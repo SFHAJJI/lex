@@ -1,0 +1,18 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\Lex.Law\Lex.Law.csproj" />
+    <ProjectReference Include="..\Lex.Temporal\Lex.Temporal.csproj" />
+    <ProjectReference Include="..\Lex.Index\Lex.Index.csproj" />
+    <ProjectReference Include="..\Lex.Sources.Legilux\Lex.Sources.Legilux.csproj" />
+    <ProjectReference Include="..\Lex.Sources.EurLex\Lex.Sources.EurLex.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>

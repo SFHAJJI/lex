@@ -1,0 +1,15 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Lex.Index/Lex.Index.csproj" />
+    <Project Path="src/Lex.Ingest/Lex.Ingest.csproj" />
+    <Project Path="src/Lex.Law/Lex.Law.csproj" />
+    <Project Path="src/Lex.Mcp/Lex.Mcp.csproj" />
+    <Project Path="src/Lex.Sources.EurLex/Lex.Sources.EurLex.csproj" />
+    <Project Path="src/Lex.Sources.Legilux/Lex.Sources.Legilux.csproj" />
+    <Project Path="src/Lex.Temporal/Lex.Temporal.csproj" />
+    <Project Path="src/Lex.Web/Lex.Web.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Lex.Tests/Lex.Tests.csproj" />
+  </Folder>
+</Solution>
