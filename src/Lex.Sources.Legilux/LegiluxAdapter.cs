@@ -33,6 +33,7 @@ public sealed class LegiluxAdapter : ISourceAdapter
         DocumentTypes: [],   // discovered from data at ingest time; DocumentType is data, not code (§3.5)
         Languages: ["fr"],
         TextIncluded: false, // D42 metadata-only standing state
+        TextPublic: false,   // R2 standing closed gate
         HistoryBegins: "publisher");
 
     public async IAsyncEnumerable<WorkRef> EnumerateWorks([EnumeratorCancellation] CancellationToken ct)

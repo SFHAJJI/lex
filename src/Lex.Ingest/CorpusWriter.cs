@@ -71,10 +71,11 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now)
 
                 var lexId = $"{pub.Id}:{work.Slug}:{vkey}";
                 VersionMeta meta;
-                if (File.Exists(metaPath))
+                var existing = File.Exists(metaPath);
+                var changed = false;
+                if (existing)
                 {
                     meta = JsonSerializer.Deserialize<VersionMeta>(await File.ReadAllTextAsync(metaPath, ct), CorpusJson.Options)!;
-                    var changed = false;
                     // F12: interval closure — one appended event, valid_to updated, nothing else touched.
                     var newTo = v.ValidTo?.ToString("yyyy-MM-dd");
                     if (meta.ValidTo is null && newTo is not null)
@@ -95,8 +96,6 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now)
                         foreach (var e in meta.Expressions) e.ValidTo = newTo;
                         changed = true;
                     }
-                    if (!changed) { Unchanged++; continue; }
-                    Updated++;
                 }
                 else
                 {
@@ -124,7 +123,7 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now)
                             Text = new TextInfo
                             {
                                 Available = false,
-                                Reason = "pending-gate",   // D42 metadata-only standing state
+                                Reason = desc.TextIncluded ? "not-fetched" : "pending-gate",
                                 Url = e.SourceUri,
                             },
                         }).ToList(),
@@ -132,8 +131,38 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now)
                             { ["type"] = r.Type, ["target"] = r.Target.Value }).ToList(),
                         Raw = new Dictionary<string, string>(v.Raw),
                     };
-                    Created++;
                 }
+
+                // Text-bearing publishers: fetch each expression's body once (verbatim bytes,
+                // append-only — F12: an existing body file is never opened for writing).
+                // Runs for new AND existing records so a failed night backfills later.
+                var bodyAdded = false;
+                if (desc.TextIncluded)
+                {
+                    foreach (var (exprMeta, exprRec) in meta.Expressions.Zip(v.Expressions))
+                    {
+                        if (exprMeta.Observations.Count > 0) continue;   // already observed
+                        var body = await adapter.FetchBody(v, exprRec, ct);
+                        if (body is null) continue;
+                        var bytes = Encoding.UTF8.GetBytes(body);
+                        var file = $"{exprMeta.Language}.html";           // §3.3 rule 3, initial expression
+                        var bodyPath = Path.Combine(versionDir, file);
+                        if (!File.Exists(bodyPath)) await File.WriteAllBytesAsync(bodyPath, bytes, ct);
+                        exprMeta.Observations.Add(new ObservationEntry
+                        {
+                            File = file,
+                            Sha256 = Convert.ToHexStringLower(SHA256.HashData(bytes)),
+                            SourceUri = exprRec.SourceUri ?? "",
+                            RetrievedAt = _now,
+                            ObservedFrom = _now,
+                        });
+                        exprMeta.Text = new TextInfo { Available = true, Url = exprRec.SourceUri };
+                        bodyAdded = true;
+                    }
+                }
+
+                if (existing && !changed && !bodyAdded) { Unchanged++; continue; }
+                if (existing) Updated++; else Created++;
 
                 meta.RecordSha256 = null;
                 var canonical = JsonSerializer.Serialize(meta, CorpusJson.Options);
@@ -153,8 +182,10 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now)
             Attribution = pub.Attribution,
             SourceTermsUrl = pub.SourceTermsUrl,
             TextIncluded = desc.TextIncluded,
-            TextPublic = false,
-            Modifications = "Metadata converted from source RDF to JSON; no text stored (metadata-only mode, D42).",
+            TextPublic = desc.TextPublic,
+            Modifications = desc.TextIncluded
+                ? "Metadata converted from source RDF to JSON; bodies stored verbatim as retrieved from the publisher's dissemination channel; no text altered."
+                : "Metadata converted from source RDF to JSON; no text stored (metadata-only mode, D42).",
             DocumentTypes = kinds.OrderByDescending(k => k.Value)
                 .Select(k => new Dictionary<string, object> { ["code"] = k.Key, ["versions"] = k.Value }).ToList(),
             Languages = langs.Order().ToList(),

@@ -67,6 +67,7 @@ public sealed record PublisherDescriptor(
     IReadOnlyList<DocumentType> DocumentTypes,
     IReadOnlyList<string> Languages,
     bool TextIncluded,
+    bool TextPublic,                  // D38: true only when the publisher's text-reuse right is measured
     string HistoryBegins);            // "publisher" for Tier A, ISO date for Tier B
 
 /// <summary>

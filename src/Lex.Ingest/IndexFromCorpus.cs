@@ -43,6 +43,17 @@ public static class IndexFromCorpus
                 foreach (var expr in meta.Expressions)
                 {
                     var exprValidFrom = expr.ValidFrom ?? meta.ValidFrom;
+
+                    // Text-bearing corpora: index a plain-text extraction of the verbatim body
+                    // (the hash always covers the verbatim file, never the extraction).
+                    string? bodyText = null;
+                    var lastObs = expr.Observations.LastOrDefault();
+                    if (expr.Text.Available && lastObs?.File is not null)
+                    {
+                        var bodyPath = Path.Combine(versionDir, lastObs.File);
+                        if (File.Exists(bodyPath)) bodyText = HtmlToText(File.ReadAllText(bodyPath));
+                    }
+
                     docs.Add(new DocRow(
                         Key: meta.LexId,
                         Collection: publisherId,
@@ -62,7 +73,7 @@ public static class IndexFromCorpus
                         SourceUri: expr.SourceUri,
                         Title: expr.Title ?? workMeta.Title,
                         TitleShort: expr.TitleShort ?? workMeta.Title,
-                        Body: null,   // metadata-only mode never loads bodies into the index
+                        Body: bodyText,
                         PublicationDate: meta.PublicationDate,
                         StatusNote: meta.InForceStatus));
 
@@ -105,6 +116,19 @@ public static class IndexFromCorpus
     }
 
     private static string ReadIfExists(string path) => File.Exists(path) ? File.ReadAllText(path) : "";
+
+    /// <summary>Plain-text extraction for FTS and reading view. Never the artefact of record.</summary>
+    private static string HtmlToText(string html)
+    {
+        var s = System.Text.RegularExpressions.Regex.Replace(html, "(?is)<(script|style)[^>]*>.*?</\\1>", " ");
+        s = System.Text.RegularExpressions.Regex.Replace(s, "(?i)<(br|/p|/div|/tr|/li|/h[1-6]|/td)[^>]*>", "\n");
+        s = System.Text.RegularExpressions.Regex.Replace(s, "<[^>]+>", " ");
+        s = System.Net.WebUtility.HtmlDecode(s);
+        s = System.Text.RegularExpressions.Regex.Replace(s, "[ \\t\\u00A0]+", " ");
+        s = System.Text.RegularExpressions.Regex.Replace(s, "( ?\\n ?)+", "\n");
+        s = s.Trim();
+        return s.Length > 1_500_000 ? s[..1_500_000] : s;
+    }
 
     private static string GitCommit(string dir)
     {

@@ -69,9 +69,12 @@ string Page(string title, string body, string? subtitle = null) => $$"""
     {{body}}
     </main>
     <footer>
-      Data: Legilux — Ministère d'État, Service central de législation, Grand-Duché de Luxembourg (CC-BY metadata).
-      Metadata-only mode: no legal text is stored or republished; every document links to the official publication.
+      LU data: Legilux — Ministère d'État, Service central de législation, Grand-Duché de Luxembourg (CC-BY metadata;
+      metadata-only: no LU text is stored or republished — documents link to the official publication).
+      EU data: © European Union, reuse with attribution (Commission Decision 2011/833/EU);
+      <b>consolidated texts have no legal effect</b> — only acts published in the Official Journal are authentic.
       Lex answers <i>what the rule was</i>, never what it means — no interpretation, no advice.
+      · <a href="https://github.com/SFHAJJI/lex">source</a>
     </footer>
     </body></html>
     """;
@@ -104,6 +107,63 @@ LexIndexReader? Reader(string publisher) => readers.GetValueOrDefault(publisher)
 string DocTitle(DocRow d) => d.TitleShort ?? d.Title ?? d.GroupKey;
 
 string Interval(DocRow d) => d.ValidTo is null ? $"{d.ValidFrom} → <i>open</i>" : $"{d.ValidFrom} → {d.ValidTo}";
+
+string RenderDiff(string oldText, string newText)
+{
+    var oldLines = oldText.Split('\n');
+    var newLines = newText.Split('\n');
+
+    // Consolidations share most content: trim the common prefix/suffix, then LCS the middle.
+    int prefix = 0;
+    while (prefix < oldLines.Length && prefix < newLines.Length && oldLines[prefix] == newLines[prefix]) prefix++;
+    int suffix = 0;
+    while (suffix < oldLines.Length - prefix && suffix < newLines.Length - prefix
+           && oldLines[^(suffix + 1)] == newLines[^(suffix + 1)]) suffix++;
+
+    var o = oldLines.AsSpan(prefix, oldLines.Length - prefix - suffix).ToArray();
+    var n = newLines.AsSpan(prefix, newLines.Length - prefix - suffix).ToArray();
+
+    var sb = new StringBuilder();
+    sb.Append($"<p class=\"sub\">{o.Length:n0} line(s) in the old middle, {n.Length:n0} in the new; {prefix:n0} unchanged leading and {suffix:n0} trailing lines trimmed.</p>");
+
+    if ((long)o.Length * n.Length > 2_250_000) // DP cap ≈ 1500×1500
+    {
+        var oldSet = o.ToHashSet(StringComparer.Ordinal);
+        var newSet = n.ToHashSet(StringComparer.Ordinal);
+        var removed = o.Where(l => !newSet.Contains(l)).Take(150).ToList();
+        var added = n.Where(l => !oldSet.Contains(l)).Take(150).ToList();
+        sb.Append("<div class=\"notice\">Change too large for an exact line diff here — showing removed/added line samples; exact comparison at the official source links above.</div>");
+        sb.Append("<div class=\"card\"><pre style=\"white-space:pre-wrap;font-size:13px;margin:0\">");
+        foreach (var l in removed) sb.Append($"<span style=\"color:#c0392b\">− {H(Trunc(l))}</span>\n");
+        foreach (var l in added) sb.Append($"<span style=\"color:var(--ok)\">+ {H(Trunc(l))}</span>\n");
+        sb.Append("</pre></div>");
+        return sb.ToString();
+    }
+
+    // Classic LCS DP on the trimmed middle.
+    var dp = new int[o.Length + 1, n.Length + 1];
+    for (var i = o.Length - 1; i >= 0; i--)
+        for (var j = n.Length - 1; j >= 0; j--)
+            dp[i, j] = o[i] == n[j] ? dp[i + 1, j + 1] + 1 : Math.Max(dp[i + 1, j], dp[i, j + 1]);
+
+    sb.Append("<div class=\"card\"><pre style=\"white-space:pre-wrap;font-size:13px;margin:0\">");
+    int x = 0, y = 0, emitted = 0;
+    const int maxEmit = 500;
+    while ((x < o.Length || y < n.Length) && emitted < maxEmit)
+    {
+        if (x < o.Length && y < n.Length && o[x] == n[y]) { x++; y++; continue; }
+        if (y < n.Length && (x >= o.Length || dp[x, y + 1] >= dp[x + 1, y]))
+        { sb.Append($"<span style=\"color:var(--ok)\">+ {H(Trunc(n[y]))}</span>\n"); y++; emitted++; }
+        else
+        { sb.Append($"<span style=\"color:#c0392b\">− {H(Trunc(o[x]))}</span>\n"); x++; emitted++; }
+    }
+    if (emitted >= maxEmit) sb.Append("<span class=\"sub\">… diff truncated at 500 changed lines …</span>\n");
+    if (emitted == 0) sb.Append("<span class=\"sub\">(only whitespace-level differences in the extraction)</span>\n");
+    sb.Append("</pre></div>");
+    return sb.ToString();
+
+    static string Trunc(string s) => s.Length > 300 ? s[..300] + "…" : s;
+}
 
 // ------------------------------------------------- routes
 
@@ -142,6 +202,9 @@ app.MapGet("/", () =>
           <li><a href="/lu-legilux/loi-2006-07-31-n2/2020-03-15">Code du travail — as it stood on 15 Mar 2020</a></li>
           <li><a href="/lu-legilux/recueil-protection_donnees">Recueil protection des données — timeline</a></li>
           <li><a href="/in-force-on?date=2022-03-15&amp;kind=CODE">Which codes were in force on 15 Mar 2022?</a></li>
+          <li><a href="/eu-eurlex/32013r0575">CRR (EU) 575/2013 — 22 consolidated versions, incl. future-dated</a></li>
+          <li><a href="/eu-eurlex/32016r0679/2019-01-01">GDPR as it stood on 1 Jan 2019 — with full text</a></li>
+          <li><a href="/eu-eurlex/32013r0575/diff/2020-01-01/2024-01-01">CRR: what changed between 2020 and 2024?</a></li>
         </ul>
         <h2>Ask your own question</h2>
         <form class="inline" action="/search"><input name="q" placeholder="search titles, e.g. protection des données" style="flex:1;min-width:240px"><button>Search</button></form>
@@ -290,6 +353,44 @@ app.MapGet("/provenance/{*key}", (string key) =>
     return Results.Content(Page("Provenance", "<p>Unknown lex_id.</p>"), "text/html", statusCode: 404);
 });
 
+app.MapGet("/{publisher}/{work}/diff/{dateA}/{dateB}", (string publisher, string work, string dateA, string dateB) =>
+{
+    var r = Reader(publisher);
+    if (r is null) return Results.Content(Page("Unknown publisher", $"<p>No index mounted for <b>{H(publisher)}</b>.</p>"), "text/html", statusCode: 404);
+    if (!DateOnly.TryParse(dateA, out var da) || !DateOnly.TryParse(dateB, out var db2))
+        return Results.Content(Page("Bad date", "<p>Use YYYY-MM-DD for both dates.</p>"), "text/html", statusCode: 400);
+
+    var a = r.AsOf(work, da, FilterSet.All);
+    var b = r.AsOf(work, db2, FilterSet.All);
+    if (a is null || b is null)
+        return Results.Content(Page("No version for date",
+            $"<p>status <span class=\"mono\">no_version_for_date</span> — resolved: {da:yyyy-MM-dd}={(a is not null)}, {db2:yyyy-MM-dd}={(b is not null)}. See the <a href=\"/{H(publisher)}/{H(work)}\">timeline</a>.</p>"),
+            "text/html", statusCode: 404);
+
+    var sb = new StringBuilder();
+    sb.Append($"""
+        <div class="card"><table class="kv">
+        <tr><td>on {da:yyyy-MM-dd}</td><td class="mono"><a href="/{H(publisher)}/{H(work)}/{da:yyyy-MM-dd}">{H(a.Key)}</a> ({Interval(a)})</td></tr>
+        <tr><td>on {db2:yyyy-MM-dd}</td><td class="mono"><a href="/{H(publisher)}/{H(work)}/{db2:yyyy-MM-dd}">{H(b.Key)}</a> ({Interval(b)})</td></tr>
+        </table></div>
+        """);
+
+    if (a.Key == b.Key)
+        sb.Append("<div class=\"notice\"><b>No change.</b> The same version applied on both dates.</div>");
+    else if (a.TextPublic && b.TextPublic && a.Body is not null && b.Body is not null)
+        sb.Append(RenderDiff(a.Body, b.Body));
+    else
+        sb.Append($"""
+            <div class="notice"><b>Different versions applied</b>, but a text diff is unavailable here
+            (status <span class="mono">text_withheld</span>). Compare at the official source:
+            <a href="{H(a.SourceUri)}">version of {H(a.ValidFrom)}</a> vs
+            <a href="{H(b.SourceUri)}">version of {H(b.ValidFrom)}</a>.</div>
+            """);
+    sb.Append(EnvelopeCard(r, IsProvisional(r, db2)));
+    return Results.Content(Page($"What changed — {H(DocTitle(b))}", sb.ToString(),
+        $"{da:yyyy-MM-dd} → {db2:yyyy-MM-dd} · no interpretation, just the text delta"), "text/html");
+});
+
 app.MapGet("/{publisher}/{work}", (string publisher, string work) =>
 {
     var r = Reader(publisher);
@@ -358,9 +459,27 @@ app.MapGet("/{publisher}/{work}/{date}", (string publisher, string work, string 
         <tr><td>record sha256</td><td class="mono">{H(doc.RecordSha)}</td></tr>
         </table></div>
         """);
-    sb.Append(TextWithheldBox(doc));
+    if (doc.TextPublic && doc.Body is not null)
+    {
+        var display = doc.Body.Length > 300_000 ? doc.Body[..300_000] : doc.Body;
+        sb.Append($"""
+            <div class="notice" style="border-left-color:var(--ok)"><b>Text included — reading view.</b>
+            Plain-text extraction of the verbatim retrieved document; the sha256 covers the verbatim file.
+            {H(r.Stamp.GetValueOrDefault("attribution"))}</div>
+            <div class="card"><pre style="white-space:pre-wrap;font:14px/1.65 Georgia,'Times New Roman',serif;margin:0">{H(display)}</pre>
+            {(doc.Body.Length > 300_000 ? "<p class=\"sub\">— truncated for display; full text at the official source —</p>" : "")}</div>
+            """);
+    }
+    else
+    {
+        sb.Append(TextWithheldBox(doc));
+    }
     sb.Append("<p>");
-    if (prev is not null) sb.Append($"<a href=\"/{H(publisher)}/{H(work)}/{H(prev.ValidFrom)}\">← previous version ({H(prev.ValidFrom)})</a> &nbsp;&nbsp;");
+    if (prev is not null)
+    {
+        sb.Append($"<a href=\"/{H(publisher)}/{H(work)}/{H(prev.ValidFrom)}\">← previous version ({H(prev.ValidFrom)})</a> &nbsp;&nbsp;");
+        if (doc.TextPublic) sb.Append($"<a href=\"/{H(publisher)}/{H(work)}/diff/{H(prev.ValidFrom)}/{H(doc.ValidFrom)}\">what changed?</a> &nbsp;&nbsp;");
+    }
     sb.Append($"<a href=\"/{H(publisher)}/{H(work)}\">timeline</a>");
     if (next is not null) sb.Append($" &nbsp;&nbsp;<a href=\"/{H(publisher)}/{H(work)}/{H(next.ValidFrom)}\">next version ({H(next.ValidFrom)}) →</a>");
     sb.Append("</p>");
