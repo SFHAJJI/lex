@@ -127,26 +127,46 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
         },
     };
 
-    private static JsonObject DocJson(DocRow d, bool withText) => new()
+    // Base URL for permalinks is deployment config only (never derived from or stored in
+    // signed content); the field is omitted entirely when unconfigured so air-gapped
+    // deployments do not emit unreachable URLs.
+    private readonly string? _publicBase =
+        Environment.GetEnvironmentVariable("LEX_PUBLIC_BASE_URL")?.TrimEnd('/');
+
+    private JsonObject DocJson(DocRow d, bool withText)
     {
-        ["lex_id"] = d.Key,
-        ["work"] = d.GroupKey,
-        ["work_identifier"] = d.GroupIdentifier,
-        ["document_type"] = d.Kind,
-        ["language"] = d.Language,
-        ["valid_from"] = d.ValidFrom,
-        ["valid_to"] = d.ValidTo,
-        ["valid_time_source"] = d.ValidTimeSource,
-        ["publication_date"] = d.PublicationDate,
-        ["title"] = d.TitleShort ?? d.Title,
-        ["withdrawn"] = d.Withdrawn,
-        ["text_available"] = d.TextAvailable,
-        ["record_sha256"] = d.RecordSha,
-        ["body_sha256"] = d.BodySha,
-        ["source_uri"] = d.SourceUri,
-        ["observed_from"] = d.ObservedFrom,
-        ["text"] = withText && d.TextPublic ? d.Body : null,
-    };
+        var o = new JsonObject
+        {
+            ["lex_id"] = d.Key,
+            ["work"] = d.GroupKey,
+            ["work_identifier"] = d.GroupIdentifier,
+            ["document_type"] = d.Kind,
+            ["language"] = d.Language,
+            ["valid_from"] = d.ValidFrom,
+            ["valid_to"] = d.ValidTo,
+            ["valid_time_source"] = d.ValidTimeSource,
+            ["publication_date"] = d.PublicationDate,
+            ["title"] = d.TitleShort ?? d.Title,
+            ["withdrawn"] = d.Withdrawn,
+            ["text_available"] = d.TextAvailable,
+            ["record_sha256"] = d.RecordSha,
+            ["body_sha256"] = d.BodySha,
+            ["source_uri"] = d.SourceUri,
+            ["observed_from"] = d.ObservedFrom,
+            ["text"] = withText && d.TextPublic ? d.Body : null,
+        };
+        if (_publicBase is not null && d.ValidFrom is not null)
+            o["permalink"] = $"{_publicBase}/{d.Collection}/{d.GroupKey}/{d.ValidFrom}";
+        return o;
+    }
+
+    private static string KnownExclusions(LexIndexReader r) =>
+        r.Stamp.GetValueOrDefault("known_exclusions") ?? r.Collection switch
+        {
+            "lu-legilux" => "never-consolidated LU acts (~24,579 as-published lois/RGD) are not ingested; ingestion scheduled — see coverage",
+            "eu-eurlex" => "only flagship acts are ingested so far; the wider consolidated acquis is scheduled — see coverage",
+            _ => "see the coverage tool for this publisher's known gaps",
+        };
 
     private static bool ProvisionalFor(LexIndexReader r, DateOnly d)
     {
@@ -232,7 +252,7 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                         {
                             ["basis"] = "versioned works only",
                             ["works_covered"] = r.Coverage().Groups,
-                            ["known_exclusions"] = "~24,579 never-consolidated LU acts (ingestion scheduled; see coverage)",
+                            ["known_exclusions"] = KnownExclusions(r),
                         },
                         ["total_works_in_force"] = total,
                         ["truncated"] = total > offset + limit,
@@ -340,9 +360,17 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                         ["valid_from_latest"] = c.LatestValidFrom,
                         ["document_types"] = new JsonArray(c.Kinds.Select(k => (JsonNode)new JsonObject
                         { ["code"] = k.Kind, ["versions"] = k.Versions }).ToArray()),
+                        ["text"] = new JsonObject
+                        {
+                            ["versions_with_text_served"] = c.TextServed,
+                            ["versions_without_text"] = c.Rows - c.TextServed,
+                            ["note"] = "text availability is per version (text_available/text_public on each document); versions without text carry the official source link",
+                        },
                         ["known_gaps"] = new JsonArray(
-                            "only versioned (consolidated) corpora are ingested so far; as-published acts are scheduled",
-                            "honest LU coverage claim: dense and reliable from 2017 onward; sparse before; isolated snapshots back to 1849; forward to 2030"),
+                            KnownExclusions(r),
+                            r.Collection == "lu-legilux"
+                                ? "coverage density follows the publisher's own digitised consolidations: dense from 2017 onward; sparse before; isolated snapshots back to 1849; forward-dated to 2030"
+                                : "coverage follows the publisher's consolidation practice; future-dated versions are provisional"),
                     });
                 }
                 return outp;

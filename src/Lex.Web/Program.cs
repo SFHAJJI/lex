@@ -312,9 +312,12 @@ app.MapPost("/api/ask", async (HttpRequest req) =>
     catch { return Results.Json(new { error = "Bad JSON." }, statusCode: 400); }
     if (parsed?["messages"] is not JsonArray history)
         return Results.Json(new { error = "Body must be {\"messages\": [...]}." }, statusCode: 400);
-    var ip = req.Headers["X-Forwarded-For"].FirstOrDefault()?.Split(',')[0].Trim()
+    // Last X-Forwarded-For element: appended by our ingress, not spoofable by the client
+    // (the first element is client-controlled and would reset the per-IP cap).
+    var ip = req.Headers["X-Forwarded-For"].FirstOrDefault()?.Split(',')[^1].Trim()
              ?? req.HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-    var (status, bodyJson) = await askService.AskAsync(history, ip, req.Host.Value ?? "law.soufien.lu");
+    var (status, bodyJson) = await askService.AskAsync(history, ip, req.Host.Value ?? "law.soufien.lu",
+        req.HttpContext.RequestAborted);
     return Results.Content(bodyJson.ToJsonString(), "application/json", statusCode: status);
 });
 
@@ -385,11 +388,15 @@ app.MapGet("/coverage", () =>
         foreach (var k in c.Kinds)
             sb.Append($"<tr><td>{H(k.Kind ?? "(untyped)")}</td><td>{k.Versions:n0}</td></tr>");
         sb.Append($"</table></div>{EnvelopeCard(r, false)}");
+        var luGap = c.Collection == "lu-legilux"
+            ? " ≈24,579 never-consolidated Luxembourg acts are <b>not ingested</b> (their date coverage is unmeasured)."
+            : " Only flagship acts are ingested so far; the wider consolidated acquis is scheduled.";
         sb.Append($"""
             <div class="notice"><b>Known gaps.</b> Only the publisher's versioned (consolidated) corpus is ingested:
-            {c.Groups:n0} works / {c.Rows:n0} versions. ≈24,579 never-consolidated Luxembourg acts are <b>not ingested</b>
-            (their date coverage is unmeasured). Legal text bodies are not stored (metadata-only mode) — documents link
-            to the official publication. History is as deep as the publisher's own digitised consolidations.</div>
+            {c.Groups:n0} works / {c.Rows:n0} versions.{luGap}
+            Text is per-version: <b>{c.TextServed:n0}</b> versions carry the verbatim official text,
+            <b>{c.Rows - c.TextServed:n0}</b> are metadata-with-link (status <span class="mono">text_withheld</span> or
+            no text published). History is as deep as the publisher's own digitised consolidations.</div>
             """);
     }
     return Results.Content(Page("Coverage — what we hold, and what we lack", sb.ToString()), "text/html");

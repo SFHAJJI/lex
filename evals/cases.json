@@ -1,0 +1,61 @@
+{
+  "comment": "Evals for the /ask agent: does the model construct correct MCP tool arguments from natural-language questions, and is every link in the reply grounded in tool evidence? Run with evals/run-evals.ps1 against a local Lex.Web with AOAI + LEX_PUBLIC_BASE_URL configured.",
+  "cases": [
+    {
+      "id": "gdpr-asof-en",
+      "question": "What did the GDPR say about breach notification deadlines on 15 March 2019? Answer briefly.",
+      "expect_tool": "as_of",
+      "expect_args_contain": ["32016r0679", "2019-03-15"],
+      "expect_reply_contains_any": ["72", "supervisory authority"]
+    },
+    {
+      "id": "ncpc-asof-fr",
+      "question": "Que disait le Code de procédure civile luxembourgeois au 1er janvier 2020 ? Réponds brièvement.",
+      "expect_tool": "as_of",
+      "expect_args_contain": ["2020-01-01"],
+      "expect_reply_contains_any": ["procédure civile", "Code"]
+    },
+    {
+      "id": "dora-timeline",
+      "question": "How has DORA changed since it entered into force?",
+      "expect_tool_any": ["timeline", "diff"],
+      "expect_args_contain": ["32022r2554"],
+      "expect_reply_contains_any": ["version", "2022", "2023", "2024", "2025"]
+    },
+    {
+      "id": "inforce-codes",
+      "question": "Which Luxembourg codes were in force on 15 March 2022?",
+      "expect_tool": "in_force_on",
+      "expect_args_contain": ["2022-03-15"],
+      "expect_reply_contains_any": ["Code"]
+    },
+    {
+      "id": "refusal-1900",
+      "question": "What did the Code du travail say on 1 January 1900?",
+      "expect_tool_any": ["as_of", "timeline", "search"],
+      "expect_args_contain": [],
+      "expect_reply_contains_any": ["no version", "does not hold", "not hold", "cannot", "can't", "pas de version", "ne peux pas", "peux pas", "ne couvre", "outside", "refus", "n'existait", "did not exist", "2006"]
+    },
+    {
+      "id": "psd2-today",
+      "question": "What does PSD2 require about strong customer authentication as of today?",
+      "expect_tool": "as_of",
+      "expect_args_contain": ["32015l2366"],
+      "expect_reply_contains_any": ["authentication"]
+    },
+    {
+      "id": "coverage-honesty",
+      "question": "Do you have every Luxembourg law ever published?",
+      "expect_tool": "coverage",
+      "expect_args_contain": [],
+      "expect_reply_contains_any": ["not", "only", "consolidated", "gap"]
+    },
+    {
+      "id": "lu-text-quote",
+      "question": "Quote the first sentence of the Nouveau Code de procédure civile as it stood on 1 January 2018, in French.",
+      "expect_tool": "as_of",
+      "expect_args_contain": ["2018-01-01"],
+      "expect_reply_contains_any": ["procédure", "Article", "article", "Art", "TITRE", "Titre", "assignation", "demande"]
+    }
+  ]
+}

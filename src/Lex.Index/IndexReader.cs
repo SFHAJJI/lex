@@ -11,7 +11,8 @@ public sealed record CoverageInfo(
     string? EarliestValidFrom,
     string? LatestValidFrom,
     IReadOnlyList<CoverageKind> Kinds,
-    IReadOnlyDictionary<string, string> Stamp);
+    IReadOnlyDictionary<string, string> Stamp,
+    int TextServed);
 
 /// <summary>
 /// Read side of one index file. Every query method takes a non-optional FilterSet (F5);
@@ -136,7 +137,7 @@ public sealed class LexIndexReader : IDisposable
             SELECT {DocColsQualified}, snippet(fts, -1, '«', '»', ' … ', 14) AS snip
             FROM fts JOIN docs d ON d.rid = fts.rid
             WHERE fts MATCH $q AND {where}
-            ORDER BY bm25(fts)
+            ORDER BY bm25(fts, 0.0, 12.0, 12.0, 1.0)
             LIMIT $lim
             """, ps);
         cmd.Parameters.AddWithValue("$q", Fts5Escape(query));
@@ -202,11 +203,16 @@ public sealed class LexIndexReader : IDisposable
         using (var r = cmd.ExecuteReader())
             while (r.Read()) kinds.Add(new CoverageKind(r.IsDBNull(0) ? null : r.GetString(0), r.GetInt32(1)));
 
-        using var agg = Cmd("SELECT COUNT(DISTINCT group_key), COUNT(*), MIN(valid_from), MAX(valid_from) FROM docs", []);
+        using var agg = Cmd("""
+            SELECT COUNT(DISTINCT group_key), COUNT(*), MIN(valid_from), MAX(valid_from),
+                   SUM(CASE WHEN text_public=1 AND body IS NOT NULL THEN 1 ELSE 0 END)
+            FROM docs
+            """, []);
         using var ar = agg.ExecuteReader();
         ar.Read();
         return new CoverageInfo(Collection, ar.GetInt32(0), ar.GetInt32(1),
-            ar.IsDBNull(2) ? null : ar.GetString(2), ar.IsDBNull(3) ? null : ar.GetString(3), kinds, Stamp);
+            ar.IsDBNull(2) ? null : ar.GetString(2), ar.IsDBNull(3) ? null : ar.GetString(3), kinds, Stamp,
+            ar.IsDBNull(4) ? 0 : ar.GetInt32(4));
     }
 
     private static string NormalizeWork(string work)

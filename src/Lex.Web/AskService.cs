@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Text;
 using System.Text.Json.Nodes;
 using Lex.Mcp;
@@ -27,24 +27,34 @@ public sealed class AskService(McpCore core)
 
     private const int MaxHistory = 24;
     private const int MaxMessageChars = 4000;
-    private const int MaxToolRounds = 6;
+    private const int MaxToolRounds = 8;
     private const int MaxToolResultChars = 20000;
 
     private static string SystemPrompt(string host) => $"""
         You are the answer layer of Lex, a point-in-time retrieval system for consolidated
         regulatory text (Luxembourg via Legilux, EU via EUR-Lex). You have seven read-only tools
         over signed indexes. Every version carries publisher-asserted validity dates and hashes.
+        Today's date (UTC) is {DateTime.UtcNow:yyyy-MM-dd}: use it for "today"/"current" questions
+        (one as_of call with this date — do not probe multiple dates).
 
         Rules, in order of priority:
         1. Ground every factual claim about the law in tool output from THIS conversation.
            When the document is unknown, call search first (add as_of date when the user names one),
-           then as_of for the exact state. Use timeline for "how did it change", diff for "what
-           changed between two dates", in_force_on for "what applied on date X", coverage for
-           "what do you hold".
+           then as_of for the exact state. Use timeline for "how did it change" or "since when",
+           diff for "what changed between two dates", in_force_on for "what applied on date X",
+           coverage for "what do you hold". Search hits are POINTERS, never evidence of content:
+           after search identifies the work, you MUST call as_of / timeline / diff before answering
+           anything about what the text says or how it changed. Never repeat a search that found
+           nothing: retry ONCE with the official name or a synonym (e.g. "DORA" -> "digital
+           operational resilience", acronyms -> full titles, or the CELEX number like 32022r2554
+           for EU acts), then move to the right tool or answer honestly that Lex has no match.
+           Typical flow: one search -> pick the best hit's work -> as_of / timeline / diff -> answer.
+           You have at most 2 searches per question; coverage is only for questions about what
+           Lex holds. Include no URL in your answer that was not returned by a tool in this
+           conversation.
         2. Cite what you used: document title, lex_id, validity interval (valid_from -> valid_to),
-           and a permalink https://{host}/PUBLISHER/WORK/DATE where PUBLISHER is e.g. lu-legilux,
-           WORK is the part of the lex_id between the first and second ":" and DATE is ISO.
-           Quote only the relevant provisions.
+           and the "permalink" URL returned by the tools, copied VERBATIM — never construct or
+           edit URLs yourself. Quote only the relevant provisions.
         3. Lex answers what the rule WAS, never what it means: no interpretation, no legal advice,
            no compliance conclusions. If asked for advice, give the grounded text and say that
            interpretation is out of scope.
@@ -88,7 +98,70 @@ public sealed class AskService(McpCore core)
         return arr;
     }
 
-    public async Task<(int Status, JsonObject Body)> AskAsync(JsonArray history, string ip, string host)
+    // Truncate oversized tool results without ever producing invalid JSON: shrink the largest
+    // string fields (law text) first, then fall back to a wrapped preview.
+    private static string TruncateResult(JsonNode node)
+    {
+        var raw = node.ToJsonString();
+        if (raw.Length <= MaxToolResultChars) return raw;
+        void ShrinkStrings(JsonNode? n)
+        {
+            switch (n)
+            {
+                case JsonObject o:
+                    foreach (var k in o.Select(p => p.Key).ToArray())
+                        if (o[k] is JsonValue v && v.TryGetValue<string>(out var s) && s.Length > 4000)
+                            o[k] = s[..4000] + " …[truncated — full text at the permalink]";
+                        else ShrinkStrings(o[k]);
+                    break;
+                case JsonArray a:
+                    foreach (var item in a) ShrinkStrings(item);
+                    break;
+            }
+        }
+        var clone = node.DeepClone();
+        ShrinkStrings(clone);
+        raw = clone.ToJsonString();
+        return raw.Length <= MaxToolResultChars
+            ? raw
+            : new JsonObject { ["truncated_preview"] = raw[..MaxToolResultChars] }.ToJsonString();
+    }
+
+    // Pull a compact evidence summary out of a tool result: overall status + the cited
+    // documents (any object carrying a lex_id), for the evidence list in the UI and the
+    // grounding check in evals. The cap only bounds the summary, not the model's context.
+    private static (string? Status, JsonArray Docs) Summarize(JsonNode result)
+    {
+        string? status = null;
+        var docs = new JsonArray();
+        void Walk(JsonNode? n)
+        {
+            if (docs.Count >= 24 && status is not null) return;
+            switch (n)
+            {
+                case JsonObject o:
+                    status ??= (o["envelope"]?["status"] ?? o["status"])?.GetValue<string>();
+                    if (o["lex_id"] is not null && docs.Count < 24)
+                        docs.Add(new JsonObject
+                        {
+                            ["lex_id"] = o["lex_id"]?.DeepClone(),
+                            ["title"] = o["title"]?.DeepClone(),
+                            ["valid_from"] = o["valid_from"]?.DeepClone(),
+                            ["valid_to"] = o["valid_to"]?.DeepClone(),
+                            ["permalink"] = o["permalink"]?.DeepClone(),
+                        });
+                    else foreach (var p in o) Walk(p.Value);
+                    break;
+                case JsonArray a:
+                    foreach (var item in a) Walk(item);
+                    break;
+            }
+        }
+        Walk(result);
+        return (status, docs);
+    }
+
+    public async Task<(int Status, JsonObject Body)> AskAsync(JsonArray history, string ip, string host, CancellationToken ct)
     {
         if (!Enabled)
             return (503, new JsonObject { ["error"] = "The playground is not enabled on this deployment. Connect your own AI instead: /ai." });
@@ -112,6 +185,7 @@ public sealed class AskService(McpCore core)
         try
         {
             var trace = new JsonArray();
+            var searchCalls = 0;
             for (var round = 0; round <= MaxToolRounds; round++)
             {
                 var req = new JsonObject
@@ -120,20 +194,23 @@ public sealed class AskService(McpCore core)
                     ["messages"] = messages.DeepClone(),
                     ["tools"] = OpenAiTools(),
                     ["tool_choice"] = round == MaxToolRounds ? "none" : "auto",
-                    ["max_completion_tokens"] = 3000,
-                    ["reasoning_effort"] = "low",
+                    ["max_completion_tokens"] = 10000,
+                    ["reasoning_effort"] = "high",
                 };
                 using var httpReq = new HttpRequestMessage(HttpMethod.Post, $"{_endpoint}/openai/v1/chat/completions")
                 { Content = new StringContent(req.ToJsonString(), Encoding.UTF8, "application/json") };
                 httpReq.Headers.Add("api-key", _key);
-                using var resp = await _http.SendAsync(httpReq);
-                var respText = await resp.Content.ReadAsStringAsync();
+                using var resp = await _http.SendAsync(httpReq, ct);
+                var respText = await resp.Content.ReadAsStringAsync(ct);
                 if (!resp.IsSuccessStatusCode)
                 {
                     Console.Error.WriteLine($"[ask] upstream {(int)resp.StatusCode}: {respText[..Math.Min(500, respText.Length)]}");
                     return (502, new JsonObject { ["error"] = "The model upstream returned an error — try again shortly." });
                 }
-                var choice = JsonNode.Parse(respText)?["choices"]?[0];
+                var parsed = JsonNode.Parse(respText);
+                if (parsed?["usage"]?["total_tokens"] is { } tt)
+                    Console.Error.WriteLine($"[ask] ip={ip} round={round} tokens={tt}");
+                var choice = parsed?["choices"]?[0];
                 var msg = choice?["message"];
                 var toolCalls = msg?["tool_calls"] as JsonArray;
 
@@ -152,18 +229,39 @@ public sealed class AskService(McpCore core)
                         var name = fn?["name"]?.GetValue<string>() ?? "";
                         var argsRaw = fn?["arguments"]?.GetValue<string>() ?? "{}";
                         string result;
+                        var entry = new JsonObject { ["tool"] = name };
                         try
                         {
                             var args = JsonNode.Parse(argsRaw) as JsonObject ?? [];
-                            trace.Add(new JsonObject { ["tool"] = name, ["args"] = args.DeepClone() });
-                            result = core.CallTool(name, args).ToJsonString();
+                            entry["args"] = args.DeepClone();
+                            // Deterministic routing guard: a mini model can churn on search;
+                            // after two searches the tool itself redirects it to the state tools.
+                            if (name == "search" && ++searchCalls > 2)
+                            {
+                                entry["status"] = "search_budget_exhausted";
+                                trace.Add(entry);
+                                messages.Add(new JsonObject
+                                {
+                                    ["role"] = "tool", ["tool_call_id"] = id,
+                                    ["content"] = new JsonObject
+                                    {
+                                        ["error"] = "search budget for this question is exhausted; use as_of, timeline, diff or in_force_on with a work already found (its lex_id or work field), or answer honestly from what you have",
+                                    }.ToJsonString(),
+                                });
+                                continue;
+                            }
+                            var node = core.CallTool(name, args);
+                            var (st, docs) = Summarize(node);
+                            entry["status"] = st;
+                            entry["docs"] = docs;
+                            result = TruncateResult(node);
                         }
                         catch (Exception ex)
                         {
+                            entry["status"] = "error";
                             result = new JsonObject { ["error"] = ex.Message }.ToJsonString();
                         }
-                        if (result.Length > MaxToolResultChars)
-                            result = result[..MaxToolResultChars] + "\" …(truncated — retrieve the full text at the cited permalink)\"}";
+                        trace.Add(entry);
                         messages.Add(new JsonObject { ["role"] = "tool", ["tool_call_id"] = id, ["content"] = result });
                     }
                     continue;
@@ -175,9 +273,18 @@ public sealed class AskService(McpCore core)
             }
             return (200, new JsonObject { ["reply"] = "Tool budget for one question exhausted — try a narrower question.", ["trace"] = trace });
         }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            return (499, new JsonObject { ["error"] = "Request cancelled." });
+        }
         catch (TaskCanceledException)
         {
             return (504, new JsonObject { ["error"] = "The model took too long — try a narrower question." });
+        }
+        catch (HttpRequestException ex)
+        {
+            Console.Error.WriteLine($"[ask] upstream unreachable: {ex.Message}");
+            return (502, new JsonObject { ["error"] = "The model upstream is unreachable right now — try again shortly." });
         }
         catch (Exception ex)
         {

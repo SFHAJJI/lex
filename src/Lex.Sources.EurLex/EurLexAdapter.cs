@@ -32,6 +32,20 @@ public sealed class EurLexAdapter : ISourceAdapter
         "32019R2088", // SFDR
     ];
 
+    // Common names in universal professional use — adapter-provided display aliases,
+    // never a substitute for the publisher's own title (kept verbatim in Title).
+    private static readonly Dictionary<string, string> CommonNames = new(StringComparer.Ordinal)
+    {
+        ["32016R0679"] = "GDPR",
+        ["32022R2554"] = "DORA",
+        ["32024R1689"] = "AI Act",
+        ["32022L2555"] = "NIS2",
+        ["32014L0065"] = "MiFID II",
+        ["32013R0575"] = "CRR",
+        ["32015L2366"] = "PSD2",
+        ["32019R2088"] = "SFDR",
+    };
+
     private static readonly HttpClient Http = CreateClient();
     private DateTimeOffset _lastRequest = DateTimeOffset.MinValue;
     private readonly Dictionary<string, List<VersionRecord>> _byWork = new(StringComparer.Ordinal);
@@ -155,6 +169,20 @@ public sealed class EurLexAdapter : ISourceAdapter
 
                 if (rows.Count == 0) { Console.Error.WriteLine($"  [eurlex] {baseCelex}: no consolidated versions found"); continue; }
 
+                // Consolidated expressions usually carry no title in Cellar — fall back to the
+                // base act's official EN title so search matches natural-language names.
+                var baseTitleRows = await SelectAsync(Cdm + $$"""
+                    SELECT ?title WHERE {
+                      ?w cdm:resource_legal_id_celex ?c .
+                      FILTER(STR(?c) = "{{baseCelex}}")
+                      ?e cdm:expression_belongs_to_work ?w ;
+                         cdm:expression_uses_language <http://publications.europa.eu/resource/authority/language/ENG> ;
+                         cdm:expression_title ?title .
+                    } LIMIT 1
+                    """, ct);
+                var baseTitle = baseTitleRows.FirstOrDefault()?.GetValueOrDefault("title");
+                var commonName = CommonNames.GetValueOrDefault(baseCelex);
+
                 var workUri = $"http://publications.europa.eu/resource/celex/{baseCelex}";
                 var slug = baseCelex.ToLowerInvariant();
                 var typeCode = baseCelex.Contains('R') && baseCelex[5] == 'R' ? "REG" : baseCelex[5] == 'L' ? "DIR" : "REG";
@@ -172,6 +200,7 @@ public sealed class EurLexAdapter : ISourceAdapter
                     var (celex, date, title) = versions[i];
                     DateOnly? validTo = i + 1 < versions.Count ? versions[i + 1].Date.AddDays(-1) : null;
                     var sourceUri = $"https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:{celex}";
+                    var effTitle = title ?? baseTitle;
                     list.Add(new VersionRecord(
                         Id: new Identifier($"http://publications.europa.eu/resource/celex/{celex}"),
                         WorkId: new Identifier(workUri),
@@ -184,7 +213,7 @@ public sealed class EurLexAdapter : ISourceAdapter
                         Expressions:
                         [
                             new ExpressionRecord("en", date, validTo, "publisher",
-                                Title: title, TitleShort: ShortTitle(title), SourceUri: sourceUri)
+                                Title: effTitle, TitleShort: DisplayTitle(commonName, effTitle, celex), SourceUri: sourceUri)
                         ],
                         Relations: [new RelationRecord("consolidates", new Identifier(workUri))],
                         Raw: new Dictionary<string, string> { ["celex"] = celex }));
@@ -192,7 +221,7 @@ public sealed class EurLexAdapter : ISourceAdapter
 
                 _byWork[workUri] = list;
                 _works[workUri] = new WorkRef(new Identifier(workUri), slug, typeCode,
-                    ShortTitle(versions[^1].Title) ?? baseCelex);
+                    DisplayTitle(commonName, versions[^1].Title ?? baseTitle, baseCelex));
                 Console.Error.WriteLine($"  [eurlex] {baseCelex}: {list.Count} consolidated versions");
             }
             _loaded = true;
@@ -205,6 +234,12 @@ public sealed class EurLexAdapter : ISourceAdapter
         if (title is null) return null;
         var cut = title.IndexOf(" of the European Parliament", StringComparison.Ordinal);
         return cut > 0 ? title[..cut] : title.Length > 90 ? title[..90] + "…" : title;
+    }
+
+    private static string DisplayTitle(string? commonName, string? title, string fallback)
+    {
+        var s = ShortTitle(title);
+        return commonName is null ? s ?? fallback : s is null ? commonName : $"{commonName} — {s}";
     }
 
     private async Task<List<Dictionary<string, string>>> SelectAsync(string query, CancellationToken ct)
