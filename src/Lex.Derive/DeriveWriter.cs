@@ -1,0 +1,191 @@
+using System.Text;
+using System.Text.Encodings.Web;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+
+namespace Lex.Derive;
+
+/// <summary>
+/// Walks an evidence corpus (works/&lt;slug&gt;/versions/&lt;valid_from&gt;/*.xml) and writes the
+/// derived consumption layer (fr.json + fr.md per version) under
+/// out/&lt;publisher&gt;/works/&lt;slug&gt;/versions/&lt;valid_from&gt;/. Pure function of
+/// (corpus bytes, profile version): deleting the output loses nothing but compute.
+/// </summary>
+public static class DeriveWriter
+{
+    public const string SchemaId = "lex-articles/1";
+
+    private static readonly JsonSerializerOptions JsonOpts = new()
+    {
+        WriteIndented = true,
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+    };
+
+    public sealed record Stats(int Works, int Versions, int Provisions, int Skipped, List<string> Errors);
+
+    public static Stats Derive(string corpusRoot, string outRoot, string publisher, string codeVersion)
+    {
+        var worksDir = Path.Combine(corpusRoot, "works");
+        if (!Directory.Exists(worksDir)) throw new DirectoryNotFoundException(worksDir);
+
+        var attribution = publisher == "lu-legilux"
+            ? "Legilux — Ministère d'État, Service central de législation, Grand-Duché de Luxembourg (CC-BY-4.0)"
+            : "© European Union, 1998-2026; reuse with attribution (Commission Decision 2011/833/EU); consolidated texts have no legal effect";
+        var license = publisher == "lu-legilux"
+            ? "CC-BY-4.0"
+            : "EU reuse-with-attribution (Commission Decision 2011/833/EU)";
+
+        int works = 0, versions = 0, provisionCount = 0, skipped = 0;
+        var errors = new List<string>();
+
+        foreach (var workDir in Directory.EnumerateDirectories(worksDir).OrderBy(d => d, StringComparer.Ordinal))
+        {
+            var slug = Path.GetFileName(workDir);
+            var workMetaPath = Path.Combine(workDir, "meta.json");
+            if (!File.Exists(workMetaPath)) continue;
+            var workMeta = JsonNode.Parse(File.ReadAllText(workMetaPath))!;
+            var workTitle = workMeta["title"]?.GetValue<string>();
+            works++;
+
+            var versionDirs = Directory.Exists(Path.Combine(workDir, "versions"))
+                ? Directory.EnumerateDirectories(Path.Combine(workDir, "versions"))
+                    .OrderBy(d => Path.GetFileName(d), StringComparer.Ordinal).ToList()
+                : [];
+
+            for (var i = 0; i < versionDirs.Count; i++)
+            {
+                var validFrom = Path.GetFileName(versionDirs[i]);
+                // valid_to = next version's valid_from - 1 day (same rule as the index; date part only)
+                string? validTo = null;
+                if (i + 1 < versionDirs.Count)
+                {
+                    var next = Path.GetFileName(versionDirs[i + 1]);
+                    var datePart = next.Length >= 10 ? next[..10] : next;
+                    if (DateOnly.TryParse(datePart, out var d))
+                        validTo = d.AddDays(-1).ToString("yyyy-MM-dd");
+                }
+
+                var vMetaPath = Path.Combine(versionDirs[i], "meta.json");
+                if (!File.Exists(vMetaPath)) continue;
+                var vMeta = JsonNode.Parse(File.ReadAllText(vMetaPath))!;
+
+                foreach (var xmlFile in Directory.EnumerateFiles(versionDirs[i], "*.*")
+                             .Where(f => Path.GetExtension(f) is ".xml" or ".html")
+                             .OrderBy(f => f, StringComparer.Ordinal))
+                {
+                    var lang = Path.GetFileNameWithoutExtension(xmlFile);
+                    try
+                    {
+                        var expr = (vMeta["expressions"] as JsonArray)?.OfType<JsonObject>()
+                            .FirstOrDefault(e => e["language"]?.GetValue<string>() == lang);
+                        var obs = (expr?["observations"] as JsonArray)?.OfType<JsonObject>()
+                            .FirstOrDefault(o => o["file"]?.GetValue<string>() == Path.GetFileName(xmlFile));
+                        var sourceSha = obs?["sha256"]?.GetValue<string>() ?? "";
+                        var sourceUri = expr?["source_uri"]?.GetValue<string>()
+                                        ?? vMeta["work_identifier"]?.GetValue<string>() ?? "";
+                        var lexId = $"{publisher}:{slug}:{validFrom}";
+
+                        var isAkn = Path.GetExtension(xmlFile) == ".xml";
+                        var profileId = isAkn ? AknLuProfile.ProfileId : XhtmlEuProfile.ProfileId;
+                        var frontmatter = new Dictionary<string, string>
+                        {
+                            ["lex_id"] = lexId,
+                            ["title"] = workTitle ?? slug,
+                            ["valid_from"] = validFrom,
+                            ["valid_to"] = validTo ?? "open",
+                            ["source"] = sourceUri,
+                            ["source_sha256"] = sourceSha,
+                            ["license"] = license,
+                            ["attribution"] = attribution,
+                            ["generator"] = $"{profileId} · lex derive · {codeVersion}",
+                        };
+
+                        var raw = File.ReadAllText(xmlFile, Encoding.UTF8);
+                        var extraction = isAkn
+                            ? AknLuProfile.Extract(raw, lexId)
+                            : XhtmlEuProfile.Extract(raw, lexId);
+                        if (extraction.Provisions.Count == 0)
+                        {
+                            skipped++;
+                            Console.Error.WriteLine($"  [derive] skipped (no provisions): {slug}/{validFrom}/{Path.GetFileName(xmlFile)}");
+                            continue;
+                        }
+
+                        var outDir = Path.Combine(outRoot, publisher, "works", slug, "versions", validFrom);
+                        Directory.CreateDirectory(outDir);
+
+                        // ---- fr.md: fenced frontmatter + document
+                        var mdHeader = new StringBuilder("---\n");
+                        foreach (var (k, v) in frontmatter) mdHeader.Append(k).Append(": ").Append(v.Replace("\n", " ")).Append('\n');
+                        mdHeader.Append("---\n");
+                        // spans were computed over extraction.Markdown alone; prepend length in codepoints
+                        var headerStr = mdHeader.ToString();
+                        var headerCp = headerStr.Count(c => !char.IsLowSurrogate(c));
+                        File.WriteAllText(Path.Combine(outDir, $"{lang}.md"), headerStr + extraction.Markdown, new UTF8Encoding(false));
+
+                        // ---- fr.json
+                        var provisions = new JsonArray();
+                        foreach (var p in extraction.Provisions)
+                        {
+                            var cites = new JsonArray();
+                            foreach (var c in p.Citations.DistinctBy(c => (c.Href, c.Text)))
+                                cites.Add(new JsonObject { ["href"] = c.Href, ["text"] = c.Text });
+                            provisions.Add(new JsonObject
+                            {
+                                ["anchor"] = p.Anchor,
+                                ["provision_id"] = $"{lexId}#{p.Anchor}",
+                                ["eli"] = p.Eli,
+                                ["type"] = p.Type,
+                                ["num"] = p.Num,
+                                ["heading"] = p.Heading,
+                                ["path"] = new JsonArray(p.Path.Select(s => (JsonNode)s).ToArray()),
+                                ["article_valid_from"] = p.ArticleValidFrom,
+                                ["text_md"] = p.TextMd,
+                                ["text_sha256"] = p.TextSha256,
+                                ["md_span"] = new JsonObject { ["start"] = headerCp + p.MdStart, ["end"] = headerCp + p.MdEnd },
+                                ["citations"] = cites,
+                            });
+                        }
+                        var json = new JsonObject
+                        {
+                            ["schema"] = SchemaId,
+                            ["lex_id"] = lexId,
+                            ["language"] = lang,
+                            ["title"] = workTitle,
+                            ["valid_from"] = validFrom,
+                            ["valid_to"] = validTo,
+                            ["valid_time_source"] = "publisher",
+                            ["derived_from"] = new JsonObject
+                            {
+                                ["corpus_repo"] = $"lex-corpus-{publisher}",
+                                ["path"] = $"works/{slug}/versions/{validFrom}/{Path.GetFileName(xmlFile)}",
+                                ["sha256"] = sourceSha,
+                                ["source_uri"] = sourceUri,
+                            },
+                            ["generator"] = new JsonObject
+                            {
+                                ["profile"] = profileId,
+                                ["tool"] = "lex derive",
+                                ["code_version"] = codeVersion,
+                            },
+                            ["license"] = license,
+                            ["attribution"] = attribution,
+                            ["provisions"] = provisions,
+                            ["notes"] = new JsonArray(extraction.Notes.Select(n => (JsonNode)n).ToArray()),
+                        };
+                        File.WriteAllText(Path.Combine(outDir, $"{lang}.json"),
+                            json.ToJsonString(JsonOpts) + "\n", new UTF8Encoding(false));
+
+                        versions++;
+                        provisionCount += extraction.Provisions.Count;
+                    }
+                    catch (Exception ex)
+                    {
+                        errors.Add($"{slug}/{validFrom}/{Path.GetFileName(xmlFile)}: {ex.Message}");
+                    }
+                }
+            }
+        }
+        return new Stats(works, versions, provisionCount, skipped, errors);
+    }
+}

@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/Lex.Derive/Lex.Derive.csproj" />
     <Project Path="src/Lex.Index/Lex.Index.csproj" />
     <Project Path="src/Lex.Ingest/Lex.Ingest.csproj" />
     <Project Path="src/Lex.Law/Lex.Law.csproj" />

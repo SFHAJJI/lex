@@ -51,6 +51,25 @@ switch (args0[0])
         IndexFromCorpus.Build(corpus, outDb, keyPem, now);
         return 0;
     }
+    case "derive":
+    {
+        var publisher = Get("--publisher") ?? "lu-legilux";
+        var corpus = Get("--corpus") ?? throw new ArgumentException("--corpus required");
+        var outRoot = Get("--out") ?? throw new ArgumentException("--out required");
+        var codeVersion = Get("--code-version") ?? "dev";
+        Console.Error.WriteLine($"[lex] derive {publisher} {corpus} -> {outRoot}");
+        var stats = Lex.Derive.DeriveWriter.Derive(corpus, outRoot, publisher, codeVersion);
+        Console.Error.WriteLine($"  [derive] works={stats.Works} versions={stats.Versions} provisions={stats.Provisions} skipped={stats.Skipped} errors={stats.Errors.Count}");
+        foreach (var e in stats.Errors.Take(20)) Console.Error.WriteLine($"  [derive] ERROR {e}");
+        return stats.Errors.Count == 0 ? 0 : 2;
+    }
+    case "catalog":
+    {
+        var articles = Get("--articles") ?? throw new ArgumentException("--articles required");
+        var s = Lex.Derive.CatalogBuilder.Build(articles);
+        Console.Error.WriteLine($"  [catalog] works={s.Works} anchors={s.Anchors} history_states={s.HistoryStates}");
+        return 0;
+    }
     default:
         Usage();
         return 1;
@@ -60,4 +79,5 @@ static void Usage() => Console.Error.WriteLine("""
     lex — point-in-time regulatory text pipeline
       lex ingest --publisher lu-legilux --corpus PATH [--now ISO]
       lex index  --corpus PATH --out FILE.db [--keyfile KEY.pem] [--now ISO]
+      lex derive --publisher lu-legilux --corpus PATH --out PATH [--code-version SHA]
     """);

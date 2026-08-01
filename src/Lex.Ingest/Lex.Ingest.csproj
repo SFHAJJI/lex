@@ -6,6 +6,7 @@
     <ProjectReference Include="..\Lex.Index\Lex.Index.csproj" />
     <ProjectReference Include="..\Lex.Sources.Legilux\Lex.Sources.Legilux.csproj" />
     <ProjectReference Include="..\Lex.Sources.EurLex\Lex.Sources.EurLex.csproj" />
+    <ProjectReference Include="..\Lex.Derive\Lex.Derive.csproj" />
   </ItemGroup>
 
   <PropertyGroup>
