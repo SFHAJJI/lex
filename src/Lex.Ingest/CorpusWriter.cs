@@ -145,7 +145,8 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now)
                         var body = await adapter.FetchBody(v, exprRec, ct);
                         if (body is null) continue;
                         var bytes = Encoding.UTF8.GetBytes(body);
-                        var file = $"{exprMeta.Language}.html";           // §3.3 rule 3, initial expression
+                        var ext = body.TrimStart().StartsWith("<?xml", StringComparison.Ordinal) ? "xml" : "html";
+                        var file = $"{exprMeta.Language}.{ext}";          // §3.3 rule 3, initial expression
                         var bodyPath = Path.Combine(versionDir, file);
                         if (!File.Exists(bodyPath)) await File.WriteAllBytesAsync(bodyPath, bytes, ct);
                         exprMeta.Observations.Add(new ObservationEntry

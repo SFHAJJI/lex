@@ -7,9 +7,10 @@ with the exact validity interval, the timeline, the instrument that changed it,
 and a hashed provenance record — and an honest, machine-readable refusal when it
 cannot know.
 
-**Live demo:** see the repository description link.
+**Live demo:** https://law.soufien.lu — permalinks, timelines, diffs, a hosted
+MCP endpoint (`/mcp`) for your own AI, and a capped AI playground (`/ask`).
 **Specification:** [docs/lex-spec-v4.md](docs/lex-spec-v4.md) — the full
-architecture, decision record (D1–D43), fitness rules and risk register.
+architecture, decision record (D1–D44), fitness rules and risk register.
 
 ## What it never does
 
@@ -41,11 +42,14 @@ FOUNDATION  Lex.Temporal (interval algebra)   Lex.Index (SQLite: filter-first, s
 ## Current coverage
 
 Luxembourg (Legilux, Tier A): 1,399 works / 4,644 consolidated versions,
-1849→2030, **metadata-only mode** — no published, robots-compliant body channel
-exists (spec §2.1, D42), so no legal text is stored or republished; every
-document links to the official publication. Honest coverage claim: *dense and
-reliable from 2017 onward; real but sparse before; isolated snapshots back to
-1849; forward to 2030.* EU (EUR-Lex) is next (spec §14.2).
+1849→2030, **full text** — verbatim Akoma Ntoso XML from the publisher's
+official, robots-permitted filestore, licensed CC-BY-4.0 by the publisher
+(spec D44). Honest coverage claim: *dense and reliable from 2017 onward; real
+but sparse before; isolated snapshots back to 1849; forward to 2030.*
+EU (EUR-Lex, Tier A): 8 flagship acts (GDPR, DORA, AI Act, NIS2, MiFID II,
+CRR, PSD2, SFDR), 46 consolidated versions with verbatim XHTML text where the
+publisher serves it. The never-consolidated LU acts (~24,579) and the wider EU
+acquis (75,019 consolidated versions) are staged next (spec §14).
 
 ## Run it
 
@@ -69,6 +73,12 @@ LEX_INDEX_DIR=indexes dotnet run --project src/Lex.Mcp
 `as_of` · `timeline` · `in_force_on` · `diff` · `search` · `provenance` ·
 `coverage` — coverage exists to say what we do **not** have; a system that
 cannot state its own gaps cannot be trusted with a completeness question.
+
+Hosted endpoint (Streamable HTTP, no key needed):
+
+```
+claude mcp add --transport http lex https://law.soufien.lu/mcp
+```
 
 ## Licence
 

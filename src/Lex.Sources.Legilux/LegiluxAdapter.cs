@@ -32,8 +32,13 @@ public sealed class LegiluxAdapter : ISourceAdapter
             SourceTermsUrl: "https://data.public.lu/en/datasets/legilux-journal-officiel-du-grand-duche-de-luxembourg/"),
         DocumentTypes: [],   // discovered from data at ingest time; DocumentType is data, not code (§3.5)
         Languages: ["fr"],
-        TextIncluded: false, // D42 metadata-only standing state
-        TextPublic: false,   // R2 standing closed gate
+        // R2 RESOLVED 2026-08-01 by the publisher's own statements: the official Casemates
+        // docs license "les fichiers de contenu" (content files) AND metadata under CC-BY-4.0
+        // incl. commercial reuse, and each manifestation carries a machine-readable
+        // dct:license CC-BY-4.0 triple. Text is fetched from the robots-PERMITTED main host
+        // (legilux.public.lu/filestore/...), the same host the site itself serves from.
+        TextIncluded: true,
+        TextPublic: true,
         HistoryBegins: "publisher");
 
     public async IAsyncEnumerable<WorkRef> EnumerateWorks([EnumeratorCancellation] CancellationToken ct)
@@ -51,9 +56,56 @@ public sealed class LegiluxAdapter : ISourceAdapter
             : [];
     }
 
-    // D42: metadata-only standing state — never called with a body request that succeeds.
-    public Task<string?> FetchBody(VersionRecord version, ExpressionRecord expression, CancellationToken ct)
-        => Task.FromResult<string?>(null);
+    private const int BodyCapBytes = 8 * 1024 * 1024;
+    private static readonly HttpClient BodyHttp = CreateBodyClient();
+    private DateTimeOffset _lastBodyFetch = DateTimeOffset.MinValue;
+    private Dictionary<string, string>? _xmlFiles;   // "<consolidationUri>|<lang>" -> official file URL
+
+    private static HttpClient CreateBodyClient()
+    {
+        var c = new HttpClient { Timeout = TimeSpan.FromSeconds(180) };
+        c.DefaultRequestHeaders.UserAgent.ParseAdd("Lex/0.1");
+        c.DefaultRequestHeaders.UserAgent.ParseAdd("(+https://github.com/SFHAJJI/lex)");
+        return c;
+    }
+
+    /// <summary>
+    /// Verbatim Akoma Ntoso XML from the official channel: the manifestation file the
+    /// publisher's own CC-BY dataset enumerates, served from the robots-permitted main host.
+    /// Sequential, paced (D14).
+    /// </summary>
+    public async Task<string?> FetchBody(VersionRecord version, ExpressionRecord expression, CancellationToken ct)
+    {
+        await EnsureLoadedAsync(ct);
+        if (_xmlFiles is null || !_xmlFiles.TryGetValue($"{version.Id.Value}|{expression.Language}", out var url))
+            return null;
+
+        var since = DateTimeOffset.UtcNow - _lastBodyFetch;
+        var pause = TimeSpan.FromMilliseconds(1500);
+        if (since < pause) await Task.Delay(pause - since, ct);
+        _lastBodyFetch = DateTimeOffset.UtcNow;
+
+        using var resp = await BodyHttp.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
+        if (!resp.IsSuccessStatusCode)
+        {
+            Console.Error.WriteLine($"  [legilux] body fetch failed ({(int)resp.StatusCode}): {url}");
+            return null;
+        }
+        await using var stream = await resp.Content.ReadAsStreamAsync(ct);
+        using var ms = new MemoryStream();
+        var buf = new byte[64 * 1024];
+        int read;
+        while ((read = await stream.ReadAsync(buf, ct)) > 0)
+        {
+            ms.Write(buf, 0, read);
+            if (ms.Length > BodyCapBytes)
+            {
+                Console.Error.WriteLine($"  [legilux] body exceeds {BodyCapBytes / 1024 / 1024} MB cap: {url}");
+                return null;
+            }
+        }
+        return System.Text.Encoding.UTF8.GetString(ms.ToArray());
+    }
 
     private async Task EnsureLoadedAsync(CancellationToken ct)
     {
@@ -147,9 +199,31 @@ public sealed class LegiluxAdapter : ISourceAdapter
                 works[uri] = works[uri] with { TitleHint = hint, TypeCode = kind };
             }
 
+            // Manifestation map: the publisher's own dataset enumerates the official XML file
+            // per expression (isExemplifiedBy, userFormat xml, dct:license CC-BY-4.0). Fetch
+            // host is the site's own manifestation_prefix (robots-permitted main host).
+            var xmlRows = await _sparql.SelectPagedAsync((limit, offset) => J + $$"""
+                SELECT ?c ?expr ?file WHERE {
+                  ?c a jolux:Consolidation ; jolux:isRealizedBy ?expr .
+                  ?expr jolux:isEmbodiedBy ?m .
+                  ?m jolux:userFormat <http://data.legilux.public.lu/resource/authority/user-format/xml> ;
+                     jolux:isExemplifiedBy ?file .
+                } ORDER BY ?c LIMIT {{limit}} OFFSET {{offset}}
+                """, pageSize: 5000, ct,
+                onPage: n => Console.Error.WriteLine($"  [legilux] manifestation rows {n}"));
+            var xmlFiles = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var r in xmlRows)
+            {
+                var lang = LangCode(LastSegment(r["expr"]));
+                xmlFiles[$"{r["c"]}|{lang}"] = r["file"]
+                    .Replace("http://data.legilux.public.lu/filestore/", "https://legilux.public.lu/filestore/")
+                    .Replace("https://data.legilux.public.lu/filestore/", "https://legilux.public.lu/filestore/");
+            }
+            _xmlFiles = xmlFiles;
+
             _byWork = byWork;
             _works = works;
-            Console.Error.WriteLine($"  [legilux] {works.Count} works, {byWork.Values.Sum(v => v.Count)} versions");
+            Console.Error.WriteLine($"  [legilux] {works.Count} works, {byWork.Values.Sum(v => v.Count)} versions, {xmlFiles.Count} xml manifestations");
         }
         finally { _initLock.Release(); }
     }

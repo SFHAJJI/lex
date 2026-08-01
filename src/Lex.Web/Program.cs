@@ -1,5 +1,8 @@
 using System.Text;
+using System.Text.Json.Nodes;
 using Lex.Index;
+using Lex.Mcp;
+using Lex.Web;
 
 var builder = WebApplication.CreateBuilder(args);
 var app = builder.Build();
@@ -16,6 +19,10 @@ if (Directory.Exists(indexDir))
         Console.Error.WriteLine($"[web] mounted {db} ({r.Collection}, signature_valid={r.SignatureValid})");
     }
 if (readers.Count == 0) Console.Error.WriteLine($"[web] WARNING: no indexes found in {indexDir}");
+
+var mcpCore = new McpCore(readers);
+var askService = new AskService(mcpCore);
+Console.Error.WriteLine($"[web] /ask playground: {(askService.Enabled ? "enabled" : "disabled (no AOAI_ENDPOINT/AOAI_KEY)")}");
 
 string H(string? s) => System.Net.WebUtility.HtmlEncode(s ?? "");
 
@@ -61,7 +68,7 @@ string Page(string title, string body, string? subtitle = null) => $$"""
       <a class="brand" href="/">Lex</a>
       <span class="tag">point-in-time regulatory text — what did the rule say on a given date?</span>
       <span style="flex:1"></span>
-      <a href="/in-force-on">in force on…</a>&nbsp; <a href="/search">search</a>&nbsp; <a href="/coverage">coverage</a>
+      <a href="/in-force-on">in force on…</a>&nbsp; <a href="/search">search</a>&nbsp; <a href="/ask">ask</a>&nbsp; <a href="/ai">use with your AI</a>&nbsp; <a href="/coverage">coverage</a>
     </header>
     <main>
     <h1>{{title}}</h1>
@@ -69,8 +76,8 @@ string Page(string title, string body, string? subtitle = null) => $$"""
     {{body}}
     </main>
     <footer>
-      LU data: Legilux — Ministère d'État, Service central de législation, Grand-Duché de Luxembourg (CC-BY metadata;
-      metadata-only: no LU text is stored or republished — documents link to the official publication).
+      LU data: Legilux — Ministère d'État, Service central de législation, Grand-Duché de Luxembourg
+      (CC-BY 4.0, metadata and content files; consolidated texts reproduced verbatim from the official filestore).
       EU data: © European Union, reuse with attribution (Commission Decision 2011/833/EU);
       <b>consolidated texts have no legal effect</b> — only acts published in the Official Journal are authentic.
       Lex answers <i>what the rule was</i>, never what it means — no interpretation, no advice.
@@ -168,6 +175,148 @@ string RenderDiff(string oldText, string newText)
 // ------------------------------------------------- routes
 
 app.MapGet("/robots.txt", () => Results.Text("User-agent: *\nAllow: /\n"));
+
+// ---- public MCP endpoint (Streamable HTTP, stateless): any MCP client can connect ----
+app.MapPost("/mcp", async (HttpRequest req) =>
+{
+    using var sr = new StreamReader(req.Body);
+    var body = await sr.ReadToEndAsync();
+    JsonNode? msg;
+    try { msg = JsonNode.Parse(body); } catch { return Results.BadRequest(); }
+    if (msg is JsonArray batch)
+    {
+        var responses = new JsonArray();
+        foreach (var m in batch.ToArray())
+            if (m is not null && mcpCore.HandleMessage(m) is { } r) responses.Add(r);
+        return responses.Count == 0 ? Results.Accepted() : Results.Json(responses);
+    }
+    if (msg is null) return Results.BadRequest();
+    var resp = mcpCore.HandleMessage(msg);
+    return resp is null ? Results.Accepted() : Results.Json(resp);
+});
+app.MapGet("/mcp", () => Results.Text("POST JSON-RPC here (MCP Streamable HTTP). Connect: claude mcp add --transport http lex <this URL>", statusCode: 405));
+
+app.MapGet("/ai", (HttpRequest req) =>
+{
+    var baseUrl = $"{req.Scheme}://{req.Host}";
+    var body = $$"""
+        <p>Lex is <b>MCP-native</b>: you bring your AI, Lex brings the evidence. Your model asks the
+        seven Lex tools for the law as it stood on a date, and composes its answer from returned
+        text, dates and hashes — Lex itself never interprets anything.</p>
+
+        <h2>Connect in one line</h2>
+        <div class="card"><b>Claude Code</b><pre class="mono" style="white-space:pre-wrap">claude mcp add --transport http lex {{baseUrl}}/mcp</pre></div>
+        <div class="card"><b>Claude Desktop / any MCP client</b> — add a remote MCP server:
+        <pre class="mono" style="white-space:pre-wrap">{ "mcpServers": { "lex": { "url": "{{baseUrl}}/mcp" } } }</pre></div>
+
+        <h2>What a conversation looks like</h2>
+        <div class="card"><pre style="white-space:pre-wrap;font-size:14px;margin:0">
+            You     What did Luxembourg data-protection law require about breach
+                    notification in March 2019?
+
+            AI  →   search("notification violation données", as_of: 2019-03-15)
+                ←   loi du 1er août 2018 (lex_id lu-legilux:loi-2018-08-01-a686…), recueil protection des données
+            AI  →   as_of("lu-legilux:recueil-protection_donnees", "2019-03-15")
+                ←   the exact text valid that day + interval + sha256 + signed stamp
+
+            AI      "As of 15 March 2019, the applicable framework was … [quotes the
+                    retrieved text; cites validity 2018-08-20 → 2019-… ; links provenance]"
+        </pre></div>
+
+        <h2>The seven tools</h2>
+        <p class="sub">as_of · timeline · in_force_on · diff · search · provenance · coverage —
+        read-only, deterministic, every response carries its dates, its hash, and an honest refusal
+        (<span class="mono">no_version_for_date</span>, <span class="mono">text_withheld</span>) when Lex cannot know.</p>
+
+        <p>Want to try it without installing anything? The capped <a href="/ask">built-in playground</a>
+        runs the same tools. Prefer no AI at all? Everything is also a <a href="/">permalink</a>.</p>
+        """;
+    return Results.Content(Page("Use Lex with your AI", body,
+        "your model + our evidence — MCP endpoint, one line to connect"), "text/html");
+});
+
+// ---- /ask playground: chat over the seven tools, grounded and capped ----
+app.MapGet("/ask", () =>
+{
+    const string body = """
+        <div class="notice"><b>Not legal advice.</b> The assistant answers only from Lex's signed
+        point-in-time indexes and cites the exact version (dates, hash, permalink) behind every claim.
+        It reports <i>what the rule was</i>, never what it means. Consolidated texts have no legal effect.</div>
+
+        <div id="chat"></div>
+        <form id="askform" class="inline" style="margin-top:14px">
+          <input id="q" style="flex:1;min-width:260px" maxlength="4000" autocomplete="off"
+                 placeholder="e.g. Que disait le Code de procédure civile au 1er janvier 2020 ?">
+          <button id="send" type="submit">ask</button>
+        </form>
+        <p class="sub" id="hints">Try:
+          <a href="#" class="hint">Que disait le Code de procédure civile au 1er janvier 2020 ?</a> ·
+          <a href="#" class="hint">What did the GDPR say about breach notification on 15 March 2019?</a> ·
+          <a href="#" class="hint">How has DORA changed since it entered into force?</a></p>
+        <p class="sub">Capped public playground (daily per-visitor and global limits). Unlimited use:
+        <a href="/ai">connect your own AI</a> to the MCP endpoint.</p>
+
+        <style>
+          #chat .msg { margin:10px 0; padding:10px 14px; border-radius:10px; white-space:pre-wrap }
+          #chat .u { background:var(--card); border:1px solid var(--line) }
+          #chat .a { border:1px solid var(--line) }
+          #chat .t { font-family:var(--mono); font-size:12.5px; color:var(--muted); margin:4px 0 4px 8px }
+          #chat .err { border-left:3px solid #c0392b; padding:8px 12px; color:var(--muted) }
+        </style>
+        <script>
+        (function () {
+          const chat = document.getElementById('chat'), q = document.getElementById('q'),
+                form = document.getElementById('askform'), send = document.getElementById('send');
+          const msgs = [];
+          function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+          function linkify(s) {
+            return esc(s).replace(/(https?:\/\/[^\s)"'<>]+)/g, '<a href="$1" rel="noopener">$1</a>');
+          }
+          function add(cls, html) { const d = document.createElement('div'); d.className = cls; d.innerHTML = html; chat.appendChild(d); d.scrollIntoView({block:'end'}); return d; }
+          async function ask(text) {
+            msgs.push({ role: 'user', content: text });
+            add('msg u', esc(text));
+            const busy = add('t', 'thinking…');
+            send.disabled = true;
+            try {
+              const r = await fetch('/api/ask', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                                 body: JSON.stringify({ messages: msgs }) });
+              const j = await r.json();
+              busy.remove();
+              (j.trace || []).forEach(t => add('t', '→ ' + esc(t.tool) + '(' + esc(JSON.stringify(t.args)) + ')'));
+              if (j.error) { add('err', esc(j.error)); msgs.pop(); }
+              else { msgs.push({ role: 'assistant', content: j.reply }); add('msg a', linkify(j.reply)); }
+            } catch (e) { busy.remove(); add('err', 'network error — try again'); msgs.pop(); }
+            send.disabled = false; q.focus();
+          }
+          form.addEventListener('submit', function (e) {
+            e.preventDefault();
+            const text = q.value.trim(); if (!text || send.disabled) return;
+            q.value = ''; ask(text);
+          });
+          document.querySelectorAll('.hint').forEach(a => a.addEventListener('click', function (e) {
+            e.preventDefault(); if (!send.disabled) ask(this.textContent);
+          }));
+        })();
+        </script>
+        """;
+    return Results.Content(Page("Ask the AI", body,
+        "a model that reads only from Lex's signed indexes — every answer cites the version it used"), "text/html");
+});
+
+app.MapPost("/api/ask", async (HttpRequest req) =>
+{
+    if (req.ContentLength is > 65536) return Results.Json(new { error = "Request too large." }, statusCode: 413);
+    JsonNode? parsed;
+    try { using var sr = new StreamReader(req.Body); parsed = JsonNode.Parse(await sr.ReadToEndAsync()); }
+    catch { return Results.Json(new { error = "Bad JSON." }, statusCode: 400); }
+    if (parsed?["messages"] is not JsonArray history)
+        return Results.Json(new { error = "Body must be {\"messages\": [...]}." }, statusCode: 400);
+    var ip = req.Headers["X-Forwarded-For"].FirstOrDefault()?.Split(',')[0].Trim()
+             ?? req.HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+    var (status, bodyJson) = await askService.AskAsync(history, ip, req.Host.Value ?? "law.soufien.lu");
+    return Results.Content(bodyJson.ToJsonString(), "application/json", statusCode: status);
+});
 
 app.MapGet("/healthz", () => Results.Text("ok"));
 

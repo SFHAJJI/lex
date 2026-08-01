@@ -3,6 +3,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Lex.Index\Lex.Index.csproj" />
     <ProjectReference Include="..\Lex.Temporal\Lex.Temporal.csproj" />
+    <ProjectReference Include="..\Lex.Mcp\Lex.Mcp.csproj" />
   </ItemGroup>
 
   <PropertyGroup>
