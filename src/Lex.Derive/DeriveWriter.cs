@@ -23,7 +23,7 @@ public static class DeriveWriter
 
     public sealed record Stats(int Works, int Versions, int Provisions, int Skipped, List<string> Errors);
 
-    public static Stats Derive(string corpusRoot, string outRoot, string publisher, string codeVersion)
+    public static Stats Derive(string corpusRoot, string outRoot, string publisher)
     {
         var worksDir = Path.Combine(corpusRoot, "works");
         if (!Directory.Exists(worksDir)) throw new DirectoryNotFoundException(worksDir);
@@ -97,7 +97,7 @@ public static class DeriveWriter
                             ["source_sha256"] = sourceSha,
                             ["license"] = license,
                             ["attribution"] = attribution,
-                            ["generator"] = $"{profileId} · lex derive · {codeVersion}",
+                            ["generator"] = $"{profileId} · lex derive",
                         };
 
                         var raw = File.ReadAllText(xmlFile, Encoding.UTF8);
@@ -162,11 +162,12 @@ public static class DeriveWriter
                                 ["sha256"] = sourceSha,
                                 ["source_uri"] = sourceUri,
                             },
+                            // The immutable profile id IS the reproducibility contract (SCHEMA.md);
+                            // a code sha here would churn every file on unrelated commits.
                             ["generator"] = new JsonObject
                             {
                                 ["profile"] = profileId,
                                 ["tool"] = "lex derive",
-                                ["code_version"] = codeVersion,
                             },
                             ["license"] = license,
                             ["attribution"] = attribution,

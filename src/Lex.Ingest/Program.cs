@@ -56,9 +56,8 @@ switch (args0[0])
         var publisher = Get("--publisher") ?? "lu-legilux";
         var corpus = Get("--corpus") ?? throw new ArgumentException("--corpus required");
         var outRoot = Get("--out") ?? throw new ArgumentException("--out required");
-        var codeVersion = Get("--code-version") ?? "dev";
         Console.Error.WriteLine($"[lex] derive {publisher} {corpus} -> {outRoot}");
-        var stats = Lex.Derive.DeriveWriter.Derive(corpus, outRoot, publisher, codeVersion);
+        var stats = Lex.Derive.DeriveWriter.Derive(corpus, outRoot, publisher);
         Console.Error.WriteLine($"  [derive] works={stats.Works} versions={stats.Versions} provisions={stats.Provisions} skipped={stats.Skipped} errors={stats.Errors.Count}");
         foreach (var e in stats.Errors.Take(20)) Console.Error.WriteLine($"  [derive] ERROR {e}");
         return stats.Errors.Count == 0 ? 0 : 2;
