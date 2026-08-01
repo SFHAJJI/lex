@@ -119,6 +119,19 @@ public class DeriveTests
     }
 
     [Fact]
+    public void Profile_akn_lu_1_is_frozen()
+    {
+        // Profile permanence (SCHEMA.md): akn-lu/1 output over a fixed input never changes.
+        // If this test fails, you have edited a published profile — make a NEW profile
+        // (akn-lu/2) instead; citations pinned under akn-lu/1 must verify forever.
+        var x = AknLuProfile.Extract(Akn, "lex:frozen");
+        var combined = string.Join("|", x.Provisions.Select(p => $"{p.Anchor}:{p.TextSha256}"));
+        var pinned = Convert.ToHexStringLower(
+            System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(combined)));
+        Assert.Equal("1c55e3140c5945dca3be0d782d1a0b1a9b742f03de2721f7ff6aab8e2db9a223", pinned);
+    }
+
+    [Fact]
     public void Sha256_covers_text_md_exactly()
     {
         var x = AknLuProfile.Extract(Akn, "lex:test");

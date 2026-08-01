@@ -15,11 +15,15 @@ public static class XhtmlEuProfile
 {
     public const string ProfileId = "xhtml-eu/1";
 
+    private sealed record Draft(
+        string Anchor, string Type, string? Num, string? Heading,
+        List<string> Path, string Body, List<Citation> Citations);
+
     public static Extraction Extract(string xhtml, string lexIdBase)
     {
         var doc = XDocument.Parse(xhtml, LoadOptions.None);
         var root = doc.Root ?? throw new InvalidDataException("empty XHTML document");
-        var notes = new List<string> { "extraction_confidence: heuristic (Cellar HTML classes are stable but undocumented)" };
+        var notes = new List<string>();
 
         var subdivisions = root.Descendants()
             .Where(e => e.Name.LocalName == "div" && HasClass(e, "eli-subdivision"))
@@ -32,56 +36,153 @@ public static class XhtmlEuProfile
             .Where(e => !e.Ancestors().Any(a => subdivisions.Contains(a)))
             .ToList();
 
+        List<Draft> drafts;
+        if (subdivisions.Count > 0)
+        {
+            notes.Add("boundaries: publisher eli-subdivision fragment identifiers (structural-in-presentation)");
+            drafts = subdivisions.Select(el =>
+            {
+                var id = (string)el.Attribute("id")!;
+                var citations = new List<Citation>();
+                return new Draft(
+                    Anchor: id,
+                    Type: id.StartsWith("anx", StringComparison.Ordinal) ? "annex" : "article",
+                    Num: MdUtil.NullIfEmpty(TextOfFirst(el, "title-article-norm")),
+                    Heading: MdUtil.NullIfEmpty(TextOfFirst(el, "stitle-article-norm")),
+                    Path: ContainerPath(el),
+                    Body: RenderBody(el, citations),
+                    Citations: citations);
+            }).ToList();
+        }
+        else
+        {
+            // Older flat consolidation format: no subdivision wrappers; articles are marked
+            // by p.title-article-norm and annexes by p.title-annex-1. Anchors derive
+            // deterministically from the publisher's own numbering (ELI fragment convention).
+            notes.Add("boundaries: flat format segmented on title-article-norm / title-annex-1; anchors derived from publisher numbering (art_N / anx_N)");
+            drafts = FlatExtract(root, notes);
+        }
+
+        return Assemble(drafts, notes);
+    }
+
+    private static List<Draft> FlatExtract(XElement root, List<string> notes)
+    {
+        var firstTitle = root.Descendants()
+            .FirstOrDefault(e => e.Name.LocalName == "p" && ClassOf(e).Contains("title-article-norm"));
+        if (firstTitle is null) return [];
+        var stream = firstTitle.Parent!.Elements().ToList();
+
+        var drafts = new List<Draft>();
+        string? level1 = null, level2 = null;
+        string? curAnchor = null, curType = null, curNum = null, curHeading = null;
+        List<string> curPath = [];
+        List<string> curBlocks = [];
+        List<Citation> curCites = [];
+
+        void Flush()
+        {
+            if (curAnchor is null) return;
+            drafts.Add(new Draft(curAnchor, curType!, curNum, curHeading, curPath,
+                string.Join("\n\n", curBlocks.Where(b => b.Length > 0)), curCites));
+            curAnchor = null; curNum = null; curHeading = null; curBlocks = []; curCites = [];
+        }
+
+        foreach (var e in stream)
+        {
+            var cls = ClassOf(e);
+            if (e.Name.LocalName == "p" && cls.Contains("title-article-norm"))
+            {
+                Flush();
+                curNum = MdUtil.NullIfEmpty(Inline(e, null));
+                curType = "article";
+                var slug = MdUtil.Slug(curNum ?? "article");
+                curAnchor = slug.StartsWith("article_", StringComparison.Ordinal) ? "art_" + slug["article_".Length..] : slug;
+                curPath = new[] { level1, level2 }.Where(s => !string.IsNullOrEmpty(s)).Select(s => s!).ToList();
+            }
+            else if (e.Name.LocalName == "p" && cls.Contains("stitle-article-norm"))
+            {
+                if (curAnchor is not null && curHeading is null) curHeading = MdUtil.NullIfEmpty(Inline(e, null));
+            }
+            else if (e.Name.LocalName == "p" && cls.Any(c => c.StartsWith("title-annex", StringComparison.Ordinal)))
+            {
+                Flush();
+                curHeading = MdUtil.NullIfEmpty(Inline(e, null));
+                curType = "annex";
+                var slug = MdUtil.Slug(curHeading ?? "annex");
+                curAnchor = slug.StartsWith("annex_", StringComparison.Ordinal) ? "anx_" + slug["annex_".Length..] : slug;
+                curPath = [];
+                level1 = null; level2 = null;
+            }
+            else if (e.Name.LocalName == "p" && cls.Contains("title-division-1"))
+            {
+                Flush();
+                level1 = MdUtil.NullIfEmpty(Inline(e, null)); level2 = null;
+            }
+            else if (e.Name.LocalName == "p" && cls.Contains("title-division-2"))
+            {
+                // division heading text pairs with the preceding division-1 number
+                if (curAnchor is null) level2 = MdUtil.NullIfEmpty(Inline(e, null));
+                else RenderBlock(e, curBlocks, curCites);
+            }
+            else if (curAnchor is not null)
+            {
+                RenderBlock(e, curBlocks, curCites);
+            }
+            // content before the first article (preamble, recitals) is out of v1 scope
+        }
+        Flush();
+
+        var allTitles = root.Descendants().Count(e => e.Name.LocalName == "p" && ClassOf(e).Contains("title-article-norm"));
+        var captured = drafts.Count(d => d.Type == "article");
+        if (captured < allTitles)
+            notes.Add($"flat extraction captured {captured}/{allTitles} article titles (some outside the main stream)");
+        return drafts;
+    }
+
+    private static Extraction Assemble(List<Draft> drafts, List<string> notes)
+    {
         var md = new StringBuilder();
         var provisions = new List<Provision>();
         var lastPath = new List<string>();
         var seen = new HashSet<string>(StringComparer.Ordinal);
 
-        foreach (var el in subdivisions)
+        foreach (var d in drafts)
         {
-            var id = (string)el.Attribute("id")!;
-            var anchor = id;
+            var anchor = d.Anchor;
             if (!seen.Add(anchor))
             {
                 var i = 2;
-                while (!seen.Add(anchor = $"{id}__{i}")) i++;
-                notes.Add($"duplicate anchor '{id}' disambiguated as '{anchor}'");
+                while (!seen.Add(anchor = $"{d.Anchor}__{i}")) i++;
+                notes.Add($"duplicate anchor '{d.Anchor}' disambiguated as '{anchor}'");
             }
-            var type = id.StartsWith("anx", StringComparison.Ordinal) ? "annex" : "article";
 
-            var num = MdUtil.NullIfEmpty(TextOfFirst(el, "title-article-norm"));
-            var heading = MdUtil.NullIfEmpty(TextOfFirst(el, "stitle-article-norm"));
-            var path = ContainerPath(el);
-
-            var citations = new List<Citation>();
-            var body = RenderBody(el, citations);
-
-            for (var i = 0; i < path.Count; i++)
+            for (var i = 0; i < d.Path.Count; i++)
             {
-                if (i < lastPath.Count && lastPath[i] == path[i]) continue;
-                md.Append('\n').Append(new string('#', Math.Min(2 + i, 5))).Append(' ').Append(path[i]).Append('\n');
+                if (i < lastPath.Count && lastPath[i] == d.Path[i]) continue;
+                md.Append('\n').Append(new string('#', Math.Min(2 + i, 5))).Append(' ').Append(d.Path[i]).Append('\n');
             }
-            lastPath = path.ToList();
+            lastPath = d.Path.ToList();
 
             md.Append("\n<a id=\"").Append(anchor).Append("\"></a>\n\n");
-            var title = num is null && heading is null ? anchor
-                : string.Join(" — ", new[] { num, heading }.Where(s => !string.IsNullOrEmpty(s)));
+            var title = d.Num is null && d.Heading is null ? anchor
+                : string.Join(" — ", new[] { d.Num, d.Heading }.Where(s => !string.IsNullOrEmpty(s)));
             md.Append("### ").Append(title).Append("\n\n");
 
             var start = md.Length;
-            md.Append(body);
+            md.Append(d.Body);
             var end = md.Length;
             md.Append('\n');
 
             provisions.Add(new Provision(
-                Anchor: anchor, Eli: null, Type: type, Num: num, Heading: heading,
-                Path: path, ArticleValidFrom: null,
-                TextMd: body, TextSha256: MdUtil.Sha256Hex(body),
-                MdStart: start, MdEnd: end, Citations: citations));
+                Anchor: anchor, Eli: null, Type: d.Type, Num: d.Num, Heading: d.Heading,
+                Path: d.Path, ArticleValidFrom: null,
+                TextMd: d.Body, TextSha256: MdUtil.Sha256Hex(d.Body),
+                MdStart: start, MdEnd: end, Citations: d.Citations));
         }
 
         if (provisions.Count == 0)
-            notes.Add("no eli-subdivision articles/annexes found; document not extracted");
+            notes.Add("no articles/annexes found; document not extracted");
 
         var markdown = md.ToString();
         return new Extraction(MdUtil.ToCodepointSpans(markdown, provisions), markdown, notes);
@@ -98,7 +199,8 @@ public static class XhtmlEuProfile
                      && (aid.StartsWith("cpt_", StringComparison.Ordinal) || aid.StartsWith("sct_", StringComparison.Ordinal))))
         {
             var parts = anc.Elements()
-                .Where(c => c.Name.LocalName == "p" && ClassOf(c).Contains("title-division"))
+                .Where(c => c.Name.LocalName == "p" &&
+                            ClassOf(c).Any(x => x.StartsWith("title-division", StringComparison.Ordinal)))
                 .Select(c => MdUtil.CollapseWs(PlainText(c)))
                 .Where(s => s.Length > 0)
                 .ToList();
@@ -132,6 +234,17 @@ public static class XhtmlEuProfile
                 return;                                    // already in num/heading
             case "div" when cls.Contains("eli-title"):
                 return;
+            case "p" when cls.Contains("modref"):
+            {
+                // amendment arrows (▼M6 etc.) are provenance, not text: structured citations only
+                foreach (var a in el.Descendants().Where(d => d.Name.LocalName == "a"))
+                {
+                    var href = (string?)a.Attribute("href");
+                    var label = MdUtil.CollapseWs((string?)a.Attribute("title") ?? PlainText(a));
+                    if (href is not null && label.Length > 0) citations.Add(new Citation(href, label));
+                }
+                return;
+            }
             case "p":
             {
                 var t = Inline(el, citations);

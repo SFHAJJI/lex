@@ -65,23 +65,31 @@ public static class CatalogBuilder
                 }
                 anchorCount += allAnchors.Count;
 
-                // ---- history.json: per anchor, consecutive same-sha runs collapse to intervals
+                // ---- history.json: per anchor, consecutive same-sha runs collapse to intervals.
+                // Publisher-asserted article dates ride along; disagreement between the asserted
+                // date and the observed interval start is disclosed, never silently resolved (§3.3).
                 var history = new JsonObject();
                 foreach (var anchor in allAnchors)
                 {
                     var states = new JsonArray();
-                    string? runSha = null, runFrom = null, runTo = null, runVersion = null;
+                    string? runSha = null, runFrom = null, runTo = null, runVersion = null, runArticleDate = null;
                     void Flush()
                     {
                         if (runSha is null) return;
-                        states.Add(new JsonObject
+                        var state = new JsonObject
                         {
                             ["valid_from"] = runFrom,
                             ["valid_to"] = runTo,
                             ["text_sha256"] = runSha,
                             ["in_version"] = runVersion,
-                        });
-                        runSha = null;
+                        };
+                        if (runArticleDate is not null)
+                        {
+                            state["article_valid_from"] = runArticleDate;
+                            if (runArticleDate != runFrom) state["validity_conflict"] = true;
+                        }
+                        states.Add(state);
+                        runSha = null; runArticleDate = null;
                     }
                     foreach (var (validFrom, _, doc) in versions)
                     {
@@ -96,6 +104,7 @@ public static class CatalogBuilder
                             runSha = sha;
                             runFrom = validFrom;
                             runVersion = doc["lex_id"]?.GetValue<string>();
+                            runArticleDate = p["article_valid_from"]?.GetValue<string>();
                         }
                         runTo = validTo;                              // extends with every version in the run
                     }
@@ -104,25 +113,79 @@ public static class CatalogBuilder
                     history[anchor] = states;
                 }
 
+                // ---- anchor_events: mechanical renumbering/insertion/removal detection (§2).
+                // A "renumbered" event is emitted only when the text hash match between one
+                // removed and one inserted anchor is UNIQUE within the transition — identical
+                // boilerplate texts ("Abrogé.") otherwise stay honest removed/inserted pairs.
+                var anchorEvents = new JsonArray();
+                for (var vi = 1; vi < versions.Count; vi++)
+                {
+                    Dictionary<string, string> ShaByAnchor(int idx) =>
+                        (versions[idx].Doc["provisions"] as JsonArray)!.OfType<JsonObject>()
+                        .ToDictionary(p => p["anchor"]!.GetValue<string>(), p => p["text_sha256"]!.GetValue<string>(), StringComparer.Ordinal);
+                    var prev = ShaByAnchor(vi - 1);
+                    var cur = ShaByAnchor(vi);
+                    var atVersion = versions[vi].Doc["lex_id"]?.GetValue<string>();
+                    var removed = prev.Keys.Except(cur.Keys, StringComparer.Ordinal).OrderBy(a => a, StringComparer.Ordinal).ToList();
+                    var inserted = cur.Keys.Except(prev.Keys, StringComparer.Ordinal).OrderBy(a => a, StringComparer.Ordinal).ToList();
+                    var matched = new HashSet<string>(StringComparer.Ordinal);
+                    foreach (var r in removed)
+                    {
+                        var sha = prev[r];
+                        var candidates = inserted.Where(a => cur[a] == sha).ToList();
+                        var sameShaRemoved = removed.Where(a => prev[a] == sha).ToList();
+                        if (candidates.Count == 1 && sameShaRemoved.Count == 1)
+                        {
+                            matched.Add(r); matched.Add(candidates[0]);
+                            anchorEvents.Add(new JsonObject
+                            {
+                                ["type"] = "renumbered", ["from"] = r, ["to"] = candidates[0],
+                                ["text_sha256"] = sha, ["at_version"] = atVersion, ["basis"] = "identical_text",
+                            });
+                        }
+                    }
+                    foreach (var r in removed.Where(a => !matched.Contains(a)))
+                        anchorEvents.Add(new JsonObject { ["type"] = "removed", ["anchor"] = r, ["at_version"] = atVersion });
+                    foreach (var a in inserted.Where(a => !matched.Contains(a)))
+                        anchorEvents.Add(new JsonObject { ["type"] = "inserted", ["anchor"] = a, ["at_version"] = atVersion });
+                }
+
+                var languages = new SortedSet<string>(versions.Select(v => v.Lang), StringComparer.Ordinal);
+                var profiles = new SortedSet<string>(versions
+                    .Select(v => v.Doc["generator"]?["profile"]?.GetValue<string>())
+                    .OfType<string>(), StringComparer.Ordinal);
+
                 File.WriteAllText(Path.Combine(workDir, "work.json"), new JsonObject
                 {
                     ["lex_work_id"] = $"{publisher}:{slug}",
                     ["title"] = title,
+                    ["languages"] = new JsonArray(languages.Select(l => (JsonNode)l).ToArray()),
                     ["versions"] = versionArr,
                     ["anchors"] = new JsonArray(allAnchors.Select(a => (JsonNode)a).ToArray()),
+                    // reserved for the transposition/amendment axis (§5): populated by a later
+                    // ingest (Cellar NIM links etc.), never a schema migration
+                    ["relations"] = new JsonObject
+                    {
+                        ["amends"] = new JsonArray(), ["amended_by"] = new JsonArray(),
+                        ["transposes"] = new JsonArray(), ["implemented_by"] = new JsonArray(),
+                        ["repeals"] = new JsonArray(), ["repealed_by"] = new JsonArray(),
+                    },
                 }.ToJsonString(JsonOpts) + "\n");
 
                 File.WriteAllText(Path.Combine(workDir, "history.json"), new JsonObject
                 {
                     ["lex_work_id"] = $"{publisher}:{slug}",
                     ["schema"] = "lex-articles/1",
+                    ["profiles"] = new JsonArray(profiles.Select(p => (JsonNode)p).ToArray()),
                     ["anchors"] = history,
+                    ["anchor_events"] = anchorEvents,
                 }.ToJsonString(JsonOpts) + "\n");
 
                 catalog.Add(new JsonObject
                 {
                     ["lex_work_id"] = $"{publisher}:{slug}",
                     ["title"] = title,
+                    ["languages"] = new JsonArray(languages.Select(l => (JsonNode)l).ToArray()),
                     ["derived_versions"] = versions.Count,
                     ["anchors"] = allAnchors.Count,
                     ["first_valid_from"] = versions[0].ValidFrom,
