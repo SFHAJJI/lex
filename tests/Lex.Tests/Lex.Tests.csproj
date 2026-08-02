@@ -24,6 +24,7 @@
     <ProjectReference Include="..\..\src\Lex.Index\Lex.Index.csproj" />
     <ProjectReference Include="..\..\src\Lex.Ingest\Lex.Ingest.csproj" />
     <ProjectReference Include="..\..\src\Lex.Derive\Lex.Derive.csproj" />
+    <ProjectReference Include="..\..\src\Lex.Mcp\Lex.Mcp.csproj" />
   </ItemGroup>
 
 </Project>
