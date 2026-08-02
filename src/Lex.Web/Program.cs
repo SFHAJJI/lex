@@ -347,16 +347,11 @@ app.MapGet("/", () =>
         <p class="lede">Ask in plain language. Get the exact text that applied that day —
         and the official source it came from.</p>
 
-        <div id="chat"></div>
-        <form id="askform" class="inline" style="margin-top:10px">
-          <input id="q" style="flex:1;min-width:min(260px,100%)" maxlength="4000" autocomplete="off"
-                 placeholder="What did the Covid rules say on 1 February 2021?">
-          <button id="send" type="submit">Ask</button>
-        </form>
-        <p class="sub" id="hints">
-          <a href="#" class="hint">Que disait le Code de procédure civile au 1er janvier 2020 ?</a> ·
-          <a href="#" class="hint">What did the GDPR say about breach notification on 15 March 2019?</a> ·
-          <a href="#" class="hint">How has Article 92 of the CRR changed over its life?</a></p>
+        <!-- The workspace mounts here. Without JavaScript the page still explains itself
+             and every permalink below still works — those are server-rendered documents. -->
+        <div id="workspace"><noscript><p class="sub">The interactive workspace needs JavaScript.
+          Everything is also reachable as plain pages: <a href="/find">find a law</a>,
+          <a href="/changed">what changed</a>, <a href="/stories">stories</a>.</p></noscript></div>
         """
         + $"""
         <div class="storyrow">
@@ -387,24 +382,9 @@ app.MapGet("/", () =>
         <p class="sub">Free public assistant with a daily limit.
         <a href="/developers">Connect your own AI</a> for unlimited use.</p>
         """
-        // CSS and JS live in a NON-interpolated raw string: their braces are not holes.
+        // Story cards keep their styles; the workspace ships its own stylesheet.
         + """
         <style>
-          #chat .msg { margin:10px 0; padding:10px 14px; border-radius:10px; white-space:pre-wrap }
-          #chat .u { background:var(--card); border:1px solid var(--line) }
-          #chat .a { border:1px solid var(--line) }
-          #chat .t { font-family:var(--mono); font-size:12.5px; color:var(--muted); margin:4px 0 4px 8px }
-          #chat .err { border-left:3px solid #c0392b; padding:8px 12px; color:var(--muted) }
-          #chat .ev { border:1px solid var(--line); border-radius:10px; margin:6px 0 14px; padding:8px 12px; font-size:13.5px }
-          #chat .ev h4 { margin:0 0 6px; font-size:13px; color:var(--muted) }
-          #chat .ev .evcard { border-top:1px solid var(--line); padding:6px 0 }
-          #chat .ev .stat { border:1px solid var(--line); border-radius:99px; padding:0 8px; font-size:11.5px; color:var(--muted) }
-          #chat .ev .stat.warn { color:var(--warn); border-color:var(--warn) }
-          #chat .ev .evver { margin:4px 0 4px 10px }
-          #chat .ev .pin { margin:4px 0 4px 14px; border-left:2px solid var(--line); padding-left:8px }
-          #chat .ev .pin .q { color:var(--muted); font-style:italic }
-          #chat .share { margin:-6px 0 14px 2px; font-size:13.5px }
-          #chat .msg.a { font-family:var(--serif); font-size:16.5px }
           .lede { font-size:18px; color:var(--muted); margin:0 0 18px; max-width:62ch }
           .storyrow { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:14px; margin:30px 0 10px }
           a.story { display:block; border:1px solid var(--line); border-radius:10px; padding:15px; color:inherit; background:var(--card) }
@@ -414,95 +394,8 @@ app.MapGet("/", () =>
           a.story .big { font-family:var(--serif); font-size:25px; color:var(--accent); display:block;
                          margin:9px 0 2px; line-height:1; font-variant-numeric:tabular-nums }
         </style>
-        <script>
-        (function () {
-          const chat = document.getElementById('chat'), q = document.getElementById('q'),
-                form = document.getElementById('askform'), send = document.getElementById('send');
-          const msgs = [];
-          function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
-          function linkify(s) {
-            return esc(s).replace(/(https?:\/\/[^\s)"'<>]+)/g, '<a href="$1" rel="noopener">$1</a>');
-          }
-          function add(cls, html) { const d = document.createElement('div'); d.className = cls; d.innerHTML = html; chat.appendChild(d); d.scrollIntoView({block:'end'}); return d; }
-          // Every question is a URL: ?q=... re-runs it against the same signed indexes,
-          // so an answer can be pasted into a chat, a mail, a paper.
-          function shareLink(text) { return location.origin + '/?q=' + encodeURIComponent(text); }
-          async function ask(text) {
-            msgs.push({ role: 'user', content: text });
-            add('msg u', esc(text));
-            if (msgs.length === 1) history.replaceState(null, '', '/?q=' + encodeURIComponent(text));
-            const busy = add('t', 'thinking…');
-            send.disabled = true;
-            try {
-              const r = await fetch('/api/ask', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-                                                 body: JSON.stringify({ messages: msgs }) });
-              const j = await r.json();
-              busy.remove();
-              (j.trace || []).forEach(t => add('t', '→ ' + esc(t.tool) + '(' + esc(JSON.stringify(t.args)) + ')'));
-              if (j.error) { add('err', esc(j.error)); msgs.pop(); }
-              else {
-                msgs.push({ role: 'assistant', content: j.reply });
-                add('msg a', linkify(j.reply));
-                const calls = (j.trace || []).filter(t => (t.docs || []).length || t.status);
-                if (calls.length) {
-                  // Evidence tree: work -> point-in-time version -> pinpointed articles with
-                  // the exact text the tools returned. A reader can compare each claim above
-                  // against source text without leaving the page (misgrounding is the failure
-                  // mode legal AI is known for — a real citation that doesn't support the claim).
-                  let html = '<h4>Evidence — what the tools returned (deterministic; the AI text above is generated)</h4>';
-                  const works = new Map();
-                  calls.forEach(t => {
-                    const warn = t.status && t.status !== 'ok' ? ' warn' : '';
-                    html += '<span class="stat' + warn + '">' + esc(t.tool)
-                          + (t.status ? ' · ' + esc(t.status) : '') + '</span> ';
-                    (t.docs || []).forEach(d => {
-                      const wk = (d.lex_id || '').split(':').slice(0, 2).join(':') || d.title || '?';
-                      if (!works.has(wk)) works.set(wk, { title: d.title, versions: new Map() });
-                      const w = works.get(wk); if (!w.title && d.title) w.title = d.title;
-                      const vk = d.valid_from || '?';
-                      if (!w.versions.has(vk)) w.versions.set(vk, { to: d.valid_to, link: d.permalink, pins: [] });
-                      const v = w.versions.get(vk);
-                      (d.pinpoints || []).forEach(p => { if (!v.pins.some(x => x.anchor === p.anchor)) v.pins.push(p); });
-                      if (d.snippet) v.pins.push({ anchor: d.anchor, quote: d.snippet, permalink: d.permalink });
-                    });
-                  });
-                  works.forEach((w, wk) => {
-                    html += '<div class="evcard"><b>' + esc(w.title || wk) + '</b>';
-                    w.versions.forEach((v, from) => {
-                      const stamp = 'point-in-time: ' + esc(from) + ' → ' + esc(v.to || 'open');
-                      html += '<div class="evver"><span class="stat">' + stamp + '</span>'
-                            + (v.link ? ' <a href="' + esc(v.link) + '" rel="noopener">open this version</a>' : '') ;
-                      v.pins.slice(0, 4).forEach(p => {
-                        html += '<div class="pin">'
-                              + (p.anchor ? (p.permalink ? '<a href="' + esc(p.permalink) + '" rel="noopener">#' + esc(p.anchor) + '</a> ' : '<b>#' + esc(p.anchor) + '</b> ') : '')
-                              + (p.quote ? '<span class="q">' + esc(p.quote) + '</span>' : '') + '</div>';
-                      });
-                      html += '</div>';
-                    });
-                    html += '</div>';
-                  });
-                  add('ev', html);
-                }
-                const first = msgs.find(m => m.role === 'user');
-                if (first) add('share', '<a href="' + esc(shareLink(first.content)) + '">🔗 share this answer</a> '
-                  + '<span class="sub">— the link re-runs the question against the same signed indexes</span>');
-              }
-            } catch (e) { busy.remove(); add('err', 'network error — try again'); msgs.pop(); }
-            send.disabled = false; q.focus();
-          }
-          form.addEventListener('submit', function (e) {
-            e.preventDefault();
-            const text = q.value.trim(); if (!text || send.disabled) return;
-            q.value = ''; ask(text);
-          });
-          document.querySelectorAll('.hint').forEach(a => a.addEventListener('click', function (e) {
-            e.preventDefault(); if (!send.disabled) ask(this.textContent);
-          }));
-          // Shared link (?q=) or a story link: run it immediately on arrival.
-          const preset = new URLSearchParams(location.search).get('q');
-          if (preset && preset.trim()) ask(preset.trim().slice(0, 4000));
-        })();
-        </script>
+        <link rel="stylesheet" href="/app/workspace.css">
+        <script type="module" src="/app/workspace.js"></script>
         """;
     return Results.Content(Page("Luxembourg and EU law, as it stood on any date.", body, null, "ask"), "text/html");
 });
@@ -1474,7 +1367,12 @@ app.MapGet("/provenance/{*key}", (string key) =>
     return Results.Content(Page("Provenance", "<p>Unknown lex_id.</p>"), "text/html", statusCode: 404);
 });
 
-app.MapGet("/{publisher}/{work}/diff/{dateA}/{dateB}", (string publisher, string work, string dateA, string dateB) =>
+// Only mounted publishers own the /{publisher}/... space. WebApplication inserts routing
+// at the START of the pipeline, so an unconstrained /{publisher}/{work} would match
+// /app/workspace.js and static files would stand down for an already-selected endpoint.
+var pubRoute = $"{{publisher:regex(^({string.Join("|", readers.Keys.Select(System.Text.RegularExpressions.Regex.Escape))})$)}}";
+
+app.MapGet($"/{pubRoute}/{{work}}/diff/{{dateA}}/{{dateB}}", (string publisher, string work, string dateA, string dateB) =>
 {
     var r = Reader(publisher);
     if (r is null) return Results.Content(Page("Unknown publisher", $"<p>No index mounted for <b>{H(publisher)}</b>.</p>"), "text/html", statusCode: 404);
@@ -1513,7 +1411,7 @@ app.MapGet("/{publisher}/{work}/diff/{dateA}/{dateB}", (string publisher, string
         $"{da:yyyy-MM-dd} → {db2:yyyy-MM-dd} · no interpretation, just the text delta"), "text/html");
 });
 
-app.MapGet("/{publisher}/{work}", (string publisher, string work) =>
+app.MapGet($"/{pubRoute}/{{work}}", (string publisher, string work) =>
 {
     var r = Reader(publisher);
     if (r is null) return Results.Content(Page("Unknown publisher", $"<p>No index mounted for <b>{H(publisher)}</b>. See <a href=\"/coverage\">coverage</a>.</p>"), "text/html", statusCode: 404);
@@ -1540,7 +1438,7 @@ app.MapGet("/{publisher}/{work}", (string publisher, string work) =>
     return Results.Content(Page(t, sb.ToString(), $"every version, on a time axis", "find"), "text/html");
 });
 
-app.MapGet("/{publisher}/{work}/{date}", (string publisher, string work, string date) =>
+app.MapGet($"/{pubRoute}/{{work}}/{{date}}", (string publisher, string work, string date) =>
 {
     var r = Reader(publisher);
     if (r is null) return Results.Content(Page("Unknown publisher", $"<p>No index mounted for <b>{H(publisher)}</b>.</p>"), "text/html", statusCode: 404);

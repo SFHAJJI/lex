@@ -5,3 +5,5 @@ deploy/
 *.pem
 .vs/
 evals/out/
+web/node_modules/
+src/Lex.Web/wwwroot/app/
