@@ -151,6 +151,31 @@ public sealed class AskService(McpCore core)
     // Pull a compact evidence summary out of a tool result: overall status + the cited
     // documents (any object carrying a lex_id), for the evidence list in the UI and the
     // grounding check in evals. The cap only bounds the summary, not the model's context.
+    private static readonly System.Text.Json.JsonSerializerOptions UiJson = new()
+    {
+        PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.SnakeCaseLower,
+        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
+    };
+
+    /// <summary>The reply body: prose, the raw trace, and the merged rendering directive.</summary>
+    private static JsonObject Body(string reply, JsonArray trace, List<UiEffect> effects)
+    {
+        var body = new JsonObject { ["reply"] = reply, ["trace"] = trace };
+        var merged = UiEffect.Merge(effects);
+        // A turn that used tools and produced nothing to render is a refusal — the most
+        // characteristic thing this product does. It gets a view like any other answer,
+        // rather than silently degrading to a wall of prose.
+        if (merged.IsEmpty && trace.Count > 0)
+            merged = new UiEffect(Gap: new GapView(
+                Status: "no_result",
+                Work: null, Date: null,
+                Explanation: "Lex found nothing matching that in what it holds. This is a limit of the corpus, not a hedge — see coverage for exactly what is and is not held.",
+                Available: []));
+        if (!merged.IsEmpty)
+            body["ui"] = JsonNode.Parse(System.Text.Json.JsonSerializer.Serialize(merged, UiJson));
+        return body;
+    }
+
     private static (string? Status, JsonArray Docs) Summarize(JsonNode result)
     {
         string? status = null;
@@ -293,6 +318,9 @@ public sealed class AskService(McpCore core)
             var searchCalls = 0;
             var worksFound = new Dictionary<string, string>(StringComparer.Ordinal);
             var textToolUsed = false;
+            // D31 shape: effects are collected across every tool call in the turn and merged
+            // into ONE payload, so a single reply can carry prose plus more than one view.
+            var effects = new List<UiEffect>();
             // Reasoning shares the completion budget: over a large tool result the model can
             // spend all of it thinking and return an empty message. When that happens we retry
             // the same conversation once at lower effort, which leaves room to actually write.
@@ -376,6 +404,8 @@ public sealed class AskService(McpCore core)
                             toolSpan?.SetTag("lex.docs", docs.Count);
                             entry["status"] = st;
                             entry["docs"] = docs;
+                            var eff = UiMapper.From(name, args, node);
+                            if (!eff.IsEmpty) effects.Add(eff);
                             // Remember every work any tool surfaced: the work id is what the state
                             // tools need, and it is the thing the model most often loses track of.
                             foreach (var d in docs.OfType<JsonObject>())
@@ -425,9 +455,9 @@ public sealed class AskService(McpCore core)
                     reply = trace.Count > 0
                         ? "I retrieved the evidence below but could not compose an answer — try asking for a narrower slice (a single law, or a shorter period)."
                         : "I could not produce an answer — try rephrasing.";
-                return (200, new JsonObject { ["reply"] = reply, ["trace"] = trace });
+                return (200, Body(reply, trace, effects));
             }
-            return (200, new JsonObject { ["reply"] = "Tool budget for one question exhausted — try a narrower question.", ["trace"] = trace });
+            return (200, Body("Tool budget for one question exhausted — try a narrower question.", trace, effects));
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
