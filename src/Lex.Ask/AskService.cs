@@ -333,7 +333,10 @@ public sealed class AskService(McpCore core)
                     ["model"] = _deployment,
                     ["messages"] = messages.DeepClone(),
                     ["tools"] = OpenAiTools(),
-                    ["tool_choice"] = round == MaxToolRounds ? "none" : "auto",
+                    // Once a list view is on screen the answer is a sentence, not more lookups.
+                    // Rejecting the calls afterwards still costs a full round of the model
+                    // emitting them; withdrawing the tools removes the temptation entirely.
+                    ["tool_choice"] = round == MaxToolRounds || listRendered ? "none" : "auto",
                     ["max_completion_tokens"] = 16000,
                     ["reasoning_effort"] = effort,
                 };
