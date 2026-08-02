@@ -6,6 +6,10 @@ import react from "@vitejs/plugin-react";
 // landing workspace is a component tree.
 export default defineConfig({
   plugins: [react()],
+  // Library mode does NOT substitute this — it assumes another bundler will. React reads it
+  // at import time, so without it the bundle throws "process is not defined" before mounting
+  // and the page silently degrades to its server-rendered half.
+  define: { "process.env.NODE_ENV": JSON.stringify("production") },
   build: {
     outDir: "../src/Lex.Web/wwwroot/app",
     emptyOutDir: true,
