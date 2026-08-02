@@ -182,6 +182,37 @@ public sealed class AskService(McpCore core)
         return body;
     }
 
+    /// <summary>
+    /// Names what a tool actually found, so the wait carries information rather than
+    /// reassurance. Falls back to the tool's own name only when nothing was returned.
+    /// </summary>
+    private static Step Describe(string tool, JsonObject args, UiEffect eff, JsonArray docs)
+    {
+        string? T(JsonNode? n) => n?.GetValue<string>();
+        var first = docs.OfType<JsonObject>().FirstOrDefault();
+        var title = T(first?["title"]);
+        var work = T(args["work"]) ?? T(first?["lex_id"]);
+        var date = T(args["date"]) ?? T(args["as_of"]) ?? T(first?["valid_from"]);
+
+        if (eff.Ranking is { } r)
+            return new Step("found", $"{r.WorksChanged:n0} laws changed between {r.FromDate} and {r.ToDate}");
+        if (eff.Provision is { } pv)
+            return new Step("read", $"{title ?? work} — {pv.Provisions.Count} article(s) as in force on {pv.ValidFrom}",
+                pv.Subject.Work, pv.ValidFrom, pv.Provisions.FirstOrDefault()?.Anchor);
+        if (eff.History is { } h)
+            return new Step("history", $"{h.Anchor} has had {h.DistinctTexts} distinct text(s)", h.Subject.Work, null, h.Anchor);
+        if (eff.InForce is { } f)
+            return new Step("found", $"{f.Total:n0} laws in force on {f.Date}");
+        if (eff.Diff is { } d)
+            return new Step("diff", $"comparing {d.FromDate} with {d.ToDate}", d.Subject.Work, d.FromDate);
+        if (tool == "search")
+            return docs.Count == 0
+                ? new Step("searched", $"no match for “{T(args["query"])}”")
+                : new Step("searched", $"found {docs.Count} result(s) — {title ?? work}", work, date);
+        if (eff.Gap is { } g) return new Step("gap", g.Explanation);
+        return new Step("step", tool.Replace('_', ' '));
+    }
+
     private static (string? Status, JsonArray Docs) Summarize(JsonNode result)
     {
         string? status = null;
@@ -295,7 +326,17 @@ public sealed class AskService(McpCore core)
         return (status, docs);
     }
 
-    public async Task<(int Status, JsonObject Body)> AskAsync(JsonArray history, string ip, string host, CancellationToken ct)
+    /// <summary>
+    /// A step worth telling the reader about. CHI '26 (N=45, 26s and 45s waits) found
+    /// content-bearing updates — ones that name a real object — beat progress-only cues on
+    /// perceived speed, trust and cognitive load, with the payoff GROWING as the wait
+    /// lengthens. So these carry entities, never activity labels: "Code du travail,
+    /// 2019-03-01", not "searching…".
+    /// </summary>
+    public sealed record Step(string Kind, string Text, string? Work = null, string? Date = null, string? Anchor = null);
+
+    public async Task<(int Status, JsonObject Body)> AskAsync(JsonArray history, string ip, string host,
+        CancellationToken ct, Action<Step>? onStep = null)
     {
         if (!Enabled)
             return (503, new JsonObject { ["error"] = "The playground is not enabled on this deployment. Connect your own AI instead: /ai." });
@@ -431,6 +472,7 @@ public sealed class AskService(McpCore core)
                             entry["docs"] = docs;
                             var eff = UiMapper.From(name, args, node);
                             if (!eff.IsEmpty) effects.Add(eff);
+                            onStep?.Invoke(Describe(name, args, eff, docs));
                             // A list view is shown as-is; it needs no enrichment. Without this
                             // the model fetches every ranked row to "confirm" it — eleven calls
                             // and two minutes for a question already answered by the first.

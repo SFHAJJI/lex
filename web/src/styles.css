@@ -133,3 +133,19 @@ button.pick { cursor: pointer; }
         cursor: pointer; font-size: 15px; font-family: var(--serif); }
 .toch:hover { color: var(--accent); }
 .toc .rows { margin: 0 0 10px 16px; }
+
+/* The wait, narrated. Each line names something real; a named law is one click away, so a
+   reader can start verifying before the prose exists. */
+.steps { list-style: none; margin: 0 0 14px; padding: 0; border-left: 2px solid var(--line); }
+.steps li { display: flex; align-items: baseline; gap: 10px; padding: 5px 0 5px 14px;
+            font-size: 14px; color: var(--muted); position: relative; }
+.steps li:before { content: ""; position: absolute; left: -5px; top: 12px; width: 8px; height: 8px;
+                   border-radius: 50%; background: var(--line); }
+.steps li.read:before, .steps li.history:before, .steps li.diff:before { background: var(--accent); }
+.steps li.gap:before { background: var(--warn); }
+.steps li.pending { color: var(--muted); font-style: italic; }
+.steps li.pending:before { background: var(--accent); animation: pulse 1.4s ease-in-out infinite; }
+@keyframes pulse { 0%,100% { opacity: .3 } 50% { opacity: 1 } }
+@media (prefers-reduced-motion: reduce) { .steps li.pending:before { animation: none } }
+.chipmini { border: 1px solid var(--line); border-radius: 99px; padding: 1px 9px; font-size: 12px;
+            background: var(--card); color: var(--accent); cursor: pointer; white-space: nowrap; }

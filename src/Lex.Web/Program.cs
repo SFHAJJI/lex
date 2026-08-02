@@ -434,6 +434,58 @@ app.MapPost("/api/ask", async (HttpRequest req) =>
     return Results.Content(bodyJson.ToJsonString(), "application/json", statusCode: status);
 });
 
+// ---- /api/ask/stream: the same answer, but the wait carries information.
+// A grounded answer takes 30-70s. CHI '26 (N=45, 26s and 45s waits) found that filling that
+// time with updates NAMING REAL OBJECTS beats a spinner on perceived speed, trust and load —
+// and the benefit grows with the wait. So this streams what the agent FOUND, never what it is
+// doing: "Code du travail — 3 articles as in force on 2019-03-01", not "searching…".
+app.MapPost("/api/ask/stream", async (HttpRequest req, HttpResponse res) =>
+{
+    if (req.ContentLength is > 65536) { res.StatusCode = 413; return; }
+    JsonNode? parsed;
+    try { using var sr = new StreamReader(req.Body); parsed = JsonNode.Parse(await sr.ReadToEndAsync()); }
+    catch { res.StatusCode = 400; return; }
+    if (parsed?["messages"] is not JsonArray history) { res.StatusCode = 400; return; }
+    var ip = req.Headers["X-Forwarded-For"].FirstOrDefault()?.Split(',')[^1].Trim()
+             ?? req.HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+
+    res.Headers.ContentType = "text/event-stream";
+    res.Headers.CacheControl = "no-cache";
+    res.Headers["X-Accel-Buffering"] = "no";
+
+    var writes = new SemaphoreSlim(1, 1);
+    async Task Send(string ev, JsonNode data)
+    {
+        await writes.WaitAsync();
+        try
+        {
+            await res.WriteAsync($"event: {ev}\ndata: {data.ToJsonString()}\n\n", req.HttpContext.RequestAborted);
+            await res.Body.FlushAsync(req.HttpContext.RequestAborted);
+        }
+        catch { /* reader gone; the loop notices via the cancellation token */ }
+        finally { writes.Release(); }
+    }
+
+    var steps = 0;
+    var (status, bodyJson) = await askService.AskAsync(history, ip, req.Host.Value ?? "law.soufien.lu",
+        req.HttpContext.RequestAborted,
+        step =>
+        {
+            Interlocked.Increment(ref steps);
+            _ = Send("step", new JsonObject
+            {
+                ["kind"] = step.Kind, ["text"] = step.Text,
+                ["work"] = step.Work, ["date"] = step.Date, ["anchor"] = step.Anchor,
+            });
+        });
+
+    // Outcome-aware (the labor illusion REVERSES on a weak result): a transparent wait ending
+    // in a poor answer scored below delivering that same answer instantly. A refusal therefore
+    // keeps its steps out of the transcript.
+    bodyJson["narrated"] = status == 200 && bodyJson["ui"]?["gap"] is null && steps > 0;
+    await Send("done", bodyJson);
+});
+
 app.MapGet("/architecture", () =>
 {
     var body = """

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ask, first, tool, type AskReply, type ProvisionItem, type UiEffect } from "./api";
+import { askStreaming, first, tool, type AskReply, type ProvisionItem, type Step, type UiEffect } from "./api";
 import { publisherOf, useWorkspace, workSlug, type Space, type State } from "./state";
 import { Compare, Empty, Gap, HistoryRail, InForce, Provision, Ranking, WorkTimeline, hasView, modeFor } from "./views";
 import { LawPicker, PeriodPicker, TopicSearch, shorten } from "./pickers";
@@ -28,6 +28,7 @@ export default function App() {
   const [s, go] = useWorkspace();
   const [q, setQ] = useState("");
   const [busy, setBusy] = useState(false);
+  const [steps, setSteps] = useState<Step[]>([]);
   const [said, setSaid] = useState<string>();
   const [ui, setUi] = useState<UiEffect>();
   const [loaded, setLoaded] = useState<{ items: ProvisionItem[]; from: string; to?: string }>();
@@ -130,12 +131,18 @@ export default function App() {
 
   const submit = useCallback(async (text: string) => {
     if (!text.trim() || busy) return;
-    setBusy(true); setSaid(undefined);
+    setBusy(true); setSaid(undefined); setSteps([]);
     abort.current?.abort();
     abort.current = new AbortController();
     try {
-      const r: AskReply = await ask(text.trim(), abort.current.signal);
+      const r: AskReply = await askStreaming(
+        text.trim(),
+        (step) => setSteps((prev) => [...prev, step]),
+        abort.current.signal);
       setSaid(r.error ?? r.reply);
+      // A refusal keeps its steps out of the transcript: visible effort followed by a weak
+      // answer measures WORSE than the same answer delivered instantly and quietly.
+      if (r.narrated === false) setSteps([]);
       if (hasView(r.ui)) {
         setUi(r.ui);
         const subj = r.ui!.provision?.subject ?? r.ui!.history?.subject ?? r.ui!.diff?.subject;
@@ -190,6 +197,23 @@ export default function App() {
                placeholder="Ask anything — or pick a law below" aria-label="Ask" />
         <button type="submit" disabled={busy}>{busy ? "…" : "Ask"}</button>
       </form>
+
+      {steps.length > 0 ? (
+        <ol className="steps" aria-live="polite" aria-label="What the assistant is finding">
+          {steps.map((st, i) => (
+            <li key={i} className={st.kind}>
+              <span>{st.text}</span>
+              {st.work ? (
+                <button className="chipmini" onClick={() => {
+                  setUi(undefined);
+                  go({ work: st.work, date: st.date, anchor: st.anchor, mode: "read", space: "law" });
+                }}>open →</button>
+              ) : null}
+            </li>
+          ))}
+          {busy ? <li className="pending"><span>working…</span></li> : null}
+        </ol>
+      ) : null}
 
       {said ? <div className="said"><b>what I found</b>{said}</div> : null}
 

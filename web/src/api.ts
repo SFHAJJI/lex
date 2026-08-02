@@ -29,6 +29,8 @@ export interface AskReply {
   trace?: { tool: string; status?: string }[];
   ui?: UiEffect;
   error?: string;
+  /** False when the answer was a refusal: its steps are withheld from the transcript. */
+  narrated?: boolean;
 }
 
 export interface Subject { work: string; title?: string; date?: string; anchor?: string }
@@ -44,6 +46,54 @@ export interface UiEffect {
 export interface RankingRow {
   work: string; title?: string; versions_in_period: number; versions_total: number;
   first_change: string; last_change: string; permalink?: string; diff_permalink?: string;
+}
+
+/** A step the agent completed, naming what it found. */
+export interface Step { kind: string; text: string; work?: string; date?: string; anchor?: string }
+
+/**
+ * Streams the answer. The 30-70s wait is filled with what the agent FOUND — named laws,
+ * dates and articles — because content-bearing updates measurably beat a spinner on
+ * perceived speed and trust, and the gap widens the longer the wait. Falls back to the
+ * plain endpoint if the stream is unavailable.
+ */
+export async function askStreaming(
+  question: string,
+  onStep: (s: Step) => void,
+  signal?: AbortSignal,
+): Promise<AskReply> {
+  const r = await fetch("/api/ask/stream", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ messages: [{ role: "user", content: question }] }),
+    signal,
+  });
+  if (!r.ok || !r.body) return ask(question, signal);
+
+  const reader = r.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = "";
+  let done: AskReply | undefined;
+
+  for (;;) {
+    const { value, done: finished } = await reader.read();
+    if (finished) break;
+    buf += decoder.decode(value, { stream: true });
+    // SSE frames are separated by a blank line; keep any partial frame in the buffer.
+    const frames = buf.split("\n\n");
+    buf = frames.pop() ?? "";
+    for (const frame of frames) {
+      const ev = /^event: (.+)$/m.exec(frame)?.[1];
+      const raw = /^data: (.*)$/m.exec(frame)?.[1];
+      if (!ev || !raw) continue;
+      try {
+        const data = JSON.parse(raw);
+        if (ev === "step") onStep(data as Step);
+        else if (ev === "done") done = data as AskReply;
+      } catch { /* a malformed frame must not kill the stream */ }
+    }
+  }
+  return done ?? { reply: "The answer stream ended early — try again." };
 }
 
 export async function ask(question: string, signal?: AbortSignal): Promise<AskReply> {
