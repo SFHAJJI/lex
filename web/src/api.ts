@@ -32,7 +32,7 @@ export interface AskReply {
 }
 
 export interface Subject { work: string; title?: string; date?: string; anchor?: string }
-export interface ProvisionItem { anchor: string; num?: string; heading?: string; text: string; sha?: string }
+export interface ProvisionItem { anchor: string; num?: string; heading?: string; text: string; sha?: string; path?: string }
 export interface UiEffect {
   provision?: { subject: Subject; valid_from: string; valid_to?: string; provisions: ProvisionItem[]; permalink?: string };
   diff?: { subject: Subject; from_date: string; to_date: string; note?: string };

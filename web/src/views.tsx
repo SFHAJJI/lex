@@ -10,9 +10,12 @@ export function Provision({ items, validFrom, validTo, work, onPick }: {
   items: ProvisionItem[]; validFrom: string; validTo?: string; work: string;
   onPick: (anchor: string) => void;
 }) {
-  // A large law arrives as an outline (no text): render it as a table of contents the
-  // reader picks from, rather than pulling thousands of articles into the page.
+  // A large law arrives as an outline (no text). A flat list of 1,160 articles is not a
+  // table of contents — legislation.gov.uk serves an 845 KB hierarchical ToC where a flat
+  // render of the same act is 13.9 MB. Provisions already carry their Book/Title/Chapter
+  // path, so group by the top level and let the reader drill in.
   const outline = items.length > 0 && items.every((p) => !p.text);
+  if (outline) return <Outline items={items} validFrom={validFrom} validTo={validTo} onPick={onPick} />;
   return (
     <>
       <div className="cnt">
@@ -286,4 +289,70 @@ export function modeFor(ui?: UiEffect): State["mode"] | undefined {
   if (ui?.history) return "history";
   if (ui?.provision) return "read";
   return undefined;
+}
+
+/** Strip the Markdown emphasis publishers put in structural headings. */
+const plain = (s: string) => s.replace(/\*+/g, "").replace(/\s+/g, " ").trim();
+
+/**
+ * Hierarchical table of contents for a large code. Groups by the first level of each
+ * provision's path (Book / Title / Chapter / Section) and opens one section at a time, with
+ * a filter box over article numbers and headings. Precedent: legislation.gov.uk's ToC view,
+ * which exists for the same reason — a national code is not a scrollable list.
+ */
+function Outline({ items, validFrom, validTo, onPick }: {
+  items: ProvisionItem[]; validFrom: string; validTo?: string; onPick: (anchor: string) => void;
+}) {
+  const [open, setOpen] = useState<string>();
+  const [q, setQ] = useState("");
+
+  const needle = q.trim().toLowerCase();
+  const matches = (p: ProvisionItem) =>
+    !needle || `${p.num ?? ""} ${p.heading ?? ""} ${p.anchor}`.toLowerCase().includes(needle);
+
+  const groups = new Map<string, ProvisionItem[]>();
+  for (const p of items) {
+    if (!matches(p)) continue;
+    const top = plain((p.path ?? "").split(" / ")[0] || "Without a section");
+    (groups.get(top) ?? groups.set(top, []).get(top)!).push(p);
+  }
+
+  return (
+    <>
+      <div className="cnt">
+        <span className="tag">in force {validFrom} → {validTo ?? "open"}</span>
+        <span className="tag">{items.length} articles</span>
+        <span className="tag">{groups.size} sections</span>
+      </div>
+      <input className="filter" value={q} onChange={(e) => setQ(e.target.value)}
+             aria-label="Filter articles by number or heading"
+             placeholder="Filter — article number or words in a heading" />
+      {needle && groups.size === 0 ? <Empty>No article matches “{q}”.</Empty> : null}
+      <ul className="toc">
+        {[...groups].map(([section, list]) => {
+          const expanded = open === section || (needle.length > 0);
+          return (
+            <li key={section}>
+              <button className="toch" aria-expanded={expanded}
+                      onClick={() => setOpen(expanded && !needle ? undefined : section)}>
+                <span>{expanded ? "▾" : "▸"} {section}</span>
+                <span className="sub mono">{list.length}</span>
+              </button>
+              {expanded ? (
+                <ul className="rows">
+                  {list.map((p) => (
+                    <li key={p.anchor}>
+                      <button className="rowbtn" onClick={() => onPick(p.anchor)}>
+                        <span>{p.num ?? p.anchor}{p.heading ? ` — ${plain(p.heading)}` : ""}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </li>
+          );
+        })}
+      </ul>
+    </>
+  );
 }

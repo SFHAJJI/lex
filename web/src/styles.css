@@ -123,3 +123,13 @@ button.pick { cursor: pointer; }
    --on-accent (white in light, near-black in dark); both directions now exceed 4.5:1. */
 .cmd button, .askrow .go { color: var(--on-accent, #fff); }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Table of contents for large codes: one section open at a time, filterable. */
+.filter { width: 100%; margin: 0 0 12px; }
+.toc { list-style: none; padding: 0; margin: 0; }
+.toc > li { border-top: 1px solid var(--line); }
+.toch { display: flex; justify-content: space-between; align-items: center; gap: 12px; width: 100%;
+        text-align: left; background: none; border: 0; padding: 10px 0; color: inherit;
+        cursor: pointer; font-size: 15px; font-family: var(--serif); }
+.toch:hover { color: var(--accent); }
+.toc .rows { margin: 0 0 10px 16px; }
