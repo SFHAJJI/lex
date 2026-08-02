@@ -34,6 +34,7 @@ switch (args0[0])
     case "index":
     {
         var corpus = Get("--corpus") ?? throw new ArgumentException("--corpus required");
+        var articles = Get("--articles");
         var outDb = Get("--out") ?? throw new ArgumentException("--out required");
         var keyFile = Get("--keyfile");
         string? keyPem = null;
@@ -47,8 +48,8 @@ switch (args0[0])
             }
             keyPem = File.ReadAllText(keyFile);
         }
-        Console.Error.WriteLine($"[lex] index {corpus} -> {outDb}");
-        IndexFromCorpus.Build(corpus, outDb, keyPem, now);
+        Console.Error.WriteLine($"[lex] index {corpus} (articles: {articles ?? "none"}) -> {outDb}");
+        IndexFromCorpus.Build(corpus, articles, outDb, keyPem, now);
         return 0;
     }
     case "derive":
@@ -77,6 +78,6 @@ switch (args0[0])
 static void Usage() => Console.Error.WriteLine("""
     lex — point-in-time regulatory text pipeline
       lex ingest --publisher lu-legilux --corpus PATH [--now ISO]
-      lex index  --corpus PATH --out FILE.db [--keyfile KEY.pem] [--now ISO]
+      lex index  --corpus PATH [--articles PATH] --out FILE.db [--keyfile KEY.pem] [--now ISO]
       lex derive --publisher lu-legilux --corpus PATH --out PATH [--code-version SHA]
     """);

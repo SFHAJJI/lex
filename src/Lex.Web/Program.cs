@@ -452,25 +452,26 @@ app.MapGet("/search", (string? q, string? kind) =>
 {
     var sb = new StringBuilder();
     sb.Append($"""
-        <form class="inline"><input name="q" value="{H(q)}" placeholder="search titles &amp; metadata" style="flex:1;min-width:240px"><button>Search</button></form>
-        <p class="sub">Metadata-only mode: search covers titles and metadata, not body text. Filters run before ranking — always.</p>
+        <form class="inline"><input name="q" value="{H(q)}" placeholder="search article text &amp; titles" style="flex:1;min-width:240px"><button>Search</button></form>
+        <p class="sub">Article-level full-text search over every held provision. Filters run before ranking — always.</p>
         """);
     if (!string.IsNullOrWhiteSpace(q))
     {
         foreach (var r in readers.Values)
         {
-            var hits = r.Search(q, new FilterSet(null, null, string.IsNullOrEmpty(kind) ? null : kind, null), 60)
-                .GroupBy(h => h.Doc.GroupKey)
-                .Select(g => g.First())
+            var hits = r.Search(q, new FilterSet(null, null, string.IsNullOrEmpty(kind) ? null : kind, null), 90)
+                .GroupBy(h => (h.Doc.GroupKey, h.Prov.Anchor)).Select(g => g.First())
+                .GroupBy(h => h.Doc.GroupKey).SelectMany(g => g.Take(2))
                 .Take(15)
                 .ToList();
-            sb.Append($"<h2>{H(r.Stamp.GetValueOrDefault("publisher_name"))} — {hits.Count} work(s)</h2>");
-            foreach (var (docRow, snippet) in hits)
+            sb.Append($"<h2>{H(r.Stamp.GetValueOrDefault("publisher_name"))} — {hits.Count} hit(s)</h2>");
+            foreach (var (docRow, prov, snippet) in hits)
                 sb.Append($"""
-                    <div class="card"><a href="/{H(docRow.Collection)}/{H(docRow.GroupKey)}"><b>{H(DocTitle(docRow))}</b></a>
+                    <div class="card"><a href="/{H(docRow.Collection)}/{H(docRow.GroupKey)}/{H(docRow.ValidFrom)}#{H(prov.Anchor)}"><b>{H(DocTitle(docRow))}</b>
+                    — {H(prov.Num ?? prov.Heading ?? prov.Anchor)}</a>
                     <span class="badge">{H(docRow.Kind)}</span> <span class="badge mono">{Interval(docRow)}</span>
                     <div class="snippet">{snippet}</div>
-                    <div class="mono sub">{H(docRow.Key)}</div></div>
+                    <div class="mono sub">{H(prov.ProvisionId)}</div></div>
                     """);
         }
     }
@@ -533,8 +534,9 @@ app.MapGet("/{publisher}/{work}/diff/{dateA}/{dateB}", (string publisher, string
 
     if (a.Key == b.Key)
         sb.Append("<div class=\"notice\"><b>No change.</b> The same version applied on both dates.</div>");
-    else if (a.TextPublic && b.TextPublic && a.Body is not null && b.Body is not null)
-        sb.Append(RenderDiff(a.Body, b.Body));
+    else if (a.TextPublic && b.TextPublic
+             && r.BuildBody(a) is { } bodyA && r.BuildBody(b) is { } bodyB)
+        sb.Append(RenderDiff(bodyA, bodyB));
     else
         sb.Append($"""
             <div class="notice"><b>Different versions applied</b>, but a text diff is unavailable here
@@ -615,16 +617,41 @@ app.MapGet("/{publisher}/{work}/{date}", (string publisher, string work, string 
         <tr><td>record sha256</td><td class="mono">{H(doc.RecordSha)}</td></tr>
         </table></div>
         """);
-    if (doc.TextPublic && doc.Body is not null)
+    var provisions = doc.TextPublic ? r.Provisions(LexIndexReader.RidOf(doc)) : [];
+    if (provisions.Count > 0)
     {
-        var display = doc.Body.Length > 300_000 ? doc.Body[..300_000] : doc.Body;
         sb.Append($"""
-            <div class="notice" style="border-left-color:var(--ok)"><b>Text included — reading view.</b>
-            Plain-text extraction of the verbatim retrieved document; the sha256 covers the verbatim file.
+            <div class="notice" style="border-left-color:var(--ok)"><b>Text included — per-article reading view.</b>
+            Deterministic extraction of the verbatim retrieved document; each article carries its own hash and anchor.
             {H(r.Stamp.GetValueOrDefault("attribution"))}</div>
-            <div class="card"><pre style="white-space:pre-wrap;font:14px/1.65 Georgia,'Times New Roman',serif;margin:0">{H(display)}</pre>
-            {(doc.Body.Length > 300_000 ? "<p class=\"sub\">— truncated for display; full text at the official source —</p>" : "")}</div>
+            <details class="card"><summary><b>Outline — {provisions.Count} provisions</b></summary><p>
             """);
+        foreach (var p in provisions)
+            sb.Append($"<a href=\"#{H(p.Anchor)}\" class=\"badge\">{H(p.Num ?? p.Heading ?? p.Anchor)}</a> ");
+        sb.Append("</p></details>");
+
+        string? lastPath = null;
+        var shown = 0;
+        foreach (var p in provisions)
+        {
+            if (p.Path is not null && p.Path != lastPath)
+            {
+                sb.Append($"<h2 style=\"margin-top:26px\">{H(p.Path)}</h2>");
+                lastPath = p.Path;
+            }
+            var title = p.Num is null && p.Heading is null ? p.Anchor
+                : string.Join(" — ", new[] { p.Num, p.Heading }.Where(s => !string.IsNullOrEmpty(s)));
+            sb.Append($"""
+                <div class="card" id="{H(p.Anchor)}">
+                <b>{H(title)}</b>
+                <a class="sub mono" href="#{H(p.Anchor)}" title="permalink to this provision">#{H(p.Anchor)}</a>
+                {(p.ArticleValidFrom is not null && p.ArticleValidFrom != doc.ValidFrom ? $"<span class=\"badge\">applicable {H(p.ArticleValidFrom)}</span>" : "")}
+                <pre style="white-space:pre-wrap;font:14px/1.65 Georgia,'Times New Roman',serif;margin:8px 0 0">{H(p.TextMd)}</pre>
+                </div>
+                """);
+            shown++;
+            if (shown >= 400) { sb.Append($"<p class=\"sub\">— {provisions.Count - shown:n0} further provisions omitted from this view; retrieve them via the MCP tools —</p>"); break; }
+        }
     }
     else
     {

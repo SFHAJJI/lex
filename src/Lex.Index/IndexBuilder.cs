@@ -8,12 +8,13 @@ namespace Lex.Index;
 /// </summary>
 public static class IndexBuilder
 {
-    public const string SchemaVersion = "lex-index/1";
+    public const string SchemaVersion = "lex-index/2";
 
     public static void Build(
         string dbPath,
         IReadOnlyDictionary<string, string> stampValues,
         IEnumerable<DocRow> docs,
+        IEnumerable<ProvisionRow> provisions,
         IEnumerable<EventRow> events,
         IEnumerable<ObservationRow> observations,
         string? signingKeyPem)
@@ -22,6 +23,8 @@ public static class IndexBuilder
         using var conn = new SqliteConnection($"Data Source={dbPath}");
         conn.Open();
 
+        // lex-index/2: text lives exactly once, in provisions; document bodies are
+        // reconstructed by the reader; FTS is external-content over provisions.
         Exec(conn, """
             CREATE TABLE docs(
               key TEXT NOT NULL, collection TEXT NOT NULL, group_key TEXT NOT NULL,
@@ -30,34 +33,38 @@ public static class IndexBuilder
               observed_from TEXT NOT NULL, withdrawn INTEGER NOT NULL,
               text_available INTEGER NOT NULL, text_public INTEGER NOT NULL,
               record_sha TEXT, body_sha TEXT, source_uri TEXT,
-              title TEXT, title_short TEXT, body TEXT,
+              title TEXT, title_short TEXT,
               publication_date TEXT, status_note TEXT, rid TEXT NOT NULL,
               PRIMARY KEY(key, language, valid_from));
             CREATE INDEX ix_docs_group ON docs(group_key, valid_from);
             CREATE INDEX ix_docs_stab ON docs(collection, kind, valid_from, valid_to);
             CREATE INDEX ix_docs_rid ON docs(rid);
+            CREATE TABLE provisions(
+              rid TEXT NOT NULL, seq INTEGER NOT NULL, anchor TEXT NOT NULL,
+              provision_id TEXT NOT NULL, ptype TEXT NOT NULL, num TEXT, heading TEXT,
+              path TEXT, article_valid_from TEXT, work_title TEXT,
+              text_md TEXT NOT NULL, text_sha TEXT NOT NULL,
+              PRIMARY KEY(rid, seq));
+            CREATE INDEX ix_prov_rid ON provisions(rid);
+            CREATE INDEX ix_prov_anchor ON provisions(anchor);
             CREATE TABLE events(key TEXT, scope TEXT, event TEXT, observed_from TEXT, detail TEXT);
             CREATE INDEX ix_events_key ON events(key);
             CREATE TABLE obs_history(key TEXT, language TEXT, expr_valid_from TEXT,
               sha256 TEXT, source_uri TEXT, observed_from TEXT, observed_to TEXT);
             CREATE INDEX ix_obs_key ON obs_history(key, language, expr_valid_from);
             CREATE TABLE stamp(k TEXT PRIMARY KEY, v TEXT NOT NULL);
-            CREATE VIRTUAL TABLE fts USING fts5(rid UNINDEXED, title, title_short, body);
+            CREATE VIRTUAL TABLE fts USING fts5(work_title, num, heading, text_md,
+              content='provisions', content_rowid='rowid');
             """);
 
         using (var tx = conn.BeginTransaction())
         {
             var insDoc = conn.CreateCommand();
             insDoc.CommandText = """
-                INSERT OR REPLACE INTO docs VALUES ($key,$col,$gk,$gi,$kind,$lang,$vf,$vt,$vts,$of,$wd,$ta,$tp,$rs,$bs,$su,$t,$ts2,$b,$pd,$sn,$rid)
+                INSERT OR REPLACE INTO docs VALUES ($key,$col,$gk,$gi,$kind,$lang,$vf,$vt,$vts,$of,$wd,$ta,$tp,$rs,$bs,$su,$t,$ts2,$pd,$sn,$rid)
                 """;
-            foreach (var p in new[] { "$key", "$col", "$gk", "$gi", "$kind", "$lang", "$vf", "$vt", "$vts", "$of", "$wd", "$ta", "$tp", "$rs", "$bs", "$su", "$t", "$ts2", "$b", "$pd", "$sn", "$rid" })
+            foreach (var p in new[] { "$key", "$col", "$gk", "$gi", "$kind", "$lang", "$vf", "$vt", "$vts", "$of", "$wd", "$ta", "$tp", "$rs", "$bs", "$su", "$t", "$ts2", "$pd", "$sn", "$rid" })
                 insDoc.Parameters.Add(new SqliteParameter(p, SqliteType.Text));
-
-            var insFts = conn.CreateCommand();
-            insFts.CommandText = "INSERT INTO fts(rid,title,title_short,body) VALUES ($rid,$t,$ts2,$b)";
-            foreach (var p in new[] { "$rid", "$t", "$ts2", "$b" })
-                insFts.Parameters.Add(new SqliteParameter(p, SqliteType.Text));
 
             foreach (var d in docs)
             {
@@ -68,13 +75,29 @@ public static class IndexBuilder
                 Set(insDoc, "$of", d.ObservedFrom); Set(insDoc, "$wd", d.Withdrawn ? "1" : "0");
                 Set(insDoc, "$ta", d.TextAvailable ? "1" : "0"); Set(insDoc, "$tp", d.TextPublic ? "1" : "0");
                 Set(insDoc, "$rs", d.RecordSha); Set(insDoc, "$bs", d.BodySha); Set(insDoc, "$su", d.SourceUri);
-                Set(insDoc, "$t", d.Title); Set(insDoc, "$ts2", d.TitleShort); Set(insDoc, "$b", d.Body);
+                Set(insDoc, "$t", d.Title); Set(insDoc, "$ts2", d.TitleShort);
                 Set(insDoc, "$pd", d.PublicationDate); Set(insDoc, "$sn", d.StatusNote); Set(insDoc, "$rid", rid);
                 insDoc.ExecuteNonQuery();
-
-                Set(insFts, "$rid", rid); Set(insFts, "$t", d.Title); Set(insFts, "$ts2", d.TitleShort); Set(insFts, "$b", d.Body);
-                insFts.ExecuteNonQuery();
             }
+
+            var insProv = conn.CreateCommand();
+            insProv.CommandText = """
+                INSERT INTO provisions VALUES ($rid,$seq,$a,$pid,$pt,$n,$h,$path,$avf,$wt,$md,$sha)
+                """;
+            insProv.Parameters.Add(new SqliteParameter("$seq", SqliteType.Integer));
+            foreach (var p in new[] { "$rid", "$a", "$pid", "$pt", "$n", "$h", "$path", "$avf", "$wt", "$md", "$sha" })
+                insProv.Parameters.Add(new SqliteParameter(p, SqliteType.Text));
+            foreach (var p in provisions)
+            {
+                insProv.Parameters["$seq"].Value = p.Seq;
+                Set(insProv, "$rid", p.Rid); Set(insProv, "$a", p.Anchor); Set(insProv, "$pid", p.ProvisionId);
+                Set(insProv, "$pt", p.PType); Set(insProv, "$n", p.Num); Set(insProv, "$h", p.Heading);
+                Set(insProv, "$path", p.Path); Set(insProv, "$avf", p.ArticleValidFrom);
+                Set(insProv, "$wt", p.WorkTitle); Set(insProv, "$md", p.TextMd); Set(insProv, "$sha", p.TextSha);
+                insProv.ExecuteNonQuery();
+            }
+            // populate the external-content FTS index in one pass
+            Exec(conn, "INSERT INTO fts(rowid, work_title, num, heading, text_md) SELECT rowid, work_title, num, heading, text_md FROM provisions");
 
             var insEv = conn.CreateCommand();
             insEv.CommandText = "INSERT INTO events VALUES ($key,$scope,$event,$of,$detail)";

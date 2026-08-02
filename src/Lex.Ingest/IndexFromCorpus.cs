@@ -10,13 +10,14 @@ namespace Lex.Ingest;
 /// </summary>
 public static class IndexFromCorpus
 {
-    public static void Build(string corpusRoot, string dbPath, string? signingKeyPem, DateTimeOffset now)
+    public static void Build(string corpusRoot, string? articlesRoot, string dbPath, string? signingKeyPem, DateTimeOffset now)
     {
         var manifest = JsonSerializer.Deserialize<ManifestDoc>(
             File.ReadAllText(Path.Combine(corpusRoot, "manifest.json")), CorpusJson.Options)!;
         var publisherId = manifest.Publisher["id"];
 
         var docs = new List<DocRow>();
+        var provisions = new List<ProvisionRow>();
         var events = new List<EventRow>();
         var observations = new List<ObservationRow>();
 
@@ -44,14 +45,35 @@ public static class IndexFromCorpus
                 {
                     var exprValidFrom = expr.ValidFrom ?? meta.ValidFrom;
 
-                    // Text-bearing corpora: index a plain-text extraction of the verbatim body
-                    // (the hash always covers the verbatim file, never the extraction).
-                    string? bodyText = null;
-                    var lastObs = expr.Observations.LastOrDefault();
-                    if (expr.Text.Available && lastObs?.File is not null)
+                    // lex-index/2: text comes from the derived consumption layer, per provision;
+                    // the hash chain always runs derived text -> verbatim file -> observation.
+                    var rid = $"{meta.LexId}|{expr.Language}|{exprValidFrom}";
+                    var derivedJson = articlesRoot is null ? null : Path.Combine(
+                        articlesRoot, publisherId, "works", workMeta.Slug, "versions",
+                        Path.GetFileName(versionDir), $"{expr.Language}.json");
+                    var hasDerived = derivedJson is not null && File.Exists(derivedJson);
+                    if (hasDerived)
                     {
-                        var bodyPath = Path.Combine(versionDir, lastObs.File);
-                        if (File.Exists(bodyPath)) bodyText = HtmlToText(File.ReadAllText(bodyPath));
+                        using var dd = JsonDocument.Parse(File.ReadAllText(derivedJson!));
+                        var seq = 0;
+                        foreach (var p in dd.RootElement.GetProperty("provisions").EnumerateArray())
+                        {
+                            provisions.Add(new ProvisionRow(
+                                Rid: rid,
+                                Seq: seq++,
+                                Anchor: p.GetProperty("anchor").GetString()!,
+                                ProvisionId: p.GetProperty("provision_id").GetString()!,
+                                PType: p.GetProperty("type").GetString() ?? "article",
+                                Num: p.TryGetProperty("num", out var n) ? n.GetString() : null,
+                                Heading: p.TryGetProperty("heading", out var h) ? h.GetString() : null,
+                                Path: p.TryGetProperty("path", out var pa) && pa.ValueKind == JsonValueKind.Array
+                                    ? string.Join(" / ", pa.EnumerateArray().Select(x => x.GetString())) is { Length: > 0 } joined ? joined : null
+                                    : null,
+                                ArticleValidFrom: p.TryGetProperty("article_valid_from", out var av) ? av.GetString() : null,
+                                WorkTitle: workMeta.Title,
+                                TextMd: p.GetProperty("text_md").GetString() ?? "",
+                                TextSha: p.GetProperty("text_sha256").GetString() ?? ""));
+                        }
                     }
 
                     docs.Add(new DocRow(
@@ -67,13 +89,13 @@ public static class IndexFromCorpus
                         ObservedFrom: firstSighting,
                         Withdrawn: withdrawn,
                         TextAvailable: expr.Text.Available,
-                        TextPublic: manifest.TextPublic && expr.Text.Available,
+                        TextPublic: manifest.TextPublic && expr.Text.Available && hasDerived,
                         RecordSha: meta.RecordSha256,
                         BodySha: expr.Observations.LastOrDefault()?.Sha256,
                         SourceUri: expr.SourceUri,
                         Title: expr.Title ?? workMeta.Title,
                         TitleShort: expr.TitleShort ?? workMeta.Title,
-                        Body: bodyText,
+                        Body: null,
                         PublicationDate: meta.PublicationDate,
                         StatusNote: meta.InForceStatus));
 
@@ -111,24 +133,12 @@ public static class IndexFromCorpus
             ["versions"] = docs.Select(d => d.Key).Distinct().Count().ToString(),
         };
 
-        IndexBuilder.Build(dbPath, stamp, docs, events, observations, signingKeyPem);
-        Console.Error.WriteLine($"  [index] {dbPath}: {docs.Count} rows, {events.Count} events, signed={(signingKeyPem is not null)}");
+        stamp["derived_provisions"] = provisions.Count.ToString();
+        IndexBuilder.Build(dbPath, stamp, docs, provisions, events, observations, signingKeyPem);
+        Console.Error.WriteLine($"  [index] {dbPath}: {docs.Count} rows, {provisions.Count} provisions, {events.Count} events, signed={(signingKeyPem is not null)}");
     }
 
     private static string ReadIfExists(string path) => File.Exists(path) ? File.ReadAllText(path) : "";
-
-    /// <summary>Plain-text extraction for FTS and reading view. Never the artefact of record.</summary>
-    private static string HtmlToText(string html)
-    {
-        var s = System.Text.RegularExpressions.Regex.Replace(html, "(?is)<(script|style)[^>]*>.*?</\\1>", " ");
-        s = System.Text.RegularExpressions.Regex.Replace(s, "(?i)<(br|/p|/div|/tr|/li|/h[1-6]|/td)[^>]*>", "\n");
-        s = System.Text.RegularExpressions.Regex.Replace(s, "<[^>]+>", " ");
-        s = System.Net.WebUtility.HtmlDecode(s);
-        s = System.Text.RegularExpressions.Regex.Replace(s, "[ \\t\\u00A0]+", " ");
-        s = System.Text.RegularExpressions.Regex.Replace(s, "( ?\\n ?)+", "\n");
-        s = s.Trim();
-        return s.Length > 1_500_000 ? s[..1_500_000] : s;
-    }
 
     private static string GitCommit(string dir)
     {

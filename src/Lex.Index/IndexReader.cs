@@ -53,7 +53,7 @@ public sealed class LexIndexReader : IDisposable
     private const string DocCols = """
         key, collection, group_key, group_identifier, kind, language, valid_from, valid_to,
         valid_time_source, observed_from, withdrawn, text_available, text_public,
-        record_sha, body_sha, source_uri, title, title_short, body, publication_date, status_note
+        record_sha, body_sha, source_uri, title, title_short, publication_date, status_note, rid
         """;
 
     /// <summary>True if the work exists at all (distinguishes unknown_work from no_version_for_date).</summary>
@@ -126,25 +126,43 @@ public sealed class LexIndexReader : IDisposable
     private const string DocColsQualified = """
         d.key, d.collection, d.group_key, d.group_identifier, d.kind, d.language, d.valid_from, d.valid_to,
         d.valid_time_source, d.observed_from, d.withdrawn, d.text_available, d.text_public,
-        d.record_sha, d.body_sha, d.source_uri, d.title, d.title_short, d.body, d.publication_date, d.status_note
+        d.record_sha, d.body_sha, d.source_uri, d.title, d.title_short, d.publication_date, d.status_note, d.rid
         """;
 
-    public List<(DocRow Doc, string Snippet)> Search(string query, FilterSet filters, int limit)
+    public List<(DocRow Doc, ProvisionRow Prov, string Snippet)> Search(string query, FilterSet filters, int limit)
     {
-        // Filters first (F5): SQL predicates restrict the candidate set; only survivors are ranked by bm25.
+        // Filters first (F5): SQL predicates restrict the candidate set; only survivors are
+        // ranked by bm25 (weights: work title > heading > num > body text). Hits are
+        // provision-level: the retrieval unit is the article, not the document.
         var (where, ps) = WithFilters("1=1", filters, excludeAsOf: false, bare: true);
         using var cmd = Cmd($"""
-            SELECT {DocColsQualified}, snippet(fts, -1, '«', '»', ' … ', 14) AS snip
-            FROM fts JOIN docs d ON d.rid = fts.rid
+            SELECT {DocColsQualified},
+                   p.rid, p.seq, p.anchor, p.provision_id, p.ptype, p.num, p.heading, p.path,
+                   p.article_valid_from, p.work_title, p.text_md, p.text_sha,
+                   snippet(fts, 3, '«', '»', ' … ', 14) AS snip
+            FROM fts
+            JOIN provisions p ON p.rowid = fts.rowid
+            JOIN docs d ON d.rid = p.rid
             WHERE fts MATCH $q AND {where}
-            ORDER BY bm25(fts, 0.0, 12.0, 12.0, 1.0)
+            ORDER BY bm25(fts, 10.0, 4.0, 6.0, 1.0)
             LIMIT $lim
             """, ps);
         cmd.Parameters.AddWithValue("$q", Fts5Escape(query));
         cmd.Parameters.AddWithValue("$lim", limit);
-        var result = new List<(DocRow, string)>();
+        var result = new List<(DocRow, ProvisionRow, string)>();
         using var r = cmd.ExecuteReader();
-        while (r.Read()) result.Add((ReadDoc(r), r.IsDBNull(21) ? "" : r.GetString(21)));
+        while (r.Read())
+        {
+            // DocCols occupies ordinals 0..20 (incl. rid); provision cols follow at 21..32; snippet last.
+            var prov = new ProvisionRow(
+                Rid: r.GetString(21), Seq: r.GetInt32(22), Anchor: r.GetString(23), ProvisionId: r.GetString(24),
+                PType: r.GetString(25), Num: r.IsDBNull(26) ? null : r.GetString(26),
+                Heading: r.IsDBNull(27) ? null : r.GetString(27), Path: r.IsDBNull(28) ? null : r.GetString(28),
+                ArticleValidFrom: r.IsDBNull(29) ? null : r.GetString(29),
+                WorkTitle: r.IsDBNull(30) ? null : r.GetString(30),
+                TextMd: r.GetString(31), TextSha: r.GetString(32));
+            result.Add((ReadDoc(r), prov, r.IsDBNull(33) ? "" : r.GetString(33)));
+        }
         return result;
     }
 
@@ -272,8 +290,57 @@ public sealed class LexIndexReader : IDisposable
         TextPublic: r.GetString(12) == "1" || (r.GetValue(12) is long l3 && l3 == 1),
         RecordSha: r.IsDBNull(13) ? null : r.GetString(13), BodySha: r.IsDBNull(14) ? null : r.GetString(14),
         SourceUri: r.IsDBNull(15) ? null : r.GetString(15), Title: r.IsDBNull(16) ? null : r.GetString(16),
-        TitleShort: r.IsDBNull(17) ? null : r.GetString(17), Body: r.IsDBNull(18) ? null : r.GetString(18),
-        PublicationDate: r.IsDBNull(19) ? null : r.GetString(19), StatusNote: r.IsDBNull(20) ? null : r.GetString(20));
+        TitleShort: r.IsDBNull(17) ? null : r.GetString(17), Body: null,
+        PublicationDate: r.IsDBNull(18) ? null : r.GetString(18), StatusNote: r.IsDBNull(19) ? null : r.GetString(19));
+
+    /// <summary>Rid of a doc row (key|language|valid_from) — the provisions foreign key.</summary>
+    public static string RidOf(DocRow d) => $"{d.Key}|{d.Language}|{d.ValidFrom}";
+
+    /// <summary>All provisions of one document version, in document order.</summary>
+    public List<ProvisionRow> Provisions(string rid)
+    {
+        using var cmd = Cmd("""
+            SELECT rid, seq, anchor, provision_id, ptype, num, heading, path, article_valid_from,
+                   work_title, text_md, text_sha
+            FROM provisions WHERE rid=$rid ORDER BY seq
+            """, []);
+        cmd.Parameters.AddWithValue("$rid", rid);
+        var list = new List<ProvisionRow>();
+        using var r = cmd.ExecuteReader();
+        while (r.Read()) list.Add(new ProvisionRow(
+            Rid: r.GetString(0), Seq: r.GetInt32(1), Anchor: r.GetString(2), ProvisionId: r.GetString(3),
+            PType: r.GetString(4), Num: r.IsDBNull(5) ? null : r.GetString(5),
+            Heading: r.IsDBNull(6) ? null : r.GetString(6), Path: r.IsDBNull(7) ? null : r.GetString(7),
+            ArticleValidFrom: r.IsDBNull(8) ? null : r.GetString(8),
+            WorkTitle: r.IsDBNull(9) ? null : r.GetString(9),
+            TextMd: r.GetString(10), TextSha: r.GetString(11)));
+        return list;
+    }
+
+    /// <summary>One provision of one document version, by anchor.</summary>
+    public ProvisionRow? Provision(string rid, string anchor)
+        => Provisions(rid).FirstOrDefault(p => p.Anchor == anchor);
+
+    /// <summary>Document text reconstructed from its provisions (lex-index/2 stores text once).</summary>
+    public string? BuildBody(DocRow d)
+    {
+        var provs = Provisions(RidOf(d));
+        if (provs.Count == 0) return null;
+        var sb = new System.Text.StringBuilder();
+        string? lastPath = null;
+        foreach (var p in provs)
+        {
+            if (p.Path is not null && p.Path != lastPath)
+            {
+                sb.Append("\n## ").Append(p.Path).Append('\n');
+                lastPath = p.Path;
+            }
+            var title = p.Num is null && p.Heading is null ? p.Anchor
+                : string.Join(" — ", new[] { p.Num, p.Heading }.Where(s => !string.IsNullOrEmpty(s)));
+            sb.Append("\n### ").Append(title).Append("\n\n").Append(p.TextMd).Append('\n');
+        }
+        return sb.ToString();
+    }
 
     public void Dispose() => _conn.Dispose();
 }

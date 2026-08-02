@@ -93,8 +93,14 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
         var workDesc = "Work-level lex_id (publisher:workkey), version-level lex_id (version segment ignored), or verbatim publisher identifier. Unknown document -> call search first.";
         return
         [
-            Tool("as_of", "The state of one document as it stood on one date. Pure lookup, no ranking. Returns metadata, validity interval, hash, and full text where the publisher's text gate has cleared (else status=text_withheld with the official URL).",
-                new JsonObject { ["work"] = S(workDesc), ["date"] = S("ISO date YYYY-MM-DD"), ["language"] = S("optional language code, e.g. fr") }, ["work", "date"]),
+            Tool("as_of", "The state of one document as it stood on one date. Pure lookup, no ranking. mode=outline lists the provisions (articles/annexes) without text — use it first on long documents; mode=select returns only the named anchors' text; mode=full (default) returns the whole text. Every provision carries its own permalink and hash.",
+                new JsonObject
+                {
+                    ["work"] = S(workDesc), ["date"] = S("ISO date YYYY-MM-DD"),
+                    ["language"] = S("optional language code, e.g. fr"),
+                    ["mode"] = S("full | outline | select (default full)"),
+                    ["anchors"] = S("comma-separated provision anchors for mode=select, e.g. art_1er,art_33"),
+                }, ["work", "date"]),
             Tool("timeline", "Every state a document has been in: validity intervals and version keys, publisher-asserted.",
                 new JsonObject { ["work"] = S(workDesc), ["limit"] = I("max versions (default 100)"), ["offset"] = I("pagination offset") }, ["work"]),
             Tool("in_force_on", "The set of works in force on a date, computed from validity intervals at query time, deduplicated by work. Carries a mandatory population disclosure.",
@@ -160,6 +166,25 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
         return o;
     }
 
+    private JsonObject ProvisionJson(DocRow d, ProvisionRow p, bool withText)
+    {
+        var o = new JsonObject
+        {
+            ["anchor"] = p.Anchor,
+            ["provision_id"] = p.ProvisionId,
+            ["type"] = p.PType,
+            ["num"] = p.Num,
+            ["heading"] = p.Heading,
+            ["path"] = p.Path,
+            ["article_valid_from"] = p.ArticleValidFrom,
+            ["text_sha256"] = p.TextSha,
+            ["text"] = withText ? p.TextMd : null,
+        };
+        if (_publicBase is not null)
+            o["permalink"] = $"{_publicBase}/{d.Collection}/{d.GroupKey}/{d.ValidFrom}#{p.Anchor}";
+        return o;
+    }
+
     private static string KnownExclusions(LexIndexReader r) =>
         r.Stamp.GetValueOrDefault("known_exclusions") ?? r.Collection switch
         {
@@ -210,11 +235,49 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                         ["date"] = date.ToString("yyyy-MM-dd"),
                     };
                 var status = doc.TextPublic ? "ok" : "text_withheld";
+                var mode = Str("mode") ?? "full";
                 var o = new JsonObject
                 {
                     ["envelope"] = Envelope(r, status, ProvisionalFor(r, date)),
-                    ["document"] = DocJson(doc, withText: true),
                 };
+                var rid = LexIndexReader.RidOf(doc);
+                switch (mode)
+                {
+                    case "outline":
+                    {
+                        o["document"] = DocJson(doc, withText: false);
+                        o["provisions"] = new JsonArray(r.Provisions(rid)
+                            .Select(p => (JsonNode)ProvisionJson(doc, p, withText: false)).ToArray());
+                        break;
+                    }
+                    case "select":
+                    {
+                        var wanted = (Str("anchors") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                        if (wanted.Length == 0) throw new ArgumentException("mode=select requires anchors");
+                        o["document"] = DocJson(doc, withText: false);
+                        var all = r.Provisions(rid);
+                        var found = new JsonArray();
+                        var missing = new JsonArray();
+                        foreach (var anchorName in wanted)
+                        {
+                            var p = all.FirstOrDefault(x => x.Anchor == anchorName);
+                            if (p is null) missing.Add((JsonNode)anchorName);
+                            else found.Add((JsonNode)ProvisionJson(doc, p, withText: doc.TextPublic));
+                        }
+                        o["provisions"] = found;
+                        if (missing.Count > 0)
+                        {
+                            o["anchors_not_in_version"] = missing;   // honest refusal per anchor
+                            if (found.Count == 0) o["envelope"]!["status"] = "anchor_not_in_version";
+                        }
+                        break;
+                    }
+                    default:
+                    {
+                        o["document"] = DocJson(doc with { Body = doc.TextPublic ? r.BuildBody(doc) : null }, withText: true);
+                        break;
+                    }
+                }
                 if (status == "text_withheld")
                     o["text_withheld_reason"] = "publisher text gate pending; read the official text at source_uri";
                 return o;
@@ -297,15 +360,25 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                 var outp = new JsonArray();
                 foreach (var r in readers.Values.Where(x => pub is null || x.Collection == pub))
                 {
-                    var hits = r.Search(q, new FilterSet(asOf, null, Str("document_type"), Str("language")), limit * 4)
-                        .GroupBy(h => h.Doc.GroupKey).Select(g => g.First()).Take(limit).ToList();
+                    // provision-level hits: the retrieval unit is the article; at most two
+                    // provisions per work so one huge code cannot monopolize the result set
+                    var hits = r.Search(q, new FilterSet(asOf, null, Str("document_type"), Str("language")), limit * 6)
+                        .GroupBy(h => (h.Doc.GroupKey, h.Prov.Anchor)).Select(g => g.First())
+                        .GroupBy(h => h.Doc.GroupKey).SelectMany(g => g.Take(2))
+                        .Take(limit).ToList();
                     outp.Add(new JsonObject
                     {
                         ["envelope"] = Envelope(r, "ok"),
                         ["hits"] = new JsonArray(hits.Select(h =>
                         {
                             var d = DocJson(h.Doc, false);
+                            d["anchor"] = h.Prov.Anchor;
+                            d["provision_id"] = h.Prov.ProvisionId;
+                            d["provision_num"] = h.Prov.Num;
+                            d["provision_heading"] = h.Prov.Heading;
                             d["snippet"] = h.Snippet;
+                            if (_publicBase is not null)
+                                d["permalink"] = $"{_publicBase}/{h.Doc.Collection}/{h.Doc.GroupKey}/{h.Doc.ValidFrom}#{h.Prov.Anchor}";
                             return (JsonNode)d;
                         }).ToArray()),
                     });

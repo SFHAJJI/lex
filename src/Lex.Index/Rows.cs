@@ -23,9 +23,24 @@ public sealed record DocRow(
     string? SourceUri,
     string? Title,
     string? TitleShort,
-    string? Body,
+    string? Body,               // reconstructed from provisions on demand (never stored in lex-index/2)
     string? PublicationDate,
     string? StatusNote);
+
+/// <summary>One provision (article/annex) of one document version — the retrieval unit.</summary>
+public sealed record ProvisionRow(
+    string Rid,                 // parent doc rid (key|language|valid_from)
+    int Seq,                    // document order
+    string Anchor,              // publisher-minted fragment id (art_1er, anx_i, ...)
+    string ProvisionId,         // lex_id#anchor
+    string PType,               // article | annex (opaque here)
+    string? Num,
+    string? Heading,
+    string? Path,               // container ancestry, " / "-joined
+    string? ArticleValidFrom,   // publisher-asserted per-provision date, when present
+    string? WorkTitle,          // denormalized for ranking
+    string TextMd,
+    string TextSha);
 
 public sealed record EventRow(string Key, string Scope, string Event, string ObservedFrom, string? Detail);
 

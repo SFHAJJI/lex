@@ -6,11 +6,17 @@ public class IndexTests : IDisposable
 {
     private readonly string _db = Path.Combine(Path.GetTempPath(), $"lex-test-{Guid.NewGuid():N}.db");
 
-    private static DocRow Row(string key, string group, string from, string? to, string kind = "REG", string? title = null) =>
+    private static DocRow Row(string key, string group, string from, string? to, string kind = "REG", string? title = null, bool text = false) =>
         new(key, "t-pub", group, $"urn:{group}", kind, "en", from, to, "publisher",
-            "2026-08-01T00:00:00Z", Withdrawn: false, TextAvailable: false, TextPublic: false,
+            "2026-08-01T00:00:00Z", Withdrawn: false, TextAvailable: text, TextPublic: text,
             RecordSha: "abc", BodySha: null, SourceUri: "https://example.org", Title: title ?? group,
             TitleShort: title ?? group, Body: null, PublicationDate: from, StatusNote: null);
+
+    private static ProvisionRow Prov(DocRow d, int seq, string anchor, string text, string? num = null) =>
+        new(Rid: $"{d.Key}|{d.Language}|{d.ValidFrom}", Seq: seq, Anchor: anchor,
+            ProvisionId: $"{d.Key}#{anchor}", PType: "article", Num: num ?? anchor, Heading: null,
+            Path: null, ArticleValidFrom: null, WorkTitle: d.Title, TextMd: text,
+            TextSha: Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(text))));
 
     private LexIndexReader Build()
     {
@@ -21,11 +27,18 @@ public class IndexTests : IDisposable
         };
         var docs = new[]
         {
-            Row("t-pub:w1:2020-01-01", "w1", "2020-01-01", "2021-12-31", title: "first thing"),
-            Row("t-pub:w1:2022-01-01", "w1", "2022-01-01", null, title: "first thing revised"),
-            Row("t-pub:w2:2019-06-01", "w2", "2019-06-01", null, kind: "DIR", title: "second thing"),
+            Row("t-pub:w1:2020-01-01", "w1", "2020-01-01", "2021-12-31", title: "first thing", text: true),
+            Row("t-pub:w1:2022-01-01", "w1", "2022-01-01", null, title: "first thing revised", text: true),
+            Row("t-pub:w2:2019-06-01", "w2", "2019-06-01", null, kind: "DIR", title: "second thing", text: true),
         };
-        IndexBuilder.Build(_db, stamp, docs, [], [], StampSigner.CreateKeyPem());
+        var provisions = new[]
+        {
+            Prov(docs[0], 0, "art_1", "the thing shall apply everywhere"),
+            Prov(docs[0], 1, "art_2", "penalties for the thing are mild"),
+            Prov(docs[1], 0, "art_1", "the thing shall apply everywhere, revised"),
+            Prov(docs[2], 0, "art_1", "a different directive thing entirely"),
+        };
+        IndexBuilder.Build(_db, stamp, docs, provisions, [], [], StampSigner.CreateKeyPem());
         return LexIndexReader.Open(_db);
     }
 
@@ -64,20 +77,35 @@ public class IndexTests : IDisposable
     }
 
     [Fact]
-    public void Search_filters_before_ranking()
+    public void Search_filters_before_ranking_and_hits_are_provision_level()
     {
         using var r = Build();
         var all = r.Search("thing", FilterSet.All, 10);
         Assert.True(all.Count >= 3);
+        Assert.All(all, h => Assert.False(string.IsNullOrEmpty(h.Prov.Anchor)));
         var dirHits = r.Search("thing", new FilterSet(null, null, "DIR", null), 10);
         Assert.All(dirHits, h => Assert.Equal("DIR", h.Doc.Kind));
+    }
+
+    [Fact]
+    public void Provisions_round_trip_and_body_reconstruction()
+    {
+        using var r = Build();
+        var d = r.AsOf("w1", new DateOnly(2020, 6, 1), FilterSet.All)!;
+        var provs = r.Provisions(LexIndexReader.RidOf(d));
+        Assert.Equal(2, provs.Count);
+        Assert.Equal(["art_1", "art_2"], provs.Select(p => p.Anchor));
+        var body = r.BuildBody(d)!;
+        Assert.Contains("the thing shall apply everywhere", body);
+        Assert.Contains("penalties for the thing are mild", body);
+        Assert.Null(d.Body);   // never stored on the row; reconstruction is explicit
     }
 
     [Fact]
     public void Unknown_schema_is_refused_explicitly()
     {
         var stamp = new Dictionary<string, string> { ["collection"] = "t-pub" };
-        IndexBuilder.Build(_db, stamp, [], [], [], null);
+        IndexBuilder.Build(_db, stamp, [], [], [], [], null);
         // sabotage the schema stamp
         using (var c = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={_db}"))
         {
