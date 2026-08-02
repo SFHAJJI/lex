@@ -105,6 +105,16 @@ string Page(string title, string body, string? subtitle = null, string nav = "")
       .rail .yr { position:absolute; top:30px; font-family:var(--mono); font-size:11px; color:var(--muted) }
       .railcap { margin:2px 0 18px } .nowmark { color:var(--accent) }
       .lawbody { font-family:var(--serif); font-size:16.5px; line-height:1.62 }
+      /* Phones: law texts carry wide tables and long pre blocks. Let each scroll inside
+         itself rather than pushing the whole page sideways. Desktop is untouched. */
+      @media (max-width:640px) {
+        main { padding:20px 14px 48px }
+        table { display:block; overflow-x:auto }
+        pre { overflow-x:auto }
+        header { gap:12px; padding:12px 14px }
+        h1 { font-size:25px }
+        .rail .yr { font-size:10px }
+      }
     </style></head>
     <body>
     <header>
@@ -339,7 +349,7 @@ app.MapGet("/", () =>
 
         <div id="chat"></div>
         <form id="askform" class="inline" style="margin-top:10px">
-          <input id="q" style="flex:1;min-width:260px" maxlength="4000" autocomplete="off"
+          <input id="q" style="flex:1;min-width:min(260px,100%)" maxlength="4000" autocomplete="off"
                  placeholder="What did the Covid rules say on 1 February 2021?">
           <button id="send" type="submit">Ask</button>
         </form>
