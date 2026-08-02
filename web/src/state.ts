@@ -4,8 +4,13 @@
 import { useEffect, useState } from "react";
 
 export type Mode = "read" | "history" | "compare" | "provenance";
+/** The three subjects a question can be about — a law, a stretch of time, or words. */
+export type Space = "law" | "time" | "topic";
 
 export interface State {
+  space?: Space;
+  q?: string;         // topic query
+  asOf?: string;      // topic: restrict to versions valid on this date
   work?: string;      // "lu-legilux:loi-2020-07-17-a624"
   date?: string;      // point in time for read/compare-from
   to?: string;        // compare-to
@@ -20,6 +25,9 @@ export function read(): State {
   const p = new URLSearchParams(location.search);
   const mode = (p.get("mode") as Mode) || "read";
   return {
+    space: (p.get("space") as Space) || undefined,
+    q: p.get("q") || undefined,
+    asOf: p.get("asOf") || undefined,
     work: p.get("work") || undefined,
     date: p.get("date") || undefined,
     to: p.get("to") || undefined,

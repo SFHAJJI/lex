@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ask, first, tool, type AskReply, type ProvisionItem, type UiEffect } from "./api";
-import { publisherOf, useWorkspace, workSlug, type State } from "./state";
+import { publisherOf, useWorkspace, workSlug, type Space, type State } from "./state";
 import { Compare, Empty, Gap, HistoryRail, InForce, Provision, Ranking, hasView, modeFor } from "./views";
+import { LawPicker, PeriodPicker, TopicSearch } from "./pickers";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -126,10 +127,19 @@ export default function App() {
     finally { setBusy(false); }
   }, [busy, go]);
 
-  const openLaw = (work: string, date: string) => { setUi(undefined); go({ work, date, to: undefined, anchor: undefined, mode: "read" }); };
-  const openDiff = (work: string, from: string, to: string) => { setUi(undefined); go({ work, date: from, to, mode: "compare" }); };
+  const openLaw = (work: string, date: string) => { setUi(undefined); go({ work, date, to: undefined, anchor: undefined, mode: "read", space: "law" }); };
+  const openDiff = (work: string, from: string, to: string) => { setUi(undefined); go({ work, date: from, to, mode: "compare", space: "law" }); };
 
-  const isTime = !s.work && (!!s.from || !!ui?.ranking || !!ui?.in_force);
+  // Which framework is on screen: whatever the URL says, else inferred from what is loaded.
+  const space: Space = s.space ?? (s.work ? "law" : s.q ? "topic" : (s.from || ui?.ranking) ? "time" : "law");
+
+  const switchTo = (sp: Space) => {
+    setUi(undefined);
+    setSaid(undefined);
+    if (sp === "time") go({ space: sp, work: undefined, anchor: undefined, from: s.from ?? shift(today(), -365), until: s.until ?? today(), order: s.order ?? "by_churn" });
+    else if (sp === "topic") go({ space: sp, work: undefined, anchor: undefined });
+    else go({ space: sp, from: undefined, until: undefined });
+  };
 
   return (
     <div className="ws">
@@ -142,23 +152,49 @@ export default function App() {
 
       {said ? <div className="said"><b>what I found</b>{said}</div> : null}
 
-      {s.work ? (
+      <nav className="spaces">
+        {(["law", "time", "topic"] as const).map((sp) => (
+          <button key={sp} className={space === sp ? "on" : ""} onClick={() => switchTo(sp)}>
+            {sp === "law" ? "A law" : sp === "time" ? "A period" : "A topic"}
+          </button>
+        ))}
+      </nav>
+
+      {space === "time" ? (
+        <PeriodPicker from={s.from ?? shift(today(), -365)} until={s.until ?? today()}
+                      order={s.order ?? "by_churn"}
+                      onChange={(next) => { setUi(undefined); go({ ...next, work: undefined }); }} />
+      ) : null}
+
+      {space === "topic" ? (
+        <TopicSearch q={s.q ?? ""} asOf={s.asOf}
+                     onQuery={(query, asOf) => go({ q: query, asOf, work: undefined })}
+                     onOpen={(work, date, anchor) => { setUi(undefined); go({ work, date, anchor, mode: "read", space: "law" }); }} />
+      ) : null}
+
+      {space === "law" ? (
         <>
           <div className="sel">
-            <span className="pick main"><i>law</i>{title ?? workSlug(s.work)}</span>
+            <LawPicker current={title ?? (s.work ? workSlug(s.work) : undefined)}
+                       onPick={(h) => { setUi(undefined); setTitle(h.title); go({ work: h.work, date: h.validFrom ?? today(), anchor: undefined, to: undefined, mode: "read" }); }} />
+            {s.work ? (
             <label className="pick"><i>{s.mode === "compare" ? "from" : "date"}</i>
               <input type="date" value={s.date ?? today()} onChange={(e) => go({ date: e.target.value })} />
-            </label>
+            </label>) : null}
             {s.mode === "compare" ? (
               <label className="pick"><i>to</i>
                 <input type="date" value={s.to ?? today()} onChange={(e) => go({ to: e.target.value })} />
               </label>
             ) : null}
-            {s.anchor ? <span className="pick"><i>article</i>{s.anchor}</span> : null}
+            {s.anchor ? (
+              <button className="pick" onClick={() => go({ anchor: undefined, mode: "read" })}>
+                <i>article</i>{s.anchor} ✕</button>
+            ) : null}
             <span className="grow" />
-            <a className="pick" href={`/${publisherOf(s.work)}/${workSlug(s.work)}`}>permalink ↗</a>
+            {s.work ? <a className="pick" href={`/${publisherOf(s.work)}/${workSlug(s.work)}`}>permalink ↗</a> : null}
           </div>
 
+          {s.work ? (
           <nav className="modes">
             {(["read", "history", "compare"] as const).map((m) => (
               <button key={m} className={s.mode === m ? "on" : ""}
@@ -168,12 +204,13 @@ export default function App() {
                 {m === "read" ? "Read" : m === "history" ? "History" : "Compare"}
               </button>
             ))}
-          </nav>
+          </nav>) : null}
         </>
       ) : null}
 
       <div className="work">
-        {ui?.gap ? <Gap {...ui.gap} /> :
+        {space === "topic" ? null :
+         ui?.gap ? <Gap {...ui.gap} /> :
          ui?.ranking ? <Ranking rows={ui.ranking.rows} worksChanged={ui.ranking.works_changed}
                                 newVersions={ui.ranking.new_versions} from={ui.ranking.from_date}
                                 to={ui.ranking.to_date} onOpen={openDiff} /> :
@@ -182,7 +219,8 @@ export default function App() {
          s.work && s.mode === "compare" ? <Compare work={s.work} from={s.date ?? today()} to={s.to ?? today()} anchor={s.anchor} /> :
          s.work && s.mode === "read" && loaded ? <Provision items={loaded.items} validFrom={loaded.from} validTo={loaded.to} work={s.work} onPick={(a) => go({ anchor: a })} /> :
          s.work ? <Empty>Loading…</Empty> :
-         isTime ? <Empty>Pick a period, or ask a question.</Empty> :
+         space === "law" ? <Empty>Choose a law above, or ask a question.</Empty> :
+         space === "time" ? <Empty>Pick a period above.</Empty> :
          <Intro onPick={submit} />}
       </div>
 

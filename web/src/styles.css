@@ -80,3 +80,24 @@ button.ghost { background: none; border: 1px solid var(--line); color: var(--mut
   .modes { overflow-x: auto; }
   .sel { gap: 6px; }
 }
+
+/* Framework switcher — the deterministic door into each of the three subjects. */
+.spaces { display: flex; gap: 6px; margin: 0 0 12px; }
+.spaces button { background: var(--card); border: 1px solid var(--line); border-radius: 99px;
+                 padding: 6px 14px; font-size: 14px; color: var(--muted); cursor: pointer; }
+.spaces button.on { border-color: var(--fg); color: var(--fg); font-weight: 600; }
+
+.picker { position: relative; }
+.picker > button { cursor: pointer; }
+.pop { position: absolute; z-index: 20; top: calc(100% + 5px); left: 0; width: min(440px, 82vw);
+       background: var(--bg); border: 1px solid var(--line); border-radius: 9px; padding: 9px;
+       box-shadow: 0 10px 28px rgba(0,0,0,.14); }
+.pop input { width: 100%; }
+.pop ul { list-style: none; margin: 7px 0 0; padding: 0; max-height: 320px; overflow-y: auto; }
+.pop li button { display: flex; flex-direction: column; gap: 1px; width: 100%; text-align: left;
+                 background: none; border: 0; border-radius: 6px; padding: 7px 8px; color: inherit;
+                 cursor: pointer; font-size: 14px; }
+.pop li button:hover { background: var(--card); }
+.popnote { color: var(--muted); font-size: 13px; padding: 7px 8px 0; }
+.quick { display: flex; gap: 6px; flex-wrap: wrap; }
+.quick .chip { padding: 5px 11px; font-size: 13px; }
