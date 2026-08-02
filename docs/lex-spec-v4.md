@@ -1079,7 +1079,7 @@ One SQLite file per publisher:
   sha, `built_at`, ingester version, `text_public` (C2), **attribution,
   source-terms URL, the modifications statement, and the full §16.2 NOTICE
   text** (the index is consumed standalone; obligations ride inside it) — the
-  stamp is **signed** (D40): an Ed25519 signature over the stamp row ships as a
+  stamp is **signed** (D40, as amended: ECDSA-P256-SHA256): a signature over the stamp row ships as a
   detached file beside the release asset and inside the table; the public key
   lives in the `lex` README; `provenance` returns it. During the private-corpus
   phase this is what makes envelope hashes *attributable* rather than
@@ -1855,10 +1855,14 @@ Numbering continues from v3; v3 decisions are restated with status.
 | **D-PR1** | GitHub stars are the priority over portfolio polish; complexity allowed in the engine, never in the visitor's first five minutes | carried from settled memory |
 | **D38** | Rights-pending text withholding: `text_public` flag (C2) honoured by every public surface; `text_withheld` refusal status distinct from `text_not_available` | new (§9, §12.2) |
 | **D39** | Observation archives: private per-publisher repos, fetch-gate entry, dispatcher-run, replay backfill with original timestamps | new (§11.5) |
-| **D40** | Signed index stamp (Ed25519, key in `lex-ops`, public key in `lex` README, signature via `provenance`) — attestation is the sellable artefact; built in increment A | new (§8.1, counter-verdicts r1 §7.3 / r2 §2.2) |
+| **D40** | Signed index stamp (key in `lex-ops`, public key in `lex` README + `/pubkey.pem`, signature via `provenance`) — attestation is the sellable artefact; built in increment A. **Amended 2026-08-02: the implemented algorithm is ECDSA-P256-SHA256** (stamped in the `algorithm` field); the Ed25519 wording was never implemented, and this amendment lands BEFORE any public key or verify tooling publishes, so no rotation or trust break occurs. | new (§8.1); amended blueprint-verdict §3.1 |
 | **D41** | Version directories named by `valid_from` only; no directory is ever renamed; `--02` collision suffix | new (C1) |
-| **D42** | Legilux runs in metadata-only mode as a standing state: no published robots-compliant body channel exists (§2.1 probes); no SPA-API reverse-engineering, ever | new (§2.1, C4) |
+| **D42** | ~~Legilux runs in metadata-only mode~~ **Superseded by D44** (the robots-permitted CC-BY filestore channel); the no-SPA-API-reverse-engineering rule stands permanently | superseded 2026-08-01 |
 | **D43** | Data licence decided: stars-maximal (§16.3); code licence Apache-2.0, permanent | new (§16) |
+| **D44** | LU full-text channel: verbatim Akoma Ntoso XML from `legilux.public.lu/filestore` (robots-permitted; publisher documents CC-BY-4.0 on content files incl. commercial reuse; machine-readable `dct:license` per manifestation). Bodies stored byte-verbatim, append-only; closes R2/R19 with evidence. | supersedes D42/D34 |
+| **D45** | `/ask` is the §12.1 model layer, made front-door by owner decision 2026-08-02: one model + system prompt over the SAME in-process `McpCore` the public `/mcp` serves (parity by construction — no loopback HTTP, no orchestrator, no agent framework). Env-gated, IP+global daily caps (no-login constraint). Generation lives only in the Apps layer; every AI surface carries a visible not-legal-advice / not-part-of-the-record label; refusal statuses render from tool envelopes, never only the model's paraphrase. | blueprint + design workflow + owner |
+| **D46** | Derived consumption layer `lex-articles` (schema `lex-articles/1`): per-provision Markdown+JSON deterministically extracted from the evidence repos into a separate HEAD-is-the-contract repo. Profiles are versioned, IMMUTABLE, permanently runnable (`akn-lu/1`, `xhtml-eu/1`; changes = new profile beside the old, frozen-fingerprint test enforces); publisher-minted anchors only; spans in Unicode scalar values; publisher-date vs observed-text disagreement disclosed as `validity_conflict`, never resolved; renumbering detected mechanically (unique text-hash match) as `anchor_events`. Rule: every increment ends with something a stranger can experience. | blueprint + verdict r1 |
+| **D47** | The provision is the retrieval unit: `lex-index/2` stores text once (provisions table, external-content FTS, title-weighted ranking); search hits are provision-level; `as_of` gains `mode=outline\|select`; tool #8 `article_history` serves the per-anchor time axis with refusals `unknown_anchor` / `anchor_not_in_version` / `no_provision_history`. D27 stands: 8 tools, one binary. | blueprint inc 5-6 |
 
 ---
 

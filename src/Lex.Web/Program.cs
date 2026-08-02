@@ -347,6 +347,86 @@ app.MapPost("/api/ask", async (HttpRequest req) =>
     return Results.Content(bodyJson.ToJsonString(), "application/json", statusCode: status);
 });
 
+// ---- auditor surface: public key, live attestation, verify-it-yourself ----
+app.MapGet("/pubkey.pem", () =>
+{
+    var pem = readers.Values.Select(r => r.Stamp.GetValueOrDefault("public_key")).FirstOrDefault(p => !string.IsNullOrEmpty(p));
+    return pem is null ? Results.NotFound() : Results.Text(pem, "application/x-pem-file");
+});
+
+app.MapGet("/attestation.json", () =>
+{
+    var collections = new JsonArray();
+    foreach (var r in readers.Values)
+    {
+        var stampObj = new JsonObject();
+        foreach (var (k, v) in r.Stamp.OrderBy(kv => kv.Key, StringComparer.Ordinal))
+            stampObj[k] = v;
+        collections.Add(new JsonObject
+        {
+            ["collection"] = r.Collection,
+            ["signature_valid_at_load"] = r.SignatureValid,
+            ["stamp"] = stampObj,
+        });
+    }
+    return Results.Content(new JsonObject
+    {
+        ["what"] = "attestation of currency: the complete signed stamp of every index this deployment serves",
+        ["signature_binds"] = "the canonical stamp text: every stamp field except signature/public_key, sorted by key, joined as k=v lines",
+        ["signature_format"] = "ECDSA-P256-SHA256, IEEE P1363 (r||s, 64 bytes), base64",
+        ["verify"] = "see /verify",
+        ["served_at"] = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ"),
+        ["collections"] = collections,
+    }.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }), "application/json");
+});
+
+app.MapGet("/verify", () =>
+{
+    var body = $$"""
+        <p>Every index this site serves carries a <b>signed stamp</b>. The signature binds: schema version,
+        corpus commit, build time, attribution, the full NOTICE text, and the corpus statistics — the
+        canonical text is every stamp field except <span class="mono">signature</span>/<span class="mono">public_key</span>,
+        sorted by key, joined as <span class="mono">k=v</span> lines. Algorithm:
+        <span class="mono">ECDSA-P256-SHA256</span>, signature format IEEE P1363 (r||s, 64 bytes), base64.</p>
+
+        <h2>What it does — and does not — attest</h2>
+        <p>It attests that this exact index (schema, corpus commit, build) was produced by the holder of the
+        Lex signing key. It does <b>not</b> attest that the underlying text matches the publisher — that is what
+        the hash chain is for: every provision's <span class="mono">text_sha256</span> derives deterministically from a
+        verbatim publisher file whose sha256 is recorded in the open corpus repos. Re-run the pinned open-source
+        extractor on the state's bytes and you get these bytes — the defence is never "trust Lex".</p>
+
+        <h2>Verify the stamp yourself</h2>
+        <div class="card"><pre class="mono" style="white-space:pre-wrap">curl -s https://law.soufien.lu/attestation.json -o att.json
+        curl -s https://law.soufien.lu/pubkey.pem -o pubkey.pem
+        python3 - &lt;&lt;'EOF'
+        import json, base64
+        from cryptography.hazmat.primitives.serialization import load_pem_public_key
+        from cryptography.hazmat.primitives.asymmetric import ec, utils as au
+        from cryptography.hazmat.primitives import hashes
+        att = json.load(open('att.json'))
+        pub = load_pem_public_key(open('pubkey.pem','rb').read())
+        for c in att['collections']:
+            s = c['stamp']
+            canon = chr(10).join(f'{k}={v}' for k, v in sorted(s.items()) if k not in ('signature','public_key')).encode()
+            raw = base64.b64decode(s['signature'])
+            r, sv = int.from_bytes(raw[:32],'big'), int.from_bytes(raw[32:],'big')
+            pub.verify(au.encode_dss_signature(r, sv), canon, ec.ECDSA(hashes.SHA256()))
+            print(c['collection'], 'OK', s['corpus_commit'], s['built_at'])
+        EOF</pre></div>
+
+        <h2>Verify a citation against the state's bytes</h2>
+        <p>Clone the evidence repo and the code, then re-derive offline:</p>
+        <div class="card"><pre class="mono" style="white-space:pre-wrap">git clone https://github.com/SFHAJJI/lex &amp;&amp; git clone https://github.com/SFHAJJI/lex-corpus-lu-legilux
+        cd lex &amp;&amp; dotnet run --project src/Lex.Ingest -- verify derive --publisher lu-legilux --corpus ../lex-corpus-lu-legilux --articles ../lex-articles</pre></div>
+        <p class="sub">Extraction profiles are immutable (<span class="mono">akn-lu/1</span>, <span class="mono">xhtml-eu/1</span>);
+        a citation pinned under a profile verifies under that profile, forever. Contract:
+        <a href="https://github.com/SFHAJJI/lex-articles/blob/main/SCHEMA.md">SCHEMA.md</a>.</p>
+        """;
+    return Results.Content(Page("Verify", body,
+        "the signature, the hash chain, and how to check both without trusting us"), "text/html");
+});
+
 app.MapGet("/healthz", () => Results.Text("ok"));
 
 app.MapGet("/", () =>

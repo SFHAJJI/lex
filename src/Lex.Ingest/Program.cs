@@ -63,6 +63,60 @@ switch (args0[0])
         foreach (var e in stats.Errors.Take(20)) Console.Error.WriteLine($"  [derive] ERROR {e}");
         return stats.Errors.Count == 0 ? 0 : 2;
     }
+    case "verify":
+    {
+        // verify stamp --db X   |   verify derive --publisher P --corpus X --articles Y [--work slug]
+        switch (args0.Length > 1 ? args0[1] : "")
+        {
+            case "stamp":
+            {
+                var db = Get("--db") ?? throw new ArgumentException("--db required");
+                using var r = Lex.Index.LexIndexReader.Open(db);
+                Console.WriteLine($"collection={r.Collection} schema={r.Stamp.GetValueOrDefault("schema")} " +
+                    $"algorithm={r.Stamp.GetValueOrDefault("algorithm")} corpus_commit={r.Stamp.GetValueOrDefault("corpus_commit")} " +
+                    $"built_at={r.Stamp.GetValueOrDefault("built_at")} signature_valid={r.SignatureValid}");
+                return r.SignatureValid ? 0 : 3;
+            }
+            case "derive":
+            {
+                var publisher = Get("--publisher") ?? "lu-legilux";
+                var corpus = Get("--corpus") ?? throw new ArgumentException("--corpus required");
+                var articles = Get("--articles") ?? throw new ArgumentException("--articles required");
+                var onlyWork = Get("--work");
+                var tmp = Path.Combine(Path.GetTempPath(), $"lex-verify-{Guid.NewGuid():N}");
+                try
+                {
+                    // re-derive (optionally one work via a filtered shadow corpus) and byte-compare
+                    var corpusToUse = corpus;
+                    if (onlyWork is not null)
+                    {
+                        corpusToUse = Path.Combine(tmp, "corpus");
+                        Directory.CreateDirectory(Path.Combine(corpusToUse, "works"));
+                        File.Copy(Path.Combine(corpus, "manifest.json"), Path.Combine(corpusToUse, "manifest.json"));
+                        CopyDir(Path.Combine(corpus, "works", onlyWork), Path.Combine(corpusToUse, "works", onlyWork));
+                    }
+                    var outDir = Path.Combine(tmp, "articles");
+                    Lex.Derive.DeriveWriter.Derive(corpusToUse, outDir, publisher);
+                    int compared = 0, mismatched = 0, missing = 0;
+                    foreach (var f in Directory.EnumerateFiles(Path.Combine(outDir, publisher), "*.*", SearchOption.AllDirectories))
+                    {
+                        var rel = Path.GetRelativePath(outDir, f);
+                        var published = Path.Combine(articles, rel);
+                        compared++;
+                        if (!File.Exists(published)) { missing++; Console.Error.WriteLine($"MISSING in published layer: {rel}"); }
+                        else if (!File.ReadAllBytes(f).SequenceEqual(File.ReadAllBytes(published)))
+                        { mismatched++; Console.Error.WriteLine($"MISMATCH: {rel}"); }
+                    }
+                    Console.WriteLine($"verify derive: compared={compared} mismatched={mismatched} missing={missing}");
+                    return mismatched == 0 && missing == 0 ? 0 : 3;
+                }
+                finally { try { Directory.Delete(tmp, true); } catch { } }
+            }
+            default:
+                Console.Error.WriteLine("usage: lex verify stamp --db X | lex verify derive --publisher P --corpus X --articles Y [--work slug]");
+                return 1;
+        }
+    }
     case "catalog":
     {
         var articles = Get("--articles") ?? throw new ArgumentException("--articles required");
@@ -73,6 +127,13 @@ switch (args0[0])
     default:
         Usage();
         return 1;
+}
+
+static void CopyDir(string src, string dst)
+{
+    Directory.CreateDirectory(dst);
+    foreach (var f in Directory.EnumerateFiles(src)) File.Copy(f, Path.Combine(dst, Path.GetFileName(f)));
+    foreach (var d in Directory.EnumerateDirectories(src)) CopyDir(d, Path.Combine(dst, Path.GetFileName(d)));
 }
 
 static void Usage() => Console.Error.WriteLine("""
