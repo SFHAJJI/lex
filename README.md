@@ -7,10 +7,15 @@ with the exact validity interval, the timeline, the instrument that changed it,
 and a hashed provenance record — and an honest, machine-readable refusal when it
 cannot know.
 
-**Live demo:** https://law.soufien.lu — permalinks, timelines, diffs, a hosted
-MCP endpoint (`/mcp`) for your own AI, and a capped AI playground (`/ask`).
+**Live:** https://law.soufien.lu — AI answers grounded in signed per-article
+indexes (the front page), permalinks/timelines/diffs, a hosted MCP endpoint
+(`/mcp`, 8 tools incl. `article_history`), and a
+[verify-it-yourself](https://law.soufien.lu/verify) auditor surface.
+**Machine-readable data:** [lex-articles](https://github.com/SFHAJJI/lex-articles)
+— per-provision Markdown+JSON, point-in-time, hash-chained (CC-BY).
+**Architecture in one page:** https://law.soufien.lu/architecture ·
 **Specification:** [docs/lex-spec-v4.md](docs/lex-spec-v4.md) — the full
-architecture, decision record (D1–D44), fitness rules and risk register.
+decision record (D1–D47), fitness rules and risk register.
 
 ## What it never does
 
