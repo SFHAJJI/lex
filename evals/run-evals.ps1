@@ -31,6 +31,7 @@ $cases = (Get-Content "$PSScriptRoot\cases.json" -Raw -Encoding UTF8 | ConvertFr
 if ($Only) { $cases = @($cases | Where-Object { $Only -contains $_.id }) }
 $failures = 0
 $results = @()
+$export = @()   # per-case {query,response,context} JSONL for evals/groundedness.py (Azure AI Foundry evaluators)
 
 foreach ($case in $cases) {
     $body = @{ messages = @(@{ role = "user"; content = $case.question }) } | ConvertTo-Json -Depth 5
@@ -88,8 +89,17 @@ foreach ($case in $cases) {
     $ok = $problems.Count -eq 0
     if (-not $ok) { $failures++ }
     $results += [pscustomobject]@{ id = $case.id; ok = $ok; detail = if ($ok) { "tools: $($tools -join '->')" } else { $problems -join " | " } }
+
+    # Evidence context for groundedness scoring: what the tools actually returned
+    $ctx = ($trace | ForEach-Object { $_.docs } | Where-Object { $_ } | ForEach-Object {
+        $quotes = @($_.pinpoints | ForEach-Object { "$($_.anchor): $($_.quote)" }) -join " "
+        "$($_.title) [$($_.valid_from) -> $($_.valid_to)] $($_.permalink) $quotes"
+    }) -join "`n"
+    $export += (@{ id = $case.id; query = $case.question; response = "$($r.reply)"; context = $ctx } | ConvertTo-Json -Compress -Depth 4)
 }
 
+New-Item -ItemType Directory -Force "$PSScriptRoot\out" | Out-Null
+[IO.File]::WriteAllLines("$PSScriptRoot\out\results.jsonl", $export, (New-Object Text.UTF8Encoding $false))
 $results | Format-Table -AutoSize -Wrap
-Write-Host "$($cases.Count - $failures)/$($cases.Count) passed"
+Write-Host "$($cases.Count - $failures)/$($cases.Count) passed  (evidence export: out\results.jsonl — score with groundedness.py)"
 exit $failures

@@ -1,10 +1,23 @@
 using System.Text;
 using System.Text.Json.Nodes;
+using Azure.Monitor.OpenTelemetry.AspNetCore;
 using Lex.Ask;
 using Lex.Index;
 using Lex.Mcp;
+using OpenTelemetry.Trace;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Foundry-hybrid observability (D45 posture: keep the loop, adopt the platform's
+// tracing): OpenTelemetry via the Azure Monitor distro, exporting to the App
+// Insights resource a Foundry project can attach to. Enabled only when the
+// connection string is configured; the app is fully functional without it.
+if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("APPLICATIONINSIGHTS_CONNECTION_STRING")))
+{
+    builder.Services.AddOpenTelemetry().UseAzureMonitor();
+    builder.Services.ConfigureOpenTelemetryTracerProvider((_, b) => b.AddSource(AskService.ActivitySourceName));
+}
+
 var app = builder.Build();
 
 // ---- index registry: one LexIndexReader per mounted per-publisher index file (D27) ----
@@ -207,7 +220,7 @@ app.MapGet("/ai", (HttpRequest req) =>
     var baseUrl = $"{req.Scheme}://{req.Host}";
     var body = $$"""
         <p>Lex is <b>MCP-native</b>: you bring your AI, Lex brings the evidence. Your model asks the
-        seven Lex tools for the law as it stood on a date, and composes its answer from returned
+        eight Lex tools for the law as it stood on a date, and composes its answer from returned
         text, dates and hashes — Lex itself never interprets anything.</p>
 
         <h2>Connect in one line</h2>
@@ -229,10 +242,16 @@ app.MapGet("/ai", (HttpRequest req) =>
                     retrieved text; cites validity 2018-08-20 → 2019-… ; links provenance]"
         </pre></div>
 
-        <h2>The seven tools</h2>
-        <p class="sub">as_of · timeline · in_force_on · diff · search · provenance · coverage —
+        <h2>The eight tools</h2>
+        <p class="sub">as_of (full/outline/select) · timeline · in_force_on · diff · search ·
+        provenance · article_history · coverage —
         read-only, deterministic, every response carries its dates, its hash, and an honest refusal
         (<span class="mono">no_version_for_date</span>, <span class="mono">text_withheld</span>) when Lex cannot know.</p>
+
+        <h2>Azure AI Foundry agents</h2>
+        <div class="card">Foundry's Agent Service speaks remote MCP natively — point an agent at this
+        endpoint and it gets all eight tools (no key needed; leave approvals on for writes-free comfort):
+        <pre class="mono" style="white-space:pre-wrap">{ "type": "mcp", "server_label": "lex", "server_url": "{{baseUrl}}/mcp", "require_approval": "never" }</pre></div>
 
         <p>Want to try it without installing anything? The capped <a href="/ask">built-in playground</a>
         runs the same tools. Prefer no AI at all? Everything is also a <a href="/">permalink</a>.</p>
@@ -304,6 +323,9 @@ app.MapGet("/", () =>
           #chat .ev .evcard { border-top:1px solid var(--line); padding:6px 0 }
           #chat .ev .stat { border:1px solid var(--line); border-radius:99px; padding:0 8px; font-size:11.5px; color:var(--muted) }
           #chat .ev .stat.warn { color:var(--warn); border-color:var(--warn) }
+          #chat .ev .evver { margin:4px 0 4px 10px }
+          #chat .ev .pin { margin:4px 0 4px 14px; border-left:2px solid var(--line); padding-left:8px }
+          #chat .ev .pin .q { color:var(--muted); font-style:italic }
         </style>
         <script>
         (function () {
@@ -332,17 +354,39 @@ app.MapGet("/", () =>
                 add('msg a', linkify(j.reply));
                 const calls = (j.trace || []).filter(t => (t.docs || []).length || t.status);
                 if (calls.length) {
+                  // Evidence tree: work -> point-in-time version -> pinpointed articles with
+                  // the exact text the tools returned. A reader can compare each claim above
+                  // against source text without leaving the page (misgrounding is the failure
+                  // mode legal AI is known for — a real citation that doesn't support the claim).
                   let html = '<h4>Evidence — what the tools returned (deterministic; the AI text above is generated)</h4>';
+                  const works = new Map();
                   calls.forEach(t => {
                     const warn = t.status && t.status !== 'ok' ? ' warn' : '';
-                    html += '<div class="evcard"><span class="stat' + warn + '">' + esc(t.tool)
+                    html += '<span class="stat' + warn + '">' + esc(t.tool)
                           + (t.status ? ' · ' + esc(t.status) : '') + '</span> ';
-                    (t.docs || []).slice(0, 4).forEach(d => {
-                      const label = esc(d.title || d.lex_id || '');
-                      const iv = d.valid_from ? ' <span class="mono">' + esc(d.valid_from) + ' → ' + esc(d.valid_to || 'open') + '</span>' : '';
-                      html += d.permalink
-                        ? '<div><a href="' + esc(d.permalink) + '" rel="noopener">' + label + '</a>' + iv + '</div>'
-                        : '<div>' + label + iv + '</div>';
+                    (t.docs || []).forEach(d => {
+                      const wk = (d.lex_id || '').split(':').slice(0, 2).join(':') || d.title || '?';
+                      if (!works.has(wk)) works.set(wk, { title: d.title, versions: new Map() });
+                      const w = works.get(wk); if (!w.title && d.title) w.title = d.title;
+                      const vk = d.valid_from || '?';
+                      if (!w.versions.has(vk)) w.versions.set(vk, { to: d.valid_to, link: d.permalink, pins: [] });
+                      const v = w.versions.get(vk);
+                      (d.pinpoints || []).forEach(p => { if (!v.pins.some(x => x.anchor === p.anchor)) v.pins.push(p); });
+                      if (d.snippet) v.pins.push({ anchor: d.anchor, quote: d.snippet, permalink: d.permalink });
+                    });
+                  });
+                  works.forEach((w, wk) => {
+                    html += '<div class="evcard"><b>' + esc(w.title || wk) + '</b>';
+                    w.versions.forEach((v, from) => {
+                      const stamp = 'point-in-time: ' + esc(from) + ' → ' + esc(v.to || 'open');
+                      html += '<div class="evver"><span class="stat">' + stamp + '</span>'
+                            + (v.link ? ' <a href="' + esc(v.link) + '" rel="noopener">open this version</a>' : '') ;
+                      v.pins.slice(0, 4).forEach(p => {
+                        html += '<div class="pin">'
+                              + (p.anchor ? (p.permalink ? '<a href="' + esc(p.permalink) + '" rel="noopener">#' + esc(p.anchor) + '</a> ' : '<b>#' + esc(p.anchor) + '</b> ') : '')
+                              + (p.quote ? '<span class="q">' + esc(p.quote) + '</span>' : '') + '</div>';
+                      });
+                      html += '</div>';
                     });
                     html += '</div>';
                   });
@@ -588,14 +632,21 @@ app.MapGet("/coverage", () =>
             sb.Append($"<tr><td>{H(k.Kind ?? "(untyped)")}</td><td>{k.Versions:n0}</td></tr>");
         sb.Append($"</table></div>{EnvelopeCard(r, false)}");
         var luGap = c.Collection == "lu-legilux"
-            ? " ≈24,579 never-consolidated Luxembourg acts are <b>not ingested</b> (their date coverage is unmeasured)."
+            ? """
+              The publisher only maintains consolidated (amendments-merged) editions for some laws —
+              the codes and frequently amended acts. Lex holds <b>all of those</b>. The other
+              ≈24,579 Luxembourg acts never get a consolidated edition; they are <b>not here yet</b>
+              (and we won't guess dates for texts we haven't seen).
+              """
             : " Only flagship acts are ingested so far; the wider consolidated acquis is scheduled.";
         sb.Append($"""
-            <div class="notice"><b>Known gaps.</b> Only the publisher's versioned (consolidated) corpus is ingested:
-            {c.Groups:n0} works / {c.Rows:n0} versions.{luGap}
-            Text is per-version: <b>{c.TextServed:n0}</b> versions carry the verbatim official text,
-            <b>{c.Rows - c.TextServed:n0}</b> are metadata-with-link (status <span class="mono">text_withheld</span> or
-            no text published). History is as deep as the publisher's own digitised consolidations.</div>
+            <div class="notice"><b>What we hold — and what we honestly don't.</b>
+            {c.Groups:n0} laws in {c.Rows:n0} dated snapshots.{luGap}
+            Of those snapshots, <b>{c.TextServed:n0}</b> carry the full official text;
+            <b>{c.Rows - c.TextServed:n0}</b> exist as dated entries with a link but no stored text,
+            because the publisher has no machine-readable file for that (usually old) version —
+            those answer with <span class="mono">text_withheld</span> instead of pretending.
+            History can never go deeper than what the publisher itself digitised.</div>
             """);
     }
     return Results.Content(Page("Coverage — what we hold, and what we lack", sb.ToString()), "text/html");
@@ -805,6 +856,19 @@ app.MapGet("/{publisher}/{work}/{date}", (string publisher, string work, string 
     var next = idx >= 0 && idx < all.Count - 1 ? all[idx + 1] : null;
 
     var sb = new StringBuilder();
+    // Unambiguous temporal-status banner (the legislation.gov.uk precedent): the reader
+    // must never wonder WHICH state of the law they are looking at.
+    sb.Append(next is not null
+        ? $"""
+           <div class="notice"><b>Point-in-time view as at {d:yyyy-MM-dd}.</b> This version has been
+           <b>superseded</b> — it applied {H(Interval(doc))}. <a href="/{H(publisher)}/{H(work)}">Jump to the
+           version in force today</a> or <a href="/{H(publisher)}/{H(work)}/diff/{H(doc.ValidFrom)}/{H(next.ValidFrom)}">see
+           exactly what changed next</a>.</div>
+           """
+        : $"""
+           <div class="notice" style="border-left-color:var(--ok)"><b>Point-in-time view as at {d:yyyy-MM-dd}.</b>
+           This is the latest state the publisher has consolidated — valid {H(Interval(doc))}.</div>
+           """);
     sb.Append($"""
         <div class="card"><table class="kv">
         <tr><td>as of</td><td><b>{d:yyyy-MM-dd}</b> → this version applied</td></tr>

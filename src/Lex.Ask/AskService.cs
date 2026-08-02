@@ -12,6 +12,10 @@ namespace Lex.Ask;
 // Stateless per request; capped per IP and per day.
 public sealed class AskService(McpCore core)
 {
+    /// <summary>OTel source for the agent loop; registered by the host when tracing is configured.</summary>
+    public const string ActivitySourceName = "Lex.Ask";
+    private static readonly System.Diagnostics.ActivitySource Activity = new(ActivitySourceName);
+
     private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(90) };
     private readonly string? _endpoint = Environment.GetEnvironmentVariable("AOAI_ENDPOINT")?.TrimEnd('/');
     private readonly string? _key = Environment.GetEnvironmentVariable("AOAI_KEY");
@@ -33,7 +37,7 @@ public sealed class AskService(McpCore core)
 
     private static string SystemPrompt(string host) => $"""
         You are the answer layer of Lex, a point-in-time retrieval system for consolidated
-        regulatory text (Luxembourg via Legilux, EU via EUR-Lex). You have seven read-only tools
+        regulatory text (Luxembourg via Legilux, EU via EUR-Lex). You have eight read-only tools
         over signed indexes. Every version carries publisher-asserted validity dates and hashes.
         Today's date (UTC) is {DateTime.UtcNow:yyyy-MM-dd}: use it for "today"/"current" questions
         (one as_of call with this date — do not probe multiple dates).
@@ -146,14 +150,42 @@ public sealed class AskService(McpCore core)
                 case JsonObject o:
                     status ??= (o["envelope"]?["status"] ?? o["status"])?.GetValue<string>();
                     if (o["lex_id"] is not null && docs.Count < 24)
-                        docs.Add(new JsonObject
+                    {
+                        var d = new JsonObject
                         {
                             ["lex_id"] = o["lex_id"]?.DeepClone(),
                             ["title"] = o["title"]?.DeepClone(),
                             ["valid_from"] = o["valid_from"]?.DeepClone(),
                             ["valid_to"] = o["valid_to"]?.DeepClone(),
                             ["permalink"] = o["permalink"]?.DeepClone(),
-                        });
+                        };
+                        // Pinpoints: the exact provision text the tool returned, quotable next
+                        // to the claim it grounds (anti-misgrounding: a reader can compare the
+                        // answer against source text without leaving the page).
+                        if (o["provisions"] is JsonArray provs)
+                        {
+                            var pins = new JsonArray();
+                            foreach (var p in provs.OfType<JsonObject>().Take(2))
+                            {
+                                var text = (p["text"] ?? p["text_md"])?.GetValue<string>();
+                                if (text is null && p["anchor"] is null) continue;
+                                pins.Add(new JsonObject
+                                {
+                                    ["anchor"] = p["anchor"]?.DeepClone(),
+                                    ["quote"] = text is null ? null : text.Length > 280 ? text[..280] + "…" : text,
+                                    ["permalink"] = p["permalink"]?.DeepClone(),
+                                });
+                            }
+                            if (pins.Count > 0) d["pinpoints"] = pins;
+                        }
+                        else if (o["snippet"] is not null)   // provision-level search hit
+                        {
+                            d["anchor"] = o["anchor"]?.DeepClone();
+                            d["snippet"] = o["snippet"]?.DeepClone();
+                            d["provision_id"] = o["provision_id"]?.DeepClone();
+                        }
+                        docs.Add(d);
+                    }
                     else foreach (var p in o) Walk(p.Value);
                     break;
                 case JsonArray a:
@@ -188,6 +220,8 @@ public sealed class AskService(McpCore core)
             return (503, new JsonObject { ["error"] = "The playground is busy — try again in a moment." });
         try
         {
+            using var askSpan = Activity.StartActivity("ask");
+            askSpan?.SetTag("gen_ai.request.model", _deployment);
             var trace = new JsonArray();
             var searchCalls = 0;
             for (var round = 0; round <= MaxToolRounds; round++)
@@ -254,8 +288,12 @@ public sealed class AskService(McpCore core)
                                 });
                                 continue;
                             }
+                            using var toolSpan = Activity.StartActivity("tool");
+                            toolSpan?.SetTag("gen_ai.tool.name", name);
                             var node = core.CallTool(name, args);
                             var (st, docs) = Summarize(node);
+                            toolSpan?.SetTag("lex.status", st ?? "ok");
+                            toolSpan?.SetTag("lex.docs", docs.Count);
                             entry["status"] = st;
                             entry["docs"] = docs;
                             result = TruncateResult(node);
