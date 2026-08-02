@@ -109,6 +109,8 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                 new JsonObject { ["work"] = S(workDesc), ["from_date"] = S("ISO date"), ["to_date"] = S("ISO date"), ["language"] = S("language code") }, ["work", "from_date", "to_date"]),
             Tool("search", "Filtered-then-ranked full-text search (FTS; filters always run before ranking). Returns hits WITHOUT body text: lex_id, dates, snippet, hash. Full state via as_of.",
                 new JsonObject { ["query"] = S("search terms"), ["publisher"] = S("optional publisher id"), ["document_type"] = S("optional type code"), ["as_of"] = S("optional ISO date: only versions valid on this date"), ["limit"] = I("default 10") }, ["query"]),
+            Tool("article_history", "Every distinct text ONE provision (article/annex) has had, as validity intervals — plus its lifecycle events (inserted/removed/renumbered, renumbering detected mechanically by identical text hash). The answer to \"what did Article X say over its life / when did it change\".",
+                new JsonObject { ["work"] = S(workDesc), ["anchor"] = S("provision anchor, e.g. art_1er (find it via search or as_of mode=outline)") }, ["work", "anchor"]),
             Tool("provenance", "Proof chain for one lex_id: source URI, retrieval time, record/body hashes, event chain, corpus commit, index build, stamp signature.",
                 new JsonObject { ["lex_id"] = S("full lex_id"), ["language"] = S("optional") }, ["lex_id"]),
             Tool("coverage", "What we hold and what we lack, tier by tier: counts, date ranges, history_begins, known gaps. This tool exists to say what we do NOT have.",
@@ -384,6 +386,60 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                     });
                 }
                 return outp;
+            }
+            case "article_history":
+            {
+                var work = Str("work") ?? throw new ArgumentException("work required");
+                var anchor = Str("anchor") ?? throw new ArgumentException("anchor required");
+                var res = Resolve(work, Str("publisher"));
+                if (res is null) return new JsonObject { ["status"] = "unknown_work", ["work"] = work };
+                var (r, w) = res.Value;
+                if (!r.WorkExists(w)) return new JsonObject { ["envelope"] = Envelope(r, "unknown_work"), ["work"] = w };
+                var states = r.ProvisionStates(w, anchor);
+                var evs = r.AnchorEvents(w, anchor);
+                if (states.Count == 0 && evs.Count == 0)
+                    return new JsonObject
+                    {
+                        ["envelope"] = Envelope(r, r.HasProvisionHistory(w) ? "unknown_anchor" : "no_provision_history"),
+                        ["work"] = w,
+                        ["anchor"] = anchor,
+                        ["hint"] = "list anchors via as_of with mode=outline",
+                    };
+                var statesArr = new JsonArray(states.Select(s =>
+                {
+                    var o = new JsonObject
+                    {
+                        ["valid_from"] = s.ValidFrom,
+                        ["valid_to"] = s.ValidTo,
+                        ["text_sha256"] = s.TextSha,
+                        ["in_version"] = s.InVersion,
+                    };
+                    if (s.ArticleValidFrom is not null) o["article_valid_from"] = s.ArticleValidFrom;
+                    if (s.ValidityConflict) o["validity_conflict"] = true;
+                    if (_publicBase is not null && s.InVersion is not null)
+                    {
+                        var parts = s.InVersion.Split(':');
+                        if (parts.Length >= 3)
+                            o["permalink"] = $"{_publicBase}/{parts[0]}/{parts[1]}/{parts[2]}#{anchor}";
+                    }
+                    return (JsonNode)o;
+                }).ToArray());
+                return new JsonObject
+                {
+                    ["envelope"] = Envelope(r, "ok"),
+                    ["work"] = w,
+                    ["anchor"] = anchor,
+                    ["distinct_texts"] = states.Count,
+                    ["states"] = statesArr,
+                    ["anchor_events"] = new JsonArray(evs.Select(e => (JsonNode)new JsonObject
+                    {
+                        ["type"] = e.EType,
+                        ["from"] = e.FromAnchor,
+                        ["to"] = e.ToAnchor,
+                        ["anchor"] = e.Anchor,
+                        ["at_version"] = e.AtVersion,
+                    }).ToArray()),
+                };
             }
             case "provenance":
             {

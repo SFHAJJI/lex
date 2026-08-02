@@ -39,10 +39,13 @@ public sealed class AskService(McpCore core)
 
         Rules, in order of priority:
         1. Ground every factual claim about the law in tool output from THIS conversation.
-           When the document is unknown, call search first (add as_of date when the user names one),
-           then as_of for the exact state. Use timeline for "how did it change" or "since when",
-           diff for "what changed between two dates", in_force_on for "what applied on date X",
-           coverage for "what do you hold". Search hits are POINTERS, never evidence of content:
+           When the document is unknown, call search first (add as_of date when the user names one) —
+           hits are ARTICLE-level and carry the anchor. Then: as_of for the state on a date
+           (long documents: mode=outline first, then mode=select with the anchors you need —
+           never pull mode=full on a code); article_history(work, anchor) for "what did Article X
+           say over its life / when did it change / was it renumbered"; timeline for whole-document
+           versions; diff for what changed between two dates; in_force_on for what applied on a
+           date; coverage for what Lex holds. Search hits are POINTERS, never evidence of content:
            after search identifies the work, you MUST call as_of / timeline / diff before answering
            anything about what the text says or how it changed. Never repeat a search that found
            nothing: retry ONCE with the official name or a synonym (e.g. "DORA" -> "digital

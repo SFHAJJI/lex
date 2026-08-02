@@ -133,9 +133,47 @@ public static class IndexFromCorpus
             ["versions"] = docs.Select(d => d.Key).Distinct().Count().ToString(),
         };
 
+        // Per-anchor time axis + lifecycle events, from the derived layer's history.json
+        var provisionStates = new List<ProvisionStateRow>();
+        var anchorEventRows = new List<AnchorEventRow>();
+        var articlesWorks = articlesRoot is null ? null : Path.Combine(articlesRoot, publisherId, "works");
+        if (articlesWorks is not null && Directory.Exists(articlesWorks))
+        {
+            foreach (var wd in Directory.EnumerateDirectories(articlesWorks))
+            {
+                var histPath = Path.Combine(wd, "history.json");
+                if (!File.Exists(histPath)) continue;
+                var slug = Path.GetFileName(wd);
+                using var hd = JsonDocument.Parse(File.ReadAllText(histPath));
+                if (hd.RootElement.TryGetProperty("anchors", out var anchors))
+                    foreach (var a in anchors.EnumerateObject())
+                        foreach (var s in a.Value.EnumerateArray())
+                            provisionStates.Add(new ProvisionStateRow(
+                                GroupKey: slug,
+                                Anchor: a.Name,
+                                ValidFrom: s.GetProperty("valid_from").GetString() ?? "",
+                                ValidTo: s.TryGetProperty("valid_to", out var vt) ? vt.GetString() : null,
+                                TextSha: s.GetProperty("text_sha256").GetString() ?? "",
+                                InVersion: s.TryGetProperty("in_version", out var iv) ? iv.GetString() : null,
+                                ArticleValidFrom: s.TryGetProperty("article_valid_from", out var av) ? av.GetString() : null,
+                                ValidityConflict: s.TryGetProperty("validity_conflict", out var vc) && vc.GetBoolean()));
+                if (hd.RootElement.TryGetProperty("anchor_events", out var evs))
+                    foreach (var e in evs.EnumerateArray())
+                        anchorEventRows.Add(new AnchorEventRow(
+                            GroupKey: slug,
+                            EType: e.GetProperty("type").GetString() ?? "",
+                            FromAnchor: e.TryGetProperty("from", out var f) ? f.GetString() : null,
+                            ToAnchor: e.TryGetProperty("to", out var t) ? t.GetString() : null,
+                            Anchor: e.TryGetProperty("anchor", out var an) ? an.GetString() : null,
+                            TextSha: e.TryGetProperty("text_sha256", out var ts) ? ts.GetString() : null,
+                            AtVersion: e.TryGetProperty("at_version", out var atv) ? atv.GetString() : null));
+            }
+        }
+
         stamp["derived_provisions"] = provisions.Count.ToString();
-        IndexBuilder.Build(dbPath, stamp, docs, provisions, events, observations, signingKeyPem);
-        Console.Error.WriteLine($"  [index] {dbPath}: {docs.Count} rows, {provisions.Count} provisions, {events.Count} events, signed={(signingKeyPem is not null)}");
+        IndexBuilder.Build(dbPath, stamp, docs, provisions, events, observations, signingKeyPem,
+            provisionStates, anchorEventRows);
+        Console.Error.WriteLine($"  [index] {dbPath}: {docs.Count} rows, {provisions.Count} provisions, {provisionStates.Count} states, {anchorEventRows.Count} anchor events, signed={(signingKeyPem is not null)}");
     }
 
     private static string ReadIfExists(string path) => File.Exists(path) ? File.ReadAllText(path) : "";

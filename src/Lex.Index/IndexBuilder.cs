@@ -17,7 +17,9 @@ public static class IndexBuilder
         IEnumerable<ProvisionRow> provisions,
         IEnumerable<EventRow> events,
         IEnumerable<ObservationRow> observations,
-        string? signingKeyPem)
+        string? signingKeyPem,
+        IEnumerable<ProvisionStateRow>? provisionStates = null,
+        IEnumerable<AnchorEventRow>? anchorEvents = null)
     {
         if (File.Exists(dbPath)) File.Delete(dbPath);
         using var conn = new SqliteConnection($"Data Source={dbPath}");
@@ -47,6 +49,15 @@ public static class IndexBuilder
               PRIMARY KEY(rid, seq));
             CREATE INDEX ix_prov_rid ON provisions(rid);
             CREATE INDEX ix_prov_anchor ON provisions(anchor);
+            CREATE TABLE provision_states(
+              group_key TEXT NOT NULL, anchor TEXT NOT NULL, valid_from TEXT NOT NULL,
+              valid_to TEXT, text_sha TEXT NOT NULL, in_version TEXT,
+              article_valid_from TEXT, validity_conflict INTEGER NOT NULL DEFAULT 0);
+            CREATE INDEX ix_pstates ON provision_states(group_key, anchor, valid_from);
+            CREATE TABLE anchor_events(
+              group_key TEXT NOT NULL, etype TEXT NOT NULL, from_anchor TEXT, to_anchor TEXT,
+              anchor TEXT, text_sha TEXT, at_version TEXT);
+            CREATE INDEX ix_aevents ON anchor_events(group_key);
             CREATE TABLE events(key TEXT, scope TEXT, event TEXT, observed_from TEXT, detail TEXT);
             CREATE INDEX ix_events_key ON events(key);
             CREATE TABLE obs_history(key TEXT, language TEXT, expr_valid_from TEXT,
@@ -98,6 +109,30 @@ public static class IndexBuilder
             }
             // populate the external-content FTS index in one pass
             Exec(conn, "INSERT INTO fts(rowid, work_title, num, heading, text_md) SELECT rowid, work_title, num, heading, text_md FROM provisions");
+
+            var insState = conn.CreateCommand();
+            insState.CommandText = "INSERT INTO provision_states VALUES ($gk,$a,$vf,$vt,$sha,$iv,$avf,$vc)";
+            foreach (var p in new[] { "$gk", "$a", "$vf", "$vt", "$sha", "$iv", "$avf", "$vc" })
+                insState.Parameters.Add(new SqliteParameter(p, SqliteType.Text));
+            foreach (var s in provisionStates ?? [])
+            {
+                Set(insState, "$gk", s.GroupKey); Set(insState, "$a", s.Anchor); Set(insState, "$vf", s.ValidFrom);
+                Set(insState, "$vt", s.ValidTo); Set(insState, "$sha", s.TextSha); Set(insState, "$iv", s.InVersion);
+                Set(insState, "$avf", s.ArticleValidFrom); Set(insState, "$vc", s.ValidityConflict ? "1" : "0");
+                insState.ExecuteNonQuery();
+            }
+
+            var insAe = conn.CreateCommand();
+            insAe.CommandText = "INSERT INTO anchor_events VALUES ($gk,$et,$fa,$ta,$a,$sha,$av)";
+            foreach (var p in new[] { "$gk", "$et", "$fa", "$ta", "$a", "$sha", "$av" })
+                insAe.Parameters.Add(new SqliteParameter(p, SqliteType.Text));
+            foreach (var e in anchorEvents ?? [])
+            {
+                Set(insAe, "$gk", e.GroupKey); Set(insAe, "$et", e.EType); Set(insAe, "$fa", e.FromAnchor);
+                Set(insAe, "$ta", e.ToAnchor); Set(insAe, "$a", e.Anchor); Set(insAe, "$sha", e.TextSha);
+                Set(insAe, "$av", e.AtVersion);
+                insAe.ExecuteNonQuery();
+            }
 
             var insEv = conn.CreateCommand();
             insEv.CommandText = "INSERT INTO events VALUES ($key,$scope,$event,$of,$detail)";

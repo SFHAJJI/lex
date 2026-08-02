@@ -321,6 +321,53 @@ public sealed class LexIndexReader : IDisposable
     public ProvisionRow? Provision(string rid, string anchor)
         => Provisions(rid).FirstOrDefault(p => p.Anchor == anchor);
 
+    /// <summary>Every distinct text a provision has had, as validity intervals (the time axis).</summary>
+    public List<ProvisionStateRow> ProvisionStates(string work, string anchor)
+    {
+        using var cmd = Cmd("""
+            SELECT group_key, anchor, valid_from, valid_to, text_sha, in_version,
+                   article_valid_from, validity_conflict
+            FROM provision_states WHERE group_key=$w AND anchor=$a ORDER BY valid_from
+            """, []);
+        cmd.Parameters.AddWithValue("$w", NormalizeWork(work));
+        cmd.Parameters.AddWithValue("$a", anchor);
+        var list = new List<ProvisionStateRow>();
+        using var r = cmd.ExecuteReader();
+        while (r.Read()) list.Add(new ProvisionStateRow(
+            r.GetString(0), r.GetString(1), r.GetString(2), r.IsDBNull(3) ? null : r.GetString(3),
+            r.GetString(4), r.IsDBNull(5) ? null : r.GetString(5), r.IsDBNull(6) ? null : r.GetString(6),
+            r.GetString(7) == "1" || (r.GetValue(7) is long l && l == 1)));
+        return list;
+    }
+
+    /// <summary>Anchor lifecycle events for a work; optionally only those touching one anchor.</summary>
+    public List<AnchorEventRow> AnchorEvents(string work, string? anchor = null)
+    {
+        using var cmd = Cmd("""
+            SELECT group_key, etype, from_anchor, to_anchor, anchor, text_sha, at_version
+            FROM anchor_events WHERE group_key=$w
+              AND ($a IS NULL OR from_anchor=$a OR to_anchor=$a OR anchor=$a)
+            ORDER BY at_version
+            """, []);
+        cmd.Parameters.AddWithValue("$w", NormalizeWork(work));
+        cmd.Parameters.AddWithValue("$a", (object?)anchor ?? DBNull.Value);
+        var list = new List<AnchorEventRow>();
+        using var r = cmd.ExecuteReader();
+        while (r.Read()) list.Add(new AnchorEventRow(
+            r.GetString(0), r.GetString(1), r.IsDBNull(2) ? null : r.GetString(2),
+            r.IsDBNull(3) ? null : r.GetString(3), r.IsDBNull(4) ? null : r.GetString(4),
+            r.IsDBNull(5) ? null : r.GetString(5), r.IsDBNull(6) ? null : r.GetString(6)));
+        return list;
+    }
+
+    /// <summary>True if the work has any provision-level history rows.</summary>
+    public bool HasProvisionHistory(string work)
+    {
+        using var cmd = Cmd("SELECT 1 FROM provision_states WHERE group_key=$w LIMIT 1", []);
+        cmd.Parameters.AddWithValue("$w", NormalizeWork(work));
+        return cmd.ExecuteScalar() is not null;
+    }
+
     /// <summary>Document text reconstructed from its provisions (lex-index/2 stores text once).</summary>
     public string? BuildBody(DocRow d)
     {

@@ -262,6 +262,11 @@ app.MapGet("/ask", () =>
           #chat .a { border:1px solid var(--line) }
           #chat .t { font-family:var(--mono); font-size:12.5px; color:var(--muted); margin:4px 0 4px 8px }
           #chat .err { border-left:3px solid #c0392b; padding:8px 12px; color:var(--muted) }
+          #chat .ev { border:1px solid var(--line); border-radius:10px; margin:6px 0 14px; padding:8px 12px; font-size:13.5px }
+          #chat .ev h4 { margin:0 0 6px; font-size:13px; color:var(--muted) }
+          #chat .ev .evcard { border-top:1px solid var(--line); padding:6px 0 }
+          #chat .ev .stat { border:1px solid var(--line); border-radius:99px; padding:0 8px; font-size:11.5px; color:var(--muted) }
+          #chat .ev .stat.warn { color:var(--warn); border-color:var(--warn) }
         </style>
         <script>
         (function () {
@@ -285,7 +290,28 @@ app.MapGet("/ask", () =>
               busy.remove();
               (j.trace || []).forEach(t => add('t', '→ ' + esc(t.tool) + '(' + esc(JSON.stringify(t.args)) + ')'));
               if (j.error) { add('err', esc(j.error)); msgs.pop(); }
-              else { msgs.push({ role: 'assistant', content: j.reply }); add('msg a', linkify(j.reply)); }
+              else {
+                msgs.push({ role: 'assistant', content: j.reply });
+                add('msg a', linkify(j.reply));
+                const calls = (j.trace || []).filter(t => (t.docs || []).length || t.status);
+                if (calls.length) {
+                  let html = '<h4>Evidence — what the tools returned (deterministic; the AI text above is generated)</h4>';
+                  calls.forEach(t => {
+                    const warn = t.status && t.status !== 'ok' ? ' warn' : '';
+                    html += '<div class="evcard"><span class="stat' + warn + '">' + esc(t.tool)
+                          + (t.status ? ' · ' + esc(t.status) : '') + '</span> ';
+                    (t.docs || []).slice(0, 4).forEach(d => {
+                      const label = esc(d.title || d.lex_id || '');
+                      const iv = d.valid_from ? ' <span class="mono">' + esc(d.valid_from) + ' → ' + esc(d.valid_to || 'open') + '</span>' : '';
+                      html += d.permalink
+                        ? '<div><a href="' + esc(d.permalink) + '" rel="noopener">' + label + '</a>' + iv + '</div>'
+                        : '<div>' + label + iv + '</div>';
+                    });
+                    html += '</div>';
+                  });
+                  add('ev', html);
+                }
+              }
             } catch (e) { busy.remove(); add('err', 'network error — try again'); msgs.pop(); }
             send.disabled = false; q.focus();
           }

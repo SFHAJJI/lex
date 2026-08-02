@@ -51,6 +51,20 @@
       "expect_reply_contains_any": ["not", "only", "consolidated", "gap"]
     },
     {
+      "id": "article-history",
+      "question": "How has Article 1 of the GDPR changed over its life? Has it ever been renumbered?",
+      "expect_tool": "article_history",
+      "expect_args_contain": ["art_1"],
+      "expect_reply_contains_any": ["distinct", "one text", "single", "not been renumbered", "no renumber", "never", "unchanged", "same text", "one version", "1 "]
+    },
+    {
+      "id": "select-mode-code",
+      "question": "Quote article 1102 of the Nouveau Code de procédure civile as it stood on 1 January 2020.",
+      "expect_tool": "as_of",
+      "expect_args_contain": ["2020-01-01"],
+      "expect_reply_contains_any": ["1102", "Article", "article", "Art"]
+    },
+    {
       "id": "lu-text-quote",
       "question": "Quote the first sentence of the Nouveau Code de procédure civile as it stood on 1 January 2018, in French.",
       "expect_tool": "as_of",
