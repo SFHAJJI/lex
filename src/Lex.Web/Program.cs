@@ -973,6 +973,24 @@ app.MapGet("/{publisher}/{work}/{date}", (string publisher, string work, string 
            <div class="notice" style="border-left-color:var(--ok)"><b>Point-in-time view as at {d:yyyy-MM-dd}.</b>
            This is the latest state the publisher has consolidated — valid {H(Interval(doc))}.</div>
            """);
+    // Most readers arrive from a search engine straight onto this page and never see the
+    // homepage. The two things they must know — what a consolidated text is, and that it
+    // carries no legal force — belong here, in plain words, not only on the front door.
+    sb.Append("""
+        <details class="card" style="margin-top:-4px"><summary><b>New here? What am I looking at?</b></summary>
+        <p>This is a <b>consolidated</b> text: the original law with every later amendment merged in,
+        as the official publisher produced it for a given date. Laws are amended constantly, so
+        <b>“the law” has no single text — only a text per date</b>. That date is the banner above.</p>
+        <p><b>It has no legal force.</b> Only the version published in the official gazette
+        (<i>Mémorial</i> / Official Journal) is authentic — the publishers say so themselves, and so do we.
+        Lex reproduces their text without altering a byte, and links the source on every page.
+        This is legal <i>information</i>, never legal advice: it reports what the text said,
+        never what it means for your situation.</p>
+        <p class="sub">“Valid from → to” = the window in which this text applied.
+        “Open” = still current as far as the publisher has consolidated.
+        Each article carries its own hash so you can prove it was not tampered with —
+        <a href="/verify">here is how</a>.</p></details>
+        """);
     sb.Append($"""
         <div class="card"><table class="kv">
         <tr><td>as of</td><td><b>{d:yyyy-MM-dd}</b> → this version applied</td></tr>
