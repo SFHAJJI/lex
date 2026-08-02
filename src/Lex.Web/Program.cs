@@ -158,6 +158,17 @@ LexIndexReader? Reader(string publisher) => readers.GetValueOrDefault(publisher)
 
 string DocTitle(DocRow d) => d.TitleShort ?? d.Title ?? d.GroupKey;
 
+// Legilux titles are prefixed "Version consolidée applicable au DD/MM/YYYY : <real title>".
+// In a list of changes that prefix is noise — the date is already its own column.
+string? TitleShorten(string? t)
+{
+    if (string.IsNullOrEmpty(t)) return t;
+    var i = t.IndexOf(" : ", StringComparison.Ordinal);
+    if (i > 0 && t.StartsWith("Version consolidée", StringComparison.OrdinalIgnoreCase)) t = t[(i + 3)..];
+    else if (i > 0 && t.StartsWith("Konsolidierte", StringComparison.OrdinalIgnoreCase)) t = t[(i + 3)..];
+    return t.Length > 110 ? t[..110].TrimEnd() + "…" : t;
+}
+
 string Interval(DocRow d) => d.ValidTo is null ? $"{d.ValidFrom} → <i>open</i>" : $"{d.ValidFrom} → {d.ValidTo}";
 
 string RenderDiff(string oldText, string newText)
@@ -246,7 +257,7 @@ app.MapGet("/ai", (HttpRequest req) =>
     var baseUrl = $"{req.Scheme}://{req.Host}";
     var body = $$"""
         <p>Lex is <b>MCP-native</b>: you bring your AI, Lex brings the evidence. Your model asks the
-        eight Lex tools for the law as it stood on a date, and composes its answer from returned
+        nine Lex tools for the law as it stood on a date, and composes its answer from returned
         text, dates and hashes — Lex itself never interprets anything.</p>
 
         <h2>Connect in one line</h2>
@@ -268,7 +279,7 @@ app.MapGet("/ai", (HttpRequest req) =>
                     retrieved text; cites validity 2018-08-20 → 2019-… ; links provenance]"
         </pre></div>
 
-        <h2>The eight tools</h2>
+        <h2>The nine tools</h2>
         <p class="sub">as_of (full/outline/select) · timeline · in_force_on · diff · search ·
         provenance · article_history · coverage —
         read-only, deterministic, every response carries its dates, its hash, and an honest refusal
@@ -276,7 +287,7 @@ app.MapGet("/ai", (HttpRequest req) =>
 
         <h2>Azure AI Foundry agents</h2>
         <div class="card">Foundry's Agent Service speaks remote MCP natively — point an agent at this
-        endpoint and it gets all eight tools (no key needed; leave approvals on for writes-free comfort):
+        endpoint and it gets all nine tools (no key needed; leave approvals on for writes-free comfort):
         <pre class="mono" style="white-space:pre-wrap">{ "type": "mcp", "server_label": "lex", "server_url": "{{baseUrl}}/mcp", "require_approval": "never" }</pre></div>
 
         <p>Want to try it without installing anything? The capped <a href="/ask">built-in playground</a>
@@ -300,7 +311,7 @@ app.MapGet("/", () =>
         <span class="badge">{cov.Sum(c => c.TextServed):n0} with full text</span>
         <span class="badge">{H(cov.Select(c => c.EarliestValidFrom).Min())} → {H(cov.Select(c => c.LatestValidFrom).Max())}</span>
         <span class="badge ok">signed indexes</span>
-        <span class="badge">8 MCP tools</span>
+        <span class="badge">9 MCP tools</span>
         <span class="badge">Luxembourg + EU</span></p>
         """;
     // Story cards: same source as /stories, computed live so a figure can never drift into fiction.
@@ -521,7 +532,7 @@ app.MapGet("/architecture", () =>
                       never an LLM)                    signed SQLite indexes (lex-index/2)
                                                        provisions + FTS + time axis, ECDSA-P256 stamp
                                                             │
-                            this site · /mcp (8 tools, any MCP client) · datasets</pre></div>
+                            this site · /mcp (9 tools, any MCP client) · datasets</pre></div>
 
         <p>Every provision's <span class="mono">text_sha256</span> chains to a verbatim-file sha256 in the evidence
         repo: re-run the pinned open-source extractor on the state's bytes and you get these bytes.
@@ -839,7 +850,7 @@ app.MapGet("/built", () =>
                 ▼  (immutable profiles)           │
           SIGNED SQLITE INDEX (ECDSA P-256) ◄─────┘
                 │
-                ├──► MCP server  (8 tools, public, no key)
+                ├──► MCP server  (9 tools, public, no key)
                 └──► this site   (Container Apps, scale-to-zero)</pre></div>
         <p class="sub">Azure: Container Apps behind a managed certificate, Container Registry, Azure
         OpenAI (gpt-5-mini) for the assistant, Application Insights via OpenTelemetry, Azure DNS.
@@ -960,7 +971,7 @@ app.MapGet("/built", () =>
     return Results.Content(Page("How it was built", body, null, "how"), "text/html");
 });
 
-// ---- /developers: everything an engineer needs — the eight tools, four ways to connect,
+// ---- /developers: everything an engineer needs — the nine tools, four ways to connect,
 // the datasets, the repos. /ai kept as an alias so older links survive.
 app.MapGet("/developers", (HttpRequest req) =>
 {
@@ -984,7 +995,7 @@ app.MapGet("/developers", (HttpRequest req) =>
                   "arguments": { "work":"eu-eurlex:32016r0679",
                     "date":"2019-03-15", "mode":"select", "anchors":"art_33" } } }'</pre></div>
 
-        <h2>The eight tools</h2>
+        <h2>The nine tools</h2>
         <div class="card"><table>
         <tr><th>tool</th><th>arguments</th><th>answers</th></tr>
         <tr><td class="mono">as_of</td><td class="mono">work, date, [language], [mode: full\|outline\|select], [anchors]</td>
@@ -1002,6 +1013,28 @@ app.MapGet("/developers", (HttpRequest req) =>
             <td>source URI, retrieval time, record hash, the append-only observation chain.</td></tr>
         <tr><td class="mono">coverage</td><td class="mono">[publisher]</td><td>what is held, and what is knowably missing.</td></tr>
         </table></div>
+
+        <h2>Try the joysticks</h2>
+        <p class="sub">This calls the same public endpoint your model would. No key, nothing installed —
+        the JSON below is exactly what an MCP client receives.</p>
+        <div class="card">
+          <form id="pg" class="inline" style="margin:0 0 8px">
+            <select id="pgtool">
+              <option value="as_of">as_of</option>
+              <option value="article_history">article_history</option>
+              <option value="timeline">timeline</option>
+              <option value="diff">diff</option>
+              <option value="in_force_on">in_force_on</option>
+              <option value="search">search</option>
+              <option value="provenance">provenance</option>
+              <option value="coverage">coverage</option>
+              <option value="changes_in_period">changes_in_period</option>
+            </select>
+            <button type="submit">Call it</button>
+          </form>
+          <textarea id="pgargs" rows="5" style="width:100%;font-family:var(--mono);font-size:13px"></textarea>
+          <pre id="pgout" class="mono" style="white-space:pre-wrap;max-height:340px;overflow:auto;font-size:12.5px;margin:10px 0 0">↑ pick a tool and press "Call it"</pre>
+        </div>
 
         <h2>It refuses rather than guesses</h2>
         <p class="sub">Every tool returns an envelope with a status. The refusals are part of the contract:
@@ -1040,6 +1073,46 @@ app.MapGet("/developers", (HttpRequest req) =>
         <p class="sub">Everything on this page is exercised by the project's own test and eval suites,
         and the endpoint is rebuilt nightly. <a href="/built">How it was built →</a> ·
         <a href="/verify">Verify it yourself →</a></p>
+        """
+        + """
+        <script>
+        (function () {
+          const presets = {
+            as_of: { work: "eu-eurlex:32016r0679", date: "2019-03-15", mode: "select", anchors: "art_33" },
+            article_history: { work: "eu-eurlex:32013r0575", anchor: "art_92" },
+            timeline: { work: "lu-legilux:loi-2020-07-17-a624" },
+            diff: { work: "lu-legilux:loi-2020-07-17-a624", from_date: "2020-07-25", to_date: "2021-02-01" },
+            in_force_on: { date: "2022-03-15", document_type: "CODE", limit: 5 },
+            search: { query: "congé parental", publisher: "lu-legilux", limit: 3 },
+            provenance: { lex_id: "eu-eurlex:32016r0679:2016-05-04" },
+            coverage: {},
+            changes_in_period: { from_date: "2020-03-01", to_date: "2021-07-01", order: "by_churn", limit: 10 }
+          };
+          const tool = document.getElementById('pgtool'), args = document.getElementById('pgargs'),
+                out = document.getElementById('pgout'), form = document.getElementById('pg');
+          function fill() { args.value = JSON.stringify(presets[tool.value], null, 2); }
+          tool.addEventListener('change', fill); fill();
+          form.addEventListener('submit', async function (e) {
+            e.preventDefault();
+            out.textContent = 'calling ' + tool.value + '…';
+            let parsed;
+            try { parsed = JSON.parse(args.value || '{}'); }
+            catch (err) { out.textContent = 'arguments are not valid JSON: ' + err.message; return; }
+            try {
+              const r = await fetch('/mcp', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call',
+                                       params: { name: tool.value, arguments: parsed } })
+              });
+              const j = await r.json();
+              const text = j.result && j.result.content && j.result.content[0]
+                ? j.result.content[0].text : JSON.stringify(j, null, 2);
+              let pretty; try { pretty = JSON.stringify(JSON.parse(text), null, 2); } catch { pretty = text; }
+              out.textContent = pretty.length > 6000 ? pretty.slice(0, 6000) + '\n… truncated for display' : pretty;
+            } catch (err) { out.textContent = 'request failed: ' + err.message; }
+          });
+        })();
+        </script>
         """;
     return Results.Content(Page("For developers", body, null, "dev"), "text/html");
 });
@@ -1109,6 +1182,77 @@ app.MapGet("/how-it-works", () =>
     return Results.Content(Page("How it works", body, null, "how"), "text/html");
 });
 
+// ---- /changed: the corpus-wide counterpart of a diff. "What moved between two dates?"
+// is the question a compliance reader actually has, and no per-work tool can answer it.
+app.MapGet("/changed", (string? from, string? to, string? order, string? publisher) =>
+{
+    var today = DateOnly.FromDateTime(DateTime.UtcNow);
+    if (!DateOnly.TryParse(to, out var toD)) toD = today;
+    if (!DateOnly.TryParse(from, out var fromD)) fromD = toD.AddYears(-1);
+    if (fromD > toD) (fromD, toD) = (toD, fromD);
+    var byChurn = order == "by_churn";
+    var f = fromD.ToString("yyyy-MM-dd");
+    var t = toD.ToString("yyyy-MM-dd");
+
+    var sb = new StringBuilder($"""
+        <p class="lede">Every Luxembourg and EU law in Lex that gained a new version between two
+        dates — the corpus-wide view that a single law's timeline cannot give you.</p>
+        <form class="inline" method="get">
+          <label class="sub">from <input type="date" name="from" value="{f}"></label>
+          <label class="sub">to <input type="date" name="to" value="{t}"></label>
+          <select name="order">
+            <option value="by_date"{(byChurn ? "" : " selected")}>most recently changed</option>
+            <option value="by_churn"{(byChurn ? " selected" : "")}>changed most often</option>
+          </select>
+          <button type="submit">Show changes</button>
+        </form>
+        <p class="sub">Quick ranges:
+          <a href="/changed?from={today.AddMonths(-1):yyyy-MM-dd}&to={today:yyyy-MM-dd}">last month</a> ·
+          <a href="/changed?from={today.AddYears(-1):yyyy-MM-dd}&to={today:yyyy-MM-dd}">last year</a> ·
+          <a href="/changed?from=2025-01-01&to=2026-01-01">2025 → 2026</a> ·
+          <a href="/changed?from=2020-03-01&to=2021-07-01&order=by_churn">the pandemic, by churn</a></p>
+        """);
+
+    var totalWorks = 0; var totalVersions = 0;
+    var blocks = new StringBuilder();
+    foreach (var r in readers.Values.Where(x => publisher is null || x.Collection == publisher)
+                             .OrderBy(x => x.Collection, StringComparer.Ordinal))
+    {
+        var (works, versions) = r.ChangeTotals(f, t, null);
+        totalWorks += works; totalVersions += versions;
+        var rows = r.ChangesInPeriod(f, t, null, byChurn, 60);
+        if (rows.Count == 0) continue;
+        blocks.Append($"<h2>{H(r.Collection)} — {works:n0} law(s) moved, {versions:n0} new version(s)</h2>");
+        blocks.Append("<div class=\"card\"><table><tr><th>law</th><th>new versions</th><th>window</th><th></th></tr>");
+        foreach (var c in rows)
+            blocks.Append($"""
+                <tr><td><a href="/{H(r.Collection)}/{H(c.GroupKey)}">{H(TitleShorten(c.Title) ?? c.GroupKey)}</a>
+                    <div class="sub mono" style="font-size:12px">{H(c.GroupKey)} · {c.VersionsTotal} version(s) in all</div></td>
+                <td class="mono">{c.VersionsInPeriod}</td>
+                <td class="mono">{H(c.FirstChange)}{(c.FirstChange == c.LastChange ? "" : " → " + H(c.LastChange))}</td>
+                <td>{(c.FirstChange == c.LastChange
+                        ? $"<a href=\"/{H(r.Collection)}/{H(c.GroupKey)}/{H(c.LastChange)}\">read</a>"
+                        : $"<a href=\"/{H(r.Collection)}/{H(c.GroupKey)}/diff/{H(c.FirstChange)}/{H(c.LastChange)}\">what changed</a>")}</td></tr>
+                """);
+        blocks.Append("</table></div>");
+    }
+
+    sb.Append($"""
+        <div class="card" style="border-color:var(--accent)">
+          <b>{totalWorks:n0} law(s) changed</b> between {H(f)} and {H(t)},
+          producing <b>{totalVersions:n0} new version(s)</b>.
+          {(totalWorks == 0 ? "Nothing moved in this window — which is itself an answer." : "")}
+        </div>
+        """);
+    sb.Append(blocks);
+    sb.Append($"""
+        <p class="sub">Same data, from your own code:
+        <span class="mono">changes_in_period(from_date="{H(f)}", to_date="{H(t)}"{(byChurn ? ", order=\"by_churn\"" : "")})</span>
+        — <a href="/developers">try it in the browser</a>.</p>
+        """);
+    return Results.Content(Page("What changed", sb.ToString(), null, "find"), "text/html");
+});
+
 // ---- /find: one door for the three ways of locating a law (search, browse, in-force-on).
 app.MapGet("/find", () =>
 {
@@ -1130,6 +1274,12 @@ app.MapGet("/find", () =>
           <input type="date" name="date" value="{DateTime.UtcNow:yyyy-MM-dd}">
           <button type="submit">List it</button>
         </form></div>
+
+        <div class="card"><h2 style="margin-top:0">What changed between two dates?</h2>
+        <p class="sub">Across the whole corpus, not one law at a time — the question a compliance
+        reader actually has.</p>
+        <p><a href="/changed"><b>Open the change report →</b></a> ·
+           <a href="/changed?from=2020-03-01&amp;to=2021-07-01&amp;order=by_churn">the pandemic, ranked by churn</a></p></div>
 
         <div class="card"><h2 style="margin-top:0">Browse everything</h2>
         <p class="sub">All {readers.Values.Sum(r => r.Coverage().Groups):n0} laws, by publisher and type.</p>
@@ -1245,6 +1395,33 @@ app.MapGet("/stories", () =>
         + "where the question is what was punishable on the day of the act.",
         "Que disait le Code pénal luxembourgeois au 1er janvier 2020 ?");
 
+    // The same aggregate that changes_in_period exposes: the page and the API answer this
+    // from one code path, so the site never knows something an MCP client cannot get.
+    if (readers.TryGetValue("lu-legilux", out var luR))
+    {
+        var churn = luR.ChangesInPeriod("2020-03-01", "2021-07-01", null, byChurn: true, limit: 5);
+        if (churn.Count > 0)
+        {
+            sb.Append("""
+                <div class="card"><h2 style="margin:0 0 4px">Which laws moved most during the pandemic</h2>
+                <p class="sub" style="margin:0 0 10px">March 2020 – July 2021, ranked by how many new versions
+                each law produced. Computed live, and available to your own code as
+                <span class="mono">changes_in_period(order="by_churn")</span>.</p><table>
+                <tr><th>law</th><th>new versions</th><th></th></tr>
+                """);
+            foreach (var c in churn)
+                sb.Append($"""
+                    <tr><td><a href="/lu-legilux/{H(c.GroupKey)}">{H(TitleShorten(c.Title) ?? c.GroupKey)}</a></td>
+                    <td class="mono">{c.VersionsInPeriod}</td>
+                    <td><a href="/lu-legilux/{H(c.GroupKey)}/diff/{H(c.FirstChange)}/{H(c.LastChange)}">what changed</a></td></tr>
+                    """);
+            sb.Append("""
+                </table><p class="sub" style="margin:8px 0 0">
+                <a href="/changed?from=2020-03-01&amp;to=2021-07-01&amp;order=by_churn"><b>Explore any period →</b></a></p></div>
+                """);
+        }
+    }
+
     sb.Append("""
         <div class="card"><b>The honest half.</b> A demo that only shows wins is a brochure.
           <a href="/lu-legilux/rgd-1998-08-03-n4/1900-01-01">Ask for a law in 1900</a> and Lex refuses,
@@ -1252,7 +1429,7 @@ app.MapGet("/stories", () =>
           <a href="/coverage">here is exactly what it holds and what it lacks</a>.</div>
         """);
     return Results.Content(Page("Stories — watch the law move", sb.ToString(),
-        "four real histories from the Luxembourg and EU corpora, computed live"), "text/html");
+        "real histories from the Luxembourg and EU corpora, computed live", "find"), "text/html");
 });
 
 app.MapGet("/provenance/{*key}", (string key) =>

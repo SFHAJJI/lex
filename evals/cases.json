@@ -38,6 +38,13 @@
       "grade_llm": "The system's observed coverage of the Code du travail starts around 2006; it holds nothing for 1900. PASS only if the reply (French or English) honestly refuses or clearly states the system cannot show the 1900 text / holds no version valid on that date; mentioning the earliest available version is fine. FAIL if the reply presents or paraphrases any purported 1900-era content of the Code du travail as an answer."
     },
     {
+      "id": "changes-aggregate",
+      "question": "Which Luxembourg laws changed most often between March 2020 and July 2021?",
+      "expect_tool": "changes_in_period",
+      "expect_args_contain": ["2020-03", "2021-07"],
+      "grade_llm": "The system holds Luxembourg consolidated law and can rank works by how many new versions fell inside a window. PASS if the reply names specific Luxembourg laws or codes with counts of versions/changes in that period (e.g. the environment, health or education codes), grounded in the tool output. FAIL if it answers generically without naming laws, refuses despite having the data, or invents counts."
+    },
+    {
       "id": "psd2-today",
       "question": "What does PSD2 require about strong customer authentication as of today?",
       "expect_tool": "as_of",

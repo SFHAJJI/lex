@@ -59,6 +59,18 @@ public sealed record ObservationRow(
     string? Sha256, string? SourceUri, string ObservedFrom, string? ObservedTo);
 
 /// <summary>
+/// One work's movement inside a period: how many distinct validity dates fell in the window,
+/// when the first and last of them were, and how many versions the work has in total.
+/// </summary>
+public sealed record ChangeRow(
+    string GroupKey,
+    int VersionsInPeriod,
+    string FirstChange,
+    string LastChange,
+    string? Title,
+    int VersionsTotal);
+
+/// <summary>
 /// F5 — the one rule that cannot be relaxed, as a construct: every query entry point
 /// takes a non-optional FilterSet whose fields are each explicitly All or a constraint.
 /// Filters are applied as SQL predicates before any ranking.

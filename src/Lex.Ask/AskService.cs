@@ -37,7 +37,7 @@ public sealed class AskService(McpCore core)
 
     private static string SystemPrompt(string host) => $"""
         You are the answer layer of Lex, a point-in-time retrieval system for consolidated
-        regulatory text (Luxembourg via Legilux, EU via EUR-Lex). You have eight read-only tools
+        regulatory text (Luxembourg via Legilux, EU via EUR-Lex). You have nine read-only tools
         over signed indexes. Every version carries publisher-asserted validity dates and hashes.
         Today's date (UTC) is {DateTime.UtcNow:yyyy-MM-dd}: use it for "today"/"current" questions
         (one as_of call with this date — do not probe multiple dates).
@@ -50,7 +50,15 @@ public sealed class AskService(McpCore core)
            never pull mode=full on a code); article_history(work, anchor) for "what did Article X
            say over its life / when did it change / was it renumbered"; timeline for whole-document
            versions; diff for what changed between two dates; in_force_on for what applied on a
-           date; coverage for what Lex holds. Search hits are POINTERS, never evidence of content:
+           date; changes_in_period(from_date, to_date) for ACROSS-the-corpus questions ("what
+           changed between 2025 and 2026", "which laws changed most during the pandemic" —
+           add order=by_churn to rank by how often each moved); coverage for what Lex holds.
+           changes_in_period is DIFFERENT from search: its counts and rankings ARE the answer
+           to "which/how many laws changed" questions. Report them directly with the titles and
+           permalinks it returned. Do NOT call as_of on each result to confirm a count — the
+           count comes from the index, and fetching each work wastes the budget and answers
+           nothing. Only fetch a work's text if the user asks what a specific law now SAYS.
+           Search hits are POINTERS, never evidence of content:
            after search identifies the work, you MUST call as_of / timeline / diff before answering
            anything about what the text says or how it changed. Never repeat a search that found
            nothing: retry ONCE with the official name or a synonym (e.g. "DORA" -> "digital
@@ -188,6 +196,21 @@ public sealed class AskService(McpCore core)
             {
                 case JsonObject o:
                     status ??= (o["envelope"]?["status"] ?? o["status"])?.GetValue<string>();
+                    // changes_in_period rows are works, not versions: they carry "work" rather
+                    // than "lex_id", and the counts ARE the evidence.
+                    if (o["work"] is not null && o["versions_in_period"] is not null && docs.Count < 24)
+                    {
+                        docs.Add(new JsonObject
+                        {
+                            ["lex_id"] = o["work"]?.DeepClone(),
+                            ["title"] = o["title"]?.DeepClone(),
+                            ["valid_from"] = o["first_change"]?.DeepClone(),
+                            ["valid_to"] = o["last_change"]?.DeepClone(),
+                            ["permalink"] = (o["diff_permalink"] ?? o["permalink"])?.DeepClone(),
+                            ["snippet"] = $"{o["versions_in_period"]} new version(s) in the window, {o["versions_total"]} in all",
+                        });
+                        break;
+                    }
                     // as_of shape: provisions ride as a SIBLING of document — pair them
                     if (o["document"] is JsonObject docObj && docObj["lex_id"] is not null && docs.Count < 24)
                     {

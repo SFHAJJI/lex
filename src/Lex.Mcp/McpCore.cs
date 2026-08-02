@@ -115,6 +115,16 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                 new JsonObject { ["lex_id"] = S("full lex_id"), ["language"] = S("optional") }, ["lex_id"]),
             Tool("coverage", "What we hold and what we lack, tier by tier: counts, date ranges, history_begins, known gaps. This tool exists to say what we do NOT have.",
                 new JsonObject { ["publisher"] = S("optional publisher id") }, []),
+            Tool("changes_in_period", "ACROSS the corpus: which works gained new versions between two dates, how many each, and when — the aggregate counterpart of diff/timeline (which cover ONE work). Use for \"what changed between 2025 and 2026\", \"which laws changed most during the pandemic\", \"what moved last month\". order=by_churn ranks by number of new versions; by_date (default) lists most recently changed first.",
+                new JsonObject
+                {
+                    ["from_date"] = S("ISO date, start of window (inclusive)"),
+                    ["to_date"] = S("ISO date, end of window (inclusive)"),
+                    ["publisher"] = S("optional publisher id"),
+                    ["document_type"] = S("optional type code"),
+                    ["order"] = S("by_date (default) or by_churn"),
+                    ["limit"] = I("default 20"),
+                }, ["from_date", "to_date"]),
         ];
     }
 
@@ -494,6 +504,52 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                     };
                 }
                 return new JsonObject { ["status"] = "unknown_work", ["lex_id"] = key };
+            }
+            case "changes_in_period":
+            {
+                var from = Str("from_date") ?? throw new ArgumentException("from_date required");
+                var to = Str("to_date") ?? throw new ArgumentException("to_date required");
+                if (string.CompareOrdinal(from, to) > 0) (from, to) = (to, from);
+                var pub = Str("publisher");
+                var kind = Str("document_type");
+                var byChurn = string.Equals(Str("order"), "by_churn", StringComparison.OrdinalIgnoreCase);
+                var limit = Int("limit", 20);
+                var outp = new JsonArray();
+                foreach (var r in readers.Values.Where(x => pub is null || x.Collection == pub))
+                {
+                    var (works, versions) = r.ChangeTotals(from, to, kind);
+                    var rows = r.ChangesInPeriod(from, to, kind, byChurn, limit);
+                    outp.Add(new JsonObject
+                    {
+                        ["envelope"] = Envelope(r, works == 0 ? "no_changes_in_period" : "ok"),
+                        ["window"] = new JsonObject { ["from"] = from, ["to"] = to },
+                        ["order"] = byChurn ? "by_churn" : "by_date",
+                        ["works_changed"] = works,
+                        ["new_versions"] = versions,
+                        ["shown"] = rows.Count,
+                        ["changes"] = new JsonArray(rows.Select(c =>
+                        {
+                            var o = new JsonObject
+                            {
+                                ["work"] = $"{r.Collection}:{c.GroupKey}",
+                                ["title"] = c.Title,
+                                ["versions_in_period"] = c.VersionsInPeriod,
+                                ["versions_total"] = c.VersionsTotal,
+                                ["first_change"] = c.FirstChange,
+                                ["last_change"] = c.LastChange,
+                            };
+                            if (_publicBase is not null)
+                            {
+                                o["permalink"] = $"{_publicBase}/{r.Collection}/{c.GroupKey}/{c.LastChange}";
+                                if (c.FirstChange != c.LastChange)
+                                    o["diff_permalink"] = $"{_publicBase}/{r.Collection}/{c.GroupKey}/diff/{c.FirstChange}/{c.LastChange}";
+                            }
+                            return (JsonNode)o;
+                        }).ToArray()),
+                        ["note"] = "a 'change' is a new consolidated version dated inside the window, as asserted by the publisher; use diff or as_of on a work to see the text",
+                    });
+                }
+                return outp;
             }
             case "coverage":
             {

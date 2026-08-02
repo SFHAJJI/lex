@@ -193,6 +193,54 @@ public sealed class LexIndexReader : IDisposable
         return result;
     }
 
+    /// <summary>
+    /// Cross-work aggregation: which works gained versions inside a window, how many, and when.
+    /// The one question shape the per-work tools cannot answer — "what moved, across the corpus".
+    /// </summary>
+    public List<ChangeRow> ChangesInPeriod(string from, string to, string? kind, bool byChurn, int limit)
+    {
+        var where = "d.valid_from >= $from AND d.valid_from <= $to"
+                    + (string.IsNullOrEmpty(kind) ? "" : " AND d.kind = $kind");
+        var order = byChurn ? "versions DESC, last_change DESC" : "last_change DESC, versions DESC";
+        using var cmd = Cmd($"""
+            SELECT d.group_key,
+                   COUNT(DISTINCT d.valid_from) AS versions,
+                   MIN(d.valid_from) AS first_change,
+                   MAX(d.valid_from) AS last_change,
+                   (SELECT COALESCE(t.title_short, t.title) FROM docs t WHERE t.group_key = d.group_key
+                     ORDER BY t.valid_from DESC LIMIT 1) AS title,
+                   (SELECT COUNT(DISTINCT t2.valid_from) FROM docs t2 WHERE t2.group_key = d.group_key) AS versions_total
+            FROM docs d
+            WHERE {where}
+            GROUP BY d.group_key
+            ORDER BY {order}
+            LIMIT $lim
+            """, []);
+        cmd.Parameters.AddWithValue("$from", from);
+        cmd.Parameters.AddWithValue("$to", to);
+        if (!string.IsNullOrEmpty(kind)) cmd.Parameters.AddWithValue("$kind", kind);
+        cmd.Parameters.AddWithValue("$lim", limit);
+        var list = new List<ChangeRow>();
+        using var r = cmd.ExecuteReader();
+        while (r.Read())
+            list.Add(new ChangeRow(r.GetString(0), r.GetInt32(1), r.GetString(2), r.GetString(3),
+                r.IsDBNull(4) ? null : r.GetString(4), r.GetInt32(5)));
+        return list;
+    }
+
+    /// <summary>Totals for a window: how many works moved and how many new versions appeared.</summary>
+    public (int Works, int Versions) ChangeTotals(string from, string to, string? kind)
+    {
+        var where = "valid_from >= $from AND valid_from <= $to"
+                    + (string.IsNullOrEmpty(kind) ? "" : " AND kind = $kind");
+        using var cmd = Cmd($"SELECT COUNT(DISTINCT group_key), COUNT(DISTINCT group_key || valid_from) FROM docs WHERE {where}", []);
+        cmd.Parameters.AddWithValue("$from", from);
+        cmd.Parameters.AddWithValue("$to", to);
+        if (!string.IsNullOrEmpty(kind)) cmd.Parameters.AddWithValue("$kind", kind);
+        using var r = cmd.ExecuteReader();
+        return r.Read() ? (r.GetInt32(0), r.GetInt32(1)) : (0, 0);
+    }
+
     public List<EventRow> Events(string key)
     {
         using var cmd = Cmd("SELECT key, scope, event, observed_from, detail FROM events WHERE key=$k ORDER BY observed_from", []);
