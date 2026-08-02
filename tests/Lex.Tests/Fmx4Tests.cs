@@ -19,7 +19,7 @@ public class Fmx4Tests
         <ARTICLE IDENTIFIER="001"><TI.ART>Article 1</TI.ART><STI.ART>Scope</STI.ART>
           <PARAG IDENTIFIER="001.001"><NO.PARAG>1.</NO.PARAG><ALINEA>This Regulation   lays down
              rules.</ALINEA></PARAG>
-          <PARAG IDENTIFIER="001.002"><NO.PARAG>2.</NO.PARAG><ALINEA>It applies to:
+          <PARAG IDENTIFIER="001.002"><NO.PARAG>2.</NO.PARAG><ALINEA><TXT>It applies to:</TXT>
             <LIST TYPE="alpha"><ITEM><NP><NO.P>(a)</NO.P><TXT>controllers;</TXT></NP></ITEM>
             <ITEM><NP><NO.P>(b)</NO.P><TXT>processors established in the <QUOT.START CODE="2018"/>Union<QUOT.END CODE="2019"/>.</TXT></NP></ITEM></LIST></ALINEA></PARAG>
         </ARTICLE>
@@ -68,6 +68,8 @@ public class Fmx4Tests
         Assert.Contains("**1.** This Regulation lays down rules.", a1.TextMd);
         Assert.Contains("(a) controllers;", a1.TextMd);
         Assert.Contains("(b) processors established in the ‘Union’.", a1.TextMd);   // QUOT CODE chars
+        // a TXT intro followed by a LIST inside one ALINEA must render exactly once
+        Assert.Equal(1, a1.TextMd.Split("It applies to:").Length - 1);
     }
 
     [Fact]
@@ -110,6 +112,19 @@ public class Fmx4Tests
             var slice = x.Markdown.Substring(p.MdStart, p.MdEnd - p.MdStart);
             Assert.Equal(p.TextMd, slice);
         }
+    }
+
+    [Fact]
+    public void Profile_fmx4_eu_1_is_frozen()
+    {
+        // Profile permanence (SCHEMA.md): fmx4-eu/1 output over a fixed input never changes.
+        // If this test fails, you have edited a published profile — make a NEW profile
+        // (fmx4-eu/2) instead; citations pinned under fmx4-eu/1 must verify forever.
+        var x = Fmx4EuProfile.Extract(Fmx, "lex:frozen");
+        var combined = string.Join("|", x.Provisions.Select(p => $"{p.Anchor}:{p.TextSha256}"));
+        var pinned = Convert.ToHexStringLower(
+            System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(combined)));
+        Assert.Equal("5cdf47db9b187db61ecd01d1660dec168ec9b6ad4cc3247d60caa9358cd787ca", pinned);
     }
 
     [Fact]

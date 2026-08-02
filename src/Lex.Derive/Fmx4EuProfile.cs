@@ -171,10 +171,11 @@ public static class Fmx4EuProfile
             }
             case "ALINEA" or "TXT" or "P" or "CONTENTS" or "GR.SEQ" when HasBlockChildren(el):
             {
-                // mixed container: leading inline text (if any) then nested blocks
+                // mixed container: inline content (text nodes + inline children) first, then
+                // ONLY the block children — inline children were already consumed above.
                 var leading = InlineOwnText(el, citations);
                 if (leading.Length > 0) blocks.Add(leading);
-                foreach (var c in el.Elements()) RenderBlock(c, blocks, citations);
+                foreach (var c in el.Elements().Where(IsBlockElement)) RenderBlock(c, blocks, citations);
                 return;
             }
             case "ALINEA" or "TXT" or "P":
@@ -243,8 +244,11 @@ public static class Fmx4EuProfile
         }
     }
 
+    private static bool IsBlockElement(XElement el)
+        => el.Name.LocalName is "LIST" or "TBL" or "PARAG" or "NP" or "GR.SEQ" or "ALINEA" or "TITLE";
+
     private static bool HasBlockChildren(XElement el)
-        => el.Elements().Any(c => c.Name.LocalName is "LIST" or "TBL" or "PARAG" or "NP" or "GR.SEQ" or "ALINEA");
+        => el.Elements().Any(IsBlockElement);
 
     private static string RenderTable(XElement tbl, List<Citation> citations)
     {
@@ -267,14 +271,14 @@ public static class Fmx4EuProfile
         return sb.ToString().TrimEnd('\n');
     }
 
-    /// <summary>Inline text of an element's direct text nodes only (block children rendered separately).</summary>
+    /// <summary>Inline text of an element's direct text nodes and inline children (block children rendered separately).</summary>
     private static string InlineOwnText(XElement el, List<Citation> citations)
     {
         var sb = new StringBuilder();
         foreach (var n in el.Nodes())
         {
             if (n is XText t) sb.Append(t.Value);
-            else if (n is XElement e && e.Name.LocalName is not ("LIST" or "TBL" or "PARAG" or "NP" or "GR.SEQ" or "ALINEA"))
+            else if (n is XElement e && !IsBlockElement(e))
                 sb.Append(Inline(e, citations, raw: true));
         }
         return MdUtil.CollapseWs(sb.ToString());
