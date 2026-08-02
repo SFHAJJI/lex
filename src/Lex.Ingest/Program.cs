@@ -72,10 +72,18 @@ switch (args0[0])
             {
                 var db = Get("--db") ?? throw new ArgumentException("--db required");
                 using var r = Lex.Index.LexIndexReader.Open(db);
+                // A valid signature over the metadata proves nothing about the text. Recompute
+                // the content digest from what the database actually holds and compare it with
+                // the signed value: that is what detects an edited article.
+                var claimed = r.Stamp.GetValueOrDefault("content_digest") ?? "";
+                var actual = r.ComputeContentDigest();
+                var contentOk = claimed.Length > 0 && claimed == actual;
                 Console.WriteLine($"collection={r.Collection} schema={r.Stamp.GetValueOrDefault("schema")} " +
                     $"algorithm={r.Stamp.GetValueOrDefault("algorithm")} corpus_commit={r.Stamp.GetValueOrDefault("corpus_commit")} " +
-                    $"built_at={r.Stamp.GetValueOrDefault("built_at")} signature_valid={r.SignatureValid}");
-                return r.SignatureValid ? 0 : 3;
+                    $"built_at={r.Stamp.GetValueOrDefault("built_at")} signature_valid={r.SignatureValid} " +
+                    $"content_digest={(claimed.Length == 0 ? "absent (index predates content binding)" : contentOk ? "matches" : "MISMATCH — contents were altered")}");
+                if (!r.SignatureValid) return 3;
+                return claimed.Length == 0 || contentOk ? 0 : 4;
             }
             case "derive":
             {

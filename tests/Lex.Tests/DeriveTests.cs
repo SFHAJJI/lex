@@ -142,4 +142,16 @@ public class DeriveTests
             Assert.Equal(expected, p.TextSha256);
         }
     }
+
+    // D41 same-day collision keys are STORAGE, not validity. Publishing the key as a date put
+    // "2025-07-28--02" in a date column, and treating it as "the next version" of 2025-07-28
+    // produced valid_to = 2025-07-27 — an interval ending before it began, invisible to every
+    // point-in-time query. Thirteen such intervals reached production.
+    [Theory]
+    [InlineData("2025-07-28", "2025-07-28")]
+    [InlineData("2025-07-28--02", "2025-07-28")]
+    [InlineData("1849-03-14", "1849-03-14")]
+    [InlineData("not-a-date", "not-a-date")]
+    public void Version_key_yields_its_date_without_the_collision_suffix(string key, string expected)
+        => Assert.Equal(expected, DeriveWriter.DateKeyOf(key));
 }

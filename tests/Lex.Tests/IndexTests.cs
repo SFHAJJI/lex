@@ -49,6 +49,37 @@ public class IndexTests : IDisposable
         Assert.True(r.SignatureValid);
     }
 
+    // A signature over the stamp's metadata says nothing about the text the index serves.
+    // The stamp therefore commits to a digest of the content, and this is the test that the
+    // commitment is real: edit one article's text in the database and the recomputed digest
+    // must stop matching the signed one. Without it, "every served hash is attributable"
+    // would be a claim with no mechanism behind it.
+    [Fact]
+    public void Editing_article_text_breaks_the_content_digest()
+    {
+        string signed;
+        using (var r = Build())
+        {
+            Assert.True(r.SignatureValid);
+            signed = r.Stamp["content_digest"];
+            Assert.Equal(signed, r.ComputeContentDigest());
+        }
+
+        using (var conn = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={_db}"))
+        {
+            conn.Open();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "UPDATE provisions SET text_sha = 'tampered' WHERE seq = 0";
+            Assert.True(cmd.ExecuteNonQuery() > 0);
+        }
+
+        using (var r = LexIndexReader.Open(_db))
+        {
+            Assert.True(r.SignatureValid);                      // the stamp itself is untouched
+            Assert.NotEqual(signed, r.ComputeContentDigest());  // but the contents no longer match it
+        }
+    }
+
     [Fact]
     public void AsOf_stabs_the_correct_version_and_distinguishes_refusals()
     {

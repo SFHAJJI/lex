@@ -67,15 +67,24 @@ public static class DeriveWriter
 
             for (var i = 0; i < versionDirs.Count; i++)
             {
-                var validFrom = Path.GetFileName(versionDirs[i]);
-                // valid_to = next version's valid_from - 1 day (same rule as the index; date part only)
+                // A directory name is a version KEY, which may carry a same-day collision
+                // suffix (2025-07-28--02, D41). The date is the key's first ten characters —
+                // publishing the key as valid_from put a non-date in a date column.
+                var versionKey = Path.GetFileName(versionDirs[i]);
+                var validFrom = DateKeyOf(versionKey);
+
+                // valid_to = the next version's start, minus a day. Sibling keys for the SAME
+                // day must be skipped: taking 2025-07-28--02 as "the next version" of
+                // 2025-07-28 produced valid_to = 2025-07-27, an interval ending before it
+                // began, which no point-in-time query can ever match.
                 string? validTo = null;
-                if (i + 1 < versionDirs.Count)
+                for (var j = i + 1; j < versionDirs.Count; j++)
                 {
-                    var next = Path.GetFileName(versionDirs[i + 1]);
-                    var datePart = next.Length >= 10 ? next[..10] : next;
-                    if (DateOnly.TryParse(datePart, out var d))
+                    var nextDate = DateKeyOf(Path.GetFileName(versionDirs[j]));
+                    if (nextDate == validFrom) continue;
+                    if (DateOnly.TryParse(nextDate, out var d))
                         validTo = d.AddDays(-1).ToString("yyyy-MM-dd");
+                    break;
                 }
 
                 var vMetaPath = Path.Combine(versionDirs[i], "meta.json");
@@ -258,4 +267,12 @@ public static class DeriveWriter
         }
         return result;
     }
+
+    /// <summary>
+    /// The date a version key denotes. Keys are normally an ISO date, but a second version
+    /// dated the same day carries a collision suffix (2025-07-28--02, D41). That suffix is
+    /// storage, not validity: it must never reach a date field or an interval calculation.
+    /// </summary>
+    public static string DateKeyOf(string versionKey)
+        => versionKey.Length >= 10 && DateOnly.TryParse(versionKey[..10], out _) ? versionKey[..10] : versionKey;
 }

@@ -10,6 +10,23 @@ public static class IndexBuilder
 {
     public const string SchemaVersion = "lex-index/2";
 
+    /// <summary>
+    /// One hash over every document identity and every provision hash, in fixed ordinal order.
+    /// LexIndexReader.ComputeContentDigest must reproduce this byte for byte from the stored
+    /// rows — that equality is what makes tampering detectable.
+    /// </summary>
+    private static string ContentDigest(IEnumerable<DocRow> docs, IEnumerable<ProvisionRow> provisions)
+    {
+        var sb = new System.Text.StringBuilder();
+        foreach (var d in docs.OrderBy(d => d.Key, StringComparer.Ordinal).ThenBy(d => d.Language, StringComparer.Ordinal))
+            sb.Append(d.Key).Append('|').Append(d.Language).Append('|').Append(d.ValidFrom).Append('|')
+              .Append(d.ValidTo ?? "").Append('|').Append(d.RecordSha ?? "").Append('\n');
+        foreach (var p in provisions.OrderBy(p => p.Rid, StringComparer.Ordinal).ThenBy(p => p.Seq))
+            sb.Append(p.ProvisionId).Append('|').Append(p.TextSha).Append('\n');
+        return Convert.ToHexStringLower(
+            System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(sb.ToString())));
+    }
+
     public static void Build(
         string dbPath,
         IReadOnlyDictionary<string, string> stampValues,
@@ -157,7 +174,16 @@ public static class IndexBuilder
                 insObs.ExecuteNonQuery();
             }
 
-            var stamp = new Dictionary<string, string>(stampValues) { ["schema"] = SchemaVersion, ["algorithm"] = StampSigner.Algorithm };
+            // The signature must bind the CONTENT, not just the metadata beside it: otherwise an
+            // article's text could be edited inside a released database and the stamp would
+            // still verify. Computed HERE, where docs and provisions are written, so no caller
+            // can build an index without it and no path can drift from what is stored.
+            var stamp = new Dictionary<string, string>(stampValues)
+            {
+                ["schema"] = SchemaVersion,
+                ["algorithm"] = StampSigner.Algorithm,
+                ["content_digest"] = ContentDigest(docs, provisions),
+            };
             if (signingKeyPem is not null)
             {
                 var (sig, pub) = StampSigner.Sign(stamp, signingKeyPem);

@@ -254,6 +254,29 @@ public sealed class LexIndexReader : IDisposable
         return r.Read() ? (r.GetInt32(0), r.GetInt32(1)) : (0, 0);
     }
 
+    /// <summary>
+    /// Recomputes the digest the stamp commits to, from what this database actually contains.
+    /// Comparing it with the signed value is what turns "signature valid" into "the text you
+    /// are reading is the text that was signed" — a signature over metadata alone cannot.
+    /// Must stay byte-identical to the builder's construction.
+    /// </summary>
+    public string ComputeContentDigest()
+    {
+        var sb = new System.Text.StringBuilder();
+        using (var cmd = Cmd($"SELECT key, language, valid_from, valid_to, record_sha FROM docs ORDER BY key, language", []))
+        using (var r = cmd.ExecuteReader())
+            while (r.Read())
+                sb.Append(r.GetString(0)).Append('|').Append(r.GetString(1)).Append('|')
+                  .Append(r.GetString(2)).Append('|').Append(r.IsDBNull(3) ? "" : r.GetString(3)).Append('|')
+                  .Append(r.IsDBNull(4) ? "" : r.GetString(4)).Append('\n');
+        using (var cmd = Cmd("SELECT provision_id, text_sha FROM provisions ORDER BY rid, seq", []))
+        using (var r = cmd.ExecuteReader())
+            while (r.Read())
+                sb.Append(r.GetString(0)).Append('|').Append(r.GetString(1)).Append('\n');
+        return Convert.ToHexStringLower(
+            System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(sb.ToString())));
+    }
+
     public List<EventRow> Events(string key)
     {
         using var cmd = Cmd("SELECT key, scope, event, observed_from, detail FROM events WHERE key=$k ORDER BY observed_from", []);
