@@ -18,7 +18,7 @@ judge = GroundednessEvaluator(AzureOpenAIModelConfiguration(
     azure_endpoint=os.environ["AOAI_ENDPOINT"],
     api_key=os.environ["AOAI_KEY"],
     azure_deployment=os.environ.get("AOAI_CHAT_DEPLOYMENT", "gpt-5-mini"),
-))
+), is_reasoning_model=True)   # gpt-5 family rejects max_tokens; this switches the judge to max_completion_tokens
 
 low = 0
 for row in rows:
