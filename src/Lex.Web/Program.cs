@@ -32,6 +32,12 @@ string Page(string title, string body, string? subtitle = null) => $$"""
     <head>
     <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{H(title)}} — Lex</title>
+    <meta name="description" content="Point-in-time Luxembourg + EU law: what did the rule say on a given date? Grounded AI answers, permalinks, timelines, diffs, cryptographic provenance, and a public MCP endpoint.">
+    <meta property="og:title" content="{{H(title)}} — Lex">
+    <meta property="og:description" content="Point-in-time Luxembourg + EU law with grounded AI answers, per-article history, and verifiable provenance.">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Lex">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9A%96%3C/text%3E%3C/svg%3E">
     <style>
       :root { --bg:#ffffff; --fg:#16181d; --muted:#5c6470; --line:#e3e6ea; --accent:#0b57d0;
               --card:#f6f7f9; --ok:#0a7a3d; --warn:#a15c00; --mono:ui-monospace,'Cascadia Code',Consolas,monospace; }
@@ -68,7 +74,7 @@ string Page(string title, string body, string? subtitle = null) => $$"""
       <a class="brand" href="/">Lex</a>
       <span class="tag">point-in-time regulatory text — what did the rule say on a given date?</span>
       <span style="flex:1"></span>
-      <a href="/browse">browse</a>&nbsp; <a href="/search">search</a>&nbsp; <a href="/in-force-on">in force on…</a>&nbsp; <a href="/architecture">architecture</a>&nbsp; <a href="/ai">use with your AI</a>&nbsp; <a href="/verify">verify</a>&nbsp; <a href="/coverage">coverage</a>
+      <a href="/browse">browse</a>&nbsp; <a href="/search">search</a>&nbsp; <a href="/in-force-on">in force on…</a>&nbsp; <a href="/architecture">architecture</a>&nbsp; <a href="/ai">use with your AI</a>&nbsp; <a href="/verify">verify</a>&nbsp; <a href="/coverage">coverage</a>&nbsp; <a href="https://github.com/SFHAJJI/lex" rel="noopener">github</a>
     </header>
     <main>
     <h1>{{title}}</h1>
