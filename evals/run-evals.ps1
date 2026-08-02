@@ -101,5 +101,5 @@ foreach ($case in $cases) {
 New-Item -ItemType Directory -Force "$PSScriptRoot\out" | Out-Null
 [IO.File]::WriteAllLines("$PSScriptRoot\out\results.jsonl", $export, (New-Object Text.UTF8Encoding $false))
 $results | Format-Table -AutoSize -Wrap
-Write-Host "$($cases.Count - $failures)/$($cases.Count) passed  (evidence export: out\results.jsonl — score with groundedness.py)"
+Write-Host "$($cases.Count - $failures)/$($cases.Count) passed  (evidence export: out\results.jsonl - score with groundedness.py)"
 exit $failures

@@ -142,6 +142,45 @@ public sealed class AskService(McpCore core)
     {
         string? status = null;
         var docs = new JsonArray();
+
+        // Pinpoints: the exact provision text the tool returned, quotable next to the
+        // claim it grounds (anti-misgrounding: a reader can compare the answer against
+        // source text without leaving the page).
+        static JsonObject BuildDoc(JsonObject source, JsonArray? provisions)
+        {
+            var d = new JsonObject
+            {
+                ["lex_id"] = source["lex_id"]?.DeepClone(),
+                ["title"] = source["title"]?.DeepClone(),
+                ["valid_from"] = source["valid_from"]?.DeepClone(),
+                ["valid_to"] = source["valid_to"]?.DeepClone(),
+                ["permalink"] = source["permalink"]?.DeepClone(),
+            };
+            if (provisions is not null)
+            {
+                var pins = new JsonArray();
+                foreach (var p in provisions.OfType<JsonObject>().Take(2))
+                {
+                    var text = (p["text"] ?? p["text_md"])?.GetValue<string>();
+                    if (text is null && p["anchor"] is null) continue;
+                    pins.Add(new JsonObject
+                    {
+                        ["anchor"] = p["anchor"]?.DeepClone(),
+                        ["quote"] = text is null ? null : text.Length > 280 ? text[..280] + "…" : text,
+                        ["permalink"] = p["permalink"]?.DeepClone(),
+                    });
+                }
+                if (pins.Count > 0) d["pinpoints"] = pins;
+            }
+            else if (source["snippet"] is not null)   // provision-level search hit
+            {
+                d["anchor"] = source["anchor"]?.DeepClone();
+                d["snippet"] = source["snippet"]?.DeepClone();
+                d["provision_id"] = source["provision_id"]?.DeepClone();
+            }
+            return d;
+        }
+
         void Walk(JsonNode? n)
         {
             if (docs.Count >= 24 && status is not null) return;
@@ -149,43 +188,14 @@ public sealed class AskService(McpCore core)
             {
                 case JsonObject o:
                     status ??= (o["envelope"]?["status"] ?? o["status"])?.GetValue<string>();
-                    if (o["lex_id"] is not null && docs.Count < 24)
+                    // as_of shape: provisions ride as a SIBLING of document — pair them
+                    if (o["document"] is JsonObject docObj && docObj["lex_id"] is not null && docs.Count < 24)
                     {
-                        var d = new JsonObject
-                        {
-                            ["lex_id"] = o["lex_id"]?.DeepClone(),
-                            ["title"] = o["title"]?.DeepClone(),
-                            ["valid_from"] = o["valid_from"]?.DeepClone(),
-                            ["valid_to"] = o["valid_to"]?.DeepClone(),
-                            ["permalink"] = o["permalink"]?.DeepClone(),
-                        };
-                        // Pinpoints: the exact provision text the tool returned, quotable next
-                        // to the claim it grounds (anti-misgrounding: a reader can compare the
-                        // answer against source text without leaving the page).
-                        if (o["provisions"] is JsonArray provs)
-                        {
-                            var pins = new JsonArray();
-                            foreach (var p in provs.OfType<JsonObject>().Take(2))
-                            {
-                                var text = (p["text"] ?? p["text_md"])?.GetValue<string>();
-                                if (text is null && p["anchor"] is null) continue;
-                                pins.Add(new JsonObject
-                                {
-                                    ["anchor"] = p["anchor"]?.DeepClone(),
-                                    ["quote"] = text is null ? null : text.Length > 280 ? text[..280] + "…" : text,
-                                    ["permalink"] = p["permalink"]?.DeepClone(),
-                                });
-                            }
-                            if (pins.Count > 0) d["pinpoints"] = pins;
-                        }
-                        else if (o["snippet"] is not null)   // provision-level search hit
-                        {
-                            d["anchor"] = o["anchor"]?.DeepClone();
-                            d["snippet"] = o["snippet"]?.DeepClone();
-                            d["provision_id"] = o["provision_id"]?.DeepClone();
-                        }
-                        docs.Add(d);
+                        docs.Add(BuildDoc(docObj, o["provisions"] as JsonArray));
+                        foreach (var p in o) if (p.Key is not ("document" or "provisions")) Walk(p.Value);
                     }
+                    else if (o["lex_id"] is not null && docs.Count < 24)
+                        docs.Add(BuildDoc(o, o["provisions"] as JsonArray));
                     else foreach (var p in o) Walk(p.Value);
                     break;
                 case JsonArray a:
