@@ -405,7 +405,7 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                         {
                             var d = DocJson(doc, false);
                             d["match"] = "work_title";
-                            d["note"] = "no per-article text held for this work (see coverage); timeline / in_force_on / provenance still answer version questions";
+                            d["match_note"] = "THIS WORK IS HELD by Lex — its versions, dates and provenance are available via timeline / in_force_on / provenance. Only the per-article TEXT is not stored (the publisher offers no machine-readable body for it). Never report this work as missing or unknown; report that the text specifically is not held.";
                             if (_publicBase is not null)
                                 d["permalink"] = $"{_publicBase}/{doc.Collection}/{doc.GroupKey}/{doc.ValidFrom}";
                             hitsArr.Add(d);

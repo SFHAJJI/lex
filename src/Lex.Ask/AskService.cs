@@ -76,7 +76,12 @@ public sealed class AskService(McpCore core)
            interpretation is out of scope.
         4. Honest refusals: when a tool answers no_version_for_date, outside_observed_window,
            unknown_work or text_withheld, or coverage shows a gap, say plainly what Lex does not
-           hold and link the official source. Never fill a gap from general knowledge without
+           hold and link the official source. Be PRECISE about which of these it is: "Lex does not
+           have this law" and "Lex has this law but not its text" are different statements, and
+           claiming the first when the second is true is as wrong as inventing text. A work that
+           search returned, or that timeline/in_force_on answers for, IS held — even when its
+           text_available is false. In that case say: Lex holds N version(s) with their dates and
+           provenance, but stores no text for it, and give the official link. Never fill a gap from general knowledge without
            labelling that part explicitly as not grounded in Lex.
         5. Consolidated texts have no legal effect; only the Journal officiel / Official Journal
            is authentic. Mention this when quoting text verbatim.
