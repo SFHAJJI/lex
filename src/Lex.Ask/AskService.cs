@@ -293,6 +293,10 @@ public sealed class AskService(McpCore core)
             var searchCalls = 0;
             var worksFound = new Dictionary<string, string>(StringComparer.Ordinal);
             var textToolUsed = false;
+            // Reasoning shares the completion budget: over a large tool result the model can
+            // spend all of it thinking and return an empty message. When that happens we retry
+            // the same conversation once at lower effort, which leaves room to actually write.
+            var effort = "high";
             for (var round = 0; round <= MaxToolRounds; round++)
             {
                 var req = new JsonObject
@@ -301,8 +305,8 @@ public sealed class AskService(McpCore core)
                     ["messages"] = messages.DeepClone(),
                     ["tools"] = OpenAiTools(),
                     ["tool_choice"] = round == MaxToolRounds ? "none" : "auto",
-                    ["max_completion_tokens"] = 10000,
-                    ["reasoning_effort"] = "high",
+                    ["max_completion_tokens"] = 16000,
+                    ["reasoning_effort"] = effort,
                 };
                 using var httpReq = new HttpRequestMessage(HttpMethod.Post, $"{_endpoint}/openai/v1/chat/completions")
                 { Content = new StringContent(req.ToJsonString(), Encoding.UTF8, "application/json") };
@@ -410,7 +414,17 @@ public sealed class AskService(McpCore core)
                 }
 
                 var reply = msg?["content"]?.GetValue<string>() ?? "";
-                if (reply.Length == 0) reply = "I could not produce an answer — try rephrasing.";
+                if (reply.Length == 0 && effort == "high")
+                {
+                    // Budget spent on reasoning, nothing written. Same evidence, less thinking.
+                    Console.Error.WriteLine("[ask] empty reply at high effort — retrying at medium");
+                    effort = "medium";
+                    continue;
+                }
+                if (reply.Length == 0)
+                    reply = trace.Count > 0
+                        ? "I retrieved the evidence below but could not compose an answer — try asking for a narrower slice (a single law, or a shorter period)."
+                        : "I could not produce an answer — try rephrasing.";
                 return (200, new JsonObject { ["reply"] = reply, ["trace"] = trace });
             }
             return (200, new JsonObject { ["reply"] = "Tool budget for one question exhausted — try a narrower question.", ["trace"] = trace });
