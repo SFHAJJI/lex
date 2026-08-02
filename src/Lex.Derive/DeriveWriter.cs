@@ -145,9 +145,12 @@ public static class DeriveWriter
                         var outDir = Path.Combine(outRoot, publisher, "works", slug, "versions", validFrom);
                         Directory.CreateDirectory(outDir);
 
-                        // ---- fr.md: fenced frontmatter + document
+                        // ---- fr.md: fenced frontmatter + document. Values are YAML
+                        // single-quoted: titles contain ": " which is a YAML mapping error
+                        // unquoted (GitHub renders a parse banner instead of the table).
                         var mdHeader = new StringBuilder("---\n");
-                        foreach (var (k, v) in frontmatter) mdHeader.Append(k).Append(": ").Append(v.Replace("\n", " ")).Append('\n');
+                        foreach (var (k, v) in frontmatter)
+                            mdHeader.Append(k).Append(": '").Append(v.Replace("\n", " ").Replace("'", "''")).Append("'\n");
                         mdHeader.Append("---\n");
                         // spans were computed over extraction.Markdown alone; prepend length in codepoints
                         var headerStr = mdHeader.ToString();
