@@ -368,21 +368,44 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                         .GroupBy(h => (h.Doc.GroupKey, h.Prov.Anchor)).Select(g => g.First())
                         .GroupBy(h => h.Doc.GroupKey).SelectMany(g => g.Take(2))
                         .Take(limit).ToList();
+                    var hitsArr = new JsonArray(hits.Select(h =>
+                    {
+                        var d = DocJson(h.Doc, false);
+                        d["anchor"] = h.Prov.Anchor;
+                        d["provision_id"] = h.Prov.ProvisionId;
+                        d["provision_num"] = h.Prov.Num;
+                        d["provision_heading"] = h.Prov.Heading;
+                        d["snippet"] = h.Snippet;
+                        if (_publicBase is not null)
+                            d["permalink"] = $"{_publicBase}/{h.Doc.Collection}/{h.Doc.GroupKey}/{h.Doc.ValidFrom}#{h.Prov.Anchor}";
+                        return (JsonNode)d;
+                    }).ToArray());
+
+                    // Title fallback: works holding no per-article text (body missing upstream)
+                    // are invisible to the provision FTS but must still be locatable by name.
+                    if (hits.Count < limit)
+                    {
+                        var seen = hits.Select(h => h.Doc.GroupKey).ToHashSet(StringComparer.Ordinal);
+                        foreach (var doc in r.SearchTitlesWithoutProvisions(q,
+                                     new FilterSet(asOf, null, Str("document_type"), Str("language")), limit * 4)
+                                 .GroupBy(x => x.GroupKey)
+                                 .Select(g => g.OrderByDescending(x => x.ValidFrom, StringComparer.Ordinal).First())
+                                 .Where(x => !seen.Contains(x.GroupKey))
+                                 .Take(limit - hits.Count))
+                        {
+                            var d = DocJson(doc, false);
+                            d["match"] = "work_title";
+                            d["note"] = "no per-article text held for this work (see coverage); timeline / in_force_on / provenance still answer version questions";
+                            if (_publicBase is not null)
+                                d["permalink"] = $"{_publicBase}/{doc.Collection}/{doc.GroupKey}/{doc.ValidFrom}";
+                            hitsArr.Add(d);
+                        }
+                    }
+
                     outp.Add(new JsonObject
                     {
                         ["envelope"] = Envelope(r, "ok"),
-                        ["hits"] = new JsonArray(hits.Select(h =>
-                        {
-                            var d = DocJson(h.Doc, false);
-                            d["anchor"] = h.Prov.Anchor;
-                            d["provision_id"] = h.Prov.ProvisionId;
-                            d["provision_num"] = h.Prov.Num;
-                            d["provision_heading"] = h.Prov.Heading;
-                            d["snippet"] = h.Snippet;
-                            if (_publicBase is not null)
-                                d["permalink"] = $"{_publicBase}/{h.Doc.Collection}/{h.Doc.GroupKey}/{h.Doc.ValidFrom}#{h.Prov.Anchor}";
-                            return (JsonNode)d;
-                        }).ToArray()),
+                        ["hits"] = hitsArr,
                     });
                 }
                 return outp;

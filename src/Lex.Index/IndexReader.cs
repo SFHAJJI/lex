@@ -166,6 +166,33 @@ public sealed class LexIndexReader : IDisposable
         return result;
     }
 
+    /// <summary>
+    /// Title fallback for works that hold no per-article text (body missing upstream):
+    /// the provision FTS cannot find them, but a work must still be locatable by name.
+    /// Terms are AND-ed, case-insensitive, against version titles; caller dedupes per work.
+    /// </summary>
+    public List<DocRow> SearchTitlesWithoutProvisions(string query, FilterSet filters, int limit)
+    {
+        var terms = query.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(t => t.Length >= 2).Take(6).ToList();
+        if (terms.Count == 0) return [];
+        var (where, ps) = WithFilters("1=1", filters, excludeAsOf: false, bare: true);
+        var likes = string.Join(" AND ", terms.Select((_, i) => $"d.title LIKE $t{i}"));
+        using var cmd = Cmd($"""
+            SELECT {DocColsQualified}
+            FROM docs d
+            WHERE {where} AND {likes}
+              AND NOT EXISTS (SELECT 1 FROM provisions p WHERE p.rid = d.rid)
+            LIMIT $lim
+            """, ps);
+        for (var i = 0; i < terms.Count; i++) cmd.Parameters.AddWithValue($"$t{i}", "%" + terms[i] + "%");
+        cmd.Parameters.AddWithValue("$lim", limit);
+        var result = new List<DocRow>();
+        using var r = cmd.ExecuteReader();
+        while (r.Read()) result.Add(ReadDoc(r));
+        return result;
+    }
+
     public List<EventRow> Events(string key)
     {
         using var cmd = Cmd("SELECT key, scope, event, observed_from, detail FROM events WHERE key=$k ORDER BY observed_from", []);
