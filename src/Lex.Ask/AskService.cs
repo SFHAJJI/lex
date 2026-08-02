@@ -321,6 +321,7 @@ public sealed class AskService(McpCore core)
             // D31 shape: effects are collected across every tool call in the turn and merged
             // into ONE payload, so a single reply can carry prose plus more than one view.
             var effects = new List<UiEffect>();
+            var listRendered = false;
             // Reasoning shares the completion budget: over a large tool result the model can
             // spend all of it thinking and return an empty message. When that happens we retry
             // the same conversation once at lower effort, which leaves room to actually write.
@@ -394,6 +395,21 @@ public sealed class AskService(McpCore core)
                                 });
                                 continue;
                             }
+                            if (listRendered && name is "as_of" or "timeline" or "diff" or "article_history")
+                            {
+                                entry["status"] = "already_rendered";
+                                trace.Add(entry);
+                                messages.Add(new JsonObject
+                                {
+                                    ["role"] = "tool", ["tool_call_id"] = id,
+                                    ["content"] = new JsonObject
+                                    {
+                                        ["already_rendered"] = true,
+                                        ["note"] = "The list you just retrieved is ALREADY DISPLAYED to the user in full, with titles, counts and links. Do not fetch its entries one by one. Answer now, in one or two sentences, naming the top entries and their counts.",
+                                    }.ToJsonString(),
+                                });
+                                continue;
+                            }
                             using var toolSpan = Activity.StartActivity("tool");
                             toolSpan?.SetTag("gen_ai.tool.name", name);
                             var node = core.CallTool(name, args);
@@ -406,6 +422,10 @@ public sealed class AskService(McpCore core)
                             entry["docs"] = docs;
                             var eff = UiMapper.From(name, args, node);
                             if (!eff.IsEmpty) effects.Add(eff);
+                            // A list view is shown as-is; it needs no enrichment. Without this
+                            // the model fetches every ranked row to "confirm" it — eleven calls
+                            // and two minutes for a question already answered by the first.
+                            if (eff.Ranking is not null || eff.InForce is not null) listRendered = true;
                             // Remember every work any tool surfaced: the work id is what the state
                             // tools need, and it is the thing the model most often loses track of.
                             foreach (var d in docs.OfType<JsonObject>())
