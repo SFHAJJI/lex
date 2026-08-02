@@ -70,6 +70,16 @@ public sealed record PublisherDescriptor(
     bool TextPublic,                  // D38: true only when the publisher's text-reuse right is measured
     string HistoryBegins);            // "publisher" for Tier A, ISO date for Tier B
 
+/// <summary>One file inside an alternative manifestation (an archive member). Bytes are publisher-verbatim.</summary>
+public sealed record ManifestationMember(string Name, byte[] Bytes);
+
+/// <summary>
+/// An alternative manifestation of an expression (D48): a richer structural format some
+/// publishers serve alongside the primary body. A container archive is packaging, not
+/// evidence — members carry the stable publisher bytes.
+/// </summary>
+public sealed record ManifestationFetch(string Format, IReadOnlyList<ManifestationMember> Members, string SourceUri);
+
 /// <summary>
 /// C4 — the adapter seam. An adapter never writes files, never touches git, never knows the corpus layout (F8).
 /// A Tier A/B adapter whose body channel is gated runs in declared metadata-only mode: FetchBody is not called.
@@ -80,4 +90,13 @@ public interface ISourceAdapter
     IAsyncEnumerable<WorkRef> EnumerateWorks(CancellationToken ct);
     Task<IReadOnlyList<VersionRecord>> FetchVersions(WorkRef work, CancellationToken ct);
     Task<string?> FetchBody(VersionRecord version, ExpressionRecord expression, CancellationToken ct);
+
+    /// <summary>
+    /// D48: fetch an alternative structural manifestation for an expression, or null when the
+    /// publisher has none (the default for adapters without one). Implementations must verify
+    /// the returned content identifies as the REQUESTED version — a manifestation that cannot
+    /// be identity-checked is not evidence and must be dropped.
+    /// </summary>
+    Task<ManifestationFetch?> FetchAltManifestation(VersionRecord version, ExpressionRecord expression, CancellationToken ct)
+        => Task.FromResult<ManifestationFetch?>(null);
 }

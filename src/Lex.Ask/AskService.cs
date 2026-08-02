@@ -3,12 +3,13 @@ using System.Text;
 using System.Text.Json.Nodes;
 using Lex.Mcp;
 
-namespace Lex.Web;
+namespace Lex.Ask;
 
-// The /ask playground: a server-side agent loop over the seven Lex tools.
-// The model (Azure OpenAI chat completions, v1 surface) composes answers ONLY from tool
-// output; Lex.Web itself stays deterministic — this class is additive and disabled unless
-// AOAI_ENDPOINT + AOAI_KEY are configured. Stateless per request; capped per IP and per day.
+// The /ask playground: a server-side agent loop over the Lex tools (D31/F10: the only
+// non-deterministic component, in its own assembly so the deterministic web tier carries
+// no AI code). The model (Azure OpenAI chat completions, v1 surface) composes answers ONLY
+// from tool output; disabled unless AOAI_ENDPOINT + AOAI_KEY are configured.
+// Stateless per request; capped per IP and per day.
 public sealed class AskService(McpCore core)
 {
     private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(90) };

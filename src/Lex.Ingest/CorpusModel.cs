@@ -47,6 +47,8 @@ public sealed class ObservationEntry
     public required string SourceUri { get; set; }
     public required string RetrievedAt { get; set; }
     public required string ObservedFrom { get; set; }
+    /// <summary>D48: manifestation format for alternative-format members (e.g. "fmx4"); null for the primary body.</summary>
+    public string? Format { get; set; }
 }
 
 public sealed class ExpressionMeta

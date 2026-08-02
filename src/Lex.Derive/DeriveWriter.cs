@@ -52,6 +52,19 @@ public static class DeriveWriter
                     .OrderBy(d => Path.GetFileName(d), StringComparer.Ordinal).ToList()
                 : [];
 
+            // D48: per-work profile choice — a work+language switches to fmx4-eu/1 only when
+            // EVERY version that has a body for that language also has a Formex main member.
+            // Mixed profiles inside one work would fabricate provision-text diffs between
+            // versions that are formatting artifacts, not law.
+            var fmxByVersion = versionDirs.Select(Fmx4Mains).ToList();
+            var bodyLangsByVersion = versionDirs.Select(vd => Directory.EnumerateFiles(vd, "*.*")
+                .Where(f => Path.GetExtension(f) is ".xml" or ".html")
+                .Select(f => Path.GetFileNameWithoutExtension(f)!)
+                .ToHashSet(StringComparer.Ordinal)).ToList();
+            var fmx4Langs = fmxByVersion.SelectMany(m => m.Keys).Distinct()
+                .Where(l => !bodyLangsByVersion.Where((langs, vi) => langs.Contains(l) && !fmxByVersion[vi].ContainsKey(l)).Any())
+                .ToHashSet(StringComparer.Ordinal);
+
             for (var i = 0; i < versionDirs.Count; i++)
             {
                 var validFrom = Path.GetFileName(versionDirs[i]);
@@ -69,24 +82,39 @@ public static class DeriveWriter
                 if (!File.Exists(vMetaPath)) continue;
                 var vMeta = JsonNode.Parse(File.ReadAllText(vMetaPath))!;
 
-                foreach (var xmlFile in Directory.EnumerateFiles(versionDirs[i], "*.*")
+                var units = new List<(string Lang, string FilePath, string Kind, string ObsFile)>();
+                foreach (var f in Directory.EnumerateFiles(versionDirs[i], "*.*")
                              .Where(f => Path.GetExtension(f) is ".xml" or ".html")
                              .OrderBy(f => f, StringComparer.Ordinal))
                 {
-                    var lang = Path.GetFileNameWithoutExtension(xmlFile);
+                    var l = Path.GetFileNameWithoutExtension(f);
+                    if (fmx4Langs.Contains(l) && fmxByVersion[i].ContainsKey(l)) continue;   // superseded by fmx4 unit
+                    units.Add((l, f, Path.GetExtension(f) == ".xml" ? "akn" : "xhtml", Path.GetFileName(f)));
+                }
+                foreach (var (l, mainPath) in fmxByVersion[i].OrderBy(kv => kv.Key, StringComparer.Ordinal))
+                    if (fmx4Langs.Contains(l))
+                        units.Add((l, mainPath, "fmx4", $"{l}.fmx4/{Path.GetFileName(mainPath)}"));
+
+                foreach (var unit in units.OrderBy(u => u.ObsFile, StringComparer.Ordinal))
+                {
+                    var lang = unit.Lang;
                     try
                     {
                         var expr = (vMeta["expressions"] as JsonArray)?.OfType<JsonObject>()
                             .FirstOrDefault(e => e["language"]?.GetValue<string>() == lang);
                         var obs = (expr?["observations"] as JsonArray)?.OfType<JsonObject>()
-                            .FirstOrDefault(o => o["file"]?.GetValue<string>() == Path.GetFileName(xmlFile));
+                            .FirstOrDefault(o => o["file"]?.GetValue<string>() == unit.ObsFile);
                         var sourceSha = obs?["sha256"]?.GetValue<string>() ?? "";
                         var sourceUri = expr?["source_uri"]?.GetValue<string>()
                                         ?? vMeta["work_identifier"]?.GetValue<string>() ?? "";
                         var lexId = $"{publisher}:{slug}:{validFrom}";
 
-                        var isAkn = Path.GetExtension(xmlFile) == ".xml";
-                        var profileId = isAkn ? AknLuProfile.ProfileId : XhtmlEuProfile.ProfileId;
+                        var profileId = unit.Kind switch
+                        {
+                            "akn" => AknLuProfile.ProfileId,
+                            "fmx4" => Fmx4EuProfile.ProfileId,
+                            _ => XhtmlEuProfile.ProfileId,
+                        };
                         var frontmatter = new Dictionary<string, string>
                         {
                             ["lex_id"] = lexId,
@@ -100,14 +128,17 @@ public static class DeriveWriter
                             ["generator"] = $"{profileId} · lex derive",
                         };
 
-                        var raw = File.ReadAllText(xmlFile, Encoding.UTF8);
-                        var extraction = isAkn
-                            ? AknLuProfile.Extract(raw, lexId)
-                            : XhtmlEuProfile.Extract(raw, lexId);
+                        var raw = File.ReadAllText(unit.FilePath, Encoding.UTF8);
+                        var extraction = unit.Kind switch
+                        {
+                            "akn" => AknLuProfile.Extract(raw, lexId),
+                            "fmx4" => Fmx4EuProfile.Extract(raw, lexId),
+                            _ => XhtmlEuProfile.Extract(raw, lexId),
+                        };
                         if (extraction.Provisions.Count == 0)
                         {
                             skipped++;
-                            Console.Error.WriteLine($"  [derive] skipped (no provisions): {slug}/{validFrom}/{Path.GetFileName(xmlFile)}");
+                            Console.Error.WriteLine($"  [derive] skipped (no provisions): {slug}/{validFrom}/{unit.ObsFile}");
                             continue;
                         }
 
@@ -158,7 +189,7 @@ public static class DeriveWriter
                             ["derived_from"] = new JsonObject
                             {
                                 ["corpus_repo"] = $"lex-corpus-{publisher}",
-                                ["path"] = $"works/{slug}/versions/{validFrom}/{Path.GetFileName(xmlFile)}",
+                                ["path"] = $"works/{slug}/versions/{validFrom}/{unit.ObsFile}",
                                 ["sha256"] = sourceSha,
                                 ["source_uri"] = sourceUri,
                             },
@@ -182,11 +213,46 @@ public static class DeriveWriter
                     }
                     catch (Exception ex)
                     {
-                        errors.Add($"{slug}/{validFrom}/{Path.GetFileName(xmlFile)}: {ex.Message}");
+                        errors.Add($"{slug}/{validFrom}/{unit.ObsFile}: {ex.Message}");
                     }
                 }
             }
         }
         return new Stats(works, versions, provisionCount, skipped, errors);
+    }
+
+    /// <summary>
+    /// D48: map language -> Formex main-member path for a version dir. Members live under
+    /// {lang}.fmx4/; the main member is the only non-.doc.xml file, or the one the .doc.xml
+    /// manifest points at via REF.PHYS TYPE="DOC.XML" (largest file as deterministic fallback).
+    /// </summary>
+    private static Dictionary<string, string> Fmx4Mains(string versionDir)
+    {
+        var result = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var d in Directory.EnumerateDirectories(versionDir, "*.fmx4").OrderBy(x => x, StringComparer.Ordinal))
+        {
+            var lang = Path.GetFileName(d);
+            lang = lang[..^".fmx4".Length];
+            var xmls = Directory.EnumerateFiles(d, "*.xml")
+                .Where(f => !f.EndsWith(".doc.xml", StringComparison.OrdinalIgnoreCase))
+                .OrderBy(f => f, StringComparer.Ordinal).ToList();
+            if (xmls.Count == 0) continue;
+            string? pick = xmls.Count == 1 ? xmls[0] : null;
+            if (pick is null)
+            {
+                var docXml = Directory.EnumerateFiles(d, "*.doc.xml").OrderBy(f => f, StringComparer.Ordinal).FirstOrDefault();
+                if (docXml is not null)
+                {
+                    var m = System.Text.RegularExpressions.Regex.Match(
+                        File.ReadAllText(docXml, Encoding.UTF8),
+                        "REF\\.PHYS FILE=\"([^\"]+)\" TYPE=\"DOC\\.XML\"");
+                    if (m.Success)
+                        pick = xmls.FirstOrDefault(f => Path.GetFileName(f) == m.Groups[1].Value);
+                }
+                pick ??= xmls.OrderByDescending(f => new FileInfo(f).Length).ThenBy(f => f, StringComparer.Ordinal).First();
+            }
+            result[lang] = pick;
+        }
+        return result;
     }
 }

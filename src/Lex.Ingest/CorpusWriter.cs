@@ -160,6 +160,34 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now)
                         exprMeta.Text = new TextInfo { Available = true, Url = exprRec.SourceUri };
                         bodyAdded = true;
                     }
+
+                    // D48: alternative structural manifestation (e.g. Formex 4). Stored as
+                    // verbatim members under {lang}.{format}/ — one observation per member.
+                    // Append-only like bodies; re-attempted nightly until the publisher serves it.
+                    foreach (var (exprMeta, exprRec) in meta.Expressions.Zip(v.Expressions))
+                    {
+                        if (exprMeta.Observations.Any(o => o.Format is not null)) continue;   // already observed
+                        var alt = await adapter.FetchAltManifestation(v, exprRec, ct);
+                        if (alt is null) continue;
+                        var altDirName = $"{exprMeta.Language}.{alt.Format}";
+                        var altDir = Path.Combine(versionDir, altDirName);
+                        Directory.CreateDirectory(altDir);
+                        foreach (var member in alt.Members)
+                        {
+                            var memberPath = Path.Combine(altDir, member.Name);
+                            if (!File.Exists(memberPath)) await File.WriteAllBytesAsync(memberPath, member.Bytes, ct);
+                            exprMeta.Observations.Add(new ObservationEntry
+                            {
+                                File = $"{altDirName}/{member.Name}",
+                                Sha256 = Convert.ToHexStringLower(SHA256.HashData(member.Bytes)),
+                                SourceUri = alt.SourceUri,
+                                RetrievedAt = _now,
+                                ObservedFrom = _now,
+                                Format = alt.Format,
+                            });
+                        }
+                        bodyAdded = true;
+                    }
                 }
 
                 if (existing && !changed && !bodyAdded) { Unchanged++; continue; }

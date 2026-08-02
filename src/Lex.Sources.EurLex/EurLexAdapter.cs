@@ -139,6 +139,98 @@ public sealed class EurLexAdapter : ISourceAdapter
         return System.Text.Encoding.UTF8.GetString(ms.ToArray());
     }
 
+    /// <summary>
+    /// D48: Formex 4 manifestation (application/zip;mtype=fmx4) — the Publications Office's
+    /// structural XML with publisher-minted ARTICLE/PARAG identifiers. The zip container is
+    /// rebuilt per request (member timestamps embedded), so only member bytes are evidence.
+    /// Identity guard: INFO.CONSLEG START.DATE must equal the requested version's valid_from
+    /// (CONSLEG.DATE is the production date and may be later — e.g. GDPR corrigenda 2018).
+    /// </summary>
+    public async Task<ManifestationFetch?> FetchAltManifestation(VersionRecord version, ExpressionRecord expression, CancellationToken ct)
+    {
+        await PaceAsync(ct);
+        var celex = version.Raw.GetValueOrDefault("celex");
+        if (celex is null) return null;
+        var url = $"https://publications.europa.eu/resource/celex/{celex}";
+        HttpResponseMessage? resp = null;
+        for (var hop = 0; hop < 6; hop++)
+        {
+            using var req = new HttpRequestMessage(HttpMethod.Get, url);
+            // Cellar's negotiation parser rejects "application/zip; mtype=fmx4" (500) — the
+            // exact spaceless form must go on the wire, and reading the typed Accept view
+            // afterwards would re-normalize it, so: raw header, never inspected.
+            req.Headers.TryAddWithoutValidation("Accept", "application/zip;mtype=fmx4");
+            req.Headers.AcceptLanguage.ParseAdd(expression.Language);
+            resp?.Dispose();
+            resp = await Http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
+            if ((int)resp.StatusCode is >= 300 and < 400 && resp.Headers.Location is { } loc)
+            {
+                var next = loc.IsAbsoluteUri ? loc.ToString() : new Uri(new Uri(url), loc).ToString();
+                url = next.StartsWith("http://", StringComparison.Ordinal) ? "https://" + next["http://".Length..] : next;
+                continue;
+            }
+            break;
+        }
+        if (resp is null || !resp.IsSuccessStatusCode ||
+            resp.Content.Headers.ContentType?.MediaType is not "application/zip")
+        {
+            resp?.Dispose();
+            return null;   // no fmx4 manifestation upstream (Cellar answers with a non-zip error body)
+        }
+        using var _ = resp;
+        await using var stream = await resp.Content.ReadAsStreamAsync(ct);
+        using var ms = new MemoryStream();
+        var buf = new byte[64 * 1024];
+        int read;
+        while ((read = await stream.ReadAsync(buf, ct)) > 0)
+        {
+            ms.Write(buf, 0, read);
+            if (ms.Length > BodyCapBytes)
+            {
+                Console.Error.WriteLine($"  [eurlex] {celex}: fmx4 exceeds {BodyCapBytes / 1024 / 1024} MB cap — skipped");
+                return null;
+            }
+        }
+
+        ms.Position = 0;
+        var members = new List<ManifestationMember>();
+        try
+        {
+            using var zip = new System.IO.Compression.ZipArchive(ms, System.IO.Compression.ZipArchiveMode.Read);
+            foreach (var entry in zip.Entries.OrderBy(e => e.Name, StringComparer.Ordinal))
+            {
+                var name = Path.GetFileName(entry.Name);   // no traversal, flat member names only
+                if (name.Length == 0) continue;
+                await using var es = entry.Open();
+                using var ems = new MemoryStream();
+                await es.CopyToAsync(ems, ct);
+                members.Add(new ManifestationMember(name, ems.ToArray()));
+            }
+        }
+        catch (InvalidDataException)
+        {
+            Console.Error.WriteLine($"  [eurlex] {celex}: fmx4 response is not a readable zip — skipped");
+            return null;
+        }
+        if (members.Count == 0) return null;
+
+        // Identity guard on the main member (the body carries INFO.CONSLEG).
+        var wantDate = version.ValidFrom.ToString("yyyyMMdd", System.Globalization.CultureInfo.InvariantCulture);
+        var main = members.FirstOrDefault(m =>
+            m.Name.EndsWith(".xml", StringComparison.OrdinalIgnoreCase) &&
+            !m.Name.EndsWith(".doc.xml", StringComparison.OrdinalIgnoreCase));
+        var head = main is null ? "" : System.Text.Encoding.UTF8.GetString(main.Bytes, 0, Math.Min(main.Bytes.Length, 4096));
+        var m1 = System.Text.RegularExpressions.Regex.Match(head, "INFO\\.CONSLEG[^>]*START\\.DATE=\"(\\d{8})\"");
+        if (main is null || !m1.Success || m1.Groups[1].Value != wantDate)
+        {
+            Console.Error.WriteLine($"  [eurlex] {celex}: fmx4 identity check failed (START.DATE {(m1.Success ? m1.Groups[1].Value : "absent")} vs {wantDate}) — not stored");
+            return null;
+        }
+
+        Console.Error.WriteLine($"  [eurlex] {celex}: fmx4 {members.Count} member(s), {members.Sum(x => x.Bytes.LongLength) / 1024} KB");
+        return new ManifestationFetch("fmx4", members, url);
+    }
+
     private async Task PaceAsync(CancellationToken ct)
     {
         var since = DateTimeOffset.UtcNow - _lastRequest;
