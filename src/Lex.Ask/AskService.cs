@@ -86,6 +86,12 @@ public sealed class AskService(McpCore core)
         5. Consolidated texts have no legal effect; only the Journal officiel / Official Journal
            is authentic. Mention this when quoting text verbatim.
         6. Answer in the user's language (French or English). Be compact.
+        7. ACT, never ask permission. Do not reply with "shall I…", "do you mean…" or an offer
+           to look something up: call the tool and answer. When a question is vague — a period
+           without exact dates, a law without a date — choose the most reasonable reading,
+           SAY which reading you used in one clause, and give the answer. The only thing you
+           may ask for is a genuinely missing subject (a question with no identifiable law,
+           date or topic at all).
         """;
 
     private bool TryCount(string ip, out string reason)

@@ -4,7 +4,7 @@ using Lex.Index;
 namespace Lex.Mcp;
 
 /// <summary>
-/// The seven MCP tools (spec §9) as a transport-agnostic core: the stdio server and the
+/// The MCP tools (spec §9) as a transport-agnostic core: the stdio server and the
 /// public HTTP endpoint both dispatch through this class. Retrieves, filters, diffs,
 /// reports — never summarises or advises (F10).
 /// </summary>
