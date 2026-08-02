@@ -221,9 +221,10 @@ public sealed class LexIndexReader : IDisposable
         using (var r = cmd.ExecuteReader())
             while (r.Read()) kinds.Add(new CoverageKind(r.IsDBNull(0) ? null : r.GetString(0), r.GetInt32(1)));
 
+        // lex-index/2: text_public is set only when a derived (provision-bearing) version exists
         using var agg = Cmd("""
             SELECT COUNT(DISTINCT group_key), COUNT(*), MIN(valid_from), MAX(valid_from),
-                   SUM(CASE WHEN text_public=1 AND body IS NOT NULL THEN 1 ELSE 0 END)
+                   SUM(CASE WHEN text_public=1 THEN 1 ELSE 0 END)
             FROM docs
             """, []);
         using var ar = agg.ExecuteReader();

@@ -68,7 +68,7 @@ string Page(string title, string body, string? subtitle = null) => $$"""
       <a class="brand" href="/">Lex</a>
       <span class="tag">point-in-time regulatory text — what did the rule say on a given date?</span>
       <span style="flex:1"></span>
-      <a href="/in-force-on">in force on…</a>&nbsp; <a href="/search">search</a>&nbsp; <a href="/ask">ask</a>&nbsp; <a href="/ai">use with your AI</a>&nbsp; <a href="/coverage">coverage</a>
+      <a href="/browse">browse</a>&nbsp; <a href="/search">search</a>&nbsp; <a href="/in-force-on">in force on…</a>&nbsp; <a href="/architecture">architecture</a>&nbsp; <a href="/ai">use with your AI</a>&nbsp; <a href="/verify">verify</a>&nbsp; <a href="/coverage">coverage</a>
     </header>
     <main>
     <h1>{{title}}</h1>
@@ -236,12 +236,27 @@ app.MapGet("/ai", (HttpRequest req) =>
 });
 
 // ---- /ask playground: chat over the seven tools, grounded and capped ----
-app.MapGet("/ask", () =>
+app.MapGet("/ask", () => Results.Redirect("/"));
+
+app.MapGet("/", () =>
 {
-    const string body = """
-        <div class="notice"><b>Not legal advice.</b> The assistant answers only from Lex's signed
-        point-in-time indexes and cites the exact version (dates, hash, permalink) behind every claim.
-        It reports <i>what the rule was</i>, never what it means. Consolidated texts have no legal effect.</div>
+    // stat strip computed from the mounted indexes at render time — never hand-written numbers
+    var cov = readers.Values.Select(r => r.Coverage()).ToList();
+    var strip = $"""
+        <p class="sub" style="margin:2px 0 14px">
+        <span class="badge">{cov.Sum(c => c.Groups):n0} works</span>
+        <span class="badge">{cov.Sum(c => c.Rows):n0} versions</span>
+        <span class="badge">{cov.Sum(c => c.TextServed):n0} with full text</span>
+        <span class="badge">{H(cov.Select(c => c.EarliestValidFrom).Min())} → {H(cov.Select(c => c.LatestValidFrom).Max())}</span>
+        <span class="badge ok">signed indexes</span>
+        <span class="badge">8 MCP tools</span>
+        <span class="badge">Luxembourg + EU</span></p>
+        """;
+    var body = strip + """
+        <div class="notice"><b>AI answers, deterministic evidence — not legal advice.</b> The assistant reads only
+        Lex's signed point-in-time indexes; under every answer, the evidence cards show what the tools actually
+        returned (exact version, dates, hash, permalink). It reports <i>what the rule was</i>, never what it means.
+        Consolidated texts have no legal effect.</div>
 
         <div id="chat"></div>
         <form id="askform" class="inline" style="margin-top:14px">
@@ -252,7 +267,23 @@ app.MapGet("/ask", () =>
         <p class="sub" id="hints">Try:
           <a href="#" class="hint">Que disait le Code de procédure civile au 1er janvier 2020 ?</a> ·
           <a href="#" class="hint">What did the GDPR say about breach notification on 15 March 2019?</a> ·
-          <a href="#" class="hint">How has DORA changed since it entered into force?</a></p>
+          <a href="#" class="hint">How has Article 92 of the CRR changed over its life?</a> ·
+          <a href="#" class="hint">Which Luxembourg codes were in force on 15 March 2022?</a></p>
+
+        <h2>Or skip the AI entirely</h2>
+        <div class="card"><b>Time-travel by hand.</b> Every version is a permalink; every claim is a click.
+          <a href="/eu-eurlex/32016r0679/2019-01-01">GDPR as it stood on 1 Jan 2019</a> ·
+          <a href="/eu-eurlex/32013r0575/diff/2020-01-01/2024-01-01">CRR: what changed 2020→2024</a> ·
+          <a href="/lu-legilux/code-environnement">a code's 195 versions</a> ·
+          <a href="/lu-legilux/rgd-1998-08-03-n4/1900-01-01">ask for 1900 and watch it refuse honestly</a> ·
+          <a href="/browse">browse everything</a></div>
+        <div class="card"><b>Bring your own AI.</b> The same eight tools, hosted, no key:
+          <pre class="mono" style="white-space:pre-wrap;margin:6px 0 0">claude mcp add --transport http lex https://law.soufien.lu/mcp</pre>
+          <a href="/ai">all MCP clients →</a></div>
+        <div class="card"><b>For developers.</b> <a href="/architecture">How it works</a> — the evidence layer,
+          the derived per-article layer, the signed indexes, the honest refusals — and
+          <a href="/verify">how to verify every byte without trusting us</a>.
+          Data: <a href="https://github.com/SFHAJJI/lex-articles">lex-articles</a> (machine-readable, CC-BY).</div>
         <p class="sub">Capped public playground (daily per-visitor and global limits). Unlimited use:
         <a href="/ai">connect your own AI</a> to the MCP endpoint.</p>
 
@@ -326,8 +357,8 @@ app.MapGet("/ask", () =>
         })();
         </script>
         """;
-    return Results.Content(Page("Ask the AI", body,
-        "a model that reads only from Lex's signed indexes — every answer cites the version it used"), "text/html");
+    return Results.Content(Page("Ask Luxembourg + EU law, point-in-time", body,
+        "what did the rule say on that date? — AI answers grounded in signed, verifiable, per-article indexes"), "text/html");
 });
 
 app.MapPost("/api/ask", async (HttpRequest req) =>
@@ -345,6 +376,62 @@ app.MapPost("/api/ask", async (HttpRequest req) =>
     var (status, bodyJson) = await askService.AskAsync(history, ip, req.Host.Value ?? "law.soufien.lu",
         req.HttpContext.RequestAborted);
     return Results.Content(bodyJson.ToJsonString(), "application/json", statusCode: status);
+});
+
+app.MapGet("/architecture", () =>
+{
+    var body = """
+        <p>Lex answers one question — <b>what did the rule say on that date?</b> — for Luxembourg and EU law,
+        in a way a developer can build on and an auditor can check. Everything below is open source and open data.</p>
+
+        <h2>Two layers, one hash chain</h2>
+        <div class="card"><pre class="mono" style="white-space:pre-wrap;font-size:12.5px;margin:0">EVIDENCE LAYER (append-only, verbatim)          CONSUMPTION LAYER (regenerable, clean)
+        lex-corpus-lu-legilux   lex-corpus-eu-eurlex   lex-articles
+        the exact bytes the state published       →   per-ARTICLE Markdown + JSON
+        sha256 per file, observation chains            stable publisher-minted anchors
+                                                       validity intervals per provision
+                     deterministic, versioned,          per-anchor history + renumbering events
+                     IMMUTABLE extraction profiles          │
+                     (akn-lu/1, xhtml-eu/1 — code,          ▼
+                      never an LLM)                    signed SQLite indexes (lex-index/2)
+                                                       provisions + FTS + time axis, ECDSA-P256 stamp
+                                                            │
+                            this site · /mcp (8 tools, any MCP client) · datasets</pre></div>
+
+        <p>Every provision's <span class="mono">text_sha256</span> chains to a verbatim-file sha256 in the evidence
+        repo: re-run the pinned open-source extractor on the state's bytes and you get these bytes.
+        <a href="/verify">Verify it yourself</a> — the defence is never "trust Lex".</p>
+
+        <h2>The retrieval unit is the article</h2>
+        <p>Search hits, <span class="mono">as_of</span> (with <span class="mono">outline</span> and
+        <span class="mono">select</span> modes), and the <span class="mono">article_history</span> tool all operate
+        per provision. "What did Article 92 say over its life?" is a file read: every distinct text as a validity
+        interval, plus mechanically detected renumberings (identical-hash matching — never interpretation).</p>
+
+        <h2>Honesty as an API contract</h2>
+        <div class="card"><table>
+        <tr><th>refusal status</th><th>meaning</th></tr>
+        <tr><td class="mono">no_version_for_date</td><td>the work exists; no version was valid on that date</td></tr>
+        <tr><td class="mono">unknown_work / unknown_anchor</td><td>Lex does not hold it — and says so</td></tr>
+        <tr><td class="mono">anchor_not_in_version</td><td>that article did not exist in that version (knowing this IS the product)</td></tr>
+        <tr><td class="mono">text_withheld</td><td>metadata held, text gate not cleared; official link provided</td></tr>
+        <tr><td class="mono">outside_observed_window</td><td>before the observation history begins</td></tr>
+        </table></div>
+        <p>A flagged wrong answer is still wrong, so Lex refuses instead; <a href="/coverage">coverage</a> exists to
+        state what we do <b>not</b> have. The AI layer (<a href="/">the front page</a>) is additive and separated:
+        one model + system prompt over the same in-process tool core the public <span class="mono">/mcp</span> serves
+        — parity by construction; no framework, no interpretation (fitness rule F10).</p>
+
+        <h2>Build on it</h2>
+        <p>
+        <a href="https://github.com/SFHAJJI/lex-articles">lex-articles</a> — machine-readable corpus (CC-BY, SCHEMA.md contract) ·
+        <a href="https://github.com/SFHAJJI/lex">lex</a> — all code, Apache-2.0, incl. the
+        <a href="https://github.com/SFHAJJI/lex/blob/main/docs/lex-spec-v4.md">full decision record (D1–D47)</a> ·
+        <a href="https://github.com/SFHAJJI/lex-corpus-lu-legilux">evidence repos</a> ·
+        hosted MCP: <span class="mono">claude mcp add --transport http lex https://law.soufien.lu/mcp</span></p>
+        """;
+    return Results.Content(Page("Architecture", body,
+        "the evidence layer, the article layer, the signed indexes — and why you don't have to trust us"), "text/html");
 });
 
 // ---- auditor surface: public key, live attestation, verify-it-yourself ----
@@ -429,7 +516,7 @@ app.MapGet("/verify", () =>
 
 app.MapGet("/healthz", () => Results.Text("ok"));
 
-app.MapGet("/", () =>
+app.MapGet("/browse", () =>
 {
     var sb = new StringBuilder();
     sb.Append("""
@@ -472,8 +559,8 @@ app.MapGet("/", () =>
           <button>As of date</button>
         </form>
         """);
-    return Results.Content(Page("Point-in-time law, honestly",
-        sb.ToString(), "Luxembourg first. EU next. Every answer carries its dates, its source and its hash — never an interpretation."), "text/html");
+    return Results.Content(Page("Browse the corpus",
+        sb.ToString(), "Luxembourg + EU. Every answer carries its dates, its source and its hash — never an interpretation."), "text/html");
 });
 
 app.MapGet("/go-asof", (string work, string date) =>
