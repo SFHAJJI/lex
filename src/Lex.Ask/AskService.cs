@@ -234,6 +234,8 @@ public sealed class AskService(McpCore core)
             askSpan?.SetTag("gen_ai.request.model", _deployment);
             var trace = new JsonArray();
             var searchCalls = 0;
+            var worksFound = new Dictionary<string, string>(StringComparer.Ordinal);
+            var textToolUsed = false;
             for (var round = 0; round <= MaxToolRounds; round++)
             {
                 var req = new JsonObject
@@ -283,18 +285,23 @@ public sealed class AskService(McpCore core)
                             var args = JsonNode.Parse(argsRaw) as JsonObject ?? [];
                             entry["args"] = args.DeepClone();
                             // Deterministic routing guard: a mini model can churn on search;
-                            // after two searches the tool itself redirects it to the state tools.
+                            // after two searches the tool redirects it to the state tools — and
+                            // hands back the works it has ALREADY found, because "you are out of
+                            // searches" without saying what was found is what made it give up.
                             if (name == "search" && ++searchCalls > 2)
                             {
                                 entry["status"] = "search_budget_exhausted";
                                 trace.Add(entry);
+                                var err = new JsonObject
+                                {
+                                    ["error"] = "search budget for this question is exhausted; do NOT search again. Call as_of / timeline / diff / article_history with one of the works already found below, or answer honestly from what you have.",
+                                };
+                                if (worksFound.Count > 0)
+                                    err["works_already_found"] = new JsonArray(worksFound.Take(8)
+                                        .Select(w => (JsonNode)new JsonObject { ["work"] = w.Key, ["title"] = w.Value }).ToArray());
                                 messages.Add(new JsonObject
                                 {
-                                    ["role"] = "tool", ["tool_call_id"] = id,
-                                    ["content"] = new JsonObject
-                                    {
-                                        ["error"] = "search budget for this question is exhausted; use as_of, timeline, diff or in_force_on with a work already found (its lex_id or work field), or answer honestly from what you have",
-                                    }.ToJsonString(),
+                                    ["role"] = "tool", ["tool_call_id"] = id, ["content"] = err.ToJsonString(),
                                 });
                                 continue;
                             }
@@ -302,10 +309,36 @@ public sealed class AskService(McpCore core)
                             toolSpan?.SetTag("gen_ai.tool.name", name);
                             var node = core.CallTool(name, args);
                             var (st, docs) = Summarize(node);
+                            if (name is "as_of" or "timeline" or "diff" or "article_history" or "in_force_on")
+                                textToolUsed = true;
                             toolSpan?.SetTag("lex.status", st ?? "ok");
                             toolSpan?.SetTag("lex.docs", docs.Count);
                             entry["status"] = st;
                             entry["docs"] = docs;
+                            // Remember every work any tool surfaced: the work id is what the state
+                            // tools need, and it is the thing the model most often loses track of.
+                            foreach (var d in docs.OfType<JsonObject>())
+                                if (d["lex_id"]?.GetValue<string>() is { } lid)
+                                {
+                                    var parts = lid.Split(':');
+                                    if (parts.Length >= 2)
+                                        worksFound.TryAdd($"{parts[0]}:{parts[1]}", d["title"]?.GetValue<string>() ?? "");
+                                }
+                            // coverage answers "what does Lex hold" — it is not an answer to
+                            // "what did this text say". Observed failure: the model searches,
+                            // finds the right work, then calls coverage and stops. When that
+                            // happens the harness hands the work ids straight back.
+                            if (name == "coverage" && !textToolUsed && worksFound.Count > 0)
+                            {
+                                var wrapped = new JsonObject
+                                {
+                                    ["coverage"] = node.DeepClone(),
+                                    ["next_step_required"] = "coverage describes what is held; it does not contain the text of any law. You have already located the works below — call as_of (mode=select with anchors when you want specific articles), timeline, diff or article_history on one of them before answering anything about what a text said.",
+                                    ["works_already_found"] = new JsonArray(worksFound.Take(8)
+                                        .Select(w => (JsonNode)new JsonObject { ["work"] = w.Key, ["title"] = w.Value }).ToArray()),
+                                };
+                                node = wrapped;
+                            }
                             result = TruncateResult(node);
                         }
                         catch (Exception ex)
