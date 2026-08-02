@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ask, first, tool, type AskReply, type ProvisionItem, type UiEffect } from "./api";
 import { publisherOf, useWorkspace, workSlug, type Space, type State } from "./state";
-import { Compare, Empty, Gap, HistoryRail, InForce, Provision, Ranking, hasView, modeFor } from "./views";
+import { Compare, Empty, Gap, HistoryRail, InForce, Provision, Ranking, WorkTimeline, hasView, modeFor } from "./views";
 import { LawPicker, PeriodPicker, TopicSearch, shorten } from "./pickers";
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -32,7 +32,31 @@ export default function App() {
   const [ui, setUi] = useState<UiEffect>();
   const [loaded, setLoaded] = useState<{ items: ProvisionItem[]; from: string; to?: string }>();
   const [title, setTitle] = useState<string>();
+  const [versions, setVersions] = useState<string[]>([]);
   const abort = useRef<AbortController>();
+
+  // The marketing below the fold belongs to a first-time visitor, not to someone reading a
+  // law. One flag on <body> lets the server-rendered page get out of the way.
+  useEffect(() => {
+    const busyWith = s.work || s.q || s.from;
+    document.body.dataset.workspace = busyWith ? "active" : "";
+  }, [s.work, s.q, s.from]);
+
+  // Every version of the loaded work: powers the version count and the previous/next stepper,
+  // which is the most-wanted action in a point-in-time reader and did not exist.
+  useEffect(() => {
+    if (!s.work) { setVersions([]); return; }
+    let live = true;
+    tool<any>("timeline", { work: s.work, limit: 400 })
+      .then((res) => {
+        if (!live) return;
+        const one = first<any>(res, (x) => Array.isArray(x?.versions) && x.versions.length > 0);
+        const dates = [...new Set((one?.versions ?? []).map((v: any) => String(v.valid_from)))] as string[];
+        setVersions(dates.sort());
+      })
+      .catch(() => live && setVersions([]));
+    return () => { live = false; };
+  }, [s.work]);
 
   // Deterministic loading: switching mode or date calls the public MCP endpoint directly.
   // No model in the loop — playing with the workspace must be instant and repeatable.
@@ -129,6 +153,21 @@ export default function App() {
     finally { setBusy(false); }
   }, [busy, go]);
 
+  // Open on the text in force TODAY, never on the oldest version — the oldest is the one most
+  // likely to have no stored text, so the old behaviour greeted every visitor with a refusal.
+  const pickLaw = (h: { work: string; title: string }) => {
+    setUi(undefined); setTitle(h.title); setVersions([]);
+    go({ work: h.work, date: undefined, anchor: undefined, to: undefined, mode: "read", space: "law" });
+  };
+
+  // Where the current date sits among the versions, for the stepper.
+  const step = (() => {
+    if (versions.length === 0 || !loaded) return {} as { prev?: string; next?: string };
+    const i = versions.indexOf(loaded.from);
+    if (i < 0) return {};
+    return { prev: i > 0 ? versions[i - 1] : undefined, next: i < versions.length - 1 ? versions[i + 1] : undefined };
+  })();
+
   const openLaw = (work: string, date: string) => { setUi(undefined); go({ work, date, to: undefined, anchor: undefined, mode: "read", space: "law" }); };
   const openDiff = (work: string, from: string, to: string) => { setUi(undefined); go({ work, date: from, to, mode: "compare", space: "law" }); };
 
@@ -174,15 +213,35 @@ export default function App() {
                      onOpen={(work, date, anchor) => { setUi(undefined); go({ work, date, anchor, mode: "read", space: "law" }); }} />
       ) : null}
 
+      {space === "law" && s.work ? (
+        <header className="lawhead">
+          <div className="t">
+            <h2>{title ?? workSlug(s.work)}</h2>
+            <div className="meta">
+              {loaded ? (
+                <span className={`pill ${loaded.to ? "old" : "live"}`}>
+                  {loaded.to ? "superseded" : "in force"}
+                </span>
+              ) : null}
+              {loaded ? <span>{loaded.from} → {loaded.to ?? "today"}</span> : null}
+              {versions.length > 1 ? <><span>·</span><span>{versions.length} versions</span></> : null}
+            </div>
+          </div>
+          <LawPicker current="change law" onPick={pickLaw} />
+        </header>
+      ) : null}
+
       {space === "law" ? (
         <>
           <div className="sel">
-            <LawPicker current={title ?? (s.work ? workSlug(s.work) : undefined)}
-                       onPick={(h) => { setUi(undefined); setTitle(h.title); go({ work: h.work, date: h.validFrom ?? today(), anchor: undefined, to: undefined, mode: "read" }); }} />
+            {!s.work ? <LawPicker current={undefined} onPick={pickLaw} /> : null}
             {s.work ? (
-            <label className="pick"><i>{s.mode === "compare" ? "from" : "date"}</i>
+            <label className="pick"><i>{s.mode === "compare" ? "from" : "showing"}</i>
               <input type="date" value={s.date ?? today()} onChange={(e) => go({ date: e.target.value })} />
             </label>) : null}
+            {s.work && step.prev ? <button className="pick" onClick={() => go({ date: step.prev })}>← previous version</button> : null}
+            {s.work && step.next ? <button className="pick" onClick={() => go({ date: step.next })}>next version →</button> : null}
+            {s.work && step.next ? <button className="pick" onClick={() => go({ date: versions[versions.length - 1] })}>jump to today</button> : null}
             {s.mode === "compare" ? (
               <label className="pick"><i>to</i>
                 <input type="date" value={s.to ?? today()} onChange={(e) => go({ to: e.target.value })} />
@@ -200,10 +259,15 @@ export default function App() {
           <nav className="modes">
             {(["read", "history", "compare"] as const).map((m) => (
               <button key={m} className={s.mode === m ? "on" : ""}
-                      disabled={m === "history" && !s.anchor}
-                      title={m === "history" && !s.anchor ? "Pick an article first" : undefined}
-                      onClick={() => go({ mode: m, ...(m === "compare" && !s.to ? { to: today() } : {}) })}>
+                      aria-pressed={s.mode === m}
+                      onClick={() => go({
+                        mode: m,
+                        // Compare defaults to the neighbouring version, not to today: comparing
+                        // a 2021 text against 2026 is never what someone means by "compare".
+                        ...(m === "compare" && !s.to ? { to: step.next ?? versions[versions.length - 1] ?? today() } : {}),
+                      })}>
                 {m === "read" ? "Read" : m === "history" ? "History" : "Compare"}
+                {m === "history" && versions.length > 1 ? <span className="cnt">{versions.length}</span> : null}
               </button>
             ))}
           </nav>) : null}
@@ -218,6 +282,9 @@ export default function App() {
                                 to={ui.ranking.to_date} onOpen={openDiff} /> :
          ui?.in_force ? <InForce date={ui.in_force.date} total={ui.in_force.total} rows={ui.in_force.rows} onOpen={openLaw} /> :
          ui?.history ? <HistoryRail states={ui.history.states} anchor={ui.history.anchor} work={ui.history.subject.work} /> :
+         s.work && s.mode === "history" && !s.anchor ?
+           <WorkTimeline versions={versions} current={loaded?.from}
+                         onPick={(d) => { setUi(undefined); go({ date: d, mode: "read" }); }} /> :
          s.work && s.mode === "compare" ? <Compare work={s.work} from={s.date ?? today()} to={s.to ?? today()} anchor={s.anchor} /> :
          s.work && s.mode === "read" && loaded ? <Provision items={loaded.items} validFrom={loaded.from} validTo={loaded.to} work={s.work} onPick={(a) => go({ anchor: a })} /> :
          s.work ? <Empty>Loading…</Empty> :

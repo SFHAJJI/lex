@@ -354,6 +354,7 @@ app.MapGet("/", () =>
           <a href="/changed">what changed</a>, <a href="/stories">stories</a>.</p></noscript></div>
         """
         + $"""
+        <div class="frontdoor">
         <div class="storyrow">
           {StoryCard("lu-legilux", "loi-2020-07-17-a624", "The law that could not sit still", "Covid measures act, 2020–2024")}
           {StoryCard("lu-legilux", "constitution-1868-10-17-n1", "A constitution, revised in public", "Luxembourg, 1919 → the 2023 reform")}
@@ -381,11 +382,15 @@ app.MapGet("/", () =>
         <span class="badge">updated nightly</span></p>
         <p class="sub">Free public assistant with a daily limit.
         <a href="/developers">Connect your own AI</a> for unlimited use.</p>
+        </div>
         """
         // Story cards keep their styles; the workspace ships its own stylesheet.
         + """
         <style>
           .lede { font-size:18px; color:var(--muted); margin:0 0 18px; max-width:62ch }
+          /* Once a law, a period or a search is loaded, the front-door content is noise.
+             The workspace sets data-workspace on <body>; everything promotional steps aside. */
+          body[data-workspace="active"] .frontdoor { display:none }
           .storyrow { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:14px; margin:30px 0 10px }
           a.story { display:block; border:1px solid var(--line); border-radius:10px; padding:15px; color:inherit; background:var(--card) }
           a.story:hover { border-color:var(--accent); text-decoration:none }

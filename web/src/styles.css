@@ -101,3 +101,20 @@ button.ghost { background: none; border: 1px solid var(--line); color: var(--mut
 .popnote { color: var(--muted); font-size: 13px; padding: 7px 8px 0; }
 .quick { display: flex; gap: 6px; flex-wrap: wrap; }
 .quick .chip { padding: 5px 11px; font-size: 13px; }
+
+/* ---- law header: the law gets the page, the app becomes furniture ---- */
+.lawhead { display: flex; align-items: flex-start; gap: 16px; margin: 4px 0 14px; }
+.lawhead .t { flex: 1; min-width: 0; }
+.lawhead h2 { font-family: var(--serif); font-size: 22px; line-height: 1.24; letter-spacing: -.012em;
+              margin: 0 0 6px; text-wrap: balance; }
+.lawhead .meta { display: flex; flex-wrap: wrap; gap: 7px; align-items: center;
+                 font-size: 13px; color: var(--muted); }
+.pill { border: 1px solid var(--line); border-radius: 99px; padding: 1px 10px; font-size: 12.5px; }
+.pill.live { border-color: var(--ok); color: var(--ok); }
+.pill.old { border-color: var(--accent); color: var(--accent); }
+.modes .cnt { margin-left: 7px; font-size: 11.5px; color: var(--muted); border: 1px solid var(--line);
+              border-radius: 99px; padding: 0 6px; }
+.rail .tick { border: 0; padding: 0; cursor: pointer; }
+.rail .tick.on { top: 5px; height: 33px; width: 3px; background: var(--accent); opacity: 1; }
+.strong { font-weight: 600; }
+button.pick { cursor: pointer; }

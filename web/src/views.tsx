@@ -185,6 +185,45 @@ export function Ranking({ rows, worksChanged, newVersions, from, to, onOpen }: {
   );
 }
 
+/** The whole law's timeline: History with no article focused. Every version, clickable. */
+export function WorkTimeline({ versions, current, onPick }: {
+  versions: string[]; current?: string; onPick: (date: string) => void;
+}) {
+  if (versions.length === 0) return <Empty>No versions recorded for this law.</Empty>;
+  const t = (d: string) => Date.parse(`${d}T00:00:00Z`);
+  const lo = t(versions[0]);
+  const span = Math.max(1, t(versions[versions.length - 1]) - lo);
+  const gaps = versions.slice(1).map((d, i) => (t(d) - t(versions[i])) / 86400000).sort((a, b) => a - b);
+  const median = gaps.length ? Math.round(gaps[Math.floor(gaps.length / 2)]) : 0;
+  return (
+    <>
+      <div className="cnt">
+        <span className="tag">{versions.length} versions</span>
+        <span className="tag mono">{versions[0]} → {versions[versions.length - 1]}</span>
+        {median > 0 ? <span className="tag">amended every {median} days (median)</span> : null}
+      </div>
+      <div className="rail">
+        <div className="axis" />
+        {versions.map((d) => (
+          <button key={d} className={`tick${d === current ? " on" : ""}`}
+                  style={{ left: `${((t(d) - lo) / span) * 97 + 1.5}%` }}
+                  title={d} aria-label={`Read the version of ${d}`} onClick={() => onPick(d)} />
+        ))}
+      </div>
+      <p className="sub">Click any mark to read that version.</p>
+      <ul className="rows">
+        {versions.slice().reverse().slice(0, 40).map((d) => (
+          <li key={d}>
+            <button className="rowbtn" onClick={() => onPick(d)}>
+              <span className={d === current ? "mono strong" : "mono"}>{d}{d === current ? "  ← showing" : ""}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+}
+
 export function InForce({ date, total, rows, onOpen }: {
   date: string; total: number;
   rows: { work: string; title?: string; kind?: string; valid_from: string }[];
