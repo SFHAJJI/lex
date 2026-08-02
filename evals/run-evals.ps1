@@ -1,9 +1,34 @@
 # Evals for the /ask agent (spec: the AI constructs MCP tool arguments from natural questions).
-# Usage:  .\run-evals.ps1 [-BaseUrl http://localhost:5099]
+# Usage:  .\run-evals.ps1 [-BaseUrl http://localhost:5099] [-Only case-id[,case-id]]
 # Requires the target Lex.Web to run with AOAI_* and LEX_PUBLIC_BASE_URL configured.
-param([string]$BaseUrl = "http://localhost:5099")
+param([string]$BaseUrl = "http://localhost:5099", [string[]]$Only)
+
+# Optional LLM-graded assertion: replaces brittle keyword markers on cases that carry a
+# `grade_llm` rubric, when AOAI_ENDPOINT + AOAI_KEY are set. Returns $null on any failure
+# so the harness silently falls back to the keyword markers (keyless CI still works).
+function Invoke-LlmGrade([string]$Question, [string]$Reply, [string]$Rubric) {
+    $ep = $env:AOAI_ENDPOINT; if ($ep) { $ep = $ep.TrimEnd('/') }
+    if (-not $ep -or -not $env:AOAI_KEY) { return $null }
+    $dep = if ($env:AOAI_CHAT_DEPLOYMENT) { $env:AOAI_CHAT_DEPLOYMENT } else { "gpt-5-mini" }
+    $req = @{
+        model = $dep
+        reasoning_effort = "low"
+        max_completion_tokens = 2000
+        messages = @(
+            @{ role = "system"; content = 'You grade answers from a legal point-in-time retrieval assistant. Judge ONLY against the rubric. Output strict JSON: {"pass": true|false, "reason": "<one sentence>"} and nothing else.' },
+            @{ role = "user"; content = "RUBRIC:`n$Rubric`n`nQUESTION:`n$Question`n`nREPLY TO GRADE:`n$Reply" }
+        )
+    } | ConvertTo-Json -Depth 6
+    try {
+        $resp = Invoke-RestMethod -Method Post -Uri "$ep/openai/v1/chat/completions" -Headers @{ "api-key" = $env:AOAI_KEY } -ContentType "application/json" -Body ([System.Text.Encoding]::UTF8.GetBytes($req)) -TimeoutSec 120
+        $json = [regex]::Match($resp.choices[0].message.content, '\{[\s\S]*\}').Value
+        if (-not $json) { return $null }
+        return $json | ConvertFrom-Json
+    } catch { return $null }
+}
 
 $cases = (Get-Content "$PSScriptRoot\cases.json" -Raw -Encoding UTF8 | ConvertFrom-Json).cases
+if ($Only) { $cases = @($cases | Where-Object { $Only -contains $_.id }) }
 $failures = 0
 $results = @()
 
@@ -29,8 +54,17 @@ foreach ($case in $cases) {
         if ($argsFlat -notmatch [regex]::Escape($frag)) { $problems += "arg fragment '$frag' not found in any tool call" }
     }
 
-    # 3. Reply content sanity
-    if ($case.expect_reply_contains_any) {
+    # 3. Reply content sanity — LLM-graded when the case has a rubric and AOAI creds exist,
+    #    keyword markers otherwise (and as fallback when the grader call fails).
+    $graded = $false
+    if ($case.grade_llm) {
+        $g = Invoke-LlmGrade -Question $case.question -Reply $r.reply -Rubric $case.grade_llm
+        if ($null -ne $g) {
+            $graded = $true
+            if (-not $g.pass) { $problems += "LLM grade fail: $($g.reason)" }
+        }
+    }
+    if (-not $graded -and $case.expect_reply_contains_any) {
         $hit = @($case.expect_reply_contains_any) | Where-Object { $r.reply -match [regex]::Escape($_) }
         if (-not $hit) { $problems += "reply contains none of the expected markers" }
     }

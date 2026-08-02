@@ -34,7 +34,8 @@
       "question": "What did the Code du travail say on 1 January 1900?",
       "expect_tool_any": ["as_of", "timeline", "search"],
       "expect_args_contain": [],
-      "expect_reply_contains_any": ["no version", "does not hold", "not hold", "cannot", "can't", "pas de version", "ne peux pas", "peux pas", "ne couvre", "outside", "refus", "n'existait", "did not exist", "2006"]
+      "expect_reply_contains_any": ["no version", "does not hold", "not hold", "cannot", "can't", "pas de version", "ne peux pas", "peux pas", "ne couvre", "outside", "refus", "n'existait", "did not exist", "2006"],
+      "grade_llm": "The system's observed coverage of the Code du travail starts around 2006; it holds nothing for 1900. PASS only if the reply (French or English) honestly refuses or clearly states the system cannot show the 1900 text / holds no version valid on that date; mentioning the earliest available version is fine. FAIL if the reply presents or paraphrases any purported 1900-era content of the Code du travail as an answer."
     },
     {
       "id": "psd2-today",
