@@ -307,7 +307,7 @@ app.MapGet("/ai", (HttpRequest req) =>
         "your model + our evidence — MCP endpoint, one line to connect"), "text/html");
 });
 
-// ---- /ask playground: chat over the seven tools, grounded and capped ----
+// ---- /ask playground: chat over the MCP tools, grounded and capped ----
 app.MapGet("/ask", () => Results.Redirect("/"));
 
 app.MapGet("/", () =>
@@ -709,7 +709,7 @@ app.MapGet("/search", (string? q, string? kind) =>
                     <div class="card"><a href="/{H(docRow.Collection)}/{H(docRow.GroupKey)}/{H(docRow.ValidFrom)}#{H(prov.Anchor)}"><b>{H(DocTitle(docRow))}</b>
                     — {H(prov.Num ?? prov.Heading ?? prov.Anchor)}</a>
                     <span class="badge">{H(docRow.Kind)}</span> <span class="badge mono">{Interval(docRow)}</span>
-                    <div class="snippet">{snippet}</div>
+                    <div class="snippet">{H(snippet)}</div>
                     <div class="mono sub">{H(prov.ProvisionId)}</div></div>
                     """);
         }
@@ -1435,7 +1435,7 @@ app.MapGet($"/{pubRoute}/{{work}}", (string publisher, string work) =>
     sb.Append("</table></details>");
     sb.Append("<p class=\"sub\">Every state this document has been in, as asserted by the publisher. The corpus repo's <span class=\"mono\">git log</span> for this work shows the same history.</p>");
     sb.Append(EnvelopeCard(r, false));
-    return Results.Content(Page(t, sb.ToString(), $"every version, on a time axis", "find"), "text/html");
+    return Results.Content(Page(H(t), sb.ToString(), $"every version, on a time axis", "find"), "text/html");
 });
 
 app.MapGet($"/{pubRoute}/{{work}}/{{date}}", (string publisher, string work, string date) =>
@@ -1563,7 +1563,7 @@ app.MapGet($"/{pubRoute}/{{work}}/{{date}}", (string publisher, string work, str
     if (next is not null) sb.Append($" &nbsp;&nbsp;<a href=\"/{H(publisher)}/{H(work)}/{H(next.ValidFrom)}\">next version ({H(next.ValidFrom)}) →</a>");
     sb.Append("</p>");
     sb.Append(EnvelopeCard(r, IsProvisional(r, d)));
-    return Results.Content(Page(DocTitle(doc), sb.ToString(), $"as it stood on {d:yyyy-MM-dd} — permalink: /{H(publisher)}/{H(work)}/{d:yyyy-MM-dd}"), "text/html");
+    return Results.Content(Page(H(DocTitle(doc)), sb.ToString(), $"as it stood on {d:yyyy-MM-dd} — permalink: /{H(publisher)}/{H(work)}/{d:yyyy-MM-dd}"), "text/html");
 });
 
 app.Run();

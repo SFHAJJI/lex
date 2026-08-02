@@ -239,7 +239,7 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now)
             IngesterVersion = "0.1.0",
         };
         WriteIfChanged(Path.Combine(corpusRoot, "manifest.json"), JsonSerializer.Serialize(manifest, CorpusJson.Options));
-        WriteIfChanged(Path.Combine(corpusRoot, "NOTICE"), Notice(pub));
+        WriteIfChanged(Path.Combine(corpusRoot, "NOTICE"), Notice(pub, desc.TextIncluded));
         Console.Error.WriteLine($"  [corpus] works={works} versions={versions} created={Created} updated={Updated} unchanged={Unchanged}");
     }
 
@@ -252,7 +252,7 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now)
     private static string Min(string? a, string b) => a is null || string.CompareOrdinal(b, a) < 0 ? b : a;
     private static string Max(string? a, string b) => a is null || string.CompareOrdinal(b, a) > 0 ? b : a;
 
-    private static string Notice(Publisher pub) => $"""
+    private static string Notice(Publisher pub, bool textIncluded) => $"""
         NOTICE — three layers (Lex spec §16.2)
 
         1. UNDERLYING ACTS AND DOCUMENTS
@@ -261,8 +261,11 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now)
            reused, it is reused under the publisher's own terms.
            Attribution: {pub.Attribution}
            Source terms: {pub.SourceTermsUrl}
-           Modifications: metadata converted from source RDF to JSON; no text altered,
-           no text stored. These obligations survive into forks and derived artefacts.
+           Modifications: metadata converted from source RDF to JSON; no text altered.
+           {(textIncluded
+              ? "Bodies are stored verbatim as retrieved from the publisher's dissemination channel."
+              : "No text is stored (metadata-only mode, D42).")}
+           These obligations survive into forks and derived artefacts.
 
         2. LEX'S COMPILATION
            The selection, arrangement, observation history and database rights in this

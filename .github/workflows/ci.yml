@@ -1,0 +1,41 @@
+name: ci
+
+# Every guarantee this project makes is enforced by a test: the fitness rules that keep the
+# layering honest, and the frozen-fingerprint tests that make "a published extraction profile
+# never changes its output" true rather than aspirational. Until this file existed those tests
+# only ran when someone typed `dotnet test`, while the nightly pipeline built from unpinned
+# main — so a profile regression could rewrite tens of thousands of published hashes overnight
+# with a green build.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch: {}
+
+jobs:
+  dotnet:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - run: dotnet build -c Release --nologo
+      - name: test (fitness rules + frozen profile fingerprints)
+        run: dotnet test -c Release --nologo --logger "console;verbosity=normal"
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci --no-audit --no-fund
+        working-directory: web
+      # Typechecks, bundles, and asserts in a real DOM that the workspace actually mounts —
+      # a bundle can typecheck and serve correctly and still throw on its first line.
+      - run: npm run build
+        working-directory: web

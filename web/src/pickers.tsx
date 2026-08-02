@@ -159,7 +159,7 @@ function shift(days: number) { const d = new Date(); d.setUTCDate(d.getUTCDate()
 const stripMarks = (s: string) => s.replace(/[«»]/g, "");
 
 /** Legilux titles are prefixed "Version consolidée applicable au …  : " — noise in a list. */
-function shorten(t?: string): string | undefined {
+export function shorten(t?: string): string | undefined {
   if (!t) return t;
   const i = t.indexOf(" : ");
   const body = i > 0 && /^(Version consolidée|Konsolidierte)/i.test(t) ? t.slice(i + 3) : t;

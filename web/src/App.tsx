@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ask, first, tool, type AskReply, type ProvisionItem, type UiEffect } from "./api";
 import { publisherOf, useWorkspace, workSlug, type Space, type State } from "./state";
 import { Compare, Empty, Gap, HistoryRail, InForce, Provision, Ranking, hasView, modeFor } from "./views";
-import { LawPicker, PeriodPicker, TopicSearch } from "./pickers";
+import { LawPicker, PeriodPicker, TopicSearch, shorten } from "./pickers";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -39,6 +39,8 @@ export default function App() {
   useEffect(() => {
     if (!s.work) return;
     let live = true;
+    // Never show one law's text under another's heading: clear before fetching.
+    setLoaded(undefined);
     if (s.mode === "read") {
       const date = s.date ?? today();
       // A code can carry thousands of articles: ask for the outline first and only pull
@@ -58,7 +60,7 @@ export default function App() {
           if (!live) return;
           const one = first<any>(res, (x) => Array.isArray(x?.provisions) && x.provisions.length > 0);
           const doc = one?.document ?? one;
-          setTitle(doc?.title);
+          setTitle(shorten(doc?.title));
           const items = (one?.provisions ?? []) as ProvisionItem[];
           setLoaded({ items, from: doc?.valid_from ?? date, to: doc?.valid_to });
           if (items.length === 0)
@@ -219,7 +221,6 @@ export default function App() {
          s.work && s.mode === "compare" ? <Compare work={s.work} from={s.date ?? today()} to={s.to ?? today()} anchor={s.anchor} /> :
          s.work && s.mode === "read" && loaded ? <Provision items={loaded.items} validFrom={loaded.from} validTo={loaded.to} work={s.work} onPick={(a) => go({ anchor: a })} /> :
          s.work ? <Empty>Loading…</Empty> :
-         space === "law" ? <Empty>Choose a law above, or ask a question.</Empty> :
          space === "time" ? <Empty>Pick a period above.</Empty> :
          <Intro onPick={submit} />}
       </div>
