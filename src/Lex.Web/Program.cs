@@ -19,6 +19,12 @@ if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("APPLICATIONINSIGHT
 }
 
 var app = builder.Build();
+app.UseStaticFiles();   // wwwroot: og.png (social preview card)
+
+// Absolute base for social-preview metadata; falls back to the canonical host so a
+// pasted link previews correctly even when the env var is unset.
+var publicBase = Environment.GetEnvironmentVariable("LEX_PUBLIC_BASE_URL")?.TrimEnd('/')
+                 ?? "https://law.soufien.lu";
 
 // ---- index registry: one LexIndexReader per mounted per-publisher index file (D27) ----
 var indexDir = Environment.GetEnvironmentVariable("LEX_INDEX_DIR")
@@ -50,6 +56,10 @@ string Page(string title, string body, string? subtitle = null) => $$"""
     <meta property="og:description" content="Point-in-time Luxembourg + EU law with grounded AI answers, per-article history, and verifiable provenance.">
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="Lex">
+    <meta property="og:image" content="{{publicBase}}/og.png">
+    <meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:image" content="{{publicBase}}/og.png">
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9A%96%3C/text%3E%3C/svg%3E">
     <style>
       :root { --bg:#ffffff; --fg:#16181d; --muted:#5c6470; --line:#e3e6ea; --accent:#0b57d0;
@@ -87,7 +97,7 @@ string Page(string title, string body, string? subtitle = null) => $$"""
       <a class="brand" href="/">Lex</a>
       <span class="tag">point-in-time regulatory text — what did the rule say on a given date?</span>
       <span style="flex:1"></span>
-      <a href="/browse">browse</a>&nbsp; <a href="/search">search</a>&nbsp; <a href="/in-force-on">in force on…</a>&nbsp; <a href="/architecture">architecture</a>&nbsp; <a href="/ai">use with your AI</a>&nbsp; <a href="/verify">verify</a>&nbsp; <a href="/coverage">coverage</a>&nbsp; <a href="https://github.com/SFHAJJI/lex" rel="noopener">github</a>
+      <a href="/stories">stories</a>&nbsp; <a href="/browse">browse</a>&nbsp; <a href="/search">search</a>&nbsp; <a href="/in-force-on">in force on…</a>&nbsp; <a href="/architecture">architecture</a>&nbsp; <a href="/ai">use with your AI</a>&nbsp; <a href="/verify">verify</a>&nbsp; <a href="/coverage">coverage</a>&nbsp; <a href="https://github.com/SFHAJJI/lex" rel="noopener">github</a>
     </header>
     <main>
     <h1>{{title}}</h1>
@@ -326,6 +336,7 @@ app.MapGet("/", () =>
           #chat .ev .evver { margin:4px 0 4px 10px }
           #chat .ev .pin { margin:4px 0 4px 14px; border-left:2px solid var(--line); padding-left:8px }
           #chat .ev .pin .q { color:var(--muted); font-style:italic }
+          #chat .share { margin:-6px 0 14px 2px; font-size:13.5px }
         </style>
         <script>
         (function () {
@@ -337,9 +348,13 @@ app.MapGet("/", () =>
             return esc(s).replace(/(https?:\/\/[^\s)"'<>]+)/g, '<a href="$1" rel="noopener">$1</a>');
           }
           function add(cls, html) { const d = document.createElement('div'); d.className = cls; d.innerHTML = html; chat.appendChild(d); d.scrollIntoView({block:'end'}); return d; }
+          // Every question is a URL: ?q=... re-runs it against the same signed indexes,
+          // so an answer can be pasted into a chat, a mail, a paper.
+          function shareLink(text) { return location.origin + '/?q=' + encodeURIComponent(text); }
           async function ask(text) {
             msgs.push({ role: 'user', content: text });
             add('msg u', esc(text));
+            if (msgs.length === 1) history.replaceState(null, '', '/?q=' + encodeURIComponent(text));
             const busy = add('t', 'thinking…');
             send.disabled = true;
             try {
@@ -392,6 +407,9 @@ app.MapGet("/", () =>
                   });
                   add('ev', html);
                 }
+                const first = msgs.find(m => m.role === 'user');
+                if (first) add('share', '<a href="' + esc(shareLink(first.content)) + '">🔗 share this answer</a> '
+                  + '<span class="sub">— the link re-runs the question against the same signed indexes</span>');
               }
             } catch (e) { busy.remove(); add('err', 'network error — try again'); msgs.pop(); }
             send.disabled = false; q.focus();
@@ -404,6 +422,9 @@ app.MapGet("/", () =>
           document.querySelectorAll('.hint').forEach(a => a.addEventListener('click', function (e) {
             e.preventDefault(); if (!send.disabled) ask(this.textContent);
           }));
+          // Shared link (?q=) or a story link: run it immediately on arrival.
+          const preset = new URLSearchParams(location.search).get('q');
+          if (preset && preset.trim()) ask(preset.trim().slice(0, 4000));
         })();
         </script>
         """;
@@ -726,6 +747,89 @@ app.MapGet("/search", (string? q, string? kind) =>
         }
     }
     return Results.Content(Page("Search", sb.ToString()), "text/html");
+});
+
+// ---- /stories: curated point-in-time narratives. Every figure is computed from the
+// mounted indexes at render time (a story that stops being true stops being shown).
+app.MapGet("/stories", () =>
+{
+    var sb = new StringBuilder();
+    sb.Append("""
+        <p>Point-in-time retrieval sounds abstract until you watch a law move. These are real
+        histories held by Lex — every number below is computed from the signed indexes as this
+        page renders, and every link lands on the evidence.</p>
+        """);
+
+    void Story(string publisher, string work, string headline, string lede, string askQuestion)
+    {
+        if (!readers.TryGetValue(publisher, out var r)) return;
+        // One version = one validity date. A bilingual work (DE+FR) carries two rows per
+        // date; counting rows would inflate the figure a reader can check by hand.
+        var vs = r.Timeline(work)
+            .GroupBy(v => v.ValidFrom, StringComparer.Ordinal)
+            .Select(g => g.First())
+            .OrderBy(v => v.ValidFrom, StringComparer.Ordinal)
+            .ToList();
+        if (vs.Count == 0) return;
+        var first = vs[0];
+        var last = vs[^1];
+        // amendment cadence: median gap between consecutive versions
+        var dates = vs.Select(v => DateOnly.TryParse(v.ValidFrom, out var d) ? d : (DateOnly?)null)
+                      .Where(d => d.HasValue).Select(d => d!.Value).OrderBy(d => d).ToList();
+        var gaps = dates.Zip(dates.Skip(1), (a, b) => b.DayNumber - a.DayNumber).OrderBy(g => g).ToList();
+        var median = gaps.Count > 0 ? gaps[gaps.Count / 2] : 0;
+        var shortest = gaps.Count > 0 ? gaps[0] : 0;
+        var mid = vs[vs.Count / 2];
+
+        sb.Append($"""
+            <div class="card">
+              <h2 style="margin:0 0 4px">{H(headline)}</h2>
+              <p class="sub" style="margin:0 0 10px">{lede}</p>
+              <p><span class="badge">{vs.Count:n0} versions</span>
+                 <span class="badge">{H(first.ValidFrom)} → {H(last.ValidFrom)}</span>
+                 {(median > 0 ? $"<span class=\"badge\">amended every {median} days (median)</span>" : "")}
+                 {(shortest > 0 ? $"<span class=\"badge\">shortest-lived version: {shortest} day{(shortest == 1 ? "" : "s")}</span>" : "")}</p>
+              <p><a href="/{H(publisher)}/{H(work)}">every version</a> ·
+                 <a href="/{H(publisher)}/{H(work)}/{H(first.ValidFrom)}">the first text</a> ·
+                 <a href="/{H(publisher)}/{H(work)}/diff/{H(first.ValidFrom)}/{H(mid.ValidFrom)}">what changed by {H(mid.ValidFrom)}</a> ·
+                 <a href="/{H(publisher)}/{H(work)}/{H(last.ValidFrom)}">the text today</a></p>
+              <p class="sub">Ask the assistant: <a href="/?q={Uri.EscapeDataString(askQuestion)}">{H(askQuestion)}</a></p>
+            </div>
+            """);
+    }
+
+    Story("lu-legilux", "loi-2020-07-17-a624",
+        "The law that could not sit still",
+        "Luxembourg's Covid-19 measures act. Rules on gatherings, masks and closures were rewritten again and again — "
+        + "which is exactly when \"what did the rule say <i>that week</i>?\" stops being an academic question.",
+        "How did the Luxembourg Covid-19 law change between July 2020 and July 2021?");
+
+    Story("lu-legilux", "constitution-1868-10-17-n1",
+        "A constitution, revised in public",
+        "The Luxembourg constitution, from the early twentieth century to the 2023 reform — the same document, "
+        + "re-consolidated after every revision, each state still retrievable.",
+        "What changed in the Luxembourg constitution in 2023?");
+
+    Story("eu-eurlex", "32013r0575",
+        "Banking rules in waves",
+        "The Capital Requirements Regulation — the rulebook a Luxembourg bank must apply. Its own Article 92 "
+        + "(the capital ratios) has more than one lifetime.",
+        "How has Article 92 of the CRR changed over its life?");
+
+    Story("lu-legilux", "loi-1879-06-18-n1",
+        "The criminal code is a moving target",
+        "Luxembourg's penal code has been re-consolidated repeatedly in the last decade. Point-in-time matters most "
+        + "where the question is what was punishable on the day of the act.",
+        "Que disait le Code pénal luxembourgeois au 1er janvier 2020 ?");
+
+    sb.Append("""
+        <div class="card"><b>The honest half.</b> A demo that only shows wins is a brochure.
+          <a href="/lu-legilux/rgd-1998-08-03-n4/1900-01-01">Ask for a law in 1900</a> and Lex refuses,
+          with a reason code, instead of inventing a plausible text —
+          <a href="/coverage">here is exactly what it holds and what it lacks</a>.</div>
+        """);
+    return Results.Content(Page("Stories — watch the law move", sb.ToString(),
+        "four real histories from the Luxembourg and EU corpora, computed live"), "text/html");
 });
 
 app.MapGet("/provenance/{*key}", (string key) =>
