@@ -34,11 +34,21 @@ Or ask the [live site](https://law.soufien.lu). A real answer, verbatim:
 > 4,5 %; (b) a Tier 1 capital ratio of 6 %; (c) a total capital ratio of 8 %."*
 > — `eu-eurlex:32013r0575:2019-12-25` (valid 2019-12-25 → 2020-06-26),
 > [permalink](https://law.soufien.lu/eu-eurlex/32013r0575/2019-12-25#art_92).
-> Article 92 has had two distinct texts: 2013-06-28 → 2019-12-24 and
-> 2019-12-25 onward — each with its own permalink and sha256.
+>
+> Article 92 has had **four distinct texts** since 2013 — 2013-06-28 → 2021-06-28,
+> 2021-06-29 → 2022-12-31, 2023-01-01 → 2024-12-31, 2025-01-01 onward — each with
+> its own permalink and sha256.
 
 Every claim in that answer came from a deterministic tool call (the trace is
 shown under each reply); the model never answers from its own memory.
+Do not take this file's word for it — the numbers above are checkable in one call,
+and if they ever drift from the live system, that is a bug worth reporting:
+
+```bash
+curl -s -X POST https://law.soufien.lu/mcp -H 'Content-Type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"article_history",
+       "arguments":{"work":"eu-eurlex:32013r0575","anchor":"art_92"}}}'
+```
 
 ## Who uses this
 
@@ -47,7 +57,7 @@ shown under each reply); the model never answers from its own memory.
 - **A legal-tech developer** building RAG over law that must not hallucinate
   versions: per-article chunks with `valid_from`/`valid_to` to filter *before*
   similarity ([dataset](https://github.com/SFHAJJI/lex-articles)).
-- **An AI agent** using the 8 MCP tools directly — the same tools the site's
+- **An AI agent** using the 9 MCP tools directly — the same tools the site's
   own AI uses, at the same endpoint.
 - **A researcher** tracking how one article's text evolved across amendments
   (`article_history`: every distinct text state, dated).
@@ -61,7 +71,7 @@ No component in this system generates interpretive text (fitness rule F10).
 ## Architecture (one screen)
 
 ```
-APPS        Lex.Ingest (CLI)   Lex.Mcp (MCP server, 8 tools)   Lex.Web (demo)   Lex.Ask (AI loop)
+APPS        Lex.Ingest (CLI)   Lex.Mcp (MCP server, 9 tools)   Lex.Web (demo)   Lex.Ask (AI loop)
 DERIVED     Lex.Derive — evidence -> per-article Markdown+JSON (immutable profiles: akn-lu/1, fmx4-eu/1, xhtml-eu/1)
 ADAPTERS    Lex.Sources.Legilux (Tier A, SPARQL)   Lex.Sources.EurLex (Tier A, Cellar + Formex)
 MODEL       Lex.Law — Publisher, Work, Version, Expression, Observation. No publisher names.
@@ -118,9 +128,11 @@ LEX_INDEX_DIR=indexes dotnet run --project src/Lex.Mcp
 ## MCP tools
 
 `as_of` (full / outline / per-article select) · `timeline` · `in_force_on` ·
-`diff` · `search` · `provenance` · `article_history` · `coverage` — coverage
-exists to say what we do **not** have; a system that cannot state its own gaps
-cannot be trusted with a completeness question.
+`diff` · `search` · `provenance` · `article_history` · `changes_in_period` ·
+`coverage` — `changes_in_period` answers across the corpus ("which laws moved
+most in this window"), the aggregate counterpart of `diff` and `timeline`; and
+`coverage` exists to say what we do **not** have, because a system that cannot
+state its own gaps cannot be trusted with a completeness question.
 
 ## Contributing
 
