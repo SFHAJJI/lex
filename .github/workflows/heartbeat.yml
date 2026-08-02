@@ -1,0 +1,98 @@
+name: heartbeat
+
+# A dead-man's check for the nightly pipeline.
+#
+# Every failure mode the fleet already handles is a LOUD one: a bad ingest opens an issue, a
+# non-deterministic derive refuses to commit. The mode nothing covered is silence — GitHub
+# disables scheduled workflows after 60 days of repository inactivity, a personal access token
+# expires, a billing lapse pauses Actions. In every one of those cases the cron simply never
+# fires: no run, no failure, no issue. The site keeps serving a stale index that still reports
+# "signature valid", and the first person to notice is a visitor reading last month's law.
+#
+# This job runs from a DIFFERENT repository to the one being watched, so it survives the thing
+# it is watching for, and asks one question: has lex-ops recorded a nightly run recently?
+on:
+  schedule:
+    - cron: "0 9 * * *"      # 09:00 UTC — hours after the 02:17 nightly, so a slow run is not a false alarm
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  freshness:
+    runs-on: ubuntu-latest
+    steps:
+      - name: check that the fleet reported recently
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.LEX_OPS_TOKEN }}
+        run: |
+          set -uo pipefail
+          # lex-ops is private: read its newest status commit through the API.
+          last=$(gh api repos/SFHAJJI/lex-ops/commits --jq '.[0].commit.committer.date' 2>/dev/null || echo "")
+          if [ -z "$last" ]; then
+            echo "reason=Could not read lex-ops at all — the ops token may have expired." >> "$GITHUB_OUTPUT"
+            echo "stale=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          age=$(( ( $(date -u +%s) - $(date -u -d "$last" +%s) ) / 3600 ))
+          echo "last lex-ops commit: $last (${age}h ago)"
+          if [ "$age" -gt 30 ]; then
+            echo "reason=No nightly status has been committed for ${age} hours (last: $last)." >> "$GITHUB_OUTPUT"
+            echo "stale=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "stale=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: check that the served index is not stale
+        id: served
+        run: |
+          set -uo pipefail
+          built=$(curl -sS -m 30 -X POST https://law.soufien.lu/mcp \
+            -H 'Content-Type: application/json' \
+            -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"coverage","arguments":{}}}' \
+            | grep -o '"built_at": *"[^"]*"' | head -1 | cut -d'"' -f4)
+          if [ -z "$built" ]; then
+            echo "reason=law.soufien.lu did not answer a coverage call." >> "$GITHUB_OUTPUT"
+            echo "stale=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          age=$(( ( $(date -u +%s) - $(date -u -d "$built" +%s) ) / 86400 ))
+          echo "served index built: $built (${age}d ago)"
+          # The index is only rebuilt when a corpus advances, so several quiet days are normal;
+          # three weeks is not, and means the pipeline stopped without saying so.
+          if [ "$age" -gt 21 ]; then
+            echo "reason=The live index was built ${age} days ago (${built})." >> "$GITHUB_OUTPUT"
+            echo "stale=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "stale=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: raise or update the alarm
+        if: steps.check.outputs.stale == 'true' || steps.served.outputs.stale == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -uo pipefail
+          title="heartbeat: the nightly pipeline has gone quiet"
+          body="The dead-man's check fired.
+
+          - fleet: ${{ steps.check.outputs.reason }}
+          - served index: ${{ steps.served.outputs.reason }}
+
+          Silence is the one failure the fleet cannot report on its own. Likely causes, in order:
+          GitHub disabled the schedule after 60 days of repository inactivity; \`LEX_OPS_TOKEN\`
+          expired; Actions is paused. Re-run \`nightly-fleet\` manually to confirm.
+
+          Checked at $(date -u +%FT%TZ)."
+          # One issue, reopened and updated — not one per day.
+          existing=$(gh issue list --repo "$GITHUB_REPOSITORY" --state all --search "$title in:title" \
+                       --json number,state --jq '.[0]' 2>/dev/null || echo "")
+          if [ -n "$existing" ] && [ "$existing" != "null" ]; then
+            n=$(echo "$existing" | grep -o '"number":[0-9]*' | cut -d: -f2)
+            gh issue reopen "$n" --repo "$GITHUB_REPOSITORY" 2>/dev/null || true
+            gh issue comment "$n" --repo "$GITHUB_REPOSITORY" --body "$body"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "$body"
+          fi
+          exit 1
