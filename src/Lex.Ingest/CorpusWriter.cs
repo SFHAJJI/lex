@@ -166,27 +166,40 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now)
                     // Append-only like bodies; re-attempted nightly until the publisher serves it.
                     foreach (var (exprMeta, exprRec) in meta.Expressions.Zip(v.Expressions))
                     {
-                        if (exprMeta.Observations.Any(o => o.Format is not null)) continue;   // already observed
-                        var alt = await adapter.FetchAltManifestation(v, exprRec, ct);
-                        if (alt is null) continue;
-                        var altDirName = $"{exprMeta.Language}.{alt.Format}";
-                        var altDir = Path.Combine(versionDir, altDirName);
-                        Directory.CreateDirectory(altDir);
-                        foreach (var member in alt.Members)
+                        var hasAlt = exprMeta.Observations.Any(o => o.Format is not null);
+                        if (!hasAlt)
                         {
-                            var memberPath = Path.Combine(altDir, member.Name);
-                            if (!File.Exists(memberPath)) await File.WriteAllBytesAsync(memberPath, member.Bytes, ct);
-                            exprMeta.Observations.Add(new ObservationEntry
+                            var alt = await adapter.FetchAltManifestation(v, exprRec, ct);
+                            if (alt is not null)
                             {
-                                File = $"{altDirName}/{member.Name}",
-                                Sha256 = Convert.ToHexStringLower(SHA256.HashData(member.Bytes)),
-                                SourceUri = alt.SourceUri,
-                                RetrievedAt = _now,
-                                ObservedFrom = _now,
-                                Format = alt.Format,
-                            });
+                                var altDirName = $"{exprMeta.Language}.{alt.Format}";
+                                var altDir = Path.Combine(versionDir, altDirName);
+                                Directory.CreateDirectory(altDir);
+                                foreach (var member in alt.Members)
+                                {
+                                    var memberPath = Path.Combine(altDir, member.Name);
+                                    if (!File.Exists(memberPath)) await File.WriteAllBytesAsync(memberPath, member.Bytes, ct);
+                                    exprMeta.Observations.Add(new ObservationEntry
+                                    {
+                                        File = $"{altDirName}/{member.Name}",
+                                        Sha256 = Convert.ToHexStringLower(SHA256.HashData(member.Bytes)),
+                                        SourceUri = alt.SourceUri,
+                                        RetrievedAt = _now,
+                                        ObservedFrom = _now,
+                                        Format = alt.Format,
+                                    });
+                                }
+                                hasAlt = true;
+                                bodyAdded = true;
+                            }
                         }
-                        bodyAdded = true;
+                        // an alt manifestation IS observed text: versions whose primary body was
+                        // never fetchable (size cap, 404) become text-available through it
+                        if (hasAlt && !exprMeta.Text.Available)
+                        {
+                            exprMeta.Text = new TextInfo { Available = true, Url = exprMeta.Text.Url ?? exprRec.SourceUri };
+                            bodyAdded = true;
+                        }
                     }
                 }
 
