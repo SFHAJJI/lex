@@ -113,6 +113,40 @@ public class McpContractTests : IDisposable
         Assert.Equal("anchor_not_in_version", Status(o));
     }
 
+    // Every mode of as_of that has provisions must expose them under the same key, in the same
+    // shape. full — the DEFAULT mode — returned only a concatenated body, so a client reading
+    // `provisions` uniformly got nothing back for a law held in full and reported it missing.
+    // Nothing else caught it: the call succeeded, the envelope said "ok", the payload was
+    // well-formed JSON, and the bytes were all present under a different key.
+    [Theory]
+    [InlineData("full")]
+    [InlineData("outline")]
+    public void Every_mode_exposes_provisions_under_the_same_key(string mode)
+    {
+        var o = Call("as_of", new JsonObject
+        {
+            ["work"] = "t-pub:w1", ["date"] = "2022-06-01", ["mode"] = mode,
+        });
+
+        var provisions = Assert.IsType<JsonArray>(o["provisions"]);
+        Assert.NotEmpty(provisions);
+        Assert.Equal("art_1", provisions[0]!["anchor"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void Full_carries_the_text_and_carries_it_once()
+    {
+        var o = Call("as_of", new JsonObject
+        {
+            ["work"] = "t-pub:w1", ["date"] = "2022-06-01", ["mode"] = "full",
+        });
+
+        Assert.Equal("the thing shall apply everywhere, revised",
+                     o["provisions"]![0]!["text"]!.GetValue<string>());
+        // …and not a second time as a concatenated blob: one payload, one copy of the text.
+        Assert.Null(o["document"]!["text"]);
+    }
+
     [Fact]
     public void Article_history_refuses_when_no_per_article_history_is_held()
         => Assert.Contains(

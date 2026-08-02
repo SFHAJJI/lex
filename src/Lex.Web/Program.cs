@@ -45,7 +45,9 @@ Console.Error.WriteLine($"[web] /ask playground: {(askService.Enabled ? "enabled
 
 string H(string? s) => System.Net.WebUtility.HtmlEncode(s ?? "");
 
-string Page(string title, string body, string? subtitle = null, string nav = "") => $$"""
+// `title` is what search engines and social cards get; `h1` is what a reader sees, when the
+// two want to be different sentences.
+string Page(string title, string body, string? subtitle = null, string nav = "", string? h1 = null) => $$"""
     <!DOCTYPE html>
     <html lang="en">
     <head>
@@ -129,7 +131,7 @@ string Page(string title, string body, string? subtitle = null, string nav = "")
       <a class="navlink{{(nav == "built" ? " on" : "")}}" href="/built">how it was built</a>
     </header>
     <main>
-    <h1>{{title}}</h1>
+    <h1>{{h1 ?? title}}</h1>
     {{(subtitle is null ? "" : $"<p class=\"sub\">{subtitle}</p>")}}
     {{body}}
     </main>
@@ -143,11 +145,12 @@ string Page(string title, string body, string? subtitle = null, string nav = "")
       <a href="/developers">Developers &amp; API</a> ·
       <a href="https://github.com/SFHAJJI/lex" rel="noopener">Source</a>
     </nav>
+      <b>Not legal advice, and not the official text.</b> Lex answers <i>what the rule was</i>, never what it
+      means for your situation — no interpretation, no advice. Every answer shows the source it came from.
       LU data: Legilux — Ministère d'État, Service central de législation, Grand-Duché de Luxembourg
       (CC-BY 4.0, metadata and content files; consolidated texts reproduced verbatim from the official filestore).
       EU data: © European Union, reuse with attribution (Commission Decision 2011/833/EU);
       <b>consolidated texts have no legal effect</b> — only acts published in the Official Journal are authentic.
-      Lex answers <i>what the rule was</i>, never what it means — no interpretation, no advice.
       · <a href="https://github.com/SFHAJJI/lex">source</a>
     </footer>
     </body></html>
@@ -336,29 +339,15 @@ app.MapGet("/", () =>
         <span class="badge">9 MCP tools</span>
         <span class="badge">Luxembourg + EU</span></p>
         """;
-    // Story cards: same source as /stories, computed live so a figure can never drift into fiction.
-    string StoryCard(string publisher, string work, string title, string sub)
-    {
-        if (!readers.TryGetValue(publisher, out var rr)) return "";
-        var vs = rr.Timeline(work).GroupBy(v => v.ValidFrom, StringComparer.Ordinal).Select(g => g.First())
-                   .OrderBy(v => v.ValidFrom, StringComparer.Ordinal).ToList();
-        if (vs.Count == 0) return "";
-        var ds = vs.Select(v => DateOnly.TryParse(v.ValidFrom, out var d) ? d : (DateOnly?)null)
-                   .Where(d => d.HasValue).Select(d => d!.Value).ToList();
-        var gaps = ds.Zip(ds.Skip(1), (a, b) => b.DayNumber - a.DayNumber).OrderBy(g => g).ToList();
-        var med = gaps.Count > 0 ? gaps[gaps.Count / 2] : 0;
-        return $"""
-            <a class="story" href="/{H(publisher)}/{H(work)}">
-              <b>{H(title)}</b><em>{H(sub)}</em>
-              <span class="big">{vs.Count} versions</span>
-              <em>{(med > 0 ? $"rewritten every {med} days" : "")}</em></a>
-            """;
-    }
-
-    var body = """
-        <p class="lede">Ask in plain language. Get the exact text that applied that day —
-        and the official source it came from.</p>
-
+    // The thesis of the whole project, said once, at the top. It used to sit below three
+    // promotional cards, where the visitors most likely to bounce never reached it — while
+    // the sentence above the fold merely announced that the site answers questions.
+    var body = $"""
+        <p class="lede">It is a different document on every date it was amended. Lex holds
+        <b>{cov.Sum(c => c.Groups):n0}</b> Luxembourg and EU laws as <b>{cov.Sum(c => c.Rows):n0}</b> dated
+        snapshots, exactly as the official publishers issued them — ask what any of them said on any day.</p>
+        """
+        + """
         <!-- The workspace mounts here. Without JavaScript the page still explains itself
              and every permalink below still works — those are server-rendered documents. -->
         <div id="workspace"><noscript><p class="sub">The interactive workspace needs JavaScript.
@@ -367,54 +356,32 @@ app.MapGet("/", () =>
         """
         + $"""
         <div class="frontdoor">
-        <div class="storyrow">
-          {StoryCard("lu-legilux", "loi-2020-07-17-a624", "The law that could not sit still", "Covid measures act, 2020–2024")}
-          {StoryCard("lu-legilux", "constitution-1868-10-17-n1", "A constitution, revised in public", "Luxembourg, 1919 → the 2023 reform")}
-          <a class="story" href="/lu-legilux/rgd-1998-08-03-n4/1900-01-01">
-            <b>Ask for 1900. Watch it refuse.</b><em>the honest half of the demo</em>
-            <span class="big">no guess</span><em>it says what it does not have</em></a>
-        </div>
-
-        <h2>What this is</h2>
-        <p>A law is not one document — it is a different document on every date it was amended.
-        Lex holds {cov.Sum(c => c.Groups):n0} Luxembourg and EU laws as {cov.Sum(c => c.Rows):n0} dated
-        snapshots, exactly as the official publishers issued them, and answers the only question that
-        matters in practice: <b>what did the rule say on that day?</b></p>
-        <p class="sub"><b>Not legal advice, and not the official text.</b> Consolidated versions have no
-        legal force — only the official gazette does. Lex reports what a text said; never what it means
-        for your situation. Every answer shows the source it came from, so you never have to take its
-        word for anything. <a href="/how-it-works">How it works →</a></p>
-
-        <p class="sub" style="margin-top:22px">
-        <span class="badge">{cov.Sum(c => c.Groups):n0} laws</span>
-        <span class="badge">{cov.Sum(c => c.Rows):n0} dated versions</span>
+        <p class="sub">
         <span class="badge">{cov.Sum(c => c.TextServed):n0} with full text</span>
         <span class="badge">{H(cov.Select(c => c.EarliestValidFrom).Min())} → {H(cov.Select(c => c.LatestValidFrom).Max())}</span>
         <span class="badge ok">cryptographically signed</span>
-        <span class="badge">updated nightly</span></p>
+        <span class="badge">updated nightly</span>
+        <a href="/how-it-works">How it works →</a></p>
         <p class="sub">Free public assistant with a daily limit.
-        <a href="/developers">Connect your own AI</a> for unlimited use.</p>
+        <a href="/developers">Connect your own AI</a> for unlimited use. Worked examples in
+        <a href="/stories">stories</a>.</p>
         </div>
         """
-        // Story cards keep their styles; the workspace ships its own stylesheet.
         + """
         <style>
-          .lede { font-size:18px; color:var(--muted); margin:0 0 18px; max-width:62ch }
+          .lede { font-size:18px; color:var(--muted); margin:0 0 20px; max-width:62ch }
+          .lede b { color:var(--fg); font-variant-numeric:tabular-nums }
           /* Once a law, a period or a search is loaded, the front-door content is noise.
              The workspace sets data-workspace on <body>; everything promotional steps aside. */
-          body[data-workspace="active"] .frontdoor { display:none }
-          .storyrow { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:14px; margin:30px 0 10px }
-          a.story { display:block; border:1px solid var(--line); border-radius:10px; padding:15px; color:inherit; background:var(--card) }
-          a.story:hover { border-color:var(--accent); text-decoration:none }
-          a.story b { font-family:var(--serif); font-size:16px; display:block; margin-bottom:3px }
-          a.story em { font-style:normal; font-size:13px; color:var(--muted); display:block }
-          a.story .big { font-family:var(--serif); font-size:25px; color:var(--accent); display:block;
-                         margin:9px 0 2px; line-height:1; font-variant-numeric:tabular-nums }
+          body[data-workspace="active"] .frontdoor,
+          body[data-workspace="active"] .lede,
+          body[data-workspace="active"] main > h1 { display:none }
         </style>
         <link rel="stylesheet" href="/app/workspace.css">
         <script type="module" src="/app/workspace.js"></script>
         """;
-    return Results.Content(Page("Luxembourg and EU law, as it stood on any date.", body, null, "ask"), "text/html");
+    return Results.Content(Page("Luxembourg and EU law, as it stood on any date.", body, null, "ask",
+        h1: "A law is not one document."), "text/html");
 });
 
 app.MapPost("/api/ask", async (HttpRequest req) =>

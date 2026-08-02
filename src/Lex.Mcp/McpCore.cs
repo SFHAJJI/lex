@@ -286,7 +286,28 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                     }
                     default:
                     {
-                        o["document"] = DocJson(doc with { Body = doc.TextPublic ? r.BuildBody(doc) : null }, withText: true);
+                        // full = every provision, with text. It used to return only the
+                        // concatenated body, so `provisions` was the one thing full mode did
+                        // NOT carry — while outline and select both did. Every client reading
+                        // provisions uniformly (the workspace reader, the answer-to-view
+                        // mapper) therefore saw an empty result for a document that has text,
+                        // and reported "no text is held" for laws Lex holds in full. full is
+                        // also as_of's DEFAULT mode, so this was the common path, not a corner.
+                        //
+                        // The text is returned exactly once, in the most structured form
+                        // available: as provisions when the version is split into them, and as
+                        // document.text when it is not.
+                        var all = r.Provisions(rid);
+                        if (all.Count > 0)
+                        {
+                            o["document"] = DocJson(doc, withText: false);
+                            o["provisions"] = new JsonArray(all
+                                .Select(p => (JsonNode)ProvisionJson(doc, p, withText: doc.TextPublic)).ToArray());
+                        }
+                        else
+                        {
+                            o["document"] = DocJson(doc with { Body = doc.TextPublic ? r.BuildBody(doc) : null }, withText: true);
+                        }
                         break;
                     }
                 }

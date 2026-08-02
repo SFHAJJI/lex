@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { first, tool, type ProvisionItem, type RankingRow, type UiEffect } from "./api";
 import { diffWords, changed, type Piece } from "./diff";
 import { publisherOf, workSlug, type State } from "./state";
@@ -6,81 +6,177 @@ import { publisherOf, workSlug, type State } from "./state";
 const permalink = (work: string, date: string, anchor?: string) =>
   `/${publisherOf(work)}/${workSlug(work)}/${date}${anchor ? `#${anchor}` : ""}`;
 
-export function Provision({ items, validFrom, validTo, work, onPick }: {
-  items: ProvisionItem[]; validFrom: string; validTo?: string; work: string;
-  onPick: (anchor: string) => void;
+const ms = (d: string) => Date.parse(`${d}T00:00:00Z`);
+
+/**
+ * The reader: the law's structure on the left, its text on the right.
+ *
+ * The outline used to appear only for laws too large to render, and vanished the moment you
+ * opened an article — so re-dating dropped you at the top of a document you were reading the
+ * middle of. It is the one control a point-in-time reader uses constantly, so it stays put.
+ */
+export function Provision({ items, toc, validFrom, validTo, work, anchor, onPick, onClear }: {
+  items: ProvisionItem[]; toc: ProvisionItem[]; validFrom: string; validTo?: string;
+  work: string; anchor?: string; onPick: (anchor: string) => void; onClear: () => void;
 }) {
-  // A large law arrives as an outline (no text). A flat list of 1,160 articles is not a
-  // table of contents — legislation.gov.uk serves an 845 KB hierarchical ToC where a flat
-  // render of the same act is 13.9 MB. Provisions already carry their Book/Title/Chapter
-  // path, so group by the top level and let the reader drill in.
-  const outline = items.length > 0 && items.every((p) => !p.text);
-  if (outline) return <Outline items={items} validFrom={validFrom} validTo={validTo} onPick={onPick} />;
-  return (
-    <>
+  const outlineOnly = items.length > 0 && items.every((p) => !p.text);
+  const nav = toc.length >= 6 || outlineOnly;
+  const body = (
+    <div className="text">
       <div className="cnt">
         <span className="tag">in force {validFrom} → {validTo ?? "open"}</span>
-        <span className="tag">{items.length} article{items.length === 1 ? "" : "s"}</span>
-        {outline ? <span className="tag">outline — pick an article to read it</span> : null}
+        {anchor ? (
+          <button className="tag act" onClick={onClear}>article {anchor} ✕</button>
+        ) : (
+          <span className="tag">{items.length} article{items.length === 1 ? "" : "s"}</span>
+        )}
       </div>
-      {outline ? (
-        <ul className="rows">
-          {items.map((p) => (
-            <li key={p.anchor}>
-              <button className="rowbtn" onClick={() => onPick(p.anchor)}>
-                <span>{p.num ?? p.anchor}{p.heading ? ` — ${p.heading}` : ""}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
+      {outlineOnly ? (
+        // A blank pane next to a table of contents is a dead end. Offer the thing a reader
+        // opening a code actually wants: the first article, one click away.
+        <div className="empty">
+          <p>{toc.length.toLocaleString()} articles — too many to render at once.
+             Pick one from the contents, or start at the beginning.</p>
+          {toc.length > 0 ? (
+            <button className="chip" onClick={() => onPick(toc[0].anchor)}>
+              Read from {toc[0].num ?? toc[0].anchor} →
+            </button>
+          ) : null}
+        </div>
       ) : items.map((p) => (
-        <article key={p.anchor} className="art">
+        <article key={p.anchor} className="art" id={p.anchor}>
           <h4>
             <a href={permalink(work, validFrom, p.anchor)}>{p.num ?? p.anchor}</a>
-            {p.heading ? <span className="sub"> — {p.heading}</span> : null}
+            {p.heading ? <span className="sub"> — {plain(p.heading)}</span> : null}
           </h4>
           <div className="lawtxt">{p.text}</div>
           {p.sha ? <div className="sha">sha256 {p.sha.slice(0, 16)}…</div> : null}
         </article>
       ))}
-    </>
+    </div>
+  );
+  if (!nav) return body;
+  return (
+    <div className="reader">
+      <aside className="toccol"><Outline items={toc} current={anchor} onPick={onPick} /></aside>
+      {body}
+    </div>
   );
 }
 
-export function HistoryRail({ states, anchor, work }: {
-  states: { valid_from: string; valid_to?: string; sha?: string }[]; anchor: string; work: string;
+/**
+ * Every version of what is on screen, always visible.
+ *
+ * Read / History / Compare were three tabs over ONE dimension — one point in time, all of
+ * them, two of them — and each tab discarded the others' state. The rail collapses them:
+ * click a version to read it, shift-click a second to compare the pair. There is nothing to
+ * navigate to, because the history is the navigation. Scope follows the reader: with an
+ * article open it shows that article's distinct texts, otherwise the law's own versions.
+ */
+export function VersionRail({ dates, current, compareTo, scope, today, onPick, onCompare, onClear }: {
+  dates: string[]; current?: string; compareTo?: string; scope: string; today: string;
+  onPick: (d: string) => void; onCompare: (d: string) => void; onClear: () => void;
 }) {
-  if (states.length === 0) return <Empty>No recorded history for this article.</Empty>;
-  const t = (d: string) => Date.parse(`${d}T00:00:00Z`);
-  const lo = t(states[0].valid_from);
-  const hi = t(states[states.length - 1].valid_from);
-  const span = Math.max(1, hi - lo);
+  const box = useRef<HTMLDivElement>(null);
+  const [w, setW] = useState(720);
+
+  useLayoutEffect(() => {
+    const el = box.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(([e]) => setW(e.contentRect.width));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  if (dates.length === 0) return null;
+  const i = current ? dates.indexOf(current) : -1;
+  const j = compareTo ? dates.indexOf(compareTo) : -1;
+  const xs = layout(dates, w);
+  const labels = labelled(dates, xs, w, i, j);
+  const ahead = dates.filter((d) => d > today).length;
+  const gaps = dates.slice(1).map((d, k) => (ms(d) - ms(dates[k])) / 86400000).sort((a, b) => a - b);
+  const median = gaps.length ? Math.round(gaps[Math.floor(gaps.length / 2)]) : 0;
+  const [a, b] = i >= 0 && j >= 0 ? [Math.min(xs[i], xs[j]), Math.max(xs[i], xs[j])] : [0, 0];
+
   return (
-    <>
-      <div className="cnt">
-        <span className="tag">{states.length} distinct text{states.length === 1 ? "" : "s"}</span>
-        <span className="tag">{anchor}</span>
+    <div className="railbox">
+      <div className="railhead">
+        <span className="tag">{dates.length} {scope}</span>
+        {median > 0 ? <span className="tag">every {median} days (median)</span> : null}
+        {ahead > 0 ? <span className="tag warn">{ahead} not yet in force</span> : null}
+        {/* Keyed off compareTo, not off finding it on the rail: a compared date need not be one
+            of these ticks (article texts are a subset of the law's versions), and a comparison
+            with no visible way out is a trap. */}
+        {compareTo ? (
+          <button className="tag act" onClick={onClear}>
+            comparing {current && current < compareTo ? current : compareTo} →{" "}
+            {current && current < compareTo ? compareTo : current} ✕
+          </button>
+        ) : (
+          <span className="hint">shift-click a second version to compare</span>
+        )}
+        <span className="grow" />
+        <button className="stepbtn" disabled={i <= 0} aria-label="Previous version"
+                onClick={() => onPick(dates[i - 1])}>←</button>
+        <button className="stepbtn" disabled={i < 0 || i >= dates.length - 1} aria-label="Next version"
+                onClick={() => onPick(dates[i + 1])}>→</button>
       </div>
-      <div className="rail">
+      <div className="rail" ref={box}>
         <div className="axis" />
-        {states.map((s) => (
-          <a key={s.valid_from} className="tick"
-             style={{ left: `${((t(s.valid_from) - lo) / span) * 97 + 1.5}%` }}
-             href={permalink(work, s.valid_from, anchor)} title={s.valid_from} />
+        {j >= 0 ? <div className="band" style={{ left: a, width: Math.max(2, b - a) }} /> : null}
+        {dates.map((d, k) => (
+          <button key={d}
+                  className={`tick${k === i ? " on" : ""}${k === j ? " cmp" : ""}${d > today ? " future" : ""}`}
+                  style={{ left: xs[k] }} title={`${d}${d > today ? " — not yet in force" : ""}`}
+                  tabIndex={labels.has(k) || k === i ? 0 : -1}
+                  aria-label={`${d}${k === i ? " (showing)" : ""}`}
+                  onClick={(e) => (e.shiftKey ? onCompare(d) : onPick(d))} />
+        ))}
+        {[...labels].map((k) => (
+          <span key={k} className={`rlbl${k === i ? " on" : ""}`} style={{ left: xs[k] }}>{dates[k]}</span>
         ))}
       </div>
-      <ol className="states">
-        {states.map((s) => (
-          <li key={s.valid_from}>
-            <a href={permalink(work, s.valid_from, anchor)}>
-              <b>{s.valid_from}</b> → {s.valid_to ?? "open"}
-            </a>
-            {s.sha ? <span className="sha"> {s.sha.slice(0, 12)}</span> : null}
-          </li>
-        ))}
-      </ol>
-    </>
+    </div>
   );
+}
+
+/**
+ * Time-proportional, so the rhythm of amendment stays legible — a law rewritten every three
+ * weeks looks nothing like one revised twice a century. Then ticks are pushed apart to keep a
+ * clickable target each, because proportional alone collapses dense runs into an unhittable smear.
+ */
+function layout(dates: string[], width: number): number[] {
+  const pad = 12;
+  const usable = Math.max(1, width - pad * 2);
+  const lo = ms(dates[0]);
+  const span = Math.max(1, ms(dates[dates.length - 1]) - lo);
+  const xs = dates.map((d) => pad + ((ms(d) - lo) / span) * usable);
+  const min = Math.min(9, usable / Math.max(1, dates.length - 1));
+  for (let k = 1; k < xs.length; k++) xs[k] = Math.max(xs[k], xs[k - 1] + min);
+  const last = xs.length - 1;
+  if (xs[last] > pad + usable) {
+    xs[last] = pad + usable;
+    for (let k = last - 1; k >= 0; k--) xs[k] = Math.min(xs[k], xs[k + 1] - min);
+  }
+  return xs;
+}
+
+/** As many date labels as fit without touching; the version on screen always keeps its own. */
+function labelled(dates: string[], xs: number[], width: number, cur: number, cmp: number): Set<number> {
+  const W = 82;
+  const room = Math.max(2, Math.floor(width / W));
+  const placed: number[] = [];
+  const keep = new Set<number>();
+  const fits = (k: number) => placed.every((p) => Math.abs(xs[p] - xs[k]) >= W);
+  // Priority: what you are reading, what you are comparing against, then the two ends,
+  // then an even spread through whatever room is left.
+  const order = [cur, cmp, 0, dates.length - 1];
+  for (let k = 0; k < dates.length; k++) order.push(k);
+  for (const k of order) {
+    if (k < 0 || keep.has(k) || keep.size >= room) continue;
+    if (k === cur || fits(k)) { keep.add(k); placed.push(k); }
+  }
+  return keep;
 }
 
 /** Compare: fetches both versions itself, then shows only what moved. */
@@ -198,45 +294,6 @@ export function Ranking({ rows, worksChanged, newVersions, from, to, onOpen }: {
   );
 }
 
-/** The whole law's timeline: History with no article focused. Every version, clickable. */
-export function WorkTimeline({ versions, current, onPick }: {
-  versions: string[]; current?: string; onPick: (date: string) => void;
-}) {
-  if (versions.length === 0) return <Empty>No versions recorded for this law.</Empty>;
-  const t = (d: string) => Date.parse(`${d}T00:00:00Z`);
-  const lo = t(versions[0]);
-  const span = Math.max(1, t(versions[versions.length - 1]) - lo);
-  const gaps = versions.slice(1).map((d, i) => (t(d) - t(versions[i])) / 86400000).sort((a, b) => a - b);
-  const median = gaps.length ? Math.round(gaps[Math.floor(gaps.length / 2)]) : 0;
-  return (
-    <>
-      <div className="cnt">
-        <span className="tag">{versions.length} versions</span>
-        <span className="tag mono">{versions[0]} → {versions[versions.length - 1]}</span>
-        {median > 0 ? <span className="tag">amended every {median} days (median)</span> : null}
-      </div>
-      <div className="rail">
-        <div className="axis" />
-        {versions.map((d) => (
-          <button key={d} className={`tick${d === current ? " on" : ""}`}
-                  style={{ left: `${((t(d) - lo) / span) * 97 + 1.5}%` }}
-                  title={d} aria-label={`Read the version of ${d}`} onClick={() => onPick(d)} />
-        ))}
-      </div>
-      <p className="sub">Click any mark to read that version.</p>
-      <ul className="rows">
-        {versions.slice().reverse().slice(0, 40).map((d) => (
-          <li key={d}>
-            <button className="rowbtn" onClick={() => onPick(d)}>
-              <span className={d === current ? "mono strong" : "mono"}>{d}{d === current ? "  ← showing" : ""}</span>
-            </button>
-          </li>
-        ))}
-      </ul>
-    </>
-  );
-}
-
 export function InForce({ date, total, rows, onOpen }: {
   date: string; total: number;
   rows: { work: string; title?: string; kind?: string; valid_from: string }[];
@@ -284,10 +341,10 @@ export function Empty({ children }: { children: React.ReactNode }) {
 export const hasView = (ui?: UiEffect) =>
   !!(ui && (ui.provision || ui.diff || ui.history || ui.ranking || ui.in_force || ui.gap));
 
+/** A history answer needs no mode of its own: the rail is already showing it. */
 export function modeFor(ui?: UiEffect): State["mode"] | undefined {
   if (ui?.diff) return "compare";
-  if (ui?.history) return "history";
-  if (ui?.provision) return "read";
+  if (ui?.history || ui?.provision) return "read";
   return undefined;
 }
 
@@ -300,8 +357,8 @@ const plain = (s: string) => s.replace(/\*+/g, "").replace(/\s+/g, " ").trim();
  * a filter box over article numbers and headings. Precedent: legislation.gov.uk's ToC view,
  * which exists for the same reason — a national code is not a scrollable list.
  */
-function Outline({ items, validFrom, validTo, onPick }: {
-  items: ProvisionItem[]; validFrom: string; validTo?: string; onPick: (anchor: string) => void;
+function Outline({ items, current, onPick }: {
+  items: ProvisionItem[]; current?: string; onPick: (anchor: string) => void;
 }) {
   const [open, setOpen] = useState<string>();
   const [q, setQ] = useState("");
@@ -311,38 +368,47 @@ function Outline({ items, validFrom, validTo, onPick }: {
     !needle || `${p.num ?? ""} ${p.heading ?? ""} ${p.anchor}`.toLowerCase().includes(needle);
 
   const groups = new Map<string, ProvisionItem[]>();
+  const sectionOf = new Map<string, string>();
   for (const p of items) {
-    if (!matches(p)) continue;
     const top = plain((p.path ?? "").split(" / ")[0] || "Without a section");
+    sectionOf.set(p.anchor, top);
+    if (!matches(p)) continue;
     (groups.get(top) ?? groups.set(top, []).get(top)!).push(p);
   }
+  // The section holding the article you are reading opens itself — otherwise the outline
+  // answers "where am I?" with a list of closed boxes.
+  const here = current ? sectionOf.get(current) : undefined;
+  const single = groups.size === 1;
 
   return (
     <>
-      <div className="cnt">
-        <span className="tag">in force {validFrom} → {validTo ?? "open"}</span>
-        <span className="tag">{items.length} articles</span>
-        <span className="tag">{groups.size} sections</span>
+      <div className="tochead">
+        <b>Contents</b>
+        <span className="sub mono">{items.length}</span>
       </div>
       <input className="filter" value={q} onChange={(e) => setQ(e.target.value)}
              aria-label="Filter articles by number or heading"
-             placeholder="Filter — article number or words in a heading" />
-      {needle && groups.size === 0 ? <Empty>No article matches “{q}”.</Empty> : null}
+             placeholder="Filter articles…" />
+      {needle && groups.size === 0 ? <p className="sub">No article matches “{q}”.</p> : null}
       <ul className="toc">
         {[...groups].map(([section, list]) => {
-          const expanded = open === section || (needle.length > 0);
+          const expanded = single || open === section || needle.length > 0 || (open === undefined && section === here);
           return (
             <li key={section}>
-              <button className="toch" aria-expanded={expanded}
-                      onClick={() => setOpen(expanded && !needle ? undefined : section)}>
-                <span>{expanded ? "▾" : "▸"} {section}</span>
-                <span className="sub mono">{list.length}</span>
-              </button>
+              {single ? null : (
+                <button className="toch" aria-expanded={expanded}
+                        onClick={() => setOpen(expanded && !needle ? "" : section)}>
+                  <span>{expanded ? "▾" : "▸"} {section}</span>
+                  <span className="sub mono">{list.length}</span>
+                </button>
+              )}
               {expanded ? (
                 <ul className="rows">
                   {list.map((p) => (
                     <li key={p.anchor}>
-                      <button className="rowbtn" onClick={() => onPick(p.anchor)}>
+                      <button className={`rowbtn${p.anchor === current ? " on" : ""}`}
+                              aria-current={p.anchor === current ? "true" : undefined}
+                              onClick={() => onPick(p.anchor)}>
                         <span>{p.num ?? p.anchor}{p.heading ? ` — ${plain(p.heading)}` : ""}</span>
                       </button>
                     </li>

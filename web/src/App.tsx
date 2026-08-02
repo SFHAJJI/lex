@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { askStreaming, first, tool, type AskReply, type ProvisionItem, type Step, type UiEffect } from "./api";
 import { publisherOf, useWorkspace, workSlug, type Space, type State } from "./state";
-import { Compare, Empty, Gap, HistoryRail, InForce, Provision, Ranking, WorkTimeline, hasView, modeFor } from "./views";
+import { Compare, Empty, Gap, InForce, Provision, Ranking, VersionRail, hasView, modeFor } from "./views";
 import { LawPicker, PeriodPicker, TopicSearch, shorten } from "./pickers";
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -9,12 +9,8 @@ const today = () => new Date().toISOString().slice(0, 10);
 /** Follow-ups derived from the view on screen — always valid, and free. */
 function chipsFor(s: State, ui?: UiEffect): { label: string; go: Partial<State> }[] {
   if (ui?.ranking) return [{ label: "Try the last twelve months", go: { from: shift(today(), -365), until: today(), mode: "read" } }];
-  if (s.mode === "read" && s.work) return [
-    { label: "How did this change?", go: { mode: "history" } },
-    { label: "Compare with a year later", go: { mode: "compare", to: shift(s.date ?? today(), 365) } },
-  ];
-  if (s.mode === "history") return [{ label: "Read the current text", go: { mode: "read", date: today() } }];
-  if (s.mode === "compare") return [{ label: "Read the later version", go: { mode: "read", date: s.to } }];
+  if (s.mode === "compare") return [{ label: "Read the later version", go: { mode: "read", date: s.to, to: undefined } }];
+  if (s.work) return [{ label: "Read the current text", go: { mode: "read", date: today(), to: undefined } }];
   return [];
 }
 
@@ -32,8 +28,10 @@ export default function App() {
   const [said, setSaid] = useState<string>();
   const [ui, setUi] = useState<UiEffect>();
   const [loaded, setLoaded] = useState<{ items: ProvisionItem[]; from: string; to?: string }>();
+  const [toc, setToc] = useState<ProvisionItem[]>([]);
   const [title, setTitle] = useState<string>();
   const [versions, setVersions] = useState<string[]>([]);
+  const [states, setStates] = useState<string[]>([]);
   const abort = useRef<AbortController>();
 
   // The marketing below the fold belongs to a first-time visitor, not to someone reading a
@@ -59,41 +57,60 @@ export default function App() {
     return () => { live = false; };
   }, [s.work]);
 
-  // Deterministic loading: switching mode or date calls the public MCP endpoint directly.
-  // No model in the loop — playing with the workspace must be instant and repeatable.
+  // The outline belongs to (law, date) — never to the focused article. It used to be fetched
+  // as part of the text, so opening an article replaced the contents with that one article
+  // and re-dating dropped you at the top of a document you were reading the middle of.
   useEffect(() => {
-    if (!s.work) return;
+    if (!s.work) { setToc([]); return; }
+    let live = true;
+    tool<any>("as_of", { work: s.work, date: s.date ?? today(), mode: "outline" })
+      .then((res) => {
+        if (!live) return;
+        const one = first<any>(res, (x) => Array.isArray(x?.provisions) && x.provisions.length > 0);
+        setToc((one?.provisions ?? []) as ProvisionItem[]);
+      })
+      .catch(() => live && setToc([]));
+    return () => { live = false; };
+  }, [s.work, s.date]);
+
+  // Deterministic loading: changing date, article or mode calls the public MCP endpoint
+  // directly. No model in the loop — playing with the workspace must be instant and repeatable.
+  useEffect(() => {
+    if (!s.work || s.mode !== "read") return;
     let live = true;
     // Never show one law's text under another's heading: clear before fetching.
     setLoaded(undefined);
-    if (s.mode === "read") {
-      const date = s.date ?? today();
-      // A code can carry thousands of articles: ask for the outline first and only pull
-      // full text when it is small enough to read. Otherwise show the outline and let the
-      // reader choose — dumping a whole code would freeze the tab and help nobody.
-      const fetchRead = async () => {
-        if (s.anchor)
-          return tool<any>("as_of", { work: s.work, date, mode: "select", anchors: s.anchor });
-        const outline = await tool<any>("as_of", { work: s.work, date, mode: "outline" });
-        const o = first<any>(outline, (x) => Array.isArray(x?.provisions) && x.provisions.length > 0);
-        const n = o?.provisions?.length ?? 0;
-        if (n === 0 || n > 80) return outline;
-        return tool<any>("as_of", { work: s.work, date, mode: "full" });
-      };
-      fetchRead()
-        .then((res) => {
-          if (!live) return;
-          const one = first<any>(res, (x) => Array.isArray(x?.provisions) && x.provisions.length > 0);
-          const doc = one?.document ?? one;
-          setTitle(shorten(doc?.title));
-          const items = (one?.provisions ?? []) as ProvisionItem[];
-          setLoaded({ items, from: doc?.valid_from ?? date, to: doc?.valid_to });
-          if (items.length === 0)
-            setUi({ gap: { status: one?.envelope?.status ?? "no_result", explanation: "No text is held for this law on that date.", available: [] } });
-          else setUi(undefined);
-        })
-        .catch(() => live && setUi({ gap: { status: "error", explanation: "That version could not be loaded.", available: [] } }));
-    }
+    const date = s.date ?? today();
+    // A code can carry thousands of articles: ask for the outline first and only pull full
+    // text when it is small enough to read. Otherwise leave the reader in the contents —
+    // dumping a whole code would freeze the tab and help nobody.
+    //
+    // The ceiling was 80 articles, set when the outline took the whole width and a scrolling
+    // reader had nothing to navigate with. With the contents pinned beside the text, whole-act
+    // reading is the better default: GDPR is 99 articles and 196 KB. The Consolidated CRR is
+    // 500+ and 2.2 MB, which is what this threshold is actually for.
+    const fetchRead = async () => {
+      if (s.anchor)
+        return tool<any>("as_of", { work: s.work, date, mode: "select", anchors: s.anchor });
+      const outline = await tool<any>("as_of", { work: s.work, date, mode: "outline" });
+      const o = first<any>(outline, (x) => Array.isArray(x?.provisions) && x.provisions.length > 0);
+      const n = o?.provisions?.length ?? 0;
+      if (n === 0 || n > 200) return outline;
+      return tool<any>("as_of", { work: s.work, date, mode: "full" });
+    };
+    fetchRead()
+      .then((res) => {
+        if (!live) return;
+        const one = first<any>(res, (x) => Array.isArray(x?.provisions) && x.provisions.length > 0);
+        const doc = one?.document ?? one;
+        setTitle(shorten(doc?.title));
+        const items = (one?.provisions ?? []) as ProvisionItem[];
+        setLoaded({ items, from: doc?.valid_from ?? date, to: doc?.valid_to });
+        if (items.length === 0)
+          setUi({ gap: { status: one?.envelope?.status ?? "no_result", explanation: "No text is held for this law on that date.", available: [] } });
+        else setUi(undefined);
+      })
+      .catch(() => live && setUi({ gap: { status: "error", explanation: "That version could not be loaded.", available: [] } }));
     return () => { live = false; };
   }, [s.work, s.date, s.mode, s.anchor]);
 
@@ -115,19 +132,21 @@ export default function App() {
     return () => { live = false; };
   }, [s.work, s.from, s.until, s.order]);
 
+  // With an article open the rail narrows to THAT article's distinct texts — the question a
+  // reader actually has ("when did this paragraph change?") rather than "when was anything
+  // in this law touched?". Falls back to the law's versions when no per-article history exists.
   useEffect(() => {
+    if (!s.work || !s.anchor) { setStates([]); return; }
     let live = true;
-    if (s.mode === "history" && s.anchor) {
-      tool<any>("article_history", { work: s.work, anchor: s.anchor })
-        .then((res) => {
-          if (!live) return;
-          const one = first<any>(res, (x) => Array.isArray(x?.states) && x.states.length > 0);
-          setUi(one?.states?.length ? { history: { subject: { work: s.work! }, anchor: s.anchor!, distinct_texts: one.distinct_texts, states: one.states } }
-                                    : { gap: { status: one?.envelope?.status ?? "no_provision_history", explanation: "No per-article history is held for this article.", available: [] } });
-        }).catch(() => {});
-    }
+    tool<any>("article_history", { work: s.work, anchor: s.anchor })
+      .then((res) => {
+        if (!live) return;
+        const one = first<any>(res, (x) => Array.isArray(x?.states) && x.states.length > 0);
+        setStates(((one?.states ?? []) as { valid_from: string }[]).map((x) => x.valid_from).sort());
+      })
+      .catch(() => live && setStates([]));
     return () => { live = false; };
-  }, [s.work, s.date, s.mode, s.anchor]);
+  }, [s.work, s.anchor]);
 
   const submit = useCallback(async (text: string) => {
     if (!text.trim() || busy) return;
@@ -167,13 +186,11 @@ export default function App() {
     go({ work: h.work, date: undefined, anchor: undefined, to: undefined, mode: "read", space: "law" });
   };
 
-  // Where the current date sits among the versions, for the stepper.
-  const step = (() => {
-    if (versions.length === 0 || !loaded) return {} as { prev?: string; next?: string };
-    const i = versions.indexOf(loaded.from);
-    if (i < 0) return {};
-    return { prev: i > 0 ? versions[i - 1] : undefined, next: i < versions.length - 1 ? versions[i + 1] : undefined };
-  })();
+  // What the rail is a rail OF: this article's texts when one is open, else the law's versions.
+  const railDates = s.anchor && states.length > 0 ? states : versions;
+  const railScope = s.anchor && states.length > 0 ? "texts of this article" : "versions";
+  const at = loaded?.from && railDates.includes(loaded.from) ? loaded.from
+           : railDates.filter((d) => d <= (s.date ?? today())).pop();
 
   const openLaw = (work: string, date: string) => { setUi(undefined); go({ work, date, to: undefined, anchor: undefined, mode: "read", space: "law" }); };
   const openDiff = (work: string, from: string, to: string) => { setUi(undefined); go({ work, date: from, to, mode: "compare", space: "law" }); };
@@ -193,29 +210,12 @@ export default function App() {
     <div className="ws">
       <form className="cmd" onSubmit={(e) => { e.preventDefault(); submit(q); setQ(""); }}>
         <span className="brand">Lex</span>
+        {/* Not "ask anything": the corpus is bounded, and inviting anything invites the one
+            question that comes back unknown_work. Name the shape of a good question instead. */}
         <input value={q} onChange={(e) => setQ(e.target.value)} disabled={busy}
-               placeholder="Ask anything — or pick a law below" aria-label="Ask" />
+               placeholder="What did a law say on a date?" aria-label="Ask" />
         <button type="submit" disabled={busy}>{busy ? "…" : "Ask"}</button>
       </form>
-
-      {steps.length > 0 ? (
-        <ol className="steps" aria-live="polite" aria-label="What the assistant is finding">
-          {steps.map((st, i) => (
-            <li key={i} className={st.kind}>
-              <span>{st.text}</span>
-              {st.work ? (
-                <button className="chipmini" onClick={() => {
-                  setUi(undefined);
-                  go({ work: st.work, date: st.date, anchor: st.anchor, mode: "read", space: "law" });
-                }}>open →</button>
-              ) : null}
-            </li>
-          ))}
-          {busy ? <li className="pending"><span>working…</span></li> : null}
-        </ol>
-      ) : null}
-
-      {said ? <div className="said"><b>what I found</b>{said}</div> : null}
 
       <nav className="spaces">
         {(["law", "time", "topic"] as const).map((sp) => (
@@ -237,6 +237,8 @@ export default function App() {
                      onOpen={(work, date, anchor) => { setUi(undefined); go({ work, date, anchor, mode: "read", space: "law" }); }} />
       ) : null}
 
+      {space === "law" && !s.work ? <div className="sel"><LawPicker current={undefined} onPick={pickLaw} /></div> : null}
+
       {space === "law" && s.work ? (
         <header className="lawhead">
           <div className="t">
@@ -248,71 +250,68 @@ export default function App() {
                 </span>
               ) : null}
               {loaded ? <span>{loaded.from} → {loaded.to ?? "today"}</span> : null}
-              {versions.length > 1 ? <><span>·</span><span>{versions.length} versions</span></> : null}
+              <span className="grow" />
+              <label className="pick"><i>{s.mode === "compare" ? "from" : "showing"}</i>
+                <input type="date" value={s.date ?? today()} aria-label="Date to show the law as it stood"
+                       onChange={(e) => go({ date: e.target.value })} />
+              </label>
+              <LawPicker current="change law" onPick={pickLaw} />
+              <a className="pick" href={`/${publisherOf(s.work)}/${workSlug(s.work)}`}>permalink ↗</a>
             </div>
           </div>
-          <LawPicker current="change law" onPick={pickLaw} />
         </header>
       ) : null}
 
-      {space === "law" ? (
-        <>
-          <div className="sel">
-            {!s.work ? <LawPicker current={undefined} onPick={pickLaw} /> : null}
-            {s.work ? (
-            <label className="pick"><i>{s.mode === "compare" ? "from" : "showing"}</i>
-              <input type="date" value={s.date ?? today()} onChange={(e) => go({ date: e.target.value })} />
-            </label>) : null}
-            {s.work && step.prev ? <button className="pick" onClick={() => go({ date: step.prev })}>← previous version</button> : null}
-            {s.work && step.next ? <button className="pick" onClick={() => go({ date: step.next })}>next version →</button> : null}
-            {s.work && step.next ? <button className="pick" onClick={() => go({ date: versions[versions.length - 1] })}>jump to today</button> : null}
-            {s.mode === "compare" ? (
-              <label className="pick"><i>to</i>
-                <input type="date" value={s.to ?? today()} onChange={(e) => go({ to: e.target.value })} />
-              </label>
-            ) : null}
-            {s.anchor ? (
-              <button className="pick" onClick={() => go({ anchor: undefined, mode: "read" })}>
-                <i>article</i>{s.anchor} ✕</button>
-            ) : null}
-            <span className="grow" />
-            {s.work ? <a className="pick" href={`/${publisherOf(s.work)}/${workSlug(s.work)}`}>permalink ↗</a> : null}
-          </div>
-
-          {s.work ? (
-          <nav className="modes">
-            {(["read", "history", "compare"] as const).map((m) => (
-              <button key={m} className={s.mode === m ? "on" : ""}
-                      aria-pressed={s.mode === m}
-                      onClick={() => go({
-                        mode: m,
-                        // Compare defaults to the neighbouring version, not to today: comparing
-                        // a 2021 text against 2026 is never what someone means by "compare".
-                        ...(m === "compare" && !s.to ? { to: step.next ?? versions[versions.length - 1] ?? today() } : {}),
-                      })}>
-                {m === "read" ? "Read" : m === "history" ? "History" : "Compare"}
-                {m === "history" && versions.length > 1 ? <span className="cnt">{versions.length}</span> : null}
-              </button>
-            ))}
-          </nav>) : null}
-        </>
+      {space === "law" && s.work ? (
+        <VersionRail dates={railDates} current={at} compareTo={s.mode === "compare" ? s.to : undefined}
+                     scope={railScope} today={today()}
+                     onPick={(d) => { setUi(undefined); go({ date: d, to: undefined, mode: "read" }); }}
+                     onCompare={(d) => {
+                       // Shift-click makes the pair, so comparing never means retyping a date
+                       // that is already on screen. Order the pair; a diff runs forwards.
+                       const from = at && at < d ? at : d;
+                       const to = at && at < d ? d : at ?? d;
+                       if (from === to) return;
+                       setUi(undefined); go({ date: from, to, mode: "compare" });
+                     }}
+                     onClear={() => { setUi(undefined); go({ to: undefined, mode: "read" }); }} />
       ) : null}
 
       <div className="work">
+        {steps.length > 0 ? (
+          <ol className="steps" aria-live="polite" aria-label="What the assistant is finding">
+            {steps.map((st, i) => (
+              <li key={i} className={st.kind}>
+                <span>{st.text}</span>
+                {st.work ? (
+                  <button className="chipmini" onClick={() => {
+                    setUi(undefined);
+                    go({ work: st.work, date: st.date, anchor: st.anchor, mode: "read", space: "law" });
+                  }}>open →</button>
+                ) : null}
+              </li>
+            ))}
+            {busy ? <li className="pending"><span>working…</span></li> : null}
+          </ol>
+        ) : null}
+
+        {/* The answer sits directly on top of the evidence for it. It used to be separated from
+            the law text by three rows of chrome, so verifying a claim meant scrolling away from it. */}
+        {said ? <div className="said"><b>what I found</b>{said}</div> : null}
+
         {space === "topic" ? null :
          ui?.gap ? <Gap {...ui.gap} /> :
          ui?.ranking ? <Ranking rows={ui.ranking.rows} worksChanged={ui.ranking.works_changed}
                                 newVersions={ui.ranking.new_versions} from={ui.ranking.from_date}
                                 to={ui.ranking.to_date} onOpen={openDiff} /> :
          ui?.in_force ? <InForce date={ui.in_force.date} total={ui.in_force.total} rows={ui.in_force.rows} onOpen={openLaw} /> :
-         ui?.history ? <HistoryRail states={ui.history.states} anchor={ui.history.anchor} work={ui.history.subject.work} /> :
-         s.work && s.mode === "history" && !s.anchor ?
-           <WorkTimeline versions={versions} current={loaded?.from}
-                         onPick={(d) => { setUi(undefined); go({ date: d, mode: "read" }); }} /> :
          s.work && s.mode === "compare" ? <Compare work={s.work} from={s.date ?? today()} to={s.to ?? today()} anchor={s.anchor} /> :
-         s.work && s.mode === "read" && loaded ? <Provision items={loaded.items} validFrom={loaded.from} validTo={loaded.to} work={s.work} onPick={(a) => go({ anchor: a })} /> :
+         s.work && loaded ? <Provision items={loaded.items} toc={toc} validFrom={loaded.from} validTo={loaded.to}
+                                       work={s.work} anchor={s.anchor} onPick={(a) => go({ anchor: a })}
+                                       onClear={() => go({ anchor: undefined })} /> :
          s.work ? <Empty>Loading…</Empty> :
          space === "time" ? <Empty>Pick a period above.</Empty> :
+         said ? null :
          <Intro onPick={submit} />}
       </div>
 
@@ -327,6 +326,10 @@ export default function App() {
   );
 }
 
+/**
+ * Four questions, no preamble. The page above already said what Lex is; a second paragraph
+ * repeating it in different words only delayed the one thing a visitor can actually act on.
+ */
 function Intro({ onPick }: { onPick: (q: string) => void }) {
   const examples = [
     "What did the Covid rules say on 1 February 2021?",
@@ -336,8 +339,6 @@ function Intro({ onPick }: { onPick: (q: string) => void }) {
   ];
   return (
     <div className="intro">
-      <p className="lede">Ask in plain language, then keep playing — every answer becomes a workspace
-        you can re-date, compare and trace without asking again.</p>
       <div className="chips">
         {examples.map((e) => <button key={e} className="chip" onClick={() => onPick(e)}>{e}</button>)}
       </div>

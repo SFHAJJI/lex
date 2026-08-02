@@ -34,4 +34,10 @@ for (const expected of ["A law", "A period", "A topic"]) {
     process.exit(1);
   }
 }
+// The three mode tabs were replaced by the always-on version rail. A stale bundle would still
+// mount and still pass every check above, so pin the shape of the reader itself.
+if (/>\s*History\s*</.test(html)) {
+  console.error("FAIL — the History tab is back; the rail is meant to replace it");
+  process.exit(1);
+}
 console.log(`ok — workspace mounted, ${html.length} chars, all three frameworks present`);

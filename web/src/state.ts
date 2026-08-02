@@ -3,7 +3,8 @@
 // is shareable and bookmarkable, including the one the assistant chose for them.
 import { useEffect, useState } from "react";
 
-export type Mode = "read" | "history" | "compare" | "provenance";
+/** Reading one version, or comparing two. History is not a mode — the rail always shows it. */
+export type Mode = "read" | "compare";
 /** The three subjects a question can be about — a law, a stretch of time, or words. */
 export type Space = "law" | "time" | "topic";
 
@@ -23,7 +24,9 @@ export interface State {
 
 export function read(): State {
   const p = new URLSearchParams(location.search);
-  const mode = (p.get("mode") as Mode) || "read";
+  // ?mode=history predates the rail and is still in shared links: it means "show me this
+  // law's versions", which is now unconditional. Read it, then let it go.
+  const mode: Mode = p.get("mode") === "compare" ? "compare" : "read";
   return {
     space: (p.get("space") as Space) || undefined,
     q: p.get("q") || undefined,

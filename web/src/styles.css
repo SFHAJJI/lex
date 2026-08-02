@@ -20,11 +20,14 @@
 .pick input { border: 0; background: transparent; padding: 0; color: inherit; font: inherit; }
 .grow { flex: 1; }
 
-.modes { display: flex; gap: 2px; border-bottom: 1px solid var(--line); margin-bottom: 14px; }
-.modes button { background: none; border: 0; border-bottom: 2px solid transparent; border-radius: 0;
-                color: var(--muted); padding: 8px 13px; font-size: 14.5px; cursor: pointer; }
-.modes button.on { color: var(--fg); font-weight: 600; border-bottom-color: var(--accent); }
-.modes button:disabled { opacity: .45; cursor: default; }
+/* ---- the version rail: navigation and history are the same object ---- */
+.railbox { border-bottom: 1px solid var(--line); margin: 0 0 16px; padding-bottom: 4px; }
+.railhead { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.railhead .hint { font-size: 12.5px; color: var(--muted); }
+.tag.act { cursor: pointer; border-color: var(--accent); color: var(--accent); background: none; }
+.stepbtn { background: var(--card); border: 1px solid var(--line); border-radius: 6px; color: inherit;
+           width: 28px; height: 26px; padding: 0; cursor: pointer; font-size: 13px; }
+.stepbtn:disabled { opacity: .35; cursor: default; }
 
 .work { min-height: 180px; }
 .cnt { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
@@ -42,12 +45,25 @@ ins { background: color-mix(in srgb, var(--ok) 16%, transparent); color: var(--o
 del { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent);
       padding: 0 2px; border-radius: 2px; }
 
-.rail { position: relative; height: 42px; margin: 4px 0 10px; }
+.rail { position: relative; height: 52px; margin: 2px 0 0; }
 .rail .axis { position: absolute; left: 0; right: 0; top: 20px; height: 1px; background: var(--line); }
-.rail .tick { position: absolute; top: 12px; width: 2px; height: 17px; background: var(--muted); opacity: .55; }
-.rail .tick:hover { opacity: 1; background: var(--accent); height: 25px; top: 8px; }
-.states { list-style: none; padding: 0; margin: 0; font-size: 14.5px; }
-.states li { border-top: 1px solid var(--line); padding: 7px 0; }
+.rail .band { position: absolute; top: 13px; height: 15px; background: var(--accent); opacity: .13;
+              border-radius: 2px; pointer-events: none; }
+/* Ticks are 2px of ink on a 13px-wide hit box: dense runs stay legible AND clickable. */
+.rail .tick { position: absolute; top: 11px; width: 13px; height: 20px; margin-left: -6px; padding: 0;
+              border: 0; background: none; cursor: pointer; }
+.rail .tick:before { content: ""; position: absolute; left: 6px; top: 2px; width: 2px; height: 16px;
+                     background: var(--muted); opacity: .5; border-radius: 1px; }
+.rail .tick:hover:before { opacity: 1; background: var(--accent); top: 0; height: 20px; }
+.rail .tick.on:before { background: var(--accent); opacity: 1; width: 3px; top: -3px; height: 26px; }
+.rail .tick.cmp:before { background: var(--accent); opacity: .75; width: 3px; top: -1px; height: 22px; }
+/* Not yet in force: dashed, because a date the publisher has scheduled is not the same
+   claim as a date it has enacted, and the rail should not let them look alike. */
+.rail .tick.future:before { background: none; border-left: 2px dashed var(--warn); opacity: .9; }
+.rail .rlbl { position: absolute; top: 33px; transform: translateX(-50%); font-family: var(--mono);
+              font-size: 11px; color: var(--muted); white-space: nowrap; pointer-events: none;
+              font-variant-numeric: tabular-nums; }
+.rail .rlbl.on { color: var(--accent); font-weight: 600; }
 
 .bars { display: grid; gap: 7px; }
 .bar { display: grid; grid-template-columns: 1fr 46px; gap: 10px; align-items: center;
@@ -76,9 +92,26 @@ del { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var
 .chip:hover { border-color: var(--accent); color: var(--accent); }
 button.ghost { background: none; border: 1px solid var(--line); color: var(--muted); margin-top: 12px; }
 
-@media (max-width: 640px) {
-  .modes { overflow-x: auto; }
+/* ---- reader: structure on the left, law on the right ---- */
+.reader { display: grid; grid-template-columns: minmax(190px, 260px) 1fr; gap: 28px; align-items: start; }
+.toccol { position: sticky; top: 12px; max-height: calc(100vh - 40px); overflow-y: auto;
+          border-right: 1px solid var(--line); padding-right: 16px; }
+.tochead { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+.tochead b { font-family: var(--serif); font-size: 15px; }
+.toccol .filter { font-size: 13px; padding: 5px 8px; }
+.toccol .rowbtn { padding: 5px 0; font-size: 13.5px; }
+.toccol .rowbtn.on { color: var(--accent); font-weight: 600; }
+.toccol .rows li { border-top: 0; }
+.toccol .toc > li { border-top: 1px solid var(--line); }
+.text { min-width: 0; }
+
+@media (max-width: 760px) {
+  .reader { grid-template-columns: 1fr; gap: 4px; }
+  /* Stacked, a sticky column of contents would eat the screen the law needs. */
+  .toccol { position: static; max-height: 260px; border-right: 0; padding-right: 0;
+            border-bottom: 1px solid var(--line); padding-bottom: 10px; margin-bottom: 10px; }
   .sel { gap: 6px; }
+  .rail .rlbl { font-size: 10px; }
 }
 
 /* Framework switcher — the deterministic door into each of the three subjects. */
@@ -103,7 +136,7 @@ button.ghost { background: none; border: 1px solid var(--line); color: var(--mut
 .quick .chip { padding: 5px 11px; font-size: 13px; }
 
 /* ---- law header: the law gets the page, the app becomes furniture ---- */
-.lawhead { display: flex; align-items: flex-start; gap: 16px; margin: 4px 0 14px; }
+.lawhead { display: flex; align-items: flex-start; gap: 16px; margin: 4px 0 6px; }
 .lawhead .t { flex: 1; min-width: 0; }
 .lawhead h2 { font-family: var(--serif); font-size: 22px; line-height: 1.24; letter-spacing: -.012em;
               margin: 0 0 6px; text-wrap: balance; }
@@ -112,10 +145,6 @@ button.ghost { background: none; border: 1px solid var(--line); color: var(--mut
 .pill { border: 1px solid var(--line); border-radius: 99px; padding: 1px 10px; font-size: 12.5px; }
 .pill.live { border-color: var(--ok); color: var(--ok); }
 .pill.old { border-color: var(--accent); color: var(--accent); }
-.modes .cnt { margin-left: 7px; font-size: 11.5px; color: var(--muted); border: 1px solid var(--line);
-              border-radius: 99px; padding: 0 6px; }
-.rail .tick { border: 0; padding: 0; cursor: pointer; }
-.rail .tick.on { top: 5px; height: 33px; width: 3px; background: var(--accent); opacity: 1; }
 .strong { font-weight: 600; }
 button.pick { cursor: pointer; }
 
