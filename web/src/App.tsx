@@ -206,38 +206,48 @@ export default function App() {
     else go({ space: sp, from: undefined, until: undefined });
   };
 
+  // Nothing chosen yet. The front is one question box — not a form with two required steps,
+  // which is exactly how an ask bar stacked on a framework switcher was reading.
+  const front = !s.work && !s.q && !s.from && !said && steps.length === 0;
+  const browsing = s.space !== undefined || !front;
+
   return (
     <div className="ws">
-      <form className="cmd" onSubmit={(e) => { e.preventDefault(); submit(q); setQ(""); }}>
-        <span className="brand">Lex</span>
+      <form className={front ? "cmd big" : "cmd"} onSubmit={(e) => { e.preventDefault(); submit(q); setQ(""); }}>
+        {front ? null : <span className="brand">Lex</span>}
         {/* Not "ask anything": the corpus is bounded, and inviting anything invites the one
             question that comes back unknown_work. Name the shape of a good question instead. */}
         <input value={q} onChange={(e) => setQ(e.target.value)} disabled={busy}
-               placeholder="What did a law say on a date?" aria-label="Ask" />
+               placeholder="Ask about any law, on any date" aria-label="Ask" />
         <button type="submit" disabled={busy}>{busy ? "…" : "Ask"}</button>
       </form>
 
-      <nav className="spaces">
+      {front ? <Intro onPick={submit} /> : null}
+
+      {/* The second door, and it must read as an alternative rather than a next step: below a
+          rule, in body text, at a fraction of the weight of the question box. */}
+      <nav className="doors">
+        <span>{front ? "Or browse" : "Browse"}</span>
         {(["law", "time", "topic"] as const).map((sp) => (
-          <button key={sp} className={space === sp ? "on" : ""} onClick={() => switchTo(sp)}>
-            {sp === "law" ? "A law" : sp === "time" ? "A period" : "A topic"}
+          <button key={sp} className={browsing && space === sp ? "on" : ""} onClick={() => switchTo(sp)}>
+            {sp === "law" ? "a law" : sp === "time" ? "a period" : "a topic"}
           </button>
         ))}
       </nav>
 
-      {space === "time" ? (
+      {browsing && space === "time" ? (
         <PeriodPicker from={s.from ?? shift(today(), -365)} until={s.until ?? today()}
                       order={s.order ?? "by_churn"}
                       onChange={(next) => { setUi(undefined); go({ ...next, work: undefined }); }} />
       ) : null}
 
-      {space === "topic" ? (
+      {browsing && space === "topic" ? (
         <TopicSearch q={s.q ?? ""} asOf={s.asOf}
                      onQuery={(query, asOf) => go({ q: query, asOf, work: undefined })}
                      onOpen={(work, date, anchor) => { setUi(undefined); go({ work, date, anchor, mode: "read", space: "law" }); }} />
       ) : null}
 
-      {space === "law" && !s.work ? <div className="sel"><LawPicker current={undefined} onPick={pickLaw} /></div> : null}
+      {browsing && space === "law" && !s.work ? <div className="sel"><LawPicker current={undefined} onPick={pickLaw} /></div> : null}
 
       {space === "law" && s.work ? (
         <header className="lawhead">
@@ -310,9 +320,8 @@ export default function App() {
                                        work={s.work} anchor={s.anchor} onPick={(a) => go({ anchor: a })}
                                        onClear={() => go({ anchor: undefined })} /> :
          s.work ? <Empty>Loading…</Empty> :
-         space === "time" ? <Empty>Pick a period above.</Empty> :
-         said ? null :
-         <Intro onPick={submit} />}
+         browsing && space === "time" ? <Empty>Pick a period above.</Empty> :
+         null}
       </div>
 
       {(s.work || ui) ? (
@@ -327,21 +336,23 @@ export default function App() {
 }
 
 /**
- * Four questions, no preamble. The page above already said what Lex is; a second paragraph
- * repeating it in different words only delayed the one thing a visitor can actually act on.
+ * Two examples, set as a sentence rather than as buttons. A row of four chips reads as four
+ * more decisions stacked under the one decision that matters; a line of prose reads as help.
  */
 function Intro({ onPick }: { onPick: (q: string) => void }) {
   const examples = [
     "What did the Covid rules say on 1 February 2021?",
-    "Which Luxembourg laws changed most during the pandemic?",
     "How has Article 92 of the CRR changed?",
-    "Que disait le Code du travail en 2019 ?",
   ];
   return (
-    <div className="intro">
-      <div className="chips">
-        {examples.map((e) => <button key={e} className="chip" onClick={() => onPick(e)}>{e}</button>)}
-      </div>
-    </div>
+    <p className="egs">
+      For example:{" "}
+      {examples.map((e, i) => (
+        <span key={e}>
+          {i > 0 ? <span className="or"> or </span> : null}
+          <button className="eg" onClick={() => onPick(e)}>{e}</button>
+        </span>
+      ))}
+    </p>
   );
 }

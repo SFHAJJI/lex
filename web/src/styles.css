@@ -7,6 +7,32 @@
 .cmd input { flex: 1; min-width: 0; }
 .cmd button { min-width: 74px; }
 
+/* Front of the site: ONE thing to do. The question box carries the weight so that nothing
+   below it can be mistaken for a second required step. */
+.cmd.big { margin: 0 0 10px; gap: 0; border: 1px solid var(--line); border-radius: 11px;
+           background: var(--card); padding: 4px 4px 4px 6px; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+.cmd.big:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 13%, transparent); }
+.cmd.big input { border: 0; background: none; font-size: 17px; padding: 13px 10px; }
+.cmd.big input:focus { outline: none; }
+.cmd.big button { border-radius: 8px; padding: 11px 18px; font-size: 15px; }
+
+/* Examples as a sentence, not as a row of chips: help reads as help, buttons read as work. */
+.egs { color: var(--muted); font-size: 14px; margin: 0 0 18px; padding-left: 3px; }
+.eg, .or { font: inherit; }
+.eg { background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer;
+      text-align: left; border-bottom: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); }
+.eg:hover { border-bottom-color: var(--accent); }
+.or { color: var(--muted); }
+
+/* The second door. Below a rule, in body text, at a fraction of the question box's weight —
+   an alternative, never a next step. */
+.doors { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; font-size: 14px;
+         color: var(--muted); border-top: 1px solid var(--line); padding-top: 12px; margin: 0 0 14px; }
+.doors button { background: none; border: 0; padding: 0; font: inherit; color: var(--accent);
+                cursor: pointer; border-bottom: 1px solid transparent; }
+.doors button:hover { border-bottom-color: var(--accent); }
+.doors button.on { color: var(--fg); font-weight: 600; border-bottom-color: var(--accent); }
+
 .said { font-family: var(--serif); font-size: 16.5px; line-height: 1.55; background: var(--card);
         border-left: 3px solid var(--accent); padding: 10px 14px; border-radius: 0 8px 8px 0; margin: 0 0 14px; }
 .said b { display: block; font-family: inherit; font-size: 11px; letter-spacing: .12em;
@@ -114,12 +140,6 @@ button.ghost { background: none; border: 1px solid var(--line); color: var(--mut
   .rail .rlbl { font-size: 10px; }
 }
 
-/* Framework switcher — the deterministic door into each of the three subjects. */
-.spaces { display: flex; gap: 6px; margin: 0 0 12px; }
-.spaces button { background: var(--card); border: 1px solid var(--line); border-radius: 99px;
-                 padding: 6px 14px; font-size: 14px; color: var(--muted); cursor: pointer; }
-.spaces button.on { border-color: var(--fg); color: var(--fg); font-weight: 600; }
-
 .picker { position: relative; }
 .picker > button { cursor: pointer; }
 .pop { position: absolute; z-index: 20; top: calc(100% + 5px); left: 0; width: min(440px, 82vw);
@@ -132,8 +152,7 @@ button.ghost { background: none; border: 1px solid var(--line); color: var(--mut
                  cursor: pointer; font-size: 14px; }
 .pop li button:hover { background: var(--card); }
 .popnote { color: var(--muted); font-size: 13px; padding: 7px 8px 0; }
-.quick { display: flex; gap: 6px; flex-wrap: wrap; }
-.quick .chip { padding: 5px 11px; font-size: 13px; }
+.quick { display: flex; gap: 7px; flex-wrap: wrap; align-items: baseline; font-size: 13.5px; }
 
 /* ---- law header: the law gets the page, the app becomes furniture ---- */
 .lawhead { display: flex; align-items: flex-start; gap: 16px; margin: 4px 0 6px; }

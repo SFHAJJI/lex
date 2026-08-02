@@ -99,7 +99,13 @@ string Page(string title, string body, string? subtitle = null, string nav = "",
       footer { border-top:1px solid var(--line); margin-top:40px; padding:16px 20px; color:var(--muted); font-size:13px }
       .notice { border-left:3px solid var(--warn); padding:10px 14px; background:var(--card); border-radius:0 8px 8px 0; margin:12px 0; font-size:14.5px }
       .snippet { color:var(--muted); font-size:13.5px }
-      .sitemap { margin-bottom:12px; line-height:2 }
+      .sitemap { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:8px 30px;
+                 margin-bottom:18px; padding-bottom:16px; border-bottom:1px solid var(--line) }
+      .sitemap div { display:flex; flex-direction:column; gap:3px }
+      .sitemap b { color:var(--fg); font-size:12px; letter-spacing:.06em; text-transform:uppercase;
+                   margin-bottom:4px; font-weight:600 }
+      .sitemap a { color:var(--muted) }
+      .sitemap a:hover { color:var(--accent) }
       :focus-visible { outline:2px solid var(--accent); outline-offset:2px }
       .rail { position:relative; height:44px; margin:14px 0 0 }
       .rail .axis { position:absolute; left:0; right:0; top:21px; height:1px; background:var(--line) }
@@ -136,14 +142,20 @@ string Page(string title, string body, string? subtitle = null, string nav = "",
     {{body}}
     </main>
     <footer>
+    <!-- Fourteen links in one undifferentiated run answered no question a reader had. Three
+         named groups do: what each page is FOR is now the label above it. -->
     <nav class="sitemap" aria-label="All pages">
-      <a href="/">Ask</a> · <a href="/find">Find a law</a> · <a href="/changed">What changed</a> ·
-      <a href="/stories">Stories</a> · <a href="/browse">Browse</a> · <a href="/search">Search</a> ·
-      <a href="/in-force-on">In force on a date</a> · <a href="/how-it-works">How it works</a> ·
-      <a href="/architecture">Architecture</a> · <a href="/built">How it was built</a> ·
-      <a href="/coverage">Coverage</a> · <a href="/verify">Verify it yourself</a> ·
-      <a href="/developers">Developers &amp; API</a> ·
-      <a href="https://github.com/SFHAJJI/lex" rel="noopener">Source</a>
+      <div><b>Read the law</b>
+        <a href="/find">Find a law</a><a href="/browse">Browse everything</a>
+        <a href="/search">Search the text</a><a href="/in-force-on">What was in force on a date</a>
+        <a href="/changed">What changed in a period</a><a href="/stories">Worked examples</a></div>
+      <div><b>Check the work</b>
+        <a href="/how-it-works">How it works</a><a href="/coverage">What Lex holds — and lacks</a>
+        <a href="/verify">Verify it yourself</a><a href="/architecture">Architecture</a>
+        <a href="/built">How it was built</a></div>
+      <div><b>Build on it</b>
+        <a href="/developers">Developers &amp; API</a>
+        <a href="https://github.com/SFHAJJI/lex" rel="noopener">Source on GitHub</a></div>
     </nav>
       <b>Not legal advice, and not the official text.</b> Lex answers <i>what the rule was</i>, never what it
       means for your situation — no interpretation, no advice. Every answer shows the source it came from.

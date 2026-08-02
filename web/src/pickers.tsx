@@ -91,13 +91,11 @@ export function PeriodPicker({ from, until, order, onChange }: {
           <option value="by_date">most recent</option>
         </select></label>
       <span className="grow" />
+      {/* Two shortcuts, not three: one ordinary window and one that shows what the tool is for. */}
       <span className="quick">
-        {([["last month", -30], ["last year", -365], ["the pandemic", 0]] as const).map(([label, days]) => (
-          <button key={label} className="chip" onClick={() =>
-            days === 0
-              ? onChange({ from: "2020-03-01", until: "2021-07-01", order: "by_churn" })
-              : onChange({ from: shift(days), until: iso(new Date()) })}>{label}</button>
-        ))}
+        <button className="eg" onClick={() => onChange({ from: shift(-365), until: iso(new Date()) })}>last year</button>
+        <span className="or">·</span>
+        <button className="eg" onClick={() => onChange({ from: "2020-03-01", until: "2021-07-01", order: "by_churn" })}>the pandemic</button>
       </span>
     </div>
   );
