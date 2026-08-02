@@ -167,30 +167,43 @@ public sealed class LexIndexReader : IDisposable
     }
 
     /// <summary>
-    /// Title fallback for works that hold no per-article text (body missing upstream):
-    /// the provision FTS cannot find them, but a work must still be locatable by name.
-    /// Terms are AND-ed, case-insensitive, against version titles; caller dedupes per work.
+    /// Identifier/title lookup, complementing the provision FTS. Covers two things the FTS
+    /// cannot: works whose body is missing upstream (no provisions to match), and lookups by
+    /// the publisher's own identifier — a CELEX number like 32022r2554 is the canonical way to
+    /// name an EU act, and it lives in the work slug, not in any indexed text.
+    /// Terms are AND-ed over slug-or-title; if that yields nothing, the most distinctive term
+    /// is matched against the slug alone, so "CELEX 32022R2554" still resolves.
     /// </summary>
-    public List<DocRow> SearchTitlesWithoutProvisions(string query, FilterSet filters, int limit)
+    public List<DocRow> SearchWorksByIdentifierOrTitle(string query, FilterSet filters, int limit)
     {
-        var terms = query.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+        var terms = query.Split([' ', ',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Where(t => t.Length >= 2).Take(6).ToList();
         if (terms.Count == 0) return [];
-        var (where, ps) = WithFilters("1=1", filters, excludeAsOf: false, bare: true);
-        var likes = string.Join(" AND ", terms.Select((_, i) => $"d.title LIKE $t{i}"));
-        using var cmd = Cmd($"""
-            SELECT {DocColsQualified}
-            FROM docs d
-            WHERE {where} AND {likes}
-              AND NOT EXISTS (SELECT 1 FROM provisions p WHERE p.rid = d.rid)
-            LIMIT $lim
-            """, ps);
-        for (var i = 0; i < terms.Count; i++) cmd.Parameters.AddWithValue($"$t{i}", "%" + terms[i] + "%");
-        cmd.Parameters.AddWithValue("$lim", limit);
-        var result = new List<DocRow>();
-        using var r = cmd.ExecuteReader();
-        while (r.Read()) result.Add(ReadDoc(r));
-        return result;
+
+        var hits = Lookup(terms.Select((t, i) => $"(d.title LIKE $t{i} OR d.group_key LIKE $t{i})"), terms);
+        if (hits.Count > 0) return hits;
+
+        // "CELEX 32022R2554", "see 32013r0575" — keep the identifier, drop the chatter.
+        var distinctive = terms.OrderByDescending(t => t.Length).First();
+        return distinctive.Length >= 5 ? Lookup(["(d.group_key LIKE $t0)"], [distinctive]) : [];
+
+        List<DocRow> Lookup(IEnumerable<string> clauses, IReadOnlyList<string> values)
+        {
+            var (where, ps) = WithFilters("1=1", filters, excludeAsOf: false, bare: true);
+            using var cmd = Cmd($"""
+                SELECT {DocColsQualified}
+                FROM docs d
+                WHERE {where} AND {string.Join(" AND ", clauses)}
+                ORDER BY d.valid_from DESC
+                LIMIT $lim
+                """, ps);
+            for (var i = 0; i < values.Count; i++) cmd.Parameters.AddWithValue($"$t{i}", "%" + values[i] + "%");
+            cmd.Parameters.AddWithValue("$lim", limit);
+            var result = new List<DocRow>();
+            using var r = cmd.ExecuteReader();
+            while (r.Read()) result.Add(ReadDoc(r));
+            return result;
+        }
     }
 
     /// <summary>

@@ -391,12 +391,13 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                         return (JsonNode)d;
                     }).ToArray());
 
-                    // Title fallback: works holding no per-article text (body missing upstream)
-                    // are invisible to the provision FTS but must still be locatable by name.
+                    // Identifier/title fallback: works holding no per-article text are invisible
+                    // to the provision FTS, and no indexed text contains a work's own identifier
+                    // (a CELEX number lives in the slug) — both must still be findable.
                     if (hits.Count < limit)
                     {
                         var seen = hits.Select(h => h.Doc.GroupKey).ToHashSet(StringComparer.Ordinal);
-                        foreach (var doc in r.SearchTitlesWithoutProvisions(q,
+                        foreach (var doc in r.SearchWorksByIdentifierOrTitle(q,
                                      new FilterSet(asOf, null, Str("document_type"), Str("language")), limit * 4)
                                  .GroupBy(x => x.GroupKey)
                                  .Select(g => g.OrderByDescending(x => x.ValidFrom, StringComparer.Ordinal).First())
@@ -404,8 +405,10 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                                  .Take(limit - hits.Count))
                         {
                             var d = DocJson(doc, false);
-                            d["match"] = "work_title";
-                            d["match_note"] = "THIS WORK IS HELD by Lex — its versions, dates and provenance are available via timeline / in_force_on / provenance. Only the per-article TEXT is not stored (the publisher offers no machine-readable body for it). Never report this work as missing or unknown; report that the text specifically is not held.";
+                            d["match"] = "work_identifier_or_title";
+                            d["match_note"] = doc.TextPublic
+                                ? "THIS WORK IS HELD by Lex, matched on its identifier or title rather than its wording. Call as_of on it for the text."
+                                : "THIS WORK IS HELD by Lex — versions, dates and provenance are available via timeline / in_force_on / provenance. Only the per-article TEXT is absent (the publisher offers no machine-readable body). Never report this work as missing or unknown; report that the text specifically is not held.";
                             if (_publicBase is not null)
                                 d["permalink"] = $"{_publicBase}/{doc.Collection}/{doc.GroupKey}/{doc.ValidFrom}";
                             hitsArr.Add(d);
