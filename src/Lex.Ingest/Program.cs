@@ -117,6 +117,59 @@ switch (args0[0])
                 return 1;
         }
     }
+    case "dataset":
+    {
+        // One JSON line per provision-version, per publisher: the AI-builder consumption file.
+        var articles = Get("--articles") ?? throw new ArgumentException("--articles required");
+        var outDir = Get("--out") ?? throw new ArgumentException("--out required");
+        Directory.CreateDirectory(outDir);
+        foreach (var pubDir in Directory.EnumerateDirectories(articles).Where(d => Directory.Exists(Path.Combine(d, "works"))).OrderBy(d => d, StringComparer.Ordinal))
+        {
+            var pub = Path.GetFileName(pubDir);
+            var outPath = Path.Combine(outDir, $"{pub}-provisions.jsonl.gz");
+            var rowCount = 0;
+            await using var fs = File.Create(outPath);
+            await using var gz = new System.IO.Compression.GZipStream(fs, System.IO.Compression.CompressionLevel.Optimal);
+            await using var w = new StreamWriter(gz, new System.Text.UTF8Encoding(false));
+            foreach (var jf in Directory.EnumerateFiles(pubDir, "*.json", SearchOption.AllDirectories)
+                         .Where(f => Path.GetFileName(Path.GetDirectoryName(Path.GetDirectoryName(f))!) == "versions")
+                         .OrderBy(f => f, StringComparer.Ordinal))
+            {
+                using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(jf));
+                var root = doc.RootElement;
+                string? S2(System.Text.Json.JsonElement e, string k) => e.TryGetProperty(k, out var v) && v.ValueKind == System.Text.Json.JsonValueKind.String ? v.GetString() : null;
+                foreach (var p in root.GetProperty("provisions").EnumerateArray())
+                {
+                    var line = new System.Text.Json.Nodes.JsonObject
+                    {
+                        ["provision_id"] = S2(p, "provision_id"),
+                        ["lex_id"] = S2(root, "lex_id"),
+                        ["anchor"] = S2(p, "anchor"),
+                        ["type"] = S2(p, "type"),
+                        ["num"] = S2(p, "num"),
+                        ["heading"] = S2(p, "heading"),
+                        ["language"] = S2(root, "language"),
+                        ["valid_from"] = S2(root, "valid_from"),
+                        ["valid_to"] = S2(root, "valid_to"),
+                        ["article_valid_from"] = S2(p, "article_valid_from"),
+                        ["title"] = S2(root, "title"),
+                        ["text_md"] = S2(p, "text_md"),
+                        ["text_sha256"] = S2(p, "text_sha256"),
+                        ["source_sha256"] = S2(root.GetProperty("derived_from"), "sha256"),
+                        ["source_uri"] = S2(root.GetProperty("derived_from"), "source_uri"),
+                        ["profile"] = S2(root.GetProperty("generator"), "profile"),
+                        ["license"] = S2(root, "license"),
+                        ["attribution"] = S2(root, "attribution"),
+                    };
+                    await w.WriteLineAsync(line.ToJsonString(new System.Text.Json.JsonSerializerOptions
+                    { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping }));
+                    rowCount++;
+                }
+            }
+            Console.Error.WriteLine($"  [dataset] {outPath}: {rowCount} provision rows");
+        }
+        return 0;
+    }
     case "catalog":
     {
         var articles = Get("--articles") ?? throw new ArgumentException("--articles required");
