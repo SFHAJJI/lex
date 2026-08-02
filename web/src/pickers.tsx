@@ -18,12 +18,14 @@ export function LawPicker({ current, onPick }: { current?: string; onPick: (w: W
 
   useEffect(() => {
     const away = (e: MouseEvent) => { if (box.current && !box.current.contains(e.target as Node)) setOpen(false); };
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
     addEventListener("mousedown", away);
-    return () => removeEventListener("mousedown", away);
+    addEventListener("keydown", esc);
+    return () => { removeEventListener("mousedown", away); removeEventListener("keydown", esc); };
   }, []);
 
   useEffect(() => {
-    if (!open || q.trim().length < 2) { setHits([]); return; }
+    if (!open || q.trim().length < 2) { setHits([]); setBusy(false); return; }
     let live = true;
     setBusy(true);
     const timer = setTimeout(async () => {
@@ -46,18 +48,19 @@ export function LawPicker({ current, onPick }: { current?: string; onPick: (w: W
 
   return (
     <div className="picker" ref={box}>
-      <button className="pick main" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
+      <button className="pick main" onClick={() => setOpen((v) => !v)}
+              aria-expanded={open} aria-haspopup="listbox" aria-controls="lawpop">
         <i>law</i>{current ?? "choose a law"} ▾
       </button>
       {open ? (
-        <div className="pop">
+        <div className="pop" id="lawpop" role="listbox">
           <input autoFocus value={q} onChange={(e) => setQ(e.target.value)}
                  placeholder="name, subject, or identifier (32016r0679)" aria-label="Find a law" />
           {busy ? <div className="popnote">searching…</div> : null}
           {!busy && q.trim().length >= 2 && hits.length === 0 ? <div className="popnote">nothing matches</div> : null}
           <ul>
             {hits.map((h) => (
-              <li key={h.work}>
+              <li key={h.work} role="option" aria-selected={false}>
                 <button onClick={() => { onPick(h); setOpen(false); setQ(""); }}>
                   <span>{h.title}</span>
                   <span className="sub mono">{h.work}</span>
@@ -79,11 +82,11 @@ export function PeriodPicker({ from, until, order, onChange }: {
   return (
     <div className="sel">
       <label className="pick"><i>from</i>
-        <input type="date" value={from} onChange={(e) => onChange({ from: e.target.value })} /></label>
+        <input type="date" aria-label="Period start" value={from} onChange={(e) => onChange({ from: e.target.value })} /></label>
       <label className="pick"><i>to</i>
-        <input type="date" value={until} onChange={(e) => onChange({ until: e.target.value })} /></label>
+        <input type="date" aria-label="Period end" value={until} onChange={(e) => onChange({ until: e.target.value })} /></label>
       <label className="pick"><i>rank by</i>
-        <select value={order} onChange={(e) => onChange({ order: e.target.value as "by_date" | "by_churn" })}>
+        <select aria-label="How to rank the results" value={order} onChange={(e) => onChange({ order: e.target.value as "by_date" | "by_churn" })}>
           <option value="by_churn">most changed</option>
           <option value="by_date">most recent</option>
         </select></label>
@@ -128,10 +131,10 @@ export function TopicSearch({ q, asOf, onQuery, onOpen }: {
   return (
     <>
       <form className="sel" onSubmit={(e) => { e.preventDefault(); onQuery(text, asOf); }}>
-        <input style={{ flex: 1, minWidth: 0 }} value={text} onChange={(e) => setText(e.target.value)}
+        <input aria-label="Words to search for in the text" style={{ flex: 1, minWidth: 0 }} value={text} onChange={(e) => setText(e.target.value)}
                placeholder="words in the text — congé parental, breach notification, own funds" />
         <label className="pick"><i>as of</i>
-          <input type="date" value={asOf ?? ""} onChange={(e) => onQuery(q, e.target.value || undefined)} /></label>
+          <input type="date" aria-label="Only versions in force on this date" value={asOf ?? ""} onChange={(e) => onQuery(q, e.target.value || undefined)} /></label>
         <button type="submit">Search</button>
       </form>
       {busy ? <div className="empty">Searching…</div> : null}

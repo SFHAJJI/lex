@@ -92,6 +92,14 @@ export function Compare({ work, from, to, anchor }: {
     let live = true;
     setState({ loading: true });
     const load = async (date: string) => {
+      // Read is guarded against pulling a whole code into the tab; Compare was not, and it
+      // pulls TWO. A 1,160-article code froze the page. Above the threshold, compare the
+      // focused article instead and say so.
+      if (!anchor) {
+        const outline = await tool<any>("as_of", { work, date, mode: "outline" });
+        const o = first<any>(outline, (x) => Array.isArray(x?.provisions) && x.provisions.length > 0);
+        if ((o?.provisions?.length ?? 0) > 120) throw new Error("TOO_LARGE");
+      }
       const res = await tool<any>("as_of", { work, date, mode: anchor ? "select" : "full", ...(anchor ? { anchors: anchor } : {}) });
       const one = first<any>(res, (x) => Array.isArray(x?.provisions) && x.provisions.length > 0);
       const map = new Map<string, ProvisionItem>();
@@ -122,6 +130,8 @@ export function Compare({ work, from, to, anchor }: {
   }, [work, from, to, anchor]);
 
   if (state.loading) return <Empty>Comparing {from} with {to}…</Empty>;
+  if (state.error === "TOO_LARGE")
+    return <Empty>This law is too large to compare whole — open an article first, then compare.</Empty>;
   if (state.error) return <Empty>Could not compare these versions: {state.error}</Empty>;
 
   const rows = state.rows ?? [];

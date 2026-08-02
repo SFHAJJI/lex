@@ -118,3 +118,8 @@ button.ghost { background: none; border: 1px solid var(--line); color: var(--mut
 .rail .tick.on { top: 5px; height: 33px; width: 3px; background: var(--accent); opacity: 1; }
 .strong { font-weight: 600; }
 button.pick { cursor: pointer; }
+
+/* Buttons: white on the dark-mode accent measured 3.16:1, below AA. The page defines
+   --on-accent (white in light, near-black in dark); both directions now exceed 4.5:1. */
+.cmd button, .askrow .go { color: var(--on-accent, #fff); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

@@ -65,12 +65,12 @@ string Page(string title, string body, string? subtitle = null, string nav = "")
       /* Law is set in a serif; the interface around it is sans. The accent is reserved
          for one thing only: the date you are looking at. */
       :root { --bg:#faf8f3; --fg:#15171b; --muted:#5d5a53; --line:#e2ded4; --accent:#a8342a;
-              --card:#ffffff; --ok:#2f6b46; --warn:#8a5a12;
+              --card:#ffffff; --ok:#2f6b46; --warn:#8a5a12; --on-accent:#ffffff;
               --serif:Georgia,'Iowan Old Style','Palatino Linotype','Times New Roman',serif;
               --mono:ui-monospace,'Cascadia Code',Consolas,monospace; }
       @media (prefers-color-scheme: dark) {
         :root { --bg:#101215; --fg:#e9e5dd; --muted:#9a958b; --line:#2b2e34; --accent:#e0705f;
-                --card:#171a1e; --ok:#6cc48f; --warn:#e0b070; } }
+                --card:#171a1e; --ok:#6cc48f; --warn:#e0b070; --on-accent:#101215; } }
       * { box-sizing:border-box }
       body { margin:0; font:16px/1.6 ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif; background:var(--bg); color:var(--fg); }
       a { color:var(--accent); text-decoration:none } a:hover { text-decoration:underline }
@@ -93,10 +93,12 @@ string Page(string title, string body, string? subtitle = null, string nav = "")
       .kv td:first-child { color:var(--muted); white-space:nowrap; padding-right:18px }
       form.inline { display:flex; gap:8px; flex-wrap:wrap; margin:10px 0 }
       input,select,button { font:inherit; padding:7px 10px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--fg) }
-      button { background:var(--accent); color:#fff; border-color:var(--accent); cursor:pointer }
+      button { background:var(--accent); color:var(--on-accent); border-color:var(--accent); cursor:pointer }
       footer { border-top:1px solid var(--line); margin-top:40px; padding:16px 20px; color:var(--muted); font-size:13px }
       .notice { border-left:3px solid var(--warn); padding:10px 14px; background:var(--card); border-radius:0 8px 8px 0; margin:12px 0; font-size:14.5px }
       .snippet { color:var(--muted); font-size:13.5px }
+      .sitemap { margin-bottom:12px; line-height:2 }
+      :focus-visible { outline:2px solid var(--accent); outline-offset:2px }
       .rail { position:relative; height:44px; margin:14px 0 0 }
       .rail .axis { position:absolute; left:0; right:0; top:21px; height:1px; background:var(--line) }
       .rail .tick { position:absolute; top:13px; width:1px; height:17px; background:var(--muted); opacity:.55 }
@@ -124,6 +126,7 @@ string Page(string title, string body, string? subtitle = null, string nav = "")
       <a class="navlink{{(nav == "how" ? " on" : "")}}" href="/how-it-works">How it works</a>
       <span style="flex:1"></span>
       <a class="navlink{{(nav == "dev" ? " on" : "")}}" href="/developers">for developers</a>
+      <a class="navlink{{(nav == "built" ? " on" : "")}}" href="/built">how it was built</a>
     </header>
     <main>
     <h1>{{title}}</h1>
@@ -131,6 +134,15 @@ string Page(string title, string body, string? subtitle = null, string nav = "")
     {{body}}
     </main>
     <footer>
+    <nav class="sitemap" aria-label="All pages">
+      <a href="/">Ask</a> · <a href="/find">Find a law</a> · <a href="/changed">What changed</a> ·
+      <a href="/stories">Stories</a> · <a href="/browse">Browse</a> · <a href="/search">Search</a> ·
+      <a href="/in-force-on">In force on a date</a> · <a href="/how-it-works">How it works</a> ·
+      <a href="/architecture">Architecture</a> · <a href="/built">How it was built</a> ·
+      <a href="/coverage">Coverage</a> · <a href="/verify">Verify it yourself</a> ·
+      <a href="/developers">Developers &amp; API</a> ·
+      <a href="https://github.com/SFHAJJI/lex" rel="noopener">Source</a>
+    </nav>
       LU data: Legilux — Ministère d'État, Service central de législation, Grand-Duché de Luxembourg
       (CC-BY 4.0, metadata and content files; consolidated texts reproduced verbatim from the official filestore).
       EU data: © European Union, reuse with attribution (Commission Decision 2011/833/EU);
@@ -207,7 +219,7 @@ string RenderDiff(string oldText, string newText)
         var added = n.Where(l => !oldSet.Contains(l)).Take(150).ToList();
         sb.Append("<div class=\"notice\">Change too large for an exact line diff here — showing removed/added line samples; exact comparison at the official source links above.</div>");
         sb.Append("<div class=\"card\"><pre style=\"white-space:pre-wrap;font-size:13px;margin:0\">");
-        foreach (var l in removed) sb.Append($"<span style=\"color:#c0392b\">− {H(Trunc(l))}</span>\n");
+        foreach (var l in removed) sb.Append($"<span style=\"color:var(--accent)\">− {H(Trunc(l))}</span>\n");
         foreach (var l in added) sb.Append($"<span style=\"color:var(--ok)\">+ {H(Trunc(l))}</span>\n");
         sb.Append("</pre></div>");
         return sb.ToString();
@@ -228,7 +240,7 @@ string RenderDiff(string oldText, string newText)
         if (y < n.Length && (x >= o.Length || dp[x, y + 1] >= dp[x + 1, y]))
         { sb.Append($"<span style=\"color:var(--ok)\">+ {H(Trunc(n[y]))}</span>\n"); y++; emitted++; }
         else
-        { sb.Append($"<span style=\"color:#c0392b\">− {H(Trunc(o[x]))}</span>\n"); x++; emitted++; }
+        { sb.Append($"<span style=\"color:var(--accent)\">− {H(Trunc(o[x]))}</span>\n"); x++; emitted++; }
     }
     if (emitted >= maxEmit) sb.Append("<span class=\"sub\">… diff truncated at 500 changed lines …</span>\n");
     if (emitted == 0) sb.Append("<span class=\"sub\">(only whitespace-level differences in the extraction)</span>\n");
@@ -927,7 +939,7 @@ app.MapGet("/developers", (HttpRequest req) =>
         the JSON below is exactly what an MCP client receives.</p>
         <div class="card">
           <form id="pg" class="inline" style="margin:0 0 8px">
-            <select id="pgtool">
+            <select id="pgtool" aria-label="Choose a tool to call">
               <option value="as_of">as_of</option>
               <option value="article_history">article_history</option>
               <option value="timeline">timeline</option>
@@ -940,7 +952,7 @@ app.MapGet("/developers", (HttpRequest req) =>
             </select>
             <button type="submit">Call it</button>
           </form>
-          <textarea id="pgargs" rows="5" style="width:100%;font-family:var(--mono);font-size:13px"></textarea>
+          <textarea id="pgargs" aria-label="Tool arguments as JSON" rows="5" style="width:100%;font-family:var(--mono);font-size:13px"></textarea>
           <pre id="pgout" class="mono" style="white-space:pre-wrap;max-height:340px;overflow:auto;font-size:12.5px;margin:10px 0 0">↑ pick a tool and press "Call it"</pre>
         </div>
 
@@ -1171,15 +1183,15 @@ app.MapGet("/find", () =>
         <div class="card"><h2 style="margin-top:0">Search by words</h2>
         <p class="sub">Finds the individual article, not just the law — search runs over every provision.</p>
         <form class="inline" action="/search" method="get">
-          <input name="q" style="flex:1;min-width:240px" placeholder="e.g. congé parental, breach notification, own funds">
-          <input type="date" name="as_of" title="optional: as it stood on this date">
+          <input name="q" aria-label="Words to search for in the text" style="flex:1;min-width:240px" placeholder="e.g. congé parental, breach notification, own funds">
+          <input type="date" name="as_of" aria-label="Only versions in force on this date">
           <button type="submit">Search</button>
         </form></div>
 
         <div class="card"><h2 style="margin-top:0">What was in force on a date?</h2>
         <p class="sub">The compliance question in one call: everything that applied on a given day.</p>
         <form class="inline" action="/in-force-on" method="get">
-          <input type="date" name="date" value="{DateTime.UtcNow:yyyy-MM-dd}">
+          <input type="date" name="date" aria-label="Date to list laws in force on" value="{DateTime.UtcNow:yyyy-MM-dd}">
           <button type="submit">List it</button>
         </form></div>
 

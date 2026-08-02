@@ -56,8 +56,14 @@ export function useWorkspace(): [State, (next: Partial<State>, push?: boolean) =
     return () => removeEventListener("popstate", onPop);
   }, []);
 
-  const go = (next: Partial<State>, push = true) => {
+  const go = (next: Partial<State>, push?: boolean) => {
     const merged = { ...state, ...next };
+    // Back should undo "I opened another law", not "I nudged the date". Every control tweak
+    // pushing a history entry meant Back had to be pressed a dozen times to leave a page.
+    if (push === undefined)
+      push = next.work !== undefined && next.work !== state.work
+          || next.q !== undefined && next.q !== state.q
+          || next.space !== undefined && next.space !== state.space;
     const url = toSearch(merged);
     if (push) history.pushState(null, "", url);
     else history.replaceState(null, "", url);
