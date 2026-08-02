@@ -4,3 +4,4 @@ deploy/
 *.db
 *.pem
 .vs/
+evals/out/
