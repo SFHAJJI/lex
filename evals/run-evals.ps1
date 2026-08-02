@@ -77,7 +77,9 @@ foreach ($case in $cases) {
     }
 
     # 5. Grounding: every URL in the reply must come from tool evidence (permalink) or an official publisher host
-    $evidenceLinks = @($trace | ForEach-Object { $_.docs } | ForEach-Object { $_.permalink } | Where-Object { $_ })
+    # every link a tool handed back counts as evidence, whichever field carried it
+    $evidenceLinks = @($trace | ForEach-Object { $_.docs } | ForEach-Object { $_.permalink; $_.diff_permalink } | Where-Object { $_ })
+    $evidenceLinks += @($trace | ForEach-Object { $_.docs } | ForEach-Object { $_.pinpoints } | ForEach-Object { $_.permalink } | Where-Object { $_ })
     $officialHosts = @("legilux.public.lu", "data.legilux.public.lu", "eur-lex.europa.eu", "publications.europa.eu")
     $urls = [regex]::Matches($r.reply, 'https?://[^\s)"''<>\]]+') | ForEach-Object { $_.Value.TrimEnd('.', ',', ';') }
     foreach ($u in $urls) {

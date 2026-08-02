@@ -206,7 +206,11 @@ public sealed class AskService(McpCore core)
                             ["title"] = o["title"]?.DeepClone(),
                             ["valid_from"] = o["first_change"]?.DeepClone(),
                             ["valid_to"] = o["last_change"]?.DeepClone(),
-                            ["permalink"] = (o["diff_permalink"] ?? o["permalink"])?.DeepClone(),
+                            // permalink is the row's canonical link (as for every other tool);
+                            // the diff is an extra affordance, not a replacement — dropping it
+                            // made legitimately-cited URLs look ungrounded.
+                            ["permalink"] = o["permalink"]?.DeepClone(),
+                            ["diff_permalink"] = o["diff_permalink"]?.DeepClone(),
                             ["snippet"] = $"{o["versions_in_period"]} new version(s) in the window, {o["versions_total"]} in all",
                         });
                         break;
