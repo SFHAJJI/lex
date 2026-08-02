@@ -196,6 +196,31 @@ public sealed class AskService(McpCore core)
             {
                 case JsonObject o:
                     status ??= (o["envelope"]?["status"] ?? o["status"])?.GetValue<string>();
+                    // article_history has no lex_id at all: it is keyed by work + anchor, and its
+                    // evidence is the list of states. Without this it produced ZERO evidence rows
+                    // and its own permalinks read as ungrounded when the model cited them.
+                    if (o["anchor"] is not null && o["states"] is JsonArray states && docs.Count < 24)
+                    {
+                        var first = states.OfType<JsonObject>().FirstOrDefault();
+                        var last = states.OfType<JsonObject>().LastOrDefault();
+                        var pins = new JsonArray(states.OfType<JsonObject>().Take(6).Select(s =>
+                            (JsonNode)new JsonObject
+                            {
+                                ["anchor"] = o["anchor"]?.DeepClone(),
+                                ["quote"] = $"in force {s["valid_from"]} → {s["valid_to"] ?? "open"} (text sha {(s["text_sha256"]?.GetValue<string>() ?? "")[..Math.Min(12, (s["text_sha256"]?.GetValue<string>() ?? "").Length)]})",
+                                ["permalink"] = s["permalink"]?.DeepClone(),
+                            }).ToArray());
+                        docs.Add(new JsonObject
+                        {
+                            ["lex_id"] = o["work"]?.DeepClone(),
+                            ["title"] = $"{o["work"]} · {o["anchor"]} — {o["distinct_texts"]} distinct text(s)",
+                            ["valid_from"] = first?["valid_from"]?.DeepClone(),
+                            ["valid_to"] = last?["valid_to"]?.DeepClone(),
+                            ["permalink"] = first?["permalink"]?.DeepClone(),
+                            ["pinpoints"] = pins,
+                        });
+                        break;
+                    }
                     // changes_in_period rows are works, not versions: they carry "work" rather
                     // than "lex_id", and the counts ARE the evidence.
                     if (o["work"] is not null && o["versions_in_period"] is not null && docs.Count < 24)

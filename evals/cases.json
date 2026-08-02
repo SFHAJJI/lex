@@ -16,11 +16,18 @@
       "expect_reply_contains_any": ["procédure civile", "Code"]
     },
     {
-      "id": "dora-timeline",
+      "id": "dora-single-version-honesty",
       "question": "How has DORA changed since it entered into force?",
-      "expect_tool_any": ["timeline", "diff"],
-      "expect_args_contain": ["32022r2554"],
-      "expect_reply_contains_any": ["version", "2022", "2023", "2024", "2025"]
+      "expect_tool_any": ["timeline", "diff", "search", "coverage"],
+      "expect_args_contain": [],
+      "grade_llm": "Ground truth: Lex holds exactly ONE consolidated version of DORA (Regulation (EU) 2022/2554, valid from 2022-12-27) and stores no text for it. PASS if the reply honestly conveys that there is only one version / no recorded amendments in Lex, and/or that no text is held, optionally pointing at the official source. FAIL if it describes amendments or multiple versions of DORA as though Lex held them, or invents dates."
+    },
+    {
+      "id": "crr-timeline",
+      "question": "How many versions of the CRR (Regulation 575/2013) does Lex hold, and when was the most recent one?",
+      "expect_tool": "timeline",
+      "expect_args_contain": ["32013r0575"],
+      "grade_llm": "Lex holds 22 consolidated versions of the CRR, earliest valid from 2013-06-28, latest dated 2026-06-26. PASS if the reply gives a version count consistent with the tool output (about 22) and a most-recent date consistent with it. FAIL if it invents a count or date, or refuses although the data is present."
     },
     {
       "id": "inforce-codes",
