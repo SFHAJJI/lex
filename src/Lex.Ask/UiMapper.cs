@@ -44,8 +44,8 @@ internal static class UiMapper
 
     private static bool HasContent(JsonObject o)
         => o["provisions"] is JsonArray { Count: > 0 } || o["states"] is JsonArray { Count: > 0 }
-           || o["changes"] is JsonArray { Count: > 0 } || o["documents"] is JsonArray { Count: > 0 }
-           || o["document"] is JsonObject;
+           || o["changes"] is JsonArray { Count: > 0 } || o["works"] is JsonArray { Count: > 0 }
+           || o["document"] is JsonObject || o["from"] is JsonObject;
 
     private static UiEffect Provision(JsonObject o, JsonObject args)
     {
@@ -81,12 +81,13 @@ internal static class UiMapper
         var from = S(args, "from_date") ?? S(o, "from_date");
         var to = S(args, "to_date") ?? S(o, "to_date");
         if (from is null || to is null) return new UiEffect();
-        var docs = o["documents"]?.AsArray().OfType<JsonObject>().ToList() ?? [];
+        // diff returns the two resolved documents as `from` / `to`, not a list.
+        var a = o["from"] as JsonObject;
+        var b = o["to"] as JsonObject;
         return new UiEffect(Diff: new DiffView(
-            Subject: new Subject(S(args, "work") ?? S(o, "work") ?? "", null, from, null),
-            FromDate: from, ToDate: to,
-            FromPermalink: docs.FirstOrDefault() is { } f ? S(f, "permalink") : null,
-            ToPermalink: docs.Count > 1 ? S(docs[^1], "permalink") : null,
+            Subject: new Subject(S(args, "work") ?? S(o, "work") ?? "", S(b, "title") ?? S(a, "title"), from, null),
+            FromDate: S(a, "valid_from") ?? from, ToDate: S(b, "valid_from") ?? to,
+            FromPermalink: S(a, "permalink"), ToPermalink: S(b, "permalink"),
             Note: S(o, "note")));
     }
 
@@ -109,10 +110,10 @@ internal static class UiMapper
 
     private static UiEffect InForce(JsonObject o, JsonObject args)
     {
-        if (o["documents"] is not JsonArray docs || docs.Count == 0) return new UiEffect();
+        if (o["works"] is not JsonArray docs || docs.Count == 0) return new UiEffect();
         return new UiEffect(InForce: new InForceView(
             Date: S(args, "date") ?? "",
-            Total: o["total"]?.GetValue<int>() ?? docs.Count,
+            Total: o["total_works_in_force"]?.GetValue<int>() ?? docs.Count,
             Rows: docs.OfType<JsonObject>().Take(60).Select(d => new InForceRow(
                 Work: S(d, "lex_id") ?? "", Title: S(d, "title"), Kind: S(d, "document_type"),
                 ValidFrom: S(d, "valid_from") ?? "", Permalink: S(d, "permalink"))).ToList()));

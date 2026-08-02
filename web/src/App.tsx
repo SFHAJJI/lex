@@ -40,19 +40,55 @@ export default function App() {
     let live = true;
     if (s.mode === "read") {
       const date = s.date ?? today();
-      tool<any>("as_of", { work: s.work, date, mode: s.anchor ? "select" : "full", ...(s.anchor ? { anchors: s.anchor } : {}) })
+      // A code can carry thousands of articles: ask for the outline first and only pull
+      // full text when it is small enough to read. Otherwise show the outline and let the
+      // reader choose — dumping a whole code would freeze the tab and help nobody.
+      const fetchRead = async () => {
+        if (s.anchor)
+          return tool<any>("as_of", { work: s.work, date, mode: "select", anchors: s.anchor });
+        const outline = await tool<any>("as_of", { work: s.work, date, mode: "outline" });
+        const o = first<any>(outline, (x) => Array.isArray(x?.provisions) && x.provisions.length > 0);
+        const n = o?.provisions?.length ?? 0;
+        if (n === 0 || n > 80) return outline;
+        return tool<any>("as_of", { work: s.work, date, mode: "full" });
+      };
+      fetchRead()
         .then((res) => {
           if (!live) return;
           const one = first<any>(res, (x) => Array.isArray(x?.provisions) && x.provisions.length > 0);
           const doc = one?.document ?? one;
           setTitle(doc?.title);
-          setLoaded({ items: one?.provisions ?? [], from: doc?.valid_from ?? date, to: doc?.valid_to });
-          if (!one?.provisions?.length)
-            setUi({ gap: { status: one?.envelope?.status ?? "no_result", explanation: "No text is held for this law on that date.", available: [], } });
+          const items = (one?.provisions ?? []) as ProvisionItem[];
+          setLoaded({ items, from: doc?.valid_from ?? date, to: doc?.valid_to });
+          if (items.length === 0)
+            setUi({ gap: { status: one?.envelope?.status ?? "no_result", explanation: "No text is held for this law on that date.", available: [] } });
           else setUi(undefined);
         })
         .catch(() => live && setUi({ gap: { status: "error", explanation: "That version could not be loaded.", available: [] } }));
     }
+    return () => { live = false; };
+  }, [s.work, s.date, s.mode, s.anchor]);
+
+  // Time workspace: a period loads the ranking deterministically, so the follow-up chips
+  // and any /?from=&until= link land on real content instead of an empty panel.
+  useEffect(() => {
+    if (s.work || !s.from || !s.until) return;
+    let live = true;
+    tool<any>("changes_in_period", { from_date: s.from, to_date: s.until, order: s.order ?? "by_churn", limit: 25 })
+      .then((res) => {
+        if (!live) return;
+        const one = first<any>(res, (x) => Array.isArray(x?.changes) && x.changes.length > 0);
+        setUi(one?.changes?.length
+          ? { ranking: { from_date: s.from!, to_date: s.until!, order: s.order ?? "by_churn",
+                         works_changed: one.works_changed, new_versions: one.new_versions, rows: one.changes } }
+          : { gap: { status: "no_changes_in_period", explanation: "Nothing changed in that window.", available: [] } });
+      })
+      .catch(() => {});
+    return () => { live = false; };
+  }, [s.work, s.from, s.until, s.order]);
+
+  useEffect(() => {
+    let live = true;
     if (s.mode === "history" && s.anchor) {
       tool<any>("article_history", { work: s.work, anchor: s.anchor })
         .then((res) => {
@@ -144,7 +180,7 @@ export default function App() {
          ui?.in_force ? <InForce date={ui.in_force.date} total={ui.in_force.total} rows={ui.in_force.rows} onOpen={openLaw} /> :
          ui?.history ? <HistoryRail states={ui.history.states} anchor={ui.history.anchor} work={ui.history.subject.work} /> :
          s.work && s.mode === "compare" ? <Compare work={s.work} from={s.date ?? today()} to={s.to ?? today()} anchor={s.anchor} /> :
-         s.work && s.mode === "read" && loaded ? <Provision items={loaded.items} validFrom={loaded.from} validTo={loaded.to} work={s.work} /> :
+         s.work && s.mode === "read" && loaded ? <Provision items={loaded.items} validFrom={loaded.from} validTo={loaded.to} work={s.work} onPick={(a) => go({ anchor: a })} /> :
          s.work ? <Empty>Loading…</Empty> :
          isTime ? <Empty>Pick a period, or ask a question.</Empty> :
          <Intro onPick={submit} />}

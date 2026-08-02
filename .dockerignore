@@ -2,3 +2,8 @@
 **/obj
 .git
 *.md
+# npm installs inside the node stage; shipping 66 MB of node_modules in the build context
+# only slows the upload and risks platform-specific binaries leaking in.
+web/node_modules
+# the bundle is produced by the node stage, never taken from a developer's machine
+src/Lex.Web/wwwroot/app

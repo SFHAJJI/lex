@@ -6,16 +6,31 @@ import { publisherOf, workSlug, type State } from "./state";
 const permalink = (work: string, date: string, anchor?: string) =>
   `/${publisherOf(work)}/${workSlug(work)}/${date}${anchor ? `#${anchor}` : ""}`;
 
-export function Provision({ items, validFrom, validTo, work }: {
+export function Provision({ items, validFrom, validTo, work, onPick }: {
   items: ProvisionItem[]; validFrom: string; validTo?: string; work: string;
+  onPick: (anchor: string) => void;
 }) {
+  // A large law arrives as an outline (no text): render it as a table of contents the
+  // reader picks from, rather than pulling thousands of articles into the page.
+  const outline = items.length > 0 && items.every((p) => !p.text);
   return (
     <>
       <div className="cnt">
         <span className="tag">in force {validFrom} → {validTo ?? "open"}</span>
         <span className="tag">{items.length} article{items.length === 1 ? "" : "s"}</span>
+        {outline ? <span className="tag">outline — pick an article to read it</span> : null}
       </div>
-      {items.map((p) => (
+      {outline ? (
+        <ul className="rows">
+          {items.map((p) => (
+            <li key={p.anchor}>
+              <button className="rowbtn" onClick={() => onPick(p.anchor)}>
+                <span>{p.num ?? p.anchor}{p.heading ? ` — ${p.heading}` : ""}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : items.map((p) => (
         <article key={p.anchor} className="art">
           <h4>
             <a href={permalink(work, validFrom, p.anchor)}>{p.num ?? p.anchor}</a>
@@ -69,7 +84,8 @@ export function HistoryRail({ states, anchor, work }: {
 export function Compare({ work, from, to, anchor }: {
   work: string; from: string; to: string; anchor?: string;
 }) {
-  const [state, setState] = useState<{ loading: boolean; error?: string; rows?: [string, Piece[]][]; unchanged?: number }>({ loading: true });
+  const [state, setState] = useState<{ loading: boolean; error?: string; rows?: [string, Piece[]][];
+                                       unchanged?: number; added?: number; removed?: number }>({ loading: true });
   const [showAll, setShowAll] = useState(false);
 
   useEffect(() => {
@@ -88,12 +104,18 @@ export function Compare({ work, from, to, anchor }: {
         const keys = [...new Set([...a.keys(), ...b.keys()])].sort();
         const rows: [string, Piece[]][] = [];
         let same = 0;
+        let added = 0;
+        let removed = 0;
         for (const k of keys) {
+          // Added/removed is about PRESENCE, not about which edit pieces appear: an
+          // article that only gained a sentence is amended, not added.
+          if (!a.has(k)) { added++; }
+          else if (!b.has(k)) { removed++; }
           const pieces = diffWords(a.get(k)?.text ?? "", b.get(k)?.text ?? "");
           if (changed(pieces)) rows.push([a.get(k)?.num ?? b.get(k)?.num ?? k, pieces]);
           else same++;
         }
-        setState({ loading: false, rows, unchanged: same });
+        setState({ loading: false, rows, unchanged: same, added, removed });
       })
       .catch((e) => live && setState({ loading: false, error: String(e.message ?? e) }));
     return () => { live = false; };
@@ -103,14 +125,12 @@ export function Compare({ work, from, to, anchor }: {
   if (state.error) return <Empty>Could not compare these versions: {state.error}</Empty>;
 
   const rows = state.rows ?? [];
-  const added = rows.filter(([, p]) => p.every((x) => x.k !== "-")).length;
-  const removed = rows.filter(([, p]) => p.every((x) => x.k !== "+")).length;
   return (
     <>
       <div className="cnt">
-        <span className="tag">{rows.length} amended</span>
-        <span className="tag">{added} added</span>
-        <span className="tag">{removed} removed</span>
+        <span className="tag">{rows.length} changed</span>
+        <span className="tag">{state.added ?? 0} added</span>
+        <span className="tag">{state.removed ?? 0} removed</span>
         <span className="tag">{state.unchanged} unchanged{state.unchanged ? " · hidden" : ""}</span>
         <span className="tag mono">{from} → {to}</span>
       </div>
