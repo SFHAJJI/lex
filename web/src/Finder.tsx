@@ -43,10 +43,13 @@ export default function Finder(p: FinderProps) {
             {t.label}
           </button>
         ))}
-        <span className="fin-hint">{tab.hint}</span>
       </div>
 
+      {/* The hint used to be pinned to the far right of the tab row, level with the tabs but
+          nowhere near the one it described, so it read as an unrelated caption. It belongs under
+          the tab it explains and above the control it explains. */}
       <div className="fin-body">
+        <p className="fin-hint">{tab.hint}</p>
         {p.space === "law" && <LawPicker current={undefined} onPick={p.onPickLaw} inline />}
         {p.space === "time" && (
           <PeriodPicker from={p.state.from ?? p.today} until={p.state.until ?? p.today}

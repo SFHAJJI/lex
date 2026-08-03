@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { first, tool, type ProvisionItem, type RankingRow, type UiEffect } from "./api";
 import { diffWords, changed, type Piece } from "./diff";
 import { publisherOf, workSlug, type State } from "./state";
+import { shorten } from "./pickers";
 
 const permalink = (work: string, date: string, anchor?: string) =>
   `/${publisherOf(work)}/${workSlug(work)}/${date}${anchor ? `#${anchor}` : ""}`;
@@ -21,6 +22,17 @@ export function Provision({ items, toc, validFrom, validTo, work, anchor, onPick
 }) {
   const outlineOnly = items.length > 0 && items.every((p) => !p.text);
   const nav = toc.length >= 6 || outlineOnly;
+
+  // A code too large to render whole used to open onto an apology with a button beside it. Open
+  // the first article instead, so arriving at the Code du travail means arriving at some law.
+  // Once per work: clearing the article is a deliberate act, and should give back the contents
+  // rather than bounce straight to Article 1 again.
+  const opened = useRef<string>();
+  useEffect(() => {
+    if (!outlineOnly || anchor || toc.length === 0 || opened.current === work) return;
+    opened.current = work;
+    onPick(toc[0].anchor);
+  }, [outlineOnly, anchor, work, toc]);
   const body = (
     <div className="text">
       <div className="cnt">
@@ -79,6 +91,10 @@ export function VersionRail({ dates, current, compareTo, scope, today, onPick, o
 }) {
   const box = useRef<HTMLDivElement>(null);
   const [w, setW] = useState(720);
+  // Comparing used to be shift-click and nothing else, which meant it did not exist at all on a
+  // phone: there is no shift key to hold. Arming the rail from a button gives the same feature a
+  // door that a finger can open, and leaves shift-click in place for anyone who already knows it.
+  const [arming, setArming] = useState(false);
 
   useLayoutEffect(() => {
     const el = box.current;
@@ -88,15 +104,38 @@ export function VersionRail({ dates, current, compareTo, scope, today, onPick, o
     return () => ro.disconnect();
   }, []);
 
-  if (dates.length === 0) return null;
+  useEffect(() => {
+    if (!arming) return;
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setArming(false); };
+    addEventListener("keydown", esc);
+    return () => removeEventListener("keydown", esc);
+  }, [arming]);
+
+  // A comparison landing on screen means the job is done; stop asking for a second date.
+  useEffect(() => { if (compareTo) setArming(false); }, [compareTo]);
+
   const i = current ? dates.indexOf(current) : -1;
   const j = compareTo ? dates.indexOf(compareTo) : -1;
-  const xs = layout(dates, w);
-  const labels = labelled(dates, xs, w, i, j);
+  const { xs, width } = layout(dates, w);
+
+  // A rail that scrolls can hold the version you are reading off screen. Centre it whenever it
+  // moves, so stepping with the arrows keeps the marker in sight instead of leaving it behind.
+  useEffect(() => {
+    const el = box.current;
+    if (!el || i < 0) return;
+    el.scrollTo({ left: Math.max(0, xs[i] - el.clientWidth / 2), behavior: "smooth" });
+  }, [i, width]);
+
+  if (dates.length === 0) return null;
+  const labels = labelled(dates, xs, width, i, j);
   const ahead = dates.filter((d) => d > today).length;
   const gaps = dates.slice(1).map((d, k) => (ms(d) - ms(dates[k])) / 86400000).sort((a, b) => a - b);
   const median = gaps.length ? Math.round(gaps[Math.floor(gaps.length / 2)]) : 0;
   const [a, b] = i >= 0 && j >= 0 ? [Math.min(xs[i], xs[j]), Math.max(xs[i], xs[j])] : [0, 0];
+  const pick = (d: string, shift: boolean) => {
+    if (shift || arming) { if (d !== current) onCompare(d); return; }
+    onPick(d);
+  };
 
   return (
     <div className="railbox">
@@ -112,29 +151,42 @@ export function VersionRail({ dates, current, compareTo, scope, today, onPick, o
             comparing {current && current < compareTo ? current : compareTo} →{" "}
             {current && current < compareTo ? compareTo : current} ✕
           </button>
+        ) : arming ? (
+          <span className="hint arm">now pick the version to compare it with</span>
         ) : (
-          <span className="hint">shift-click a second version to compare</span>
+          <span className="hint">or shift-click a second version</span>
         )}
         <span className="grow" />
+        {compareTo ? null : (
+          <button className={"stepbtn wide" + (arming ? " on" : "")} disabled={dates.length < 2}
+                  aria-pressed={arming} onClick={() => setArming((v) => !v)}>
+            {arming ? "Cancel" : "Compare"}
+          </button>
+        )}
         <button className="stepbtn" disabled={i <= 0} aria-label="Previous version"
                 onClick={() => onPick(dates[i - 1])}>←</button>
         <button className="stepbtn" disabled={i < 0 || i >= dates.length - 1} aria-label="Next version"
                 onClick={() => onPick(dates[i + 1])}>→</button>
       </div>
-      <div className="rail" ref={box}>
-        <div className="axis" />
-        {j >= 0 ? <div className="band" style={{ left: a, width: Math.max(2, b - a) }} /> : null}
-        {dates.map((d, k) => (
-          <button key={d}
-                  className={`tick${k === i ? " on" : ""}${k === j ? " cmp" : ""}${d > today ? " future" : ""}`}
-                  style={{ left: xs[k] }} title={`${d}${d > today ? ", not yet in force" : ""}`}
-                  tabIndex={labels.has(k) || k === i ? 0 : -1}
-                  aria-label={`${d}${k === i ? " (showing)" : ""}`}
-                  onClick={(e) => (e.shiftKey ? onCompare(d) : onPick(d))} />
-        ))}
-        {[...labels].map((k) => (
-          <span key={k} className={`rlbl${k === i ? " on" : ""}`} style={{ left: xs[k] }}>{dates[k]}</span>
-        ))}
+      {/* The ticks keep a minimum spacing and the rail scrolls when they no longer fit. It used to
+          squeeze them into the available width instead, so the laws with the most versions, which
+          are exactly the ones worth scrubbing, ended up with targets under 4px wide. */}
+      <div className={"rail" + (arming ? " arming" : "")} ref={box}>
+        <div className="railtrack" style={{ width }}>
+          <div className="axis" />
+          {j >= 0 ? <div className="band" style={{ left: a, width: Math.max(2, b - a) }} /> : null}
+          {dates.map((d, k) => (
+            <button key={d}
+                    className={`tick${k === i ? " on" : ""}${k === j ? " cmp" : ""}${d > today ? " future" : ""}`}
+                    style={{ left: xs[k] }} title={`${d}${d > today ? ", not yet in force" : ""}`}
+                    tabIndex={labels.has(k) || k === i ? 0 : -1}
+                    aria-label={`${d}${k === i ? " (showing)" : ""}`}
+                    onClick={(e) => pick(d, e.shiftKey)} />
+          ))}
+          {[...labels].map((k) => (
+            <span key={k} className={`rlbl${k === i ? " on" : ""}`} style={{ left: xs[k] }}>{dates[k]}</span>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -144,21 +196,23 @@ export function VersionRail({ dates, current, compareTo, scope, today, onPick, o
  * Time-proportional, so the rhythm of amendment stays legible — a law rewritten every three
  * weeks looks nothing like one revised twice a century. Then ticks are pushed apart to keep a
  * clickable target each, because proportional alone collapses dense runs into an unhittable smear.
+ *
+ * MIN is a floor, not a preference. It used to be `Math.min(9, usable / (n - 1))`, which reads as
+ * a floor but is the opposite: the denser the law, the smaller the target it produced, and a
+ * squeeze pass afterwards pulled everything back inside the box. A 195-version code came out at
+ * 3.6px per tick. The rail now overflows and scrolls instead, so scrubbing stays possible however
+ * many versions there are.
  */
-function layout(dates: string[], width: number): number[] {
+const MIN = 8;
+function layout(dates: string[], width: number): { xs: number[]; width: number } {
+  if (dates.length === 0) return { xs: [], width };
   const pad = 12;
   const usable = Math.max(1, width - pad * 2);
   const lo = ms(dates[0]);
   const span = Math.max(1, ms(dates[dates.length - 1]) - lo);
   const xs = dates.map((d) => pad + ((ms(d) - lo) / span) * usable);
-  const min = Math.min(9, usable / Math.max(1, dates.length - 1));
-  for (let k = 1; k < xs.length; k++) xs[k] = Math.max(xs[k], xs[k - 1] + min);
-  const last = xs.length - 1;
-  if (xs[last] > pad + usable) {
-    xs[last] = pad + usable;
-    for (let k = last - 1; k >= 0; k--) xs[k] = Math.min(xs[k], xs[k + 1] - min);
-  }
-  return xs;
+  for (let k = 1; k < xs.length; k++) xs[k] = Math.max(xs[k], xs[k - 1] + MIN);
+  return { xs, width: Math.max(width, xs[xs.length - 1] + pad) };
 }
 
 /** As many date labels as fit without touching; the version on screen always keeps its own. */
@@ -267,10 +321,56 @@ export function Compare({ work, from, to, anchor }: {
   );
 }
 
+/**
+ * What the ranking rows do not say for themselves.
+ *
+ * changes_in_period counts amendments; it does not report whether the amended text can be shown,
+ * and it returns a null title for roughly a third of the rows. Both gaps are visible in the same
+ * screenful: a list where some rows are named "Code de l'environnement", some are named
+ * `lu-legilux:st-1994-01-19-n1`, and eight of the top twelve open onto nothing.
+ *
+ * One outline lookup per row answers both, so it is worth the calls: whether that version carries
+ * text, and what the publisher actually calls it. Six at a time, off the render path, and every
+ * row stays usable while its own lookup is still in flight.
+ */
+function useRowFacts(rows: RankingRow[]) {
+  const [facts, setFacts] = useState<Record<string, { text: boolean; title?: string }>>({});
+  const key = rows.map((r) => r.work).join("|");
+  useEffect(() => {
+    let live = true;
+    setFacts({});
+    const queue = rows.slice();
+    const worker = async () => {
+      for (;;) {
+        const r = queue.shift();
+        if (!r || !live) return;
+        let fact: { text: boolean; title?: string } = { text: false };
+        try {
+          const res = await tool<any>("as_of", { work: r.work, date: r.last_change, mode: "outline" });
+          const one = first<any>(res, (x) => Array.isArray(x?.provisions) && x.provisions.length > 0)
+                   ?? (Array.isArray(res) ? res[0] : res);
+          fact = { text: (one?.provisions?.length ?? 0) > 0, title: label((one?.document ?? one)?.title) };
+        } catch { /* a row that cannot be checked stays unmarked rather than wrongly marked */ }
+        if (live) setFacts((f) => ({ ...f, [r.work]: fact }));
+      }
+    };
+    void Promise.all(Array.from({ length: Math.min(6, rows.length) }, worker));
+    return () => { live = false; };
+  }, [key]);
+  return facts;
+}
+
 export function Ranking({ rows, worksChanged, newVersions, from, to, onOpen }: {
   rows: RankingRow[]; worksChanged: number; newVersions: number; from: string; to: string;
   onOpen: (work: string, from: string, to: string) => void;
 }) {
+  const facts = useRowFacts(rows);
+  const [onlyText, setOnlyText] = useState(false);
+  const checked = rows.filter((r) => facts[r.work]);
+  const textless = checked.filter((r) => !facts[r.work].text).length;
+  // Unchecked rows stay in the list. Hiding a row because its lookup has not landed yet would
+  // make the list shuffle under the cursor while it loads.
+  const shown = onlyText ? rows.filter((r) => facts[r.work]?.text !== false) : rows;
   const max = Math.max(1, ...rows.map((r) => r.versions_in_period));
   return (
     <>
@@ -278,17 +378,29 @@ export function Ranking({ rows, worksChanged, newVersions, from, to, onOpen }: {
         <span className="tag">{worksChanged.toLocaleString()} laws changed</span>
         <span className="tag">{newVersions.toLocaleString()} new versions</span>
         <span className="tag mono">{from} → {to}</span>
+        {textless > 0 ? (
+          <button className={"tag act" + (onlyText ? " on" : "")} aria-pressed={onlyText}
+                  onClick={() => setOnlyText((v) => !v)}>
+            {onlyText ? `showing the ${shown.length} with text ✕` : `${textless} hold no text · hide them`}
+          </button>
+        ) : null}
       </div>
       <div className="bars">
-        {rows.map((r) => (
-          <button key={r.work} className="bar" onClick={() => onOpen(r.work, r.first_change, r.last_change)}>
-            <span className="track">
-              <span className="fill" style={{ width: `${(r.versions_in_period / max) * 100}%` }} />
-              <span className="lbl">{clean(r.title) ?? r.work}</span>
-            </span>
-            <span className="num">{r.versions_in_period}</span>
-          </button>
-        ))}
+        {shown.map((r) => {
+          const f = facts[r.work];
+          const name = f?.title ?? label(r.title) ?? humanSlug(r.work);
+          return (
+            <button key={r.work} className={"bar" + (f && !f.text ? " notext" : "")}
+                    onClick={() => onOpen(r.work, r.first_change, r.last_change)}>
+              <span className="track">
+                <span className="fill" style={{ width: `${(r.versions_in_period / max) * 100}%` }} />
+                <span className="lbl">{name}</span>
+                {f && !f.text ? <span className="mark">record only</span> : null}
+              </span>
+              <span className="num">{r.versions_in_period}</span>
+            </button>
+          );
+        })}
       </div>
     </>
   );
@@ -319,14 +431,47 @@ export function InForce({ date, total, rows, onOpen }: {
   );
 }
 
-export function Gap({ status, explanation, available }: { status: string; explanation: string; available: string[] }) {
+/**
+ * A refusal, and what stands behind it.
+ *
+ * The date-level version of this message was misleading on the works that need it most. Told
+ * "no text is held for this law on that date", a reader reasonably tries another date. For
+ * Code de l'environnement that is 195 wrong guesses: Legilux publishes the amendment record for
+ * these consolidated codes and no text file for any snapshot of them. So when the whole work is
+ * textless, say THAT, once, and then show what Lex does hold, because dated versions with sources
+ * and hashes are a real answer to a real question, just not to the question about wording.
+ */
+export function Gap({ status, explanation, available, held }: {
+  status: string; explanation: string; available: string[];
+  held?: { text: number; total: number; official?: string };
+}) {
+  const whole = held && held.total > 0 && held.text === 0;
   return (
     <div className="gap">
       <div className="cnt"><span className="tag warn mono">{status}</span></div>
-      <p>{explanation}</p>
-      {available.length > 0 ? (
-        <p className="sub">What does exist: {available.slice(0, 10).join(" · ")}</p>
-      ) : null}
+      {whole ? (
+        <>
+          <p><b>Lex holds the amendment record for this law, not its text.</b></p>
+          <p className="sub">
+            The publisher issues no text file for any of its {held!.total.toLocaleString()} versions,
+            so no date will show wording. What is held for each of them: the dates it applied
+            between, the source it came from, and the hash of the record. The rail above is the
+            history itself, and it is complete.
+          </p>
+          {held!.official ? (
+            <p className="sub">
+              <a href={held!.official} target="_blank" rel="noopener noreferrer">Read the text at the publisher ↗</a>
+            </p>
+          ) : null}
+        </>
+      ) : (
+        <>
+          <p>{explanation}</p>
+          {available.length > 0 ? (
+            <p className="sub">What does exist: {available.slice(0, 10).join(" · ")}</p>
+          ) : null}
+        </>
+      )}
       <p className="sub">
         <a href="/coverage">See exactly what Lex holds and what it lacks →</a>
       </p>
@@ -348,11 +493,33 @@ export function modeFor(ui?: UiEffect): State["mode"] | undefined {
   return undefined;
 }
 
-/** Publishers put escaped newlines and editorial notes inside titles. A bar label is one line,
- *  so collapse the whitespace and cut at the first sentence-ending break. */
-export const clean = (t?: string) => t
-  ? t.replace(/\n/g, " ").replace(/\s+/g, " ").trim().slice(0, 120)
-  : t;
+/**
+ * One name for a law, everywhere it appears.
+ *
+ * There used to be two. The pickers used `shorten`, which drops the "Version consolidée applicable
+ * au … :" that Legilux prefixes to every consolidated title. The ranking used `clean`, which only
+ * collapsed whitespace and cut at 120 characters. So the same law read as "Code du travail" in one
+ * list and as boilerplate severed mid-word in the next, and neither list was wrong on its own.
+ */
+export const label = (t?: string) => shorten(t?.replace(/\s+/g, " ").trim());
+
+/**
+ * Last resort, for the handful of works the publisher never titled. `lu-legilux:st-1994-01-19-n1`
+ * is not a name; the date inside it is. Types Lex can name are named, and the rest keep their
+ * identifier rather than being given a legal category they may not belong to.
+ */
+const MONTHS = ["janvier", "février", "mars", "avril", "mai", "juin",
+                "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
+const KINDS: Record<string, string> = {
+  loi: "Loi", rgd: "Règlement grand-ducal", rmin: "Règlement ministériel",
+  amin: "Arrêté ministériel", agd: "Arrêté grand-ducal",
+};
+export function humanSlug(work: string) {
+  const slug = work.includes(":") ? work.slice(work.indexOf(":") + 1) : work;
+  const m = /^([a-z]+)-(\d{4})-(\d{2})-(\d{2})/.exec(slug);
+  const kind = m && KINDS[m[1]];
+  return kind ? `${kind} du ${Number(m![4])} ${MONTHS[Number(m![3]) - 1]} ${m![2]}` : slug;
+}
 
 /** Strip the Markdown emphasis publishers put in structural headings. */
 const plain = (s: string) => s.replace(/\*+/g, "").replace(/\s+/g, " ").trim();

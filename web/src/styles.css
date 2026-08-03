@@ -54,6 +54,11 @@
 .stepbtn { background: var(--card); border: 1px solid var(--line); border-radius: 6px; color: inherit;
            width: 28px; height: 26px; padding: 0; cursor: pointer; font-size: 13px; }
 .stepbtn:disabled { opacity: .35; cursor: default; }
+/* Compare needs a word, not a modifier key. A phone has no shift to hold, so the whole feature
+   was unreachable on touch; this is the door. */
+.stepbtn.wide { width: auto; padding: 0 11px; font-size: 12.5px; }
+.stepbtn.wide.on { border-color: var(--accent); color: var(--accent); }
+.railhead .hint.arm { color: var(--accent); }
 
 /* Reserved height stops the page jumping while a law loads, but on the front there is
    nothing to reserve for, and 180px of nothing under the finder reads as a mistake. */
@@ -74,8 +79,15 @@ ins { background: color-mix(in srgb, var(--ok) 16%, transparent); color: var(--o
 del { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent);
       padding: 0 2px; border-radius: 2px; }
 
-.rail { position: relative; height: 52px; margin: 2px 0 0; }
+/* The rail scrolls rather than squeezing: with a floor of 8px per tick, a law with hundreds of
+   versions is wider than the page, and a rail you can scrub beats one that fits and cannot be hit. */
+.rail { position: relative; height: 52px; margin: 2px 0 0; overflow-x: auto; overflow-y: hidden;
+        scrollbar-width: thin; overscroll-behavior-x: contain; }
+.railtrack { position: relative; height: 52px; }
 .rail .axis { position: absolute; left: 0; right: 0; top: 20px; height: 1px; background: var(--line); }
+/* Armed for comparison: every tick is a candidate, so say so on hover across the whole rail. */
+.rail.arming .tick:before { opacity: .8; }
+.rail.arming .tick:hover:before { background: var(--accent); width: 3px; }
 .rail .band { position: absolute; top: 13px; height: 15px; background: var(--accent); opacity: .13;
               border-radius: 2px; pointer-events: none; }
 /* Ticks are 2px of ink on a 13px-wide hit box: dense runs stay legible AND clickable. */
@@ -104,6 +116,17 @@ del { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var
             overflow: hidden; text-overflow: ellipsis; right: 8px; }
 .bar .num { font-family: var(--mono); font-size: 14px; text-align: right; }
 .bar:hover .fill { opacity: .34; }
+/* A row whose work carries no text is still a real answer about amendments, so it stays in the
+   list and says what it is rather than being hidden or looking identical to a readable one. */
+.bar.notext .fill { opacity: .08; }
+.bar.notext .lbl { color: var(--muted); }
+.bar .mark { position: absolute; right: 9px; top: 5px; font-size: 10.5px; letter-spacing: .04em;
+             text-transform: uppercase; color: var(--muted); border: 1px solid var(--line);
+             border-radius: 99px; padding: 0 7px; background: var(--bg); }
+.tag.act.on { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+/* The matched words in a search snippet. */
+mark { background: color-mix(in srgb, var(--accent) 26%, transparent); color: inherit;
+       border-radius: 2px; padding: 0 1px; }
 
 .rows { list-style: none; padding: 0; margin: 0; }
 .rows li { border-top: 1px solid var(--line); }
@@ -183,6 +206,8 @@ button.pick { cursor: pointer; }
         text-align: left; background: none; border: 0; padding: 10px 0; color: inherit;
         cursor: pointer; font-size: 15px; font-family: var(--serif); }
 .toch:hover { color: var(--accent); }
+/* The count column was squeezable, so three-digit sections wrapped one digit per line. */
+.toch .sub, .tochead .sub { flex: none; font-variant-numeric: tabular-nums; }
 .toc .rows { margin: 0 0 10px 16px; }
 
 /* The wait, narrated. Each line names something real; a named law is one click away, so a
@@ -213,7 +238,7 @@ button.pick { cursor: pointer; }
   font-family:var(--serif);font-size:16px;color:var(--muted);padding:13px 15px 11px;cursor:pointer}
 .fin-tab:hover{color:var(--fg)}
 .fin-tab.on{color:var(--fg);font-weight:600;border-bottom-color:var(--accent)}
-.fin-hint{margin-left:auto;padding-right:8px;font-size:12.5px;color:var(--muted)}
+.fin-hint{margin:0 0 12px;font-size:12.5px;color:var(--muted)}
 .fin-body{padding:18px 18px 20px}
 .fin-body .sel{padding-bottom:0}
 
@@ -280,9 +305,30 @@ button.pick { cursor: pointer; }
   .askpanel{right:8px;left:8px;bottom:8px;width:auto;max-height:82vh}
   .asklaunch{right:12px;bottom:12px}
   .al-t small{display:none}
-  .fin-hint{display:none}
+  .fin-hint{font-size:12px}
 }
 @media(prefers-reduced-motion:reduce){.asklaunch:hover{transform:none}}
 
 .ap-next{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
 .ap-chip.next{display:inline-block;width:auto;margin:0;border-radius:99px;padding:6px 12px;font-size:12.5px}
+
+/* The first-run coach. Inline, above the work area, so the step it is asking for happens where
+   the reader is already looking rather than in a corner they have to notice. */
+.coach{border:1px solid var(--line);border-left:2px solid var(--accent);border-radius:10px;
+       background:var(--card);padding:12px 14px;margin:0 0 16px;transition:opacity .5s}
+.coach.done{opacity:.55}
+.co-h{display:flex;align-items:baseline;gap:10px;margin-bottom:8px}
+.co-h b{font-family:var(--serif);font-size:15px}
+.co-x{margin-left:auto;background:none;border:0;color:var(--muted);cursor:pointer;
+      font-size:13px;padding:0 2px;line-height:1}
+.co-x:hover{color:var(--accent)}
+.co-steps{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:6px 22px}
+.co-steps li{display:flex;align-items:flex-start;gap:8px;font-size:13.5px;color:var(--muted)}
+.co-steps li.at{color:var(--fg)}
+.co-steps li.ok .co-n{background:var(--accent);border-color:var(--accent);color:var(--bg)}
+.co-steps li.at .co-n{border-color:var(--accent);color:var(--accent)}
+.co-n{flex:none;width:19px;height:19px;border:1px solid var(--line);border-radius:50%;
+      display:grid;place-items:center;font-family:var(--mono);font-size:11px;margin-top:1px}
+.co-steps li b{font-weight:600;display:block}
+.co-d{display:block;font-size:12.5px;color:var(--muted)}
+@media (max-width:640px){ .co-steps{gap:8px} .co-steps li{width:100%} }

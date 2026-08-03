@@ -128,13 +128,14 @@ string Page(string title, string body, string? subtitle = null, string nav = "",
     </style></head>
     <body>
     <header>
+      <!-- The workspace IS the home page, so there is no "Ask" to link to from it, and /find,
+           /search and /changed are the no-JavaScript twins of its three tabs rather than separate
+           features. Promoting them here is what made the site look like it had two ways to do
+           everything. They stay reachable from the footer and from the noscript line. -->
       <a class="brand" href="/">Lex</a>
-      <a class="navlink{{(nav == "ask" ? " on" : "")}}" href="/">Ask</a>
-      <a class="navlink{{(nav == "find" ? " on" : "")}}" href="/find">Find a law</a>
       <a class="navlink{{(nav == "how" ? " on" : "")}}" href="/how-it-works">How it works</a>
       <span style="flex:1"></span>
-      <a class="navlink{{(nav == "dev" ? " on" : "")}}" href="/developers">for developers</a>
-      <a class="navlink{{(nav == "built" ? " on" : "")}}" href="/built">how it was built</a>
+      <a class="navlink{{(nav == "dev" || nav == "built" ? " on" : "")}}" href="/developers">For developers</a>
     </header>
     <main>
     <h1>{{h1 ?? title}}</h1>
@@ -151,10 +152,10 @@ string Page(string title, string body, string? subtitle = null, string nav = "",
         <a href="/changed">What changed in a period</a><a href="/stories">Worked examples</a></div>
       <div><b>Check the work</b>
         <a href="/how-it-works">How it works</a><a href="/coverage">What Lex holds, and lacks</a>
-        <a href="/verify">Verify it yourself</a><a href="/architecture">Architecture</a>
-        <a href="/built">How it was built</a></div>
+        <a href="/verify">Verify it yourself</a><a href="/architecture">Architecture</a></div>
       <div><b>Build on it</b>
-        <a href="/developers">Developers &amp; API</a>
+        <a href="/developers">Developers &amp; API</a><a href="/ai">Connect your own AI</a>
+        <a href="/built">How it was built</a>
         <a href="https://github.com/SFHAJJI/lex" rel="noopener">Source on GitHub</a></div>
     </nav>
       <b>Not legal advice, and not the official text.</b> Lex answers <i>what the rule was</i>, never what it
@@ -355,9 +356,8 @@ app.MapGet("/", () =>
     // promotional cards, where the visitors most likely to bounce never reached it — while
     // the sentence above the fold merely announced that the site answers questions.
     var body = $"""
-        <p class="lede">It is a different document on every date it was amended. Lex holds
-        <b>{cov.Sum(c => c.Groups):n0}</b> Luxembourg and EU laws as <b>{cov.Sum(c => c.Rows):n0}</b> dated
-        snapshots, exactly as the official publishers issued them, ask what any of them said on any day.</p>
+        <p class="lede">Ask what any Luxembourg or EU law said on any day, exactly as its
+        publisher issued it.</p>
         """
         + """
         <!-- The workspace mounts here. Without JavaScript the page still explains itself
@@ -369,14 +369,14 @@ app.MapGet("/", () =>
         + $"""
         <div class="frontdoor">
         <p class="sub">
+        <span class="badge">{cov.Sum(c => c.Groups):n0} laws</span>
+        <span class="badge">{cov.Sum(c => c.Rows):n0} dated versions</span>
         <span class="badge">{cov.Sum(c => c.TextServed):n0} with full text</span>
         <span class="badge">{H(cov.Select(c => c.EarliestValidFrom).Min())} → {H(cov.Select(c => c.LatestValidFrom).Max())}</span>
-        <span class="badge ok">cryptographically signed</span>
-        <span class="badge">updated nightly</span>
-        <a href="/how-it-works">How it works →</a></p>
-        <p class="sub">Free public assistant with a daily limit.
-        <a href="/developers">Connect your own AI</a> for unlimited use. Worked examples in
-        <a href="/stories">stories</a>.</p>
+        <span class="badge ok">cryptographically signed</span></p>
+        <p class="sub">Free assistant, daily limit. <a href="/ai">Connect your own AI</a> for
+        unlimited use. <a href="/how-it-works">How it works</a> ·
+        <a href="/stories">Worked examples</a>.</p>
         </div>
         """
         + """

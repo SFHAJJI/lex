@@ -5,14 +5,21 @@ import { Compare, Empty, Gap, InForce, Provision, Ranking, VersionRail, hasView,
 import { LawPicker, shorten } from "./pickers";
 import AskPanel from "./AskPanel";
 import Finder from "./Finder";
+import Coach, { COACH_KEY } from "./Coach";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
 /** Follow-ups derived from the view on screen — always valid, and free. */
-function chipsFor(s: State, ui?: UiEffect): { label: string; go: Partial<State> }[] {
-  if (ui?.ranking) return [{ label: "Try the last twelve months", go: { from: shift(today(), -365), until: today(), mode: "read" } }];
+function chipsFor(s: State, ui?: UiEffect, hasText = true): { label: string; go: Partial<State> }[] {
+  // Offering a window the reader is already looking at is noise, so the twelve-month chip only
+  // appears when the twelve months are not already on screen.
+  if (ui?.ranking) {
+    const from = shift(today(), -365);
+    return s.from === from && s.until === today() ? []
+         : [{ label: "Try the last twelve months", go: { from, until: today(), mode: "read" } }];
+  }
   if (s.mode === "compare") return [{ label: "Read the later version", go: { mode: "read", date: s.to, to: undefined } }];
-  if (s.work) return [{ label: "Read the current text", go: { mode: "read", date: today(), to: undefined } }];
+  if (s.work && hasText) return [{ label: "Read the current text", go: { mode: "read", date: today(), to: undefined } }];
   return [];
 }
 
@@ -33,7 +40,11 @@ export default function App() {
   const [toc, setToc] = useState<ProvisionItem[]>([]);
   const [title, setTitle] = useState<string>();
   const [versions, setVersions] = useState<string[]>([]);
+  const [held, setHeld] = useState<{ text: number; total: number; official?: string }>();
   const [states, setStates] = useState<string[]>([]);
+  const [coached, setCoached] = useState(() => {
+    try { return localStorage.getItem(COACH_KEY) === "1"; } catch { return true; }
+  });
   const abort = useRef<AbortController>();
 
   // The marketing below the fold belongs to a first-time visitor, not to someone reading a
@@ -45,17 +56,27 @@ export default function App() {
 
   // Every version of the loaded work: powers the version count and the previous/next stepper,
   // which is the most-wanted action in a point-in-time reader and did not exist.
+  //
+  // It also answers a question that used to be asked one date at a time: does this work have text
+  // AT ALL? Legilux publishes no text file for 1,768 of the 4,703 snapshots, and for some works
+  // that means every single one. Code de l'environnement has 195 versions and text on none of
+  // them, so a visitor could step the whole rail and be refused at every stop, with the interface
+  // implying each refusal was about that date. Knowing the work-level answer up front lets the
+  // reader say it once, and lets the chips stop offering text that does not exist.
   useEffect(() => {
-    if (!s.work) { setVersions([]); return; }
+    if (!s.work) { setVersions([]); setHeld(undefined); return; }
     let live = true;
     tool<any>("timeline", { work: s.work, limit: 400 })
       .then((res) => {
         if (!live) return;
         const one = first<any>(res, (x) => Array.isArray(x?.versions) && x.versions.length > 0);
-        const dates = [...new Set((one?.versions ?? []).map((v: any) => String(v.valid_from)))] as string[];
+        const vs = (one?.versions ?? []) as any[];
+        const dates = [...new Set(vs.map((v) => String(v.valid_from)))] as string[];
         setVersions(dates.sort());
+        setHeld({ text: vs.filter((v) => v.text_available).length, total: vs.length,
+                  official: vs[vs.length - 1]?.source_uri });
       })
-      .catch(() => live && setVersions([]));
+      .catch(() => { if (live) { setVersions([]); setHeld(undefined); } });
     return () => { live = false; };
   }, [s.work]);
 
@@ -253,6 +274,13 @@ export default function App() {
         </nav>
       )}
 
+      {coached ? null : (
+        <Coach state={s} onDone={() => {
+          try { localStorage.setItem(COACH_KEY, "1"); } catch { /* private mode, teach again */ }
+          setCoached(true);
+        }} />
+      )}
+
       {space === "law" && s.work ? (
         <header className="lawhead">
           <div className="t">
@@ -293,7 +321,7 @@ export default function App() {
 
       <div className="work">
         {space === "topic" ? null :
-         ui?.gap ? <Gap {...ui.gap} /> :
+         ui?.gap ? <Gap {...ui.gap} held={s.work ? held : undefined} /> :
          ui?.ranking ? <Ranking rows={ui.ranking.rows} worksChanged={ui.ranking.works_changed}
                                 newVersions={ui.ranking.new_versions} from={ui.ranking.from_date}
                                 to={ui.ranking.to_date} onOpen={openDiff} /> :
@@ -309,14 +337,14 @@ export default function App() {
 
       {(s.work || ui) ? (
         <div className="chips">
-          {chipsFor(s, ui).map((c) => (
+          {chipsFor(s, ui, (held?.text ?? 1) > 0).map((c) => (
             <button key={c.label} className="chip" onClick={() => { setUi(undefined); go(c.go); }}>{c.label}</button>
           ))}
         </div>
       ) : null}
 
       <AskPanel q={q} setQ={setQ} busy={busy} steps={steps} said={said} onSubmit={submit}
-                followUps={chipsFor(s, ui).map((c) => ({
+                followUps={chipsFor(s, ui, (held?.text ?? 1) > 0).map((c) => ({
                   label: c.label, run: () => { setUi(undefined); go(c.go); } }))}
                 onOpenStep={(st) => { setUi(undefined); go({ work: st.work, date: st.date, anchor: st.anchor, mode: "read", space: "law" }); }} />
     </div>

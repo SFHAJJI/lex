@@ -149,7 +149,7 @@ export function TopicSearch({ q, asOf, onQuery, onOpen }: {
             <li key={`${h.provision_id ?? h.lex_id}-${i}`}>
               <button className="rowbtn" onClick={() => onOpen(work, h.valid_from, h.anchor)}>
                 <span>{shorten(h.title) ?? work}{h.provision_num ? `, ${h.provision_num}` : ""}</span>
-                {h.snippet ? <span className="sub">{stripMarks(h.snippet)}</span> : null}
+                {h.snippet ? <span className="sub"><Snippet text={h.snippet} /></span> : null}
                 <span className="sub mono">{h.valid_from}{h.anchor ? ` · ${h.anchor}` : ""}</span>
               </button>
             </li>
@@ -162,7 +162,25 @@ export function TopicSearch({ q, asOf, onQuery, onOpen }: {
 
 const iso = (d: Date) => d.toISOString().slice(0, 10);
 function shift(days: number) { const d = new Date(); d.setUTCDate(d.getUTCDate() + days); return iso(d); }
-const stripMarks = (s: string) => s.replace(/[«»]/g, "");
+
+/**
+ * A snippet, with the match actually marked.
+ *
+ * The index wraps the words you matched in guillemets, and the publisher leaves Markdown emphasis
+ * in the body text. The old cleanup removed the guillemets and kept the asterisks, which is exactly
+ * backwards: it threw away the only reason a snippet exists and printed `**(1)**` in its place.
+ */
+function Snippet({ text }: { text: string }) {
+  const parts = text.replace(/\*+/g, "").split(/(«[^»]*»)/g);
+  return (
+    <>
+      {parts.map((p, i) =>
+        p.startsWith("«") && p.endsWith("»")
+          ? <mark key={i}>{p.slice(1, -1).trim()}</mark>
+          : <span key={i}>{p}</span>)}
+    </>
+  );
+}
 
 /** Legilux titles are prefixed "Version consolidée applicable au …  : " — noise in a list. */
 export function shorten(t?: string): string | undefined {
