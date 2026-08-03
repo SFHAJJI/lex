@@ -284,7 +284,7 @@ export function Ranking({ rows, worksChanged, newVersions, from, to, onOpen }: {
           <button key={r.work} className="bar" onClick={() => onOpen(r.work, r.first_change, r.last_change)}>
             <span className="track">
               <span className="fill" style={{ width: `${(r.versions_in_period / max) * 100}%` }} />
-              <span className="lbl">{r.title ?? r.work}</span>
+              <span className="lbl">{clean(r.title) ?? r.work}</span>
             </span>
             <span className="num">{r.versions_in_period}</span>
           </button>
@@ -347,6 +347,12 @@ export function modeFor(ui?: UiEffect): State["mode"] | undefined {
   if (ui?.history || ui?.provision) return "read";
   return undefined;
 }
+
+/** Publishers put escaped newlines and editorial notes inside titles. A bar label is one line,
+ *  so collapse the whitespace and cut at the first sentence-ending break. */
+export const clean = (t?: string) => t
+  ? t.replace(/\n/g, " ").replace(/\s+/g, " ").trim().slice(0, 120)
+  : t;
 
 /** Strip the Markdown emphasis publishers put in structural headings. */
 const plain = (s: string) => s.replace(/\*+/g, "").replace(/\s+/g, " ").trim();
