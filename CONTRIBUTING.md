@@ -6,22 +6,22 @@ contribution is judged against that.
 
 ## High-leverage contributions
 
-1. **A new publisher adapter** — any jurisdiction with an official
+1. **A new publisher adapter**, any jurisdiction with an official
    machine-readable channel. Implement `ISourceAdapter`
    ([src/Lex.Law/Model.cs](src/Lex.Law/Model.cs)): enumerate works, fetch
    versions, fetch verbatim bodies. Adapters never write files, never touch
    git, and never leak publisher names into lower layers (a fitness test
    enforces this). The Legilux adapter is the reference: SPARQL + paced,
    sequential fetches from robots-permitted endpoints only.
-2. **Eval cases** — [evals/cases.json](evals/cases.json). A good case is a
+2. **Eval cases**, [evals/cases.json](evals/cases.json). A good case is a
    natural question where the AI should construct a better tool call, or
    refuse better. Cases assert tool-argument construction and grounding, not
    phrasing.
-3. **Extraction improvements** — published profiles (`akn-lu/1`,
+3. **Extraction improvements**, published profiles (`akn-lu/1`,
    `xhtml-eu/1`, `fmx4-eu/1`) are immutable: improvements ship as a **new**
    profile beside the old, with a frozen-fingerprint test. See
    [src/Lex.Derive](src/Lex.Derive).
-4. **Bug reports with a permalink** — every rendered article has one; a URL +
+4. **Bug reports with a permalink**, every rendered article has one; a URL +
    expected-vs-actual is a complete report.
 
 ## Ground rules

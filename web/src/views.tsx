@@ -35,7 +35,7 @@ export function Provision({ items, toc, validFrom, validTo, work, anchor, onPick
         // A blank pane next to a table of contents is a dead end. Offer the thing a reader
         // opening a code actually wants: the first article, one click away.
         <div className="empty">
-          <p>{toc.length.toLocaleString()} articles — too many to render at once.
+          <p>{toc.length.toLocaleString()} articles, too many to render at once.
              Pick one from the contents, or start at the beginning.</p>
           {toc.length > 0 ? (
             <button className="chip" onClick={() => onPick(toc[0].anchor)}>
@@ -47,7 +47,7 @@ export function Provision({ items, toc, validFrom, validTo, work, anchor, onPick
         <article key={p.anchor} className="art" id={p.anchor}>
           <h4>
             <a href={permalink(work, validFrom, p.anchor)}>{p.num ?? p.anchor}</a>
-            {p.heading ? <span className="sub"> — {plain(p.heading)}</span> : null}
+            {p.heading ? <span className="sub">, {plain(p.heading)}</span> : null}
           </h4>
           <div className="lawtxt">{p.text}</div>
           {p.sha ? <div className="sha">sha256 {p.sha.slice(0, 16)}…</div> : null}
@@ -127,7 +127,7 @@ export function VersionRail({ dates, current, compareTo, scope, today, onPick, o
         {dates.map((d, k) => (
           <button key={d}
                   className={`tick${k === i ? " on" : ""}${k === j ? " cmp" : ""}${d > today ? " future" : ""}`}
-                  style={{ left: xs[k] }} title={`${d}${d > today ? " — not yet in force" : ""}`}
+                  style={{ left: xs[k] }} title={`${d}${d > today ? ", not yet in force" : ""}`}
                   tabIndex={labels.has(k) || k === i ? 0 : -1}
                   aria-label={`${d}${k === i ? " (showing)" : ""}`}
                   onClick={(e) => (e.shiftKey ? onCompare(d) : onPick(d))} />
@@ -230,7 +230,7 @@ export function Compare({ work, from, to, anchor }: {
 
   if (state.loading) return <Empty>Comparing {from} with {to}…</Empty>;
   if (state.error === "TOO_LARGE")
-    return <Empty>This law is too large to compare whole — open an article first, then compare.</Empty>;
+    return <Empty>This law is too large to compare whole, open an article first, then compare.</Empty>;
   if (state.error) return <Empty>Could not compare these versions: {state.error}</Empty>;
 
   const rows = state.rows ?? [];
@@ -409,7 +409,7 @@ function Outline({ items, current, onPick }: {
                       <button className={`rowbtn${p.anchor === current ? " on" : ""}`}
                               aria-current={p.anchor === current ? "true" : undefined}
                               onClick={() => onPick(p.anchor)}>
-                        <span>{p.num ?? p.anchor}{p.heading ? ` — ${plain(p.heading)}` : ""}</span>
+                        <span>{p.num ?? p.anchor}{p.heading ? `, ${plain(p.heading)}` : ""}</span>
                       </button>
                     </li>
                   ))}

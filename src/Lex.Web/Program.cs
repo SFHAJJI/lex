@@ -52,9 +52,9 @@ string Page(string title, string body, string? subtitle = null, string nav = "",
     <html lang="en">
     <head>
     <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{{H(title)}} — Lex</title>
+    <title>{{H(title)}}, Lex</title>
     <meta name="description" content="Point-in-time Luxembourg + EU law: what did the rule say on a given date? Grounded AI answers, permalinks, timelines, diffs, cryptographic provenance, and a public MCP endpoint.">
-    <meta property="og:title" content="{{H(title)}} — Lex">
+    <meta property="og:title" content="{{H(title)}}, Lex">
     <meta property="og:description" content="Point-in-time Luxembourg + EU law with grounded AI answers, per-article history, and verifiable provenance.">
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="Lex">
@@ -150,7 +150,7 @@ string Page(string title, string body, string? subtitle = null, string nav = "",
         <a href="/search">Search the text</a><a href="/in-force-on">What was in force on a date</a>
         <a href="/changed">What changed in a period</a><a href="/stories">Worked examples</a></div>
       <div><b>Check the work</b>
-        <a href="/how-it-works">How it works</a><a href="/coverage">What Lex holds — and lacks</a>
+        <a href="/how-it-works">How it works</a><a href="/coverage">What Lex holds, and lacks</a>
         <a href="/verify">Verify it yourself</a><a href="/architecture">Architecture</a>
         <a href="/built">How it was built</a></div>
       <div><b>Build on it</b>
@@ -158,11 +158,11 @@ string Page(string title, string body, string? subtitle = null, string nav = "",
         <a href="https://github.com/SFHAJJI/lex" rel="noopener">Source on GitHub</a></div>
     </nav>
       <b>Not legal advice, and not the official text.</b> Lex answers <i>what the rule was</i>, never what it
-      means for your situation — no interpretation, no advice. Every answer shows the source it came from.
-      LU data: Legilux — Ministère d'État, Service central de législation, Grand-Duché de Luxembourg
+      means for your situation, no interpretation, no advice. Every answer shows the source it came from.
+      LU data: Legilux, Ministère d'État, Service central de législation, Grand-Duché de Luxembourg
       (CC-BY 4.0, metadata and content files; consolidated texts reproduced verbatim from the official filestore).
       EU data: © European Union, reuse with attribution (Commission Decision 2011/833/EU);
-      <b>consolidated texts have no legal effect</b> — only acts published in the Official Journal are authentic.
+      <b>consolidated texts have no legal effect</b>, only acts published in the Official Journal are authentic.
       · <a href="https://github.com/SFHAJJI/lex">source</a>
     </footer>
     </body></html>
@@ -170,7 +170,7 @@ string Page(string title, string body, string? subtitle = null, string nav = "",
 
 string EnvelopeCard(LexIndexReader r, bool provisional) => $"""
     <div class="card"><table class="kv">
-    <tr><td>tier</td><td>{H(r.Stamp.GetValueOrDefault("tier"))} — publisher-supplied validity dates</td></tr>
+    <tr><td>tier</td><td>{H(r.Stamp.GetValueOrDefault("tier"))}, publisher-supplied validity dates</td></tr>
     <tr><td>history begins</td><td>{H(r.Stamp.GetValueOrDefault("history_begins"))}</td></tr>
     <tr><td>index built</td><td class="mono">{H(r.Stamp.GetValueOrDefault("built_at"))} · corpus {H(r.Stamp.GetValueOrDefault("corpus_commit"))}</td></tr>
     <tr><td>stamp signature</td><td>{(r.SignatureValid ? "<span class=\"badge ok\">valid (ECDSA-P256)</span>" : "<span class=\"badge warn\">unsigned</span>")}</td></tr>
@@ -232,7 +232,7 @@ string RenderDiff(string oldText, string newText)
         var newSet = n.ToHashSet(StringComparer.Ordinal);
         var removed = o.Where(l => !newSet.Contains(l)).Take(150).ToList();
         var added = n.Where(l => !oldSet.Contains(l)).Take(150).ToList();
-        sb.Append("<div class=\"notice\">Change too large for an exact line diff here — showing removed/added line samples; exact comparison at the official source links above.</div>");
+        sb.Append("<div class=\"notice\">Change too large for an exact line diff here, showing removed/added line samples; exact comparison at the official source links above.</div>");
         sb.Append("<div class=\"card\"><pre style=\"white-space:pre-wrap;font-size:13px;margin:0\">");
         foreach (var l in removed) sb.Append($"<span style=\"color:var(--accent)\">− {H(Trunc(l))}</span>\n");
         foreach (var l in added) sb.Append($"<span style=\"color:var(--ok)\">+ {H(Trunc(l))}</span>\n");
@@ -295,11 +295,11 @@ app.MapGet("/ai", (HttpRequest req) =>
     var body = $$"""
         <p>Lex is <b>MCP-native</b>: you bring your AI, Lex brings the evidence. Your model asks the
         nine Lex tools for the law as it stood on a date, and composes its answer from returned
-        text, dates and hashes — Lex itself never interprets anything.</p>
+        text, dates and hashes, Lex itself never interprets anything.</p>
 
         <h2>Connect in one line</h2>
         <div class="card"><b>Claude Code</b><pre class="mono" style="white-space:pre-wrap">claude mcp add --transport http lex {{baseUrl}}/mcp</pre></div>
-        <div class="card"><b>Claude Desktop / any MCP client</b> — add a remote MCP server:
+        <div class="card"><b>Claude Desktop / any MCP client</b>, add a remote MCP server:
         <pre class="mono" style="white-space:pre-wrap">{ "mcpServers": { "lex": { "url": "{{baseUrl}}/mcp" } } }</pre></div>
 
         <h2>What a conversation looks like</h2>
@@ -318,12 +318,12 @@ app.MapGet("/ai", (HttpRequest req) =>
 
         <h2>The nine tools</h2>
         <p class="sub">as_of (full/outline/select) · timeline · in_force_on · diff · search ·
-        provenance · article_history · coverage —
+        provenance · article_history · coverage , 
         read-only, deterministic, every response carries its dates, its hash, and an honest refusal
         (<span class="mono">no_version_for_date</span>, <span class="mono">text_withheld</span>) when Lex cannot know.</p>
 
         <h2>Azure AI Foundry agents</h2>
-        <div class="card">Foundry's Agent Service speaks remote MCP natively — point an agent at this
+        <div class="card">Foundry's Agent Service speaks remote MCP natively, point an agent at this
         endpoint and it gets all nine tools (no key needed; leave approvals on for writes-free comfort):
         <pre class="mono" style="white-space:pre-wrap">{ "type": "mcp", "server_label": "lex", "server_url": "{{baseUrl}}/mcp", "require_approval": "never" }</pre></div>
 
@@ -331,7 +331,7 @@ app.MapGet("/ai", (HttpRequest req) =>
         runs the same tools. Prefer no AI at all? Everything is also a <a href="/">permalink</a>.</p>
         """;
     return Results.Content(Page("Use Lex with your AI", body,
-        "your model + our evidence — MCP endpoint, one line to connect"), "text/html");
+        "your model + our evidence, MCP endpoint, one line to connect"), "text/html");
 });
 
 // ---- /ask playground: chat over the MCP tools, grounded and capped ----
@@ -357,11 +357,11 @@ app.MapGet("/", () =>
     var body = $"""
         <p class="lede">It is a different document on every date it was amended. Lex holds
         <b>{cov.Sum(c => c.Groups):n0}</b> Luxembourg and EU laws as <b>{cov.Sum(c => c.Rows):n0}</b> dated
-        snapshots, exactly as the official publishers issued them — ask what any of them said on any day.</p>
+        snapshots, exactly as the official publishers issued them, ask what any of them said on any day.</p>
         """
         + """
         <!-- The workspace mounts here. Without JavaScript the page still explains itself
-             and every permalink below still works — those are server-rendered documents. -->
+             and every permalink below still works, those are server-rendered documents. -->
         <div id="workspace"><noscript><p class="sub">The interactive workspace needs JavaScript.
           Everything is also reachable as plain pages: <a href="/find">find a law</a>,
           <a href="/changed">what changed</a>, <a href="/stories">stories</a>.</p></noscript></div>
@@ -468,7 +468,7 @@ app.MapPost("/api/ask/stream", async (HttpRequest req, HttpResponse res) =>
 app.MapGet("/architecture", () =>
 {
     var body = """
-        <p>Lex answers one question — <b>what did the rule say on that date?</b> — for Luxembourg and EU law,
+        <p>Lex answers one question, <b>what did the rule say on that date?</b>, for Luxembourg and EU law,
         in a way a developer can build on and an auditor can check. Everything below is open source and open data.</p>
 
         <h2>Two layers, one hash chain</h2>
@@ -479,7 +479,7 @@ app.MapGet("/architecture", () =>
                                                        validity intervals per provision
                      deterministic, versioned,          per-anchor history + renumbering events
                      IMMUTABLE extraction profiles          │
-                     (akn-lu/1, xhtml-eu/1 — code,          ▼
+                     (akn-lu/1, xhtml-eu/1, code,          ▼
                       never an LLM)                    signed SQLite indexes (lex-index/2)
                                                        provisions + FTS + time axis, ECDSA-P256 stamp
                                                             │
@@ -487,19 +487,19 @@ app.MapGet("/architecture", () =>
 
         <p>Every provision's <span class="mono">text_sha256</span> chains to a verbatim-file sha256 in the evidence
         repo: re-run the pinned open-source extractor on the state's bytes and you get these bytes.
-        <a href="/verify">Verify it yourself</a> — the defence is never "trust Lex".</p>
+        <a href="/verify">Verify it yourself</a>, the defence is never "trust Lex".</p>
 
         <h2>The retrieval unit is the article</h2>
         <p>Search hits, <span class="mono">as_of</span> (with <span class="mono">outline</span> and
         <span class="mono">select</span> modes), and the <span class="mono">article_history</span> tool all operate
         per provision. "What did Article 92 say over its life?" is a file read: every distinct text as a validity
-        interval, plus mechanically detected renumberings (identical-hash matching — never interpretation).</p>
+        interval, plus mechanically detected renumberings (identical-hash matching, never interpretation).</p>
 
         <h2>Honesty as an API contract</h2>
         <div class="card"><table>
         <tr><th>refusal status</th><th>meaning</th></tr>
         <tr><td class="mono">no_version_for_date</td><td>the work exists; no version was valid on that date</td></tr>
-        <tr><td class="mono">unknown_work / unknown_anchor</td><td>Lex does not hold it — and says so</td></tr>
+        <tr><td class="mono">unknown_work / unknown_anchor</td><td>Lex does not hold it, and says so</td></tr>
         <tr><td class="mono">anchor_not_in_version</td><td>that article did not exist in that version (knowing this IS the product)</td></tr>
         <tr><td class="mono">text_withheld</td><td>metadata held, text gate not cleared; official link provided</td></tr>
         <tr><td class="mono">outside_observed_window</td><td>before the observation history begins</td></tr>
@@ -507,18 +507,18 @@ app.MapGet("/architecture", () =>
         <p>A flagged wrong answer is still wrong, so Lex refuses instead; <a href="/coverage">coverage</a> exists to
         state what we do <b>not</b> have. The AI layer (<a href="/">the front page</a>) is additive and separated:
         one model + system prompt over the same in-process tool core the public <span class="mono">/mcp</span> serves
-        — parity by construction; no framework, no interpretation (fitness rule F10).</p>
+        ,  parity by construction; no framework, no interpretation (fitness rule F10).</p>
 
         <h2>Build on it</h2>
         <p>
-        <a href="https://github.com/SFHAJJI/lex-articles">lex-articles</a> — machine-readable corpus (CC-BY, SCHEMA.md contract) ·
-        <a href="https://github.com/SFHAJJI/lex">lex</a> — all code, Apache-2.0, incl. the
-        <a href="https://github.com/SFHAJJI/lex/blob/main/docs/lex-spec-v4.md">full decision record (D1–D47)</a> ·
+        <a href="https://github.com/SFHAJJI/lex-articles">lex-articles</a>, machine-readable corpus (CC-BY, SCHEMA.md contract) ·
+        <a href="https://github.com/SFHAJJI/lex">lex</a>, all code, Apache-2.0, incl. the
+        <a href="https://github.com/SFHAJJI/lex/blob/main/docs/lex-spec-v4.md">full decision record (D1, D47)</a> ·
         <a href="https://github.com/SFHAJJI/lex-corpus-lu-legilux">evidence repos</a> ·
         hosted MCP: <span class="mono">claude mcp add --transport http lex https://law.soufien.lu/mcp</span></p>
         """;
     return Results.Content(Page("Architecture", body,
-        "the evidence layer, the article layer, the signed indexes — and why you don't have to trust us"), "text/html");
+        "the evidence layer, the article layer, the signed indexes, and why you don't have to trust us"), "text/html");
 });
 
 // ---- auditor surface: public key, live attestation, verify-it-yourself ----
@@ -558,17 +558,17 @@ app.MapGet("/verify", () =>
 {
     var body = $$"""
         <p>Every index this site serves carries a <b>signed stamp</b>. The signature binds: schema version,
-        corpus commit, build time, attribution, the full NOTICE text, and the corpus statistics — the
+        corpus commit, build time, attribution, the full NOTICE text, and the corpus statistics, the
         canonical text is every stamp field except <span class="mono">signature</span>/<span class="mono">public_key</span>,
         sorted by key, joined as <span class="mono">k=v</span> lines. Algorithm:
         <span class="mono">ECDSA-P256-SHA256</span>, signature format IEEE P1363 (r||s, 64 bytes), base64.</p>
 
-        <h2>What it does — and does not — attest</h2>
+        <h2>What it does, and does not, attest</h2>
         <p>It attests that this exact index (schema, corpus commit, build) was produced by the holder of the
-        Lex signing key. It does <b>not</b> attest that the underlying text matches the publisher — that is what
+        Lex signing key. It does <b>not</b> attest that the underlying text matches the publisher, that is what
         the hash chain is for: every provision's <span class="mono">text_sha256</span> derives deterministically from a
         verbatim publisher file whose sha256 is recorded in the open corpus repos. Re-run the pinned open-source
-        extractor on the state's bytes and you get these bytes — the defence is never "trust Lex".</p>
+        extractor on the state's bytes and you get these bytes, the defence is never "trust Lex".</p>
 
         <h2>Verify the stamp yourself</h2>
         <div class="card"><pre class="mono" style="white-space:pre-wrap">curl -s https://law.soufien.lu/attestation.json -o att.json
@@ -609,7 +609,7 @@ app.MapGet("/browse", () =>
     sb.Append("""
         <p>Regulators publish the current rule; audits, investigations and disputes are about a <b>past date</b>.
         Lex keeps every version it has seen and answers <i>“what did this say on 15&nbsp;March&nbsp;2022?”</i>
-        with the exact validity interval, a timeline, a hashed provenance record — and an honest refusal when it cannot know.</p>
+        with the exact validity interval, a timeline, a hashed provenance record, and an honest refusal when it cannot know.</p>
         """);
     foreach (var r in readers.Values)
     {
@@ -629,13 +629,13 @@ app.MapGet("/browse", () =>
     sb.Append("""
         <h2>Try it</h2>
         <ul>
-          <li><a href="/lu-legilux/rgd-1998-08-03-n4/2018-01-01">Nouveau Code de procédure civile — as it stood on 1 Jan 2018</a></li>
-          <li><a href="/lu-legilux/code-environnement">Code de l'environnement — full timeline (195 versions)</a></li>
-          <li><a href="/lu-legilux/loi-2006-07-31-n2/2020-03-15">Code du travail — as it stood on 15 Mar 2020</a></li>
-          <li><a href="/lu-legilux/recueil-protection_donnees">Recueil protection des données — timeline</a></li>
+          <li><a href="/lu-legilux/rgd-1998-08-03-n4/2018-01-01">Nouveau Code de procédure civile, as it stood on 1 Jan 2018</a></li>
+          <li><a href="/lu-legilux/code-environnement">Code de l'environnement, full timeline (195 versions)</a></li>
+          <li><a href="/lu-legilux/loi-2006-07-31-n2/2020-03-15">Code du travail, as it stood on 15 Mar 2020</a></li>
+          <li><a href="/lu-legilux/recueil-protection_donnees">Recueil protection des données, timeline</a></li>
           <li><a href="/in-force-on?date=2022-03-15&amp;kind=CODE">Which codes were in force on 15 Mar 2022?</a></li>
-          <li><a href="/eu-eurlex/32013r0575">CRR (EU) 575/2013 — 22 consolidated versions, incl. future-dated</a></li>
-          <li><a href="/eu-eurlex/32016r0679/2019-01-01">GDPR as it stood on 1 Jan 2019 — with full text</a></li>
+          <li><a href="/eu-eurlex/32013r0575">CRR (EU) 575/2013-22 consolidated versions, incl. future-dated</a></li>
+          <li><a href="/eu-eurlex/32016r0679/2019-01-01">GDPR as it stood on 1 Jan 2019, with full text</a></li>
           <li><a href="/eu-eurlex/32013r0575/diff/2020-01-01/2024-01-01">CRR: what changed between 2020 and 2024?</a></li>
         </ul>
         <h2>Ask your own question</h2>
@@ -647,7 +647,7 @@ app.MapGet("/browse", () =>
         </form>
         """);
     return Results.Content(Page("Browse the corpus",
-        sb.ToString(), "Luxembourg + EU. Every answer carries its dates, its source and its hash — never an interpretation."), "text/html");
+        sb.ToString(), "Luxembourg + EU. Every answer carries its dates, its source and its hash, never an interpretation."), "text/html");
 });
 
 app.MapGet("/go-asof", (string work, string date) =>
@@ -670,23 +670,23 @@ app.MapGet("/coverage", () =>
         sb.Append($"</table></div>{EnvelopeCard(r, false)}");
         var luGap = c.Collection == "lu-legilux"
             ? """
-              The publisher only maintains consolidated (amendments-merged) editions for some laws —
+              The publisher only maintains consolidated (amendments-merged) editions for some laws , 
               the codes and frequently amended acts. Lex holds <b>all of those</b>. The other
               ≈24,579 Luxembourg acts never get a consolidated edition; they are <b>not here yet</b>
               (and we won't guess dates for texts we haven't seen).
               """
             : " Only flagship acts are ingested so far; the wider consolidated acquis is scheduled.";
         sb.Append($"""
-            <div class="notice"><b>What we hold — and what we honestly don't.</b>
+            <div class="notice"><b>What we hold, and what we honestly don't.</b>
             {c.Groups:n0} laws in {c.Rows:n0} dated snapshots.{luGap}
             Of those snapshots, <b>{c.TextServed:n0}</b> carry the full official text;
             <b>{c.Rows - c.TextServed:n0}</b> exist as dated entries with a link but no stored text,
-            because the publisher has no machine-readable file for that (usually old) version —
+            because the publisher has no machine-readable file for that (usually old) version , 
             those answer with <span class="mono">text_withheld</span> instead of pretending.
             History can never go deeper than what the publisher itself digitised.</div>
             """);
     }
-    return Results.Content(Page("Coverage — what we hold, and what we lack", sb.ToString()), "text/html");
+    return Results.Content(Page("Coverage, what we hold, and what we lack", sb.ToString()), "text/html");
 });
 
 app.MapGet("/in-force-on", (string? date, string? publisher, string? kind, int? page) =>
@@ -709,7 +709,7 @@ app.MapGet("/in-force-on", (string? date, string? publisher, string? kind, int? 
         foreach (var r in readers.Values.Where(r => publisher is null || r.Collection == publisher))
         {
             var (rows, total) = r.InForceOn(d, new FilterSet(null, null, string.IsNullOrEmpty(kind) ? null : kind, null), limit, p * limit);
-            sb.Append($"<h2>{H(r.Stamp.GetValueOrDefault("publisher_name"))} — {total:n0} works in force on {d:yyyy-MM-dd}</h2>");
+            sb.Append($"<h2>{H(r.Stamp.GetValueOrDefault("publisher_name"))}, {total:n0} works in force on {d:yyyy-MM-dd}</h2>");
             sb.Append("<div class=\"card\"><table><tr><th>work</th><th>type</th><th>version valid</th></tr>");
             foreach (var row in rows)
                 sb.Append($"""
@@ -726,7 +726,7 @@ app.MapGet("/in-force-on", (string? date, string? publisher, string? kind, int? 
             }
             sb.Append($"""
                 <div class="notice"><b>Population disclosure.</b> Basis: versioned works only ({r.Coverage().Groups:n0} works).
-                ≈24,579 never-consolidated LU acts are not ingested (date coverage unmeasured) — see <a href="/coverage">coverage</a>.</div>
+                ≈24,579 never-consolidated LU acts are not ingested (date coverage unmeasured), see <a href="/coverage">coverage</a>.</div>
                 """);
             sb.Append(EnvelopeCard(r, IsProvisional(r, d)));
         }
@@ -740,7 +740,7 @@ app.MapGet("/search", (string? q, string? kind) =>
     var sb = new StringBuilder();
     sb.Append($"""
         <form class="inline"><input name="q" value="{H(q)}" placeholder="search article text &amp; titles" style="flex:1;min-width:240px"><button>Search</button></form>
-        <p class="sub">Article-level full-text search over every held provision. Filters run before ranking — always.</p>
+        <p class="sub">Article-level full-text search over every held provision. Filters run before ranking, always.</p>
         """);
     if (!string.IsNullOrWhiteSpace(q))
     {
@@ -751,11 +751,11 @@ app.MapGet("/search", (string? q, string? kind) =>
                 .GroupBy(h => h.Doc.GroupKey).SelectMany(g => g.Take(2))
                 .Take(15)
                 .ToList();
-            sb.Append($"<h2>{H(r.Stamp.GetValueOrDefault("publisher_name"))} — {hits.Count} hit(s)</h2>");
+            sb.Append($"<h2>{H(r.Stamp.GetValueOrDefault("publisher_name"))}, {hits.Count} hit(s)</h2>");
             foreach (var (docRow, prov, snippet) in hits)
                 sb.Append($"""
                     <div class="card"><a href="/{H(docRow.Collection)}/{H(docRow.GroupKey)}/{H(docRow.ValidFrom)}#{H(prov.Anchor)}"><b>{H(DocTitle(docRow))}</b>
-                    — {H(prov.Num ?? prov.Heading ?? prov.Anchor)}</a>
+                    ,  {H(prov.Num ?? prov.Heading ?? prov.Anchor)}</a>
                     <span class="badge">{H(docRow.Kind)}</span> <span class="badge mono">{Interval(docRow)}</span>
                     <div class="snippet">{H(snippet)}</div>
                     <div class="mono sub">{H(prov.ProvisionId)}</div></div>
@@ -772,18 +772,18 @@ app.MapGet("/built", () =>
     var cov = readers.Values.Select(r => r.Coverage()).ToList();
     var body = $"""
         <p class="lede">A point-in-time legal database, an MCP server, a grounded assistant and a
-        nightly pipeline — built solo. This page is the part usually left out: the decisions, the
+        nightly pipeline, built solo. This page is the part usually left out: the decisions, the
         things that broke, and how correctness is actually proven rather than asserted.</p>
 
         <div class="notice"><b>Built with AI assistance.</b> The architecture, the decisions and the
         verification are mine; a great deal of the code was written with an AI pair. That is stated
-        here because it is true, and because the parts that matter — the decision record, the failure
-        modes below, and the tests that catch them — are where the engineering actually lives.</div>
+        here because it is true, and because the parts that matter, the decision record, the failure
+        modes below, and the tests that catch them, are where the engineering actually lives.</div>
 
         <h2>The problem</h2>
         <p>Ask any legal site what a law says and you get today's text. Almost every question that
         matters is about a <b>date</b>: what applied when the contract was signed, when the fine was
-        issued, when the breach happened. Official publishers do hold dated consolidated editions —
+        issued, when the breach happened. Official publishers do hold dated consolidated editions , 
         but scattered across formats (Akoma Ntoso XML, Formex XML, legacy XHTML), with no article-level
         access and no machine interface. Lex turns that into one queryable, verifiable history.</p>
 
@@ -805,7 +805,7 @@ app.MapGet("/built", () =>
                 └──► this site   (Container Apps, scale-to-zero)</pre></div>
         <p class="sub">Azure: Container Apps behind a managed certificate, Container Registry, Azure
         OpenAI (gpt-5-mini) for the assistant, Application Insights via OpenTelemetry, Azure DNS.
-        The web app runs at 0.25 vCPU and <b>scales to zero</b> — idle cost is essentially the
+        The web app runs at 0.25 vCPU and <b>scales to zero</b>, idle cost is essentially the
         registry and the DNS zone.</p>
 
         <h2>Decisions worth defending</h2>
@@ -816,13 +816,13 @@ app.MapGet("/built", () =>
             what the state published. Cost: two layers to maintain instead of one.</td></tr>
         <tr><td><b>Extraction profiles are immutable</b></td>
             <td>Once <span class="mono">akn-lu/1</span> is published, its output for a given input can
-            never change — a frozen-fingerprint test fails the build if it does. Improvements ship as
+            never change, a frozen-fingerprint test fails the build if it does. Improvements ship as
             a new profile. Cost: no silent fixes, ever.</td></tr>
         <tr><td><b>Refusals are part of the API</b></td>
             <td>Seven typed refusal codes instead of empty results. A caller can distinguish "no such
             law", "no version that day" and "text withheld". Cost: more surface to test.</td></tr>
         <tr><td><b>A small model, tightly fenced</b></td>
-            <td>The assistant only picks lookups and quotes results — no agent framework, no chain of
+            <td>The assistant only picks lookups and quotes results, no agent framework, no chain of
             reasoning over law. Cheap, auditable, and wrong answers are visible against the evidence
             shown beside them.</td></tr>
         <tr><td><b>Nightly commits nothing when unsure</b></td>
@@ -830,24 +830,24 @@ app.MapGet("/built", () =>
             A partial upstream response must never rewrite history.</td></tr>
         </table>
         <p class="sub" style="margin:8px 0 0">Forty-eight numbered decisions like these are recorded in
-        the specification, each with its rationale — so "why did you do it that way" has a written
+        the specification, each with its rationale, so "why did you do it that way" has a written
         answer rather than a recollection.</p></div>
 
         <h2>The machinery that keeps it fresh</h2>
         <p>Law changes while you sleep, so the corpus is rebuilt while I do. One scheduled job at
-        02:17 UTC drives the whole fleet — no manual step exists, and there is deliberately only one
+        02:17 UTC drives the whole fleet, no manual step exists, and there is deliberately only one
         credential and one cron for all publishers.</p>
         <div class="card"><table>
         <tr><th>stage</th><th>what it does, and how it refuses to do damage</th></tr>
         <tr><td><b>1. Ingest</b></td><td>Asks each publisher what versions exist, downloads any it has
-        not seen, and writes them <i>verbatim</i>. Existing files are never reopened for writing —
+        not seen, and writes them <i>verbatim</i>. Existing files are never reopened for writing , 
         the evidence layer is append-only by construction.</td></tr>
         <tr><td><b>2. Anomaly gate</b></td><td>If the work count drops more than 5%, the run assumes the
         upstream response was partial, discards everything and commits nothing. A bad night leaves
         yesterday's good data in place.</td></tr>
         <tr><td><b>3. Derive</b></td><td>Regenerates the per-article layer from the verbatim files.</td></tr>
         <tr><td><b>4. Determinism guard</b></td><td>If derived output changed while no source file did,
-        that means the extractor is non-deterministic — the run fails loudly and commits nothing,
+        that means the extractor is non-deterministic, the run fails loudly and commits nothing,
         because a silent extraction drift would corrupt history.</td></tr>
         <tr><td><b>5. Index &amp; publish</b></td><td>Rebuilds the search index, signs it (ECDSA P-256),
         publishes it as a release asset, regenerates the JSONL and Parquet datasets.</td></tr>
@@ -867,19 +867,19 @@ app.MapGet("/built", () =>
             <td>{(r.SignatureValid ? "<span class=\"badge ok\">valid</span>" : "<span class=\"badge warn\">unsigned</span>")}</td></tr>
             """))}
         </table>
-        <p class="sub" style="margin:8px 0 0">Nothing here is typed by hand — if the pipeline stopped,
+        <p class="sub" style="margin:8px 0 0">Nothing here is typed by hand, if the pipeline stopped,
         this table would say so. The same values come back from the
         <a href="/developers">coverage tool</a> in every API response.</p></div>
 
         <h2>What broke, and what it taught</h2>
         <div class="card">
         <p><b>A silently dead search, caught in production.</b> The nightly job built the search index
-        without the per-article layer. Nothing errored: the index was valid, signed, and published —
+        without the per-article layer. Nothing errored: the index was valid, signed, and published , 
         it just had zero provisions in it, so search returned nothing. The automated eval suite caught
         it by asking a question a user would ask and noticing the assistant could no longer find a
         Luxembourg code.</p>
         <p class="sub">Fix: the index step now runs after derivation and takes the article layer as a
-        required input, so the failure cannot recur. Lesson: a green build is not a working system —
+        required input, so the failure cannot recur. Lesson: a green build is not a working system , 
         the only tests that would have caught this are the ones that exercise it end to end, the way
         someone actually uses it.</p>
         <p><b>A parser that quietly duplicated text.</b> Adding Formex XML support introduced doubled
@@ -896,7 +896,7 @@ app.MapGet("/built", () =>
         <tr><td>Determinism guard in CI</td><td>re-derivation is byte-identical or the run commits nothing</td></tr>
         <tr><td>10 end-to-end AI evals</td><td>the assistant picks the right tools and never cites a source it was not given</td></tr>
         <tr><td>LLM-judged groundedness</td><td>answers scored against the evidence actually returned</td></tr>
-        <tr><td>ECDSA-signed indexes</td><td>anyone can verify a build was not altered — <a href="/verify">recipe</a></td></tr>
+        <tr><td>ECDSA-signed indexes</td><td>anyone can verify a build was not altered, <a href="/verify">recipe</a></td></tr>
         </table></div>
 
         <h2>Scale</h2>
@@ -908,10 +908,10 @@ app.MapGet("/built", () =>
         <span class="badge">nightly, unattended</span></p>
 
         <h2>What I would do differently</h2>
-        <p>Version the index schema migration path from day one — schema v2 required a full rebuild
+        <p>Version the index schema migration path from day one, schema v2 required a full rebuild
         rather than a migration. Put the end-to-end evals in the nightly pipeline, not only in my hands;
         they caught the worst bug of the project and should be a gate, not a habit. And treat the
-        derived layer's release assets as part of the deploy, not a follow-up step — the two times
+        derived layer's release assets as part of the deploy, not a follow-up step, the two times
         something shipped stale, that was why.</p>
 
         <p class="sub"><a href="/developers"><b>Use it from your own code →</b></a> ·
@@ -930,16 +930,16 @@ app.MapGet("/developers", (HttpRequest req) =>
     var cov = readers.Values.Select(r => r.Coverage()).ToList();
     var body = $$"""
         <p class="lede">Lex is MCP-native: you bring the model, Lex brings the evidence. Eight
-        read-only tools over signed indexes — no key, no account, no rate limit on the endpoint.</p>
+        read-only tools over signed indexes, no key, no account, no rate limit on the endpoint.</p>
 
         <h2>Connect</h2>
         <div class="card"><b>Claude Code</b>
         <pre class="mono" style="white-space:pre-wrap;margin:6px 0 0">claude mcp add --transport http lex {{baseUrl}}/mcp</pre></div>
         <div class="card"><b>Claude Desktop, Cursor, any MCP client</b>
         <pre class="mono" style="white-space:pre-wrap;margin:6px 0 0">{ "mcpServers": { "lex": { "url": "{{baseUrl}}/mcp" } } }</pre></div>
-        <div class="card"><b>Azure AI Foundry Agent Service</b> — remote MCP is native:
+        <div class="card"><b>Azure AI Foundry Agent Service</b>, remote MCP is native:
         <pre class="mono" style="white-space:pre-wrap;margin:6px 0 0">{ "type": "mcp", "server_label": "lex", "server_url": "{{baseUrl}}/mcp", "require_approval": "never" }</pre></div>
-        <div class="card"><b>No framework at all</b> — it is JSON-RPC over one POST:
+        <div class="card"><b>No framework at all</b>, it is JSON-RPC over one POST:
         <pre class="mono" style="white-space:pre-wrap;margin:6px 0 0">curl -X POST {{baseUrl}}/mcp -H 'Content-Type: application/json' \
           -d '{ "jsonrpc":"2.0", "id":1, "method":"tools/call",
                 "params": { "name":"as_of",
@@ -951,7 +951,7 @@ app.MapGet("/developers", (HttpRequest req) =>
         <tr><th>tool</th><th>arguments</th><th>answers</th></tr>
         <tr><td class="mono">as_of</td><td class="mono">work, date, [language], [mode: full\|outline\|select], [anchors]</td>
             <td>the text in force on a date. <span class="mono">outline</span> lists article anchors only;
-            <span class="mono">select</span> returns just the anchors you name — use it, codes are large.</td></tr>
+            <span class="mono">select</span> returns just the anchors you name, use it, codes are large.</td></tr>
         <tr><td class="mono">article_history</td><td class="mono">work, anchor</td>
             <td>every distinct text one article has had, as validity intervals, plus renumbering events.</td></tr>
         <tr><td class="mono">timeline</td><td class="mono">work</td><td>all versions of a work with their validity windows.</td></tr>
@@ -966,7 +966,7 @@ app.MapGet("/developers", (HttpRequest req) =>
         </table></div>
 
         <h2>Try the joysticks</h2>
-        <p class="sub">This calls the same public endpoint your model would. No key, nothing installed —
+        <p class="sub">This calls the same public endpoint your model would. No key, nothing installed , 
         the JSON below is exactly what an MCP client receives.</p>
         <div class="card">
           <form id="pg" class="inline" style="margin:0 0 8px">
@@ -995,14 +995,14 @@ app.MapGet("/developers", (HttpRequest req) =>
         <span class="mono">outside_observed_window</span>. Build against them: an empty result and a
         refusal are different things.</p>
 
-        <h2>Or skip the API — take the data</h2>
+        <h2>Or skip the API, take the data</h2>
         <p>Every provision of every version, one row each, licence and attribution inline.
         {{cov.Sum(c => c.TextServed):n0}} versions carry full text.</p>
         <div class="card"><b>DuckDB, one line, no download:</b>
         <pre class="mono" style="white-space:pre-wrap;margin:6px 0 0">SELECT * FROM read_parquet('https://github.com/SFHAJJI/lex-articles/releases/latest/download/eu-eurlex-provisions.parquet');</pre>
         <p class="sub" style="margin:8px 0 0">Also published as <span class="mono">.jsonl.gz</span>.
         Python examples (standard library only, no pip install) live in
-        <a href="https://github.com/SFHAJJI/lex-articles/tree/main/examples" rel="noopener">examples/</a> —
+        <a href="https://github.com/SFHAJJI/lex-articles/tree/main/examples" rel="noopener">examples/</a> , 
         load provisions, resolve a point in time, verify the hash chain, call this MCP endpoint.</p></div>
 
         <h2>The repositories</h2>
@@ -1011,11 +1011,11 @@ app.MapGet("/developers", (HttpRequest req) =>
         <tr><td><a href="https://github.com/SFHAJJI/lex" rel="noopener">lex</a></td>
             <td>the engine: ingest, derive, index, MCP server, this site</td><td>Apache-2.0</td></tr>
         <tr><td><a href="https://github.com/SFHAJJI/lex-articles" rel="noopener">lex-articles</a></td>
-            <td>derived layer — one Markdown+JSON record per article per version</td><td>CC-BY-4.0</td></tr>
+            <td>derived layer, one Markdown+JSON record per article per version</td><td>CC-BY-4.0</td></tr>
         <tr><td><a href="https://github.com/SFHAJJI/lex-corpus-lu-legilux" rel="noopener">lex-corpus-lu-legilux</a></td>
-            <td>evidence layer — Legilux's own files, verbatim, plus signed nightly index</td><td>CC-BY-4.0</td></tr>
+            <td>evidence layer, Legilux's own files, verbatim, plus signed nightly index</td><td>CC-BY-4.0</td></tr>
         <tr><td><a href="https://github.com/SFHAJJI/lex-corpus-eu-eurlex" rel="noopener">lex-corpus-eu-eurlex</a></td>
-            <td>evidence layer — EUR-Lex/Cellar files, verbatim</td><td>EU reuse</td></tr>
+            <td>evidence layer, EUR-Lex/Cellar files, verbatim</td><td>EU reuse</td></tr>
         </table>
         <p class="sub" style="margin:8px 0 0">Why four? Evidence and derivation are kept apart on purpose:
         the evidence repos are append-only and never rewritten, so a derived record can always be traced
@@ -1080,8 +1080,8 @@ app.MapGet("/how-it-works", () =>
 
         <h2>Why "what does the law say" is the wrong question</h2>
         <p>Laws are amended constantly. Ask what the Luxembourg Covid measures act said and the honest
-        answer is: <i>which of its 32 texts?</i> Almost every legal question that matters — was this
-        contract valid, was that fine lawful, did we comply — is really a question about a
+        answer is: <i>which of its 32 texts?</i> Almost every legal question that matters, was this
+        contract valid, was that fine lawful, did we comply, is really a question about a
         <b>date</b>. Most legal websites show you only today's text.</p>
 
         <h2>Where the text comes from</h2>
@@ -1089,22 +1089,22 @@ app.MapGet("/how-it-works", () =>
         for Luxembourg, <a href="https://eur-lex.europa.eu" rel="noopener">EUR-Lex</a> for the EU.
         Lex downloads the publisher's own file for each version and stores it <b>byte for byte</b>,
         untouched, with a SHA-256 fingerprint. Nothing is rewritten, summarised or "cleaned".</p>
-        <p>A second layer then splits that file into one record per article — still deterministic,
-        no AI involved — so you can ask for Article 92 rather than a whole 600-page regulation.
+        <p>A second layer then splits that file into one record per article, still deterministic,
+        no AI involved, so you can ask for Article 92 rather than a whole 600-page regulation.
         Each article's fingerprint chains back to the publisher's original file, so any tampering
         anywhere in the chain is detectable.</p>
 
         <h2>How you can check all of this yourself</h2>
         <p>Every index Lex serves is cryptographically signed (ECDSA P-256). You can download the
         public key, verify the signature, recompute any article's hash, and compare it against the
-        publisher's own file — all without trusting this site.
+        publisher's own file, all without trusting this site.
         <a href="/verify"><b>The step-by-step recipe, with code →</b></a></p>
 
         <h2>What it will not do</h2>
         <p>It will not guess. If you ask for a date Lex has no version for, it says so with a reason
         code (<span class="mono">no_version_for_date</span>) instead of producing a plausible text.
         The assistant on the front page is a small model whose only job is to pick the right lookup
-        and quote what comes back — every answer shows the evidence underneath it, so you can check
+        and quote what comes back, every answer shows the evidence underneath it, so you can check
         the answer against the source without leaving the page.
         <a href="/lu-legilux/rgd-1998-08-03-n4/1900-01-01">Watch it refuse →</a></p>
 
@@ -1115,7 +1115,7 @@ app.MapGet("/how-it-works", () =>
         <span class="badge">refreshed nightly</span></p>
         <p>Lex holds every Luxembourg law the state maintains a consolidated edition for, plus a set
         of EU financial and data regulations. Roughly 24,000 Luxembourg acts never receive a
-        consolidated edition and are not here — and the gaps are published rather than hidden.
+        consolidated edition and are not here, and the gaps are published rather than hidden.
         <a href="/coverage"><b>Exactly what is and is not held →</b></a></p>
 
         <h2>Under the hood</h2>
@@ -1126,7 +1126,7 @@ app.MapGet("/how-it-works", () =>
         <a href="/developers"><b>Use it from your own code →</b></a></p>
 
         <div class="notice"><b>Not legal advice, and not the official text.</b> Consolidated versions
-        have no legal force — only the version published in the official gazette does. The publishers
+        have no legal force, only the version published in the official gazette does. The publishers
         say so themselves. Lex reports what a text said on a date; deciding what that means for a
         situation is a lawyer's job.</div>
         """;
@@ -1147,7 +1147,7 @@ app.MapGet("/changed", (string? from, string? to, string? order, string? publish
 
     var sb = new StringBuilder($"""
         <p class="lede">Every Luxembourg and EU law in Lex that gained a new version between two
-        dates — the corpus-wide view that a single law's timeline cannot give you.</p>
+        dates, the corpus-wide view that a single law's timeline cannot give you.</p>
         <form class="inline" method="get">
           <label class="sub">from <input type="date" name="from" value="{f}"></label>
           <label class="sub">to <input type="date" name="to" value="{t}"></label>
@@ -1173,7 +1173,7 @@ app.MapGet("/changed", (string? from, string? to, string? order, string? publish
         totalWorks += works; totalVersions += versions;
         var rows = r.ChangesInPeriod(f, t, null, byChurn, 60);
         if (rows.Count == 0) continue;
-        blocks.Append($"<h2>{H(r.Collection)} — {works:n0} law(s) moved, {versions:n0} new version(s)</h2>");
+        blocks.Append($"<h2>{H(r.Collection)}, {works:n0} law(s) moved, {versions:n0} new version(s)</h2>");
         blocks.Append("<div class=\"card\"><table><tr><th>law</th><th>new versions</th><th>window</th><th></th></tr>");
         foreach (var c in rows)
             blocks.Append($"""
@@ -1192,14 +1192,14 @@ app.MapGet("/changed", (string? from, string? to, string? order, string? publish
         <div class="card" style="border-color:var(--accent)">
           <b>{totalWorks:n0} law(s) changed</b> between {H(f)} and {H(t)},
           producing <b>{totalVersions:n0} new version(s)</b>.
-          {(totalWorks == 0 ? "Nothing moved in this window — which is itself an answer." : "")}
+          {(totalWorks == 0 ? "Nothing moved in this window, which is itself an answer." : "")}
         </div>
         """);
     sb.Append(blocks);
     sb.Append($"""
         <p class="sub">Same data, from your own code:
         <span class="mono">changes_in_period(from_date="{H(f)}", to_date="{H(t)}"{(byChurn ? ", order=\"by_churn\"" : "")})</span>
-        — <a href="/developers">try it in the browser</a>.</p>
+        ,  <a href="/developers">try it in the browser</a>.</p>
         """);
     return Results.Content(Page("What changed", sb.ToString(), null, "find"), "text/html");
 });
@@ -1212,7 +1212,7 @@ app.MapGet("/find", () =>
         as it stood on a date you choose.</p>
 
         <div class="card"><h2 style="margin-top:0">Search by words</h2>
-        <p class="sub">Finds the individual article, not just the law — search runs over every provision.</p>
+        <p class="sub">Finds the individual article, not just the law, search runs over every provision.</p>
         <form class="inline" action="/search" method="get">
           <input name="q" aria-label="Words to search for in the text" style="flex:1;min-width:240px" placeholder="e.g. congé parental, breach notification, own funds">
           <input type="date" name="as_of" aria-label="Only versions in force on this date">
@@ -1227,7 +1227,7 @@ app.MapGet("/find", () =>
         </form></div>
 
         <div class="card"><h2 style="margin-top:0">What changed between two dates?</h2>
-        <p class="sub">Across the whole corpus, not one law at a time — the question a compliance
+        <p class="sub">Across the whole corpus, not one law at a time, the question a compliance
         reader actually has.</p>
         <p><a href="/changed"><b>Open the change report →</b></a> ·
            <a href="/changed?from=2020-03-01&amp;to=2021-07-01&amp;order=by_churn">the pandemic, ranked by churn</a></p></div>
@@ -1280,7 +1280,7 @@ app.MapGet("/stories", () =>
     var sb = new StringBuilder();
     sb.Append("""
         <p>Point-in-time retrieval sounds abstract until you watch a law move. These are real
-        histories held by Lex — every number below is computed from the signed indexes as this
+        histories held by Lex, every number below is computed from the signed indexes as this
         page renders, and every link lands on the evidence.</p>
         """);
 
@@ -1324,19 +1324,19 @@ app.MapGet("/stories", () =>
 
     Story("lu-legilux", "loi-2020-07-17-a624",
         "The law that could not sit still",
-        "Luxembourg's Covid-19 measures act. Rules on gatherings, masks and closures were rewritten again and again — "
+        "Luxembourg's Covid-19 measures act. Rules on gatherings, masks and closures were rewritten again and again, "
         + "which is exactly when \"what did the rule say <i>that week</i>?\" stops being an academic question.",
         "How did the Luxembourg Covid-19 law change between July 2020 and July 2021?");
 
     Story("lu-legilux", "constitution-1868-10-17-n1",
         "A constitution, revised in public",
-        "The Luxembourg constitution, from the early twentieth century to the 2023 reform — the same document, "
+        "The Luxembourg constitution, from the early twentieth century to the 2023 reform, the same document, "
         + "re-consolidated after every revision, each state still retrievable.",
         "What changed in the Luxembourg constitution in 2023?");
 
     Story("eu-eurlex", "32013r0575",
         "Banking rules in waves",
-        "The Capital Requirements Regulation — the rulebook a Luxembourg bank must apply. Its own Article 92 "
+        "The Capital Requirements Regulation, the rulebook a Luxembourg bank must apply. Its own Article 92 "
         + "(the capital ratios) has more than one lifetime.",
         "How has Article 92 of the CRR changed over its life?");
 
@@ -1355,7 +1355,7 @@ app.MapGet("/stories", () =>
         {
             sb.Append("""
                 <div class="card"><h2 style="margin:0 0 4px">Which laws moved most during the pandemic</h2>
-                <p class="sub" style="margin:0 0 10px">March 2020 – July 2021, ranked by how many new versions
+                <p class="sub" style="margin:0 0 10px">March 2020, July 2021, ranked by how many new versions
                 each law produced. Computed live, and available to your own code as
                 <span class="mono">changes_in_period(order="by_churn")</span>.</p><table>
                 <tr><th>law</th><th>new versions</th><th></th></tr>
@@ -1376,10 +1376,10 @@ app.MapGet("/stories", () =>
     sb.Append("""
         <div class="card"><b>The honest half.</b> A demo that only shows wins is a brochure.
           <a href="/lu-legilux/rgd-1998-08-03-n4/1900-01-01">Ask for a law in 1900</a> and Lex refuses,
-          with a reason code, instead of inventing a plausible text —
+          with a reason code, instead of inventing a plausible text , 
           <a href="/coverage">here is exactly what it holds and what it lacks</a>.</div>
         """);
-    return Results.Content(Page("Stories — watch the law move", sb.ToString(),
+    return Results.Content(Page("Stories, watch the law move", sb.ToString(),
         "real histories from the Luxembourg and EU corpora, computed live", "find"), "text/html");
 });
 
@@ -1431,7 +1431,7 @@ app.MapGet($"/{pubRoute}/{{work}}/diff/{{dateA}}/{{dateB}}", (string publisher, 
     var b = r.AsOf(work, db2, FilterSet.All);
     if (a is null || b is null)
         return Results.Content(Page("No version for date",
-            $"<p>status <span class=\"mono\">no_version_for_date</span> — resolved: {da:yyyy-MM-dd}={(a is not null)}, {db2:yyyy-MM-dd}={(b is not null)}. See the <a href=\"/{H(publisher)}/{H(work)}\">timeline</a>.</p>"),
+            $"<p>status <span class=\"mono\">no_version_for_date</span>, resolved: {da:yyyy-MM-dd}={(a is not null)}, {db2:yyyy-MM-dd}={(b is not null)}. See the <a href=\"/{H(publisher)}/{H(work)}\">timeline</a>.</p>"),
             "text/html", statusCode: 404);
 
     var sb = new StringBuilder();
@@ -1455,7 +1455,7 @@ app.MapGet($"/{pubRoute}/{{work}}/diff/{{dateA}}/{{dateB}}", (string publisher, 
             <a href="{H(b.SourceUri)}">version of {H(b.ValidFrom)}</a>.</div>
             """);
     sb.Append(EnvelopeCard(r, IsProvisional(r, db2)));
-    return Results.Content(Page($"What changed — {H(DocTitle(b))}", sb.ToString(),
+    return Results.Content(Page($"What changed, {H(DocTitle(b))}", sb.ToString(),
         $"{da:yyyy-MM-dd} → {db2:yyyy-MM-dd} · no interpretation, just the text delta"), "text/html");
 });
 
@@ -1465,7 +1465,7 @@ app.MapGet($"/{pubRoute}/{{work}}", (string publisher, string work) =>
     if (r is null) return Results.Content(Page("Unknown publisher", $"<p>No index mounted for <b>{H(publisher)}</b>. See <a href=\"/coverage\">coverage</a>.</p>"), "text/html", statusCode: 404);
     var rows = r.Timeline(work);
     if (rows.Count == 0)
-        return Results.Content(Page("Unknown work", $"<p>status <span class=\"mono\">unknown_work</span> — no work <b>{H(work)}</b> in {H(publisher)}. Try <a href=\"/search\">search</a>.</p>"), "text/html", statusCode: 404);
+        return Results.Content(Page("Unknown work", $"<p>status <span class=\"mono\">unknown_work</span>, no work <b>{H(work)}</b> in {H(publisher)}. Try <a href=\"/search\">search</a>.</p>"), "text/html", statusCode: 404);
 
     var t = DocTitle(rows[^1]);
     var sb = new StringBuilder();
@@ -1497,11 +1497,11 @@ app.MapGet($"/{pubRoute}/{{work}}/{{date}}", (string publisher, string work, str
     if (doc is null)
     {
         if (!r.WorkExists(work))
-            return Results.Content(Page("Unknown work", $"<p>status <span class=\"mono\">unknown_work</span> — no work <b>{H(work)}</b>. Try <a href=\"/search\">search</a>.</p>"), "text/html", statusCode: 404);
+            return Results.Content(Page("Unknown work", $"<p>status <span class=\"mono\">unknown_work</span>, no work <b>{H(work)}</b>. Try <a href=\"/search\">search</a>.</p>"), "text/html", statusCode: 404);
         var timeline = r.Timeline(work);
         var sb0 = new StringBuilder();
         sb0.Append($"""
-            <div class="notice">status <span class="mono">no_version_for_date</span> — the work exists, but no
+            <div class="notice">status <span class="mono">no_version_for_date</span>, the work exists, but no
             version covers <b>{d:yyyy-MM-dd}</b>. The publisher's digitised history for this work covers:</div>
             """);
         sb0.Append("<ul>");
@@ -1509,7 +1509,7 @@ app.MapGet($"/{pubRoute}/{{work}}/{{date}}", (string publisher, string work, str
             sb0.Append($"<li><a href=\"/{H(publisher)}/{H(work)}/{H(v.ValidFrom)}\" class=\"mono\">{Interval(v)}</a></li>");
         sb0.Append("</ul>");
         sb0.Append(EnvelopeCard(r, IsProvisional(r, d)));
-        return Results.Content(Page(H(work), sb0.ToString(), $"as of {d:yyyy-MM-dd} — honest refusal"), "text/html", statusCode: 404);
+        return Results.Content(Page(H(work), sb0.ToString(), $"as of {d:yyyy-MM-dd}, honest refusal"), "text/html", statusCode: 404);
     }
 
     var all = r.Timeline(work);
@@ -1524,13 +1524,13 @@ app.MapGet($"/{pubRoute}/{{work}}/{{date}}", (string publisher, string work, str
     sb.Append(next is not null
         ? $"""
            <div class="notice"><b>Point-in-time view as at {d:yyyy-MM-dd}.</b> This version has been
-           <b>superseded</b> — it applied {H(Interval(doc))}. <a href="/{H(publisher)}/{H(work)}">Jump to the
+           <b>superseded</b>, it applied {H(Interval(doc))}. <a href="/{H(publisher)}/{H(work)}">Jump to the
            version in force today</a> or <a href="/{H(publisher)}/{H(work)}/diff/{H(doc.ValidFrom)}/{H(next.ValidFrom)}">see
            exactly what changed next</a>.</div>
            """
         : $"""
            <div class="notice" style="border-left-color:var(--ok)"><b>Point-in-time view as at {d:yyyy-MM-dd}.</b>
-           This is the latest state the publisher has consolidated — valid {H(Interval(doc))}.</div>
+           This is the latest state the publisher has consolidated, valid {H(Interval(doc))}.</div>
            """);
     // Most readers arrive from a search engine straight onto this page and never see the
     // homepage. The two things they must know — what a consolidated text is, and that it
@@ -1539,15 +1539,15 @@ app.MapGet($"/{pubRoute}/{{work}}/{{date}}", (string publisher, string work, str
         <details class="card" style="margin-top:-4px"><summary><b>New here? What am I looking at?</b></summary>
         <p>This is a <b>consolidated</b> text: the original law with every later amendment merged in,
         as the official publisher produced it for a given date. Laws are amended constantly, so
-        <b>“the law” has no single text — only a text per date</b>. That date is the banner above.</p>
+        <b>“the law” has no single text, only a text per date</b>. That date is the banner above.</p>
         <p><b>It has no legal force.</b> Only the version published in the official gazette
-        (<i>Mémorial</i> / Official Journal) is authentic — the publishers say so themselves, and so do we.
+        (<i>Mémorial</i> / Official Journal) is authentic, the publishers say so themselves, and so do we.
         Lex reproduces their text without altering a byte, and links the source on every page.
         This is legal <i>information</i>, never legal advice: it reports what the text said,
         never what it means for your situation.</p>
         <p class="sub">“Valid from → to” = the window in which this text applied.
         “Open” = still current as far as the publisher has consolidated.
-        Each article carries its own hash so you can prove it was not tampered with —
+        Each article carries its own hash so you can prove it was not tampered with , 
         <a href="/verify">here is how</a>.</p></details>
         """);
     sb.Append($"""
@@ -1565,10 +1565,10 @@ app.MapGet($"/{pubRoute}/{{work}}/{{date}}", (string publisher, string work, str
     if (provisions.Count > 0)
     {
         sb.Append($"""
-            <div class="notice" style="border-left-color:var(--ok)"><b>Text included — per-article reading view.</b>
+            <div class="notice" style="border-left-color:var(--ok)"><b>Text included, per-article reading view.</b>
             Deterministic extraction of the verbatim retrieved document; each article carries its own hash and anchor.
             {H(r.Stamp.GetValueOrDefault("attribution"))}</div>
-            <details class="card"><summary><b>Outline — {provisions.Count} provisions</b></summary><p>
+            <details class="card"><summary><b>Outline, {provisions.Count} provisions</b></summary><p>
             """);
         foreach (var p in provisions)
             sb.Append($"<a href=\"#{H(p.Anchor)}\" class=\"badge\">{H(p.Num ?? p.Heading ?? p.Anchor)}</a> ");
@@ -1584,7 +1584,7 @@ app.MapGet($"/{pubRoute}/{{work}}/{{date}}", (string publisher, string work, str
                 lastPath = p.Path;
             }
             var title = p.Num is null && p.Heading is null ? p.Anchor
-                : string.Join(" — ", new[] { p.Num, p.Heading }.Where(s => !string.IsNullOrEmpty(s)));
+                : string.Join(", ", new[] { p.Num, p.Heading }.Where(s => !string.IsNullOrEmpty(s)));
             sb.Append($"""
                 <div class="card" id="{H(p.Anchor)}">
                 <b>{H(title)}</b>
@@ -1594,7 +1594,7 @@ app.MapGet($"/{pubRoute}/{{work}}/{{date}}", (string publisher, string work, str
                 </div>
                 """);
             shown++;
-            if (shown >= 400) { sb.Append($"<p class=\"sub\">— {provisions.Count - shown:n0} further provisions omitted from this view; retrieve them via the MCP tools —</p>"); break; }
+            if (shown >= 400) { sb.Append($"<p class=\"sub\">,  {provisions.Count - shown:n0} further provisions omitted from this view; retrieve them via the MCP tools , </p>"); break; }
         }
     }
     else
@@ -1611,7 +1611,7 @@ app.MapGet($"/{pubRoute}/{{work}}/{{date}}", (string publisher, string work, str
     if (next is not null) sb.Append($" &nbsp;&nbsp;<a href=\"/{H(publisher)}/{H(work)}/{H(next.ValidFrom)}\">next version ({H(next.ValidFrom)}) →</a>");
     sb.Append("</p>");
     sb.Append(EnvelopeCard(r, IsProvisional(r, d)));
-    return Results.Content(Page(H(DocTitle(doc)), sb.ToString(), $"as it stood on {d:yyyy-MM-dd} — permalink: /{H(publisher)}/{H(work)}/{d:yyyy-MM-dd}"), "text/html");
+    return Results.Content(Page(H(DocTitle(doc)), sb.ToString(), $"as it stood on {d:yyyy-MM-dd}, permalink: /{H(publisher)}/{H(work)}/{d:yyyy-MM-dd}"), "text/html");
 });
 
 app.Run();

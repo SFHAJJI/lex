@@ -1,4 +1,4 @@
-# Increment B — written prediction (BEFORE any EU code)
+# Increment B, written prediction (BEFORE any EU code)
 
 Date: 2026-08-01
 Rule (spec §14.2): if the real numbers land far above these, the neutral model

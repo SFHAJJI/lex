@@ -1,4 +1,4 @@
-# Lex — Technical Specification v4.0
+# Lex, Technical Specification v4.0
 
 **Point-in-time retrieval of regulatory text.**
 
@@ -27,8 +27,8 @@ Lex ingests regulatory text from many publishers, keeps every version it has eve
 seen, and answers "what did this say on 15 March 2022?" with the exact text, the
 dates it applied between, the instrument that changed it, and a hash proving the
 text was retrieved rather than reconstructed. Where a publisher forbids
-republication of the text, Lex keeps and serves the *timeline* — which document,
-which version, in force between which dates — and links out for the text. Where
+republication of the text, Lex keeps and serves the *timeline*, which document,
+which version, in force between which dates, and links out for the text. Where
 Lex cannot know the answer, it says so in a machine-readable way: an honest
 refusal is a feature of the product, not a failure of it.
 
@@ -41,7 +41,7 @@ refusal is a feature of the product, not a failure of it.
 Two audiences, deliberately:
 
 1. **Developers** who consume the corpora, the MCP server, and the published
-   packages — the audience that produces GitHub stars, which is the settled
+   packages, the audience that produces GitHub stars, which is the settled
    priority (D-PR1).
 2. **Organisations subject to supervision**, and the professionals serving them.
    Luxembourg financial firms first, because supervisory density is highest there,
@@ -49,7 +49,7 @@ Two audiences, deliberately:
    installations, a data-protection authority enforcing the GDPR or the AI Act,
    and a banking supervisor are the same shape of problem. Any regulator, in any
    jurisdiction, whose rules are legal to ingest is in eventual scope via the §1.5
-   intake procedure — the architecture requires zero change per new publisher
+   intake procedure, the architecture requires zero change per new publisher
    beyond one adapter and one corpus repo.
 
 ### 1.2 The question we answer
@@ -81,21 +81,21 @@ generates interpretive text (§9.9, fitness rule F10).
 Scope is defined by **publisher**, not by sector. A publisher enters scope when
 the §1.5 intake completes.
 
-**In scope, text expected republishable — pending stated gates:**
+**In scope, text expected republishable, pending stated gates:**
 
 | Publisher | What | Access | Gate |
 |---|---|---|---|
-| Legilux (LU) | Laws, grand-ducal regulations, codes, Constitution, règlements CSSF | SPARQL endpoint, verified | **R2** — written confirmation that the reuse grant covers act *content*, and **R19** — a compliant body-acquisition channel (§2.5). Until both: timeline + metadata + link-out only. |
+| Legilux (LU) | Laws, grand-ducal regulations, codes, Constitution, règlements CSSF | SPARQL endpoint, verified | **R2**, written confirmation that the reuse grant covers act *content*, and **R19**, a compliant body-acquisition channel (§2.5). Until both: timeline + metadata + link-out only. |
 | EUR-Lex / Cellar (EU) | Regulations, directives, delegated & implementing acts, consolidated versions | SPARQL endpoint | Volume/rate measurement (R13) before nightly commitment |
-| EBA, ESMA, EIOPA (EU) | Guidelines, Q&A, final RTS/ITS reports | Website; reuse permitted with attribution | none — first Tier B source, observation clock starts in increment A (§14.1) |
+| EBA, ESMA, EIOPA (EU) | Guidelines, Q&A, final RTS/ITS reports | Website; reuse permitted with attribution | none, first Tier B source, observation clock starts in increment A (§14.1) |
 | BCL (LU) | Règlements and circulaires of the central bank | Website; reuse permitted with attribution | intake refresh before adapter work |
 | ECB / SSM (EU) | Regulations, decisions, supervisory guides | Website; reuse permitted with attribution | intake refresh before adapter work |
 
-**In scope, text NOT republishable — timeline only (Tier C, §1.6):**
+**In scope, text NOT republishable, timeline only (Tier C, §1.6):**
 
 | Publisher | What | Constraint | Gate |
 |---|---|---|---|
-| CSSF (LU) | Circulaires | All rights reserved; written consent required for text | **R18** — written request for *metadata/timeline* reuse sent and **answered**, or the documented legal basis recorded per §14.4, before the corpus ships |
+| CSSF (LU) | Circulaires | All rights reserved; written consent required for text | **R18**, written request for *metadata/timeline* reuse sent and **answered**, or the documented legal basis recorded per §14.4, before the corpus ships |
 | CNPD (LU) | Lignes directrices | Written authorisation required | same |
 
 Note the same authority appears in both tables: **règlements CSSF** are published
@@ -105,16 +105,16 @@ publication channel and its legal regime, not the issuing authority.** This spli
 is the cleanest public demonstration of why the tier model exists, and it is
 documented in both corpus READMEs.
 
-**Candidate publishers — sector expansion. NOT VERIFIED. Each requires the §1.5
+**Candidate publishers, sector expansion. NOT VERIFIED. Each requires the §1.5
 intake before any code is written against it:**
 
-- ILR — energy, telecoms, postal, NIS2 outside CSSF-supervised sectors
-- ITM — workplace and installation safety prescriptions
-- ILNAS — standardisation, accreditation, product safety
-- CAA — insurance supervision (reuse terms unknown)
-- CRF — financial intelligence unit circulars (reuse terms unknown)
+- ILR, energy, telecoms, postal, NIS2 outside CSSF-supervised sectors
+- ITM, workplace and installation safety prescriptions
+- ILNAS, standardisation, accreditation, product safety
+- CAA, insurance supervision (reuse terms unknown)
+- CRF, financial intelligence unit circulars (reuse terms unknown)
 - Administration de l'environnement, and sector equivalents
-- Non-LU/EU regulators, wherever ingestion is legal — same intake, same shape
+- Non-LU/EU regulators, wherever ingestion is legal, same intake, same shape
 
 > **R5 discipline is in force.** A publisher that we cannot describe accurately
 > does not enter the spec. The list above is a research backlog, not a commitment.
@@ -131,7 +131,7 @@ corpus repo's `README`, with a source URL for each:
    supervisory expectation / guidance. Taken from the publisher's own words,
    cited. Never our inference (§3.6).
 3. **Is it retrievable mechanically?** Endpoint, feed, sitemap, or paginated
-   HTML. Does robots.txt permit the specific paths we would fetch — including
+   HTML. Does robots.txt permit the specific paths we would fetch, including
    the paths **bodies** are served from, not only listings (see R19)?
 4. **May we republish the text?** Yes / no / unclear. Unclear is treated as no.
 5. **May we republish the metadata and timeline** (identifiers, titles, dates,
@@ -151,10 +151,10 @@ PUBLISH GATE   Q1, Q2, Q4, Q5, Q6. Cleared → the corpus repo may go public
 ```
 
 Private storage of a public page is not republication, so the legal posture is
-unchanged — but a dozen publishers can be under observation within a fortnight
+unchanged, but a dozen publishers can be under observation within a fortnight
 instead of two by an increment's end, and observation time is the one asset
 that decays daily (§1.6). A publisher with all six answers gets a corpus repo;
-one missing any answer does not. Questions 4 and 5 are independent — a "no" on
+one missing any answer does not. Questions 4 and 5 are independent, a "no" on
 text with a "yes" (or documented legal basis) on metadata is exactly Tier C.
 
 ### 1.6 Source tiers
@@ -177,7 +177,7 @@ TIER B   Full text, NO publisher-supplied version history
            started watching; that date is stated in every response, and dates
            before it get an explicit refusal, not a guess (§9.1).
 
-TIER C   No text — metadata and timeline only
+TIER C   No text, metadata and timeline only
          Text republication is forbidden or not mechanically retrievable;
          metadata republication is permitted or has a documented legal basis
          (§1.5 question 5).
@@ -193,17 +193,16 @@ way this project acquires a credibility failure; fitness rule F7 and the §9.1
 refusal status exist for it.
 
 **Tier B observation time is the moat.** Every day a Tier B publisher goes
-unobserved is history no competitor — and no future self — can ever recover. The
+unobserved is history no competitor, and no future self, can ever recover. The
 tool surface is copyable in weeks; an observation record that started earlier is
 not. Therefore observation is **decoupled from integration**: a cleared Tier B
 publisher gets a minimal nightly fetch-and-commit (raw snapshot + fetch metadata,
 no adapter, no index) the week its intake clears, regardless of when its
 increment ships (§14.1). Snapshot jobs write to **private archive repos**, never
-to the corpus repo, and are dispatched and monitored like any fleet member —
-mechanics and backfill rule in §11.5.
+to the corpus repo, and are dispatched and monitored like any fleet member, mechanics and backfill rule in §11.5.
 
 **Tier C is not a degraded product.** For a supervised firm, the scarce artefact
-is the *timeline* — which circular was in force on which day, and what replaced
+is the *timeline*, which circular was in force on which day, and what replaced
 it. The text has always been one click away. Nobody sells the timeline.
 
 ### 1.7 Explicitly out of scope
@@ -213,11 +212,11 @@ it. The text has always been one click away. Nobody sells the timeline.
 | Switzerland | Dropped (D17). The buyer is in Luxembourg. |
 | Court rulings / case law | A judgment is a point, not an interval; needs a parallel design. Later, if ever. |
 | ISO / IEC / SAE standards | Paywalled. We may reference a clause number; we never store the text. |
-| IFRS standalone standards | Licensed. The EU-adopted text inside Reg. (EU) 2023/1803 carries an EEA-only reproduction notice — not open. |
+| IFRS standalone standards | Licensed. The EU-adopted text inside Reg. (EU) 2023/1803 carries an EEA-only reproduction notice, not open. |
 | Luxembourg Stock Exchange rulebook | Written consent required. |
 | Any interpretive or advisory output | §1.3. |
 | Preparatory works, doctrine, commentary | Not now. |
-| The Legilux flat corpus (~24,579 never-consolidated acts) | Deferred to its own increment with its own layout, index representation, and etiquette budget (§7.7, R20). No manifest field and no tool exposure until then — **except** as a named known-exclusion in `coverage` (§9.7) and in `in_force_on` population disclosures (§9.3), where honesty requires naming it. |
+| The Legilux flat corpus (~24,579 never-consolidated acts) | Deferred to its own increment with its own layout, index representation, and etiquette budget (§7.7, R20). No manifest field and no tool exposure until then, **except** as a named known-exclusion in `coverage` (§9.7) and in `in_force_on` population disclosures (§9.3), where honesty requires naming it. |
 
 ---
 
@@ -225,16 +224,16 @@ it. The text has always been one click away. Nobody sells the timeline.
 
 These are measured, not estimated. Numbers without a source line are **not** to
 be repeated in public material. Where verification is *pending*, this section
-says so — v3 stated one unverified right as measured, which is the exact failure
+says so, v3 stated one unverified right as measured, which is the exact failure
 this section exists to prevent.
 
-### 2.1 Luxembourg — Legilux SPARQL (`https://data.legilux.public.lu/sparqlendpoint`)
+### 2.1 Luxembourg, Legilux SPARQL (`https://data.legilux.public.lu/sparqlendpoint`)
 
 ```
 Versioned corpus (carry jolux:dateApplicability)
   versions ........................ 4,636
   distinct works .................. ~1,390
-  dateApplicability coverage ...... 100%   (the gate — passed)
+  dateApplicability coverage ...... 100%   (the gate, passed)
   isMemberOf ...................... 100%
   inForceStatus ................... 99%
   isRealizedBy .................... 97%
@@ -248,7 +247,7 @@ Type breakdown of the 4,636
   unidentified .................... 287
   LOI+RGD+codes+Constitution = 4,349 = 94%
 
-Flat corpus (no version history) — OUT OF SCOPE until R20 resolves (§1.7)
+Flat corpus (no version history), OUT OF SCOPE until R20 resolves (§1.7)
   LOI 9,246 + RGD 15,333 = 24,579 acts
   → only ~6% of lois and ~4% of RGD are ever consolidated
 
@@ -282,7 +281,7 @@ deleted).
 **robots.txt:** `data.legilux.public.lu/eli/…`, `/file/…`, `/filestore/…` are
 disallowed. The SPARQL endpoint is not. → D14: SPARQL-first, never crawl.
 
-**Probe results, 2026-08-01 (executed live against the endpoint — these
+**Probe results, 2026-08-01 (executed live against the endpoint, these
 supersede the open questions above):**
 
 - **R6 SETTLED.** 503,867 `jolux:Article` entities exist and **100% carry
@@ -294,31 +293,30 @@ supersede the open questions above):**
   (`code/procedure_civile` → `rgd/1998/08/03/n4`). Model: **Work = the
   `isMemberOf` target; DocumentType = the consolidation's own `typeDocument`;
   compilations are Works like any other.** Each consolidation belongs to
-  exactly one Work — no double-counting in `in_force_on`.
-- **Corpus count now 4,644** consolidations (+8 since the §2.1 measurement —
-  the corpus is live). Codes are deep: code de l'environnement 195 versions,
+  exactly one Work, no double-counting in `in_force_on`.
+- **Corpus count now 4,644** consolidations (+8 since the §2.1 measurement, the corpus is live). Codes are deep: code de l'environnement 195 versions,
   santé 121, éducation nationale 115.
-- **R19 SETTLED — negative, and now a standing state (D42).** SPARQL carries
+- **R19 SETTLED, negative, and now a standing state (D42).** SPARQL carries
   no text literals; an Expression's `isEmbodiedBy` manifestation URLs live on
   the robots-disallowed `data.` subdomain; the main domain serves a JavaScript
   shell for every `/eli/` path; the SPA's internal API is unpublished and
   **will not be reverse-engineered or used**. Conclusion: **no published,
   robots-compliant body channel exists.** `Lex.Sources.Legilux` runs in C4's
   metadata-only mode permanently until a lawful channel appears. The public
-  product is the timeline — which §1.6 already argues is the scarce artefact.
+  product is the timeline, which §1.6 already argues is the scarce artefact.
 - **Etiquette note:** the ingest User-Agent identifies the project
   (`Lex/x.y (+repository URL)`), not a personal address.
 
-### 2.2 Luxembourg — publication rights: what is actually measured (R2)
+### 2.2 Luxembourg, publication rights: what is actually measured (R2)
 
 - **Measured:** dataset `62c83bfd9794ec8e47b5bc68` on data.public.lu carries a
-  CC-BY tag, and the dataset page **self-describes as metadata** — it does not
+  CC-BY tag, and the dataset page **self-describes as metadata**, it does not
   facially cover act bodies.
-- **Measured:** Luxembourg act *text* carries no copyright — loi du 18 avril
+- **Measured:** Luxembourg act *text* carries no copyright, loi du 18 avril
   2001, art. 10, 8°: « les actes officiels de l'autorité et leur traduction
   officielle » are excluded from protection.
 - **Open (R2):** the load-bearing right is therefore not copyright but the
-  state's **sui generis database right** (same law, arts. 67–70 — no
+  state's **sui generis database right** (same law, arts. 67-70, no
   official-acts exclusion), art. 67(3)'s grand-ducal-regulation conditions on
   copying state databases, and whether the open-data law of 29 November 2021
   (transposing Directive (EU) 2019/1024, art. 1(6) of which bars public-sector
@@ -326,9 +324,9 @@ supersede the open questions above):**
 - **Action (week one of increment A):** written question to the Service central
   de législation: *may we bulk-extract act text via the SPARQL endpoint and
   republish it (public git repository + public website), with attribution, under
-  the loi du 29.11.2021 and/or the CC-BY grant — and do any art. 67(3)
+  the loi du 29.11.2021 and/or the CC-BY grant, and do any art. 67(3)
   conditions apply?* Answer in writing, cited in the corpus README per §1.5 Q4.
-- **Until answered: unclear = no** (§1.5's own rule) — on **every** surface act
+- **Until answered: unclear = no** (§1.5's own rule), on **every** surface act
   text could reach the public: the corpus repo stays private, the
   `index-lu-legilux.db` release stays private, and the public `Lex.Web` and
   `Lex.Mcp` instances serve the **text-withheld mode** (D38, §9's
@@ -337,7 +335,7 @@ supersede the open questions above):**
   schedule (§14.1). R11 (does the same open-data law bind the CSSF?) shares the
   statute; one answer likely informs both.
 
-### 2.3 European Union — Cellar (`http://publications.europa.eu/webapi/rdf/sparql`)
+### 2.3 European Union, Cellar (`http://publications.europa.eu/webapi/rdf/sparql`)
 
 - Ontology is **CDM**, a different lineage from JOLux. JOLux extends ELI; CDM
   sits beside it, bridged by `owl:sameAs`. No shared vocabulary to reuse.
@@ -347,24 +345,24 @@ supersede the open questions above):**
   increment A (§14.1).
 - **Cellar appears uni-temporal**: valid time only; no transaction time located
   (R9). We generate transaction time ourselves (§7.4).
-- Consolidated texts carry **no legal effect** — only the OJ acts are authentic.
+- Consolidated texts carry **no legal effect**, only the OJ acts are authentic.
   Every consolidated version we serve links to its constituent authentic acts
   (§9.6).
 
-### 2.4 Comparable systems — measured, for positioning
+### 2.4 Comparable systems, measured, for positioning
 
 | System | What it does | Note |
 |---|---|---|
 | bundestag/gesetze | German federal law as Markdown in git | 1,900 stars |
 | Legilibre/Archeo-Lex | French law converted to git | 104 stars |
-| Normattiva (IT) | State point-in-time, "multivigenza", 1861– | State-operated |
+| Normattiva (IT) | State point-in-time, "multivigenza", 1861,  | State-operated |
 | legislation.gov.uk | State point-in-time, **date in URL** | State-operated |
 | e-Gov 法令API v2 (JP) | Public API with amendment history | State-operated |
 | Ansvar Luxembourg-law-mcp | 4,551 statutes, 36,014 provisions, ~69 MB SQLite, 13 tools, BM25 | No point-in-time (roadmap item) |
 
 **Consequences internalised into this spec:**
 
-1. Point-in-time law is not novel — it is solved at state level in IT/UK/JP. Our
+1. Point-in-time law is not novel, it is solved at state level in IT/UK/JP. Our
    claim is narrowed to *this jurisdiction, this combination, independently
    operated, hash-proof, MCP-native*.
 2. The 1,900-vs-104 gap says attention accrues to **browsable data**, not
@@ -380,13 +378,13 @@ supersede the open questions above):**
 
 | Publisher | Text republishable | Metadata/timeline republishable | Evidence |
 |---|---|---|---|
-| Legilux | **Pending R2** (metadata grant measured; content scope unverified — §2.2) | Yes (CC-BY metadata grant) | data.public.lu dataset page |
+| Legilux | **Pending R2** (metadata grant measured; content scope unverified, §2.2) | Yes (CC-BY metadata grant) | data.public.lu dataset page |
 | EUR-Lex | Yes, with third-party carve-outs | Yes | Commission Decision 2011/833/EU |
 | BCL | Yes, with attribution | Yes | bcl.lu copyright page |
 | ECB / SSM | Yes, with attribution | Yes | bankingsupervision.europa.eu |
 | EBA / ESMA / EIOPA | Yes, with attribution; carve-outs | Yes | each authority's legal notice |
-| CSSF circulars | No — written consent required | **Pending R18** (request + documented basis) | cssf.lu ToS |
-| CNPD | No — written authorisation required | **Pending R18** | cnpd.public.lu |
+| CSSF circulars | No, written consent required | **Pending R18** (request + documented basis) | cssf.lu ToS |
+| CNPD | No, written authorisation required | **Pending R18** | cnpd.public.lu |
 | LuxSE | No | No | luxse.com terms |
 
 Attribution obligations **propagate into every derived artefact**: the index
@@ -396,7 +394,7 @@ states that they survive into forks (§16.2).
 
 ---
 
-## 3. The neutral model — `Lex.Law`
+## 3. The neutral model, `Lex.Law`
 
 The middle layer is named after no source. It is the vocabulary every adapter
 translates **into**, and it contains no knowledge of JOLux, CDM, HTML scraping,
@@ -428,7 +426,7 @@ Publisher ──< Work ──< Version ──< Expression ──< Observation
 
 ### 3.3 Expression-level validity, with resolution rules
 
-In Luxembourg, `fr` and `de` move together. In the EU they do not — a
+In Luxembourg, `fr` and `de` move together. In the EU they do not, a
 corrigendum may correct one language and not another:
 
 ```
@@ -449,14 +447,14 @@ the corpus layout and lex_ids freeze at increment A:
    as the hull of its Expressions' intervals and is informational only.
    `in_force_on` deduplicates by Work (§9.3).
 2. **Envelope rule.** The `valid_from`/`valid_to` in every response are the
-   returned **Expression's** dates — consistent with the adjacent `language`
+   returned **Expression's** dates, consistent with the adjacent `language`
    field. Optional `version_valid_from`/`version_valid_to` carry the hull.
 3. **Storage rule.** A language-skewed correction stays **inside the existing
    version directory** as an additional entry in the `expressions` list. **One
    naming rule, shared verbatim with C3 and C1:** the version's initial
    expression in a language is `<lang>.md`; a *further Expression* of the same
    language (a corrigendum with its own interval) is `<lang>.<valid_from>.md`;
-   a *re-observation* of an existing expression (same interval, new body — a
+   a *re-observation* of an existing expression (same interval, new body, a
    publisher correction, §7.4) appends an observation suffix:
    `<lang>.obs-<observed-date>.md` or `<lang>.<valid_from>.obs-<observed-date>.md`.
    The two cases are thereby distinguishable from the filename alone, and
@@ -469,7 +467,7 @@ the corpus layout and lex_ids freeze at increment A:
    Decided now, because lex_ids go public in increment A.
 
 This design is **paper-tested against one real Cellar corrigendum** (e.g. a DORA
-language corrigendum) during increment A — not first exercised in increment B
+language corrigendum) during increment A, not first exercised in increment B
 (§14.1).
 
 ### 3.4 Identifier discipline
@@ -498,12 +496,12 @@ force a release? If yes, it is in the wrong place.*
 
 **R15 is settled before the corpus writer is written, not before the first
 benchmark.** `LOI`/`RGD` describe an *instrument*; `CODE`/`RECUEIL` describe a
-*compilation* whose articles originate from many instruments — 35% of the
+*compilation* whose articles originate from many instruments, 35% of the
 versioned corpus. If these are two axes, Work identity, the C1 layout, and every
 `in_force_on` denominator change (a code version and its constituent lois would
 double-count). One SPARQL query settles it; it runs in week one (§14.1), and the
 answer is recorded as a decision in §17 before any layout freezes. Re-cutting
-Work identity after publication would rewrite public git history — the demo
+Work identity after publication would rewrite public git history, the demo
 itself.
 
 ### 3.6 Authority is cited data, never our opinion
@@ -517,8 +515,8 @@ itself.
 }
 ```
 
-`level` is drawn from a closed vocabulary — `binding`, `comply_or_explain`,
-`supervisory_expectation`, `guidance`, `unknown` — but the assignment must trace
+`level` is drawn from a closed vocabulary, `binding`, `comply_or_explain`,
+`supervisory_expectation`, `guidance`, `unknown`, but the assignment must trace
 to the publisher's own words with a URL. Where the publisher does not say,
 `unknown` is the correct value and it is surfaced. `unknown` is a feature.
 
@@ -526,7 +524,7 @@ to the publisher's own words with a URL. Where the publisher does not say,
 
 > **A concept enters the neutral model only when a *second* publisher needs it.**
 
-Until then it lives in the adapter's `raw` output (§6, C3) — capped, namespaced,
+Until then it lives in the adapter's `raw` output (§6, C3), capped, namespaced,
 and read by nothing (fitness rule F11). When a second publisher needs it, it
 earns a place in the model via a deliberate, diffed promotion.
 
@@ -537,22 +535,22 @@ earns a place in the model via a deliberate, diffed promotion.
 ```
 APPS
   Lex.Ingest          the ingestion program (a CLI)
-  Lex.Mcp             the MCP server — exactly ONE binary (D27)
-  Lex.Web             the public demo (server-rendered, model-free — §12)
+  Lex.Mcp             the MCP server, exactly ONE binary (D27)
+  Lex.Web             the public demo (server-rendered, model-free, §12)
 
-LAYER 3 — ADAPTERS (one per publisher; each knows exactly one world)
+LAYER 3, ADAPTERS (one per publisher; each knows exactly one world)
   Lex.Sources.Legilux     JOLux / SPARQL          Tier A
   Lex.Sources.EurLex      CDM / SPARQL            Tier A
   Lex.Sources.Esa         HTML listing            Tier B      (EBA/ESMA/EIOPA)
   Lex.Sources.Cssf        HTML listing            Tier C
   Lex.Sources.<next>      …
 
-LAYER 2 — NEUTRAL MODEL
+LAYER 2, NEUTRAL MODEL
   Lex.Law             Publisher, Work, Version, Expression, Observation,
                       Relation, Identifier, DocumentType, Authority
                       Knows no publisher. Knows no serialisation format.
 
-LAYER 1 — FOUNDATIONS (know nothing about regulation at all)
+LAYER 1, FOUNDATIONS (know nothing about regulation at all)
   Lex.Temporal        dates, intervals, as-of resolution, interval algebra
   Lex.Index           build the index, query the index
 ```
@@ -565,14 +563,14 @@ L1 → L2, L2 → L3           build failure
 L2 → any adapter assembly  build failure
 ```
 
-### 4.1 D27 — one MCP binary; the corpus set is deployment configuration
+### 4.1 D27, one MCP binary; the corpus set is deployment configuration
 
 There is exactly one `Lex.Mcp`. The set of publishers it serves is determined by
-the index files mounted into it via the index manifest (§8.6) — never by a code
+the index files mounted into it via the index manifest (§8.6), never by a code
 fork, never by per-publisher server variants.
 
-The rejected alternative — one MCP server per jurisdiction or regulator, with a
-client-side model routing among them — is recorded here so it is not re-proposed:
+The rejected alternative, one MCP server per jurisdiction or regulator, with a
+client-side model routing among them, is recorded here so it is not re-proposed:
 it multiplies the seven-tool surface into 7N near-duplicate tools (the
 pathological case for client-model tool selection); it relocates §8.5's fan-out
 and merge into a client that cannot merge rankings; it turns directive→national
@@ -580,7 +578,7 @@ questions (§10.5) into fragile multi-server orchestration; it fragments
 `coverage` so no single honest "what we hold" answer exists; and it hands a solo
 maintainer N images and N version matrices. Per-regulator distribution and
 monetisation are achieved by the same binary plus a **licensed subset of index
-release assets** — the public demo mounts all public indexes; a bank mounts only
+release assets**, the public demo mounts all public indexes; a bank mounts only
 its licensed ones.
 
 ### 4.2 Published packages
@@ -626,14 +624,13 @@ lex-bench                    the public benchmark
 failure modes and retention policy all follow the publisher. Mixing two
 publishers means one publisher's bad night rewrites another's files and one set
 of terms has to cover both. Per-jurisdiction grouping was considered and
-rejected: it solves the wrong problem (repo count is not the solo cost driver —
-uncoordinated operations are, and §11 centralises those regardless of grouping)
+rejected: it solves the wrong problem (repo count is not the solo cost driver, uncoordinated operations are, and §11 centralises those regardless of grouping)
 while reintroducing exactly the blast radius this rule avoids.
 
 **A corpus repo contains:** data, a manifest, a `NOTICE` (§16.2), a README that
 is a product surface (§12.3) answering the six §1.5 questions, and one workflow
 file (~15 lines) that only responds to `workflow_dispatch` from the §11
-dispatcher. No cron in corpus repos — GitHub disables scheduled workflows in
+dispatcher. No cron in corpus repos, GitHub disables scheduled workflows in
 repos without commit activity for 60 days, and a quiet corpus repo is *by
 design* such a repo. No logic, no secrets beyond the default token.
 
@@ -641,7 +638,7 @@ design* such a repo. No logic, no secrets beyond the default token.
 
 ## 6. Contracts
 
-### C1 — Corpus on disk
+### C1, Corpus on disk
 
 ```
 lex-corpus-lu-legilux/
@@ -661,27 +658,27 @@ lex-corpus-lu-legilux/
           fr.md
           fr.obs-2019-03-12.md   ← a re-observation of fr: publisher correction (§7.4)
                                     (a corrigendum EXPRESSION would instead be
-                                     fr.<valid_from>.md — §3.3 rule 3, one shared scheme)
+                                     fr.<valid_from>.md, §3.3 rule 3, one shared scheme)
 ```
 
-Directory name of a version is its **`valid_from` alone** — `valid_to` is never
+Directory name of a version is its **`valid_from` alone**, `valid_to` is never
 in the path. Rationale (D41): 26% of Legilux versions are open intervals; a
 path embedding `valid_to` forces a rename on every closure, and the corpus
-`git log` — the demo — would fill with renames that look like edits to the law
+`git log`, the demo, would fill with renames that look like edits to the law
 and are not. **No directory is ever renamed, for any reason, ever**; a closure
 is one `meta.json` chain entry (§7.4). A same-`valid_from` collision takes a
 `--02` ordinal suffix, which carries no meaning. Paths are non-authoritative:
 `meta.json` is the sole authority for intervals, and the index keys records by
 the `lex_id` inside `meta.json`, never by path. Body files are equally
-**append-only** — no ingest code path may open an existing body file for
+**append-only**, no ingest code path may open an existing body file for
 writing (F12).
 
 Human-readable by design: `git log` on this tree must be legible as a
 legislative history without tooling. That legibility is the demo. Therefore:
-no heartbeat commits, no nightly re-stamps, no operational noise — ever
+no heartbeat commits, no nightly re-stamps, no operational noise, ever
 (§7.4, §11.2).
 
-**Tier C variant** — no body files, same shape:
+**Tier C variant**, no body files, same shape:
 
 ```
 lex-corpus-lu-cssf/
@@ -693,7 +690,7 @@ lex-corpus-lu-cssf/
           meta.json              ← "text": { "available": false, "url": "…" }
 ```
 
-### C2 — `manifest.json` (repository root)
+### C2, `manifest.json` (repository root)
 
 ```json
 {
@@ -707,7 +704,7 @@ lex-corpus-lu-cssf/
   },
   "tier": "A",
   "source_endpoint": "https://data.legilux.public.lu/sparqlendpoint",
-  "attribution": "Ministère d'État — Service central de législation, Grand-Duché de Luxembourg",
+  "attribution": "Ministère d'État, Service central de législation, Grand-Duché de Luxembourg",
   "source_terms_url": "https://…",
   "text_included": true,
   "text_public": false,
@@ -727,18 +724,18 @@ lex-corpus-lu-cssf/
 }
 ```
 
-- `history_begins` is `"publisher"` for Tier A, or an ISO date for Tier B — the
+- `history_begins` is `"publisher"` for Tier A, or an ISO date for Tier B, the
   day observation began. Propagated to every response for that publisher.
 - `text_public` starts `false` and flips to `true` only when the publisher's
-  text gate (§1.5 Q4 — for Legilux, R2 + R19) has cleared **in writing**. All
+  text gate (§1.5 Q4, for Legilux, R2 + R19) has cleared **in writing**. All
   public-facing surfaces honour it (D38, §12.2); the index stamp table carries a
   copy (§8.1).
 - v3's `works_search_only` field is **deleted** (§1.7): a manifest may not
   advertise a corpus no section builds.
-- The manifest is written only when its content changes — never as a heartbeat
+- The manifest is written only when its content changes, never as a heartbeat
   (freshness lives in `lex-ops`, §11.2).
 
-### C3 — version `meta.json`
+### C3, version `meta.json`
 
 ```json
 {
@@ -773,30 +770,30 @@ Rules, each load-bearing:
 
 - **`events`** is the transaction-time chain (§7.4). Entries are append-only,
   each with its own `observed_from`, drawn from a **closed vocabulary that F12
-  enumerates** — the change→entry mapping is total over every mutable field of
+  enumerates**, the change→entry mapping is total over every mutable field of
   `meta.json`:
-  - `first_sighting` — the record's creation.
-  - `interval_closed` — carries the new `valid_to`; **implies an accompanying
+  - `first_sighting`, the record's creation.
+  - `interval_closed`, carries the new `valid_to`; **implies an accompanying
     expression-scoped closure entry for every still-open expression** (as_of
-    resolves on expression intervals, §3.3 rule 1 — a version closure that left
+    resolves on expression intervals, §3.3 rule 1, a version closure that left
     them open would answer past it).
-  - `validity_revised` — a publisher revising already-published dates (Tier A
-    `dateApplicability` corrections happen). Carries `scope` — the version, or
-    an expression coordinate `(language, valid_from)` — plus `field`, `old`,
+  - `validity_revised`, a publisher revising already-published dates (Tier A
+    `dateApplicability` corrections happen). Carries `scope`, the version, or
+    an expression coordinate `(language, valid_from)`, plus `field`, `old`,
     `new`. Directories never move (paths are `valid_from`-only and
     non-authoritative, C1/D41); even a revised `valid_from` leaves the path
     untouched.
-  - `withdrawn_from_source` — tombstone; the record is never deleted, and this
+  - `withdrawn_from_source`, tombstone; the record is never deleted, and this
     event **closes the open observation intervals** of the record's expressions.
-  - `resighted` — reappearance after withdrawal; observation reopens with a
+  - `resighted`, reappearance after withdrawal; observation reopens with a
     fresh entry, keeping append-only semantics.
-  - `internal_correction` — Lex fixing its **own** ingestion error:
+  - `internal_correction`, Lex fixing its **own** ingestion error:
     `asserted_by: "lex"`, with a reason and the superseded value or sha. The
     only F12-legal path for our own mistakes; hashes we served in error stay
     explainable through `provenance` instead of vanishing.
 - **`expressions[].observations`** is the expression-level transaction-time
   chain. A new entry is appended **only when the fetched body's sha256 differs**
-  from the last entry's — a publisher correction. The corrected body is written
+  from the last entry's, a publisher correction. The corrected body is written
   as a new file per the single §3.3 rule-3 scheme
   (`<lang>[.<valid_from>].obs-<observed-date>.md`); prior body files are never
   overwritten or opened for writing (F12). The current body is the last
@@ -807,16 +804,16 @@ Rules, each load-bearing:
 - **`valid_time_source`** is per-field: `publisher` (Tier A, or Tier B dates
   stated inside the document) or `observation` (Tier B fallback). Never
   per-response.
-- **`relations`** are stored, not modelled — they come free in SPARQL queries
+- **`relations`** are stored, not modelled, they come free in SPARQL queries
   already being issued. Refetching 4,636 versions against a rate-limited
   government endpoint is weeks of polite crawling; bytes already paid for are
   not YAGNI.
 - **`raw`** holds publisher-specific fields that have not earned a place in the
   neutral model (§3.7). Namespaced per publisher, **capped at 16 KB** (ingest
-  validation fails above it — the cap pairs with the clone strategy, §7.5), and
+  validation fails above it, the cap pairs with the clone strategy, §7.5), and
   read by nothing (fitness rule F11).
 
-### C4 — `ISourceAdapter`
+### C4, `ISourceAdapter`
 
 ```csharp
 public interface ISourceAdapter
@@ -838,68 +835,67 @@ public interface ISourceAdapter
   "pending-gate" }`. Distinct from Tier C, and distinct from fabricating empty
   bodies, which stays forbidden.
 - An adapter never writes files, never touches git, never knows the corpus
-  layout (fitness rule F8). The corpus writer — one component, in `Lex.Ingest` —
-  owns the mutation rules of C3 and is the single place fitness rule F12's
+  layout (fitness rule F8). The corpus writer, one component, in `Lex.Ingest`, owns the mutation rules of C3 and is the single place fitness rule F12's
   commit-time half is implemented.
 
-### C5 — There is no internal HTTP API between Lex components
+### C5, There is no internal HTTP API between Lex components
 
 `Lex.Mcp` calls `Lex.Index` in-process. `Lex.Web` is a **server-rendered
-application that also calls `Lex.Index` in-process** — C5 forbids a REST layer
+application that also calls `Lex.Index` in-process**, C5 forbids a REST layer
 *between Lex components*, not the web app serving its own HTML over HTTP. v3
 left Lex.Web's transport unstated, which made the increment-A demo unbuildable
 without accidentally violating this contract; it is now stated.
 
-### C6 — MCP tool surface
+### C6, MCP tool surface
 
-Seven tools, contracts as specified in §9 — including parameter definitions,
+Seven tools, contracts as specified in §9, including parameter definitions,
 pagination, size caps and refusal statuses. Frozen for increment A **after** the
 §9 contracts are complete; v3 froze the surface with `work` undefined, which is
 freezing an ambiguity.
 
-### C7 — Index artefact
+### C7, Index artefact
 
 `index-<publisher>.db`, a SQLite file, published as a **release asset** of the
 corpus repo. Never committed to git. Release assets are **treated as immutable
-by policy** — GitHub does not enforce it, so `Lex.Mcp`'s sha256 verification
+by policy**, GitHub does not enforce it, so `Lex.Mcp`'s sha256 verification
 against the manifest (§8.6) makes any silent replacement detectable and fatal
 at load, and the D40 stamp signature makes the builder attributable. "Latest"
 is a pointer in the index manifest, never a mutated asset. The §16.2 NOTICE is
 embedded **inside** the `.db` (stamp table, §8.1), not only attached to the
-release — the artefact is consumed standalone. Retention: keep the last 12
+release, the artefact is consumed standalone. Retention: keep the last 12
 releases plus one per month; a release referenced by any published index
 manifest is never deleted.
 
-### C8 — Adapter plugin seam
+### C8, Adapter plugin seam
 
 An adapter is discovered by implementing `ISourceAdapter` and being registered
 in `Lex.Ingest`'s composition root. No reflection scanning, no plugin
 directory. A new publisher is a pull request against `lex` plus a new corpus
 repo generated from the template.
 
-### C9 — Provenance envelope
+### C9, Provenance envelope
 
 Every MCP response carries the §9.8 envelope (its core is compile-enforced,
 fitness rule F6). There is no response shape without it.
 
-### C10 — Honesty fields are mandatory
+### C10, Honesty fields are mandatory
 
 `tier`, `history_begins`, `text_available`, `provisional`,
 `valid_time_source`, population disclosure (where applicable), and the freshness
 block (`built_at`, `last_confirmed_at`, `last_confirmed_source`) appear in every
 response that could otherwise be read as a completeness or currency claim.
 
-### C11 — Status record
+### C11, Status record
 
-Every ingest run — including no-change runs and failed runs — ends by
+Every ingest run, including no-change runs and failed runs, ends by
 **uploading a per-publisher status record as a workflow artifact**; the
-`lex-ops` dispatcher collects and commits them (§11.2 — corpus-repo tokens
+`lex-ops` dispatcher collects and commits them (§11.2, corpus-repo tokens
 cannot push cross-repo, so the write inverts). A run without a status artifact
 is itself recorded as `failed` by the dispatcher (fitness rule F14).
 
-### C12 — Index manifest
+### C12, Index manifest
 
-`indexes.json` — the deployment contract for `Lex.Mcp` (§8.6): for each
+`indexes.json`, the deployment contract for `Lex.Mcp` (§8.6): for each
 publisher, the corpus repo, release tag, asset URL, sha256, schema version, and
 embedding model. `Lex.Mcp` takes a manifest path/URL as its **only** corpus
 configuration.
@@ -942,22 +938,22 @@ segment is the work-key slug.
 says it:
 
 - **Tier A:** supplied as data by the publisher. `valid_time_source: publisher`.
-- **Tier B:** most regulator documents *state their own dates* — application
+- **Tier B:** most regulator documents *state their own dates*, application
   dates, entry-into-force clauses. The adapter extracts them (this is document
   reading, not identifier parsing) and marks `valid_time_source: publisher`.
   Only where the document is silent does observation supply the boundary:
   `valid_from` = first observation, closed when the text changes, marked
   `valid_time_source: observation`. v3 threw publisher-stated dates away and
-  substituted crawl dates — manufacturing false legal boundaries while
+  substituted crawl dates, manufacturing false legal boundaries while
   discarding citable ones; that violated its own §3.6 standard.
 - Derived (observation-sourced) boundaries are flagged per-field in every
   response, and `as_of` refuses dates before the observation window rather than
   answering from an artefact of the crawl schedule (§9.1).
 
-### 7.4 Transaction time — append-only chains inside hashed content
+### 7.4 Transaction time, append-only chains inside hashed content
 
 Transaction time answers "what did *we* believe, when?" It lives entirely inside
-committed `meta.json` content — never in mutable commit metadata; no commit
+committed `meta.json` content, never in mutable commit metadata; no commit
 timestamp is ever read. v3's rules made the axis unreconstructable (its
 first-sighting rule, its no-commit-timestamps rule and its interval-closure
 rewrites were mutually inconsistent, and its stored `observed_to` could never be
@@ -970,11 +966,11 @@ truthfully populated). v4 replaces them with **per-state semantics**:
 
 Consequences, each of which resolves a v3 defect:
 
-1. **No nightly rewrites.** A no-change night touches nothing — zero blobs, zero
+1. **No nightly rewrites.** A no-change night touches nothing, zero blobs, zero
    commits. The anti-bloat arithmetic that motivated v3's first-sighting rule is
    fully preserved: stamp changes only ride on commits that already happen.
 2. **The full transaction-time axis lives in HEAD.** Every chain is in current
-   content, so the index build reads HEAD only (§8.2) — no git-history walk. Git
+   content, so the index build reads HEAD only (§8.2), no git-history walk. Git
    history remains the forensic archive (every prior body file is recoverable),
    but no nightly process depends on walking it.
 3. **Publisher corrections are first-class, not silent.** A changed body for an
@@ -984,9 +980,9 @@ Consequences, each of which resolves a v3 defect:
    instead of contradicted. lex-bench answers stay reproducible.
 4. **Interval closure is a dated event, and nothing else.** Closing `valid_to`
    (26% of Legilux versions are open; closures are guaranteed) appends an
-   `interval_closed` event plus expression-scoped closures — no rename, no file
+   `interval_closed` event plus expression-scoped closures, no rename, no file
    churn: directories are named by `valid_from` alone (C1/D41).
-5. **Disappearance is a dated event — written conservatively.** A record the
+5. **Disappearance is a dated event, written conservatively.** A record the
    publisher no longer serves gets a `withdrawn_from_source` tombstone event.
    Records are never deleted. Because a tombstone is the one entry a later
    append cannot un-assert, it is gated twice: (a) the ingest job aborts
@@ -994,7 +990,7 @@ Consequences, each of which resolves a v3 defect:
    below the last successful run recorded in `lex-ops` (a transient partial
    SPARQL response is the single most likely nightly failure, and it must not
    write history); (b) a tombstone is written only after **N consecutive
-   successful runs** (start: 3) show the work absent — absence counters live in
+   successful runs** (start: 3) show the work absent, absence counters live in
    the `lex-ops` status feed, never in the corpus. A genuine withdrawal is
    still recorded within days; a flaky night records nothing.
 6. **`observed_to` is derived, never stored** (C3).
@@ -1007,12 +1003,12 @@ the same commit; `withdrawn_from_source` ↔ the run's C11 status record shows
 the work absent for N consecutive successful runs; `internal_correction` ↔
 carries reason + superseded value. Additionally: no ingest code path may open
 an existing body file for writing, and no commit may rename a version
-directory. F12 runs twice — in the corpus writer at commit time, and as a
+directory. F12 runs twice, in the corpus writer at commit time, and as a
 nightly corpus-side pass over each new commit (like F13), so manual commits
 cannot bypass the discipline. Cross-reference: §7.4 point 3's bench claim is
 delivered by §14.5's observation pinning.
 
-**Where "last confirmed" lives:** in `lex-ops` status records (§11.2) — not in
+**Where "last confirmed" lives:** in `lex-ops` status records (§11.2), not in
 the corpus (heartbeat commits would destroy `git log` as legislative history)
 and not solely in the index stamp (an index built only on change would go stale
 on quiet nights, which was v3's D12/§10.1 deadlock). The envelope's freshness
@@ -1030,13 +1026,13 @@ access pattern. v3's `--filter=blob:limit=64k` existed to serve a history walk
 that no longer exists; it is retired with it (D13-v4). The 16 KB cap on `raw`
 (C3) keeps `meta.json` blobs small for fast tree reads regardless.
 
-### 7.6 Growth thresholds — measured continuously, with a pre-decided shape
+### 7.6 Growth thresholds, measured continuously, with a pre-decided shape
 
 Every nightly run reports `.git` size and index-build duration into its status
 record (§11.2), with a soft alarm at **1 GB / 10 minutes** and a hard threshold
 at **2 GB / 20 minutes**. Crossing the hard threshold does not improvise: the
 pre-decided migration is **bodies move to object storage; the `meta.json` tree,
-README and NOTICE stay in git** — the timeline stays browsable (the corpus
+README and NOTICE stay in git**, the timeline stays browsable (the corpus
 degrades to a self-inflicted Tier C shape rather than disappearing), text
 follows a link. R7 measures where we actually are before increment A commits to
 nightly operation.
@@ -1048,11 +1044,11 @@ representation, no etiquette budget, and no tool surface in this spec. They
 enter scope only through a future increment that defines all four, plus a probe
 (R20) of whether JOLux carries publication/entry-into-force dates that would
 give each act a coarse single interval. Until then exactly **two** references
-to them exist anywhere in the system — the `coverage` tool's known-gaps list
-(§9.7) and the `in_force_on` population disclosure (§9.3) — and no others.
+to them exist anywhere in the system, the `coverage` tool's known-gaps list
+(§9.7) and the `in_force_on` population disclosure (§9.3), and no others.
 Honesty beats tidiness; the disclosure is the more important of the two rules.
 Note (per the round-2 counter-verdict, accepted): whether unversioned acts
-carry usable entry-into-force dates is **unmeasured** — the disclosure says
+carry usable entry-into-force dates is **unmeasured**, the disclosure says
 "not ingested", never "no validity data".
 
 ---
@@ -1068,7 +1064,7 @@ One SQLite file per publisher:
   `observed_from`, `in_force_as_of_build`, `tier`, `text_available`, `sha256`,
   `source_uri`, body path or URL
 - an **observation-history table**: `(lex_id, language, expr_valid_from,
-  sha256, source_uri, observed_from, observed_to)` — keyed by the full
+  sha256, source_uri, observed_from, observed_to)`, keyed by the full
   expression coordinate (§3.3 rule 4) so two same-language expressions in one
   version never interleave; populated from the C3 chains; serves `provenance`
 - an **events table**: `(lex_id, scope, event, observed_from, detail)`
@@ -1078,7 +1074,7 @@ One SQLite file per publisher:
 - a **stamp table**: schema version, embedding model and version, corpus commit
   sha, `built_at`, ingester version, `text_public` (C2), **attribution,
   source-terms URL, the modifications statement, and the full §16.2 NOTICE
-  text** (the index is consumed standalone; obligations ride inside it) — the
+  text** (the index is consumed standalone; obligations ride inside it), the
   stamp is **signed** (D40, as amended: ECDSA-P256-SHA256): a signature over the stamp row ships as a
   detached file beside the release asset and inside the table; the public key
   lives in the `lex` README; `provenance` returns it. During the private-corpus
@@ -1087,39 +1083,37 @@ One SQLite file per publisher:
   index from a tampered fork.
 
 `in_force_as_of_build` is **display metadata only**. In-force determinations are
-always computed from the date columns against the query date at query time —
-the stored boolean goes stale between builds (future-dated versions cross their
+always computed from the date columns against the query date at query time, the stored boolean goes stale between builds (future-dated versions cross their
 effective dates nightly). No query path uses it as a predicate.
 
 ### 8.2 Build
 
-From a `--depth=1` clone, HEAD only (§7.4–7.5). Build time enters as an injected
+From a `--depth=1` clone, HEAD only (§7.4-7.5). Build time enters as an injected
 parameter (fitness rule F9) and is recorded in the stamp table, so builds are
 reproducible and auditable. Build cost is O(current corpus), not O(all history).
 
 Reproducibility is claimed at the **logical** level: identical rows, FTS content
 and stamps for the same corpus commit and code. Byte-identity is claimed only
-for corpus files, where the sha256 chain proves it — embedding outputs are not
+for corpus files, where the sha256 chain proves it, embedding outputs are not
 bit-stable across hardware and remote APIs, and pretending otherwise would hand
 an auditor a false claim.
 
-### 8.3 The one rule that cannot be relaxed — as a construct, not a slogan
+### 8.3 The one rule that cannot be relaxed, as a construct, not a slogan
 
 > **Filters run before ranking. Always.**
 
 Enforced structurally, not aspirationally (fitness rule F5):
 
 - `Lex.Index` exposes **one** public query entry point, and it takes a
-  **non-optional `FilterSet`** (date, language, publisher, document type, tier —
-  each field explicitly `All` or a constraint; an omitted filter is a compile
+  **non-optional `FilterSet`** (date, language, publisher, document type, tier, each field explicitly `All` or a constraint; an omitted filter is a compile
   error, not a forgotten one).
 - SQL predicates apply the FilterSet first; only surviving rows are scored.
-- The **vector path is exact scoring over the pre-filtered rows** — no top-k ANN
+- The **vector path is exact scoring over the pre-filtered rows**, no top-k ANN
   before filtering. At 4,636 versions per publisher this is trivially
   affordable; it stays affordable per-publisher because indexes shard by
   publisher (§8.5).
 
-Rank-then-filter produces a confident, incomplete answer — the failure mode this
+Rank-then-filter produces a confident, incomplete answer, the failure mode this
 project exists to demonstrate in others.
 
 ### 8.4 Embedding model
@@ -1133,7 +1127,7 @@ questions from real articles) first.
 
 Not one combined file. Independent failure, independent download, independent
 pinning. `Lex.Mcp` opens several and fans out; cross-publisher `search` results
-are merged by **reciprocal rank fusion** — per-index BM25 scores are not
+are merged by **reciprocal rank fusion**, per-index BM25 scores are not
 comparable across SQLite files (different corpus statistics), and merging raw
 scores would be §8.3's failure mode one layer up. Vector-score merging is
 permitted only when every mounted index carries the identical embedding
@@ -1141,16 +1135,16 @@ model+version (checkable from stamp tables at startup); otherwise `Lex.Mcp`
 degrades to per-publisher grouped results **with a stated reason in the
 response**. A raw-score cross-index sort fails the build (F5).
 
-### 8.6 Distribution and pinning — the index manifest (C12)
+### 8.6 Distribution and pinning, the index manifest (C12)
 
-`lex-ops` publishes `indexes.json`: per publisher — corpus repo, release tag,
+`lex-ops` publishes `indexes.json`: per publisher, corpus repo, release tag,
 asset URL, sha256, schema version, embedding model. `Lex.Mcp`'s only corpus
 configuration is a manifest path/URL; it verifies each downloaded asset against
 the manifest sha256 and refuses mismatches. Consequences:
 
-- **A deployment is pinned by pinning a manifest** — one file under change
+- **A deployment is pinned by pinning a manifest**, one file under change
   control, which is what a bank's change process needs.
-- **A scoped deployment is a subset manifest** — the per-regulator distribution
+- **A scoped deployment is a subset manifest**, the per-regulator distribution
   and monetisation mechanism (D27), no code involved.
 - `Lex.Index` refuses to open an index whose schema version it does not
   recognise, explicitly. It never guesses, never migrates silently.
@@ -1162,28 +1156,27 @@ the manifest sha256 and refuses mismatches. Consequences:
 Seven tools. Contracts complete below; frozen for increment A (C6).
 
 **The `work` parameter, defined once for all tools:** exactly three accepted
-forms — a **work-level `lex_id`** (`<publisher-id>:<work-key>`, §7.2), a
+forms, a **work-level `lex_id`** (`<publisher-id>:<work-key>`, §7.2), a
 **version-level `lex_id`** (resolves to its Work; the version segment is
 ignored for date resolution, so the chaining below type-checks), or a
 **verbatim publisher identifier** (compared opaquely, §3.4). Titles and
-citations are not accepted. The tool descriptions — the only prompt a client
-model gets — state the chaining explicitly: *"unknown document → call `search`
+citations are not accepted. The tool descriptions, the only prompt a client
+model gets, state the chaining explicitly: *"unknown document → call `search`
 first, take `lex_id` from the hit, then `as_of`."* Where a `lex_id` is given,
 the `publisher` parameter is redundant and, if contradictory, an error.
 
 **Refusal statuses, defined once:** every lookup tool returns exactly one of
 `ok`; `no_version_for_date` (the work exists; no version covers the date);
-`outside_observed_window` (Tier B; date precedes `history_begins` — carries
+`outside_observed_window` (Tier B; date precedes `history_begins`, carries
 `history_begins` so the client can say *why* it is unknowable);
 `text_not_available` (Tier C corpus shape; timeline + link returned);
-`text_withheld` (the text exists in the corpus but a rights/acquisition gate —
-R2/R18-class — has not cleared; carries `reason`; **distinct from
+`text_withheld` (the text exists in the corpus but a rights/acquisition gate, R2/R18-class, has not cleared; carries `reason`; **distinct from
 `text_not_available`**, D38); `stale_cursor`; or `unknown_work`. A flagged
 wrong answer is still a wrong answer; refusals are how `as_of` stays truthful
 on Tier B (§7.3) and how gated publishers stay lawful in public (D38).
 
 **Cursor semantics, defined once:** cursors are opaque, bound to the
-`corpus_commit` they were issued against, and expire with it — presented
+`corpus_commit` they were issued against, and expire with it, presented
 against a different build they return `stale_cursor` (restart the query).
 Every truncating tool both returns and accepts one.
 
@@ -1196,7 +1189,7 @@ as_of(work, date, language?, max_bytes?, cursor?) → Expression + envelope | re
 The text of one document as it stood on one date. Pure lookup, resolved on
 Expression intervals (§3.3). No ranking, no model. Responses above `max_bytes`
 (default 256 KB) are truncated at a section boundary with `truncated: true` and
-a continuation cursor — a CODE is megabytes of Markdown, and an unbounded
+a continuation cursor, a CODE is megabytes of Markdown, and an unbounded
 response destroys the client conversation the product exists to serve.
 Article-level addressing is R6's outcome (probe already written).
 
@@ -1228,13 +1221,13 @@ Every response carries a **population disclosure** (C10):
 "population": {
   "basis": "versioned works only",
   "works_covered": 1390,
-  "known_exclusions": "≈24,579 never-consolidated LU acts (not ingested; date coverage unmeasured — see coverage)"
+  "known_exclusions": "≈24,579 never-consolidated LU acts (not ingested; date coverage unmeasured, see coverage)"
 }
 ```
 
 The claim "the whole set" appears nowhere. Cross-publisher pagination is
 deterministic: results and cursors are ordered by the composite
-`(publisher, lex_id)` — this tool has no ranking, so the ordering is total and
+`(publisher, lex_id)`, this tool has no ranking, so the ordering is total and
 stable.
 
 ### 9.4 `diff`
@@ -1255,7 +1248,7 @@ search(query, as_of?, publisher?, document_type?, language?, tier?,
 
 Filters first (§8.3), then ranking; cross-publisher merging per §8.5. A hit is
 an **envelope without body text**: `lex_id`, dates, tier, a short verbatim
-snippet, and sha256. Full text comes from `as_of` — returning bodies × hit
+snippet, and sha256. Full text comes from `as_of`, returning bodies × hit
 count would flood the client context. Never summarises. `total_count` makes
 truncation visible.
 
@@ -1266,10 +1259,10 @@ provenance(lex_id, language?, valid_from?) → proof chain + envelope
 ```
 
 Source URI, retrieval timestamps, the **full observation chain** (every sha256
-this expression has ever had, with observed intervals — publisher corrections
+this expression has ever had, with observed intervals, publisher corrections
 are visible, not silent; `valid_from` selects among same-language expressions,
 §3.3 rule 4), corpus commit, index build, **the D40 stamp signature**,
-attribution and source terms, and — for EU consolidated text — the constituent
+attribution and source terms, and, for EU consolidated text, the constituent
 authentic OJ acts with the explicit statement that consolidated text has no
 legal effect.
 
@@ -1281,7 +1274,7 @@ coverage(publisher?) → what we hold, tier by tier + envelope
 
 Publisher, tier, document types, counts, `history_begins`, date range, last
 successful ingest (from the freshness feed, §11.2), observation gaps recorded
-by operations (§11.3), and **known exclusions** — including the flat corpus
+by operations (§11.3), and **known exclusions**, including the flat corpus
 (§7.7) and any publisher whose ingest is degraded.
 
 **This tool exists to say what we do not have.** A system that cannot state its
@@ -1312,10 +1305,9 @@ guaranteed the rule would be quietly weakened.
 }
 ```
 
-- `provisional: true` whenever the query date exceeds the index build date —
-  future-dated law is a prediction from currently enacted text (§2.1).
+- `provisional: true` whenever the query date exceeds the index build date, future-dated law is a prediction from currently enacted text (§2.1).
 - `last_confirmed_source` is `ops-feed` when `Lex.Mcp` is configured with the
-  §11.2 freshness feed, else `index-build` — an offline bank deployment
+  §11.2 freshness feed, else `index-build`, an offline bank deployment
   truthfully reports the weaker guarantee instead of faking the stronger one.
 - Cross-publisher responses (`search`, `in_force_on`) carry one core per
   contributing publisher.
@@ -1324,7 +1316,7 @@ guaranteed the rule would be quietly weakened.
 `document_type`, `authority`, `language`, `valid_from`, `valid_to`,
 `valid_time_source` (per-field, §7.3), `version_valid_from/to` (§3.3),
 `text_available`, `text` (where applicable), `source_uri`, `sha256`,
-`withdrawn` (publisher no longer serves this record — §7.4 point 5),
+`withdrawn` (publisher no longer serves this record, §7.4 point 5),
 `embedding_model` (search only).
 
 **List extension** (`timeline`, `in_force_on`, `search`): `total_count`,
@@ -1332,7 +1324,7 @@ guaranteed the rule would be quietly weakened.
 sha256s and validity intervals. **Population extension** (`in_force_on`): the
 §9.3 block. **Coverage extension** (`coverage`): the §9.7 field list. F6's
 compile-time check covers the core plus the extension declared for each tool
-kind — the envelope rule is satisfiable *because* it is narrowed per tool;
+kind, the envelope rule is satisfiable *because* it is narrowed per tool;
 v3's single-shape rule was not.
 
 ### 9.9 No generation in the server
@@ -1346,7 +1338,7 @@ hash and keeps §1.3 architectural (fitness rule F10).
 
 ## 10. How the pieces interact
 
-### 10.1 Write path — nightly, dispatched centrally (§11)
+### 10.1 Write path, nightly, dispatched centrally (§11)
 
 ```
 02:00  lex-ops dispatcher fires (the ONLY cron in the fleet)
@@ -1359,15 +1351,14 @@ hash and keeps §1.3 architectural (fitness rule F10).
        │   │   │   workflow (single update point, §11.4)
        │   │   ├─ pre-commit anomaly gate: works_enumerated ≥ 95% of the last
        │   │   │   successful run (from the status feed) or ABORT, commit
-       │   │   │   nothing, outcome=failed (§7.4 point 5 — a flaky endpoint
+       │   │   │   nothing, outcome=failed (§7.4 point 5, a flaky endpoint
        │   │   │   must not write history)
        │   │   ├─ runs: lex ingest --publisher lu-legilux
        │   │   │        adapter → Lex.Law → corpus writer (C3/F12 rules)
        │   │   ├─ commits ONLY if observed reality changed
-       │   │   └─ uploads its status record as a RUN ARTIFACT (C11) — including
+       │   │   └─ uploads its status record as a RUN ARTIFACT (C11), including
        │   │       "ran, no change", which is a SUCCESS state, not silence
-       │   └─ JOB 2  index (same workflow run; no cross-workflow trigger —
-       │       GITHUB_TOKEN pushes cannot fire other workflows, which is why
+       │   └─ JOB 2  index (same workflow run; no cross-workflow trigger, │       GITHUB_TOKEN pushes cannot fire other workflows, which is why
        │       v3's 02:00/02:20 choreography could never run)
        │       ├─ git clone --depth=1
        │       ├─ reads HEAD: meta.json chains + bodies → rows, history tables,
@@ -1384,7 +1375,7 @@ hash and keeps §1.3 architectural (fitness rule F10).
           opens/updates the fleet-status issue on anomalies (§11.3)
 ```
 
-### 10.2 Read path — on every question
+### 10.2 Read path, on every question
 
 ```
 client model → MCP call
@@ -1408,7 +1399,7 @@ code. Neither depends on the other in the compiler sense.
 
 ### 10.4 Coupling surface
 
-Three versioned artefacts — v3 claimed two and was wrong at fleet level, which
+Three versioned artefacts, v3 claimed two and was wrong at fleet level, which
 is how the third went unmanaged:
 
 | | Written by | Read by | Meaning |
@@ -1418,14 +1409,14 @@ is how the third went unmanaged:
 | `indexes.json` (C12) | the index job / lex-ops | `Lex.Mcp` at startup | which exact index releases a deployment runs |
 
 A code release that changes none of the three is invisible to the data side. A
-schema bump costs one index rebuild — the index is derived data, always
+schema bump costs one index rebuild, the index is derived data, always
 regenerable from the corpus.
 
 ### 10.5 Cross-publisher links
 
 A directive implemented by a national law is a `Relation` between Works in two
 corpora. It is **stored where it is observed** (C3) and **resolved by `Lex.Mcp`
-at startup/query time** across whatever indexes are actually mounted — each
+at startup/query time** across whatever indexes are actually mounted, each
 index carries its own `lex_id ↔ identifier` map (§7.2), so resolution is a
 lookup, not a build step. v3 resolved at index build time, which cannot work:
 each build runs inside a single corpus repo with no other index present, and a
@@ -1433,11 +1424,11 @@ dangling link would never re-resolve because nothing in the referring repo
 changes when the target later appears. Under D27 this is also the honest
 behaviour for scoped deployments: "target publisher not mounted" is a correct,
 stated answer, not a stale artefact. Unresolvable targets are kept as dangling
-identifiers with a flag — never dropped, never invented.
+identifiers with a flag, never dropped, never invented.
 
 ---
 
-## 11. Operations — the fleet layer
+## 11. Operations, the fleet layer
 
 New in v4. v3 had no observability at all while institutionalising "silence is
 normal"; combined with GitHub's platform behaviour that guaranteed silent fleet
@@ -1453,21 +1444,21 @@ five cost, and five silently rotting.
   using a cross-repo credential held only in `lex-ops` (corpus repos keep the
   no-secrets rule). The standing mechanism is a **GitHub App installation
   token**; a fine-grained PAT is an acceptable interim **only until the third
-  publisher or 90 days, whichever comes first** — PATs expire silently, and
+  publisher or 90 days, whichever comes first**, PATs expire silently, and
   the deadline is recorded here so the interim cannot ossify. Do not let App
   setup delay the first watcher by a single night.
 - Dispatch-triggered workflows are exempt from GitHub's 60-day scheduled-
   workflow auto-disable; the risk is confined to the one dispatcher cron.
   `lex-ops` receives a status commit every night by construction (§11.2), so
-  it never approaches the inactivity threshold — no separate keepalive is
+  it never approaches the inactivity threshold, no separate keepalive is
   needed; the dead-man's check (§11.3) covers the crash case.
 - Dispatches are staggered (02:00 UTC is peak cron congestion; GitHub cron is
   best-effort and routinely late) and rate-capped per publisher (D14).
 
-### 11.2 Status model — three states, never silence
+### 11.2 Status model, three states, never silence
 
-Every run uploads a status artifact; the dispatcher's post-run job — the only
-holder of the cross-repo credential — collects them and writes the whole
+Every run uploads a status artifact; the dispatcher's post-run job, the only
+holder of the cross-repo credential, collects them and writes the whole
 fleet's records in **one commit per night** to a dedicated `lex-ops` branch
 (corpus-repo tokens cannot push cross-repo, and per-run pushes would race;
 **never** into corpus repos, where heartbeat commits would destroy `git log`
@@ -1486,11 +1477,11 @@ as legislative history):
   publisher from a crashed adapter, a partial SPARQL response, or a
   platform-disabled workflow.
 - This feed is also the **freshness source**: `Lex.Mcp` deployments configured
-  with it serve true `last_confirmed_at` in every envelope (§9.8) — resolving
+  with it serve true `last_confirmed_at` in every envelope (§9.8), resolving
   v3's deadlock where the honesty field could never advance on quiet nights.
 - Growth metrics feed §7.6's thresholds.
 
-### 11.3 Alerting — one issue, loudly
+### 11.3 Alerting, one issue, loudly
 
 The dispatcher's post-run job evaluates the fleet:
 
@@ -1502,23 +1493,22 @@ The dispatcher's post-run job evaluates the fleet:
 
 …and opens/updates a **single fleet-status issue** in `lex-ops`; GitHub's issue
 notification delivers the email. Detected observation gaps for Tier B publishers
-are written into that publisher's coverage data as **known gaps** — a hole in
+are written into that publisher's coverage data as **known gaps**, a hole in
 the watch is recorded as data (widening derived-interval uncertainty), never
 lost (§9.7). **The monitor itself is monitored:** an independent dead-man's
-check — a free external uptime monitor, or a trivial second workflow in `lex` —
-alerts when the newest `lex-ops` status commit is older than N+1 days, so a
+check, a free external uptime monitor, or a trivial second workflow in `lex`, alerts when the newest `lex-ops` status commit is older than N+1 days, so a
 dead dispatcher (crash, bad edit, suspended credential) cannot die silently.
 The pre-commit anomaly gate (§10.1) runs **inside** the ingest job, before
-anything is written — the dispatcher's post-run check is the second line, not
+anything is written, the dispatcher's post-run check is the second line, not
 the first.
 
-### 11.4 Version fan-out — one update point
+### 11.4 Version fan-out, one update point
 
 Corpus repos reference the reusable workflow by moving major tag (`@v1`). `lex`
 CI advances the tag only after the fitness function and an integration run
 against one **canary corpus repo** pass (at N=1 the canary is a template/
 fixture corpus repo kept for exactly this purpose). The exact `Lex.Ingest`
-version is pinned **inside the reusable workflow** — so upgrading the fleet is
+version is pinned **inside the reusable workflow**, so upgrading the fleet is
 one change in one place, corpus-repo YAML is genuinely write-once, and no repo
 drifts to a stale pin. Dependabot (github-actions ecosystem) on corpus repos is
 the safety net for rare breaking `@v2` migrations.
@@ -1527,7 +1517,7 @@ the safety net for rare breaking `@v2` migrations.
 
 **Archives.** A publisher that clears the §1.5 **fetch gate** gets a nightly
 raw snapshot job the same week: a **private** per-publisher archive repo
-(`lex-archive-<publisher>`) receiving raw responses plus fetch metadata — no
+(`lex-archive-<publisher>`) receiving raw responses plus fetch metadata, no
 adapter, no model, no index. Private storage of a public page is not
 republication; §1.5's publish-gate questions govern *publication* only.
 Archive jobs are registered in `publishers.json`, dispatched by the §11.1
@@ -1536,7 +1526,7 @@ gap detection covers them. **Backfill rule:** when the publisher's real corpus
 ships, the adapter replays the archive in snapshot order, writing
 `observed_from` = the original snapshot timestamp; F12 accepts replayed chains
 (they satisfy the change→entry table; they are recorded history, not
-fabrication). The archives — not the corpus — are the uncopyable asset: anyone
+fabrication). The archives, not the corpus, are the uncopyable asset: anyone
 can re-scrape a publisher tomorrow; nobody can obtain what the live site said
 on a day they were not watching.
 
@@ -1553,23 +1543,23 @@ New as a first-class section: v3 spent forty lines on tool signatures a visitor
 never sees and one line on the page they land on, while its own §2.3 evidence
 said browsable surfaces are where attention accrues.
 
-### 12.1 Lex.Web — deterministic, permalink-first, model-free
+### 12.1 Lex.Web, deterministic, permalink-first, model-free
 
 - **Stable permalinks:** `/{publisher}/{work}/{date}` resolves to the as-of
   view: the text (where R2 permits; otherwise timeline + metadata + link-out),
   the validity interval, `valid_time_source`, the sha256, tier, and a link to
   the exact corpus file. `/{publisher}/{work}` shows the timeline;
   `/{publisher}/{work}/diff/{dateA}/{dateB}` the diff.
-- **Server-rendered** (links unfurl in chats and forums — the
+- **Server-rendered** (links unfurl in chats and forums, the
   legislation.gov.uk distribution mechanic), calling `Lex.Index` in-process
   (C5).
 - **No model in the loop.** `as_of`, `timeline`, `diff` are pure lookups: the
   demo costs cents, cannot be abused into a bill, has no prompt-injection
-  surface, and every answer is hash-backed — the demo *is* the proof. A
+  surface, and every answer is hash-backed, the demo *is* the proof. A
   model-driven chat over the MCP server is a later, keyed, rate-limited
-  playground — an appendix, never the front door.
-- Increment A's definition of done includes: *a stranger can obtain — and
-  share — a permalink to any versioned document as of any date* (§14.1).
+  playground, an appendix, never the front door.
+- Increment A's definition of done includes: *a stranger can obtain, and
+  share, a permalink to any versioned document as of any date* (§14.1).
 
 ### 12.2 The MCP server as a public surface
 
@@ -1588,11 +1578,10 @@ Each corpus repo's README opens for the five-minute visitor, in this order:
 3. An auto-generated coverage table from `manifest.json` (types, counts, date
    range, tier, `history_begins`).
 4. How to consume it (clone, index release asset, MCP, permalinks).
-5. The six §1.5 intake answers with URLs, attribution, and the NOTICE summary —
-   the diligence layer, demoted below the product layer.
+5. The six §1.5 intake answers with URLs, attribution, and the NOTICE summary, the diligence layer, demoted below the product layer.
 
 Increments A and B each end with an explicit **publish/announce milestone**
-(§14) — the star-generating moment is scheduled, not left to chance.
+(§14), the star-generating moment is scheduled, not left to chance.
 
 ---
 
@@ -1612,7 +1601,7 @@ Increments A and B each end with an explicit **publish/announce milestone**
   default token.
 
 **Ingestion etiquette (D14):** SPARQL first; never fetch what robots.txt
-disallows (which currently includes Legilux body paths — see R19; no adapter
+disallows (which currently includes Legilux body paths, see R19; no adapter
 ships until the channel is compliant); identifying User-Agent with a contact
 address; sequential requests with backoff; a hard nightly cap per publisher.
 
@@ -1624,13 +1613,13 @@ Each increment has a definition of done that is **externally observable**.
 Ordering serves the settled stars-first priority: browsable corpora ship early;
 the text-less timeline product is demand-driven.
 
-### 14.1 Increment A — Legilux end to end, deployed, honestly gated
+### 14.1 Increment A, Legilux end to end, deployed, honestly gated
 
 **Probe batch: EXECUTED 2026-08-01** (results in §2.1). R6, R15 and R19 are
 settled; no letters are sent (operating constraint: the maintainer takes no
-manual external actions — R2/R18 are standing closed gates, not pending ones).
+manual external actions, R2/R18 are standing closed gates, not pending ones).
 Still open, non-blocking: the §3.3 Cellar corrigendum paper-test (before
-increment B, not A — the LU layout does not depend on it now that expressions
+increment B, not A, the LU layout does not depend on it now that expressions
 are stored inside version directories); §1.5 fetch-gate checks for ESA and
 candidates, whose observation clocks start as soon as each clears (§11.5).
 
@@ -1638,7 +1627,7 @@ candidates, whose observation clocks start as soon as each clears (§11.5).
 
 - `Lex.Temporal`, `Lex.Index`, `Lex.Law`, `Lex.Sources.Legilux`, `Lex.Ingest`,
   `Lex.Mcp`, `Lex.Web`.
-- `lex-ops` live **before** nightly operation begins — dispatcher, status
+- `lex-ops` live **before** nightly operation begins, dispatcher, status
   model, fleet issue, index manifest (§11).
 - **Fitness function exists and is failing red before the second package is
   created** (§15).
@@ -1650,13 +1639,13 @@ candidates, whose observation clocks start as soon as each clears (§11.5).
 document as of a past date and gets its validity interval, its timeline, its
 metadata record hash, and a shareable permalink with a link-out to the
 official text. Under the standing R19/R2 state (§2.1 probes) the pipeline runs
-in **metadata-only mode**: no body text is stored or served anywhere — which
+in **metadata-only mode**: no body text is stored or served anywhere, which
 also means the corpus repo, being pure CC-BY-licensed metadata with
 attribution, **may go public immediately**; the browsable timeline tree in
 git *is* the star artefact. Body text and body hashes activate only if a
 lawful channel ever appears (D42). Budget a deployment day.
 
-### 14.2 Increment B — EU, the falsification test
+### 14.2 Increment B, EU, the falsification test
 
 - `Lex.Sources.EurLex`, `lex-corpus-eu-eurlex` (R13 volume measurement first).
 - **Written prediction, before starting, with a number and a date:** how many
@@ -1665,23 +1654,23 @@ lawful channel ever appears (D42). Budget a deployment day.
   until it is fixed.
 - Expression-level validity exercised against real corrigenda (completing what
   §14.1 paper-tested).
-- Ends with the announce milestone — a browsable git corpus of EU law is the
+- Ends with the announce milestone, a browsable git corpus of EU law is the
   larger-audience dataset and the natural Show HN moment.
 
-### 14.3 Increment C — Tier B, the sector-neutrality proof
+### 14.3 Increment C, Tier B, the sector-neutrality proof
 
 - `Lex.Sources.Esa` + `lex-corpus-eu-esa` (intake already clear; observation
-  clock already running since A — the corpus opens with real accumulated
+  clock already running since A, the corpus opens with real accumulated
   history, marked with its true `history_begins`).
-- One **non-financial** publisher from §1.4's candidates, post-intake — proving
+- One **non-financial** publisher from §1.4's candidates, post-intake, proving
   "any regulator, any sector" is a property of the design, not a slogan.
 - Exercises the machinery carrying the project's biggest permanent-credibility
   risk (derived history, R16): publisher-stated date extraction (§7.3),
   `outside_observed_window` refusals (§9.1), observation-gap recording (§11.3).
 
-### 14.4 Increment D — Tier C, the CSSF timeline (demand-driven)
+### 14.4 Increment D, Tier C, the CSSF timeline (demand-driven)
 
-- Triggered by a concrete buyer conversation — not by sequence. The
+- Triggered by a concrete buyer conversation, not by sequence. The
   financial-buyer motion and the stars motion pull in different directions;
   this spec says which increment serves which instead of implying one sequence
   serves both.
@@ -1689,17 +1678,17 @@ lawful channel ever appears (D42). Budget a deployment day.
   constraint), so the gate is the **documented legal basis alone**, recorded
   in the corpus README before it ships: facts-not-expression (identifiers,
   dates, statuses are unprotectable facts); the spin-off doctrine on the
-  database right (BHB/Fixtures — data created by the body's own activity);
+  database right (BHB/Fixtures, data created by the body's own activity);
   the règlement/circulaire channel distinction. If that written analysis does
   not hold up, the corpus stores identifiers and dates only, no titles.
 - `in_force_on` answering "which circulars applied on 15 March 2022?" with its
   population disclosure.
-- Zero body text stored — enforced by fitness rule F13, not by promise.
+- Zero body text stored, enforced by fitness rule F13, not by promise.
 
-### 14.5 Increment E — the benchmark
+### 14.5 Increment E, the benchmark
 
 - `lex-bench`: published questions; expected answers pinned to
-  **observations** — `(lex_id, language, observed_at, sha256)` — verified by
+  **observations**, `(lex_id, language, observed_at, sha256)`, verified by
   *chain membership* via `provenance`, never by equality with current `as_of`
   output, so a later publisher correction turns a run yellow-with-explanation
   instead of red (§7.4). Prompts, model names and versions, run dates.
@@ -1711,7 +1700,7 @@ lawful channel ever appears (D42). Budget a deployment day.
   of <date>, version <x>"); phrased neutrally ("does not currently support",
   never "dropped"); no popularity metrics (star counts are ridicule, not
   capability facts); a correction channel published in the repo; claims
-  re-verified before every re-publication (R17 — competitors ship roadmaps).
+  re-verified before every re-publication (R17, competitors ship roadmaps).
 - One unreproducible or stale claim ends the project's credibility; the
   benchmark is simultaneously the strongest asset and the largest liability.
 
@@ -1721,7 +1710,7 @@ lawful channel ever appears (D42). Budget a deployment day.
 
 Runs in CI. Fails the build. Not advisory. With a single code repository there
 is no repository boundary enforcing anything, so this **is** the architecture's
-enforcement mechanism — which is why every rule below is specified as a
+enforcement mechanism, which is why every rule below is specified as a
 **verifiable construct**, not a slogan. v3's key rules were unsatisfiable (its
 F6), unverifiable (its F5), or gameable (its F2 string-grep); rules that cannot
 run get quietly weakened, which is worse than their absence.
@@ -1729,14 +1718,14 @@ run get quietly weakened, which is worse than their absence.
 | # | Rule | Mechanism |
 |---|---|---|
 | F1 | `Lex.Temporal` and `Lex.Index` reference no legal concept and no publisher | architecture test over type/namespace references |
-| F2 | `Lex.Law` references no adapter assembly, no publisher-named type/namespace, and declares no publisher id constant | reference-graph test, not source grep — `"LU"` as *data* in a manifest is legal; publisher *knowledge in code* is not |
+| F2 | `Lex.Law` references no adapter assembly, no publisher-named type/namespace, and declares no publisher id constant | reference-graph test, not source grep, `"LU"` as *data* in a manifest is legal; publisher *knowledge in code* is not |
 | F3 | Dependency direction Apps → L3 → L2 → L1; any reverse or lateral edge fails | project-reference test |
 | F4 | No parsing of `Identifier`-typed values outside an adapter | `Identifier` is an opaque struct; analyzer bans string operations on it in L1/L2/apps |
 | F5 | Filters before ranking | `Lex.Index` exposes one public query entry point taking a non-optional `FilterSet`; vector scoring is exact over pre-filtered rows; a raw-score cross-index sort fails (§8.3, §8.5) |
 | F6 | Every MCP response embeds `EnvelopeCore` | base record with C# `required` members; per-tool extensions defined in §9.8; missing member = compile error |
 | F7 | Tier B responses carry `history_begins` as a date, never `"publisher"` | type-level: `HistoryBegins` is a closed union; adapters declare it in `Describe()` |
 | F8 | No adapter writes to disk or invokes git | architecture test (no IO/process references from adapter assemblies) |
-| F9 | No ambient time in `Lex.Index` build code — time is an injected parameter | analyzer on `DateTime.Now`/`UtcNow`/`DateTimeOffset.Now` |
+| F9 | No ambient time in `Lex.Index` build code, time is an injected parameter | analyzer on `DateTime.Now`/`UtcNow`/`DateTimeOffset.Now` |
 | F10 | No natural-language generation call in `Lex.Mcp` or below | dependency test: no model-SDK reference below Apps; `Lex.Web` likewise (D27/§12.1) |
 | F11 | `raw` is written by its authoring adapter and read by nothing else; ≤ 16 KB | reference test + ingest validation (C3) |
 | F12 | meta.json mutation discipline: any change appends the corresponding chain entry; any chain entry accompanies a real change | ingest validation in the corpus writer (§7.4) |
@@ -1750,7 +1739,7 @@ run get quietly weakened, which is worse than their absence.
 Decided now at the boundary level, because publication is irreversible and v3's
 header made the maximal giveaway while claiming deferral.
 
-### 16.1 Code — Apache-2.0, permanent
+### 16.1 Code, Apache-2.0, permanent
 
 The `lex` repository (and the workflow YAML in corpus repos) is Apache-2.0.
 Rationale, recorded because v3 flipped a settled decision silently: the primary
@@ -1761,7 +1750,7 @@ published version remains forkable under its licence forever; "relicense later"
 is not a lever and no plan may be calibrated against it. The code is not the
 moat and never was.
 
-### 16.2 Data — a three-layer NOTICE in every corpus repo and index release
+### 16.2 Data, a three-layer NOTICE in every corpus repo and index release
 
 1. **Underlying acts and documents:** official Luxembourg acts are outside
    copyright (loi du 18.4.2001, art. 10, 8°); EU/ESA/BCL/ECB text is reused
@@ -1769,21 +1758,21 @@ moat and never was.
    `attribution` and `source_terms_url`; the `modifications` statement included
    (Decision 2011/833/EU requires it). **These obligations survive into forks
    and derived artefacts**, and the NOTICE says so.
-2. **Lex's compilation** — selection, arrangement, verification, observation
+2. **Lex's compilation**, selection, arrangement, verification, observation
    history, and the index artefacts: sui generis database right and any
    compilation copyright **expressly reserved** pending the §16.3 decision.
    Reservation is reversible; an open grant is not.
 3. **The code licence does not apply to the data or the index.**
 
-### 16.3 The data-licence decision — DECIDED: stars-maximal
+### 16.3 The data-licence decision, DECIDED: stars-maximal
 
 Decided 2026-08-01, deliberately early (the round-2 counter-verdict is right
 that a deadline coinciding with maximum ship pressure is a rubber stamp). The
 fork, recorded for the register:
 
 - **Stars-maximal** (consistent with the settled priority): openly license the
-  corpus compilation (e.g. CC-BY-4.0) — accepting that CC-BY-4.0 licenses the
-  database right too — and monetise **freshness, hosting, support and SLA**.
+  corpus compilation (e.g. CC-BY-4.0), accepting that CC-BY-4.0 licenses the
+  database right too, and monetise **freshness, hosting, support and SLA**.
   The durable moat is being the maintained, trusted, nightly-verified source
   with the longest observation history (§1.6), which no licence can transfer.
 - **Rights-maximal:** share-alike or reserved rights on the compilation,
@@ -1793,7 +1782,7 @@ fork, recorded for the register:
 Lex's compilation (upstream terms pass through per layer 1). Index release
 assets carry the limited grant: free to download and use; **redistribution of
 any build stays reserved**. Monetisation is freshness, hosting/SLA, scoped
-manifests, and signed attestation (D40) — the fresh index is the product, the
+manifests, and signed attestation (D40), the fresh index is the product, the
 corpus is the credibility artefact, and the observation archives are the moat.
 
 ### 16.4 Monetisation surfaces (what is actually sellable)
@@ -1805,7 +1794,7 @@ is chosen. Never: future relicensing of already-published code or data.
 
 ### 16.5 Contribution
 
-DCO, not CLA (D9) — compatible with all of the above.
+DCO, not CLA (D9), compatible with all of the above.
 
 ---
 
@@ -1825,8 +1814,8 @@ Numbering continues from v3; v3 decisions are restated with status.
 | D8 | Two published packages | carried; `Lex.Law` internal through B minimum |
 | D9 | DCO, not CLA | carried |
 | D10 | Bitemporal via git, observation stamps inside hashed content | carried, **semantics corrected**: per-state chains (§7.4) |
-| D11 | First-sighting only | **superseded** by per-state append-only chains (§7.4) — v3's rule made the axis unreconstructable |
-| D12 | "Last confirmed" outside the corpus | carried, relocated to lex-ops status feed (§11.2) — the index-only version deadlocked on quiet nights |
+| D11 | First-sighting only | **superseded** by per-state append-only chains (§7.4), v3's rule made the axis unreconstructable |
+| D12 | "Last confirmed" outside the corpus | carried, relocated to lex-ops status feed (§11.2), the index-only version deadlocked on quiet nights |
 | D13 | Clone filter | **superseded**: `--depth=1`, HEAD-only build (§7.5) |
 | D14 | SPARQL-first, never crawl, identifying UA | carried, extended: body-path compliance is part of it (R19) |
 | D15 | No `FetchRelations`; relations stored if free | carried |
@@ -1855,15 +1844,15 @@ Numbering continues from v3; v3 decisions are restated with status.
 | **D-PR1** | GitHub stars are the priority over portfolio polish; complexity allowed in the engine, never in the visitor's first five minutes | carried from settled memory |
 | **D38** | Rights-pending text withholding: `text_public` flag (C2) honoured by every public surface; `text_withheld` refusal status distinct from `text_not_available` | new (§9, §12.2) |
 | **D39** | Observation archives: private per-publisher repos, fetch-gate entry, dispatcher-run, replay backfill with original timestamps | new (§11.5) |
-| **D40** | Signed index stamp (key in `lex-ops`, public key in `lex` README + `/pubkey.pem`, signature via `provenance`) — attestation is the sellable artefact; built in increment A. **Amended 2026-08-02: the implemented algorithm is ECDSA-P256-SHA256** (stamped in the `algorithm` field); the Ed25519 wording was never implemented, and this amendment lands BEFORE any public key or verify tooling publishes, so no rotation or trust break occurs. | new (§8.1); amended blueprint-verdict §3.1 |
+| **D40** | Signed index stamp (key in `lex-ops`, public key in `lex` README + `/pubkey.pem`, signature via `provenance`), attestation is the sellable artefact; built in increment A. **Amended 2026-08-02: the implemented algorithm is ECDSA-P256-SHA256** (stamped in the `algorithm` field); the Ed25519 wording was never implemented, and this amendment lands BEFORE any public key or verify tooling publishes, so no rotation or trust break occurs. | new (§8.1); amended blueprint-verdict §3.1 |
 | **D41** | Version directories named by `valid_from` only; no directory is ever renamed; `--02` collision suffix | new (C1) |
 | **D42** | ~~Legilux runs in metadata-only mode~~ **Superseded by D44** (the robots-permitted CC-BY filestore channel); the no-SPA-API-reverse-engineering rule stands permanently | superseded 2026-08-01 |
 | **D43** | Data licence decided: stars-maximal (§16.3); code licence Apache-2.0, permanent | new (§16) |
 | **D44** | LU full-text channel: verbatim Akoma Ntoso XML from `legilux.public.lu/filestore` (robots-permitted; publisher documents CC-BY-4.0 on content files incl. commercial reuse; machine-readable `dct:license` per manifestation). Bodies stored byte-verbatim, append-only; closes R2/R19 with evidence. | supersedes D42/D34 |
-| **D45** | `/ask` is the §12.1 model layer, made front-door by owner decision 2026-08-02: one model + system prompt over the SAME in-process `McpCore` the public `/mcp` serves (parity by construction — no loopback HTTP, no orchestrator, no agent framework). Env-gated, IP+global daily caps (no-login constraint). Generation lives only in the Apps layer; every AI surface carries a visible not-legal-advice / not-part-of-the-record label; refusal statuses render from tool envelopes, never only the model's paraphrase. | blueprint + design workflow + owner |
+| **D45** | `/ask` is the §12.1 model layer, made front-door by owner decision 2026-08-02: one model + system prompt over the SAME in-process `McpCore` the public `/mcp` serves (parity by construction, no loopback HTTP, no orchestrator, no agent framework). Env-gated, IP+global daily caps (no-login constraint). Generation lives only in the Apps layer; every AI surface carries a visible not-legal-advice / not-part-of-the-record label; refusal statuses render from tool envelopes, never only the model's paraphrase. | blueprint + design workflow + owner |
 | **D46** | Derived consumption layer `lex-articles` (schema `lex-articles/1`): per-provision Markdown+JSON deterministically extracted from the evidence repos into a separate HEAD-is-the-contract repo. Profiles are versioned, IMMUTABLE, permanently runnable (`akn-lu/1`, `xhtml-eu/1`; changes = new profile beside the old, frozen-fingerprint test enforces); publisher-minted anchors only; spans in Unicode scalar values; publisher-date vs observed-text disagreement disclosed as `validity_conflict`, never resolved; renumbering detected mechanically (unique text-hash match) as `anchor_events`. Rule: every increment ends with something a stranger can experience. | blueprint + verdict r1 |
 | **D47** | The provision is the retrieval unit: `lex-index/2` stores text once (provisions table, external-content FTS, title-weighted ranking); search hits are provision-level; `as_of` gains `mode=outline\|select`; tool #8 `article_history` serves the per-anchor time axis with refusals `unknown_anchor` / `anchor_not_in_version` / `no_provision_history`. D27 stands: 8 tools, one binary. | blueprint inc 5-6 |
-| **D48** | Alternative structural manifestations: an adapter may fetch a second, richer publisher format per expression (EU: Formex 4 via `application/zip;mtype=fmx4`, spaceless — Cellar 500s on the normalized form). The container archive is packaging (its bytes embed fetch-time timestamps); zip MEMBERS are the evidence, stored verbatim under `versions/{date}/{lang}.{format}/` with one observation (sha256 + `format` field) per member. Identity guard in the adapter: `INFO.CONSLEG START.DATE` must equal the requested version's valid_from (CONSLEG.DATE is production date — GDPR's says 2018 for the 2016-05-04 version, corrigenda incorporation), else the fetch is discarded — unverifiable content is not evidence. Derived profile `fmx4-eu/1` (immutable, schema-confidence) extracts the main member; a work+language switches profile only when EVERY body-bearing version has the Formex main (mixed profiles would fabricate provision diffs that are formatting, not law); anchors continue the xhtml-eu/1 convention (`art_N`/`anx_<roman>`) so permalinks and history states survive the switch. Formex also fills bodies the XHTML cap excluded (CRR ≥2020) and articles the flat-XHTML heuristic missed (CRR art_50a–d). | new 2026-08-02 |
+| **D48** | Alternative structural manifestations: an adapter may fetch a second, richer publisher format per expression (EU: Formex 4 via `application/zip;mtype=fmx4`, spaceless, Cellar 500s on the normalized form). The container archive is packaging (its bytes embed fetch-time timestamps); zip MEMBERS are the evidence, stored verbatim under `versions/{date}/{lang}.{format}/` with one observation (sha256 + `format` field) per member. Identity guard in the adapter: `INFO.CONSLEG START.DATE` must equal the requested version's valid_from (CONSLEG.DATE is production date, GDPR's says 2018 for the 2016-05-04 version, corrigenda incorporation), else the fetch is discarded, unverifiable content is not evidence. Derived profile `fmx4-eu/1` (immutable, schema-confidence) extracts the main member; a work+language switches profile only when EVERY body-bearing version has the Formex main (mixed profiles would fabricate provision diffs that are formatting, not law); anchors continue the xhtml-eu/1 convention (`art_N`/`anx_<roman>`) so permalinks and history states survive the switch. Formex also fills bodies the XHTML cap excluded (CRR ≥2020) and articles the flat-XHTML heuristic missed (CRR art_50a, d). | new 2026-08-02 |
 
 ---
 
@@ -1871,9 +1860,9 @@ Numbering continues from v3; v3 decisions are restated with status.
 
 | # | Risk | Kills what | How to settle |
 |---|---|---|---|
-| **R2** | Does the Legilux reuse grant cover act *content*? (dataset self-describes as metadata; database right arts. 67–70; open-data law art. 1(6); art. 67(3) conditions) | public republication of act text | **Standing closed gate** — no letter will be sent (operating constraint). Moot in practice: D42's metadata-only mode never republishes text; the metadata corpus is squarely CC-BY |
+| **R2** | Does the Legilux reuse grant cover act *content*? (dataset self-describes as metadata; database right arts. 67-70; open-data law art. 1(6); art. 67(3) conditions) | public republication of act text | **Standing closed gate**, no letter will be sent (operating constraint). Moot in practice: D42's metadata-only mode never republishes text; the metadata corpus is squarely CC-BY |
 | R4 | Embedding model chosen without an evaluation set | search quality, silently | 30 real fr/de questions from real articles, before model choice |
-| R6 | ~~Do articles carry their own `dateApplicability`?~~ | — | **SETTLED 2026-08-01**: yes, 100% of 503,867 articles (§2.1). Article-level as-of is a lookup |
+| R6 | ~~Do articles carry their own `dateApplicability`?~~ |, | **SETTLED 2026-08-01**: yes, 100% of 503,867 articles (§2.1). Article-level as-of is a lookup |
 | R7 | Corpus repo growth | the storage model | pack 79 versions of one code, measure; thresholds + pre-decided shape in §7.6 |
 | R9 | Cellar has no transaction time | the EU bitemporal claim | we generate it (§7.4); verify no publisher equivalent exists |
 | R10 | EU corrigenda semantics at Expression level | the schema | paper-test in A (§14.1); exercised for real in B |
@@ -1881,11 +1870,11 @@ Numbering continues from v3; v3 decisions are restated with status.
 | R12 | Tier C link rot | the timeline product | store title + dates + status so a dead link still identifies the document |
 | R13 | Cellar volume and rate limits | increment B schedule | measure before committing to nightly |
 | R14 | Authority level absent from publisher's words | §3.6 integrity | `unknown` is the answer; never infer |
-| R15 | ~~Instrument vs compilation axes~~ | — | **SETTLED 2026-08-01**: Work = `isMemberOf` target; type = the consolidation's `typeDocument`; one axis, no double-counting (§2.1) |
+| R15 | ~~Instrument vs compilation axes~~ |, | **SETTLED 2026-08-01**: Work = `isMemberOf` target; type = the consolidation's `typeDocument`; one axis, no double-counting (§2.1) |
 | R16 | Tier B derived history mistaken for real history | credibility, permanently | D32: publisher-dates-first, refusals, F7, gap recording (§11.3) |
 | R17 | A competitor ships point-in-time first | positioning | observation clocks are the uncopyable head start (§1.6); claims re-verified per §14.5 |
 | **R18** | Tier C metadata republication vs all-rights-reserved ToS | the CSSF/CNPD product; regulator goodwill | §1.5 Q5 letter + documented legal basis before increment D |
-| **R19** | ~~Legilux body acquisition channel~~ | — | **SETTLED 2026-08-01, negative** (§2.1): no published compliant channel; metadata-only mode is the standing state (D42) |
+| **R19** | ~~Legilux body acquisition channel~~ |, | **SETTLED 2026-08-01, negative** (§2.1): no published compliant channel; metadata-only mode is the standing state (D42) |
 | **R20** | Flat-corpus dates: does JOLux carry publication/EIF dates for never-consolidated acts? | whether the flat corpus can ever join `in_force_on` | probe when the flat-corpus increment is scheduled; until then §7.7 |
 
 ---
@@ -1901,26 +1890,26 @@ publisher's systems.
 
 ---
 
-## 20. External gates — what blocks "doing everything"
+## 20. External gates, what blocks "doing everything"
 
 Everything in this spec is buildable by one person except where an external
 party or a deliberate choice gates it. Recorded so nothing is discovered
 mid-build:
 
 **Operating constraint, recorded 2026-08-01:** the maintainer takes no manual
-external actions — no letters, no consent requests. Every gate that required
+external actions, no letters, no consent requests. Every gate that required
 one is a **standing closed gate**, and the design operates fully inside it.
 
 | Gate | Blocks | State |
 |---|---|---|
-| R2 (Legilux act-content right) | public act text on any surface | standing closed; moot under D42 metadata-only mode — no text is stored or served |
+| R2 (Legilux act-content right) | public act text on any surface | standing closed; moot under D42 metadata-only mode, no text is stored or served |
 | R19 (body channel) | body ingestion | **settled negative** (§2.1); metadata-only is the standing state |
 | R18 (CSSF/CNPD metadata basis) | increment D shipping | documented-legal-basis path only (§14.4); demand-driven anyway |
 | R11 (open-data-law scope) | CSSF tier upgrade | CSSF stays Tier C |
 | Dispatcher credential | §11 ops hub | fine-grained PAT interim (deadline: N=3 publishers or 90 days, §11.1) |
 | R4 evaluation set | vector search | FTS-only search until done |
-| §16.3 data licence | — | **decided: stars-maximal (D43)** |
-| R6 / R15 | — | **settled** (§2.1) |
+| §16.3 data licence |, | **decided: stars-maximal (D43)** |
+| R6 / R15 |, | **settled** (§2.1) |
 
 Nothing blocks increment A. The corpus repo (pure CC-BY metadata) and the
 demo may both go public immediately.

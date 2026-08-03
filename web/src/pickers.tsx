@@ -130,7 +130,7 @@ export function TopicSearch({ q, asOf, onQuery, onOpen }: {
     <>
       <form className="sel" onSubmit={(e) => { e.preventDefault(); onQuery(text, asOf); }}>
         <input aria-label="Words to search for in the text" style={{ flex: 1, minWidth: 0 }} value={text} onChange={(e) => setText(e.target.value)}
-               placeholder="words in the text — congé parental, breach notification, own funds" />
+               placeholder="words in the text, congé parental, breach notification, own funds" />
         <label className="pick"><i>as of</i>
           <input type="date" aria-label="Only versions in force on this date" value={asOf ?? ""} onChange={(e) => onQuery(q, e.target.value || undefined)} /></label>
         <button type="submit">Search</button>
@@ -143,7 +143,7 @@ export function TopicSearch({ q, asOf, onQuery, onOpen }: {
           return (
             <li key={`${h.provision_id ?? h.lex_id}-${i}`}>
               <button className="rowbtn" onClick={() => onOpen(work, h.valid_from, h.anchor)}>
-                <span>{shorten(h.title) ?? work}{h.provision_num ? ` — ${h.provision_num}` : ""}</span>
+                <span>{shorten(h.title) ?? work}{h.provision_num ? `, ${h.provision_num}` : ""}</span>
                 {h.snippet ? <span className="sub">{stripMarks(h.snippet)}</span> : null}
                 <span className="sub mono">{h.valid_from}{h.anchor ? ` · ${h.anchor}` : ""}</span>
               </button>

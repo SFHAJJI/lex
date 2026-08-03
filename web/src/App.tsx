@@ -180,7 +180,7 @@ export default function App() {
           go({ work: undefined, from: r.ui!.ranking.from_date, until: r.ui!.ranking.to_date, order: r.ui!.ranking.order as State["order"], mode: "read" });
         }
       }
-    } catch { setSaid("The request failed — try again."); }
+    } catch { setSaid("The request failed, try again."); }
     finally { setBusy(false); }
   }, [busy, go]);
 
