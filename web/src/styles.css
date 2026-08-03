@@ -120,6 +120,8 @@ del { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var
    list and says what it is rather than being hidden or looking identical to a readable one. */
 .bar.notext .fill { opacity: .08; }
 .bar.notext .lbl { color: var(--muted); }
+/* The label yields to the marker rather than sliding under it on a narrow screen. */
+.bar.notext .lbl { right: 92px; overflow: hidden; text-overflow: ellipsis; }
 .bar .mark { position: absolute; right: 9px; top: 5px; font-size: 10.5px; letter-spacing: .04em;
              text-transform: uppercase; color: var(--muted); border: 1px solid var(--line);
              border-radius: 99px; padding: 0 7px; background: var(--bg); }

@@ -262,6 +262,11 @@ export function Compare({ work, from, to, anchor }: {
     Promise.all([load(from), load(to)])
       .then(([a, b]) => {
         if (!live) return;
+        // Two versions that carry no text are not two identical versions. Diffing them produces
+        // four zeros and the sentence "nothing changed in the text", which is the strongest claim
+        // on the page and is false: nothing was compared. Legilux publishes no text file for any
+        // snapshot of several large codes, so this is the ordinary case for them, not an edge.
+        if (a.size === 0 && b.size === 0) { setState({ loading: false, error: "NO_TEXT" }); return; }
         const keys = [...new Set([...a.keys(), ...b.keys()])].sort();
         const rows: [string, Piece[]][] = [];
         let same = 0;
@@ -285,6 +290,13 @@ export function Compare({ work, from, to, anchor }: {
   if (state.loading) return <Empty>Comparing {from} with {to}…</Empty>;
   if (state.error === "TOO_LARGE")
     return <Empty>This law is too large to compare whole, open an article first, then compare.</Empty>;
+  if (state.error === "NO_TEXT")
+    return (
+      <Empty>
+        Neither version carries text, so there is nothing to compare. What Lex holds for this law is
+        the amendment record: when each version applied, where it came from, and its hash.
+      </Empty>
+    );
   if (state.error) return <Empty>Could not compare these versions: {state.error}</Empty>;
 
   const rows = state.rows ?? [];
@@ -360,9 +372,10 @@ function useRowFacts(rows: RankingRow[]) {
   return facts;
 }
 
-export function Ranking({ rows, worksChanged, newVersions, from, to, onOpen }: {
+export function Ranking({ rows, worksChanged, newVersions, from, to, onOpen, onOpenRecord }: {
   rows: RankingRow[]; worksChanged: number; newVersions: number; from: string; to: string;
   onOpen: (work: string, from: string, to: string) => void;
+  onOpenRecord: (work: string, date: string) => void;
 }) {
   const facts = useRowFacts(rows);
   const [onlyText, setOnlyText] = useState(false);
@@ -381,7 +394,8 @@ export function Ranking({ rows, worksChanged, newVersions, from, to, onOpen }: {
         {textless > 0 ? (
           <button className={"tag act" + (onlyText ? " on" : "")} aria-pressed={onlyText}
                   onClick={() => setOnlyText((v) => !v)}>
-            {onlyText ? `showing the ${shown.length} with text ✕` : `${textless} hold no text · hide them`}
+            {onlyText ? `showing the ${shown.length} with text ✕`
+                      : `${textless} of these hold no text · hide them`}
           </button>
         ) : null}
       </div>
@@ -391,7 +405,10 @@ export function Ranking({ rows, worksChanged, newVersions, from, to, onOpen }: {
           const name = f?.title ?? label(r.title) ?? humanSlug(r.work);
           return (
             <button key={r.work} className={"bar" + (f && !f.text ? " notext" : "")}
-                    onClick={() => onOpen(r.work, r.first_change, r.last_change)}>
+                    title={f && !f.text ? "No text is published for this law, open its record" : undefined}
+                    onClick={() => f && !f.text
+                      ? onOpenRecord(r.work, r.last_change)
+                      : onOpen(r.work, r.first_change, r.last_change)}>
               <span className="track">
                 <span className="fill" style={{ width: `${(r.versions_in_period / max) * 100}%` }} />
                 <span className="lbl">{name}</span>

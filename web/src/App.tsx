@@ -324,7 +324,7 @@ export default function App() {
          ui?.gap ? <Gap {...ui.gap} held={s.work ? held : undefined} /> :
          ui?.ranking ? <Ranking rows={ui.ranking.rows} worksChanged={ui.ranking.works_changed}
                                 newVersions={ui.ranking.new_versions} from={ui.ranking.from_date}
-                                to={ui.ranking.to_date} onOpen={openDiff} /> :
+                                to={ui.ranking.to_date} onOpen={openDiff} onOpenRecord={openLaw} /> :
          ui?.in_force ? <InForce date={ui.in_force.date} total={ui.in_force.total} rows={ui.in_force.rows} onOpen={openLaw} /> :
          s.work && s.mode === "compare" ? <Compare work={s.work} from={s.date ?? today()} to={s.to ?? today()} anchor={s.anchor} /> :
          s.work && loaded ? <Provision items={loaded.items} toc={toc} validFrom={loaded.from} validTo={loaded.to}
