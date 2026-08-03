@@ -68,6 +68,11 @@ export default function App() {
         if (!live) return;
         const one = first<any>(res, (x) => Array.isArray(x?.provisions) && x.provisions.length > 0);
         setToc((one?.provisions ?? []) as ProvisionItem[]);
+        // The law's name belongs to the law, not to the mode you are reading it in. It used to
+        // be set only on the read path, so opening a comparison showed the raw work slug as
+        // the heading — the one place a reader most needs to know which law they are looking at.
+        const t = shorten((one?.document ?? one)?.title);
+        if (t) setTitle(t);
       })
       .catch(() => live && setToc([]));
     return () => { live = false; };

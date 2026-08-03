@@ -156,3 +156,9 @@ to corpus data or index artefacts — see each corpus repository's `NOTICE`
 (three layers: official acts outside copyright / Lex's compilation rights /
 code licence inapplicable). Derived dataset: CC-BY-4.0 (LU) and EU
 reuse-with-attribution, licence inline in every file.
+
+## Support
+
+This is free, open and maintained on my own time — and it stays that way whatever you decide.
+If it saved you an afternoon, you can [buy me a coffee ☕](https://buymeacoffee.com/shajji).
+Starring the repo helps just as much, and costs nothing.
