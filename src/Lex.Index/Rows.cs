@@ -79,7 +79,12 @@ public sealed record FilterSet(
     DateOnly? AsOf,
     string? Collection,
     string? Kind,
-    string? Language)
+    string? Language,
+    // Restrict retrieval to a named set of works. Full-text ranking over a whole national corpus
+    // is precise only when the question happens to use rare words: search the entire body of
+    // Luxembourg law for "prix" and seed-certification and care-home tariffs outrank the
+    // electricity act. A consumer that knows its subject can say so, and get its subject back.
+    IReadOnlyList<string>? Works = null)
 {
     public static readonly FilterSet All = new(null, null, null, null);
 }

@@ -108,7 +108,7 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
             Tool("diff", "What changed between two dates for one work: which versions applied, and where both texts are held, retrieve them via as_of to compare.",
                 new JsonObject { ["work"] = S(workDesc), ["from_date"] = S("ISO date"), ["to_date"] = S("ISO date"), ["language"] = S("language code") }, ["work", "from_date", "to_date"]),
             Tool("search", "Filtered-then-ranked full-text search (FTS; filters always run before ranking). Returns hits WITHOUT body text: lex_id, dates, snippet, hash. Full state via as_of.",
-                new JsonObject { ["query"] = S("search terms"), ["publisher"] = S("optional publisher id"), ["document_type"] = S("optional type code"), ["as_of"] = S("optional ISO date: only versions valid on this date"), ["limit"] = I("default 10") }, ["query"]),
+                new JsonObject { ["query"] = S("search terms"), ["publisher"] = S("optional publisher id"), ["document_type"] = S("optional type code"), ["as_of"] = S("optional ISO date: only versions valid on this date"), ["works"] = S("optional comma-separated work ids: restrict the search to these works, for callers that know their subject"), ["limit"] = I("default 10") }, ["query"]),
             Tool("article_history", "Every distinct text ONE provision (article/annex) has had, as validity intervals — plus its lifecycle events (inserted/removed/renumbered, renumbering detected mechanically by identical text hash). The answer to \"what did Article X say over its life / when did it change\".",
                 new JsonObject { ["work"] = S(workDesc), ["anchor"] = S("provision anchor, e.g. art_1er (find it via search or as_of mode=outline)") }, ["work", "anchor"]),
             Tool("provenance", "Proof chain for one lex_id: source URI, retrieval time, record/body hashes, event chain, corpus commit, index build, stamp signature.",
@@ -390,12 +390,18 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                 DateOnly? asOf = Str("as_of") is { } s ? DateOnly.Parse(s) : null;
                 var pub = Str("publisher");
                 var limit = Int("limit", 10);
+                // Optional subject scope. Ranking a national corpus by relevance alone is precise
+                // only when the question uses rare words: search all of Luxembourg law for "prix"
+                // and seed certification outranks the electricity act. A caller that knows which
+                // works it cares about can name them.
+                var works = Str("works")?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                                        .Select(w => w.Contains(':') ? w[(w.IndexOf(':') + 1)..] : w).ToArray();
                 var outp = new JsonArray();
                 foreach (var r in readers.Values.Where(x => pub is null || x.Collection == pub))
                 {
                     // provision-level hits: the retrieval unit is the article; at most two
                     // provisions per work so one huge code cannot monopolize the result set
-                    var hits = r.Search(q, new FilterSet(asOf, null, Str("document_type"), Str("language")), limit * 6)
+                    var hits = r.Search(q, new FilterSet(asOf, null, Str("document_type"), Str("language"), works), limit * 6)
                         .GroupBy(h => (h.Doc.GroupKey, h.Prov.Anchor)).Select(g => g.First())
                         .GroupBy(h => h.Doc.GroupKey).SelectMany(g => g.Take(2))
                         .Take(limit).ToList();

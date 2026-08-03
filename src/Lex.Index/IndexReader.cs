@@ -364,6 +364,14 @@ public sealed class LexIndexReader : IDisposable
         if (f.Collection is not null) { sql += " AND collection=$fcol"; ps.Add(new SqliteParameter("$fcol", f.Collection)); }
         if (f.Kind is not null) { sql += " AND kind=$fkind"; ps.Add(new SqliteParameter("$fkind", f.Kind)); }
         if (f.Language is not null) { sql += " AND language=$flang"; ps.Add(new SqliteParameter("$flang", f.Language)); }
+        if (f.Works is { Count: > 0 } works)
+        {
+            // Matches either the slug or the publisher's own identifier, so a caller can scope
+            // with whichever of the two it happens to be holding.
+            var names = works.Select((_, i) => $"$fw{i}").ToList();
+            sql += $" AND (group_key IN ({string.Join(",", names)}) OR group_identifier IN ({string.Join(",", names)}))";
+            for (var i = 0; i < works.Count; i++) ps.Add(new SqliteParameter($"$fw{i}", works[i]));
+        }
         if (!excludeAsOf && f.AsOf is { } d)
         {
             sql += " AND valid_from <= $fasof AND (valid_to IS NULL OR valid_to >= $fasof)";
