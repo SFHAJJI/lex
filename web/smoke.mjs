@@ -28,23 +28,21 @@ if (html.length === 0) {
   console.error("FAIL — bundle loaded but rendered nothing into #workspace");
   process.exit(1);
 }
-for (const expected of ["a law", "a period", "a topic"]) {
+for (const expected of ["A law", "A period", "A topic"]) {
   if (!html.includes(`>${expected}<`)) {
-    console.error(`FAIL — rendered, but the "${expected}" door is missing`);
+    console.error(`FAIL — rendered, but the "${expected}" tab is missing from the finder`);
     process.exit(1);
   }
 }
-// A stale bundle would still mount and still pass every check above, so pin the two structural
-// decisions the front rests on: one question box, and the browse doors as a subordinate
-// alternative to it rather than a second required step.
-for (const [re, why] of [
-  [/>\s*History\s*</, "the History tab is back; the rail is meant to replace it"],
-  [/class="cmd big"/, "the front lost its single prominent question box"],
-  [/class="doors"/, "the browse doors are gone"],
-  [/Or browse/, "the browse doors no longer read as an alternative"],
+// The assistant left the page flow for a launcher in the corner, and the browse controls became
+// one card. A stale bundle would still mount and still pass every check above, so pin both.
+for (const [re, want, why] of [
+  [/class="finder"/, true, "the finder card is gone"],
+  [/class="fin-tab/, true, "the finder tabs are gone"],
+  [/class="asklaunch"/, true, "the assistant launcher is gone"],
+  [/class="cmd big"/, false, "the old full-width ask bar is back above the browse controls"],
+  [/>\s*History\s*</, false, "the History tab is back; the rail is meant to replace it"],
 ]) {
-  const present = re.test(html);
-  const wanted = why.startsWith("the History");
-  if (present === wanted) { console.error(`FAIL — ${why}`); process.exit(1); }
+  if (re.test(html) !== want) { console.error(`FAIL — ${why}`); process.exit(1); }
 }
 console.log(`ok — workspace mounted, ${html.length} chars, one question box + three doors`);

@@ -381,7 +381,7 @@ app.MapGet("/", () =>
         """
         + """
         <style>
-          .lede { font-size:18px; color:var(--muted); margin:0 0 20px; max-width:62ch }
+          .lede { font-size:18px; color:var(--muted); margin:0 0 22px; max-width:74ch }
           .lede b { color:var(--fg); font-variant-numeric:tabular-nums }
           /* Once a law, a period or a search is loaded, the front-door content is noise.
              The workspace sets data-workspace on <body>; everything promotional steps aside. */

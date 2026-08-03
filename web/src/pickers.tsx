@@ -9,8 +9,11 @@ export interface WorkHit { work: string; title: string; validFrom?: string }
  * identifier/title fallback — so typing "32016r0679", "GDPR" or "code du travail"
  * all resolve. No model involved: picking a law must be instant and repeatable.
  */
-export function LawPicker({ current, onPick }: { current?: string; onPick: (w: WorkHit) => void }) {
-  const [open, setOpen] = useState(false);
+export function LawPicker({ current, onPick, inline }: { current?: string; onPick: (w: WorkHit) => void; inline?: boolean }) {
+  // Inline means the search field IS the control, with results beneath it, rather than a button
+  // that opens a popover. In the finder card there is nothing to hide behind, so hiding it costs
+  // a click and buys nothing.
+  const [open, setOpen] = useState(!!inline);
   const [q, setQ] = useState("");
   const [hits, setHits] = useState<WorkHit[]>([]);
   const [busy, setBusy] = useState(false);
@@ -47,21 +50,23 @@ export function LawPicker({ current, onPick }: { current?: string; onPick: (w: W
   }, [q, open]);
 
   return (
-    <div className="picker" ref={box}>
-      <button className="pick main" onClick={() => setOpen((v) => !v)}
-              aria-expanded={open} aria-haspopup="listbox" aria-controls="lawpop">
-        <i>law</i>{current ?? "choose a law"} ▾
-      </button>
+    <div className={inline ? "picker inline" : "picker"} ref={box}>
+      {inline ? null : (
+        <button className="pick main" onClick={() => setOpen((v) => !v)}
+                aria-expanded={open} aria-haspopup="listbox" aria-controls="lawpop">
+          <i>law</i>{current ?? "choose a law"} ▾
+        </button>
+      )}
       {open ? (
-        <div className="pop" id="lawpop" role="listbox">
-          <input autoFocus value={q} onChange={(e) => setQ(e.target.value)}
+        <div className={inline ? "pop open" : "pop"} id="lawpop" role="listbox">
+          <input autoFocus={!inline} value={q} onChange={(e) => setQ(e.target.value)}
                  placeholder="name, subject, or identifier (32016r0679)" aria-label="Find a law" />
           {busy ? <div className="popnote">searching…</div> : null}
           {!busy && q.trim().length >= 2 && hits.length === 0 ? <div className="popnote">nothing matches</div> : null}
           <ul>
             {hits.map((h) => (
               <li key={h.work} role="option" aria-selected={false}>
-                <button onClick={() => { onPick(h); setOpen(false); setQ(""); }}>
+                <button onClick={() => { onPick(h); if (!inline) setOpen(false); setQ(""); }}>
                   <span>{h.title}</span>
                   <span className="sub mono">{h.work}</span>
                 </button>

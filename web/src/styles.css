@@ -55,7 +55,10 @@
            width: 28px; height: 26px; padding: 0; cursor: pointer; font-size: 13px; }
 .stepbtn:disabled { opacity: .35; cursor: default; }
 
+/* Reserved height stops the page jumping while a law loads, but on the front there is
+   nothing to reserve for, and 180px of nothing under the finder reads as a mistake. */
 .work { min-height: 180px; }
+.work:empty { min-height: 0; }
 .cnt { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
 .tag { border: 1px solid var(--line); border-radius: 99px; padding: 1px 10px; font-size: 12.5px; color: var(--muted); }
 .tag.warn { color: var(--warn); border-color: var(--warn); }
@@ -197,3 +200,86 @@ button.pick { cursor: pointer; }
 @media (prefers-reduced-motion: reduce) { .steps li.pending:before { animation: none } }
 .chipmini { border: 1px solid var(--line); border-radius: 99px; padding: 1px 9px; font-size: 12px;
             background: var(--card); color: var(--accent); cursor: pointer; white-space: nowrap; }
+
+
+/* ================= the finder: one card, three ways in =================
+   Three controls in a row of body text read as leftovers. A single card with tabs reads as a
+   deliberate set, and the page stops moving when you switch between them. */
+.finder{background:var(--card);border:1px solid var(--line);border-radius:14px;
+  box-shadow:0 1px 2px rgba(0,0,0,.03),0 14px 34px rgba(0,0,0,.055);overflow:hidden;margin:0 0 22px}
+.fin-tabs{display:flex;align-items:baseline;gap:2px;padding:0 8px;background:var(--bg);
+  border-bottom:1px solid var(--line)}
+.fin-tab{background:none;border:0;border-bottom:2px solid transparent;border-radius:0;
+  font-family:var(--serif);font-size:16px;color:var(--muted);padding:13px 15px 11px;cursor:pointer}
+.fin-tab:hover{color:var(--fg)}
+.fin-tab.on{color:var(--fg);font-weight:600;border-bottom-color:var(--accent)}
+.fin-hint{margin-left:auto;padding-right:8px;font-size:12.5px;color:var(--muted)}
+.fin-body{padding:18px 18px 20px}
+.fin-body .sel{padding-bottom:0}
+
+/* The law search stops being a dropdown: in the card there is nothing to hide behind. */
+.picker.inline{position:static}
+.picker.inline .pop{position:static;width:auto;border:0;box-shadow:none;padding:0;background:none}
+.picker.inline .pop input{font-size:16px;padding:12px 14px;border-radius:9px;border:1px solid var(--line);
+  background:var(--bg)}
+.picker.inline .pop input:focus{outline:none;border-color:var(--accent);
+  box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 12%,transparent)}
+.picker.inline .pop ul{max-height:340px;margin-top:10px}
+.picker.inline .pop li button{border-radius:8px;padding:9px 10px}
+.picker.inline .pop li button:hover{background:var(--bg)}
+
+/* Period and topic get the same field treatment, so the three tabs look related. */
+.fin-body .pick{border-radius:9px;padding:9px 12px;background:var(--bg)}
+.fin-body input[type=date],.fin-body select{font:inherit;font-size:14.5px}
+.fin-body form.sel input[type=text],.fin-body form.sel input:not([type]){font-size:16px;padding:12px 14px;
+  border-radius:9px;border:1px solid var(--line);background:var(--bg)}
+.fin-body form.sel button[type=submit]{border-radius:9px;padding:11px 20px}
+
+/* ================= the assistant, in the corner =================
+   Summoned rather than stumbled into. Nothing on the page competes with it, and browsing is no
+   longer the fallback for people it failed. */
+.asklaunch{position:fixed;right:20px;bottom:20px;z-index:40;display:flex;align-items:center;gap:11px;
+  background:var(--accent);color:var(--on-accent);border:0;border-radius:99px;padding:12px 20px 12px 16px;
+  cursor:pointer;font-family:inherit;box-shadow:0 8px 26px rgba(0,0,0,.22);transition:transform .16s,box-shadow .16s}
+.asklaunch:hover{transform:translateY(-2px);box-shadow:0 12px 32px rgba(0,0,0,.28)}
+.al-ic{font-size:15px;opacity:.95}
+.al-t{display:flex;flex-direction:column;line-height:1.2;text-align:left}
+.al-t b{font-size:14px;font-weight:700}
+.al-t small{font-size:11.5px;opacity:.85}
+
+.askpanel{position:fixed;right:20px;bottom:20px;z-index:40;width:min(430px,calc(100vw - 32px));
+  max-height:min(76vh,720px);display:flex;flex-direction:column;background:var(--card);
+  border:1px solid var(--line);border-radius:14px;box-shadow:0 18px 52px rgba(0,0,0,.26);overflow:hidden}
+.askpanel.min{max-height:none}
+.ap-head{display:flex;align-items:center;gap:8px;padding:11px 12px 11px 15px;background:var(--accent);
+  color:var(--on-accent)}
+.ap-title{font-weight:700;font-size:14.5px;flex:1;display:flex;align-items:center;gap:8px}
+.ap-x{background:#ffffff26;border:0;color:inherit;width:26px;height:26px;border-radius:7px;cursor:pointer;
+  font-size:12px;line-height:1}
+.ap-x:hover{background:#ffffff3d}
+.ap-notice{margin:0;padding:11px 15px;font-size:12px;line-height:1.5;color:var(--muted);
+  background:var(--bg);border-bottom:1px solid var(--line)}
+.ap-body{flex:1;overflow-y:auto;padding:14px 15px;min-height:90px}
+.ap-sugg-h{margin:0 0 9px;font-size:11.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;
+  color:var(--muted)}
+.ap-chip{display:block;width:100%;text-align:left;background:var(--bg);border:1px solid var(--line);
+  border-radius:9px;padding:9px 12px;margin-bottom:7px;font:inherit;font-size:13.5px;color:inherit;cursor:pointer}
+.ap-chip:hover{border-color:var(--accent);color:var(--accent)}
+.ap-body .steps{margin-bottom:10px}
+.ap-body .said{font-size:15px;margin:0}
+.ap-form{display:flex;gap:8px;padding:11px 12px;border-top:1px solid var(--line);background:var(--bg)}
+.ap-form input{flex:1;min-width:0;border-radius:9px;border:1px solid var(--line);padding:10px 12px;
+  font:inherit;font-size:14px;background:var(--card)}
+.ap-form input:focus{outline:none;border-color:var(--accent)}
+.ap-form button{border-radius:9px;padding:10px 17px;min-width:0}
+
+.backhome{background:none;border:0;padding:0;font:inherit;color:var(--muted);cursor:pointer;margin-right:4px}
+.backhome:hover{color:var(--accent)}
+
+@media(max-width:640px){
+  .askpanel{right:8px;left:8px;bottom:8px;width:auto;max-height:82vh}
+  .asklaunch{right:12px;bottom:12px}
+  .al-t small{display:none}
+  .fin-hint{display:none}
+}
+@media(prefers-reduced-motion:reduce){.asklaunch:hover{transform:none}}

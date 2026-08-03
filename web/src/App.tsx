@@ -2,7 +2,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { askStreaming, first, tool, type AskReply, type ProvisionItem, type Step, type UiEffect } from "./api";
 import { publisherOf, useWorkspace, workSlug, type Space, type State } from "./state";
 import { Compare, Empty, Gap, InForce, Provision, Ranking, VersionRail, hasView, modeFor } from "./views";
-import { LawPicker, PeriodPicker, TopicSearch, shorten } from "./pickers";
+import { LawPicker, shorten } from "./pickers";
+import AskPanel from "./AskPanel";
+import Finder from "./Finder";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -127,10 +129,21 @@ export default function App() {
     tool<any>("changes_in_period", { from_date: s.from, to_date: s.until, order: s.order ?? "by_churn", limit: 25 })
       .then((res) => {
         if (!live) return;
-        const one = first<any>(res, (x) => Array.isArray(x?.changes) && x.changes.length > 0);
-        setUi(one?.changes?.length
-          ? { ranking: { from_date: s.from!, to_date: s.until!, order: s.order ?? "by_churn",
-                         works_changed: one.works_changed, new_versions: one.new_versions, rows: one.changes } }
+        // changes_in_period asks ACROSS the corpus, so its answer is the union of the
+        // publishers, not the first one that happens to reply. Taking the first envelope with
+        // rows reported 3 EU acts for the pandemic and silently dropped the hundreds of
+        // Luxembourg ones behind it, because the EU index answers first.
+        const envs = (Array.isArray(res) ? res : [res]) as any[];
+        const rows = envs.flatMap((e) => e?.changes ?? []);
+        const by = s.order ?? "by_churn";
+        rows.sort((a: any, b: any) => by === "by_churn"
+          ? (b.versions_in_period ?? 0) - (a.versions_in_period ?? 0)
+          : String(b.last_change ?? "").localeCompare(String(a.last_change ?? "")));
+        setUi(rows.length
+          ? { ranking: { from_date: s.from!, to_date: s.until!, order: by,
+                         works_changed: envs.reduce((n, e) => n + (e?.works_changed ?? 0), 0),
+                         new_versions: envs.reduce((n, e) => n + (e?.new_versions ?? 0), 0),
+                         rows: rows.slice(0, 25) } }
           : { gap: { status: "no_changes_in_period", explanation: "Nothing changed in that window.", available: [] } });
       })
       .catch(() => {});
@@ -211,48 +224,34 @@ export default function App() {
     else go({ space: sp, from: undefined, until: undefined });
   };
 
-  // Nothing chosen yet. The front is one question box — not a form with two required steps,
-  // which is exactly how an ask bar stacked on a framework switcher was reading.
-  const front = !s.work && !s.q && !s.from && !said && steps.length === 0;
-  const browsing = s.space !== undefined || !front;
+  // The finder is the home surface, and it stays until a law is actually open. Keying it on
+  // "nothing chosen yet" was wrong: picking the period tab sets a date range, which counted as a
+  // choice, so the card vanished the instant you touched it and took its own controls with it.
+  const front = !s.work;
 
   return (
     <div className="ws">
-      <form className={front ? "cmd big" : "cmd"} onSubmit={(e) => { e.preventDefault(); submit(q); setQ(""); }}>
-        {front ? null : <span className="brand">Lex</span>}
-        {/* Not "ask anything": the corpus is bounded, and inviting anything invites the one
-            question that comes back unknown_work. Name the shape of a good question instead. */}
-        <input value={q} onChange={(e) => setQ(e.target.value)} disabled={busy}
-               placeholder="Ask about any law, on any date" aria-label="Ask" />
-        <button type="submit" disabled={busy}>{busy ? "…" : "Ask"}</button>
-      </form>
-
-      {front ? <Intro onPick={submit} /> : null}
-
-      {/* The second door, and it must read as an alternative rather than a next step: below a
-          rule, in body text, at a fraction of the weight of the question box. */}
-      <nav className="doors">
-        <span>{front ? "Or browse" : "Browse"}</span>
-        {(["law", "time", "topic"] as const).map((sp) => (
-          <button key={sp} className={browsing && space === sp ? "on" : ""} onClick={() => switchTo(sp)}>
-            {sp === "law" ? "a law" : sp === "time" ? "a period" : "a topic"}
+      {front ? (
+        <Finder
+          space={space} state={s} today={today()}
+          onSpace={switchTo}
+          onPickLaw={pickLaw}
+          onPeriod={(next) => { setUi(undefined); go(next); }}
+          onQuery={(query, asOf) => go({ q: query, asOf, work: undefined })}
+          onOpen={(work, date, anchor) => { setUi(undefined); go({ work, date, anchor, mode: "read", space: "law" }); }}
+        />
+      ) : (
+        <nav className="doors">
+          <button className="backhome" onClick={() => { setUi(undefined); setSaid(undefined); go({ work: undefined, q: undefined, from: undefined, until: undefined, anchor: undefined, to: undefined, space: undefined }); }}>
+            ← everything
           </button>
-        ))}
-      </nav>
-
-      {browsing && space === "time" ? (
-        <PeriodPicker from={s.from ?? shift(today(), -365)} until={s.until ?? today()}
-                      order={s.order ?? "by_churn"}
-                      onChange={(next) => { setUi(undefined); go({ ...next, work: undefined }); }} />
-      ) : null}
-
-      {browsing && space === "topic" ? (
-        <TopicSearch q={s.q ?? ""} asOf={s.asOf}
-                     onQuery={(query, asOf) => go({ q: query, asOf, work: undefined })}
-                     onOpen={(work, date, anchor) => { setUi(undefined); go({ work, date, anchor, mode: "read", space: "law" }); }} />
-      ) : null}
-
-      {browsing && space === "law" && !s.work ? <div className="sel"><LawPicker current={undefined} onPick={pickLaw} /></div> : null}
+          {(["law", "time", "topic"] as const).map((sp) => (
+            <button key={sp} className={space === sp ? "on" : ""} onClick={() => switchTo(sp)}>
+              {sp === "law" ? "a law" : sp === "time" ? "a period" : "a topic"}
+            </button>
+          ))}
+        </nav>
+      )}
 
       {space === "law" && s.work ? (
         <header className="lawhead">
@@ -293,27 +292,6 @@ export default function App() {
       ) : null}
 
       <div className="work">
-        {steps.length > 0 ? (
-          <ol className="steps" aria-live="polite" aria-label="What the assistant is finding">
-            {steps.map((st, i) => (
-              <li key={i} className={st.kind}>
-                <span>{st.text}</span>
-                {st.work ? (
-                  <button className="chipmini" onClick={() => {
-                    setUi(undefined);
-                    go({ work: st.work, date: st.date, anchor: st.anchor, mode: "read", space: "law" });
-                  }}>open →</button>
-                ) : null}
-              </li>
-            ))}
-            {busy ? <li className="pending"><span>working…</span></li> : null}
-          </ol>
-        ) : null}
-
-        {/* The answer sits directly on top of the evidence for it. It used to be separated from
-            the law text by three rows of chrome, so verifying a claim meant scrolling away from it. */}
-        {said ? <div className="said"><b>what I found</b>{said}</div> : null}
-
         {space === "topic" ? null :
          ui?.gap ? <Gap {...ui.gap} /> :
          ui?.ranking ? <Ranking rows={ui.ranking.rows} worksChanged={ui.ranking.works_changed}
@@ -325,7 +303,7 @@ export default function App() {
                                        work={s.work} anchor={s.anchor} onPick={(a) => go({ anchor: a })}
                                        onClear={() => go({ anchor: undefined })} /> :
          s.work ? <Empty>Loading…</Empty> :
-         browsing && space === "time" ? <Empty>Pick a period above.</Empty> :
+         !front && space === "time" ? <Empty>Pick a period above.</Empty> :
          null}
       </div>
 
@@ -336,6 +314,9 @@ export default function App() {
           ))}
         </div>
       ) : null}
+
+      <AskPanel q={q} setQ={setQ} busy={busy} steps={steps} said={said} onSubmit={submit}
+                onOpenStep={(st) => { setUi(undefined); go({ work: st.work, date: st.date, anchor: st.anchor, mode: "read", space: "law" }); }} />
     </div>
   );
 }
@@ -344,20 +325,3 @@ export default function App() {
  * Two examples, set as a sentence rather than as buttons. A row of four chips reads as four
  * more decisions stacked under the one decision that matters; a line of prose reads as help.
  */
-function Intro({ onPick }: { onPick: (q: string) => void }) {
-  const examples = [
-    "What did the Covid rules say on 1 February 2021?",
-    "How has Article 92 of the CRR changed?",
-  ];
-  return (
-    <p className="egs">
-      For example:{" "}
-      {examples.map((e, i) => (
-        <span key={e}>
-          {i > 0 ? <span className="or"> or </span> : null}
-          <button className="eg" onClick={() => onPick(e)}>{e}</button>
-        </span>
-      ))}
-    </p>
-  );
-}
