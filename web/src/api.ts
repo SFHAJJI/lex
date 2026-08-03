@@ -93,7 +93,7 @@ export async function askStreaming(
       } catch { /* a malformed frame must not kill the stream */ }
     }
   }
-  return done ?? { reply: "The answer stream ended early — try again." };
+  return done ?? { reply: "The answer stream ended early. Try again." };
 }
 
 export async function ask(question: string, signal?: AbortSignal): Promise<AskReply> {

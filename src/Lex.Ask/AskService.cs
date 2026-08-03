@@ -85,10 +85,11 @@ public sealed class AskService(McpCore core)
            labelling that part explicitly as not grounded in Lex.
         5. Consolidated texts have no legal effect; only the Journal officiel / Official Journal
            is authentic. Mention this when quoting text verbatim.
-        6. Answer in the user's language (French or English). Be compact.
+        6. Answer in the user's language (French or English). Be compact. Never use an em dash
+           or an en dash: use a comma, a colon or a full stop. No exceptions.
         7. ACT, never ask permission. Do not reply with "shall I…", "do you mean…" or an offer
-           to look something up: call the tool and answer. When a question is vague — a period
-           without exact dates, a law without a date — choose the most reasonable reading,
+           to look something up: call the tool and answer. When a question is vague (a period
+           without exact dates, a law without a date) choose the most reasonable reading,
            SAY which reading you used in one clause, and give the answer. The only thing you
            may ask for is a genuinely missing subject (a question with no identifiable law,
            date or topic at all).
@@ -102,8 +103,8 @@ public sealed class AskService(McpCore core)
                 _counters.TryRemove(k, out _);
         var g = _counters.AddOrUpdate($"{day}|_global", 1, (_, v) => v + 1);
         var p = _counters.AddOrUpdate($"{day}|{ip}", 1, (_, v) => v + 1);
-        reason = g > _globalDaily ? "The shared daily budget for this public playground is used up — come back tomorrow, or connect your own AI via /ai (the MCP endpoint has no cap)."
-               : p > _perIpDaily ? "Daily question limit reached for your address — come back tomorrow, or connect your own AI via /ai."
+        reason = g > _globalDaily ? "The shared daily budget for this public playground is used up. Come back tomorrow, or connect your own AI via /ai (the MCP endpoint has no cap)."
+               : p > _perIpDaily ? "Daily question limit reached for your address. Come back tomorrow, or connect your own AI via /ai."
                : "";
         return reason.Length == 0;
     }
@@ -138,7 +139,7 @@ public sealed class AskService(McpCore core)
                 case JsonObject o:
                     foreach (var k in o.Select(p => p.Key).ToArray())
                         if (o[k] is JsonValue v && v.TryGetValue<string>(out var s) && s.Length > 4000)
-                            o[k] = s[..4000] + " …[truncated — full text at the permalink]";
+                            o[k] = s[..4000] + " …[truncated, full text at the permalink]";
                         else ShrinkStrings(o[k]);
                     break;
                 case JsonArray a:
@@ -175,7 +176,7 @@ public sealed class AskService(McpCore core)
             merged = new UiEffect(Gap: new GapView(
                 Status: "no_result",
                 Work: null, Date: null,
-                Explanation: "Lex found nothing matching that in what it holds. This is a limit of the corpus, not a hedge — see coverage for exactly what is and is not held.",
+                Explanation: "Lex found nothing matching that in what it holds. This is a limit of the corpus, not a hedge. See coverage for exactly what is and is not held.",
                 Available: []));
         if (!merged.IsEmpty)
             body["ui"] = JsonNode.Parse(System.Text.Json.JsonSerializer.Serialize(merged, UiJson));
@@ -197,7 +198,7 @@ public sealed class AskService(McpCore core)
         if (eff.Ranking is { } r)
             return new Step("found", $"{r.WorksChanged:n0} laws changed between {r.FromDate} and {r.ToDate}");
         if (eff.Provision is { } pv)
-            return new Step("read", $"{title ?? work} — {pv.Provisions.Count} article(s) as in force on {pv.ValidFrom}",
+            return new Step("read", $"{title ?? work}, {pv.Provisions.Count} article(s) as in force on {pv.ValidFrom}",
                 pv.Subject.Work, pv.ValidFrom, pv.Provisions.FirstOrDefault()?.Anchor);
         if (eff.History is { } h)
             return new Step("history", $"{h.Anchor} has had {h.DistinctTexts} distinct text(s)", h.Subject.Work, null, h.Anchor);
@@ -208,7 +209,7 @@ public sealed class AskService(McpCore core)
         if (tool == "search")
             return docs.Count == 0
                 ? new Step("searched", $"no match for “{T(args["query"])}”")
-                : new Step("searched", $"found {docs.Count} result(s) — {title ?? work}", work, date);
+                : new Step("searched", $"found {docs.Count} result(s): {title ?? work}", work, date);
         if (eff.Gap is { } g) return new Step("gap", g.Explanation);
         return new Step("step", tool.Replace('_', ' '));
     }
@@ -280,7 +281,7 @@ public sealed class AskService(McpCore core)
                         docs.Add(new JsonObject
                         {
                             ["lex_id"] = o["work"]?.DeepClone(),
-                            ["title"] = $"{o["work"]} · {o["anchor"]} — {o["distinct_texts"]} distinct text(s)",
+                            ["title"] = $"{o["work"]} · {o["anchor"]} · {o["distinct_texts"]} distinct text(s)",
                             ["valid_from"] = first?["valid_from"]?.DeepClone(),
                             ["valid_to"] = last?["valid_to"]?.DeepClone(),
                             ["permalink"] = first?["permalink"]?.DeepClone(),
@@ -341,7 +342,7 @@ public sealed class AskService(McpCore core)
         if (!Enabled)
             return (503, new JsonObject { ["error"] = "The playground is not enabled on this deployment. Connect your own AI instead: /ai." });
         if (history.Count is 0 or > MaxHistory)
-            return (400, new JsonObject { ["error"] = $"Send 1–{MaxHistory} messages." });
+            return (400, new JsonObject { ["error"] = $"Send 1 to {MaxHistory} messages." });
 
         var messages = new JsonArray { new JsonObject { ["role"] = "system", ["content"] = SystemPrompt(host) } };
         foreach (var m in history)
@@ -356,7 +357,7 @@ public sealed class AskService(McpCore core)
         if (!TryCount(ip, out var why)) return (429, new JsonObject { ["error"] = why });
 
         if (!await _gate.WaitAsync(TimeSpan.FromSeconds(20)))
-            return (503, new JsonObject { ["error"] = "The playground is busy — try again in a moment." });
+            return (503, new JsonObject { ["error"] = "The playground is busy. Try again in a moment." });
         try
         {
             using var askSpan = Activity.StartActivity("ask");
@@ -395,7 +396,7 @@ public sealed class AskService(McpCore core)
                 if (!resp.IsSuccessStatusCode)
                 {
                     Console.Error.WriteLine($"[ask] upstream {(int)resp.StatusCode}: {respText[..Math.Min(500, respText.Length)]}");
-                    return (502, new JsonObject { ["error"] = "The model upstream returned an error — try again shortly." });
+                    return (502, new JsonObject { ["error"] = "The model upstream returned an error. Try again shortly." });
                 }
                 var parsed = JsonNode.Parse(respText);
                 if (parsed?["usage"]?["total_tokens"] is { } tt)
@@ -524,11 +525,11 @@ public sealed class AskService(McpCore core)
                 }
                 if (reply.Length == 0)
                     reply = trace.Count > 0
-                        ? "I retrieved the evidence below but could not compose an answer — try asking for a narrower slice (a single law, or a shorter period)."
-                        : "I could not produce an answer — try rephrasing.";
+                        ? "I retrieved the evidence below but could not compose an answer. Try asking for a narrower slice (a single law, or a shorter period)."
+                        : "I could not produce an answer. Try rephrasing.";
                 return (200, Body(reply, trace, effects));
             }
-            return (200, Body("Tool budget for one question exhausted — try a narrower question.", trace, effects));
+            return (200, Body("Tool budget for one question exhausted. Try a narrower question.", trace, effects));
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -536,12 +537,12 @@ public sealed class AskService(McpCore core)
         }
         catch (TaskCanceledException)
         {
-            return (504, new JsonObject { ["error"] = "The model took too long — try a narrower question." });
+            return (504, new JsonObject { ["error"] = "The model took too long. Try a narrower question." });
         }
         catch (HttpRequestException ex)
         {
             Console.Error.WriteLine($"[ask] upstream unreachable: {ex.Message}");
-            return (502, new JsonObject { ["error"] = "The model upstream is unreachable right now — try again shortly." });
+            return (502, new JsonObject { ["error"] = "The model upstream is unreachable right now. Try again shortly." });
         }
         catch (Exception ex)
         {
