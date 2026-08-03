@@ -283,3 +283,6 @@ button.pick { cursor: pointer; }
   .fin-hint{display:none}
 }
 @media(prefers-reduced-motion:reduce){.asklaunch:hover{transform:none}}
+
+.ap-next{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.ap-chip.next{display:inline-block;width:auto;margin:0;border-radius:99px;padding:6px 12px;font-size:12.5px}

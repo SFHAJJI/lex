@@ -316,6 +316,8 @@ export default function App() {
       ) : null}
 
       <AskPanel q={q} setQ={setQ} busy={busy} steps={steps} said={said} onSubmit={submit}
+                followUps={chipsFor(s, ui).map((c) => ({
+                  label: c.label, run: () => { setUi(undefined); go(c.go); } }))}
                 onOpenStep={(st) => { setUi(undefined); go({ work: st.work, date: st.date, anchor: st.anchor, mode: "read", space: "law" }); }} />
     </div>
   );

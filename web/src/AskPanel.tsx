@@ -21,6 +21,10 @@ export interface AskPanelProps {
   said?: string;
   onSubmit: (text: string) => void;
   onOpenStep: (s: Step) => void;
+  // Next steps for the answer on screen. Lex's prompt forbids asking permission, so
+  // these are things to do rather than a question to answer: compare, read the current
+  // text, widen the window.
+  followUps?: { label: string; run: () => void }[];
 }
 
 const SUGGESTIONS = [
@@ -100,6 +104,14 @@ export default function AskPanel(p: AskPanelProps) {
             )}
 
             {p.said ? <div className="said"><b>what I found</b>{p.said}</div> : null}
+
+            {p.said && (p.followUps?.length ?? 0) > 0 && (
+              <div className="ap-next">
+                {p.followUps!.map((f) => (
+                  <button key={f.label} className="ap-chip next" onClick={f.run}>{f.label}</button>
+                ))}
+              </div>
+            )}
           </div>
 
           <form className="ap-form" onSubmit={(e) => { e.preventDefault(); p.onSubmit(p.q); p.setQ(""); }}>
