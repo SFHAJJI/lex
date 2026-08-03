@@ -20,6 +20,11 @@ public sealed class EurLexAdapter : ISourceAdapter
 
     // Flagship set for increment B. DocumentType is data (§3.5): derived from the
     // publisher's own CELEX typology inside this adapter (R = regulation, L = directive).
+    //
+    // The energy pair at the end was added because energy.soufien.lu retired its own private law
+    // service in favour of this endpoint, and a corpus diff showed those two directives were the
+    // only documents it would have lost in the move. A consumer asking for a text it actually
+    // needs is the right reason to widen this list, and a better one than widening it on a guess.
     private static readonly string[] Flagships =
     [
         "32016R0679", // GDPR
@@ -30,6 +35,8 @@ public sealed class EurLexAdapter : ISourceAdapter
         "32013R0575", // CRR
         "32015L2366", // PSD2
         "32019R2088", // SFDR
+        "32018L2001", // RED II, renewable energy
+        "32019L0944", // electricity market
     ];
 
     // Common names in universal professional use — adapter-provided display aliases,
@@ -44,6 +51,8 @@ public sealed class EurLexAdapter : ISourceAdapter
         ["32013R0575"] = "CRR",
         ["32015L2366"] = "PSD2",
         ["32019R2088"] = "SFDR",
+        ["32018L2001"] = "RED II",
+        ["32019L0944"] = "Electricity Market Directive",
     };
 
     private static readonly HttpClient Http = CreateClient();
