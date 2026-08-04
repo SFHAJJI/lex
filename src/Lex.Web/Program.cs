@@ -178,10 +178,16 @@ string Page(string title, string body, string? subtitle = null, string nav = "",
       <div><b>Check the work</b>
         <a href="/how-it-works">How it works</a><a href="/coverage">What Lex holds, and lacks</a>
         <a href="/verify">Verify it yourself</a><a href="/architecture">Architecture</a></div>
+      <!-- The datasets, not the engine. This group used to end at "Source on GitHub" pointing at
+           the engine repo, which is the wrong thing to lead with for a reader who wants to USE
+           this law rather than read the code that serves it. The corpora are the part that is
+           reusable on its own, and they were reachable only from /developers. -->
       <div><b>Build on it</b>
         <a href="/developers">Developers &amp; API</a><a href="/ai">Connect your own AI</a>
         <a href="/built">How it was built</a>
-        <a href="https://github.com/SFHAJJI/lex" rel="noopener">Source on GitHub</a></div>
+        <a href="https://github.com/SFHAJJI/lex-articles" rel="noopener">Dataset: law by article (CC-BY)</a>
+        <a href="https://github.com/SFHAJJI/lex-corpus-lu-legilux" rel="noopener">Corpus: Luxembourg, verbatim</a>
+        <a href="https://github.com/SFHAJJI/lex-corpus-eu-eurlex" rel="noopener">Corpus: EU, verbatim</a></div>
     </nav>
       <b>Not legal advice, and not the official text.</b> Lex answers <i>what the rule was</i>, never what it
       means for your situation, no interpretation, no advice. Every answer shows the source it came from.
@@ -1132,10 +1138,27 @@ app.MapGet("/built", () =>
         derived layer's release assets as part of the deploy, not a follow-up step, the two times
         something shipped stale, that was why.</p>
 
+        <!-- Eight sections on how this was made, and until now not one word on who made it.
+             Anyone still reading here has already decided the work is serious, so the answer
+             belongs at the end rather than at the top: a law tool that opens by introducing its
+             author reads as a portfolio, and stops being trusted as a source. Two sentences. -->
+        <h2>Who built this</h2>
+        <div class="card">
+        <p>Lex is built and run by <b>Soufien Hajji</b>, a software engineer in Luxembourg. It is a
+        personal project, unaffiliated with any publisher or public body, built the way I build
+        professionally: the pipeline is deterministic, the claims are testable, and the parts that
+        cannot be verified say so rather than guessing.</p>
+        <p class="sub">Two other things I have built the same way:
+        <a href="https://soufien.lu" rel="noopener">soufien.lu</a>, where you can ask an assistant
+        about my work or paste a job advert to see how it matches, and
+        <a href="https://energy.soufien.lu" rel="noopener">energy.soufien.lu</a>, an AI co-pilot
+        for solar prospecting in Luxembourg.</p>
+        </div>
+
         <p class="sub"><a href="/developers"><b>Use it from your own code →</b></a> ·
         <a href="/architecture"><b>The data model →</b></a> ·
         <a href="/verify"><b>Verify a build yourself →</b></a> ·
-        <a href="https://github.com/SFHAJJI/lex" rel="noopener"><b>Source →</b></a></p>
+        <a href="https://github.com/SFHAJJI/lex-articles" rel="noopener"><b>The dataset →</b></a></p>
         """;
     return Results.Content(Page("How it was built", body, null, "how"), "text/html");
 });
