@@ -722,6 +722,14 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                         ["valid_from_latest"] = c.LatestValidFrom,
                         ["document_types"] = new JsonArray(c.Kinds.Select(k => (JsonNode)new JsonObject
                         { ["code"] = k.Kind, ["versions"] = k.Versions, ["versions_with_text"] = k.WithText }).ToArray()),
+                        // Which languages this corpus is in, and how rarely the same law exists
+                        // in more than one. A caller planning a language filter needs to know
+                        // that picking one here does not narrow a translation, it removes a
+                        // publisher: Luxembourg publishes in French, the EU acts held here are
+                        // English, and almost no work carries both.
+                        ["languages"] = new JsonArray(c.Languages.Select(l => (JsonNode)new JsonObject
+                        { ["code"] = l.Language, ["works"] = l.Works, ["versions"] = l.Versions }).ToArray()),
+                        ["multilingual_works"] = c.MultilingualWorks,
                         ["text"] = new JsonObject
                         {
                             ["versions_with_text_served"] = c.TextServed,

@@ -11,6 +11,11 @@ public sealed record CoverageKind(string? Kind, int Versions, int WithText);
 /// of the corpus as a number rather than as a claim.
 public sealed record CoverageProfile(string Profile, int Versions);
 
+/// How many works and versions exist in each language, and how many works hold more than one.
+/// The tool that exists to say what is NOT held could not answer "which languages", which is the
+/// question that decides whether a language control belongs to the site or to the document.
+public sealed record CoverageLanguage(string Language, int Works, int Versions);
+
 public sealed record CoverageInfo(
     string Collection,
     int Groups,
@@ -20,7 +25,9 @@ public sealed record CoverageInfo(
     IReadOnlyList<CoverageKind> Kinds,
     IReadOnlyDictionary<string, string> Stamp,
     int TextServed,
-    IReadOnlyList<CoverageProfile> Profiles);
+    IReadOnlyList<CoverageProfile> Profiles,
+    IReadOnlyList<CoverageLanguage> Languages,
+    int MultilingualWorks);
 
 /// <summary>
 /// Read side of one index file. Every query method takes a non-optional FilterSet (F5);
@@ -594,9 +601,29 @@ public sealed class LexIndexReader : IDisposable
         using (var pr = pc.ExecuteReader())
             while (pr.Read()) profiles.Add(new CoverageProfile(pr.GetString(0), pr.GetInt32(1)));
 
+        // Which languages the corpus is actually in. This decides a real design question and was
+        // being answered by guesswork: a site-wide language picker only makes sense if the same
+        // law exists in several languages, and here it almost never does. Luxembourg publishes in
+        // French, the EU acts held here are English, and a reader who picked one would lose the
+        // other entirely rather than see a translation.
+        var languages = new List<CoverageLanguage>();
+        using (var lc = Cmd("""
+            SELECT language, COUNT(DISTINCT group_key), COUNT(*) FROM docs
+            GROUP BY language ORDER BY COUNT(*) DESC
+            """, []))
+        using (var lr = lc.ExecuteReader())
+            while (lr.Read()) languages.Add(new CoverageLanguage(lr.GetString(0), lr.GetInt32(1), lr.GetInt32(2)));
+
+        int multilingual;
+        using (var mc = Cmd("""
+            SELECT COUNT(*) FROM (
+              SELECT group_key FROM docs GROUP BY group_key HAVING COUNT(DISTINCT language) > 1)
+            """, []))
+            multilingual = Convert.ToInt32(mc.ExecuteScalar());
+
         return new CoverageInfo(Collection, ar.GetInt32(0), ar.GetInt32(1),
             ar.IsDBNull(2) ? null : ar.GetString(2), ar.IsDBNull(3) ? null : ar.GetString(3), kinds, Stamp,
-            ar.IsDBNull(4) ? 0 : ar.GetInt32(4), profiles);
+            ar.IsDBNull(4) ? 0 : ar.GetInt32(4), profiles, languages, multilingual);
     }
 
     private static string NormalizeWork(string work)

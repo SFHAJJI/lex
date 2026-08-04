@@ -197,11 +197,36 @@ public sealed class LegiluxAdapter : ISourceAdapter
             }
 
             // Prefer a title-bearing hint and the dominant type per work.
+            //
+            // The hint used to be Expressions.FirstOrDefault(), which is whichever expression the
+            // publisher's result set happened to list first. For a work published in several
+            // languages that is a coin toss, and the Constitution lost it: its 2023 version exists
+            // in German, French and Luxembourgish, German came first, and because the individual
+            // expressions carry no title of their own, that one hint became the title of all 39
+            // versions back to 1919. A German heading sat over French articles on one of three
+            // suggested starting points on the front page.
+            //
+            // The language chosen is the one the work is MOSTLY published in, counted across its
+            // own versions rather than assumed from the country: 37 of the Constitution's 39 are
+            // French. Ties break alphabetically so two runs of the same input agree.
             foreach (var (uri, list) in byWork)
             {
-                var latest = list.OrderByDescending(v => v.ValidFrom).First();
-                var hint = latest.Expressions.FirstOrDefault()?.TitleShort
-                           ?? latest.Expressions.FirstOrDefault()?.Title;
+                var dominant = list
+                    .SelectMany(v => v.Expressions)
+                    .GroupBy(e => e.Language, StringComparer.Ordinal)
+                    .OrderByDescending(g => g.Count())
+                    .ThenBy(g => g.Key, StringComparer.Ordinal)
+                    .Select(g => g.Key)
+                    .FirstOrDefault();
+
+                // Newest version first, dominant language first within it, and skip expressions
+                // that carry no title at all rather than letting one absent title win.
+                var hint = list
+                    .OrderByDescending(v => v.ValidFrom)
+                    .SelectMany(v => v.Expressions.OrderByDescending(e => e.Language == dominant))
+                    .Select(e => e.TitleShort ?? e.Title)
+                    .FirstOrDefault(t => !string.IsNullOrWhiteSpace(t));
+
                 var kind = list.GroupBy(v => v.TypeCode).OrderByDescending(g => g.Count()).First().Key;
                 works[uri] = works[uri] with { TitleHint = hint, TypeCode = kind };
             }
