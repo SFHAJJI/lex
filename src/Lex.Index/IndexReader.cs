@@ -325,44 +325,48 @@ public sealed class LexIndexReader : IDisposable
     }
 
     /// <summary>
-    /// How many distinct wordings a work had between two dates, counted from the ordered
-    /// per-provision hashes rather than from the file hash.
+    /// Whether the wording differs between the two versions a comparison would actually show:
+    /// 2 when it does, 1 when it does not, 0 when neither side carries text.
     ///
-    /// The file hash was the obvious signal and the wrong one: a consolidated document carries a
-    /// header naming the date it was produced, so a pure reissue changes the file while every
-    /// article stays identical. The report would then promise a change and hand the reader a
-    /// comparison reading "0 changed, 0 added, 0 removed", which is how correct software gets
-    /// mistaken for broken software. Provisions are what the comparison actually shows, so
-    /// provisions are what gets counted.
+    /// Counted from the ordered per-provision hashes, not from the file hash. The file hash was
+    /// the obvious signal and the wrong one: a consolidated document carries a header naming the
+    /// date it was produced, so a pure reissue changes the file while every article stays
+    /// identical. The report would then promise a change and hand the reader "0 changed, 0 added,
+    /// 0 removed", which is how correct software gets mistaken for broken software.
+    ///
+    /// Exactly two reads, whatever the span. Walking every version in between cost 1.7s on a
+    /// six-year window because a work like the Code de l'environnement has 195 of them, and
+    /// answered a question nobody asked: what matters is whether THIS comparison shows anything.
     /// </summary>
     public int DistinctWordings(string work, string from, string to)
     {
-        using var cmd = Cmd($"""
-            SELECT d.rid FROM docs d
-            WHERE (d.group_key=$w OR d.group_identifier=$w)
-              AND d.valid_from >= $from AND d.valid_from <= $to
-            GROUP BY d.valid_from
-            ORDER BY d.valid_from
+        var a = WordingDigest(work, from);
+        var b = WordingDigest(work, to);
+        if (a is null && b is null) return 0;
+        return a == b ? 1 : 2;
+    }
+
+    /// <summary>The ordered provision hashes of the version in force on a date, or null.</summary>
+    private string? WordingDigest(string work, string date)
+    {
+        // Exactly the one version in force, chosen the way as_of chooses it. Joining on the
+        // interval alone matched every version whose window contains the date, so the digest
+        // became the concatenation of several versions and no two dates ever compared equal.
+        using var cmd = Cmd("""
+            SELECT p.text_sha FROM provisions p
+            WHERE p.rid = (
+                SELECT d.rid FROM docs d
+                WHERE (d.group_key=$w OR d.group_identifier=$w)
+                  AND d.valid_from <= $d AND (d.valid_to IS NULL OR d.valid_to >= $d)
+                ORDER BY d.valid_from DESC LIMIT 1)
+            ORDER BY p.seq
             """, []);
         cmd.Parameters.AddWithValue("$w", NormalizeWork(work));
-        cmd.Parameters.AddWithValue("$from", from);
-        cmd.Parameters.AddWithValue("$to", to);
-        var rids = new List<string>();
-        using (var r = cmd.ExecuteReader())
-            while (r.Read()) rids.Add(r.GetString(0));
-
-        var seen = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var rid in rids)
-        {
-            using var q = Cmd("SELECT text_sha FROM provisions WHERE rid=$r ORDER BY seq", []);
-            q.Parameters.AddWithValue("$r", rid);
-            var sb = new System.Text.StringBuilder();
-            using var rr = q.ExecuteReader();
-            while (rr.Read()) sb.Append(rr.GetString(0));
-            // A version with no provisions holds no wording; it must not count as one more.
-            if (sb.Length > 0) seen.Add(sb.ToString());
-        }
-        return seen.Count;
+        cmd.Parameters.AddWithValue("$d", date);
+        var sb = new System.Text.StringBuilder();
+        using var r = cmd.ExecuteReader();
+        while (r.Read()) sb.Append(r.GetString(0));
+        return sb.Length == 0 ? null : sb.ToString();
     }
 
     /// <summary>Totals for a window: how many works moved and how many new versions appeared.</summary>
