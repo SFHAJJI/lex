@@ -147,9 +147,8 @@ string Page(string title, string body, string? subtitle = null, string nav = "",
          named groups do: what each page is FOR is now the label above it. -->
     <nav class="sitemap" aria-label="All pages">
       <div><b>Read the law</b>
-        <a href="/find">Find a law</a><a href="/browse">Browse everything</a>
-        <a href="/search">Search the text</a><a href="/in-force-on">What was in force on a date</a>
-        <a href="/changed">What changed in a period</a><a href="/stories">Worked examples</a></div>
+        <a href="/browse">Browse everything</a><a href="/stories">Worked examples</a>
+        <a href="/find">Plain pages, without JavaScript</a></div>
       <div><b>Check the work</b>
         <a href="/how-it-works">How it works</a><a href="/coverage">What Lex holds, and lacks</a>
         <a href="/verify">Verify it yourself</a><a href="/architecture">Architecture</a></div>
@@ -375,8 +374,7 @@ app.MapGet("/", () =>
         <span class="badge">{H(cov.Select(c => c.EarliestValidFrom).Min())} → {H(cov.Select(c => c.LatestValidFrom).Max())}</span>
         <span class="badge ok">cryptographically signed</span></p>
         <p class="sub">Free assistant, daily limit. <a href="/ai">Connect your own AI</a> for
-        unlimited use. <a href="/how-it-works">How it works</a> ·
-        <a href="/stories">Worked examples</a>.</p>
+        unlimited use.</p>
         </div>
         """
         + """

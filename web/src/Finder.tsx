@@ -27,11 +27,14 @@ export interface FinderProps {
   onDoor: (go: Partial<State>) => void;
 }
 
+// Labels are the QUESTION, not the noun. "A period" and "A date" sound like the same thing and
+// are not: one asks what CHANGED between two days, the other what APPLIED on one. Naming the
+// question is the difference between a reader guessing and a reader choosing.
 const TABS: { id: Space; label: string; hint: string }[] = [
-  { id: "law", label: "A law", hint: "by name, subject or identifier" },
-  { id: "time", label: "A period", hint: "what changed between two dates" },
-  { id: "topic", label: "A topic", hint: "words as they appear in the text" },
-  { id: "onDate", label: "A date", hint: "what was in force on one day" },
+  { id: "law", label: "Find a law", hint: "by name, subject or identifier" },
+  { id: "topic", label: "Search the text", hint: "words as they appear in the articles" },
+  { id: "time", label: "What changed", hint: "between two dates, across the corpus" },
+  { id: "onDate", label: "In force on a day", hint: "everything that applied on one date" },
 ];
 
 /**
@@ -95,7 +98,10 @@ export default function Finder(p: FinderProps) {
       {/* Only while nothing has been asked. They exist so a first arrival sees the corpus work
           without having to invent a question; once there IS a question they are just three more
           things competing with the answer. */}
-      {!p.state.q && !p.state.from && !p.state.asOf ? (
+      {/* Keyed off the CURRENT tab's own input, not off any state anywhere: a leftover date from
+          an earlier tab was hiding the doors on a page that had asked nothing. */}
+      {(p.space === "law" || (p.space === "topic" && !p.state.q)
+        || (p.space === "onDate" && !p.state.asOf)) ? (
         <div className="doors">
           <span className="doors-h">or start here</span>
           {DOORS.map((d) => (

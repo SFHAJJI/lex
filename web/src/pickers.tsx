@@ -20,13 +20,17 @@ export function LawPicker({ current, onPick, inline }: { current?: string; onPic
   const [busy, setBusy] = useState(false);
   const box = useRef<HTMLDivElement>(null);
 
+  // Dismissal belongs to the POPOVER, never to the inline field. Inline, this listener closed the
+  // front page's only control on the first click landing anywhere else, with nothing to reopen it,
+  // so the card sat there empty under its own heading and the site looked broken on arrival.
   useEffect(() => {
+    if (inline) return;
     const away = (e: MouseEvent) => { if (box.current && !box.current.contains(e.target as Node)) setOpen(false); };
     const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
     addEventListener("mousedown", away);
     addEventListener("keydown", esc);
     return () => { removeEventListener("mousedown", away); removeEventListener("keydown", esc); };
-  }, []);
+  }, [inline]);
 
   useEffect(() => {
     if (!open || q.trim().length < 2) { setHits([]); setBusy(false); return; }
