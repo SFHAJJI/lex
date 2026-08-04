@@ -1,5 +1,11 @@
 # Lex
 
+[![CI](https://img.shields.io/github/actions/workflow/status/SFHAJJI/lex/ci.yml?branch=main&label=tests&style=flat-square)](https://github.com/SFHAJJI/lex/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue?style=flat-square)](LICENSE)
+[![Live](https://img.shields.io/badge/live-law.soufien.lu-e0705f?style=flat-square)](https://law.soufien.lu)
+[![MCP](https://img.shields.io/badge/MCP-10%20read--only%20tools-6f42c1?style=flat-square)](https://law.soufien.lu/developers)
+[![Coverage](https://img.shields.io/badge/corpus-1%2C409%20laws%20%C2%B7%204%2C705%20versions-brightgreen?style=flat-square)](https://law.soufien.lu/coverage)
+
 **Point-in-time retrieval of regulatory text.** Regulators publish the current
 rule; every audit, investigation and dispute is about a **past date**. Lex keeps
 every version it has seen and answers *"what did this say on 15 March 2022?"*
