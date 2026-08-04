@@ -100,28 +100,36 @@ publisher issues, 1,399 / 4,703, 1849→2030. Nothing is filtered out by type.
 Text is verbatim Akoma Ntoso XML from the publisher's official,
 robots-permitted filestore, licensed CC-BY-4.0.
 
-**Text is held for 2,935 of those versions, not all of them, and the reason is
+**Text is held for 2,949 of those versions, not all of them, and the reason is
 the publisher's format rather than our pipeline.** Legilux offers XML for 2,892
 consolidations, PDF only for 1,611, and no file at all for 130 (measured against
-its own catalogue, 2026-08-04). Lex ingests the XML manifestation, because XML is
-the only format carrying article boundaries, which is what makes an article
-citable, hashable and diffable. Where there is no XML we hold the complete dated
-record, the source and the hash, and link the publisher's PDF for that date.
+its own catalogue, 2026-08-04). Lex reads the XML, because XML is the only format
+carrying article boundaries, which is what makes an article citable, hashable and
+diffable.
+
+Where the publisher issues no XML, Lex falls back to the consolidated PDF
+(profile `pdf-lu/1`, spec D49). Those PDFs are born-digital with a real font
+layer, so no OCR is involved: 64 versions are read this way, and the profile id
+records per version that the article boundaries were inferred from typography
+rather than taken from publisher markup. The fallback deliberately refuses the
+1,371 thematic-collection PDFs, which concatenate every act on a shelf, and the
+176 Memorial gazette scans, where the act sits inside a whole day's journal.
+Everything else keeps its dated record, source and hash, with no wording.
 
 The gap is concentrated outside the hierarchy of norms, not across it:
 
 | | text held |
 |---|---|
 | Constitution, treaties | **100%** |
+| Code (enacted as a law) | **100%** |
+| Règlement de la Chambre, arrêté ministériel | **100%** |
+| Règlement grand-ducal | 96% |
 | Loi | 93% |
-| Règlement grand-ducal | 94% |
-| Code (enacted as a law) | 82% |
-| Arrêtés, règlements ministériels | ~78% |
+| Règlement ministériel, arrêté grand-ducal | ~75% |
 | RECUEIL / CODE_RECUEIL (thematic folders, not instruments) | 9% / 2% |
 
-Roughly 1,371 of the 1,611 textless versions are those folders, which nobody
-voted and which hold no rule of their own. Across every genuine instrument, from
-the Constitution down to ministerial regulations, only ~240 versions lack text.
+Roughly 1,371 of the textless versions are those folders, which nobody voted and
+which hold no rule of their own.
 Honest coverage claim: *dense and reliable from 2017 onward; real but sparse
 before; isolated snapshots back to 1849; forward to 2030.*
 
