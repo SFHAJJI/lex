@@ -345,8 +345,10 @@ export function Compare({ work, from, to, anchor }: {
  * text, and what the publisher actually calls it. Six at a time, off the render path, and every
  * row stays usable while its own lookup is still in flight.
  */
+const FOLDER_KINDS = ["RECUEIL", "CODE_RECUEIL"];
+
 function useRowFacts(rows: RankingRow[]) {
-  const [facts, setFacts] = useState<Record<string, { text: boolean; title?: string }>>({});
+  const [facts, setFacts] = useState<Record<string, { text: boolean; title?: string; kind?: string }>>({});
   const key = rows.map((r) => r.work).join("|");
   useEffect(() => {
     let live = true;
@@ -356,12 +358,14 @@ function useRowFacts(rows: RankingRow[]) {
       for (;;) {
         const r = queue.shift();
         if (!r || !live) return;
-        let fact: { text: boolean; title?: string } = { text: false };
+        let fact: { text: boolean; title?: string; kind?: string } = { text: false };
         try {
           const res = await tool<any>("as_of", { work: r.work, date: r.last_change, mode: "outline" });
           const one = first<any>(res, (x) => Array.isArray(x?.provisions) && x.provisions.length > 0)
                    ?? (Array.isArray(res) ? res[0] : res);
-          fact = { text: (one?.provisions?.length ?? 0) > 0, title: label((one?.document ?? one)?.title) };
+          const doc = one?.document ?? one;
+          fact = { text: (one?.provisions?.length ?? 0) > 0, title: label(doc?.title),
+                   kind: doc?.document_type ?? undefined };
         } catch { /* a row that cannot be checked stays unmarked rather than wrongly marked */ }
         if (live) setFacts((f) => ({ ...f, [r.work]: fact }));
       }
@@ -372,53 +376,83 @@ function useRowFacts(rows: RankingRow[]) {
   return facts;
 }
 
+/**
+ * What changed in a period, with laws and folders kept apart.
+ *
+ * They used to share one ranked list, and the folders always won it. A thematic folder gains a new
+ * dated state whenever ANY act on its shelf is amended, so "most changed" ranks shelves above laws
+ * by arithmetic, every time. It read as a claim about Luxembourg (environment law is the most
+ * volatile area) when it was a claim about filing (the environment shelf is a big shelf). Worse,
+ * those same folders are the ones the publisher ships as PDF only, so the top of the list was also
+ * the unreadable part of it.
+ *
+ * Hiding them was the obvious fix and it was wrong: measured, only 56% of Code de l'environnement's
+ * restamp dates have a consolidated instrument changing the same day, so a folder does carry signal
+ * nothing else carries. Two sections keep that signal, out of the way and honestly labelled.
+ */
 export function Ranking({ rows, worksChanged, newVersions, from, to, onOpen, onOpenRecord }: {
   rows: RankingRow[]; worksChanged: number; newVersions: number; from: string; to: string;
   onOpen: (work: string, from: string, to: string) => void;
   onOpenRecord: (work: string, date: string) => void;
 }) {
   const facts = useRowFacts(rows);
-  const [onlyText, setOnlyText] = useState(false);
-  const checked = rows.filter((r) => facts[r.work]);
-  const textless = checked.filter((r) => !facts[r.work].text).length;
-  // Unchecked rows stay in the list. Hiding a row because its lookup has not landed yet would
-  // make the list shuffle under the cursor while it loads.
-  const shown = onlyText ? rows.filter((r) => facts[r.work]?.text !== false) : rows;
+  const [showFolders, setShowFolders] = useState(false);
+  const isFolder = (w: string) => {
+    const k = facts[w]?.kind;
+    return k ? FOLDER_KINDS.includes(k) : false;
+  };
+  const laws = rows.filter((r) => !isFolder(r.work));
+  const folders = rows.filter((r) => isFolder(r.work));
   const max = Math.max(1, ...rows.map((r) => r.versions_in_period));
+
+  const bar = (r: RankingRow) => {
+    const f = facts[r.work];
+    const name = f?.title ?? label(r.title) ?? humanSlug(r.work);
+    return (
+      <button key={r.work} className={"bar" + (f && !f.text ? " notext" : "")}
+              title={f && !f.text ? "No text is published for this version, open its record" : undefined}
+              onClick={() => f && !f.text
+                ? onOpenRecord(r.work, r.last_change)
+                : onOpen(r.work, r.first_change, r.last_change)}>
+        <span className="track">
+          <span className="fill" style={{ width: `${(r.versions_in_period / max) * 100}%` }} />
+          <span className="lbl">{name}</span>
+          {f && !f.text ? <span className="mark">record only</span> : null}
+        </span>
+        <span className="num">{r.versions_in_period}</span>
+      </button>
+    );
+  };
+
   return (
     <>
       <div className="cnt">
         <span className="tag">{worksChanged.toLocaleString()} laws changed</span>
         <span className="tag">{newVersions.toLocaleString()} new versions</span>
         <span className="tag mono">{from} → {to}</span>
-        {textless > 0 ? (
-          <button className={"tag act" + (onlyText ? " on" : "")} aria-pressed={onlyText}
-                  onClick={() => setOnlyText((v) => !v)}>
-            {onlyText ? `showing the ${shown.length} with text ✕`
-                      : `${textless} of these hold no text · hide them`}
+      </div>
+
+      <div className="bars">{laws.map(bar)}</div>
+      {laws.length === 0 ? <Empty>No individual law changed in that window.</Empty> : null}
+
+      {folders.length > 0 ? (
+        <div className="folders">
+          <button className="folders-h" aria-expanded={showFolders}
+                  onClick={() => setShowFolders((v) => !v)}>
+            <span>{showFolders ? "▾" : "▸"} {folders.length} thematic collection{folders.length === 1 ? "" : "s"} also restamped</span>
           </button>
-        ) : null}
-      </div>
-      <div className="bars">
-        {shown.map((r) => {
-          const f = facts[r.work];
-          const name = f?.title ?? label(r.title) ?? humanSlug(r.work);
-          return (
-            <button key={r.work} className={"bar" + (f && !f.text ? " notext" : "")}
-                    title={f && !f.text ? "No text is published for this law, open its record" : undefined}
-                    onClick={() => f && !f.text
-                      ? onOpenRecord(r.work, r.last_change)
-                      : onOpen(r.work, r.first_change, r.last_change)}>
-              <span className="track">
-                <span className="fill" style={{ width: `${(r.versions_in_period / max) * 100}%` }} />
-                <span className="lbl">{name}</span>
-                {f && !f.text ? <span className="mark">record only</span> : null}
-              </span>
-              <span className="num">{r.versions_in_period}</span>
-            </button>
-          );
-        })}
-      </div>
+          {showFolders ? (
+            <>
+              <p className="folders-why">
+                Legilux groups laws into subject collections. A collection is restamped whenever any
+                act inside it is amended, so it changes far more often than any single law, and it is
+                not itself a law that anyone voted. The publisher issues most of them as PDF only.
+              </p>
+              <div className="bars">{folders.map(bar)}</div>
+            </>
+          ) : null}
+        </div>
+      ) : null}
     </>
   );
 }
@@ -468,16 +502,21 @@ export function Gap({ status, explanation, available, held }: {
       <div className="cnt"><span className="tag warn mono">{status}</span></div>
       {whole ? (
         <>
-          <p><b>Lex holds the amendment record for this law, not its text.</b></p>
+          <p><b>Lex holds the amendment record for this law, not its wording.</b></p>
           <p className="sub">
-            The publisher issues no text file for any of its {held!.total.toLocaleString()} versions,
-            so no date will show wording. What is held for each of them: the dates it applied
-            between, the source it came from, and the hash of the record. The rail above is the
-            history itself, and it is complete.
+            Lex reads the publisher's machine-readable XML, because XML is the only format that
+            marks where each article begins and ends, which is what makes an article citable,
+            hashable and comparable across dates. For this law the publisher does not issue it, on
+            any of its {held!.total.toLocaleString()} versions, so no date here will show wording.
+          </p>
+          <p className="sub">
+            What is held for every one of them: the dates it applied between, the source it came
+            from, and the hash of the record. The rail above is the history itself, and it is
+            complete. The wording usually still exists at the publisher, as a PDF.
           </p>
           {held!.official ? (
             <p className="sub">
-              <a href={held!.official} target="_blank" rel="noopener noreferrer">Read the text at the publisher ↗</a>
+              <a href={held!.official} target="_blank" rel="noopener noreferrer">Open this law at the publisher ↗</a>
             </p>
           ) : null}
         </>

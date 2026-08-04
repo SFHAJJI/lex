@@ -57,6 +57,11 @@ public static class DeriveWriter
             // Mixed profiles inside one work would fabricate provision-text diffs between
             // versions that are formatting artifacts, not law.
             var fmxByVersion = versionDirs.Select(Fmx4Mains).ToList();
+            // D49: the PDF fallback. Unlike fmx4 this is decided PER VERSION, not per work,
+            // because it is a fallback rather than a format upgrade: one law is routinely XML on
+            // some dates and PDF-only on others, and the profile id is the confidence marker for
+            // exactly that version.
+            var pdfByVersion = versionDirs.Select(PdfMains).ToList();
             var bodyLangsByVersion = versionDirs.Select(vd => Directory.EnumerateFiles(vd, "*.*")
                 .Where(f => Path.GetExtension(f) is ".xml" or ".html")
                 .Select(f => Path.GetFileNameWithoutExtension(f)!)
@@ -103,6 +108,12 @@ public static class DeriveWriter
                 foreach (var (l, mainPath) in fmxByVersion[i].OrderBy(kv => kv.Key, StringComparer.Ordinal))
                     if (fmx4Langs.Contains(l))
                         units.Add((l, mainPath, "fmx4", $"{l}.fmx4/{Path.GetFileName(mainPath)}"));
+                // Only where the publisher served no structural body for that language on that
+                // date. Deriving a version twice, once from its XML and once from its PDF, would
+                // put two texts of the same article in the corpus and invent a diff between them.
+                foreach (var (l, pdfPath) in pdfByVersion[i].OrderBy(kv => kv.Key, StringComparer.Ordinal))
+                    if (!units.Any(u => u.Lang == l))
+                        units.Add((l, pdfPath, "pdf", $"{l}.pdf/{Path.GetFileName(pdfPath)}"));
 
                 foreach (var unit in units.OrderBy(u => u.ObsFile, StringComparer.Ordinal))
                 {
@@ -122,6 +133,7 @@ public static class DeriveWriter
                         {
                             "akn" => AknLuProfile.ProfileId,
                             "fmx4" => Fmx4EuProfile.ProfileId,
+                            "pdf" => PdfLuProfile.ProfileId,
                             _ => XhtmlEuProfile.ProfileId,
                         };
                         var frontmatter = new Dictionary<string, string>
@@ -137,12 +149,13 @@ public static class DeriveWriter
                             ["generator"] = $"{profileId} · lex derive",
                         };
 
-                        var raw = File.ReadAllText(unit.FilePath, Encoding.UTF8);
                         var extraction = unit.Kind switch
                         {
-                            "akn" => AknLuProfile.Extract(raw, lexId),
-                            "fmx4" => Fmx4EuProfile.Extract(raw, lexId),
-                            _ => XhtmlEuProfile.Extract(raw, lexId),
+                            // A PDF is bytes, not text; reading it as UTF-8 first would corrupt it.
+                            "pdf" => PdfLuProfile.Extract(File.ReadAllBytes(unit.FilePath), lexId),
+                            "akn" => AknLuProfile.Extract(File.ReadAllText(unit.FilePath, Encoding.UTF8), lexId),
+                            "fmx4" => Fmx4EuProfile.Extract(File.ReadAllText(unit.FilePath, Encoding.UTF8), lexId),
+                            _ => XhtmlEuProfile.Extract(File.ReadAllText(unit.FilePath, Encoding.UTF8), lexId),
                         };
                         if (extraction.Provisions.Count == 0)
                         {
@@ -238,6 +251,20 @@ public static class DeriveWriter
     /// {lang}.fmx4/; the main member is the only non-.doc.xml file, or the one the .doc.xml
     /// manifest points at via REF.PHYS TYPE="DOC.XML" (largest file as deterministic fallback).
     /// </summary>
+    /// One PDF per language directory, written by the alt-manifestation path as {lang}.pdf/.
+    private static Dictionary<string, string> PdfMains(string versionDir)
+    {
+        var result = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var d in Directory.EnumerateDirectories(versionDir, "*.pdf").OrderBy(x => x, StringComparer.Ordinal))
+        {
+            var lang = Path.GetFileName(d);
+            lang = lang[..^".pdf".Length];
+            var pdfs = Directory.EnumerateFiles(d, "*.pdf").OrderBy(f => f, StringComparer.Ordinal).ToList();
+            if (pdfs.Count == 1) result[lang] = pdfs[0];
+        }
+        return result;
+    }
+
     private static Dictionary<string, string> Fmx4Mains(string versionDir)
     {
         var result = new Dictionary<string, string>(StringComparer.Ordinal);

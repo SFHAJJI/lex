@@ -126,6 +126,13 @@ del { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var
              text-transform: uppercase; color: var(--muted); border: 1px solid var(--line);
              border-radius: 99px; padding: 0 7px; background: var(--bg); }
 .tag.act.on { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+/* Collections, kept out of the ranking but not out of the page. Folded by default because they
+   are a filing fact rather than a legal one, and open on one click when that is what you want. */
+.folders { margin-top: 20px; border-top: 1px solid var(--line); padding-top: 14px; }
+.folders-h { background: none; border: 0; padding: 0; cursor: pointer; color: var(--muted);
+             font-size: 13.5px; font-family: inherit; }
+.folders-h:hover { color: var(--accent); }
+.folders-why { font-size: 13px; color: var(--muted); max-width: 62ch; margin: 8px 0 12px; }
 /* The matched words in a search snippet. */
 mark { background: color-mix(in srgb, var(--accent) 26%, transparent); color: inherit;
        border-radius: 2px; padding: 0 1px; }

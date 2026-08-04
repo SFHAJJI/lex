@@ -60,6 +60,7 @@ public sealed class LegiluxAdapter : ISourceAdapter
     private static readonly HttpClient BodyHttp = CreateBodyClient();
     private DateTimeOffset _lastBodyFetch = DateTimeOffset.MinValue;
     private Dictionary<string, string>? _xmlFiles;   // "<consolidationUri>|<lang>" -> official file URL
+    private Dictionary<string, string>? _pdfFiles;   // same key, the PDF the publisher also lists (D49)
 
     private static HttpClient CreateBodyClient()
     {
@@ -202,24 +203,32 @@ public sealed class LegiluxAdapter : ISourceAdapter
             // Manifestation map: the publisher's own dataset enumerates the official XML file
             // per expression (isExemplifiedBy, userFormat xml, dct:license CC-BY-4.0). Fetch
             // host is the site's own manifestation_prefix (robots-permitted main host).
+            // Ask for the format too, rather than filtering to xml in the query. The publisher
+            // offers XML for 2,892 of its consolidations and PDF only for 1,611 (D49), and the
+            // PDF is the only fallback that exists for the rest, so discarding it here was
+            // throwing away the answer to "why is there no text".
             var xmlRows = await _sparql.SelectPagedAsync((limit, offset) => J + $$"""
-                SELECT ?c ?expr ?file WHERE {
+                SELECT ?c ?expr ?fmt ?file WHERE {
                   ?c a jolux:Consolidation ; jolux:isRealizedBy ?expr .
                   ?expr jolux:isEmbodiedBy ?m .
-                  ?m jolux:userFormat <http://data.legilux.public.lu/resource/authority/user-format/xml> ;
-                     jolux:isExemplifiedBy ?file .
+                  ?m jolux:userFormat ?fmt ; jolux:isExemplifiedBy ?file .
+                  VALUES ?fmt { <http://data.legilux.public.lu/resource/authority/user-format/xml>
+                                <http://data.legilux.public.lu/resource/authority/user-format/pdf> }
                 } ORDER BY ?c LIMIT {{limit}} OFFSET {{offset}}
                 """, pageSize: 5000, ct,
                 onPage: n => Console.Error.WriteLine($"  [legilux] manifestation rows {n}"));
             var xmlFiles = new Dictionary<string, string>(StringComparer.Ordinal);
+            var pdfFiles = new Dictionary<string, string>(StringComparer.Ordinal);
             foreach (var r in xmlRows)
             {
                 var lang = LangCode(LastSegment(r["expr"]));
-                xmlFiles[$"{r["c"]}|{lang}"] = r["file"]
+                var url = r["file"]
                     .Replace("http://data.legilux.public.lu/filestore/", "https://legilux.public.lu/filestore/")
                     .Replace("https://data.legilux.public.lu/filestore/", "https://legilux.public.lu/filestore/");
+                (LastSegment(r["fmt"]) == "pdf" ? pdfFiles : xmlFiles)[$"{r["c"]}|{lang}"] = url;
             }
             _xmlFiles = xmlFiles;
+            _pdfFiles = pdfFiles;
 
             _byWork = byWork;
             _works = works;
@@ -240,6 +249,55 @@ public sealed class LegiluxAdapter : ISourceAdapter
     private static string PublicUrl(string dataUri) =>
         dataUri.Replace("http://data.legilux.public.lu/", "https://legilux.public.lu/")
                .Replace("https://data.legilux.public.lu/", "https://legilux.public.lu/");
+
+    /// <summary>
+    /// D49: the PDF fallback, on the D48 alternative-manifestation seam.
+    ///
+    /// Returned ONLY when the publisher lists no XML for this exact version and language, because
+    /// a version derived twice would put two texts of the same article in the corpus. The PDF is
+    /// publisher bytes like any other evidence and is stored verbatim under its own sha256; what
+    /// is lower-confidence is the DERIVATION, and that is carried by the profile id (pdf-lu/1),
+    /// not by pretending the bytes are less real than they are.
+    ///
+    /// Gazette scans are excluded here rather than downstream. When a law was never amended,
+    /// Legilux points its consolidation at the whole Mémorial issue the act first appeared in, a
+    /// scan containing several unrelated acts. Locating one act inside it needs layout analysis
+    /// and is a different profile at a different confidence; feeding it to pdf-lu/1 would produce
+    /// confident, wrong articles.
+    /// </summary>
+    public async Task<ManifestationFetch?> FetchAltManifestation(VersionRecord version, ExpressionRecord expression, CancellationToken ct)
+    {
+        await EnsureLoadedAsync(ct);
+        var key = $"{version.Id.Value}|{expression.Language}";
+        if (_xmlFiles is not null && _xmlFiles.ContainsKey(key)) return null;
+        if (_pdfFiles is null || !_pdfFiles.TryGetValue(key, out var url)) return null;
+        if (url.Contains("/memorial/", StringComparison.Ordinal))
+        {
+            Console.Error.WriteLine($"  [legilux] pdf is a gazette issue, not a consolidated act; skipped: {url}");
+            return null;
+        }
+
+        var since = DateTimeOffset.UtcNow - _lastBodyFetch;
+        var pause = TimeSpan.FromMilliseconds(1500);
+        if (since < pause) await Task.Delay(pause - since, ct);
+        _lastBodyFetch = DateTimeOffset.UtcNow;
+
+        using var resp = await BodyHttp.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
+        if (!resp.IsSuccessStatusCode)
+        {
+            Console.Error.WriteLine($"  [legilux] pdf fetch failed ({(int)resp.StatusCode}): {url}");
+            return null;
+        }
+        using var ms = new MemoryStream();
+        await (await resp.Content.ReadAsStreamAsync(ct)).CopyToAsync(ms, ct);
+        var bytes = ms.ToArray();
+        if (bytes.Length < 5 || bytes[0] != 0x25 || bytes[1] != 0x50 || bytes[2] != 0x44 || bytes[3] != 0x46)
+        {
+            Console.Error.WriteLine($"  [legilux] response is not a PDF; discarded: {url}");
+            return null;
+        }
+        return new ManifestationFetch("pdf", [new ManifestationMember(url.Split('/')[^1], bytes)], PublicUrl(url));
+    }
 
     private static string Slug(string workUri)
     {
