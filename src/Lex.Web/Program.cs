@@ -62,7 +62,9 @@ string Page(string title, string body, string? subtitle = null, string nav = "",
     <html lang="en">
     <head>
     <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{{H(title)}}, Lex</title>
+    <!-- Titles are labels, not sentences: one that ends in a full stop renders "acts., Lex" in
+         the tab and in every social card, which is what the front page did until now. -->
+    <title>{{H(title.TrimEnd('.'))}}, Lex</title>
     <meta name="description" content="Point-in-time Luxembourg law, plus ten EU acts: what did the rule say on a given date? Grounded AI answers, permalinks, timelines, diffs, cryptographic provenance, and a public MCP endpoint.">
     <meta property="og:title" content="{{H(title)}}, Lex">
     <meta property="og:description" content="Point-in-time Luxembourg law, plus ten EU acts, with grounded AI answers, per-article history, and verifiable provenance.">
@@ -469,7 +471,7 @@ app.MapGet("/", () =>
         <link rel="stylesheet" href="/app/workspace.css">
         <script type="module" src="/app/workspace.js"></script>
         """;
-    return Results.Content(Page("Luxembourg law as it stood on any date, plus ten EU acts.", body, null, "ask",
+    return Results.Content(Page("Luxembourg law as it stood on any date, plus ten EU acts", body, null, "ask",
         h1: "A law is not one document."), "text/html");
 });
 
