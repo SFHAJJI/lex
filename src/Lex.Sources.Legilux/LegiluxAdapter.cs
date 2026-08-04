@@ -271,6 +271,17 @@ public sealed class LegiluxAdapter : ISourceAdapter
         var key = $"{version.Id.Value}|{expression.Language}";
         if (_xmlFiles is not null && _xmlFiles.ContainsKey(key)) return null;
         if (_pdfFiles is null || !_pdfFiles.TryGetValue(key, out var url)) return null;
+
+        // Thematic collections are excluded here, and this is not a nicety. A RECUEIL or
+        // CODE_RECUEIL is a shelf, not an instrument: its PDF concatenates every act on the shelf,
+        // runs to tens of megabytes, and would be re-fetched for each of the hundreds of dates the
+        // shelf is restamped. Learned the hard way: without this the run filled the disk with
+        // 638 MB of code-communal before failing.
+        if (version.TypeCode is "RECUEIL" or "CODE_RECUEIL")
+        {
+            Console.Error.WriteLine($"  [legilux] pdf belongs to a thematic collection, not an act; skipped: {version.Id.Value}");
+            return null;
+        }
         if (url.Contains("/memorial/", StringComparison.Ordinal))
         {
             Console.Error.WriteLine($"  [legilux] pdf is a gazette issue, not a consolidated act; skipped: {url}");
@@ -288,9 +299,23 @@ public sealed class LegiluxAdapter : ISourceAdapter
             Console.Error.WriteLine($"  [legilux] pdf fetch failed ({(int)resp.StatusCode}): {url}");
             return null;
         }
+        // A consolidated act is a few MB at most; the whole 1,197-article Code du travail is 2.3.
+        // Anything far past that is a compilation the type field failed to mark, and downloading
+        // it is how the disk fills. Checked before reading the body, not after.
+        const long CapBytes = 25L * 1024 * 1024;
+        if (resp.Content.Headers.ContentLength is > CapBytes)
+        {
+            Console.Error.WriteLine($"  [legilux] pdf exceeds {CapBytes / 1024 / 1024} MB, not a single act; skipped: {url}");
+            return null;
+        }
         using var ms = new MemoryStream();
         await (await resp.Content.ReadAsStreamAsync(ct)).CopyToAsync(ms, ct);
         var bytes = ms.ToArray();
+        if (bytes.LongLength > CapBytes)
+        {
+            Console.Error.WriteLine($"  [legilux] pdf exceeds the cap once read; skipped: {url}");
+            return null;
+        }
         if (bytes.Length < 5 || bytes[0] != 0x25 || bytes[1] != 0x50 || bytes[2] != 0x44 || bytes[3] != 0x46)
         {
             Console.Error.WriteLine($"  [legilux] response is not a PDF; discarded: {url}");
