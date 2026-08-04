@@ -78,7 +78,7 @@ MODEL       Lex.Law, Publisher, Work, Version, Expression, Observation. No publi
 FOUNDATION  Lex.Temporal (interval algebra)   Lex.Index (SQLite: filter-first, signed stamp)
 ```
 
-- **One corpus repo per publisher**; the corpus is human-readable JSON + git, `git log` *is* the legislative history.
+- **One corpus repo per publisher**; the corpus is human-readable JSON + git. The tree carries the legislative history, `git log` carries the ingest history, and the two are deliberately not the same ([why](https://law.soufien.lu/decisions)).
 - **Bitemporal**: valid time is the publisher's; transaction time is ours, as
   append-only observation chains inside hashed content. Nothing is ever
   overwritten; publisher corrections become visible events.
