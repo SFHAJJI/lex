@@ -296,18 +296,7 @@ public sealed class LexIndexReader : IDisposable
                    -- comparison with itself whenever a work moved exactly once.
                    (SELECT MAX(t3.valid_from) FROM docs t3
                      WHERE t3.group_key = d.group_key AND t3.valid_from < MIN(d.valid_from)) AS baseline,
-                   -- How many DISTINCT texts this work actually had across the comparison span,
-                   -- baseline included. A publisher can reissue a consolidation without touching
-                   -- a word, so "2 new versions" and "nothing changed" are both true at once. The
-                   -- report is called what CHANGED, so it has to be able to tell them apart
-                   -- instead of sending a reader into a comparison that shows nothing.
-                   (SELECT COUNT(DISTINCT t4.body_sha) FROM docs t4
-                     WHERE t4.group_key = d.group_key AND t4.body_sha IS NOT NULL
-                       AND t4.valid_from >= COALESCE(
-                             (SELECT MAX(t5.valid_from) FROM docs t5
-                               WHERE t5.group_key = d.group_key AND t5.valid_from < MIN(d.valid_from)),
-                             MIN(d.valid_from))
-                       AND t4.valid_from <= MAX(d.valid_from)) AS distinct_texts
+                   0 AS distinct_texts
             FROM docs d
             WHERE {where}
             GROUP BY d.group_key
@@ -324,9 +313,56 @@ public sealed class LexIndexReader : IDisposable
         while (r.Read())
             list.Add(new ChangeRow(r.GetString(0), r.GetInt32(1), r.GetString(2), r.GetString(3),
                 r.IsDBNull(4) ? null : r.GetString(4), r.GetInt32(5),
-                r.IsDBNull(6) ? null : r.GetString(6),
-                r.IsDBNull(7) ? 0 : r.GetInt32(7)));
-        return list;
+                r.IsDBNull(6) ? null : r.GetString(6)));
+        r.Close();
+        // Answered per row rather than in the aggregate above, because it is a question about
+        // the PROVISIONS and the aggregate is a question about versions. Two small indexed reads
+        // per row; the report returns at most a page of them.
+        return list.Select(c => c with
+        {
+            DistinctTexts = DistinctWordings(c.GroupKey, c.Baseline ?? c.FirstChange, c.LastChange),
+        }).ToList();
+    }
+
+    /// <summary>
+    /// How many distinct wordings a work had between two dates, counted from the ordered
+    /// per-provision hashes rather than from the file hash.
+    ///
+    /// The file hash was the obvious signal and the wrong one: a consolidated document carries a
+    /// header naming the date it was produced, so a pure reissue changes the file while every
+    /// article stays identical. The report would then promise a change and hand the reader a
+    /// comparison reading "0 changed, 0 added, 0 removed", which is how correct software gets
+    /// mistaken for broken software. Provisions are what the comparison actually shows, so
+    /// provisions are what gets counted.
+    /// </summary>
+    public int DistinctWordings(string work, string from, string to)
+    {
+        using var cmd = Cmd($"""
+            SELECT d.rid FROM docs d
+            WHERE (d.group_key=$w OR d.group_identifier=$w)
+              AND d.valid_from >= $from AND d.valid_from <= $to
+            GROUP BY d.valid_from
+            ORDER BY d.valid_from
+            """, []);
+        cmd.Parameters.AddWithValue("$w", NormalizeWork(work));
+        cmd.Parameters.AddWithValue("$from", from);
+        cmd.Parameters.AddWithValue("$to", to);
+        var rids = new List<string>();
+        using (var r = cmd.ExecuteReader())
+            while (r.Read()) rids.Add(r.GetString(0));
+
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var rid in rids)
+        {
+            using var q = Cmd("SELECT text_sha FROM provisions WHERE rid=$r ORDER BY seq", []);
+            q.Parameters.AddWithValue("$r", rid);
+            var sb = new System.Text.StringBuilder();
+            using var rr = q.ExecuteReader();
+            while (rr.Read()) sb.Append(rr.GetString(0));
+            // A version with no provisions holds no wording; it must not count as one more.
+            if (sb.Length > 0) seen.Add(sb.ToString());
+        }
+        return seen.Count;
     }
 
     /// <summary>Totals for a window: how many works moved and how many new versions appeared.</summary>

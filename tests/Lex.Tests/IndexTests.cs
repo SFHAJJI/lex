@@ -317,11 +317,22 @@ public class IndexTests : IDisposable
         var docs = new[]
         {
             D("amended", "2020-01-01", "aaa"), D("amended", "2021-01-01", "bbb"),
-            D("reissued", "2020-01-01", "ccc"), D("reissued", "2021-01-01", "ccc"),
+            D("reissued", "2020-01-01", "ccc"), D("reissued", "2021-01-01", "ddd"),
+        };
+        // The file hash is deliberately DIFFERENT on both of "reissued" versions while their
+        // article text is identical, which is the real shape: a consolidated document carries a
+        // header naming the date it was produced, so a pure reissue changes the file and not one
+        // word of the law. Counting file hashes called that an amendment.
+        var provisions = new[]
+        {
+            Prov(docs[0], 0, "art_1", "the original wording"),
+            Prov(docs[1], 0, "art_1", "the amended wording"),
+            Prov(docs[2], 0, "art_1", "wording that never moved"),
+            Prov(docs[3], 0, "art_1", "wording that never moved"),
         };
         var db2 = Path.Combine(Path.GetTempPath(), $"lex-reissue-{Guid.NewGuid():N}.db");
         _extra.Add(db2);
-        IndexBuilder.Build(db2, stamp, docs, [], [], [], StampSigner.CreateKeyPem());
+        IndexBuilder.Build(db2, stamp, docs, provisions, [], [], StampSigner.CreateKeyPem());
         return LexIndexReader.Open(db2);
     }
 
