@@ -222,7 +222,10 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
         r.Stamp.GetValueOrDefault("known_exclusions") ?? r.Collection switch
         {
             "lu-legilux" => "never-consolidated LU acts (~24,579 as-published lois/RGD) are not ingested; ingestion scheduled — see coverage",
-            "eu-eurlex" => "only flagship acts are ingested so far; the wider consolidated acquis is scheduled — see coverage",
+            // Named, not gestured at. "Flagship acts" tells a reader nothing about whether the act
+            // they care about is here, and the front page used to promise "EU law" over the top
+            // of it.
+            "eu-eurlex" => "ten acts only: GDPR, CRR, MiFID II, PSD2, SFDR, DORA, NIS2, AI Act, RED II, Electricity Market Directive. The wider consolidated acquis is not ingested",
             _ => "see the coverage tool for this publisher's known gaps",
         };
 
