@@ -18,7 +18,9 @@ const ms = (d: string) => Date.parse(`${d}T00:00:00Z`);
 export function Provision({ items, toc, validFrom, validTo, work, anchor, profile, source, onPick, onClear, onCite }: {
   items: ProvisionItem[]; toc: ProvisionItem[]; validFrom: string; validTo?: string;
   work: string; anchor?: string; profile?: string; source?: string;
-  onPick: (anchor: string) => void; onClear: () => void; onCite?: (work: string) => void;
+  // `auto` marks an article the reader did not ask for. The rail uses it to decide whether to
+  // stay on the law's versions or narrow to this article's texts.
+  onPick: (anchor: string, auto?: boolean) => void; onClear: () => void; onCite?: (work: string) => void;
 }) {
   // Where this text came from. Publisher markup and a read PDF are not the same claim, and the
   // difference has to reach the person reading the words, not stop at a field in a JSON file.
@@ -38,7 +40,7 @@ export function Provision({ items, toc, validFrom, validTo, work, anchor, profil
   useEffect(() => {
     if (!outlineOnly || anchor || toc.length === 0 || opened.current === work) return;
     opened.current = work;
-    onPick(toc[0].anchor);
+    onPick(toc[0].anchor, true);
   }, [outlineOnly, anchor, work, toc]);
   const body = (
     <div className="text">
@@ -377,15 +379,20 @@ export function Ranking({ rows, worksChanged, newVersions, from, to, layer, page
           // has nothing earlier to compare against, so it opens for reading instead.
           const from = r.diff_from ?? r.baseline ?? r.first_change;
           const to = r.diff_to ?? r.last_change;
-          const comparable = !!f?.text && from !== to;
           const n = r.versions_in_period;
+          // A publisher can reissue an act without altering a word, so a row can honestly say
+          // "2 new versions" and its comparison honestly say nothing changed. Sending a reader
+          // into that comparison makes working software look broken, so the row says it instead
+          // and opens for reading. distinct_texts counts wordings, not versions.
+          const reissued = r.distinct_texts === 1;
+          const comparable = !!f?.text && from !== to && !reissued;
+          const why = !f?.text ? "No text is published for this version, open its record"
+            : reissued ? `Reissued ${n} time${n === 1 ? "" : "s"} in this window without the wording changing`
+            : comparable ? `Compare ${from} with ${to}`
+            : "This law's first version falls in this window, so there is nothing earlier to compare it with";
           return (
             <button key={r.work} className={"bar" + (f && !f.text ? " notext" : "")}
-                    title={f && !f.text
-                      ? "No text is published for this version, open its record"
-                      : comparable
-                        ? `Compare ${from} with ${to}`
-                        : "This law's first version falls in this window, so there is nothing earlier to compare it with"}
+                    title={why}
                     onClick={() => comparable
                       ? onOpen(r.work, from, to)
                       : onOpenRecord(r.work, r.last_change)}>
@@ -393,6 +400,7 @@ export function Ranking({ rows, worksChanged, newVersions, from, to, layer, page
                 <span className="fill" style={{ width: `${(n / max) * 100}%` }} />
                 <span className="lbl">{name}</span>
                 {f && !f.text ? <span className="mark">record only</span>
+                  : reissued ? <span className="mark">same wording</span>
                   : !comparable ? <span className="mark">first version</span> : null}
               </span>
               {/* "4" beside a comparison showing one edit read as a contradiction. It counts

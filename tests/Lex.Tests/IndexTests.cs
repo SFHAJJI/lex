@@ -280,6 +280,51 @@ public class IndexTests : IDisposable
                     $"{row.GroupKey}: baseline {b} is not strictly before first change {row.FirstChange}");
     }
 
+    [Fact]
+    public void A_reissue_with_the_same_wording_is_distinguishable_from_an_amendment()
+    {
+        // A publisher can issue a new consolidation without altering a word. The row then says
+        // "2 new versions" and the comparison says nothing changed, and both are true. Sending a
+        // reader into that comparison makes working software look broken, so the report has to be
+        // able to tell a reissue from an amendment before it offers the comparison.
+        using var r = BuildReissued();
+
+        var amended = r.ChangesInPeriod("2019-01-01", "2026-01-01", null, true, 50)
+                       .Single(x => x.GroupKey == "amended");
+        var reissued = r.ChangesInPeriod("2019-01-01", "2026-01-01", null, true, 50)
+                        .Single(x => x.GroupKey == "reissued");
+
+        Assert.Equal(2, amended.VersionsInPeriod);
+        Assert.Equal(2, amended.DistinctTexts);      // two versions, two wordings
+        Assert.Equal(2, reissued.VersionsInPeriod);
+        Assert.Equal(1, reissued.DistinctTexts);     // two versions, one wording
+    }
+
+    private LexIndexReader BuildReissued()
+    {
+        var stamp = new Dictionary<string, string>
+        {
+            ["collection"] = "t-pub", ["tier"] = "A", ["history_begins"] = "publisher",
+            ["built_at"] = "2026-08-01T00:00:00Z", ["corpus_commit"] = "test",
+        };
+        DocRow D(string group, string from, string bodySha) =>
+            new($"t-pub:{group}:{from}", "t-pub", group, $"urn:{group}", "RGD", "fr", from, null,
+                "publisher", "2026-08-01T00:00:00Z", Withdrawn: false, TextAvailable: true,
+                TextPublic: true, RecordSha: "rec", BodySha: bodySha,
+                SourceUri: "https://example.org", Title: group, TitleShort: group, Body: null,
+                PublicationDate: from, StatusNote: null);
+
+        var docs = new[]
+        {
+            D("amended", "2020-01-01", "aaa"), D("amended", "2021-01-01", "bbb"),
+            D("reissued", "2020-01-01", "ccc"), D("reissued", "2021-01-01", "ccc"),
+        };
+        var db2 = Path.Combine(Path.GetTempPath(), $"lex-reissue-{Guid.NewGuid():N}.db");
+        _extra.Add(db2);
+        IndexBuilder.Build(db2, stamp, docs, [], [], [], StampSigner.CreateKeyPem());
+        return LexIndexReader.Open(db2);
+    }
+
     // ---- which language a version is served in when it exists in several ----
     //
     // The Constitution is one of three suggested starting points on the front page. It holds 37

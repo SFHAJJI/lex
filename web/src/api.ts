@@ -59,6 +59,9 @@ export interface RankingRow {
   // whenever a work moved exactly once, so the comparison ran a version against itself and
   // correctly reported nothing. Null when the window's first change is the work's first version.
   baseline?: string | null; diff_from?: string; diff_to?: string;
+  // How many distinct wordings the comparison span actually holds. 1 means the act was reissued
+  // without a word changing, which is why a row could say "2" and its comparison say nothing.
+  distinct_texts?: number; wording_changed?: boolean;
 }
 
 /** A step the agent completed, naming what it found. */

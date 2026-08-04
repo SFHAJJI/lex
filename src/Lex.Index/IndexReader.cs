@@ -295,7 +295,19 @@ public sealed class LexIndexReader : IDisposable
                    -- has to compare against; comparing first_change with last_change is a
                    -- comparison with itself whenever a work moved exactly once.
                    (SELECT MAX(t3.valid_from) FROM docs t3
-                     WHERE t3.group_key = d.group_key AND t3.valid_from < MIN(d.valid_from)) AS baseline
+                     WHERE t3.group_key = d.group_key AND t3.valid_from < MIN(d.valid_from)) AS baseline,
+                   -- How many DISTINCT texts this work actually had across the comparison span,
+                   -- baseline included. A publisher can reissue a consolidation without touching
+                   -- a word, so "2 new versions" and "nothing changed" are both true at once. The
+                   -- report is called what CHANGED, so it has to be able to tell them apart
+                   -- instead of sending a reader into a comparison that shows nothing.
+                   (SELECT COUNT(DISTINCT t4.body_sha) FROM docs t4
+                     WHERE t4.group_key = d.group_key AND t4.body_sha IS NOT NULL
+                       AND t4.valid_from >= COALESCE(
+                             (SELECT MAX(t5.valid_from) FROM docs t5
+                               WHERE t5.group_key = d.group_key AND t5.valid_from < MIN(d.valid_from)),
+                             MIN(d.valid_from))
+                       AND t4.valid_from <= MAX(d.valid_from)) AS distinct_texts
             FROM docs d
             WHERE {where}
             GROUP BY d.group_key
@@ -312,7 +324,8 @@ public sealed class LexIndexReader : IDisposable
         while (r.Read())
             list.Add(new ChangeRow(r.GetString(0), r.GetInt32(1), r.GetString(2), r.GetString(3),
                 r.IsDBNull(4) ? null : r.GetString(4), r.GetInt32(5),
-                r.IsDBNull(6) ? null : r.GetString(6)));
+                r.IsDBNull(6) ? null : r.GetString(6),
+                r.IsDBNull(7) ? 0 : r.GetInt32(7)));
         return list;
     }
 

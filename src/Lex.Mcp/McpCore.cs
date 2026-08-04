@@ -680,6 +680,10 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                                 // Null when the window's first change is the work's own first
                                 // version: there is no earlier state to show.
                                 ["baseline"] = c.Baseline,
+                                // 1 means the publisher reissued this act without altering a
+                                // word, so "2 new versions" and "nothing changed" are both true.
+                                ["distinct_texts"] = c.DistinctTexts,
+                                ["wording_changed"] = c.DistinctTexts > 1,
                                 ["diff_from"] = c.Baseline ?? c.FirstChange,
                                 ["diff_to"] = c.LastChange,
                             };

@@ -58,6 +58,9 @@ export default function App() {
     try { return localStorage.getItem(COACH_KEY) === "1"; } catch { return true; }
   });
   const abort = useRef<AbortController>();
+  // Whether the article on screen was picked by the reader or opened for them. Not in the URL:
+  // it changes nothing about what is displayed, only which timeline the rail belongs to.
+  const chosenAnchor = useRef(false);
 
   // The marketing below the fold belongs to a first-time visitor, not to someone reading a
   // law. One flag on <body> lets the server-rendered page get out of the way.
@@ -76,6 +79,7 @@ export default function App() {
   // implying each refusal was about that date. Knowing the work-level answer up front lets the
   // reader say it once, and lets the chips stop offering text that does not exist.
   useEffect(() => {
+    chosenAnchor.current = false;
     if (!s.work) { setVersions([]); setLangs([]); setHeld(undefined); return; }
     let live = true;
     tool<any>("timeline", { work: s.work, limit: 400 })
@@ -297,8 +301,16 @@ export default function App() {
   };
 
   // What the rail is a rail OF: this article's texts when one is open, else the law's versions.
-  const railDates = s.anchor && states.length > 0 ? states : versions;
-  const railScope = s.anchor && states.length > 0 ? "texts of this article" : "versions";
+  // The rail is a rail OF the law, unless the reader deliberately narrowed it to one article.
+  //
+  // A code too large to render whole opens on its first article, so that arriving at the Code du
+  // travail means arriving at some law rather than at an apology. That article was then treated
+  // as a choice: the rail retargeted to its history, and a law with 61 versions announced "6
+  // texts of this article". The single idea the product exists to show, that a law is a series of
+  // dated versions, was being hidden by the convenience that lands you in it.
+  const narrowed = !!s.anchor && chosenAnchor.current && states.length > 0;
+  const railDates = narrowed ? states : versions;
+  const railScope = narrowed ? "texts of this article" : "versions";
   const at = loaded?.from && railDates.includes(loaded.from) ? loaded.from
            : railDates.filter((d) => d <= (s.date ?? today())).pop();
 
@@ -423,7 +435,7 @@ export default function App() {
                                        work={s.work} anchor={s.anchor} profile={loaded.profile}
                                        source={loaded.source}
                                        onCite={(w) => { setUi(undefined); go({ work: w, date: undefined, anchor: undefined, to: undefined, mode: "read", space: "law" }); }}
-                                       onPick={(a) => go({ anchor: a })}
+                                       onPick={(a, auto) => { chosenAnchor.current = !auto; go({ anchor: a }); }}
                                        onClear={() => go({ anchor: undefined })} /> :
          s.work ? <Empty>Loading…</Empty> :
          !front && space === "time" ? <Empty>Pick a period above.</Empty> :

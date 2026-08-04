@@ -84,7 +84,11 @@ public sealed record ChangeRow(
     // is the common case: 92% of regulation rows in a recent window. The comparison then runs a
     // version against itself and truthfully reports no differences. Null when the window's first
     // change is also the work's first version, so there is nothing to compare against.
-    string? Baseline);
+    string? Baseline,
+    // Distinct wordings across the comparison span, baseline included. 1 means the publisher
+    // reissued the act without altering a word, which is a real and common answer: "2 new
+    // versions, wording unchanged". 0 means no version in the span carries text at all.
+    int DistinctTexts = 0);
 
 /// <summary>
 /// F5 — the one rule that cannot be relaxed, as a construct: every query entry point
