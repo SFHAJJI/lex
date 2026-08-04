@@ -149,7 +149,12 @@ export default function App() {
   useEffect(() => {
     if (s.work || !s.from || !s.until) return;
     let live = true;
-    tool<any>("changes_in_period", { from_date: s.from, to_date: s.until, order: s.order ?? "by_churn", limit: 25 })
+    // Ask for far more rows than are shown. The list separates laws from thematic collections
+    // AFTER ranking, and a collection restamps whenever anything on its shelf moves, so over a
+    // long window they crowd the top: asking for 25 over six years returned 18 collections and
+    // left only 7 laws on screen, fewer than the same query over one year. Fetch deep enough that
+    // the law list is never starved by them.
+    tool<any>("changes_in_period", { from_date: s.from, to_date: s.until, order: s.order ?? "by_churn", limit: 80 })
       .then((res) => {
         if (!live) return;
         // changes_in_period asks ACROSS the corpus, so its answer is the union of the
@@ -166,7 +171,7 @@ export default function App() {
           ? { ranking: { from_date: s.from!, to_date: s.until!, order: by,
                          works_changed: envs.reduce((n, e) => n + (e?.works_changed ?? 0), 0),
                          new_versions: envs.reduce((n, e) => n + (e?.new_versions ?? 0), 0),
-                         rows: rows.slice(0, 25) } }
+                         rows: rows.slice(0, 80) } }
           : { gap: { status: "no_changes_in_period", explanation: "Nothing changed in that window.", available: [] } });
       })
       .catch(() => {});

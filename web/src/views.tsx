@@ -327,12 +327,14 @@ export function Ranking({ rows, worksChanged, newVersions, from, to, onOpen, onO
 }) {
   const facts = useRowFacts(rows);
   const [showFolders, setShowFolders] = useState(false);
+  const [showAllLaws, setShowAllLaws] = useState(false);
   const isFolder = (w: string) => {
     const k = facts[w]?.kind;
     return k ? FOLDER_KINDS.includes(k) : false;
   };
   const laws = rows.filter((r) => !isFolder(r.work));
   const folders = rows.filter((r) => isFolder(r.work));
+  const shown = showAllLaws ? laws : laws.slice(0, 25);
   const max = Math.max(1, ...rows.map((r) => r.versions_in_period));
 
   const bar = (r: RankingRow) => {
@@ -362,8 +364,13 @@ export function Ranking({ rows, worksChanged, newVersions, from, to, onOpen, onO
         <span className="tag mono">{from} → {to}</span>
       </div>
 
-      <div className="bars">{laws.map(bar)}</div>
+      <div className="bars">{shown.map(bar)}</div>
       {laws.length === 0 ? <Empty>No individual law changed in that window.</Empty> : null}
+      {!showAllLaws && laws.length > shown.length ? (
+        <button className="ghost" onClick={() => setShowAllLaws(true)}>
+          Show the other {laws.length - shown.length} laws
+        </button>
+      ) : null}
 
       {folders.length > 0 ? (
         <div className="folders">
