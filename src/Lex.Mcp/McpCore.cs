@@ -232,6 +232,26 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
         return b.Length >= 10 && DateOnly.TryParse(b[..10], out var bd) && d > bd;
     }
 
+    /// <summary>
+    /// Anchors a caller might have meant, for a mode=select miss.
+    ///
+    /// Deliberately mechanical: it compares the digits in the anchor, not its words, because the
+    /// mismatch is almost always a numbering convention rather than a typo. "art_1er" against a
+    /// code numbered "art_l_010-1" shares the digit 1; "article-5" against "art_5" shares 5. No
+    /// fuzzy string distance, which would rank "art_11" above "art_1" for the query "art_1".
+    /// Falls back to the first few anchors, which at least SHOWS the scheme in use.
+    /// </summary>
+    private static List<string> NearestAnchors(IEnumerable<string> wanted, IReadOnlyList<ProvisionRow> all)
+    {
+        static string Digits(string s) => new string(s.Where(char.IsAsciiDigit).ToArray()).TrimStart('0');
+
+        var keys = wanted.Select(Digits).Where(x => x.Length > 0).ToHashSet(StringComparer.Ordinal);
+        if (keys.Count == 0) return all.Take(6).Select(p => p.Anchor).ToList();
+
+        var hit = all.Where(p => keys.Contains(Digits(p.Anchor))).Select(p => p.Anchor).Take(10).ToList();
+        return hit.Count > 0 ? hit : all.Take(6).Select(p => p.Anchor).ToList();
+    }
+
     private (LexIndexReader r, string norm)? Resolve(string work, string? publisher)
     {
         if (publisher is not null && readers.TryGetValue(publisher, out var rp)) return (rp, work);
@@ -302,6 +322,18 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                         {
                             o["anchors_not_in_version"] = missing;   // honest refusal per anchor
                             if (found.Count == 0) o["envelope"]!["status"] = "anchor_not_in_version";
+                            // A truthful "no" that leaves the caller nowhere to go is how an
+                            // assistant ends up guessing. Asked for art_1er of the Code du travail
+                            // it got an empty list, fell back to full-text search, and answered out
+                            // of the electricity act. The code has no Article 1 at all: it numbers
+                            // its provisions L. 010-1, L. 111-1, and nothing in the reply said so.
+                            var near = NearestAnchors(wanted, all);
+                            if (near.Count > 0)
+                                o["nearest_anchors"] = new JsonArray(near.Select(x => (JsonNode)x).ToArray());
+                            o["anchors_in_version"] = all.Count;
+                            o["anchor_note"] = near.Count > 0
+                                ? "This work numbers its provisions in its own scheme. nearest_anchors are anchors it actually has; call as_of mode=select with one of those, or mode=outline for the full list. Do NOT fall back to full-text search for a provision of a known work."
+                                : $"This version holds {all.Count} provisions under other anchors. Call as_of mode=outline to list them, then select from that list. Do NOT fall back to full-text search for a provision of a known work.";
                         }
                         break;
                     }
@@ -445,8 +477,12 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                     if (hits.Count < limit)
                     {
                         var seen = hits.Select(h => h.Doc.GroupKey).ToHashSet(StringComparer.Ordinal);
+                        // `works` has to reach this branch too. It did not, so a caller that named
+                        // its subject and got few article hits was handed unrelated works to fill
+                        // the quota — the documented scope silently ignored on exactly the path a
+                        // scoped search is most likely to take.
                         foreach (var doc in r.SearchWorksByIdentifierOrTitle(q,
-                                     new FilterSet(asOf, null, Str("document_type"), Str("language")), limit * 4)
+                                     new FilterSet(asOf, null, Str("document_type"), Str("language"), works), limit * 4)
                                  .GroupBy(x => x.GroupKey)
                                  .Select(g => g.OrderByDescending(x => x.ValidFrom, StringComparer.Ordinal).First())
                                  .Where(x => !seen.Contains(x.GroupKey))

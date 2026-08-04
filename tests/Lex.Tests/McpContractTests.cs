@@ -192,6 +192,40 @@ public class McpContractTests : IDisposable
     }
 
     [Fact]
+    public void A_missed_anchor_says_which_anchors_exist()
+    {
+        // Real failure this reproduces: an assistant asked for "art_1er" of the Code du travail,
+        // which numbers its provisions L. 010-1 and has no Article 1 at all. It got an empty
+        // provisions list and nothing else, fell back to full-text search, and answered out of an
+        // unrelated electricity act. A refusal has to leave a next step.
+        var miss = Call("as_of", new JsonObject
+        {
+            ["work"] = "t-pub:w1", ["date"] = "2022-06-01",
+            ["mode"] = "select", ["anchors"] = "art_1er",
+        });
+
+        Assert.Equal("anchor_not_in_version", Status(miss));
+        Assert.Equal("art_1er", miss["anchors_not_in_version"]![0]!.GetValue<string>());
+        // "art_1er" and "art_1" share their digits, which is what the mismatch actually is:
+        // a numbering convention, not a typo.
+        Assert.Contains("art_1", miss["nearest_anchors"]!.AsArray().Select(x => x!.GetValue<string>()));
+        Assert.False(string.IsNullOrWhiteSpace(miss["anchor_note"]?.GetValue<string>()));
+    }
+
+    [Fact]
+    public void A_scoped_search_stays_inside_its_scope()
+    {
+        // `works` is documented as restricting the search. The article-level pass honoured it and
+        // the identifier/title fallback did not, so a caller that named its subject and matched
+        // few articles got unrelated works back to fill the quota — on exactly the path a scoped
+        // search is most likely to take, since scoping it makes hits rarer.
+        var scoped = Call("search", new JsonObject { ["query"] = "w1", ["works"] = "t-pub:w2" });
+
+        Assert.DoesNotContain("w1", scoped["hits"]!.AsArray()
+            .Select(h => h!["work"]?.GetValue<string>() ?? ""));
+    }
+
+    [Fact]
     public void Every_envelope_carries_freshness_and_signature_state()
     {
         var env = Call("timeline", new JsonObject { ["work"] = "t-pub:w1" })["envelope"]!;
