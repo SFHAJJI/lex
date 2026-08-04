@@ -121,6 +121,7 @@ export function TopicSearch({ q, asOf, onQuery, onOpen }: {
   // a French query was coming back in German because nothing narrowed it.
   const [layer, setLayer] = useState<LayerId | "">("");
   const [lang, setLang] = useState("");
+  const [open, setOpen] = useState<Set<string>>(new Set());
 
   useEffect(() => { setText(q); }, [q]);
   useEffect(() => {
@@ -164,23 +165,61 @@ export function TopicSearch({ q, asOf, onQuery, onOpen }: {
           </select></label>
       </div>
       {busy ? <div className="empty">Searching…</div> : null}
-      {!busy && q && hits.length === 0 ? <div className="empty">Nothing in the corpus matches that.</div> : null}
-      <ul className="rows">
-        {hits.map((h, i) => {
-          const work = String(h.lex_id ?? "").split(":").slice(0, 2).join(":");
-          return (
-            <li key={`${h.provision_id ?? h.lex_id}-${i}`}>
-              <button className="rowbtn" onClick={() => onOpen(work, h.valid_from, h.anchor)}>
-                <span>{shorten(h.title) ?? work}{h.provision_num ? `, ${h.provision_num}` : ""}</span>
+      {!busy && q && hits.length === 0 ? (
+        <div className="empty">
+          <p>Nothing in the corpus matches that.</p>
+          {/* Two different things look identical from here, and saying which is the whole
+              personality of this product: there may be no such rule, or Lex may hold the law and
+              not its words. Search only reaches versions that carry text. */}
+          <p className="sub">
+            Search reads the text of the versions that have it. Lex also holds dated versions whose
+            wording the publisher never issued, and those can be dated but not searched, so a law
+            can be in the corpus and still not answer here.{" "}
+            <a href="/coverage">What Lex holds, and lacks →</a>
+          </p>
+        </div>
+      ) : null}
+      {/* Grouped by law. A flat list let one code with twenty matching articles bury the eleven
+          other laws that also answered the question. */}
+      <ul className="rows grouped">
+        {groupHits(hits).map((g) => (
+          <li key={g.work} className="hitgroup">
+            <div className="hg-h">
+              <b>{g.title}</b>
+              <span className="sub mono">{g.hits.length} article{g.hits.length === 1 ? "" : "s"}</span>
+            </div>
+            {(open.has(g.work) ? g.hits : g.hits.slice(0, 3)).map((h, i) => (
+              <button key={`${h.provision_id ?? i}`} className="rowbtn"
+                      onClick={() => onOpen(g.work, h.valid_from, h.anchor)}>
+                <span>{h.provision_num ?? h.anchor}</span>
                 {h.snippet ? <span className="sub"><Snippet text={h.snippet} /></span> : null}
-                <span className="sub mono">{h.valid_from}{h.anchor ? ` · ${h.anchor}` : ""}</span>
+                <span className="sub mono">{h.valid_from}</span>
               </button>
-            </li>
-          );
-        })}
+            ))}
+            {g.hits.length > 3 ? (
+              <button className="hg-more" onClick={() => setOpen((o) => {
+                const n = new Set(o); n.has(g.work) ? n.delete(g.work) : n.add(g.work); return n;
+              })}>
+                {open.has(g.work) ? "fewer" : `+${g.hits.length - 3} more in this law`}
+              </button>
+            ) : null}
+          </li>
+        ))}
       </ul>
     </>
   );
+}
+
+/** Hits gathered under the law they belong to, keeping the ranking order of their best hit. */
+function groupHits(hits: any[]) {
+  const by = new Map<string, { work: string; title: string; hits: any[] }>();
+  for (const h of hits) {
+    const work = String(h.lex_id ?? "").split(":").slice(0, 2).join(":");
+    const g = by.get(work) ?? { work, title: shorten(h.title) ?? work, hits: [] };
+    g.hits.push(h);
+    by.set(work, g);
+  }
+  return [...by.values()];
 }
 
 const iso = (d: Date) => d.toISOString().slice(0, 10);

@@ -23,12 +23,28 @@ export interface FinderProps {
   onPeriod: (next: Partial<State>) => void;
   onQuery: (q: string, asOf?: string) => void;
   onOpen: (work: string, date: string, anchor?: string) => void;
+  onOnDate: (date: string) => void;
+  onDoor: (go: Partial<State>) => void;
 }
 
 const TABS: { id: Space; label: string; hint: string }[] = [
   { id: "law", label: "A law", hint: "by name, subject or identifier" },
   { id: "time", label: "A period", hint: "what changed between two dates" },
   { id: "topic", label: "A topic", hint: "words as they appear in the text" },
+  { id: "onDate", label: "A date", hint: "what was in force on one day" },
+];
+
+/**
+ * Three ways in and nothing to try.
+ *
+ * A visitor arriving at three empty inputs has to think of a question before the product does
+ * anything at all, which is a poor trade for a corpus that can answer immediately. These are real
+ * queries against real laws, not a tour.
+ */
+const DOORS: { label: string; go: Partial<State> }[] = [
+  { label: "The Constitution", go: { work: "lu-legilux:constitution-1868-10-17-n1", space: "law", mode: "read" } },
+  { label: "Code du travail", go: { work: "lu-legilux:loi-2006-07-31-n2", space: "law", mode: "read" } },
+  { label: "What changed this month", go: { space: "time" } },
 ];
 
 export default function Finder(p: FinderProps) {
@@ -59,6 +75,28 @@ export default function Finder(p: FinderProps) {
         {p.space === "topic" && (
           <TopicSearch q={p.state.q ?? ""} asOf={p.state.asOf} onQuery={p.onQuery} onOpen={p.onOpen} />
         )}
+        {p.space === "onDate" && (
+          <div className="sel">
+            <label className="pick"><i>on</i>
+              <input type="date" aria-label="Show what was in force on this date"
+                     value={p.state.asOf ?? p.today}
+                     onChange={(e) => p.onOnDate(e.target.value || p.today)} /></label>
+            <button type="button" onClick={() => p.onOnDate(p.state.asOf ?? p.today)}>Show</button>
+            <span className="grow" />
+            <span className="quick">
+              <button className="eg" onClick={() => p.onOnDate(p.today)}>today</button>
+              <span className="or">·</span>
+              <button className="eg" onClick={() => p.onOnDate("2020-03-18")}>18 March 2020</button>
+            </span>
+          </div>
+        )}
+      </div>
+
+      <div className="doors">
+        <span className="doors-h">or start here</span>
+        {DOORS.map((d) => (
+          <button key={d.label} className="door" onClick={() => p.onDoor(d.go)}>{d.label}</button>
+        ))}
       </div>
     </section>
   );

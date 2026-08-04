@@ -187,7 +187,9 @@ export function VersionRail({ dates, current, compareTo, scope, today, onPick, o
   const median = gaps.length ? Math.round(gaps[Math.floor(gaps.length / 2)]) : 0;
   const [a, b] = i >= 0 && j >= 0 ? [Math.min(xs[i], xs[j]), Math.max(xs[i], xs[j])] : [0, 0];
   const pick = (d: string, shift: boolean) => {
-    if (shift || arming) { if (d !== current) onCompare(d); return; }
+    // In a comparison, a tick is the other end of it. Leaving the comparison to read one version
+    // is what the ✕ is for, and losing the pair on a stray tap was the worse failure.
+    if (shift || arming || compareTo) { if (d !== current) onCompare(d); return; }
     onPick(d);
   };
 
@@ -208,10 +210,20 @@ export function VersionRail({ dates, current, compareTo, scope, today, onPick, o
         ) : arming ? (
           <span className="hint arm">now pick the version to compare it with</span>
         ) : (
-          <span className="hint">or shift-click a second version</span>
+          <span className="hint">
+            {compareTo ? "" : "pick another version to change the pair"}
+          </span>
         )}
         <span className="grow" />
-        {compareTo ? null : (
+        {/* One click, because the question a tick poses is nearly always "what changed HERE",
+            meaning against the version before it. Choosing an arbitrary pair is the rarer case and
+            keeps its own path: while a comparison is on screen, clicking any tick moves the other
+            end, which works with a finger where shift-click never could. */}
+        {compareTo ? null : i > 0 ? (
+          <button className="stepbtn wide" onClick={() => onCompare(dates[i - 1])}>
+            What changed here
+          </button>
+        ) : (
           <button className={"stepbtn wide" + (arming ? " on" : "")} disabled={dates.length < 2}
                   aria-pressed={arming} onClick={() => setArming((v) => !v)}>
             {arming ? "Cancel" : "Compare"}

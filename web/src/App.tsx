@@ -184,6 +184,29 @@ export default function App() {
     return () => { live = false; };
   }, [s.work, s.from, s.until, s.order, s.layer, page]);
 
+  // "What was in force on this day": the compliance question, answered deterministically like
+  // every other control in the workspace rather than only through the assistant.
+  useEffect(() => {
+    if (s.space !== "onDate" || !s.asOf) return;
+    let live = true;
+    tool<any>("in_force_on", { date: s.asOf, limit: 60 })
+      .then((res) => {
+        if (!live) return;
+        const envs = (Array.isArray(res) ? res : [res]) as any[];
+        // in_force_on returns `works` with a `total_works_in_force` count, and its rows carry
+        // work/title/document_type/valid_from. Mapped here to the shape the view already speaks.
+        const rows = envs.flatMap((e) => (e?.works ?? []).map((w: any) => ({
+          work: w.work, title: w.title, kind: w.document_type,
+          valid_from: w.valid_from, permalink: w.permalink,
+        })));
+        setUi(rows.length
+          ? { in_force: { date: s.asOf!, total: envs.reduce((n, e) => n + (e?.total_works_in_force ?? 0), 0), rows } }
+          : { gap: { status: "no_result", explanation: `Nothing is recorded as in force on ${s.asOf}.`, available: [] } });
+      })
+      .catch(() => {});
+    return () => { live = false; };
+  }, [s.space, s.asOf]);
+
   // With an article open the rail narrows to THAT article's distinct texts — the question a
   // reader actually has ("when did this paragraph change?") rather than "when was anything
   // in this law touched?". Falls back to the law's versions when no per-article history exists.
@@ -262,6 +285,7 @@ export default function App() {
     setSaid(undefined);
     if (sp === "time") go({ space: sp, work: undefined, anchor: undefined, from: s.from ?? shift(today(), -365), until: s.until ?? today(), order: s.order ?? "by_churn" });
     else if (sp === "topic") go({ space: sp, work: undefined, anchor: undefined });
+    else if (sp === "onDate") go({ space: sp, work: undefined, anchor: undefined, from: undefined, until: undefined, asOf: s.asOf ?? today() });
     else go({ space: sp, from: undefined, until: undefined });
   };
 
@@ -280,15 +304,24 @@ export default function App() {
           onPeriod={(next) => { setUi(undefined); go(next); }}
           onQuery={(query, asOf) => go({ q: query, asOf, work: undefined })}
           onOpen={(work, date, anchor) => { setUi(undefined); go({ work, date, anchor, mode: "read", space: "law" }); }}
+          onOnDate={(d) => { setUi(undefined); go({ space: "onDate", asOf: d, work: undefined, from: undefined, until: undefined }); }}
+          onDoor={(next) => {
+            setUi(undefined);
+            // "What changed this month" is a period, computed here so the door stays declarative.
+            const withDates = next.space === "time"
+              ? { ...next, from: shift(today(), -30), until: today(), order: "by_churn" as const }
+              : next;
+            go(withDates);
+          }}
         />
       ) : (
         <nav className="doors">
           <button className="backhome" onClick={() => { setUi(undefined); setSaid(undefined); go({ work: undefined, q: undefined, from: undefined, until: undefined, anchor: undefined, to: undefined, space: undefined }); }}>
             ← everything
           </button>
-          {(["law", "time", "topic"] as const).map((sp) => (
+          {(["law", "time", "topic", "onDate"] as const).map((sp) => (
             <button key={sp} className={space === sp ? "on" : ""} onClick={() => switchTo(sp)}>
-              {sp === "law" ? "a law" : sp === "time" ? "a period" : "a topic"}
+              {sp === "law" ? "a law" : sp === "time" ? "a period" : sp === "topic" ? "a topic" : "a date"}
             </button>
           ))}
         </nav>
@@ -361,6 +394,7 @@ export default function App() {
                                        onClear={() => go({ anchor: undefined })} /> :
          s.work ? <Empty>Loading…</Empty> :
          !front && space === "time" ? <Empty>Pick a period above.</Empty> :
+         space === "onDate" && !s.asOf ? <Empty>Pick a date above.</Empty> :
          null}
       </div>
 

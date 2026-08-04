@@ -6,12 +6,15 @@ import { useEffect, useState } from "react";
 /** Reading one version, or comparing two. History is not a mode — the rail always shows it. */
 export type Mode = "read" | "compare";
 /** The three subjects a question can be about — a law, a stretch of time, or words. */
-export type Space = "law" | "time" | "topic";
+// "onDate" is the compliance question, "what applied on the day it happened", which the corpus
+// has always answered and the workspace never asked. It was reachable only as a plain page or by
+// asking the assistant.
+export type Space = "law" | "time" | "topic" | "onDate";
 
 export interface State {
   space?: Space;
   q?: string;         // topic query
-  asOf?: string;      // topic: restrict to versions valid on this date
+  asOf?: string;      // topic: restrict to versions valid on this date; onDate: THE date
   work?: string;      // "lu-legilux:loi-2020-07-17-a624"
   date?: string;      // point in time for read/compare-from
   to?: string;        // compare-to
