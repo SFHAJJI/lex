@@ -386,12 +386,40 @@ app.MapGet("/", () =>
     var cov = readers.Values.Select(r => r.Coverage()).ToList();
     var tools = mcpCore.ToolDefs().OfType<JsonObject>()
                        .Select(t => t["name"]!.GetValue<string>()).ToList();
+
+    // The suggested starting points, checked against the index that will serve them.
+    //
+    // These lived in the workspace bundle as hand-written slugs, and one of the three was
+    // "lu-legilux:code-penal", which does not exist: the Code penal is loi-1879-06-18-n1. So a
+    // first-time visitor who took one of only three invitations on the page was told the work was
+    // unknown. Worse, that work is the best thing in the corpus to land on, 699 provisions with
+    // per-article permalinks. Emitting them from here means a door that does not resolve is
+    // dropped before anyone can click it, and says so in the log.
+    var doors = new (string Publisher, string Work, string Label)[]
+    {
+        ("lu-legilux", "constitution-1868-10-17-n1", "The Constitution"),
+        ("lu-legilux", "loi-2006-07-31-n2", "Code du travail"),
+        ("lu-legilux", "loi-1879-06-18-n1", "Code pénal"),
+    };
+    var liveDoors = new JsonArray();
+    foreach (var (pub, work, label) in doors)
+    {
+        if (readers.TryGetValue(pub, out var dr) && dr.WorkExists(work))
+            liveDoors.Add(new JsonObject { ["work"] = $"{pub}:{work}", ["label"] = label });
+        else
+            Console.Error.WriteLine($"[web] door dropped: {pub}:{work} ({label}) is not in a mounted index");
+    }
     // The thesis of the whole project, said once, at the top. It used to sit below three
     // promotional cards, where the visitors most likely to bounce never reached it — while
     // the sentence above the fold merely announced that the site answers questions.
     var body = $"""
         <p class="lede">Ask what any Luxembourg or EU law said on any day, exactly as its
         publisher issued it.</p>
+        """
+        + $"""
+        <!-- Read synchronously by the workspace on mount, so the doors never flash in or need a
+             round trip of their own. -->
+        <script type="application/json" id="doors">{liveDoors.ToJsonString()}</script>
         """
         + """
         <!-- The workspace mounts here. Without JavaScript the page still explains itself

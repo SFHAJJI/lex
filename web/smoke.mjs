@@ -13,7 +13,13 @@ const code = fs.readFileSync(bundle, "utf8");
 // different address. Only the home surface was ever checked, which is why deleting the finder
 // could take the report's own controls with it and still pass.
 async function mount(url) {
-  const dom = new JSDOM(`<!doctype html><html><body><div id="workspace"></div></body></html>`, {
+  // The server emits the suggested starting points, validated against the index, so the mount
+  // has to be given one to exercise the path that reads them.
+  const doors = JSON.stringify([{ work: "lu-legilux:loi-1879-06-18-n1", label: "Code penal" }]);
+  const dom = new JSDOM(
+    `<!doctype html><html><body>` +
+    `<script type="application/json" id="doors">${doors}</script>` +
+    `<div id="workspace"></div></body></html>`, {
     runScripts: "outside-only",
     url,
   });
@@ -41,6 +47,8 @@ const html = await mount("https://law.soufien.lu/");
 for (const [re, want, why] of [
   [/class="finder"/, true, "the search card is gone"],
   [/class="onebox"/, true, "the single search input is gone"],
+  [/class="door"/, true, "the suggested starting points are gone"],
+  [/Code penal/, true, "the doors did not come from the server-emitted block"],
   [/class="asof"/, true, "the as-of date control is gone; the date IS the product"],
   [/class="asklaunch"/, true, "the assistant launcher is gone"],
   [/class="fin-tab/, false, "the query-type tabs are back; one box decides for the reader"],

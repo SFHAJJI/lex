@@ -35,11 +35,25 @@ export interface SearchProps {
 type WorkHit = { work: string; title: string; validFrom?: string };
 type ArticleHit = { work: string; title: string; anchor: string; num?: string; snippet?: string; validFrom: string };
 
-const DOORS = [
-  { label: "The Constitution", work: "lu-legilux:constitution-1868-10-17-n1" },
-  { label: "Code du travail", work: "lu-legilux:loi-2006-07-31-n2" },
-  { label: "Code pénal", work: "lu-legilux:code-penal" },
-];
+/**
+ * The suggested starting points, emitted by the server from the index that will serve them.
+ *
+ * They used to be hand-written here, and one of the three pointed at "lu-legilux:code-penal",
+ * which is not a work: the Code penal is loi-1879-06-18-n1. A visitor who took one of only three
+ * invitations on the front page was told the work was unknown. Nothing could catch that from in
+ * here, because this bundle has no idea what the index holds.
+ */
+type Door = { work: string; label: string };
+
+const DOORS: Door[] = (() => {
+  try {
+    const el = document.getElementById("doors");
+    const parsed = el?.textContent ? JSON.parse(el.textContent) : [];
+    return Array.isArray(parsed) ? (parsed as Door[]) : [];
+  } catch {
+    return [];   // a malformed block costs the suggestions, never the search box
+  }
+})();
 
 /** A bare date is a question in itself: what applied that day. */
 const DATE_ONLY = /^\s*(\d{4}-\d{2}-\d{2})\s*$/;
@@ -125,14 +139,14 @@ export default function Search(p: SearchProps) {
       <div className="doors">
         {q ? (
           <button className="door" onClick={() => { setText(""); p.onQuery(""); }}>clear</button>
-        ) : (
+        ) : DOORS.length > 0 ? (
           <>
             <span className="doors-h">Try</span>
             {DOORS.map((d) => (
-              <button key={d.label} className="door" onClick={() => p.onOpen(d.work, asOf)}>{d.label}</button>
+              <button key={d.work} className="door" onClick={() => p.onOpen(d.work, asOf)}>{d.label}</button>
             ))}
           </>
-        )}
+        ) : null}
         <button className="door" onClick={p.onMonitor}>What changed recently</button>
       </div>
 
