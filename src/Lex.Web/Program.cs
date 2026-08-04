@@ -2017,3 +2017,8 @@ app.MapGet($"/{pubRoute}/{{work}}/{{date}}", (string publisher, string work, str
 });
 
 app.Run();
+
+// Top-level statements compile to an internal Program class. WebApplicationFactory<T> needs a
+// type from this assembly to boot the app in-process, which is how the golden tests render every
+// route without shelling out to a server.
+public partial class Program;

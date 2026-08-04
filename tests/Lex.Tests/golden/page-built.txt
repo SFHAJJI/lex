@@ -1,0 +1,306 @@
+HTTP 200
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Titles are labels, not sentences: one that ends in a full stop renders "acts., Lex" in
+     the tab and in every social card, which is what the front page did until now. -->
+<title>How it was built, Lex</title>
+<meta name="description" content="Point-in-time Luxembourg law, plus ten EU acts: what did the rule say on a given date? Grounded AI answers, permalinks, timelines, diffs, cryptographic provenance, and a public MCP endpoint.">
+<meta property="og:title" content="How it was built, Lex">
+<meta property="og:description" content="Point-in-time Luxembourg law, plus ten EU acts, with grounded AI answers, per-article history, and verifiable provenance.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Lex">
+<meta property="og:image" content="https://golden.test/og.png">
+<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://golden.test/og.png">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9A%96%3C/text%3E%3C/svg%3E">
+<style>
+  /* Law is set in a serif; the interface around it is sans. The accent is reserved
+     for one thing only: the date you are looking at. */
+  :root { --bg:#faf8f3; --fg:#15171b; --muted:#5d5a53; --line:#e2ded4; --accent:#a8342a;
+          --card:#ffffff; --ok:#2f6b46; --warn:#8a5a12; --on-accent:#ffffff;
+          --serif:Georgia,'Iowan Old Style','Palatino Linotype','Times New Roman',serif;
+          --mono:ui-monospace,'Cascadia Code',Consolas,monospace; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#101215; --fg:#e9e5dd; --muted:#9a958b; --line:#2b2e34; --accent:#e0705f;
+            --card:#171a1e; --ok:#6cc48f; --warn:#e0b070; --on-accent:#101215; } }
+  * { box-sizing:border-box }
+  body { margin:0; font:16px/1.6 ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif; background:var(--bg); color:var(--fg); }
+  a { color:var(--accent); text-decoration:none } a:hover { text-decoration:underline }
+  header { border-bottom:1px solid var(--line); padding:14px 20px; display:flex; gap:20px; align-items:baseline; flex-wrap:wrap }
+  header .brand { font-family:var(--serif); font-weight:700; font-size:21px; color:var(--fg); letter-spacing:-.01em }
+  header a.navlink { color:var(--muted); font-size:14.5px }
+  header a.navlink.on { color:var(--fg); font-weight:600; box-shadow:inset 0 -2px 0 var(--accent) }
+  main { max-width:960px; margin:0 auto; padding:26px 20px 60px }
+  h1 { font-family:var(--serif); font-size:29px; line-height:1.15; letter-spacing:-.015em; margin:0 0 6px; text-wrap:balance }
+  h2 { font-family:var(--serif); font-size:20px; margin:28px 0 8px }
+  .sub { color:var(--muted); margin:0 0 18px; font-size:14.5px }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px 16px; margin:12px 0; overflow-x:auto }
+  .badge { display:inline-block; border:1px solid var(--line); border-radius:99px; padding:1px 10px; font-size:12.5px; color:var(--muted); margin-right:6px }
+  .badge.ok { color:var(--ok); border-color:var(--ok) }
+  .badge.warn { color:var(--warn); border-color:var(--warn) }
+  table { border-collapse:collapse; width:100%; font-size:14.5px }
+  th,td { text-align:left; padding:7px 10px; border-bottom:1px solid var(--line); vertical-align:top }
+  th { color:var(--muted); font-weight:600; font-size:13px }
+  .mono { font-family:var(--mono); font-size:13px; word-break:break-all }
+  .kv td:first-child { color:var(--muted); white-space:nowrap; padding-right:18px }
+  /* The catalogue. Filters are links, so every state of the page is a shareable URL. */
+  .filters { display:flex; flex-direction:column; gap:7px; margin:14px 0 16px }
+  .filters > div { display:flex; flex-wrap:wrap; gap:6px; align-items:baseline }
+  .filters i { font-style:normal; font-size:11px; letter-spacing:.06em; text-transform:uppercase;
+               color:var(--muted); width:74px; flex:none }
+  .filters .f { border:1px solid var(--line); border-radius:99px; padding:2px 11px; font-size:13px;
+                color:var(--muted); text-decoration:none }
+  .filters .f:hover { border-color:var(--accent); color:var(--accent); text-decoration:none }
+  .filters .f.on { border-color:var(--accent); color:var(--accent); font-weight:600 }
+  .filters .n { opacity:.65; font-size:11.5px; font-variant-numeric:tabular-nums }
+  .cat td:first-child a { font-weight:600 }
+  .cat .r { text-align:right; font-variant-numeric:tabular-nums }
+  .cat .sub { font-size:12px; margin-top:2px }
+  .pager { display:flex; gap:14px; align-items:baseline; margin:12px 0; font-size:14px }
+  .pager span { color:var(--muted); font-variant-numeric:tabular-nums }
+  form.inline { display:flex; gap:8px; flex-wrap:wrap; margin:10px 0 }
+  input,select,button { font:inherit; padding:7px 10px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--fg) }
+  button { background:var(--accent); color:var(--on-accent); border-color:var(--accent); cursor:pointer }
+  footer { border-top:1px solid var(--line); margin-top:40px; padding:16px 20px; color:var(--muted); font-size:13px }
+  .notice { border-left:3px solid var(--warn); padding:10px 14px; background:var(--card); border-radius:0 8px 8px 0; margin:12px 0; font-size:14.5px }
+  .snippet { color:var(--muted); font-size:13.5px }
+  .sitemap { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:8px 30px;
+             margin-bottom:18px; padding-bottom:16px; border-bottom:1px solid var(--line) }
+  .sitemap div { display:flex; flex-direction:column; gap:3px }
+  .sitemap b { color:var(--fg); font-size:12px; letter-spacing:.06em; text-transform:uppercase;
+               margin-bottom:4px; font-weight:600 }
+  .sitemap a { color:var(--muted) }
+  .sitemap a:hover { color:var(--accent) }
+  :focus-visible { outline:2px solid var(--accent); outline-offset:2px }
+  .rail { position:relative; height:44px; margin:14px 0 0 }
+  .rail .axis { position:absolute; left:0; right:0; top:21px; height:1px; background:var(--line) }
+  .rail .tick { position:absolute; top:13px; width:1px; height:17px; background:var(--muted); opacity:.55 }
+  .rail .tick:hover { opacity:1; background:var(--accent); width:2px }
+  .rail .tick.act { top:5px; height:33px; width:2px; background:var(--accent); opacity:1 }
+  .rail .yr { position:absolute; top:30px; font-family:var(--mono); font-size:11px; color:var(--muted) }
+  .railcap { margin:2px 0 18px } .nowmark { color:var(--accent) }
+  .lawbody { font-family:var(--serif); font-size:16.5px; line-height:1.62 }
+  /* Phones: law texts carry wide tables and long pre blocks. Let each scroll inside
+     itself rather than pushing the whole page sideways. Desktop is untouched. */
+  @media (max-width:640px) {
+    main { padding:20px 14px 48px }
+    table { display:block; overflow-x:auto }
+    pre { overflow-x:auto }
+    header { gap:12px; padding:12px 14px }
+    h1 { font-size:25px }
+    .rail .yr { font-size:10px }
+  }
+</style></head>
+<body>
+<header>
+  <!-- The workspace IS the home page, so there is no "Ask" to link to from it, and /find,
+       /search and /changed are the no-JavaScript twins of its three tabs rather than separate
+       features. Promoting them here is what made the site look like it had two ways to do
+       everything. They stay reachable from the footer and from the noscript line. -->
+  <a class="brand" href="/">Lex</a>
+  <a class="navlink" href="/browse">Browse everything</a>
+  <a class="navlink on" href="/how-it-works">How it works</a>
+  <span style="flex:1"></span>
+  <a class="navlink" href="/developers">For developers</a>
+</header>
+<main>
+<h1>How it was built</h1>
+
+<p class="lede">A point-in-time legal database, an MCP server, a grounded assistant and a
+nightly pipeline, built solo. This page is the part usually left out: the decisions, the
+things that broke, and how correctness is actually proven rather than asserted.</p>
+
+<div class="notice"><b>Built with AI assistance.</b> The architecture, the decisions and the
+verification are mine; a great deal of the code was written with an AI pair. That is stated
+here because it is true, and because the parts that matter, the decision record, the failure
+modes below, and the tests that catch them, are where the engineering actually lives.</div>
+
+<h2>The problem</h2>
+<p>Ask any legal site what a law says and you get today's text. Almost every question that
+matters is about a <b>date</b>: what applied when the contract was signed, when the fine was
+issued, when the breach happened. Official publishers do hold dated consolidated editions , 
+but scattered across formats (Akoma Ntoso XML, Formex XML, legacy XHTML), with no article-level
+access and no machine interface. Lex turns that into one queryable, verifiable history.</p>
+
+<h2>The shape of it</h2>
+<div class="card"><pre class="mono" style="white-space:pre-wrap;margin:0;font-size:13px">
+official publishers          nightly, one scheduled job
+Legilux · EUR-Lex/Cellar     ──────────────────────────────────
+        │                    ingest → anomaly gate → derive →
+        │  verbatim bytes      (&gt;5% drop =        determinism
+        ▼  + sha256             commit nothing)     guard
+  EVIDENCE REPOS ──────────────────────────────────────────►
+  append-only, never rewritten            │
+        │                                 ▼
+        │  deterministic extraction   DERIVED REPO (per article)
+        ▼  (immutable profiles)           │
+  SIGNED SQLITE INDEX (ECDSA P-256) ◄─────┘
+        │
+        ├──► MCP server  (public, no key)      
+        └──► this site   (Container Apps, scale-to-zero)</pre></div>
+<p class="sub">Azure: Container Apps behind a managed certificate, Container Registry, Azure
+OpenAI (gpt-5-mini) for the assistant, Application Insights via OpenTelemetry, Azure DNS.
+The web app runs at 0.25 vCPU and <b>scales to zero</b>, idle cost is essentially the
+registry and the DNS zone.</p>
+
+<h2>Decisions worth defending</h2>
+<div class="card"><table>
+<tr><th>decision</th><th>why, and what it cost</th></tr>
+<tr><td><b>Store publisher bytes verbatim</b></td>
+    <td>The evidence layer is never "cleaned". A hash over cleaned text proves nothing about
+    what the state published. Cost: two layers to maintain instead of one.</td></tr>
+<tr><td><b>Extraction profiles are immutable</b></td>
+    <td>Once <span class="mono">akn-lu/1</span> is published, its output for a given input can
+    never change, a frozen-fingerprint test fails the build if it does. Improvements ship as
+    a new profile. Cost: no silent fixes, ever.</td></tr>
+<tr><td><b>Refusals are part of the API</b></td>
+    <td>Seven typed refusal codes instead of empty results. A caller can distinguish "no such
+    law", "no version that day" and "text withheld". Cost: more surface to test.</td></tr>
+<tr><td><b>A small model, tightly fenced</b></td>
+    <td>The assistant only picks lookups and quotes results, no agent framework, no chain of
+    reasoning over law. Cheap, auditable, and wrong answers are visible against the evidence
+    shown beside them.</td></tr>
+<tr><td><b>Nightly commits nothing when unsure</b></td>
+    <td>A &gt;5% drop in works, or a re-derivation that is not byte-identical, aborts the run.
+    A partial upstream response must never rewrite history.</td></tr>
+</table>
+<p class="sub" style="margin:8px 0 0">Forty-eight numbered decisions like these are recorded in
+the specification, each with its rationale, so "why did you do it that way" has a written
+answer rather than a recollection.</p></div>
+
+<h2>The machinery that keeps it fresh</h2>
+<p>Law changes while you sleep, so the corpus is rebuilt while I do. One scheduled job at
+02:17 UTC drives the whole fleet, no manual step exists, and there is deliberately only one
+credential and one cron for all publishers.</p>
+<div class="card"><table>
+<tr><th>stage</th><th>what it does, and how it refuses to do damage</th></tr>
+<tr><td><b>1. Ingest</b></td><td>Asks each publisher what versions exist, downloads any it has
+not seen, and writes them <i>verbatim</i>. Existing files are never reopened for writing , 
+the evidence layer is append-only by construction.</td></tr>
+<tr><td><b>2. Anomaly gate</b></td><td>If the work count drops more than 5%, the run assumes the
+upstream response was partial, discards everything and commits nothing. A bad night leaves
+yesterday's good data in place.</td></tr>
+<tr><td><b>3. Derive</b></td><td>Regenerates the per-article layer from the verbatim files.</td></tr>
+<tr><td><b>4. Determinism guard</b></td><td>If derived output changed while no source file did,
+that means the extractor is non-deterministic, the run fails loudly and commits nothing,
+because a silent extraction drift would corrupt history.</td></tr>
+<tr><td><b>5. Index &amp; publish</b></td><td>Rebuilds the search index, signs it (ECDSA P-256),
+publishes it as a release asset, regenerates the JSONL and Parquet datasets.</td></tr>
+<tr><td><b>6. Report</b></td><td>Writes a three-state outcome per publisher
+(<span class="mono">ran_committed</span> / <span class="mono">ran_no_change</span> /
+<span class="mono">failed_*</span>) and opens an issue on failure.</td></tr>
+</table></div>
+<p>The result travels with the data: every index carries a signed stamp recording when it was
+built and from which corpus commit, and every tool response returns it. <b>This is that stamp,
+read live from the running indexes:</b></p>
+<div class="card"><table>
+<tr><th>publisher</th><th>index built</th><th>from corpus commit</th><th>signature</th></tr>
+<tr><td>t-pub</td>
+<td class="mono"><TIMESTAMP></td>
+<td class="mono">goldenc</td>
+<td><span class="badge ok">valid</span></td></tr>
+</table>
+<p class="sub" style="margin:8px 0 0">Nothing here is typed by hand, if the pipeline stopped,
+this table would say so. The same values come back from the
+<a href="/developers">coverage tool</a> in every API response.</p></div>
+
+<h2>What broke, and what it taught</h2>
+<div class="card">
+<p><b>A silently dead search, caught in production.</b> The nightly job built the search index
+without the per-article layer. Nothing errored: the index was valid, signed, and published , 
+it just had zero provisions in it, so search returned nothing. The automated eval suite caught
+it by asking a question a user would ask and noticing the assistant could no longer find a
+Luxembourg code.</p>
+<p class="sub">Fix: the index step now runs after derivation and takes the article layer as a
+required input, so the failure cannot recur. Lesson: a green build is not a working system , 
+the only tests that would have caught this are the ones that exercise it end to end, the way
+someone actually uses it.</p>
+<p><b>A parser that quietly duplicated text.</b> Adding Formex XML support introduced doubled
+paragraphs where an article had introductory text followed by a list. It looked plausible on
+screen. It was caught by re-reading real output rather than trusting a passing test, fixed the
+same day, and pinned with a fingerprint test so the profile can never drift again.</p>
+</div>
+
+<h2>How correctness is proven, not claimed</h2>
+<div class="card"><table>
+<tr><th>mechanism</th><th>what it guarantees</th></tr>
+<tr><td>34 unit tests</td><td>parsers, temporal logic, index schema, signing</td></tr>
+<tr><td>Frozen profile fingerprints</td><td>a published extraction can never change output</td></tr>
+<tr><td>Determinism guard in CI</td><td>re-derivation is byte-identical or the run commits nothing</td></tr>
+<tr><td>10 end-to-end AI evals</td><td>the assistant picks the right tools and never cites a source it was not given</td></tr>
+<tr><td>LLM-judged groundedness</td><td>answers scored against the evidence actually returned</td></tr>
+<tr><td>ECDSA-signed indexes</td><td>anyone can verify a build was not altered, <a href="/verify">recipe</a></td></tr>
+</table></div>
+
+<h2>Scale</h2>
+<p><span class="badge">2 laws</span>
+<span class="badge">3 dated versions</span>
+<span class="badge">333,000+ articles indexed</span>
+<span class="badge">~7,200 lines of C# across 10 projects</span>
+<span class="badge">3 XML/HTML dialects parsed</span>
+<span class="badge">nightly, unattended</span></p>
+
+<h2>What I would do differently</h2>
+<p>Version the index schema migration path from day one, schema v2 required a full rebuild
+rather than a migration. Put the end-to-end evals in the nightly pipeline, not only in my hands;
+they caught the worst bug of the project and should be a gate, not a habit. And treat the
+derived layer's release assets as part of the deploy, not a follow-up step, the two times
+something shipped stale, that was why.</p>
+
+<!-- Eight sections on how this was made, and until now not one word on who made it.
+     Anyone still reading here has already decided the work is serious, so the answer
+     belongs at the end rather than at the top: a law tool that opens by introducing its
+     author reads as a portfolio, and stops being trusted as a source. Two sentences. -->
+<h2>Who built this</h2>
+<div class="card">
+<p>Lex is built and run by <b>Soufien Hajji</b>, a software engineer in Luxembourg. It is a
+personal project, unaffiliated with any publisher or public body, built the way I build
+professionally: the pipeline is deterministic, the claims are testable, and the parts that
+cannot be verified say so rather than guessing.</p>
+<p class="sub">Two other things I have built the same way:
+<a href="https://soufien.lu" rel="noopener">soufien.lu</a>, where you can ask an assistant
+about my work or paste a job advert to see how it matches, and
+<a href="https://energy.soufien.lu" rel="noopener">energy.soufien.lu</a>, an AI co-pilot
+for solar prospecting in Luxembourg.</p>
+</div>
+
+<p class="sub"><a href="/decisions"><b>Why it is built this way →</b></a> ·
+<a href="/developers"><b>Use it from your own code →</b></a> ·
+<a href="/architecture"><b>The data model →</b></a> ·
+<a href="/verify"><b>Verify a build yourself →</b></a> ·
+<a href="https://github.com/SFHAJJI/lex-articles" rel="noopener"><b>The dataset →</b></a></p>
+</main>
+<footer>
+<!-- Fourteen links in one undifferentiated run answered no question a reader had. Three
+     named groups do: what each page is FOR is now the label above it. -->
+<nav class="sitemap" aria-label="All pages">
+  <div><b>Read the law</b>
+    <a href="/browse">Browse everything</a><a href="/stories">Worked examples</a>
+    <a href="/find">Plain pages, without JavaScript</a></div>
+  <div><b>Check the work</b>
+    <a href="/how-it-works">How it works</a><a href="/coverage">What Lex holds, and lacks</a>
+    <a href="/decisions">Decisions, and what they cost</a>
+    <a href="/verify">Verify it yourself</a><a href="/architecture">Architecture</a></div>
+  <!-- The datasets, not the engine. This group used to end at "Source on GitHub" pointing at
+       the engine repo, which is the wrong thing to lead with for a reader who wants to USE
+       this law rather than read the code that serves it. The corpora are the part that is
+       reusable on its own, and they were reachable only from /developers. -->
+  <div><b>Build on it</b>
+    <a href="/developers">Developers &amp; API</a><a href="/ai">Connect your own AI</a>
+    <a href="/built">How it was built</a>
+    <a href="https://github.com/SFHAJJI/lex-articles" rel="noopener">Dataset: law by article (CC-BY)</a>
+    <a href="https://github.com/SFHAJJI/lex-corpus-lu-legilux" rel="noopener">Corpus: Luxembourg, verbatim</a>
+    <a href="https://github.com/SFHAJJI/lex-corpus-eu-eurlex" rel="noopener">Corpus: EU, verbatim</a></div>
+</nav>
+  <b>Not legal advice, and not the official text.</b> Lex answers <i>what the rule was</i>, never what it
+  means for your situation, no interpretation, no advice. Every answer shows the source it came from.
+  LU data: Legilux, Ministère d'État, Service central de législation, Grand-Duché de Luxembourg
+  (CC-BY 4.0, metadata and content files; consolidated texts reproduced verbatim from the official filestore).
+  EU data: © European Union, reuse with attribution (Commission Decision 2011/833/EU);
+  <b>consolidated texts have no legal effect</b>, only acts published in the Official Journal are authentic.
+  · <a href="https://github.com/SFHAJJI/lex">source</a>
+</footer>
+</body></html>
