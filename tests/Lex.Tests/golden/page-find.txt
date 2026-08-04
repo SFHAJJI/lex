@@ -1,0 +1,173 @@
+HTTP 200
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Titles are labels, not sentences: one that ends in a full stop renders "acts., Lex" in
+     the tab and in every social card, which is what the front page did until now. -->
+<title>Find a law, Lex</title>
+<meta name="description" content="Point-in-time Luxembourg law, plus ten EU acts: what did the rule say on a given date? Grounded AI answers, permalinks, timelines, diffs, cryptographic provenance, and a public MCP endpoint.">
+<meta property="og:title" content="Find a law, Lex">
+<meta property="og:description" content="Point-in-time Luxembourg law, plus ten EU acts, with grounded AI answers, per-article history, and verifiable provenance.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Lex">
+<meta property="og:image" content="https://golden.test/og.png">
+<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://golden.test/og.png">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9A%96%3C/text%3E%3C/svg%3E">
+<style>
+  /* Law is set in a serif; the interface around it is sans. The accent is reserved
+     for one thing only: the date you are looking at. */
+  :root { --bg:#faf8f3; --fg:#15171b; --muted:#5d5a53; --line:#e2ded4; --accent:#a8342a;
+          --card:#ffffff; --ok:#2f6b46; --warn:#8a5a12; --on-accent:#ffffff;
+          --serif:Georgia,'Iowan Old Style','Palatino Linotype','Times New Roman',serif;
+          --mono:ui-monospace,'Cascadia Code',Consolas,monospace; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#101215; --fg:#e9e5dd; --muted:#9a958b; --line:#2b2e34; --accent:#e0705f;
+            --card:#171a1e; --ok:#6cc48f; --warn:#e0b070; --on-accent:#101215; } }
+  * { box-sizing:border-box }
+  body { margin:0; font:16px/1.6 ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif; background:var(--bg); color:var(--fg); }
+  a { color:var(--accent); text-decoration:none } a:hover { text-decoration:underline }
+  header { border-bottom:1px solid var(--line); padding:14px 20px; display:flex; gap:20px; align-items:baseline; flex-wrap:wrap }
+  header .brand { font-family:var(--serif); font-weight:700; font-size:21px; color:var(--fg); letter-spacing:-.01em }
+  header a.navlink { color:var(--muted); font-size:14.5px }
+  header a.navlink.on { color:var(--fg); font-weight:600; box-shadow:inset 0 -2px 0 var(--accent) }
+  main { max-width:960px; margin:0 auto; padding:26px 20px 60px }
+  h1 { font-family:var(--serif); font-size:29px; line-height:1.15; letter-spacing:-.015em; margin:0 0 6px; text-wrap:balance }
+  h2 { font-family:var(--serif); font-size:20px; margin:28px 0 8px }
+  .sub { color:var(--muted); margin:0 0 18px; font-size:14.5px }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px 16px; margin:12px 0; overflow-x:auto }
+  .badge { display:inline-block; border:1px solid var(--line); border-radius:99px; padding:1px 10px; font-size:12.5px; color:var(--muted); margin-right:6px }
+  .badge.ok { color:var(--ok); border-color:var(--ok) }
+  .badge.warn { color:var(--warn); border-color:var(--warn) }
+  table { border-collapse:collapse; width:100%; font-size:14.5px }
+  th,td { text-align:left; padding:7px 10px; border-bottom:1px solid var(--line); vertical-align:top }
+  th { color:var(--muted); font-weight:600; font-size:13px }
+  .mono { font-family:var(--mono); font-size:13px; word-break:break-all }
+  .kv td:first-child { color:var(--muted); white-space:nowrap; padding-right:18px }
+  /* The catalogue. Filters are links, so every state of the page is a shareable URL. */
+  .filters { display:flex; flex-direction:column; gap:7px; margin:14px 0 16px }
+  .filters > div { display:flex; flex-wrap:wrap; gap:6px; align-items:baseline }
+  .filters i { font-style:normal; font-size:11px; letter-spacing:.06em; text-transform:uppercase;
+               color:var(--muted); width:74px; flex:none }
+  .filters .f { border:1px solid var(--line); border-radius:99px; padding:2px 11px; font-size:13px;
+                color:var(--muted); text-decoration:none }
+  .filters .f:hover { border-color:var(--accent); color:var(--accent); text-decoration:none }
+  .filters .f.on { border-color:var(--accent); color:var(--accent); font-weight:600 }
+  .filters .n { opacity:.65; font-size:11.5px; font-variant-numeric:tabular-nums }
+  .cat td:first-child a { font-weight:600 }
+  .cat .r { text-align:right; font-variant-numeric:tabular-nums }
+  .cat .sub { font-size:12px; margin-top:2px }
+  .pager { display:flex; gap:14px; align-items:baseline; margin:12px 0; font-size:14px }
+  .pager span { color:var(--muted); font-variant-numeric:tabular-nums }
+  form.inline { display:flex; gap:8px; flex-wrap:wrap; margin:10px 0 }
+  input,select,button { font:inherit; padding:7px 10px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--fg) }
+  button { background:var(--accent); color:var(--on-accent); border-color:var(--accent); cursor:pointer }
+  footer { border-top:1px solid var(--line); margin-top:40px; padding:16px 20px; color:var(--muted); font-size:13px }
+  .notice { border-left:3px solid var(--warn); padding:10px 14px; background:var(--card); border-radius:0 8px 8px 0; margin:12px 0; font-size:14.5px }
+  .snippet { color:var(--muted); font-size:13.5px }
+  .sitemap { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:8px 30px;
+             margin-bottom:18px; padding-bottom:16px; border-bottom:1px solid var(--line) }
+  .sitemap div { display:flex; flex-direction:column; gap:3px }
+  .sitemap b { color:var(--fg); font-size:12px; letter-spacing:.06em; text-transform:uppercase;
+               margin-bottom:4px; font-weight:600 }
+  .sitemap a { color:var(--muted) }
+  .sitemap a:hover { color:var(--accent) }
+  :focus-visible { outline:2px solid var(--accent); outline-offset:2px }
+  .rail { position:relative; height:44px; margin:14px 0 0 }
+  .rail .axis { position:absolute; left:0; right:0; top:21px; height:1px; background:var(--line) }
+  .rail .tick { position:absolute; top:13px; width:1px; height:17px; background:var(--muted); opacity:.55 }
+  .rail .tick:hover { opacity:1; background:var(--accent); width:2px }
+  .rail .tick.act { top:5px; height:33px; width:2px; background:var(--accent); opacity:1 }
+  .rail .yr { position:absolute; top:30px; font-family:var(--mono); font-size:11px; color:var(--muted) }
+  .railcap { margin:2px 0 18px } .nowmark { color:var(--accent) }
+  .lawbody { font-family:var(--serif); font-size:16.5px; line-height:1.62 }
+  /* Phones: law texts carry wide tables and long pre blocks. Let each scroll inside
+     itself rather than pushing the whole page sideways. Desktop is untouched. */
+  @media (max-width:640px) {
+    main { padding:20px 14px 48px }
+    table { display:block; overflow-x:auto }
+    pre { overflow-x:auto }
+    header { gap:12px; padding:12px 14px }
+    h1 { font-size:25px }
+    .rail .yr { font-size:10px }
+  }
+</style></head>
+<body>
+<header>
+  <!-- The workspace IS the home page, so there is no "Ask" to link to from it, and /find,
+       /search and /changed are the no-JavaScript twins of its three tabs rather than separate
+       features. Promoting them here is what made the site look like it had two ways to do
+       everything. They stay reachable from the footer and from the noscript line. -->
+  <a class="brand" href="/">Lex</a>
+  <a class="navlink" href="/browse">Browse everything</a>
+  <a class="navlink" href="/how-it-works">How it works</a>
+  <span style="flex:1"></span>
+  <a class="navlink" href="/developers">For developers</a>
+</header>
+<main>
+<h1>Find a law</h1>
+
+<p class="lede">Three ways in. All of them end at the same place: the text of a law
+as it stood on a date you choose.</p>
+
+<div class="card"><h2 style="margin-top:0">Search by words</h2>
+<p class="sub">Finds the individual article, not just the law, search runs over every provision.</p>
+<form class="inline" action="/search" method="get">
+  <input name="q" aria-label="Words to search for in the text" style="flex:1;min-width:240px" placeholder="e.g. congé parental, breach notification, own funds">
+  <input type="date" name="as_of" aria-label="Only versions in force on this date">
+  <button type="submit">Search</button>
+</form></div>
+
+<div class="card"><h2 style="margin-top:0">What was in force on a date?</h2>
+<p class="sub">The compliance question in one call: everything that applied on a given day.</p>
+<form class="inline" action="/in-force-on" method="get">
+  <input type="date" name="date" aria-label="Date to list laws in force on" value="<TODAY>">
+  <button type="submit">List it</button>
+</form></div>
+
+<div class="card"><h2 style="margin-top:0">What changed between two dates?</h2>
+<p class="sub">Across the whole corpus, not one law at a time, the question a compliance
+reader actually has.</p>
+<p><a href="/changed"><b>Open the change report →</b></a> ·
+   <a href="/changed?from=2020-03-01&amp;to=2021-07-01&amp;order=by_churn">the pandemic, ranked by churn</a></p></div>
+
+<div class="card"><h2 style="margin-top:0">Browse everything</h2>
+<p class="sub">All 2 laws, by publisher and type.</p>
+<p><a href="/browse"><b>Open the catalogue →</b></a></p></div>
+
+<p class="sub">Not sure where to start? The <a href="/">assistant</a> takes a plain question,
+or read <a href="/stories">four laws with a story</a>.</p>
+</main>
+<footer>
+<!-- Fourteen links in one undifferentiated run answered no question a reader had. Three
+     named groups do: what each page is FOR is now the label above it. -->
+<nav class="sitemap" aria-label="All pages">
+  <div><b>Read the law</b>
+    <a href="/browse">Browse everything</a><a href="/stories">Worked examples</a>
+    <a href="/find">Plain pages, without JavaScript</a></div>
+  <div><b>Check the work</b>
+    <a href="/how-it-works">How it works</a><a href="/coverage">What Lex holds, and lacks</a>
+    <a href="/decisions">Decisions, and what they cost</a>
+    <a href="/verify">Verify it yourself</a><a href="/architecture">Architecture</a></div>
+  <!-- The datasets, not the engine. This group used to end at "Source on GitHub" pointing at
+       the engine repo, which is the wrong thing to lead with for a reader who wants to USE
+       this law rather than read the code that serves it. The corpora are the part that is
+       reusable on its own, and they were reachable only from /developers. -->
+  <div><b>Build on it</b>
+    <a href="/developers">Developers &amp; API</a><a href="/ai">Connect your own AI</a>
+    <a href="/built">How it was built</a>
+    <a href="https://github.com/SFHAJJI/lex-articles" rel="noopener">Dataset: law by article (CC-BY)</a>
+    <a href="https://github.com/SFHAJJI/lex-corpus-lu-legilux" rel="noopener">Corpus: Luxembourg, verbatim</a>
+    <a href="https://github.com/SFHAJJI/lex-corpus-eu-eurlex" rel="noopener">Corpus: EU, verbatim</a></div>
+</nav>
+  <b>Not legal advice, and not the official text.</b> Lex answers <i>what the rule was</i>, never what it
+  means for your situation, no interpretation, no advice. Every answer shows the source it came from.
+  LU data: Legilux, Ministère d'État, Service central de législation, Grand-Duché de Luxembourg
+  (CC-BY 4.0, metadata and content files; consolidated texts reproduced verbatim from the official filestore).
+  EU data: © European Union, reuse with attribution (Commission Decision 2011/833/EU);
+  <b>consolidated texts have no legal effect</b>, only acts published in the Official Journal are authentic.
+  · <a href="https://github.com/SFHAJJI/lex">source</a>
+</footer>
+</body></html>

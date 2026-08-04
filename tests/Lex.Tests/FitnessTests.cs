@@ -133,6 +133,54 @@ public class FitnessTests
             Assert.DoesNotContain(".Raw", File.ReadAllText(file));
     }
 
+    // F14 — the composition root stays a composition root.
+    //
+    // Program.cs was 2,019 lines: every route, the HTML shell, the stylesheet and seven scattered
+    // reads of the environment in one scope. Splitting it is worth nothing if the next feature
+    // lands back in the same file, and "keep it small" is not a rule anyone remembers under
+    // deadline. So it is a build failure instead.
+    [Fact]
+    public void F14_the_startup_file_registers_and_delegates_only()
+    {
+        var program = Path.Combine(RepoRoot(), "src", "Lex.Web", "Program.cs");
+        var text = File.ReadAllText(program);
+        var lines = File.ReadAllLines(program).Length;
+
+        Assert.True(lines < 150,
+            $"Program.cs is {lines} lines. It is the composition root: configuration, services, "
+            + "and which module answers what. A route or a page belongs in an endpoint module.");
+
+        // A route registered here is a route nobody will find later.
+        Assert.DoesNotContain("app.MapGet(\"", text);
+        Assert.DoesNotContain("app.MapPost(\"", text);
+
+        // Markup here means the shell has started leaking back out of PageShell.
+        Assert.DoesNotContain("<!DOCTYPE", text);
+        Assert.DoesNotContain("<div", text);
+    }
+
+    // F15 — every endpoint module is reachable from the composition root.
+    //
+    // A module nobody calls compiles, tests clean, and serves nothing. The failure mode is a
+    // 404 in production on a page that exists in the source.
+    [Fact]
+    public void F15_every_endpoint_module_is_mapped()
+    {
+        var webDir = Path.Combine(RepoRoot(), "src", "Lex.Web");
+        var program = File.ReadAllText(Path.Combine(webDir, "Program.cs"));
+
+        foreach (var file in Directory.EnumerateFiles(webDir, "*Endpoints.cs"))
+        {
+            var text = File.ReadAllText(file);
+            var i = text.IndexOf("public static IEndpointRouteBuilder Map", StringComparison.Ordinal);
+            Assert.True(i >= 0, $"{Path.GetFileName(file)} declares no Map* extension method.");
+
+            var name = text[(i + "public static IEndpointRouteBuilder ".Length)..];
+            name = name[..name.IndexOf('(')];
+            Assert.Contains($".{name}(", program);
+        }
+    }
+
     // F12 — no page states a tool count as a literal.
     //
     // Three places carried one by hand and all three were wrong at once: the /developers lede said

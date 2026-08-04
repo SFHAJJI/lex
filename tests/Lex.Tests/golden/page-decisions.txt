@@ -1,0 +1,239 @@
+HTTP 200
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Titles are labels, not sentences: one that ends in a full stop renders "acts., Lex" in
+     the tab and in every social card, which is what the front page did until now. -->
+<title>Decisions, Lex</title>
+<meta name="description" content="Point-in-time Luxembourg law, plus ten EU acts: what did the rule say on a given date? Grounded AI answers, permalinks, timelines, diffs, cryptographic provenance, and a public MCP endpoint.">
+<meta property="og:title" content="Decisions, Lex">
+<meta property="og:description" content="Point-in-time Luxembourg law, plus ten EU acts, with grounded AI answers, per-article history, and verifiable provenance.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Lex">
+<meta property="og:image" content="https://golden.test/og.png">
+<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://golden.test/og.png">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9A%96%3C/text%3E%3C/svg%3E">
+<style>
+  /* Law is set in a serif; the interface around it is sans. The accent is reserved
+     for one thing only: the date you are looking at. */
+  :root { --bg:#faf8f3; --fg:#15171b; --muted:#5d5a53; --line:#e2ded4; --accent:#a8342a;
+          --card:#ffffff; --ok:#2f6b46; --warn:#8a5a12; --on-accent:#ffffff;
+          --serif:Georgia,'Iowan Old Style','Palatino Linotype','Times New Roman',serif;
+          --mono:ui-monospace,'Cascadia Code',Consolas,monospace; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#101215; --fg:#e9e5dd; --muted:#9a958b; --line:#2b2e34; --accent:#e0705f;
+            --card:#171a1e; --ok:#6cc48f; --warn:#e0b070; --on-accent:#101215; } }
+  * { box-sizing:border-box }
+  body { margin:0; font:16px/1.6 ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif; background:var(--bg); color:var(--fg); }
+  a { color:var(--accent); text-decoration:none } a:hover { text-decoration:underline }
+  header { border-bottom:1px solid var(--line); padding:14px 20px; display:flex; gap:20px; align-items:baseline; flex-wrap:wrap }
+  header .brand { font-family:var(--serif); font-weight:700; font-size:21px; color:var(--fg); letter-spacing:-.01em }
+  header a.navlink { color:var(--muted); font-size:14.5px }
+  header a.navlink.on { color:var(--fg); font-weight:600; box-shadow:inset 0 -2px 0 var(--accent) }
+  main { max-width:960px; margin:0 auto; padding:26px 20px 60px }
+  h1 { font-family:var(--serif); font-size:29px; line-height:1.15; letter-spacing:-.015em; margin:0 0 6px; text-wrap:balance }
+  h2 { font-family:var(--serif); font-size:20px; margin:28px 0 8px }
+  .sub { color:var(--muted); margin:0 0 18px; font-size:14.5px }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px 16px; margin:12px 0; overflow-x:auto }
+  .badge { display:inline-block; border:1px solid var(--line); border-radius:99px; padding:1px 10px; font-size:12.5px; color:var(--muted); margin-right:6px }
+  .badge.ok { color:var(--ok); border-color:var(--ok) }
+  .badge.warn { color:var(--warn); border-color:var(--warn) }
+  table { border-collapse:collapse; width:100%; font-size:14.5px }
+  th,td { text-align:left; padding:7px 10px; border-bottom:1px solid var(--line); vertical-align:top }
+  th { color:var(--muted); font-weight:600; font-size:13px }
+  .mono { font-family:var(--mono); font-size:13px; word-break:break-all }
+  .kv td:first-child { color:var(--muted); white-space:nowrap; padding-right:18px }
+  /* The catalogue. Filters are links, so every state of the page is a shareable URL. */
+  .filters { display:flex; flex-direction:column; gap:7px; margin:14px 0 16px }
+  .filters > div { display:flex; flex-wrap:wrap; gap:6px; align-items:baseline }
+  .filters i { font-style:normal; font-size:11px; letter-spacing:.06em; text-transform:uppercase;
+               color:var(--muted); width:74px; flex:none }
+  .filters .f { border:1px solid var(--line); border-radius:99px; padding:2px 11px; font-size:13px;
+                color:var(--muted); text-decoration:none }
+  .filters .f:hover { border-color:var(--accent); color:var(--accent); text-decoration:none }
+  .filters .f.on { border-color:var(--accent); color:var(--accent); font-weight:600 }
+  .filters .n { opacity:.65; font-size:11.5px; font-variant-numeric:tabular-nums }
+  .cat td:first-child a { font-weight:600 }
+  .cat .r { text-align:right; font-variant-numeric:tabular-nums }
+  .cat .sub { font-size:12px; margin-top:2px }
+  .pager { display:flex; gap:14px; align-items:baseline; margin:12px 0; font-size:14px }
+  .pager span { color:var(--muted); font-variant-numeric:tabular-nums }
+  form.inline { display:flex; gap:8px; flex-wrap:wrap; margin:10px 0 }
+  input,select,button { font:inherit; padding:7px 10px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--fg) }
+  button { background:var(--accent); color:var(--on-accent); border-color:var(--accent); cursor:pointer }
+  footer { border-top:1px solid var(--line); margin-top:40px; padding:16px 20px; color:var(--muted); font-size:13px }
+  .notice { border-left:3px solid var(--warn); padding:10px 14px; background:var(--card); border-radius:0 8px 8px 0; margin:12px 0; font-size:14.5px }
+  .snippet { color:var(--muted); font-size:13.5px }
+  .sitemap { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:8px 30px;
+             margin-bottom:18px; padding-bottom:16px; border-bottom:1px solid var(--line) }
+  .sitemap div { display:flex; flex-direction:column; gap:3px }
+  .sitemap b { color:var(--fg); font-size:12px; letter-spacing:.06em; text-transform:uppercase;
+               margin-bottom:4px; font-weight:600 }
+  .sitemap a { color:var(--muted) }
+  .sitemap a:hover { color:var(--accent) }
+  :focus-visible { outline:2px solid var(--accent); outline-offset:2px }
+  .rail { position:relative; height:44px; margin:14px 0 0 }
+  .rail .axis { position:absolute; left:0; right:0; top:21px; height:1px; background:var(--line) }
+  .rail .tick { position:absolute; top:13px; width:1px; height:17px; background:var(--muted); opacity:.55 }
+  .rail .tick:hover { opacity:1; background:var(--accent); width:2px }
+  .rail .tick.act { top:5px; height:33px; width:2px; background:var(--accent); opacity:1 }
+  .rail .yr { position:absolute; top:30px; font-family:var(--mono); font-size:11px; color:var(--muted) }
+  .railcap { margin:2px 0 18px } .nowmark { color:var(--accent) }
+  .lawbody { font-family:var(--serif); font-size:16.5px; line-height:1.62 }
+  /* Phones: law texts carry wide tables and long pre blocks. Let each scroll inside
+     itself rather than pushing the whole page sideways. Desktop is untouched. */
+  @media (max-width:640px) {
+    main { padding:20px 14px 48px }
+    table { display:block; overflow-x:auto }
+    pre { overflow-x:auto }
+    header { gap:12px; padding:12px 14px }
+    h1 { font-size:25px }
+    .rail .yr { font-size:10px }
+  }
+</style></head>
+<body>
+<header>
+  <!-- The workspace IS the home page, so there is no "Ask" to link to from it, and /find,
+       /search and /changed are the no-JavaScript twins of its three tabs rather than separate
+       features. Promoting them here is what made the site look like it had two ways to do
+       everything. They stay reachable from the footer and from the noscript line. -->
+  <a class="brand" href="/">Lex</a>
+  <a class="navlink" href="/browse">Browse everything</a>
+  <a class="navlink on" href="/how-it-works">How it works</a>
+  <span style="flex:1"></span>
+  <a class="navlink" href="/developers">For developers</a>
+</header>
+<main>
+<h1>Decisions</h1>
+<p class="sub">The choices that shaped Lex, each with the alternative it was chosen over and what it cost.</p>
+<p class="lede">Every entry here had a reasonable alternative that other people chose. What
+follows is the choice, the road not taken, and the bill.</p>
+
+<h2>The history is not the git log</h2>
+
+<div class="card">
+<p><b>The choice.</b> The corpus is append-only git. The history is not.</p>
+<p>Every consolidated file a publisher issues is stored verbatim, under its sha256, in a
+repository that only ever gains commits. That is the evidence, and anyone can audit it with
+<span class="mono">git clone</span>. But no query walks it. Point-in-time answers come from
+a signed SQLite index carrying three separate time axes, rebuilt from the corpus every
+night. The only <span class="mono">git</span> call anywhere in the engine is
+<span class="mono">rev-parse HEAD</span>, which stamps the index with the exact commit it
+was built from.</p>
+</div>
+
+<h3>The alternative</h3>
+<p>Store each law as a file and let git be the history: one commit per amendment,
+<span class="mono">git log</span> for the timeline, <span class="mono">git diff</span>
+between two dates. It is elegant, it is nearly free, and it arrives with a browsable web
+interface that somebody else operates. Serious projects run on exactly this:
+<a href="https://archeo-lex.fr" rel="noopener nofollow">Archeo-Lex</a> for French law,
+<a href="https://github.com/bundestag/gesetze" rel="noopener nofollow">bundestag/gesetze</a>
+for German federal law. It was the obvious thing to do, and I did not do it.</p>
+
+<h3>Why not</h3>
+<p>Five reasons. Each is a fact about legislation rather than a preference about tools.</p>
+<div class="card">
+<p><b>1. Git's clock is the wrong clock.</b> A commit records when <i>I</i> learned
+something, never when the law applied. Last night's ingest added versions that took effect
+on 1 January 2026 and versions that take effect years from now. Git timestamps both with
+last night. <span class="mono">git log</span> answers "when did we find out", which is a
+real question, but it is not the question this product exists for.</p>
+
+<p><b>2. Law is dated into the future.</b> Lex holds versions valid to
+<span class="mono">2022-01-01</span>. Publishers routinely issue today a text that
+becomes binding years from now. Git cannot express a commit that becomes true later, so a
+git-as-history model must either publish future law as if it were current, or drop it.
+Both are wrong answers to "what is in force today".</p>
+
+<p><b>3. Publishers backfill.</b> A consolidation covering 2019 can be issued in 2026.
+Under git-as-history that arrives as a 2026 change to the law, which is simply false. The
+fix is to record two things separately: when the text applied, and when we saw it. That is
+two columns, and it is not something a commit graph can carry.</p>
+
+<p><b>4. <span class="mono">git diff</span> cannot see a renumbering.</b> When Article 7
+becomes Article 7-1 with its wording untouched, that is a rename <i>inside</i> a file, not
+a file rename, and a textual diff reports one deletion and one insertion. Lex detects it
+mechanically instead: a renumbering event is emitted only when the text hash matches across
+the change of anchor. None of that is inferable from a diff.</p>
+
+<p><b>5. There is no per-article axis.</b> "When did Article L. 111-1 last change" needs
+either one file per article, which no publisher provides, or a table keyed on
+(work, anchor, valid_from). Lex has the table. A repository of whole documents cannot
+answer the question at all.</p>
+</div>
+
+<h3>What it cost</h3>
+<p>Four things. An argument that omits them is not worth reading.</p>
+<div class="card">
+<p><b>A build step, every night.</b> Git-as-history is free: commit, and you are finished.
+Lex has to ingest, derive, catalog, index and sign before anything is answerable, and that
+pipeline is the largest part of the codebase.</p>
+<p><b>Duplication.</b> The same facts now exist twice, as bytes in the corpus and as rows
+in an index, and two copies can disagree. That is exactly why the index stamp binds a
+digest of its own content and names the corpus commit it came from: the duplication is
+allowed, drifting silently is not.</p>
+<p><b>Schema drift.</b> A column was once added to the index without changing the schema
+string, so an index built the day before opened cleanly and then failed inside a request
+with a raw SQL error. A repository of files has no schema to drift. Opening an index now
+checks that every column the reader needs is present, and refuses with a message naming
+what is missing.</p>
+<p><b>The free interface.</b> GitHub hands a git-as-history project a browsable, diffable,
+permalinked view that somebody else maintains. Choosing a data layer meant building all of
+it, and the reading, comparing and searching on this site is the bill for that decision.</p>
+</div>
+
+<h3>What it bought</h3>
+<p>A point-in-time answer is one indexed lookup rather than a walk backwards through
+history. Future-dated law is representable. Every record separates what the publisher
+asserts from what Lex observed, so "what did it say" and "what did we know" stay different
+questions. Articles have their own lifetimes, renumbering included. And because an answer
+comes from a single artifact rather than a traversal, that artifact can be signed: the
+stamp commits to a digest of the content, so an index that was altered fails verification
+instead of serving quietly.</p>
+
+<h3>Check it yourself</h3>
+<p class="sub">
+<a href="/verify"><b>Verify a build &rarr;</b></a> &middot;
+<a href="/architecture"><b>The data model &rarr;</b></a> &middot;
+<a href="https://github.com/SFHAJJI/lex-corpus-lu-legilux" rel="noopener"><b>The evidence repo &rarr;</b></a> &middot;
+<a href="/coverage"><b>What is missing &rarr;</b></a></p>
+
+<p class="sub" style="margin-top:26px">More entries as they are written. If you disagree
+with one of these, that is the point of publishing them:
+<a href="https://github.com/SFHAJJI/lex/issues" rel="noopener">open an issue</a>.</p>
+</main>
+<footer>
+<!-- Fourteen links in one undifferentiated run answered no question a reader had. Three
+     named groups do: what each page is FOR is now the label above it. -->
+<nav class="sitemap" aria-label="All pages">
+  <div><b>Read the law</b>
+    <a href="/browse">Browse everything</a><a href="/stories">Worked examples</a>
+    <a href="/find">Plain pages, without JavaScript</a></div>
+  <div><b>Check the work</b>
+    <a href="/how-it-works">How it works</a><a href="/coverage">What Lex holds, and lacks</a>
+    <a href="/decisions">Decisions, and what they cost</a>
+    <a href="/verify">Verify it yourself</a><a href="/architecture">Architecture</a></div>
+  <!-- The datasets, not the engine. This group used to end at "Source on GitHub" pointing at
+       the engine repo, which is the wrong thing to lead with for a reader who wants to USE
+       this law rather than read the code that serves it. The corpora are the part that is
+       reusable on its own, and they were reachable only from /developers. -->
+  <div><b>Build on it</b>
+    <a href="/developers">Developers &amp; API</a><a href="/ai">Connect your own AI</a>
+    <a href="/built">How it was built</a>
+    <a href="https://github.com/SFHAJJI/lex-articles" rel="noopener">Dataset: law by article (CC-BY)</a>
+    <a href="https://github.com/SFHAJJI/lex-corpus-lu-legilux" rel="noopener">Corpus: Luxembourg, verbatim</a>
+    <a href="https://github.com/SFHAJJI/lex-corpus-eu-eurlex" rel="noopener">Corpus: EU, verbatim</a></div>
+</nav>
+  <b>Not legal advice, and not the official text.</b> Lex answers <i>what the rule was</i>, never what it
+  means for your situation, no interpretation, no advice. Every answer shows the source it came from.
+  LU data: Legilux, Ministère d'État, Service central de législation, Grand-Duché de Luxembourg
+  (CC-BY 4.0, metadata and content files; consolidated texts reproduced verbatim from the official filestore).
+  EU data: © European Union, reuse with attribution (Commission Decision 2011/833/EU);
+  <b>consolidated texts have no legal effect</b>, only acts published in the Official Journal are authentic.
+  · <a href="https://github.com/SFHAJJI/lex">source</a>
+</footer>
+</body></html>
