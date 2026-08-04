@@ -56,7 +56,13 @@ public sealed class LegiluxAdapter : ISourceAdapter
             : [];
     }
 
-    private const int BodyCapBytes = 8 * 1024 * 1024;
+    // 32 MB, not 8. The old ceiling was refusing four real instruments whose XML the publisher
+    // does serve: code/fonction_publique at 9.2 MB, rgd-2005-06-09-n1 at 10.4, and two versions
+    // of rgd-2016-04-27-n4 at 30.5 and 30.7. Those are large because of their annexes, not
+    // because anything is wrong with them, and refusing publisher XML we can have is a worse
+    // failure than parsing a big file. The largest thing Legilux publishes is around 31 MB, so
+    // this clears it with headroom and still stops a runaway.
+    private const int BodyCapBytes = 32 * 1024 * 1024;
     private static readonly HttpClient BodyHttp = CreateBodyClient();
     private DateTimeOffset _lastBodyFetch = DateTimeOffset.MinValue;
     private Dictionary<string, string>? _xmlFiles;   // "<consolidationUri>|<lang>" -> official file URL
