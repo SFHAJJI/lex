@@ -92,12 +92,17 @@ export default function Finder(p: FinderProps) {
         )}
       </div>
 
-      <div className="doors">
-        <span className="doors-h">or start here</span>
-        {DOORS.map((d) => (
-          <button key={d.label} className="door" onClick={() => p.onDoor(d.go)}>{d.label}</button>
-        ))}
-      </div>
+      {/* Only while nothing has been asked. They exist so a first arrival sees the corpus work
+          without having to invent a question; once there IS a question they are just three more
+          things competing with the answer. */}
+      {!p.state.q && !p.state.from && !p.state.asOf ? (
+        <div className="doors">
+          <span className="doors-h">or start here</span>
+          {DOORS.map((d) => (
+            <button key={d.label} className="door" onClick={() => p.onDoor(d.go)}>{d.label}</button>
+          ))}
+        </div>
+      ) : null}
     </section>
   );
 }

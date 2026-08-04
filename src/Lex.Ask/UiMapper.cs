@@ -9,7 +9,9 @@ namespace Lex.Ask;
 /// a view and never authors a value — every field here is copied from tool output, which is
 /// why a fabricated citation cannot reach the screen.
 /// </summary>
-internal static class UiMapper
+/// Public so the AI-to-UI contract can be tested directly: the mapping from what the assistant
+/// asked for to what the workspace does is a contract, and an untested contract is a promise.
+public static class UiMapper
 {
     public static UiEffect From(string tool, JsonObject args, JsonNode result)
     {

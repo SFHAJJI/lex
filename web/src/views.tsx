@@ -203,17 +203,16 @@ export function VersionRail({ dates, current, compareTo, scope, today, onPick, o
             of these ticks (article texts are a subset of the law's versions), and a comparison
             with no visible way out is a trap. */}
         {compareTo ? (
-          <button className="tag act" onClick={onClear}>
-            comparing {current && current < compareTo ? current : compareTo} →{" "}
-            {current && current < compareTo ? compareTo : current} ✕
-          </button>
+          <>
+            <button className="tag act" onClick={onClear}>
+              comparing {current && current < compareTo ? current : compareTo} →{" "}
+              {current && current < compareTo ? compareTo : current} ✕
+            </button>
+            <span className="hint">tap any version to move the other end</span>
+          </>
         ) : arming ? (
           <span className="hint arm">now pick the version to compare it with</span>
-        ) : (
-          <span className="hint">
-            {compareTo ? "" : "pick another version to change the pair"}
-          </span>
-        )}
+        ) : null}
         <span className="grow" />
         {/* One click, because the question a tick poses is nearly always "what changed HERE",
             meaning against the version before it. Choosing an arbitrary pair is the rarer case and
@@ -366,13 +365,13 @@ export function Ranking({ rows, worksChanged, newVersions, from, to, layer, page
           </button>
         ))}
       </div>
-      <p className="layers-hint">{current.hint}</p>
-
+      {/* One row, not three. The layer's meaning belongs beside its counts, because "820 changed"
+          only means anything once you know 820 of what. */}
       <div className="cnt">
         <span className="tag">{worksChanged.toLocaleString()} changed</span>
         <span className="tag">{newVersions.toLocaleString()} new versions</span>
         <span className="tag mono">{from} → {to}</span>
-        {page > 0 ? <span className="tag">from {page * 25 + 1}</span> : null}
+        <span className="layers-hint">{current.hint}</span>
       </div>
 
       <div className="bars">
