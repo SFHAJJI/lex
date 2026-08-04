@@ -95,18 +95,48 @@ FOUNDATION  Lex.Temporal (interval algebra)   Lex.Index (SQLite: filter-first, s
 
 ## Current coverage
 
-**Luxembourg** (Legilux, Tier A): 1,399 works / 4,632 consolidated versions,
-1849→2030, **full text**, verbatim Akoma Ntoso XML from the publisher's
-official, robots-permitted filestore, licensed CC-BY-4.0 by the publisher.
+**Luxembourg** (Legilux, Tier A): **every** work and consolidated version the
+publisher issues, 1,399 / 4,703, 1849→2030. Nothing is filtered out by type.
+Text is verbatim Akoma Ntoso XML from the publisher's official,
+robots-permitted filestore, licensed CC-BY-4.0.
+
+**Text is held for 2,935 of those versions, not all of them, and the reason is
+the publisher's format rather than our pipeline.** Legilux offers XML for 2,892
+consolidations, PDF only for 1,611, and no file at all for 130 (measured against
+its own catalogue, 2026-08-04). Lex ingests the XML manifestation, because XML is
+the only format carrying article boundaries, which is what makes an article
+citable, hashable and diffable. Where there is no XML we hold the complete dated
+record, the source and the hash, and link the publisher's PDF for that date.
+
+The gap is concentrated outside the hierarchy of norms, not across it:
+
+| | text held |
+|---|---|
+| Constitution, treaties | **100%** |
+| Loi | 93% |
+| Règlement grand-ducal | 94% |
+| Code (enacted as a law) | 82% |
+| Arrêtés, règlements ministériels | ~78% |
+| RECUEIL / CODE_RECUEIL (thematic folders, not instruments) | 9% / 2% |
+
+Roughly 1,371 of the 1,611 textless versions are those folders, which nobody
+voted and which hold no rule of their own. Across every genuine instrument, from
+the Constitution down to ministerial regulations, only ~240 versions lack text.
 Honest coverage claim: *dense and reliable from 2017 onward; real but sparse
 before; isolated snapshots back to 1849; forward to 2030.*
-**EU** (EUR-Lex/Cellar, Tier A): 8 flagship acts (GDPR, DORA, AI Act, NIS2,
-MiFID II, CRR, PSD2, SFDR), 46 consolidated versions, full text from the
-Publications Office's **Formex 4** structural XML where served (44/46),
-including the large CRR consolidations the XHTML channel couldn't carry.
+
+**EU** (EUR-Lex/Cellar, Tier A): 10 flagship acts (GDPR, DORA, AI Act, NIS2,
+MiFID II, CRR, PSD2, SFDR, RED II, electricity market), 56 consolidated
+versions, full text from the Publications Office's **Formex 4** structural XML
+where served, including the large CRR consolidations the XHTML channel couldn't
+carry. The EU limit is scope, not format: flagship acts only, out of a much
+wider acquis.
+
 Derived layer: **1,212 works · 88,981 articles · 102,773 dated text states**.
 The never-consolidated LU acts (~24,579) and the wider EU acquis are staged
-next (spec §14).
+next (spec §14). Communal regulations are deliberately out of scope: 17,232
+exist as published acts, none is ever consolidated, so there is no point-in-time
+history to hold. The fallback ladder for XML-less versions is spec D49.
 
 ## Run it
 

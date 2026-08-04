@@ -597,7 +597,7 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                         ["valid_from_earliest"] = c.EarliestValidFrom,
                         ["valid_from_latest"] = c.LatestValidFrom,
                         ["document_types"] = new JsonArray(c.Kinds.Select(k => (JsonNode)new JsonObject
-                        { ["code"] = k.Kind, ["versions"] = k.Versions }).ToArray()),
+                        { ["code"] = k.Kind, ["versions"] = k.Versions, ["versions_with_text"] = k.WithText }).ToArray()),
                         ["text"] = new JsonObject
                         {
                             ["versions_with_text_served"] = c.TextServed,

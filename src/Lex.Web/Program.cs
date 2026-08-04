@@ -664,9 +664,20 @@ app.MapGet("/coverage", () =>
     {
         var c = r.Coverage();
         sb.Append($"<h2>{H(r.Stamp.GetValueOrDefault("publisher_name"))} <span class=\"badge\">{H(c.Collection)}</span></h2>");
-        sb.Append("<div class=\"card\"><table><tr><th>document type</th><th>versions</th></tr>");
+        // Per type, held versus readable. The second number is the one that matters, and it is
+        // computed from the index rather than written down, so it cannot drift from the corpus.
+        sb.Append("<div class=\"card\"><table><tr><th>document type</th><th>versions</th>"
+                + "<th>with text</th><th></th></tr>");
         foreach (var k in c.Kinds)
-            sb.Append($"<tr><td>{H(k.Kind ?? "(untyped)")}</td><td>{k.Versions:n0}</td></tr>");
+        {
+            var pct = k.Versions > 0 ? 100.0 * k.WithText / k.Versions : 0;
+            var folder = k.Kind is "RECUEIL" or "CODE_RECUEIL";
+            sb.Append($"""
+                <tr><td>{H(k.Kind ?? "(untyped)")}</td><td>{k.Versions:n0}</td>
+                <td>{k.WithText:n0} <span class="mono" style="opacity:.6">{pct:0}%</span></td>
+                <td>{(folder ? "<span class=\"badge\">thematic folder, not an instrument</span>" : "")}</td></tr>
+                """);
+        }
         sb.Append($"</table></div>{EnvelopeCard(r, false)}");
         var luGap = c.Collection == "lu-legilux"
             ? """
@@ -676,13 +687,28 @@ app.MapGet("/coverage", () =>
               (and we won't guess dates for texts we haven't seen).
               """
             : " Only flagship acts are ingested so far; the wider consolidated acquis is scheduled.";
+        // Measured against the publisher's own catalogue, 2026-08-04. The cause is the file format
+        // offered per version, not our pipeline and not the age of the act, and it lands mostly on
+        // documents that are not instruments at all.
+        var gapWhy = c.Collection == "lu-legilux"
+            ? """
+              <b>Why:</b> Lex ingests the publisher's XML, because XML is the only format that marks
+              where each article begins and ends, which is what makes an article citable, hashable and
+              comparable across dates. Legilux offers XML for 2,892 of its consolidations, PDF only for
+              1,611, and no file at all for 130. Roughly 1,371 of those PDF-only versions are the
+              thematic folders marked above, which nobody voted and which carry no rule of their own.
+              Across every genuine instrument, from the Constitution down to ministerial regulations,
+              about 240 versions lack text. The wording still exists at the publisher, and each of these
+              entries links to it.
+              """
+            : "";
         sb.Append($"""
             <div class="notice"><b>What we hold, and what we honestly don't.</b>
             {c.Groups:n0} laws in {c.Rows:n0} dated snapshots.{luGap}
-            Of those snapshots, <b>{c.TextServed:n0}</b> carry the full official text;
-            <b>{c.Rows - c.TextServed:n0}</b> exist as dated entries with a link but no stored text,
-            because the publisher has no machine-readable file for that (usually old) version , 
-            those answer with <span class="mono">text_withheld</span> instead of pretending.
+            Of those snapshots, <b>{c.TextServed:n0}</b> carry the full official text and
+            <b>{c.Rows - c.TextServed:n0}</b> are a dated entry with its source and hash but no wording.
+            {gapWhy}
+            Those answer with <span class="mono">text_withheld</span> rather than pretending.
             History can never go deeper than what the publisher itself digitised.</div>
             """);
     }

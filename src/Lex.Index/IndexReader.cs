@@ -2,7 +2,10 @@ using Microsoft.Data.Sqlite;
 
 namespace Lex.Index;
 
-public sealed record CoverageKind(string? Kind, int Versions);
+/// Per document type: how many versions are held, and how many of them carry text. The second
+/// number is the honest one. A source may serve a version only in a format that has no article
+/// structure; such a version is held as a complete dated record with no wording (D49).
+public sealed record CoverageKind(string? Kind, int Versions, int WithText);
 
 public sealed record CoverageInfo(
     string Collection,
@@ -328,9 +331,14 @@ public sealed class LexIndexReader : IDisposable
     public CoverageInfo Coverage()
     {
         var kinds = new List<CoverageKind>();
-        using (var cmd = Cmd("SELECT kind, COUNT(*) FROM docs GROUP BY kind ORDER BY COUNT(*) DESC", []))
+        using (var cmd = Cmd("""
+            SELECT kind, COUNT(*), SUM(CASE WHEN text_public=1 THEN 1 ELSE 0 END)
+            FROM docs GROUP BY kind ORDER BY COUNT(*) DESC
+            """, []))
         using (var r = cmd.ExecuteReader())
-            while (r.Read()) kinds.Add(new CoverageKind(r.IsDBNull(0) ? null : r.GetString(0), r.GetInt32(1)));
+            while (r.Read())
+                kinds.Add(new CoverageKind(r.IsDBNull(0) ? null : r.GetString(0),
+                                           r.GetInt32(1), r.IsDBNull(2) ? 0 : r.GetInt32(2)));
 
         // lex-index/2: text_public is set only when a derived (provision-bearing) version exists
         using var agg = Cmd("""
