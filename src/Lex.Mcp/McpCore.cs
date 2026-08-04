@@ -121,9 +121,10 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                     ["from_date"] = S("ISO date, start of window (inclusive)"),
                     ["to_date"] = S("ISO date, end of window (inclusive)"),
                     ["publisher"] = S("optional publisher id"),
-                    ["document_type"] = S("optional type code"),
+                    ["document_type"] = S("optional type code(s), comma-separated; prefix with ! to exclude, e.g. !RECUEIL,!CODE_RECUEIL for instruments only"),
                     ["order"] = S("by_date (default) or by_churn"),
                     ["limit"] = I("default 20"),
+                    ["offset"] = I("skip this many, for paging"),
                 }, ["from_date", "to_date"]),
         ];
     }
@@ -546,14 +547,19 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                 var to = Str("to_date") ?? throw new ArgumentException("to_date required");
                 if (string.CompareOrdinal(from, to) > 0) (from, to) = (to, from);
                 var pub = Str("publisher");
-                var kind = Str("document_type");
+                // Comma-separated, and a leading "!" inverts: "!RECUEIL,!CODE_RECUEIL" asks for
+                // everything that is not a thematic collection, which is what a reader means by
+                // "laws" and would otherwise require naming every other type.
+                var kinds = Str("document_type")
+                    ?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
                 var byChurn = string.Equals(Str("order"), "by_churn", StringComparison.OrdinalIgnoreCase);
                 var limit = Int("limit", 20);
+                var offset = Int("offset", 0);
                 var outp = new JsonArray();
                 foreach (var r in readers.Values.Where(x => pub is null || x.Collection == pub))
                 {
-                    var (works, versions) = r.ChangeTotals(from, to, kind);
-                    var rows = r.ChangesInPeriod(from, to, kind, byChurn, limit);
+                    var (works, versions) = r.ChangeTotals(from, to, kinds);
+                    var rows = r.ChangesInPeriod(from, to, kinds, byChurn, limit, offset);
                     outp.Add(new JsonObject
                     {
                         ["envelope"] = Envelope(r, works == 0 ? "no_changes_in_period" : "ok"),
@@ -562,6 +568,7 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                         ["works_changed"] = works,
                         ["new_versions"] = versions,
                         ["shown"] = rows.Count,
+                        ["offset"] = offset,
                         ["changes"] = new JsonArray(rows.Select(c =>
                         {
                             var o = new JsonObject

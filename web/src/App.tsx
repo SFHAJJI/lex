@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { askStreaming, first, tool, type AskReply, type ProvisionItem, type Step, type UiEffect } from "./api";
-import { publisherOf, useWorkspace, workSlug, type Space, type State } from "./state";
+import { LAYERS, publisherOf, useWorkspace, workSlug, type Space, type State } from "./state";
 import { Empty, Gap, InForce, Provision, Ranking, VersionRail, hasView, modeFor } from "./views";
 import { Compare } from "./Compare";
 import { LawPicker, shorten } from "./pickers";
@@ -9,6 +9,9 @@ import Finder from "./Finder";
 import Coach, { COACH_KEY } from "./Coach";
 
 const today = () => new Date().toISOString().slice(0, 10);
+
+/** Rows per page in the period view. Enough to scan, small enough to arrive quickly. */
+const PAGE = 25;
 
 /** Follow-ups derived from the view on screen — always valid, and free. */
 function chipsFor(s: State, ui?: UiEffect, hasText = true): { label: string; go: Partial<State> }[] {
@@ -42,6 +45,7 @@ export default function App() {
   const [title, setTitle] = useState<string>();
   const [versions, setVersions] = useState<string[]>([]);
   const [held, setHeld] = useState<{ text: number; total: number; official?: string }>();
+  const [page, setPage] = useState(0);
   const [states, setStates] = useState<string[]>([]);
   const [coached, setCoached] = useState(() => {
     try { return localStorage.getItem(COACH_KEY) === "1"; } catch { return true; }
@@ -149,12 +153,14 @@ export default function App() {
   useEffect(() => {
     if (s.work || !s.from || !s.until) return;
     let live = true;
-    // Ask for far more rows than are shown. The list separates laws from thematic collections
-    // AFTER ranking, and a collection restamps whenever anything on its shelf moves, so over a
-    // long window they crowd the top: asking for 25 over six years returned 18 collections and
-    // left only 7 laws on screen, fewer than the same query over one year. Fetch deep enough that
-    // the law list is never starved by them.
-    tool<any>("changes_in_period", { from_date: s.from, to_date: s.until, order: s.order ?? "by_churn", limit: 80 })
+    // The layer is now a filter the server applies, so the list is no longer ranked and then
+    // thinned: every row that comes back belongs to the chosen layer. That also removes the old
+    // failure where a longer window returned FEWER laws, because collections had eaten the top 25
+    // before they were folded away.
+    const layer = LAYERS.find((l) => l.id === (s.layer ?? "instruments")) ?? LAYERS[0];
+    tool<any>("changes_in_period", {
+      from_date: s.from, to_date: s.until, order: s.order ?? "by_churn",
+      document_type: layer.types, limit: PAGE, offset: page * PAGE })
       .then((res) => {
         if (!live) return;
         // changes_in_period asks ACROSS the corpus, so its answer is the union of the
@@ -171,12 +177,12 @@ export default function App() {
           ? { ranking: { from_date: s.from!, to_date: s.until!, order: by,
                          works_changed: envs.reduce((n, e) => n + (e?.works_changed ?? 0), 0),
                          new_versions: envs.reduce((n, e) => n + (e?.new_versions ?? 0), 0),
-                         rows: rows.slice(0, 80) } }
+                         rows } }
           : { gap: { status: "no_changes_in_period", explanation: "Nothing changed in that window.", available: [] } });
       })
       .catch(() => {});
     return () => { live = false; };
-  }, [s.work, s.from, s.until, s.order]);
+  }, [s.work, s.from, s.until, s.order, s.layer, page]);
 
   // With an article open the rail narrows to THAT article's distinct texts — the question a
   // reader actually has ("when did this paragraph change?") rather than "when was anything
@@ -331,7 +337,11 @@ export default function App() {
          ui?.gap ? <Gap {...ui.gap} held={s.work ? held : undefined} /> :
          ui?.ranking ? <Ranking rows={ui.ranking.rows} worksChanged={ui.ranking.works_changed}
                                 newVersions={ui.ranking.new_versions} from={ui.ranking.from_date}
-                                to={ui.ranking.to_date} onOpen={openDiff} onOpenRecord={openLaw} /> :
+                                to={ui.ranking.to_date} onOpen={openDiff} onOpenRecord={openLaw}
+                                layer={s.layer ?? "instruments"} page={page}
+                                hasMore={ui.ranking.rows.length >= PAGE}
+                                onLayer={(l) => { setPage(0); setUi(undefined); go({ layer: l }); }}
+                                onPage={(p) => { setPage(Math.max(0, p)); setUi(undefined); }} /> :
          ui?.in_force ? <InForce date={ui.in_force.date} total={ui.in_force.total} rows={ui.in_force.rows} onOpen={openLaw} /> :
          s.work && s.mode === "compare" ? <Compare work={s.work} from={s.date ?? today()} to={s.to ?? today()} anchor={s.anchor} /> :
          s.work && loaded ? <Provision items={loaded.items} toc={toc} validFrom={loaded.from} validTo={loaded.to}

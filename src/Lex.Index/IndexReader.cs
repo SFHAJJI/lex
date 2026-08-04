@@ -219,10 +219,36 @@ public sealed class LexIndexReader : IDisposable
     /// Cross-work aggregation: which works gained versions inside a window, how many, and when.
     /// The one question shape the per-work tools cannot answer — "what moved, across the corpus".
     /// </summary>
-    public List<ChangeRow> ChangesInPeriod(string from, string to, string? kind, bool byChurn, int limit)
+    /// <summary>
+    /// What moved in a window. `kinds` accepts several document types, because the useful question
+    /// is rarely about one code: a reader asks for statutes, or for everything that is an
+    /// instrument, or for the thematic collections on their own. `offset` pages through the rest,
+    /// since a six-year window moves 860 works and a first page of 25 is not the whole answer.
+    /// </summary>
+    /// <summary>
+    /// Type predicate for a set of document types. A member prefixed with "!" inverts the whole
+    /// set, so "!RECUEIL,!CODE_RECUEIL" reads as "anything that is not a thematic collection",
+    /// which is the ordinary case and would otherwise mean naming every other type by hand.
+    /// </summary>
+    private static string KindClause(IReadOnlyList<string>? kinds, string alias)
     {
-        var where = "d.valid_from >= $from AND d.valid_from <= $to"
-                    + (string.IsNullOrEmpty(kind) ? "" : " AND d.kind = $kind");
+        if (kinds is not { Count: > 0 }) return "";
+        var negate = kinds[0].StartsWith('!');
+        var names = kinds.Select((_, i) => $"$k{i}");
+        return $" AND ({alias}kind {(negate ? "IS NULL OR " + alias + "kind NOT IN" : "IN")} ({string.Join(",", names)}))";
+    }
+
+    private static void BindKinds(SqliteCommand cmd, IReadOnlyList<string>? kinds)
+    {
+        if (kinds is not { Count: > 0 }) return;
+        for (var i = 0; i < kinds.Count; i++)
+            cmd.Parameters.AddWithValue($"$k{i}", kinds[i].TrimStart('!'));
+    }
+
+    public List<ChangeRow> ChangesInPeriod(string from, string to, IReadOnlyList<string>? kinds,
+                                           bool byChurn, int limit, int offset = 0)
+    {
+        var where = "d.valid_from >= $from AND d.valid_from <= $to" + KindClause(kinds, "d.");
         var order = byChurn ? "versions DESC, last_change DESC" : "last_change DESC, versions DESC";
         using var cmd = Cmd($"""
             SELECT d.group_key,
@@ -236,12 +262,13 @@ public sealed class LexIndexReader : IDisposable
             WHERE {where}
             GROUP BY d.group_key
             ORDER BY {order}
-            LIMIT $lim
+            LIMIT $lim OFFSET $off
             """, []);
         cmd.Parameters.AddWithValue("$from", from);
         cmd.Parameters.AddWithValue("$to", to);
-        if (!string.IsNullOrEmpty(kind)) cmd.Parameters.AddWithValue("$kind", kind);
+        BindKinds(cmd, kinds);
         cmd.Parameters.AddWithValue("$lim", limit);
+        cmd.Parameters.AddWithValue("$off", Math.Max(0, offset));
         var list = new List<ChangeRow>();
         using var r = cmd.ExecuteReader();
         while (r.Read())
@@ -251,14 +278,13 @@ public sealed class LexIndexReader : IDisposable
     }
 
     /// <summary>Totals for a window: how many works moved and how many new versions appeared.</summary>
-    public (int Works, int Versions) ChangeTotals(string from, string to, string? kind)
+    public (int Works, int Versions) ChangeTotals(string from, string to, IReadOnlyList<string>? kinds)
     {
-        var where = "valid_from >= $from AND valid_from <= $to"
-                    + (string.IsNullOrEmpty(kind) ? "" : " AND kind = $kind");
+        var where = "valid_from >= $from AND valid_from <= $to" + KindClause(kinds, "");
         using var cmd = Cmd($"SELECT COUNT(DISTINCT group_key), COUNT(DISTINCT group_key || valid_from) FROM docs WHERE {where}", []);
         cmd.Parameters.AddWithValue("$from", from);
         cmd.Parameters.AddWithValue("$to", to);
-        if (!string.IsNullOrEmpty(kind)) cmd.Parameters.AddWithValue("$kind", kind);
+        BindKinds(cmd, kinds);
         using var r = cmd.ExecuteReader();
         return r.Read() ? (r.GetInt32(0), r.GetInt32(1)) : (0, 0);
     }

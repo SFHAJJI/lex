@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { first, tool, type ProvisionItem, type RankingRow, type UiEffect } from "./api";
-import { publisherOf, workSlug, type State } from "./state";
+import { LAYERS, publisherOf, workSlug, type LayerId, type State } from "./state";
 import { shorten } from "./pickers";
 
 const permalink = (work: string, date: string, anchor?: string) =>
@@ -275,8 +275,6 @@ function labelled(dates: string[], xs: number[], width: number, cur: number, cmp
 }
 
 /** Compare: fetches both versions itself, then shows only what moved. */
-const FOLDER_KINDS = ["RECUEIL", "CODE_RECUEIL"];
-
 function useRowFacts(rows: RankingRow[]) {
   const [facts, setFacts] = useState<Record<string, { text: boolean; title?: string; kind?: string }>>({});
   const key = rows.map((r) => r.work).join("|");
@@ -307,87 +305,85 @@ function useRowFacts(rows: RankingRow[]) {
 }
 
 /**
- * What changed in a period, with laws and folders kept apart.
+ * What changed in a period.
  *
- * They used to share one ranked list, and the folders always won it. A thematic folder gains a new
- * dated state whenever ANY act on its shelf is amended, so "most changed" ranks shelves above laws
- * by arithmetic, every time. It read as a claim about Luxembourg (environment law is the most
- * volatile area) when it was a claim about filing (the environment shelf is a big shelf). Worse,
- * those same folders are the ones the publisher ships as PDF only, so the top of the list was also
- * the unreadable part of it.
+ * This used to rank everything together and then fold the thematic collections away, which had a
+ * perverse effect: a collection restamps whenever anything on its shelf moves, so over a longer
+ * window they crowded the top and squeezed the laws out. Six years showed 7 laws where one year
+ * showed 16, while the totals above correctly rose from 264 to 860.
  *
- * Hiding them was the obvious fix and it was wrong: measured, only 56% of Code de l'environnement's
- * restamp dates have a consolidated instrument changing the same day, so a folder does carry signal
- * nothing else carries. Two sections keep that signal, out of the way and honestly labelled.
+ * A collection turned out to be nothing special: it is simply another document type. So the layer
+ * is a filter the server applies, every row that arrives already belongs to the chosen layer, and
+ * the widget that used to hide them is gone. Layers are by legal weight rather than by the
+ * publisher's fifteen codes, because a reader asks about laws and regulations, not about RGC.
  */
-export function Ranking({ rows, worksChanged, newVersions, from, to, onOpen, onOpenRecord }: {
+export function Ranking({ rows, worksChanged, newVersions, from, to, layer, page, hasMore,
+                          onOpen, onOpenRecord, onLayer, onPage }: {
   rows: RankingRow[]; worksChanged: number; newVersions: number; from: string; to: string;
+  layer: LayerId; page: number; hasMore: boolean;
   onOpen: (work: string, from: string, to: string) => void;
   onOpenRecord: (work: string, date: string) => void;
+  onLayer: (l: LayerId) => void;
+  onPage: (p: number) => void;
 }) {
   const facts = useRowFacts(rows);
-  const [showFolders, setShowFolders] = useState(false);
-  const [showAllLaws, setShowAllLaws] = useState(false);
-  const isFolder = (w: string) => {
-    const k = facts[w]?.kind;
-    return k ? FOLDER_KINDS.includes(k) : false;
-  };
-  const laws = rows.filter((r) => !isFolder(r.work));
-  const folders = rows.filter((r) => isFolder(r.work));
-  const shown = showAllLaws ? laws : laws.slice(0, 25);
   const max = Math.max(1, ...rows.map((r) => r.versions_in_period));
-
-  const bar = (r: RankingRow) => {
-    const f = facts[r.work];
-    const name = f?.title ?? label(r.title) ?? humanSlug(r.work);
-    return (
-      <button key={r.work} className={"bar" + (f && !f.text ? " notext" : "")}
-              title={f && !f.text ? "No text is published for this version, open its record" : undefined}
-              onClick={() => f && !f.text
-                ? onOpenRecord(r.work, r.last_change)
-                : onOpen(r.work, r.first_change, r.last_change)}>
-        <span className="track">
-          <span className="fill" style={{ width: `${(r.versions_in_period / max) * 100}%` }} />
-          <span className="lbl">{name}</span>
-          {f && !f.text ? <span className="mark">record only</span> : null}
-        </span>
-        <span className="num">{r.versions_in_period}</span>
-      </button>
-    );
-  };
+  const current = LAYERS.find((l) => l.id === layer) ?? LAYERS[0];
 
   return (
     <>
+      <div className="layers" role="tablist" aria-label="Which layer of the law">
+        {LAYERS.map((l) => (
+          <button key={l.id} role="tab" aria-selected={l.id === layer}
+                  className={"layer" + (l.id === layer ? " on" : "")}
+                  title={l.hint} onClick={() => onLayer(l.id)}>
+            {l.label}
+          </button>
+        ))}
+      </div>
+      <p className="layers-hint">{current.hint}</p>
+
       <div className="cnt">
-        <span className="tag">{worksChanged.toLocaleString()} laws changed</span>
+        <span className="tag">{worksChanged.toLocaleString()} changed</span>
         <span className="tag">{newVersions.toLocaleString()} new versions</span>
         <span className="tag mono">{from} → {to}</span>
+        {page > 0 ? <span className="tag">from {page * 25 + 1}</span> : null}
       </div>
 
-      <div className="bars">{shown.map(bar)}</div>
-      {laws.length === 0 ? <Empty>No individual law changed in that window.</Empty> : null}
-      {!showAllLaws && laws.length > shown.length ? (
-        <button className="ghost" onClick={() => setShowAllLaws(true)}>
-          Show the other {laws.length - shown.length} laws
-        </button>
+      <div className="bars">
+        {rows.map((r) => {
+          const f = facts[r.work];
+          const name = f?.title ?? label(r.title) ?? humanSlug(r.work);
+          return (
+            <button key={r.work} className={"bar" + (f && !f.text ? " notext" : "")}
+                    title={f && !f.text ? "No text is published for this version, open its record" : undefined}
+                    onClick={() => f && !f.text
+                      ? onOpenRecord(r.work, r.last_change)
+                      : onOpen(r.work, r.first_change, r.last_change)}>
+              <span className="track">
+                <span className="fill" style={{ width: `${(r.versions_in_period / max) * 100}%` }} />
+                <span className="lbl">{name}</span>
+                {f && !f.text ? <span className="mark">record only</span> : null}
+              </span>
+              <span className="num">{r.versions_in_period}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {rows.length === 0 ? (
+        <Empty>Nothing in this layer changed in that window.</Empty>
       ) : null}
 
-      {folders.length > 0 ? (
-        <div className="folders">
-          <button className="folders-h" aria-expanded={showFolders}
-                  onClick={() => setShowFolders((v) => !v)}>
-            <span>{showFolders ? "▾" : "▸"} {folders.length} thematic collection{folders.length === 1 ? "" : "s"} also restamped</span>
+      {(page > 0 || hasMore) ? (
+        <div className="pager">
+          <button className="ghost" disabled={page === 0} onClick={() => onPage(page - 1)}>
+            ← previous
           </button>
-          {showFolders ? (
-            <>
-              <p className="folders-why">
-                Legilux groups laws into subject collections. A collection is restamped whenever any
-                act inside it is amended, so it changes far more often than any single law, and it is
-                not itself a law that anyone voted. The publisher issues most of them as PDF only.
-              </p>
-              <div className="bars">{folders.map(bar)}</div>
-            </>
-          ) : null}
+          <span className="sub mono">{page * 25 + 1}–{page * 25 + rows.length} of {worksChanged.toLocaleString()}</span>
+          <button className="ghost" disabled={!hasMore} onClick={() => onPage(page + 1)}>
+            next →
+          </button>
         </div>
       ) : null}
     </>

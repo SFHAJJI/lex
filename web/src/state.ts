@@ -20,7 +20,32 @@ export interface State {
   from?: string;      // period start (time workspace)
   until?: string;     // period end
   order?: "by_date" | "by_churn";
+  // Which legal layer the period view is showing. In the URL so a filtered view is shareable
+  // and the Back button undoes a filter change like any other move.
+  layer?: LayerId;
 }
+
+/**
+ * The layers, by legal weight rather than by the publisher's fifteen type codes.
+ *
+ * A reader asks "what changed in the law", not "what changed in documents of type RGC". And a
+ * thematic collection is, as it turns out, simply another document type, so it needs no special
+ * case anywhere: it is one layer among the others, just not the default one.
+ */
+export type LayerId = "instruments" | "constitution" | "statutes" | "regulations" | "collections";
+
+export const LAYERS: { id: LayerId; label: string; hint: string; types: string }[] = [
+  { id: "instruments",  label: "Laws",          hint: "everything anyone voted or enacted",
+    types: "!RECUEIL,!CODE_RECUEIL" },
+  { id: "constitution", label: "Constitution",  hint: "and international conventions",
+    types: "Constitution,CONV,PROT,TC,ORD" },
+  { id: "statutes",     label: "Statutes",      hint: "lois and codes enacted as law",
+    types: "LOI,CODE" },
+  { id: "regulations",  label: "Regulations",   hint: "grand-ducal and ministerial",
+    types: "RGD,RMIN,AMIN,AGD,RGC,AGC,ARGD,RI" },
+  { id: "collections",  label: "Collections",   hint: "subject shelves, not instruments",
+    types: "RECUEIL,CODE_RECUEIL" },
+];
 
 export function read(): State {
   const p = new URLSearchParams(location.search);
@@ -38,6 +63,7 @@ export function read(): State {
     from: p.get("from") || undefined,
     until: p.get("until") || undefined,
     order: (p.get("order") as State["order"]) || undefined,
+    layer: (p.get("layer") as LayerId) || undefined,
     mode,
   };
 }
