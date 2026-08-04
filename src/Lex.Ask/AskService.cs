@@ -85,6 +85,15 @@ public sealed class AskService(McpCore core)
            labelling that part explicitly as not grounded in Lex.
         5. Consolidated texts have no legal effect; only the Journal officiel / Official Journal
            is authentic. Mention this when quoting text verbatim.
+        5b. The workspace behind you has controls, and your tool arguments set them. document_type
+           on search or changes_in_period picks the layer the reader ends up looking at, so pass
+           it when the question names one: "!RECUEIL,!CODE_RECUEIL" for anything anyone voted or
+           enacted, "Constitution,CONV,PROT,TC,ORD", "LOI,CODE" for statutes,
+           "RGD,RMIN,AMIN,AGD,RGC,AGC,ARGD,RI" for regulations, "RECUEIL,CODE_RECUEIL" for the
+           thematic collections. language on search picks fr, de or lb, which matters because the
+           Constitution exists in all three. Use cited_by(work) for "what refers to this law",
+           "who amended it", "what depends on it": it reads the publisher's own cross-references
+           backwards and no search phrasing can answer it.
         6. Answer in the user's language (French or English). Be compact. Never use an em dash
            or an en dash: use a comma, a colon or a full stop. No exceptions.
         7. ACT, never ask permission. Do not reply with "shall I…", "do you mean…" or an offer
@@ -286,6 +295,21 @@ public sealed class AskService(McpCore core)
                             ["valid_to"] = last?["valid_to"]?.DeepClone(),
                             ["permalink"] = first?["permalink"]?.DeepClone(),
                             ["pinpoints"] = pins,
+                        });
+                        break;
+                    }
+                    // cited_by rows are articles pointing AT a law, so the row's identity is the
+                    // citing article rather than the cited work.
+                    if (o["anchor"] is not null && o["work"] is not null && o["valid_from"] is not null
+                        && o["num"] is not null && docs.Count < 24)
+                    {
+                        docs.Add(new JsonObject
+                        {
+                            ["lex_id"] = o["work"]?.DeepClone(),
+                            ["title"] = o["title"]?.DeepClone(),
+                            ["valid_from"] = o["valid_from"]?.DeepClone(),
+                            ["permalink"] = o["permalink"]?.DeepClone(),
+                            ["snippet"] = $"cites it at {o["num"]}",
                         });
                         break;
                     }

@@ -74,7 +74,7 @@ public class McpContractTests : IDisposable
 
         Assert.Equal(
             ["as_of", "timeline", "in_force_on", "diff", "search",
-             "article_history", "provenance", "coverage", "changes_in_period"],
+             "article_history", "provenance", "coverage", "cited_by", "changes_in_period"],
             names);
 
         // Every tool must document itself: the descriptions ARE the routing layer for a model

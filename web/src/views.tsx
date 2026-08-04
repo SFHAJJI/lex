@@ -15,10 +15,10 @@ const ms = (d: string) => Date.parse(`${d}T00:00:00Z`);
  * opened an article — so re-dating dropped you at the top of a document you were reading the
  * middle of. It is the one control a point-in-time reader uses constantly, so it stays put.
  */
-export function Provision({ items, toc, validFrom, validTo, work, anchor, profile, source, onPick, onClear }: {
+export function Provision({ items, toc, validFrom, validTo, work, anchor, profile, source, onPick, onClear, onCite }: {
   items: ProvisionItem[]; toc: ProvisionItem[]; validFrom: string; validTo?: string;
   work: string; anchor?: string; profile?: string; source?: string;
-  onPick: (anchor: string) => void; onClear: () => void;
+  onPick: (anchor: string) => void; onClear: () => void; onCite?: (work: string) => void;
 }) {
   // Where this text came from. Publisher markup and a read PDF are not the same claim, and the
   // difference has to reach the person reading the words, not stop at a field in a JSON file.
@@ -103,6 +103,19 @@ export function Provision({ items, toc, validFrom, validTo, work, anchor, profil
             {p.heading ? <span className="sub">, {plain(p.heading)}</span> : null}
           </h4>
           <div className="lawtxt">{p.text}</div>
+          {/* The acts this article points at. The publisher writes them into the text and the
+              derive step captures them with their ELI target, so they can be followed rather
+              than merely read. This is the shape legal research actually has: one rule leads to
+              another, and a search box cannot express that. */}
+          {p.citations && p.citations.length > 0 ? (
+            <div className="cites-out">
+              <span className="cites-h">Refers to</span>
+              {p.citations.map((c, i) => (
+                <button key={i} className="citelink" onClick={() => onCite?.(c.work)}
+                        title={c.work}>{c.text ?? c.work}</button>
+              ))}
+            </div>
+          ) : null}
           {p.sha ? <div className="sha">sha256 {p.sha.slice(0, 16)}…</div> : null}
         </article>
       ))}
@@ -473,7 +486,39 @@ export function Empty({ children }: { children: React.ReactNode }) {
 }
 
 export const hasView = (ui?: UiEffect) =>
-  !!(ui && (ui.provision || ui.diff || ui.history || ui.ranking || ui.in_force || ui.gap));
+  !!(ui && (ui.provision || ui.diff || ui.history || ui.ranking || ui.in_force || ui.cited_by || ui.gap));
+
+/**
+ * Which articles point at one law.
+ *
+ * The publisher writes its cross-references into the text and the derive step captures them with
+ * their ELI target, so this direction is a lookup rather than a search. It is also the question a
+ * search box structurally cannot answer: "what depends on this law" is about the edges of a graph,
+ * not about the words in a document.
+ */
+export function CitedBy({ view, onOpen }: {
+  view: NonNullable<UiEffect["cited_by"]>;
+  onOpen: (work: string, date: string, anchor?: string) => void;
+}) {
+  return (
+    <>
+      <div className="cnt">
+        <span className="tag">{view.citing_articles.toLocaleString()} article{view.citing_articles === 1 ? "" : "s"} refer to it</span>
+        <span className="tag mono">{view.cited_work}</span>
+      </div>
+      <ul className="rows">
+        {view.rows.map((r, i) => (
+          <li key={`${r.work}-${r.anchor}-${i}`}>
+            <button className="rowbtn" onClick={() => onOpen(r.work, r.valid_from, r.anchor)}>
+              <span>{label(r.title) ?? humanSlug(r.work)}{r.num ? `, ${r.num}` : ""}</span>
+              <span className="sub mono">{r.valid_from} · {r.anchor}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+}
 
 /** A history answer needs no mode of its own: the rail is already showing it. */
 export function modeFor(ui?: UiEffect): State["mode"] | undefined {

@@ -115,6 +115,12 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                 new JsonObject { ["lex_id"] = S("full lex_id"), ["language"] = S("optional") }, ["lex_id"]),
             Tool("coverage", "What we hold and what we lack, tier by tier: counts, date ranges, history_begins, known gaps. This tool exists to say what we do NOT have.",
                 new JsonObject { ["publisher"] = S("optional publisher id") }, []),
+            Tool("cited_by", "Which ARTICLES point at this law. The reverse of the cross-references the publisher writes into its own text (\"modifie par la loi du 4 juin 2020\"), captured at derive time. Answers \"what depends on this law\", \"who amended it\", \"is anything still referring to it\" — the question legal research is actually made of, and the one a search box cannot answer.",
+                new JsonObject
+                {
+                    ["work"] = S("the law being cited, e.g. lu-legilux:loi-2020-06-04-a476"),
+                    ["limit"] = I("default 50"),
+                }, ["work"]),
             Tool("changes_in_period", "ACROSS the corpus: which works gained new versions between two dates, how many each, and when — the aggregate counterpart of diff/timeline (which cover ONE work). Use for \"what changed between 2025 and 2026\", \"which laws changed most during the pandemic\", \"what moved last month\". order=by_churn ranks by number of new versions; by_date (default) lists most recently changed first.",
                 new JsonObject
                 {
@@ -198,6 +204,15 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
             ["text_sha256"] = p.TextSha,
             ["text"] = withText ? p.TextMd : null,
         };
+        // The publisher's own cross-references, captured at derive time. Only with the text, since
+        // an outline is a table of contents and these belong to the words.
+        if (withText)
+        {
+            var cits = readers.GetValueOrDefault(d.Collection)?.CitationsOf($"{d.Key}|{d.Language}|{d.ValidFrom}", p.Anchor);
+            if (cits is { Count: > 0 })
+                o["citations"] = new JsonArray(cits.Select(c => (JsonNode)new JsonObject
+                { ["work"] = $"{d.Collection}:{c.Slug}", ["href"] = c.Href, ["text"] = c.Label }).ToArray());
+        }
         if (_publicBase is not null)
             o["permalink"] = $"{_publicBase}/{d.Collection}/{d.GroupKey}/{d.ValidFrom}#{p.Anchor}";
         return o;
@@ -541,6 +556,35 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                 }
                 return new JsonObject { ["status"] = "unknown_work", ["lex_id"] = key };
             }
+            case "cited_by":
+            {
+                var w = Str("work") ?? throw new ArgumentException("work required");
+                var slug = w.Contains(':') ? w[(w.IndexOf(':') + 1)..] : w;
+                var lim = Int("limit", 50);
+                var outp = new JsonArray();
+                foreach (var r in readers.Values)
+                {
+                    var hits = r.CitedBy(slug, lim);
+                    outp.Add(new JsonObject
+                    {
+                        ["envelope"] = Envelope(r, hits.Count == 0 ? "no_result" : "ok"),
+                        ["cited_work"] = w,
+                        ["citing_articles"] = hits.Count,
+                        ["citations"] = new JsonArray(hits.Select(h => (JsonNode)new JsonObject
+                        {
+                            ["work"] = $"{r.Collection}:{h.GroupKey}",
+                            ["title"] = h.Title,
+                            ["valid_from"] = h.ValidFrom,
+                            ["anchor"] = h.Anchor,
+                            ["num"] = h.Num,
+                            ["permalink"] = _publicBase is null ? null
+                                : $"{_publicBase}/{r.Collection}/{h.GroupKey}/{h.ValidFrom}#{h.Anchor}",
+                        }).ToArray()),
+                    });
+                }
+                return outp.Count == 1 ? outp[0]!.DeepClone() : outp;
+            }
+
             case "changes_in_period":
             {
                 var from = Str("from_date") ?? throw new ArgumentException("from_date required");

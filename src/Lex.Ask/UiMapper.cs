@@ -36,8 +36,10 @@ internal static class UiMapper
             "as_of" => Provision(node, args),
             "article_history" => History(node),
             "diff" => Diff(node, args),
-            "changes_in_period" => Ranking(node),
+            "changes_in_period" => Ranking(node, args),
             "in_force_on" => InForce(node, args),
+            "cited_by" => Cited(node),
+            "search" => Workspace(args),
             _ => new UiEffect(),
         };
     }
@@ -91,7 +93,48 @@ internal static class UiMapper
             Note: S(o, "note")));
     }
 
-    private static UiEffect Ranking(JsonObject o)
+    /// <summary>
+    /// Which of the workspace's layers a set of document types corresponds to. The assistant
+    /// asks the index in the index's vocabulary ("LOI,CODE"); the workspace thinks in layers. This
+    /// is the translation, so that asking the assistant for statutes leaves the reader looking at
+    /// the Statutes tab rather than at an unexplained subset of everything.
+    /// </summary>
+    private static string? LayerOf(string? types) => types?.Replace(" ", "") switch
+    {
+        null or "" => null,
+        "!RECUEIL,!CODE_RECUEIL" => "instruments",
+        "Constitution,CONV,PROT,TC,ORD" => "constitution",
+        "LOI,CODE" => "statutes",
+        "RGD,RMIN,AMIN,AGD,RGC,AGC,ARGD,RI" => "regulations",
+        "RECUEIL,CODE_RECUEIL" => "collections",
+        var t when t.Contains("Constitution") => "constitution",
+        var t when t.Contains("LOI") || t.Contains("CODE") => "statutes",
+        var t when t.Contains("RGD") || t.Contains("RMIN") => "regulations",
+        _ => null,
+    };
+
+    /// Controls the assistant set on the way to its answer, so the workspace lands the same way.
+    private static UiEffect Workspace(JsonObject args)
+    {
+        var layer = LayerOf(S(args, "document_type"));
+        var lang = S(args, "language");
+        return layer is null && lang is null
+            ? new UiEffect()
+            : new UiEffect(Workspace: new WorkspaceView(Layer: layer, Language: lang));
+    }
+
+    private static UiEffect Cited(JsonObject o)
+    {
+        if (o["citations"] is not JsonArray rows || rows.Count == 0) return new UiEffect();
+        return new UiEffect(CitedBy: new CitedByView(
+            CitedWork: S(o, "cited_work") ?? "",
+            CitingArticles: o["citing_articles"]?.GetValue<int>() ?? rows.Count,
+            Rows: rows.OfType<JsonObject>().Select(c => new CitedByRow(
+                Work: S(c, "work") ?? "", Title: S(c, "title"), ValidFrom: S(c, "valid_from") ?? "",
+                Anchor: S(c, "anchor") ?? "", Num: S(c, "num"), Permalink: S(c, "permalink"))).ToList()));
+    }
+
+    private static UiEffect Ranking(JsonObject o, JsonObject args)
     {
         if (o["changes"] is not JsonArray rows || rows.Count == 0) return new UiEffect();
         return new UiEffect(Ranking: new RankingView(
@@ -105,7 +148,10 @@ internal static class UiMapper
                 VersionsInPeriod: c["versions_in_period"]?.GetValue<int>() ?? 0,
                 VersionsTotal: c["versions_total"]?.GetValue<int>() ?? 0,
                 FirstChange: S(c, "first_change") ?? "", LastChange: S(c, "last_change") ?? "",
-                Permalink: S(c, "permalink"), DiffPermalink: S(c, "diff_permalink"))).ToList()));
+                Permalink: S(c, "permalink"), DiffPermalink: S(c, "diff_permalink"))).ToList()),
+            Workspace: LayerOf(S(args, "document_type")) is { } lay
+                ? new WorkspaceView(Layer: lay, Page: (o["offset"]?.GetValue<int>() ?? 0) / 25)
+                : null);
     }
 
     private static UiEffect InForce(JsonObject o, JsonObject args)

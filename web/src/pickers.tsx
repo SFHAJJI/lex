@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { tool } from "./api";
+import { LAYERS, type LayerId } from "./state";
 
 /** A work the user can choose, collapsed from provision-level search hits. */
 export interface WorkHit { work: string; title: string; validFrom?: string }
@@ -115,13 +116,21 @@ export function TopicSearch({ q, asOf, onQuery, onOpen }: {
   const [text, setText] = useState(q);
   const [hits, setHits] = useState<any[]>([]);
   const [busy, setBusy] = useState(false);
+  // Both filters are already understood by the index; the workspace simply never asked. Language
+  // matters more than it looks: the Constitution exists in French, German and Luxembourgish, and
+  // a French query was coming back in German because nothing narrowed it.
+  const [layer, setLayer] = useState<LayerId | "">("");
+  const [lang, setLang] = useState("");
 
   useEffect(() => { setText(q); }, [q]);
   useEffect(() => {
     if (!q.trim()) { setHits([]); return; }
     let live = true;
     setBusy(true);
-    tool<any>("search", { query: q, limit: 20, ...(asOf ? { as_of: asOf } : {}) })
+    const types = LAYERS.find((l) => l.id === layer)?.types;
+    tool<any>("search", { query: q, limit: 30, ...(asOf ? { as_of: asOf } : {}),
+                          ...(types ? { document_type: types } : {}),
+                          ...(lang ? { language: lang } : {}) })
       .then((res) => {
         if (!live) return;
         setHits((Array.isArray(res) ? res : [res]).flatMap((c: any) => c?.hits ?? []));
@@ -129,7 +138,7 @@ export function TopicSearch({ q, asOf, onQuery, onOpen }: {
       .catch(() => live && setHits([]))
       .finally(() => live && setBusy(false));
     return () => { live = false; };
-  }, [q, asOf]);
+  }, [q, asOf, layer, lang]);
 
   return (
     <>
@@ -140,6 +149,20 @@ export function TopicSearch({ q, asOf, onQuery, onOpen }: {
           <input type="date" aria-label="Only versions in force on this date" value={asOf ?? ""} onChange={(e) => onQuery(q, e.target.value || undefined)} /></label>
         <button type="submit">Search</button>
       </form>
+      <div className="sfilters">
+        <label className="pick"><i>in</i>
+          <select aria-label="Which layer of the law" value={layer} onChange={(e) => setLayer(e.target.value as LayerId | "")}>
+            <option value="">everything</option>
+            {LAYERS.map((l) => <option key={l.id} value={l.id}>{l.label}</option>)}
+          </select></label>
+        <label className="pick"><i>language</i>
+          <select aria-label="Language of the text" value={lang} onChange={(e) => setLang(e.target.value)}>
+            <option value="">any</option>
+            <option value="fr">français</option>
+            <option value="de">deutsch</option>
+            <option value="lb">lëtzebuergesch</option>
+          </select></label>
+      </div>
       {busy ? <div className="empty">Searching…</div> : null}
       {!busy && q && hits.length === 0 ? <div className="empty">Nothing in the corpus matches that.</div> : null}
       <ul className="rows">

@@ -17,11 +17,18 @@ public sealed record UiEffect(
     HistoryView? History = null,
     RankingView? Ranking = null,
     InForceView? InForce = null,
+    CitedByView? CitedBy = null,
+    // The controls, not a view. Everything above answers "what should the workspace SHOW"; this
+    // answers "how should it be SET". Asking for statutes only, or for the next page, is a move a
+    // reader makes with a filter, and the assistant should be able to make the same move rather
+    // than describe it in prose and leave the visitor to find the control.
+    WorkspaceView? Workspace = null,
     GapView? Gap = null)
 {
     [System.Text.Json.Serialization.JsonIgnore]
     public bool IsEmpty => Provision is null && Diff is null && History is null
-                           && Ranking is null && InForce is null && Gap is null;
+                           && Ranking is null && InForce is null && CitedBy is null
+                           && Workspace is null && Gap is null;
 
     /// <summary>Merge the effects of every tool call in one turn into a single payload.</summary>
     public static UiEffect Merge(IEnumerable<UiEffect> parts)
@@ -35,6 +42,8 @@ public sealed record UiEffect(
                 History = acc.History ?? p.History,
                 Ranking = acc.Ranking ?? p.Ranking,
                 InForce = acc.InForce ?? p.InForce,
+                CitedBy = acc.CitedBy ?? p.CitedBy,
+                Workspace = acc.Workspace ?? p.Workspace,
                 Gap = acc.Gap ?? p.Gap,
             };
         return acc;
@@ -64,6 +73,17 @@ public sealed record RankingRow(string Work, string? Title, int VersionsInPeriod
     string FirstChange, string LastChange, string? Permalink, string? DiffPermalink);
 
 public sealed record InForceView(string Date, int Total, IReadOnlyList<InForceRow> Rows);
+
+/// <summary>Which articles point at one law: the reverse of the publisher's own cross-references.</summary>
+public sealed record CitedByView(string CitedWork, int CitingArticles, IReadOnlyList<CitedByRow> Rows);
+
+public sealed record CitedByRow(string Work, string? Title, string ValidFrom, string Anchor,
+                                string? Num, string? Permalink);
+
+/// <summary>
+/// How the workspace should be set, as opposed to what it should show. Null means "leave it".
+/// </summary>
+public sealed record WorkspaceView(string? Layer = null, int? Page = null, string? Language = null);
 
 public sealed record InForceRow(string Work, string? Title, string? Kind, string ValidFrom, string? Permalink);
 

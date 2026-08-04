@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using Microsoft.Data.Sqlite;
 
 namespace Lex.Index;
@@ -15,6 +16,48 @@ public static class IndexBuilder
     /// LexIndexReader.ComputeContentDigest must reproduce this byte for byte from the stored
     /// rows — that equality is what makes tampering detectable.
     /// </summary>
+    /// <summary>
+    /// Flattens a provision's cross-references into the lookup table. The ELI href
+    /// "/eli/etat/leg/loi/2020/06/04/a476/jo" becomes the slug "loi-2020-06-04-a476", which is how
+    /// works are keyed everywhere else, so a citation can be resolved to a work without parsing a
+    /// URL at read time.
+    /// </summary>
+    private static void WriteCitations(SqliteConnection conn, ProvisionRow p)
+    {
+        if (string.IsNullOrEmpty(p.CitationsJson)) return;
+        JsonArray? arr;
+        try { arr = JsonNode.Parse(p.CitationsJson) as JsonArray; }
+        catch { return; }
+        if (arr is null) return;
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "INSERT INTO citations VALUES ($rid,$a,$slug,$href,$label)";
+        foreach (var node in arr.OfType<JsonObject>())
+        {
+            var href = node["href"]?.GetValue<string>();
+            if (string.IsNullOrWhiteSpace(href)) continue;
+            var slug = SlugOfEli(href);
+            if (slug is null) continue;
+            cmd.Parameters.Clear();
+            cmd.Parameters.AddWithValue("$rid", p.Rid);
+            cmd.Parameters.AddWithValue("$a", p.Anchor);
+            cmd.Parameters.AddWithValue("$slug", slug);
+            cmd.Parameters.AddWithValue("$href", href);
+            cmd.Parameters.AddWithValue("$label", (object?)node["text"]?.GetValue<string>() ?? DBNull.Value);
+            cmd.ExecuteNonQuery();
+        }
+    }
+
+    /// "/eli/etat/leg/loi/2020/06/04/a476/jo" -> "loi-2020-06-04-a476". Null when it is not an ELI.
+    private static string? SlugOfEli(string href)
+    {
+        var i = href.IndexOf("/eli/", StringComparison.Ordinal);
+        if (i < 0) return null;
+        var parts = href[(i + 5)..].Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length < 3) return null;
+        var tail = parts.Skip(2).Where(x => x is not ("jo" or "consolide")).ToList();
+        return tail.Count == 0 ? null : string.Join("-", tail);
+    }
+
     private static string ContentDigest(IEnumerable<DocRow> docs, IEnumerable<ProvisionRow> provisions)
     {
         var sb = new System.Text.StringBuilder();
@@ -66,6 +109,12 @@ public static class IndexBuilder
               text_md TEXT NOT NULL, text_sha TEXT NOT NULL,
               PRIMARY KEY(rid, seq));
             CREATE INDEX ix_prov_rid ON provisions(rid);
+            -- Cross-references, flattened so the reverse question ("which articles cite this
+            -- law?") is an indexed lookup rather than a scan over every provision's JSON.
+            CREATE TABLE citations(
+              rid TEXT NOT NULL, anchor TEXT NOT NULL,
+              cited_slug TEXT NOT NULL, href TEXT NOT NULL, label TEXT);
+            CREATE INDEX ix_cit_target ON citations(cited_slug);
             CREATE INDEX ix_prov_anchor ON provisions(anchor);
             CREATE TABLE provision_states(
               group_key TEXT NOT NULL, anchor TEXT NOT NULL, valid_from TEXT NOT NULL,
@@ -125,6 +174,7 @@ public static class IndexBuilder
                 Set(insProv, "$path", p.Path); Set(insProv, "$avf", p.ArticleValidFrom);
                 Set(insProv, "$wt", p.WorkTitle); Set(insProv, "$md", p.TextMd); Set(insProv, "$sha", p.TextSha);
                 insProv.ExecuteNonQuery();
+                WriteCitations(conn, p);
             }
             // populate the external-content FTS index in one pass
             Exec(conn, "INSERT INTO fts(rowid, work_title, num, heading, text_md) SELECT rowid, work_title, num, heading, text_md FROM provisions");

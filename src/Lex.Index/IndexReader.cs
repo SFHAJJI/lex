@@ -360,6 +360,46 @@ public sealed class LexIndexReader : IDisposable
         return ReadAll(cmd);
     }
 
+    /// <summary>Cross-references a provision makes, in document order.</summary>
+    public List<(string Slug, string Href, string? Label)> CitationsOf(string rid, string anchor)
+    {
+        using var cmd = Cmd("SELECT cited_slug, href, label FROM citations WHERE rid=$r AND anchor=$a", []);
+        cmd.Parameters.AddWithValue("$r", rid);
+        cmd.Parameters.AddWithValue("$a", anchor);
+        var list = new List<(string, string, string?)>();
+        using var r = cmd.ExecuteReader();
+        while (r.Read()) list.Add((r.GetString(0), r.GetString(1), r.IsDBNull(2) ? null : r.GetString(2)));
+        return list;
+    }
+
+    /// <summary>
+    /// The reverse: which articles point AT this work. This is the question legal research is
+    /// actually made of, and it is only answerable because the publisher's own cross-references
+    /// were captured at derive time rather than thrown away with the rest of the markup.
+    /// </summary>
+    public List<(string GroupKey, string ValidFrom, string Anchor, string? Num, string? Title)> CitedBy(
+        string slug, int limit)
+    {
+        using var cmd = Cmd("""
+            SELECT DISTINCT d.group_key, d.valid_from, c.anchor, p.num,
+                   COALESCE(d.title_short, d.title)
+            FROM citations c
+            JOIN docs d ON d.rid = c.rid
+            LEFT JOIN provisions p ON p.rid = c.rid AND p.anchor = c.anchor
+            WHERE c.cited_slug = $s
+            ORDER BY d.valid_from DESC, d.group_key, c.anchor
+            LIMIT $lim
+            """, []);
+        cmd.Parameters.AddWithValue("$s", slug);
+        cmd.Parameters.AddWithValue("$lim", limit);
+        var list = new List<(string, string, string, string?, string?)>();
+        using var r = cmd.ExecuteReader();
+        while (r.Read())
+            list.Add((r.GetString(0), r.GetString(1), r.GetString(2),
+                      r.IsDBNull(3) ? null : r.GetString(3), r.IsDBNull(4) ? null : r.GetString(4)));
+        return list;
+    }
+
     public CoverageInfo Coverage()
     {
         var kinds = new List<CoverageKind>();

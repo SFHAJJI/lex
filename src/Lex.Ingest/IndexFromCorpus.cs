@@ -79,7 +79,10 @@ public static class IndexFromCorpus
                                 ArticleValidFrom: p.TryGetProperty("article_valid_from", out var av) ? av.GetString() : null,
                                 WorkTitle: workMeta.Title,
                                 TextMd: p.GetProperty("text_md").GetString() ?? "",
-                                TextSha: p.GetProperty("text_sha256").GetString() ?? ""));
+                                TextSha: p.GetProperty("text_sha256").GetString() ?? "",
+                                CitationsJson: p.TryGetProperty("citations", out var cit)
+                                    && cit.ValueKind == JsonValueKind.Array && cit.GetArrayLength() > 0
+                                    ? cit.GetRawText() : null));
                         }
                     }
 

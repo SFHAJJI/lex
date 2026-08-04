@@ -45,7 +45,11 @@ public sealed record ProvisionRow(
     string? ArticleValidFrom,   // publisher-asserted per-provision date, when present
     string? WorkTitle,          // denormalized for ranking
     string TextMd,
-    string TextSha);
+    string TextSha,
+    // Cross-references the publisher wrote into the text ("modifie par la loi du 4 juin 2020"),
+    // captured at derive time with their ELI target. Serialised as JSON because a provision has
+    // few of them and they are always read whole, never queried field by field.
+    string? CitationsJson = null);
 
 /// <summary>One distinct text state of one provision across versions (the per-anchor time axis).</summary>
 public sealed record ProvisionStateRow(

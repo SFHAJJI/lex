@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { askStreaming, first, tool, type AskReply, type ProvisionItem, type Step, type UiEffect } from "./api";
 import { LAYERS, publisherOf, useWorkspace, workSlug, type Space, type State } from "./state";
-import { Empty, Gap, InForce, Provision, Ranking, VersionRail, hasView, modeFor } from "./views";
+import { CitedBy, Empty, Gap, InForce, Provision, Ranking, VersionRail, hasView, modeFor } from "./views";
 import { Compare } from "./Compare";
 import { LawPicker, shorten } from "./pickers";
 import AskPanel from "./AskPanel";
@@ -214,6 +214,13 @@ export default function App() {
       // A refusal keeps its steps out of the transcript: visible effort followed by a weak
       // answer measures WORSE than the same answer delivered instantly and quietly.
       if (r.narrated === false) setSteps([]);
+      // Controls the assistant set on the way to its answer. Applied before the view, so the
+      // layer tabs and the page already read correctly when the rows land under them.
+      if (r.ui?.workspace) {
+        const w = r.ui.workspace;
+        if (typeof w.page === "number") setPage(Math.max(0, w.page));
+        if (w.layer) go({ layer: w.layer as State["layer"] });
+      }
       if (hasView(r.ui)) {
         setUi(r.ui);
         const subj = r.ui!.provision?.subject ?? r.ui!.history?.subject ?? r.ui!.diff?.subject;
@@ -342,11 +349,14 @@ export default function App() {
                                 hasMore={ui.ranking.rows.length >= PAGE}
                                 onLayer={(l) => { setPage(0); setUi(undefined); go({ layer: l }); }}
                                 onPage={(p) => { setPage(Math.max(0, p)); setUi(undefined); }} /> :
+         ui?.cited_by ? <CitedBy view={ui.cited_by}
+                                 onOpen={(w, d, a) => { setUi(undefined); go({ work: w, date: d, anchor: a, mode: "read", space: "law" }); }} /> :
          ui?.in_force ? <InForce date={ui.in_force.date} total={ui.in_force.total} rows={ui.in_force.rows} onOpen={openLaw} /> :
          s.work && s.mode === "compare" ? <Compare work={s.work} from={s.date ?? today()} to={s.to ?? today()} anchor={s.anchor} /> :
          s.work && loaded ? <Provision items={loaded.items} toc={toc} validFrom={loaded.from} validTo={loaded.to}
                                        work={s.work} anchor={s.anchor} profile={loaded.profile}
                                        source={loaded.source}
+                                       onCite={(w) => { setUi(undefined); go({ work: w, date: undefined, anchor: undefined, to: undefined, mode: "read", space: "law" }); }}
                                        onPick={(a) => go({ anchor: a })}
                                        onClear={() => go({ anchor: undefined })} /> :
          s.work ? <Empty>Loading…</Empty> :

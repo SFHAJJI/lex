@@ -34,13 +34,21 @@ export interface AskReply {
 }
 
 export interface Subject { work: string; title?: string; date?: string; anchor?: string }
-export interface ProvisionItem { anchor: string; num?: string; heading?: string; text: string; sha?: string; path?: string }
+export interface Citation { work: string; href: string; text?: string }
+export interface ProvisionItem { anchor: string; num?: string; heading?: string; text: string; sha?: string; path?: string;
+                                 citations?: Citation[] }
 export interface UiEffect {
   provision?: { subject: Subject; valid_from: string; valid_to?: string; provisions: ProvisionItem[]; permalink?: string };
   diff?: { subject: Subject; from_date: string; to_date: string; note?: string };
   history?: { subject: Subject; anchor: string; distinct_texts: number; states: { valid_from: string; valid_to?: string; sha?: string; permalink?: string }[] };
   ranking?: { from_date: string; to_date: string; order: string; works_changed: number; new_versions: number; rows: RankingRow[] };
   in_force?: { date: string; total: number; rows: { work: string; title?: string; kind?: string; valid_from: string; permalink?: string }[] };
+  cited_by?: { cited_work: string; citing_articles: number;
+               rows: { work: string; title?: string; valid_from: string; anchor: string; num?: string; permalink?: string }[] };
+  // Not a view: how the workspace should be SET. The assistant reaches the same controls a reader
+  // does, so "show me only the statutes" leaves the Statutes layer selected rather than describing
+  // a filter the visitor then has to find.
+  workspace?: { layer?: string; page?: number; language?: string };
   gap?: { status: string; work?: string; date?: string; explanation: string; available: string[] };
 }
 export interface RankingRow {
