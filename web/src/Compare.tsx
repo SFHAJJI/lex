@@ -31,16 +31,6 @@ type Row = {
   kind: "changed" | "added" | "removed";
 };
 
-/** Variants the publisher swaps without changing a word of law. */
-const typographic = (s: string) =>
-  (s ?? "")
-    .replace(/[’ʼ]/g, "'")
-    .replace(/[–—]/g, "-")
-    .replace(/[  ]/g, " ")
-    .replace(/[“”]/g, '"')
-    .replace(/\s+/g, " ")
-    .trim();
-
 export function Compare({ work, from, to, anchor }: {
   work: string; from: string; to: string; anchor?: string;
 }) {
@@ -118,13 +108,13 @@ export function Compare({ work, from, to, anchor }: {
         const kind: Row["kind"] = !A.has(k) ? "added" : !B.has(k) ? "removed" : "changed";
         if (kind === "added") added++;
         if (kind === "removed") removed++;
-        // A difference the publisher made to punctuation is not a difference to the law.
-        if (kind === "changed" && typographic(before) === typographic(after)) {
-          punctuation.push(label);
-          continue;
-        }
+        // diffWords now matches tokens on their normalised form, so a purely typographic reset
+        // yields no changed pieces at all and needs no separate test here. These are still counted
+        // and named rather than silently dropped, because the bytes really did move: the hash
+        // changed, the law did not, and both halves of that are worth saying.
         const pieces = diffWords(before, after);
-        if (changed(pieces) || kind !== "changed") rows.push({ label, anchor: k, pieces, kind });
+        if (!changed(pieces) && kind === "changed") { punctuation.push(label); continue; }
+        rows.push({ label, anchor: k, pieces, kind });
       }
       setState({ loading: false, rows, unchanged: untouched, punctuation, added, removed });
     })().catch((e) => live && setState({ loading: false, error: String(e?.message ?? e) }));
