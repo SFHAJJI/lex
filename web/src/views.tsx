@@ -342,29 +342,21 @@ function useRowFacts(rows: RankingRow[]) {
  * publisher's fifteen codes, because a reader asks about laws and regulations, not about RGC.
  */
 export function Ranking({ rows, worksChanged, newVersions, from, to, layer, page, hasMore,
-                          onOpen, onOpenRecord, onLayer, onPage }: {
+                          onOpen, onOpenRecord, onPage }: {
   rows: RankingRow[]; worksChanged: number; newVersions: number; from: string; to: string;
   layer: LayerId; page: number; hasMore: boolean;
   onOpen: (work: string, from: string, to: string) => void;
   onOpenRecord: (work: string, date: string) => void;
-  onLayer: (l: LayerId) => void;
   onPage: (p: number) => void;
 }) {
   const facts = useRowFacts(rows);
   const max = Math.max(1, ...rows.map((r) => r.versions_in_period));
   const current = LAYERS.find((l) => l.id === layer) ?? LAYERS[0];
 
+  // The layer tabs used to live here, above the rows, which meant a filter that matched nothing
+  // took its own escape hatch down with it. They belong with the window and the ordering.
   return (
     <>
-      <div className="layers" role="tablist" aria-label="Which layer of the law">
-        {LAYERS.map((l) => (
-          <button key={l.id} role="tab" aria-selected={l.id === layer}
-                  className={"layer" + (l.id === layer ? " on" : "")}
-                  title={l.hint} onClick={() => onLayer(l.id)}>
-            {l.label}
-          </button>
-        ))}
-      </div>
       {/* One row, not three. The layer's meaning belongs beside its counts, because "820 changed"
           only means anything once you know 820 of what. */}
       <div className="cnt">

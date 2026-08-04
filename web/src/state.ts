@@ -6,10 +6,17 @@ import { useEffect, useState } from "react";
 /** Reading one version, or comparing two. History is not a mode — the rail always shows it. */
 export type Mode = "read" | "compare";
 /** The three subjects a question can be about — a law, a stretch of time, or words. */
-// "onDate" is the compliance question, "what applied on the day it happened", which the corpus
-// has always answered and the workspace never asked. It was reachable only as a plain page or by
-// asking the assistant.
-export type Space = "law" | "time" | "topic" | "onDate";
+/**
+ * Three places, not four query types.
+ *
+ * "search" is the one box and the one date: finding a law, finding words, and reading either as
+ * they stood on a day are the same act with a different noun. "law" is reading one. "time" is the
+ * corpus-wide report, which is a different job entirely, watching rather than looking up.
+ *
+ * The old spaces (topic, onDate) were query TYPES, which asked a reader to classify their own
+ * question before asking it. A date is not a kind of question; it is a modifier on every question.
+ */
+export type Space = "search" | "law" | "time";
 
 export interface State {
   space?: Space;

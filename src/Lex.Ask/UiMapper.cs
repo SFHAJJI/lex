@@ -192,6 +192,9 @@ public static class UiMapper
         _ => "Lex cannot answer this from what it holds.",
     };
 
-    private static string? S(JsonObject o, string k)
-        => o[k] is JsonValue v && v.TryGetValue<string>(out var s) ? s : null;
+    // Nullable on purpose: callers reach into optional sub-objects (`o["from"] as JsonObject`),
+    // and a tool response that omits one of them must map to a missing field, not to a throw that
+    // loses the whole answer along with its UI payload.
+    private static string? S(JsonObject? o, string k)
+        => o?[k] is JsonValue v && v.TryGetValue<string>(out var s) ? s : null;
 }

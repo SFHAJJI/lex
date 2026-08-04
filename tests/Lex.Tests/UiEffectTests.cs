@@ -131,6 +131,26 @@ public class UiEffectTests
     }
 
     [Fact]
+    public void A_half_resolved_diff_still_maps()
+    {
+        // A diff whose second side did not resolve used to throw inside the mapper, which loses
+        // the whole answer — prose included — over a missing sub-object. It must degrade to a view
+        // with the fields it does have.
+        var eff = UiMapper.From("diff",
+            Args(("work", "lu-legilux:loi-2006-07-31-n2"), ("from_date", "2024-01-01"), ("to_date", "2025-01-01")),
+            new JsonObject
+            {
+                ["envelope"] = new JsonObject { ["status"] = "ok" },
+                ["from"] = new JsonObject { ["valid_from"] = "2024-01-01", ["title"] = "Code du travail" },
+                // no "to" at all
+            });
+
+        Assert.Equal("2024-01-01", eff.Diff!.FromDate);
+        Assert.Equal("2025-01-01", eff.Diff.ToDate);
+        Assert.Equal("Code du travail", eff.Diff.Subject.Title);
+    }
+
+    [Fact]
     public void Merging_a_turn_keeps_the_first_of_each_kind()
     {
         // One turn can call several tools. The workspace must end in ONE state, not the last one

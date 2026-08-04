@@ -5,7 +5,8 @@ import { CitedBy, Empty, Gap, InForce, Provision, Ranking, VersionRail, hasView,
 import { Compare } from "./Compare";
 import { LawPicker, shorten } from "./pickers";
 import AskPanel from "./AskPanel";
-import Finder from "./Finder";
+import Search from "./Search";
+import Period from "./Period";
 import Coach, { COACH_KEY } from "./Coach";
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -187,7 +188,9 @@ export default function App() {
   // "What was in force on this day": the compliance question, answered deterministically like
   // every other control in the workspace rather than only through the assistant.
   useEffect(() => {
-    if (s.space !== "onDate" || !s.asOf) return;
+    // A date with no question is itself a question: what applied that day. Not a mode, just what
+    // an empty search means once a date is set.
+    if (s.work || s.q || !s.asOf || s.space === "time") return;
     let live = true;
     tool<any>("in_force_on", { date: s.asOf, limit: 60 })
       .then((res) => {
@@ -205,7 +208,7 @@ export default function App() {
       })
       .catch(() => {});
     return () => { live = false; };
-  }, [s.space, s.asOf]);
+  }, [s.space, s.asOf, s.work, s.q]);
 
   // With an article open the rail narrows to THAT article's distinct texts — the question a
   // reader actually has ("when did this paragraph change?") rather than "when was anything
@@ -248,13 +251,18 @@ export default function App() {
         setUi(r.ui);
         const subj = r.ui!.provision?.subject ?? r.ui!.history?.subject ?? r.ui!.diff?.subject;
         const m = modeFor(r.ui);
+        // The space is set explicitly, never inferred. The reader is somewhere when they ask, and
+        // "somewhere" is now a pinned value: answering a "what changed" question from the search
+        // page used to print the prose and leave the table behind the space it belonged to.
         if (subj?.work) {
           setTitle(subj.title);
           if (r.ui!.provision) setLoaded({ items: r.ui!.provision.provisions, from: r.ui!.provision.valid_from, to: r.ui!.provision.valid_to });
           go({ work: subj.work, date: subj.date ?? r.ui!.provision?.valid_from, anchor: subj.anchor, mode: m ?? "read",
+               space: "law",
                ...(r.ui!.diff ? { date: r.ui!.diff.from_date, to: r.ui!.diff.to_date } : {}) });
         } else if (r.ui!.ranking) {
-          go({ work: undefined, from: r.ui!.ranking.from_date, until: r.ui!.ranking.to_date, order: r.ui!.ranking.order as State["order"], mode: "read" });
+          go({ work: undefined, from: r.ui!.ranking.from_date, until: r.ui!.ranking.to_date,
+               order: r.ui!.ranking.order as State["order"], mode: "read", space: "time" });
         }
       }
     } catch { setSaid("The request failed, try again."); }
@@ -278,54 +286,47 @@ export default function App() {
   const openDiff = (work: string, from: string, to: string) => { setUi(undefined); go({ work, date: from, to, mode: "compare", space: "law" }); };
 
   // Which framework is on screen: whatever the URL says, else inferred from what is loaded.
-  const space: Space = s.space ?? (s.work ? "law" : s.q ? "topic" : (s.from || ui?.ranking) ? "time" : "law");
+  const space: Space = s.space ?? (s.work ? "law" : (s.from || ui?.ranking) ? "time" : "search");
 
   const switchTo = (sp: Space) => {
     setUi(undefined);
     setSaid(undefined);
     if (sp === "time") go({ space: sp, work: undefined, anchor: undefined, from: s.from ?? shift(today(), -365), until: s.until ?? today(), order: s.order ?? "by_churn" });
-    else if (sp === "topic") go({ space: sp, work: undefined, anchor: undefined });
-    else if (sp === "onDate") go({ space: sp, work: undefined, anchor: undefined, from: undefined, until: undefined, asOf: s.asOf ?? today() });
-    else go({ space: sp, from: undefined, until: undefined });
+    else go({ space: sp, work: undefined, anchor: undefined, from: undefined, until: undefined });
   };
 
-  // The finder is the home surface, and it stays until a law is actually open. Keying it on
-  // "nothing chosen yet" was wrong: picking the period tab sets a date range, which counted as a
-  // choice, so the card vanished the instant you touched it and took its own controls with it.
-  const front = !s.work;
+  // Home is the search surface, and it stays until a law is open OR the reader asks for the
+  // report. The old flag was "nothing chosen yet", which made the report render underneath a
+  // search box that had nothing to do with it.
+  const front = !s.work && space === "search";
 
   return (
     <div className="ws">
       {front ? (
-        <Finder
-          space={space} state={s} today={today()}
-          onSpace={switchTo}
-          onPickLaw={pickLaw}
-          onPeriod={(next) => { setUi(undefined); go(next); }}
-          onQuery={(query, asOf) => go({ q: query, asOf, work: undefined })}
+        <Search
+          state={s} today={today()}
+          onQuery={(q) => { setUi(undefined); go({ q: q || undefined, work: undefined, from: undefined, until: undefined, space: "search" }); }}
+          onAsOf={(d) => { setUi(undefined); go({ asOf: d }); }}
           onOpen={(work, date, anchor) => { setUi(undefined); go({ work, date, anchor, mode: "read", space: "law" }); }}
-          onOnDate={(d) => { setUi(undefined); go({ space: "onDate", asOf: d, work: undefined, from: undefined, until: undefined }); }}
-          onDoor={(next) => {
-            setUi(undefined);
-            // "What changed this month" is a period, computed here so the door stays declarative.
-            const withDates = next.space === "time"
-              ? { ...next, from: shift(today(), -30), until: today(), order: "by_churn" as const }
-              : next;
-            go(withDates);
-          }}
+          onMonitor={() => switchTo("time")}
         />
       ) : (
         <nav className="doors">
           <button className="backhome" onClick={() => { setUi(undefined); setSaid(undefined); go({ work: undefined, q: undefined, from: undefined, until: undefined, anchor: undefined, to: undefined, space: undefined }); }}>
             ← everything
           </button>
-          {(["law", "time", "topic", "onDate"] as const).map((sp) => (
-            <button key={sp} className={space === sp ? "on" : ""} onClick={() => switchTo(sp)}>
-              {sp === "law" ? "a law" : sp === "time" ? "a period" : sp === "topic" ? "a topic" : "a date"}
-            </button>
-          ))}
+          <button className={space === "search" ? "on" : ""} onClick={() => switchTo("search")}>search</button>
+          <button className={space === "time" ? "on" : ""} onClick={() => switchTo("time")}>what changed</button>
         </nav>
       )}
+
+      {space === "time" && !s.work ? (
+        <Period from={s.from ?? shift(today(), -365)} until={s.until ?? today()}
+                order={s.order ?? "by_churn"} layer={s.layer ?? "instruments"} today={today()}
+                onWindow={(from, until) => { setPage(0); setUi(undefined); go({ from, until }); }}
+                onOrder={(o) => { setPage(0); setUi(undefined); go({ order: o }); }}
+                onLayer={(l) => { setPage(0); setUi(undefined); go({ layer: l }); }} />
+      ) : null}
 
       {coached ? null : (
         <Coach state={s} onDone={() => {
@@ -373,14 +374,12 @@ export default function App() {
       ) : null}
 
       <div className="work">
-        {space === "topic" ? null :
-         ui?.gap ? <Gap {...ui.gap} held={s.work ? held : undefined} /> :
+        {ui?.gap ? <Gap {...ui.gap} held={s.work ? held : undefined} /> :
          ui?.ranking ? <Ranking rows={ui.ranking.rows} worksChanged={ui.ranking.works_changed}
                                 newVersions={ui.ranking.new_versions} from={ui.ranking.from_date}
                                 to={ui.ranking.to_date} onOpen={openDiff} onOpenRecord={openLaw}
                                 layer={s.layer ?? "instruments"} page={page}
                                 hasMore={ui.ranking.rows.length >= PAGE}
-                                onLayer={(l) => { setPage(0); setUi(undefined); go({ layer: l }); }}
                                 onPage={(p) => { setPage(Math.max(0, p)); setUi(undefined); }} /> :
          ui?.cited_by ? <CitedBy view={ui.cited_by}
                                  onOpen={(w, d, a) => { setUi(undefined); go({ work: w, date: d, anchor: a, mode: "read", space: "law" }); }} /> :
@@ -394,7 +393,6 @@ export default function App() {
                                        onClear={() => go({ anchor: undefined })} /> :
          s.work ? <Empty>Loading…</Empty> :
          !front && space === "time" ? <Empty>Pick a period above.</Empty> :
-         space === "onDate" && !s.asOf ? <Empty>Pick a date above.</Empty> :
          null}
       </div>
 

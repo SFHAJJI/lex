@@ -415,3 +415,48 @@ button.pick { cursor: pointer; }
 .hg-more { background: none; border: 0; padding: 2px 0 0 9px; font: inherit; font-size: 12.5px;
            color: var(--muted); cursor: pointer; }
 .hg-more:hover { color: var(--accent); }
+
+/* One box, one date. The date sits beside the question because every question this corpus
+   answers has an "as of when", and that is the entire point of the thing. */
+.one { display: flex; flex-wrap: wrap; gap: 8px; align-items: stretch; padding: 16px 16px 10px; }
+.onebox { flex: 1 1 260px; min-width: 0; font: inherit; font-size: 16.5px; padding: 12px 14px;
+          background: var(--bg); border: 1px solid var(--line); border-radius: 10px; color: inherit; }
+.onebox:focus { outline: none; border-color: var(--accent); }
+.asof { display: flex; align-items: center; gap: 7px; padding: 0 12px; background: var(--bg);
+        border: 1px solid var(--line); border-radius: 10px; }
+.asof i { font-style: normal; font-size: 11px; letter-spacing: .06em; text-transform: uppercase;
+          color: var(--muted); }
+.asof input { font: inherit; font-size: 14.5px; background: none; border: 0; color: inherit; }
+.one button[type=submit] { border-radius: 10px; padding: 0 22px; }
+.onehint { font-size: 12.5px; color: var(--muted); padding: 0 18px 14px; }
+.linky { background: none; border: 0; padding: 0; font: inherit; font-size: inherit;
+         color: var(--accent); cursor: pointer; text-decoration: underline; }
+
+.results { border-top: 1px solid var(--line); padding: 12px 16px 16px; }
+.res-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.reslayer { font: inherit; font-size: 13px; background: var(--bg); color: inherit;
+            border: 1px solid var(--line); border-radius: 8px; padding: 5px 9px; }
+.res-h { font-family: var(--serif); font-size: 14px; margin: 14px 0 6px; color: var(--muted);
+         letter-spacing: .02em; }
+.res-h:first-of-type { margin-top: 0; }
+
+/* The report's own header. It is not a search, so it does not look like one: a title, the window
+   it covers, and how the rows are ordered. */
+.period { background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+          padding: 14px 16px; margin-bottom: 18px; display: flex; flex-direction: column; gap: 10px; }
+.period-row { display: flex; align-items: center; gap: 8px; }
+.period-row.wrap { flex-wrap: wrap; }
+.period h2 { font-family: var(--serif); font-size: 20px; margin: 0; letter-spacing: -.01em; }
+.period .chip { padding: 5px 12px; font-size: 13.5px; cursor: pointer; }
+.period .chip.on { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { font: inherit; font-size: 13.5px; padding: 6px 12px; background: none; border: 0;
+              color: var(--muted); cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button.on { background: var(--accent); color: var(--card); font-weight: 600; }
+
+@media (max-width: 620px) {
+  .period-row { flex-wrap: wrap; }
+  .period h2 { width: 100%; }
+}

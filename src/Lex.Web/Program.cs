@@ -133,6 +133,7 @@ string Page(string title, string body, string? subtitle = null, string nav = "",
            features. Promoting them here is what made the site look like it had two ways to do
            everything. They stay reachable from the footer and from the noscript line. -->
       <a class="brand" href="/">Lex</a>
+      <a class="navlink{{(nav == "browse" ? " on" : "")}}" href="/browse">Browse everything</a>
       <a class="navlink{{(nav == "how" ? " on" : "")}}" href="/how-it-works">How it works</a>
       <span style="flex:1"></span>
       <a class="navlink{{(nav == "dev" || nav == "built" ? " on" : "")}}" href="/developers">For developers</a>
@@ -339,18 +340,8 @@ app.MapGet("/ask", () => Results.Redirect("/"));
 
 app.MapGet("/", () =>
 {
-    // stat strip computed from the mounted indexes at render time — never hand-written numbers
+    // Counts come from the mounted indexes at render time, never hand-written numbers.
     var cov = readers.Values.Select(r => r.Coverage()).ToList();
-    var strip = $"""
-        <p class="sub" style="margin:2px 0 14px">
-        <span class="badge">{cov.Sum(c => c.Groups):n0} works</span>
-        <span class="badge">{cov.Sum(c => c.Rows):n0} versions</span>
-        <span class="badge">{cov.Sum(c => c.TextServed):n0} with full text</span>
-        <span class="badge">{H(cov.Select(c => c.EarliestValidFrom).Min())} → {H(cov.Select(c => c.LatestValidFrom).Max())}</span>
-        <span class="badge ok">signed indexes</span>
-        <span class="badge">9 MCP tools</span>
-        <span class="badge">Luxembourg + EU</span></p>
-        """;
     // The thesis of the whole project, said once, at the top. It used to sit below three
     // promotional cards, where the visitors most likely to bounce never reached it — while
     // the sentence above the fold merely announced that the site answers questions.
@@ -645,7 +636,8 @@ app.MapGet("/browse", () =>
         </form>
         """);
     return Results.Content(Page("Browse the corpus",
-        sb.ToString(), "Luxembourg + EU. Every answer carries its dates, its source and its hash, never an interpretation."), "text/html");
+        sb.ToString(), "Luxembourg + EU. Every answer carries its dates, its source and its hash, never an interpretation.",
+        "browse"), "text/html");
 });
 
 app.MapGet("/go-asof", (string work, string date) =>
