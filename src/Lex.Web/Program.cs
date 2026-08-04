@@ -33,9 +33,19 @@ var readers = new Dictionary<string, LexIndexReader>(StringComparer.Ordinal);
 if (Directory.Exists(indexDir))
     foreach (var db in Directory.EnumerateFiles(indexDir, "index-*.db"))
     {
-        var r = LexIndexReader.Open(db);
-        readers[r.Collection] = r;
-        Console.Error.WriteLine($"[web] mounted {db} ({r.Collection}, signature_valid={r.SignatureValid})");
+        // One unreadable index must not take the other publishers down with it. Publishers are
+        // independent by design (D27), so a refusal is logged loudly and the rest still mount;
+        // /coverage then reports the survivors, which is the honest state of the service.
+        try
+        {
+            var r = LexIndexReader.Open(db);
+            readers[r.Collection] = r;
+            Console.Error.WriteLine($"[web] mounted {db} ({r.Collection}, signature_valid={r.SignatureValid})");
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[web] REFUSED {db}: {ex.Message}");
+        }
     }
 if (readers.Count == 0) Console.Error.WriteLine($"[web] WARNING: no indexes found in {indexDir}");
 
@@ -93,6 +103,21 @@ string Page(string title, string body, string? subtitle = null, string nav = "",
       th { color:var(--muted); font-weight:600; font-size:13px }
       .mono { font-family:var(--mono); font-size:13px; word-break:break-all }
       .kv td:first-child { color:var(--muted); white-space:nowrap; padding-right:18px }
+      /* The catalogue. Filters are links, so every state of the page is a shareable URL. */
+      .filters { display:flex; flex-direction:column; gap:7px; margin:14px 0 16px }
+      .filters > div { display:flex; flex-wrap:wrap; gap:6px; align-items:baseline }
+      .filters i { font-style:normal; font-size:11px; letter-spacing:.06em; text-transform:uppercase;
+                   color:var(--muted); width:74px; flex:none }
+      .filters .f { border:1px solid var(--line); border-radius:99px; padding:2px 11px; font-size:13px;
+                    color:var(--muted); text-decoration:none }
+      .filters .f:hover { border-color:var(--accent); color:var(--accent); text-decoration:none }
+      .filters .f.on { border-color:var(--accent); color:var(--accent); font-weight:600 }
+      .filters .n { opacity:.65; font-size:11.5px; font-variant-numeric:tabular-nums }
+      .cat td:first-child a { font-weight:600 }
+      .cat .r { text-align:right; font-variant-numeric:tabular-nums }
+      .cat .sub { font-size:12px; margin-top:2px }
+      .pager { display:flex; gap:14px; align-items:baseline; margin:12px 0; font-size:14px }
+      .pager span { color:var(--muted); font-variant-numeric:tabular-nums }
       form.inline { display:flex; gap:8px; flex-wrap:wrap; margin:10px 0 }
       input,select,button { font:inherit; padding:7px 10px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--fg) }
       button { background:var(--accent); color:var(--on-accent); border-color:var(--accent); cursor:pointer }
@@ -168,6 +193,15 @@ string Page(string title, string body, string? subtitle = null, string nav = "",
     </footer>
     </body></html>
     """;
+
+// The absolute URL to print in a copy-paste connect command.
+//
+// req.Scheme is "http" in production: Container Apps terminates TLS at the ingress and forwards
+// over plain HTTP inside the environment. So every connect command on /ai and /developers handed
+// out an insecure URL, which a strict MCP client refuses outright. The last X-Forwarded-Proto
+// element is the one our own ingress appended, matching how X-Forwarded-For is read below.
+string BaseUrl(HttpRequest req) =>
+    $"{req.Headers["X-Forwarded-Proto"].FirstOrDefault()?.Split(',')[^1].Trim() ?? req.Scheme}://{req.Host}";
 
 string EnvelopeCard(LexIndexReader r, bool provisional) => $"""
     <div class="card"><table class="kv">
@@ -292,11 +326,14 @@ app.MapGet("/mcp", () => Results.Text("POST JSON-RPC here (MCP Streamable HTTP).
 
 app.MapGet("/ai", (HttpRequest req) =>
 {
-    var baseUrl = $"{req.Scheme}://{req.Host}";
+    var baseUrl = BaseUrl(req);
+    // Counted, not written. See /developers for why.
+    var tools = mcpCore.ToolDefs().OfType<JsonObject>()
+                       .Select(t => t["name"]!.GetValue<string>()).ToList();
     var body = $$"""
         <p>Lex is <b>MCP-native</b>: you bring your AI, Lex brings the evidence. Your model asks the
-        nine Lex tools for the law as it stood on a date, and composes its answer from returned
-        text, dates and hashes, Lex itself never interprets anything.</p>
+        {{tools.Count}} Lex tools for the law as it stood on a date, and composes its answer from
+        returned text, dates and hashes, Lex itself never interprets anything.</p>
 
         <h2>Connect in one line</h2>
         <div class="card"><b>Claude Code</b><pre class="mono" style="white-space:pre-wrap">claude mcp add --transport http lex {{baseUrl}}/mcp</pre></div>
@@ -317,15 +354,14 @@ app.MapGet("/ai", (HttpRequest req) =>
                     retrieved text; cites validity 2018-08-20 → 2019-… ; links provenance]"
         </pre></div>
 
-        <h2>The nine tools</h2>
-        <p class="sub">as_of (full/outline/select) · timeline · in_force_on · diff · search ·
-        provenance · article_history · coverage , 
+        <h2>The {{tools.Count}} tools</h2>
+        <p class="sub">{{string.Join(" · ", tools)}} , 
         read-only, deterministic, every response carries its dates, its hash, and an honest refusal
         (<span class="mono">no_version_for_date</span>, <span class="mono">text_withheld</span>) when Lex cannot know.</p>
 
         <h2>Azure AI Foundry agents</h2>
         <div class="card">Foundry's Agent Service speaks remote MCP natively, point an agent at this
-        endpoint and it gets all nine tools (no key needed; leave approvals on for writes-free comfort):
+        endpoint and it gets all {{tools.Count}} tools (no key needed; leave approvals on for writes-free comfort):
         <pre class="mono" style="white-space:pre-wrap">{ "type": "mcp", "server_label": "lex", "server_url": "{{baseUrl}}/mcp", "require_approval": "never" }</pre></div>
 
         <p>Want to try it without installing anything? The capped <a href="/ask">built-in playground</a>
@@ -342,6 +378,8 @@ app.MapGet("/", () =>
 {
     // Counts come from the mounted indexes at render time, never hand-written numbers.
     var cov = readers.Values.Select(r => r.Coverage()).ToList();
+    var tools = mcpCore.ToolDefs().OfType<JsonObject>()
+                       .Select(t => t["name"]!.GetValue<string>()).ToList();
     // The thesis of the whole project, said once, at the top. It used to sit below three
     // promotional cards, where the visitors most likely to bounce never reached it — while
     // the sentence above the fold merely announced that the site answers questions.
@@ -366,12 +404,27 @@ app.MapGet("/", () =>
         <span class="badge ok">cryptographically signed</span></p>
         <p class="sub">Free assistant, daily limit. <a href="/ai">Connect your own AI</a> for
         unlimited use.</p>
+
+        <!-- A fork, not a menu. Three readers arrive here and they want different things; the
+             third one is the differentiator and was a footer link. A project that invites you to
+             audit it is making a claim the other two doors cannot make for it. -->
+        <nav class="fork" aria-label="Where to go next">
+          <a href="/browse"><b>I want to read a law</b><span>The catalogue: every work, every dated version.</span></a>
+          <a href="/developers"><b>I want to build on this</b><span>MCP endpoint, {tools.Count} tools, the datasets, the licence.</span></a>
+          <a href="/coverage"><b>I want to check whether this is honest</b><span>What Lex holds, and what it knowably lacks.</span></a>
+        </nav>
         </div>
         """
         + """
         <style>
           .lede { font-size:18px; color:var(--muted); margin:0 0 22px; max-width:74ch }
           .lede b { color:var(--fg); font-variant-numeric:tabular-nums }
+          .fork { display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:10px; margin:18px 0 0 }
+          .fork a { display:block; border:1px solid var(--line); border-radius:10px; padding:12px 14px;
+                    background:var(--card); text-decoration:none; color:inherit }
+          .fork a:hover { border-color:var(--accent); text-decoration:none }
+          .fork b { display:block; color:var(--accent); font-size:15px }
+          .fork span { display:block; color:var(--muted); font-size:13.5px; margin-top:3px }
           /* Once a law, a period or a search is loaded, the front-door content is noise.
              The workspace sets data-workspace on <body>; everything promotional steps aside. */
           body[data-workspace="active"] .frontdoor,
@@ -472,7 +525,7 @@ app.MapGet("/architecture", () =>
                       never an LLM)                    signed SQLite indexes (lex-index/2)
                                                        provisions + FTS + time axis, ECDSA-P256 stamp
                                                             │
-                            this site · /mcp (9 tools, any MCP client) · datasets</pre></div>
+                            this site · /mcp (any MCP client) · datasets</pre></div>
 
         <p>Every provision's <span class="mono">text_sha256</span> chains to a verbatim-file sha256 in the evidence
         repo: re-run the pinned open-source extractor on the state's bytes and you get these bytes.
@@ -592,13 +645,151 @@ app.MapGet("/verify", () =>
 
 app.MapGet("/healthz", () => Results.Text("ok"));
 
-app.MapGet("/browse", () =>
+// ---- /browse: the catalogue.
+//
+// It was two source cards, eight curated links and a search box, under a header item that says
+// "Browse everything" and a link on /find that says "Open the catalogue". Seven links against
+// 1,409 works is a dead end at the most prominent invitation on the site, and it breaks the first
+// promise the navigation makes. Every column and every filter below already existed in the signed
+// index; nothing new is derived, it was simply never asked for.
+const int CatalogPage = 50;
+app.MapGet("/browse", (HttpRequest req) =>
 {
+    string? Q(string k) => req.Query[k].FirstOrDefault() is { Length: > 0 } v ? v : null;
+
+    var pub = Q("publisher");
+    var kind = Q("type");
+    var text = Q("text") switch { "yes" => true, "no" => (bool?)false, _ => null };
+    var order = Q("sort") switch
+    {
+        "versions" => CatalogueOrder.MostVersions,
+        "recent" => CatalogueOrder.MostRecent,
+        "oldest" => CatalogueOrder.Oldest,
+        _ => CatalogueOrder.Name,
+    };
+    var page = int.TryParse(Q("page"), out var pg) && pg > 0 ? pg : 1;
+
+    // One publisher's index cannot answer for another, so the catalogue is the union of the
+    // mounted readers. Filtering by publisher simply narrows which ones are asked.
+    var sources = readers.Values.Where(r => pub is null || r.Collection == pub).ToList();
+    var filters = new FilterSet(null, null, kind, null);
+    var gathered = sources
+        .Select(r => r.Catalogue(filters, text, order, CatalogPage * page, 0))
+        .ToList();
+    var total = gathered.Sum(g => g.Total);
+    // Re-sorted across publishers: each index sorted its own rows, and concatenating two sorted
+    // lists does not produce a sorted list.
+    IEnumerable<CatalogueRow> merged = gathered.SelectMany(g => g.Rows);
+    merged = order switch
+    {
+        CatalogueOrder.MostVersions => merged.OrderByDescending(x => x.Versions).ThenBy(x => x.GroupKey, StringComparer.Ordinal),
+        CatalogueOrder.MostRecent => merged.OrderByDescending(x => x.LastFrom, StringComparer.Ordinal).ThenBy(x => x.GroupKey, StringComparer.Ordinal),
+        CatalogueOrder.Oldest => merged.OrderBy(x => x.FirstFrom, StringComparer.Ordinal).ThenBy(x => x.GroupKey, StringComparer.Ordinal),
+        _ => merged.OrderBy(x => x.GroupKey, StringComparer.Ordinal),
+    };
+    var rows = merged.Skip((page - 1) * CatalogPage).Take(CatalogPage).ToList();
+    var pages = Math.Max(1, (total + CatalogPage - 1) / CatalogPage);
+
+    string Link(string k, string? v)
+    {
+        var q = new List<string>();
+        void Keep(string name, string? cur) { if (cur is not null) q.Add($"{name}={Uri.EscapeDataString(cur)}"); }
+        Keep("publisher", k == "publisher" ? v : pub);
+        Keep("type", k == "type" ? v : kind);
+        Keep("text", k == "text" ? v : text switch { true => "yes", false => "no", _ => null });
+        Keep("sort", k == "sort" ? v : Q("sort"));
+        Keep("page", k == "page" ? v : null);
+        return "/browse" + (q.Count > 0 ? "?" + string.Join("&amp;", q) : "");
+    }
+
     var sb = new StringBuilder();
+    sb.Append($"""
+        <p class="sub" style="margin-top:0">Every work Lex holds, with the number of dated versions
+        behind it. A work is a law; a version is what that law said between two dates.
+        <b>{total:n0}</b> works match.</p>
+        """);
+
+    // Filters are links, not a form: no JavaScript, and every state of this page is a URL that a
+    // reader can bookmark, share, or hand to a crawler.
+    sb.Append("""<nav class="filters" aria-label="Narrow the catalogue">""");
+    sb.Append($"""<div><i>publisher</i><a class="f{(pub is null ? " on" : "")}" href="{Link("publisher", null)}">all</a>""");
+    foreach (var r in readers.Values)
+        sb.Append($"""<a class="f{(pub == r.Collection ? " on" : "")}" href="{Link("publisher", r.Collection)}">{H(r.Stamp.GetValueOrDefault("publisher_name", r.Collection))}</a>""");
+    sb.Append("</div>");
+
+    var kinds = sources.SelectMany(r => r.CatalogueKinds(null))
+                       .GroupBy(x => x.Kind)
+                       .Select(g => (Kind: g.Key, Works: g.Sum(x => x.Works)))
+                       .OrderByDescending(x => x.Works).Take(14).ToList();
+    sb.Append($"""<div><i>type</i><a class="f{(kind is null ? " on" : "")}" href="{Link("type", null)}">all</a>""");
+    foreach (var (k, n) in kinds)
+        sb.Append($"""<a class="f{(kind == k ? " on" : "")}" href="{Link("type", k)}">{H(k)} <span class="n">{n:n0}</span></a>""");
+    sb.Append("</div>");
+
+    sb.Append($"""
+        <div><i>text</i>
+        <a class="f{(text is null ? " on" : "")}" href="{Link("text", null)}">any</a>
+        <a class="f{(text == true ? " on" : "")}" href="{Link("text", "yes")}">full text held</a>
+        <a class="f{(text == false ? " on" : "")}" href="{Link("text", "no")}">record only</a></div>
+        <div><i>sort</i>
+        <a class="f{(order == CatalogueOrder.Name ? " on" : "")}" href="{Link("sort", null)}">name</a>
+        <a class="f{(order == CatalogueOrder.MostVersions ? " on" : "")}" href="{Link("sort", "versions")}">most versions</a>
+        <a class="f{(order == CatalogueOrder.MostRecent ? " on" : "")}" href="{Link("sort", "recent")}">most recent</a>
+        <a class="f{(order == CatalogueOrder.Oldest ? " on" : "")}" href="{Link("sort", "oldest")}">oldest first</a></div>
+        </nav>
+        """);
+
+    if (rows.Count == 0)
+    {
+        sb.Append("""<div class="card"><p>No work matches those filters. <a href="/browse">Clear them</a>.</p></div>""");
+    }
+    else
+    {
+        sb.Append("""
+            <div class="card" style="overflow-x:auto"><table class="cat">
+            <tr><th>work</th><th>type</th><th class="r">versions</th><th>first</th><th>last</th><th>text</th></tr>
+            """);
+        foreach (var w in rows)
+        {
+            var mark = w.HasText
+                ? """<span class="badge ok">full text</span>"""
+                : """<span class="badge">record only</span>""";
+            sb.Append($"""
+                <tr>
+                  <td><a href="/{H(w.Collection)}/{H(w.GroupKey)}">{H(w.TitleShort ?? w.Title ?? w.GroupKey)}</a>
+                      <div class="sub mono">{H(w.GroupKey)}</div></td>
+                  <td class="mono">{H(w.Kind ?? "")}</td>
+                  <td class="r">{w.Versions:n0}</td>
+                  <td class="mono">{H(w.FirstFrom)}</td>
+                  <td class="mono">{H(w.LastFrom)}</td>
+                  <td>{mark}</td>
+                </tr>
+                """);
+        }
+        sb.Append("</table></div>");
+
+        if (pages > 1)
+        {
+            sb.Append("""<nav class="pager" aria-label="Pages">""");
+            if (page > 1) sb.Append($"""<a href="{Link("page", (page - 1).ToString())}">&larr; previous</a>""");
+            sb.Append($"""<span>page {page:n0} of {pages:n0}</span>""");
+            if (page < pages) sb.Append($"""<a href="{Link("page", (page + 1).ToString())}">next &rarr;</a>""");
+            sb.Append("</nav>");
+        }
+    }
+
+    // The curated links keep their home, below the thing they used to stand in for.
     sb.Append("""
-        <p>Regulators publish the current rule; audits, investigations and disputes are about a <b>past date</b>.
-        Lex keeps every version it has seen and answers <i>“what did this say on 15&nbsp;March&nbsp;2022?”</i>
-        with the exact validity interval, a timeline, a hashed provenance record, and an honest refusal when it cannot know.</p>
+        <h2>Start here</h2>
+        <ul>
+          <li><a href="/lu-legilux/rgd-1998-08-03-n4/2018-01-01">Nouveau Code de proc&#233;dure civile, as it stood on 1 Jan 2018</a></li>
+          <li><a href="/lu-legilux/code-environnement">Code de l'environnement, full timeline</a></li>
+          <li><a href="/lu-legilux/recueil-protection_donnees">Recueil protection des donn&#233;es, timeline</a></li>
+          <li><a href="/in-force-on?date=2022-03-15&amp;kind=CODE">Which codes were in force on 15 Mar 2022?</a></li>
+          <li><a href="/eu-eurlex/32013r0575">CRR (EU) 575/2013-22 consolidated versions, incl. future-dated</a></li>
+          <li><a href="/eu-eurlex/32016r0679/2019-01-01">GDPR as it stood on 1 Jan 2019, with full text</a></li>
+          <li><a href="/eu-eurlex/32013r0575/diff/2020-01-01/2024-01-01">CRR: what changed between 2020 and 2024?</a></li>
+        </ul>
         """);
     foreach (var r in readers.Values)
     {
@@ -609,34 +800,23 @@ app.MapGet("/browse", () =>
             <span class="badge">tier {H(c.Stamp.GetValueOrDefault("tier"))}</span>
             <span class="badge">{c.Groups:n0} works</span>
             <span class="badge">{c.Rows:n0} versions</span>
-            <span class="badge">{H(c.EarliestValidFrom)} → {H(c.LatestValidFrom)}</span>
+            <span class="badge">{H(c.EarliestValidFrom)} &rarr; {H(c.LatestValidFrom)}</span>
             <span class="badge {(r.SignatureValid ? "ok" : "warn")}">{(r.SignatureValid ? "signed index" : "unsigned")}</span>
             <div class="sub" style="margin-top:6px">Dense and reliable from 2017 onward; real but sparse before; isolated snapshots back to 1849; forward to 2030.</div>
             </div>
             """);
     }
     sb.Append("""
-        <h2>Try it</h2>
-        <ul>
-          <li><a href="/lu-legilux/rgd-1998-08-03-n4/2018-01-01">Nouveau Code de procédure civile, as it stood on 1 Jan 2018</a></li>
-          <li><a href="/lu-legilux/code-environnement">Code de l'environnement, full timeline (195 versions)</a></li>
-          <li><a href="/lu-legilux/loi-2006-07-31-n2/2020-03-15">Code du travail, as it stood on 15 Mar 2020</a></li>
-          <li><a href="/lu-legilux/recueil-protection_donnees">Recueil protection des données, timeline</a></li>
-          <li><a href="/in-force-on?date=2022-03-15&amp;kind=CODE">Which codes were in force on 15 Mar 2022?</a></li>
-          <li><a href="/eu-eurlex/32013r0575">CRR (EU) 575/2013-22 consolidated versions, incl. future-dated</a></li>
-          <li><a href="/eu-eurlex/32016r0679/2019-01-01">GDPR as it stood on 1 Jan 2019, with full text</a></li>
-          <li><a href="/eu-eurlex/32013r0575/diff/2020-01-01/2024-01-01">CRR: what changed between 2020 and 2024?</a></li>
-        </ul>
-        <h2>Ask your own question</h2>
-        <form class="inline" action="/search"><input name="q" placeholder="search titles, e.g. protection des données" style="flex:1;min-width:240px"><button>Search</button></form>
+        <h2>Look something up</h2>
+        <form class="inline" action="/search"><input name="q" placeholder="words in the text, e.g. protection des donn&#233;es" style="flex:1;min-width:240px"><button>Search</button></form>
         <form class="inline" action="/go-asof">
           <input name="work" placeholder="work slug, e.g. code-travail" style="flex:1;min-width:200px">
           <input name="date" type="date" value="2022-03-15">
           <button>As of date</button>
         </form>
         """);
-    return Results.Content(Page("Browse the corpus",
-        sb.ToString(), "Luxembourg + EU. Every answer carries its dates, its source and its hash, never an interpretation.",
+    return Results.Content(Page("The catalogue",
+        sb.ToString(), "Every work Lex holds, filterable by publisher, type and whether the text itself is held.",
         "browse"), "text/html");
 });
 
@@ -839,7 +1019,7 @@ app.MapGet("/built", () =>
                 ▼  (immutable profiles)           │
           SIGNED SQLITE INDEX (ECDSA P-256) ◄─────┘
                 │
-                ├──► MCP server  (9 tools, public, no key)
+                ├──► MCP server  (public, no key)      
                 └──► this site   (Container Apps, scale-to-zero)</pre></div>
         <p class="sub">Azure: Container Apps behind a managed certificate, Container Registry, Azure
         OpenAI (gpt-5-mini) for the assistant, Application Insights via OpenTelemetry, Azure DNS.
@@ -960,15 +1140,21 @@ app.MapGet("/built", () =>
     return Results.Content(Page("How it was built", body, null, "how"), "text/html");
 });
 
-// ---- /developers: everything an engineer needs — the nine tools, four ways to connect,
+// ---- /developers: everything an engineer needs — every tool, four ways to connect,
 // the datasets, the repos. /ai kept as an alias so older links survive.
 app.MapGet("/developers", (HttpRequest req) =>
 {
-    var baseUrl = $"{req.Scheme}://{req.Host}";
+    var baseUrl = BaseUrl(req);
     var cov = readers.Values.Select(r => r.Coverage()).ToList();
+    // Counted from the advertised tool list, never written by hand. This page said "Eight" in its
+    // lede and "nine" in its heading while the endpoint served ten, because three places had to be
+    // remembered every time a tool shipped.
+    var tools = mcpCore.ToolDefs().OfType<JsonObject>()
+                       .Select(t => t["name"]!.GetValue<string>()).ToList();
     var body = $$"""
-        <p class="lede">Lex is MCP-native: you bring the model, Lex brings the evidence. Eight
-        read-only tools over signed indexes, no key, no account, no rate limit on the endpoint.</p>
+        <p class="lede">Lex is MCP-native: you bring the model, Lex brings the evidence.
+        {{tools.Count}} read-only tools over signed indexes, no key, no account, no rate limit on
+        the endpoint.</p>
 
         <h2>Connect</h2>
         <div class="card"><b>Claude Code</b>
@@ -984,7 +1170,7 @@ app.MapGet("/developers", (HttpRequest req) =>
                   "arguments": { "work":"eu-eurlex:32016r0679",
                     "date":"2019-03-15", "mode":"select", "anchors":"art_33" } } }'</pre></div>
 
-        <h2>The nine tools</h2>
+        <h2>The {{tools.Count}} tools</h2>
         <div class="card"><table>
         <tr><th>tool</th><th>arguments</th><th>answers</th></tr>
         <tr><td class="mono">as_of</td><td class="mono">work, date, [language], [mode: full\|outline\|select], [anchors]</td>
@@ -1001,6 +1187,12 @@ app.MapGet("/developers", (HttpRequest req) =>
         <tr><td class="mono">provenance</td><td class="mono">lex_id</td>
             <td>source URI, retrieval time, record hash, the append-only observation chain.</td></tr>
         <tr><td class="mono">coverage</td><td class="mono">[publisher]</td><td>what is held, and what is knowably missing.</td></tr>
+        <tr><td class="mono">cited_by</td><td class="mono">work, [limit]</td>
+            <td>which articles point AT this law, from the cross-references the publisher writes
+            into its own text. Answers "what depends on this", "who amended it".</td></tr>
+        <tr><td class="mono">changes_in_period</td><td class="mono">from_date, to_date, [publisher], [document_type], [order], [limit], [offset]</td>
+            <td>across the corpus: which works gained versions in a window, and how many.
+            The aggregate counterpart of diff and timeline, which cover one work.</td></tr>
         </table></div>
 
         <h2>Try the joysticks</h2>
@@ -1009,15 +1201,7 @@ app.MapGet("/developers", (HttpRequest req) =>
         <div class="card">
           <form id="pg" class="inline" style="margin:0 0 8px">
             <select id="pgtool" aria-label="Choose a tool to call">
-              <option value="as_of">as_of</option>
-              <option value="article_history">article_history</option>
-              <option value="timeline">timeline</option>
-              <option value="diff">diff</option>
-              <option value="in_force_on">in_force_on</option>
-              <option value="search">search</option>
-              <option value="provenance">provenance</option>
-              <option value="coverage">coverage</option>
-              <option value="changes_in_period">changes_in_period</option>
+              {{string.Join("", tools.Select(t => $"<option value=\"{t}\">{t}</option>"))}}
             </select>
             <button type="submit">Call it</button>
           </form>
@@ -1573,8 +1757,9 @@ app.MapGet($"/{pubRoute}/{{work}}/{{date}}", (string publisher, string work, str
     // Most readers arrive from a search engine straight onto this page and never see the
     // homepage. The two things they must know — what a consolidated text is, and that it
     // carries no legal force — belong here, in plain words, not only on the front door.
-    sb.Append("""
-        <details class="card" style="margin-top:-4px"><summary><b>New here? What am I looking at?</b></summary>
+    // Collapsed, and below the law: a reader who came for Article 12 should meet Article 12.
+    var primer = """
+        <details class="card"><summary><b>New here? What am I looking at?</b></summary>
         <p>This is a <b>consolidated</b> text: the original law with every later amendment merged in,
         as the official publisher produced it for a given date. Laws are amended constantly, so
         <b>“the law” has no single text, only a text per date</b>. That date is the banner above.</p>
@@ -1587,9 +1772,9 @@ app.MapGet($"/{pubRoute}/{{work}}/{{date}}", (string publisher, string work, str
         “Open” = still current as far as the publisher has consolidated.
         Each article carries its own hash so you can prove it was not tampered with , 
         <a href="/verify">here is how</a>.</p></details>
-        """);
-    sb.Append($"""
-        <div class="card"><table class="kv">
+        """;
+    var record = $"""
+        <table class="kv">
         <tr><td>as of</td><td><b>{d:yyyy-MM-dd}</b> → this version applied</td></tr>
         <tr><td>valid</td><td class="mono">{Interval(doc)} <span class="badge">{H(doc.ValidTimeSource)}-asserted</span></td></tr>
         <tr><td>type</td><td><span class="badge">{H(doc.Kind)}</span> {H(doc.Title ?? "")}</td></tr>
@@ -1597,8 +1782,9 @@ app.MapGet($"/{pubRoute}/{{work}}/{{date}}", (string publisher, string work, str
         {(doc.PublicationDate is null ? "" : $"<tr><td>published</td><td class=\"mono\">{H(doc.PublicationDate)}</td></tr>")}
         <tr><td>lex_id</td><td class="mono"><a href="/provenance/{H(doc.Key)}">{H(doc.Key)}</a></td></tr>
         <tr><td>record sha256</td><td class="mono">{H(doc.RecordSha)}</td></tr>
-        </table></div>
-        """);
+        </table>
+        """;
+
     var provisions = doc.TextPublic ? r.Provisions(LexIndexReader.RidOf(doc)) : [];
     if (provisions.Count > 0)
     {
@@ -1634,11 +1820,22 @@ app.MapGet($"/{pubRoute}/{{work}}/{{date}}", (string publisher, string work, str
             shown++;
             if (shown >= 400) { sb.Append($"<p class=\"sub\">,  {provisions.Count - shown:n0} further provisions omitted from this view; retrieve them via the MCP tools , </p>"); break; }
         }
+        // The receipt, after the goods. This table was the first thing on the page, above the law
+        // it describes, which is backwards for the nineteen readers in twenty who came to read the
+        // law. It is still one click away for the twentieth, who is the reason it exists.
+        sb.Append($"""
+            <details class="card"><summary><b>Provenance and validity</b>
+            <span class="sub">dates, identifier, hash</span></summary>{record}</details>
+            """);
     }
     else
     {
+        // No wording is held, so the record is not a receipt for the answer, it IS the answer.
+        // Hiding it here would leave the page with nothing on it.
         sb.Append(TextWithheldBox(doc));
+        sb.Append($"""<div class="card">{record}</div>""");
     }
+    sb.Append(primer);
     sb.Append("<p>");
     if (prev is not null)
     {

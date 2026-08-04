@@ -132,4 +132,38 @@ public class FitnessTests
         foreach (var file in Sources(project))
             Assert.DoesNotContain(".Raw", File.ReadAllText(file));
     }
+
+    // F12 — no page states a tool count as a literal.
+    //
+    // Three places carried one by hand and all three were wrong at once: the /developers lede said
+    // "Eight", its own heading said "nine", and the endpoint served ten. A number that must be
+    // remembered on every ship is a number that will be wrong, so counts are interpolated from
+    // ToolDefs and this test keeps them that way.
+    [Fact]
+    public void F12_no_page_hard_codes_a_tool_count()
+    {
+        string[] literals =
+        [
+            "seven tools", "eight tools", "nine tools", "ten tools", "eleven tools",
+            "7 tools", "8 tools", "9 tools", "10 tools", "11 tools",
+        ];
+        foreach (var file in Sources("Lex.Web"))
+        {
+            var text = File.ReadAllText(file);
+            foreach (var bad in literals)
+                Assert.False(text.Contains(bad, StringComparison.OrdinalIgnoreCase),
+                    $"{Path.GetFileName(file)} states a tool count as a literal (\"{bad}\"); interpolate ToolDefs().Count instead");
+        }
+    }
+
+    // F13 — a copy-paste connect command is never built from req.Scheme.
+    //
+    // Container Apps terminates TLS at the ingress, so req.Scheme is "http" in production and every
+    // command on /ai and /developers handed out an insecure URL that a strict MCP client refuses.
+    [Fact]
+    public void F13_public_urls_do_not_trust_the_request_scheme()
+    {
+        foreach (var file in Sources("Lex.Web"))
+            Assert.DoesNotContain("{req.Scheme}://", File.ReadAllText(file));
+    }
 }

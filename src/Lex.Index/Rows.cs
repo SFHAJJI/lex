@@ -84,6 +84,17 @@ public sealed record ChangeRow(
 /// takes a non-optional FilterSet whose fields are each explicitly All or a constraint.
 /// Filters are applied as SQL predicates before any ranking.
 /// </summary>
+/// <summary>A work as the catalogue lists it: summarised across all of its versions.</summary>
+public sealed record CatalogueRow(
+    string Collection, string GroupKey, string? Title, string? TitleShort, string? Kind,
+    int Versions, string FirstFrom, string LastFrom, bool HasText);
+
+/// <summary>
+/// How the catalogue is sorted. An enum rather than a string because the value reaches an
+/// ORDER BY clause, and a whitelist that the compiler enforces cannot be talked past.
+/// </summary>
+public enum CatalogueOrder { Name, MostVersions, MostRecent, Oldest }
+
 public sealed record FilterSet(
     DateOnly? AsOf,
     string? Collection,

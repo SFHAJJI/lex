@@ -148,6 +148,93 @@ public class IndexTests : IDisposable
         Assert.Throws<InvalidOperationException>(() => LexIndexReader.Open(_db));
     }
 
+    // ---- the catalogue ----
+    //
+    // /browse promised "Browse everything" and delivered seven curated links against 1,409 works.
+    // The page that replaced it asks one question per reader choice, and every one of those
+    // choices reaches an aggregate over versions, which is where a listing quietly goes wrong:
+    // counting versions instead of works, losing the newest title, or paging a total that does
+    // not match the rows.
+
+    [Fact]
+    public void The_catalogue_lists_works_not_versions()
+    {
+        using var r = Build();
+        var (rows, total) = r.Catalogue(new FilterSet(null, null, null, null), null,
+                                        CatalogueOrder.Name, 50, 0);
+
+        // Three versions across two works. A listing of works must say two.
+        Assert.Equal(2, total);
+        Assert.Equal(2, rows.Count);
+
+        var w1 = rows.Single(x => x.GroupKey == "w1");
+        Assert.Equal(2, w1.Versions);
+        Assert.Equal("2020-01-01", w1.FirstFrom);
+        Assert.Equal("2022-01-01", w1.LastFrom);
+        // The title comes from the NEWEST version, pinned by a window function. A GROUP BY
+        // carrying more than one MIN/MAX leaves SQLite free to hand back either row's title.
+        Assert.Equal("first thing revised", w1.Title);
+    }
+
+    [Fact]
+    public void Filters_narrow_the_catalogue_and_its_total_together()
+    {
+        using var r = Build();
+        var (rows, total) = r.Catalogue(new FilterSet(null, null, "DIR", null), null,
+                                        CatalogueOrder.Name, 50, 0);
+
+        // A pager built on a total that ignored the filter would offer pages that render empty.
+        Assert.Equal(1, total);
+        Assert.Equal("w2", Assert.Single(rows).GroupKey);
+    }
+
+    [Fact]
+    public void The_text_filter_separates_held_wording_from_record_only()
+    {
+        using var r = Build();
+        var f = new FilterSet(null, null, null, null);
+
+        Assert.Equal(2, r.Catalogue(f, true, CatalogueOrder.Name, 50, 0).Total);
+        Assert.Empty(r.Catalogue(f, false, CatalogueOrder.Name, 50, 0).Rows);
+    }
+
+    [Theory]
+    [InlineData(CatalogueOrder.MostVersions, "w1")]   // 2 versions beats 1
+    [InlineData(CatalogueOrder.MostRecent, "w1")]     // last change 2022 beats 2019
+    [InlineData(CatalogueOrder.Oldest, "w2")]         // first seen 2019 beats 2020
+    [InlineData(CatalogueOrder.Name, "w1")]
+    public void Every_ordering_puts_a_predictable_work_first(CatalogueOrder order, string first)
+    {
+        using var r = Build();
+        var (rows, _) = r.Catalogue(new FilterSet(null, null, null, null), null, order, 50, 0);
+        Assert.Equal(first, rows[0].GroupKey);
+    }
+
+    [Fact]
+    public void Paging_walks_every_work_exactly_once()
+    {
+        using var r = Build();
+        var f = new FilterSet(null, null, null, null);
+        var a = r.Catalogue(f, null, CatalogueOrder.Name, 1, 0).Rows;
+        var b = r.Catalogue(f, null, CatalogueOrder.Name, 1, 1).Rows;
+
+        Assert.Single(a);
+        Assert.Single(b);
+        Assert.NotEqual(a[0].GroupKey, b[0].GroupKey);
+    }
+
+    [Fact]
+    public void The_type_list_counts_works_so_the_filter_labels_are_honest()
+    {
+        using var r = Build();
+        var kinds = r.CatalogueKinds(null).ToDictionary(x => x.Kind, x => x.Works);
+
+        // w1 has two REG versions. A filter chip saying "REG 2" beside a list of one work reads
+        // as a bug, so the chip counts works.
+        Assert.Equal(1, kinds["REG"]);
+        Assert.Equal(1, kinds["DIR"]);
+    }
+
     public void Dispose()
     {
         Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();

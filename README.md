@@ -57,7 +57,7 @@ curl -s -X POST https://law.soufien.lu/mcp -H 'Content-Type: application/json' \
 - **A legal-tech developer** building RAG over law that must not hallucinate
   versions: per-article chunks with `valid_from`/`valid_to` to filter *before*
   similarity ([dataset](https://github.com/SFHAJJI/lex-articles)).
-- **An AI agent** using the 9 MCP tools directly, the same tools the site's
+- **An AI agent** using the MCP tools directly, the same tools the site's
   own AI uses, at the same endpoint.
 - **A researcher** tracking how one article's text evolved across amendments
   (`article_history`: every distinct text state, dated).
@@ -71,7 +71,7 @@ No component in this system generates interpretive text (fitness rule F10).
 ## Architecture (one screen)
 
 ```
-APPS        Lex.Ingest (CLI)   Lex.Mcp (MCP server, 9 tools)   Lex.Web (demo)   Lex.Ask (AI loop)
+APPS        Lex.Ingest (CLI)   Lex.Mcp (MCP server)        Lex.Web (demo)   Lex.Ask (AI loop)
 DERIVED     Lex.Derive, evidence -> per-article Markdown+JSON (immutable profiles: akn-lu/1, fmx4-eu/1, xhtml-eu/1)
 ADAPTERS    Lex.Sources.Legilux (Tier A, SPARQL)   Lex.Sources.EurLex (Tier A, Cellar + Formex)
 MODEL       Lex.Law, Publisher, Work, Version, Expression, Observation. No publisher names.

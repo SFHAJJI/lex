@@ -55,6 +55,25 @@ public sealed class LexIndexReader : IDisposable
         if (stamp.GetValueOrDefault("schema") != IndexBuilder.SchemaVersion)
             throw new InvalidOperationException(
                 $"Index schema '{stamp.GetValueOrDefault("schema")}' is not '{IndexBuilder.SchemaVersion}'. Refusing to open {dbPath}.");
+
+        // The stamp is a claim, not a check. `profile` was added to docs without the schema string
+        // changing, so an index built the day before opened cleanly and then threw a raw
+        // "no such column" from inside a request, on whichever page happened to select it first.
+        // Reading the columns the reader actually needs turns that into one clear refusal here.
+        var present = new HashSet<string>(StringComparer.Ordinal);
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = "SELECT name FROM pragma_table_info('docs')";
+            using var r = cmd.ExecuteReader();
+            while (r.Read()) present.Add(r.GetString(0));
+        }
+        var missing = DocCols.Split([',', '\n', '\r', ' '], StringSplitOptions.RemoveEmptyEntries)
+                             .Where(c => !present.Contains(c)).ToList();
+        if (missing.Count > 0)
+            throw new InvalidOperationException(
+                $"Index {dbPath} claims schema '{IndexBuilder.SchemaVersion}' but docs is missing " +
+                $"[{string.Join(", ", missing)}]. It predates a column the reader needs; rebuild it.");
+
         return new LexIndexReader(conn, stamp);
     }
 
@@ -106,7 +125,7 @@ public sealed class LexIndexReader : IDisposable
     {
         var (where, ps) = WithFilters(
             "valid_from <= $d AND (valid_to IS NULL OR valid_to >= $d) AND withdrawn = 0",
-            filters, excludeAsOf: true, bare: true);
+            filters, excludeAsOf: true);
 
         int total;
         using (var cnt = Cmd($"SELECT COUNT(DISTINCT group_key) FROM docs WHERE {where}", ps))
@@ -143,7 +162,7 @@ public sealed class LexIndexReader : IDisposable
         // Filters first (F5): SQL predicates restrict the candidate set; only survivors are
         // ranked by bm25 (weights: work title > heading > num > body text). Hits are
         // provision-level: the retrieval unit is the article, not the document.
-        var (where, ps) = WithFilters("1=1", filters, excludeAsOf: false, bare: true);
+        var (where, ps) = WithFilters("1=1", filters, excludeAsOf: false);
         using var cmd = Cmd($"""
             SELECT {DocColsQualified},
                    p.rid, p.seq, p.anchor, p.provision_id, p.ptype, p.num, p.heading, p.path,
@@ -198,7 +217,7 @@ public sealed class LexIndexReader : IDisposable
 
         List<DocRow> Lookup(IEnumerable<string> clauses, IReadOnlyList<string> values)
         {
-            var (where, ps) = WithFilters("1=1", filters, excludeAsOf: false, bare: true);
+            var (where, ps) = WithFilters("1=1", filters, excludeAsOf: false);
             using var cmd = Cmd($"""
                 SELECT {DocColsQualified}
                 FROM docs d
@@ -348,7 +367,7 @@ public sealed class LexIndexReader : IDisposable
 
     public List<DocRow> GroupsPage(int limit, int offset, FilterSet filters)
     {
-        var (where, ps) = WithFilters("1=1", filters, excludeAsOf: true, bare: true);
+        var (where, ps) = WithFilters("1=1", filters, excludeAsOf: true);
         using var cmd = Cmd($"""
             SELECT {DocCols} FROM docs d
             WHERE {where} AND valid_from = (SELECT MAX(valid_from) FROM docs d2 WHERE d2.group_key = d.group_key)
@@ -358,6 +377,80 @@ public sealed class LexIndexReader : IDisposable
         cmd.Parameters.AddWithValue("$lim", limit);
         cmd.Parameters.AddWithValue("$off", offset);
         return ReadAll(cmd);
+    }
+
+    /// <summary>
+    /// One row of the catalogue: a work, summarised across every version of it that survives the
+    /// filters. The page that shows this is answering "what is in here", which is a question about
+    /// works, while every other query in this file is about versions.
+    /// </summary>
+    public (List<CatalogueRow> Rows, int Total) Catalogue(
+        FilterSet filters, bool? hasText, CatalogueOrder order, int limit, int offset)
+    {
+        var (where, ps) = WithFilters("1=1", filters, excludeAsOf: false);
+        // A GROUP BY carrying more than one MIN/MAX leaves SQLite's bare columns undefined, so the
+        // title and type come from a window function pinned to the newest surviving version rather
+        // than from whichever row the aggregate happened to walk last.
+        var ctes = $"""
+            WITH f AS (SELECT * FROM docs WHERE {where}),
+                 agg AS (SELECT group_key, COUNT(*) AS versions, MIN(valid_from) AS first_from,
+                                MAX(valid_from) AS last_from, MAX(text_public) AS has_text
+                         FROM f GROUP BY group_key),
+                 newest AS (SELECT group_key, collection, title, title_short, kind,
+                                   ROW_NUMBER() OVER (PARTITION BY group_key
+                                                      ORDER BY valid_from DESC, key DESC) AS rn
+                            FROM f)
+            """;
+        var having = hasText switch { true => " AND a.has_text = 1", false => " AND a.has_text = 0", _ => "" };
+        var orderBy = order switch
+        {
+            CatalogueOrder.MostVersions => "a.versions DESC, n.group_key ASC",
+            CatalogueOrder.MostRecent => "a.last_from DESC, n.group_key ASC",
+            CatalogueOrder.Oldest => "a.first_from ASC, n.group_key ASC",
+            _ => "n.group_key ASC",
+        };
+
+        using var count = Cmd($"{ctes} SELECT COUNT(*) FROM agg a WHERE 1=1{having}", ps);
+        var total = Convert.ToInt32(count.ExecuteScalar());
+
+        using var cmd = Cmd($"""
+            {ctes}
+            SELECT n.collection, n.group_key, n.title, n.title_short, n.kind,
+                   a.versions, a.first_from, a.last_from, a.has_text
+            FROM agg a JOIN newest n ON n.group_key = a.group_key AND n.rn = 1
+            WHERE 1=1{having}
+            ORDER BY {orderBy}
+            LIMIT $lim OFFSET $off
+            """, ps);
+        cmd.Parameters.AddWithValue("$lim", limit);
+        cmd.Parameters.AddWithValue("$off", offset);
+
+        var rows = new List<CatalogueRow>();
+        using var rd = cmd.ExecuteReader();
+        while (rd.Read())
+            rows.Add(new CatalogueRow(
+                rd.GetString(0), rd.GetString(1),
+                rd.IsDBNull(2) ? null : rd.GetString(2),
+                rd.IsDBNull(3) ? null : rd.GetString(3),
+                rd.IsDBNull(4) ? null : rd.GetString(4),
+                rd.GetInt32(5), rd.GetString(6), rd.GetString(7), rd.GetInt32(8) == 1));
+        return (rows, total);
+    }
+
+    /// <summary>The document types present, with how many WORKS each covers, for a filter list.</summary>
+    public List<(string Kind, int Works)> CatalogueKinds(string? collection)
+    {
+        var ps = new List<SqliteParameter>();
+        var where = "kind IS NOT NULL";
+        if (collection is not null) { where += " AND collection=$c"; ps.Add(new SqliteParameter("$c", collection)); }
+        using var cmd = Cmd($"""
+            SELECT kind, COUNT(DISTINCT group_key) AS works FROM docs
+            WHERE {where} GROUP BY kind ORDER BY works DESC
+            """, ps);
+        var outp = new List<(string, int)>();
+        using var rd = cmd.ExecuteReader();
+        while (rd.Read()) outp.Add((rd.GetString(0), rd.GetInt32(1)));
+        return outp;
     }
 
     /// <summary>Cross-references a provision makes, in document order.</summary>
@@ -445,7 +538,7 @@ public sealed class LexIndexReader : IDisposable
         return work;
     }
 
-    private (string Sql, List<SqliteParameter> Ps) WithFilters(string baseSql, FilterSet f, bool excludeAsOf, bool bare = false)
+    private (string Sql, List<SqliteParameter> Ps) WithFilters(string baseSql, FilterSet f, bool excludeAsOf)
     {
         var ps = new List<SqliteParameter>();
         var sql = baseSql;
