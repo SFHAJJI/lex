@@ -288,11 +288,12 @@ public sealed class LegiluxAdapter : ISourceAdapter
             Console.Error.WriteLine($"  [legilux] pdf belongs to a thematic collection, not an act; skipped: {version.Id.Value}");
             return null;
         }
-        if (url.Contains("/memorial/", StringComparison.Ordinal))
-        {
-            Console.Error.WriteLine($"  [legilux] pdf is a gazette issue, not a consolidated act; skipped: {url}");
-            return null;
-        }
+        // A gazette issue is fetched, but declared as its own format so the derive step sends it
+        // to pdf-memorial-lu/1 rather than to pdf-lu/1. The two are not interchangeable: one reads
+        // a document that IS the act, the other has to find the act inside a whole day's journal
+        // among unrelated ones, and mixing them would let a confident profile loose on a document
+        // it cannot reason about.
+        var gazette = url.Contains("/memorial/", StringComparison.Ordinal);
 
         var since = DateTimeOffset.UtcNow - _lastBodyFetch;
         var pause = TimeSpan.FromMilliseconds(1500);
@@ -327,15 +328,34 @@ public sealed class LegiluxAdapter : ISourceAdapter
             Console.Error.WriteLine($"  [legilux] response is not a PDF; discarded: {url}");
             return null;
         }
-        return new ManifestationFetch("pdf", [new ManifestationMember(url.Split('/')[^1], bytes)], PublicUrl(url));
+        return new ManifestationFetch(gazette ? "pdf-memorial" : "pdf",
+                                      [new ManifestationMember(url.Split('/')[^1], bytes)], PublicUrl(url));
     }
 
     private static string Slug(string workUri)
     {
         // e.g. …/eli/etat/leg/code/procedure_civile  -> code-procedure_civile
         //      …/eli/etat/leg/loi/2001/04/18/n1      -> loi-2001-04-18-n1
-        var idx = workUri.IndexOf("/eli/etat/leg/", StringComparison.Ordinal);
-        var tail = idx >= 0 ? workUri[(idx + "/eli/etat/leg/".Length)..] : workUri;
+        //      …/eli/etat/adm/pa/2020/10/23/b4077    -> pa-2020-10-23-b4077
+        //
+        // The branch after /eli/ is not always "etat/leg": administrative acts sit under
+        // "etat/adm". Matching the literal meant those works kept their whole URL as their
+        // identifier, so a publication notice was published as
+        // "http_--data.legilux.public.lu-eli-etat-adm-pa-2020-10-23-b4077" in permalinks and in
+        // every list. Skip the two segments after /eli/ instead of naming them.
+        var idx = workUri.IndexOf("/eli/", StringComparison.Ordinal);
+        var tail = workUri;
+        if (idx >= 0)
+        {
+            var rest = workUri[(idx + "/eli/".Length)..].TrimStart('/');
+            var cut = 0;
+            for (var seg = 0; seg < 2 && cut >= 0; seg++)
+            {
+                var next = rest.IndexOf('/', cut);
+                cut = next < 0 ? -1 : next + 1;
+            }
+            tail = cut > 0 ? rest[cut..] : rest;
+        }
         var slug = tail.Trim('/').Replace('/', '-');
         foreach (var bad in new[] { ':', '?', '#', '&', '=' }) slug = slug.Replace(bad, '_');
         return slug;

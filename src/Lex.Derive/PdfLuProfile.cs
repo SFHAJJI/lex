@@ -37,7 +37,7 @@ public static class PdfLuProfile
     // start on purpose: cross-references to articles are frequent mid-sentence and are not
     // boundaries. The hyphen form is real: Legilux inserts "Art. 7-1" between 7 and 8 exactly as
     // it writes "Chapitre IV-1", and capturing only the leading digits collided it with Art. 7.
-    private static readonly Regex ArticleHead = new(
+    internal static readonly Regex ArticleHead = new(
         @"^[ 	]*Art\.?[  ]*(\d+(?:-\d+)*(?:er|bis|ter|quater|quinquies|sexies|septies|octies|novies|decies)?)[  ]*\.?",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
@@ -95,6 +95,16 @@ public static class PdfLuProfile
         var body0 = firstContainer >= 0 && firstContainer < firstArticle ? firstContainer : firstArticle;
         if (body0 > 0) notes.Add($"dropped {body0} line(s) of front matter");
 
+        return ParseBody(lines.Skip(body0).ToList(), notes);
+    }
+
+    /// <summary>
+    /// Lines to provisions. Shared with pdf-memorial-lu/1, which reaches the same job by a
+    /// different route: this profile slices off front matter, that one slices one act out of a
+    /// whole gazette issue, and from there the work is identical.
+    /// </summary>
+    internal static Extraction ParseBody(IReadOnlyList<string> src, List<string> notes)
+    {
         var md = new StringBuilder();
         var provisions = new List<Provision>();
         var seen = new HashSet<string>(StringComparer.Ordinal);
@@ -125,7 +135,7 @@ public static class PdfLuProfile
             open = false;
         }
 
-        foreach (var line in lines.Skip(body0))
+        foreach (var line in src)
         {
             var art = ArticleHead.Match(line);
             if (art.Success)
@@ -202,7 +212,7 @@ public static class PdfLuProfile
         return new Extraction(MdUtil.ToCodepointSpans(markdown, provisions), markdown, notes);
     }
 
-    private static IReadOnlyList<string> ReadPages(byte[] pdf)
+    internal static IReadOnlyList<string> ReadPages(byte[] pdf)
     {
         var pages = new List<string>();
         using var doc = PdfDocument.Open(pdf);
@@ -216,7 +226,7 @@ public static class PdfLuProfile
     /// the pages is furniture, not law. On a 43-page act the header appears 43 times and no
     /// sentence of the act appears twice.
     /// </summary>
-    private static HashSet<string> Furniture(IReadOnlyList<string> pages)
+    internal static HashSet<string> Furniture(IReadOnlyList<string> pages)
     {
         if (pages.Count < 4) return [];
         var counts = new Dictionary<string, int>(StringComparer.Ordinal);
@@ -228,6 +238,6 @@ public static class PdfLuProfile
     }
 
     /// Page numbers differ per page, so they are erased before a line is compared for repetition.
-    private static string Normalise(string line) =>
+    internal static string Normalise(string line) =>
         Regex.Replace(MdUtil.CollapseWs(line).Trim(), @"\d+", "#").ToLowerInvariant();
 }

@@ -62,6 +62,7 @@ public static class DeriveWriter
             // some dates and PDF-only on others, and the profile id is the confidence marker for
             // exactly that version.
             var pdfByVersion = versionDirs.Select(PdfMains).ToList();
+            var gazByVersion = versionDirs.Select(GazetteMains).ToList();
             var bodyLangsByVersion = versionDirs.Select(vd => Directory.EnumerateFiles(vd, "*.*")
                 .Where(f => Path.GetExtension(f) is ".xml" or ".html")
                 .Select(f => Path.GetFileNameWithoutExtension(f)!)
@@ -114,6 +115,11 @@ public static class DeriveWriter
                 foreach (var (l, pdfPath) in pdfByVersion[i].OrderBy(kv => kv.Key, StringComparer.Ordinal))
                     if (!units.Any(u => u.Lang == l))
                         units.Add((l, pdfPath, "pdf", $"{l}.pdf/{Path.GetFileName(pdfPath)}"));
+                // Last resort, and only when nothing better exists for that language: the act cut
+                // out of a gazette issue.
+                foreach (var (l, gazPath) in gazByVersion[i].OrderBy(kv => kv.Key, StringComparer.Ordinal))
+                    if (!units.Any(u => u.Lang == l))
+                        units.Add((l, gazPath, "pdf-memorial", $"{l}.pdf-memorial/{Path.GetFileName(gazPath)}"));
 
                 foreach (var unit in units.OrderBy(u => u.ObsFile, StringComparer.Ordinal))
                 {
@@ -134,6 +140,7 @@ public static class DeriveWriter
                             "akn" => AknLuProfile.ProfileId,
                             "fmx4" => Fmx4EuProfile.ProfileId,
                             "pdf" => PdfLuProfile.ProfileId,
+                            "pdf-memorial" => PdfMemorialLuProfile.ProfileId,
                             _ => XhtmlEuProfile.ProfileId,
                         };
                         var frontmatter = new Dictionary<string, string>
@@ -153,6 +160,7 @@ public static class DeriveWriter
                         {
                             // A PDF is bytes, not text; reading it as UTF-8 first would corrupt it.
                             "pdf" => PdfLuProfile.Extract(File.ReadAllBytes(unit.FilePath), lexId),
+                            "pdf-memorial" => PdfMemorialLuProfile.Extract(File.ReadAllBytes(unit.FilePath), lexId),
                             "akn" => AknLuProfile.Extract(File.ReadAllText(unit.FilePath, Encoding.UTF8), lexId),
                             "fmx4" => Fmx4EuProfile.Extract(File.ReadAllText(unit.FilePath, Encoding.UTF8), lexId),
                             _ => XhtmlEuProfile.Extract(File.ReadAllText(unit.FilePath, Encoding.UTF8), lexId),
@@ -251,6 +259,20 @@ public static class DeriveWriter
     /// {lang}.fmx4/; the main member is the only non-.doc.xml file, or the one the .doc.xml
     /// manifest points at via REF.PHYS TYPE="DOC.XML" (largest file as deterministic fallback).
     /// </summary>
+    /// A gazette issue per language, written as {lang}.pdf-memorial/.
+    private static Dictionary<string, string> GazetteMains(string versionDir)
+    {
+        var result = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var d in Directory.EnumerateDirectories(versionDir, "*.pdf-memorial").OrderBy(x => x, StringComparer.Ordinal))
+        {
+            var lang = Path.GetFileName(d);
+            lang = lang[..^".pdf-memorial".Length];
+            var pdfs = Directory.EnumerateFiles(d, "*.pdf").OrderBy(f => f, StringComparer.Ordinal).ToList();
+            if (pdfs.Count == 1) result[lang] = pdfs[0];
+        }
+        return result;
+    }
+
     /// One PDF per language directory, written by the alt-manifestation path as {lang}.pdf/.
     private static Dictionary<string, string> PdfMains(string versionDir)
     {

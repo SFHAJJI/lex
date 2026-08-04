@@ -16,14 +16,18 @@ const ms = (d: string) => Date.parse(`${d}T00:00:00Z`);
  * opened an article — so re-dating dropped you at the top of a document you were reading the
  * middle of. It is the one control a point-in-time reader uses constantly, so it stays put.
  */
-export function Provision({ items, toc, validFrom, validTo, work, anchor, profile, onPick, onClear }: {
+export function Provision({ items, toc, validFrom, validTo, work, anchor, profile, source, onPick, onClear }: {
   items: ProvisionItem[]; toc: ProvisionItem[]; validFrom: string; validTo?: string;
-  work: string; anchor?: string; profile?: string;
+  work: string; anchor?: string; profile?: string; source?: string;
   onPick: (anchor: string) => void; onClear: () => void;
 }) {
   // Where this text came from. Publisher markup and a read PDF are not the same claim, and the
   // difference has to reach the person reading the words, not stop at a field in a JSON file.
+  // Two levels, because the risks differ: pdf-lu/1 read a document that IS this act, so the doubt
+  // is only about where an article begins. pdf-memorial-lu/1 had to find this act inside a whole
+  // issue of the official gazette, so the doubt extends to whether this is the right act at all.
   const fromPdf = profile === "pdf-lu/1";
+  const fromGazette = profile === "pdf-memorial-lu/1";
   const outlineOnly = items.length > 0 && items.every((p) => !p.text);
   const nav = toc.length >= 6 || outlineOnly;
 
@@ -47,6 +51,7 @@ export function Provision({ items, toc, validFrom, validTo, work, anchor, profil
           <span className="tag">{items.length} article{items.length === 1 ? "" : "s"}</span>
         )}
         {fromPdf ? <span className="tag warn">read from the publisher's PDF</span> : null}
+        {fromGazette ? <span className="tag warn">cut from a gazette issue</span> : null}
       </div>
       {fromPdf ? (
         <p className="pdfnote">
@@ -55,6 +60,30 @@ export function Provision({ items, toc, validFrom, validTo, work, anchor, profil
           ours, inferred from the layout rather than taken from publisher markup. Check anything
           that turns on exact numbering against the source.
         </p>
+      ) : null}
+      {fromGazette ? (
+        <div className="pdfnote strong">
+          <p><b>Read this one with more care than the rest.</b></p>
+          <p>
+            Legilux publishes no machine-readable text for this version, and no separate document
+            for it either. What it offers is the issue of the <i>Mémorial</i>, the official gazette,
+            that the consolidated text appeared in, which is an entire day's journal and can contain
+            several unrelated acts.
+          </p>
+          <p>
+            So the words below are the publisher's, but two things are ours: finding where this act
+            begins and ends inside that issue, and dividing it into articles. Both are inferred from
+            the layout. An error here would not misplace a heading, it would show you a different
+            act, so treat this as a reading aid and confirm anything that matters.
+          </p>
+          {source ? (
+            <p>
+              <a href={source} target="_blank" rel="noopener noreferrer">
+                Read the official gazette at Legilux ↗
+              </a>
+            </p>
+          ) : null}
+        </div>
       ) : null}
       {outlineOnly ? (
         // A blank pane next to a table of contents is a dead end. Offer the thing a reader

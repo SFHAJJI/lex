@@ -345,3 +345,9 @@ button.pick { cursor: pointer; }
 /* Text read from a PDF says so, next to the text, not in a footnote. */
 .pdfnote { font-size: 13px; color: var(--muted); border-left: 2px solid var(--warn);
            padding: 6px 0 6px 12px; margin: 0 0 14px; max-width: 68ch; }
+
+/* The gazette marker is louder than the PDF one on purpose: the doubt is about WHICH act. */
+.pdfnote.strong { border-left-width: 3px; background: var(--card); border-radius: 0 6px 6px 0;
+                  padding: 12px 16px; font-size: 13.5px; }
+.pdfnote.strong p { margin: 0 0 8px; }
+.pdfnote.strong p:last-child { margin-bottom: 0; }
