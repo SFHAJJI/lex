@@ -1,6 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { first, tool, type ProvisionItem, type RankingRow, type UiEffect } from "./api";
-import { diffWords, changed, type Piece } from "./diff";
 import { publisherOf, workSlug, type State } from "./state";
 import { shorten } from "./pickers";
 
@@ -276,117 +275,6 @@ function labelled(dates: string[], xs: number[], width: number, cur: number, cmp
 }
 
 /** Compare: fetches both versions itself, then shows only what moved. */
-export function Compare({ work, from, to, anchor }: {
-  work: string; from: string; to: string; anchor?: string;
-}) {
-  const [state, setState] = useState<{ loading: boolean; error?: string; rows?: [string, Piece[]][];
-                                       unchanged?: number; added?: number; removed?: number }>({ loading: true });
-  const [showAll, setShowAll] = useState(false);
-
-  useEffect(() => {
-    let live = true;
-    setState({ loading: true });
-    const load = async (date: string) => {
-      // Read is guarded against pulling a whole code into the tab; Compare was not, and it
-      // pulls TWO. A 1,160-article code froze the page. Above the threshold, compare the
-      // focused article instead and say so.
-      if (!anchor) {
-        const outline = await tool<any>("as_of", { work, date, mode: "outline" });
-        const o = first<any>(outline, (x) => Array.isArray(x?.provisions) && x.provisions.length > 0);
-        if ((o?.provisions?.length ?? 0) > 120) throw new Error("TOO_LARGE");
-      }
-      const res = await tool<any>("as_of", { work, date, mode: anchor ? "select" : "full", ...(anchor ? { anchors: anchor } : {}) });
-      const one = first<any>(res, (x) => Array.isArray(x?.provisions) && x.provisions.length > 0);
-      const map = new Map<string, ProvisionItem>();
-      for (const p of one?.provisions ?? []) map.set(p.anchor, p);
-      return map;
-    };
-    Promise.all([load(from), load(to)])
-      .then(([a, b]) => {
-        if (!live) return;
-        // Two versions that carry no text are not two identical versions. Diffing them produces
-        // four zeros and the sentence "nothing changed in the text", which is the strongest claim
-        // on the page and is false: nothing was compared. Legilux publishes no text file for any
-        // snapshot of several large codes, so this is the ordinary case for them, not an edge.
-        if (a.size === 0 && b.size === 0) { setState({ loading: false, error: "NO_TEXT" }); return; }
-        const keys = [...new Set([...a.keys(), ...b.keys()])].sort();
-        const rows: [string, Piece[]][] = [];
-        let same = 0;
-        let added = 0;
-        let removed = 0;
-        for (const k of keys) {
-          // Added/removed is about PRESENCE, not about which edit pieces appear: an
-          // article that only gained a sentence is amended, not added.
-          if (!a.has(k)) { added++; }
-          else if (!b.has(k)) { removed++; }
-          const pieces = diffWords(a.get(k)?.text ?? "", b.get(k)?.text ?? "");
-          if (changed(pieces)) rows.push([a.get(k)?.num ?? b.get(k)?.num ?? k, pieces]);
-          else same++;
-        }
-        setState({ loading: false, rows, unchanged: same, added, removed });
-      })
-      .catch((e) => live && setState({ loading: false, error: String(e.message ?? e) }));
-    return () => { live = false; };
-  }, [work, from, to, anchor]);
-
-  if (state.loading) return <Empty>Comparing {from} with {to}…</Empty>;
-  if (state.error === "TOO_LARGE")
-    return <Empty>This law is too large to compare whole, open an article first, then compare.</Empty>;
-  if (state.error === "NO_TEXT")
-    return (
-      <Empty>
-        Neither version carries text, so there is nothing to compare. What Lex holds for this law is
-        the amendment record: when each version applied, where it came from, and its hash.
-      </Empty>
-    );
-  if (state.error) return <Empty>Could not compare these versions: {state.error}</Empty>;
-
-  const rows = state.rows ?? [];
-  return (
-    <>
-      <div className="cnt">
-        <span className="tag">{rows.length} changed</span>
-        <span className="tag">{state.added ?? 0} added</span>
-        <span className="tag">{state.removed ?? 0} removed</span>
-        <span className="tag">{state.unchanged} unchanged{state.unchanged ? " · hidden" : ""}</span>
-        <span className="tag mono">{from} → {to}</span>
-      </div>
-      {rows.length === 0 ? (
-        <Empty>Nothing changed in the text between these two dates.</Empty>
-      ) : (
-        (showAll ? rows : rows.slice(0, 12)).map(([label, pieces]) => (
-          <article key={label} className="art">
-            <h4>{label}</h4>
-            <div className="lawtxt">
-              {pieces.map((p, i) =>
-                p.k === "+" ? <ins key={i}>{p.t}</ins> :
-                p.k === "-" ? <del key={i}>{p.t}</del> :
-                <span key={i}>{p.t}</span>)}
-            </div>
-          </article>
-        ))
-      )}
-      {!showAll && rows.length > 12 ? (
-        <button className="ghost" onClick={() => setShowAll(true)}>
-          Show the other {rows.length - 12} changed articles
-        </button>
-      ) : null}
-    </>
-  );
-}
-
-/**
- * What the ranking rows do not say for themselves.
- *
- * changes_in_period counts amendments; it does not report whether the amended text can be shown,
- * and it returns a null title for roughly a third of the rows. Both gaps are visible in the same
- * screenful: a list where some rows are named "Code de l'environnement", some are named
- * `lu-legilux:st-1994-01-19-n1`, and eight of the top twelve open onto nothing.
- *
- * One outline lookup per row answers both, so it is worth the calls: whether that version carries
- * text, and what the publisher actually calls it. Six at a time, off the render path, and every
- * row stays usable while its own lookup is still in flight.
- */
 const FOLDER_KINDS = ["RECUEIL", "CODE_RECUEIL"];
 
 function useRowFacts(rows: RankingRow[]) {

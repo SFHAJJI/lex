@@ -351,3 +351,27 @@ button.pick { cursor: pointer; }
                   padding: 12px 16px; font-size: 13.5px; }
 .pdfnote.strong p { margin: 0 0 8px; }
 .pdfnote.strong p:last-child { margin-bottom: 0; }
+
+/* Side by side. No alignment guesswork: an article is matched to its counterpart by anchor, so
+   the two columns are the same article by identity, and there are no filler gaps to draw. */
+.sbs { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.sbs-col { min-width: 0; }
+.sbs-h { font-size: 11px; color: var(--muted); letter-spacing: .04em; margin-bottom: 4px;
+         border-bottom: 1px solid var(--line); padding-bottom: 3px; }
+@media (max-width: 900px) { .sbs { grid-template-columns: 1fr; } }
+.diffrow.added h4 { color: var(--ok, #6ea86e); }
+.diffrow.removed h4 { color: var(--warn); }
+
+/* Punctuation-only differences: named, counted, and kept out of the change list. */
+.punct { border-left: 2px solid var(--line); padding: 4px 0 4px 12px; margin: 0 0 14px; }
+.punct-h { background: none; border: 0; padding: 0; color: var(--muted); cursor: pointer;
+           font-family: inherit; font-size: 13px; }
+.punct-h:hover { color: var(--accent); }
+.punct-b { font-size: 12.5px; color: var(--muted); margin: 6px 0 0; max-width: 70ch; }
+
+/* The unchanged articles, as a band you can open rather than a number you cannot. */
+.ctx { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 10px; }
+.ctx-h { background: none; border: 0; padding: 0; color: var(--muted); cursor: pointer;
+         font-family: inherit; font-size: 13px; }
+.ctx-h:hover { color: var(--accent); }
+.ctx-b { font-size: 12px; color: var(--muted); margin: 8px 0 0; line-height: 1.7; }

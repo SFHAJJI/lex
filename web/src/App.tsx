@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { askStreaming, first, tool, type AskReply, type ProvisionItem, type Step, type UiEffect } from "./api";
 import { publisherOf, useWorkspace, workSlug, type Space, type State } from "./state";
-import { Compare, Empty, Gap, InForce, Provision, Ranking, VersionRail, hasView, modeFor } from "./views";
+import { Empty, Gap, InForce, Provision, Ranking, VersionRail, hasView, modeFor } from "./views";
+import { Compare } from "./Compare";
 import { LawPicker, shorten } from "./pickers";
 import AskPanel from "./AskPanel";
 import Finder from "./Finder";
