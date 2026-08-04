@@ -208,7 +208,11 @@ public class McpContractTests : IDisposable
         Assert.Equal("art_1er", miss["anchors_not_in_version"]![0]!.GetValue<string>());
         // "art_1er" and "art_1" share their digits, which is what the mismatch actually is:
         // a numbering convention, not a typo.
-        Assert.Contains("art_1", miss["nearest_anchors"]!.AsArray().Select(x => x!.GetValue<string>()));
+        var near = miss["nearest_anchors"]!.AsArray().Select(x => x!.GetValue<string>()).ToList();
+        Assert.Contains("art_1", near);
+        // And an article question is answered with articles. Matching digits alone answered
+        // "art_1er" with "attachment_1", which is true and useless.
+        Assert.All(near, a => Assert.StartsWith("art", a));
         Assert.False(string.IsNullOrWhiteSpace(miss["anchor_note"]?.GetValue<string>()));
     }
 

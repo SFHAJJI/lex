@@ -235,21 +235,35 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
     /// <summary>
     /// Anchors a caller might have meant, for a mode=select miss.
     ///
-    /// Deliberately mechanical: it compares the digits in the anchor, not its words, because the
-    /// mismatch is almost always a numbering convention rather than a typo. "art_1er" against a
-    /// code numbered "art_l_010-1" shares the digit 1; "article-5" against "art_5" shares 5. No
-    /// fuzzy string distance, which would rank "art_11" above "art_1" for the query "art_1".
-    /// Falls back to the first few anchors, which at least SHOWS the scheme in use.
+    /// Two mechanical steps, no fuzzy string distance (which would rank "art_11" above "art_1"
+    /// for the query "art_1"). First stay inside the same KIND of anchor: someone asking for an
+    /// article wants articles, and an unfiltered digit match answered "art_1er" with
+    /// "attachment_1", which is true and useless. Then match on digits rather than on words,
+    /// because the mismatch is almost always a numbering convention: "article-5" against "art_5".
+    ///
+    /// When digits match nothing, return the first few anchors OF THAT KIND, which is the more
+    /// valuable answer anyway: it shows the scheme in use. The Code du travail has no Article 1
+    /// under any spelling, and seeing "art_l_010-1, art_l_111-1" says why in one line.
     /// </summary>
     private static List<string> NearestAnchors(IEnumerable<string> wanted, IReadOnlyList<ProvisionRow> all)
     {
         static string Digits(string s) => new string(s.Where(char.IsAsciiDigit).ToArray()).TrimStart('0');
+        static string Kind(string s)
+        {
+            var head = new string(s.TakeWhile(char.IsAsciiLetter).ToArray()).ToLowerInvariant();
+            return head.StartsWith("art") ? "art" : head;   // art / article / arts all mean the same
+        }
 
-        var keys = wanted.Select(Digits).Where(x => x.Length > 0).ToHashSet(StringComparer.Ordinal);
-        if (keys.Count == 0) return all.Take(6).Select(p => p.Anchor).ToList();
+        var want = wanted.ToList();
+        var kinds = want.Select(Kind).Where(k => k.Length > 0).ToHashSet(StringComparer.Ordinal);
+        var family = kinds.Count > 0 ? all.Where(p => kinds.Contains(Kind(p.Anchor))).ToList() : [];
+        if (family.Count == 0) family = [.. all];
 
-        var hit = all.Where(p => keys.Contains(Digits(p.Anchor))).Select(p => p.Anchor).Take(10).ToList();
-        return hit.Count > 0 ? hit : all.Take(6).Select(p => p.Anchor).ToList();
+        var keys = want.Select(Digits).Where(x => x.Length > 0).ToHashSet(StringComparer.Ordinal);
+        var hit = keys.Count > 0
+            ? family.Where(p => keys.Contains(Digits(p.Anchor))).Select(p => p.Anchor).Take(10).ToList()
+            : [];
+        return hit.Count > 0 ? hit : family.Take(6).Select(p => p.Anchor).ToList();
     }
 
     private (LexIndexReader r, string norm)? Resolve(string work, string? publisher)
