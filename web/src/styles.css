@@ -460,3 +460,11 @@ button.pick { cursor: pointer; }
   .period-row { flex-wrap: wrap; }
   .period h2 { width: 100%; }
 }
+
+/* Which language a law is being read in. Only rendered when a work has more than one, which is
+   rare, so it never competes with the date for attention when there is nothing to choose. */
+.langs { display: inline-flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
+.langs button { font: inherit; font-size: 12px; text-transform: uppercase; letter-spacing: .04em;
+                padding: 4px 9px; background: none; border: 0; color: var(--muted); cursor: pointer; }
+.langs button + button { border-left: 1px solid var(--line); }
+.langs button.on { background: var(--accent); color: var(--card); font-weight: 600; }

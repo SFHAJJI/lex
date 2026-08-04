@@ -33,6 +33,9 @@ export interface State {
   // Which legal layer the period view is showing. In the URL so a filtered view is shareable
   // and the Back button undoes a filter change like any other move.
   layer?: LayerId;
+  // Which language to read a law in, for the few works published in more than one. In the URL
+  // for the same reason: "the Constitution in German" has to be a link someone can send.
+  language?: string;
 }
 
 /**
@@ -74,6 +77,7 @@ export function read(): State {
     until: p.get("until") || undefined,
     order: (p.get("order") as State["order"]) || undefined,
     layer: (p.get("layer") as LayerId) || undefined,
+    language: p.get("language") || undefined,
     mode,
   };
 }

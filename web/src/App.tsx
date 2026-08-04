@@ -11,6 +11,11 @@ import Coach, { COACH_KEY } from "./Coach";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
+/** Language codes as a reader recognises them, for the switcher's tooltip. */
+const NAMES: Record<string, string> = {
+  fr: "French", de: "German", lb: "Luxembourgish", en: "English", nl: "Dutch", it: "Italian",
+};
+
 /** Rows per page in the period view. Enough to scan, small enough to arrive quickly. */
 const PAGE = 25;
 
@@ -45,6 +50,7 @@ export default function App() {
   const [toc, setToc] = useState<ProvisionItem[]>([]);
   const [title, setTitle] = useState<string>();
   const [versions, setVersions] = useState<string[]>([]);
+  const [langs, setLangs] = useState<string[]>([]);
   const [held, setHeld] = useState<{ text: number; total: number; official?: string }>();
   const [page, setPage] = useState(0);
   const [states, setStates] = useState<string[]>([]);
@@ -70,7 +76,7 @@ export default function App() {
   // implying each refusal was about that date. Knowing the work-level answer up front lets the
   // reader say it once, and lets the chips stop offering text that does not exist.
   useEffect(() => {
-    if (!s.work) { setVersions([]); setHeld(undefined); return; }
+    if (!s.work) { setVersions([]); setLangs([]); setHeld(undefined); return; }
     let live = true;
     tool<any>("timeline", { work: s.work, limit: 400 })
       .then((res) => {
@@ -79,10 +85,15 @@ export default function App() {
         const vs = (one?.versions ?? []) as any[];
         const dates = [...new Set(vs.map((v) => String(v.valid_from)))] as string[];
         setVersions(dates.sort());
+        // Which languages this work exists in. The Constitution is published in French, German
+        // and Luxembourgish, and its stored title is German for all three, so a reader looking
+        // at the French text sees a German heading above it and reasonably concludes the page is
+        // broken. Naming the language being read costs one chip and removes the contradiction.
+        setLangs([...new Set(vs.map((v) => String(v.language)).filter(Boolean))].sort());
         setHeld({ text: vs.filter((v) => v.text_available).length, total: vs.length,
                   official: vs[vs.length - 1]?.source_uri });
       })
-      .catch(() => { if (live) { setVersions([]); setHeld(undefined); } });
+      .catch(() => { if (live) { setVersions([]); setLangs([]); setHeld(undefined); } });
     return () => { live = false; };
   }, [s.work]);
 
@@ -92,7 +103,8 @@ export default function App() {
   useEffect(() => {
     if (!s.work) { setToc([]); return; }
     let live = true;
-    tool<any>("as_of", { work: s.work, date: s.date ?? today(), mode: "outline" })
+    tool<any>("as_of", { work: s.work, date: s.date ?? today(), mode: "outline",
+                         ...(s.language ? { language: s.language } : {}) })
       .then((res) => {
         if (!live) return;
         const one = first<any>(res, (x) => Array.isArray(x?.provisions) && x.provisions.length > 0);
@@ -105,7 +117,7 @@ export default function App() {
       })
       .catch(() => live && setToc([]));
     return () => { live = false; };
-  }, [s.work, s.date]);
+  }, [s.work, s.date, s.language]);
 
   // Deterministic loading: changing date, article or mode calls the public MCP endpoint
   // directly. No model in the loop — playing with the workspace must be instant and repeatable.
@@ -115,6 +127,7 @@ export default function App() {
     // Never show one law's text under another's heading: clear before fetching.
     setLoaded(undefined);
     const date = s.date ?? today();
+    const lang = s.language ? { language: s.language } : {};
     // A code can carry thousands of articles: ask for the outline first and only pull full
     // text when it is small enough to read. Otherwise leave the reader in the contents —
     // dumping a whole code would freeze the tab and help nobody.
@@ -125,12 +138,12 @@ export default function App() {
     // 500+ and 2.2 MB, which is what this threshold is actually for.
     const fetchRead = async () => {
       if (s.anchor)
-        return tool<any>("as_of", { work: s.work, date, mode: "select", anchors: s.anchor });
-      const outline = await tool<any>("as_of", { work: s.work, date, mode: "outline" });
+        return tool<any>("as_of", { work: s.work, date, mode: "select", anchors: s.anchor, ...lang });
+      const outline = await tool<any>("as_of", { work: s.work, date, mode: "outline", ...lang });
       const o = first<any>(outline, (x) => Array.isArray(x?.provisions) && x.provisions.length > 0);
       const n = o?.provisions?.length ?? 0;
       if (n === 0 || n > 200) return outline;
-      return tool<any>("as_of", { work: s.work, date, mode: "full" });
+      return tool<any>("as_of", { work: s.work, date, mode: "full", ...lang });
     };
     fetchRead()
       .then((res) => {
@@ -139,15 +152,22 @@ export default function App() {
         const doc = one?.document ?? one;
         setTitle(shorten(doc?.title));
         const items = (one?.provisions ?? []) as ProvisionItem[];
-        setLoaded({ items, from: doc?.valid_from ?? date, to: doc?.valid_to,
-                    profile: doc?.extraction_profile, source: doc?.source_uri });
+        // Only claim a validity interval when a version actually resolved. `?? date` filled the
+        // gap with the date that was ASKED for, so opening the Code penal at 1200-01-01 answered
+        // "no version covers that date" in the body while the header above it said, in a green
+        // pill, "in force 1200-01-01 → today". A refusal the chrome contradicts is worse than
+        // either half alone: one of them is lying and the reader cannot tell which.
+        setLoaded(doc?.valid_from
+          ? { items, from: doc.valid_from, to: doc?.valid_to,
+              profile: doc?.extraction_profile, source: doc?.source_uri }
+          : undefined);
         if (items.length === 0)
           setUi({ gap: { status: one?.envelope?.status ?? "no_result", explanation: "No text is held for this law on that date.", available: [] } });
         else setUi(undefined);
       })
       .catch(() => live && setUi({ gap: { status: "error", explanation: "That version could not be loaded.", available: [] } }));
     return () => { live = false; };
-  }, [s.work, s.date, s.mode, s.anchor]);
+  }, [s.work, s.date, s.mode, s.anchor, s.language]);
 
   // Time workspace: a period loads the ranking deterministically, so the follow-up chips
   // and any /?from=&until= link land on real content instead of an empty panel.
@@ -346,6 +366,20 @@ export default function App() {
                 </span>
               ) : null}
               {loaded ? <span>{loaded.from} → {loaded.to ?? "today"}</span> : null}
+              {/* Which language you are reading. It only appears when the work exists in more
+                  than one, which is rare and always worth saying: the Constitution is published
+                  in French, German and Luxembourgish, and one stored title serves all three, so
+                  a German heading can sit above French articles and read as a broken page. */}
+              {langs.length > 1 ? (
+                <span className="langs" role="group" aria-label="Language of this text">
+                  {langs.map((l) => (
+                    <button key={l} className={l === (s.language ?? langs[0]) ? "on" : ""}
+                            aria-pressed={l === (s.language ?? langs[0])}
+                            title={`Read this law in ${NAMES[l] ?? l}`}
+                            onClick={() => { setUi(undefined); go({ language: l }); }}>{l}</button>
+                  ))}
+                </span>
+              ) : null}
               <span className="grow" />
               <label className="pick"><i>{s.mode === "compare" ? "from" : "showing"}</i>
                 <input type="date" value={s.date ?? today()} aria-label="Date to show the law as it stood"
