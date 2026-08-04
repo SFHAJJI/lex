@@ -63,9 +63,9 @@ string Page(string title, string body, string? subtitle = null, string nav = "",
     <head>
     <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{H(title)}}, Lex</title>
-    <meta name="description" content="Point-in-time Luxembourg + EU law: what did the rule say on a given date? Grounded AI answers, permalinks, timelines, diffs, cryptographic provenance, and a public MCP endpoint.">
+    <meta name="description" content="Point-in-time Luxembourg law, plus ten EU acts: what did the rule say on a given date? Grounded AI answers, permalinks, timelines, diffs, cryptographic provenance, and a public MCP endpoint.">
     <meta property="og:title" content="{{H(title)}}, Lex">
-    <meta property="og:description" content="Point-in-time Luxembourg + EU law with grounded AI answers, per-article history, and verifiable provenance.">
+    <meta property="og:description" content="Point-in-time Luxembourg law, plus ten EU acts, with grounded AI answers, per-article history, and verifiable provenance.">
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="Lex">
     <meta property="og:image" content="{{publicBase}}/og.png">
@@ -413,8 +413,8 @@ app.MapGet("/", () =>
     // promotional cards, where the visitors most likely to bounce never reached it — while
     // the sentence above the fold merely announced that the site answers questions.
     var body = $"""
-        <p class="lede">Ask what any Luxembourg or EU law said on any day, exactly as its
-        publisher issued it.</p>
+        <p class="lede">Ask what any Luxembourg law said on any day, exactly as its publisher
+        issued it. Plus ten EU acts, from the GDPR to the AI Act.</p>
         """
         + $"""
         <!-- Read synchronously by the workspace on mount, so the doors never flash in or need a
@@ -468,7 +468,7 @@ app.MapGet("/", () =>
         <link rel="stylesheet" href="/app/workspace.css">
         <script type="module" src="/app/workspace.js"></script>
         """;
-    return Results.Content(Page("Luxembourg and EU law, as it stood on any date.", body, null, "ask",
+    return Results.Content(Page("Luxembourg law as it stood on any date, plus ten EU acts.", body, null, "ask",
         h1: "A law is not one document."), "text/html");
 });
 
@@ -544,7 +544,7 @@ app.MapPost("/api/ask/stream", async (HttpRequest req, HttpResponse res) =>
 app.MapGet("/architecture", () =>
 {
     var body = """
-        <p>Lex answers one question, <b>what did the rule say on that date?</b>, for Luxembourg and EU law,
+        <p>Lex answers one question, <b>what did the rule say on that date?</b>, for Luxembourg law and ten EU acts,
         in a way a developer can build on and an auditor can check. Everything below is open source and open data.</p>
 
         <h2>Two layers, one hash chain</h2>
@@ -1419,7 +1419,7 @@ app.MapGet("/changed", (string? from, string? to, string? order, string? publish
     var t = toD.ToString("yyyy-MM-dd");
 
     var sb = new StringBuilder($"""
-        <p class="lede">Every Luxembourg and EU law in Lex that gained a new version between two
+        <p class="lede">Every law in Lex that gained a new version between two
         dates, the corpus-wide view that a single law's timeline cannot give you.</p>
         <form class="inline" method="get">
           <label class="sub">from <input type="date" name="from" value="{f}"></label>
@@ -1653,7 +1653,7 @@ app.MapGet("/stories", () =>
           <a href="/coverage">here is exactly what it holds and what it lacks</a>.</div>
         """);
     return Results.Content(Page("Stories, watch the law move", sb.ToString(),
-        "real histories from the Luxembourg and EU corpora, computed live", "find"), "text/html");
+        "real histories from the Luxembourg corpus and the ten EU acts, computed live", "find"), "text/html");
 });
 
 app.MapGet("/provenance/{*key}", (string key) =>
