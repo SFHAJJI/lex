@@ -101,7 +101,20 @@ public sealed class LexIndexReader : IDisposable
             WHERE (group_key=$w OR group_identifier=$w)
               AND valid_from <= $d AND (valid_to IS NULL OR valid_to >= $d)
             """, filters, excludeAsOf: true);
-        sql += " ORDER BY valid_from DESC, language LIMIT 1";
+        // When the caller names no language and the version exists in several, prefer the one this
+        // work is mostly published in, then fall back to alphabetical for a stable tie-break.
+        // Ordering by language alone made "de" win over "fr" on every tie, which is how the
+        // Constitution, one of three suggested starting points on the front page, greeted readers
+        // in German: it holds 37 French versions, one German and one Luxembourgish, and the German
+        // one shares a date with the other two. The rule stays publisher-agnostic (F1): it asks
+        // the work what it is written in rather than hard-coding a national language.
+        sql += """
+             ORDER BY valid_from DESC,
+                      (SELECT COUNT(*) FROM docs c
+                        WHERE c.group_key = docs.group_key AND c.language = docs.language) DESC,
+                      language
+             LIMIT 1
+            """;
         using var cmd = Cmd(sql, ps);
         cmd.Parameters.AddWithValue("$w", NormalizeWork(work));
         cmd.Parameters.AddWithValue("$d", date.ToString("yyyy-MM-dd"));
@@ -276,7 +289,13 @@ public sealed class LexIndexReader : IDisposable
                    MAX(d.valid_from) AS last_change,
                    (SELECT COALESCE(t.title_short, t.title) FROM docs t WHERE t.group_key = d.group_key
                      ORDER BY t.valid_from DESC LIMIT 1) AS title,
-                   (SELECT COUNT(DISTINCT t2.valid_from) FROM docs t2 WHERE t2.group_key = d.group_key) AS versions_total
+                   (SELECT COUNT(DISTINCT t2.valid_from) FROM docs t2 WHERE t2.group_key = d.group_key) AS versions_total,
+                   -- The state this law was in before the window touched it: the newest version
+                   -- strictly older than the window's first change. This is what "what changed"
+                   -- has to compare against; comparing first_change with last_change is a
+                   -- comparison with itself whenever a work moved exactly once.
+                   (SELECT MAX(t3.valid_from) FROM docs t3
+                     WHERE t3.group_key = d.group_key AND t3.valid_from < MIN(d.valid_from)) AS baseline
             FROM docs d
             WHERE {where}
             GROUP BY d.group_key
@@ -292,7 +311,8 @@ public sealed class LexIndexReader : IDisposable
         using var r = cmd.ExecuteReader();
         while (r.Read())
             list.Add(new ChangeRow(r.GetString(0), r.GetInt32(1), r.GetString(2), r.GetString(3),
-                r.IsDBNull(4) ? null : r.GetString(4), r.GetInt32(5)));
+                r.IsDBNull(4) ? null : r.GetString(4), r.GetInt32(5),
+                r.IsDBNull(6) ? null : r.GetString(6)));
         return list;
     }
 

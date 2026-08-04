@@ -235,9 +235,109 @@ public class IndexTests : IDisposable
         Assert.Equal(1, kinds["DIR"]);
     }
 
+    // ---- what a "what changed" row must be compared against ----
+    //
+    // A row reports how many versions a work gained in a window. Opening it used to compare
+    // first_change with last_change, and those are the SAME DATE whenever a work moved exactly
+    // once, which is the ordinary case: 92% of regulation rows in a recent window. The comparison
+    // then ran a version against itself and truthfully reported no differences, so the report's
+    // primary action was broken for most of its rows while looking like it worked.
+
+    [Fact]
+    public void A_work_that_moved_once_still_has_something_to_compare_against()
+    {
+        using var r = Build();
+        // w1 has versions at 2020-01-01 and 2022-01-01. A window holding only the second one
+        // reports one change, and its baseline must be the first.
+        var row = Assert.Single(r.ChangesInPeriod("2021-06-01", "2023-01-01", null, true, 50));
+
+        Assert.Equal(1, row.VersionsInPeriod);
+        Assert.Equal(row.FirstChange, row.LastChange);      // the shape that used to break
+        Assert.Equal("2020-01-01", row.Baseline);           // and what makes it comparable
+    }
+
+    [Fact]
+    public void The_baseline_is_the_state_before_the_window_not_inside_it()
+    {
+        using var r = Build();
+        var row = r.ChangesInPeriod("2019-01-01", "2023-01-01", null, true, 50)
+                   .Single(x => x.GroupKey == "w1");
+
+        // Both of w1's versions are inside this window, so the window opens on its first-ever
+        // version and there is no earlier state. Null, not the window's own first change: a
+        // caller must be able to tell "nothing to compare" from "compare against this".
+        Assert.Equal(2, row.VersionsInPeriod);
+        Assert.Null(row.Baseline);
+    }
+
+    [Fact]
+    public void A_baseline_never_falls_inside_the_window()
+    {
+        using var r = Build();
+        foreach (var row in r.ChangesInPeriod("2019-01-01", "2026-01-01", null, true, 50))
+            if (row.Baseline is { } b)
+                Assert.True(string.CompareOrdinal(b, row.FirstChange) < 0,
+                    $"{row.GroupKey}: baseline {b} is not strictly before first change {row.FirstChange}");
+    }
+
+    // ---- which language a version is served in when it exists in several ----
+    //
+    // The Constitution is one of three suggested starting points on the front page. It holds 37
+    // French versions, one German and one Luxembourgish, and all three share the date 2023-07-01.
+    // Ordering by language alone put "de" first, so the front page greeted readers in German.
+
+    [Fact]
+    public void An_unspecified_language_gets_the_one_the_work_is_mostly_written_in()
+    {
+        using var r = BuildMultilingual();
+        var doc = r.AsOf("w3", new DateOnly(2024, 6, 1), new FilterSet(null, null, null, null));
+
+        Assert.NotNull(doc);
+        Assert.Equal("fr", doc!.Language);
+    }
+
+    [Fact]
+    public void An_explicit_language_still_wins_over_the_preference()
+    {
+        using var r = BuildMultilingual();
+        var doc = r.AsOf("w3", new DateOnly(2024, 6, 1), new FilterSet(null, null, null, "de"));
+
+        Assert.Equal("de", doc!.Language);
+    }
+
+    /// <summary>A work published mostly in French, with one German and one Luxembourgish version
+    /// sharing a date, which is the Constitution's exact shape.</summary>
+    private LexIndexReader BuildMultilingual()
+    {
+        var stamp = new Dictionary<string, string>
+        {
+            ["collection"] = "t-pub", ["tier"] = "A", ["history_begins"] = "publisher",
+            ["built_at"] = "2026-08-01T00:00:00Z", ["corpus_commit"] = "test",
+        };
+        DocRow L(string from, string lang) =>
+            new($"t-pub:w3:{from}:{lang}", "t-pub", "w3", "urn:w3", "Constitution", lang, from, null,
+                "publisher", "2026-08-01T00:00:00Z", Withdrawn: false, TextAvailable: true,
+                TextPublic: true, RecordSha: "abc", BodySha: null, SourceUri: "https://example.org",
+                Title: "a constitution", TitleShort: "a constitution", Body: null,
+                PublicationDate: from, StatusNote: null);
+
+        var docs = new[]
+        {
+            L("2019-01-01", "fr"), L("2020-01-01", "fr"), L("2021-01-01", "fr"),
+            L("2024-01-01", "de"), L("2024-01-01", "fr"), L("2024-01-01", "lb"),
+        };
+        var db2 = Path.Combine(Path.GetTempPath(), $"lex-lang-{Guid.NewGuid():N}.db");
+        _extra.Add(db2);
+        IndexBuilder.Build(db2, stamp, docs, [], [], [], StampSigner.CreateKeyPem());
+        return LexIndexReader.Open(db2);
+    }
+
+    private readonly List<string> _extra = [];
+
     public void Dispose()
     {
         Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
         try { File.Delete(_db); } catch { /* temp file */ }
+        foreach (var f in _extra) { try { File.Delete(f); } catch { /* temp file */ } }
     }
 }

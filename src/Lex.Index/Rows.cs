@@ -77,7 +77,14 @@ public sealed record ChangeRow(
     string FirstChange,
     string LastChange,
     string? Title,
-    int VersionsTotal);
+    int VersionsTotal,
+    // The version in force immediately BEFORE the window's first change, which is the only
+    // sensible left-hand side of "what changed here". Without it a caller compares FirstChange
+    // with LastChange, and those are the same date whenever a work changed exactly once, which
+    // is the common case: 92% of regulation rows in a recent window. The comparison then runs a
+    // version against itself and truthfully reports no differences. Null when the window's first
+    // change is also the work's first version, so there is nothing to compare against.
+    string? Baseline);
 
 /// <summary>
 /// F5 — the one rule that cannot be relaxed, as a construct: every query entry point

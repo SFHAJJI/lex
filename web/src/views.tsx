@@ -370,18 +370,34 @@ export function Ranking({ rows, worksChanged, newVersions, from, to, layer, page
         {rows.map((r) => {
           const f = facts[r.work];
           const name = f?.title ?? label(r.title) ?? humanSlug(r.work);
+          // Where the comparison starts. The server sends the version in force BEFORE the
+          // window; without it the row opened first_change against last_change, and those are
+          // the same date whenever a law moved once, so the comparison ran a version against
+          // itself and reported nothing. A law whose first-ever version falls inside the window
+          // has nothing earlier to compare against, so it opens for reading instead.
+          const from = r.diff_from ?? r.baseline ?? r.first_change;
+          const to = r.diff_to ?? r.last_change;
+          const comparable = !!f?.text && from !== to;
+          const n = r.versions_in_period;
           return (
             <button key={r.work} className={"bar" + (f && !f.text ? " notext" : "")}
-                    title={f && !f.text ? "No text is published for this version, open its record" : undefined}
-                    onClick={() => f && !f.text
-                      ? onOpenRecord(r.work, r.last_change)
-                      : onOpen(r.work, r.first_change, r.last_change)}>
+                    title={f && !f.text
+                      ? "No text is published for this version, open its record"
+                      : comparable
+                        ? `Compare ${from} with ${to}`
+                        : "This law's first version falls in this window, so there is nothing earlier to compare it with"}
+                    onClick={() => comparable
+                      ? onOpen(r.work, from, to)
+                      : onOpenRecord(r.work, r.last_change)}>
               <span className="track">
-                <span className="fill" style={{ width: `${(r.versions_in_period / max) * 100}%` }} />
+                <span className="fill" style={{ width: `${(n / max) * 100}%` }} />
                 <span className="lbl">{name}</span>
-                {f && !f.text ? <span className="mark">record only</span> : null}
+                {f && !f.text ? <span className="mark">record only</span>
+                  : !comparable ? <span className="mark">first version</span> : null}
               </span>
-              <span className="num">{r.versions_in_period}</span>
+              {/* "4" beside a comparison showing one edit read as a contradiction. It counts
+                  versions the publisher issued, which is not the same as edits to the wording. */}
+              <span className="num" title={`${n} new version${n === 1 ? "" : "s"} in this window`}>{n}</span>
             </button>
           );
         })}

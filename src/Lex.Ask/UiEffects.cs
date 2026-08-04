@@ -70,7 +70,10 @@ public sealed record RankingView(string FromDate, string ToDate, string Order,
     int WorksChanged, int NewVersions, IReadOnlyList<RankingRow> Rows);
 
 public sealed record RankingRow(string Work, string? Title, int VersionsInPeriod, int VersionsTotal,
-    string FirstChange, string LastChange, string? Permalink, string? DiffPermalink);
+    string FirstChange, string LastChange, string? Permalink, string? DiffPermalink,
+    // The state before the window, so a row the assistant surfaces opens the same comparison a
+    // clicked row does. Null when the window contains the work's first version.
+    string? Baseline = null, string? DiffFrom = null, string? DiffTo = null);
 
 public sealed record InForceView(string Date, int Total, IReadOnlyList<InForceRow> Rows);
 

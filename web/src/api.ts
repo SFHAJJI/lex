@@ -54,6 +54,11 @@ export interface UiEffect {
 export interface RankingRow {
   work: string; title?: string; versions_in_period: number; versions_total: number;
   first_change: string; last_change: string; permalink?: string; diff_permalink?: string;
+  // Where a comparison should start: the version in force before the window touched this law.
+  // The row used to be opened as first_change vs last_change, and those are the same date
+  // whenever a work moved exactly once, so the comparison ran a version against itself and
+  // correctly reported nothing. Null when the window's first change is the work's first version.
+  baseline?: string | null; diff_from?: string; diff_to?: string;
 }
 
 /** A step the agent completed, naming what it found. */

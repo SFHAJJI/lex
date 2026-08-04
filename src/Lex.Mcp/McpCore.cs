@@ -673,12 +673,26 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                                 ["versions_total"] = c.VersionsTotal,
                                 ["first_change"] = c.FirstChange,
                                 ["last_change"] = c.LastChange,
+                                // What this law looked like before the window touched it, and so
+                                // the correct left-hand side of a diff. Comparing first_change
+                                // with last_change is a comparison with itself whenever a work
+                                // moved exactly once in the window, which is the usual case.
+                                // Null when the window's first change is the work's own first
+                                // version: there is no earlier state to show.
+                                ["baseline"] = c.Baseline,
+                                ["diff_from"] = c.Baseline ?? c.FirstChange,
+                                ["diff_to"] = c.LastChange,
                             };
                             if (_publicBase is not null)
                             {
                                 o["permalink"] = $"{_publicBase}/{r.Collection}/{c.GroupKey}/{c.LastChange}";
-                                if (c.FirstChange != c.LastChange)
-                                    o["diff_permalink"] = $"{_publicBase}/{r.Collection}/{c.GroupKey}/diff/{c.FirstChange}/{c.LastChange}";
+                                // Built from the baseline, so a law that moved exactly once still
+                                // gets a comparison link. The old condition compared FirstChange
+                                // with LastChange and therefore emitted no link at all for the
+                                // most common row in the report.
+                                var diffFrom = c.Baseline ?? c.FirstChange;
+                                if (diffFrom != c.LastChange)
+                                    o["diff_permalink"] = $"{_publicBase}/{r.Collection}/{c.GroupKey}/diff/{diffFrom}/{c.LastChange}";
                             }
                             return (JsonNode)o;
                         }).ToArray()),

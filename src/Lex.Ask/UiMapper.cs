@@ -150,6 +150,7 @@ public static class UiMapper
                 VersionsInPeriod: c["versions_in_period"]?.GetValue<int>() ?? 0,
                 VersionsTotal: c["versions_total"]?.GetValue<int>() ?? 0,
                 FirstChange: S(c, "first_change") ?? "", LastChange: S(c, "last_change") ?? "",
+                Baseline: S(c, "baseline"), DiffFrom: S(c, "diff_from"), DiffTo: S(c, "diff_to"),
                 Permalink: S(c, "permalink"), DiffPermalink: S(c, "diff_permalink"))).ToList()),
             Workspace: LayerOf(S(args, "document_type")) is { } lay
                 ? new WorkspaceView(Layer: lay, Page: (o["offset"]?.GetValue<int>() ?? 0) / 25)
