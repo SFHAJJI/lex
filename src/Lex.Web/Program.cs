@@ -4,15 +4,27 @@ using Azure.Monitor.OpenTelemetry.AspNetCore;
 using Lex.Ask;
 using Lex.Index;
 using Lex.Mcp;
+using Lex.Web;
 using OpenTelemetry.Trace;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// ---- composition root ------------------------------------------------------------------
+//
+// Configuration was seven Environment.GetEnvironmentVariable calls spread through this file,
+// each with its own inline default and none of them validated. It is now one bound, validated
+// object, and the index registry is a service rather than a local dictionary captured by every
+// route lambda in the file.
+var options = LexOptionsSetup.FromEnvironment(builder.Environment);
+builder.Services.AddSingleton(Microsoft.Extensions.Options.Options.Create(options));
+builder.Services.AddSingleton<IndexRegistry>();
+builder.Services.AddSingleton(sp => new McpCore(sp.GetRequiredService<IndexRegistry>().All));
 
 // Foundry-hybrid observability (D45 posture: keep the loop, adopt the platform's
 // tracing): OpenTelemetry via the Azure Monitor distro, exporting to the App
 // Insights resource a Foundry project can attach to. Enabled only when the
 // connection string is configured; the app is fully functional without it.
-if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("APPLICATIONINSIGHTS_CONNECTION_STRING")))
+if (!string.IsNullOrEmpty(options.AppInsightsConnectionString))
 {
     builder.Services.AddOpenTelemetry().UseAzureMonitor();
     builder.Services.ConfigureOpenTelemetryTracerProvider((_, b) => b.AddSource(AskService.ActivitySourceName));
@@ -21,35 +33,12 @@ if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("APPLICATIONINSIGHT
 var app = builder.Build();
 app.UseStaticFiles();   // wwwroot: og.png (social preview card)
 
-// Absolute base for social-preview metadata; falls back to the canonical host so a
-// pasted link previews correctly even when the env var is unset.
-var publicBase = Environment.GetEnvironmentVariable("LEX_PUBLIC_BASE_URL")?.TrimEnd('/')
-                 ?? "https://law.soufien.lu";
+var publicBase = options.PublicBase;
+var registry = app.Services.GetRequiredService<IndexRegistry>();
+var readers = registry.All;
+var indexDir = options.IndexDir;
 
-// ---- index registry: one LexIndexReader per mounted per-publisher index file (D27) ----
-var indexDir = Environment.GetEnvironmentVariable("LEX_INDEX_DIR")
-               ?? Path.Combine(app.Environment.ContentRootPath, "indexes");
-var readers = new Dictionary<string, LexIndexReader>(StringComparer.Ordinal);
-if (Directory.Exists(indexDir))
-    foreach (var db in Directory.EnumerateFiles(indexDir, "index-*.db"))
-    {
-        // One unreadable index must not take the other publishers down with it. Publishers are
-        // independent by design (D27), so a refusal is logged loudly and the rest still mount;
-        // /coverage then reports the survivors, which is the honest state of the service.
-        try
-        {
-            var r = LexIndexReader.Open(db);
-            readers[r.Collection] = r;
-            Console.Error.WriteLine($"[web] mounted {db} ({r.Collection}, signature_valid={r.SignatureValid})");
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine($"[web] REFUSED {db}: {ex.Message}");
-        }
-    }
-if (readers.Count == 0) Console.Error.WriteLine($"[web] WARNING: no indexes found in {indexDir}");
-
-var mcpCore = new McpCore(readers);
+var mcpCore = app.Services.GetRequiredService<McpCore>();
 var askService = new AskService(mcpCore);
 Console.Error.WriteLine($"[web] /ask playground: {(askService.Enabled ? "enabled" : "disabled (no AOAI_ENDPOINT/AOAI_KEY)")}");
 
