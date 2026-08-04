@@ -114,26 +114,42 @@ public static class PdfMemorialLuProfile
         if (!ReferenceEquals(used, needles[0]))
             notes.Add("located by date alone; the issue does not name the instrument as the ELI does");
 
-        // The consolidated text begins at the first marker at or after the act is named. Failing
-        // that, at the first article after it: some issues set the heading without the marker.
+        // Where the consolidated text begins.
+        //
+        // Taking the first marker after the act is named looks right and is not: an issue carries
+        // several "texte coordonné" markers, in the Sommaire, in running heads, and before each
+        // act, and picking the wrong one starts the reader in the middle of the law. Measured over
+        // the corpus, 24 of 171 versions came out beginning at Art. 32, Art. 14, Art. 5.
+        //
+        // A consolidated act always opens at Article 1. So a candidate start is only accepted when
+        // the first article after it IS Article 1, which is a fact about law rather than about
+        // this publisher's typography.
+        var markers = Enumerable.Range(0, folded.Count)
+            .Where(i => folded[i].Contains(Marker, StringComparison.Ordinal)).ToList();
+        var candidates = markers.Select(i => i + 1).ToList();
+        // A heading without its marker still starts a text, so the first article after each
+        // mention of the act is a candidate too.
+        candidates.AddRange(named);
+        candidates = candidates.Where(i => i < lines.Count).Distinct().OrderBy(i => i).ToList();
+
         var start = -1;
-        foreach (var at in named)
-        {
-            var marker = Enumerable.Range(at, folded.Count - at)
-                .FirstOrDefault(i => folded[i].Contains(Marker, StringComparison.Ordinal), -1);
-            if (marker >= 0) { start = marker + 1; break; }
-        }
+        foreach (var pass in new[] { true, false })          // first insist the act is named above
+            foreach (var cand in candidates)
+            {
+                if (pass && !named.Any(n => n <= cand)) continue;
+                var firstArt = Enumerable.Range(cand, lines.Count - cand)
+                    .FirstOrDefault(i => PdfLuProfile.ArticleHead.IsMatch(lines[i]), -1);
+                if (firstArt < 0) continue;
+                var num = PdfLuProfile.ArticleHead.Match(lines[firstArt]).Groups[1].Value;
+                if (num is not ("1" or "1er")) continue;
+                start = firstArt;
+                break;
+            }
         if (start < 0)
         {
-            var firstArt = Enumerable.Range(named[^1], lines.Count - named[^1])
-                .FirstOrDefault(i => PdfLuProfile.ArticleHead.IsMatch(lines[i]), -1);
-            if (firstArt < 0)
-            {
-                notes.Add("the act is named but no consolidated text follows it; not extracted");
-                return new Extraction([], "", notes);
-            }
-            start = firstArt;
-            notes.Add("no 'texte coordonné' marker; started at the first article after the act's heading");
+            notes.Add("no consolidated text starting at Article 1 could be located in this issue; "
+                    + "not extracted (profile coverage gap)");
+            return new Extraction([], "", notes);
         }
 
         // And it ends where the next act begins, if one does.

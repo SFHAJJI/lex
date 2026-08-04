@@ -107,6 +107,44 @@ public class PdfMemorialLuProfileTests
     }
 
     [Fact]
+    public void A_marker_that_does_not_open_at_article_one_is_not_the_start()
+    {
+        // An issue carries several "texte coordonné" markers: in the Sommaire, in running heads,
+        // and before each act. Taking the first one after the act is named started 24 of 171 real
+        // versions in the middle of their own law, one of them at Art. 32 presented as the whole
+        // act. A consolidated text always opens at Article 1, so a candidate that does not is the
+        // wrong candidate.
+        var ex = PdfMemorialLuProfile.FromPages([Issue(
+            "Sommaire",
+            "Texte coordonne de la loi du 19 fevrier 1973 concernant la vente",
+            "Texte coordonne",
+            "Art. 1er.",
+            "Le vrai debut de la loi.",
+            "Art. 2.",
+            "La suite.",
+            "Texte coordonne",                    // a later marker, mid-document
+            "Art. 32.",
+            "Un article tardif.")], LexId);
+
+        Assert.Equal("art_1er", ex.Provisions[0].Anchor);
+        Assert.Equal(3, ex.Provisions.Count);
+    }
+
+    [Fact]
+    public void An_issue_with_no_text_opening_at_article_one_is_refused()
+    {
+        var ex = PdfMemorialLuProfile.FromPages([Issue(
+            "Sommaire",
+            "Texte coordonne de la loi du 19 fevrier 1973 concernant la vente",
+            "Texte coordonne",
+            "Art. 14.",
+            "Le texte ne commence pas au debut.")], LexId);
+
+        Assert.Empty(ex.Provisions);
+        Assert.Contains(ex.Notes, n => n.Contains("Article 1"));
+    }
+
+    [Fact]
     public void A_gazette_with_no_text_layer_is_refused()
     {
         var ex = PdfMemorialLuProfile.FromPages([], LexId);

@@ -692,6 +692,7 @@ app.MapGet("/coverage", () =>
                     "fmx4-eu/1" => "publisher XML (Formex 4), article boundaries from the publisher",
                     "xhtml-eu/1" => "publisher XHTML, article boundaries from the publisher",
                     "pdf-lu/1" => "read from the publisher's PDF, article boundaries inferred from layout",
+                    "pdf-memorial-lu/1" => "cut out of an official gazette issue, both the act's boundaries and its articles inferred",
                     _ => "",
                 };
                 sb.Append($"<tr><td class=\"mono\">{H(pr.Profile)}</td><td>{pr.Versions:n0}</td></tr>"
