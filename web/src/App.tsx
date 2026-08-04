@@ -36,7 +36,7 @@ export default function App() {
   const [steps, setSteps] = useState<Step[]>([]);
   const [said, setSaid] = useState<string>();
   const [ui, setUi] = useState<UiEffect>();
-  const [loaded, setLoaded] = useState<{ items: ProvisionItem[]; from: string; to?: string }>();
+  const [loaded, setLoaded] = useState<{ items: ProvisionItem[]; from: string; to?: string; profile?: string }>();
   const [toc, setToc] = useState<ProvisionItem[]>([]);
   const [title, setTitle] = useState<string>();
   const [versions, setVersions] = useState<string[]>([]);
@@ -133,7 +133,7 @@ export default function App() {
         const doc = one?.document ?? one;
         setTitle(shorten(doc?.title));
         const items = (one?.provisions ?? []) as ProvisionItem[];
-        setLoaded({ items, from: doc?.valid_from ?? date, to: doc?.valid_to });
+        setLoaded({ items, from: doc?.valid_from ?? date, to: doc?.valid_to, profile: doc?.extraction_profile });
         if (items.length === 0)
           setUi({ gap: { status: one?.envelope?.status ?? "no_result", explanation: "No text is held for this law on that date.", available: [] } });
         else setUi(undefined);
@@ -328,7 +328,8 @@ export default function App() {
          ui?.in_force ? <InForce date={ui.in_force.date} total={ui.in_force.total} rows={ui.in_force.rows} onOpen={openLaw} /> :
          s.work && s.mode === "compare" ? <Compare work={s.work} from={s.date ?? today()} to={s.to ?? today()} anchor={s.anchor} /> :
          s.work && loaded ? <Provision items={loaded.items} toc={toc} validFrom={loaded.from} validTo={loaded.to}
-                                       work={s.work} anchor={s.anchor} onPick={(a) => go({ anchor: a })}
+                                       work={s.work} anchor={s.anchor} profile={loaded.profile}
+                                       onPick={(a) => go({ anchor: a })}
                                        onClear={() => go({ anchor: undefined })} /> :
          s.work ? <Empty>Loading…</Empty> :
          !front && space === "time" ? <Empty>Pick a period above.</Empty> :

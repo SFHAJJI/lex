@@ -678,6 +678,27 @@ app.MapGet("/coverage", () =>
                 <td>{(folder ? "<span class=\"badge\">thematic folder, not an instrument</span>" : "")}</td></tr>
                 """);
         }
+        // The confidence mix, as a count rather than a claim. Text from publisher markup and text
+        // read out of a PDF are different evidence, and the page that reports coverage is the page
+        // that should say how much of it is which.
+        if (c.Profiles.Count > 0)
+        {
+            sb.Append("<div class=\"card\"><table><tr><th>how the text was obtained</th><th>versions</th></tr>");
+            foreach (var pr in c.Profiles)
+            {
+                var what = pr.Profile switch
+                {
+                    "akn-lu/1" => "publisher XML (Akoma Ntoso), article boundaries from the publisher",
+                    "fmx4-eu/1" => "publisher XML (Formex 4), article boundaries from the publisher",
+                    "xhtml-eu/1" => "publisher XHTML, article boundaries from the publisher",
+                    "pdf-lu/1" => "read from the publisher's PDF, article boundaries inferred from layout",
+                    _ => "",
+                };
+                sb.Append($"<tr><td class=\"mono\">{H(pr.Profile)}</td><td>{pr.Versions:n0}</td></tr>"
+                        + (what.Length > 0 ? $"<tr><td colspan=\"2\" class=\"sub\">{what}</td></tr>" : ""));
+            }
+            sb.Append("</table></div>");
+        }
         sb.Append($"</table></div>{EnvelopeCard(r, false)}");
         var luGap = c.Collection == "lu-legilux"
             ? """

@@ -159,6 +159,11 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
             ["work"] = d.GroupKey,
             ["work_identifier"] = d.GroupIdentifier,
             ["document_type"] = d.Kind,
+            // How this version's text was obtained. "akn-lu/1" and "fmx4-eu/1" mean the article
+            // boundaries came from the publisher's own structural markup; "pdf-lu/1" means they
+            // were inferred from a page-description format, which is a weaker claim and has to
+            // travel with the text rather than sit in a file nobody reads.
+            ["extraction_profile"] = d.Profile,
             ["language"] = d.Language,
             ["valid_from"] = d.ValidFrom,
             ["valid_to"] = d.ValidTo,

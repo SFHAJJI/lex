@@ -52,9 +52,16 @@ public static class IndexFromCorpus
                         articlesRoot, publisherId, "works", workMeta.Slug, "versions",
                         Path.GetFileName(versionDir), $"{expr.Language}.json");
                     var hasDerived = derivedJson is not null && File.Exists(derivedJson);
+                    // Which profile produced this version's text. Recorded per version because one
+                    // law is routinely publisher XML on some dates and a read PDF on others, so a
+                    // work-level answer would be wrong for half of them.
+                    string? profile = null;
                     if (hasDerived)
                     {
                         using var dd = JsonDocument.Parse(File.ReadAllText(derivedJson!));
+                        if (dd.RootElement.TryGetProperty("generator", out var gen)
+                            && gen.TryGetProperty("profile", out var pf))
+                            profile = pf.GetString();
                         var seq = 0;
                         foreach (var p in dd.RootElement.GetProperty("provisions").EnumerateArray())
                         {
@@ -97,7 +104,8 @@ public static class IndexFromCorpus
                         TitleShort: expr.TitleShort ?? workMeta.Title,
                         Body: null,
                         PublicationDate: meta.PublicationDate,
-                        StatusNote: meta.InForceStatus));
+                        StatusNote: meta.InForceStatus,
+                        Profile: profile));
 
                     // Observation chains: obs N's observed_to = obs N+1's observed_from; last closed by tombstone.
                     for (var i = 0; i < expr.Observations.Count; i++)

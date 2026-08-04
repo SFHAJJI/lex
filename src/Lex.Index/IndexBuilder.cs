@@ -54,6 +54,7 @@ public static class IndexBuilder
               record_sha TEXT, body_sha TEXT, source_uri TEXT,
               title TEXT, title_short TEXT,
               publication_date TEXT, status_note TEXT, rid TEXT NOT NULL,
+              profile TEXT,
               PRIMARY KEY(key, language, valid_from));
             CREATE INDEX ix_docs_group ON docs(group_key, valid_from);
             CREATE INDEX ix_docs_stab ON docs(collection, kind, valid_from, valid_to);
@@ -89,9 +90,9 @@ public static class IndexBuilder
         {
             var insDoc = conn.CreateCommand();
             insDoc.CommandText = """
-                INSERT OR REPLACE INTO docs VALUES ($key,$col,$gk,$gi,$kind,$lang,$vf,$vt,$vts,$of,$wd,$ta,$tp,$rs,$bs,$su,$t,$ts2,$pd,$sn,$rid)
+                INSERT OR REPLACE INTO docs VALUES ($key,$col,$gk,$gi,$kind,$lang,$vf,$vt,$vts,$of,$wd,$ta,$tp,$rs,$bs,$su,$t,$ts2,$pd,$sn,$rid,$prof)
                 """;
-            foreach (var p in new[] { "$key", "$col", "$gk", "$gi", "$kind", "$lang", "$vf", "$vt", "$vts", "$of", "$wd", "$ta", "$tp", "$rs", "$bs", "$su", "$t", "$ts2", "$pd", "$sn", "$rid" })
+            foreach (var p in new[] { "$key", "$col", "$gk", "$gi", "$kind", "$lang", "$vf", "$vt", "$vts", "$of", "$wd", "$ta", "$tp", "$rs", "$bs", "$su", "$t", "$ts2", "$pd", "$sn", "$rid", "$prof" })
                 insDoc.Parameters.Add(new SqliteParameter(p, SqliteType.Text));
 
             foreach (var d in docs)
@@ -105,6 +106,7 @@ public static class IndexBuilder
                 Set(insDoc, "$rs", d.RecordSha); Set(insDoc, "$bs", d.BodySha); Set(insDoc, "$su", d.SourceUri);
                 Set(insDoc, "$t", d.Title); Set(insDoc, "$ts2", d.TitleShort);
                 Set(insDoc, "$pd", d.PublicationDate); Set(insDoc, "$sn", d.StatusNote); Set(insDoc, "$rid", rid);
+                Set(insDoc, "$prof", d.Profile);
                 insDoc.ExecuteNonQuery();
             }
 

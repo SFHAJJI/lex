@@ -16,10 +16,14 @@ const ms = (d: string) => Date.parse(`${d}T00:00:00Z`);
  * opened an article — so re-dating dropped you at the top of a document you were reading the
  * middle of. It is the one control a point-in-time reader uses constantly, so it stays put.
  */
-export function Provision({ items, toc, validFrom, validTo, work, anchor, onPick, onClear }: {
+export function Provision({ items, toc, validFrom, validTo, work, anchor, profile, onPick, onClear }: {
   items: ProvisionItem[]; toc: ProvisionItem[]; validFrom: string; validTo?: string;
-  work: string; anchor?: string; onPick: (anchor: string) => void; onClear: () => void;
+  work: string; anchor?: string; profile?: string;
+  onPick: (anchor: string) => void; onClear: () => void;
 }) {
+  // Where this text came from. Publisher markup and a read PDF are not the same claim, and the
+  // difference has to reach the person reading the words, not stop at a field in a JSON file.
+  const fromPdf = profile === "pdf-lu/1";
   const outlineOnly = items.length > 0 && items.every((p) => !p.text);
   const nav = toc.length >= 6 || outlineOnly;
 
@@ -42,7 +46,16 @@ export function Provision({ items, toc, validFrom, validTo, work, anchor, onPick
         ) : (
           <span className="tag">{items.length} article{items.length === 1 ? "" : "s"}</span>
         )}
+        {fromPdf ? <span className="tag warn">read from the publisher's PDF</span> : null}
       </div>
+      {fromPdf ? (
+        <p className="pdfnote">
+          The publisher issues no machine-readable XML for this version, so the wording below was
+          read from its official PDF. The words are the publisher's; the division into articles is
+          ours, inferred from the layout rather than taken from publisher markup. Check anything
+          that turns on exact numbering against the source.
+        </p>
+      ) : null}
       {outlineOnly ? (
         // A blank pane next to a table of contents is a dead end. Offer the thing a reader
         // opening a code actually wants: the first article, one click away.

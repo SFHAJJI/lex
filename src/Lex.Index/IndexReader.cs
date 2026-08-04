@@ -7,6 +7,10 @@ namespace Lex.Index;
 /// structure; such a version is held as a complete dated record with no wording (D49).
 public sealed record CoverageKind(string? Kind, int Versions, int WithText);
 
+/// How many versions each extraction profile produced text for. Publishes the confidence mix
+/// of the corpus as a number rather than as a claim.
+public sealed record CoverageProfile(string Profile, int Versions);
+
 public sealed record CoverageInfo(
     string Collection,
     int Groups,
@@ -15,7 +19,8 @@ public sealed record CoverageInfo(
     string? LatestValidFrom,
     IReadOnlyList<CoverageKind> Kinds,
     IReadOnlyDictionary<string, string> Stamp,
-    int TextServed);
+    int TextServed,
+    IReadOnlyList<CoverageProfile> Profiles);
 
 /// <summary>
 /// Read side of one index file. Every query method takes a non-optional FilterSet (F5);
@@ -56,7 +61,8 @@ public sealed class LexIndexReader : IDisposable
     private const string DocCols = """
         key, collection, group_key, group_identifier, kind, language, valid_from, valid_to,
         valid_time_source, observed_from, withdrawn, text_available, text_public,
-        record_sha, body_sha, source_uri, title, title_short, publication_date, status_note, rid
+        record_sha, body_sha, source_uri, title, title_short, publication_date, status_note, rid,
+        profile
         """;
 
     /// <summary>True if the work exists at all (distinguishes unknown_work from no_version_for_date).</summary>
@@ -348,9 +354,17 @@ public sealed class LexIndexReader : IDisposable
             """, []);
         using var ar = agg.ExecuteReader();
         ar.Read();
+        var profiles = new List<CoverageProfile>();
+        using (var pc = Cmd("""
+            SELECT profile, COUNT(*) FROM docs WHERE profile IS NOT NULL
+            GROUP BY profile ORDER BY COUNT(*) DESC
+            """, []))
+        using (var pr = pc.ExecuteReader())
+            while (pr.Read()) profiles.Add(new CoverageProfile(pr.GetString(0), pr.GetInt32(1)));
+
         return new CoverageInfo(Collection, ar.GetInt32(0), ar.GetInt32(1),
             ar.IsDBNull(2) ? null : ar.GetString(2), ar.IsDBNull(3) ? null : ar.GetString(3), kinds, Stamp,
-            ar.IsDBNull(4) ? 0 : ar.GetInt32(4));
+            ar.IsDBNull(4) ? 0 : ar.GetInt32(4), profiles);
     }
 
     private static string NormalizeWork(string work)
@@ -419,7 +433,8 @@ public sealed class LexIndexReader : IDisposable
         RecordSha: r.IsDBNull(13) ? null : r.GetString(13), BodySha: r.IsDBNull(14) ? null : r.GetString(14),
         SourceUri: r.IsDBNull(15) ? null : r.GetString(15), Title: r.IsDBNull(16) ? null : r.GetString(16),
         TitleShort: r.IsDBNull(17) ? null : r.GetString(17), Body: null,
-        PublicationDate: r.IsDBNull(18) ? null : r.GetString(18), StatusNote: r.IsDBNull(19) ? null : r.GetString(19));
+        PublicationDate: r.IsDBNull(18) ? null : r.GetString(18), StatusNote: r.IsDBNull(19) ? null : r.GetString(19),
+        Profile: r.FieldCount > 21 && !r.IsDBNull(21) ? r.GetString(21) : null);
 
     /// <summary>Rid of a doc row (key|language|valid_from) — the provisions foreign key.</summary>
     public static string RidOf(DocRow d) => $"{d.Key}|{d.Language}|{d.ValidFrom}";

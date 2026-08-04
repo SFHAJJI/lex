@@ -341,3 +341,7 @@ button.pick { cursor: pointer; }
 .co-steps li b{font-weight:600;display:block}
 .co-d{display:block;font-size:12.5px;color:var(--muted)}
 @media (max-width:640px){ .co-steps{gap:8px} .co-steps li{width:100%} }
+
+/* Text read from a PDF says so, next to the text, not in a footnote. */
+.pdfnote { font-size: 13px; color: var(--muted); border-left: 2px solid var(--warn);
+           padding: 6px 0 6px 12px; margin: 0 0 14px; max-width: 68ch; }

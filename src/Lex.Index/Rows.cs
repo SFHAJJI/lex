@@ -25,7 +25,12 @@ public sealed record DocRow(
     string? TitleShort,
     string? Body,               // reconstructed from provisions on demand (never stored in lex-index/2)
     string? PublicationDate,
-    string? StatusNote);
+    string? StatusNote,
+    // Which extraction profile produced this version's text. It is a confidence marker, not
+    // trivia: text from publisher markup and text inferred from a page-description format are
+    // not the same claim, and one law is routinely the first on some dates and the second on
+    // others. Null when the version carries no text at all.
+    string? Profile = null);
 
 /// <summary>One provision (article/annex) of one document version — the retrieval unit.</summary>
 public sealed record ProvisionRow(
