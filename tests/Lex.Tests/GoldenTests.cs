@@ -208,6 +208,12 @@ internal static class Golden
         s = Regex.Replace(s, @"""(signature|public_key)""\s*:\s*""[^""]*""", @"""$1"": ""<KEY>""");
         s = Regex.Replace(s, @"-----BEGIN PUBLIC KEY-----.*?-----END PUBLIC KEY-----",
                           "<PEM>", RegexOptions.Singleline);
+        // Line endings, in both encodings. System.Text.Json's indented writer uses the platform
+        // newline, so a tool response serialised on Windows carries an ESCAPED \r\n inside the
+        // JSON string while the same code on Linux emits \n. Normalising only the real newlines
+        // made every tool snapshot fail in CI while passing locally, which is the worst shape a
+        // test can have: green on the machine that wrote it.
+        s = s.Replace("\\r\\n", "\\n");
         return s.Replace("\r\n", "\n").TrimEnd() + "\n";
     }
 
