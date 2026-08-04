@@ -51,6 +51,12 @@ export default function App() {
   const [title, setTitle] = useState<string>();
   const [versions, setVersions] = useState<string[]>([]);
   const [langs, setLangs] = useState<string[]>([]);
+  // The language actually served, read back from the document rather than assumed. The switcher
+  // first highlighted langs[0], which is alphabetical, so the Constitution showed French articles
+  // under a chip reading DE: the index prefers the language a work is mostly published in, and
+  // for this work that is French while "de" sorts first. A control that misreports the state it
+  // controls is worse than no control.
+  const [servedLang, setServedLang] = useState<string>();
   const [held, setHeld] = useState<{ text: number; total: number; official?: string }>();
   const [page, setPage] = useState(0);
   const [states, setStates] = useState<string[]>([]);
@@ -80,7 +86,7 @@ export default function App() {
   // reader say it once, and lets the chips stop offering text that does not exist.
   useEffect(() => {
     chosenAnchor.current = false;
-    if (!s.work) { setVersions([]); setLangs([]); setHeld(undefined); return; }
+    if (!s.work) { setVersions([]); setLangs([]); setServedLang(undefined); setHeld(undefined); return; }
     let live = true;
     tool<any>("timeline", { work: s.work, limit: 400 })
       .then((res) => {
@@ -118,6 +124,7 @@ export default function App() {
         // the heading — the one place a reader most needs to know which law they are looking at.
         const t = shorten((one?.document ?? one)?.title);
         if (t) setTitle(t);
+        setServedLang((one?.document ?? one)?.language);
       })
       .catch(() => live && setToc([]));
     return () => { live = false; };
@@ -385,8 +392,8 @@ export default function App() {
               {langs.length > 1 ? (
                 <span className="langs" role="group" aria-label="Language of this text">
                   {langs.map((l) => (
-                    <button key={l} className={l === (s.language ?? langs[0]) ? "on" : ""}
-                            aria-pressed={l === (s.language ?? langs[0])}
+                    <button key={l} className={l === (s.language ?? servedLang) ? "on" : ""}
+                            aria-pressed={l === (s.language ?? servedLang)}
                             title={`Read this law in ${NAMES[l] ?? l}`}
                             onClick={() => { setUi(undefined); go({ language: l }); }}>{l}</button>
                   ))}
