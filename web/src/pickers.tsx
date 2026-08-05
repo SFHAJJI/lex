@@ -65,7 +65,13 @@ export function LawPicker({ current, onPick, inline }: { current?: string; onPic
         <div className={inline ? "pop open" : "pop"} id="lawpop" role="listbox">
           <input autoFocus={!inline} value={q} onChange={(e) => setQ(e.target.value)}
                  placeholder="name, subject, or identifier (32016r0679)" aria-label="Find a law" />
-          {busy ? <div className="popnote">searching…</div> : null}
+          {busy ? (
+            <ul className="rows">
+              {[0, 1, 2].map((i) => (
+                <li key={i} className="skrow"><span className="sk" style={{ width: `${78 - i * 9}%`, height: 15 }} /></li>
+              ))}
+            </ul>
+          ) : null}
           {!busy && q.trim().length >= 2 && hits.length === 0 ? <div className="popnote">nothing matches</div> : null}
           <ul>
             {hits.map((h) => (

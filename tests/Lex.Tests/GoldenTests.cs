@@ -194,8 +194,20 @@ internal static class Golden
     public static string Normalise(string s)
     {
         s = Regex.Replace(s, @"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z", "<TIMESTAMP>");
-        s = s.Replace(DateTime.UtcNow.ToString("yyyy-MM-dd"), "<TODAY>");
-        s = s.Replace(DateTime.UtcNow.AddDays(-365).ToString("yyyy-MM-dd"), "<TODAY-365>");
+        // Any date computed from the clock, expressed as its offset from today.
+        //
+        // Naming two offsets by hand was not enough: the pages also link "last month", so a
+        // snapshot captured yesterday failed today by exactly one day. Every date within a
+        // couple of years of now is rewritten as <TODAY-n>, which is stable whenever it was
+        // captured. Dates further out are left alone: those come from the corpus and are the
+        // facts under test.
+        var today = DateTime.UtcNow.Date;
+        s = Regex.Replace(s, @"\d{4}-\d{2}-\d{2}", m =>
+            DateOnly.TryParse(m.Value, out var d)
+            && (today - d.ToDateTime(TimeOnly.MinValue)).TotalDays is var delta
+            && delta is >= 0 and <= 800
+                ? delta == 0 ? "<TODAY>" : $"<TODAY-{(int)delta}>"
+                : m.Value);
         // A signing key is generated per test run, so every signature and every public key differs
         // between runs of identical code. Both arrive double-encoded, as JSON inside a JSON string,
         // so the quotes delimiting the value are backslash-escaped.

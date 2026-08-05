@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { CompareSkeleton } from "./Skeleton";
 import { first, tool } from "./api";
 import { diffWords, changed, type Piece } from "./diff";
 import { Empty } from "./views";
@@ -122,7 +123,14 @@ export function Compare({ work, from, to, anchor }: {
     return () => { live = false; };
   }, [work, from, to, anchor]);
 
-  if (state.loading) return <Empty>Comparing {from} with {to}…</Empty>;
+  // The dates stay in view while the shape of the comparison fills in below them, so a reader
+  // can tell they asked for the right pair before the answer arrives.
+  if (state.loading) return (
+    <>
+      <p className="sub">Comparing {from} with {to}…</p>
+      <CompareSkeleton />
+    </>
+  );
   if (state.error === "NO_TEXT")
     return (
       <Empty>

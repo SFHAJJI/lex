@@ -8,6 +8,7 @@ import AskPanel from "./AskPanel";
 import Search from "./Search";
 import Period from "./Period";
 import Coach, { COACH_KEY } from "./Coach";
+import { CompareSkeleton, LawSkeleton, ReportSkeleton } from "./Skeleton";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -444,7 +445,12 @@ export default function App() {
                                        onCite={(w) => { setUi(undefined); go({ work: w, date: undefined, anchor: undefined, to: undefined, mode: "read", space: "law" }); }}
                                        onPick={(a, auto) => { chosenAnchor.current = !auto; go({ anchor: a }); }}
                                        onClear={() => go({ anchor: undefined })} /> :
-         s.work ? <Empty>Loading…</Empty> :
+         // The shape of what is coming, not the word for waiting: a code takes a moment to
+         // arrive and an empty screen saying "Loading" answers none of the questions a reader
+         // has while it does.
+         s.work && s.mode === "compare" ? <CompareSkeleton /> :
+         s.work ? <LawSkeleton /> :
+         !front && space === "time" && (s.from || s.until) ? <ReportSkeleton /> :
          !front && space === "time" ? <Empty>Pick a period above.</Empty> :
          null}
       </div>

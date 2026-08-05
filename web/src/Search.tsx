@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { tool } from "./api";
 import { LAYERS, type LayerId, type State } from "./state";
 import { shorten } from "./pickers";
+import { ResultsSkeleton } from "./Skeleton";
 
 /**
  * One box, one date.
@@ -161,6 +162,8 @@ export default function Search(p: SearchProps) {
               {LAYERS.map((l) => <option key={l.id} value={l.id}>{l.label}</option>)}
             </select>
           </div>
+
+          {busy && works.length === 0 && articles.length === 0 ? <ResultsSkeleton /> : null}
 
           {works.length > 0 ? (
             <>

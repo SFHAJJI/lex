@@ -121,9 +121,9 @@ dates, the corpus-wide view that a single law's timeline cannot give you.</p>
   <button type="submit">Show changes</button>
 </form>
 <p class="sub">Quick ranges:
-  <a href="/changed?from=2026-07-04&to=<TODAY>">last month</a> ·
+  <a href="/changed?from=<TODAY-31>&to=<TODAY>">last month</a> ·
   <a href="/changed?from=<TODAY-365>&to=<TODAY>">last year</a> ·
-  <a href="/changed?from=2025-01-01&to=2026-01-01">2025 → 2026</a> ·
+  <a href="/changed?from=<TODAY-581>&to=<TODAY-216>">2025 → 2026</a> ·
   <a href="/changed?from=2020-03-01&to=2021-07-01&order=by_churn">the pandemic, by churn</a></p><div class="card" style="border-color:var(--accent)">
   <b>2 law(s) changed</b> between 2019-01-01 and 2023-01-01,
   producing <b>3 new version(s)</b>.
