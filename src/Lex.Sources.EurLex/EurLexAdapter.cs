@@ -37,6 +37,17 @@ public sealed class EurLexAdapter : ISourceAdapter
         "32019R2088", // SFDR
         "32018L2001", // RED II, renewable energy
         "32019L0944", // electricity market
+            // The rest of the shelf a compliance officer in a regulated firm answers to.
+            // The one competing EU legal MCP with real traction serves exactly GDPR, NIS2,
+            // DORA, AI Act, CRA, eIDAS, Data Act, DSA, MiCA, PSD2 and MiFID, as current text
+            // only. With these five we hold all of that plus CRR, SFDR, RED II and the
+            // Electricity Directive, and hold every one as dated versions, which is the
+            // question an audit or an incident actually asks.
+            "32014R0910", // eIDAS
+            "32024R2847", // Cyber Resilience Act
+            "32023R2854", // Data Act
+            "32022R2065", // DSA
+            "32023R1114", // MiCA
     ];
 
     // Common names in universal professional use — adapter-provided display aliases,
@@ -53,6 +64,11 @@ public sealed class EurLexAdapter : ISourceAdapter
         ["32019R2088"] = "SFDR",
         ["32018L2001"] = "RED II",
         ["32019L0944"] = "Electricity Market Directive",
+        ["32014R0910"] = "eIDAS",
+        ["32024R2847"] = "Cyber Resilience Act",
+        ["32023R2854"] = "Data Act",
+        ["32022R2065"] = "DSA",
+        ["32023R1114"] = "MiCA",
     };
 
     private static readonly HttpClient Http = CreateClient();
