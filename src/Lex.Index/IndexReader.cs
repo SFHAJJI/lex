@@ -139,6 +139,33 @@ public sealed class LexIndexReader : IDisposable
         return ReadAll(cmd);
     }
 
+    /// <summary>
+    /// Every distinct version address this index can serve, for the sitemap.
+    ///
+    /// One row per (collection, work, valid_from), which is exactly the set of canonical version
+    /// URLs: a request for any date inside an interval renders that version and canonicalises to
+    /// the date the version starts. Grouped rather than selected, because a work published in
+    /// several languages has one row per language behind a single URL.
+    ///
+    /// One query rather than a Timeline call per work, which would be 1,409 round trips to build
+    /// one file.
+    /// </summary>
+    public List<(string Collection, string GroupKey, string ValidFrom, string? LastObserved)> VersionPaths()
+    {
+        using var cmd = Cmd("""
+            SELECT collection, group_key, valid_from, MAX(observed_from)
+            FROM docs
+            GROUP BY collection, group_key, valid_from
+            ORDER BY group_key, valid_from
+            """, []);
+        var rows = new List<(string, string, string, string?)>();
+        using var rd = cmd.ExecuteReader();
+        while (rd.Read())
+            rows.Add((rd.GetString(0), rd.GetString(1), rd.GetString(2),
+                      rd.IsDBNull(3) ? null : rd.GetString(3)));
+        return rows;
+    }
+
     /// <summary>In-force set computed from validity intervals at query time (never a stored flag).
     /// Deduplicated by group; deterministic (collection, group_key) ordering for stable cursors.</summary>
     public (List<DocRow> Rows, int TotalGroups) InForceOn(DateOnly date, FilterSet filters, int limit, int offset)

@@ -205,6 +205,16 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
         // Every work in the fixture, addressed the way a reader reaches it.
         Xunit.Assert.Contains("https://golden.test/t-pub/w1", locs);
 
+        // And every VERSION, which is where the law actually is. The first sitemap listed only
+        // work pages, on the reasoning that versions were near-duplicates the work page links
+        // anyway. They are not duplicates, each is a distinct legal state, and a work page is
+        // navigation while a version page is the text someone searched for. Asserted separately
+        // because the two sets are easy to conflate and only one of them carries content.
+        var versions = locs.Where(l => l.StartsWith("https://golden.test/t-pub/w1/")).ToList();
+        Xunit.Assert.NotEmpty(versions);
+        Xunit.Assert.All(versions, v =>
+            Xunit.Assert.Matches(@"^https://golden\.test/t-pub/w1/\d{4}-\d{2}-\d{2}$", v));
+
         var robots = await _site.Client.GetStringAsync("/robots.txt");
         Xunit.Assert.Contains("Sitemap: https://golden.test/sitemap.xml", robots);
 

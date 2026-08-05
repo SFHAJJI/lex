@@ -58,19 +58,33 @@ public static class ApiEndpoints
             // run actually touched from the ones that have not moved since the first ingest.
             // A row without it simply omits the tag, which is allowed, rather than guessing.
             var today = DateOnly.FromDateTime(DateTime.UtcNow);
+            string Lastmod(string? observed) =>
+                observed is { Length: >= 10 } o && DateOnly.TryParse(o[..10], out var d) && d <= today
+                    ? $"<lastmod>{d:yyyy-MM-dd}</lastmod>" : "";
+
             foreach (var r in ctx.Registry.Values)
             {
                 var (rows, _) = r.Catalogue(new FilterSet(null, null, null, null), null,
                                             CatalogueOrder.Name, 20000, 0);
                 foreach (var w in rows)
-                {
-                    var lastmod = w.LastObserved is { Length: >= 10 } o
-                                  && DateOnly.TryParse(o[..10], out var d) && d <= today
-                        ? $"<lastmod>{d:yyyy-MM-dd}</lastmod>" : "";
                     sb.Append($"<url><loc>{ctx.PublicBase}/{w.Collection}/{w.GroupKey}</loc>"
-                              + lastmod
+                              + Lastmod(w.LastObserved)
                               + "<changefreq>monthly</changefreq><priority>0.6</priority></url>");
-                }
+
+                // The version pages, which is where the law actually is.
+                //
+                // These were left out at first as "near-duplicates of one another that the work
+                // page links anyway". That was wrong twice over. They are not duplicates: each is
+                // a distinct legal state with different text, and each already canonicalises to
+                // the date its own interval starts, so the set below is exactly the set of
+                // canonical addresses. And they are not incidental: a work page is 553 words of
+                // navigation, while a version page is the tens of thousands of words of law that
+                // a reader searched for. Submitting the index and withholding the content is the
+                // wrong way round.
+                foreach (var (collection, groupKey, validFrom, observed) in r.VersionPaths())
+                    sb.Append($"<url><loc>{ctx.PublicBase}/{collection}/{groupKey}/{validFrom}</loc>"
+                              + Lastmod(observed)
+                              + "<changefreq>yearly</changefreq><priority>0.5</priority></url>");
             }
             sb.Append("</urlset>");
             return Results.Content(sb.ToString(), "application/xml");
