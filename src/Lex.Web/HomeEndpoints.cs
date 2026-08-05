@@ -63,28 +63,26 @@ public static class HomeEndpoints
                      round trip of their own. -->
                 <script type="application/json" id="doors">{liveDoors.ToJsonString()}</script>
                 """
-                + """
+                + $"""
                 <!-- The workspace mounts here. Without JavaScript the page still explains itself
-                     and every permalink below still works, those are server-rendered documents. -->
+                     and every permalink below still works, those are server-rendered documents.
+                     The three doors are repeated here as real links, because the block above is
+                     JSON for the workspace to read and a crawler that runs no JavaScript followed
+                     none of it: the front page carried twenty-four links and not one reached a
+                     law. They live inside the noscript on purpose. A reader with JavaScript gets
+                     the workspace's own richer version a moment later, and rendering both put the
+                     same three names on the page twice. -->
                 <div id="workspace"><noscript><p class="sub">The interactive workspace needs JavaScript.
                   Everything is also reachable as plain pages: <a href="/find">find a law</a>,
-                  <a href="/changed">what changed</a>, <a href="/stories">stories</a>.</p></noscript></div>
+                  <a href="/changed">what changed</a>, <a href="/stories">stories</a>.</p>
+                  {(liveDoors.Count == 0 ? "" : $"""
+                  <p class="sub">Start with {string.Join(", ", liveDoors.Select(d =>
+                      $"<a href=\"/{d!["work"]!.GetValue<string>().Replace(":", "/")}\">{H(d["label"]!.GetValue<string>())}</a>"))},
+                  or <a href="/browse">browse all {cov.Sum(c => c.Groups):n0}</a>.</p>
+                  """)}</noscript></div>
                 """
                 + $"""
                 <div class="frontdoor">
-                <!-- The same three doors again, as real links this time.
-                     They already existed above as JSON for the workspace to read, which is fine
-                     for a browser and useless to everything else: the front page carried
-                     twenty-four links and not one of them reached a law, so nothing led a crawler
-                     from here into the 1,409 documents this site exists to serve. These are the
-                     three most-searched laws in the corpus and their names are the words people
-                     actually type, so the anchor text matters as much as the href.
-                     Hidden once the workspace mounts, like everything else in .frontdoor. -->
-                {(liveDoors.Count == 0 ? "" : $"""
-                <p class="sub">Start with {string.Join(", ", liveDoors.Select(d =>
-                    $"<a href=\"/{d!["work"]!.GetValue<string>().Replace(":", "/")}\">{H(d["label"]!.GetValue<string>())}</a>"))},
-                or <a href="/browse">browse all {cov.Sum(c => c.Groups):n0}</a>.</p>
-                """)}
                 <p class="sub">
                 <span class="badge">{cov.Sum(c => c.Groups):n0} laws</span>
                 <span class="badge">{cov.Sum(c => c.Rows):n0} dated versions</span>
