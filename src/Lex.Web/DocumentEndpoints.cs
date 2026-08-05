@@ -90,6 +90,21 @@ public static class DocumentEndpoints
             sb.Append("</table></details>");
             sb.Append("<p class=\"sub\">Every state this document has been in, as asserted by the publisher. The corpus repo's <span class=\"mono\">git log</span> for this work shows the same history.</p>");
             sb.Append(EnvelopeCard(r, false));
+            // The name of the law, then where it is from. Someone looking for this page types the
+            // name of a law and a country, never the consolidation label the publisher prefixes.
+            var jurisdiction = publisher == "eu-eurlex" ? "EU law" : "Luxembourg law";
+            // Publisher titles end in a full stop. A title is a label, so the stop is dropped
+            // rather than left to land mid-sentence as "Luxemburg.. Full text as it stood ...".
+            var name = (StripConsolidationLabel(t) ?? t).TrimEnd('.', ' ');
+
+            // The language of the WORK, not of whichever expression sorted last. The Constitution
+            // has 37 French versions, one German and one Luxembourgish, and the last row happened
+            // to be the Luxembourgish one, so the page declared lang="lb" over French text. Ties
+            // break on the code so the answer does not depend on row order.
+            var lang = rows.GroupBy(v => v.Language)
+                           .OrderByDescending(g => g.Count()).ThenBy(g => g.Key)
+                           .First().Key;
+
             // Legislation is the schema.org type built for exactly this: a legal instrument with a
             // jurisdiction, a date, an identifier and a legal-force status. Using the type that
             // already exists beats inventing properties, and legislationLegalForce is the one
@@ -109,7 +124,7 @@ public static class DocumentEndpoints
                 ["legislationDate"] = rows[0].ValidFrom,
                 ["legislationLegalForce"] = rows[^1].ValidTo is null && !rows[^1].Withdrawn
                     ? "https://schema.org/InForce" : "https://schema.org/NotInForce",
-                ["inLanguage"] = rows[^1].Language,
+                ["inLanguage"] = lang,
                 ["temporalCoverage"] = rows[^1].ValidTo is null
                     ? $"{rows[0].ValidFrom}/.." : $"{rows[0].ValidFrom}/{rows[^1].ValidTo}",
                 ["license"] = "https://creativecommons.org/licenses/by/4.0/",
@@ -117,10 +132,6 @@ public static class DocumentEndpoints
             };
             if (rows[^1].Kind is { } kind) lawLd["legislationType"] = kind;
 
-            // The name of the law, then where it is from. Someone looking for this page types the
-            // name of a law and a country, never the consolidation label the publisher prefixes.
-            var jurisdiction = publisher == "eu-eurlex" ? "EU law" : "Luxembourg law";
-            var name = StripConsolidationLabel(t) ?? t;
             // "version(s)" is fine in a table header a reader is already looking at. In a search
             // result it is the one string on the page written by a machine for a machine.
             var n = rows.Count == 1 ? "1 version" : $"{rows.Count} versions";
@@ -145,7 +156,7 @@ public static class DocumentEndpoints
             return Results.Content(Page($"{name}, {jurisdiction}", sb.ToString(),
                 "every version, on a time axis", "find", h1: name,
                 canonicalPath: $"/{publisher}/{work}", jsonLd: graph.ToJsonString(),
-                description: lawDesc, lang: rows[^1].Language), "text/html");
+                description: lawDesc, lang: lang), "text/html");
         });
 
         app.MapGet($"/{pubRoute}/{{work}}/{{date}}", (string publisher, string work, string date) =>
@@ -291,7 +302,7 @@ public static class DocumentEndpoints
             // /…/2020-08-11 can be byte-identical pages on different URLs. Left alone that is a few
             // thousand self-inflicted duplicates competing with each other; the canonical names the
             // date the version actually starts, which is the one URL worth ranking.
-            var vName = StripConsolidationLabel(DocTitle(doc)) ?? DocTitle(doc);
+            var vName = (StripConsolidationLabel(DocTitle(doc)) ?? DocTitle(doc)).TrimEnd('.', ' ');
             var vDesc = $"{vName}, as it stood on {d:yyyy-MM-dd}. "
                       + $"This version applied from {doc.ValidFrom}"
                       + (doc.ValidTo is null ? " and is still in force." : $" to {doc.ValidTo}.");
