@@ -113,6 +113,50 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
     }
 
     /// <summary>
+    /// initialize answers with a protocol revision the server actually speaks.
+    ///
+    /// It used to echo the client's request verbatim, so asking for "1999-01-01" got
+    /// "1999-01-01" back and the handshake completed on a version that has never existed. The
+    /// spec has the server answer with the requested version when it supports it, and otherwise
+    /// with one it does support, so that the client can decide whether to go on. Echoing takes
+    /// that decision away by lying about it.
+    /// </summary>
+    [Theory]
+    [InlineData("2025-06-18", "2025-06-18")]   // supported, echoed back
+    [InlineData("2024-11-05", "2024-11-05")]   // older but supported
+    [InlineData("2025-11-25", "2025-11-25")]   // what mcp-proxy asks for
+    [InlineData("1999-01-01", "2025-11-25")]   // nonsense, falls back to ours
+    [InlineData("tomorrow", "2025-11-25")]     // not even a date
+    public async Task Initialize_answers_with_a_protocol_version_we_actually_speak(
+        string requested, string expected)
+    {
+        // Built as a JsonObject rather than a raw literal: this payload ends in "}}}", and a C#
+        // raw interpolated string needs more '$' than it has consecutive closing braces. Quoting
+        // it by hand is how you ship a test that fails for the wrong reason.
+        var req = new System.Text.Json.Nodes.JsonObject
+        {
+            ["jsonrpc"] = "2.0",
+            ["id"] = 1,
+            ["method"] = "initialize",
+            ["params"] = new System.Text.Json.Nodes.JsonObject
+            {
+                ["protocolVersion"] = requested,
+                ["capabilities"] = new System.Text.Json.Nodes.JsonObject(),
+                ["clientInfo"] = new System.Text.Json.Nodes.JsonObject
+                {
+                    ["name"] = "probe", ["version"] = "1",
+                },
+            },
+        };
+        var res = await _site.Client.PostAsync("/mcp",
+            new StringContent(req.ToJsonString(), Encoding.UTF8, "application/json"));
+        var body = await res.Content.ReadAsStringAsync();
+        using var doc = System.Text.Json.JsonDocument.Parse(body);
+        var actual = doc.RootElement.GetProperty("result").GetProperty("protocolVersion").GetString();
+        Xunit.Assert.Equal(expected, actual);
+    }
+
+    /// <summary>
     /// Escaping happens exactly once, in the shell.
     ///
     /// Callers used to pass H(title) into a method that escaped it again, so the Constitution's

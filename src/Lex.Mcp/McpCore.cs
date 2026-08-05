@@ -22,7 +22,7 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
             case "initialize":
                 return Reply(id, new JsonObject
                 {
-                    ["protocolVersion"] = msg["params"]?["protocolVersion"]?.GetValue<string>() ?? "2025-06-18",
+                    ["protocolVersion"] = Negotiate(msg["params"]?["protocolVersion"]?.GetValue<string>()),
                     ["capabilities"] = new JsonObject { ["tools"] = new JsonObject() },
                     ["serverInfo"] = new JsonObject { ["name"] = "lex", ["version"] = "0.3.0" },
                     ["instructions"] =
@@ -73,6 +73,31 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
 
     private static JsonNode Reply(JsonNode? id, JsonNode result) =>
         new JsonObject { ["jsonrpc"] = "2.0", ["id"] = id?.DeepClone(), ["result"] = result };
+
+    /// <summary>
+    /// The protocol revisions this server has actually been built and tested against, newest last.
+    /// </summary>
+    private static readonly string[] SupportedProtocols =
+        ["2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25"];
+
+    /// <summary>
+    /// Answer initialize with a version we genuinely speak.
+    ///
+    /// This used to echo whatever the client asked for, which meant the server agreed to anything:
+    /// asked for "1999-01-01" it replied "1999-01-01" and the handshake completed. The spec is
+    /// explicit that a server responds with the same version when it supports it and otherwise
+    /// with one it does support, precisely so the client can decide whether to continue. Echoing
+    /// removes that decision by lying about it, and a client is then entitled to send us messages
+    /// in a shape we have never handled.
+    ///
+    /// It is also the same fault as the rest of this file's history in miniature: answering
+    /// confidently rather than answering truthfully. A server whose entire premise is verifiable
+    /// retrieval should not open the conversation with a claim it cannot support.
+    /// </summary>
+    private static string Negotiate(string? requested) =>
+        requested is not null && SupportedProtocols.Contains(requested, StringComparer.Ordinal)
+            ? requested
+            : SupportedProtocols[^1];
 
     public JsonArray ToolDefs()
     {
