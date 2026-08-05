@@ -314,7 +314,8 @@ public static class DocumentEndpoints
                       + $"This version applied from {doc.ValidFrom}"
                       + (doc.ValidTo is null ? " and is still in force." : $" to {doc.ValidTo}.");
             return Results.Content(Page($"{vName}, as of {d:yyyy-MM-dd}", sb.ToString(),
-                $"as it stood on {d:yyyy-MM-dd}, permalink: /{H(publisher)}/{H(work)}/{d:yyyy-MM-dd}",
+                $"as it stood on <span class=\"asof\">{d:yyyy-MM-dd}</span>, " +
+                $"permalink: /{H(publisher)}/{H(work)}/{d:yyyy-MM-dd}",
                 h1: vName, canonicalPath: $"/{publisher}/{work}/{doc.ValidFrom}",
                 description: vDesc, lang: doc.Language), "text/html");
         });

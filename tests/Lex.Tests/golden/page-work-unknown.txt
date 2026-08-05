@@ -15,24 +15,70 @@ HTTP 404
 <meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="https://golden.test/og.png">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9A%96%3C/text%3E%3C/svg%3E">
+<!-- The interval mark: a rule, two terminals, and a notch at the date being read.
+     The same shape is the version rail at full width. An emoji was a different
+     picture on every platform and read as a generic legal site on all of them. -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect x='1' y='3' width='1.4' height='10' fill='%23c6112f'/%3E%3Crect x='13.6' y='3' width='1.4' height='10' fill='%23c6112f'/%3E%3Crect x='1' y='7.3' width='14' height='1.4' fill='%2359626c'/%3E%3Ccircle cx='10.2' cy='8' r='3' fill='%23c6112f'/%3E%3C/svg%3E">
 <style>
-  /* Law is set in a serif; the interface around it is sans. The accent is reserved
-     for one thing only: the date you are looking at. */
-  :root { --bg:#faf8f3; --fg:#15171b; --muted:#5d5a53; --line:#e2ded4; --accent:#a8342a;
-          --card:#ffffff; --ok:#2f6b46; --warn:#8a5a12; --on-accent:#ffffff;
-          --serif:Georgia,'Iowan Old Style','Palatino Linotype','Times New Roman',serif;
-          --mono:ui-monospace,'Cascadia Code',Consolas,monospace; }
+  /* Self-hosted, no CDN. Three faces, chosen rather than defaulted:
+     Source Serif 4 for the law, a real reading serif with optical sizes.
+     IBM Plex Sans for the interface, drawn as technical-but-humane, and
+     deliberately not Inter, which is the default-everywhere face this year.
+     IBM Plex Mono for lex_ids, hashes and dates; Sans and Mono are a designed pair.
+     All three are variable, so one file covers 400 and 600. unicode-range means a
+     page only fetches latin-ext when it actually contains one of those characters,
+     which for French law is mostly the ligature in 'oeuvre' and 'coeur'.
+     font-display:swap: the law renders immediately in the fallback and swaps. */
+  @font-face { font-family:'IBM Plex Mono'; font-style:normal; font-weight:400 600;
+    font-display:swap; src:url(/fonts/IBMPlexMono-latin-ext.woff2) format('woff2');
+    unicode-range:U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF }
+  @font-face { font-family:'IBM Plex Mono'; font-style:normal; font-weight:400 600;
+    font-display:swap; src:url(/fonts/IBMPlexMono-latin.woff2) format('woff2');
+    unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD }
+  @font-face { font-family:'IBM Plex Sans'; font-style:normal; font-weight:400 600;
+    font-display:swap; src:url(/fonts/IBMPlexSans-latin-ext.woff2) format('woff2');
+    unicode-range:U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF }
+  @font-face { font-family:'IBM Plex Sans'; font-style:normal; font-weight:400 600;
+    font-display:swap; src:url(/fonts/IBMPlexSans-latin.woff2) format('woff2');
+    unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD }
+  @font-face { font-family:'Source Serif 4'; font-style:normal; font-weight:400 600;
+    font-display:swap; src:url(/fonts/SourceSerif4-latin-ext.woff2) format('woff2');
+    unicode-range:U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF }
+  @font-face { font-family:'Source Serif 4'; font-style:normal; font-weight:400 600;
+    font-display:swap; src:url(/fonts/SourceSerif4-latin.woff2) format('woff2');
+    unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD }
+  /* Law is set in a serif; the interface around it is sans.
+     --accent does not mean "brand". It means: THIS IS THE MOMENT YOU ARE LOOKING AT.
+     Nothing else may use it. Not links, not headings, not buttons. That single rule
+     is the identity; everything else here is just neutrals and hairlines.
+     The ground is cool rather than cream: warm paper with a terracotta accent is the
+     house style of every AI design tool this year, and the audience here is people
+     paid to notice. */
+  :root { --bg:#f4f6f7; --fg:#0f1419; --muted:#59626c; --line:#dde2e6; --accent:#c6112f;
+          --card:#ffffff; --ok:#0f6b4f; --warn:#8a5a12; --on-accent:#ffffff;
+          --serif:'Source Serif 4',Charter,Georgia,'Iowan Old Style','Palatino Linotype',serif;
+          --sans:'IBM Plex Sans',ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+          --mono:'IBM Plex Mono',ui-monospace,'Cascadia Code',Consolas,monospace; }
   @media (prefers-color-scheme: dark) {
-    :root { --bg:#101215; --fg:#e9e5dd; --muted:#9a958b; --line:#2b2e34; --accent:#e0705f;
-            --card:#171a1e; --ok:#6cc48f; --warn:#e0b070; --on-accent:#101215; } }
+    :root { --bg:#0d1117; --fg:#e6e9ec; --muted:#8b949e; --line:#21262d; --accent:#ff4d6a;
+            --card:#131920; --ok:#4ec78f; --warn:#e0b070; --on-accent:#0d1117; } }
   * { box-sizing:border-box }
-  body { margin:0; font:16px/1.6 ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif; background:var(--bg); color:var(--fg); }
-  a { color:var(--accent); text-decoration:none } a:hover { text-decoration:underline }
+  body { margin:0; font:16px/1.6 var(--sans); background:var(--bg); color:var(--fg); }
+  /* Digits line up in columns all over this product: dates, version counts, article
+     numbers, hashes. Proportional figures make those columns ragged. */
+  table, .mono, .badge, time, .kv { font-variant-numeric:tabular-nums }
+  /* Links were the single biggest consumer of the accent, which left it meaning
+     "clickable" rather than "now". Ink and a hairline underline read as a link
+     everywhere on the web and cost the accent nothing. */
+  a { color:inherit; text-decoration:underline; text-decoration-thickness:1px;
+      text-underline-offset:2px; text-decoration-color:var(--line) }
+  a:hover { text-decoration-color:var(--fg) }
+  /* The one thing that keeps it. */
+  .now, .asof { color:var(--accent); font-weight:600; font-variant-numeric:tabular-nums }
   header { border-bottom:1px solid var(--line); padding:14px 20px; display:flex; gap:20px; align-items:baseline; flex-wrap:wrap }
   header .brand { font-family:var(--serif); font-weight:700; font-size:21px; color:var(--fg); letter-spacing:-.01em }
   header a.navlink { color:var(--muted); font-size:14.5px }
-  header a.navlink.on { color:var(--fg); font-weight:600; box-shadow:inset 0 -2px 0 var(--accent) }
+  header a.navlink.on { color:var(--fg); font-weight:600; box-shadow:inset 0 -2px 0 var(--fg) }
   main { max-width:960px; margin:0 auto; padding:26px 20px 60px }
   h1 { font-family:var(--serif); font-size:29px; line-height:1.15; letter-spacing:-.015em; margin:0 0 6px; text-wrap:balance }
   h2 { font-family:var(--serif); font-size:20px; margin:28px 0 8px }
@@ -53,8 +99,8 @@ HTTP 404
                color:var(--muted); width:74px; flex:none }
   .filters .f { border:1px solid var(--line); border-radius:99px; padding:2px 11px; font-size:13px;
                 color:var(--muted); text-decoration:none }
-  .filters .f:hover { border-color:var(--accent); color:var(--accent); text-decoration:none }
-  .filters .f.on { border-color:var(--accent); color:var(--accent); font-weight:600 }
+  .filters .f:hover { border-color:var(--fg); color:var(--fg); text-decoration:none }
+  .filters .f.on { border-color:var(--fg); color:var(--fg); font-weight:600 }
   .filters .n { opacity:.65; font-size:11.5px; font-variant-numeric:tabular-nums }
   .cat td:first-child a { font-weight:600 }
   .cat .r { text-align:right; font-variant-numeric:tabular-nums }
@@ -63,7 +109,7 @@ HTTP 404
   .pager span { color:var(--muted); font-variant-numeric:tabular-nums }
   form.inline { display:flex; gap:8px; flex-wrap:wrap; margin:10px 0 }
   input,select,button { font:inherit; padding:7px 10px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--fg) }
-  button { background:var(--accent); color:var(--on-accent); border-color:var(--accent); cursor:pointer }
+  button { background:var(--fg); color:var(--bg); border-color:var(--fg); cursor:pointer }
   footer { border-top:1px solid var(--line); margin-top:40px; padding:16px 20px; color:var(--muted); font-size:13px }
   .notice { border-left:3px solid var(--warn); padding:10px 14px; background:var(--card); border-radius:0 8px 8px 0; margin:12px 0; font-size:14.5px }
   .snippet { color:var(--muted); font-size:13.5px }
@@ -73,12 +119,14 @@ HTTP 404
   .sitemap b { color:var(--fg); font-size:12px; letter-spacing:.06em; text-transform:uppercase;
                margin-bottom:4px; font-weight:600 }
   .sitemap a { color:var(--muted) }
-  .sitemap a:hover { color:var(--accent) }
+  .sitemap a:hover { text-decoration-color:var(--fg) }
+  /* The one deliberate exception to the accent rule: a focus ring has to be the
+     loudest thing on the page, and accessibility outranks the identity. */
   :focus-visible { outline:2px solid var(--accent); outline-offset:2px }
   .rail { position:relative; height:44px; margin:14px 0 0 }
   .rail .axis { position:absolute; left:0; right:0; top:21px; height:1px; background:var(--line) }
   .rail .tick { position:absolute; top:13px; width:1px; height:17px; background:var(--muted); opacity:.55 }
-  .rail .tick:hover { opacity:1; background:var(--accent); width:2px }
+  .rail .tick:hover { opacity:1; background:var(--fg); width:2px }
   .rail .tick.act { top:5px; height:33px; width:2px; background:var(--accent); opacity:1 }
   .rail .yr { position:absolute; top:30px; font-family:var(--mono); font-size:11px; color:var(--muted) }
   .railcap { margin:2px 0 18px } .nowmark { color:var(--accent) }
