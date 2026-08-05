@@ -1,6 +1,10 @@
 bin/
 obj/
-deploy/
+# Contents, not the directory: git never descends into an excluded directory, so a
+# negation inside one is silently ignored. The 947 MB of indexes stay out; the build
+# script must be tracked or a clean clone cannot build the image.
+deploy/*
+!deploy/fetch-indexes.sh
 *.db
 *.pem
 .vs/
