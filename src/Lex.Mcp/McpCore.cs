@@ -284,6 +284,37 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
 
     public JsonNode CallTool(string name, JsonObject a)
     {
+        // A build with no corpus must say so, once, in every answer.
+        //
+        // The index is 947 MB and is not in the repository, so anyone who builds this server
+        // from source, or deploys the image a directory listing generates from it, gets a
+        // working binary over an empty shelf. Before this guard every tool answered such a
+        // caller with `[]`: coverage said [], search said [], and nothing distinguished "this
+        // law does not exist" from "no law exists here because none was ever loaded". A model
+        // reading that concludes the corpus is empty and tells its user so.
+        //
+        // Emptiness is the one answer this project is not allowed to give silently, and
+        // coverage exists specifically "to say what we do NOT have" (F10). Saying it here
+        // costs one dictionary lookup per call and turns a broken-looking server into one
+        // that explains itself and names where the data actually is.
+        if (readers.Count == 0)
+            return new JsonObject
+            {
+                ["status"] = "no_corpus_mounted",
+                ["detail"] = "This server started with zero indexes, so it holds no law and "
+                           + "cannot answer any question about one. It is not misconfigured and "
+                           + "the tools are real: the corpus is roughly 947 MB and is not "
+                           + "distributed inside the repository or the container image.",
+                ["hosted_endpoint"] = "https://law.soufien.lu/mcp",
+                ["hosted_endpoint_note"] = "Public, no key, no signup. The same tools over the "
+                           + "full corpus: 1,409 works and 4,705 dated versions.",
+                ["to_build_a_local_index"] = "See the pipeline in the repository README "
+                           + "(ingest -> derive -> catalog -> index -> sign), then point "
+                           + "LEX_INDEX_DIR at the directory holding index-*.db.",
+                ["index_dir_searched"] = Environment.GetEnvironmentVariable("LEX_INDEX_DIR") ?? "indexes",
+                ["tool_called"] = name,
+            };
+
         string? Str(string k) => a[k]?.GetValue<string>();
         int Int(string k, int dflt) => a[k] is { } n && int.TryParse(n.ToString(), out var v) ? v : dflt;
 
