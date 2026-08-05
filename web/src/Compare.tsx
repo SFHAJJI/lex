@@ -38,6 +38,7 @@ export function Compare({ work, from, to, anchor }: {
   const [state, setState] = useState<{
     loading: boolean; error?: string; rows?: Row[];
     unchanged?: string[]; punctuation?: string[]; added?: number; removed?: number;
+    profiles?: [string, string];
   }>({ loading: true });
   const [wide, setWide] = useState(() => typeof window !== "undefined" && window.innerWidth >= 900);
   const [showPunct, setShowPunct] = useState(false);
@@ -78,6 +79,20 @@ export function Compare({ work, from, to, anchor }: {
       const B = new Map<string, any>((pb?.provisions ?? []).map((p: any) => [p.anchor, p]));
       if (A.size === 0 && B.size === 0) {
         if (live) setState({ loading: false, error: "NO_TEXT" });
+        return;
+      }
+
+      // Two versions are only comparable article by article when the same extraction profile
+      // produced both. The Code du travail is the case that proves it: 2020 came from pdf-lu/1
+      // with 13 provisions anchored art_541-8, 2026 from akn-lu/1 with 1,197 anchored
+      // art_l_010-1. Pairing those by anchor yielded "1,196 added, 12 removed" — a confident,
+      // detailed, entirely false account of what the legislator did, produced by two parsers
+      // disagreeing. Refusing is the only honest option, and it is cheap: both profiles are
+      // already in the outline payloads we just fetched.
+      const profA: string | undefined = pa?.document?.extraction_profile;
+      const profB: string | undefined = pb?.document?.extraction_profile;
+      if (profA && profB && profA !== profB) {
+        if (live) setState({ loading: false, error: "PROFILE_MISMATCH", profiles: [profA, profB] });
         return;
       }
 
@@ -138,6 +153,20 @@ export function Compare({ work, from, to, anchor }: {
         is the amendment record: when each version applied, where it came from, and its hash.
       </Empty>
     );
+  if (state.error === "PROFILE_MISMATCH") {
+    const [pA, pB] = state.profiles ?? ["", ""];
+    return (
+      <Empty>
+        These two versions were read by different extraction profiles, <span className="mono">{pA}</span> on
+        {" "}{from} and <span className="mono">{pB}</span> on {to}, so their articles carry different
+        anchor schemes and cannot be lined up. A comparison here would report differences invented by
+        the two parsers rather than made by the legislator, so Lex will not draw one. Open each
+        version on its own, or compare the publisher's own texts:{" "}
+        <a href={`/${work.replace(":", "/")}/${from}`}>{from}</a>{" and "}
+        <a href={`/${work.replace(":", "/")}/${to}`}>{to}</a>.
+      </Empty>
+    );
+  }
   if (state.error) return <Empty>Could not compare these versions: {state.error}</Empty>;
 
   const rows = state.rows ?? [];
@@ -147,22 +176,33 @@ export function Compare({ work, from, to, anchor }: {
   // Side by side needs width that a phone does not have, so it is offered rather than imposed,
   // and defaults off below 900px. Unlike a code diff there is no alignment guesswork: an article
   // is matched to its counterpart by anchor, so the two columns are the same article by identity.
+  // One column per date, including for articles that exist on only one side: an article that
+  // was inserted genuinely has nothing on the left, and saying so beside its text is clearer
+  // than the empty space that saying nothing leaves. This used to render only for kind
+  // "changed", so on a comparison made mostly of insertions the toggle appeared to do nothing
+  // at all — the button flipped its own label and the page below it did not move.
+  const col = (r: Row, date: string, drop: "+" | "-", mark: "+" | "-") => {
+    const pieces = r.pieces.filter((p) => p.k !== drop);
+    const absent = (drop === "+" && r.kind === "added") || (drop === "-" && r.kind === "removed");
+    return (
+      <div className="sbs-col">
+        <div className="sbs-h mono">{date}</div>
+        {absent
+          ? <p className="sub">not in this version</p>
+          : <div className="lawtxt">
+              {pieces.map((p, i) =>
+                p.k === mark
+                  ? (mark === "+" ? <ins key={i}>{p.t}</ins> : <del key={i}>{p.t}</del>)
+                  : <span key={i}>{p.t}</span>)}
+            </div>}
+      </div>
+    );
+  };
+
   const side = (r: Row) => (
     <div className="sbs">
-      <div className="sbs-col">
-        <div className="sbs-h mono">{from}</div>
-        <div className="lawtxt">
-          {r.pieces.filter((p) => p.k !== "+").map((p, i) =>
-            p.k === "-" ? <del key={i}>{p.t}</del> : <span key={i}>{p.t}</span>)}
-        </div>
-      </div>
-      <div className="sbs-col">
-        <div className="sbs-h mono">{to}</div>
-        <div className="lawtxt">
-          {r.pieces.filter((p) => p.k !== "-").map((p, i) =>
-            p.k === "+" ? <ins key={i}>{p.t}</ins> : <span key={i}>{p.t}</span>)}
-        </div>
-      </div>
+      {col(r, from, "+", "-")}
+      {col(r, to, "-", "+")}
     </div>
   );
 
@@ -220,7 +260,7 @@ export function Compare({ work, from, to, anchor }: {
               {r.label}
               {r.kind !== "changed" ? <span className="sub"> · {r.kind}</span> : null}
             </h4>
-            {wide && r.kind === "changed" ? side(r) : inline(r)}
+            {wide ? side(r) : inline(r)}
           </article>
         ))
       )}

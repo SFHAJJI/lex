@@ -46,14 +46,31 @@ public static class ApiEndpoints
                                       "/architecture", "/stories", "/find", "/changed" })
                 Url(p, "0.8", "weekly");
 
+            // lastmod is when the PAGE last changed, so it can never be in the future.
+            //
+            // This first shipped using the work's latest valid_from, which is a different thing
+            // entirely: valid_from is when a law takes effect, and 23 works in the corpus are
+            // already published with a commencement date years out, one of them in 2030. Search
+            // Console rejected every one of them as an invalid date.
+            //
+            // observed_from is the honest field: when a record for this work entered the corpus.
+            // It also carries real signal, because it distinguishes the works the last nightly
+            // run actually touched from the ones that have not moved since the first ingest.
+            // A row without it simply omits the tag, which is allowed, rather than guessing.
+            var today = DateOnly.FromDateTime(DateTime.UtcNow);
             foreach (var r in ctx.Registry.Values)
             {
                 var (rows, _) = r.Catalogue(new FilterSet(null, null, null, null), null,
                                             CatalogueOrder.Name, 20000, 0);
                 foreach (var w in rows)
+                {
+                    var lastmod = w.LastObserved is { Length: >= 10 } o
+                                  && DateOnly.TryParse(o[..10], out var d) && d <= today
+                        ? $"<lastmod>{d:yyyy-MM-dd}</lastmod>" : "";
                     sb.Append($"<url><loc>{ctx.PublicBase}/{w.Collection}/{w.GroupKey}</loc>"
-                              + $"<lastmod>{w.LastFrom}</lastmod>"
+                              + lastmod
                               + "<changefreq>monthly</changefreq><priority>0.6</priority></url>");
+                }
             }
             sb.Append("</urlset>");
             return Results.Content(sb.ToString(), "application/xml");

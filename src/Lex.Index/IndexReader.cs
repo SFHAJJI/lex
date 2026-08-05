@@ -474,7 +474,13 @@ public sealed class LexIndexReader : IDisposable
         var ctes = $"""
             WITH f AS (SELECT * FROM docs WHERE {where}),
                  agg AS (SELECT group_key, COUNT(*) AS versions, MIN(valid_from) AS first_from,
-                                MAX(valid_from) AS last_from, MAX(text_public) AS has_text
+                                MAX(valid_from) AS last_from, MAX(text_public) AS has_text,
+                                -- When we last SAW a change for this work. valid_from is when a
+                                -- law takes effect, which is legitimately in the future for a
+                                -- deferred commencement; observed_from is when the record entered
+                                -- the corpus, which is the only one of the two that can serve as
+                                -- a last-modified time for the page that renders it.
+                                MAX(observed_from) AS last_observed
                          FROM f GROUP BY group_key),
                  newest AS (SELECT group_key, collection, title, title_short, kind,
                                    ROW_NUMBER() OVER (PARTITION BY group_key
@@ -496,7 +502,7 @@ public sealed class LexIndexReader : IDisposable
         using var cmd = Cmd($"""
             {ctes}
             SELECT n.collection, n.group_key, n.title, n.title_short, n.kind,
-                   a.versions, a.first_from, a.last_from, a.has_text
+                   a.versions, a.first_from, a.last_from, a.has_text, a.last_observed
             FROM agg a JOIN newest n ON n.group_key = a.group_key AND n.rn = 1
             WHERE 1=1{having}
             ORDER BY {orderBy}
@@ -513,7 +519,8 @@ public sealed class LexIndexReader : IDisposable
                 rd.IsDBNull(2) ? null : rd.GetString(2),
                 rd.IsDBNull(3) ? null : rd.GetString(3),
                 rd.IsDBNull(4) ? null : rd.GetString(4),
-                rd.GetInt32(5), rd.GetString(6), rd.GetString(7), rd.GetInt32(8) == 1));
+                rd.GetInt32(5), rd.GetString(6), rd.GetString(7), rd.GetInt32(8) == 1,
+                rd.IsDBNull(9) ? null : rd.GetString(9)));
         return (rows, total);
     }
 

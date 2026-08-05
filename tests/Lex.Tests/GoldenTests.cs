@@ -163,6 +163,19 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
 
         var robots = await _site.Client.GetStringAsync("/robots.txt");
         Xunit.Assert.Contains("Sitemap: https://golden.test/sitemap.xml", robots);
+
+        // lastmod is a last-modified time, so a future one is never valid. The first version of
+        // this route used the work's latest valid_from, which is when a law takes EFFECT: 23 works
+        // in the live corpus have a commencement date years out, one in 2030, and Search Console
+        // rejected every one. Asserted against the tag rather than the source field, because the
+        // bug was choosing the wrong field, not formatting it wrongly.
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        foreach (var lm in doc.Root!.Descendants(ns + "lastmod").Select(e => e.Value))
+        {
+            Xunit.Assert.True(DateOnly.TryParseExact(lm, "yyyy-MM-dd", out var d),
+                $"lastmod '{lm}' is not YYYY-MM-DD");
+            Xunit.Assert.True(d <= today, $"lastmod '{lm}' is in the future");
+        }
     }
 
     /// <summary>

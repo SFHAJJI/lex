@@ -287,12 +287,25 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
         string? Str(string k) => a[k]?.GetValue<string>();
         int Int(string k, int dflt) => a[k] is { } n && int.TryParse(n.ToString(), out var v) ? v : dflt;
 
+        // Every required date goes through here. `diff` used to parse its two dates with the
+        // null-forgiving operator, so a caller that omitted one, or spelled it `from` instead of
+        // `from_date`, got "Value cannot be null. (Parameter 's')" back: a .NET internal leaked
+        // to an API consumer, naming a parameter that does not exist in the tool schema. The
+        // caller here is usually a model, and a model cannot act on that. It can act on being
+        // told which argument it got wrong and what shape was expected.
+        DateOnly Date(string k)
+        {
+            var raw = Str(k) ?? throw new ArgumentException($"{k} required (ISO date, YYYY-MM-DD)");
+            return DateOnly.TryParse(raw, System.Globalization.CultureInfo.InvariantCulture, out var d)
+                ? d : throw new ArgumentException($"{k} must be an ISO date (YYYY-MM-DD), got '{raw}'");
+        }
+
         switch (name)
         {
             case "as_of":
             {
                 var work = Str("work") ?? throw new ArgumentException("work required");
-                var date = DateOnly.Parse(Str("date") ?? throw new ArgumentException("date required"));
+                var date = Date("date");
                 var res = Resolve(work, Str("publisher"));
                 if (res is null) return new JsonObject { ["status"] = "unknown_work", ["work"] = work };
                 var (r, w) = res.Value;
@@ -404,7 +417,7 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
             }
             case "in_force_on":
             {
-                var date = DateOnly.Parse(Str("date") ?? throw new ArgumentException("date required"));
+                var date = Date("date");
                 var limit = Int("limit", 50); var offset = Int("offset", 0);
                 var pub = Str("publisher");
                 var outp = new JsonArray();
@@ -430,8 +443,8 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
             case "diff":
             {
                 var work = Str("work") ?? throw new ArgumentException("work required");
-                var from = DateOnly.Parse(Str("from_date")!);
-                var to = DateOnly.Parse(Str("to_date")!);
+                var from = Date("from_date");
+                var to = Date("to_date");
                 var res = Resolve(work, Str("publisher"));
                 if (res is null) return new JsonObject { ["status"] = "unknown_work", ["work"] = work };
                 var (r, w) = res.Value;
@@ -441,17 +454,43 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                 if (a1 is null || b1 is null)
                     return new JsonObject { ["envelope"] = Envelope(r, "no_version_for_date"), ["from_resolved"] = a1 is not null, ["to_resolved"] = b1 is not null };
                 var changed = a1.Key != b1.Key;
+
+                // Two versions of the same work are only comparable provision by provision when
+                // the same extraction profile produced both. The Code du travail is the proof:
+                // its 2020 version came from pdf-lu/1 with 13 provisions anchored art_541-8, its
+                // 2026 version from akn-lu/1 with 1,197 anchored art_l_010-1. Pair those by anchor
+                // and you get "1,196 articles added", which is not a fact about Luxembourg law,
+                // it is a fact about two parsers. Saying so is the whole point of F10: a caller
+                // that is told the comparison is unsound can fall back to the source URIs, while
+                // a caller handed a confident diff cannot know to.
+                //
+                // Only when BOTH profiles are known and they disagree. Profile is null when a
+                // version carries no text at all, and two unknowns are not evidence of a
+                // mismatch: claiming one would be the same overreach in the other direction,
+                // and that case is already told the truth by text_withheld.
+                var pa = a1.Profile;
+                var pb = b1.Profile;
+                var profilesDiffer = pa is not null && pb is not null && pa != pb;
+                var comparable = !profilesDiffer && a1.TextPublic && b1.TextPublic;
                 return new JsonObject
                 {
-                    ["envelope"] = Envelope(r, a1.TextPublic && b1.TextPublic ? "ok" : "text_withheld"),
+                    ["envelope"] = Envelope(r, profilesDiffer ? "profiles_differ"
+                                               : a1.TextPublic && b1.TextPublic ? "ok" : "text_withheld"),
                     ["changed"] = changed,
+                    ["provision_level_comparable"] = comparable,
                     ["from"] = DocJson(a1, false),
                     ["to"] = DocJson(b1, false),
-                    ["note"] = changed
-                        ? (a1.TextPublic && b1.TextPublic
-                            ? "different versions applied; retrieve both via as_of (text included) to compare, or use the web diff permalink /{publisher}/{work}/diff/{from}/{to}"
-                            : "different versions applied; text diff unavailable here — compare at the official source URIs")
-                        : "the same version applied on both dates",
+                    ["note"] = profilesDiffer
+                        ? $"the two versions were extracted by different profiles ({pa ?? "unknown"} vs "
+                          + $"{pb ?? "unknown"}), so their provisions carry different anchor schemes and "
+                          + "cannot be paired: any provision-level diff between them would report "
+                          + "differences created by the extraction, not by the legislator. Compare the "
+                          + "full texts, or the official source URIs on each side, instead."
+                        : changed
+                            ? (a1.TextPublic && b1.TextPublic
+                                ? "different versions applied; retrieve both via as_of (text included) to compare, or use the web diff permalink /{publisher}/{work}/diff/{from}/{to}"
+                                : "different versions applied; text diff unavailable here — compare at the official source URIs")
+                            : "the same version applied on both dates",
                 };
             }
             case "search":
