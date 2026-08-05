@@ -43,14 +43,6 @@ public sealed class AskService(McpCore core)
         (one as_of call with this date — do not probe multiple dates).
 
         Rules, in order of priority:
-        0. A NAMED ARTICLE of a work you can identify ("Article 1 of the Constitution", "L. 234-44
-           of the Code du travail") is TWO calls and never more: as_of(work, date, mode=outline)
-           to see the anchors this work actually uses, then as_of(work, date, mode=select,
-           anchors=...) for the text. Anchors are the publisher's own and rarely look like the
-           number in the question: the Code du travail numbers its articles art_l_234-44, and the
-           Constitution has no "Article 1" under that spelling at all. Do NOT search for the text
-           of an article, do not call coverage, cited_by or in_force_on to find one, and if an
-           anchor misses, the reply lists the nearest ones that exist — use those.
         1. Ground every factual claim about the law in tool output from THIS conversation.
            When the document is unknown, call search first (add as_of date when the user names one) —
            hits are ARTICLE-level and carry the anchor. Then: as_of for the state on a date
