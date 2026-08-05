@@ -40,8 +40,7 @@ public static class PageShell
     /// own, so an identical string on 1,423 pages is the same as having none at all.
     private const string SiteDescription =
         "Point-in-time Luxembourg law, plus ten EU acts: what did the rule say on a given date? "
-        + "Grounded AI answers, permalinks, timelines, diffs, cryptographic provenance, and a "
-        + "public MCP endpoint.";
+        + "Permalinks, timelines, diffs and verifiable provenance.";
 
     /// The social-card fallback is shorter on purpose: a card clips where a search result does
     /// not. A page that supplies its own description is specific enough to serve both.

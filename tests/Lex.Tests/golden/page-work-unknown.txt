@@ -6,7 +6,7 @@ HTTP 404
 <!-- Titles are labels, not sentences: one that ends in a full stop renders "acts., Lex" in
      the tab and in every social card, which is what the front page did until now. -->
 <title>Unknown work, Lex</title>
-<meta name="description" content="Point-in-time Luxembourg law, plus ten EU acts: what did the rule say on a given date? Grounded AI answers, permalinks, timelines, diffs, cryptographic provenance, and a public MCP endpoint.">
+<meta name="description" content="Point-in-time Luxembourg law, plus ten EU acts: what did the rule say on a given date? Permalinks, timelines, diffs and verifiable provenance.">
 <meta property="og:title" content="Unknown work, Lex">
 <meta property="og:description" content="Point-in-time Luxembourg law, plus ten EU acts, with grounded AI answers, per-article history, and verifiable provenance.">
 <meta property="og:type" content="website">
