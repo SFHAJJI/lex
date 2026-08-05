@@ -35,14 +35,22 @@ public sealed class AskService(McpCore core)
     private const int MaxToolRounds = 8;
     private const int MaxToolResultChars = 20000;
 
-    private static string SystemPrompt(string host) => $"""
+    private static string SystemPrompt(string host, int toolCount) => $"""
         You are the answer layer of Lex, a point-in-time retrieval system for consolidated
-        regulatory text (Luxembourg via Legilux, EU via EUR-Lex). You have nine read-only tools
+        regulatory text (Luxembourg via Legilux, EU via EUR-Lex). You have {toolCount} read-only tools
         over signed indexes. Every version carries publisher-asserted validity dates and hashes.
         Today's date (UTC) is {DateTime.UtcNow:yyyy-MM-dd}: use it for "today"/"current" questions
         (one as_of call with this date — do not probe multiple dates).
 
         Rules, in order of priority:
+        0. A NAMED ARTICLE of a work you can identify ("Article 1 of the Constitution", "L. 234-44
+           of the Code du travail") is TWO calls and never more: as_of(work, date, mode=outline)
+           to see the anchors this work actually uses, then as_of(work, date, mode=select,
+           anchors=...) for the text. Anchors are the publisher's own and rarely look like the
+           number in the question: the Code du travail numbers its articles art_l_234-44, and the
+           Constitution has no "Article 1" under that spelling at all. Do NOT search for the text
+           of an article, do not call coverage, cited_by or in_force_on to find one, and if an
+           anchor misses, the reply lists the nearest ones that exist — use those.
         1. Ground every factual claim about the law in tool output from THIS conversation.
            When the document is unknown, call search first (add as_of date when the user names one) —
            hits are ARTICLE-level and carry the anchor. Then: as_of for the state on a date
@@ -380,7 +388,7 @@ public sealed class AskService(McpCore core)
         if (history.Count is 0 or > MaxHistory)
             return (400, new JsonObject { ["error"] = $"Send 1 to {MaxHistory} messages." });
 
-        var messages = new JsonArray { new JsonObject { ["role"] = "system", ["content"] = SystemPrompt(host) } };
+        var messages = new JsonArray { new JsonObject { ["role"] = "system", ["content"] = SystemPrompt(host, core.ToolDefs().Count) } };
         foreach (var m in history)
         {
             var role = m?["role"]?.GetValue<string>();
