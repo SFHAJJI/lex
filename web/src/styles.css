@@ -11,7 +11,7 @@
    below it can be mistaken for a second required step. */
 .cmd.big { margin: 0 0 10px; gap: 0; border: 1px solid var(--line); border-radius: 11px;
            background: var(--card); padding: 4px 4px 4px 6px; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
-.cmd.big:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 13%, transparent); }
+.cmd.big:focus-within { border-color: var(--fg); box-shadow: 0 0 0 3px color-mix(in srgb, var(--fg) 13%, transparent); }
 .cmd.big input { border: 0; background: none; font-size: 17px; padding: 13px 10px; }
 .cmd.big input:focus { outline: none; }
 .cmd.big button { border-radius: 8px; padding: 11px 18px; font-size: 15px; }
@@ -19,24 +19,24 @@
 /* Examples as a sentence, not as a row of chips: help reads as help, buttons read as work. */
 .egs { color: var(--muted); font-size: 14px; margin: 0 0 18px; padding-left: 3px; }
 .eg, .or { font: inherit; }
-.eg { background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer;
-      text-align: left; border-bottom: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); }
-.eg:hover { border-bottom-color: var(--accent); }
+.eg { background: none; border: 0; padding: 0; color: var(--fg); cursor: pointer;
+      text-align: left; border-bottom: 1px solid color-mix(in srgb, var(--fg) 35%, transparent); }
+.eg:hover { border-bottom-color: var(--fg); }
 .or { color: var(--muted); }
 
 /* The second door. Below a rule, in body text, at a fraction of the question box's weight —
    an alternative, never a next step. */
 .doors { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; font-size: 14px;
          color: var(--muted); border-top: 1px solid var(--line); padding-top: 12px; margin: 0 0 14px; }
-.doors button { background: none; border: 0; padding: 0; font: inherit; color: var(--accent);
+.doors button { background: none; border: 0; padding: 0; font: inherit; color: var(--fg);
                 cursor: pointer; border-bottom: 1px solid transparent; }
-.doors button:hover { border-bottom-color: var(--accent); }
-.doors button.on { color: var(--fg); font-weight: 600; border-bottom-color: var(--accent); }
+.doors button:hover { border-bottom-color: var(--fg); }
+.doors button.on { color: var(--fg); font-weight: 600; border-bottom-color: var(--fg); }
 
 .said { font-family: var(--serif); font-size: 16.5px; line-height: 1.55; background: var(--card);
-        border-left: 3px solid var(--accent); padding: 10px 14px; border-radius: 0 8px 8px 0; margin: 0 0 14px; }
+        border-left: 3px solid var(--fg); padding: 10px 14px; border-radius: 0 8px 8px 0; margin: 0 0 14px; }
 .said b { display: block; font-family: inherit; font-size: 11px; letter-spacing: .12em;
-          text-transform: uppercase; color: var(--accent); margin-bottom: 3px; font-weight: 600; }
+          text-transform: uppercase; color: var(--fg); margin-bottom: 3px; font-weight: 600; }
 
 .sel { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding-bottom: 10px; }
 .pick { border: 1px solid var(--line); border-radius: 7px; padding: 5px 10px; font-size: 14px;
@@ -50,14 +50,14 @@
 .railbox { border-bottom: 1px solid var(--line); margin: 0 0 16px; padding-bottom: 4px; }
 .railhead { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .railhead .hint { font-size: 12.5px; color: var(--muted); }
-.tag.act { cursor: pointer; border-color: var(--accent); color: var(--accent); background: none; }
+.tag.act { cursor: pointer; border-color: var(--fg); color: var(--fg); background: none; }
 .stepbtn { background: var(--card); border: 1px solid var(--line); border-radius: 6px; color: inherit;
            width: 28px; height: 26px; padding: 0; cursor: pointer; font-size: 13px; }
 .stepbtn:disabled { opacity: .35; cursor: default; }
 /* Compare needs a word, not a modifier key. A phone has no shift to hold, so the whole feature
    was unreachable on touch; this is the door. */
 .stepbtn.wide { width: auto; padding: 0 11px; font-size: 12.5px; }
-.stepbtn.wide.on { border-color: var(--accent); color: var(--accent); }
+.stepbtn.wide.on { border-color: var(--fg); color: var(--fg); }
 .railhead .hint.arm { color: var(--accent); }
 
 /* Reserved height stops the page jumping while a law loads, but on the front there is
@@ -125,13 +125,13 @@ del { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var
 .bar .mark { position: absolute; right: 9px; top: 5px; font-size: 10.5px; letter-spacing: .04em;
              text-transform: uppercase; color: var(--muted); border: 1px solid var(--line);
              border-radius: 99px; padding: 0 7px; background: var(--bg); }
-.tag.act.on { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+.tag.act.on { background: var(--fg); border-color: var(--fg); color: var(--bg); }
 /* Collections, kept out of the ranking but not out of the page. Folded by default because they
    are a filing fact rather than a legal one, and open on one click when that is what you want. */
 .folders { margin-top: 20px; border-top: 1px solid var(--line); padding-top: 14px; }
 .folders-h { background: none; border: 0; padding: 0; cursor: pointer; color: var(--muted);
              font-size: 13.5px; font-family: inherit; }
-.folders-h:hover { color: var(--accent); }
+.folders-h:hover { color: var(--fg); }
 .folders-why { font-size: 13px; color: var(--muted); max-width: 62ch; margin: 8px 0 12px; }
 /* The matched words in a search snippet. */
 mark { background: color-mix(in srgb, var(--accent) 26%, transparent); color: inherit;
@@ -150,7 +150,7 @@ mark { background: color-mix(in srgb, var(--accent) 26%, transparent); color: in
 .chips { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 16px; }
 .chip { border: 1px solid var(--line); border-radius: 99px; padding: 7px 13px; font-size: 14px;
         background: var(--card); color: inherit; cursor: pointer; }
-.chip:hover { border-color: var(--accent); color: var(--accent); }
+.chip:hover { border-color: var(--fg); color: var(--fg); }
 button.ghost { background: none; border: 1px solid var(--line); color: var(--muted); margin-top: 12px; }
 
 /* ---- reader: structure on the left, law on the right ---- */
@@ -161,7 +161,7 @@ button.ghost { background: none; border: 1px solid var(--line); color: var(--mut
 .tochead b { font-family: var(--serif); font-size: 15px; }
 .toccol .filter { font-size: 13px; padding: 5px 8px; }
 .toccol .rowbtn { padding: 5px 0; font-size: 13.5px; }
-.toccol .rowbtn.on { color: var(--accent); font-weight: 600; }
+.toccol .rowbtn.on { color: var(--fg); font-weight: 600; }
 .toccol .rows li { border-top: 0; }
 .toccol .toc > li { border-top: 1px solid var(--line); }
 .text { min-width: 0; }
@@ -198,7 +198,7 @@ button.ghost { background: none; border: 1px solid var(--line); color: var(--mut
                  font-size: 13px; color: var(--muted); }
 .pill { border: 1px solid var(--line); border-radius: 99px; padding: 1px 10px; font-size: 12.5px; }
 .pill.live { border-color: var(--ok); color: var(--ok); }
-.pill.old { border-color: var(--accent); color: var(--accent); }
+.pill.old { border-color: var(--fg); color: var(--fg); }
 .strong { font-weight: 600; }
 button.pick { cursor: pointer; }
 
@@ -214,7 +214,7 @@ button.pick { cursor: pointer; }
 .toch { display: flex; justify-content: space-between; align-items: center; gap: 12px; width: 100%;
         text-align: left; background: none; border: 0; padding: 10px 0; color: inherit;
         cursor: pointer; font-size: 15px; font-family: var(--serif); }
-.toch:hover { color: var(--accent); }
+.toch:hover { color: var(--fg); }
 /* The count column was squeezable, so three-digit sections wrapped one digit per line. */
 .toch .sub, .tochead .sub { flex: none; font-variant-numeric: tabular-nums; }
 .toc .rows { margin: 0 0 10px 16px; }
@@ -233,7 +233,7 @@ button.pick { cursor: pointer; }
 @keyframes pulse { 0%,100% { opacity: .3 } 50% { opacity: 1 } }
 @media (prefers-reduced-motion: reduce) { .steps li.pending:before { animation: none } }
 .chipmini { border: 1px solid var(--line); border-radius: 99px; padding: 1px 9px; font-size: 12px;
-            background: var(--card); color: var(--accent); cursor: pointer; white-space: nowrap; }
+            background: var(--card); color: var(--fg); cursor: pointer; white-space: nowrap; }
 
 
 /* ================= the finder: one card, three ways in =================
@@ -246,7 +246,7 @@ button.pick { cursor: pointer; }
 .fin-tab{background:none;border:0;border-bottom:2px solid transparent;border-radius:0;
   font-family:var(--serif);font-size:16px;color:var(--muted);padding:13px 15px 11px;cursor:pointer}
 .fin-tab:hover{color:var(--fg)}
-.fin-tab.on{color:var(--fg);font-weight:600;border-bottom-color:var(--accent)}
+.fin-tab.on{color:var(--fg);font-weight:600;border-bottom-color:var(--fg)}
 .fin-hint{margin:0 0 12px;font-size:12.5px;color:var(--muted)}
 .fin-body{padding:18px 18px 20px}
 .fin-body .sel{padding-bottom:0}
@@ -256,8 +256,8 @@ button.pick { cursor: pointer; }
 .picker.inline .pop{position:static;width:auto;border:0;box-shadow:none;padding:0;background:none}
 .picker.inline .pop input{font-size:16px;padding:12px 14px;border-radius:9px;border:1px solid var(--line);
   background:var(--bg)}
-.picker.inline .pop input:focus{outline:none;border-color:var(--accent);
-  box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 12%,transparent)}
+.picker.inline .pop input:focus{outline:none;border-color:var(--fg);
+  box-shadow:0 0 0 3px color-mix(in srgb,var(--fg) 12%,transparent)}
 .picker.inline .pop ul{max-height:340px;margin-top:10px}
 .picker.inline .pop li button{border-radius:8px;padding:9px 10px}
 .picker.inline .pop li button:hover{background:var(--bg)}
@@ -273,7 +273,7 @@ button.pick { cursor: pointer; }
    Summoned rather than stumbled into. Nothing on the page competes with it, and browsing is no
    longer the fallback for people it failed. */
 .asklaunch{position:fixed;right:20px;bottom:20px;z-index:40;display:flex;align-items:center;gap:11px;
-  background:var(--accent);color:var(--on-accent);border:0;border-radius:99px;padding:12px 20px 12px 16px;
+  background: var(--fg);color:var(--bg);border:0;border-radius:99px;padding:12px 20px 12px 16px;
   cursor:pointer;font-family:inherit;box-shadow:0 8px 26px rgba(0,0,0,.22);transition:transform .16s,box-shadow .16s}
 .asklaunch:hover{transform:translateY(-2px);box-shadow:0 12px 32px rgba(0,0,0,.28)}
 .al-ic{font-size:15px;opacity:.95}
@@ -285,8 +285,8 @@ button.pick { cursor: pointer; }
   max-height:min(76vh,720px);display:flex;flex-direction:column;background:var(--card);
   border:1px solid var(--line);border-radius:14px;box-shadow:0 18px 52px rgba(0,0,0,.26);overflow:hidden}
 .askpanel.min{max-height:none}
-.ap-head{display:flex;align-items:center;gap:8px;padding:11px 12px 11px 15px;background:var(--accent);
-  color:var(--on-accent)}
+.ap-head{display:flex;align-items:center;gap:8px;padding:11px 12px 11px 15px;background: var(--fg);
+  color:var(--bg)}
 .ap-title{font-weight:700;font-size:14.5px;flex:1;display:flex;align-items:center;gap:8px}
 .ap-x{background:#ffffff26;border:0;color:inherit;width:26px;height:26px;border-radius:7px;cursor:pointer;
   font-size:12px;line-height:1}
@@ -298,17 +298,17 @@ button.pick { cursor: pointer; }
   color:var(--muted)}
 .ap-chip{display:block;width:100%;text-align:left;background:var(--bg);border:1px solid var(--line);
   border-radius:9px;padding:9px 12px;margin-bottom:7px;font:inherit;font-size:13.5px;color:inherit;cursor:pointer}
-.ap-chip:hover{border-color:var(--accent);color:var(--accent)}
+.ap-chip:hover{border-color:var(--fg);color:var(--fg)}
 .ap-body .steps{margin-bottom:10px}
 .ap-body .said{font-size:15px;margin:0}
 .ap-form{display:flex;gap:8px;padding:11px 12px;border-top:1px solid var(--line);background:var(--bg)}
 .ap-form input{flex:1;min-width:0;border-radius:9px;border:1px solid var(--line);padding:10px 12px;
   font:inherit;font-size:14px;background:var(--card)}
-.ap-form input:focus{outline:none;border-color:var(--accent)}
+.ap-form input:focus{outline:none;border-color:var(--fg)}
 .ap-form button{border-radius:9px;padding:10px 17px;min-width:0}
 
 .backhome{background:none;border:0;padding:0;font:inherit;color:var(--muted);cursor:pointer;margin-right:4px}
-.backhome:hover{color:var(--accent)}
+.backhome:hover{color:var(--fg)}
 
 @media(max-width:640px){
   .askpanel{right:8px;left:8px;bottom:8px;width:auto;max-height:82vh}
@@ -323,14 +323,14 @@ button.pick { cursor: pointer; }
 
 /* The first-run coach. Inline, above the work area, so the step it is asking for happens where
    the reader is already looking rather than in a corner they have to notice. */
-.coach{border:1px solid var(--line);border-left:2px solid var(--accent);border-radius:10px;
+.coach{border:1px solid var(--line);border-left:2px solid var(--fg);border-radius:10px;
        background:var(--card);padding:12px 14px;margin:0 0 16px;transition:opacity .5s}
 .coach.done{opacity:.55}
 .co-h{display:flex;align-items:baseline;gap:10px;margin-bottom:8px}
 .co-h b{font-family:var(--serif);font-size:15px}
 .co-x{margin-left:auto;background:none;border:0;color:var(--muted);cursor:pointer;
       font-size:13px;padding:0 2px;line-height:1}
-.co-x:hover{color:var(--accent)}
+.co-x:hover{color:var(--fg)}
 .co-steps{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:6px 22px}
 .co-steps li{display:flex;align-items:flex-start;gap:8px;font-size:13.5px;color:var(--muted)}
 .co-steps li.at{color:var(--fg)}
@@ -366,14 +366,14 @@ button.pick { cursor: pointer; }
 .punct { border-left: 2px solid var(--line); padding: 4px 0 4px 12px; margin: 0 0 14px; }
 .punct-h { background: none; border: 0; padding: 0; color: var(--muted); cursor: pointer;
            font-family: inherit; font-size: 13px; }
-.punct-h:hover { color: var(--accent); }
+.punct-h:hover { color: var(--fg); }
 .punct-b { font-size: 12.5px; color: var(--muted); margin: 6px 0 0; max-width: 70ch; }
 
 /* The unchanged articles, as a band you can open rather than a number you cannot. */
 .ctx { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 10px; }
 .ctx-h { background: none; border: 0; padding: 0; color: var(--muted); cursor: pointer;
          font-family: inherit; font-size: 13px; }
-.ctx-h:hover { color: var(--accent); }
+.ctx-h:hover { color: var(--fg); }
 .ctx-b { font-size: 12px; color: var(--muted); margin: 8px 0 0; line-height: 1.7; }
 
 /* Layers of the law, by weight rather than by the publisher's fifteen type codes. */
@@ -381,7 +381,7 @@ button.pick { cursor: pointer; }
 .layer { background: none; border: 1px solid var(--line); border-radius: 99px; padding: 4px 12px;
          font: inherit; font-size: 13px; color: var(--muted); cursor: pointer; }
 .layer:hover { color: var(--fg); border-color: var(--muted); }
-.layer.on { background: var(--accent); border-color: var(--accent); color: var(--bg); font-weight: 600; }
+.layer.on { background: var(--fg); border-color: var(--fg); color: var(--bg); font-weight: 600; }
 .layers-hint { font-size: 12.5px; color: var(--muted); margin: 0; }
 
 .pager { display: flex; align-items: center; gap: 14px; margin-top: 16px; }
@@ -394,7 +394,7 @@ button.pick { cursor: pointer; }
                       text-transform: uppercase; margin-right: 2px; }
 .citelink { background: none; border: 1px solid var(--line); border-radius: 99px; padding: 1px 9px;
             font: inherit; font-size: 12px; color: var(--muted); cursor: pointer; }
-.citelink:hover { border-color: var(--accent); color: var(--accent); }
+.citelink:hover { border-color: var(--fg); color: var(--fg); }
 
 /* Search narrowing, in the same vocabulary as the period view's layers. */
 .sfilters { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 0; }
@@ -405,7 +405,7 @@ button.pick { cursor: pointer; }
 .doors-h { font-size: 12px; color: var(--muted); }
 .door { background: none; border: 1px solid var(--line); border-radius: 99px; padding: 5px 13px;
         font: inherit; font-size: 13.5px; color: inherit; cursor: pointer; }
-.door:hover { border-color: var(--accent); color: var(--accent); }
+.door:hover { border-color: var(--fg); color: var(--fg); }
 
 /* Search results gathered under the law they belong to. */
 .hitgroup { border-bottom: 1px solid var(--line); padding-bottom: 8px; margin-bottom: 8px; }
@@ -414,14 +414,14 @@ button.pick { cursor: pointer; }
 .hg-h .sub { margin-left: auto; }
 .hg-more { background: none; border: 0; padding: 2px 0 0 9px; font: inherit; font-size: 12.5px;
            color: var(--muted); cursor: pointer; }
-.hg-more:hover { color: var(--accent); }
+.hg-more:hover { color: var(--fg); }
 
 /* One box, one date. The date sits beside the question because every question this corpus
    answers has an "as of when", and that is the entire point of the thing. */
 .one { display: flex; flex-wrap: wrap; gap: 8px; align-items: stretch; padding: 16px 16px 10px; }
 .onebox { flex: 1 1 260px; min-width: 0; font: inherit; font-size: 16.5px; padding: 12px 14px;
           background: var(--bg); border: 1px solid var(--line); border-radius: 10px; color: inherit; }
-.onebox:focus { outline: none; border-color: var(--accent); }
+.onebox:focus { outline: none; border-color: var(--fg); }
 .asof { display: flex; align-items: center; gap: 7px; padding: 0 12px; background: var(--bg);
         border: 1px solid var(--line); border-radius: 10px; }
 .asof i { font-style: normal; font-size: 11px; letter-spacing: .06em; text-transform: uppercase;
@@ -430,7 +430,7 @@ button.pick { cursor: pointer; }
 .one button[type=submit] { border-radius: 10px; padding: 0 22px; }
 .onehint { font-size: 12.5px; color: var(--muted); padding: 0 18px 14px; }
 .linky { background: none; border: 0; padding: 0; font: inherit; font-size: inherit;
-         color: var(--accent); cursor: pointer; text-decoration: underline; }
+         color: var(--fg); cursor: pointer; text-decoration: underline; }
 
 .results { border-top: 1px solid var(--line); padding: 12px 16px 16px; }
 .res-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
@@ -448,13 +448,13 @@ button.pick { cursor: pointer; }
 .period-row.wrap { flex-wrap: wrap; }
 .period h2 { font-family: var(--serif); font-size: 20px; margin: 0; letter-spacing: -.01em; }
 .period .chip { padding: 5px 12px; font-size: 13.5px; cursor: pointer; }
-.period .chip.on { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.period .chip.on { border-color: var(--fg); color: var(--fg); font-weight: 600; }
 
 .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
 .seg button { font: inherit; font-size: 13.5px; padding: 6px 12px; background: none; border: 0;
               color: var(--muted); cursor: pointer; }
 .seg button + button { border-left: 1px solid var(--line); }
-.seg button.on { background: var(--accent); color: var(--card); font-weight: 600; }
+.seg button.on { background: var(--fg); color: var(--bg); font-weight: 600; }
 
 @media (max-width: 620px) {
   .period-row { flex-wrap: wrap; }
@@ -467,7 +467,7 @@ button.pick { cursor: pointer; }
 .langs button { font: inherit; font-size: 12px; text-transform: uppercase; letter-spacing: .04em;
                 padding: 4px 9px; background: none; border: 0; color: var(--muted); cursor: pointer; }
 .langs button + button { border-left: 1px solid var(--line); }
-.langs button.on { background: var(--accent); color: var(--card); font-weight: 600; }
+.langs button.on { background: var(--fg); color: var(--bg); font-weight: 600; }
 
 /* Skeletons. The shimmer is a single moving highlight rather than a pulse, because a pulse reads
    as a warning and a sweep reads as work in progress. Both stop for anyone who asked for less
