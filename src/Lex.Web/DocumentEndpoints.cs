@@ -156,7 +156,14 @@ public static class DocumentEndpoints
             return Results.Content(Page($"{name}, {jurisdiction}", sb.ToString(),
                 "every version, on a time axis", "find", h1: name,
                 canonicalPath: $"/{publisher}/{work}", jsonLd: graph.ToJsonString(),
-                description: lawDesc, lang: lang), "text/html");
+                // html lang declares the language of THIS PAGE, not of the subject it
+                // describes. A work page is a timeline: 553 words of English chrome, a French
+                // title and a table of dates. Declaring it French because the law is French
+                // told every crawler and every screen reader something untrue about the words
+                // actually on the page. The version page is the opposite case and keeps its
+                // expression language, because there the content really is 38,000 words of
+                // French law and the chrome rounds to nothing.
+                description: lawDesc), "text/html");
         });
 
         app.MapGet($"/{pubRoute}/{{work}}/{{date}}", (string publisher, string work, string date) =>
