@@ -7,3 +7,8 @@
 web/node_modules
 # the bundle is produced by the node stage, never taken from a developer's machine
 src/Lex.Web/wwwroot/app
+
+# The indexes are fetched from the published GitHub releases at build time
+# (deploy/fetch-indexes.sh), so they must NOT be uploaded as build context.
+# This is the difference between a 950 MB upload per deploy and a few MB.
+deploy/indexes
