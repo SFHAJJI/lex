@@ -17,8 +17,10 @@ public static class ApiEndpoints
         var mcpCore = ctx.Mcp;
         var askService = ctx.Ask;
         string Page(string title, string body, string? subtitle = null, string nav = "",
-                    string? h1 = null, string? canonicalPath = null, string? jsonLd = null)
-            => PageShell.Page(ctx.PublicBase, title, body, subtitle, nav, h1, canonicalPath, jsonLd);
+                    string? h1 = null, string? canonicalPath = null, string? jsonLd = null,
+                    string? description = null, string? lang = null)
+            => PageShell.Page(ctx.PublicBase, title, body, subtitle, nav, h1, canonicalPath,
+                              jsonLd, description, lang);
 
         // A crawler that is allowed everywhere still has to FIND everything. Without the
         // sitemap line it had to walk /browse fifty works at a time across twenty-nine pages.

@@ -35,21 +35,42 @@ public static class PageShell
     /// <summary>HTML-encode. Never interpolate publisher text into markup without it.</summary>
     public static string H(string? s) => System.Net.WebUtility.HtmlEncode(s ?? "");
 
+    /// The one description every page falls back to. A page that can say something specific
+    /// about itself should: Google discards a description repeated across a site and writes its
+    /// own, so an identical string on 1,423 pages is the same as having none at all.
+    private const string SiteDescription =
+        "Point-in-time Luxembourg law, plus ten EU acts: what did the rule say on a given date? "
+        + "Grounded AI answers, permalinks, timelines, diffs, cryptographic provenance, and a "
+        + "public MCP endpoint.";
+
+    /// The social-card fallback is shorter on purpose: a card clips where a search result does
+    /// not. A page that supplies its own description is specific enough to serve both.
+    private const string SocialDescription =
+        "Point-in-time Luxembourg law, plus ten EU acts, with grounded AI answers, "
+        + "per-article history, and verifiable provenance.";
+
     // `title` is what search engines and social cards get; `h1` is what a reader sees, when the
     // two want to be different sentences.
+    //
+    // Every string here is PLAIN TEXT and is escaped on the way out. Callers used to pass H(...)
+    // for the title, which this method then escaped a second time, so the Constitution's tab and
+    // its Google result both read "Gro&#223;herzogtums". The h1 hid it, because that one was
+    // interpolated raw and the two mistakes cancelled. Escaping in exactly one place is what
+    // stops the pair from drifting apart again.
     public static string Page(string publicBase, string title, string body,
                                   string? subtitle = null, string nav = "", string? h1 = null,
-                                  string? canonicalPath = null, string? jsonLd = null) => $$"""
+                                  string? canonicalPath = null, string? jsonLd = null,
+                                  string? description = null, string? lang = null) => $$"""
         <!DOCTYPE html>
-        <html lang="en">
+        <html lang="{{H(lang ?? "en")}}">
         <head>
         <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
         <!-- Titles are labels, not sentences: one that ends in a full stop renders "acts., Lex" in
              the tab and in every social card, which is what the front page did until now. -->
         <title>{{H(title.TrimEnd('.'))}}, Lex</title>
-        <meta name="description" content="Point-in-time Luxembourg law, plus ten EU acts: what did the rule say on a given date? Grounded AI answers, permalinks, timelines, diffs, cryptographic provenance, and a public MCP endpoint.">
+        <meta name="description" content="{{H(description ?? SiteDescription)}}">
         <meta property="og:title" content="{{H(title)}}, Lex">
-        <meta property="og:description" content="Point-in-time Luxembourg law, plus ten EU acts, with grounded AI answers, per-article history, and verifiable provenance.">
+        <meta property="og:description" content="{{H(description ?? SocialDescription)}}">
         <meta property="og:type" content="website">
         <meta property="og:site_name" content="Lex">
         <meta property="og:image" content="{{publicBase}}/og.png">
@@ -148,7 +169,7 @@ public static class PageShell
           <a class="navlink{{(nav == "dev" || nav == "built" ? " on" : "")}}" href="/developers">For developers</a>
         </header>
         <main>
-        <h1>{{h1 ?? title}}</h1>
+        <h1>{{H(h1 ?? title)}}</h1>
         {{(subtitle is null ? "" : $"<p class=\"sub\">{subtitle}</p>")}}
         {{body}}
         </main>

@@ -1,19 +1,20 @@
 HTTP 200
 <!DOCTYPE html>
-<html lang="en">
+<html lang="fr">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Titles are labels, not sentences: one that ends in a full stop renders "acts., Lex" in
      the tab and in every social card, which is what the front page did until now. -->
-<title>Reglement sans texte, Lex</title>
-<meta name="description" content="Point-in-time Luxembourg law, plus ten EU acts: what did the rule say on a given date? Grounded AI answers, permalinks, timelines, diffs, cryptographic provenance, and a public MCP endpoint.">
-<meta property="og:title" content="Reglement sans texte, Lex">
-<meta property="og:description" content="Point-in-time Luxembourg law, plus ten EU acts, with grounded AI answers, per-article history, and verifiable provenance.">
+<title>Reglement sans texte, as of 2020-01-01, Lex</title>
+<meta name="description" content="Reglement sans texte, as it stood on 2020-01-01. This version applied from 2019-06-01 and is still in force.">
+<meta property="og:title" content="Reglement sans texte, as of 2020-01-01, Lex">
+<meta property="og:description" content="Reglement sans texte, as it stood on 2020-01-01. This version applied from 2019-06-01 and is still in force.">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Lex">
 <meta property="og:image" content="https://golden.test/og.png">
 <meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
+<link rel="canonical" href="https://golden.test/t-pub/w2/2019-06-01">
 <meta name="twitter:image" content="https://golden.test/og.png">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9A%96%3C/text%3E%3C/svg%3E">
 <style>

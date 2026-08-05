@@ -113,6 +113,31 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
     }
 
     /// <summary>
+    /// Escaping happens exactly once, in the shell.
+    ///
+    /// Callers used to pass H(title) into a method that escaped it again, so the Constitution's
+    /// tab and its Google result read "Gro&#223;herzogtums". The h1 hid it: that one interpolated
+    /// raw, and the two mistakes cancelled out. Neither the fixture titles nor any snapshot
+    /// contains a character that escapes, so nothing here would have noticed. This asserts the
+    /// contract directly against a title built to break it.
+    /// </summary>
+    [Theory]
+    [InlineData("Loi Grand-Ducale & Cie", "Loi Grand-Ducale &amp; Cie")]
+    [InlineData("Verfassung des Großherzogtums", "Verfassung des Gro&#223;herzogtums")]
+    [InlineData("<script>alert(1)</script>", "&lt;script&gt;alert(1)&lt;/script&gt;")]
+    public void A_title_is_escaped_once_in_the_tab_and_once_in_the_heading(string raw, string encoded)
+    {
+        var html = Lex.Web.PageShell.Page("https://golden.test", raw, "<p>body</p>");
+        Xunit.Assert.Contains($"<title>{encoded}, Lex</title>", html);
+        Xunit.Assert.Contains($"<h1>{encoded}</h1>", html);
+        Xunit.Assert.Contains($"content=\"{encoded}, Lex\"", html);   // og:title
+        // The tell for a second pass: an ampersand that has itself been escaped.
+        Xunit.Assert.DoesNotContain("&amp;#", html);
+        Xunit.Assert.DoesNotContain("&amp;amp;", html);
+        Xunit.Assert.DoesNotContain("&amp;lt;", html);
+    }
+
+    /// <summary>
     /// The sitemap is the one page written for a machine that no human ever opens, which is
     /// exactly why it rots unwatched. Asserted as XML rather than as a snapshot: the corpus grows
     /// nightly, so the file is expected to change, but it must stay parseable, must name every

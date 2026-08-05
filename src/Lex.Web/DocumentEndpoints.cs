@@ -16,8 +16,10 @@ public static class DocumentEndpoints
         var readers = ctx.Registry.All;
         var publicBase = ctx.PublicBase;
         string Page(string title, string body, string? subtitle = null, string nav = "",
-                    string? h1 = null, string? canonicalPath = null, string? jsonLd = null)
-            => PageShell.Page(ctx.PublicBase, title, body, subtitle, nav, h1, canonicalPath, jsonLd);
+                    string? h1 = null, string? canonicalPath = null, string? jsonLd = null,
+                    string? description = null, string? lang = null)
+            => PageShell.Page(ctx.PublicBase, title, body, subtitle, nav, h1, canonicalPath,
+                              jsonLd, description, lang);
         LexIndexReader? Reader(string publisher) => ctx.Registry.All.GetValueOrDefault(publisher);
 
         // Only mounted publishers own the /{publisher}/... space. WebApplication inserts routing
@@ -60,7 +62,7 @@ public static class DocumentEndpoints
                     <a href="{H(b.SourceUri)}">version of {H(b.ValidFrom)}</a>.</div>
                     """);
             sb.Append(EnvelopeCard(r, IsProvisional(r, db2)));
-            return Results.Content(Page($"What changed, {H(DocTitle(b))}", sb.ToString(),
+            return Results.Content(Page($"What changed, {TitleShorten(DocTitle(b))}", sb.ToString(),
                 $"{da:yyyy-MM-dd} → {db2:yyyy-MM-dd} · no interpretation, just the text delta"), "text/html");
         });
 
@@ -114,8 +116,36 @@ public static class DocumentEndpoints
                 ["isBasedOn"] = rows[^1].SourceUri,
             };
             if (rows[^1].Kind is { } kind) lawLd["legislationType"] = kind;
-            return Results.Content(Page(H(t), sb.ToString(), $"every version, on a time axis", "find",
-                canonicalPath: $"/{publisher}/{work}", jsonLd: lawLd.ToJsonString()), "text/html");
+
+            // The name of the law, then where it is from. Someone looking for this page types the
+            // name of a law and a country, never the consolidation label the publisher prefixes.
+            var jurisdiction = publisher == "eu-eurlex" ? "EU law" : "Luxembourg law";
+            var name = StripConsolidationLabel(t) ?? t;
+            // "version(s)" is fine in a table header a reader is already looking at. In a search
+            // result it is the one string on the page written by a machine for a machine.
+            var n = rows.Count == 1 ? "1 version" : $"{rows.Count} versions";
+            var span = rows[^1].ValidTo is null
+                ? $"{n} from {rows[0].ValidFrom} to today"
+                : $"{n}, {rows[0].ValidFrom} to {rows[^1].ValidTo}";
+            var lawDesc = $"{name}. Full text as it stood on any date: {span}, "
+                        + "with per-article history and a link to the official text.";
+
+            // Breadcrumbs alongside the Legislation record. A top-level array is valid JSON-LD and
+            // is how you say two things about one page; it also gives a result a readable trail
+            // instead of a bare URL, which is what a permalink of ours otherwise looks like.
+            var graph = new JsonArray(lawLd, new JsonObject
+            {
+                ["@context"] = "https://schema.org",
+                ["@type"] = "BreadcrumbList",
+                ["itemListElement"] = new JsonArray(
+                    Crumb(1, "Catalogue", $"{publicBase}/browse"),
+                    Crumb(2, jurisdiction, $"{publicBase}/browse?publisher={publisher}"),
+                    Crumb(3, name, $"{publicBase}/{publisher}/{work}")),
+            });
+            return Results.Content(Page($"{name}, {jurisdiction}", sb.ToString(),
+                "every version, on a time axis", "find", h1: name,
+                canonicalPath: $"/{publisher}/{work}", jsonLd: graph.ToJsonString(),
+                description: lawDesc, lang: rows[^1].Language), "text/html");
         });
 
         app.MapGet($"/{pubRoute}/{{work}}/{{date}}", (string publisher, string work, string date) =>
@@ -141,7 +171,7 @@ public static class DocumentEndpoints
                     sb0.Append($"<li><a href=\"/{H(publisher)}/{H(work)}/{H(v.ValidFrom)}\" class=\"mono\">{Interval(v)}</a></li>");
                 sb0.Append("</ul>");
                 sb0.Append(EnvelopeCard(r, IsProvisional(r, d)));
-                return Results.Content(Page(H(work), sb0.ToString(), $"as of {d:yyyy-MM-dd}, honest refusal"), "text/html", statusCode: 404);
+                return Results.Content(Page(work, sb0.ToString(), $"as of {d:yyyy-MM-dd}, honest refusal"), "text/html", statusCode: 404);
             }
 
             var all = r.Timeline(work);
@@ -256,9 +286,27 @@ public static class DocumentEndpoints
             if (next is not null) sb.Append($" &nbsp;&nbsp;<a href=\"/{H(publisher)}/{H(work)}/{H(next.ValidFrom)}\">next version ({H(next.ValidFrom)}) →</a>");
             sb.Append("</p>");
             sb.Append(EnvelopeCard(r, IsProvisional(r, d)));
-            return Results.Content(Page(H(DocTitle(doc)), sb.ToString(), $"as it stood on {d:yyyy-MM-dd}, permalink: /{H(publisher)}/{H(work)}/{d:yyyy-MM-dd}"), "text/html");
+
+            // Any date inside a version's interval renders that same version, so /…/2020-03-04 and
+            // /…/2020-08-11 can be byte-identical pages on different URLs. Left alone that is a few
+            // thousand self-inflicted duplicates competing with each other; the canonical names the
+            // date the version actually starts, which is the one URL worth ranking.
+            var vName = StripConsolidationLabel(DocTitle(doc)) ?? DocTitle(doc);
+            var vDesc = $"{vName}, as it stood on {d:yyyy-MM-dd}. "
+                      + $"This version applied from {doc.ValidFrom}"
+                      + (doc.ValidTo is null ? " and is still in force." : $" to {doc.ValidTo}.");
+            return Results.Content(Page($"{vName}, as of {d:yyyy-MM-dd}", sb.ToString(),
+                $"as it stood on {d:yyyy-MM-dd}, permalink: /{H(publisher)}/{H(work)}/{d:yyyy-MM-dd}",
+                h1: vName, canonicalPath: $"/{publisher}/{work}/{doc.ValidFrom}",
+                description: vDesc, lang: doc.Language), "text/html");
         });
 
         return app;
     }
+
+    /// <summary>One step of a breadcrumb trail, in the shape schema.org wants.</summary>
+    private static JsonObject Crumb(int position, string name, string url) => new()
+    {
+        ["@type"] = "ListItem", ["position"] = position, ["name"] = name, ["item"] = url,
+    };
 }

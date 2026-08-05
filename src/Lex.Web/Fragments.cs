@@ -50,14 +50,36 @@ public static class Fragments
 
     public static string DocTitle(DocRow d) => d.TitleShort ?? d.Title ?? d.GroupKey;
 
-    // Legilux titles are prefixed "Version consolidée applicable au DD/MM/YYYY : <real title>".
-    // In a list of changes that prefix is noise — the date is already its own column.
-    public static string? TitleShorten(string? t)
+    // Legilux prefixes every title with the consolidation it came from: "Version consolidée
+    // applicable au DD/MM/YYYY : <real title>", in whichever language the expression is in.
+    //
+    // On a version row that prefix is noise, because the date is already its own column. In a
+    // <title> tag it is worse than noise: 2,856 of the corpus's 2,934 titles carry it, so almost
+    // every page in the site opened with the same nine words, and the name of the law, which is
+    // the only part anyone types into a search box, sat past the point where a result gets
+    // truncated. On a work page it is also simply wrong: that page spans every version, so
+    // naming one consolidation date in its title describes something the page is not.
+    //
+    // Anchored on the four labels the publisher actually uses rather than on "anything before a
+    // colon", because plenty of real titles contain a colon of their own. A label we have not
+    // seen leaves the title untouched, which is the safe direction to fail in.
+    private static readonly string[] ConsolidationLabels =
+        ["Version consolidée", "Version rectifiée", "Konsolidierte", "Konsolidéiert"];
+
+    public static string? StripConsolidationLabel(string? t)
     {
         if (string.IsNullOrEmpty(t)) return t;
         var i = t.IndexOf(" : ", StringComparison.Ordinal);
-        if (i > 0 && t.StartsWith("Version consolidée", StringComparison.OrdinalIgnoreCase)) t = t[(i + 3)..];
-        else if (i > 0 && t.StartsWith("Konsolidierte", StringComparison.OrdinalIgnoreCase)) t = t[(i + 3)..];
+        if (i <= 0) return t;
+        foreach (var label in ConsolidationLabels)
+            if (t.StartsWith(label, StringComparison.OrdinalIgnoreCase)) return t[(i + 3)..];
+        return t;
+    }
+
+    public static string? TitleShorten(string? t)
+    {
+        t = StripConsolidationLabel(t);
+        if (string.IsNullOrEmpty(t)) return t;
         return t.Length > 110 ? t[..110].TrimEnd() + "…" : t;
     }
 
