@@ -397,7 +397,13 @@ public sealed class AskService(McpCore core)
             // Reasoning shares the completion budget: over a large tool result the model can
             // spend all of it thinking and return an empty message. When that happens we retry
             // the same conversation once at lower effort, which leaves room to actually write.
-            var effort = "high";
+            //
+            // It is also the entire latency budget. Measured live, one ordinary question spent
+            // 3s reaching the first tool, 20s deciding on the second, and 76s writing the answer,
+            // all at "high". Choosing a tool is routing and does not improve with deliberation;
+            // composing a grounded answer from what came back does. So effort is set per round
+            // rather than once, and a retry can still raise it when a round comes back empty.
+            var retried = false;
             for (var round = 0; round <= MaxToolRounds; round++)
             {
                 var req = new JsonObject
@@ -410,7 +416,11 @@ public sealed class AskService(McpCore core)
                     // emitting them; withdrawing the tools removes the temptation entirely.
                     ["tool_choice"] = round == MaxToolRounds || listRendered ? "none" : "auto",
                     ["max_completion_tokens"] = 16000,
-                    ["reasoning_effort"] = effort,
+                    // Low while the tools are still open, because the only decision on the table
+                    // is which one to call. Medium once they are withdrawn and the model has to
+                    // write, or after an empty round, which means it needs more room to think.
+                    ["reasoning_effort"] =
+                        retried || round == MaxToolRounds || listRendered ? "medium" : "low",
                 };
                 using var httpReq = new HttpRequestMessage(HttpMethod.Post, $"{_endpoint}/openai/v1/chat/completions")
                 { Content = new StringContent(req.ToJsonString(), Encoding.UTF8, "application/json") };
@@ -540,11 +550,11 @@ public sealed class AskService(McpCore core)
                 }
 
                 var reply = msg?["content"]?.GetValue<string>() ?? "";
-                if (reply.Length == 0 && effort == "high")
+                if (reply.Length == 0 && !retried)
                 {
-                    // Budget spent on reasoning, nothing written. Same evidence, less thinking.
-                    Console.Error.WriteLine("[ask] empty reply at high effort — retrying at medium");
-                    effort = "medium";
+                    // Nothing written. Same evidence, one more attempt with room to think.
+                    Console.Error.WriteLine("[ask] empty reply — retrying at medium effort");
+                    retried = true;
                     continue;
                 }
                 if (reply.Length == 0)
