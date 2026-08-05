@@ -113,6 +113,34 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
     }
 
     /// <summary>
+    /// The sitemap is the one page written for a machine that no human ever opens, which is
+    /// exactly why it rots unwatched. Asserted as XML rather than as a snapshot: the corpus grows
+    /// nightly, so the file is expected to change, but it must stay parseable, must name every
+    /// work the catalogue holds, and must be the file robots.txt points at.
+    /// </summary>
+    [Fact]
+    public async Task The_sitemap_lists_every_work_and_robots_points_at_it()
+    {
+        var res = await _site.Client.GetAsync("/sitemap.xml");
+        Xunit.Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+        Xunit.Assert.Equal("application/xml", res.Content.Headers.ContentType?.MediaType);
+
+        var doc = System.Xml.Linq.XDocument.Parse(await res.Content.ReadAsStringAsync());
+        System.Xml.Linq.XNamespace ns = "http://www.sitemaps.org/schemas/sitemap/0.9";
+        var locs = doc.Root!.Elements(ns + "url").Select(u => u.Element(ns + "loc")!.Value).ToList();
+
+        Xunit.Assert.All(locs, l => Xunit.Assert.StartsWith("https://golden.test/", l));
+        Xunit.Assert.Equal(locs.Count, locs.Distinct().Count());
+        Xunit.Assert.Contains("https://golden.test/", locs);
+        Xunit.Assert.Contains("https://golden.test/browse", locs);
+        // Every work in the fixture, addressed the way a reader reaches it.
+        Xunit.Assert.Contains("https://golden.test/t-pub/w1", locs);
+
+        var robots = await _site.Client.GetStringAsync("/robots.txt");
+        Xunit.Assert.Contains("Sitemap: https://golden.test/sitemap.xml", robots);
+    }
+
+    /// <summary>
     /// A fixture corpus and the real app on top of it. Deterministic by construction: fixed dates,
     /// fixed hashes, a signing key generated once per run and normalised out of the snapshots.
     /// </summary>

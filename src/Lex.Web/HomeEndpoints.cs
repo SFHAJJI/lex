@@ -16,9 +16,9 @@ public static class HomeEndpoints
         var readers = ctx.Registry.All;
         var publicBase = ctx.PublicBase;
         var mcpCore = ctx.Mcp;
-        string Page(string title, string body, string? subtitle = null, string nav = "", string? h1 = null)
-            => PageShell.Page(ctx.PublicBase, title, body, subtitle, nav, h1);
-        LexIndexReader? Reader(string publisher) => ctx.Registry.All.GetValueOrDefault(publisher);
+        string Page(string title, string body, string? subtitle = null, string nav = "",
+                    string? h1 = null, string? canonicalPath = null, string? jsonLd = null)
+            => PageShell.Page(ctx.PublicBase, title, body, subtitle, nav, h1, canonicalPath, jsonLd);
 
         app.MapGet("/", () =>
         {
@@ -108,8 +108,26 @@ public static class HomeEndpoints
                 <link rel="stylesheet" href="/app/workspace.css">
                 <script type="module" src="/app/workspace.js"></script>
                 """;
+            // WebSite, so a crawler has an unambiguous name and publisher for the whole site.
+            // Built as a JsonObject rather than written out as a string: JSON is mostly quotes and
+            // braces, which is exactly what a C# raw literal reserves, and hand-quoting it is how
+            // you ship a page carrying malformed structured data that nothing warns you about.
+            var siteLd = new JsonObject
+            {
+                ["@context"] = "https://schema.org",
+                ["@type"] = "WebSite",
+                ["name"] = "Lex",
+                ["url"] = ctx.PublicBase,
+                ["description"] = "Point-in-time retrieval of Luxembourg law and ten EU acts, "
+                                  + "with per-article history and verifiable provenance.",
+                ["inLanguage"] = "en",
+                ["publisher"] = new JsonObject
+                {
+                    ["@type"] = "Person", ["name"] = "Soufien Hajji", ["url"] = "https://soufien.lu",
+                },
+            }.ToJsonString();
             return Results.Content(Page("Luxembourg law as it stood on any date, plus ten EU acts", body, null, "ask",
-                h1: "A law is not one document."), "text/html");
+                h1: "A law is not one document.", canonicalPath: "/", jsonLd: siteLd), "text/html");
         });
 
         return app;

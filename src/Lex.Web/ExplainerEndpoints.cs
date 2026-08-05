@@ -15,9 +15,9 @@ public static class ExplainerEndpoints
     {
         // Re-declared here so every moved route body is byte-identical to what it was in
         // Program.cs. That is the property the golden snapshots check.
-        string Page(string title, string body, string? subtitle = null, string nav = "", string? h1 = null)
-            => PageShell.Page(ctx.PublicBase, title, body, subtitle, nav, h1);
-        LexIndexReader? Reader(string publisher) => ctx.Registry.All.GetValueOrDefault(publisher);
+        string Page(string title, string body, string? subtitle = null, string nav = "",
+                    string? h1 = null, string? canonicalPath = null, string? jsonLd = null)
+            => PageShell.Page(ctx.PublicBase, title, body, subtitle, nav, h1, canonicalPath, jsonLd);
         var readers = ctx.Registry.All;
         var publicBase = ctx.PublicBase;
         var mcpCore = ctx.Mcp;

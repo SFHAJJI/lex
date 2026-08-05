@@ -15,8 +15,9 @@ public static class DocumentEndpoints
     {
         var readers = ctx.Registry.All;
         var publicBase = ctx.PublicBase;
-        string Page(string title, string body, string? subtitle = null, string nav = "", string? h1 = null)
-            => PageShell.Page(ctx.PublicBase, title, body, subtitle, nav, h1);
+        string Page(string title, string body, string? subtitle = null, string nav = "",
+                    string? h1 = null, string? canonicalPath = null, string? jsonLd = null)
+            => PageShell.Page(ctx.PublicBase, title, body, subtitle, nav, h1, canonicalPath, jsonLd);
         LexIndexReader? Reader(string publisher) => ctx.Registry.All.GetValueOrDefault(publisher);
 
         // Only mounted publishers own the /{publisher}/... space. WebApplication inserts routing
@@ -87,7 +88,34 @@ public static class DocumentEndpoints
             sb.Append("</table></details>");
             sb.Append("<p class=\"sub\">Every state this document has been in, as asserted by the publisher. The corpus repo's <span class=\"mono\">git log</span> for this work shows the same history.</p>");
             sb.Append(EnvelopeCard(r, false));
-            return Results.Content(Page(H(t), sb.ToString(), $"every version, on a time axis", "find"), "text/html");
+            // Legislation is the schema.org type built for exactly this: a legal instrument with a
+            // jurisdiction, a date, an identifier and a legal-force status. Using the type that
+            // already exists beats inventing properties, and legislationLegalForce is the one
+            // field here a general-purpose crawler cannot infer from the page for itself.
+            var lawLd = new JsonObject
+            {
+                ["@context"] = "https://schema.org",
+                ["@type"] = "Legislation",
+                ["name"] = t,
+                ["url"] = $"{publicBase}/{publisher}/{work}",
+                ["legislationIdentifier"] = rows[^1].GroupIdentifier,
+                ["legislationJurisdiction"] = new JsonObject
+                {
+                    ["@type"] = publisher == "eu-eurlex" ? "AdministrativeArea" : "Country",
+                    ["name"] = publisher == "eu-eurlex" ? "European Union" : "Luxembourg",
+                },
+                ["legislationDate"] = rows[0].ValidFrom,
+                ["legislationLegalForce"] = rows[^1].ValidTo is null && !rows[^1].Withdrawn
+                    ? "https://schema.org/InForce" : "https://schema.org/NotInForce",
+                ["inLanguage"] = rows[^1].Language,
+                ["temporalCoverage"] = rows[^1].ValidTo is null
+                    ? $"{rows[0].ValidFrom}/.." : $"{rows[0].ValidFrom}/{rows[^1].ValidTo}",
+                ["license"] = "https://creativecommons.org/licenses/by/4.0/",
+                ["isBasedOn"] = rows[^1].SourceUri,
+            };
+            if (rows[^1].Kind is { } kind) lawLd["legislationType"] = kind;
+            return Results.Content(Page(H(t), sb.ToString(), $"every version, on a time axis", "find",
+                canonicalPath: $"/{publisher}/{work}", jsonLd: lawLd.ToJsonString()), "text/html");
         });
 
         app.MapGet($"/{pubRoute}/{{work}}/{{date}}", (string publisher, string work, string date) =>

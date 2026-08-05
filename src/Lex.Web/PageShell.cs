@@ -14,13 +14,32 @@ namespace Lex.Web;
 /// </summary>
 public static class PageShell
 {
+    /// <summary>
+    /// The optional head tags, emitted as nothing at all when absent.
+    ///
+    /// Written inline in the template first, which left two blank lines in the head of every page
+    /// that passed neither. Small, but it is the head of 1,409 pages.
+    /// </summary>
+    private static string Extras(string publicBase, string? canonicalPath, string? jsonLd)
+    {
+        var sb = new System.Text.StringBuilder();
+        if (canonicalPath is not null)
+            sb.Append(Environment.NewLine)
+              .Append($"""<link rel="canonical" href="{publicBase}{canonicalPath}">""");
+        if (jsonLd is not null)
+            sb.Append(Environment.NewLine)
+              .Append($"""<script type="application/ld+json">{jsonLd}</script>""");
+        return sb.ToString();
+    }
+
     /// <summary>HTML-encode. Never interpolate publisher text into markup without it.</summary>
     public static string H(string? s) => System.Net.WebUtility.HtmlEncode(s ?? "");
 
     // `title` is what search engines and social cards get; `h1` is what a reader sees, when the
     // two want to be different sentences.
     public static string Page(string publicBase, string title, string body,
-                                  string? subtitle = null, string nav = "", string? h1 = null) => $$"""
+                                  string? subtitle = null, string nav = "", string? h1 = null,
+                                  string? canonicalPath = null, string? jsonLd = null) => $$"""
         <!DOCTYPE html>
         <html lang="en">
         <head>
@@ -35,7 +54,7 @@ public static class PageShell
         <meta property="og:site_name" content="Lex">
         <meta property="og:image" content="{{publicBase}}/og.png">
         <meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
-        <meta name="twitter:card" content="summary_large_image">
+        <meta name="twitter:card" content="summary_large_image">{{Extras(publicBase, canonicalPath, jsonLd)}}
         <meta name="twitter:image" content="{{publicBase}}/og.png">
         <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9A%96%3C/text%3E%3C/svg%3E">
         <style>

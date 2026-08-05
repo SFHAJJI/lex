@@ -18,9 +18,9 @@ public static class CatalogueEndpoints
     {
         // Re-declared here so every moved route body is byte-identical to what it was in
         // Program.cs. That is the property the golden snapshots check.
-        string Page(string title, string body, string? subtitle = null, string nav = "", string? h1 = null)
-            => PageShell.Page(ctx.PublicBase, title, body, subtitle, nav, h1);
-        LexIndexReader? Reader(string publisher) => ctx.Registry.All.GetValueOrDefault(publisher);
+        string Page(string title, string body, string? subtitle = null, string nav = "",
+                    string? h1 = null, string? canonicalPath = null, string? jsonLd = null)
+            => PageShell.Page(ctx.PublicBase, title, body, subtitle, nav, h1, canonicalPath, jsonLd);
         var readers = ctx.Registry.All;
         var publicBase = ctx.PublicBase;
         var mcpCore = ctx.Mcp;
@@ -187,9 +187,51 @@ public static class CatalogueEndpoints
                   <button>As of date</button>
                 </form>
                 """);
+            // Dataset, because this is what Google Dataset Search indexes, and a CC-BY corpus of
+            // consolidated national law with a stated temporal range is exactly what that index
+            // is for. Built as a JsonObject: JSON is mostly quotes and braces, which is what a
+            // C# raw literal reserves, and hand-quoting it ships malformed markup silently.
+            var span = ctx.Registry.Values.Select(r => r.Coverage()).ToList();
+            var datasetLd = new JsonObject
+            {
+                ["@context"] = "https://schema.org",
+                ["@type"] = "Dataset",
+                ["name"] = "Lex: point-in-time Luxembourg law and ten EU acts",
+                ["description"] = "Every consolidated version of Luxembourg law that Legilux "
+                    + "publishes, plus ten EU acts, as dated records carrying validity intervals, "
+                    + "per-article history, and a SHA-256 chain to the publisher's own bytes.",
+                ["url"] = $"{ctx.PublicBase}/browse",
+                ["license"] = "https://creativecommons.org/licenses/by/4.0/",
+                ["isAccessibleForFree"] = true,
+                ["creator"] = new JsonObject
+                {
+                    ["@type"] = "Person", ["name"] = "Soufien Hajji", ["url"] = "https://soufien.lu",
+                },
+                ["keywords"] = new JsonArray("legislation", "Luxembourg", "European Union",
+                    "consolidated law", "point-in-time", "legal data", "open data"),
+                ["temporalCoverage"] =
+                    $"{span.Select(c => c.EarliestValidFrom).Min()}/{span.Select(c => c.LatestValidFrom).Max()}",
+                ["spatialCoverage"] = new JsonArray(
+                    new JsonObject { ["@type"] = "Country", ["name"] = "Luxembourg" },
+                    new JsonObject { ["@type"] = "Place", ["name"] = "European Union" }),
+                ["distribution"] = new JsonArray(
+                    new JsonObject
+                    {
+                        ["@type"] = "DataDownload", ["encodingFormat"] = "application/json",
+                        ["contentUrl"] = "https://github.com/SFHAJJI/lex-articles",
+                        ["description"] = "Per-article JSON, JSONL and parquet, CC-BY.",
+                    },
+                    new JsonObject
+                    {
+                        ["@type"] = "DataDownload", ["encodingFormat"] = "application/json",
+                        ["contentUrl"] = $"{ctx.PublicBase}/mcp",
+                        ["description"] = "Public MCP endpoint, ten read-only tools, no key.",
+                    }),
+            }.ToJsonString();
+
             return Results.Content(Page("The catalogue",
                 sb.ToString(), "Every work Lex holds, filterable by publisher, type and whether the text itself is held.",
-                "browse"), "text/html");
+                "browse", canonicalPath: "/browse", jsonLd: datasetLd), "text/html");
         });
 
         app.MapGet("/go-asof", (string work, string date) =>

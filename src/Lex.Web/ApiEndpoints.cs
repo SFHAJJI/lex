@@ -16,11 +16,46 @@ public static class ApiEndpoints
         var readers = ctx.Registry.All;
         var mcpCore = ctx.Mcp;
         var askService = ctx.Ask;
-        string Page(string title, string body, string? subtitle = null, string nav = "", string? h1 = null)
-            => PageShell.Page(ctx.PublicBase, title, body, subtitle, nav, h1);
-        LexIndexReader? Reader(string publisher) => ctx.Registry.All.GetValueOrDefault(publisher);
+        string Page(string title, string body, string? subtitle = null, string nav = "",
+                    string? h1 = null, string? canonicalPath = null, string? jsonLd = null)
+            => PageShell.Page(ctx.PublicBase, title, body, subtitle, nav, h1, canonicalPath, jsonLd);
 
-        app.MapGet("/robots.txt", () => Results.Text("User-agent: *\nAllow: /\n"));
+        // A crawler that is allowed everywhere still has to FIND everything. Without the
+        // sitemap line it had to walk /browse fifty works at a time across twenty-nine pages.
+        app.MapGet("/robots.txt", () => Results.Text(
+            $"User-agent: *\nAllow: /\nSitemap: {ctx.PublicBase}/sitemap.xml\n"));
+
+        // Every work, plus the pages worth indexing. Versions are deliberately left out: there
+        // are 4,705 of them, they are near-duplicates of one another, and the work page links
+        // them all, which is what a crawler follows anyway.
+        app.MapGet("/sitemap.xml", () =>
+        {
+            var sb = new StringBuilder();
+            sb.Append("""<?xml version="1.0" encoding="UTF-8"?>""");
+            sb.Append("""<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">""");
+
+            void Url(string path, string priority, string freq)
+                => sb.Append($"<url><loc>{ctx.PublicBase}{path}</loc>"
+                             + $"<changefreq>{freq}</changefreq><priority>{priority}</priority></url>");
+
+            Url("/", "1.0", "daily");
+            foreach (var p in new[] { "/browse", "/coverage", "/decisions", "/built", "/about",
+                                      "/how-it-works", "/developers", "/ai", "/verify",
+                                      "/architecture", "/stories", "/find", "/changed" })
+                Url(p, "0.8", "weekly");
+
+            foreach (var r in ctx.Registry.Values)
+            {
+                var (rows, _) = r.Catalogue(new FilterSet(null, null, null, null), null,
+                                            CatalogueOrder.Name, 20000, 0);
+                foreach (var w in rows)
+                    sb.Append($"<url><loc>{ctx.PublicBase}/{w.Collection}/{w.GroupKey}</loc>"
+                              + $"<lastmod>{w.LastFrom}</lastmod>"
+                              + "<changefreq>monthly</changefreq><priority>0.6</priority></url>");
+            }
+            sb.Append("</urlset>");
+            return Results.Content(sb.ToString(), "application/xml");
+        });
 
         // ---- public MCP endpoint (Streamable HTTP, stateless): any MCP client can connect ----
         app.MapPost("/mcp", async (HttpRequest req) =>
