@@ -118,10 +118,21 @@ public sealed class AskService(McpCore core)
         return reason.Length == 0;
     }
 
-    private JsonArray OpenAiTools()
+    /// <summary>
+    /// The tools, minus any the turn has finished with.
+    ///
+    /// Search twice with hits and the useful move is to open what you found; searching a third
+    /// time is a loop, and it happened in one run out of three when asked for a single named
+    /// article. Rejecting the call afterwards still costs a full round of the model emitting it,
+    /// so the tool is withdrawn instead, the same way the list tools are withdrawn once a list is
+    /// on screen. Structure beats hoping the model reasons its way out.
+    /// </summary>
+    private JsonArray OpenAiTools(bool withSearch = true)
     {
         var arr = new JsonArray();
         foreach (var t in core.ToolDefs().OfType<JsonObject>())
+        {
+            if (!withSearch && t["name"]?.GetValue<string>() == "search") continue;
             arr.Add(new JsonObject
             {
                 ["type"] = "function",
@@ -132,6 +143,7 @@ public sealed class AskService(McpCore core)
                     ["parameters"] = t["inputSchema"]!.DeepClone(),
                 },
             });
+        }
         return arr;
     }
 
@@ -410,7 +422,11 @@ public sealed class AskService(McpCore core)
                 {
                     ["model"] = _deployment,
                     ["messages"] = messages.DeepClone(),
-                    ["tools"] = OpenAiTools(),
+                    // Withdrawn once the search budget is spent, rather than left on the table
+                    // and refused. The refusal already existed and still cost a full round of the
+                    // model emitting the call, and it is what produced "I hit the tool budget" in
+                    // an answer instead of the article the reader asked for.
+                    ["tools"] = OpenAiTools(withSearch: searchCalls < 2),
                     // Once a list view is on screen the answer is a sentence, not more lookups.
                     // Rejecting the calls afterwards still costs a full round of the model
                     // emitting them; withdrawing the tools removes the temptation entirely.
