@@ -72,6 +72,19 @@ public static class HomeEndpoints
                 """
                 + $"""
                 <div class="frontdoor">
+                <!-- The same three doors again, as real links this time.
+                     They already existed above as JSON for the workspace to read, which is fine
+                     for a browser and useless to everything else: the front page carried
+                     twenty-four links and not one of them reached a law, so nothing led a crawler
+                     from here into the 1,409 documents this site exists to serve. These are the
+                     three most-searched laws in the corpus and their names are the words people
+                     actually type, so the anchor text matters as much as the href.
+                     Hidden once the workspace mounts, like everything else in .frontdoor. -->
+                {(liveDoors.Count == 0 ? "" : $"""
+                <p class="sub">Start with {string.Join(", ", liveDoors.Select(d =>
+                    $"<a href=\"/{d!["work"]!.GetValue<string>().Replace(":", "/")}\">{H(d["label"]!.GetValue<string>())}</a>"))},
+                or <a href="/browse">browse all {cov.Sum(c => c.Groups):n0}</a>.</p>
+                """)}
                 <p class="sub">
                 <span class="badge">{cov.Sum(c => c.Groups):n0} laws</span>
                 <span class="badge">{cov.Sum(c => c.Rows):n0} dated versions</span>
