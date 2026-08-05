@@ -474,13 +474,22 @@ public static class ExplainerEndpoints
                 </div>
 
                 <h3>The alternative</h3>
-                <p>Store each law as a file and let git be the history: one commit per amendment,
+                <p>Store each law as a file and let git be the history: a commit per version,
                 <span class="mono">git log</span> for the timeline, <span class="mono">git diff</span>
                 between two dates. It is elegant, it is nearly free, and it arrives with a browsable web
-                interface that somebody else operates. Serious projects run on exactly this:
-                <a href="https://archeo-lex.fr" rel="noopener nofollow">Archeo-Lex</a> for French law,
-                <a href="https://github.com/bundestag/gesetze" rel="noopener nofollow">bundestag/gesetze</a>
-                for German federal law. It was the obvious thing to do, and I did not do it.</p>
+                interface that somebody else operates. Independent projects run on exactly this.
+                <a href="https://github.com/Legilibre/Archeo-Lex" rel="noopener nofollow">Archeo-Lex</a>,
+                by Legilibre, replays French law from the LEGI database as Git and Markdown, one commit
+                per consolidated version. <a href="https://github.com/bundestag/gesetze" rel="noopener nofollow">bundestag/gesetze</a>
+                does the same for German federal law from gesetze-im-internet.de; it is a community
+                project rather than the parliament, despite the organisation name. It was the obvious
+                thing to do, and I did not do it.</p>
+
+                <p>The German project is worth reading on its own commits: they aim to follow
+                publication in the <i>Bundesgesetzblatt</i>, and, in its words,
+                &#8220;das funktioniert nicht immer problemlos&#8221;, this does not always work
+                smoothly. That is the same wall met from the other side. Nothing is wrong with their
+                engineering; a commit graph is simply not shaped like a legislative timeline.</p>
 
                 <h3>Why not</h3>
                 <p>Five reasons. Each is a fact about legislation rather than a preference about tools.</p>
