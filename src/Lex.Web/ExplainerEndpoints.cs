@@ -360,15 +360,11 @@ public static class ExplainerEndpoints
                      author reads as a portfolio, and stops being trusted as a source. Two sentences. -->
                 <h2>Who built this</h2>
                 <div class="card">
-                <p>Lex is built and run by <b>Soufien Hajji</b>, a software engineer in Luxembourg. It is a
-                personal project, unaffiliated with any publisher or public body, built the way I build
-                professionally: the pipeline is deterministic, the claims are testable, and the parts that
-                cannot be verified say so rather than guessing.</p>
-                <p class="sub">Two other things I have built the same way:
-                <a href="https://soufien.lu" rel="noopener">soufien.lu</a>, where you can ask an assistant
-                about my work or paste a job advert to see how it matches, and
-                <a href="https://energy.soufien.lu" rel="noopener">energy.soufien.lu</a>, an AI co-pilot
-                for solar prospecting in Luxembourg.</p>
+                <p>Lex is built and run by <b><a href="/about">Soufien Hajji</a></b>, a senior .NET, Azure
+                and AI engineer in Luxembourg. It is a personal project, unaffiliated with any publisher or
+                public body, built the way I build professionally: the pipeline is deterministic, the claims
+                are testable, and the parts that cannot be verified say so rather than guessing.</p>
+                <p class="sub"><a href="/about"><b>About, and the other two systems built the same way →</b></a></p>
                 </div>
 
                 <p class="sub"><a href="/decisions"><b>Why it is built this way →</b></a> ·
@@ -378,6 +374,77 @@ public static class ExplainerEndpoints
                 <a href="https://github.com/SFHAJJI/lex-articles" rel="noopener"><b>The dataset →</b></a></p>
                 """;
             return Results.Content(Page("How it was built", body, null, "how"), "text/html");
+        });
+
+        // ---- /about: who built this, and what else they have built.
+        //
+        // Deliberately one page, and deliberately not the front door. Someone who ends up holding this
+        // app, or who reads it far enough to wonder who is behind it, should find a straight answer in
+        // one click rather than piecing it together from a footer. Everywhere the author or the sibling
+        // projects were named inline now points here, so the answer lives in exactly one place.
+        app.MapGet("/about", () =>
+        {
+            var cov = ctx.Registry.Values.Select(r => r.Coverage()).ToList();
+            var works = cov.Sum(c => c.Groups);
+            var versions = cov.Sum(c => c.Rows);
+            var body = $$"""
+                <p class="lede">I build systems that have to be right rather than plausible: regulated
+                platforms where an answer has to carry its source, its date, and a way to check it.</p>
+
+                <div class="card">
+                <p><b>Soufien Hajji</b>, senior .NET, Azure and AI engineer, based in Luxembourg. Nine
+                years across telecoms, rail, investment banking and asset management, most of it on
+                systems where being wrong is expensive: front-office trading platforms, regulatory-capital
+                reporting, and the agentic AI layer on top of it.</p>
+                <p class="sub">Lex is a personal project, unaffiliated with any publisher or public body.
+                It is built the way I build professionally, which is the reason it exists: the pipeline is
+                deterministic, the claims are testable, and the parts that cannot be verified say so
+                instead of guessing.</p>
+                <p><a class="pick main" href="https://api.soufien.lu/cv/en" rel="noopener">CV, English (PDF)</a>
+                &nbsp; <a class="pick" href="https://api.soufien.lu/cv/fr" rel="noopener">CV, français (PDF)</a>
+                &nbsp; <a class="pick" href="https://www.linkedin.com/in/soufien-hajji" rel="noopener">LinkedIn ↗</a></p>
+                </div>
+
+                <h2>Three things, built the same way</h2>
+
+                <div class="card">
+                <b><a href="https://law.soufien.lu">law.soufien.lu</a></b> &middot; this one
+                <p class="sub">Point-in-time Luxembourg law and ten EU acts: {{works:n0}} works as
+                {{versions:n0}} dated versions, a public MCP endpoint, open datasets, and a signed index
+                whose stamp commits to a digest of its own content. The hard part was never the AI; it was
+                that a law has no single text, only a text per date.
+                <a href="/decisions">The decision that shaped it, and what it cost →</a></p>
+                </div>
+
+                <div class="card">
+                <b><a href="https://soufien.lu" rel="noopener">soufien.lu</a></b> &middot; the assistant
+                <p class="sub">Ask about my experience or my code, drop in a job advert to see how it
+                matches, or run a mock interview. Grounded in a corpus of my own work, and it cites where
+                each answer came from.</p>
+                </div>
+
+                <div class="card">
+                <b><a href="https://energy.soufien.lu" rel="noopener">energy.soufien.lu</a></b> &middot; solar prospecting
+                <p class="sub">An AI co-pilot for photovoltaic prospecting in Luxembourg: which roofs and
+                car parks qualify, the tariffs and grants that apply, and the law behind the answer. Every
+                claim is cited, and it declines rather than guessing.</p>
+                </div>
+
+                <h2>How I work, if that is what you are here for</h2>
+                <p>The clearest evidence is not a CV. It is
+                <a href="/decisions">the decisions page</a>, which states each choice, the alternative it
+                was taken over, and the bill; <a href="/coverage">the coverage page</a>, which exists to
+                say what this service does <i>not</i> hold; and
+                <a href="/verify">the verification page</a>, which tells you how to check the answers
+                without trusting me. A system that cannot say what it lacks is not finished.</p>
+
+                <p class="sub"><a href="/built"><b>How this was built →</b></a> &middot;
+                <a href="/decisions"><b>Why it is built this way →</b></a> &middot;
+                <a href="https://github.com/SFHAJJI" rel="noopener"><b>GitHub →</b></a></p>
+                """;
+            return Results.Content(Page("About", body,
+                "Senior .NET, Azure and AI engineer in Luxembourg. Lex is one of three systems built the same way.",
+                "about"), "text/html");
         });
 
         // ---- /decisions: the choices, with what each one cost.

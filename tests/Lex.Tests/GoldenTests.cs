@@ -40,6 +40,7 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
         { "architecture",    "/architecture" },
         { "built",           "/built" },
         { "decisions",       "/decisions" },
+        { "about",           "/about" },
         { "stories",         "/stories" },
         { "find",            "/find" },
         { "developers",      "/developers" },

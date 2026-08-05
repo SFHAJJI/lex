@@ -5,9 +5,9 @@ HTTP 200
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Titles are labels, not sentences: one that ends in a full stop renders "acts., Lex" in
      the tab and in every social card, which is what the front page did until now. -->
-<title>What changed, Loi sur la chose, Lex</title>
+<title>About, Lex</title>
 <meta name="description" content="Point-in-time Luxembourg law, plus ten EU acts: what did the rule say on a given date? Grounded AI answers, permalinks, timelines, diffs, cryptographic provenance, and a public MCP endpoint.">
-<meta property="og:title" content="What changed, Loi sur la chose, Lex">
+<meta property="og:title" content="About, Lex">
 <meta property="og:description" content="Point-in-time Luxembourg law, plus ten EU acts, with grounded AI answers, per-article history, and verifiable provenance.">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Lex">
@@ -107,20 +107,61 @@ HTTP 200
   <a class="navlink" href="/developers">For developers</a>
 </header>
 <main>
-<h1>What changed, Loi sur la chose</h1>
-<p class="sub">2020-01-01 → 2022-01-01 · no interpretation, just the text delta</p>
-<div class="card"><table class="kv">
-<tr><td>on 2020-01-01</td><td class="mono"><a href="/t-pub/w1/2020-01-01">t-pub:w1:2020-01-01</a> (2020-01-01 → 2021-12-31)</td></tr>
-<tr><td>on 2022-01-01</td><td class="mono"><a href="/t-pub/w1/2022-01-01">t-pub:w1:2022-01-01</a> (2022-01-01 → <i>open</i>)</td></tr>
-</table></div><p class="sub">1 line(s) in the old middle, 1 in the new; 3 unchanged leading and 5 trailing lines trimmed.</p><div class="card"><pre style="white-space:pre-wrap;font-size:13px;margin:0"><span style="color:var(--ok)">+ la chose s applique partout, revisee</span>
-<span style="color:var(--accent)">− la chose s applique partout</span>
-</pre></div><div class="card"><table class="kv">
-<tr><td>tier</td><td>A, publisher-supplied validity dates</td></tr>
-<tr><td>history begins</td><td>publisher</td></tr>
-<tr><td>index built</td><td class="mono"><TIMESTAMP> · corpus goldenc</td></tr>
-<tr><td>stamp signature</td><td><span class="badge ok">valid (ECDSA-P256)</span></td></tr>
+<h1>About</h1>
+<p class="sub">Senior .NET, Azure and AI engineer in Luxembourg. Lex is one of three systems built the same way.</p>
+<p class="lede">I build systems that have to be right rather than plausible: regulated
+platforms where an answer has to carry its source, its date, and a way to check it.</p>
 
-</table></div>
+<div class="card">
+<p><b>Soufien Hajji</b>, senior .NET, Azure and AI engineer, based in Luxembourg. Nine
+years across telecoms, rail, investment banking and asset management, most of it on
+systems where being wrong is expensive: front-office trading platforms, regulatory-capital
+reporting, and the agentic AI layer on top of it.</p>
+<p class="sub">Lex is a personal project, unaffiliated with any publisher or public body.
+It is built the way I build professionally, which is the reason it exists: the pipeline is
+deterministic, the claims are testable, and the parts that cannot be verified say so
+instead of guessing.</p>
+<p><a class="pick main" href="https://api.soufien.lu/cv/en" rel="noopener">CV, English (PDF)</a>
+&nbsp; <a class="pick" href="https://api.soufien.lu/cv/fr" rel="noopener">CV, français (PDF)</a>
+&nbsp; <a class="pick" href="https://www.linkedin.com/in/soufien-hajji" rel="noopener">LinkedIn ↗</a></p>
+</div>
+
+<h2>Three things, built the same way</h2>
+
+<div class="card">
+<b><a href="https://law.soufien.lu">law.soufien.lu</a></b> &middot; this one
+<p class="sub">Point-in-time Luxembourg law and ten EU acts: 2 works as
+3 dated versions, a public MCP endpoint, open datasets, and a signed index
+whose stamp commits to a digest of its own content. The hard part was never the AI; it was
+that a law has no single text, only a text per date.
+<a href="/decisions">The decision that shaped it, and what it cost →</a></p>
+</div>
+
+<div class="card">
+<b><a href="https://soufien.lu" rel="noopener">soufien.lu</a></b> &middot; the assistant
+<p class="sub">Ask about my experience or my code, drop in a job advert to see how it
+matches, or run a mock interview. Grounded in a corpus of my own work, and it cites where
+each answer came from.</p>
+</div>
+
+<div class="card">
+<b><a href="https://energy.soufien.lu" rel="noopener">energy.soufien.lu</a></b> &middot; solar prospecting
+<p class="sub">An AI co-pilot for photovoltaic prospecting in Luxembourg: which roofs and
+car parks qualify, the tariffs and grants that apply, and the law behind the answer. Every
+claim is cited, and it declines rather than guessing.</p>
+</div>
+
+<h2>How I work, if that is what you are here for</h2>
+<p>The clearest evidence is not a CV. It is
+<a href="/decisions">the decisions page</a>, which states each choice, the alternative it
+was taken over, and the bill; <a href="/coverage">the coverage page</a>, which exists to
+say what this service does <i>not</i> hold; and
+<a href="/verify">the verification page</a>, which tells you how to check the answers
+without trusting me. A system that cannot say what it lacks is not finished.</p>
+
+<p class="sub"><a href="/built"><b>How this was built →</b></a> &middot;
+<a href="/decisions"><b>Why it is built this way →</b></a> &middot;
+<a href="https://github.com/SFHAJJI" rel="noopener"><b>GitHub →</b></a></p>
 </main>
 <footer>
 <!-- Fourteen links in one undifferentiated run answered no question a reader had. Three

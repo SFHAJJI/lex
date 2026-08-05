@@ -256,15 +256,11 @@ something shipped stale, that was why.</p>
      author reads as a portfolio, and stops being trusted as a source. Two sentences. -->
 <h2>Who built this</h2>
 <div class="card">
-<p>Lex is built and run by <b>Soufien Hajji</b>, a software engineer in Luxembourg. It is a
-personal project, unaffiliated with any publisher or public body, built the way I build
-professionally: the pipeline is deterministic, the claims are testable, and the parts that
-cannot be verified say so rather than guessing.</p>
-<p class="sub">Two other things I have built the same way:
-<a href="https://soufien.lu" rel="noopener">soufien.lu</a>, where you can ask an assistant
-about my work or paste a job advert to see how it matches, and
-<a href="https://energy.soufien.lu" rel="noopener">energy.soufien.lu</a>, an AI co-pilot
-for solar prospecting in Luxembourg.</p>
+<p>Lex is built and run by <b><a href="/about">Soufien Hajji</a></b>, a senior .NET, Azure
+and AI engineer in Luxembourg. It is a personal project, unaffiliated with any publisher or
+public body, built the way I build professionally: the pipeline is deterministic, the claims
+are testable, and the parts that cannot be verified say so rather than guessing.</p>
+<p class="sub"><a href="/about"><b>About, and the other two systems built the same way →</b></a></p>
 </div>
 
 <p class="sub"><a href="/decisions"><b>Why it is built this way →</b></a> ·
@@ -283,7 +279,8 @@ for solar prospecting in Luxembourg.</p>
   <div><b>Check the work</b>
     <a href="/how-it-works">How it works</a><a href="/coverage">What Lex holds, and lacks</a>
     <a href="/decisions">Decisions, and what they cost</a>
-    <a href="/verify">Verify it yourself</a><a href="/architecture">Architecture</a></div>
+    <a href="/verify">Verify it yourself</a><a href="/architecture">Architecture</a>
+    <a href="/about">Who built this</a></div>
   <!-- The datasets, not the engine. This group used to end at "Source on GitHub" pointing at
        the engine repo, which is the wrong thing to lead with for a reader who wants to USE
        this law rather than read the code that serves it. The corpora are the part that is

@@ -150,7 +150,8 @@ or read <a href="/stories">four laws with a story</a>.</p>
   <div><b>Check the work</b>
     <a href="/how-it-works">How it works</a><a href="/coverage">What Lex holds, and lacks</a>
     <a href="/decisions">Decisions, and what they cost</a>
-    <a href="/verify">Verify it yourself</a><a href="/architecture">Architecture</a></div>
+    <a href="/verify">Verify it yourself</a><a href="/architecture">Architecture</a>
+    <a href="/about">Who built this</a></div>
   <!-- The datasets, not the engine. This group used to end at "Source on GitHub" pointing at
        the engine repo, which is the wrong thing to lead with for a reader who wants to USE
        this law rather than read the code that serves it. The corpora are the part that is

@@ -85,7 +85,7 @@ public static class HomeEndpoints
                 <nav class="fork" aria-label="Where to go next">
                   <a href="/browse"><b>I want to read a law</b><span>The catalogue: every work, every dated version.</span></a>
                   <a href="/developers"><b>I want to build on this</b><span>MCP endpoint, {tools.Count} tools, the datasets, the licence.</span></a>
-                  <a href="/coverage"><b>I want to check whether this is honest</b><span>What Lex holds, and what it knowably lacks.</span></a>
+                  <a href="/about"><b>I want to know who built this</b><span>One engineer in Luxembourg, and two other systems built the same way.</span></a>
                 </nav>
                 </div>
                 """
