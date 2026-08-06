@@ -176,6 +176,11 @@ jobs:
           printf '%s' "$eu_exact" | jq -e \
             '.[0].retrieval_mode == "keyword"
              and any(.[0].hits[]; .work == "32016r0679")' >/dev/null
+          if [ "$REQUIRE_MANIFEST" = "1" ]; then
+            [ "$MANIFEST_SET" != "legacy" ] || { echo "::error::signed deployment resolved to legacy artifacts"; exit 1; }
+            printf '%s' "$eu_exact" | jq -e --arg manifest "$MANIFEST_SET" \
+              '.[0].artifact_manifest_id == $manifest' >/dev/null
+          fi
           lu_temporal=$(mcp_text '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"as_of","arguments":{"work":"loi-1879-06-18-n1","publisher":"lu-legilux","date":"2026-08-06","mode":"outline"}}}')
           printf '%s' "$lu_temporal" | jq -e \
             '.document.work == "loi-1879-06-18-n1" and (.provisions | length) > 0' >/dev/null
