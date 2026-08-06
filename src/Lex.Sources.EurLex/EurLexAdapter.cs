@@ -155,6 +155,12 @@ public sealed class EurLexAdapter : ISourceAdapter
     /// </summary>
     public async Task<ManifestationFetch?> FetchAltManifestation(VersionRecord version, ExpressionRecord expression, CancellationToken ct)
     {
+        // Formex identity checks require an official consolidated CONSLEG expression.
+        // Original and unconsolidated acts do not contain INFO.CONSLEG, so requesting
+        // their optional Formex representation can never produce an accepted result.
+        if (version.Raw.TryGetValue("consolidation_status", out var status) && status != "published")
+            return null;
+
         await PaceAsync(ct);
         var celex = version.Raw.GetValueOrDefault("celex");
         if (celex is null) return null;
