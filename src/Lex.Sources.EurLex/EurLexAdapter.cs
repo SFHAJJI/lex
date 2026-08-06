@@ -275,6 +275,9 @@ public sealed class EurLexAdapter : ISourceAdapter
                     .ToDictionary(g => g.Key, g => g.First().GetValueOrDefault("title"), StringComparer.Ordinal);
                 var baseTitle = titles.GetValueOrDefault("en") ?? titles.GetValueOrDefault("fr");
                 var commonName = CommonNames.GetValueOrDefault(baseCelex);
+                var inForce = baseTitleRows.FirstOrDefault(r => r.ContainsKey("inforce"))
+                    ?.GetValueOrDefault("inforce");
+                var bindingStatus = NormalizeBindingStatus(inForce);
 
                 var workUri = $"http://publications.europa.eu/resource/celex/{baseCelex}";
                 var slug = baseCelex.ToLowerInvariant();
@@ -313,11 +316,11 @@ public sealed class EurLexAdapter : ISourceAdapter
                         ValidFrom: date,
                         ValidTo: validTo,
                         ValidTimeSource: "publisher",
-                        InForceStatus: null,
+                        InForceStatus: inForce,
                         PublicationDate: date,
                         Expressions: expressions,
                         Relations: [new RelationRecord("consolidates", new Identifier(workUri))],
-                        Raw: ScopeRaw(celex, typeCode, "published", reasons)));
+                        Raw: ScopeRaw(celex, typeCode, bindingStatus, "published", reasons)));
                 }
 
                 // One-version and not-yet-consolidated works remain first-class works. Lex stores
@@ -341,7 +344,8 @@ public sealed class EurLexAdapter : ISourceAdapter
                     list.Add(new VersionRecord(
                         new Identifier(workUri), new Identifier(workUri), typeCode, originalDate, null,
                         "publisher", baseTitleRows.First().GetValueOrDefault("inforce"), originalDate,
-                        expressions, [], ScopeRaw(baseCelex, typeCode, "not_published_or_not_required", reasons)));
+                        expressions, [], ScopeRaw(baseCelex, typeCode, bindingStatus,
+                            "not_published_or_not_required", reasons)));
                 }
 
                 _byWork[workUri] = list;
@@ -580,8 +584,16 @@ public sealed class EurLexAdapter : ISourceAdapter
         } : "OTHER";
     }
 
+    public static string NormalizeBindingStatus(string? value) => value?.Trim().ToLowerInvariant() switch
+    {
+        "true" or "1" => "in_force",
+        "false" or "0" => "not_in_force",
+        _ => "unknown",
+    };
+
     private static Dictionary<string, string> ScopeRaw(
-        string celex, string legalForm, string consolidationStatus, IEnumerable<string> reasons)
+        string celex, string legalForm, string bindingStatus, string consolidationStatus,
+        IEnumerable<string> reasons)
     {
         var reasonList = reasons.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList();
         var domains = reasonList.Where(r => r.StartsWith("domain:", StringComparison.Ordinal))
@@ -591,7 +603,7 @@ public sealed class EurLexAdapter : ISourceAdapter
             ["celex"] = celex,
             ["legal_form"] = legalForm,
             ["hierarchy"] = celex.StartsWith('1') ? "primary_eu_law" : "secondary_eu_law",
-            ["binding_status"] = "publisher_metadata",
+            ["binding_status"] = bindingStatus,
             ["consolidation_status"] = consolidationStatus,
             ["domains"] = string.Join(',', domains),
             ["scope_reasons"] = string.Join(',', reasonList),

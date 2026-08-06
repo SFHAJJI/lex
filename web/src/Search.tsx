@@ -75,6 +75,9 @@ export default function Search(p: SearchProps) {
   const [jurisdiction, setJurisdiction] = useState<"" | "lu" | "eu">("");
   const [hierarchy, setHierarchy] = useState<"" | "primary_eu_law" | "secondary_eu_law">("");
   const [domain, setDomain] = useState("");
+  const [actForm, setActForm] = useState("");
+  const [bindingStatus, setBindingStatus] = useState("");
+  const [language, setLanguage] = useState("");
   const [modeUsed, setModeUsed] = useState("keyword");
   const [expansions, setExpansions] = useState<string[]>([]);
   const box = useRef<HTMLInputElement>(null);
@@ -84,7 +87,8 @@ export default function Search(p: SearchProps) {
 
   const q = p.state.q ?? "";
   const asOf = p.state.asOf;
-  const activeFilters = [retrieval === "hybrid", jurisdiction, hierarchy, domain, layer]
+  const activeFilters = [retrieval === "hybrid", jurisdiction, hierarchy, domain, layer,
+                         actForm, bindingStatus, language]
     .filter(Boolean).length;
 
   useEffect(() => {
@@ -96,6 +100,9 @@ export default function Search(p: SearchProps) {
                           retrieval_mode: retrieval, fuzzy: "auto",
                           ...(jurisdiction ? { jurisdiction } : {}),
                           ...(hierarchy ? { hierarchy } : {}), ...(domain ? { domain } : {}),
+                          ...(actForm ? { act_form: actForm } : {}),
+                          ...(bindingStatus ? { binding_status: bindingStatus } : {}),
+                          ...(language ? { language } : {}),
                           ...(types ? { document_type: types } : {}) })
       .then((res) => {
         if (!live) return;
@@ -129,7 +136,7 @@ export default function Search(p: SearchProps) {
       .catch(() => { if (live) { setWorks([]); setArticles([]); } })
       .finally(() => { if (live) setBusy(false); });
     return () => { live = false; };
-  }, [q, asOf, layer, retrieval, jurisdiction, hierarchy, domain]);
+  }, [q, asOf, layer, retrieval, jurisdiction, hierarchy, domain, actForm, bindingStatus, language]);
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -224,6 +231,26 @@ export default function Search(p: SearchProps) {
                         onChange={(e) => setLayer(e.target.value as LayerId | "")}>
                   <option value="">Every kind of law</option>
                   {LAYERS.map((l) => <option key={l.id} value={l.id}>{l.label}</option>)}
+                </select>
+              </label>
+              <label><span>EU legal form</span>
+                <select className="reslayer" value={actForm} onChange={(e) => setActForm(e.target.value)}>
+                  <option value="">Every legal form</option><option value="REG">Regulation</option>
+                  <option value="DIR">Directive</option><option value="DEC">Decision</option>
+                  <option value="TREATY">Treaty</option><option value="CHARTER">Charter</option>
+                </select>
+              </label>
+              <label><span>EU legal status</span>
+                <select className="reslayer" value={bindingStatus}
+                        onChange={(e) => setBindingStatus(e.target.value)}>
+                  <option value="">Every status</option><option value="in_force">In force</option>
+                  <option value="not_in_force">Not in force</option><option value="unknown">Not classified</option>
+                </select>
+              </label>
+              <label><span>Language</span>
+                <select className="reslayer" value={language} onChange={(e) => setLanguage(e.target.value)}>
+                  <option value="">Every language</option><option value="fr">French</option>
+                  <option value="en">English</option>
                 </select>
               </label>
             </div>
