@@ -453,11 +453,11 @@ button.pick { cursor: pointer; }
 .res-h:first-of-type { margin-top: 0; }
 
 @media (max-width: 640px) {
-  .one { display: grid; grid-template-columns: minmax(0, 1fr) auto; }
-  .onebox { grid-column: 1 / -1; width: 100%; }
-  .asof { min-width: 0; padding: 0 9px; }
-  .asof input { min-width: 0; width: 100%; }
-  .one button[type=submit] { padding: 0 18px; min-height: 44px; }
+  .one { display: grid; grid-template-columns: minmax(0, 1fr); }
+  .onebox, .asof, .one button[type=submit] { width: 100%; min-width: 0; }
+  .asof { padding: 0 10px; min-height: 44px; overflow: hidden; }
+  .asof input { flex: 1 1 0; min-width: 0; max-width: 100%; }
+  .one button[type=submit] { padding: 9px 18px; min-height: 44px; }
   .onehint { overflow-wrap: anywhere; }
   .res-head { flex-wrap: wrap; }
   .res-head .grow { display: none; }
