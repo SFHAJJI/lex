@@ -59,6 +59,12 @@ When an amended work has no official consolidated expression, Lex holds its offi
 events, reports `consolidation_status=not_published`, and does not claim to know merged current
 wording.
 
+For the EU, another domain using the existing legislation classes is a reviewed scope
+configuration, preview and backfill. New publishers and document classes with different temporal
+semantics still require implementation. Luxembourg is currently complete for Legilux's
+`Consolidation` catalogue, not for the broader `Act` catalogue. The measured boundary and required
+adapter work are recorded in [Luxembourg scope](luxembourg-scope.md).
+
 ## Retrieval policy
 
 Keyword search remains production default until hybrid passes its gate. Hybrid is local: FTS5

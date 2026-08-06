@@ -73,9 +73,11 @@ curl -s -X POST https://law.soufien.lu/mcp -H 'Content-Type: application/json' \
 
 ## What it never does
 
-Lex answers *what the rule was*. It never answers "were we compliant?", "does
+Lex answers *what the rule was*. It does not decide "were we compliant?", "does
 this apply to me?", or "what does this mean?", those are professional opinions.
-No component in this system generates interpretive text (fitness rule F10).
+The evidence, index and MCP layers never generate or interpret legal text
+(fitness rule F10). The optional assistant may explain retrieved evidence, but
+it is visibly separate, carries the tool trace and is not part of the record.
 
 ## Architecture (one screen)
 
@@ -84,7 +86,7 @@ APPS        Lex.Ingest (CLI)   Lex.Mcp (MCP server)        Lex.Web (demo)   Lex.
 DERIVED     Lex.Derive, evidence -> per-article Markdown+JSON (immutable profiles: akn-lu/1, fmx4-eu/1, xhtml-eu/1)
 ADAPTERS    Lex.Sources.Legilux (Tier A, SPARQL)   Lex.Sources.EurLex (Tier A, Cellar + Formex)
 MODEL       Lex.Law, Publisher, Work, Version, Expression, Observation. No publisher names.
-FOUNDATION  Lex.Temporal (interval algebra)   Lex.Index (SQLite: filter-first, signed stamp)
+FOUNDATION  Lex.Temporal (interval algebra)   Lex.Index (SQLite: filter-first, verified artifacts)
 ```
 
 - **One corpus repo per publisher**; the corpus is human-readable JSON + git. The tree carries the legislative history, `git log` carries the ingest history, and the two are deliberately not the same ([why](https://law.soufien.lu/decisions)).
@@ -97,50 +99,40 @@ FOUNDATION  Lex.Temporal (interval algebra)   Lex.Index (SQLite: filter-first, s
   byte-compares.
 - **Filters before ranking, always**, enforced by construction (a non-optional
   `FilterSet` on the only query entry point).
-- **Signed index stamps** (ECDSA-P256): every served hash is attributable.
+- **Signed whole-artifact manifests** (ECDSA P-256): a trust root pinned in the
+  application verifies indexes, vectors, embedding assets, scope, benchmark
+  and source commits before any file is mounted. The embedded index stamp
+  remains public provenance, not its own trust root.
 - **Honest refusals**: `no_version_for_date`, `anchor_not_in_version`,
   `outside_observed_window`, `text_withheld`, a flagged wrong answer is still
   a wrong answer, so Lex refuses instead.
 
 ## Current coverage
 
-**Luxembourg** (Legilux, Tier A): **every** work and consolidated version the
-publisher issues, 1,399 / 4,703, 1849→2030. Nothing is filtered out by type.
-Text is verbatim Akoma Ntoso XML from the publisher's official,
-robots-permitted filestore, licensed CC-BY-4.0.
+**Luxembourg** (Legilux, Tier A): every work and current version in the
+publisher's `Consolidation` catalogue. Nothing in that collection is filtered
+out by legal form. On 2026-08-06 the publisher returned 1,399 works and 4,638
+current consolidation records, and the corpus contained all of them. Mounted
+counts, dates, corpus commit and extraction-profile mix are read from the index
+on the [live coverage page](https://law.soufien.lu/coverage), rather than copied
+into product prose that becomes stale after the next publisher run.
 
-**Text is held for 2,949 of those versions, not all of them, and the reason is
-the publisher's format rather than our pipeline.** Legilux offers XML for 2,892
-consolidations, PDF only for 1,611, and no file at all for 130 (measured against
-its own catalogue, 2026-08-04). Lex reads the XML, because XML is the only format
-carrying article boundaries, which is what makes an article citable, hashable and
-diffable.
+The consolidation catalogue is not all Luxembourg law. The same official
+endpoint exposes 150,187 resources classified as `Act`, including laws,
+grand-ducal regulations, ministerial regulations and orders that may never have
+received a consolidation record. That broad number also contains notices and
+other material that should not all enter lawyer-facing search. The measured
+boundary and the proposed normative-act increment are documented in
+[Luxembourg scope](docs/luxembourg-scope.md).
 
-Where the publisher issues no XML, Lex falls back to the consolidated PDF
-(profile `pdf-lu/1`, spec D49). Those PDFs are born-digital with a real font
-layer, so no OCR is involved: 64 versions are read this way, and the profile id
-records per version that the article boundaries were inferred from typography
-rather than taken from publisher markup. The fallback deliberately refuses the
-1,371 thematic-collection PDFs, which concatenate every act on a shelf, and the
-176 Memorial gazette scans, where the act sits inside a whole day's journal.
-Everything else keeps its dated record, source and hash, with no wording.
-
-The gap is concentrated outside the hierarchy of norms, not across it:
-
-| | text held |
-|---|---|
-| Constitution, treaties | **100%** |
-| Code (enacted as a law) | **100%** |
-| Règlement de la Chambre, arrêté ministériel | **100%** |
-| Règlement grand-ducal | 96% |
-| Loi | 93% |
-| Règlement ministériel, arrêté grand-ducal | ~75% |
-| RECUEIL / CODE_RECUEIL (thematic folders, not instruments) | 9% / 2% |
-
-Roughly 1,371 of the textless versions are those folders, which nobody voted and
-which hold no rule of their own.
-Honest coverage claim: *dense and reliable from 2017 onward; real but sparse
-before; isolated snapshots back to 1849; forward to 2030.*
+Where official XML exists, text is retained as verbatim Akoma Ntoso. The
+deterministic `pdf-lu/1` fallback handles eligible born-digital consolidated
+PDFs and records that article boundaries came from typography rather than
+publisher markup. The pipeline refuses thematic folder PDFs, whole-gazette
+scans and fileless records as authoritative article text; those versions keep
+their dates, source and hashes without pretending wording was extracted. Exact
+text availability by legal form is reported from the mounted artifact on the
+coverage page.
 
 **EU** (EUR-Lex/Cellar, Tier A): a reviewed compliance shelf spanning data,
 digital, cyber, finance and energy law. The mounted index and
@@ -149,9 +141,10 @@ work and version counts. Full text comes from the Publications Office's
 **Formex 4** structural XML where served, including large consolidations the
 XHTML channel cannot carry. The present EU limit is scope, not format.
 
-Derived layer: **1,212 works · 88,981 articles · 102,773 dated text states**.
-The never-consolidated LU acts (~24,579) and the wider EU acquis are staged
-next (spec §14). Communal regulations are deliberately out of scope: 17,232
+The derived dataset publishes its current counts and source commits in its
+[release catalog](https://github.com/SFHAJJI/lex-articles/blob/main/catalog.json).
+The broader Luxembourg original-act catalogue and approved EU scope are tracked
+by the [temporal expansion program](docs/hybrid-eu-roadmap.md). Communal regulations are deliberately out of scope: 17,232
 exist as published acts, none is ever consolidated, so there is no point-in-time
 history to hold. The fallback ladder for XML-less versions is spec D49.
 
@@ -171,14 +164,23 @@ LEX_INDEX_DIR=indexes dotnet run --project src/Lex.Web
 LEX_INDEX_DIR=indexes dotnet run --project src/Lex.Mcp
 ```
 
+The generated key above is for local development only. Production publication
+uses GitHub OIDC to ask the non-exportable Azure Key Vault key to sign the
+whole-artifact manifest, then deploys a zero-traffic candidate revision.
+
 ## MCP tools
 
 `as_of` (full / outline / per-article select) · `timeline` · `in_force_on` ·
-`diff` · `search` · `provenance` · `article_history` · `changes_in_period` ·
-`coverage`, `changes_in_period` answers across the corpus ("which laws moved
-most in this window"), the aggregate counterpart of `diff` and `timeline`; and
-`coverage` exists to say what we do **not** have, because a system that cannot
-state its own gaps cannot be trusted with a completeness question.
+`diff` · `search` · `article_history` · `provenance` · `coverage` ·
+`cited_by` · `changes_in_period`.
+
+The same read-only tools cover Luxembourg and EU material. Search spans every
+mounted publisher by default and can filter jurisdiction, date, hierarchy,
+legal form, binding status, domain and language. Keyword retrieval is
+deterministic FTS5/BM25. Hybrid adds the pinned local encoder and fixed rank
+fusion when verified vectors are mounted; no generative model participates in
+retrieval. `coverage` exists to say what Lex does **not** have, because a system
+that cannot state its own gaps cannot be trusted with a completeness question.
 
 ## Contributing
 

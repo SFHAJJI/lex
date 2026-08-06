@@ -1020,9 +1020,11 @@ public static class ExplainerEndpoints
                 <span class="badge">{cov.Sum(c => c.Rows):n0} dated versions</span>
                 <span class="badge">{cov.Sum(c => c.TextServed):n0} with full text</span>
                 <span class="badge">refreshed nightly</span></p>
-                <p>Lex holds every Luxembourg law the state maintains a consolidated edition for, plus a set
-                of EU financial and data regulations. Roughly 24,000 Luxembourg acts never receive a
-                consolidated edition and are not here, and the gaps are published rather than hidden.
+                <p>Lex holds every current record in Legilux's consolidation catalogue, plus the selected
+                temporal EU regulatory scope shown by the mounted index. Legilux also exposes a much broader
+                original-act catalogue; it mixes lawyer-relevant rules with notices and document classes that
+                need separate date and text semantics, so it is not presented as already covered. The gaps are
+                published rather than hidden.
                 <a href="/coverage"><b>Exactly what is and is not held →</b></a></p>
 
                 <h2>Under the hood</h2>

@@ -1,6 +1,6 @@
 # Working in this repo
 
-Point-in-time retrieval of Luxembourg law and ten EU acts. The product claim is that an answer
+Point-in-time retrieval of Luxembourg law and a reviewed, configuration-led EU corpus. The product claim is that an answer
 can be *checked* rather than trusted, so the rules below are not style preferences: most of them
 exist because breaking them produced a confidently wrong answer at some point.
 
@@ -27,8 +27,9 @@ comments.
 
 ## The golden tests are the safety net
 
-41 snapshots of every rendered page and every MCP tool response, plus targeted assertions. 162
-tests total.
+Snapshots cover every rendered page and every MCP tool response, with targeted contract and
+architecture assertions beside them. Do not hard-code the counts here; the test runner is the
+source of truth as the suite grows.
 
 ```bash
 dotnet test tests/Lex.Tests/Lex.Tests.csproj          # verify
@@ -51,16 +52,17 @@ the fixture and must be verified against the live site instead.
 ## Deploying, and why exit codes are not proof
 
 ```bash
-az acr build --registry crsoufien3orem --image lex-web:vX.Y.Z --file Dockerfile . --no-logs
-az containerapp update -n ca-lex-web -g rg-platform \
-   --image crsoufien3orem.azurecr.io/lex-web:vX.Y.Z --revision-suffix vXYZ
+gh workflow run deploy.yml -f require_manifest=true
+gh run watch --repo SFHAJJI/lex
 ```
 
-**Then fetch the served output and check it.** A deploy reported success while the revision sat
-in `ActivationFailed` with zero replicas and traffic stayed on the old image, so the sitemap was
-unchanged for an hour while everything claimed to be fine. Adding `--revision-suffix` and
-retrying cleared it. Check `az containerapp revision list` for `runningState`, then curl the
-thing you actually changed.
+The workflow logs into Azure through GitHub OIDC, builds an immutable image, creates a candidate
+revision at zero traffic, verifies artifact manifests, health and MCP behavior against that
+revision, and only then promotes it. The previous revision remains available for rollback.
+
+**Then fetch the served output and check it.** A workflow success proves its smoke tests, not
+every user path. Check `az containerapp revision list` for `runningState`, then request the live
+route and MCP behavior you changed.
 
 ## Things that have already gone wrong here
 
@@ -82,8 +84,9 @@ thing you actually changed.
 
 `work → dated consolidation → language expression → format manifestation → file` (JOLux/FRBR).
 
-- `Lex.Index` reads `lex-index/2`: SQLite + FTS5 with an ECDSA-P256-SHA256 signed stamp binding
-  a content digest. Knows nothing about law (F1).
+- `Lex.Index` reads both `lex-index/2` and `lex-index/3`. New builds use version 3: SQLite,
+  content-addressed exact text, contentless FTS5 and local semantic vectors. It knows nothing
+  about law (F1).
 - `Lex.Mcp` is the tool logic, shared by the stdio server and the HTTP endpoint (D27, one MCP
   binary). It never summarises or advises (F10); it returns publisher text or a machine-readable
   refusal.
@@ -94,4 +97,4 @@ thing you actually changed.
 
 ## Before a local pipeline run
 
-`git pull` both `lex-corpus-lu-legilux` and `lex-articles` first.
+`git pull` `lex-corpus-lu-legilux`, `lex-corpus-eu-eurlex` and `lex-articles` first.
