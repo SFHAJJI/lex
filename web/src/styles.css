@@ -463,6 +463,18 @@ button.pick { cursor: pointer; }
   .res-head .grow { display: none; }
   .filter-grid { grid-template-columns: 1fr; }
   .asklaunch { max-width: calc(100vw - 24px); }
+
+  /* A native date input keeps a large intrinsic width on mobile browsers. In the law header it
+     used to consume the row and push the law picker, comparison summary, and page itself beyond
+     the viewport. Give the dated-law controls deliberate rows and let long comparison labels
+     wrap. This keeps the temporal workflow usable at the same width as the finder. */
+  .lawhead .meta > .grow { display: none; }
+  .lawhead .meta > label.pick { width: 100%; min-width: 0; box-sizing: border-box; }
+  .lawhead .meta > label.pick input { flex: 1 1 0; min-width: 0; max-width: 100%; }
+  .lawhead .meta > .picker { min-width: 0; max-width: 100%; }
+  .railhead .tag.act { max-width: 100%; white-space: normal; overflow-wrap: anywhere;
+                       text-align: left; line-height: 1.35; }
+  .cnt .tag.mono { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
 }
 
 /* The report's own header. It is not a search, so it does not look like one: a title, the window
