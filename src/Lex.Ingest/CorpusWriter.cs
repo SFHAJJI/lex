@@ -30,7 +30,7 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now, TextWrit
         var kinds = new Dictionary<string, int>(StringComparer.Ordinal);
         var langs = new HashSet<string>(StringComparer.Ordinal);
         string? earliest = null, latest = null;
-        int works = 0, versions = 0;
+        int works = 0, versions = 0, expressions = 0, expressionsWithText = 0;
         var seenVersionMetadata = new HashSet<string>(PathComparer);
 
         // Materialise the metadata-only plan before fetching bodies. Adapters already hold their
@@ -274,6 +274,10 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now, TextWrit
                     }
                 }
 
+                expressions += meta.Expressions.Count;
+                expressionsWithText += meta.Expressions.Count(expression =>
+                    expression.Text.Available && expression.Observations.Count > 0);
+
                 processedExpressions += v.Expressions.Count;
                 var percent = totalExpressions == 0
                     ? 100
@@ -320,6 +324,9 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now, TextWrit
             Languages = langs.Order().ToList(),
             Works = works,
             Versions = versions,
+            Expressions = expressions,
+            ExpressionsWithText = expressionsWithText,
+            ExpressionsWithoutText = expressions - expressionsWithText,
             ValidFromEarliest = earliest,
             ValidToLatest = latest,
             HistoryBegins = desc.HistoryBegins,
@@ -327,7 +334,9 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now, TextWrit
         };
         WriteIfChanged(Path.Combine(corpusRoot, "manifest.json"), JsonSerializer.Serialize(manifest, CorpusJson.Options));
         WriteIfChanged(Path.Combine(corpusRoot, "NOTICE"), Notice(pub, desc.TextIncluded));
-        Console.Error.WriteLine($"  [corpus] works={works} versions={versions} created={Created} updated={Updated} unchanged={Unchanged}");
+        Console.Error.WriteLine($"  [corpus] works={works} versions={versions} expressions={expressions} " +
+            $"with_text={expressionsWithText} without_text={expressions - expressionsWithText} " +
+            $"created={Created} updated={Updated} unchanged={Unchanged}");
     }
 
     private void WriteIfChanged(string path, string content)
