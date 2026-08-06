@@ -152,9 +152,20 @@ switch (args0[0])
     }
     case "verify":
     {
-        // verify stamp --db X   |   verify derive --publisher P --corpus X --articles Y [--work slug]
+        // verify corpus --corpus X | verify stamp --db X | verify derive --publisher P --corpus X --articles Y
         switch (args0.Length > 1 ? args0[1] : "")
         {
+            case "corpus":
+            {
+                var corpus = Get("--corpus") ?? throw new ArgumentException("--corpus required");
+                var report = CorpusIntegrity.Verify(corpus);
+                Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(report, new System.Text.Json.JsonSerializerOptions
+                {
+                    PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.SnakeCaseLower,
+                    WriteIndented = true,
+                }));
+                return report.IsValid ? 0 : 6;
+            }
             case "stamp":
             {
                 var db = Get("--db") ?? throw new ArgumentException("--db required");
@@ -208,7 +219,7 @@ switch (args0[0])
                 finally { try { Directory.Delete(tmp, true); } catch { } }
             }
             default:
-                Console.Error.WriteLine("usage: lex verify stamp --db X | lex verify derive --publisher P --corpus X --articles Y [--work slug]");
+                Console.Error.WriteLine("usage: lex verify corpus --corpus X | lex verify stamp --db X | lex verify derive --publisher P --corpus X --articles Y [--work slug]");
                 return 1;
         }
     }
