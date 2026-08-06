@@ -474,14 +474,16 @@ public sealed class EurLexAdapter : ISourceAdapter
             foreach (var celex in domain.SeedCelex) Add(celex, $"domain:{domain.Id}:seed");
             foreach (var prefix in domain.DirectoryPrefixes)
             {
+                var inForce = _wave < 3
+                    ? " ; cdm:resource_legal_in-force \"true\"^^<http://www.w3.org/2001/XMLSchema#boolean>"
+                    : "";
                 var rows = await SelectAsync(Cdm + $$"""
                     SELECT DISTINCT ?celex WHERE {
                       ?w cdm:resource_legal_id_celex ?celex ;
-                         cdm:resource_legal_type ?type ;
-                         cdm:resource_legal_is_about_concept_directory-code ?directory .
-                      FILTER(STR(?type) IN ("R", "L", "D"))
+                         cdm:resource_legal_is_about_concept_directory-code ?directory {{inForce}} .
                       FILTER(STRSTARTS(STRAFTER(STR(?directory), "/dir-eu-legal-act/"), "{{prefix}}"))
-                    } ORDER BY ?celex LIMIT 20001
+                      FILTER(REGEX(STR(?celex), "^3[0-9]{4}[RLD]"))
+                    } LIMIT 20001
                     """, ct);
                 if (rows.Count > 20000)
                     throw new InvalidOperationException($"Directory selector '{prefix}' exceeds 20,000 works; refine the reviewed scope.");
@@ -519,8 +521,18 @@ public sealed class EurLexAdapter : ISourceAdapter
                       VALUES (?seedCelex ?seedAlias) { {{values}} }
                       VALUES ?predicate { {{predicateValues}} }
                       ?seed owl:sameAs ?seedAlias .
-                      { ?seed ?predicate ?related } UNION { ?related ?predicate ?seed }
+                      {
+                        ?seed ?predicate ?related .
+                        BIND("outbound" AS ?direction)
+                      } UNION {
+                        ?related ?predicate ?seed .
+                        BIND("inbound" AS ?direction)
+                      }
                       ?related cdm:resource_legal_id_celex ?relatedCelex .
+                      FILTER(
+                        ?predicate != cdm:resource_legal_based_on_resource_legal
+                        || ?direction = "outbound"
+                        || REGEX(STR(?relatedCelex), "^3[0-9]{4}[RL]"))
                     }
                     """, ct);
                 foreach (var group in rows.GroupBy(r => r["seedCelex"], StringComparer.Ordinal))
