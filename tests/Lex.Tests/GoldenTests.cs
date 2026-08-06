@@ -137,6 +137,18 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
     }
 
     [Fact]
+    public async Task Attestation_distinguishes_manifest_trust_from_embedded_stamp_provenance()
+    {
+        var json = await _site.Client.GetStringAsync("/attestation.json");
+        var attestation = System.Text.Json.Nodes.JsonNode.Parse(json)!.AsObject();
+
+        Assert.Contains("whole-artifact manifests", attestation["artifact_trust"]!.GetValue<string>());
+        Assert.Contains("lex-artifacts/1", attestation["artifact_signature_binds"]!.GetValue<string>());
+        Assert.Contains("canonical stamp text", attestation["embedded_stamp_signature_binds"]!.GetValue<string>());
+        Assert.NotNull(attestation["signature_binds"]); // compatibility contract
+    }
+
+    [Fact]
     public async Task Public_retrieval_judgments_are_downloadable_and_complete()
     {
         var json = await _site.Client.GetStringAsync("/benchmarks/cases.json");
