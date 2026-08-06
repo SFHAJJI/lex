@@ -1,7 +1,7 @@
 {
   "schema": "lex-eu-scope/1",
   "scope_id": "luxembourg-practice/1",
-  "approved_wave": 1,
+  "approved_wave": 2,
   "languages": ["en", "fr"],
   "legal_forms": ["REG", "DIR", "DEC", "TREATY", "CHARTER"],
   "binding_statuses": ["in_force", "not_in_force", "unknown"],
@@ -54,65 +54,86 @@
       "id": "financial-services",
       "label": "Financial services and capital markets",
       "wave": 2,
-      "directory_prefixes": ["10"],
+      "directory_prefixes": [],
       "eurovoc": [],
-      "seed_celex": []
+      "seed_celex": [
+        "32013L0036", "32014R0600", "32014R0596", "32016R1011", "32017R1129"
+      ]
     },
     {
       "id": "aml-corporate",
       "label": "Anti-money laundering and corporate law",
       "wave": 2,
-      "directory_prefixes": ["06"],
+      "directory_prefixes": [],
       "eurovoc": [],
-      "seed_celex": []
+      "seed_celex": [
+        "32015L0849", "32018L0843", "32024R1624", "32024L1640", "32024R1620",
+        "32017L1132", "32019L2121", "32007L0036", "32019L1151"
+      ]
     },
     {
       "id": "competition",
       "label": "Competition and State aid",
       "wave": 2,
-      "directory_prefixes": ["08"],
+      "directory_prefixes": [],
       "eurovoc": [],
-      "seed_celex": []
+      "seed_celex": [
+        "32003R0001", "32004R0139", "32022R1925", "32019L0001", "32023R2831", "32014R0651"
+      ]
     },
     {
       "id": "tax",
       "label": "Taxation",
       "wave": 2,
-      "directory_prefixes": ["09"],
+      "directory_prefixes": [],
       "eurovoc": [],
-      "seed_celex": []
+      "seed_celex": [
+        "32006L0112", "32011L0016", "32016L1164", "32022L2523", "32022L0542"
+      ]
     },
     {
       "id": "employment",
       "label": "Employment and social policy",
       "wave": 2,
-      "directory_prefixes": ["05"],
+      "directory_prefixes": [],
       "eurovoc": [],
-      "seed_celex": []
+      "seed_celex": [
+        "32003L0088", "32019L1152", "32006L0054", "32014L0067", "32018L0957",
+        "32022L2041", "32023L0970"
+      ]
     },
     {
       "id": "consumer-environment",
       "label": "Consumer, environmental and health protection",
       "wave": 2,
-      "directory_prefixes": ["15"],
+      "directory_prefixes": [],
       "eurovoc": [],
-      "seed_celex": []
+      "seed_celex": [
+        "32011L0083", "32005L0029", "32019L0770", "32019L0771", "32020R0852",
+        "32023R1115", "32024L1760", "32024R1781", "32021R1119", "32003L0087", "32018R1999"
+      ]
     },
     {
       "id": "procurement-and-ip",
       "label": "Public procurement and intellectual property",
       "wave": 2,
-      "directory_prefixes": ["17"],
+      "directory_prefixes": [],
       "eurovoc": [],
-      "seed_celex": []
+      "seed_celex": [
+        "32014L0024", "32014L0025", "32014L0023", "32019L0790", "32017R1001",
+        "32012R1257", "32006L0116", "32004L0048"
+      ]
     },
     {
       "id": "judicial-cooperation",
       "label": "Judicial cooperation and fundamental rights",
       "wave": 2,
-      "directory_prefixes": ["19"],
+      "directory_prefixes": [],
       "eurovoc": [],
-      "seed_celex": []
+      "seed_celex": [
+        "32012R1215", "32019R1111", "32008R0593", "32007R0864", "32020R1784",
+        "32020R1783", "32015R0848", "32014L0041", "32016L0680", "32023R1543"
+      ]
     }
   ],
   "exclusions": [
