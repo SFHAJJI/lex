@@ -63,7 +63,8 @@ jobs:
           trap 'rm -rf "$release_dir"' EXIT
           for item in \
             lex-corpus-lu-legilux:index-lu-legilux.manifest.json \
-            lex-corpus-eu-eurlex:index-eu-eurlex.manifest.json; do
+            lex-corpus-eu-eurlex:index-eu-eurlex.manifest.json \
+            lex-corpus-eu-eurlex:retrieval-benchmark-eu-eurlex.manifest.json; do
             repo="${item%%:*}"
             manifest="${item#*:}"
             if ! curl --fail --silent --show-error --location \
