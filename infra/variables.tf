@@ -24,6 +24,11 @@ variable "container_app_name" {
   default = "ca-lex-web"
 }
 
+variable "container_app_environment_name" {
+  type    = string
+  default = "cae-platform-law"
+}
+
 variable "shared_acr_resource_group" {
   type    = string
   default = "rg-soufien-portfolio"

@@ -15,7 +15,8 @@ data "azurerm_cognitive_account" "openai" {
 }
 
 locals {
-  container_app_id = "${data.azurerm_resource_group.platform.id}/providers/Microsoft.App/containerApps/${var.container_app_name}"
+  container_app_id             = "${data.azurerm_resource_group.platform.id}/providers/Microsoft.App/containerApps/${var.container_app_name}"
+  container_app_environment_id = "${data.azurerm_resource_group.platform.id}/providers/Microsoft.App/managedEnvironments/${var.container_app_environment_name}"
   tags = {
     app       = "lex"
     managedBy = "terraform"
@@ -81,6 +82,24 @@ resource "azurerm_role_assignment" "deploy_container_app" {
   scope                = local.container_app_id
   role_definition_name = "Container Apps Contributor"
   principal_id         = azurerm_user_assigned_identity.deploy.principal_id
+}
+
+resource "azurerm_role_definition" "deploy_environment_join" {
+  name        = "Lex Container Apps Environment Join"
+  scope       = data.azurerm_resource_group.platform.id
+  description = "Lets the Lex deployment identity join only the existing Container Apps environment."
+
+  permissions {
+    actions = ["Microsoft.App/managedEnvironments/join/action"]
+  }
+
+  assignable_scopes = [data.azurerm_resource_group.platform.id]
+}
+
+resource "azurerm_role_assignment" "deploy_environment_join" {
+  scope              = local.container_app_environment_id
+  role_definition_id = azurerm_role_definition.deploy_environment_join.role_definition_resource_id
+  principal_id       = azurerm_user_assigned_identity.deploy.principal_id
 }
 
 resource "azurerm_role_assignment" "deploy_runtime_identity" {
