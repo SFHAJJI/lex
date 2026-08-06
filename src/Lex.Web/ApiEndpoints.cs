@@ -43,7 +43,8 @@ public static class ApiEndpoints
             Url("/", "1.0", "daily");
             foreach (var p in new[] { "/browse", "/coverage", "/decisions", "/built", "/about",
                                       "/how-it-works", "/developers", "/ai", "/verify",
-                                      "/architecture", "/stories", "/find", "/changed" })
+                                      "/architecture", "/architecture/next", "/benchmarks",
+                                      "/stories", "/find", "/changed" })
                 Url(p, "0.8", "weekly");
 
             // lastmod is when the PAGE last changed, so it can never be in the future.
@@ -57,7 +58,7 @@ public static class ApiEndpoints
             // It also carries real signal, because it distinguishes the works the last nightly
             // run actually touched from the ones that have not moved since the first ingest.
             // A row without it simply omits the tag, which is allowed, rather than guessing.
-            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+            var today = ctx.Today;
             string Lastmod(string? observed) =>
                 observed is { Length: >= 10 } o && DateOnly.TryParse(o[..10], out var d) && d <= today
                     ? $"<lastmod>{d:yyyy-MM-dd}</lastmod>" : "";

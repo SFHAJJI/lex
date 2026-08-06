@@ -26,6 +26,7 @@ public static class HomeEndpoints
         {
             // Counts come from the mounted indexes at render time, never hand-written numbers.
             var cov = readers.Values.Select(r => r.Coverage()).ToList();
+            var euWorks = cov.Where(c => c.Collection == "eu-eurlex").Sum(c => c.Groups);
             var tools = mcpCore.ToolDefs().OfType<JsonObject>()
                                .Select(t => t["name"]!.GetValue<string>()).ToList();
 
@@ -56,7 +57,7 @@ public static class HomeEndpoints
             // the sentence above the fold merely announced that the site answers questions.
             var body = $"""
                 <p class="lede">Ask what any Luxembourg law said on any day, exactly as its publisher
-                issued it. Plus ten EU acts, from the GDPR to the AI Act.</p>
+                issued it.{(euWorks > 0 ? $" Plus {euWorks:n0} selected EU works, with every dated version the mounted index holds." : "")}</p>
                 """
                 + $"""
                 <!-- Read synchronously by the workspace on mount, so the doors never flash in or need a
@@ -131,7 +132,7 @@ public static class HomeEndpoints
                 ["@type"] = "WebSite",
                 ["name"] = "Lex",
                 ["url"] = ctx.PublicBase,
-                ["description"] = "Point-in-time retrieval of Luxembourg law and ten EU acts, "
+                ["description"] = "Point-in-time retrieval of Luxembourg law and selected EU law, "
                                   + "with per-article history and verifiable provenance.",
                 ["inLanguage"] = "en",
                 ["publisher"] = new JsonObject
@@ -139,7 +140,7 @@ public static class HomeEndpoints
                     ["@type"] = "Person", ["name"] = "Soufien Hajji", ["url"] = "https://soufien.lu",
                 },
             }.ToJsonString();
-            return Results.Content(Page("Luxembourg law as it stood on any date, plus ten EU acts", body, null, "ask",
+            return Results.Content(Page("Luxembourg law as it stood on any date", body, null, "ask",
                 h1: "A law is not one document.", canonicalPath: "/", jsonLd: siteLd), "text/html");
         });
 

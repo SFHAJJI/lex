@@ -3,8 +3,8 @@
 [![CI](https://img.shields.io/github/actions/workflow/status/SFHAJJI/lex/ci.yml?branch=main&label=tests&style=flat-square)](https://github.com/SFHAJJI/lex/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue?style=flat-square)](LICENSE)
 [![Live](https://img.shields.io/badge/live-law.soufien.lu-e0705f?style=flat-square)](https://law.soufien.lu)
-[![MCP](https://img.shields.io/badge/MCP-10%20read--only%20tools-6f42c1?style=flat-square)](https://law.soufien.lu/developers)
-[![Coverage](https://img.shields.io/badge/corpus-1%2C409%20laws%20%C2%B7%204%2C705%20versions-brightgreen?style=flat-square)](https://law.soufien.lu/coverage)
+[![MCP](https://img.shields.io/badge/MCP-read--only%20tools-6f42c1?style=flat-square)](https://law.soufien.lu/developers)
+[![Coverage](https://img.shields.io/badge/corpus-live%20coverage-brightgreen?style=flat-square)](https://law.soufien.lu/coverage)
 
 **Point-in-time retrieval of regulatory text.** Regulators publish the current
 rule; every audit, investigation and dispute is about a **past date**. Lex keeps
@@ -19,8 +19,11 @@ cannot know.
 **[Dataset (CC-BY)](https://github.com/SFHAJJI/lex-articles)** ·
 **[Examples](https://github.com/SFHAJJI/lex-articles/tree/main/examples)** ·
 **[Architecture](https://law.soufien.lu/architecture)** ·
+**[Next architecture](https://law.soufien.lu/architecture/next)** ·
+**[Benchmarks](https://law.soufien.lu/benchmarks)** ·
 **[Verify it yourself](https://law.soufien.lu/verify)** ·
-**[Spec (D1, D48)](docs/lex-spec-v4.md)**
+**[Program](docs/hybrid-eu-roadmap.md)** ·
+**[Spec (D1-D60)](docs/lex-spec-v4.md)**
 
 ## Try it in 30 seconds
 
@@ -139,12 +142,12 @@ which hold no rule of their own.
 Honest coverage claim: *dense and reliable from 2017 onward; real but sparse
 before; isolated snapshots back to 1849; forward to 2030.*
 
-**EU** (EUR-Lex/Cellar, Tier A): 10 flagship acts (GDPR, DORA, AI Act, NIS2,
-MiFID II, CRR, PSD2, SFDR, RED II, electricity market), 56 consolidated
-versions, full text from the Publications Office's **Formex 4** structural XML
-where served, including the large CRR consolidations the XHTML channel couldn't
-carry. The EU limit is scope, not format: flagship acts only, out of a much
-wider acquis.
+**EU** (EUR-Lex/Cellar, Tier A): a reviewed compliance shelf spanning data,
+digital, cyber, finance and energy law. The mounted index and
+[live coverage page](https://law.soufien.lu/coverage) are the source of truth for
+work and version counts. Full text comes from the Publications Office's
+**Formex 4** structural XML where served, including large consolidations the
+XHTML channel cannot carry. The present EU limit is scope, not format.
 
 Derived layer: **1,212 works · 88,981 articles · 102,773 dated text states**.
 The never-consolidated LU acts (~24,579) and the wider EU acquis are staged

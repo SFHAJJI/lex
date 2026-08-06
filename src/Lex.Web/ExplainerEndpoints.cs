@@ -23,6 +23,24 @@ public static class ExplainerEndpoints
         var readers = ctx.Registry.All;
         var publicBase = ctx.PublicBase;
         var mcpCore = ctx.Mcp;
+        var architecture = ArchitectureProgram.Registry;
+
+        string ArchitectureTabs(string active)
+        {
+            string Tab(string id, string href, string label) =>
+                $"<a class=\"{(active == id ? "badge ok" : "badge")}\" href=\"{href}\">{label}</a>";
+            return $"""
+                <nav class="tabs" aria-label="Architecture evidence" style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 22px">
+                  {Tab("current", "/architecture", "Current")}
+                  {Tab("next", "/architecture/next", "Next")}
+                  {Tab("decisions", "/decisions", "Decisions")}
+                  {Tab("benchmarks", "/benchmarks", "Benchmarks")}
+                </nav>
+                """;
+        }
+
+        static string StatusBadge(string status) =>
+            $"<span class=\"badge{(status == "shipped" ? " ok" : status == "gated" ? " warn" : "")}\">{H(status)}</span>";
 
         app.MapGet("/ai", (HttpRequest req) =>
         {
@@ -73,8 +91,33 @@ public static class ExplainerEndpoints
 
         app.MapGet("/architecture", () =>
         {
-            var body = """
-                <p>Lex answers one question, <b>what did the rule say on that date?</b>, for Luxembourg law and ten EU acts,
+            var cov = readers.Values.Select(r => r.Coverage()).OrderBy(c => c.Collection).ToList();
+            var current = architecture.Current;
+            var coverageRows = string.Join("", cov.Select(c => $"""
+                <tr><td>{H(c.Collection)}</td><td class="mono">{c.Groups:n0}</td>
+                <td class="mono">{c.Rows:n0}</td><td class="mono">{H(c.Stamp.GetValueOrDefault("schema"))}</td>
+                <td class="mono">{H(c.Stamp.GetValueOrDefault("corpus_commit"))}</td></tr>
+                """));
+            var body = ArchitectureTabs("current") + $"""
+                <p class="lede">This page describes the system serving requests now. Target-state work is kept
+                separately on <a href="/architecture/next">Next</a>.</p>
+                <div class="card"><table class="kv">
+                <tr><th>retrieval</th><td>{H(current.Retrieval)}, deterministic FTS5/BM25</td></tr>
+                <tr><th>hosting</th><td>{H(current.Hosting)}, {H(current.Region)}</td></tr>
+                <tr><th>resources</th><td>{H(current.Resource)}, {H(current.Scale)}</td></tr>
+                <tr><th>structured UI contract</th><td>{H(current.StructuredContract)}</td></tr>
+                <tr><th>comparison contract</th><td>{H(current.ComparisonContract)}</td></tr>
+                <tr><th>deployment observation</th><td class="mono">{H(current.ObservedAt)}</td></tr>
+                </table></div>
+                <h2>Mounted coverage, read live</h2>
+                <div class="card"><table><tr><th>collection</th><th>works</th><th>versions</th><th>schema</th><th>corpus commit</th></tr>
+                {coverageRows}</table></div>
+                <h2>Contracts preserved</h2>
+                <p>Exact publisher text, hashes, anchors, timelines, refusals, comparisons and diffs remain
+                authoritative. The backend returns structured MCP JSON and the workspace renders the separate
+                <span class="mono">UiEffect</span> field.</p>
+                """ + """
+                <p>Lex answers one question, <b>what did the rule say on that date?</b>, for Luxembourg law and the selected EU works in the mounted index,
                 in a way a developer can build on and an auditor can check. Everything below is open source and open data.</p>
 
                 <h2>Two layers, one hash chain</h2>
@@ -124,7 +167,64 @@ public static class ExplainerEndpoints
                 hosted MCP: <span class="mono">claude mcp add --transport http lex https://law.soufien.lu/mcp</span></p>
                 """;
             return Results.Content(Page("Architecture", body,
-                "the evidence layer, the article layer, the signed indexes, and why you don't have to trust us"), "text/html");
+                "what is deployed now, read separately from what comes next"), "text/html");
+        });
+
+        app.MapGet("/architecture/next", () =>
+        {
+            var rows = string.Join("", architecture.Milestones.Select(m => $"""
+                <tr><td class="mono">{H(m.Id)}</td><td><b>{H(m.Title)}</b><br><span class="sub">{H(m.Outcome)}</span></td>
+                <td>{StatusBadge(m.Status)}</td></tr>
+                """));
+            var body = ArchitectureTabs("next") + $"""
+                <p class="lede">The accepted target architecture, with status read from the registry committed
+                beside the implementation. Nothing on this page is implied to be live.</p>
+                <div class="card"><table><tr><th>milestone</th><th>outcome</th><th>status</th></tr>{rows}</table></div>
+                <h2>Target path</h2>
+                <div class="card"><pre class="mono" style="white-space:pre-wrap;margin:0;font-size:13px">Reviewed EU scope configuration
+                  -&gt; every official dated FR/EN expression plus bounded legal relationships
+                  -&gt; content-addressed text states and occurrence mappings
+                  -&gt; FTS5 keyword candidates plus local compact semantic candidates
+                  -&gt; date and hierarchy eligibility
+                  -&gt; fixed reciprocal rank fusion
+                  -&gt; the same exact provision JSON, timeline, comparison and UiEffect contracts</pre></div>
+                <p>Hybrid retrieval remains gated until its public relevance, temporal, latency and memory
+                thresholds pass. Missing official consolidation remains a named gap, never generated wording.</p>
+                <p class="sub">Program <span class="mono">{H(architecture.ProgramVersion)}</span>, updated
+                <span class="mono">{H(architecture.UpdatedAt)}</span>, review status
+                <span class="mono">{H(architecture.ReviewStatus)}</span>.</p>
+                """;
+            return Results.Content(Page("Next architecture", body,
+                "the accepted target, its gates, and what has actually shipped"), "text/html");
+        });
+
+        app.MapGet("/benchmarks", () =>
+        {
+            var b = architecture.Baseline;
+            var body = ArchitectureTabs("benchmarks") + $"""
+                <p class="lede">Evidence is published with identity and context. A missing measurement is
+                displayed as missing rather than replaced with an estimate.</p>
+                <h2>Current service baseline</h2>
+                <div class="card"><table class="kv">
+                <tr><th>kind</th><td>{H(b.Kind)}</td></tr>
+                <tr><th>measured</th><td class="mono">{H(b.MeasuredAt)}</td></tr>
+                <tr><th>code commit</th><td class="mono">{H(b.CodeCommit)}</td></tr>
+                <tr><th>live corpus commits</th><td class="mono">LU {H(b.LiveLuCorpusCommit)}, EU {H(b.LiveEuCorpusCommit)}</td></tr>
+                <tr><th>sampled MCP requests, 7 days</th><td class="mono">{b.McpRequests7dSampled:n0}</td></tr>
+                <tr><th>internal latency</th><td class="mono">p50 {b.McpInternalP50Ms:0.00} ms, p95 {b.McpInternalP95Ms:0.00} ms, p99 {b.McpInternalP99Ms:0.00} ms</td></tr>
+                <tr><th>average working set</th><td class="mono">{b.AverageWorkingSetMib:n0} MiB</td></tr>
+                </table><p class="sub">{H(b.Note)}</p></div>
+                <h2>Retrieval relevance</h2>
+                <div class="notice"><b>Not measured yet.</b> The public 200-case suite is a gated milestone.
+                Hybrid will not become default until exact identifiers, temporal isolation, nDCG@10,
+                regression, latency and memory pass their recorded thresholds.</div>
+                <h2>Publication rule</h2>
+                <p>Future reports name code and corpus commits, the signed artifact manifest, embedding model,
+                machine or Azure resource, timestamp, sample count and review status. Initial relevance
+                judgments are labelled engineer-reviewed until a lawyer reviews them.</p>
+                """;
+            return Results.Content(Page("Benchmarks", body,
+                "measured retrieval, latency, memory, index size and cost evidence"), "text/html");
         });
 
         // ---- auditor surface: public key, live attestation, verify-it-yourself ----
@@ -155,7 +255,7 @@ public static class ExplainerEndpoints
                 ["signature_binds"] = "the canonical stamp text: every stamp field except signature/public_key, sorted by key, joined as k=v lines",
                 ["signature_format"] = "ECDSA-P256-SHA256, IEEE P1363 (r||s, 64 bytes), base64",
                 ["verify"] = "see /verify",
-                ["served_at"] = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ"),
+                ["served_at"] = ctx.Clock.GetUtcNow().ToString("yyyy-MM-ddTHH:mm:ssZ"),
                 ["collections"] = collections,
             }.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }), "application/json");
         });
@@ -411,7 +511,7 @@ public static class ExplainerEndpoints
 
                 <div class="card">
                 <b><a href="https://law.soufien.lu">law.soufien.lu</a></b> &middot; this one
-                <p class="sub">Point-in-time Luxembourg law and ten EU acts: {{works:n0}} works as
+                <p class="sub">Point-in-time Luxembourg law and selected EU law: {{works:n0}} works as
                 {{versions:n0}} dated versions, a public MCP endpoint, open datasets, and a signed index
                 whose stamp commits to a digest of its own content. The hard part was never the AI; it was
                 that a law has no single text, only a text per date.
@@ -458,7 +558,18 @@ public static class ExplainerEndpoints
         {
             var cov = readers.Values.Select(r => r.Coverage()).ToList();
             var latest = cov.Select(c => c.LatestValidFrom).Where(x => x is not null).Max();
-            var body = $$"""
+            var programRows = string.Join("", architecture.Decisions.Select(d => $"""
+                <tr><td class="mono">{H(d.Id)}</td><td><b>{H(d.Title)}</b><br>
+                <span class="sub"><b>Choice:</b> {H(d.Choice)}<br><b>Alternative:</b> {H(d.Alternative)}<br>
+                <b>Why:</b> {H(d.Reason)}<br><b>Cost:</b> {H(d.Cost)}</span></td><td>{StatusBadge(d.Status)}</td></tr>
+                """));
+            var body = ArchitectureTabs("decisions") + $"""
+                <p class="lede">Every program decision records the chosen path, a credible alternative, the
+                reason and the bill. Status comes from the architecture registry.</p>
+                <div class="card"><table><tr><th>decision</th><th>choice, alternative and cost</th><th>status</th></tr>
+                {programRows}</table></div>
+                <h2>Deep dive: why the legislative timeline is not the git log</h2>
+                """ + $$"""
                 <p class="lede">Every entry here had a reasonable alternative that other people chose. What
                 follows is the choice, the road not taken, and the bill.</p>
 
@@ -890,7 +1001,7 @@ public static class ExplainerEndpoints
                   <a href="/coverage">here is exactly what it holds and what it lacks</a>.</div>
                 """);
             return Results.Content(Page("Stories, watch the law move", sb.ToString(),
-                "real histories from the Luxembourg corpus and the ten EU acts, computed live", "find"), "text/html");
+                "real histories from the Luxembourg and selected EU corpora, computed live", "find"), "text/html");
         });
 
         return app;

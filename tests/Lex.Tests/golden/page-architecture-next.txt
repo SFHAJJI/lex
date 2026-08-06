@@ -1,13 +1,13 @@
-HTTP 404
+HTTP 200
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Titles are labels, not sentences: one that ends in a full stop renders "acts., Lex" in
      the tab and in every social card, which is what the front page did until now. -->
-<title>w1, Lex</title>
+<title>Next architecture, Lex</title>
 <meta name="description" content="Point-in-time Luxembourg law and selected EU law: what did the rule say on a given date? Permalinks, timelines, diffs and verifiable provenance.">
-<meta property="og:title" content="w1, Lex">
+<meta property="og:title" content="Next architecture, Lex">
 <meta property="og:description" content="Point-in-time Luxembourg law and selected EU law, with grounded AI answers, per-article history, and verifiable provenance.">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Lex">
@@ -155,16 +155,35 @@ HTTP 404
   <a class="navlink" href="/developers">For developers</a>
 </header>
 <main>
-<h1>w1</h1>
-<p class="sub">as of 1200-01-01, honest refusal</p>
-<div class="notice">status <span class="mono">no_version_for_date</span>, the work exists, but no
-version covers <b>1200-01-01</b>. The publisher's digitised history for this work covers:</div><ul><li><a href="/t-pub/w1/2020-01-01" class="mono">2020-01-01 → 2021-12-31</a></li><li><a href="/t-pub/w1/2022-01-01" class="mono">2022-01-01 → <i>open</i></a></li></ul><div class="card"><table class="kv">
-<tr><td>tier</td><td>A, publisher-supplied validity dates</td></tr>
-<tr><td>history begins</td><td>publisher</td></tr>
-<tr><td>index built</td><td class="mono"><TIMESTAMP> · corpus goldenc</td></tr>
-<tr><td>stamp signature</td><td><span class="badge ok">valid (ECDSA-P256)</span></td></tr>
-
-</table></div>
+<h1>Next architecture</h1>
+<p class="sub">the accepted target, its gates, and what has actually shipped</p>
+<nav class="tabs" aria-label="Architecture evidence" style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 22px">
+  <a class="badge" href="/architecture">Current</a>
+  <a class="badge ok" href="/architecture/next">Next</a>
+  <a class="badge" href="/decisions">Decisions</a>
+  <a class="badge" href="/benchmarks">Benchmarks</a>
+</nav><p class="lede">The accepted target architecture, with status read from the registry committed
+beside the implementation. Nothing on this page is implied to be live.</p>
+<div class="card"><table><tr><th>milestone</th><th>outcome</th><th>status</th></tr><tr><td class="mono">M1</td><td><b>Truthful architecture narrative</b><br><span class="sub">Separate live architecture, target architecture, decisions and measured benchmarks.</span></td>
+<td><span class="badge">building</span></td></tr><tr><td class="mono">M2</td><td><b>Verified artifact publication</b><br><span class="sub">A pinned trust root verifies a signed manifest for every served artifact.</span></td>
+<td><span class="badge">planned</span></td></tr><tr><td class="mono">M3</td><td><b>Expandable temporal EU corpus</b><br><span class="sub">Configuration selects domains while every accepted work retains all official dated expressions.</span></td>
+<td><span class="badge">planned</span></td></tr><tr><td class="mono">M4</td><td><b>Deduplicated index</b><br><span class="sub">lex-index/3 stores repeated wording once without changing timelines, exact text or diffs.</span></td>
+<td><span class="badge">planned</span></td></tr><tr><td class="mono">M5</td><td><b>Local hybrid retrieval</b><br><span class="sub">Keyword and local semantic retrieval fuse deterministically only after the public quality gate passes.</span></td>
+<td><span class="badge warn">gated</span></td></tr><tr><td class="mono">M6</td><td><b>Lawyer-facing scope filters</b><br><span class="sub">Jurisdiction, hierarchy, legal form, binding status, domain, language and date remain explicit.</span></td>
+<td><span class="badge">planned</span></td></tr></table></div>
+<h2>Target path</h2>
+<div class="card"><pre class="mono" style="white-space:pre-wrap;margin:0;font-size:13px">Reviewed EU scope configuration
+  -&gt; every official dated FR/EN expression plus bounded legal relationships
+  -&gt; content-addressed text states and occurrence mappings
+  -&gt; FTS5 keyword candidates plus local compact semantic candidates
+  -&gt; date and hierarchy eligibility
+  -&gt; fixed reciprocal rank fusion
+  -&gt; the same exact provision JSON, timeline, comparison and UiEffect contracts</pre></div>
+<p>Hybrid retrieval remains gated until its public relevance, temporal, latency and memory
+thresholds pass. Missing official consolidation remains a named gap, never generated wording.</p>
+<p class="sub">Program <span class="mono">hybrid-eu/1</span>, updated
+<span class="mono">2026-08-06</span>, review status
+<span class="mono">engineer-reviewed</span>.</p>
 </main>
 <footer>
 <!-- Fourteen links in one undifferentiated run answered no question a reader had. Three

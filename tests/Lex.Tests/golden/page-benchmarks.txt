@@ -1,13 +1,13 @@
-HTTP 404
+HTTP 200
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Titles are labels, not sentences: one that ends in a full stop renders "acts., Lex" in
      the tab and in every social card, which is what the front page did until now. -->
-<title>w1, Lex</title>
+<title>Benchmarks, Lex</title>
 <meta name="description" content="Point-in-time Luxembourg law and selected EU law: what did the rule say on a given date? Permalinks, timelines, diffs and verifiable provenance.">
-<meta property="og:title" content="w1, Lex">
+<meta property="og:title" content="Benchmarks, Lex">
 <meta property="og:description" content="Point-in-time Luxembourg law and selected EU law, with grounded AI answers, per-article history, and verifiable provenance.">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Lex">
@@ -155,16 +155,33 @@ HTTP 404
   <a class="navlink" href="/developers">For developers</a>
 </header>
 <main>
-<h1>w1</h1>
-<p class="sub">as of 1200-01-01, honest refusal</p>
-<div class="notice">status <span class="mono">no_version_for_date</span>, the work exists, but no
-version covers <b>1200-01-01</b>. The publisher's digitised history for this work covers:</div><ul><li><a href="/t-pub/w1/2020-01-01" class="mono">2020-01-01 → 2021-12-31</a></li><li><a href="/t-pub/w1/2022-01-01" class="mono">2022-01-01 → <i>open</i></a></li></ul><div class="card"><table class="kv">
-<tr><td>tier</td><td>A, publisher-supplied validity dates</td></tr>
-<tr><td>history begins</td><td>publisher</td></tr>
-<tr><td>index built</td><td class="mono"><TIMESTAMP> · corpus goldenc</td></tr>
-<tr><td>stamp signature</td><td><span class="badge ok">valid (ECDSA-P256)</span></td></tr>
-
-</table></div>
+<h1>Benchmarks</h1>
+<p class="sub">measured retrieval, latency, memory, index size and cost evidence</p>
+<nav class="tabs" aria-label="Architecture evidence" style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 22px">
+  <a class="badge" href="/architecture">Current</a>
+  <a class="badge" href="/architecture/next">Next</a>
+  <a class="badge" href="/decisions">Decisions</a>
+  <a class="badge ok" href="/benchmarks">Benchmarks</a>
+</nav><p class="lede">Evidence is published with identity and context. A missing measurement is
+displayed as missing rather than replaced with an estimate.</p>
+<h2>Current service baseline</h2>
+<div class="card"><table class="kv">
+<tr><th>kind</th><td>observational</td></tr>
+<tr><th>measured</th><td class="mono">2026-08-06</td></tr>
+<tr><th>code commit</th><td class="mono">34461dc</td></tr>
+<tr><th>live corpus commits</th><td class="mono">LU 65bc005, EU 6974532</td></tr>
+<tr><th>sampled MCP requests, 7 days</th><td class="mono">0</td></tr>
+<tr><th>internal latency</th><td class="mono">p50 6,94 ms, p95 8,84 ms, p99 25,10 ms</td></tr>
+<tr><th>average working set</th><td class="mono">114 MiB</td></tr>
+</table><p class="sub">Application Insights aggregates describe the current service, not the future hybrid retrieval path.</p></div>
+<h2>Retrieval relevance</h2>
+<div class="notice"><b>Not measured yet.</b> The public 200-case suite is a gated milestone.
+Hybrid will not become default until exact identifiers, temporal isolation, nDCG@10,
+regression, latency and memory pass their recorded thresholds.</div>
+<h2>Publication rule</h2>
+<p>Future reports name code and corpus commits, the signed artifact manifest, embedding model,
+machine or Azure resource, timestamp, sample count and review status. Initial relevance
+judgments are labelled engineer-reviewed until a lawyer reviews them.</p>
 </main>
 <footer>
 <!-- Fourteen links in one undifferentiated run answered no question a reader had. Three

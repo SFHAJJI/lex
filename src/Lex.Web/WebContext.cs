@@ -14,8 +14,12 @@ public sealed record WebContext(
     IndexRegistry Registry,
     LexOptions Options,
     McpCore Mcp,
-    AskService Ask)
+    AskService Ask,
+    TimeProvider Clock)
 {
     /// <summary>Absolute base for permalinks and social metadata, without a trailing slash.</summary>
     public string PublicBase => Options.PublicBase;
+
+    /// <summary>The one application clock used by every rendered current-date claim.</summary>
+    public DateOnly Today => DateOnly.FromDateTime(Clock.GetUtcNow().UtcDateTime);
 }

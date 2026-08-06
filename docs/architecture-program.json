@@ -1,0 +1,152 @@
+{
+  "program_version": "hybrid-eu/1",
+  "updated_at": "2026-08-06",
+  "review_status": "engineer-reviewed",
+  "statuses": ["planned", "building", "gated", "shipped", "rejected"],
+  "current": {
+    "retrieval": "keyword",
+    "index_schema": "lex-index/2",
+    "hosting": "Azure Container Apps Consumption",
+    "region": "France Central",
+    "resource": "0.25 vCPU, 0.5 GiB",
+    "scale": "0 to 5 replicas",
+    "observed_at": "2026-08-06",
+    "structured_contract": "MCP JSON plus UiEffect",
+    "comparison_contract": "exact authoritative provision text"
+  },
+  "milestones": [
+    {
+      "id": "M1",
+      "title": "Truthful architecture narrative",
+      "status": "building",
+      "outcome": "Separate live architecture, target architecture, decisions and measured benchmarks."
+    },
+    {
+      "id": "M2",
+      "title": "Verified artifact publication",
+      "status": "planned",
+      "outcome": "A pinned trust root verifies a signed manifest for every served artifact."
+    },
+    {
+      "id": "M3",
+      "title": "Expandable temporal EU corpus",
+      "status": "planned",
+      "outcome": "Configuration selects domains while every accepted work retains all official dated expressions."
+    },
+    {
+      "id": "M4",
+      "title": "Deduplicated index",
+      "status": "planned",
+      "outcome": "lex-index/3 stores repeated wording once without changing timelines, exact text or diffs."
+    },
+    {
+      "id": "M5",
+      "title": "Local hybrid retrieval",
+      "status": "gated",
+      "outcome": "Keyword and local semantic retrieval fuse deterministically only after the public quality gate passes."
+    },
+    {
+      "id": "M6",
+      "title": "Lawyer-facing scope filters",
+      "status": "planned",
+      "outcome": "Jurisdiction, hierarchy, legal form, binding status, domain, language and date remain explicit."
+    }
+  ],
+  "decisions": [
+    {
+      "id": "D52",
+      "title": "Select binding acts, then close legal relationships",
+      "status": "building",
+      "choice": "Use reviewed domain configuration and bounded legal-history relationships.",
+      "alternative": "Ingest roughly 59,100 works selected only by broad subject codes.",
+      "reason": "A lawyer needs complete context for selected law, not a large shelf with arbitrary gaps.",
+      "cost": "Selection rules and relationship traversal require review and dry-run reporting."
+    },
+    {
+      "id": "D53",
+      "title": "Store repeated wording once",
+      "status": "planned",
+      "choice": "Map every dated occurrence to a content-addressed text state.",
+      "alternative": "Store and embed every repeated provision occurrence.",
+      "reason": "The timeline is preserved while index size, vector size and duplicate hits fall.",
+      "cost": "The reader must reconstruct a version through occurrence mappings."
+    },
+    {
+      "id": "D54",
+      "title": "Run semantic retrieval locally",
+      "status": "gated",
+      "choice": "Use a pinned local embedding encoder, compact vectors and fixed rank fusion.",
+      "alternative": "Buy Azure AI Search for the current corpus and traffic.",
+      "reason": "Local retrieval preserves deterministic behavior and avoids a fixed managed-search bill.",
+      "cost": "Lex owns model packaging, vector indexing and relevance evaluation."
+    },
+    {
+      "id": "D55",
+      "title": "Keep Container Apps while it is economical",
+      "status": "shipped",
+      "choice": "Retain Consumption Container Apps and scale to zero.",
+      "alternative": "Move immediately to an always-on virtual machine.",
+      "reason": "Observed traffic is low and the proposed low-cost VM assumptions did not match the actual SKU.",
+      "cost": "Cold starts remain measurable and may later justify one warm replica."
+    },
+    {
+      "id": "D56",
+      "title": "Represent hierarchy as metadata",
+      "status": "planned",
+      "choice": "Store legal hierarchy and domain fields beside each work and state.",
+      "alternative": "Create a separate database for every legal level.",
+      "reason": "Hierarchy is a query filter, while physical boundaries should follow provenance and update behavior.",
+      "cost": "The ingestion model must normalize publisher classifications without erasing them."
+    },
+    {
+      "id": "D57",
+      "title": "Never synthesize consolidation",
+      "status": "shipped",
+      "choice": "Show official text and amendment events, and name a missing consolidation explicitly.",
+      "alternative": "Mechanically apply amendments and present the result as current law.",
+      "reason": "A plausible unofficial merge would violate the product's evidence claim.",
+      "cost": "Some works remain metadata and timeline only until the publisher supplies consolidated wording."
+    },
+    {
+      "id": "D58",
+      "title": "Pin trust outside the artifact",
+      "status": "planned",
+      "choice": "Verify a whole-artifact manifest with a public-key fingerprint pinned in the release.",
+      "alternative": "Trust the public key stored beside its signature in the same database.",
+      "reason": "Replacing an artifact must not let an attacker replace its trust root too.",
+      "cost": "Key rotation becomes an explicit dual-trust release."
+    },
+    {
+      "id": "D59",
+      "title": "Use fuzzy matching only as fallback",
+      "status": "planned",
+      "choice": "Expand ordinary terms only when exact lexical retrieval is weak and show every expansion.",
+      "alternative": "Apply fuzzy expansion to every query.",
+      "reason": "Legal identifiers, quotations and exact terms must not acquire silent near-matches.",
+      "cost": "Some misspellings wait for the exact pass to return before expansion."
+    },
+    {
+      "id": "D60",
+      "title": "Publish claims only with evidence",
+      "status": "building",
+      "choice": "Separate live facts, target state, decisions and reproducible benchmarks.",
+      "alternative": "Mix roadmap claims and hand-written benchmark numbers into one architecture page.",
+      "reason": "An interviewer or lawyer must be able to distinguish what exists from what is proposed.",
+      "cost": "Every public metric carries commits, artifact identity, environment and review status."
+    }
+  ],
+  "baseline": {
+    "kind": "observational",
+    "measured_at": "2026-08-06",
+    "code_commit": "34461dc",
+    "live_eu_corpus_commit": "6974532",
+    "live_lu_corpus_commit": "65bc005",
+    "mcp_requests_7d_sampled": 456,
+    "mcp_internal_p50_ms": 6.94,
+    "mcp_internal_p95_ms": 8.84,
+    "mcp_internal_p99_ms": 25.1,
+    "average_working_set_mib": 114,
+    "relevance_benchmark": null,
+    "note": "Application Insights aggregates describe the current service, not the future hybrid retrieval path."
+  }
+}
