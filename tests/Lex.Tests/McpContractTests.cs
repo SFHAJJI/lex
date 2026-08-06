@@ -68,6 +68,18 @@ public class McpContractTests : IDisposable
         (o["envelope"]?["status"] ?? o["status"])?.GetValue<string>();
 
     [Fact]
+    public void Empty_mount_refusal_uses_live_coverage_instead_of_stale_counts()
+    {
+        var empty = new McpCore(new Dictionary<string, LexIndexReader>());
+        var result = Assert.IsType<JsonObject>(empty.CallTool("coverage", new JsonObject()));
+
+        Assert.Equal("no_corpus_mounted", result["status"]?.GetValue<string>());
+        Assert.Contains("coverage tool", result["hosted_endpoint_note"]?.GetValue<string>());
+        Assert.DoesNotContain("1,409", result.ToJsonString());
+        Assert.DoesNotContain("947 MB", result.ToJsonString());
+    }
+
+    [Fact]
     public void The_advertised_tool_list_is_the_contract()
     {
         var names = _core.ToolDefs().OfType<JsonObject>()

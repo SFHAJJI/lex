@@ -339,12 +339,10 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
     {
         // A build with no corpus must say so, once, in every answer.
         //
-        // The index is 947 MB and is not in the repository, so anyone who builds this server
-        // from source, or deploys the image a directory listing generates from it, gets a
-        // working binary over an empty shelf. Before this guard every tool answered such a
-        // caller with `[]`: coverage said [], search said [], and nothing distinguished "this
-        // law does not exist" from "no law exists here because none was ever loaded". A model
-        // reading that concludes the corpus is empty and tells its user so.
+        // Source builds and incorrectly assembled releases can start without verified artifacts.
+        // Before this guard every tool answered such a caller with `[]`: coverage said [], search
+        // said [], and nothing distinguished "this law does not exist" from "no law is mounted".
+        // A model reading that concludes the corpus is empty and tells its user so.
         //
         // Emptiness is the one answer this project is not allowed to give silently, and
         // coverage exists specifically "to say what we do NOT have" (F10). Saying it here
@@ -354,16 +352,15 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
             return new JsonObject
             {
                 ["status"] = "no_corpus_mounted",
-                ["detail"] = "This server started with zero indexes, so it holds no law and "
-                           + "cannot answer any question about one. It is not misconfigured and "
-                           + "the tools are real: the corpus is roughly 947 MB and is not "
-                           + "distributed inside the repository or the container image.",
+                ["detail"] = "This server started with zero verified indexes, so it holds no law "
+                           + "and cannot answer legal questions. The engine is available, but its "
+                           + "signed corpus artifacts were not mounted.",
                 ["hosted_endpoint"] = "https://law.soufien.lu/mcp",
-                ["hosted_endpoint_note"] = "Public, no key, no signup. The same tools over the "
-                           + "full corpus: 1,409 works and 4,705 dated versions.",
-                ["to_build_a_local_index"] = "See the pipeline in the repository README "
-                           + "(ingest -> derive -> catalog -> index -> sign), then point "
-                           + "LEX_INDEX_DIR at the directory holding index-*.db.",
+                ["hosted_endpoint_note"] = "Public, no key, no signup. Call the coverage tool "
+                           + "there for live mounted counts and known gaps.",
+                ["to_build_a_local_index"] = "Download and verify a signed index release, or run "
+                           + "the README pipeline (ingest -> derive -> catalog -> index -> sign), "
+                           + "then point LEX_INDEX_DIR at the directory holding index-*.db.",
                 ["index_dir_searched"] = Environment.GetEnvironmentVariable("LEX_INDEX_DIR") ?? "indexes",
                 ["tool_called"] = name,
             };
