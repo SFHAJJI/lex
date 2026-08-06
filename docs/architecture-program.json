@@ -142,6 +142,15 @@
       "alternative": "Generate a polished PDF or fetch and compare the law again during export.",
       "reason": "Lawyers can move traceable text into their work without a second result disagreeing or an unofficial file resembling a publisher document.",
       "cost": "Markdown prioritizes inspectable provenance over print-perfect presentation and remains explicitly a reading aid."
+    },
+    {
+      "id": "D62",
+      "title": "Keep one temporal research workspace",
+      "status": "building",
+      "choice": "Keep search, dated reading, version history and comparison in one URL-addressable workspace with stable legal context.",
+      "alternative": "Split search, reading and comparison into separate products, or make a chatbot the primary navigation model.",
+      "reason": "Lawyers need to see jurisdiction, applicable date, source and comparison state while moving between discovery and verification.",
+      "cost": "The workspace is denser than a simple search page, so smaller screens require progressive disclosure and deliberate control grouping."
     }
   ],
   "baseline": {
