@@ -5,10 +5,8 @@ using System.Text.Json.Nodes;
 namespace Lex.Derive;
 
 /// <summary>
-/// Post-pass over the derived layer: per-work work.json (version + anchor inventory),
-/// per-work history.json (per-anchor distinct text states with validity intervals —
-/// "article X has had exactly N texts" as a file read), and a global catalog.json.
-/// Pure function of the derived fr.json files; no corpus or network access.
+/// Builds per-work inventories and language-specific provision histories from the deterministic
+/// derived expression files. No corpus, network, LLM, or clock participates.
 /// </summary>
 public static class CatalogBuilder
 {
@@ -20,166 +18,110 @@ public static class CatalogBuilder
 
     public sealed record Stats(int Works, int Anchors, int HistoryStates);
 
+    private sealed record DerivedVersion(
+        string ValidFrom,
+        string Language,
+        JsonNode Document,
+        IReadOnlyDictionary<string, JsonObject> Provisions,
+        IReadOnlyDictionary<string, string> ShaByAnchor);
+
     public static Stats Build(string articlesRoot)
     {
-        int workCount = 0, anchorCount = 0, stateCount = 0;
+        var workCount = 0;
+        var anchorCount = 0;
+        var stateCount = 0;
         var catalog = new JsonArray();
 
-        foreach (var pubDir in Directory.EnumerateDirectories(articlesRoot)
+        foreach (var publisherDirectory in Directory.EnumerateDirectories(articlesRoot)
                      .Where(d => Directory.Exists(Path.Combine(d, "works")))
-                     .OrderBy(d => Path.GetFileName(d), StringComparer.Ordinal))
+                     .OrderBy(Path.GetFileName, StringComparer.Ordinal))
         {
-            var publisher = Path.GetFileName(pubDir);
-            foreach (var workDir in Directory.EnumerateDirectories(Path.Combine(pubDir, "works"))
-                         .OrderBy(d => Path.GetFileName(d), StringComparer.Ordinal))
+            var publisher = Path.GetFileName(publisherDirectory);
+            foreach (var workDirectory in Directory.EnumerateDirectories(
+                             Path.Combine(publisherDirectory, "works"))
+                         .OrderBy(Path.GetFileName, StringComparer.Ordinal))
             {
-                var slug = Path.GetFileName(workDir);
-                var versionsDir = Path.Combine(workDir, "versions");
-                if (!Directory.Exists(versionsDir)) continue;
+                var slug = Path.GetFileName(workDirectory);
+                var versionsDirectory = Path.Combine(workDirectory, "versions");
+                if (!Directory.Exists(versionsDirectory)) continue;
 
-                // (validFrom, language) -> parsed derived json
-                var versions = new List<(string ValidFrom, string Lang, JsonNode Doc)>();
-                foreach (var vDir in Directory.EnumerateDirectories(versionsDir)
-                             .OrderBy(d => Path.GetFileName(d), StringComparer.Ordinal))
-                    foreach (var jf in Directory.EnumerateFiles(vDir, "*.json").OrderBy(f => f, StringComparer.Ordinal))
-                        versions.Add((Path.GetFileName(vDir), Path.GetFileNameWithoutExtension(jf),
-                            JsonNode.Parse(File.ReadAllText(jf))!));
+                var versions = ReadVersions(versionsDirectory);
                 if (versions.Count == 0) continue;
                 workCount++;
 
                 string? title = null;
-                var versionArr = new JsonArray();
+                var versionArray = new JsonArray();
                 var allAnchors = new SortedSet<string>(StringComparer.Ordinal);
-                foreach (var (validFrom, lang, doc) in versions)
+                foreach (var version in versions)
                 {
-                    title ??= doc["title"]?.GetValue<string>();
-                    var provs = (doc["provisions"] as JsonArray)!.OfType<JsonObject>().ToList();
-                    foreach (var p in provs) allAnchors.Add(p["anchor"]!.GetValue<string>());
-                    versionArr.Add(new JsonObject
+                    title ??= version.Document["title"]?.GetValue<string>();
+                    allAnchors.UnionWith(version.Provisions.Keys);
+                    versionArray.Add(new JsonObject
                     {
-                        ["valid_from"] = validFrom,
-                        ["valid_to"] = doc["valid_to"]?.DeepClone(),
-                        ["language"] = lang,
-                        ["provisions"] = provs.Count,
+                        ["valid_from"] = version.ValidFrom,
+                        ["valid_to"] = version.Document["valid_to"]?.DeepClone(),
+                        ["language"] = version.Language,
+                        ["provisions"] = version.Provisions.Count,
                     });
                 }
                 anchorCount += allAnchors.Count;
 
-                // ---- history.json: per anchor, consecutive same-sha runs collapse to intervals.
-                // Publisher-asserted article dates ride along; disagreement between the asserted
-                // date and the observed interval start is disclosed, never silently resolved (§3.3).
-                var history = new JsonObject();
-                foreach (var anchor in allAnchors)
+                // Language is part of legal text identity. Mixing translations in one timeline
+                // would manufacture a wording change every time EN and FR alternate in file order.
+                var languages = new SortedSet<string>(versions.Select(v => v.Language), StringComparer.Ordinal);
+                var historiesByLanguage = new JsonObject();
+                var eventsByLanguage = new JsonObject();
+                foreach (var language in languages)
                 {
-                    var states = new JsonArray();
-                    string? runSha = null, runFrom = null, runTo = null, runVersion = null, runArticleDate = null;
-                    void Flush()
-                    {
-                        if (runSha is null) return;
-                        var state = new JsonObject
-                        {
-                            ["valid_from"] = runFrom,
-                            ["valid_to"] = runTo,
-                            ["text_sha256"] = runSha,
-                            ["in_version"] = runVersion,
-                        };
-                        if (runArticleDate is not null)
-                        {
-                            state["article_valid_from"] = runArticleDate;
-                            if (runArticleDate != runFrom) state["validity_conflict"] = true;
-                        }
-                        states.Add(state);
-                        runSha = null; runArticleDate = null;
-                    }
-                    foreach (var (validFrom, _, doc) in versions)
-                    {
-                        var p = (doc["provisions"] as JsonArray)!.OfType<JsonObject>()
-                            .FirstOrDefault(x => x["anchor"]!.GetValue<string>() == anchor);
-                        var validTo = doc["valid_to"]?.GetValue<string>();
-                        if (p is null) { Flush(); continue; }        // anchor absent: close any open run
-                        var sha = p["text_sha256"]!.GetValue<string>();
-                        if (sha != runSha)
-                        {
-                            Flush();
-                            runSha = sha;
-                            runFrom = validFrom;
-                            runVersion = doc["lex_id"]?.GetValue<string>();
-                            runArticleDate = p["article_valid_from"]?.GetValue<string>();
-                        }
-                        runTo = validTo;                              // extends with every version in the run
-                    }
-                    Flush();
-                    stateCount += states.Count;
-                    history[anchor] = states;
+                    var result = BuildLanguageHistory(
+                        versions.Where(v => v.Language == language).ToList());
+                    historiesByLanguage[language] = result.History;
+                    eventsByLanguage[language] = result.Events;
+                    stateCount += result.StateCount;
                 }
 
-                // ---- anchor_events: mechanical renumbering/insertion/removal detection (§2).
-                // A "renumbered" event is emitted only when the text hash match between one
-                // removed and one inserted anchor is UNIQUE within the transition — identical
-                // boilerplate texts ("Abrogé.") otherwise stay honest removed/inserted pairs.
-                var anchorEvents = new JsonArray();
-                for (var vi = 1; vi < versions.Count; vi++)
-                {
-                    Dictionary<string, string> ShaByAnchor(int idx) =>
-                        (versions[idx].Doc["provisions"] as JsonArray)!.OfType<JsonObject>()
-                        .ToDictionary(p => p["anchor"]!.GetValue<string>(), p => p["text_sha256"]!.GetValue<string>(), StringComparer.Ordinal);
-                    var prev = ShaByAnchor(vi - 1);
-                    var cur = ShaByAnchor(vi);
-                    var atVersion = versions[vi].Doc["lex_id"]?.GetValue<string>();
-                    var removed = prev.Keys.Except(cur.Keys, StringComparer.Ordinal).OrderBy(a => a, StringComparer.Ordinal).ToList();
-                    var inserted = cur.Keys.Except(prev.Keys, StringComparer.Ordinal).OrderBy(a => a, StringComparer.Ordinal).ToList();
-                    var matched = new HashSet<string>(StringComparer.Ordinal);
-                    foreach (var r in removed)
-                    {
-                        var sha = prev[r];
-                        var candidates = inserted.Where(a => cur[a] == sha).ToList();
-                        var sameShaRemoved = removed.Where(a => prev[a] == sha).ToList();
-                        if (candidates.Count == 1 && sameShaRemoved.Count == 1)
-                        {
-                            matched.Add(r); matched.Add(candidates[0]);
-                            anchorEvents.Add(new JsonObject
-                            {
-                                ["type"] = "renumbered", ["from"] = r, ["to"] = candidates[0],
-                                ["text_sha256"] = sha, ["at_version"] = atVersion, ["basis"] = "identical_text",
-                            });
-                        }
-                    }
-                    foreach (var r in removed.Where(a => !matched.Contains(a)))
-                        anchorEvents.Add(new JsonObject { ["type"] = "removed", ["anchor"] = r, ["at_version"] = atVersion });
-                    foreach (var a in inserted.Where(a => !matched.Contains(a)))
-                        anchorEvents.Add(new JsonObject { ["type"] = "inserted", ["anchor"] = a, ["at_version"] = atVersion });
-                }
-
-                var languages = new SortedSet<string>(versions.Select(v => v.Lang), StringComparer.Ordinal);
+                // Preserve the original `anchors` and `anchor_events` fields for existing
+                // consumers. They expose one deterministic primary language; new consumers use
+                // the explicit by-language maps. Count wins, then ordinal language code on ties.
+                var primaryLanguage = versions.GroupBy(v => v.Language)
+                    .OrderByDescending(g => g.Count())
+                    .ThenBy(g => g.Key, StringComparer.Ordinal)
+                    .First().Key;
+                var primaryHistory = historiesByLanguage[primaryLanguage]!.DeepClone();
+                var primaryEvents = eventsByLanguage[primaryLanguage]!.DeepClone();
                 var profiles = new SortedSet<string>(versions
-                    .Select(v => v.Doc["generator"]?["profile"]?.GetValue<string>())
+                    .Select(v => v.Document["generator"]?["profile"]?.GetValue<string>())
                     .OfType<string>(), StringComparer.Ordinal);
 
-                File.WriteAllText(Path.Combine(workDir, "work.json"), new JsonObject
+                WriteJson(Path.Combine(workDirectory, "work.json"), new JsonObject
                 {
                     ["lex_work_id"] = $"{publisher}:{slug}",
                     ["title"] = title,
                     ["languages"] = new JsonArray(languages.Select(l => (JsonNode)l).ToArray()),
-                    ["versions"] = versionArr,
+                    ["versions"] = versionArray,
                     ["anchors"] = new JsonArray(allAnchors.Select(a => (JsonNode)a).ToArray()),
-                    // reserved for the transposition/amendment axis (§5): populated by a later
-                    // ingest (Cellar NIM links etc.), never a schema migration
                     ["relations"] = new JsonObject
                     {
-                        ["amends"] = new JsonArray(), ["amended_by"] = new JsonArray(),
-                        ["transposes"] = new JsonArray(), ["implemented_by"] = new JsonArray(),
-                        ["repeals"] = new JsonArray(), ["repealed_by"] = new JsonArray(),
+                        ["amends"] = new JsonArray(),
+                        ["amended_by"] = new JsonArray(),
+                        ["transposes"] = new JsonArray(),
+                        ["implemented_by"] = new JsonArray(),
+                        ["repeals"] = new JsonArray(),
+                        ["repealed_by"] = new JsonArray(),
                     },
-                }.ToJsonString(JsonOpts) + "\n");
+                });
 
-                File.WriteAllText(Path.Combine(workDir, "history.json"), new JsonObject
+                WriteJson(Path.Combine(workDirectory, "history.json"), new JsonObject
                 {
                     ["lex_work_id"] = $"{publisher}:{slug}",
                     ["schema"] = "lex-articles/1",
                     ["profiles"] = new JsonArray(profiles.Select(p => (JsonNode)p).ToArray()),
-                    ["anchors"] = history,
-                    ["anchor_events"] = anchorEvents,
-                }.ToJsonString(JsonOpts) + "\n");
+                    ["primary_language"] = primaryLanguage,
+                    ["anchors"] = primaryHistory,
+                    ["anchor_events"] = primaryEvents,
+                    ["anchors_by_language"] = historiesByLanguage,
+                    ["anchor_events_by_language"] = eventsByLanguage,
+                });
 
                 catalog.Add(new JsonObject
                 {
@@ -194,11 +136,146 @@ public static class CatalogBuilder
             }
         }
 
-        File.WriteAllText(Path.Combine(articlesRoot, "catalog.json"), new JsonObject
+        WriteJson(Path.Combine(articlesRoot, "catalog.json"), new JsonObject
         {
             ["schema"] = "lex-articles/1",
             ["works"] = catalog,
-        }.ToJsonString(JsonOpts) + "\n");
+        });
         return new Stats(workCount, anchorCount, stateCount);
     }
+
+    private static List<DerivedVersion> ReadVersions(string versionsDirectory)
+    {
+        var versions = new List<DerivedVersion>();
+        foreach (var versionDirectory in Directory.EnumerateDirectories(versionsDirectory)
+                     .OrderBy(Path.GetFileName, StringComparer.Ordinal))
+        {
+            foreach (var jsonFile in Directory.EnumerateFiles(versionDirectory, "*.json")
+                         .OrderBy(Path.GetFileName, StringComparer.Ordinal))
+            {
+                var document = JsonNode.Parse(File.ReadAllText(jsonFile))!;
+                var provisions = (document["provisions"] as JsonArray)!.OfType<JsonObject>()
+                    .ToDictionary(p => p["anchor"]!.GetValue<string>(), StringComparer.Ordinal);
+                versions.Add(new DerivedVersion(
+                    document["valid_from"]?.GetValue<string>() ?? Path.GetFileName(versionDirectory),
+                    Path.GetFileNameWithoutExtension(jsonFile),
+                    document,
+                    provisions,
+                    provisions.ToDictionary(
+                        p => p.Key,
+                        p => p.Value["text_sha256"]!.GetValue<string>(),
+                        StringComparer.Ordinal)));
+            }
+        }
+        return versions;
+    }
+
+    private static (JsonObject History, JsonArray Events, int StateCount) BuildLanguageHistory(
+        IReadOnlyList<DerivedVersion> versions)
+    {
+        var anchors = new SortedSet<string>(
+            versions.SelectMany(v => v.Provisions.Keys), StringComparer.Ordinal);
+        var history = new JsonObject();
+        var stateCount = 0;
+
+        foreach (var anchor in anchors)
+        {
+            var states = new JsonArray();
+            string? runSha = null;
+            string? runFrom = null;
+            string? runTo = null;
+            string? runVersion = null;
+            string? runArticleDate = null;
+
+            void Flush()
+            {
+                if (runSha is null) return;
+                var state = new JsonObject
+                {
+                    ["valid_from"] = runFrom,
+                    ["valid_to"] = runTo,
+                    ["text_sha256"] = runSha,
+                    ["in_version"] = runVersion,
+                };
+                if (runArticleDate is not null)
+                {
+                    state["article_valid_from"] = runArticleDate;
+                    if (runArticleDate != runFrom) state["validity_conflict"] = true;
+                }
+                states.Add(state);
+                runSha = null;
+                runArticleDate = null;
+            }
+
+            foreach (var version in versions)
+            {
+                if (!version.Provisions.TryGetValue(anchor, out var provision))
+                {
+                    Flush();
+                    continue;
+                }
+
+                var sha = version.ShaByAnchor[anchor];
+                if (sha != runSha)
+                {
+                    Flush();
+                    runSha = sha;
+                    runFrom = version.ValidFrom;
+                    runVersion = version.Document["lex_id"]?.GetValue<string>();
+                    runArticleDate = provision["article_valid_from"]?.GetValue<string>();
+                }
+                runTo = version.Document["valid_to"]?.GetValue<string>();
+            }
+            Flush();
+            stateCount += states.Count;
+            history[anchor] = states;
+        }
+
+        return (history, BuildAnchorEvents(versions), stateCount);
+    }
+
+    private static JsonArray BuildAnchorEvents(IReadOnlyList<DerivedVersion> versions)
+    {
+        var events = new JsonArray();
+        for (var index = 1; index < versions.Count; index++)
+        {
+            var previous = versions[index - 1].ShaByAnchor;
+            var current = versions[index].ShaByAnchor;
+            var atVersion = versions[index].Document["lex_id"]?.GetValue<string>();
+            var removed = previous.Keys.Except(current.Keys, StringComparer.Ordinal)
+                .OrderBy(a => a, StringComparer.Ordinal).ToList();
+            var inserted = current.Keys.Except(previous.Keys, StringComparer.Ordinal)
+                .OrderBy(a => a, StringComparer.Ordinal).ToList();
+            var matched = new HashSet<string>(StringComparer.Ordinal);
+
+            foreach (var removedAnchor in removed)
+            {
+                var sha = previous[removedAnchor];
+                var candidates = inserted.Where(a => current[a] == sha).ToList();
+                var sameShaRemoved = removed.Where(a => previous[a] == sha).ToList();
+                if (candidates.Count != 1 || sameShaRemoved.Count != 1) continue;
+                matched.Add(removedAnchor);
+                matched.Add(candidates[0]);
+                events.Add(new JsonObject
+                {
+                    ["type"] = "renumbered",
+                    ["from"] = removedAnchor,
+                    ["to"] = candidates[0],
+                    ["text_sha256"] = sha,
+                    ["at_version"] = atVersion,
+                    ["basis"] = "identical_text",
+                });
+            }
+            foreach (var removedAnchor in removed.Where(a => !matched.Contains(a)))
+                events.Add(new JsonObject
+                    { ["type"] = "removed", ["anchor"] = removedAnchor, ["at_version"] = atVersion });
+            foreach (var insertedAnchor in inserted.Where(a => !matched.Contains(a)))
+                events.Add(new JsonObject
+                    { ["type"] = "inserted", ["anchor"] = insertedAnchor, ["at_version"] = atVersion });
+        }
+        return events;
+    }
+
+    private static void WriteJson(string path, JsonObject value) =>
+        File.WriteAllText(path, value.ToJsonString(JsonOpts) + "\n");
 }
