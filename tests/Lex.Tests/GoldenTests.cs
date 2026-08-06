@@ -93,6 +93,33 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
     }
 
     [Fact]
+    public async Task Home_reserves_workspace_height_and_versions_immutable_assets()
+    {
+        var html = await _site.Client.GetStringAsync("/");
+        Assert.Contains("classList.add('workspace-loading')", html);
+        Assert.DoesNotContain("{assetVersion}", html);
+        Assert.Matches("/app/workspace\\.css\\?v=[^\"']+", html);
+        var script = Regex.Match(html, "/app/workspace\\.js\\?v=[^\"']+");
+        Assert.True(script.Success);
+
+        var asset = await _site.Client.GetAsync(script.Value);
+        Assert.Equal(HttpStatusCode.OK, asset.StatusCode);
+        Assert.True(asset.Headers.CacheControl?.Public);
+        Assert.Equal(TimeSpan.FromDays(365), asset.Headers.CacheControl?.MaxAge);
+        Assert.Contains("immutable", asset.Headers.CacheControl?.Extensions.Select(x => x.Name) ?? []);
+    }
+
+    [Fact]
+    public async Task Html_is_compressed_when_the_client_accepts_brotli()
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/");
+        request.Headers.AcceptEncoding.ParseAdd("br");
+        using var response = await _site.Client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("br", response.Content.Headers.ContentEncoding);
+    }
+
+    [Fact]
     public async Task Architecture_separates_live_target_and_unmeasured_claims()
     {
         var current = await _site.Client.GetStringAsync("/architecture");
@@ -106,7 +133,19 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
 
         var benchmarks = await _site.Client.GetStringAsync("/benchmarks");
         Assert.Contains("Not measured yet", benchmarks);
-        Assert.Contains("engineer-reviewed", benchmarks);
+        Assert.Contains("generated-unreviewed", benchmarks);
+    }
+
+    [Fact]
+    public async Task Attestation_distinguishes_manifest_trust_from_embedded_stamp_provenance()
+    {
+        var json = await _site.Client.GetStringAsync("/attestation.json");
+        var attestation = System.Text.Json.Nodes.JsonNode.Parse(json)!.AsObject();
+
+        Assert.Contains("whole-artifact manifests", attestation["artifact_trust"]!.GetValue<string>());
+        Assert.Contains("lex-artifacts/1", attestation["artifact_signature_binds"]!.GetValue<string>());
+        Assert.Contains("canonical stamp text", attestation["embedded_stamp_signature_binds"]!.GetValue<string>());
+        Assert.NotNull(attestation["signature_binds"]); // compatibility contract
     }
 
     [Fact]
@@ -115,7 +154,7 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
         var json = await _site.Client.GetStringAsync("/benchmarks/cases.json");
         var cases = System.Text.Json.Nodes.JsonNode.Parse(json)!.AsArray();
         Assert.Equal(200, cases.Count);
-        Assert.All(cases, c => Assert.Equal("engineer-reviewed", c!["review_status"]!.GetValue<string>()));
+        Assert.All(cases, c => Assert.Equal("generated-unreviewed", c!["review_status"]!.GetValue<string>()));
     }
 
     [Fact]
@@ -320,6 +359,12 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
         public Site()
         {
             Directory.CreateDirectory(_dir);
+            var appDir = Path.Combine(_dir, "wwwroot", "app");
+            Directory.CreateDirectory(appDir);
+            // The web job owns the real Vite build and DOM smoke test. This isolated asset keeps
+            // the server suite self-contained while exercising the production static-file route
+            // and immutable cache policy from a clean checkout.
+            File.WriteAllText(Path.Combine(appDir, "workspace.js"), "/* golden fixture */\n");
             BuildFixtureIndex(Path.Combine(_dir, "index-t-pub.db"));
             Environment.SetEnvironmentVariable("LEX_INDEX_DIR", _dir);
             Environment.SetEnvironmentVariable("LEX_PUBLIC_BASE_URL", "https://golden.test");
@@ -328,6 +373,7 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
 
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
+            builder.UseWebRoot(Path.Combine(_dir, "wwwroot"));
             builder.ConfigureServices(services =>
             {
                 services.RemoveAll<TimeProvider>();

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -12,9 +13,10 @@ namespace Lex.Ingest;
 /// appends the corresponding chain entry (F12). Body files are append-only (none are
 /// written at all in metadata-only mode, D42).
 /// </summary>
-public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now)
+public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now, TextWriter? progress = null)
 {
     private readonly string _now = now.UtcDateTime.ToString("yyyy-MM-ddTHH:mm:ssZ");
+    private readonly TextWriter _progress = progress ?? Console.Error;
     public int Created { get; private set; }
     public int Updated { get; private set; }
     public int Unchanged { get; private set; }
@@ -29,11 +31,27 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now)
         var langs = new HashSet<string>(StringComparer.Ordinal);
         string? earliest = null, latest = null;
         int works = 0, versions = 0;
+        var seenVersionMetadata = new HashSet<string>(PathComparer);
 
+        // Materialise the metadata-only plan before fetching bodies. Adapters already hold their
+        // version catalogue in memory, so this adds no publisher body requests and lets the log
+        // report a real denominator. A percentage without a denominator is not actionable; an
+        // elapsed time without observed throughput is not an ETA.
+        var plan = new List<(WorkRef Work, IReadOnlyList<VersionRecord> Versions)>();
         await foreach (var work in adapter.EnumerateWorks(ct))
         {
             var versionsOfWork = await adapter.FetchVersions(work, ct);
-            if (versionsOfWork.Count == 0) continue;
+            if (versionsOfWork.Count > 0) plan.Add((work, versionsOfWork));
+        }
+        var totalExpressions = plan.Sum(item => item.Versions.Sum(version => (long)version.Expressions.Count));
+        long processedExpressions = 0;
+        var lastReportedPercent = -1;
+        var progressClock = Stopwatch.StartNew();
+        ReportProgress(pub.Id, processedExpressions, totalExpressions, progressClock.Elapsed, null);
+        lastReportedPercent = totalExpressions == 0 ? 100 : 0;
+
+        foreach (var (work, versionsOfWork) in plan)
+        {
             works++;
 
             var workDir = Path.Combine(corpusRoot, "works", work.Slug);
@@ -68,6 +86,7 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now)
                 var versionDir = Path.Combine(workDir, "versions", vkey);
                 Directory.CreateDirectory(versionDir);
                 var metaPath = Path.Combine(versionDir, "meta.json");
+                seenVersionMetadata.Add(Path.GetFullPath(metaPath));
 
                 var lexId = $"{pub.Id}:{work.Slug}:{vkey}";
                 VersionMeta meta;
@@ -76,6 +95,19 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now)
                 if (existing)
                 {
                     meta = JsonSerializer.Deserialize<VersionMeta>(await File.ReadAllTextAsync(metaPath, ct), CorpusJson.Options)!;
+                    var lifecycle = meta.Events.LastOrDefault(e =>
+                        e.Event is "withdrawn_from_source" or "resighted");
+                    if (lifecycle?.Event == "withdrawn_from_source")
+                    {
+                        meta.Events.Add(new EventEntry
+                        {
+                            Event = "resighted",
+                            ObservedFrom = _now,
+                            Scope = "version",
+                            Detail = "publisher record returned to the current enumeration",
+                        });
+                        changed = true;
+                    }
                     // F12: interval closure — one appended event, valid_to updated, nothing else touched.
                     var newTo = v.ValidTo?.ToString("yyyy-MM-dd");
                     if (meta.ValidTo is null && newTo is not null)
@@ -89,7 +121,9 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now)
                     {
                         meta.Events.Add(new EventEntry
                         {
-                            Event = "validity_revised", ObservedFrom = _now, Scope = "version",
+                            Event = "validity_revised",
+                            ObservedFrom = _now,
+                            Scope = "version",
                             Detail = $"valid_to: {meta.ValidTo ?? "null"} -> {newTo ?? "null"}"
                         });
                         meta.ValidTo = newTo;
@@ -129,6 +163,23 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now)
                         });
                         changed = true;
                     }
+
+                    // A publisher can expose a previously missing language on a later run.
+                    // Reconcile by stable language identity rather than positional Zip, which
+                    // would silently ignore the new expression and permanently undercount it.
+                    foreach (var expression in v.Expressions)
+                    {
+                        if (meta.Expressions.Any(e => e.Language == expression.Language)) continue;
+                        meta.Expressions.Add(CreateExpressionMeta(expression, desc.TextIncluded));
+                        meta.Events.Add(new EventEntry
+                        {
+                            Event = "expression_added",
+                            ObservedFrom = _now,
+                            Scope = expression.Language,
+                            Detail = $"language={expression.Language}",
+                        });
+                        changed = true;
+                    }
                 }
                 else
                 {
@@ -144,24 +195,9 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now)
                         InForceStatus = v.InForceStatus,
                         PublicationDate = v.PublicationDate?.ToString("yyyy-MM-dd"),
                         Events = [new EventEntry { Event = "first_sighting", ObservedFrom = _now }],
-                        Expressions = v.Expressions.Select(e => new ExpressionMeta
-                        {
-                            Language = e.Language,
-                            ValidFrom = e.ValidFrom?.ToString("yyyy-MM-dd"),
-                            ValidTo = e.ValidTo?.ToString("yyyy-MM-dd"),
-                            ValidTimeSource = e.ValidTimeSource,
-                            Title = e.Title,
-                            TitleShort = e.TitleShort,
-                            SourceUri = e.SourceUri,
-                            Text = new TextInfo
-                            {
-                                Available = false,
-                                Reason = desc.TextIncluded ? "not-fetched" : "pending-gate",
-                                Url = e.SourceUri,
-                            },
-                        }).ToList(),
+                        Expressions = v.Expressions.Select(e => CreateExpressionMeta(e, desc.TextIncluded)).ToList(),
                         Relations = v.Relations.Select(r => new Dictionary<string, string>
-                            { ["type"] = r.Type, ["target"] = r.Target.Value }).ToList(),
+                        { ["type"] = r.Type, ["target"] = r.Target.Value }).ToList(),
                         Raw = new Dictionary<string, string>(v.Raw),
                     };
                 }
@@ -172,8 +208,9 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now)
                 var bodyAdded = false;
                 if (desc.TextIncluded)
                 {
-                    foreach (var (exprMeta, exprRec) in meta.Expressions.Zip(v.Expressions))
+                    foreach (var exprRec in v.Expressions)
                     {
+                        var exprMeta = meta.Expressions.Single(e => e.Language == exprRec.Language);
                         if (exprMeta.Observations.Count > 0) continue;   // already observed
                         var body = await adapter.FetchBody(v, exprRec, ct);
                         if (body is null) continue;
@@ -197,8 +234,9 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now)
                     // D48: alternative structural manifestation (e.g. Formex 4). Stored as
                     // verbatim members under {lang}.{format}/ — one observation per member.
                     // Append-only like bodies; re-attempted nightly until the publisher serves it.
-                    foreach (var (exprMeta, exprRec) in meta.Expressions.Zip(v.Expressions))
+                    foreach (var exprRec in v.Expressions)
                     {
+                        var exprMeta = meta.Expressions.Single(e => e.Language == exprRec.Language);
                         var hasAlt = exprMeta.Observations.Any(o => o.Format is not null);
                         if (!hasAlt)
                         {
@@ -236,21 +274,37 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now)
                     }
                 }
 
-                if (existing && !changed && !bodyAdded) { Unchanged++; continue; }
+                processedExpressions += v.Expressions.Count;
+                var percent = totalExpressions == 0
+                    ? 100
+                    : (int)(processedExpressions * 100 / totalExpressions);
+                if (percent > lastReportedPercent || processedExpressions == totalExpressions)
+                {
+                    ReportProgress(pub.Id, processedExpressions, totalExpressions,
+                        progressClock.Elapsed, v.Raw.GetValueOrDefault("celex") ?? work.Slug);
+                    lastReportedPercent = percent;
+                }
+
+                var canonicalRecordSha = CorpusHashes.RecordSha256(meta);
+                var staleRecordSha = !CorpusHashes.Equal(meta.RecordSha256, canonicalRecordSha);
+                if (existing && !changed && !bodyAdded && !staleRecordSha) { Unchanged++; continue; }
                 if (existing) Updated++; else Created++;
 
-                meta.RecordSha256 = null;
-                var canonical = JsonSerializer.Serialize(meta, CorpusJson.Options);
-                meta.RecordSha256 = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(canonical)));
+                meta.RecordSha256 = canonicalRecordSha;
                 await File.WriteAllTextAsync(metaPath, JsonSerializer.Serialize(meta, CorpusJson.Options) + "\n", ct);
             }
         }
+
+        TombstoneMissingVersions(seenVersionMetadata);
 
         var manifest = new ManifestDoc
         {
             Publisher = new Dictionary<string, string>
             {
-                ["id"] = pub.Id, ["name"] = pub.Name, ["jurisdiction"] = pub.Jurisdiction, ["homepage"] = pub.Homepage,
+                ["id"] = pub.Id,
+                ["name"] = pub.Name,
+                ["jurisdiction"] = pub.Jurisdiction,
+                ["homepage"] = pub.Homepage,
             },
             Tier = pub.Tier.ToString(),
             SourceEndpoint = null,
@@ -282,8 +336,79 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now)
         File.WriteAllText(path, content.TrimEnd('\n') + "\n");
     }
 
+    private static ExpressionMeta CreateExpressionMeta(ExpressionRecord expression, bool textIncluded) => new()
+    {
+        Language = expression.Language,
+        ValidFrom = expression.ValidFrom?.ToString("yyyy-MM-dd"),
+        ValidTo = expression.ValidTo?.ToString("yyyy-MM-dd"),
+        ValidTimeSource = expression.ValidTimeSource,
+        Title = expression.Title,
+        TitleShort = expression.TitleShort,
+        SourceUri = expression.SourceUri,
+        Text = new TextInfo
+        {
+            Available = false,
+            Reason = textIncluded ? "not-fetched" : "pending-gate",
+            Url = expression.SourceUri,
+        },
+    };
+
+    private void TombstoneMissingVersions(IReadOnlySet<string> seenVersionMetadata)
+    {
+        var worksRoot = Path.Combine(corpusRoot, "works");
+        if (!Directory.Exists(worksRoot)) return;
+
+        foreach (var metaPath in Directory.EnumerateFiles(
+                     worksRoot, "meta.json", SearchOption.AllDirectories))
+        {
+            if (!metaPath.Contains($"{Path.DirectorySeparatorChar}versions{Path.DirectorySeparatorChar}",
+                    StringComparison.Ordinal))
+                continue;
+            if (seenVersionMetadata.Contains(Path.GetFullPath(metaPath))) continue;
+
+            var meta = JsonSerializer.Deserialize<VersionMeta>(
+                File.ReadAllText(metaPath), CorpusJson.Options)!;
+            var lifecycle = meta.Events.LastOrDefault(e =>
+                e.Event is "withdrawn_from_source" or "resighted");
+            if (lifecycle?.Event == "withdrawn_from_source") continue;
+
+            meta.Events.Add(new EventEntry
+            {
+                Event = "withdrawn_from_source",
+                ObservedFrom = _now,
+                Scope = "version",
+                Detail = "publisher record absent from the current enumeration",
+            });
+            meta.RecordSha256 = CorpusHashes.RecordSha256(meta);
+            File.WriteAllText(metaPath, JsonSerializer.Serialize(meta, CorpusJson.Options) + "\n");
+            Updated++;
+        }
+    }
+
+    private static StringComparer PathComparer => OperatingSystem.IsWindows()
+        ? StringComparer.OrdinalIgnoreCase
+        : StringComparer.Ordinal;
+
     private static string Min(string? a, string b) => a is null || string.CompareOrdinal(b, a) < 0 ? b : a;
     private static string Max(string? a, string b) => a is null || string.CompareOrdinal(b, a) > 0 ? b : a;
+
+    private void ReportProgress(string publisher, long completed, long total,
+        TimeSpan elapsed, string? current)
+    {
+        var percent = total == 0 ? 100d : completed * 100d / total;
+        var eta = (total, completed) switch
+        {
+            (0, _) => "00:00:00",
+            (_, 0) => "calculating",
+            _ => FormatDuration(TimeSpan.FromSeconds(elapsed.TotalSeconds * (total - completed) / completed)),
+        };
+        var line = FormattableString.Invariant(
+            $"  [progress] {publisher}: ingest expressions={completed}/{total} percent={percent:F1} elapsed={FormatDuration(elapsed)} eta={eta}");
+        _progress.WriteLine(line + (current is null ? "" : $" current={current}"));
+    }
+
+    private static string FormatDuration(TimeSpan value) =>
+        $"{(int)value.TotalHours:00}:{value.Minutes:00}:{value.Seconds:00}";
 
     private static string Notice(Publisher pub, bool textIncluded) => $"""
         NOTICE — three layers (Lex spec §16.2)

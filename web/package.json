@@ -4,13 +4,15 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build && node smoke.mjs"
+    "test": "node --test src/export.test.ts",
+    "build": "tsc --noEmit && npm test && vite build && node smoke.mjs"
   },
   "dependencies": {
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
+    "@types/node": "^26.1.2",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^6.0.5",

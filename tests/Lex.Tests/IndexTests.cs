@@ -11,6 +11,7 @@ public class IndexTests : IDisposable
         public string ModelId => "test/e5";
         public string ModelRevision => "test-revision";
         public int Dimensions => 8;
+        public int EncodeCalls { get; private set; }
         public int CountTokens(string text) => text.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length + 2;
         public int PrefixLengthForTokens(string text, int maxTokens)
         {
@@ -35,6 +36,7 @@ public class IndexTests : IDisposable
         }
         public float[] Encode(string text, EmbeddingInputKind kind)
         {
+            EncodeCalls++;
             var vector = new float[Dimensions];
             foreach (var token in text.ToLowerInvariant().Split([' ', ',', '.', ':'], StringSplitOptions.RemoveEmptyEntries))
             {
@@ -54,9 +56,10 @@ public class IndexTests : IDisposable
         public void Dispose() { }
     }
 
-    private static DocRow Row(string key, string group, string from, string? to, string kind = "REG", string? title = null, bool text = false) =>
+    private static DocRow Row(string key, string group, string from, string? to, string kind = "REG", string? title = null,
+                              bool text = false, bool withdrawn = false) =>
         new(key, "t-pub", group, $"urn:{group}", kind, "en", from, to, "publisher",
-            "2026-08-01T00:00:00Z", Withdrawn: false, TextAvailable: text, TextPublic: text,
+            "2026-08-01T00:00:00Z", Withdrawn: withdrawn, TextAvailable: text, TextPublic: text,
             RecordSha: "abc", BodySha: null, SourceUri: "https://example.org", Title: title ?? group,
             TitleShort: title ?? group, Body: null, PublicationDate: from, StatusNote: null);
 
@@ -78,6 +81,8 @@ public class IndexTests : IDisposable
             Row("t-pub:w1:2020-01-01", "w1", "2020-01-01", "2021-12-31", title: "first thing", text: true),
             Row("t-pub:w1:2022-01-01", "w1", "2022-01-01", null, title: "first thing revised", text: true),
             Row("t-pub:w2:2019-06-01", "w2", "2019-06-01", null, kind: "DIR", title: "second thing", text: true),
+            Row("t-pub:w3:2025-01-01", "w3", "2025-01-01", null, title: "withdrawn secret thing", text: true,
+                withdrawn: true),
         };
         var provisions = new[]
         {
@@ -85,6 +90,7 @@ public class IndexTests : IDisposable
             Prov(docs[0], 1, "art_2", "penalties for the thing are mild"),
             Prov(docs[1], 0, "art_1", "the thing shall apply everywhere, revised"),
             Prov(docs[2], 0, "art_1", "a different directive thing entirely"),
+            Prov(docs[3], 0, "art_1", "withdrawn secret thing"),
         };
         IndexBuilder.Build(_db, stamp, docs, provisions, [], [], StampSigner.CreateKeyPem());
         return LexIndexReader.Open(_db);
@@ -95,6 +101,44 @@ public class IndexTests : IDisposable
     {
         using var r = Build();
         Assert.True(r.SignatureValid);
+    }
+
+    [Fact]
+    public void Provision_history_defaults_deterministically_and_can_select_a_language()
+    {
+        var stamp = new Dictionary<string, string>
+        {
+            ["collection"] = "t-pub", ["tier"] = "A", ["history_begins"] = "publisher",
+            ["built_at"] = "2026-08-01T00:00:00Z", ["corpus_commit"] = "test",
+        };
+        var states = new[]
+        {
+            new ProvisionStateRow("w1", "en", true, "art_1", "2020-01-01", "2020-12-31", "en-1", null, null, false),
+            new ProvisionStateRow("w1", "en", true, "art_1", "2021-01-01", null, "en-2", null, null, false),
+            new ProvisionStateRow("w1", "fr", false, "art_1", "2020-01-01", null, "fr-1", null, null, false),
+        };
+        var events = new[]
+        {
+            new AnchorEventRow("w1", "en", true, "inserted", null, null, "art_1", "en-1", "2020-01-01"),
+            new AnchorEventRow("w1", "fr", false, "inserted", null, null, "art_1", "fr-1", "2020-01-01"),
+        };
+        IndexBuilder.Build(_db, stamp, [], [], [], [], StampSigner.CreateKeyPem(), states, events);
+
+        using var reader = LexIndexReader.Open(_db);
+        Assert.All(reader.ProvisionStates("w1", "art_1"), state => Assert.Equal("en", state.Language));
+        Assert.Single(reader.ProvisionStates("w1", "art_1", "fr"));
+        Assert.All(reader.AnchorEvents("w1", "art_1", "fr"), e => Assert.Equal("fr", e.Language));
+    }
+
+    [Fact]
+    public void Withdrawn_records_are_not_public_search_or_catalogue_candidates()
+    {
+        using var r = Build();
+
+        Assert.Empty(r.Search("withdrawn secret", FilterSet.All, 10));
+        Assert.Empty(r.SearchWorksByIdentifierOrTitle("w3", FilterSet.All, 10));
+        Assert.Null(r.AsOf("w3", new DateOnly(2025, 2, 1), FilterSet.All));
+        Assert.DoesNotContain(r.GroupsPage(10, 0, FilterSet.All), row => row.GroupKey == "w3");
     }
 
     // A signature over the stamp's metadata says nothing about the text the index serves.
@@ -316,6 +360,53 @@ public class IndexTests : IDisposable
     }
 
     [Fact]
+    public void Identical_chunks_share_one_embedding_and_vector_ordinal()
+    {
+        var first = Row("t-pub:first:2020-01-01", "first", "2020-01-01", null, text: true);
+        var second = Row("t-pub:second:2020-01-01", "second", "2020-01-01", null, text: true);
+        var vectors = Path.ChangeExtension(_db, ".vectors");
+        _extra.Add(vectors);
+        using var encoder = new FakeEncoder();
+        IndexBuilder.Build(_db, new Dictionary<string, string> { ["collection"] = "t-pub" },
+            [first, second],
+            [Prov(first, 0, "art_1", "shared exact wording"),
+             Prov(second, 0, "art_9", "shared exact wording")],
+            [], [], null, semantic: new SemanticBuildOptions(encoder, vectors, "model-sha", "tokenizer-sha"));
+
+        Assert.Equal(1, encoder.EncodeCalls);
+        using var vectorReader = new SemanticVectorReader(vectors);
+        Assert.Equal(1, vectorReader.Count);
+        using var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={_db}");
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT COUNT(*), COUNT(DISTINCT vector_ordinal) FROM semantic_chunks";
+        using var result = command.ExecuteReader();
+        Assert.True(result.Read());
+        Assert.Equal(2, result.GetInt32(0));
+        Assert.Equal(1, result.GetInt32(1));
+    }
+
+    [Theory]
+    [InlineData(70)]
+    [InlineData(384)]
+    public void Semantic_vector_hamming_reads_complete_blocks_and_tail(int dimensions)
+    {
+        var vectors = Path.ChangeExtension(_db, $".{dimensions}.vectors");
+        _extra.Add(vectors);
+        var stored = Enumerable.Range(0, dimensions)
+            .Select(i => i % 3 == 0 ? -0.5f : 0.5f).ToArray();
+        var query = Enumerable.Range(0, dimensions)
+            .Select(i => i % 5 == 0 ? -0.5f : 0.5f).ToArray();
+        using (var writer = new SemanticVectorWriter(vectors, dimensions))
+            Assert.Equal(0, writer.Write(stored));
+
+        using var reader = new SemanticVectorReader(vectors);
+        var expected = Enumerable.Range(0, dimensions)
+            .Count(i => (stored[i] >= 0) != (query[i] >= 0));
+        Assert.Equal(expected, reader.HammingDistance(0, SemanticVectorReader.Binary(query)));
+    }
+
+    [Fact]
     public void Fuzzy_fallback_is_visible_and_protects_identifiers()
     {
         var doc = Row("t-pub:privacy:2020-01-01", "privacy", "2020-01-01", null, text: true);
@@ -334,6 +425,23 @@ public class IndexTests : IDisposable
         Assert.Empty(quotation.QueryExpansions);
         var disabled = reader.SearchHybrid("protecton", FilterSet.All, 10, fuzzyAuto: false);
         Assert.Empty(disabled.QueryExpansions);
+    }
+
+    [Fact]
+    public void Exact_treaty_celex_matches_the_publisher_identifier_with_a_slash()
+    {
+        var treaty = Row("t-pub:12012e-txt:2012-10-26", "12012e-txt", "2012-10-26", null,
+            kind: "TREATY", title: "Treaty on the Functioning of the European Union") with
+        {
+            GroupIdentifier = "http://publications.europa.eu/resource/celex/12012E/TXT",
+        };
+        IndexBuilder.Build(_db, new Dictionary<string, string> { ["collection"] = "t-pub" },
+            [treaty], [], [], [], null);
+        using var reader = LexIndexReader.Open(_db);
+
+        var result = reader.SearchKeyword("12012E/TXT", FilterSet.All, 10, fuzzyAuto: true);
+        Assert.Equal("12012e-txt", Assert.Single(result.Hits).Doc.GroupKey);
+        Assert.Equal(["exact_identifier"], result.Hits[0].MatchReasons);
     }
 
     [Fact]

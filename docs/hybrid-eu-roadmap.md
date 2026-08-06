@@ -17,6 +17,20 @@ The structured MCP JSON and `UiEffect` contract remain the interface between ret
 assistant and the workspace. Semantic chunks are retrieval aids only. They are never rendered
 or compared as authoritative law.
 
+## Evidence export contract
+
+The article reader and temporal comparison can export a transparent Markdown reading aid and
+copy a citation. The export is built lazily from the same structured MCP payload and diff pieces
+already displayed on screen. It does not fetch a second version, run another comparison, alter
+legal wording or send text to a model. It records the work and version identifiers, validity
+dates, language, Lex permalink, official publisher sources, extraction profile and full provision
+text hashes. A one-article comparison records both the before and after hashes.
+
+Generated PDF is deliberately not the first export format. A polished PDF can be mistaken for an
+official publication, adds a rendering dependency and makes provenance harder to inspect.
+Markdown is portable, diffable and visibly a reading aid. Every file states that it is neither an
+official publication nor legal advice; the publisher source remains the authority.
+
 ## Delivery
 
 1. Publish separate current, next, decisions and benchmarks surfaces.
@@ -68,7 +82,8 @@ regress no more than 2 percent across the complete suite, keep warm server-side 
 250 ms, and remain below 75 percent of configured memory.
 
 Benchmark queries, relevance judgments, commits, artifacts, machine details and review status are
-public. Until external lawyers review a judgment, it is labelled engineer-reviewed.
+public. Generated candidates are labelled `generated-unreviewed` and cannot authorize activation.
+Engineer-reviewed and lawyer-reviewed judgments are identified individually.
 
 ## Hosting and cost
 

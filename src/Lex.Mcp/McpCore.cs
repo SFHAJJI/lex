@@ -136,7 +136,7 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                 new JsonObject
                 {
                     ["query"] = S("search terms"), ["publisher"] = S("optional publisher id"),
-                    ["jurisdiction"] = S("optional lu or eu"),
+                    ["jurisdiction"] = S("optional jurisdiction code from index metadata, e.g. LU or EU"),
                     ["document_type"] = S("backward-compatible document type filter"),
                     ["source_class"] = S("optional source document class"),
                     ["hierarchy"] = S("optional normalized legal hierarchy"),
@@ -152,7 +152,12 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                     ["limit"] = I("default 10"),
                 }, ["query"]),
             Tool("article_history", "Every distinct text ONE provision (article/annex) has had, as validity intervals — plus its lifecycle events (inserted/removed/renumbered, renumbering detected mechanically by identical text hash). The answer to \"what did Article X say over its life / when did it change\".",
-                new JsonObject { ["work"] = S(workDesc), ["anchor"] = S("provision anchor, e.g. art_1er (find it via search or as_of mode=outline)") }, ["work", "anchor"]),
+                new JsonObject
+                {
+                    ["work"] = S(workDesc),
+                    ["anchor"] = S("provision anchor, e.g. art_1er (find it via search or as_of mode=outline)"),
+                    ["language"] = S("optional language code; defaults to the work's primary derived language"),
+                }, ["work", "anchor"]),
             Tool("provenance", "Proof chain for one lex_id: source URI, retrieval time, record/body hashes, event chain, corpus commit, index build, stamp signature.",
                 new JsonObject { ["lex_id"] = S("full lex_id"), ["language"] = S("optional") }, ["lex_id"]),
             Tool("coverage", "What we hold and what we lack, tier by tier: counts, date ranges, history_begins, known gaps. This tool exists to say what we do NOT have.",
@@ -579,13 +584,8 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                 if (timeScope is not ("all_versions" or "as_of")) throw new ArgumentException("time_scope must be all_versions or as_of");
                 DateOnly? asOf = timeScope == "as_of"
                     ? DateOnly.Parse(Str("as_of") ?? throw new ArgumentException("as_of required when time_scope=as_of")) : null;
-                var pub = Str("publisher") ?? Str("jurisdiction") switch
-                {
-                    "lu" => "lu-legilux",
-                    "eu" => "eu-eurlex",
-                    null => null,
-                    _ => throw new ArgumentException("jurisdiction must be lu or eu"),
-                };
+                var pub = Str("publisher");
+                var jurisdiction = Str("jurisdiction");
                 var limit = Int("limit", 10);
                 var requestedMode = Str("retrieval_mode") ?? "keyword";
                 if (requestedMode is not ("keyword" or "hybrid")) throw new ArgumentException("retrieval_mode must be keyword or hybrid");
@@ -598,7 +598,12 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                 var works = Str("works")?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                                         .Select(w => w.Contains(':') ? w[(w.IndexOf(':') + 1)..] : w).ToArray();
                 var outp = new JsonArray();
-                foreach (var r in readers.Values.Where(x => pub is null || x.Collection == pub))
+                foreach (var r in readers.Values.Where(x =>
+                             (pub is null || x.Collection == pub)
+                             && (jurisdiction is null || string.Equals(
+                                 x.Stamp.GetValueOrDefault("jurisdiction"),
+                                 jurisdiction,
+                                 StringComparison.OrdinalIgnoreCase))))
                 {
                     var filter = new FilterSet(asOf, null, Str("source_class") ?? Str("document_type"),
                         Str("language"), works, Str("hierarchy"), Str("act_form"),
@@ -676,8 +681,9 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                 if (res is null) return new JsonObject { ["status"] = "unknown_work", ["work"] = work };
                 var (r, w) = res.Value;
                 if (!r.WorkExists(w)) return new JsonObject { ["envelope"] = Envelope(r, "unknown_work"), ["work"] = w };
-                var states = r.ProvisionStates(w, anchor);
-                var evs = r.AnchorEvents(w, anchor);
+                var requestedLanguage = Str("language");
+                var states = r.ProvisionStates(w, anchor, requestedLanguage);
+                var evs = r.AnchorEvents(w, anchor, requestedLanguage);
                 if (states.Count == 0 && evs.Count == 0)
                     return new JsonObject
                     {
@@ -692,6 +698,7 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                     {
                         ["valid_from"] = s.ValidFrom,
                         ["valid_to"] = s.ValidTo,
+                        ["language"] = s.Language,
                         ["text_sha256"] = s.TextSha,
                         ["in_version"] = s.InVersion,
                     };
@@ -710,11 +717,13 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                     ["envelope"] = Envelope(r, "ok"),
                     ["work"] = w,
                     ["anchor"] = anchor,
+                    ["language"] = states.FirstOrDefault()?.Language ?? evs.FirstOrDefault()?.Language ?? requestedLanguage,
                     ["distinct_texts"] = states.Count,
                     ["states"] = statesArr,
                     ["anchor_events"] = new JsonArray(evs.Select(e => (JsonNode)new JsonObject
                     {
                         ["type"] = e.EType,
+                        ["language"] = e.Language,
                         ["from"] = e.FromAnchor,
                         ["to"] = e.ToAnchor,
                         ["anchor"] = e.Anchor,

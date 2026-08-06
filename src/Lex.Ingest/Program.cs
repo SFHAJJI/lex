@@ -1,7 +1,5 @@
 using Lex.Index;
 using Lex.Ingest;
-using Lex.Law;
-using Lex.Sources.Legilux;
 
 var args0 = Environment.GetCommandLineArgs().Skip(1).ToArray();
 if (args0.Length == 0) { Usage(); return 1; }
@@ -20,6 +18,7 @@ IEnumerable<string> GetAll(string name)
 
 // Time enters as an injected parameter (F9); the wall clock is read only at this CLI boundary.
 var now = Get("--now") is { } n ? DateTimeOffset.Parse(n) : DateTimeOffset.UtcNow;
+var sourceAdapters = SourceAdapterRegistry.CreateDefault();
 
 switch (args0[0])
 {
@@ -85,11 +84,10 @@ switch (args0[0])
     }
     case "scope-preview":
     {
-        var scopePath = Get("--scope");
+        var publisher = Get("--publisher") ?? "eu-eurlex";
         var previous = Get("--previous-scope");
-        var wave = int.TryParse(Get("--wave"), out var parsedWave) ? parsedWave : (int?)null;
-        var adapter = new Lex.Sources.EurLex.EurLexAdapter(scopePath, wave);
-        var preview = await adapter.PreviewScopeAsync(previous, now, CancellationToken.None);
+        var preview = await sourceAdapters.PreviewScopeAsync(
+            publisher, Get, previous, now, CancellationToken.None);
         Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(preview,
             new System.Text.Json.JsonSerializerOptions
             {
@@ -102,13 +100,7 @@ switch (args0[0])
     {
         var publisher = Get("--publisher") ?? "lu-legilux";
         var corpus = Get("--corpus") ?? throw new ArgumentException("--corpus required");
-        ISourceAdapter adapter = publisher switch
-        {
-            "lu-legilux" => new LegiluxAdapter(),
-            "eu-eurlex" => new Lex.Sources.EurLex.EurLexAdapter(Get("--scope"),
-                int.TryParse(Get("--wave"), out var wave) ? wave : null),
-            _ => throw new ArgumentException($"Unknown publisher '{publisher}'"),
-        };
+        var adapter = sourceAdapters.Resolve(publisher, Get);
         Console.Error.WriteLine($"[lex] ingest {publisher} -> {corpus}");
         await new CorpusWriter(corpus, now).WriteAsync(adapter, CancellationToken.None);
         return 0;
@@ -152,9 +144,20 @@ switch (args0[0])
     }
     case "verify":
     {
-        // verify stamp --db X   |   verify derive --publisher P --corpus X --articles Y [--work slug]
+        // verify corpus --corpus X | verify stamp --db X | verify derive --publisher P --corpus X --articles Y
         switch (args0.Length > 1 ? args0[1] : "")
         {
+            case "corpus":
+            {
+                var corpus = Get("--corpus") ?? throw new ArgumentException("--corpus required");
+                var report = CorpusIntegrity.Verify(corpus);
+                Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(report, new System.Text.Json.JsonSerializerOptions
+                {
+                    PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.SnakeCaseLower,
+                    WriteIndented = true,
+                }));
+                return report.IsValid ? 0 : 6;
+            }
             case "stamp":
             {
                 var db = Get("--db") ?? throw new ArgumentException("--db required");
@@ -208,9 +211,22 @@ switch (args0[0])
                 finally { try { Directory.Delete(tmp, true); } catch { } }
             }
             default:
-                Console.Error.WriteLine("usage: lex verify stamp --db X | lex verify derive --publisher P --corpus X --articles Y [--work slug]");
+                Console.Error.WriteLine("usage: lex verify corpus --corpus X | lex verify stamp --db X | lex verify derive --publisher P --corpus X --articles Y [--work slug]");
                 return 1;
         }
+    }
+    case "repair":
+    {
+        if ((args0.Length > 1 ? args0[1] : "") != "checkout-line-endings")
+            throw new ArgumentException("usage: lex repair checkout-line-endings --corpus X");
+        var corpus = Get("--corpus") ?? throw new ArgumentException("--corpus required");
+        var report = CheckoutLineEndings.Repair(corpus);
+        Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(report, new System.Text.Json.JsonSerializerOptions
+        {
+            PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.SnakeCaseLower,
+            WriteIndented = true,
+        }));
+        return report.IsValid ? 0 : 6;
     }
     case "artifact":
     {
@@ -339,10 +355,12 @@ static void CopyDir(string src, string dst)
 
 static void Usage() => Console.Error.WriteLine("""
     lex — point-in-time regulatory text pipeline
-      lex scope-preview [--scope FILE] [--previous-scope FILE] [--wave 1..4]
-      lex ingest --publisher lu-legilux|eu-eurlex --corpus PATH [--scope FILE] [--wave 1..4] [--now ISO]
+      lex scope-preview [--publisher ID] [--scope FILE] [--previous-scope FILE] [--wave 1..4]
+      lex ingest --publisher ID --corpus PATH [--scope FILE] [--wave 1..4] [--now ISO]
       lex index  --corpus PATH [--articles PATH] --out FILE.db [--keyfile KEY.pem] [--now ISO]
       lex derive --publisher lu-legilux --corpus PATH --out PATH [--code-version SHA]
+      lex verify corpus --corpus PATH
+      lex repair checkout-line-endings --corpus PATH
       lex artifact manifest --root DIR --file RELATIVE [--file RELATIVE] --manifest FILE --signature FILE --keyfile KEY.pem --key-id ID --code-commit SHA [--source KEY=VALUE]
       lex artifact verify --root DIR --manifest FILE --signature FILE --trust-roots FILE
       lex artifact trust-root --keyfile KEY.pem --key-id ID

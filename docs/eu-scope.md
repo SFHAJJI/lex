@@ -42,4 +42,6 @@ bytes. These estimates are replaced by measured artifact sizes after the first c
 The wave uses reviewed cornerstone CELEX seeds in each practice domain instead of top-level
 directory codes. Relationship closure supplies their bounded legal context. Reverse legal-basis
 closure admits regulations and directives, but excludes case-specific decisions that would turn a
-legislative corpus into an unbounded administrative case collection.
+legislative corpus into an unbounded administrative case collection. Complete primary-law seeds
+are not reverse legal-basis roots: Lex includes the treaty or Charter and follows its own outbound
+legal bases, but does not ingest every secondary act that cites the TFEU, TEU or Charter.

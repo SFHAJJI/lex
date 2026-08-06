@@ -147,14 +147,16 @@ public static class IndexBuilder
             CREATE INDEX ix_cit_target ON citations(cited_slug);
             CREATE INDEX ix_prov_anchor ON provisions(anchor);
             CREATE TABLE provision_states(
-              group_key TEXT NOT NULL, anchor TEXT NOT NULL, valid_from TEXT NOT NULL,
+              group_key TEXT NOT NULL, language TEXT NOT NULL, is_primary_language INTEGER NOT NULL,
+              anchor TEXT NOT NULL, valid_from TEXT NOT NULL,
               valid_to TEXT, text_sha TEXT NOT NULL, in_version TEXT,
               article_valid_from TEXT, validity_conflict INTEGER NOT NULL DEFAULT 0);
-            CREATE INDEX ix_pstates ON provision_states(group_key, anchor, valid_from);
+            CREATE INDEX ix_pstates ON provision_states(group_key, language, anchor, valid_from);
             CREATE TABLE anchor_events(
-              group_key TEXT NOT NULL, etype TEXT NOT NULL, from_anchor TEXT, to_anchor TEXT,
+              group_key TEXT NOT NULL, language TEXT NOT NULL, is_primary_language INTEGER NOT NULL,
+              etype TEXT NOT NULL, from_anchor TEXT, to_anchor TEXT,
               anchor TEXT, text_sha TEXT, at_version TEXT);
-            CREATE INDEX ix_aevents ON anchor_events(group_key);
+            CREATE INDEX ix_aevents ON anchor_events(group_key, language);
             CREATE TABLE events(key TEXT, scope TEXT, event TEXT, observed_from TEXT, detail TEXT);
             CREATE INDEX ix_events_key ON events(key);
             CREATE TABLE obs_history(key TEXT, language TEXT, expr_valid_from TEXT,
@@ -194,12 +196,13 @@ public static class IndexBuilder
 
             var docByRid = docRows.ToDictionary(d => $"{d.Key}|{d.Language}|{d.ValidFrom}", StringComparer.Ordinal);
             var insBlob = conn.CreateCommand();
-            insBlob.CommandText = "INSERT OR IGNORE INTO text_blobs VALUES ($sha,$enc,$original,$stored,$payload)";
+            insBlob.CommandText = "INSERT INTO text_blobs VALUES ($sha,$enc,$original,$stored,$payload)";
             insBlob.Parameters.Add(new SqliteParameter("$sha", SqliteType.Text));
             insBlob.Parameters.Add(new SqliteParameter("$enc", SqliteType.Text));
             insBlob.Parameters.Add(new SqliteParameter("$original", SqliteType.Integer));
             insBlob.Parameters.Add(new SqliteParameter("$stored", SqliteType.Integer));
             insBlob.Parameters.Add(new SqliteParameter("$payload", SqliteType.Blob));
+            var writtenTextBlobs = new HashSet<string>(StringComparer.Ordinal);
 
             var insLexical = conn.CreateCommand();
             insLexical.CommandText = """
@@ -224,6 +227,7 @@ public static class IndexBuilder
             insChunk.Parameters.Add(new SqliteParameter("$index", SqliteType.Integer));
             insChunk.Parameters.Add(new SqliteParameter("$sha", SqliteType.Text));
             insChunk.Parameters.Add(new SqliteParameter("$ordinal", SqliteType.Integer));
+            var vectorOrdinalByChunk = new Dictionary<string, long>(StringComparer.Ordinal);
 
             var insProv = conn.CreateCommand();
             insProv.CommandText = """
@@ -241,13 +245,16 @@ public static class IndexBuilder
                 var actualSha = Convert.ToHexStringLower(SHA256.HashData(utf8));
                 if (!actualSha.Equals(p.TextSha, StringComparison.OrdinalIgnoreCase))
                     throw new InvalidDataException($"Provision '{p.ProvisionId}' text does not match text_sha.");
-                var (encoding, payload) = EncodeText(utf8);
-                insBlob.Parameters["$sha"].Value = actualSha;
-                insBlob.Parameters["$enc"].Value = encoding;
-                insBlob.Parameters["$original"].Value = utf8.Length;
-                insBlob.Parameters["$stored"].Value = payload.Length;
-                insBlob.Parameters["$payload"].Value = payload;
-                insBlob.ExecuteNonQuery();
+                if (writtenTextBlobs.Add(actualSha))
+                {
+                    var (encoding, payload) = EncodeText(utf8);
+                    insBlob.Parameters["$sha"].Value = actualSha;
+                    insBlob.Parameters["$enc"].Value = encoding;
+                    insBlob.Parameters["$original"].Value = utf8.Length;
+                    insBlob.Parameters["$stored"].Value = payload.Length;
+                    insBlob.Parameters["$payload"].Value = payload;
+                    insBlob.ExecuteNonQuery();
+                }
 
                 Set(insLexical, "$gk", doc.GroupKey); Set(insLexical, "$lang", doc.Language);
                 Set(insLexical, "$a", p.Anchor); Set(insLexical, "$sha", actualSha);
@@ -268,8 +275,12 @@ public static class IndexBuilder
                     {
                         foreach (var chunk in SemanticChunker.Split(p.TextMd, semantic.Encoder))
                         {
-                            var vector = semantic.Encoder.Encode(chunk.Text, EmbeddingInputKind.Passage);
-                            var ordinal = semanticWriter!.Write(vector);
+                            if (!vectorOrdinalByChunk.TryGetValue(chunk.Sha256, out var ordinal))
+                            {
+                                var vector = semantic.Encoder.Encode(chunk.Text, EmbeddingInputKind.Passage);
+                                ordinal = semanticWriter!.Write(vector);
+                                vectorOrdinalByChunk.Add(chunk.Sha256, ordinal);
+                            }
                             insChunk.Parameters["$state"].Value = stateId;
                             insChunk.Parameters["$index"].Value = chunk.Index;
                             insChunk.Parameters["$sha"].Value = chunk.Sha256;
@@ -290,24 +301,28 @@ public static class IndexBuilder
             }
 
             var insState = conn.CreateCommand();
-            insState.CommandText = "INSERT INTO provision_states VALUES ($gk,$a,$vf,$vt,$sha,$iv,$avf,$vc)";
-            foreach (var p in new[] { "$gk", "$a", "$vf", "$vt", "$sha", "$iv", "$avf", "$vc" })
+            insState.CommandText = "INSERT INTO provision_states VALUES ($gk,$lang,$primary,$a,$vf,$vt,$sha,$iv,$avf,$vc)";
+            foreach (var p in new[] { "$gk", "$lang", "$primary", "$a", "$vf", "$vt", "$sha", "$iv", "$avf", "$vc" })
                 insState.Parameters.Add(new SqliteParameter(p, SqliteType.Text));
             foreach (var s in provisionStates ?? [])
             {
-                Set(insState, "$gk", s.GroupKey); Set(insState, "$a", s.Anchor); Set(insState, "$vf", s.ValidFrom);
+                Set(insState, "$gk", s.GroupKey); Set(insState, "$lang", s.Language);
+                Set(insState, "$primary", s.IsPrimaryLanguage ? "1" : "0");
+                Set(insState, "$a", s.Anchor); Set(insState, "$vf", s.ValidFrom);
                 Set(insState, "$vt", s.ValidTo); Set(insState, "$sha", s.TextSha); Set(insState, "$iv", s.InVersion);
                 Set(insState, "$avf", s.ArticleValidFrom); Set(insState, "$vc", s.ValidityConflict ? "1" : "0");
                 insState.ExecuteNonQuery();
             }
 
             var insAe = conn.CreateCommand();
-            insAe.CommandText = "INSERT INTO anchor_events VALUES ($gk,$et,$fa,$ta,$a,$sha,$av)";
-            foreach (var p in new[] { "$gk", "$et", "$fa", "$ta", "$a", "$sha", "$av" })
+            insAe.CommandText = "INSERT INTO anchor_events VALUES ($gk,$lang,$primary,$et,$fa,$ta,$a,$sha,$av)";
+            foreach (var p in new[] { "$gk", "$lang", "$primary", "$et", "$fa", "$ta", "$a", "$sha", "$av" })
                 insAe.Parameters.Add(new SqliteParameter(p, SqliteType.Text));
             foreach (var e in anchorEvents ?? [])
             {
-                Set(insAe, "$gk", e.GroupKey); Set(insAe, "$et", e.EType); Set(insAe, "$fa", e.FromAnchor);
+                Set(insAe, "$gk", e.GroupKey); Set(insAe, "$lang", e.Language);
+                Set(insAe, "$primary", e.IsPrimaryLanguage ? "1" : "0");
+                Set(insAe, "$et", e.EType); Set(insAe, "$fa", e.FromAnchor);
                 Set(insAe, "$ta", e.ToAnchor); Set(insAe, "$a", e.Anchor); Set(insAe, "$sha", e.TextSha);
                 Set(insAe, "$av", e.AtVersion);
                 insAe.ExecuteNonQuery();
