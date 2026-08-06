@@ -508,7 +508,7 @@ public class IndexTests : IDisposable
 
     // ---- the catalogue ----
     //
-    // /browse promised "Browse everything" and delivered seven curated links against 1,409 works.
+    // /browse promised "Browse everything" and delivered seven curated links against thousands of works.
     // The page that replaced it asks one question per reader choice, and every one of those
     // choices reaches an aggregate over versions, which is where a listing quietly goes wrong:
     // counting versions instead of works, losing the newest title, or paging a total that does
