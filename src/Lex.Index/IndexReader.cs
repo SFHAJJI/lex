@@ -545,7 +545,8 @@ public sealed class LexIndexReader : IDisposable
             .Where(t => t.Length >= 2).Take(6).ToList();
         if (terms.Count == 0) return [];
 
-        var hits = Lookup(terms.Select((t, i) => $"(d.title LIKE $t{i} OR d.group_key LIKE $t{i})"), terms);
+        var hits = Lookup(terms.Select((t, i) =>
+            $"(d.title LIKE $t{i} OR d.group_key LIKE $t{i} OR d.group_identifier LIKE $t{i})"), terms);
         if (hits.Count > 0) return hits;
 
         // "CELEX 32022R2554", "see 32013r0575" — keep the identifier, drop the chatter.
@@ -604,7 +605,8 @@ public sealed class LexIndexReader : IDisposable
     public List<ChangeRow> ChangesInPeriod(string from, string to, IReadOnlyList<string>? kinds,
                                            bool byChurn, int limit, int offset = 0)
     {
-        var where = "d.valid_from >= $from AND d.valid_from <= $to" + KindClause(kinds, "d.");
+        var where = "d.withdrawn=0 AND d.valid_from >= $from AND d.valid_from <= $to"
+                    + KindClause(kinds, "d.");
         var order = byChurn ? "versions DESC, last_change DESC" : "last_change DESC, versions DESC";
         using var cmd = Cmd($"""
             SELECT d.group_key,
@@ -774,7 +776,9 @@ public sealed class LexIndexReader : IDisposable
         var (where, ps) = WithFilters("1=1", filters, excludeAsOf: true);
         using var cmd = Cmd($"""
             SELECT {SelectDocCols()} FROM docs d
-            WHERE {where} AND valid_from = (SELECT MAX(valid_from) FROM docs d2 WHERE d2.group_key = d.group_key)
+            WHERE {where} AND valid_from = (
+                SELECT MAX(valid_from) FROM docs d2
+                WHERE d2.group_key = d.group_key AND d2.withdrawn = 0)
             GROUP BY group_key
             ORDER BY group_key LIMIT $lim OFFSET $off
             """, ps);
@@ -856,7 +860,7 @@ public sealed class LexIndexReader : IDisposable
         if (collection is not null) { where += " AND collection=$c"; ps.Add(new SqliteParameter("$c", collection)); }
         using var cmd = Cmd($"""
             SELECT kind, COUNT(DISTINCT group_key) AS works FROM docs
-            WHERE {where} GROUP BY kind ORDER BY works DESC
+            WHERE {where} AND withdrawn=0 GROUP BY kind ORDER BY works DESC
             """, ps);
         var outp = new List<(string, int)>();
         using var rd = cmd.ExecuteReader();
@@ -890,7 +894,7 @@ public sealed class LexIndexReader : IDisposable
             FROM citations c
             JOIN docs d ON d.rid = c.rid
             LEFT JOIN provisions p ON p.rid = c.rid AND p.anchor = c.anchor
-            WHERE c.cited_slug = $s
+            WHERE c.cited_slug = $s AND d.withdrawn = 0
             ORDER BY d.valid_from DESC, d.group_key, c.anchor
             LIMIT $lim
             """, []);
@@ -909,7 +913,7 @@ public sealed class LexIndexReader : IDisposable
         var kinds = new List<CoverageKind>();
         using (var cmd = Cmd("""
             SELECT kind, COUNT(*), SUM(CASE WHEN text_public=1 THEN 1 ELSE 0 END)
-            FROM docs GROUP BY kind ORDER BY COUNT(*) DESC
+            FROM docs WHERE withdrawn=0 GROUP BY kind ORDER BY COUNT(*) DESC
             """, []))
         using (var r = cmd.ExecuteReader())
             while (r.Read())
@@ -920,13 +924,13 @@ public sealed class LexIndexReader : IDisposable
         using var agg = Cmd("""
             SELECT COUNT(DISTINCT group_key), COUNT(*), MIN(valid_from), MAX(valid_from),
                    SUM(CASE WHEN text_public=1 THEN 1 ELSE 0 END)
-            FROM docs
+            FROM docs WHERE withdrawn=0
             """, []);
         using var ar = agg.ExecuteReader();
         ar.Read();
         var profiles = new List<CoverageProfile>();
         using (var pc = Cmd("""
-            SELECT profile, COUNT(*) FROM docs WHERE profile IS NOT NULL
+            SELECT profile, COUNT(*) FROM docs WHERE profile IS NOT NULL AND withdrawn=0
             GROUP BY profile ORDER BY COUNT(*) DESC
             """, []))
         using (var pr = pc.ExecuteReader())
@@ -939,7 +943,7 @@ public sealed class LexIndexReader : IDisposable
         // other entirely rather than see a translation.
         var languages = new List<CoverageLanguage>();
         using (var lc = Cmd("""
-            SELECT language, COUNT(DISTINCT group_key), COUNT(*) FROM docs
+            SELECT language, COUNT(DISTINCT group_key), COUNT(*) FROM docs WHERE withdrawn=0
             GROUP BY language ORDER BY COUNT(*) DESC
             """, []))
         using (var lr = lc.ExecuteReader())
@@ -948,7 +952,8 @@ public sealed class LexIndexReader : IDisposable
         int multilingual;
         using (var mc = Cmd("""
             SELECT COUNT(*) FROM (
-              SELECT group_key FROM docs GROUP BY group_key HAVING COUNT(DISTINCT language) > 1)
+              SELECT group_key FROM docs WHERE withdrawn=0
+              GROUP BY group_key HAVING COUNT(DISTINCT language) > 1)
             """, []))
             multilingual = Convert.ToInt32(mc.ExecuteScalar());
 
@@ -972,7 +977,9 @@ public sealed class LexIndexReader : IDisposable
     private (string Sql, List<SqliteParameter> Ps) WithFilters(string baseSql, FilterSet f, bool excludeAsOf)
     {
         var ps = new List<SqliteParameter>();
-        var sql = baseSql;
+        // Withdrawn publisher records remain addressable by exact provenance tools, but they
+        // are not eligible public-search or catalogue candidates after their tombstone.
+        var sql = baseSql + " AND withdrawn=0";
         if (f.Collection is not null) { sql += " AND collection=$fcol"; ps.Add(new SqliteParameter("$fcol", f.Collection)); }
         if (f.Kind is not null)
         {

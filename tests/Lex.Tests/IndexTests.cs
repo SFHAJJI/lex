@@ -56,9 +56,10 @@ public class IndexTests : IDisposable
         public void Dispose() { }
     }
 
-    private static DocRow Row(string key, string group, string from, string? to, string kind = "REG", string? title = null, bool text = false) =>
+    private static DocRow Row(string key, string group, string from, string? to, string kind = "REG", string? title = null,
+                              bool text = false, bool withdrawn = false) =>
         new(key, "t-pub", group, $"urn:{group}", kind, "en", from, to, "publisher",
-            "2026-08-01T00:00:00Z", Withdrawn: false, TextAvailable: text, TextPublic: text,
+            "2026-08-01T00:00:00Z", Withdrawn: withdrawn, TextAvailable: text, TextPublic: text,
             RecordSha: "abc", BodySha: null, SourceUri: "https://example.org", Title: title ?? group,
             TitleShort: title ?? group, Body: null, PublicationDate: from, StatusNote: null);
 
@@ -80,6 +81,8 @@ public class IndexTests : IDisposable
             Row("t-pub:w1:2020-01-01", "w1", "2020-01-01", "2021-12-31", title: "first thing", text: true),
             Row("t-pub:w1:2022-01-01", "w1", "2022-01-01", null, title: "first thing revised", text: true),
             Row("t-pub:w2:2019-06-01", "w2", "2019-06-01", null, kind: "DIR", title: "second thing", text: true),
+            Row("t-pub:w3:2025-01-01", "w3", "2025-01-01", null, title: "withdrawn secret thing", text: true,
+                withdrawn: true),
         };
         var provisions = new[]
         {
@@ -87,6 +90,7 @@ public class IndexTests : IDisposable
             Prov(docs[0], 1, "art_2", "penalties for the thing are mild"),
             Prov(docs[1], 0, "art_1", "the thing shall apply everywhere, revised"),
             Prov(docs[2], 0, "art_1", "a different directive thing entirely"),
+            Prov(docs[3], 0, "art_1", "withdrawn secret thing"),
         };
         IndexBuilder.Build(_db, stamp, docs, provisions, [], [], StampSigner.CreateKeyPem());
         return LexIndexReader.Open(_db);
@@ -97,6 +101,17 @@ public class IndexTests : IDisposable
     {
         using var r = Build();
         Assert.True(r.SignatureValid);
+    }
+
+    [Fact]
+    public void Withdrawn_records_are_not_public_search_or_catalogue_candidates()
+    {
+        using var r = Build();
+
+        Assert.Empty(r.Search("withdrawn secret", FilterSet.All, 10));
+        Assert.Empty(r.SearchWorksByIdentifierOrTitle("w3", FilterSet.All, 10));
+        Assert.Null(r.AsOf("w3", new DateOnly(2025, 2, 1), FilterSet.All));
+        Assert.DoesNotContain(r.GroupsPage(10, 0, FilterSet.All), row => row.GroupKey == "w3");
     }
 
     // A signature over the stamp's metadata says nothing about the text the index serves.
@@ -383,6 +398,23 @@ public class IndexTests : IDisposable
         Assert.Empty(quotation.QueryExpansions);
         var disabled = reader.SearchHybrid("protecton", FilterSet.All, 10, fuzzyAuto: false);
         Assert.Empty(disabled.QueryExpansions);
+    }
+
+    [Fact]
+    public void Exact_treaty_celex_matches_the_publisher_identifier_with_a_slash()
+    {
+        var treaty = Row("t-pub:12012e-txt:2012-10-26", "12012e-txt", "2012-10-26", null,
+            kind: "TREATY", title: "Treaty on the Functioning of the European Union") with
+        {
+            GroupIdentifier = "http://publications.europa.eu/resource/celex/12012E/TXT",
+        };
+        IndexBuilder.Build(_db, new Dictionary<string, string> { ["collection"] = "t-pub" },
+            [treaty], [], [], [], null);
+        using var reader = LexIndexReader.Open(_db);
+
+        var result = reader.SearchKeyword("12012E/TXT", FilterSet.All, 10, fuzzyAuto: true);
+        Assert.Equal("12012e-txt", Assert.Single(result.Hits).Doc.GroupKey);
+        Assert.Equal(["exact_identifier"], result.Hits[0].MatchReasons);
     }
 
     [Fact]
