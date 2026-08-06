@@ -275,7 +275,8 @@ public static class ExplainerEndpoints
                 <h2>Publication rule</h2>
                 <p>Future reports name code and corpus commits, the signed artifact manifest, embedding model,
                 machine or Azure resource, timestamp, sample count and review status. Initial relevance
-                judgments are labelled engineer-reviewed until a lawyer reviews them.</p>
+                generated judgments are labelled generated-unreviewed and cannot pass the activation gate.
+                Reviewed cases are identified individually.</p>
                 """;
             return Results.Content(Page("Benchmarks", body,
                 "measured retrieval, latency, memory, index size and cost evidence"), "text/html");

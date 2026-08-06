@@ -25,7 +25,7 @@ public sealed class RetrievalBenchmarkTests
         {
             Assert.NotEmpty(c.RelevantWorks);
             Assert.NotEmpty(c.Explanation);
-            Assert.Equal("engineer-reviewed", c.ReviewStatus);
+            Assert.Equal("generated-unreviewed", c.ReviewStatus);
         });
         var filterDomains = cases.Where(c => c.Category == "hierarchy")
             .Select(c => c.Domain).Where(d => d is not null).Cast<string>()

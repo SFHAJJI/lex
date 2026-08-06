@@ -92,7 +92,7 @@ public static class RetrievalBenchmarkCatalog
             $"{category}-{cases.Count(c => c.Category == category) + 1:000}", category, query, language,
             timeScope, asOf, [work.Celex.ToLowerInvariant()],
             $"The query identifies {work.Topic}; the relevant work judgment is document-level and does not invent an article match.",
-            "engineer-reviewed", hierarchy, domain));
+            "generated-unreviewed", hierarchy, domain));
 
         for (var i = 0; i < 30; i++)
         {
@@ -171,6 +171,8 @@ public static class RetrievalBenchmarkRunner
         var keyword = Evaluate(cases, c => reader.SearchKeyword(c.Query, Filters(c), 10, c.Category == "fuzzy"));
         var hybrid = Evaluate(cases, c => reader.SearchHybrid(c.Query, Filters(c), 10));
         var failures = new List<string>();
+        if (cases.Any(c => c.ReviewStatus is not ("engineer-reviewed" or "lawyer-reviewed")))
+            failures.Add("relevance judgments have not been reviewed");
         if (hybrid.ExactFirstAccuracy < 1) failures.Add("exact legal identifier accuracy is below 100 percent");
         if (hybrid.TemporalLeakageFailures != 0) failures.Add("temporal leakage is not zero");
         var conceptualKeyword = Evaluate(cases.Where(c => c.Category == "conceptual").ToList(),
@@ -188,13 +190,20 @@ public static class RetrievalBenchmarkRunner
 
         return new RetrievalBenchmarkReport(
             "lex-retrieval-benchmark/1", timestamp.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ"),
-            cases.Count, "engineer-reviewed", codeCommit,
+            cases.Count, AggregateReviewStatus(cases), codeCommit,
             reader.Stamp.GetValueOrDefault("corpus_commit", "unknown"), manifestId,
             reader.Stamp.GetValueOrDefault("embedding_model", "none"),
             reader.Stamp.GetValueOrDefault("embedding_revision", "none"), machine, resourceConfiguration,
             modelLoadMs, coldQueryMs, workingSet, memoryLimitBytes, new FileInfo(indexPath).Length,
             vectorPath is not null && File.Exists(vectorPath) ? new FileInfo(vectorPath).Length : 0,
             keyword, hybrid, failures.Count == 0, failures);
+    }
+
+    private static string AggregateReviewStatus(IReadOnlyList<RetrievalBenchmarkCase> cases)
+    {
+        if (cases.All(c => c.ReviewStatus == "lawyer-reviewed")) return "lawyer-reviewed";
+        if (cases.All(c => c.ReviewStatus is "engineer-reviewed" or "lawyer-reviewed")) return "reviewed";
+        return "generated-unreviewed";
     }
 
     private static FilterSet Filters(RetrievalBenchmarkCase c) => new(
