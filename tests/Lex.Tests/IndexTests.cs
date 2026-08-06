@@ -104,6 +104,33 @@ public class IndexTests : IDisposable
     }
 
     [Fact]
+    public void Provision_history_defaults_deterministically_and_can_select_a_language()
+    {
+        var stamp = new Dictionary<string, string>
+        {
+            ["collection"] = "t-pub", ["tier"] = "A", ["history_begins"] = "publisher",
+            ["built_at"] = "2026-08-01T00:00:00Z", ["corpus_commit"] = "test",
+        };
+        var states = new[]
+        {
+            new ProvisionStateRow("w1", "en", true, "art_1", "2020-01-01", "2020-12-31", "en-1", null, null, false),
+            new ProvisionStateRow("w1", "en", true, "art_1", "2021-01-01", null, "en-2", null, null, false),
+            new ProvisionStateRow("w1", "fr", false, "art_1", "2020-01-01", null, "fr-1", null, null, false),
+        };
+        var events = new[]
+        {
+            new AnchorEventRow("w1", "en", true, "inserted", null, null, "art_1", "en-1", "2020-01-01"),
+            new AnchorEventRow("w1", "fr", false, "inserted", null, null, "art_1", "fr-1", "2020-01-01"),
+        };
+        IndexBuilder.Build(_db, stamp, [], [], [], [], StampSigner.CreateKeyPem(), states, events);
+
+        using var reader = LexIndexReader.Open(_db);
+        Assert.All(reader.ProvisionStates("w1", "art_1"), state => Assert.Equal("en", state.Language));
+        Assert.Single(reader.ProvisionStates("w1", "art_1", "fr"));
+        Assert.All(reader.AnchorEvents("w1", "art_1", "fr"), e => Assert.Equal("fr", e.Language));
+    }
+
+    [Fact]
     public void Withdrawn_records_are_not_public_search_or_catalogue_candidates()
     {
         using var r = Build();

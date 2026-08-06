@@ -70,12 +70,12 @@ public sealed record SearchExecution(
 
 /// <summary>One distinct text state of one provision across versions (the per-anchor time axis).</summary>
 public sealed record ProvisionStateRow(
-    string GroupKey, string Anchor, string ValidFrom, string? ValidTo,
+    string GroupKey, string Language, bool IsPrimaryLanguage, string Anchor, string ValidFrom, string? ValidTo,
     string TextSha, string? InVersion, string? ArticleValidFrom, bool ValidityConflict);
 
 /// <summary>Anchor lifecycle event at a version transition (inserted | removed | renumbered).</summary>
 public sealed record AnchorEventRow(
-    string GroupKey, string EType, string? FromAnchor, string? ToAnchor,
+    string GroupKey, string Language, bool IsPrimaryLanguage, string EType, string? FromAnchor, string? ToAnchor,
     string? Anchor, string? TextSha, string? AtVersion);
 
 public sealed record EventRow(string Key, string Scope, string Event, string ObservedFrom, string? Detail);

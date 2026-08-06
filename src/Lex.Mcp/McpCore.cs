@@ -152,7 +152,12 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                     ["limit"] = I("default 10"),
                 }, ["query"]),
             Tool("article_history", "Every distinct text ONE provision (article/annex) has had, as validity intervals — plus its lifecycle events (inserted/removed/renumbered, renumbering detected mechanically by identical text hash). The answer to \"what did Article X say over its life / when did it change\".",
-                new JsonObject { ["work"] = S(workDesc), ["anchor"] = S("provision anchor, e.g. art_1er (find it via search or as_of mode=outline)") }, ["work", "anchor"]),
+                new JsonObject
+                {
+                    ["work"] = S(workDesc),
+                    ["anchor"] = S("provision anchor, e.g. art_1er (find it via search or as_of mode=outline)"),
+                    ["language"] = S("optional language code; defaults to the work's primary derived language"),
+                }, ["work", "anchor"]),
             Tool("provenance", "Proof chain for one lex_id: source URI, retrieval time, record/body hashes, event chain, corpus commit, index build, stamp signature.",
                 new JsonObject { ["lex_id"] = S("full lex_id"), ["language"] = S("optional") }, ["lex_id"]),
             Tool("coverage", "What we hold and what we lack, tier by tier: counts, date ranges, history_begins, known gaps. This tool exists to say what we do NOT have.",
@@ -676,8 +681,9 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                 if (res is null) return new JsonObject { ["status"] = "unknown_work", ["work"] = work };
                 var (r, w) = res.Value;
                 if (!r.WorkExists(w)) return new JsonObject { ["envelope"] = Envelope(r, "unknown_work"), ["work"] = w };
-                var states = r.ProvisionStates(w, anchor);
-                var evs = r.AnchorEvents(w, anchor);
+                var requestedLanguage = Str("language");
+                var states = r.ProvisionStates(w, anchor, requestedLanguage);
+                var evs = r.AnchorEvents(w, anchor, requestedLanguage);
                 if (states.Count == 0 && evs.Count == 0)
                     return new JsonObject
                     {
@@ -692,6 +698,7 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                     {
                         ["valid_from"] = s.ValidFrom,
                         ["valid_to"] = s.ValidTo,
+                        ["language"] = s.Language,
                         ["text_sha256"] = s.TextSha,
                         ["in_version"] = s.InVersion,
                     };
@@ -710,11 +717,13 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                     ["envelope"] = Envelope(r, "ok"),
                     ["work"] = w,
                     ["anchor"] = anchor,
+                    ["language"] = states.FirstOrDefault()?.Language ?? evs.FirstOrDefault()?.Language ?? requestedLanguage,
                     ["distinct_texts"] = states.Count,
                     ["states"] = statesArr,
                     ["anchor_events"] = new JsonArray(evs.Select(e => (JsonNode)new JsonObject
                     {
                         ["type"] = e.EType,
+                        ["language"] = e.Language,
                         ["from"] = e.FromAnchor,
                         ["to"] = e.ToAnchor,
                         ["anchor"] = e.Anchor,
