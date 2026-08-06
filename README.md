@@ -73,9 +73,11 @@ curl -s -X POST https://law.soufien.lu/mcp -H 'Content-Type: application/json' \
 
 ## What it never does
 
-Lex answers *what the rule was*. It never answers "were we compliant?", "does
+Lex answers *what the rule was*. It does not decide "were we compliant?", "does
 this apply to me?", or "what does this mean?", those are professional opinions.
-No component in this system generates interpretive text (fitness rule F10).
+The evidence, index and MCP layers never generate or interpret legal text
+(fitness rule F10). The optional assistant may explain retrieved evidence, but
+it is visibly separate, carries the tool trace and is not part of the record.
 
 ## Architecture (one screen)
 
@@ -84,7 +86,7 @@ APPS        Lex.Ingest (CLI)   Lex.Mcp (MCP server)        Lex.Web (demo)   Lex.
 DERIVED     Lex.Derive, evidence -> per-article Markdown+JSON (immutable profiles: akn-lu/1, fmx4-eu/1, xhtml-eu/1)
 ADAPTERS    Lex.Sources.Legilux (Tier A, SPARQL)   Lex.Sources.EurLex (Tier A, Cellar + Formex)
 MODEL       Lex.Law, Publisher, Work, Version, Expression, Observation. No publisher names.
-FOUNDATION  Lex.Temporal (interval algebra)   Lex.Index (SQLite: filter-first, signed stamp)
+FOUNDATION  Lex.Temporal (interval algebra)   Lex.Index (SQLite: filter-first, verified artifacts)
 ```
 
 - **One corpus repo per publisher**; the corpus is human-readable JSON + git. The tree carries the legislative history, `git log` carries the ingest history, and the two are deliberately not the same ([why](https://law.soufien.lu/decisions)).
@@ -97,15 +99,21 @@ FOUNDATION  Lex.Temporal (interval algebra)   Lex.Index (SQLite: filter-first, s
   byte-compares.
 - **Filters before ranking, always**, enforced by construction (a non-optional
   `FilterSet` on the only query entry point).
-- **Signed index stamps** (ECDSA-P256): every served hash is attributable.
+- **Signed whole-artifact manifests** (ECDSA P-256): a trust root pinned in the
+  application verifies indexes, vectors, embedding assets, scope, benchmark
+  and source commits before any file is mounted. The embedded index stamp
+  remains public provenance, not its own trust root.
 - **Honest refusals**: `no_version_for_date`, `anchor_not_in_version`,
   `outside_observed_window`, `text_withheld`, a flagged wrong answer is still
   a wrong answer, so Lex refuses instead.
 
 ## Current coverage
 
-**Luxembourg** (Legilux, Tier A): **every** work and consolidated version the
-publisher issues, 1,399 / 4,703, 1849→2030. Nothing is filtered out by type.
+**Luxembourg** (Legilux, Tier A): every work and consolidated version the
+publisher issues. Nothing is filtered out by type. The mounted counts, date
+range, corpus commit and extraction-profile mix are read directly from the
+index on the [live coverage page](https://law.soufien.lu/coverage), rather than
+copied into prose that becomes stale after the next publisher run.
 Text is verbatim Akoma Ntoso XML from the publisher's official,
 robots-permitted filestore, licensed CC-BY-4.0.
 
@@ -149,9 +157,10 @@ work and version counts. Full text comes from the Publications Office's
 **Formex 4** structural XML where served, including large consolidations the
 XHTML channel cannot carry. The present EU limit is scope, not format.
 
-Derived layer: **1,212 works · 88,981 articles · 102,773 dated text states**.
-The never-consolidated LU acts (~24,579) and the wider EU acquis are staged
-next (spec §14). Communal regulations are deliberately out of scope: 17,232
+The derived dataset publishes its current counts and source commits in its
+[release catalog](https://github.com/SFHAJJI/lex-articles/blob/main/catalog.json).
+The never-consolidated LU acts and broader approved EU scope are handled by the
+[temporal expansion program](docs/hybrid-eu-roadmap.md). Communal regulations are deliberately out of scope: 17,232
 exist as published acts, none is ever consolidated, so there is no point-in-time
 history to hold. The fallback ladder for XML-less versions is spec D49.
 
@@ -171,14 +180,23 @@ LEX_INDEX_DIR=indexes dotnet run --project src/Lex.Web
 LEX_INDEX_DIR=indexes dotnet run --project src/Lex.Mcp
 ```
 
+The generated key above is for local development only. Production publication
+uses GitHub OIDC to ask the non-exportable Azure Key Vault key to sign the
+whole-artifact manifest, then deploys a zero-traffic candidate revision.
+
 ## MCP tools
 
 `as_of` (full / outline / per-article select) · `timeline` · `in_force_on` ·
-`diff` · `search` · `provenance` · `article_history` · `changes_in_period` ·
-`coverage`, `changes_in_period` answers across the corpus ("which laws moved
-most in this window"), the aggregate counterpart of `diff` and `timeline`; and
-`coverage` exists to say what we do **not** have, because a system that cannot
-state its own gaps cannot be trusted with a completeness question.
+`diff` · `search` · `article_history` · `provenance` · `coverage` ·
+`cited_by` · `changes_in_period`.
+
+The same read-only tools cover Luxembourg and EU material. Search spans every
+mounted publisher by default and can filter jurisdiction, date, hierarchy,
+legal form, binding status, domain and language. Keyword retrieval is
+deterministic FTS5/BM25. Hybrid adds the pinned local encoder and fixed rank
+fusion when verified vectors are mounted; no generative model participates in
+retrieval. `coverage` exists to say what Lex does **not** have, because a system
+that cannot state its own gaps cannot be trusted with a completeness question.
 
 ## Contributing
 
