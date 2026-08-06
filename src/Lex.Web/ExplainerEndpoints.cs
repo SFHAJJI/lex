@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json.Nodes;
+using System.Globalization;
 using Lex.Index;
 using static Lex.Web.PageShell;
 using static Lex.Web.Fragments;
@@ -206,6 +207,7 @@ public static class ExplainerEndpoints
 
         app.MapGet("/benchmarks", () =>
         {
+            static string F(double value) => value.ToString("0.00", CultureInfo.InvariantCulture);
             var b = architecture.Baseline;
             var body = ArchitectureTabs("benchmarks") + $"""
                 <p class="lede">Evidence is published with identity and context. A missing measurement is
@@ -217,7 +219,7 @@ public static class ExplainerEndpoints
                 <tr><th>code commit</th><td class="mono">{H(b.CodeCommit)}</td></tr>
                 <tr><th>live corpus commits</th><td class="mono">LU {H(b.LiveLuCorpusCommit)}, EU {H(b.LiveEuCorpusCommit)}</td></tr>
                 <tr><th>sampled MCP requests, 7 days</th><td class="mono">{b.McpRequests7dSampled:n0}</td></tr>
-                <tr><th>internal latency</th><td class="mono">p50 {b.McpInternalP50Ms:0.00} ms, p95 {b.McpInternalP95Ms:0.00} ms, p99 {b.McpInternalP99Ms:0.00} ms</td></tr>
+                <tr><th>internal latency</th><td class="mono">p50 {F(b.McpInternalP50Ms)} ms, p95 {F(b.McpInternalP95Ms)} ms, p99 {F(b.McpInternalP99Ms)} ms</td></tr>
                 <tr><th>average working set</th><td class="mono">{b.AverageWorkingSetMib:n0} MiB</td></tr>
                 </table><p class="sub">{H(b.Note)}</p></div>
                 <h2>Retrieval relevance</h2>

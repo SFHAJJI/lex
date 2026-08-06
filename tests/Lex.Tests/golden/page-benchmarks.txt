@@ -171,7 +171,7 @@ displayed as missing rather than replaced with an estimate.</p>
 <tr><th>code commit</th><td class="mono">34461dc</td></tr>
 <tr><th>live corpus commits</th><td class="mono">LU 65bc005, EU 6974532</td></tr>
 <tr><th>sampled MCP requests, 7 days</th><td class="mono">0</td></tr>
-<tr><th>internal latency</th><td class="mono">p50 6,94 ms, p95 8,84 ms, p99 25,10 ms</td></tr>
+<tr><th>internal latency</th><td class="mono">p50 6.94 ms, p95 8.84 ms, p99 25.10 ms</td></tr>
 <tr><th>average working set</th><td class="mono">114 MiB</td></tr>
 </table><p class="sub">Application Insights aggregates describe the current service, not the future hybrid retrieval path.</p></div>
 <h2>Retrieval relevance</h2>
