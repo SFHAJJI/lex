@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Globalization;
 using Lex.Index;
 using static Lex.Web.PageShell;
 using static Lex.Web.Fragments;
@@ -207,6 +208,8 @@ public static class ExplainerEndpoints
 
         app.MapGet("/benchmarks", () =>
         {
+            static string F(double value, string format) =>
+                value.ToString(format, CultureInfo.InvariantCulture);
             var b = architecture.Baseline;
             var retrievalCases = RetrievalBenchmarkCatalog.Create();
             var benchmarkPath = Path.Combine(ctx.Options.IndexDir, "retrieval-benchmark-eu-eurlex.json");
@@ -237,16 +240,16 @@ public static class ExplainerEndpoints
                   {report.SampleCount:n0} public cases.</div>
                   <div class="card"><table>
                   <tr><th>measure</th><th>keyword</th><th>hybrid</th></tr>
-                  <tr><td>MRR</td><td class="mono">{report.Keyword.Mrr:0.000}</td><td class="mono">{report.Hybrid.Mrr:0.000}</td></tr>
-                  <tr><td>Recall@10</td><td class="mono">{report.Keyword.RecallAt10:0.000}</td><td class="mono">{report.Hybrid.RecallAt10:0.000}</td></tr>
-                  <tr><td>nDCG@10</td><td class="mono">{report.Keyword.NdcgAt10:0.000}</td><td class="mono">{report.Hybrid.NdcgAt10:0.000}</td></tr>
-                  <tr><td>warm p95</td><td class="mono">{report.Keyword.P95Ms:0.0} ms</td><td class="mono">{report.Hybrid.P95Ms:0.0} ms</td></tr>
-                  <tr><td>warm p99</td><td class="mono">{report.Keyword.P99Ms:0.0} ms</td><td class="mono">{report.Hybrid.P99Ms:0.0} ms</td></tr>
+                  <tr><td>MRR</td><td class="mono">{F(report.Keyword.Mrr, "0.000")}</td><td class="mono">{F(report.Hybrid.Mrr, "0.000")}</td></tr>
+                  <tr><td>Recall@10</td><td class="mono">{F(report.Keyword.RecallAt10, "0.000")}</td><td class="mono">{F(report.Hybrid.RecallAt10, "0.000")}</td></tr>
+                  <tr><td>nDCG@10</td><td class="mono">{F(report.Keyword.NdcgAt10, "0.000")}</td><td class="mono">{F(report.Hybrid.NdcgAt10, "0.000")}</td></tr>
+                  <tr><td>warm p95</td><td class="mono">{F(report.Keyword.P95Ms, "0.0")} ms</td><td class="mono">{F(report.Hybrid.P95Ms, "0.0")} ms</td></tr>
+                  <tr><td>warm p99</td><td class="mono">{F(report.Keyword.P99Ms, "0.0")} ms</td><td class="mono">{F(report.Hybrid.P99Ms, "0.0")} ms</td></tr>
                   </table><p class="sub">Code <span class="mono">{H(report.CodeCommit)}</span>, corpus
                   <span class="mono">{H(report.CorpusCommit)}</span>, manifest <span class="mono">{H(report.ManifestId)}</span>,
                   model <span class="mono">{H(report.ModelId)}@{H(report.ModelRevision)}</span>.<br>
-                  Resource: {H(report.ResourceConfiguration)}. Working set {report.ProcessMemoryBytes / 1048576d:0.0} MiB;
-                  index {report.IndexBytes / 1048576d:0.0} MiB; vectors {report.VectorBytes / 1048576d:0.0} MiB.
+                  Resource: {H(report.ResourceConfiguration)}. Working set {F(report.ProcessMemoryBytes / 1048576d, "0.0")} MiB;
+                  index {F(report.IndexBytes / 1048576d, "0.0")} MiB; vectors {F(report.VectorBytes / 1048576d, "0.0")} MiB.
                   Gate failures: {H(report.GateFailures.Count == 0 ? "none" : string.Join("; ", report.GateFailures))}.</p></div>
                   <p><a href="/benchmarks/latest.json">Download the complete latest benchmark report</a>.</p>
                   """;
@@ -260,7 +263,7 @@ public static class ExplainerEndpoints
                 <tr><th>code commit</th><td class="mono">{H(b.CodeCommit)}</td></tr>
                 <tr><th>live corpus commits</th><td class="mono">LU {H(b.LiveLuCorpusCommit)}, EU {H(b.LiveEuCorpusCommit)}</td></tr>
                 <tr><th>sampled MCP requests, 7 days</th><td class="mono">{b.McpRequests7dSampled:n0}</td></tr>
-                <tr><th>internal latency</th><td class="mono">p50 {b.McpInternalP50Ms:0.00} ms, p95 {b.McpInternalP95Ms:0.00} ms, p99 {b.McpInternalP99Ms:0.00} ms</td></tr>
+                <tr><th>internal latency</th><td class="mono">p50 {F(b.McpInternalP50Ms, "0.00")} ms, p95 {F(b.McpInternalP95Ms, "0.00")} ms, p99 {F(b.McpInternalP99Ms, "0.00")} ms</td></tr>
                 <tr><th>average working set</th><td class="mono">{b.AverageWorkingSetMib:n0} MiB</td></tr>
                 </table><p class="sub">{H(b.Note)}</p></div>
                 <h2>Retrieval relevance</h2>
