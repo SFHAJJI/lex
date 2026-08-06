@@ -30,6 +30,21 @@ public sealed class CorpusWriterTests : IDisposable
         Assert.Contains("raw.domains", revision.Detail);
     }
 
+    [Fact]
+    public async Task Ingest_reports_a_real_expression_denominator_and_completion()
+    {
+        using var progress = new StringWriter();
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-06T00:00:00Z"), progress)
+            .WriteAsync(new OneVersionAdapter("in_force", "financial-services"), default);
+
+        var lines = progress.ToString().Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
+        Assert.Contains(lines, line => line.Contains(
+            "[progress] test: ingest expressions=0/1 percent=0.0", StringComparison.Ordinal));
+        Assert.Contains(lines, line => line.Contains(
+            "[progress] test: ingest expressions=1/1 percent=100.0", StringComparison.Ordinal));
+        Assert.Contains(lines, line => line.Contains("eta=00:00:00 current=w1", StringComparison.Ordinal));
+    }
+
     public void Dispose()
     {
         try { Directory.Delete(_dir, true); } catch { }
