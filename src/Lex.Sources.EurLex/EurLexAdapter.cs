@@ -104,7 +104,7 @@ public sealed class EurLexAdapter : ISourceAdapter
         await PaceAsync(ct);
         var celex = version.Raw.GetValueOrDefault("celex");
         if (celex is null) return null;
-        var url = $"https://publications.europa.eu/resource/celex/{Uri.EscapeDataString(celex)}";
+        var url = CellarResourceUrl(celex);
         HttpResponseMessage? resp = null;
         for (var hop = 0; hop < 6; hop++)
         {
@@ -164,7 +164,7 @@ public sealed class EurLexAdapter : ISourceAdapter
         await PaceAsync(ct);
         var celex = version.Raw.GetValueOrDefault("celex");
         if (celex is null) return null;
-        var url = $"https://publications.europa.eu/resource/celex/{Uri.EscapeDataString(celex)}";
+        var url = CellarResourceUrl(celex);
         HttpResponseMessage? resp = null;
         for (var hop = 0; hop < 6; hop++)
         {
@@ -286,7 +286,7 @@ public sealed class EurLexAdapter : ISourceAdapter
                 var bindingStatus = NormalizeBindingStatus(inForce);
 
                 var workUri = $"http://publications.europa.eu/resource/celex/{baseCelex}";
-                var slug = baseCelex.ToLowerInvariant();
+                var slug = NormalizeWorkSlug(baseCelex);
                 var typeCode = LegalForm(baseCelex, baseTitleRows.FirstOrDefault()?.GetValueOrDefault("rtype"));
 
                 // Distinct versions sorted by consolidation date; valid_to = next valid_from - 1 (publisher-dated sequence).
@@ -329,29 +329,41 @@ public sealed class EurLexAdapter : ISourceAdapter
                         Raw: ScopeRaw(celex, typeCode, bindingStatus, "published", reasons)));
                 }
 
-                // One-version and not-yet-consolidated works remain first-class works. Lex stores
-                // the official original expression and names the missing merge; it never invents it.
-                if (list.Count == 0 && _scope.History.IncludeOriginal && _scope.History.IncludeUnamended)
+                // The original official expression is a real temporal state when the first
+                // published consolidation starts later. Keep it for amended works as well as
+                // one-version works; otherwise history would begin only after the first
+                // amendment. If Cellar already publishes a consolidation on the original date,
+                // that state covers the same starting point and no duplicate is added.
+                if (_scope.History.IncludeOriginal && (list.Count > 0 || _scope.History.IncludeUnamended))
                 {
                     var originalDateText = baseTitleRows.FirstOrDefault(r => r.ContainsKey("date"))?.GetValueOrDefault("date");
                     if (originalDateText is null)
                     {
                         Console.Error.WriteLine($"  [eurlex] {baseCelex}: no publisher date for original expression");
-                        continue;
                     }
-                    var originalDate = ParseDate(originalDateText);
-                    var expressions = _scope.Languages.Select(lang =>
+                    else
                     {
-                        var title = titles.GetValueOrDefault(lang) ?? baseTitle;
-                        var sourceUri = $"https://eur-lex.europa.eu/legal-content/{lang.ToUpperInvariant()}/TXT/?uri=CELEX:{Uri.EscapeDataString(baseCelex)}";
-                        return new ExpressionRecord(lang, originalDate, null, "publisher", title,
-                            DisplayTitle(commonName, title, baseCelex), sourceUri);
-                    }).ToArray();
-                    list.Add(new VersionRecord(
-                        new Identifier(workUri), new Identifier(workUri), typeCode, originalDate, null,
-                        "publisher", baseTitleRows.First().GetValueOrDefault("inforce"), originalDate,
-                        expressions, [], ScopeRaw(baseCelex, typeCode, bindingStatus,
-                            "not_published_or_not_required", reasons)));
+                        var originalDate = ParseDate(originalDateText);
+                        var consolidatedDates = list.Select(v => v.ValidFrom).ToArray();
+                        if (ShouldIncludeOriginalState(originalDate, consolidatedDates))
+                        {
+                            var originalValidTo = consolidatedDates.Length == 0
+                                ? (DateOnly?)null
+                                : consolidatedDates.Min().AddDays(-1);
+                            var expressions = _scope.Languages.Select(lang =>
+                            {
+                                var title = titles.GetValueOrDefault(lang) ?? baseTitle;
+                                var sourceUri = $"https://eur-lex.europa.eu/legal-content/{lang.ToUpperInvariant()}/TXT/?uri=CELEX:{Uri.EscapeDataString(baseCelex)}";
+                                return new ExpressionRecord(lang, originalDate, originalValidTo, "publisher", title,
+                                    DisplayTitle(commonName, title, baseCelex), sourceUri);
+                            }).ToArray();
+                            list.Insert(0, new VersionRecord(
+                                new Identifier(workUri), new Identifier(workUri), typeCode, originalDate, originalValidTo,
+                                "publisher", baseTitleRows.First().GetValueOrDefault("inforce"), originalDate,
+                                expressions, [], ScopeRaw(baseCelex, typeCode, bindingStatus,
+                                    "original_official_expression", reasons)));
+                        }
+                    }
                 }
 
                 _byWork[workUri] = list;
@@ -371,7 +383,7 @@ public sealed class EurLexAdapter : ISourceAdapter
         foreach (var chunk in celexNumbers.Chunk(100))
         {
             var values = string.Join(' ', chunk.Select(c =>
-                $"(\"{c}\" <http://publications.europa.eu/resource/celex/{c}>)"));
+                $"(\"{c}\" <{CelexAliasUri(c)}>)"));
             var rows = await SelectAsync(Cdm + Owl + $$"""
                 SELECT ?base ?celex ?date ?lang ?title WHERE {
                   VALUES (?base ?alias) { {{values}} }
@@ -404,7 +416,7 @@ public sealed class EurLexAdapter : ISourceAdapter
         foreach (var chunk in celexNumbers.Chunk(100))
         {
             var values = string.Join(' ', chunk.Select(c =>
-                $"(\"{c}\" <http://publications.europa.eu/resource/celex/{c}>)"));
+                $"(\"{c}\" <{CelexAliasUri(c)}>)"));
             var rows = await SelectAsync(Cdm + Owl + $$"""
                 SELECT ?base ?lang ?title ?date ?inforce ?rtype WHERE {
                   VALUES (?base ?alias) { {{values}} }
@@ -524,7 +536,7 @@ public sealed class EurLexAdapter : ISourceAdapter
             foreach (var chunk in frontier.Chunk(50))
             {
                 var values = string.Join(' ', chunk.Select(c =>
-                    $"(\"{c}\" <http://publications.europa.eu/resource/celex/{c}>)"));
+                    $"(\"{c}\" <{CelexAliasUri(c)}>)"));
                 var predicateValues = string.Join(' ', predicates.Select(p => $"cdm:{p}"));
                 var rows = await SelectAsync(Cdm + Owl + $$"""
                     SELECT DISTINCT ?seedCelex ?relatedCelex ?predicate WHERE {
@@ -542,7 +554,8 @@ public sealed class EurLexAdapter : ISourceAdapter
                       FILTER(
                         ?predicate != cdm:resource_legal_based_on_resource_legal
                         || ?direction = "outbound"
-                        || REGEX(STR(?relatedCelex), "^3[0-9]{4}[RL]"))
+                        || (!STRSTARTS(STR(?seedCelex), "1")
+                            && REGEX(STR(?relatedCelex), "^3[0-9]{4}[RL]")))
                     }
                     """, ct);
                 foreach (var group in rows.GroupBy(r => r["seedCelex"], StringComparer.Ordinal))
@@ -576,6 +589,22 @@ public sealed class EurLexAdapter : ISourceAdapter
     }
 
     private static DateOnly ParseDate(string value) => DateOnly.Parse(value[..10]);
+
+    public static string NormalizeWorkSlug(string celex) =>
+        celex.ToLowerInvariant().Replace('/', '-');
+
+    public static string CellarResourceUrl(string celex) =>
+        $"https://publications.europa.eu/resource/celex/{Uri.EscapeDataString(celex)}";
+
+    public static string CelexAliasUri(string celex) =>
+        $"http://publications.europa.eu/resource/celex/{Uri.EscapeDataString(celex)}";
+
+    public static bool ShouldIncludeOriginalState(
+        DateOnly originalDate, IEnumerable<DateOnly> consolidatedDates)
+    {
+        var dates = consolidatedDates.ToArray();
+        return dates.Length == 0 || originalDate < dates.Min();
+    }
 
     private static string LegalForm(string celex, string? resourceType)
     {

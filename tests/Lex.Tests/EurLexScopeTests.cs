@@ -50,6 +50,41 @@ public sealed class EurLexScopeTests : IDisposable
         Assert.Equal(expected, EurLexAdapter.NormalizeBindingStatus(source));
     }
 
+    [Theory]
+    [InlineData("32016R0679", "32016r0679")]
+    [InlineData("12012E/TXT", "12012e-txt")]
+    public void Celex_identifiers_have_path_safe_stable_work_slugs(string celex, string expected)
+    {
+        Assert.Equal(expected, EurLexAdapter.NormalizeWorkSlug(celex));
+    }
+
+    [Theory]
+    [InlineData("32016R0679", "https://publications.europa.eu/resource/celex/32016R0679")]
+    [InlineData("12012E/TXT", "https://publications.europa.eu/resource/celex/12012E%2FTXT")]
+    public void Cellar_resource_url_keeps_celex_as_one_encoded_path_segment(string celex, string expected)
+    {
+        Assert.Equal(expected, EurLexAdapter.CellarResourceUrl(celex));
+    }
+
+    [Fact]
+    public void Sparql_alias_keeps_primary_celex_as_one_encoded_path_segment()
+    {
+        Assert.Equal("http://publications.europa.eu/resource/celex/12012E%2FTXT",
+            EurLexAdapter.CelexAliasUri("12012E/TXT"));
+    }
+
+    [Fact]
+    public void Original_state_is_kept_only_when_it_extends_temporal_coverage()
+    {
+        Assert.True(EurLexAdapter.ShouldIncludeOriginalState(
+            new DateOnly(2014, 9, 17), [new DateOnly(2024, 5, 20), new DateOnly(2024, 10, 18)]));
+        Assert.False(EurLexAdapter.ShouldIncludeOriginalState(
+            new DateOnly(2014, 9, 17), [new DateOnly(2014, 9, 17), new DateOnly(2024, 10, 18)]));
+        Assert.False(EurLexAdapter.ShouldIncludeOriginalState(
+            new DateOnly(2025, 1, 1), [new DateOnly(2024, 10, 18)]));
+        Assert.True(EurLexAdapter.ShouldIncludeOriginalState(new DateOnly(2014, 9, 17), []));
+    }
+
     [Fact]
     public async Task Original_expressions_skip_the_incompatible_consolidation_manifestation()
     {

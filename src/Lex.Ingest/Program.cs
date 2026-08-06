@@ -152,9 +152,20 @@ switch (args0[0])
     }
     case "verify":
     {
-        // verify stamp --db X   |   verify derive --publisher P --corpus X --articles Y [--work slug]
+        // verify corpus --corpus X | verify stamp --db X | verify derive --publisher P --corpus X --articles Y
         switch (args0.Length > 1 ? args0[1] : "")
         {
+            case "corpus":
+            {
+                var corpus = Get("--corpus") ?? throw new ArgumentException("--corpus required");
+                var report = CorpusIntegrity.Verify(corpus);
+                Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(report, new System.Text.Json.JsonSerializerOptions
+                {
+                    PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.SnakeCaseLower,
+                    WriteIndented = true,
+                }));
+                return report.IsValid ? 0 : 6;
+            }
             case "stamp":
             {
                 var db = Get("--db") ?? throw new ArgumentException("--db required");
@@ -208,9 +219,22 @@ switch (args0[0])
                 finally { try { Directory.Delete(tmp, true); } catch { } }
             }
             default:
-                Console.Error.WriteLine("usage: lex verify stamp --db X | lex verify derive --publisher P --corpus X --articles Y [--work slug]");
+                Console.Error.WriteLine("usage: lex verify corpus --corpus X | lex verify stamp --db X | lex verify derive --publisher P --corpus X --articles Y [--work slug]");
                 return 1;
         }
+    }
+    case "repair":
+    {
+        if ((args0.Length > 1 ? args0[1] : "") != "checkout-line-endings")
+            throw new ArgumentException("usage: lex repair checkout-line-endings --corpus X");
+        var corpus = Get("--corpus") ?? throw new ArgumentException("--corpus required");
+        var report = CheckoutLineEndings.Repair(corpus);
+        Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(report, new System.Text.Json.JsonSerializerOptions
+        {
+            PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.SnakeCaseLower,
+            WriteIndented = true,
+        }));
+        return report.IsValid ? 0 : 6;
     }
     case "artifact":
     {
@@ -343,6 +367,8 @@ static void Usage() => Console.Error.WriteLine("""
       lex ingest --publisher lu-legilux|eu-eurlex --corpus PATH [--scope FILE] [--wave 1..4] [--now ISO]
       lex index  --corpus PATH [--articles PATH] --out FILE.db [--keyfile KEY.pem] [--now ISO]
       lex derive --publisher lu-legilux --corpus PATH --out PATH [--code-version SHA]
+      lex verify corpus --corpus PATH
+      lex repair checkout-line-endings --corpus PATH
       lex artifact manifest --root DIR --file RELATIVE [--file RELATIVE] --manifest FILE --signature FILE --keyfile KEY.pem --key-id ID --code-commit SHA [--source KEY=VALUE]
       lex artifact verify --root DIR --manifest FILE --signature FILE --trust-roots FILE
       lex artifact trust-root --keyfile KEY.pem --key-id ID
