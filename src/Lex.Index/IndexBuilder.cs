@@ -194,12 +194,13 @@ public static class IndexBuilder
 
             var docByRid = docRows.ToDictionary(d => $"{d.Key}|{d.Language}|{d.ValidFrom}", StringComparer.Ordinal);
             var insBlob = conn.CreateCommand();
-            insBlob.CommandText = "INSERT OR IGNORE INTO text_blobs VALUES ($sha,$enc,$original,$stored,$payload)";
+            insBlob.CommandText = "INSERT INTO text_blobs VALUES ($sha,$enc,$original,$stored,$payload)";
             insBlob.Parameters.Add(new SqliteParameter("$sha", SqliteType.Text));
             insBlob.Parameters.Add(new SqliteParameter("$enc", SqliteType.Text));
             insBlob.Parameters.Add(new SqliteParameter("$original", SqliteType.Integer));
             insBlob.Parameters.Add(new SqliteParameter("$stored", SqliteType.Integer));
             insBlob.Parameters.Add(new SqliteParameter("$payload", SqliteType.Blob));
+            var writtenTextBlobs = new HashSet<string>(StringComparer.Ordinal);
 
             var insLexical = conn.CreateCommand();
             insLexical.CommandText = """
@@ -242,13 +243,16 @@ public static class IndexBuilder
                 var actualSha = Convert.ToHexStringLower(SHA256.HashData(utf8));
                 if (!actualSha.Equals(p.TextSha, StringComparison.OrdinalIgnoreCase))
                     throw new InvalidDataException($"Provision '{p.ProvisionId}' text does not match text_sha.");
-                var (encoding, payload) = EncodeText(utf8);
-                insBlob.Parameters["$sha"].Value = actualSha;
-                insBlob.Parameters["$enc"].Value = encoding;
-                insBlob.Parameters["$original"].Value = utf8.Length;
-                insBlob.Parameters["$stored"].Value = payload.Length;
-                insBlob.Parameters["$payload"].Value = payload;
-                insBlob.ExecuteNonQuery();
+                if (writtenTextBlobs.Add(actualSha))
+                {
+                    var (encoding, payload) = EncodeText(utf8);
+                    insBlob.Parameters["$sha"].Value = actualSha;
+                    insBlob.Parameters["$enc"].Value = encoding;
+                    insBlob.Parameters["$original"].Value = utf8.Length;
+                    insBlob.Parameters["$stored"].Value = payload.Length;
+                    insBlob.Parameters["$payload"].Value = payload;
+                    insBlob.ExecuteNonQuery();
+                }
 
                 Set(insLexical, "$gk", doc.GroupKey); Set(insLexical, "$lang", doc.Language);
                 Set(insLexical, "$a", p.Anchor); Set(insLexical, "$sha", actualSha);
