@@ -335,6 +335,9 @@ public static class ExplainerEndpoints
                 ["what"] = "attestation of every verified release manifest and embedded index stamp this deployment serves",
                 ["artifact_trust"] = "whole-artifact manifests are verified against public-key fingerprints pinned in the application release",
                 ["artifact_signature_format"] = "ECDSA-P256-SHA256, IEEE P1363 (r||s, 64 bytes), base64",
+                ["artifact_signature_binds"] = "the canonical lex-artifacts/1 manifest bytes; its file entries bind every artifact path, size and sha256",
+                ["embedded_stamp_signature_binds"] = "the canonical stamp text: every stamp field except signature/public_key, sorted by key, joined as k=v lines",
+                // Compatibility keys retained for clients that consumed the original stamp-only attestation.
                 ["signature_binds"] = "the canonical stamp text: every stamp field except signature/public_key, sorted by key, joined as k=v lines",
                 ["signature_format"] = "ECDSA-P256-SHA256, IEEE P1363 (r||s, 64 bytes), base64",
                 ["verify"] = "see /verify",
@@ -352,38 +355,72 @@ public static class ExplainerEndpoints
 
         app.MapGet("/verify", () =>
         {
+            var verifiedManifestCount = ctx.Registry.VerifiedArtifactManifests.Count;
+            var manifestNoun = verifiedManifestCount == 1 ? "manifest" : "manifests";
+            var artifactStatus = verifiedManifestCount > 0
+                ? $"""
+                  <div class="notice"><b>Verified now.</b> This deployment mounted
+                  {verifiedManifestCount:n0} signed artifact {manifestNoun}. The exact hashes and key ids are in
+                  <a href="/attestation.json">attestation.json</a>.</div>
+                  """
+                : """
+                  <div class="notice"><b>Migration state.</b> This deployment has no verified whole-artifact
+                  manifest mounted. Its embedded index stamps are public provenance only; do not treat them as
+                  independent artifact trust.</div>
+                  """;
             var body = $$"""
-                <p>Every index this site serves carries a <b>signed stamp</b>. The signature binds: schema version,
-                corpus commit, build time, attribution, the full NOTICE text, and the corpus statistics, the
-                canonical text is every stamp field except <span class="mono">signature</span>/<span class="mono">public_key</span>,
-                sorted by key, joined as <span class="mono">k=v</span> lines. Algorithm:
-                <span class="mono">ECDSA-P256-SHA256</span>, signature format IEEE P1363 (r||s, 64 bytes), base64.</p>
+                {{artifactStatus}}
+                <p>Production trust begins with a <b>whole-artifact manifest</b>, not with a key downloaded
+                beside the artifact it is meant to verify. Each manifest names the index, vectors, embedding
+                model, tokenizer, scope and benchmark files in that release, with every file's sha256 and size.
+                Azure Key Vault signs the canonical manifest with ECDSA P-256.</p>
 
-                <h2>What it does, and does not, attest</h2>
-                <p>It attests that this exact index (schema, corpus commit, build) was produced by the holder of the
-                Lex signing key. It does <b>not</b> attest that the underlying text matches the publisher, that is what
-                the hash chain is for: every provision's <span class="mono">text_sha256</span> derives deterministically from a
-                verbatim publisher file whose sha256 is recorded in the open corpus repos. Re-run the pinned open-source
-                extractor on the state's bytes and you get these bytes, the defence is never "trust Lex".</p>
+                <h2>The runtime trust decision</h2>
+                <p>The application release pins the accepted signing-key fingerprint in
+                <span class="mono">deploy/trusted-artifact-roots.json</span>. Image construction verifies the
+                manifest signature against that pinned root, then verifies every listed file before it can enter
+                the image. Startup performs the same check before mounting an index. A missing, changed or
+                incorrectly signed file fails closed, and the previous verified Container Apps revision keeps
+                serving traffic.</p>
 
-                <h2>Verify the stamp yourself</h2>
-                <div class="card"><pre class="mono" style="white-space:pre-wrap">curl -s https://law.soufien.lu/attestation.json -o att.json
-                curl -s https://law.soufien.lu/pubkey.pem -o pubkey.pem
-                python3 - &lt;&lt;'EOF'
-                import json, base64
-                from cryptography.hazmat.primitives.serialization import load_pem_public_key
-                from cryptography.hazmat.primitives.asymmetric import ec, utils as au
-                from cryptography.hazmat.primitives import hashes
-                att = json.load(open('att.json'))
-                pub = load_pem_public_key(open('pubkey.pem','rb').read())
-                for c in att['collections']:
-                    s = c['stamp']
-                    canon = chr(10).join(f'{k}={v}' for k, v in sorted(s.items()) if k not in ('signature','public_key')).encode()
-                    raw = base64.b64decode(s['signature'])
-                    r, sv = int.from_bytes(raw[:32],'big'), int.from_bytes(raw[32:],'big')
-                    pub.verify(au.encode_dss_signature(r, sv), canon, ec.ECDSA(hashes.SHA256()))
-                    print(c['collection'], 'OK', s['corpus_commit'], s['built_at'])
-                EOF</pre></div>
+                <h2>Verify the deployed release independently</h2>
+                <p><a href="/attestation.json">attestation.json</a> reports the exact deployed code commit and
+                manifest hashes. Check out that commit, rather than today's branch tip, because its trust-root file
+                is the one the running image actually pinned. Then download the public release assets and run the
+                same verifier:</p>
+                <div class="card"><pre class="mono" style="white-space:pre-wrap">curl -fsS https://law.soufien.lu/attestation.json -o attestation.json
+                code=$(jq -er '.deployment.code_commit' attestation.json)
+                git clone https://github.com/SFHAJJI/lex
+                git -C lex checkout "$code"
+
+                for repo in lex-corpus-lu-legilux lex-corpus-eu-eurlex; do
+                  mkdir -p "release/$repo"
+                  gh release download --repo "SFHAJJI/$repo" --dir "release/$repo"
+                  for manifest in "release/$repo"/*.manifest.json; do
+                    dotnet run --project lex/src/Lex.Ingest -- artifact verify \
+                      --root "release/$repo" --manifest "$manifest" \
+                      --signature "${manifest%.json}.sig" \
+                      --trust-roots lex/deploy/trusted-artifact-roots.json
+                  done
+                done</pre></div>
+                <p class="sub">The verifier checks the signature, key id, pinned fingerprint, every declared path,
+                file size and sha256. Compare each manifest's sha256 with the
+                <span class="mono">artifact_manifests</span> array in <span class="mono">attestation.json</span>
+                to prove that the downloaded release is the one this deployment serves.</p>
+
+                <h2>The embedded stamp is provenance, not the trust root</h2>
+                <p>Each SQLite index still carries a signed compatibility stamp binding its schema, corpus commit,
+                build time, attribution, NOTICE and corpus statistics. The public key exposed at
+                <a href="/pubkey.pem">pubkey.pem</a> comes from that stamp. It can demonstrate that the stamp is
+                internally consistent, but a key supplied beside its own signature cannot establish who should be
+                trusted. Runtime authorization therefore comes only from the separately pinned manifest root.</p>
+
+                <h2>What the signatures do, and do not, prove</h2>
+                <p>The manifest proves that the holder of the pinned release key signed these exact artifacts. It
+                does <b>not</b> by itself prove that legal wording matches the publisher. That is what the open hash
+                chain is for: every provision's <span class="mono">text_sha256</span> derives deterministically from
+                a verbatim publisher file whose sha256 is recorded in the corpus repositories. Re-run the pinned
+                extractor on the same evidence and compare the result; the defence is never merely "trust Lex".</p>
 
                 <h2>Verify a citation against the state's bytes</h2>
                 <p>Clone the evidence repo and the code, then re-derive offline:</p>
@@ -415,7 +452,7 @@ public static class ExplainerEndpoints
                 <h2>The problem</h2>
                 <p>Ask any legal site what a law says and you get today's text. Almost every question that
                 matters is about a <b>date</b>: what applied when the contract was signed, when the fine was
-                issued, when the breach happened. Official publishers do hold dated consolidated editions , 
+                issued, when the breach happened. Official publishers do hold dated consolidated editions,
                 but scattered across formats (Akoma Ntoso XML, Formex XML, legacy XHTML), with no article-level
                 access and no machine interface. Lex turns that into one queryable, verifiable history.</p>
 
@@ -431,14 +468,19 @@ public static class ExplainerEndpoints
                         │                                 ▼
                         │  deterministic extraction   DERIVED REPO (per article)
                         ▼  (immutable profiles)           │
-                  SIGNED SQLITE INDEX (ECDSA P-256) ◄─────┘
-                        │
-                        ├──► MCP server  (public, no key)      
-                        └──► this site   (Container Apps, scale-to-zero)</pre></div>
-                <p class="sub">Azure: Container Apps behind a managed certificate, Container Registry, Azure
-                OpenAI (gpt-5-mini) for the assistant, Application Insights via OpenTelemetry, Azure DNS.
-                The web app runs at 0.25 vCPU and <b>scales to zero</b>, idle cost is essentially the
-                registry and the DNS zone.</p>
+                  LEX-INDEX/3 + LOCAL VECTORS ◄───────────────┘
+                        │  signed whole-artifact manifest
+                        │  verified at build and startup
+                        ▼
+                  CANDIDATE REVISION (zero traffic)
+                        │  health + MCP + LU/EU search smoke tests
+                        ▼
+                  MCP server · this site (Container Apps, scale-to-zero)</pre></div>
+                <p class="sub">Azure: Container Apps behind a managed certificate, Container Registry, Key Vault
+                signing, Application Insights via OpenTelemetry, and Azure DNS. Managed identity pulls the image
+                and authenticates the optional Azure OpenAI assistant. Retrieval itself is local and deterministic:
+                FTS5/BM25, ONNX embeddings, fixed reranking and fusion, with no generative model in the search path.
+                The web app starts at 0.25 vCPU and <b>scales to zero</b>.</p>
 
                 <h2>Decisions worth defending</h2>
                 <div class="card"><table>
@@ -461,18 +503,18 @@ public static class ExplainerEndpoints
                     <td>A &gt;5% drop in works, or a re-derivation that is not byte-identical, aborts the run.
                     A partial upstream response must never rewrite history.</td></tr>
                 </table>
-                <p class="sub" style="margin:8px 0 0">Forty-eight numbered decisions like these are recorded in
-                the specification, each with its rationale, so "why did you do it that way" has a written
-                answer rather than a recollection.</p></div>
+                <p class="sub" style="margin:8px 0 0">{architecture.Decisions.Count:n0} delivery decisions like these are read from
+                the architecture registry, alongside the numbered specification decisions. Each records its
+                rationale, so "why did you do it that way" has a written answer rather than a recollection.</p></div>
 
                 <h2>The machinery that keeps it fresh</h2>
                 <p>Law changes while you sleep, so the corpus is rebuilt while I do. One scheduled job at
-                02:17 UTC drives the whole fleet, no manual step exists, and there is deliberately only one
-                credential and one cron for all publishers.</p>
+                02:17 UTC drives the whole fleet, no manual publication step exists. GitHub Actions uses OIDC
+                and short-lived Azure authorization; the signing key remains non-exportable in Key Vault.</p>
                 <div class="card"><table>
                 <tr><th>stage</th><th>what it does, and how it refuses to do damage</th></tr>
                 <tr><td><b>1. Ingest</b></td><td>Asks each publisher what versions exist, downloads any it has
-                not seen, and writes them <i>verbatim</i>. Existing files are never reopened for writing , 
+                not seen, and writes them <i>verbatim</i>. Existing files are never reopened for writing,
                 the evidence layer is append-only by construction.</td></tr>
                 <tr><td><b>2. Anomaly gate</b></td><td>If the work count drops more than 5%, the run assumes the
                 upstream response was partial, discards everything and commits nothing. A bad night leaves
@@ -481,15 +523,20 @@ public static class ExplainerEndpoints
                 <tr><td><b>4. Determinism guard</b></td><td>If derived output changed while no source file did,
                 that means the extractor is non-deterministic, the run fails loudly and commits nothing,
                 because a silent extraction drift would corrupt history.</td></tr>
-                <tr><td><b>5. Index &amp; publish</b></td><td>Rebuilds the search index, signs it (ECDSA P-256),
-                publishes it as a release asset, regenerates the JSONL and Parquet datasets.</td></tr>
-                <tr><td><b>6. Report</b></td><td>Writes a three-state outcome per publisher
+                <tr><td><b>5. Index &amp; sign</b></td><td>Builds lex-index/3, local vectors and the benchmark evidence.
+                A canonical manifest binds every index, vector, model, tokenizer and scope artifact by hash and
+                size; Key Vault signs that whole manifest and the workflow verifies it before publication.</td></tr>
+                <tr><td><b>6. Deploy safely</b></td><td>Builds an immutable image tagged with the code commit and
+                manifest hash, verifies the release again, starts a zero-traffic revision, exercises health, MCP,
+                LU and EU search, then promotes it. The preceding revision remains available for rollback.</td></tr>
+                <tr><td><b>7. Report</b></td><td>Writes a three-state outcome per publisher
                 (<span class="mono">ran_committed</span> / <span class="mono">ran_no_change</span> /
                 <span class="mono">failed_*</span>) and opens an issue on failure.</td></tr>
                 </table></div>
-                <p>The result travels with the data: every index carries a signed stamp recording when it was
-                built and from which corpus commit, and every tool response returns it. <b>This is that stamp,
-                read live from the running indexes:</b></p>
+                <p>The result travels with the data. The pinned whole-artifact manifest is the runtime trust root;
+                each index also carries a public provenance stamp recording when and from which corpus commit it
+                was built. Every tool response returns that provenance. <b>This is the embedded stamp read live
+                from the running indexes:</b></p>
                 <div class="card"><table>
                 <tr><th>publisher</th><th>index built</th><th>from corpus commit</th><th>signature</th></tr>
                 {string.Join("", readers.Values.OrderBy(r => r.Collection, StringComparer.Ordinal).Select(r => $"""
@@ -499,19 +546,20 @@ public static class ExplainerEndpoints
                     <td>{(r.SignatureValid ? "<span class=\"badge ok\">valid</span>" : "<span class=\"badge warn\">unsigned</span>")}</td></tr>
                     """))}
                 </table>
-                <p class="sub" style="margin:8px 0 0">Nothing here is typed by hand, if the pipeline stopped,
-                this table would say so. The same values come back from the
-                <a href="/developers">coverage tool</a> in every API response.</p></div>
+                <p class="sub" style="margin:8px 0 0">Nothing here is typed by hand. The same values come back
+                from the <a href="/developers">coverage tool</a>. The embedded signature proves provenance; the
+                <a href="/verify">release verification page</a> reports whether the complete mounted artifact set
+                passed the independently pinned trust policy.</p></div>
 
                 <h2>What broke, and what it taught</h2>
                 <div class="card">
                 <p><b>A silently dead search, caught in production.</b> The nightly job built the search index
-                without the per-article layer. Nothing errored: the index was valid, signed, and published , 
+                without the per-article layer. Nothing errored: the index was valid, signed, and published,
                 it just had zero provisions in it, so search returned nothing. The automated eval suite caught
                 it by asking a question a user would ask and noticing the assistant could no longer find a
                 Luxembourg code.</p>
                 <p class="sub">Fix: the index step now runs after derivation and takes the article layer as a
-                required input, so the failure cannot recur. Lesson: a green build is not a working system , 
+                required input, so the failure cannot recur. Lesson: a green build is not a working system,
                 the only tests that would have caught this are the ones that exercise it end to end, the way
                 someone actually uses it.</p>
                 <p><b>A parser that quietly duplicated text.</b> Adding Formex XML support introduced doubled
@@ -523,20 +571,23 @@ public static class ExplainerEndpoints
                 <h2>How correctness is proven, not claimed</h2>
                 <div class="card"><table>
                 <tr><th>mechanism</th><th>what it guarantees</th></tr>
-                <tr><td>34 unit tests</td><td>parsers, temporal logic, index schema, signing</td></tr>
+                <tr><td>Unit, contract, golden and architecture-fitness suites</td><td>parsers, temporal logic,
+                backward-compatible APIs, pages, index schemas, trust and deployment invariants</td></tr>
                 <tr><td>Frozen profile fingerprints</td><td>a published extraction can never change output</td></tr>
                 <tr><td>Determinism guard in CI</td><td>re-derivation is byte-identical or the run commits nothing</td></tr>
-                <tr><td>10 end-to-end AI evals</td><td>the assistant picks the right tools and never cites a source it was not given</td></tr>
+                <tr><td>End-to-end assistant evals</td><td>the assistant picks the right tools and never cites a source it was not given</td></tr>
+                <tr><td>200-case retrieval benchmark</td><td>exact, temporal, conceptual, bilingual, typo and hierarchy
+                behavior is measured against published judgments before hybrid can become the default</td></tr>
                 <tr><td>LLM-judged groundedness</td><td>answers scored against the evidence actually returned</td></tr>
-                <tr><td>ECDSA-signed indexes</td><td>anyone can verify a build was not altered, <a href="/verify">recipe</a></td></tr>
+                <tr><td>Pinned whole-artifact manifests</td><td>anyone can verify every released input was not altered,
+                <a href="/verify">recipe</a></td></tr>
                 </table></div>
 
                 <h2>Scale</h2>
                 <p><span class="badge">{cov.Sum(c => c.Groups):n0} laws</span>
                 <span class="badge">{cov.Sum(c => c.Rows):n0} dated versions</span>
-                <span class="badge">333,000+ articles indexed</span>
-                <span class="badge">~7,200 lines of C# across 10 projects</span>
-                <span class="badge">3 XML/HTML dialects parsed</span>
+                <span class="badge">lex-index/2 + lex-index/3 readers</span>
+                <span class="badge">3 official XML/HTML dialects</span>
                 <span class="badge">nightly, unattended</span></p>
 
                 <h2>What I would do differently</h2>
