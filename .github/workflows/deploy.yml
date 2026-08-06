@@ -163,10 +163,25 @@ jobs:
           fqdn=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
             --revision "$candidate" --query properties.fqdn -o tsv)
           curl --fail --show-error --silent --retry 5 --retry-delay 5 "https://$fqdn/healthz"
-          curl --fail --show-error --silent --retry 3 --retry-delay 5 \
-            -H 'Content-Type: application/json' \
-            -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"coverage","arguments":{}}}' \
-            "https://$fqdn/mcp" | grep -q '"result"'
+          mcp_text() {
+            curl --fail --show-error --silent --retry 3 --retry-delay 5 \
+              -H 'Content-Type: application/json' -d "$1" "https://$fqdn/mcp" \
+              | jq -er '.result.content | map(select(.type == "text")) | .[0].text'
+          }
+          coverage=$(mcp_text '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"coverage","arguments":{}}}')
+          printf '%s' "$coverage" | jq -e \
+            'any(.[]; .envelope.publisher == "lu-legilux")
+             and any(.[]; .envelope.publisher == "eu-eurlex")' >/dev/null
+          eu_exact=$(mcp_text '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"search","arguments":{"query":"32016R0679","publisher":"eu-eurlex","retrieval_mode":"keyword","fuzzy":"off","limit":3}}}')
+          printf '%s' "$eu_exact" | jq -e \
+            '.[0].retrieval_mode == "keyword"
+             and any(.[0].hits[]; .work == "32016r0679")' >/dev/null
+          lu_temporal=$(mcp_text '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"as_of","arguments":{"work":"loi-1879-06-18-n1","publisher":"lu-legilux","date":"2026-08-06","mode":"outline"}}}')
+          printf '%s' "$lu_temporal" | jq -e \
+            '.document.work == "loi-1879-06-18-n1" and (.provisions | length) > 0' >/dev/null
+          eu_hybrid=$(mcp_text '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"search","arguments":{"query":"personal data protection rights","publisher":"eu-eurlex","retrieval_mode":"hybrid","language":"en","fuzzy":"off","limit":3}}}')
+          printf '%s' "$eu_hybrid" | jq -e \
+            '.[0].retrieval_mode == "hybrid" and (.[0].hits | length) > 0' >/dev/null
           curl --fail --show-error --silent --retry 2 --retry-all-errors --retry-delay 5 \
             --max-time 180 -H 'Content-Type: application/json' \
             -d '{"messages":[{"role":"user","content":"Use the coverage tool and reply with the number of mounted publishers."}]}' \
