@@ -1,6 +1,8 @@
 ﻿using System.Collections.Concurrent;
 using System.Text;
 using System.Text.Json.Nodes;
+using Azure.Core;
+using Azure.Identity;
 using Lex.Mcp;
 
 namespace Lex.Ask;
@@ -8,7 +10,7 @@ namespace Lex.Ask;
 // The /ask playground: a server-side agent loop over the Lex tools (D31/F10: the only
 // non-deterministic component, in its own assembly so the deterministic web tier carries
 // no AI code). The model (Azure OpenAI chat completions, v1 surface) composes answers ONLY
-// from tool output; disabled unless AOAI_ENDPOINT + AOAI_KEY are configured.
+// from tool output; disabled unless the endpoint and either managed identity or a legacy key are configured.
 // Stateless per request; capped per IP and per day.
 public sealed class AskService(McpCore core)
 {
@@ -19,13 +21,17 @@ public sealed class AskService(McpCore core)
     private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(90) };
     private readonly string? _endpoint = Environment.GetEnvironmentVariable("AOAI_ENDPOINT")?.TrimEnd('/');
     private readonly string? _key = Environment.GetEnvironmentVariable("AOAI_KEY");
+    private readonly bool _useManagedIdentity =
+        Environment.GetEnvironmentVariable("AOAI_USE_MANAGED_IDENTITY") == "1";
+    private readonly TokenCredential _credential = new DefaultAzureCredential();
     private readonly string _deployment = Environment.GetEnvironmentVariable("AOAI_CHAT_DEPLOYMENT") ?? "gpt-5-mini";
     private readonly int _perIpDaily = EnvInt("ASK_PER_IP_DAILY", 25);
     private readonly int _globalDaily = EnvInt("ASK_GLOBAL_DAILY", 400);
     private readonly ConcurrentDictionary<string, int> _counters = new();
     private readonly SemaphoreSlim _gate = new(4);
 
-    public bool Enabled => !string.IsNullOrEmpty(_endpoint) && !string.IsNullOrEmpty(_key);
+    public bool Enabled => !string.IsNullOrEmpty(_endpoint)
+                           && (_useManagedIdentity || !string.IsNullOrEmpty(_key));
 
     private static int EnvInt(string name, int dflt)
         => int.TryParse(Environment.GetEnvironmentVariable(name), out var v) && v > 0 ? v : dflt;
@@ -440,7 +446,17 @@ public sealed class AskService(McpCore core)
                 };
                 using var httpReq = new HttpRequestMessage(HttpMethod.Post, $"{_endpoint}/openai/v1/chat/completions")
                 { Content = new StringContent(req.ToJsonString(), Encoding.UTF8, "application/json") };
-                httpReq.Headers.Add("api-key", _key);
+                if (_useManagedIdentity)
+                {
+                    var token = await _credential.GetTokenAsync(
+                        new TokenRequestContext(["https://cognitiveservices.azure.com/.default"]), ct);
+                    httpReq.Headers.Authorization =
+                        new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token.Token);
+                }
+                else
+                {
+                    httpReq.Headers.Add("api-key", _key);
+                }
                 using var resp = await _http.SendAsync(httpReq, ct);
                 var respText = await resp.Content.ReadAsStringAsync(ct);
                 if (!resp.IsSuccessStatusCode)

@@ -5,8 +5,14 @@ obj/
 # script must be tracked or a clean clone cannot build the image.
 deploy/*
 !deploy/fetch-indexes.sh
+!deploy/trusted-artifact-roots.json
 *.db
 *.pem
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
 .vs/
 evals/out/
 web/node_modules/

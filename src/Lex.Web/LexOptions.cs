@@ -38,14 +38,27 @@ public sealed class LexOptions
 
     public string? AzureOpenAiDeployment { get; init; }
 
+    public bool AzureOpenAiUseManagedIdentity { get; init; }
+
     /// <summary>Application Insights. Absent means observability is off and the app still runs.</summary>
     public string? AppInsightsConnectionString { get; init; }
+
+    /// <summary>
+    /// Migration gate. Production turns this on after the nightly publishes its first signed
+    /// artifact manifest; an invalid manifest always fails closed even while absence is allowed.
+    /// </summary>
+    public bool RequireArtifactManifest { get; init; }
+
+    /// <summary>Immutable deployment facts injected by the release workflow.</summary>
+    public string? CodeCommit { get; init; }
+    public string? ArtifactManifestId { get; init; }
+    public string? DeployImage { get; init; }
 
     /// <summary>True when the assistant has everything it needs to answer.</summary>
     public bool AssistantEnabled =>
         !string.IsNullOrWhiteSpace(AzureOpenAiEndpoint)
-        && !string.IsNullOrWhiteSpace(AzureOpenAiKey)
-        && !string.IsNullOrWhiteSpace(AzureOpenAiDeployment);
+        && !string.IsNullOrWhiteSpace(AzureOpenAiDeployment)
+        && (AzureOpenAiUseManagedIdentity || !string.IsNullOrWhiteSpace(AzureOpenAiKey));
 
     /// <summary>The base URL without a trailing slash, which is how every caller wants it.</summary>
     public string PublicBase => PublicBaseUrl.TrimEnd('/');
@@ -81,7 +94,13 @@ public static class LexOptionsSetup
         AzureOpenAiEndpoint = Environment.GetEnvironmentVariable("AOAI_ENDPOINT"),
         AzureOpenAiKey = Environment.GetEnvironmentVariable("AOAI_KEY"),
         AzureOpenAiDeployment = Environment.GetEnvironmentVariable("AOAI_CHAT_DEPLOYMENT"),
+        AzureOpenAiUseManagedIdentity =
+            Environment.GetEnvironmentVariable("AOAI_USE_MANAGED_IDENTITY") == "1",
         AppInsightsConnectionString =
             Environment.GetEnvironmentVariable("APPLICATIONINSIGHTS_CONNECTION_STRING"),
+        RequireArtifactManifest = Environment.GetEnvironmentVariable("LEX_REQUIRE_ARTIFACT_MANIFEST") == "1",
+        CodeCommit = Environment.GetEnvironmentVariable("LEX_CODE_COMMIT"),
+        ArtifactManifestId = Environment.GetEnvironmentVariable("LEX_ARTIFACT_MANIFEST_ID"),
+        DeployImage = Environment.GetEnvironmentVariable("LEX_DEPLOY_IMAGE"),
     };
 }
