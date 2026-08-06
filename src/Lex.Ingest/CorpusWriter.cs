@@ -129,6 +129,23 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now)
                         });
                         changed = true;
                     }
+
+                    // A publisher can expose a previously missing language on a later run.
+                    // Reconcile by stable language identity rather than positional Zip, which
+                    // would silently ignore the new expression and permanently undercount it.
+                    foreach (var expression in v.Expressions)
+                    {
+                        if (meta.Expressions.Any(e => e.Language == expression.Language)) continue;
+                        meta.Expressions.Add(CreateExpressionMeta(expression, desc.TextIncluded));
+                        meta.Events.Add(new EventEntry
+                        {
+                            Event = "expression_added",
+                            ObservedFrom = _now,
+                            Scope = expression.Language,
+                            Detail = $"language={expression.Language}",
+                        });
+                        changed = true;
+                    }
                 }
                 else
                 {
@@ -144,22 +161,7 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now)
                         InForceStatus = v.InForceStatus,
                         PublicationDate = v.PublicationDate?.ToString("yyyy-MM-dd"),
                         Events = [new EventEntry { Event = "first_sighting", ObservedFrom = _now }],
-                        Expressions = v.Expressions.Select(e => new ExpressionMeta
-                        {
-                            Language = e.Language,
-                            ValidFrom = e.ValidFrom?.ToString("yyyy-MM-dd"),
-                            ValidTo = e.ValidTo?.ToString("yyyy-MM-dd"),
-                            ValidTimeSource = e.ValidTimeSource,
-                            Title = e.Title,
-                            TitleShort = e.TitleShort,
-                            SourceUri = e.SourceUri,
-                            Text = new TextInfo
-                            {
-                                Available = false,
-                                Reason = desc.TextIncluded ? "not-fetched" : "pending-gate",
-                                Url = e.SourceUri,
-                            },
-                        }).ToList(),
+                        Expressions = v.Expressions.Select(e => CreateExpressionMeta(e, desc.TextIncluded)).ToList(),
                         Relations = v.Relations.Select(r => new Dictionary<string, string>
                             { ["type"] = r.Type, ["target"] = r.Target.Value }).ToList(),
                         Raw = new Dictionary<string, string>(v.Raw),
@@ -172,8 +174,9 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now)
                 var bodyAdded = false;
                 if (desc.TextIncluded)
                 {
-                    foreach (var (exprMeta, exprRec) in meta.Expressions.Zip(v.Expressions))
+                    foreach (var exprRec in v.Expressions)
                     {
+                        var exprMeta = meta.Expressions.Single(e => e.Language == exprRec.Language);
                         if (exprMeta.Observations.Count > 0) continue;   // already observed
                         var body = await adapter.FetchBody(v, exprRec, ct);
                         if (body is null) continue;
@@ -197,8 +200,9 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now)
                     // D48: alternative structural manifestation (e.g. Formex 4). Stored as
                     // verbatim members under {lang}.{format}/ — one observation per member.
                     // Append-only like bodies; re-attempted nightly until the publisher serves it.
-                    foreach (var (exprMeta, exprRec) in meta.Expressions.Zip(v.Expressions))
+                    foreach (var exprRec in v.Expressions)
                     {
+                        var exprMeta = meta.Expressions.Single(e => e.Language == exprRec.Language);
                         var hasAlt = exprMeta.Observations.Any(o => o.Format is not null);
                         if (!hasAlt)
                         {
@@ -281,6 +285,23 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now)
         if (File.Exists(path) && File.ReadAllText(path).TrimEnd('\n') == content.TrimEnd('\n')) return;
         File.WriteAllText(path, content.TrimEnd('\n') + "\n");
     }
+
+    private static ExpressionMeta CreateExpressionMeta(ExpressionRecord expression, bool textIncluded) => new()
+    {
+        Language = expression.Language,
+        ValidFrom = expression.ValidFrom?.ToString("yyyy-MM-dd"),
+        ValidTo = expression.ValidTo?.ToString("yyyy-MM-dd"),
+        ValidTimeSource = expression.ValidTimeSource,
+        Title = expression.Title,
+        TitleShort = expression.TitleShort,
+        SourceUri = expression.SourceUri,
+        Text = new TextInfo
+        {
+            Available = false,
+            Reason = textIncluded ? "not-fetched" : "pending-gate",
+            Url = expression.SourceUri,
+        },
+    };
 
     private static string Min(string? a, string b) => a is null || string.CompareOrdinal(b, a) < 0 ? b : a;
     private static string Max(string? a, string b) => a is null || string.CompareOrdinal(b, a) > 0 ? b : a;

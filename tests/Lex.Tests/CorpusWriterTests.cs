@@ -30,18 +30,37 @@ public sealed class CorpusWriterTests : IDisposable
         Assert.Contains("raw.domains", revision.Detail);
     }
 
+    [Fact]
+    public async Task Existing_record_adds_a_newly_available_language_by_identity()
+    {
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-01T00:00:00Z"))
+            .WriteAsync(new OneVersionAdapter("in_force", "financial-services", ["en"]), default);
+
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-06T00:00:00Z"))
+            .WriteAsync(new OneVersionAdapter("in_force", "financial-services", ["en", "fr"]), default);
+
+        var path = Path.Combine(_dir, "works", "w1", "versions", "2024-01-01", "meta.json");
+        var meta = JsonSerializer.Deserialize<VersionMeta>(await File.ReadAllTextAsync(path), CorpusJson.Options)!;
+
+        Assert.Equal(["en", "fr"], meta.Expressions.Select(e => e.Language));
+        var added = Assert.Single(meta.Events, e => e.Event == "expression_added");
+        Assert.Equal("fr", added.Scope);
+        Assert.Equal("language=fr", added.Detail);
+    }
+
     public void Dispose()
     {
         try { Directory.Delete(_dir, true); } catch { }
     }
 
-    private sealed class OneVersionAdapter(string bindingStatus, string domain) : ISourceAdapter
+    private sealed class OneVersionAdapter(
+        string bindingStatus, string domain, IReadOnlyList<string>? languages = null) : ISourceAdapter
     {
         private readonly WorkRef _work = new(new Identifier("official:w1"), "w1", "REG", "Work one");
 
         public PublisherDescriptor Describe() => new(
             new Publisher("test", "Test", "EU", "https://example.test", Tier.A, "test", null),
-            [], ["en"], TextIncluded: false, TextPublic: false, HistoryBegins: "publisher");
+            [], languages ?? ["en"], TextIncluded: false, TextPublic: false, HistoryBegins: "publisher");
 
         public async IAsyncEnumerable<WorkRef> EnumerateWorks(
             [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
@@ -58,8 +77,9 @@ public sealed class CorpusWriterTests : IDisposable
                 new(
                     new Identifier("official:v1"), _work.Id, "REG", new DateOnly(2024, 1, 1), null,
                     "publisher", "true", new DateOnly(2024, 1, 1),
-                    [new ExpressionRecord("en", new DateOnly(2024, 1, 1), null, "publisher",
-                        "Work one", "Work one", "https://example.test/v1")],
+                    (languages ?? ["en"]).Select(language => new ExpressionRecord(
+                        language, new DateOnly(2024, 1, 1), null, "publisher",
+                        "Work one", "Work one", $"https://example.test/v1/{language}")).ToArray(),
                     [], new Dictionary<string, string>
                     {
                         ["binding_status"] = bindingStatus,
