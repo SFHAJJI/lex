@@ -76,7 +76,8 @@ regress no more than 2 percent across the complete suite, keep warm server-side 
 250 ms, and remain below 75 percent of configured memory.
 
 Benchmark queries, relevance judgments, commits, artifacts, machine details and review status are
-public. Until external lawyers review a judgment, it is labelled engineer-reviewed.
+public. Generated candidates are labelled `generated-unreviewed` and cannot authorize activation.
+Engineer-reviewed and lawyer-reviewed judgments are identified individually.
 
 ## Hosting and cost
 

@@ -39,9 +39,10 @@ markers are protected. The response publishes every expansion.
 
 ## Public evaluation
 
-`RetrievalBenchmarkCatalog` publishes exactly 200 engineer-reviewed document-level judgments:
+`RetrievalBenchmarkCatalog` publishes exactly 200 generated, unreviewed document-level candidates:
 30 identifiers, 40 temporal, 60 conceptual, 30 bilingual, 20 fuzzy and 20 hierarchy/filter cases.
 `/benchmarks/cases.json` exposes them. The benchmark command records commits, manifest, model,
 machine/resource configuration, sample count, index and vector size, process memory, model load,
 cold query and warm p50/p95/p99. Missing configuration fails the gate rather than becoming an
-estimate.
+estimate. Generated candidates cannot pass the activation gate. Each judgment must be reviewed and
+labelled individually before its relevance measurement can authorize a default change.
