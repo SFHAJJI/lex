@@ -44,19 +44,19 @@ resource "azurerm_user_assigned_identity" "publisher" {
 }
 
 resource "azurerm_federated_identity_credential" "deploy_github" {
-  name                = "github-lex-production"
-  parent_id           = azurerm_user_assigned_identity.deploy.id
-  audience            = ["api://AzureADTokenExchange"]
-  issuer              = "https://token.actions.githubusercontent.com"
-  subject             = "repo:SFHAJJI/lex:environment:production"
+  name      = "github-lex-production"
+  parent_id = azurerm_user_assigned_identity.deploy.id
+  audience  = ["api://AzureADTokenExchange"]
+  issuer    = "https://token.actions.githubusercontent.com"
+  subject   = "repo:SFHAJJI/lex:environment:production"
 }
 
 resource "azurerm_federated_identity_credential" "publisher_github" {
-  name                = "github-lex-ops-main"
-  parent_id           = azurerm_user_assigned_identity.publisher.id
-  audience            = ["api://AzureADTokenExchange"]
-  issuer              = "https://token.actions.githubusercontent.com"
-  subject             = "repo:SFHAJJI/lex-ops:ref:refs/heads/main"
+  name      = "github-lex-ops-main"
+  parent_id = azurerm_user_assigned_identity.publisher.id
+  audience  = ["api://AzureADTokenExchange"]
+  issuer    = "https://token.actions.githubusercontent.com"
+  subject   = "repo:SFHAJJI/lex-ops:ref:refs/heads/main"
 }
 
 resource "azurerm_role_assignment" "runtime_acr_pull" {
