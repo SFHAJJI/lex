@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -12,9 +13,10 @@ namespace Lex.Ingest;
 /// appends the corresponding chain entry (F12). Body files are append-only (none are
 /// written at all in metadata-only mode, D42).
 /// </summary>
-public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now)
+public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now, TextWriter? progress = null)
 {
     private readonly string _now = now.UtcDateTime.ToString("yyyy-MM-ddTHH:mm:ssZ");
+    private readonly TextWriter _progress = progress ?? Console.Error;
     public int Created { get; private set; }
     public int Updated { get; private set; }
     public int Unchanged { get; private set; }
@@ -31,10 +33,25 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now)
         int works = 0, versions = 0;
         var seenVersionMetadata = new HashSet<string>(PathComparer);
 
+        // Materialise the metadata-only plan before fetching bodies. Adapters already hold their
+        // version catalogue in memory, so this adds no publisher body requests and lets the log
+        // report a real denominator. A percentage without a denominator is not actionable; an
+        // elapsed time without observed throughput is not an ETA.
+        var plan = new List<(WorkRef Work, IReadOnlyList<VersionRecord> Versions)>();
         await foreach (var work in adapter.EnumerateWorks(ct))
         {
             var versionsOfWork = await adapter.FetchVersions(work, ct);
-            if (versionsOfWork.Count == 0) continue;
+            if (versionsOfWork.Count > 0) plan.Add((work, versionsOfWork));
+        }
+        var totalExpressions = plan.Sum(item => item.Versions.Sum(version => (long)version.Expressions.Count));
+        long processedExpressions = 0;
+        var lastReportedPercent = -1;
+        var progressClock = Stopwatch.StartNew();
+        ReportProgress(pub.Id, processedExpressions, totalExpressions, progressClock.Elapsed, null);
+        lastReportedPercent = totalExpressions == 0 ? 100 : 0;
+
+        foreach (var (work, versionsOfWork) in plan)
+        {
             works++;
 
             var workDir = Path.Combine(corpusRoot, "works", work.Slug);
@@ -104,7 +121,9 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now)
                     {
                         meta.Events.Add(new EventEntry
                         {
-                            Event = "validity_revised", ObservedFrom = _now, Scope = "version",
+                            Event = "validity_revised",
+                            ObservedFrom = _now,
+                            Scope = "version",
                             Detail = $"valid_to: {meta.ValidTo ?? "null"} -> {newTo ?? "null"}"
                         });
                         meta.ValidTo = newTo;
@@ -178,7 +197,7 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now)
                         Events = [new EventEntry { Event = "first_sighting", ObservedFrom = _now }],
                         Expressions = v.Expressions.Select(e => CreateExpressionMeta(e, desc.TextIncluded)).ToList(),
                         Relations = v.Relations.Select(r => new Dictionary<string, string>
-                            { ["type"] = r.Type, ["target"] = r.Target.Value }).ToList(),
+                        { ["type"] = r.Type, ["target"] = r.Target.Value }).ToList(),
                         Raw = new Dictionary<string, string>(v.Raw),
                     };
                 }
@@ -255,6 +274,17 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now)
                     }
                 }
 
+                processedExpressions += v.Expressions.Count;
+                var percent = totalExpressions == 0
+                    ? 100
+                    : (int)(processedExpressions * 100 / totalExpressions);
+                if (percent > lastReportedPercent || processedExpressions == totalExpressions)
+                {
+                    ReportProgress(pub.Id, processedExpressions, totalExpressions,
+                        progressClock.Elapsed, v.Raw.GetValueOrDefault("celex") ?? work.Slug);
+                    lastReportedPercent = percent;
+                }
+
                 var canonicalRecordSha = CorpusHashes.RecordSha256(meta);
                 var staleRecordSha = !CorpusHashes.Equal(meta.RecordSha256, canonicalRecordSha);
                 if (existing && !changed && !bodyAdded && !staleRecordSha) { Unchanged++; continue; }
@@ -271,7 +301,10 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now)
         {
             Publisher = new Dictionary<string, string>
             {
-                ["id"] = pub.Id, ["name"] = pub.Name, ["jurisdiction"] = pub.Jurisdiction, ["homepage"] = pub.Homepage,
+                ["id"] = pub.Id,
+                ["name"] = pub.Name,
+                ["jurisdiction"] = pub.Jurisdiction,
+                ["homepage"] = pub.Homepage,
             },
             Tier = pub.Tier.ToString(),
             SourceEndpoint = null,
@@ -358,6 +391,24 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now)
 
     private static string Min(string? a, string b) => a is null || string.CompareOrdinal(b, a) < 0 ? b : a;
     private static string Max(string? a, string b) => a is null || string.CompareOrdinal(b, a) > 0 ? b : a;
+
+    private void ReportProgress(string publisher, long completed, long total,
+        TimeSpan elapsed, string? current)
+    {
+        var percent = total == 0 ? 100d : completed * 100d / total;
+        var eta = (total, completed) switch
+        {
+            (0, _) => "00:00:00",
+            (_, 0) => "calculating",
+            _ => FormatDuration(TimeSpan.FromSeconds(elapsed.TotalSeconds * (total - completed) / completed)),
+        };
+        var line = FormattableString.Invariant(
+            $"  [progress] {publisher}: ingest expressions={completed}/{total} percent={percent:F1} elapsed={FormatDuration(elapsed)} eta={eta}");
+        _progress.WriteLine(line + (current is null ? "" : $" current={current}"));
+    }
+
+    private static string FormatDuration(TimeSpan value) =>
+        $"{(int)value.TotalHours:00}:{value.Minutes:00}:{value.Seconds:00}";
 
     private static string Notice(Publisher pub, bool textIncluded) => $"""
         NOTICE — three layers (Lex spec §16.2)
