@@ -42,6 +42,8 @@ export function Compare({ work, title, from, to, anchor }: {
     profiles?: [string, string];
     sources?: [string | undefined, string | undefined];
     permalinks?: [string | undefined, string | undefined];
+    documents?: [{ lexId?: string; validFrom?: string; validTo?: string },
+                 { lexId?: string; validFrom?: string; validTo?: string }];
   }>({ loading: true });
   const [wide, setWide] = useState(() => typeof window !== "undefined" && window.innerWidth >= 900);
   const [showPunct, setShowPunct] = useState(false);
@@ -144,6 +146,10 @@ export function Compare({ work, title, from, to, anchor }: {
         profiles: [profA ?? "not recorded", profB ?? "not recorded"],
         sources: [pa?.document?.source_uri, pb?.document?.source_uri],
         permalinks: [pa?.document?.permalink, pb?.document?.permalink],
+        documents: [
+          { lexId: pa?.document?.lex_id, validFrom: pa?.document?.valid_from, validTo: pa?.document?.valid_to },
+          { lexId: pb?.document?.lex_id, validFrom: pb?.document?.valid_from, validTo: pb?.document?.valid_to },
+        ],
       });
     })().catch((e) => live && setState({ loading: false, error: String(e?.message ?? e) }));
 
@@ -189,6 +195,9 @@ export function Compare({ work, title, from, to, anchor }: {
     title, work, from, to, permalink: comparisonUrl,
     fromSource: state.sources?.[0], toSource: state.sources?.[1],
     fromPermalink: state.permalinks?.[0], toPermalink: state.permalinks?.[1],
+    fromLexId: state.documents?.[0].lexId, toLexId: state.documents?.[1].lexId,
+    fromVersionValidFrom: state.documents?.[0].validFrom, fromVersionValidTo: state.documents?.[0].validTo,
+    toVersionValidFrom: state.documents?.[1].validFrom, toVersionValidTo: state.documents?.[1].validTo,
     fromExtractionProfile: state.profiles?.[0], toExtractionProfile: state.profiles?.[1],
     rows, unchanged: untouched, punctuationOnly: punct, exportedAt: new Date().toISOString(),
   });

@@ -34,6 +34,11 @@ test("comparison evidence reconstructs both exact sides from the displayed diff"
     from: "2020-01-01",
     to: "2021-01-01",
     permalink: "https://law.soufien.lu/compare",
+    fromLexId: "eu-eurlex:32016R0679:2018-05-25",
+    toLexId: "eu-eurlex:32016R0679:2021-06-28",
+    fromVersionValidFrom: "2018-05-25",
+    fromVersionValidTo: "2021-06-27",
+    toVersionValidFrom: "2021-06-28",
     fromExtractionProfile: "xhtml-eu/1",
     toExtractionProfile: "xhtml-eu/1",
     rows: [{
@@ -58,6 +63,9 @@ test("comparison evidence reconstructs both exact sides from the displayed diff"
   assert.match(markdown, /The rate is six percent\./);
   assert.match(markdown, /2020-01-01 text SHA-256: old-sha/);
   assert.match(markdown, /2021-01-01 text SHA-256: new-sha/);
+  assert.match(markdown, /2020-01-01 applicable Lex ID: eu-eurlex:32016R0679:2018-05-25/);
+  assert.match(markdown, /2020-01-01 applicable interval: 2018-05-25 to 2021-06-27/);
+  assert.match(markdown, /2021-01-01 applicable interval: 2021-06-28 to open/);
   assert.match(markdown, /2020-01-01 extraction profile: xhtml-eu\/1/);
   assert.match(markdown, /2021-01-01 extraction profile: xhtml-eu\/1/);
   assert.match(markdown, /Punctuation-only differences/);

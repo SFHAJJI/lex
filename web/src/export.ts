@@ -33,6 +33,12 @@ export interface ComparisonEvidence {
   toSource?: string;
   fromPermalink?: string;
   toPermalink?: string;
+  fromLexId?: string;
+  toLexId?: string;
+  fromVersionValidFrom?: string;
+  fromVersionValidTo?: string;
+  toVersionValidFrom?: string;
+  toVersionValidTo?: string;
   fromExtractionProfile?: string;
   toExtractionProfile?: string;
   rows: ComparisonRow[];
@@ -125,9 +131,13 @@ export function comparisonEvidenceMarkdown(input: ComparisonEvidence): string {
     `- Compared: ${input.from} to ${input.to}`,
     `- Lex comparison: ${input.permalink}`,
     `- ${input.from} Lex version: ${input.fromPermalink ?? "not recorded"}`,
+    `- ${input.from} applicable Lex ID: ${input.fromLexId ?? "not recorded"}`,
+    `- ${input.from} applicable interval: ${input.fromVersionValidFrom ?? "not recorded"} to ${input.fromVersionValidTo ?? "open"}`,
     `- ${input.from} official source: ${input.fromSource ?? "not recorded"}`,
     `- ${input.from} extraction profile: ${input.fromExtractionProfile ?? "not recorded"}`,
     `- ${input.to} Lex version: ${input.toPermalink ?? "not recorded"}`,
+    `- ${input.to} applicable Lex ID: ${input.toLexId ?? "not recorded"}`,
+    `- ${input.to} applicable interval: ${input.toVersionValidFrom ?? "not recorded"} to ${input.toVersionValidTo ?? "open"}`,
     `- ${input.to} official source: ${input.toSource ?? "not recorded"}`,
     `- ${input.to} extraction profile: ${input.toExtractionProfile ?? "not recorded"}`,
     `- Exported at: ${input.exportedAt}`,
