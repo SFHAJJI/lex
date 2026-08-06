@@ -14,6 +14,51 @@ namespace Lex.Tests;
 // Lex.Derive and drove 17 EU works that would otherwise have yielded nothing.
 public class XhtmlEuTests
 {
+    private const string LegacyMalformed = """
+        <html><head><meta http-equiv=Content-Type content="text/html"></head><body>
+        <div><p class=title-article-norm>Article 1</p>
+        <p class=stitle-article-norm>Scope</p>
+        <p>Legacy body<br>with a void element.</p></div>
+        </body></html>
+        """;
+
+    private const string PublisherFragmentWithoutArticleWrapper = """
+        <!DOCTYPE html><html><head><title>Fragment</title></head>
+        <body><p>Authoritative fragment wording.</p></body></html>
+        """;
+
+    [Fact]
+    public void Structured_dispatch_uses_tolerant_profile_for_malformed_legacy_html()
+    {
+        var result = StructuredTextExtractor.Extract(LegacyMalformed, "lex:test");
+
+        Assert.Equal(TolerantHtmlEuProfile.ProfileId, result.ProfileId);
+        var provision = Assert.Single(result.Extraction.Provisions);
+        Assert.Equal("art_1", provision.Anchor);
+        Assert.Contains("Legacy body", provision.TextMd);
+    }
+
+    [Fact]
+    public void Structured_dispatch_does_not_confuse_xhtml_xml_with_akoma_ntoso()
+    {
+        var result = StructuredTextExtractor.Extract(Flat, "lex:test");
+
+        Assert.Equal(XhtmlEuProfile.ProfileId, result.ProfileId);
+        Assert.NotEmpty(result.Extraction.Provisions);
+    }
+
+    [Fact]
+    public void Structured_dispatch_preserves_document_fragments_without_article_boundaries()
+    {
+        var result = StructuredTextExtractor.Extract(PublisherFragmentWithoutArticleWrapper, "lex:test");
+
+        Assert.Equal(TolerantHtmlEuProfile.ProfileId, result.ProfileId);
+        var provision = Assert.Single(result.Extraction.Provisions);
+        Assert.Equal("document", provision.Type);
+        Assert.Equal("Authoritative fragment wording.", provision.TextMd);
+        Assert.Contains("document-level fallback", Assert.Single(result.Extraction.Notes));
+    }
+
     private const string Subdivision = """
         <?xml version="1.0" encoding="utf-8"?>
         <html xmlns="http://www.w3.org/1999/xhtml"><body>
