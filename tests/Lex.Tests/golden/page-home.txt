@@ -122,7 +122,7 @@ HTTP 200
   .sitemap div { display:flex; flex-direction:column; gap:3px }
   .sitemap b { color:var(--fg); font-size:12px; letter-spacing:.06em; text-transform:uppercase;
                margin-bottom:4px; font-weight:600 }
-  .sitemap a { color:var(--muted) }
+  .sitemap a { color:var(--muted); min-height:24px; display:flex; align-items:center }
   .sitemap a:hover { text-decoration-color:var(--fg) }
   /* The one deliberate exception to the accent rule: a focus ring has to be the
      loudest thing on the page, and accessibility outranks the identity. */
@@ -171,7 +171,8 @@ HTTP 200
 <p class="lede">Ask what any Luxembourg law said on any day, exactly as its publisher
 issued it.</p><!-- Read synchronously by the workspace on mount, so the doors never flash in or need a
      round trip of their own. -->
-<script type="application/json" id="doors">[]</script><!-- The workspace mounts here. Without JavaScript the page still explains itself
+<script type="application/json" id="doors">[]</script>
+<script>document.documentElement.classList.add('workspace-loading')</script><!-- The workspace mounts here. Without JavaScript the page still explains itself
      and every permalink below still works, those are server-rendered documents.
      The three doors are repeated here as real links, because the block above is
      JSON for the workspace to read and a crawler that runs no JavaScript followed
@@ -214,9 +215,11 @@ unlimited use.</p>
   body[data-workspace="active"] .frontdoor,
   body[data-workspace="active"] .lede,
   body[data-workspace="active"] main > h1 { display:none }
+  .workspace-loading #workspace { min-height:430px }
+  @media (max-width:640px) { .workspace-loading #workspace { min-height:650px } }
 </style>
-<link rel="stylesheet" href="/app/workspace.css">
-<script type="module" src="/app/workspace.js"></script>
+<link rel="stylesheet" href="/app/workspace.css?v=dev">
+<script type="module" src="/app/workspace.js?v=dev"></script>
 </main>
 <footer>
 <!-- Fourteen links in one undifferentiated run answered no question a reader had. Three

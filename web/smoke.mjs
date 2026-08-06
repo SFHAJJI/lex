@@ -51,6 +51,7 @@ for (const [re, want, why] of [
   [/Code penal/, true, "the doors did not come from the server-emitted block"],
   [/class="asof"/, true, "the as-of date control is gone; the date IS the product"],
   [/class="asklaunch"/, true, "the assistant launcher is gone"],
+  [/aria-label="Ask about any law"/, true, "the assistant launcher's accessible name diverges from its visible label"],
   [/class="fin-tab/, false, "the query-type tabs are back; one box decides for the reader"],
   [/>\s*A topic\s*</, false, "the old topic tab is back"],
   [/>\s*History\s*</, false, "the History tab is back; the rail is meant to replace it"],

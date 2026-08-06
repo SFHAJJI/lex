@@ -69,6 +69,12 @@ export default function App() {
   // it changes nothing about what is displayed, only which timeline the rail belongs to.
   const chosenAnchor = useRef(false);
 
+  // The server reserves the workspace's first-paint height so the explanatory content below it
+  // does not jump when React arrives. Release that temporary reservation only after this tree is
+  // committed. Without JavaScript the server's class-adding script never runs, so the plain
+  // noscript path receives no artificial empty space.
+  useEffect(() => { document.documentElement.classList.remove("workspace-loading"); }, []);
+
   // The marketing below the fold belongs to a first-time visitor, not to someone reading a
   // law. One flag on <body> lets the server-rendered page get out of the way.
   useEffect(() => {

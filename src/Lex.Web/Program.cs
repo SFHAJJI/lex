@@ -2,6 +2,7 @@ using Azure.Monitor.OpenTelemetry.AspNetCore;
 using Lex.Ask;
 using Lex.Mcp;
 using Lex.Web;
+using Microsoft.AspNetCore.ResponseCompression;
 using OpenTelemetry.Trace;
 
 // Lex.Web: the composition root, and nothing else.
@@ -33,6 +34,7 @@ builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<IndexRegistry>();
 builder.Services.AddSingleton(sp => new McpCore(sp.GetRequiredService<IndexRegistry>().All));
 builder.Services.AddSingleton(sp => new AskService(sp.GetRequiredService<McpCore>()));
+builder.Services.AddResponseCompression(options => options.EnableForHttps = true);
 
 // Foundry-hybrid observability (D45 posture: keep the loop, adopt the platform's tracing):
 // OpenTelemetry via the Azure Monitor distro, exporting to the App Insights resource a Foundry
@@ -45,7 +47,16 @@ if (!string.IsNullOrWhiteSpace(options.AppInsightsConnectionString))
 }
 
 var app = builder.Build();
-app.UseStaticFiles();   // wwwroot: og.png (the social preview card)
+app.UseResponseCompression();
+app.UseStaticFiles(new StaticFileOptions
+{
+    OnPrepareResponse = context =>
+    {
+        var path = context.Context.Request.Path;
+        if (path.StartsWithSegments("/app") || path.StartsWithSegments("/fonts"))
+            context.Context.Response.Headers.CacheControl = "public,max-age=31536000,immutable";
+    },
+});
 
 var ctx = new WebContext(
     app.Services.GetRequiredService<IndexRegistry>(),
