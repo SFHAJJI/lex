@@ -17,6 +17,8 @@ public sealed class RetrievalBenchmarkTests
         Assert.Equal(30, cases.Count(c => c.Category == "bilingual"));
         Assert.Equal(20, cases.Count(c => c.Category == "fuzzy"));
         Assert.Equal(20, cases.Count(c => c.Category == "hierarchy"));
+        Assert.Contains(cases, c => c.Category == "exact" && c.Query == "12012E/TXT"
+            && c.RelevantWorks.SequenceEqual(["12012e-txt"]));
         Assert.All(cases, c =>
         {
             Assert.NotEmpty(c.RelevantWorks);
