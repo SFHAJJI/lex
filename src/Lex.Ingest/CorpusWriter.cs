@@ -255,12 +255,12 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now)
                     }
                 }
 
-                if (existing && !changed && !bodyAdded) { Unchanged++; continue; }
+                var canonicalRecordSha = CorpusHashes.RecordSha256(meta);
+                var staleRecordSha = !CorpusHashes.Equal(meta.RecordSha256, canonicalRecordSha);
+                if (existing && !changed && !bodyAdded && !staleRecordSha) { Unchanged++; continue; }
                 if (existing) Updated++; else Created++;
 
-                meta.RecordSha256 = null;
-                var canonical = JsonSerializer.Serialize(meta, CorpusJson.Options);
-                meta.RecordSha256 = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(canonical)));
+                meta.RecordSha256 = canonicalRecordSha;
                 await File.WriteAllTextAsync(metaPath, JsonSerializer.Serialize(meta, CorpusJson.Options) + "\n", ct);
             }
         }
@@ -346,10 +346,7 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now)
                 Scope = "version",
                 Detail = "publisher record absent from the current enumeration",
             });
-            meta.RecordSha256 = null;
-            var canonical = JsonSerializer.Serialize(meta, CorpusJson.Options);
-            meta.RecordSha256 = Convert.ToHexStringLower(
-                SHA256.HashData(Encoding.UTF8.GetBytes(canonical)));
+            meta.RecordSha256 = CorpusHashes.RecordSha256(meta);
             File.WriteAllText(metaPath, JsonSerializer.Serialize(meta, CorpusJson.Options) + "\n");
             Updated++;
         }

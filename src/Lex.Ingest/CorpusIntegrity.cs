@@ -1,5 +1,4 @@
 using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
 
 namespace Lex.Ingest;
@@ -157,12 +156,8 @@ public static class CorpusIntegrity
             return;
         }
 
-        version.RecordSha256 = null;
-        var canonical = JsonSerializer.Serialize(version, CorpusJson.Options);
-        version.RecordSha256 = claimed;
-        var actual = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(canonical)));
-        if (!CryptographicOperations.FixedTimeEquals(
-                Encoding.ASCII.GetBytes(actual), Encoding.ASCII.GetBytes(claimed.ToLowerInvariant())))
+        var actual = CorpusHashes.RecordSha256(version);
+        if (!CorpusHashes.Equal(actual, claimed))
             errors.Add($"{relativeVersion}/meta.json record_sha256 mismatch");
     }
 
@@ -197,9 +192,13 @@ public static class CorpusIntegrity
 
         using var stream = File.OpenRead(candidate);
         var actual = Convert.ToHexStringLower(SHA256.HashData(stream));
-        if (!CryptographicOperations.FixedTimeEquals(
-                Encoding.ASCII.GetBytes(actual),
-                Encoding.ASCII.GetBytes(observation.Sha256.ToLowerInvariant())))
-            errors.Add($"{relativeVersion}/{observation.File} sha256 mismatch");
+        if (!CorpusHashes.Equal(actual, observation.Sha256))
+        {
+            var suffix = CheckoutLineEndings.LfNormalizedSha256(candidate) is { } normalized
+                         && CorpusHashes.Equal(normalized, observation.Sha256)
+                ? " (LF-normalized bytes match; checkout line endings changed)"
+                : "";
+            errors.Add($"{relativeVersion}/{observation.File} sha256 mismatch{suffix}");
+        }
     }
 }
