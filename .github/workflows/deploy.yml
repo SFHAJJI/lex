@@ -33,7 +33,7 @@ jobs:
       CONTAINER_APP: ca-lex-web
       RUNTIME_IDENTITY: uami-lex-runtime
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Require OIDC configuration
         shell: bash
@@ -43,7 +43,7 @@ jobs:
             [ -n "${!value:-}" ] || { echo "::error::$value is not configured in the production environment"; exit 1; }
           done
 
-      - uses: azure/login@v2
+      - uses: azure/login@v3
         with:
           client-id: ${{ env.AZURE_CLIENT_ID }}
           tenant-id: ${{ env.AZURE_TENANT_ID }}
