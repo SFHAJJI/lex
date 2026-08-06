@@ -97,6 +97,9 @@ public sealed class ManifestDoc
     public List<string> Languages { get; set; } = [];
     public int Works { get; set; }
     public int Versions { get; set; }
+    public int Expressions { get; set; }
+    public int ExpressionsWithText { get; set; }
+    public int ExpressionsWithoutText { get; set; }
     public string? ValidFromEarliest { get; set; }
     public string? ValidToLatest { get; set; }
     public required string HistoryBegins { get; set; }

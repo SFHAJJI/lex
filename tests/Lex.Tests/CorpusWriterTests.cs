@@ -43,6 +43,12 @@ public sealed class CorpusWriterTests : IDisposable
         Assert.Contains(lines, line => line.Contains(
             "[progress] test: ingest expressions=1/1 percent=100.0", StringComparison.Ordinal));
         Assert.Contains(lines, line => line.Contains("eta=00:00:00 current=w1", StringComparison.Ordinal));
+
+        var manifest = JsonSerializer.Deserialize<ManifestDoc>(
+            await File.ReadAllTextAsync(Path.Combine(_dir, "manifest.json")), CorpusJson.Options)!;
+        Assert.Equal(1, manifest.Expressions);
+        Assert.Equal(0, manifest.ExpressionsWithText);
+        Assert.Equal(1, manifest.ExpressionsWithoutText);
     }
 
     [Fact]
