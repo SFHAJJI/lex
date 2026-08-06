@@ -17,7 +17,7 @@ RUN dotnet publish src/Lex.Web -c Release -o /app
 # See deploy/fetch-indexes.sh for why. Kept as a separate stage so the ~950 MB never enters
 # the final image layer graph twice, and so a failed fetch fails the build loudly.
 FROM alpine:3 AS indexes
-RUN apk add --no-cache curl
+RUN apk add --no-cache curl jq
 ARG LEX_REQUIRE_ARTIFACT_MANIFEST=0
 ENV LEX_REQUIRE_ARTIFACT_MANIFEST=$LEX_REQUIRE_ARTIFACT_MANIFEST
 COPY deploy/fetch-indexes.sh /fetch-indexes.sh

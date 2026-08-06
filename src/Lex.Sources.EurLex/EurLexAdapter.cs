@@ -16,40 +16,11 @@ public sealed class EurLexAdapter : ISourceAdapter
 {
     private const string Sparql = "https://publications.europa.eu/webapi/rdf/sparql";
     private const string Cdm = "PREFIX cdm: <http://publications.europa.eu/ontology/cdm#>\n";
+    private const string Owl = "PREFIX owl: <http://www.w3.org/2002/07/owl#>\n";
     private const int BodyCapBytes = 4 * 1024 * 1024;   // versions above this keep metadata only
 
-    // Flagship set for increment B. DocumentType is data (§3.5): derived from the
-    // publisher's own CELEX typology inside this adapter (R = regulation, L = directive).
-    //
-    // The energy pair at the end was added because energy.soufien.lu retired its own private law
-    // service in favour of this endpoint, and a corpus diff showed those two directives were the
-    // only documents it would have lost in the move. A consumer asking for a text it actually
-    // needs is the right reason to widen this list, and a better one than widening it on a guess.
-    private static readonly string[] Flagships =
-    [
-        "32016R0679", // GDPR
-        "32022R2554", // DORA
-        "32024R1689", // AI Act
-        "32022L2555", // NIS2
-        "32014L0065", // MiFID II
-        "32013R0575", // CRR
-        "32015L2366", // PSD2
-        "32019R2088", // SFDR
-        "32018L2001", // RED II, renewable energy
-        "32019L0944", // electricity market
-            // The rest of the shelf a compliance officer in a regulated firm answers to.
-            // The one competing EU legal MCP with real traction serves exactly GDPR, NIS2,
-            // DORA, AI Act, CRA, eIDAS, Data Act, DSA, MiCA, PSD2 and MiFID, as current text
-            // only. With these five we hold all of that plus CRR, SFDR, RED II and the
-            // Electricity Directive, and hold every one as dated versions, which is the
-            // question an audit or an incident actually asks.
-            "32014R0910", // eIDAS
-            "32024R2847", // Cyber Resilience Act
-            "32023R2854", // Data Act
-            "32022R2065", // DSA
-            "32023R1114", // MiCA
-    ];
-
+    // Common names are presentation metadata only. Corpus membership comes from the reviewed
+    // scope configuration and bounded CDM relationships below.
     // Common names in universal professional use — adapter-provided display aliases,
     // never a substitute for the publisher's own title (kept verbatim in Title).
     private static readonly Dictionary<string, string> CommonNames = new(StringComparer.Ordinal)
@@ -75,8 +46,19 @@ public sealed class EurLexAdapter : ISourceAdapter
     private DateTimeOffset _lastRequest = DateTimeOffset.MinValue;
     private readonly Dictionary<string, List<VersionRecord>> _byWork = new(StringComparer.Ordinal);
     private readonly Dictionary<string, WorkRef> _works = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, HashSet<string>> _selectionReasons = new(StringComparer.Ordinal);
+    private readonly EurLexScopeConfig _scope;
+    private readonly int _wave;
     private bool _loaded;
     private readonly SemaphoreSlim _initLock = new(1, 1);
+
+    public EurLexAdapter(string? scopePath = null, int? wave = null)
+    {
+        _scope = EurLexScopeConfig.Load(scopePath ?? Environment.GetEnvironmentVariable("LEX_EU_SCOPE"));
+        _wave = wave ?? _scope.ApprovedWave;
+        if (_wave is < 1 or > 4)
+            throw new ArgumentOutOfRangeException(nameof(wave), "EU scope wave must be between 1 and 4.");
+    }
 
     private static HttpClient CreateClient()
     {
@@ -96,7 +78,7 @@ public sealed class EurLexAdapter : ISourceAdapter
             Attribution: "© European Union, 1998-2026. Reuse permitted with attribution under Commission Decision 2011/833/EU. Consolidated texts have no legal effect; only acts published in the Official Journal are authentic.",
             SourceTermsUrl: "https://eur-lex.europa.eu/content/legal-notice/legal-notice.html"),
         DocumentTypes: [],
-        Languages: ["en"],
+        Languages: _scope.Languages,
         TextIncluded: true,
         TextPublic: true,   // reuse right measured (Decision 2011/833/EU)
         HistoryBegins: "publisher");
@@ -122,7 +104,7 @@ public sealed class EurLexAdapter : ISourceAdapter
         await PaceAsync(ct);
         var celex = version.Raw.GetValueOrDefault("celex");
         if (celex is null) return null;
-        var url = $"https://publications.europa.eu/resource/celex/{celex}";
+        var url = $"https://publications.europa.eu/resource/celex/{Uri.EscapeDataString(celex)}";
         HttpResponseMessage? resp = null;
         for (var hop = 0; hop < 6; hop++)
         {
@@ -176,7 +158,7 @@ public sealed class EurLexAdapter : ISourceAdapter
         await PaceAsync(ct);
         var celex = version.Raw.GetValueOrDefault("celex");
         if (celex is null) return null;
-        var url = $"https://publications.europa.eu/resource/celex/{celex}";
+        var url = $"https://publications.europa.eu/resource/celex/{Uri.EscapeDataString(celex)}";
         HttpResponseMessage? resp = null;
         for (var hop = 0; hop < 6; hop++)
         {
@@ -271,53 +253,59 @@ public sealed class EurLexAdapter : ISourceAdapter
         try
         {
             if (_loaded) return;
-            foreach (var baseCelex in Flagships)
+            var selected = await ResolveScopeAsync(ct);
+            var allConsolidations = await LoadConsolidationsAsync(selected.Keys, ct);
+            var allMetadata = await LoadWorkMetadataAsync(selected.Keys, ct);
+            foreach (var (baseCelex, reasons) in selected.OrderBy(kv => kv.Key, StringComparer.Ordinal))
             {
-                var consolidatedPrefix = "0" + baseCelex[1..];
-                var rows = await SelectAsync(Cdm + $$"""
-                    SELECT ?celex ?date ?title WHERE {
-                      ?s cdm:resource_legal_id_celex ?celex ; cdm:act_consolidated_date ?date .
-                      FILTER(STRSTARTS(STR(?celex), "{{consolidatedPrefix}}"))
-                      OPTIONAL { ?e cdm:expression_belongs_to_work ?s ;
-                                 cdm:expression_uses_language <http://publications.europa.eu/resource/authority/language/ENG> ;
-                                 cdm:expression_title ?title }
-                    } ORDER BY ?celex
-                    """, ct);
-
-                if (rows.Count == 0) { Console.Error.WriteLine($"  [eurlex] {baseCelex}: no consolidated versions found"); continue; }
+                _selectionReasons[baseCelex] = reasons;
+                var rows = allConsolidations.GetValueOrDefault(baseCelex) ?? [];
 
                 // Consolidated expressions usually carry no title in Cellar — fall back to the
                 // base act's official EN title so search matches natural-language names.
-                var baseTitleRows = await SelectAsync(Cdm + $$"""
-                    SELECT ?title WHERE {
-                      ?w cdm:resource_legal_id_celex ?c .
-                      FILTER(STR(?c) = "{{baseCelex}}")
-                      ?e cdm:expression_belongs_to_work ?w ;
-                         cdm:expression_uses_language <http://publications.europa.eu/resource/authority/language/ENG> ;
-                         cdm:expression_title ?title .
-                    } LIMIT 1
-                    """, ct);
-                var baseTitle = baseTitleRows.FirstOrDefault()?.GetValueOrDefault("title");
+                var baseTitleRows = allMetadata.GetValueOrDefault(baseCelex) ?? [];
+                if (baseTitleRows.Count == 0)
+                {
+                    Console.Error.WriteLine($"  [eurlex] {baseCelex}: official work metadata unavailable");
+                    continue;
+                }
+                var titles = baseTitleRows
+                    .Where(r => r.ContainsKey("lang"))
+                    .GroupBy(r => r["lang"], StringComparer.Ordinal)
+                    .ToDictionary(g => g.Key, g => g.First().GetValueOrDefault("title"), StringComparer.Ordinal);
+                var baseTitle = titles.GetValueOrDefault("en") ?? titles.GetValueOrDefault("fr");
                 var commonName = CommonNames.GetValueOrDefault(baseCelex);
 
                 var workUri = $"http://publications.europa.eu/resource/celex/{baseCelex}";
                 var slug = baseCelex.ToLowerInvariant();
-                var typeCode = baseCelex.Contains('R') && baseCelex[5] == 'R' ? "REG" : baseCelex[5] == 'L' ? "DIR" : "REG";
+                var typeCode = LegalForm(baseCelex, baseTitleRows.FirstOrDefault()?.GetValueOrDefault("rtype"));
 
                 // Distinct versions sorted by consolidation date; valid_to = next valid_from - 1 (publisher-dated sequence).
                 var versions = rows
                     .GroupBy(r => r["celex"], StringComparer.Ordinal)
-                    .Select(g => (Celex: g.Key, Date: DateOnly.Parse(g.First()["date"]), Title: g.First().GetValueOrDefault("title")))
+                    .Select(g => new ConsolidatedState(
+                        g.Key,
+                        ParseDate(g.First()["date"]),
+                        g.Where(r => r.ContainsKey("lang"))
+                            .GroupBy(r => r["lang"], StringComparer.Ordinal)
+                            .ToDictionary(x => x.Key, x => x.First().GetValueOrDefault("title"), StringComparer.Ordinal)))
                     .OrderBy(v => v.Date).ThenBy(v => v.Celex, StringComparer.Ordinal)
                     .ToList();
 
                 var list = new List<VersionRecord>();
                 for (var i = 0; i < versions.Count; i++)
                 {
-                    var (celex, date, title) = versions[i];
+                    var state = versions[i];
+                    var celex = state.Celex;
+                    var date = state.Date;
                     DateOnly? validTo = i + 1 < versions.Count ? versions[i + 1].Date.AddDays(-1) : null;
-                    var sourceUri = $"https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:{celex}";
-                    var effTitle = title ?? baseTitle;
+                    var expressions = _scope.Languages.Select(lang =>
+                    {
+                        var title = state.Titles.GetValueOrDefault(lang) ?? titles.GetValueOrDefault(lang) ?? baseTitle;
+                        var sourceUri = $"https://eur-lex.europa.eu/legal-content/{lang.ToUpperInvariant()}/TXT/?uri=CELEX:{Uri.EscapeDataString(celex)}";
+                        return new ExpressionRecord(lang, date, validTo, "publisher", title,
+                            DisplayTitle(commonName, title, celex), sourceUri);
+                    }).ToArray();
                     list.Add(new VersionRecord(
                         Id: new Identifier($"http://publications.europa.eu/resource/celex/{celex}"),
                         WorkId: new Identifier(workUri),
@@ -327,24 +315,267 @@ public sealed class EurLexAdapter : ISourceAdapter
                         ValidTimeSource: "publisher",
                         InForceStatus: null,
                         PublicationDate: date,
-                        Expressions:
-                        [
-                            new ExpressionRecord("en", date, validTo, "publisher",
-                                Title: effTitle, TitleShort: DisplayTitle(commonName, effTitle, celex), SourceUri: sourceUri)
-                        ],
+                        Expressions: expressions,
                         Relations: [new RelationRecord("consolidates", new Identifier(workUri))],
-                        Raw: new Dictionary<string, string> { ["celex"] = celex }));
+                        Raw: ScopeRaw(celex, typeCode, "published", reasons)));
+                }
+
+                // One-version and not-yet-consolidated works remain first-class works. Lex stores
+                // the official original expression and names the missing merge; it never invents it.
+                if (list.Count == 0 && _scope.History.IncludeOriginal && _scope.History.IncludeUnamended)
+                {
+                    var originalDateText = baseTitleRows.FirstOrDefault(r => r.ContainsKey("date"))?.GetValueOrDefault("date");
+                    if (originalDateText is null)
+                    {
+                        Console.Error.WriteLine($"  [eurlex] {baseCelex}: no publisher date for original expression");
+                        continue;
+                    }
+                    var originalDate = ParseDate(originalDateText);
+                    var expressions = _scope.Languages.Select(lang =>
+                    {
+                        var title = titles.GetValueOrDefault(lang) ?? baseTitle;
+                        var sourceUri = $"https://eur-lex.europa.eu/legal-content/{lang.ToUpperInvariant()}/TXT/?uri=CELEX:{Uri.EscapeDataString(baseCelex)}";
+                        return new ExpressionRecord(lang, originalDate, null, "publisher", title,
+                            DisplayTitle(commonName, title, baseCelex), sourceUri);
+                    }).ToArray();
+                    list.Add(new VersionRecord(
+                        new Identifier(workUri), new Identifier(workUri), typeCode, originalDate, null,
+                        "publisher", baseTitleRows.First().GetValueOrDefault("inforce"), originalDate,
+                        expressions, [], ScopeRaw(baseCelex, typeCode, "not_published_or_not_required", reasons)));
                 }
 
                 _byWork[workUri] = list;
                 _works[workUri] = new WorkRef(new Identifier(workUri), slug, typeCode,
-                    DisplayTitle(commonName, versions[^1].Title ?? baseTitle, baseCelex));
-                Console.Error.WriteLine($"  [eurlex] {baseCelex}: {list.Count} consolidated versions");
+                    DisplayTitle(commonName, baseTitle, baseCelex));
+                Console.Error.WriteLine($"  [eurlex] {baseCelex}: {versions.Count} consolidation(s), {list.Count} temporal state(s)");
             }
             _loaded = true;
         }
         finally { _initLock.Release(); }
     }
+
+    private async Task<Dictionary<string, List<Dictionary<string, string>>>> LoadConsolidationsAsync(
+        IEnumerable<string> celexNumbers, CancellationToken ct)
+    {
+        var result = new Dictionary<string, List<Dictionary<string, string>>>(StringComparer.Ordinal);
+        foreach (var chunk in celexNumbers.Chunk(100))
+        {
+            var values = string.Join(' ', chunk.Select(c =>
+                $"(\"{c}\" <http://publications.europa.eu/resource/celex/{c}>)"));
+            var rows = await SelectAsync(Cdm + Owl + $$"""
+                SELECT ?base ?celex ?date ?lang ?title WHERE {
+                  VALUES (?base ?alias) { {{values}} }
+                  ?baseWork owl:sameAs ?alias .
+                  ?s cdm:act_consolidated_based_on_resource_legal ?baseWork ;
+                     cdm:resource_legal_id_celex ?celex ; cdm:act_consolidated_date ?date .
+                  ?e cdm:expression_belongs_to_work ?s ; cdm:expression_uses_language ?langUri .
+                  VALUES ?langUri {
+                    <http://publications.europa.eu/resource/authority/language/ENG>
+                    <http://publications.europa.eu/resource/authority/language/FRA>
+                  }
+                  BIND(IF(STRENDS(STR(?langUri), "/FRA"), "fr", "en") AS ?lang)
+                  OPTIONAL { ?e cdm:expression_title ?title }
+                } ORDER BY ?base ?celex
+                """, ct);
+            foreach (var row in rows)
+            {
+                var baseCelex = row["base"];
+                if (!result.TryGetValue(baseCelex, out var list)) result[baseCelex] = list = [];
+                list.Add(row);
+            }
+        }
+        return result;
+    }
+
+    private async Task<Dictionary<string, List<Dictionary<string, string>>>> LoadWorkMetadataAsync(
+        IEnumerable<string> celexNumbers, CancellationToken ct)
+    {
+        var result = new Dictionary<string, List<Dictionary<string, string>>>(StringComparer.Ordinal);
+        foreach (var chunk in celexNumbers.Chunk(100))
+        {
+            var values = string.Join(' ', chunk.Select(c =>
+                $"(\"{c}\" <http://publications.europa.eu/resource/celex/{c}>)"));
+            var rows = await SelectAsync(Cdm + Owl + $$"""
+                SELECT ?base ?lang ?title ?date ?inforce ?rtype WHERE {
+                  VALUES (?base ?alias) { {{values}} }
+                  ?w owl:sameAs ?alias .
+                  OPTIONAL { ?w cdm:work_date_document ?documentDate }
+                  OPTIONAL { ?w cdm:date_creation_legacy ?createdDate }
+                  BIND(COALESCE(?documentDate, ?createdDate) AS ?date)
+                  OPTIONAL { ?w cdm:resource_legal_in-force ?inforce }
+                  OPTIONAL { ?w cdm:work_has_resource-type ?rtype }
+                  ?e cdm:expression_belongs_to_work ?w ; cdm:expression_uses_language ?langUri .
+                  OPTIONAL { ?e cdm:expression_title ?title }
+                  VALUES ?langUri {
+                    <http://publications.europa.eu/resource/authority/language/ENG>
+                    <http://publications.europa.eu/resource/authority/language/FRA>
+                  }
+                  BIND(IF(STRENDS(STR(?langUri), "/FRA"), "fr", "en") AS ?lang)
+                } ORDER BY ?base ?lang
+                """, ct);
+            foreach (var row in rows)
+            {
+                var baseCelex = row["base"];
+                if (!result.TryGetValue(baseCelex, out var list)) result[baseCelex] = list = [];
+                list.Add(row);
+            }
+        }
+        return result;
+    }
+
+    public async Task<EurLexScopePreview> PreviewScopeAsync(
+        string? previousScopePath, DateTimeOffset observedAt, CancellationToken ct)
+    {
+        await EnsureLoadedAsync(ct);
+        IReadOnlySet<string> previous = new HashSet<string>(StringComparer.Ordinal);
+        if (previousScopePath is not null)
+            previous = (await new EurLexAdapter(previousScopePath, _wave).ResolveScopeAsync(ct)).Keys.ToHashSet(StringComparer.Ordinal);
+        var current = _selectionReasons.Keys.ToHashSet(StringComparer.Ordinal);
+        var originals = _byWork.Values.SelectMany(v => v)
+            .Where(v => v.Raw.GetValueOrDefault("consolidation_status") != "published").Sum(v => v.Expressions.Count);
+        var consolidated = _byWork.Values.SelectMany(v => v)
+            .Where(v => v.Raw.GetValueOrDefault("consolidation_status") == "published").Sum(v => v.Expressions.Count);
+        var languages = _byWork.Values.SelectMany(v => v).SelectMany(v => v.Expressions)
+            .GroupBy(e => e.Language, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal);
+        var reasonCounts = _selectionReasons.Values.SelectMany(v => v)
+            .GroupBy(v => v, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal);
+        var missing = _byWork.Where(kv => kv.Value.All(v => v.Raw.GetValueOrDefault("consolidation_status") != "published"))
+            .Select(kv => kv.Value.First().Raw.GetValueOrDefault("celex") ?? kv.Key)
+            .Order(StringComparer.Ordinal).ToArray();
+        var loadable = _works.Keys.Select(k => k[(k.IndexOf("/celex/", StringComparison.Ordinal) + 7)..])
+            .ToHashSet(StringComparer.Ordinal);
+        var metadataGaps = current.Except(loadable).Order(StringComparer.Ordinal).ToArray();
+        var expressions = originals + consolidated;
+        return new EurLexScopePreview(
+            "lex-eu-scope-preview/1", _scope.ScopeId, _wave, "engineer-reviewed",
+            observedAt.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ"),
+            current.Except(previous).Order(StringComparer.Ordinal).ToArray(),
+            previous.Except(current).Order(StringComparer.Ordinal).ToArray(),
+            current.Count, _works.Count, metadataGaps, originals, consolidated, languages, reasonCounts, missing,
+            expressions * 256L * 1024L, expressions * 96L * 1024L,
+            "planning estimate: 256 KiB download and 96 KiB lexical index per language expression; replace with measured bytes after the dry run");
+    }
+
+    private async Task<Dictionary<string, HashSet<string>>> ResolveScopeAsync(CancellationToken ct)
+    {
+        var selected = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+        void Add(string celex, string reason)
+        {
+            if (!IsAllowedCelex(celex, _wave)) return;
+            if (!selected.TryGetValue(celex, out var reasons))
+                selected[celex] = reasons = new HashSet<string>(StringComparer.Ordinal);
+            reasons.Add(reason);
+        }
+
+        foreach (var domain in _scope.ActiveDomains(_wave))
+        {
+            foreach (var celex in domain.SeedCelex) Add(celex, $"domain:{domain.Id}:seed");
+            foreach (var prefix in domain.DirectoryPrefixes)
+            {
+                var rows = await SelectAsync(Cdm + $$"""
+                    SELECT DISTINCT ?celex WHERE {
+                      ?w cdm:resource_legal_id_celex ?celex ;
+                         cdm:resource_legal_type ?type ;
+                         cdm:resource_legal_is_about_concept_directory-code ?directory .
+                      FILTER(STR(?type) IN ("R", "L", "D"))
+                      FILTER(STRSTARTS(STRAFTER(STR(?directory), "/dir-eu-legal-act/"), "{{prefix}}"))
+                    } ORDER BY ?celex LIMIT 20001
+                    """, ct);
+                if (rows.Count > 20000)
+                    throw new InvalidOperationException($"Directory selector '{prefix}' exceeds 20,000 works; refine the reviewed scope.");
+                foreach (var row in rows) Add(row["celex"], $"domain:{domain.Id}:directory:{prefix}");
+            }
+            foreach (var concept in domain.Eurovoc)
+            {
+                var rows = await SelectAsync(Cdm + $$"""
+                    SELECT DISTINCT ?celex WHERE {
+                      ?w cdm:resource_legal_id_celex ?celex ; cdm:resource_legal_type ?type ;
+                         cdm:work_is_about_concept_eurovoc <http://eurovoc.europa.eu/{{concept}}> .
+                      FILTER(STR(?type) IN ("R", "L", "D"))
+                    } ORDER BY ?celex LIMIT 20001
+                    """, ct);
+                if (rows.Count > 20000)
+                    throw new InvalidOperationException($"EuroVoc selector '{concept}' exceeds 20,000 works; refine the reviewed scope.");
+                foreach (var row in rows) Add(row["celex"], $"domain:{domain.Id}:eurovoc:{concept}");
+            }
+        }
+
+        var predicates = _scope.RelationshipClosure.Predicates.ToList();
+        if (_wave >= _scope.RelationshipClosure.IncludeCaseLawFromWave)
+            predicates.AddRange(_scope.RelationshipClosure.CaseLawPredicates);
+        for (var depth = 0; depth < _scope.RelationshipClosure.MaxDepth; depth++)
+        {
+            var frontier = selected.Keys.ToArray();
+            var before = selected.Count;
+            foreach (var chunk in frontier.Chunk(50))
+            {
+                var values = string.Join(' ', chunk.Select(c =>
+                    $"(\"{c}\" <http://publications.europa.eu/resource/celex/{c}>)"));
+                var predicateValues = string.Join(' ', predicates.Select(p => $"cdm:{p}"));
+                var rows = await SelectAsync(Cdm + Owl + $$"""
+                    SELECT DISTINCT ?seedCelex ?relatedCelex ?predicate WHERE {
+                      VALUES (?seedCelex ?seedAlias) { {{values}} }
+                      VALUES ?predicate { {{predicateValues}} }
+                      ?seed owl:sameAs ?seedAlias .
+                      { ?seed ?predicate ?related } UNION { ?related ?predicate ?seed }
+                      ?related cdm:resource_legal_id_celex ?relatedCelex .
+                    }
+                    """, ct);
+                foreach (var group in rows.GroupBy(r => r["seedCelex"], StringComparer.Ordinal))
+                    if (group.Select(r => r["relatedCelex"]).Distinct(StringComparer.Ordinal).Count()
+                        > _scope.RelationshipClosure.MaxRelatedPerSeed)
+                        throw new InvalidOperationException(
+                            $"Relationship closure for '{group.Key}' exceeds the reviewed per-seed limit.");
+                foreach (var row in rows)
+                {
+                    var predicate = row["predicate"].Split('#').Last();
+                    Add(row["relatedCelex"], $"relationship:{predicate}");
+                }
+            }
+            if (selected.Count > _scope.RelationshipClosure.MaxTotalWorks)
+                throw new InvalidOperationException("Relationship closure exceeds the reviewed total-work limit.");
+            if (selected.Count == before) break;
+        }
+        return selected;
+    }
+
+    private bool IsAllowedCelex(string celex, int wave)
+    {
+        if (celex.Length < 5) return false;
+        if (wave >= 4 && celex[0] == '6') return true;
+        if (celex[0] is not ('1' or '3')) return false;
+        return _scope.LegalForms.Contains(LegalForm(celex, null), StringComparer.Ordinal);
+    }
+
+    private static DateOnly ParseDate(string value) => DateOnly.Parse(value[..10]);
+
+    private static string LegalForm(string celex, string? resourceType)
+    {
+        if (resourceType is not null) return resourceType.Split('/').Last();
+        if (celex.StartsWith('1')) return celex.Contains('P') ? "CHARTER" : "TREATY";
+        return celex.Length > 5 ? celex[5] switch
+        {
+            'R' => "REG",
+            'L' => "DIR",
+            'D' => "DEC",
+            _ => "OTHER",
+        } : "OTHER";
+    }
+
+    private static Dictionary<string, string> ScopeRaw(
+        string celex, string legalForm, string consolidationStatus, IEnumerable<string> reasons) => new(StringComparer.Ordinal)
+    {
+        ["celex"] = celex,
+        ["legal_form"] = legalForm,
+        ["hierarchy"] = celex.StartsWith('1') ? "primary_eu_law" : "secondary_eu_law",
+        ["binding_status"] = "publisher_metadata",
+        ["consolidation_status"] = consolidationStatus,
+        ["scope_reasons"] = string.Join(',', reasons.Order(StringComparer.Ordinal)),
+    };
+
+    private sealed record ConsolidatedState(string Celex, DateOnly Date, IReadOnlyDictionary<string, string?> Titles);
 
     private static string? ShortTitle(string? title)
     {

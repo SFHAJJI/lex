@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Lex.Law\Lex.Law.csproj" />
+    <EmbeddedResource Include="eu-scope.json" LogicalName="Lex.Sources.EurLex.eu-scope.json" />
   </ItemGroup>
 
   <PropertyGroup>

@@ -294,7 +294,7 @@ public static class CatalogueEndpoints
                       ≈24,579 Luxembourg acts never get a consolidated edition; they are <b>not here yet</b>
                       (and we won't guess dates for texts we haven't seen).
                       """
-                    : " Only flagship acts are ingested so far; the wider consolidated acquis is scheduled.";
+                    : $" The mounted index contains {c.Groups:n0} selected EU works. Expansion remains gated by the reviewed scope preview and corpus release.";
                 // Measured against the publisher's own catalogue, 2026-08-04. The cause is the file format
                 // offered per version, not our pipeline and not the age of the act, and it lands mostly on
                 // documents that are not instruments at all.
