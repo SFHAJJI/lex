@@ -284,7 +284,7 @@ public static class ExplainerEndpoints
         app.MapGet("/benchmarks/latest.json", () =>
         {
             var path = Path.Combine(ctx.Options.IndexDir, "retrieval-benchmark-eu-eurlex.json");
-            return File.Exists(path)
+            return File.Exists(path) && ctx.Registry.IsArtifactVerified(Path.GetFileName(path))
                 ? Results.File(path, "application/json")
                 : Results.NotFound(new { status = "not_measured_yet" });
         });
