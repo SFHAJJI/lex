@@ -118,7 +118,9 @@ jobs:
           previous=$(az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
             --query "[?properties.trafficWeight > \`0\`].name | [0]" -o tsv)
           [ -n "$previous" ] || { echo "::error::no healthy production revision is receiving traffic"; exit 1; }
-          suffix="r${GITHUB_SHA:0:10}"
+          # A revision is immutable and its inputs are code plus the complete artifact set.
+          # Include the run identity as well so an exact deployment can be retried safely.
+          suffix="r${GITHUB_SHA:0:7}-${MANIFEST_SET:0:8}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           candidate="$CONTAINER_APP--$suffix"
           app_id=$(az containerapp show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" --query id -o tsv)
           az containerapp show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" -o json \
