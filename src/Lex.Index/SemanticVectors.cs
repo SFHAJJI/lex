@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.IO.MemoryMappedFiles;
 using System.Numerics;
 using System.Security.Cryptography;
@@ -165,7 +166,15 @@ public sealed class SemanticVectorReader : IDisposable
         if (queryBits.Length != _binaryBytes) throw new ArgumentException("Query bit dimension mismatch.");
         var offset = 32L + ordinal * _recordSize;
         var distance = 0;
-        for (var i = 0; i < _binaryBytes; i++)
+        var blockBytes = _binaryBytes - _binaryBytes % sizeof(long);
+        var i = 0;
+        for (; i < blockBytes; i += sizeof(long))
+        {
+            var stored = unchecked((ulong)_view.ReadInt64(offset + i));
+            var wanted = BinaryPrimitives.ReadUInt64LittleEndian(queryBits.AsSpan(i, sizeof(long)));
+            distance += BitOperations.PopCount(stored ^ wanted);
+        }
+        for (; i < _binaryBytes; i++)
             distance += BitOperations.PopCount((uint)(_view.ReadByte(offset + i) ^ queryBits[i]));
         return distance;
     }

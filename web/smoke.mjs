@@ -12,7 +12,7 @@ const code = fs.readFileSync(bundle, "utf8");
 // The workspace reads its whole state from the URL, so each surface is one more mount at a
 // different address. Only the home surface was ever checked, which is why deleting the finder
 // could take the report's own controls with it and still pass.
-async function mount(url) {
+async function mount(url, answer) {
   // The server emits the suggested starting points, validated against the index, so the mount
   // has to be given one to exercise the path that reads them.
   const doors = JSON.stringify([{ work: "lu-legilux:loi-1879-06-18-n1", label: "Code penal" }]);
@@ -23,7 +23,18 @@ async function mount(url) {
     runScripts: "outside-only",
     url,
   });
-  dom.window.fetch = () => Promise.resolve({ ok: true, json: async () => ({}) });
+  // JSDOM does not implement scrolling; the real browser does. The version rail uses it only to
+  // keep the current tick visible, which is unrelated to this mount contract.
+  dom.window.HTMLElement.prototype.scrollTo = () => {};
+  dom.window.fetch = (_url, init) => {
+    if (!answer) return Promise.resolve({ ok: true, json: async () => ({}) });
+    const request = JSON.parse(init?.body ?? "{}");
+    const payload = answer(request.params?.name, request.params?.arguments ?? {});
+    return Promise.resolve({
+      ok: true,
+      json: async () => ({ result: { content: [{ type: "text", text: JSON.stringify(payload) }] } }),
+    });
+  };
   try {
     dom.window.eval(code);
   } catch (e) {
@@ -51,6 +62,7 @@ for (const [re, want, why] of [
   [/Code penal/, true, "the doors did not come from the server-emitted block"],
   [/class="asof"/, true, "the as-of date control is gone; the date IS the product"],
   [/class="asklaunch"/, true, "the assistant launcher is gone"],
+  [/aria-label="Ask about any law"/, true, "the assistant launcher's accessible name diverges from its visible label"],
   [/class="fin-tab/, false, "the query-type tabs are back; one box decides for the reader"],
   [/>\s*A topic\s*</, false, "the old topic tab is back"],
   [/>\s*History\s*</, false, "the History tab is back; the rail is meant to replace it"],
@@ -70,4 +82,58 @@ for (const [re, want, why] of [
   if (re.test(report) !== want) { console.error(`FAIL (report) — ${why}`); process.exit(1); }
 }
 
-console.log(`ok — home ${html.length} chars (one box + one date), report ${report.length} chars (window + order + layers)`);
+// Evidence extraction is a reader action, so pin it on real reader states rather than merely
+// checking that its words survived minification. These are the same MCP shapes production sends.
+const document = (date) => ({
+  work: "eu-eurlex:32016R0679", title: "General Data Protection Regulation", language: "en",
+  valid_from: date, source_uri: `https://eur-lex.example/${date}`,
+  permalink: `https://law.soufien.lu/eu-eurlex/32016R0679/${date}`,
+});
+const provision = (text, sha = "abc123def456") => ({
+  anchor: "art_1", num: "Article 1", text, text_sha256: sha,
+});
+const lawAnswer = (name, args) => {
+  if (name === "timeline") return { versions: [{ ...document("2018-05-25"), text_available: true }] };
+  if (name === "as_of" && args.mode === "outline")
+    return { document: document(String(args.date)), provisions: [provision(null)] };
+  if (name === "as_of")
+    return { document: document(String(args.date)), provisions: [provision("Exact publisher wording.")] };
+  return {};
+};
+const law = await mount(
+  "https://law.soufien.lu/?space=law&work=eu-eurlex%3A32016R0679&date=2018-05-25",
+  lawAnswer,
+);
+for (const [re, why] of [
+  [/copy citation/, "the article reader lost citation copying"],
+  [/download evidence \(\.md\)/, "the article reader lost evidence download"],
+  [/sha256 abc123def456/, "the reader is not using MCP's text_sha256 field"],
+]) {
+  if (!re.test(law)) { console.error(`FAIL (law export) - ${why}`); process.exit(1); }
+}
+
+const compareAnswer = (name, args) => {
+  if (name === "timeline") return {
+    versions: ["2020-01-01", "2021-01-01"].map((date) => ({ ...document(date), text_available: true })),
+  };
+  if (name !== "as_of") return {};
+  const before = args.date === "2020-01-01";
+  const text = args.mode === "outline" ? null : before ? "The rate is five." : "The rate is six.";
+  return {
+    document: document(String(args.date)),
+    provisions: [provision(text, before ? "old" : "new")],
+  };
+};
+const comparison = await mount(
+  "https://law.soufien.lu/?space=law&work=eu-eurlex%3A32016R0679&date=2020-01-01&to=2021-01-01&mode=compare",
+  compareAnswer,
+);
+for (const [re, why] of [
+  [/1 changed/, "the structured comparison did not render"],
+  [/copy citation/, "the comparison lost citation copying"],
+  [/download evidence \(\.md\)/, "the comparison lost evidence download"],
+]) {
+  if (!re.test(comparison)) { console.error(`FAIL (comparison export) - ${why}`); process.exit(1); }
+}
+
+console.log(`ok - home ${html.length} chars, report ${report.length} chars, law and comparison evidence actions`);
