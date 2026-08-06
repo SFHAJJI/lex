@@ -96,6 +96,39 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now)
                         foreach (var e in meta.Expressions) e.ValidTo = newTo;
                         changed = true;
                     }
+
+                    // Publisher classifications can be refined without changing the legal text.
+                    // Keep the latest normalized fields in the hashed record and append one
+                    // transaction-time event so a scope or status migration is visible rather
+                    // than silently rewriting history. Unknown old raw keys are retained.
+                    var revised = new List<string>();
+                    if (meta.DocumentType != v.TypeCode)
+                    {
+                        meta.DocumentType = v.TypeCode;
+                        revised.Add("document_type");
+                    }
+                    if (meta.InForceStatus != v.InForceStatus)
+                    {
+                        meta.InForceStatus = v.InForceStatus;
+                        revised.Add("in_force_status");
+                    }
+                    foreach (var (key, value) in v.Raw.OrderBy(x => x.Key, StringComparer.Ordinal))
+                    {
+                        if (meta.Raw.GetValueOrDefault(key) == value) continue;
+                        meta.Raw[key] = value;
+                        revised.Add($"raw.{key}");
+                    }
+                    if (revised.Count > 0)
+                    {
+                        meta.Events.Add(new EventEntry
+                        {
+                            Event = "metadata_revised",
+                            ObservedFrom = _now,
+                            Scope = "version",
+                            Detail = "fields=" + string.Join(',', revised),
+                        });
+                        changed = true;
+                    }
                 }
                 else
                 {
