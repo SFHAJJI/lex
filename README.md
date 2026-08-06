@@ -109,8 +109,8 @@ FOUNDATION  Lex.Temporal (interval algebra)   Lex.Index (SQLite: filter-first, v
 
 ## Current coverage
 
-**Luxembourg** (Legilux, Tier A): every work and consolidated version the
-publisher issues. Nothing is filtered out by type. The mounted counts, date
+**Luxembourg** (Legilux, Tier A): every work and version in the publisher's
+consolidated collection. Nothing in that collection is filtered out by type. The mounted counts, date
 range, corpus commit and extraction-profile mix are read directly from the
 index on the [live coverage page](https://law.soufien.lu/coverage), rather than
 copied into prose that becomes stale after the next publisher run.
