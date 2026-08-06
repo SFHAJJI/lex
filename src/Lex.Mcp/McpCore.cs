@@ -136,7 +136,7 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                 new JsonObject
                 {
                     ["query"] = S("search terms"), ["publisher"] = S("optional publisher id"),
-                    ["jurisdiction"] = S("optional lu or eu"),
+                    ["jurisdiction"] = S("optional jurisdiction code from index metadata, e.g. LU or EU"),
                     ["document_type"] = S("backward-compatible document type filter"),
                     ["source_class"] = S("optional source document class"),
                     ["hierarchy"] = S("optional normalized legal hierarchy"),
@@ -579,13 +579,8 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                 if (timeScope is not ("all_versions" or "as_of")) throw new ArgumentException("time_scope must be all_versions or as_of");
                 DateOnly? asOf = timeScope == "as_of"
                     ? DateOnly.Parse(Str("as_of") ?? throw new ArgumentException("as_of required when time_scope=as_of")) : null;
-                var pub = Str("publisher") ?? Str("jurisdiction") switch
-                {
-                    "lu" => "lu-legilux",
-                    "eu" => "eu-eurlex",
-                    null => null,
-                    _ => throw new ArgumentException("jurisdiction must be lu or eu"),
-                };
+                var pub = Str("publisher");
+                var jurisdiction = Str("jurisdiction");
                 var limit = Int("limit", 10);
                 var requestedMode = Str("retrieval_mode") ?? "keyword";
                 if (requestedMode is not ("keyword" or "hybrid")) throw new ArgumentException("retrieval_mode must be keyword or hybrid");
@@ -598,7 +593,12 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                 var works = Str("works")?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                                         .Select(w => w.Contains(':') ? w[(w.IndexOf(':') + 1)..] : w).ToArray();
                 var outp = new JsonArray();
-                foreach (var r in readers.Values.Where(x => pub is null || x.Collection == pub))
+                foreach (var r in readers.Values.Where(x =>
+                             (pub is null || x.Collection == pub)
+                             && (jurisdiction is null || string.Equals(
+                                 x.Stamp.GetValueOrDefault("jurisdiction"),
+                                 jurisdiction,
+                                 StringComparison.OrdinalIgnoreCase))))
                 {
                     var filter = new FilterSet(asOf, null, Str("source_class") ?? Str("document_type"),
                         Str("language"), works, Str("hierarchy"), Str("act_form"),
