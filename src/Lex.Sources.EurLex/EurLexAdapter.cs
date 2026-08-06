@@ -16,7 +16,6 @@ public sealed class EurLexAdapter : ISourceAdapter
 {
     private const string Sparql = "https://publications.europa.eu/webapi/rdf/sparql";
     private const string Cdm = "PREFIX cdm: <http://publications.europa.eu/ontology/cdm#>\n";
-    private const string Owl = "PREFIX owl: <http://www.w3.org/2002/07/owl#>\n";
     private const int BodyCapBytes = 4 * 1024 * 1024;   // versions above this keep metadata only
 
     // Common names are presentation metadata only. Corpus membership comes from the reviewed
@@ -104,7 +103,7 @@ public sealed class EurLexAdapter : ISourceAdapter
         await PaceAsync(ct);
         var celex = version.Raw.GetValueOrDefault("celex");
         if (celex is null) return null;
-        var url = $"https://publications.europa.eu/resource/celex/{Uri.EscapeDataString(celex)}";
+        var url = CellarResourceUrl(celex);
         HttpResponseMessage? resp = null;
         for (var hop = 0; hop < 6; hop++)
         {
@@ -158,7 +157,7 @@ public sealed class EurLexAdapter : ISourceAdapter
         await PaceAsync(ct);
         var celex = version.Raw.GetValueOrDefault("celex");
         if (celex is null) return null;
-        var url = $"https://publications.europa.eu/resource/celex/{Uri.EscapeDataString(celex)}";
+        var url = CellarResourceUrl(celex);
         HttpResponseMessage? resp = null;
         for (var hop = 0; hop < 6; hop++)
         {
@@ -280,7 +279,7 @@ public sealed class EurLexAdapter : ISourceAdapter
                 var bindingStatus = NormalizeBindingStatus(inForce);
 
                 var workUri = $"http://publications.europa.eu/resource/celex/{baseCelex}";
-                var slug = baseCelex.ToLowerInvariant();
+                var slug = NormalizeWorkSlug(baseCelex);
                 var typeCode = LegalForm(baseCelex, baseTitleRows.FirstOrDefault()?.GetValueOrDefault("rtype"));
 
                 // Distinct versions sorted by consolidation date; valid_to = next valid_from - 1 (publisher-dated sequence).
@@ -364,12 +363,11 @@ public sealed class EurLexAdapter : ISourceAdapter
         var result = new Dictionary<string, List<Dictionary<string, string>>>(StringComparer.Ordinal);
         foreach (var chunk in celexNumbers.Chunk(100))
         {
-            var values = string.Join(' ', chunk.Select(c =>
-                $"(\"{c}\" <http://publications.europa.eu/resource/celex/{c}>)"));
-            var rows = await SelectAsync(Cdm + Owl + $$"""
+            var values = string.Join(' ', chunk.Select(c => $"\"{c}\""));
+            var rows = await SelectAsync(Cdm + $$"""
                 SELECT ?base ?celex ?date ?lang ?title WHERE {
-                  VALUES (?base ?alias) { {{values}} }
-                  ?baseWork owl:sameAs ?alias .
+                  VALUES ?base { {{values}} }
+                  ?baseWork cdm:resource_legal_id_celex ?base .
                   ?s cdm:act_consolidated_based_on_resource_legal ?baseWork ;
                      cdm:resource_legal_id_celex ?celex ; cdm:act_consolidated_date ?date .
                   ?e cdm:expression_belongs_to_work ?s ; cdm:expression_uses_language ?langUri .
@@ -397,12 +395,11 @@ public sealed class EurLexAdapter : ISourceAdapter
         var result = new Dictionary<string, List<Dictionary<string, string>>>(StringComparer.Ordinal);
         foreach (var chunk in celexNumbers.Chunk(100))
         {
-            var values = string.Join(' ', chunk.Select(c =>
-                $"(\"{c}\" <http://publications.europa.eu/resource/celex/{c}>)"));
-            var rows = await SelectAsync(Cdm + Owl + $$"""
+            var values = string.Join(' ', chunk.Select(c => $"\"{c}\""));
+            var rows = await SelectAsync(Cdm + $$"""
                 SELECT ?base ?lang ?title ?date ?inforce ?rtype WHERE {
-                  VALUES (?base ?alias) { {{values}} }
-                  ?w owl:sameAs ?alias .
+                  VALUES ?base { {{values}} }
+                  ?w cdm:resource_legal_id_celex ?base .
                   OPTIONAL { ?w cdm:work_date_document ?documentDate }
                   OPTIONAL { ?w cdm:date_creation_legacy ?createdDate }
                   BIND(COALESCE(?documentDate, ?createdDate) AS ?date)
@@ -517,14 +514,13 @@ public sealed class EurLexAdapter : ISourceAdapter
             var before = selected.Count;
             foreach (var chunk in frontier.Chunk(50))
             {
-                var values = string.Join(' ', chunk.Select(c =>
-                    $"(\"{c}\" <http://publications.europa.eu/resource/celex/{c}>)"));
+                var values = string.Join(' ', chunk.Select(c => $"\"{c}\""));
                 var predicateValues = string.Join(' ', predicates.Select(p => $"cdm:{p}"));
-                var rows = await SelectAsync(Cdm + Owl + $$"""
+                var rows = await SelectAsync(Cdm + $$"""
                     SELECT DISTINCT ?seedCelex ?relatedCelex ?predicate WHERE {
-                      VALUES (?seedCelex ?seedAlias) { {{values}} }
+                      VALUES ?seedCelex { {{values}} }
                       VALUES ?predicate { {{predicateValues}} }
-                      ?seed owl:sameAs ?seedAlias .
+                      ?seed cdm:resource_legal_id_celex ?seedCelex .
                       {
                         ?seed ?predicate ?related .
                         BIND("outbound" AS ?direction)
@@ -570,6 +566,13 @@ public sealed class EurLexAdapter : ISourceAdapter
     }
 
     private static DateOnly ParseDate(string value) => DateOnly.Parse(value[..10]);
+
+    public static string NormalizeWorkSlug(string celex) =>
+        celex.ToLowerInvariant().Replace('/', '-');
+
+    private static string CellarResourceUrl(string celex) =>
+        "https://publications.europa.eu/resource/celex/" +
+        string.Join('/', celex.Split('/').Select(Uri.EscapeDataString));
 
     private static string LegalForm(string celex, string? resourceType)
     {

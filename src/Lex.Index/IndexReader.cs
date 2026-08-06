@@ -545,7 +545,8 @@ public sealed class LexIndexReader : IDisposable
             .Where(t => t.Length >= 2).Take(6).ToList();
         if (terms.Count == 0) return [];
 
-        var hits = Lookup(terms.Select((t, i) => $"(d.title LIKE $t{i} OR d.group_key LIKE $t{i})"), terms);
+        var hits = Lookup(terms.Select((t, i) =>
+            $"(d.title LIKE $t{i} OR d.group_key LIKE $t{i} OR d.group_identifier LIKE $t{i})"), terms);
         if (hits.Count > 0) return hits;
 
         // "CELEX 32022R2554", "see 32013r0575" — keep the identifier, drop the chatter.

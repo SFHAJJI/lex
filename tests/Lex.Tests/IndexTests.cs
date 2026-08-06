@@ -337,6 +337,23 @@ public class IndexTests : IDisposable
     }
 
     [Fact]
+    public void Exact_treaty_celex_matches_the_publisher_identifier_with_a_slash()
+    {
+        var treaty = Row("t-pub:12012e-txt:2012-10-26", "12012e-txt", "2012-10-26", null,
+            kind: "TREATY", title: "Treaty on the Functioning of the European Union") with
+        {
+            GroupIdentifier = "http://publications.europa.eu/resource/celex/12012E/TXT",
+        };
+        IndexBuilder.Build(_db, new Dictionary<string, string> { ["collection"] = "t-pub" },
+            [treaty], [], [], [], null);
+        using var reader = LexIndexReader.Open(_db);
+
+        var result = reader.SearchKeyword("12012E/TXT", FilterSet.All, 10, fuzzyAuto: true);
+        Assert.Equal("12012e-txt", Assert.Single(result.Hits).Doc.GroupKey);
+        Assert.Equal(["exact_identifier"], result.Hits[0].MatchReasons);
+    }
+
+    [Fact]
     public void Semantic_chunks_are_deterministic_and_bounded()
     {
         using var encoder = new FakeEncoder();

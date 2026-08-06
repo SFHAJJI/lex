@@ -49,6 +49,14 @@ public sealed class EurLexScopeTests : IDisposable
         Assert.Equal(expected, EurLexAdapter.NormalizeBindingStatus(source));
     }
 
+    [Theory]
+    [InlineData("32016R0679", "32016r0679")]
+    [InlineData("12012E/TXT", "12012e-txt")]
+    public void Celex_identifiers_have_path_safe_stable_work_slugs(string celex, string expected)
+    {
+        Assert.Equal(expected, EurLexAdapter.NormalizeWorkSlug(celex));
+    }
+
     public void Dispose()
     {
         try { Directory.Delete(_dir, true); } catch { }
