@@ -83,7 +83,12 @@ export default function Search(p: SearchProps) {
   const box = useRef<HTMLInputElement>(null);
 
   useEffect(() => setText(p.state.q ?? ""), [p.state.q]);
-  useEffect(() => { box.current?.focus(); }, []);
+  // Desktop keyboard users benefit from landing in the primary control. On a touch device,
+  // focusing it on arrival opens the software keyboard before the reader can inspect the page.
+  useEffect(() => {
+    if (typeof window.matchMedia === "function" && window.matchMedia("(pointer: fine)").matches)
+      box.current?.focus();
+  }, []);
 
   const q = p.state.q ?? "";
   const asOf = p.state.asOf;

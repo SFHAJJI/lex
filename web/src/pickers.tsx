@@ -57,12 +57,12 @@ export function LawPicker({ current, onPick, inline }: { current?: string; onPic
     <div className={inline ? "picker inline" : "picker"} ref={box}>
       {inline ? null : (
         <button className="pick main" onClick={() => setOpen((v) => !v)}
-                aria-expanded={open} aria-haspopup="listbox" aria-controls="lawpop">
+                aria-expanded={open} aria-controls="lawpop">
           <i>law</i>{current ?? "choose a law"} ▾
         </button>
       )}
       {open ? (
-        <div className={inline ? "pop open" : "pop"} id="lawpop" role="listbox">
+        <div className={inline ? "pop open" : "pop"} id="lawpop">
           <input autoFocus={!inline} value={q} onChange={(e) => setQ(e.target.value)}
                  placeholder="name, subject, or identifier (32016r0679)" aria-label="Find a law" />
           {busy ? (
@@ -73,9 +73,9 @@ export function LawPicker({ current, onPick, inline }: { current?: string; onPic
             </ul>
           ) : null}
           {!busy && q.trim().length >= 2 && hits.length === 0 ? <div className="popnote">nothing matches</div> : null}
-          <ul>
+          <ul aria-label="Law suggestions">
             {hits.map((h) => (
-              <li key={h.work} role="option" aria-selected={false}>
+              <li key={h.work}>
                 <button onClick={() => { onPick(h); if (!inline) setOpen(false); setQ(""); }}>
                   <span>{h.title}</span>
                   <span className="sub mono">{h.work}</span>
