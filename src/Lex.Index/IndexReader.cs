@@ -32,6 +32,16 @@ public sealed record CoverageInfo(
     IReadOnlyList<CoverageLanguage> Languages,
     int MultilingualWorks);
 
+/// Values that the mounted index can actually accept as public search filters. Keeping this
+/// inventory beside the data means adding a reviewed domain or jurisdiction does not require a
+/// second hard-coded list in the web client.
+public sealed record SearchFacetInfo(
+    IReadOnlyList<string> Languages,
+    IReadOnlyList<string> Hierarchies,
+    IReadOnlyList<string> Domains,
+    IReadOnlyList<string> ActForms,
+    IReadOnlyList<string> BindingStatuses);
+
 /// <summary>
 /// Read side of one index file. Every query method takes a non-optional FilterSet (F5);
 /// filters are applied as SQL predicates before any ranking or ordering.
@@ -170,6 +180,41 @@ public sealed class LexIndexReader : IDisposable
         cmd.Parameters.AddWithValue("$w", NormalizeWork(work));
         cmd.Parameters.AddWithValue("$p", NormalizeWork(work) + ":%");
         return cmd.ExecuteScalar() is not null;
+    }
+
+    public SearchFacetInfo SearchFacets()
+    {
+        IReadOnlyList<string> Distinct(string sql)
+        {
+            using var cmd = _conn.CreateCommand();
+            cmd.CommandText = sql;
+            using var reader = cmd.ExecuteReader();
+            var values = new List<string>();
+            while (reader.Read())
+            {
+                if (!reader.IsDBNull(0) && !string.IsNullOrWhiteSpace(reader.GetString(0)))
+                    values.Add(reader.GetString(0));
+            }
+            return values;
+        }
+
+        var languages = Distinct(
+            "SELECT DISTINCT lower(language) FROM docs WHERE language <> '' ORDER BY lower(language)");
+        if (!IsV3)
+            return new SearchFacetInfo(languages, [], [], [], []);
+
+        var domains = Distinct(
+                "SELECT DISTINCT domains FROM docs WHERE domains IS NOT NULL AND domains <> '' ORDER BY domains")
+            .SelectMany(value => value.Trim('|').Split('|', StringSplitOptions.RemoveEmptyEntries))
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToList();
+        return new SearchFacetInfo(
+            languages,
+            Distinct("SELECT DISTINCT hierarchy FROM docs WHERE hierarchy IS NOT NULL AND hierarchy <> '' ORDER BY hierarchy"),
+            domains,
+            Distinct("SELECT DISTINCT act_form FROM docs WHERE act_form IS NOT NULL AND act_form <> '' ORDER BY act_form"),
+            Distinct("SELECT DISTINCT binding_status FROM docs WHERE binding_status IS NOT NULL AND binding_status <> '' ORDER BY binding_status"));
     }
 
     public DocRow? AsOf(string work, DateOnly date, FilterSet filters)

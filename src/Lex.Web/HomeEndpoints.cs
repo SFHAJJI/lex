@@ -30,6 +30,30 @@ public static class HomeEndpoints
             var assetVersion = Uri.EscapeDataString(ctx.Options.CodeCommit ?? "dev");
             var tools = mcpCore.ToolDefs().OfType<JsonObject>()
                                .Select(t => t["name"]!.GetValue<string>()).ToList();
+            var facetSets = readers.Values.Select(r => r.SearchFacets()).ToList();
+            JsonArray Values(IEnumerable<string> values) => new(values
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(value => value, StringComparer.OrdinalIgnoreCase)
+                .Select(value => (JsonNode)value).ToArray());
+            var searchFacets = new JsonObject
+            {
+                ["jurisdictions"] = new JsonArray(readers.Values
+                    .Select(r => r.Stamp.GetValueOrDefault("jurisdiction"))
+                    .Where(value => !string.IsNullOrWhiteSpace(value))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(value => value, StringComparer.OrdinalIgnoreCase)
+                    .Select(value => (JsonNode)new JsonObject
+                    {
+                        ["value"] = value!.ToLowerInvariant(),
+                        ["code"] = value.ToUpperInvariant(),
+                    }).ToArray()),
+                ["hierarchies"] = Values(facetSets.SelectMany(f => f.Hierarchies)),
+                ["domains"] = Values(facetSets.SelectMany(f => f.Domains)),
+                ["act_forms"] = Values(facetSets.SelectMany(f => f.ActForms)),
+                ["binding_statuses"] = Values(facetSets.SelectMany(f => f.BindingStatuses)),
+                ["languages"] = Values(facetSets.SelectMany(f => f.Languages)),
+            };
 
             // The suggested starting points, checked against the index that will serve them.
             //
@@ -64,6 +88,7 @@ public static class HomeEndpoints
                 <!-- Read synchronously by the workspace on mount, so the doors never flash in or need a
                      round trip of their own. -->
                 <script type="application/json" id="doors">{liveDoors.ToJsonString()}</script>
+                <script type="application/json" id="search-facets">{searchFacets.ToJsonString()}</script>
                 <script>document.documentElement.classList.add('workspace-loading')</script>
                 """
                 + $"""

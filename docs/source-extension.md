@@ -32,6 +32,12 @@ Search jurisdiction filters are matched against each mounted index's `jurisdicti
 are not mapped through a Luxembourg/EU switch, so another jurisdiction becomes searchable when
 its verified index is mounted.
 
+The search workspace also derives its jurisdiction, hierarchy, domain, act-form, binding-status,
+and language controls from mounted indexes. Extending an existing document class or reviewed
+domain does not require a parallel client-side option list. Known legal vocabulary can keep a
+lawyer-facing display-label override; an unknown value remains available through a deterministic
+readable fallback.
+
 ## Required evidence before publication
 
 Every expansion must pass:

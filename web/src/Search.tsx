@@ -51,6 +51,11 @@ type ArticleHit = HitMeta & {
  * here, because this bundle has no idea what the index holds.
  */
 type Door = { work: string; label: string };
+type SearchFacets = {
+  jurisdictions: { value: string; code: string }[];
+  hierarchies: string[]; domains: string[]; act_forms: string[];
+  binding_statuses: string[]; languages: string[];
+};
 
 const DOORS: Door[] = (() => {
   try {
@@ -62,6 +67,32 @@ const DOORS: Door[] = (() => {
   }
 })();
 
+const SEARCH_FACETS: SearchFacets = (() => {
+  const empty: SearchFacets = { jurisdictions: [], hierarchies: [], domains: [], act_forms: [],
+                                binding_statuses: [], languages: [] };
+  try {
+    const text = document.getElementById("search-facets")?.textContent;
+    return text ? { ...empty, ...JSON.parse(text) } : empty;
+  } catch {
+    return empty;
+  }
+})();
+
+const LABELS: Record<string, string> = {
+  primary_eu_law: "EU primary law", secondary_eu_law: "EU secondary law",
+  "financial-services": "Financial services", "aml-corporate": "AML and corporate",
+  "consumer-environment": "Consumer and environment", "procurement-and-ip": "Procurement and IP",
+  "judicial-cooperation": "Judicial cooperation",
+  REG: "Regulation", DIR: "Directive", DEC: "Decision", TREATY: "Treaty", CHARTER: "Charter",
+  in_force: "In force", not_in_force: "Not in force", unknown: "Not classified",
+};
+const label = (value: string) => LABELS[value] ?? value.replaceAll("_", " ").replaceAll("-", " ")
+  .replace(/\b\w/g, (letter) => letter.toUpperCase());
+const jurisdictionLabel = ({ code }: { code: string }) => code === "EU" ? "European Union" :
+  new Intl.DisplayNames(["en"], { type: "region" }).of(code) ?? code;
+const languageLabel = (code: string) =>
+  new Intl.DisplayNames(["en"], { type: "language" }).of(code) ?? code;
+
 /** A bare date is a question in itself: what applied that day. */
 const DATE_ONLY = /^\s*(\d{4}-\d{2}-\d{2})\s*$/;
 
@@ -72,8 +103,8 @@ export default function Search(p: SearchProps) {
   const [busy, setBusy] = useState(false);
   const [layer, setLayer] = useState<LayerId | "">("");
   const [retrieval, setRetrieval] = useState<"keyword" | "hybrid">("keyword");
-  const [jurisdiction, setJurisdiction] = useState<"" | "lu" | "eu">("");
-  const [hierarchy, setHierarchy] = useState<"" | "primary_eu_law" | "secondary_eu_law">("");
+  const [jurisdiction, setJurisdiction] = useState("");
+  const [hierarchy, setHierarchy] = useState("");
   const [domain, setDomain] = useState("");
   const [actForm, setActForm] = useState("");
   const [bindingStatus, setBindingStatus] = useState("");
@@ -209,26 +240,25 @@ export default function Search(p: SearchProps) {
               </label>
               <label><span>Jurisdiction</span>
                 <select className="reslayer" value={jurisdiction}
-                        onChange={(e) => setJurisdiction(e.target.value as "" | "lu" | "eu")}>
-                  <option value="">Luxembourg and EU</option><option value="lu">Luxembourg</option>
-                  <option value="eu">European Union</option>
+                        onChange={(e) => setJurisdiction(e.target.value)}>
+                  <option value="">Every jurisdiction</option>
+                  {SEARCH_FACETS.jurisdictions.map((item) =>
+                    <option key={item.value} value={item.value}>{jurisdictionLabel(item)}</option>)}
                 </select>
               </label>
               <label><span>Hierarchy</span>
                 <select className="reslayer" value={hierarchy}
-                        onChange={(e) => setHierarchy(e.target.value as typeof hierarchy)}>
-                  <option value="">Every hierarchy</option><option value="primary_eu_law">EU primary law</option>
-                  <option value="secondary_eu_law">EU secondary law</option>
+                        onChange={(e) => setHierarchy(e.target.value)}>
+                  <option value="">Every hierarchy</option>
+                  {SEARCH_FACETS.hierarchies.map((value) =>
+                    <option key={value} value={value}>{label(value)}</option>)}
                 </select>
               </label>
               <label><span>Practice area</span>
                 <select className="reslayer" value={domain} onChange={(e) => setDomain(e.target.value)}>
-                  <option value="">Every practice area</option><option value="financial-services">Financial services</option>
-                  <option value="aml-corporate">AML and corporate</option><option value="competition">Competition</option>
-                  <option value="tax">Tax</option><option value="employment">Employment</option>
-                  <option value="consumer-environment">Consumer and environment</option>
-                  <option value="procurement-and-ip">Procurement and IP</option>
-                  <option value="judicial-cooperation">Judicial cooperation</option>
+                  <option value="">Every practice area</option>
+                  {SEARCH_FACETS.domains.map((value) =>
+                    <option key={value} value={value}>{label(value)}</option>)}
                 </select>
               </label>
               <label><span>Kind of law</span>
@@ -240,22 +270,24 @@ export default function Search(p: SearchProps) {
               </label>
               <label><span>EU legal form</span>
                 <select className="reslayer" value={actForm} onChange={(e) => setActForm(e.target.value)}>
-                  <option value="">Every legal form</option><option value="REG">Regulation</option>
-                  <option value="DIR">Directive</option><option value="DEC">Decision</option>
-                  <option value="TREATY">Treaty</option><option value="CHARTER">Charter</option>
+                  <option value="">Every legal form</option>
+                  {SEARCH_FACETS.act_forms.map((value) =>
+                    <option key={value} value={value}>{label(value)}</option>)}
                 </select>
               </label>
               <label><span>EU legal status</span>
                 <select className="reslayer" value={bindingStatus}
                         onChange={(e) => setBindingStatus(e.target.value)}>
-                  <option value="">Every status</option><option value="in_force">In force</option>
-                  <option value="not_in_force">Not in force</option><option value="unknown">Not classified</option>
+                  <option value="">Every status</option>
+                  {SEARCH_FACETS.binding_statuses.map((value) =>
+                    <option key={value} value={value}>{label(value)}</option>)}
                 </select>
               </label>
               <label><span>Language</span>
                 <select className="reslayer" value={language} onChange={(e) => setLanguage(e.target.value)}>
-                  <option value="">Every language</option><option value="fr">French</option>
-                  <option value="en">English</option>
+                  <option value="">Every language</option>
+                  {SEARCH_FACETS.languages.map((value) =>
+                    <option key={value} value={value}>{languageLabel(value)}</option>)}
                 </select>
               </label>
             </div>
