@@ -23,7 +23,7 @@ cannot know.
 **[Benchmarks](https://law.soufien.lu/benchmarks)** ·
 **[Verify it yourself](https://law.soufien.lu/verify)** ·
 **[Program](docs/hybrid-eu-roadmap.md)** ·
-**[Spec (D1-D60)](docs/lex-spec-v4.md)**
+**[Spec (D1-D64)](docs/lex-spec-v4.md)**
 
 ## Try it in 30 seconds
 
