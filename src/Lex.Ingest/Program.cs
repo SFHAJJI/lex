@@ -23,6 +23,21 @@ var now = Get("--now") is { } n ? DateTimeOffset.Parse(n) : DateTimeOffset.UtcNo
 
 switch (args0[0])
 {
+    case "scope-preview":
+    {
+        var scopePath = Get("--scope");
+        var previous = Get("--previous-scope");
+        var wave = int.TryParse(Get("--wave"), out var parsedWave) ? parsedWave : (int?)null;
+        var adapter = new Lex.Sources.EurLex.EurLexAdapter(scopePath, wave);
+        var preview = await adapter.PreviewScopeAsync(previous, now, CancellationToken.None);
+        Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(preview,
+            new System.Text.Json.JsonSerializerOptions
+            {
+                PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.SnakeCaseLower,
+                WriteIndented = true,
+            }));
+        return 0;
+    }
     case "ingest":
     {
         var publisher = Get("--publisher") ?? "lu-legilux";
@@ -30,7 +45,8 @@ switch (args0[0])
         ISourceAdapter adapter = publisher switch
         {
             "lu-legilux" => new LegiluxAdapter(),
-            "eu-eurlex" => new Lex.Sources.EurLex.EurLexAdapter(),
+            "eu-eurlex" => new Lex.Sources.EurLex.EurLexAdapter(Get("--scope"),
+                int.TryParse(Get("--wave"), out var wave) ? wave : null),
             _ => throw new ArgumentException($"Unknown publisher '{publisher}'"),
         };
         Console.Error.WriteLine($"[lex] ingest {publisher} -> {corpus}");
@@ -258,7 +274,8 @@ static void CopyDir(string src, string dst)
 
 static void Usage() => Console.Error.WriteLine("""
     lex — point-in-time regulatory text pipeline
-      lex ingest --publisher lu-legilux --corpus PATH [--now ISO]
+      lex scope-preview [--scope FILE] [--previous-scope FILE] [--wave 1..4]
+      lex ingest --publisher lu-legilux|eu-eurlex --corpus PATH [--scope FILE] [--wave 1..4] [--now ISO]
       lex index  --corpus PATH [--articles PATH] --out FILE.db [--keyfile KEY.pem] [--now ISO]
       lex derive --publisher lu-legilux --corpus PATH --out PATH [--code-version SHA]
       lex artifact manifest --root DIR --file RELATIVE [--file RELATIVE] --manifest FILE --signature FILE --keyfile KEY.pem --key-id ID --code-commit SHA [--source KEY=VALUE]

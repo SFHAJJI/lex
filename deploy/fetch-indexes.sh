@@ -47,6 +47,14 @@ echo "$SETS" | while IFS=: read -r repo asset; do
        "https://github.com/SFHAJJI/$repo/releases/latest/download/$manifest"; then
     curl -fsSL --retry 3 --retry-delay 5 -o "$OUT/$signature" \
       "https://github.com/SFHAJJI/$repo/releases/latest/download/$signature"
+    jq -r '.files[].path' "$OUT/$manifest" | while IFS= read -r companion; do
+      [ "$companion" = "$asset" ] && continue
+      case "$companion" in
+        ""|*/*|*\\*|*..*) echo "ERROR: unsafe release artifact path: $companion" >&2; exit 1 ;;
+      esac
+      curl -fsSL --retry 3 --retry-delay 5 -o "$OUT/$companion" \
+        "https://github.com/SFHAJJI/$repo/releases/latest/download/$companion"
+    done
     echo "  fetched signed manifest: $manifest"
   elif [ "$REQUIRE_MANIFEST" = "1" ]; then
     echo "ERROR: $repo has no signed artifact manifest" >&2
