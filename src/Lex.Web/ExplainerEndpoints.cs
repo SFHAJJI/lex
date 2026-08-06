@@ -334,6 +334,9 @@ public static class ExplainerEndpoints
                 ["what"] = "attestation of every verified release manifest and embedded index stamp this deployment serves",
                 ["artifact_trust"] = "whole-artifact manifests are verified against public-key fingerprints pinned in the application release",
                 ["artifact_signature_format"] = "ECDSA-P256-SHA256, IEEE P1363 (r||s, 64 bytes), base64",
+                ["artifact_signature_binds"] = "the canonical lex-artifacts/1 manifest bytes; its file entries bind every artifact path, size and sha256",
+                ["embedded_stamp_signature_binds"] = "the canonical stamp text: every stamp field except signature/public_key, sorted by key, joined as k=v lines",
+                // Compatibility keys retained for clients that consumed the original stamp-only attestation.
                 ["signature_binds"] = "the canonical stamp text: every stamp field except signature/public_key, sorted by key, joined as k=v lines",
                 ["signature_format"] = "ECDSA-P256-SHA256, IEEE P1363 (r||s, 64 bytes), base64",
                 ["verify"] = "see /verify",
