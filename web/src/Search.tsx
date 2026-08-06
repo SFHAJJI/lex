@@ -33,8 +33,14 @@ export interface SearchProps {
   onMonitor: () => void;
 }
 
-type WorkHit = { work: string; title: string; validFrom?: string };
-type ArticleHit = { work: string; title: string; anchor: string; num?: string; snippet?: string; validFrom: string };
+type HitMeta = {
+  validFrom?: string; validTo?: string; hierarchy?: string; language?: string;
+  domains?: string[]; consolidationStatus?: string; matchReasons?: string[];
+};
+type WorkHit = HitMeta & { work: string; title: string };
+type ArticleHit = HitMeta & {
+  work: string; title: string; anchor: string; num?: string; snippet?: string; validFrom: string;
+};
 
 /**
  * The suggested starting points, emitted by the server from the index that will serve them.
@@ -78,6 +84,8 @@ export default function Search(p: SearchProps) {
 
   const q = p.state.q ?? "";
   const asOf = p.state.asOf;
+  const activeFilters = [retrieval === "hybrid", jurisdiction, hierarchy, domain, layer]
+    .filter(Boolean).length;
 
   useEffect(() => {
     if (!q.trim()) { setWorks([]); setArticles([]); return; }
@@ -104,10 +112,16 @@ export default function Search(p: SearchProps) {
           const work = String(h.lex_id ?? "").split(":").slice(0, 2).join(":");
           if (!work) continue;
           const title = shorten(h.title) ?? work;
-          if (!byWork.has(work)) byWork.set(work, { work, title, validFrom: h.valid_from });
+          const meta: HitMeta = {
+            validFrom: h.valid_from, validTo: h.valid_to, hierarchy: h.hierarchy,
+            language: h.language, domains: Array.isArray(h.domains) ? h.domains : [],
+            consolidationStatus: h.consolidation_status,
+            matchReasons: Array.isArray(h.match_reasons) ? h.match_reasons : [],
+          };
+          if (!byWork.has(work)) byWork.set(work, { work, title, ...meta });
           if (h.anchor)
             arts.push({ work, title, anchor: h.anchor, num: h.provision_num,
-                        snippet: h.snippet, validFrom: h.valid_from });
+                        snippet: h.snippet, ...meta, validFrom: String(h.valid_from) });
         }
         setWorks([...byWork.values()].slice(0, 8));
         setArticles(arts.slice(0, 25));
@@ -167,39 +181,55 @@ export default function Search(p: SearchProps) {
         <div className="results">
           <div className="res-head">
             <span className="sub">{busy ? "Searching…" : `${works.length} law${works.length === 1 ? "" : "s"}, ${articles.length} article${articles.length === 1 ? "" : "s"}`}</span>
-            <span className="badge">{modeUsed}</span>
+            <span className="badge">{modeUsed === "hybrid" ? "keyword + meaning" : "keyword search"}</span>
             <span className="grow" />
-            <select className="reslayer" aria-label="Retrieval mode" value={retrieval}
-                    onChange={(e) => setRetrieval(e.target.value as "keyword" | "hybrid")}>
-              <option value="keyword">keyword</option>
-              <option value="hybrid">hybrid preview</option>
-            </select>
-            <select className="reslayer" aria-label="Jurisdiction" value={jurisdiction}
-                    onChange={(e) => setJurisdiction(e.target.value as "" | "lu" | "eu")}>
-              <option value="">LU and EU</option><option value="lu">Luxembourg</option><option value="eu">European Union</option>
-            </select>
-            <select className="reslayer" aria-label="Legal hierarchy" value={hierarchy}
-                    onChange={(e) => setHierarchy(e.target.value as typeof hierarchy)}>
-              <option value="">every hierarchy</option><option value="primary_eu_law">EU primary law</option>
-              <option value="secondary_eu_law">EU secondary law</option>
-            </select>
-            <select className="reslayer" aria-label="EU legal domain" value={domain}
-                    onChange={(e) => setDomain(e.target.value)}>
-              <option value="">every domain</option><option value="financial-services">financial services</option>
-              <option value="aml-corporate">AML and corporate</option><option value="competition">competition</option>
-              <option value="tax">tax</option><option value="employment">employment</option>
-              <option value="consumer-environment">consumer and environment</option>
-              <option value="procurement-and-ip">procurement and IP</option>
-              <option value="judicial-cooperation">judicial cooperation</option>
-            </select>
-            <select className="reslayer" aria-label="Narrow to a layer of the law"
-                    value={layer} onChange={(e) => setLayer(e.target.value as LayerId | "")}>
-              <option value="">every kind of law</option>
-              {LAYERS.map((l) => <option key={l.id} value={l.id}>{l.label}</option>)}
-            </select>
           </div>
 
-          {expansions.length > 0 ? <p className="sub">Fuzzy fallback: {expansions.join(", ")}</p> : null}
+          <details className="search-filters">
+            <summary>Narrow results{activeFilters ? ` (${activeFilters} active)` : ""}</summary>
+            <div className="filter-grid">
+              <label><span>Search method</span>
+                <select className="reslayer" value={retrieval}
+                        onChange={(e) => setRetrieval(e.target.value as "keyword" | "hybrid")}>
+                  <option value="keyword">Exact keywords</option>
+                  <option value="hybrid">Keywords + meaning (preview)</option>
+                </select>
+              </label>
+              <label><span>Jurisdiction</span>
+                <select className="reslayer" value={jurisdiction}
+                        onChange={(e) => setJurisdiction(e.target.value as "" | "lu" | "eu")}>
+                  <option value="">Luxembourg and EU</option><option value="lu">Luxembourg</option>
+                  <option value="eu">European Union</option>
+                </select>
+              </label>
+              <label><span>Hierarchy</span>
+                <select className="reslayer" value={hierarchy}
+                        onChange={(e) => setHierarchy(e.target.value as typeof hierarchy)}>
+                  <option value="">Every hierarchy</option><option value="primary_eu_law">EU primary law</option>
+                  <option value="secondary_eu_law">EU secondary law</option>
+                </select>
+              </label>
+              <label><span>Practice area</span>
+                <select className="reslayer" value={domain} onChange={(e) => setDomain(e.target.value)}>
+                  <option value="">Every practice area</option><option value="financial-services">Financial services</option>
+                  <option value="aml-corporate">AML and corporate</option><option value="competition">Competition</option>
+                  <option value="tax">Tax</option><option value="employment">Employment</option>
+                  <option value="consumer-environment">Consumer and environment</option>
+                  <option value="procurement-and-ip">Procurement and IP</option>
+                  <option value="judicial-cooperation">Judicial cooperation</option>
+                </select>
+              </label>
+              <label><span>Kind of law</span>
+                <select className="reslayer" value={layer}
+                        onChange={(e) => setLayer(e.target.value as LayerId | "")}>
+                  <option value="">Every kind of law</option>
+                  {LAYERS.map((l) => <option key={l.id} value={l.id}>{l.label}</option>)}
+                </select>
+              </label>
+            </div>
+          </details>
+
+          {expansions.length > 0 ? <p className="sub expansion">Spelling fallback tried: {expansions.join(", ")}</p> : null}
 
           {busy && works.length === 0 && articles.length === 0 ? <ResultsSkeleton /> : null}
 
@@ -211,7 +241,12 @@ export default function Search(p: SearchProps) {
                   <li key={w.work}>
                     <button className="rowbtn" onClick={() => p.onOpen(w.work, asOf)}>
                       <span>{w.title}</span>
-                      <span className="sub mono">{w.work.split(":")[1]}</span>
+                      <span className="hitmeta">
+                        <span className="mono">{w.work.split(":")[1]}</span>
+                        <Validity hit={w} />
+                        {w.consolidationStatus === "not_published"
+                          ? <span className="warntext">official merged wording not published</span> : null}
+                      </span>
                     </button>
                   </li>
                 ))}
@@ -228,6 +263,7 @@ export default function Search(p: SearchProps) {
                     <button className="rowbtn" onClick={() => p.onOpen(a.work, a.validFrom, a.anchor)}>
                       <span>{a.num ?? a.anchor} <span className="sub">· {a.title}</span></span>
                       {a.snippet ? <span className="sub"><Marked text={a.snippet} /></span> : null}
+                      <span className="hitmeta"><Validity hit={a} />{a.language ? <span>{a.language.toUpperCase()}</span> : null}</span>
                     </button>
                   </li>
                 ))}
@@ -249,6 +285,11 @@ export default function Search(p: SearchProps) {
       ) : null}
     </section>
   );
+}
+
+function Validity({ hit }: { hit: HitMeta }) {
+  if (!hit.validFrom) return null;
+  return <span>valid {hit.validFrom} → {hit.validTo ?? "ongoing"}</span>;
 }
 
 /** The index marks matched words with guillemets; they render as marks, not as punctuation. */
