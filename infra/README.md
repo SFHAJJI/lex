@@ -24,3 +24,7 @@ Then provide subscription, tenant and globally unique vault name through an unco
 file or `TF_VAR_*`. Run `terraform plan -out lex.tfplan` and review every role scope before apply.
 The existing Container App remains outside Terraform until its secret-backed configuration can be
 imported with a proven no-op plan.
+
+The GitHub OIDC subjects include the immutable owner and repository IDs emitted by this account's
+custom subject template. This intentionally makes a repository transfer or replacement fail
+closed until Terraform is reviewed with the new assertion claim.
