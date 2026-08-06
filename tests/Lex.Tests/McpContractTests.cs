@@ -103,6 +103,32 @@ public class McpContractTests : IDisposable
     }
 
     [Fact]
+    public void Search_reports_the_mode_actually_used_and_visible_fuzzy_expansions()
+    {
+        var noVectors = Call("search", new JsonObject
+        {
+            ["query"] = "thing", ["retrieval_mode"] = "hybrid",
+        });
+        Assert.Equal("keyword", noVectors["retrieval_mode"]!.GetValue<string>());
+
+        var typo = Call("search", new JsonObject { ["query"] = "everywher", ["fuzzy"] = "auto" });
+        var expansions = Assert.IsType<JsonArray>(typo["query_expansions"]);
+        Assert.Contains("everywher -> everywhere", expansions.Select(x => x!.GetValue<string>()));
+    }
+
+    [Fact]
+    public void Search_as_of_returns_only_the_applicable_version()
+    {
+        var result = Call("search", new JsonObject
+        {
+            ["query"] = "thing", ["time_scope"] = "as_of", ["as_of"] = "2020-06-01",
+        });
+        var hits = Assert.IsType<JsonArray>(result["hits"]);
+        Assert.NotEmpty(hits);
+        Assert.All(hits.OfType<JsonObject>(), h => Assert.Equal("2020-01-01", h["valid_from"]!.GetValue<string>()));
+    }
+
+    [Fact]
     public void Selecting_an_absent_anchor_is_distinguished_from_an_unknown_work()
     {
         var o = Call("as_of", new JsonObject

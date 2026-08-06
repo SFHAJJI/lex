@@ -56,6 +56,7 @@ WORKDIR /app
 COPY --from=build /app .
 COPY --from=verified-indexes /indexes ./indexes
 ENV LEX_INDEX_DIR=/app/indexes
+ENV LEX_EMBEDDING_MODEL_DIR=/app/indexes
 ENV ASPNETCORE_URLS=http://+:8080
 EXPOSE 8080
 ENTRYPOINT ["dotnet", "Lex.Web.dll"]

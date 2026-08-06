@@ -6,6 +6,54 @@ public class IndexTests : IDisposable
 {
     private readonly string _db = Path.Combine(Path.GetTempPath(), $"lex-test-{Guid.NewGuid():N}.db");
 
+    private sealed class FakeEncoder : ITextEncoder
+    {
+        public string ModelId => "test/e5";
+        public string ModelRevision => "test-revision";
+        public int Dimensions => 8;
+        public int CountTokens(string text) => text.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length + 2;
+        public int PrefixLengthForTokens(string text, int maxTokens)
+        {
+            var words = 0;
+            for (var i = 0; i < text.Length; i++)
+                if ((i == 0 || char.IsWhiteSpace(text[i - 1])) && !char.IsWhiteSpace(text[i])
+                    && ++words >= Math.Max(1, maxTokens - 2))
+                {
+                    var end = text.IndexOf(' ', i);
+                    return end < 0 ? text.Length : end;
+                }
+            return text.Length;
+        }
+        public int SuffixStartForTokens(string text, int maxTokens)
+        {
+            var wanted = Math.Max(1, maxTokens - 2);
+            var words = 0;
+            for (var i = text.Length - 1; i >= 0; i--)
+                if (!char.IsWhiteSpace(text[i]) && (i == 0 || char.IsWhiteSpace(text[i - 1])) && ++words >= wanted)
+                    return i;
+            return 0;
+        }
+        public float[] Encode(string text, EmbeddingInputKind kind)
+        {
+            var vector = new float[Dimensions];
+            foreach (var token in text.ToLowerInvariant().Split([' ', ',', '.', ':'], StringSplitOptions.RemoveEmptyEntries))
+            {
+                var slot = token switch
+                {
+                    "dismissal" or "employment" or "termination" or "notice" => 0,
+                    "bank" or "capital" or "reserves" or "financial" => 1,
+                    "privacy" or "personal" or "data" => 2,
+                    _ => 3 + Math.Abs(StringComparer.Ordinal.GetHashCode(token) % 5),
+                };
+                vector[slot] += 1;
+            }
+            var norm = MathF.Sqrt(vector.Sum(x => x * x));
+            for (var i = 0; i < vector.Length; i++) vector[i] /= norm;
+            return vector;
+        }
+        public void Dispose() { }
+    }
+
     private static DocRow Row(string key, string group, string from, string? to, string kind = "REG", string? title = null, bool text = false) =>
         new(key, "t-pub", group, $"urn:{group}", kind, "en", from, to, "publisher",
             "2026-08-01T00:00:00Z", Withdrawn: false, TextAvailable: text, TextPublic: text,
@@ -134,6 +182,8 @@ public class IndexTests : IDisposable
         Assert.All(all, h => Assert.False(string.IsNullOrEmpty(h.Prov.Anchor)));
         var dirHits = r.Search("thing", new FilterSet(null, null, "DIR", null), 10);
         Assert.All(dirHits, h => Assert.Equal("DIR", h.Doc.Kind));
+        Assert.Contains(r.Search("thing", new FilterSet(null, null, "REG,DIR", null), 10), h => h.Doc.Kind == "REG");
+        Assert.All(r.Search("thing", new FilterSet(null, null, "!REG", null), 10), h => Assert.NotEqual("REG", h.Doc.Kind));
     }
 
     [Fact]
@@ -241,6 +291,64 @@ public class IndexTests : IDisposable
         var doc = reader.AsOf("w1", new DateOnly(2024, 1, 1), FilterSet.All)!;
         Assert.Equal("legacy authoritative text", Assert.Single(reader.Provisions(LexIndexReader.RidOf(doc))).TextMd);
         Assert.Null(doc.Hierarchy);
+    }
+
+    [Fact]
+    public void Hybrid_search_finds_a_concept_without_azure_or_a_generative_model()
+    {
+        var employment = Row("t-pub:employment:2020-01-01", "employment", "2020-01-01", null, text: true);
+        var banking = Row("t-pub:banking:2020-01-01", "banking", "2020-01-01", null, text: true);
+        var vectors = Path.ChangeExtension(_db, ".vectors");
+        _extra.Add(vectors);
+        using var encoder = new FakeEncoder();
+        IndexBuilder.Build(_db, new Dictionary<string, string> { ["collection"] = "t-pub" },
+            [employment, banking],
+            [Prov(employment, 0, "art_1", "dismissal notice periods apply"),
+             Prov(banking, 0, "art_1", "bank capital reserves are required")],
+            [], [], null, semantic: new SemanticBuildOptions(encoder, vectors, "model-sha", "tokenizer-sha"));
+
+        using var reader = LexIndexReader.Open(_db, encoder, vectors);
+        Assert.Empty(reader.Search("employment termination", FilterSet.All, 10));
+        var result = reader.SearchHybrid("employment termination", FilterSet.All, 10);
+        Assert.Equal("hybrid", result.RetrievalMode);
+        Assert.Equal("employment", result.Hits[0].Doc.GroupKey);
+        Assert.Contains("semantic", result.Hits[0].MatchReasons);
+    }
+
+    [Fact]
+    public void Fuzzy_fallback_is_visible_and_protects_identifiers()
+    {
+        var doc = Row("t-pub:privacy:2020-01-01", "privacy", "2020-01-01", null, text: true);
+        IndexBuilder.Build(_db, new Dictionary<string, string> { ["collection"] = "t-pub" },
+            [doc], [Prov(doc, 0, "art_1", "protection of personal information")], [], [], null);
+        using var reader = LexIndexReader.Open(_db);
+
+        var typo = reader.SearchKeyword("protecton", FilterSet.All, 10, fuzzyAuto: true);
+        Assert.Equal("protecton -> protection", Assert.Single(typo.QueryExpansions));
+        Assert.Equal("privacy", Assert.Single(typo.Hits).Doc.GroupKey);
+        Assert.Contains("fuzzy", typo.Hits[0].MatchReasons);
+
+        var identifier = reader.SearchKeyword("32022R2555", FilterSet.All, 10, fuzzyAuto: true);
+        Assert.Empty(identifier.QueryExpansions);
+        var quotation = reader.SearchKeyword("\"protecton information\"", FilterSet.All, 10, fuzzyAuto: true);
+        Assert.Empty(quotation.QueryExpansions);
+        var disabled = reader.SearchHybrid("protecton", FilterSet.All, 10, fuzzyAuto: false);
+        Assert.Empty(disabled.QueryExpansions);
+    }
+
+    [Fact]
+    public void Semantic_chunks_are_deterministic_and_bounded()
+    {
+        using var encoder = new FakeEncoder();
+        var paragraph = string.Join(' ', Enumerable.Repeat("employment notice rule", 100));
+        var text = paragraph + "\n\n" + paragraph + "\n\nshort final paragraph";
+        var first = SemanticChunker.Split(text, encoder);
+        var second = SemanticChunker.Split(text, encoder);
+
+        Assert.True(first.Count > 1);
+        Assert.Equal(first.Select(c => c.Sha256), second.Select(c => c.Sha256));
+        Assert.All(first, c => Assert.True(
+            encoder.CountTokens("passage: " + c.Text) <= SemanticChunker.MaxTokens));
     }
 
     [Fact]

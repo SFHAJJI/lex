@@ -24,6 +24,9 @@ public sealed class LexOptions
     [Required]
     public string IndexDir { get; init; } = "indexes";
 
+    /// <summary>Verified local ONNX model directory. Absent keeps retrieval keyword-only.</summary>
+    public string? EmbeddingModelDir { get; init; }
+
     /// <summary>
     /// Absolute base for permalinks and social-preview metadata. Defaults to the canonical host
     /// so a pasted link previews correctly even when nothing is configured.
@@ -89,6 +92,7 @@ public static class LexOptionsSetup
     {
         IndexDir = Environment.GetEnvironmentVariable("LEX_INDEX_DIR")
                    ?? Path.Combine(env.ContentRootPath, "indexes"),
+        EmbeddingModelDir = Environment.GetEnvironmentVariable("LEX_EMBEDDING_MODEL_DIR"),
         PublicBaseUrl = Environment.GetEnvironmentVariable("LEX_PUBLIC_BASE_URL")
                         ?? "https://law.soufien.lu",
         AzureOpenAiEndpoint = Environment.GetEnvironmentVariable("AOAI_ENDPOINT"),

@@ -56,6 +56,18 @@ public sealed record ProvisionRow(
     // few of them and they are always read whole, never queried field by field.
     string? CitationsJson = null);
 
+public sealed record RetrievalHit(
+    DocRow Doc,
+    ProvisionRow Provision,
+    string Snippet,
+    double Score,
+    IReadOnlyList<string> MatchReasons);
+
+public sealed record SearchExecution(
+    string RetrievalMode,
+    IReadOnlyList<RetrievalHit> Hits,
+    IReadOnlyList<string> QueryExpansions);
+
 /// <summary>One distinct text state of one provision across versions (the per-anchor time axis).</summary>
 public sealed record ProvisionStateRow(
     string GroupKey, string Anchor, string ValidFrom, string? ValidTo,

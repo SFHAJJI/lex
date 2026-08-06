@@ -90,6 +90,15 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
     }
 
     [Fact]
+    public async Task Public_retrieval_judgments_are_downloadable_and_complete()
+    {
+        var json = await _site.Client.GetStringAsync("/benchmarks/cases.json");
+        var cases = System.Text.Json.Nodes.JsonNode.Parse(json)!.AsArray();
+        Assert.Equal(200, cases.Count);
+        Assert.All(cases, c => Assert.Equal("engineer-reviewed", c!["review_status"]!.GetValue<string>()));
+    }
+
+    [Fact]
     public void Architecture_registry_is_decision_complete_and_uses_known_statuses()
     {
         var registry = Lex.Web.ArchitectureProgram.Registry;

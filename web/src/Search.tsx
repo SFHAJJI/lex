@@ -65,6 +65,12 @@ export default function Search(p: SearchProps) {
   const [articles, setArticles] = useState<ArticleHit[]>([]);
   const [busy, setBusy] = useState(false);
   const [layer, setLayer] = useState<LayerId | "">("");
+  const [retrieval, setRetrieval] = useState<"keyword" | "hybrid">("keyword");
+  const [jurisdiction, setJurisdiction] = useState<"" | "lu" | "eu">("");
+  const [hierarchy, setHierarchy] = useState<"" | "primary_eu_law" | "secondary_eu_law">("");
+  const [domain, setDomain] = useState("");
+  const [modeUsed, setModeUsed] = useState("keyword");
+  const [expansions, setExpansions] = useState<string[]>([]);
   const box = useRef<HTMLInputElement>(null);
 
   useEffect(() => setText(p.state.q ?? ""), [p.state.q]);
@@ -78,11 +84,17 @@ export default function Search(p: SearchProps) {
     let live = true;
     setBusy(true);
     const types = LAYERS.find((l) => l.id === layer)?.types;
-    tool<any>("search", { query: q.trim(), limit: 40, as_of: asOf ?? p.today,
+    tool<any>("search", { query: q.trim(), limit: 40, time_scope: "as_of", as_of: asOf ?? p.today,
+                          retrieval_mode: retrieval, fuzzy: "auto",
+                          ...(jurisdiction ? { jurisdiction } : {}),
+                          ...(hierarchy ? { hierarchy } : {}), ...(domain ? { domain } : {}),
                           ...(types ? { document_type: types } : {}) })
       .then((res) => {
         if (!live) return;
-        const hits = (Array.isArray(res) ? res : [res]).flatMap((e: any) => e?.hits ?? []);
+        const envelopes = Array.isArray(res) ? res : [res];
+        const hits = envelopes.flatMap((e: any) => e?.hits ?? []);
+        setModeUsed(envelopes.some((e: any) => e?.retrieval_mode === "hybrid") ? "hybrid" : "keyword");
+        setExpansions([...new Set(envelopes.flatMap((e: any) => e?.query_expansions ?? []))] as string[]);
         // The same hits answer two different questions, so they are split rather than ranked
         // together: "which law is this" and "where is this said". A reader almost always wants
         // the first when they typed a name, and the second when they typed words.
@@ -103,7 +115,7 @@ export default function Search(p: SearchProps) {
       .catch(() => { if (live) { setWorks([]); setArticles([]); } })
       .finally(() => { if (live) setBusy(false); });
     return () => { live = false; };
-  }, [q, asOf, layer]);
+  }, [q, asOf, layer, retrieval, jurisdiction, hierarchy, domain]);
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -155,13 +167,39 @@ export default function Search(p: SearchProps) {
         <div className="results">
           <div className="res-head">
             <span className="sub">{busy ? "Searching…" : `${works.length} law${works.length === 1 ? "" : "s"}, ${articles.length} article${articles.length === 1 ? "" : "s"}`}</span>
+            <span className="badge">{modeUsed}</span>
             <span className="grow" />
+            <select className="reslayer" aria-label="Retrieval mode" value={retrieval}
+                    onChange={(e) => setRetrieval(e.target.value as "keyword" | "hybrid")}>
+              <option value="keyword">keyword</option>
+              <option value="hybrid">hybrid preview</option>
+            </select>
+            <select className="reslayer" aria-label="Jurisdiction" value={jurisdiction}
+                    onChange={(e) => setJurisdiction(e.target.value as "" | "lu" | "eu")}>
+              <option value="">LU and EU</option><option value="lu">Luxembourg</option><option value="eu">European Union</option>
+            </select>
+            <select className="reslayer" aria-label="Legal hierarchy" value={hierarchy}
+                    onChange={(e) => setHierarchy(e.target.value as typeof hierarchy)}>
+              <option value="">every hierarchy</option><option value="primary_eu_law">EU primary law</option>
+              <option value="secondary_eu_law">EU secondary law</option>
+            </select>
+            <select className="reslayer" aria-label="EU legal domain" value={domain}
+                    onChange={(e) => setDomain(e.target.value)}>
+              <option value="">every domain</option><option value="financial-services">financial services</option>
+              <option value="aml-corporate">AML and corporate</option><option value="competition">competition</option>
+              <option value="tax">tax</option><option value="employment">employment</option>
+              <option value="consumer-environment">consumer and environment</option>
+              <option value="procurement-and-ip">procurement and IP</option>
+              <option value="judicial-cooperation">judicial cooperation</option>
+            </select>
             <select className="reslayer" aria-label="Narrow to a layer of the law"
                     value={layer} onChange={(e) => setLayer(e.target.value as LayerId | "")}>
               <option value="">every kind of law</option>
               {LAYERS.map((l) => <option key={l.id} value={l.id}>{l.label}</option>)}
             </select>
           </div>
+
+          {expansions.length > 0 ? <p className="sub">Fuzzy fallback: {expansions.join(", ")}</p> : null}
 
           {busy && works.length === 0 && articles.length === 0 ? <ResultsSkeleton /> : null}
 

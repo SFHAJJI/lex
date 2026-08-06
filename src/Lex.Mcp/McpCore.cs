@@ -132,8 +132,25 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                 new JsonObject { ["date"] = S("ISO date"), ["publisher"] = S("optional publisher id, e.g. lu-legilux"), ["document_type"] = S("optional type code, e.g. CODE"), ["limit"] = I("default 50"), ["offset"] = I("pagination offset") }, ["date"]),
             Tool("diff", "What changed between two dates for one work: which versions applied, and where both texts are held, retrieve them via as_of to compare.",
                 new JsonObject { ["work"] = S(workDesc), ["from_date"] = S("ISO date"), ["to_date"] = S("ISO date"), ["language"] = S("language code") }, ["work", "from_date", "to_date"]),
-            Tool("search", "Filtered-then-ranked full-text search (FTS; filters always run before ranking). Returns hits WITHOUT body text: lex_id, dates, snippet, hash. Full state via as_of.",
-                new JsonObject { ["query"] = S("search terms"), ["publisher"] = S("optional publisher id"), ["document_type"] = S("optional type code"), ["as_of"] = S("optional ISO date: only versions valid on this date"), ["works"] = S("optional comma-separated work ids: restrict the search to these works, for callers that know their subject"), ["limit"] = I("default 10") }, ["query"]),
+            Tool("search", "Filtered legal search. keyword is deterministic FTS5/BM25; hybrid adds the pinned local encoder and fixed RRF when verified vectors are mounted. No generative model participates. Returns hits WITHOUT body text; full state via as_of.",
+                new JsonObject
+                {
+                    ["query"] = S("search terms"), ["publisher"] = S("optional publisher id"),
+                    ["jurisdiction"] = S("optional lu or eu"),
+                    ["document_type"] = S("backward-compatible document type filter"),
+                    ["source_class"] = S("optional source document class"),
+                    ["hierarchy"] = S("optional normalized legal hierarchy"),
+                    ["act_form"] = S("optional legal act form"),
+                    ["binding_status"] = S("optional binding status"),
+                    ["domain"] = S("optional reviewed EU domain id"),
+                    ["language"] = S("optional language code"),
+                    ["retrieval_mode"] = S("keyword or hybrid; default keyword until activation"),
+                    ["time_scope"] = S("all_versions or as_of"),
+                    ["as_of"] = S("ISO date required when time_scope=as_of"),
+                    ["fuzzy"] = S("auto or off; visible fallback only"),
+                    ["works"] = S("optional comma-separated work ids: restrict search to these works"),
+                    ["limit"] = I("default 10"),
+                }, ["query"]),
             Tool("article_history", "Every distinct text ONE provision (article/annex) has had, as validity intervals — plus its lifecycle events (inserted/removed/renumbered, renumbering detected mechanically by identical text hash). The answer to \"what did Article X say over its life / when did it change\".",
                 new JsonObject { ["work"] = S(workDesc), ["anchor"] = S("provision anchor, e.g. art_1er (find it via search or as_of mode=outline)") }, ["work", "anchor"]),
             Tool("provenance", "Proof chain for one lex_id: source URI, retrieval time, record/body hashes, event chain, corpus commit, index build, stamp signature.",
@@ -210,6 +227,12 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
             ["observed_from"] = d.ObservedFrom,
             ["text"] = withText && d.TextPublic ? d.Body : null,
         };
+        if (d.Hierarchy is not null) o["hierarchy"] = d.Hierarchy;
+        if (d.Domains is not null) o["domains"] = new JsonArray(d.Domains.Trim('|').Split('|',
+            StringSplitOptions.RemoveEmptyEntries).Select(x => (JsonNode)x).ToArray());
+        if (d.ActForm is not null) o["act_form"] = d.ActForm;
+        if (d.BindingStatus is not null) o["binding_status"] = d.BindingStatus;
+        if (d.ConsolidationStatus is not null) o["consolidation_status"] = d.ConsolidationStatus;
         if (_publicBase is not null && d.ValidFrom is not null)
             o["permalink"] = $"{_publicBase}/{d.Collection}/{d.GroupKey}/{d.ValidFrom}";
         return o;
@@ -552,9 +575,22 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
             case "search":
             {
                 var q = Str("query") ?? throw new ArgumentException("query required");
-                DateOnly? asOf = Str("as_of") is { } s ? DateOnly.Parse(s) : null;
-                var pub = Str("publisher");
+                var timeScope = Str("time_scope") ?? (Str("as_of") is null ? "all_versions" : "as_of");
+                if (timeScope is not ("all_versions" or "as_of")) throw new ArgumentException("time_scope must be all_versions or as_of");
+                DateOnly? asOf = timeScope == "as_of"
+                    ? DateOnly.Parse(Str("as_of") ?? throw new ArgumentException("as_of required when time_scope=as_of")) : null;
+                var pub = Str("publisher") ?? Str("jurisdiction") switch
+                {
+                    "lu" => "lu-legilux",
+                    "eu" => "eu-eurlex",
+                    null => null,
+                    _ => throw new ArgumentException("jurisdiction must be lu or eu"),
+                };
                 var limit = Int("limit", 10);
+                var requestedMode = Str("retrieval_mode") ?? "keyword";
+                if (requestedMode is not ("keyword" or "hybrid")) throw new ArgumentException("retrieval_mode must be keyword or hybrid");
+                var fuzzy = Str("fuzzy") ?? "auto";
+                if (fuzzy is not ("auto" or "off")) throw new ArgumentException("fuzzy must be auto or off");
                 // Optional subject scope. Ranking a national corpus by relevance alone is precise
                 // only when the question uses rare words: search all of Luxembourg law for "prix"
                 // and seed certification outranks the electricity act. A caller that knows which
@@ -564,22 +600,30 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                 var outp = new JsonArray();
                 foreach (var r in readers.Values.Where(x => pub is null || x.Collection == pub))
                 {
+                    var filter = new FilterSet(asOf, null, Str("source_class") ?? Str("document_type"),
+                        Str("language"), works, Str("hierarchy"), Str("act_form"),
+                        Str("binding_status"), Str("domain"));
                     // provision-level hits: the retrieval unit is the article; at most two
                     // provisions per work so one huge code cannot monopolize the result set
-                    var hits = r.Search(q, new FilterSet(asOf, null, Str("document_type"), Str("language"), works), limit * 6)
-                        .GroupBy(h => (h.Doc.GroupKey, h.Prov.Anchor)).Select(g => g.First())
+                    var execution = requestedMode == "hybrid"
+                        ? r.SearchHybrid(q, filter, limit * 6, fuzzy == "auto")
+                        : r.SearchKeyword(q, filter, limit * 6, fuzzy == "auto");
+                    var hits = execution.Hits
+                        .GroupBy(h => (h.Doc.GroupKey, h.Provision.Anchor)).Select(g => g.First())
                         .GroupBy(h => h.Doc.GroupKey).SelectMany(g => g.Take(2))
                         .Take(limit).ToList();
                     var hitsArr = new JsonArray(hits.Select(h =>
                     {
                         var d = DocJson(h.Doc, false);
-                        d["anchor"] = h.Prov.Anchor;
-                        d["provision_id"] = h.Prov.ProvisionId;
-                        d["provision_num"] = h.Prov.Num;
-                        d["provision_heading"] = h.Prov.Heading;
+                        d["anchor"] = h.Provision.Anchor.Length == 0 ? null : h.Provision.Anchor;
+                        d["provision_id"] = h.Provision.ProvisionId;
+                        d["provision_num"] = h.Provision.Num;
+                        d["provision_heading"] = h.Provision.Heading;
                         d["snippet"] = h.Snippet;
+                        d["match_reasons"] = new JsonArray(h.MatchReasons.Select(x => (JsonNode)x).ToArray());
                         if (_publicBase is not null)
-                            d["permalink"] = $"{_publicBase}/{h.Doc.Collection}/{h.Doc.GroupKey}/{h.Doc.ValidFrom}#{h.Prov.Anchor}";
+                            d["permalink"] = $"{_publicBase}/{h.Doc.Collection}/{h.Doc.GroupKey}/{h.Doc.ValidFrom}"
+                                + (h.Provision.Anchor.Length == 0 ? "" : $"#{h.Provision.Anchor}");
                         return (JsonNode)d;
                     }).ToArray());
 
@@ -594,7 +638,7 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                         // the quota — the documented scope silently ignored on exactly the path a
                         // scoped search is most likely to take.
                         foreach (var doc in r.SearchWorksByIdentifierOrTitle(q,
-                                     new FilterSet(asOf, null, Str("document_type"), Str("language"), works), limit * 4)
+                                     filter, limit * 4)
                                  .GroupBy(x => x.GroupKey)
                                  .Select(g => g.OrderByDescending(x => x.ValidFrom, StringComparer.Ordinal).First())
                                  .Where(x => !seen.Contains(x.GroupKey))
@@ -614,6 +658,11 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                     outp.Add(new JsonObject
                     {
                         ["envelope"] = Envelope(r, "ok"),
+                        ["retrieval_mode"] = execution.RetrievalMode,
+                        ["time_scope"] = timeScope,
+                        ["as_of"] = asOf?.ToString("yyyy-MM-dd"),
+                        ["query_expansions"] = new JsonArray(execution.QueryExpansions.Select(x => (JsonNode)x).ToArray()),
+                        ["artifact_manifest_id"] = Environment.GetEnvironmentVariable("LEX_ARTIFACT_MANIFEST_ID"),
                         ["hits"] = hitsArr,
                     });
                 }

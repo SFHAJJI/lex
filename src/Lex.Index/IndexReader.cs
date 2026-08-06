@@ -40,21 +40,26 @@ public sealed class LexIndexReader : IDisposable
 {
     private readonly SqliteConnection _conn;
     private readonly string _schema;
+    private readonly ITextEncoder? _encoder;
+    private readonly SemanticVectorReader? _vectors;
     public IReadOnlyDictionary<string, string> Stamp { get; }
     public string Collection => Stamp.GetValueOrDefault("collection", "?");
     public bool SignatureValid { get; }
 
-    private LexIndexReader(SqliteConnection conn, Dictionary<string, string> stamp, string schema)
+    private LexIndexReader(SqliteConnection conn, Dictionary<string, string> stamp, string schema,
+                           ITextEncoder? encoder, SemanticVectorReader? vectors)
     {
         _conn = conn;
         Stamp = stamp;
         _schema = schema;
+        _encoder = encoder;
+        _vectors = vectors;
         SignatureValid = stamp.ContainsKey("signature") && StampSigner.Verify(stamp);
     }
 
     private bool IsV3 => _schema == IndexBuilder.SchemaVersion;
 
-    public static LexIndexReader Open(string dbPath)
+    public static LexIndexReader Open(string dbPath, ITextEncoder? encoder = null, string? vectorPath = null)
     {
         var conn = new SqliteConnection($"Data Source={dbPath};Mode=ReadOnly");
         conn.Open();
@@ -113,7 +118,23 @@ public sealed class LexIndexReader : IDisposable
                 throw new InvalidOperationException($"Index {dbPath} claims schema '{schema}' but provisions is missing state_id.");
         }
 
-        return new LexIndexReader(conn, stamp, schema!);
+        SemanticVectorReader? vectors = null;
+        if (encoder is not null || vectorPath is not null)
+        {
+            if (encoder is null || vectorPath is null)
+                throw new InvalidOperationException("Both an embedding encoder and vector file are required for hybrid retrieval.");
+            if (stamp.GetValueOrDefault("embedding_model") != encoder.ModelId
+                || stamp.GetValueOrDefault("embedding_revision") != encoder.ModelRevision)
+                throw new InvalidDataException("The index embedding identity does not match the runtime encoder.");
+            vectors = new SemanticVectorReader(vectorPath);
+            if (vectors.Dimensions != encoder.Dimensions)
+                throw new InvalidDataException("The semantic vector dimension does not match the runtime encoder.");
+            using var count = conn.CreateCommand();
+            count.CommandText = "SELECT COUNT(*) FROM semantic_chunks";
+            if (Convert.ToInt64(count.ExecuteScalar()) != vectors.Count)
+                throw new InvalidDataException("The semantic vector count does not match the index mapping.");
+        }
+        return new LexIndexReader(conn, stamp, schema!, encoder, vectors);
     }
 
     private const string DocCols = """
@@ -320,6 +341,194 @@ public sealed class LexIndexReader : IDisposable
             result.Add((ReadDoc(r), prov, MakeSnippet(text, query)));
         }
         return result;
+    }
+
+    public SearchExecution SearchHybrid(string query, FilterSet filters, int limit, bool fuzzyAuto = true)
+    {
+        if (_encoder is null || _vectors is null)
+            return SearchKeyword(query, filters, limit, fuzzyAuto);
+
+        var keyword = SearchKeyword(query, filters, 100, fuzzyAuto);
+        if (keyword.Hits.FirstOrDefault()?.MatchReasons.Contains("exact_identifier") == true)
+            return keyword;
+        var lexical = keyword.Hits;
+        var semantic = SearchSemantic(query, filters, 100);
+        var fused = new Dictionary<string, RetrievalHit>(StringComparer.Ordinal);
+        var scores = new Dictionary<string, double>(StringComparer.Ordinal);
+        static string Key(DocRow d, ProvisionRow p) => $"{d.GroupKey}|{d.Language}|{p.Anchor}|{p.TextSha}";
+        for (var i = 0; i < lexical.Count; i++)
+        {
+            var h = lexical[i];
+            var key = Key(h.Doc, h.Provision);
+            scores[key] = scores.GetValueOrDefault(key) + 1d / (60 + i + 1);
+            fused[key] = h with { Score = 0 };
+        }
+        for (var i = 0; i < semantic.Count; i++)
+        {
+            var h = semantic[i];
+            var key = Key(h.Doc, h.Provision);
+            scores[key] = scores.GetValueOrDefault(key) + 1d / (60 + i + 1);
+            if (fused.TryGetValue(key, out var prior))
+                fused[key] = prior with { MatchReasons = ["keyword", "semantic"] };
+            else fused[key] = h;
+        }
+        var hits = fused.Select(kv => kv.Value with { Score = scores[kv.Key] })
+            .OrderByDescending(h => h.Score).ThenByDescending(h => h.Doc.ValidFrom, StringComparer.Ordinal)
+            .Take(limit).ToList();
+        return new SearchExecution("hybrid", hits, keyword.QueryExpansions);
+    }
+
+    public SearchExecution SearchKeyword(string query, FilterSet filters, int limit, bool fuzzyAuto)
+    {
+        if (IsExactLegalIdentifier(query))
+        {
+            var works = SearchWorksByIdentifierOrTitle(query, filters, limit)
+                .GroupBy(d => d.GroupKey).Select(g => g.OrderByDescending(d => d.ValidFrom, StringComparer.Ordinal).First())
+                .Select((d, rank) => new RetrievalHit(d,
+                    new ProvisionRow(RidOf(d), 0, "", d.Key, "work", null, null, null, null,
+                        d.Title, "", d.BodySha ?? ""),
+                    d.Title ?? d.GroupKey, 1d / (rank + 1), ["exact_identifier"]))
+                .ToList();
+            if (works.Count > 0) return new SearchExecution("keyword", works, []);
+        }
+        var exact = Search(query, filters, limit);
+        if (!fuzzyAuto || exact.Count >= 5 || !IsV3)
+            return new SearchExecution("keyword", exact.Select((h, rank) =>
+                new RetrievalHit(h.Doc, h.Prov, h.Snippet, 1d / (rank + 1), ["keyword"])).ToList(), []);
+
+        var expansions = FuzzyExpansions(query);
+        if (expansions.Count == 0)
+            return new SearchExecution("keyword", exact.Select((h, rank) =>
+                new RetrievalHit(h.Doc, h.Prov, h.Snippet, 1d / (rank + 1), ["keyword"])).ToList(), []);
+
+        var combined = exact.Select((h, rank) => new RetrievalHit(
+            h.Doc, h.Prov, h.Snippet, 2d / (rank + 1), ["keyword"])).ToList();
+        foreach (var expansion in expansions)
+        {
+            var alternative = ReplaceToken(query, expansion.Source, expansion.Target);
+            combined.AddRange(Search(alternative, filters, limit).Select((h, rank) => new RetrievalHit(
+                h.Doc, h.Prov, h.Snippet, 1d / (rank + 1), ["fuzzy"])));
+        }
+        var hits = combined.GroupBy(h => $"{h.Doc.GroupKey}|{h.Doc.Language}|{h.Provision.Anchor}|{h.Provision.TextSha}", StringComparer.Ordinal)
+            .Select(g => g.OrderByDescending(h => h.Score).First())
+            .OrderByDescending(h => h.Score).Take(limit).ToList();
+        return new SearchExecution("keyword", hits,
+            expansions.Select(e => $"{e.Source} -> {e.Target}").ToList());
+    }
+
+    private List<(string Source, string Target)> FuzzyExpansions(string query)
+    {
+        var unquoted = System.Text.RegularExpressions.Regex.Replace(query, "\"[^\"]+\"", " ");
+        var tokens = unquoted.Split([' ', ',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(t => t.Trim('"', '\'', '.', ':', '(', ')')).Distinct(StringComparer.OrdinalIgnoreCase).Take(8);
+        var result = new List<(string, string)>();
+        foreach (var token in tokens)
+        {
+            if (token.Length < 4 || IsProtectedSearchToken(token)) continue;
+            var maximum = token.Length >= 8 ? 2 : 1;
+            using var cmd = Cmd("SELECT term FROM fts_vocab WHERE term >= $prefix AND term < $end LIMIT 500", []);
+            var prefix = char.ToLowerInvariant(token[0]).ToString();
+            cmd.Parameters.AddWithValue("$prefix", prefix);
+            cmd.Parameters.AddWithValue("$end", ((char)(char.ToLowerInvariant(token[0]) + 1)).ToString());
+            var candidates = new List<(string Term, int Distance)>();
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+            {
+                var term = reader.GetString(0);
+                var distance = EditDistance(token.ToLowerInvariant(), term, maximum);
+                if (distance is > 0 && distance <= maximum) candidates.Add((term, distance));
+            }
+            result.AddRange(candidates.OrderBy(c => c.Distance).ThenBy(c => c.Term, StringComparer.Ordinal)
+                .Take(2).Select(c => (token, c.Term)));
+        }
+        return result.Take(6).ToList();
+    }
+
+    private static bool IsProtectedSearchToken(string token) =>
+        token.Any(char.IsDigit) || token.Contains('/') || token.Contains(':')
+        || System.Text.RegularExpressions.Regex.IsMatch(token, "^(celex|ecli|article|art)$",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+    private static bool IsExactLegalIdentifier(string query) =>
+        System.Text.RegularExpressions.Regex.IsMatch(query.Trim(),
+            "^(?:CELEX\\s*)?(?:[136][0-9]{4}[A-Z][0-9]{4}|1[0-9]{4}[A-Z]/TXT)$",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase)
+        || System.Text.RegularExpressions.Regex.IsMatch(query.Trim(), "^ECLI:[A-Z0-9:.]+$",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+    private static string ReplaceToken(string query, string source, string target) =>
+        System.Text.RegularExpressions.Regex.Replace(query,
+            $@"(?<![\p{{L}}\p{{N}}]){System.Text.RegularExpressions.Regex.Escape(source)}(?![\p{{L}}\p{{N}}])",
+            target, System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+    private static int EditDistance(string left, string right, int stopAfter)
+    {
+        if (Math.Abs(left.Length - right.Length) > stopAfter) return stopAfter + 1;
+        var previous = Enumerable.Range(0, right.Length + 1).ToArray();
+        for (var i = 1; i <= left.Length; i++)
+        {
+            var current = new int[right.Length + 1];
+            current[0] = i;
+            var rowMin = current[0];
+            for (var j = 1; j <= right.Length; j++)
+            {
+                current[j] = Math.Min(Math.Min(current[j - 1] + 1, previous[j] + 1),
+                    previous[j - 1] + (left[i - 1] == right[j - 1] ? 0 : 1));
+                rowMin = Math.Min(rowMin, current[j]);
+            }
+            if (rowMin > stopAfter) return stopAfter + 1;
+            previous = current;
+        }
+        return previous[^1];
+    }
+
+    private List<RetrievalHit> SearchSemantic(string query, FilterSet filters, int limit)
+    {
+        var (where, ps) = WithFilters("1=1", filters, excludeAsOf: false);
+        using var cmd = Cmd($"""
+            WITH eligible AS (
+              SELECT sc.state_id, sc.vector_ordinal, p.rid, p.anchor,
+                     ROW_NUMBER() OVER (PARTITION BY sc.chunk_id ORDER BY d.valid_from DESC, p.rid) AS occurrence_rank
+              FROM semantic_chunks sc
+              JOIN provisions p ON p.state_id=sc.state_id
+              JOIN docs d ON d.rid=p.rid
+              WHERE {where}
+            )
+            SELECT state_id, vector_ordinal, rid, anchor FROM eligible WHERE occurrence_rank=1
+            """, ps);
+        var candidates = new List<(long State, long Ordinal, string Rid, string Anchor, int Hamming, int Dot)>();
+        var queryVector = _encoder!.Encode(query, EmbeddingInputKind.Query);
+        var binary = SemanticVectorReader.Binary(queryVector);
+        var int8 = SemanticVectorReader.Int8(queryVector);
+        using (var r = cmd.ExecuteReader())
+            while (r.Read())
+            {
+                var ordinal = r.GetInt64(1);
+                candidates.Add((r.GetInt64(0), ordinal, r.GetString(2), r.GetString(3),
+                    _vectors!.HammingDistance(ordinal, binary), 0));
+            }
+        var reranked = candidates.OrderBy(c => c.Hamming).Take(500)
+            .Select(c => c with { Dot = _vectors!.Int8Dot(c.Ordinal, int8) })
+            .GroupBy(c => c.State).Select(g => g.OrderByDescending(c => c.Dot).First())
+            .OrderByDescending(c => c.Dot).Take(limit).ToList();
+        var hits = new List<RetrievalHit>();
+        foreach (var candidate in reranked)
+        {
+            var doc = DocByRid(candidate.Rid);
+            var provision = Provision(candidate.Rid, candidate.Anchor);
+            if (doc is null || provision is null) continue;
+            hits.Add(new RetrievalHit(doc, provision, MakeSnippet(provision.TextMd, query),
+                candidate.Dot / (127d * 127d), ["semantic"]));
+        }
+        return hits;
+    }
+
+    private DocRow? DocByRid(string rid)
+    {
+        using var cmd = Cmd($"SELECT {SelectDocCols()} FROM docs WHERE rid=$rid LIMIT 1", []);
+        cmd.Parameters.AddWithValue("$rid", rid);
+        using var r = cmd.ExecuteReader();
+        return r.Read() ? ReadDoc(r) : null;
     }
 
     /// <summary>
@@ -765,7 +974,20 @@ public sealed class LexIndexReader : IDisposable
         var ps = new List<SqliteParameter>();
         var sql = baseSql;
         if (f.Collection is not null) { sql += " AND collection=$fcol"; ps.Add(new SqliteParameter("$fcol", f.Collection)); }
-        if (f.Kind is not null) { sql += " AND kind=$fkind"; ps.Add(new SqliteParameter("$fkind", f.Kind)); }
+        if (f.Kind is not null)
+        {
+            var kinds = f.Kind.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            var negate = kinds.Length > 0 && kinds.All(k => k.StartsWith('!'));
+            if (kinds.Length > 0)
+            {
+                var names = kinds.Select((_, i) => $"$fkind{i}").ToList();
+                sql += negate
+                    ? $" AND (kind IS NULL OR kind NOT IN ({string.Join(',', names)}))"
+                    : $" AND kind IN ({string.Join(',', names)})";
+                for (var i = 0; i < kinds.Length; i++)
+                    ps.Add(new SqliteParameter($"$fkind{i}", kinds[i].TrimStart('!')));
+            }
+        }
         if (f.Language is not null) { sql += " AND language=$flang"; ps.Add(new SqliteParameter("$flang", f.Language)); }
         if (f.Hierarchy is not null || f.ActForm is not null || f.BindingStatus is not null || f.Domain is not null)
         {
@@ -799,9 +1021,9 @@ public sealed class LexIndexReader : IDisposable
         return cmd;
     }
 
-    private static string Fts5Escape(string q) =>
-        string.Join(" ", q.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Select(t => "\"" + t.Replace("\"", "") + "\""));
+    private static string Fts5Escape(string q) => string.Join(" ",
+        System.Text.RegularExpressions.Regex.Matches(q, "\"[^\"]+\"|\\S+")
+            .Select(m => "\"" + m.Value.Trim('"').Replace("\"", "") + "\""));
 
     private static List<DocRow> ReadAll(SqliteCommand cmd)
     {
@@ -980,5 +1202,9 @@ public sealed class LexIndexReader : IDisposable
         return sb.ToString();
     }
 
-    public void Dispose() => _conn.Dispose();
+    public void Dispose()
+    {
+        _vectors?.Dispose();
+        _conn.Dispose();
+    }
 }

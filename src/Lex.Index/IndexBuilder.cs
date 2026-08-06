@@ -84,10 +84,16 @@ public static class IndexBuilder
         IEnumerable<ObservationRow> observations,
         string? signingKeyPem,
         IEnumerable<ProvisionStateRow>? provisionStates = null,
-        IEnumerable<AnchorEventRow>? anchorEvents = null)
+        IEnumerable<AnchorEventRow>? anchorEvents = null,
+        SemanticBuildOptions? semantic = null)
     {
         var docRows = docs.ToList();
         var provisionRows = provisions.ToList();
+        var vectorTempPath = semantic is null ? null : semantic.VectorPath + ".tmp-" + Guid.NewGuid().ToString("N");
+        using var semanticWriter = semantic is null ? null
+            : new SemanticVectorWriter(vectorTempPath!, semantic.Encoder.Dimensions);
+        try
+        {
         if (File.Exists(dbPath)) File.Delete(dbPath);
         using var conn = new SqliteConnection($"Data Source={dbPath}");
         conn.Open();
@@ -127,6 +133,12 @@ public static class IndexBuilder
               ptype TEXT NOT NULL, num TEXT, heading TEXT, path TEXT,
               article_valid_from TEXT, work_title TEXT,
               UNIQUE(group_key, language, anchor, text_sha));
+            CREATE TABLE semantic_chunks(
+              chunk_id INTEGER PRIMARY KEY, state_id INTEGER NOT NULL,
+              chunk_index INTEGER NOT NULL, chunk_sha TEXT NOT NULL,
+              vector_ordinal INTEGER NOT NULL,
+              UNIQUE(state_id, chunk_index));
+            CREATE INDEX ix_semantic_state ON semantic_chunks(state_id);
             -- Cross-references, flattened so the reverse question ("which articles cite this
             -- law?") is an indexed lookup rather than a scan over every provision's JSON.
             CREATE TABLE citations(
@@ -150,6 +162,7 @@ public static class IndexBuilder
             CREATE INDEX ix_obs_key ON obs_history(key, language, expr_valid_from);
             CREATE TABLE stamp(k TEXT PRIMARY KEY, v TEXT NOT NULL);
             CREATE VIRTUAL TABLE fts USING fts5(work_title, num, heading, text_md, content='');
+            CREATE VIRTUAL TABLE fts_vocab USING fts5vocab(fts, 'row');
             """);
 
         using (var tx = conn.BeginTransaction())
@@ -205,6 +218,12 @@ public static class IndexBuilder
             insFts.Parameters.Add(new SqliteParameter("$id", SqliteType.Integer));
             foreach (var name in new[] { "$wt", "$n", "$h", "$md" })
                 insFts.Parameters.Add(new SqliteParameter(name, SqliteType.Text));
+            var insChunk = conn.CreateCommand();
+            insChunk.CommandText = "INSERT INTO semantic_chunks(state_id,chunk_index,chunk_sha,vector_ordinal) VALUES ($state,$index,$sha,$ordinal)";
+            insChunk.Parameters.Add(new SqliteParameter("$state", SqliteType.Integer));
+            insChunk.Parameters.Add(new SqliteParameter("$index", SqliteType.Integer));
+            insChunk.Parameters.Add(new SqliteParameter("$sha", SqliteType.Text));
+            insChunk.Parameters.Add(new SqliteParameter("$ordinal", SqliteType.Integer));
 
             var insProv = conn.CreateCommand();
             insProv.CommandText = """
@@ -245,6 +264,19 @@ public static class IndexBuilder
                     Set(insFts, "$wt", p.WorkTitle); Set(insFts, "$n", p.Num); Set(insFts, "$h", p.Heading);
                     Set(insFts, "$md", p.TextMd);
                     insFts.ExecuteNonQuery();
+                    if (semantic is not null)
+                    {
+                        foreach (var chunk in SemanticChunker.Split(p.TextMd, semantic.Encoder))
+                        {
+                            var vector = semantic.Encoder.Encode(chunk.Text, EmbeddingInputKind.Passage);
+                            var ordinal = semanticWriter!.Write(vector);
+                            insChunk.Parameters["$state"].Value = stateId;
+                            insChunk.Parameters["$index"].Value = chunk.Index;
+                            insChunk.Parameters["$sha"].Value = chunk.Sha256;
+                            insChunk.Parameters["$ordinal"].Value = ordinal;
+                            insChunk.ExecuteNonQuery();
+                        }
+                    }
                 }
 
                 insProv.Parameters["$seq"].Value = p.Seq;
@@ -314,6 +346,15 @@ public static class IndexBuilder
                 ["algorithm"] = StampSigner.Algorithm,
                 ["content_digest"] = ContentDigest(docRows, provisionRows),
             };
+            if (semantic is not null)
+            {
+                stamp["embedding_model"] = semantic.Encoder.ModelId;
+                stamp["embedding_revision"] = semantic.Encoder.ModelRevision;
+                stamp["embedding_model_sha256"] = semantic.ModelSha256;
+                stamp["embedding_tokenizer_sha256"] = semantic.TokenizerSha256;
+                stamp["vector_format"] = semantic.VectorFormat;
+                stamp["vector_file"] = Path.GetFileName(semantic.VectorPath);
+            }
             if (signingKeyPem is not null)
             {
                 var (sig, pub) = StampSigner.Sign(stamp, signingKeyPem);
@@ -331,6 +372,19 @@ public static class IndexBuilder
             }
 
             tx.Commit();
+        }
+        if (semantic is not null)
+        {
+            semanticWriter!.Dispose();
+            File.Move(vectorTempPath!, semantic.VectorPath, overwrite: true);
+        }
+        }
+        catch
+        {
+            semanticWriter?.Dispose();
+            if (vectorTempPath is not null && File.Exists(vectorTempPath))
+                File.Delete(vectorTempPath);
+            throw;
         }
     }
 
