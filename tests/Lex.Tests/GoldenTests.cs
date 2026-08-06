@@ -347,6 +347,12 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
         public Site()
         {
             Directory.CreateDirectory(_dir);
+            var appDir = Path.Combine(_dir, "wwwroot", "app");
+            Directory.CreateDirectory(appDir);
+            // The web job owns the real Vite build and DOM smoke test. This isolated asset keeps
+            // the server suite self-contained while exercising the production static-file route
+            // and immutable cache policy from a clean checkout.
+            File.WriteAllText(Path.Combine(appDir, "workspace.js"), "/* golden fixture */\n");
             BuildFixtureIndex(Path.Combine(_dir, "index-t-pub.db"));
             Environment.SetEnvironmentVariable("LEX_INDEX_DIR", _dir);
             Environment.SetEnvironmentVariable("LEX_PUBLIC_BASE_URL", "https://golden.test");
@@ -355,6 +361,7 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
 
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
+            builder.UseWebRoot(Path.Combine(_dir, "wwwroot"));
             builder.ConfigureServices(services =>
             {
                 services.RemoveAll<TimeProvider>();
