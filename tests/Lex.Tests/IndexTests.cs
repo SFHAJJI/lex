@@ -11,6 +11,7 @@ public class IndexTests : IDisposable
         public string ModelId => "test/e5";
         public string ModelRevision => "test-revision";
         public int Dimensions => 8;
+        public int EncodeCalls { get; private set; }
         public int CountTokens(string text) => text.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length + 2;
         public int PrefixLengthForTokens(string text, int maxTokens)
         {
@@ -35,6 +36,7 @@ public class IndexTests : IDisposable
         }
         public float[] Encode(string text, EmbeddingInputKind kind)
         {
+            EncodeCalls++;
             var vector = new float[Dimensions];
             foreach (var token in text.ToLowerInvariant().Split([' ', ',', '.', ':'], StringSplitOptions.RemoveEmptyEntries))
             {
@@ -313,6 +315,33 @@ public class IndexTests : IDisposable
         Assert.Equal("hybrid", result.RetrievalMode);
         Assert.Equal("employment", result.Hits[0].Doc.GroupKey);
         Assert.Contains("semantic", result.Hits[0].MatchReasons);
+    }
+
+    [Fact]
+    public void Identical_chunks_share_one_embedding_and_vector_ordinal()
+    {
+        var first = Row("t-pub:first:2020-01-01", "first", "2020-01-01", null, text: true);
+        var second = Row("t-pub:second:2020-01-01", "second", "2020-01-01", null, text: true);
+        var vectors = Path.ChangeExtension(_db, ".vectors");
+        _extra.Add(vectors);
+        using var encoder = new FakeEncoder();
+        IndexBuilder.Build(_db, new Dictionary<string, string> { ["collection"] = "t-pub" },
+            [first, second],
+            [Prov(first, 0, "art_1", "shared exact wording"),
+             Prov(second, 0, "art_9", "shared exact wording")],
+            [], [], null, semantic: new SemanticBuildOptions(encoder, vectors, "model-sha", "tokenizer-sha"));
+
+        Assert.Equal(1, encoder.EncodeCalls);
+        using var vectorReader = new SemanticVectorReader(vectors);
+        Assert.Equal(1, vectorReader.Count);
+        using var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={_db}");
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT COUNT(*), COUNT(DISTINCT vector_ordinal) FROM semantic_chunks";
+        using var result = command.ExecuteReader();
+        Assert.True(result.Read());
+        Assert.Equal(2, result.GetInt32(0));
+        Assert.Equal(1, result.GetInt32(1));
     }
 
     [Theory]

@@ -224,6 +224,7 @@ public static class IndexBuilder
             insChunk.Parameters.Add(new SqliteParameter("$index", SqliteType.Integer));
             insChunk.Parameters.Add(new SqliteParameter("$sha", SqliteType.Text));
             insChunk.Parameters.Add(new SqliteParameter("$ordinal", SqliteType.Integer));
+            var vectorOrdinalByChunk = new Dictionary<string, long>(StringComparer.Ordinal);
 
             var insProv = conn.CreateCommand();
             insProv.CommandText = """
@@ -268,8 +269,12 @@ public static class IndexBuilder
                     {
                         foreach (var chunk in SemanticChunker.Split(p.TextMd, semantic.Encoder))
                         {
-                            var vector = semantic.Encoder.Encode(chunk.Text, EmbeddingInputKind.Passage);
-                            var ordinal = semanticWriter!.Write(vector);
+                            if (!vectorOrdinalByChunk.TryGetValue(chunk.Sha256, out var ordinal))
+                            {
+                                var vector = semantic.Encoder.Encode(chunk.Text, EmbeddingInputKind.Passage);
+                                ordinal = semanticWriter!.Write(vector);
+                                vectorOrdinalByChunk.Add(chunk.Sha256, ordinal);
+                            }
                             insChunk.Parameters["$state"].Value = stateId;
                             insChunk.Parameters["$index"].Value = chunk.Index;
                             insChunk.Parameters["$sha"].Value = chunk.Sha256;
