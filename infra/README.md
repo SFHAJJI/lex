@@ -28,3 +28,7 @@ imported with a proven no-op plan.
 The GitHub OIDC subjects include the immutable owner and repository IDs emitted by this account's
 custom subject template. This intentionally makes a repository transfer or replacement fail
 closed until Terraform is reviewed with the new assertion claim.
+
+Container App updates require the linked managed-environment join action. Lex grants a custom role
+with only that action on `cae-platform-law`; the deployment identity does not administer the shared
+environment.
