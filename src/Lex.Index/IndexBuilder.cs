@@ -1,4 +1,7 @@
 using System.Text.Json.Nodes;
+using System.IO.Compression;
+using System.Security.Cryptography;
+using System.Text;
 using Microsoft.Data.Sqlite;
 
 namespace Lex.Index;
@@ -9,7 +12,8 @@ namespace Lex.Index;
 /// </summary>
 public static class IndexBuilder
 {
-    public const string SchemaVersion = "lex-index/2";
+    public const string SchemaVersion = "lex-index/3";
+    public const string PreviousSchemaVersion = "lex-index/2";
 
     /// <summary>
     /// One hash over every document identity and every provision hash, in fixed ordinal order.
@@ -65,7 +69,8 @@ public static class IndexBuilder
             sb.Append(d.Key).Append('|').Append(d.Language).Append('|').Append(d.ValidFrom).Append('|')
               .Append(d.ValidTo ?? "").Append('|').Append(d.RecordSha ?? "").Append('\n');
         foreach (var p in provisions.OrderBy(p => p.Rid, StringComparer.Ordinal).ThenBy(p => p.Seq))
-            sb.Append(p.ProvisionId).Append('|').Append(p.TextSha).Append('\n');
+            sb.Append(p.ProvisionId).Append('|')
+              .Append(Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(p.TextMd)))).Append('\n');
         return Convert.ToHexStringLower(
             System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(sb.ToString())));
     }
@@ -81,12 +86,14 @@ public static class IndexBuilder
         IEnumerable<ProvisionStateRow>? provisionStates = null,
         IEnumerable<AnchorEventRow>? anchorEvents = null)
     {
+        var docRows = docs.ToList();
+        var provisionRows = provisions.ToList();
         if (File.Exists(dbPath)) File.Delete(dbPath);
         using var conn = new SqliteConnection($"Data Source={dbPath}");
         conn.Open();
 
-        // lex-index/2: text lives exactly once, in provisions; document bodies are
-        // reconstructed by the reader; FTS is external-content over provisions.
+        // lex-index/3: an occurrence carries legal identity and dates, while wording lives once
+        // in a content-addressed blob. Lexical state is also deduplicated across repeat versions.
         Exec(conn, """
             CREATE TABLE docs(
               key TEXT NOT NULL, collection TEXT NOT NULL, group_key TEXT NOT NULL,
@@ -97,7 +104,8 @@ public static class IndexBuilder
               record_sha TEXT, body_sha TEXT, source_uri TEXT,
               title TEXT, title_short TEXT,
               publication_date TEXT, status_note TEXT, rid TEXT NOT NULL,
-              profile TEXT,
+              profile TEXT, hierarchy TEXT, domains TEXT, act_form TEXT,
+              binding_status TEXT, consolidation_status TEXT,
               PRIMARY KEY(key, language, valid_from));
             CREATE INDEX ix_docs_group ON docs(group_key, valid_from);
             CREATE INDEX ix_docs_stab ON docs(collection, kind, valid_from, valid_to);
@@ -106,9 +114,19 @@ public static class IndexBuilder
               rid TEXT NOT NULL, seq INTEGER NOT NULL, anchor TEXT NOT NULL,
               provision_id TEXT NOT NULL, ptype TEXT NOT NULL, num TEXT, heading TEXT,
               path TEXT, article_valid_from TEXT, work_title TEXT,
-              text_md TEXT NOT NULL, text_sha TEXT NOT NULL,
+              text_sha TEXT NOT NULL, state_id INTEGER NOT NULL,
               PRIMARY KEY(rid, seq));
             CREATE INDEX ix_prov_rid ON provisions(rid);
+            CREATE INDEX ix_prov_state ON provisions(state_id);
+            CREATE TABLE text_blobs(
+              text_sha TEXT PRIMARY KEY, encoding TEXT NOT NULL,
+              original_size INTEGER NOT NULL, stored_size INTEGER NOT NULL, payload BLOB NOT NULL);
+            CREATE TABLE lexical_states(
+              state_id INTEGER PRIMARY KEY, group_key TEXT NOT NULL, language TEXT NOT NULL,
+              anchor TEXT NOT NULL, text_sha TEXT NOT NULL, provision_id TEXT NOT NULL,
+              ptype TEXT NOT NULL, num TEXT, heading TEXT, path TEXT,
+              article_valid_from TEXT, work_title TEXT,
+              UNIQUE(group_key, language, anchor, text_sha));
             -- Cross-references, flattened so the reverse question ("which articles cite this
             -- law?") is an indexed lookup rather than a scan over every provision's JSON.
             CREATE TABLE citations(
@@ -131,20 +149,19 @@ public static class IndexBuilder
               sha256 TEXT, source_uri TEXT, observed_from TEXT, observed_to TEXT);
             CREATE INDEX ix_obs_key ON obs_history(key, language, expr_valid_from);
             CREATE TABLE stamp(k TEXT PRIMARY KEY, v TEXT NOT NULL);
-            CREATE VIRTUAL TABLE fts USING fts5(work_title, num, heading, text_md,
-              content='provisions', content_rowid='rowid');
+            CREATE VIRTUAL TABLE fts USING fts5(work_title, num, heading, text_md, content='');
             """);
 
         using (var tx = conn.BeginTransaction())
         {
             var insDoc = conn.CreateCommand();
             insDoc.CommandText = """
-                INSERT OR REPLACE INTO docs VALUES ($key,$col,$gk,$gi,$kind,$lang,$vf,$vt,$vts,$of,$wd,$ta,$tp,$rs,$bs,$su,$t,$ts2,$pd,$sn,$rid,$prof)
+                INSERT OR REPLACE INTO docs VALUES ($key,$col,$gk,$gi,$kind,$lang,$vf,$vt,$vts,$of,$wd,$ta,$tp,$rs,$bs,$su,$t,$ts2,$pd,$sn,$rid,$prof,$hier,$domains,$form,$binding,$consolidation)
                 """;
-            foreach (var p in new[] { "$key", "$col", "$gk", "$gi", "$kind", "$lang", "$vf", "$vt", "$vts", "$of", "$wd", "$ta", "$tp", "$rs", "$bs", "$su", "$t", "$ts2", "$pd", "$sn", "$rid", "$prof" })
+            foreach (var p in new[] { "$key", "$col", "$gk", "$gi", "$kind", "$lang", "$vf", "$vt", "$vts", "$of", "$wd", "$ta", "$tp", "$rs", "$bs", "$su", "$t", "$ts2", "$pd", "$sn", "$rid", "$prof", "$hier", "$domains", "$form", "$binding", "$consolidation" })
                 insDoc.Parameters.Add(new SqliteParameter(p, SqliteType.Text));
 
-            foreach (var d in docs)
+            foreach (var d in docRows)
             {
                 var rid = $"{d.Key}|{d.Language}|{d.ValidFrom}";
                 Set(insDoc, "$key", d.Key); Set(insDoc, "$col", d.Collection); Set(insDoc, "$gk", d.GroupKey);
@@ -156,28 +173,89 @@ public static class IndexBuilder
                 Set(insDoc, "$t", d.Title); Set(insDoc, "$ts2", d.TitleShort);
                 Set(insDoc, "$pd", d.PublicationDate); Set(insDoc, "$sn", d.StatusNote); Set(insDoc, "$rid", rid);
                 Set(insDoc, "$prof", d.Profile);
+                Set(insDoc, "$hier", d.Hierarchy); Set(insDoc, "$domains", d.Domains);
+                Set(insDoc, "$form", d.ActForm); Set(insDoc, "$binding", d.BindingStatus);
+                Set(insDoc, "$consolidation", d.ConsolidationStatus);
                 insDoc.ExecuteNonQuery();
             }
 
+            var docByRid = docRows.ToDictionary(d => $"{d.Key}|{d.Language}|{d.ValidFrom}", StringComparer.Ordinal);
+            var insBlob = conn.CreateCommand();
+            insBlob.CommandText = "INSERT OR IGNORE INTO text_blobs VALUES ($sha,$enc,$original,$stored,$payload)";
+            insBlob.Parameters.Add(new SqliteParameter("$sha", SqliteType.Text));
+            insBlob.Parameters.Add(new SqliteParameter("$enc", SqliteType.Text));
+            insBlob.Parameters.Add(new SqliteParameter("$original", SqliteType.Integer));
+            insBlob.Parameters.Add(new SqliteParameter("$stored", SqliteType.Integer));
+            insBlob.Parameters.Add(new SqliteParameter("$payload", SqliteType.Blob));
+
+            var insLexical = conn.CreateCommand();
+            insLexical.CommandText = """
+                INSERT OR IGNORE INTO lexical_states(
+                  group_key,language,anchor,text_sha,provision_id,ptype,num,heading,path,article_valid_from,work_title)
+                VALUES ($gk,$lang,$a,$sha,$pid,$pt,$n,$h,$path,$avf,$wt)
+                """;
+            foreach (var name in new[] { "$gk", "$lang", "$a", "$sha", "$pid", "$pt", "$n", "$h", "$path", "$avf", "$wt" })
+                insLexical.Parameters.Add(new SqliteParameter(name, SqliteType.Text));
+            var findLexical = conn.CreateCommand();
+            findLexical.CommandText = "SELECT state_id FROM lexical_states WHERE group_key=$gk AND language=$lang AND anchor=$a AND text_sha=$sha";
+            foreach (var name in new[] { "$gk", "$lang", "$a", "$sha" })
+                findLexical.Parameters.Add(new SqliteParameter(name, SqliteType.Text));
+            var insFts = conn.CreateCommand();
+            insFts.CommandText = "INSERT INTO fts(rowid,work_title,num,heading,text_md) VALUES ($id,$wt,$n,$h,$md)";
+            insFts.Parameters.Add(new SqliteParameter("$id", SqliteType.Integer));
+            foreach (var name in new[] { "$wt", "$n", "$h", "$md" })
+                insFts.Parameters.Add(new SqliteParameter(name, SqliteType.Text));
+
             var insProv = conn.CreateCommand();
             insProv.CommandText = """
-                INSERT INTO provisions VALUES ($rid,$seq,$a,$pid,$pt,$n,$h,$path,$avf,$wt,$md,$sha)
+                INSERT INTO provisions VALUES ($rid,$seq,$a,$pid,$pt,$n,$h,$path,$avf,$wt,$sha,$state)
                 """;
             insProv.Parameters.Add(new SqliteParameter("$seq", SqliteType.Integer));
-            foreach (var p in new[] { "$rid", "$a", "$pid", "$pt", "$n", "$h", "$path", "$avf", "$wt", "$md", "$sha" })
+            insProv.Parameters.Add(new SqliteParameter("$state", SqliteType.Integer));
+            foreach (var p in new[] { "$rid", "$a", "$pid", "$pt", "$n", "$h", "$path", "$avf", "$wt", "$sha" })
                 insProv.Parameters.Add(new SqliteParameter(p, SqliteType.Text));
-            foreach (var p in provisions)
+            foreach (var p in provisionRows)
             {
+                if (!docByRid.TryGetValue(p.Rid, out var doc))
+                    throw new InvalidDataException($"Provision '{p.ProvisionId}' has no parent document '{p.Rid}'.");
+                var utf8 = Encoding.UTF8.GetBytes(p.TextMd);
+                var actualSha = Convert.ToHexStringLower(SHA256.HashData(utf8));
+                if (!actualSha.Equals(p.TextSha, StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidDataException($"Provision '{p.ProvisionId}' text does not match text_sha.");
+                var (encoding, payload) = EncodeText(utf8);
+                insBlob.Parameters["$sha"].Value = actualSha;
+                insBlob.Parameters["$enc"].Value = encoding;
+                insBlob.Parameters["$original"].Value = utf8.Length;
+                insBlob.Parameters["$stored"].Value = payload.Length;
+                insBlob.Parameters["$payload"].Value = payload;
+                insBlob.ExecuteNonQuery();
+
+                Set(insLexical, "$gk", doc.GroupKey); Set(insLexical, "$lang", doc.Language);
+                Set(insLexical, "$a", p.Anchor); Set(insLexical, "$sha", actualSha);
+                Set(insLexical, "$pid", p.ProvisionId); Set(insLexical, "$pt", p.PType);
+                Set(insLexical, "$n", p.Num); Set(insLexical, "$h", p.Heading); Set(insLexical, "$path", p.Path);
+                Set(insLexical, "$avf", p.ArticleValidFrom); Set(insLexical, "$wt", p.WorkTitle);
+                var created = insLexical.ExecuteNonQuery() == 1;
+                Set(findLexical, "$gk", doc.GroupKey); Set(findLexical, "$lang", doc.Language);
+                Set(findLexical, "$a", p.Anchor); Set(findLexical, "$sha", actualSha);
+                var stateId = Convert.ToInt64(findLexical.ExecuteScalar());
+                if (created)
+                {
+                    insFts.Parameters["$id"].Value = stateId;
+                    Set(insFts, "$wt", p.WorkTitle); Set(insFts, "$n", p.Num); Set(insFts, "$h", p.Heading);
+                    Set(insFts, "$md", p.TextMd);
+                    insFts.ExecuteNonQuery();
+                }
+
                 insProv.Parameters["$seq"].Value = p.Seq;
+                insProv.Parameters["$state"].Value = stateId;
                 Set(insProv, "$rid", p.Rid); Set(insProv, "$a", p.Anchor); Set(insProv, "$pid", p.ProvisionId);
                 Set(insProv, "$pt", p.PType); Set(insProv, "$n", p.Num); Set(insProv, "$h", p.Heading);
                 Set(insProv, "$path", p.Path); Set(insProv, "$avf", p.ArticleValidFrom);
-                Set(insProv, "$wt", p.WorkTitle); Set(insProv, "$md", p.TextMd); Set(insProv, "$sha", p.TextSha);
+                Set(insProv, "$wt", p.WorkTitle); Set(insProv, "$sha", actualSha);
                 insProv.ExecuteNonQuery();
                 WriteCitations(conn, p);
             }
-            // populate the external-content FTS index in one pass
-            Exec(conn, "INSERT INTO fts(rowid, work_title, num, heading, text_md) SELECT rowid, work_title, num, heading, text_md FROM provisions");
 
             var insState = conn.CreateCommand();
             insState.CommandText = "INSERT INTO provision_states VALUES ($gk,$a,$vf,$vt,$sha,$iv,$avf,$vc)";
@@ -234,7 +312,7 @@ public static class IndexBuilder
             {
                 ["schema"] = SchemaVersion,
                 ["algorithm"] = StampSigner.Algorithm,
-                ["content_digest"] = ContentDigest(docs, provisions),
+                ["content_digest"] = ContentDigest(docRows, provisionRows),
             };
             if (signingKeyPem is not null)
             {
@@ -261,6 +339,16 @@ public static class IndexBuilder
         using var cmd = conn.CreateCommand();
         cmd.CommandText = sql;
         cmd.ExecuteNonQuery();
+    }
+
+    private static (string Encoding, byte[] Payload) EncodeText(byte[] utf8)
+    {
+        if (utf8.Length == 0) return ("raw", utf8);
+        var buffer = new byte[BrotliEncoder.GetMaxCompressedLength(utf8.Length)];
+        if (!BrotliEncoder.TryCompress(utf8, buffer, out var written, quality: 4, window: 22)
+            || written >= utf8.Length * 0.92)
+            return ("raw", utf8);
+        return ("br4", buffer[..written]);
     }
 
     private static void Set(SqliteCommand cmd, string name, string? value) =>

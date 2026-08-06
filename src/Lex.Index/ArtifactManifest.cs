@@ -153,7 +153,6 @@ public static class ArtifactManifests
 
     private static byte[] DecodeBase64Signature(string value)
     {
-        if (!value.Contains('-') && !value.Contains('_')) return Convert.FromBase64String(value);
         var standard = value.Replace('-', '+').Replace('_', '/');
         standard += (standard.Length % 4) switch { 2 => "==", 3 => "=", _ => "" };
         return Convert.FromBase64String(standard);

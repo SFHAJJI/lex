@@ -77,9 +77,8 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
     {
         var current = await _site.Client.GetStringAsync("/architecture");
         Assert.Contains("2</td>", current);              // mounted fixture works, not a hand-written live count
-        Assert.Contains("lex-index/2", current);
+        Assert.Contains(IndexBuilder.SchemaVersion, current); // mounted fixture schema, not roadmap prose
         Assert.DoesNotContain("local compact semantic candidates", current);
-        Assert.DoesNotContain("lex-index/3", current);
 
         var next = await _site.Client.GetStringAsync("/architecture/next");
         Assert.Contains("local compact semantic candidates", next);

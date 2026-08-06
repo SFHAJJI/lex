@@ -30,7 +30,12 @@ public sealed record DocRow(
     // trivia: text from publisher markup and text inferred from a page-description format are
     // not the same claim, and one law is routinely the first on some dates and the second on
     // others. Null when the version carries no text at all.
-    string? Profile = null);
+    string? Profile = null,
+    string? Hierarchy = null,
+    string? Domains = null,
+    string? ActForm = null,
+    string? BindingStatus = null,
+    string? ConsolidationStatus = null);
 
 /// <summary>One provision (article/annex) of one document version — the retrieval unit.</summary>
 public sealed record ProvisionRow(
@@ -118,7 +123,11 @@ public sealed record FilterSet(
     // is precise only when the question happens to use rare words: search the entire body of
     // Luxembourg law for "prix" and seed-certification and care-home tariffs outrank the
     // electricity act. A consumer that knows its subject can say so, and get its subject back.
-    IReadOnlyList<string>? Works = null)
+    IReadOnlyList<string>? Works = null,
+    string? Hierarchy = null,
+    string? ActForm = null,
+    string? BindingStatus = null,
+    string? Domain = null)
 {
     public static readonly FilterSet All = new(null, null, null, null);
 }

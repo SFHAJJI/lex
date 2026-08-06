@@ -36,7 +36,7 @@
     {
       "id": "M4",
       "title": "Deduplicated index",
-      "status": "planned",
+      "status": "building",
       "outcome": "lex-index/3 stores repeated wording once without changing timelines, exact text or diffs."
     },
     {
@@ -65,7 +65,7 @@
     {
       "id": "D53",
       "title": "Store repeated wording once",
-      "status": "planned",
+      "status": "building",
       "choice": "Map every dated occurrence to a content-addressed text state.",
       "alternative": "Store and embed every repeated provision occurrence.",
       "reason": "The timeline is preserved while index size, vector size and duplicate hits fall.",

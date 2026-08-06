@@ -1,4 +1,7 @@
 using Microsoft.Data.Sqlite;
+using System.IO.Compression;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace Lex.Index;
 
@@ -36,16 +39,20 @@ public sealed record CoverageInfo(
 public sealed class LexIndexReader : IDisposable
 {
     private readonly SqliteConnection _conn;
+    private readonly string _schema;
     public IReadOnlyDictionary<string, string> Stamp { get; }
     public string Collection => Stamp.GetValueOrDefault("collection", "?");
     public bool SignatureValid { get; }
 
-    private LexIndexReader(SqliteConnection conn, Dictionary<string, string> stamp)
+    private LexIndexReader(SqliteConnection conn, Dictionary<string, string> stamp, string schema)
     {
         _conn = conn;
         Stamp = stamp;
+        _schema = schema;
         SignatureValid = stamp.ContainsKey("signature") && StampSigner.Verify(stamp);
     }
+
+    private bool IsV3 => _schema == IndexBuilder.SchemaVersion;
 
     public static LexIndexReader Open(string dbPath)
     {
@@ -59,9 +66,10 @@ public sealed class LexIndexReader : IDisposable
             while (r.Read()) stamp[r.GetString(0)] = r.GetString(1);
         }
         // §8.4 — refuse unknown schemas explicitly; never guess, never migrate silently.
-        if (stamp.GetValueOrDefault("schema") != IndexBuilder.SchemaVersion)
+        var schema = stamp.GetValueOrDefault("schema");
+        if (schema is not (IndexBuilder.SchemaVersion or IndexBuilder.PreviousSchemaVersion))
             throw new InvalidOperationException(
-                $"Index schema '{stamp.GetValueOrDefault("schema")}' is not '{IndexBuilder.SchemaVersion}'. Refusing to open {dbPath}.");
+                $"Index schema '{schema}' is not a supported schema. Expected '{IndexBuilder.PreviousSchemaVersion}' or '{IndexBuilder.SchemaVersion}'. Refusing to open {dbPath}.");
 
         // The stamp is a claim, not a check. `profile` was added to docs without the schema string
         // changing, so an index built the day before opened cleanly and then threw a raw
@@ -81,7 +89,31 @@ public sealed class LexIndexReader : IDisposable
                 $"Index {dbPath} claims schema '{IndexBuilder.SchemaVersion}' but docs is missing " +
                 $"[{string.Join(", ", missing)}]. It predates a column the reader needs; rebuild it.");
 
-        return new LexIndexReader(conn, stamp);
+        if (schema == IndexBuilder.SchemaVersion)
+        {
+            var missingV3Docs = new[] { "hierarchy", "domains", "act_form", "binding_status", "consolidation_status" }
+                .Where(c => !present.Contains(c)).ToList();
+            if (missingV3Docs.Count > 0)
+                throw new InvalidOperationException(
+                    $"Index {dbPath} claims schema '{schema}' but docs is missing [{string.Join(", ", missingV3Docs)}].");
+            foreach (var table in new[] { "text_blobs", "lexical_states" })
+            {
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = "SELECT 1 FROM sqlite_master WHERE type='table' AND name=$name";
+                cmd.Parameters.AddWithValue("$name", table);
+                if (cmd.ExecuteScalar() is null)
+                    throw new InvalidOperationException($"Index {dbPath} claims schema '{schema}' but is missing {table}.");
+            }
+            using var provisionColumns = conn.CreateCommand();
+            provisionColumns.CommandText = "SELECT name FROM pragma_table_info('provisions')";
+            using var provisionReader = provisionColumns.ExecuteReader();
+            var provisionNames = new HashSet<string>(StringComparer.Ordinal);
+            while (provisionReader.Read()) provisionNames.Add(provisionReader.GetString(0));
+            if (!provisionNames.Contains("state_id"))
+                throw new InvalidOperationException($"Index {dbPath} claims schema '{schema}' but provisions is missing state_id.");
+        }
+
+        return new LexIndexReader(conn, stamp, schema!);
     }
 
     private const string DocCols = """
@@ -90,6 +122,15 @@ public sealed class LexIndexReader : IDisposable
         record_sha, body_sha, source_uri, title, title_short, publication_date, status_note, rid,
         profile
         """;
+
+    private string SelectDocCols(string? alias = null)
+    {
+        var p = string.IsNullOrEmpty(alias) ? "" : alias + ".";
+        var core = string.Join(", ", DocCols.Split(',').Select(c => p + c.Trim()));
+        return IsV3
+            ? core + $", {p}hierarchy, {p}domains, {p}act_form, {p}binding_status, {p}consolidation_status"
+            : core + ", NULL, NULL, NULL, NULL, NULL";
+    }
 
     /// <summary>True if the work exists at all (distinguishes unknown_work from no_version_for_date).</summary>
     public bool WorkExists(string work)
@@ -104,7 +145,7 @@ public sealed class LexIndexReader : IDisposable
     public DocRow? AsOf(string work, DateOnly date, FilterSet filters)
     {
         var (sql, ps) = WithFilters($"""
-            SELECT {DocCols} FROM docs
+            SELECT {SelectDocCols()} FROM docs
             WHERE (group_key=$w OR group_identifier=$w)
               AND valid_from <= $d AND (valid_to IS NULL OR valid_to >= $d)
             """, filters, excludeAsOf: true);
@@ -132,7 +173,7 @@ public sealed class LexIndexReader : IDisposable
     public List<DocRow> Timeline(string work)
     {
         using var cmd = Cmd($"""
-            SELECT {DocCols} FROM docs WHERE group_key=$w OR group_identifier=$w
+            SELECT {SelectDocCols()} FROM docs WHERE group_key=$w OR group_identifier=$w
             ORDER BY valid_from, language
             """, []);
         cmd.Parameters.AddWithValue("$w", NormalizeWork(work));
@@ -182,7 +223,7 @@ public sealed class LexIndexReader : IDisposable
         }
 
         using var cmd = Cmd($"""
-            SELECT {DocCols} FROM docs d
+            SELECT {SelectDocCols()} FROM docs d
             WHERE {where} AND valid_from = (
                 SELECT MAX(d2.valid_from) FROM docs d2
                 WHERE d2.group_key = d.group_key
@@ -198,20 +239,15 @@ public sealed class LexIndexReader : IDisposable
         return (deduped, total);
     }
 
-    private const string DocColsQualified = """
-        d.key, d.collection, d.group_key, d.group_identifier, d.kind, d.language, d.valid_from, d.valid_to,
-        d.valid_time_source, d.observed_from, d.withdrawn, d.text_available, d.text_public,
-        d.record_sha, d.body_sha, d.source_uri, d.title, d.title_short, d.publication_date, d.status_note, d.rid
-        """;
-
     public List<(DocRow Doc, ProvisionRow Prov, string Snippet)> Search(string query, FilterSet filters, int limit)
     {
+        if (IsV3) return SearchV3(query, filters, limit);
         // Filters first (F5): SQL predicates restrict the candidate set; only survivors are
         // ranked by bm25 (weights: work title > heading > num > body text). Hits are
         // provision-level: the retrieval unit is the article, not the document.
         var (where, ps) = WithFilters("1=1", filters, excludeAsOf: false);
         using var cmd = Cmd($"""
-            SELECT {DocColsQualified},
+            SELECT {SelectDocCols("d")},
                    p.rid, p.seq, p.anchor, p.provision_id, p.ptype, p.num, p.heading, p.path,
                    p.article_valid_from, p.work_title, p.text_md, p.text_sha,
                    snippet(fts, 3, '«', '»', ' … ', 14) AS snip
@@ -228,15 +264,60 @@ public sealed class LexIndexReader : IDisposable
         using var r = cmd.ExecuteReader();
         while (r.Read())
         {
-            // DocCols occupies ordinals 0..20 (incl. rid); provision cols follow at 21..32; snippet last.
+            // Document columns occupy ordinals 0..26; provision columns follow.
             var prov = new ProvisionRow(
-                Rid: r.GetString(21), Seq: r.GetInt32(22), Anchor: r.GetString(23), ProvisionId: r.GetString(24),
-                PType: r.GetString(25), Num: r.IsDBNull(26) ? null : r.GetString(26),
-                Heading: r.IsDBNull(27) ? null : r.GetString(27), Path: r.IsDBNull(28) ? null : r.GetString(28),
-                ArticleValidFrom: r.IsDBNull(29) ? null : r.GetString(29),
-                WorkTitle: r.IsDBNull(30) ? null : r.GetString(30),
-                TextMd: r.GetString(31), TextSha: r.GetString(32));
-            result.Add((ReadDoc(r), prov, r.IsDBNull(33) ? "" : r.GetString(33)));
+                Rid: r.GetString(27), Seq: r.GetInt32(28), Anchor: r.GetString(29), ProvisionId: r.GetString(30),
+                PType: r.GetString(31), Num: r.IsDBNull(32) ? null : r.GetString(32),
+                Heading: r.IsDBNull(33) ? null : r.GetString(33), Path: r.IsDBNull(34) ? null : r.GetString(34),
+                ArticleValidFrom: r.IsDBNull(35) ? null : r.GetString(35),
+                WorkTitle: r.IsDBNull(36) ? null : r.GetString(36),
+                TextMd: r.GetString(37), TextSha: r.GetString(38));
+            result.Add((ReadDoc(r), prov, r.IsDBNull(39) ? "" : r.GetString(39)));
+        }
+        return result;
+    }
+
+    private List<(DocRow Doc, ProvisionRow Prov, string Snippet)> SearchV3(string query, FilterSet filters, int limit)
+    {
+        var (where, ps) = WithFilters("1=1", filters, excludeAsOf: false);
+        using var cmd = Cmd($"""
+            WITH matched AS (
+              SELECT rowid AS state_id, bm25(fts, 10.0, 4.0, 6.0, 1.0) AS score
+              FROM fts WHERE fts MATCH $q
+            ), eligible AS (
+              SELECT m.score, p.rid, p.seq, p.anchor, p.provision_id, p.ptype, p.num,
+                     p.heading, p.path, p.article_valid_from, p.work_title, p.text_sha,
+                     d.key AS doc_key,
+                     ROW_NUMBER() OVER (PARTITION BY m.state_id ORDER BY d.valid_from DESC, p.rid) AS occurrence_rank
+              FROM matched m
+              JOIN provisions p ON p.state_id = m.state_id
+              JOIN docs d ON d.rid = p.rid
+              WHERE {where}
+            )
+            SELECT {SelectDocCols("d")},
+                   e.rid, e.seq, e.anchor, e.provision_id, e.ptype, e.num, e.heading, e.path,
+                   e.article_valid_from, e.work_title, e.text_sha,
+                   b.encoding, b.original_size, b.payload
+            FROM eligible e
+            JOIN docs d ON d.key = e.doc_key AND d.rid = e.rid
+            JOIN text_blobs b ON b.text_sha = e.text_sha
+            WHERE e.occurrence_rank = 1
+            ORDER BY e.score, d.valid_from DESC
+            LIMIT $lim
+            """, ps);
+        cmd.Parameters.AddWithValue("$q", Fts5Escape(query));
+        cmd.Parameters.AddWithValue("$lim", limit);
+        var result = new List<(DocRow, ProvisionRow, string)>();
+        using var r = cmd.ExecuteReader();
+        while (r.Read())
+        {
+            var text = DecodeAndVerify(r.GetString(38), r.GetInt32(39), (byte[])r.GetValue(40), r.GetString(37));
+            var prov = new ProvisionRow(
+                r.GetString(27), r.GetInt32(28), r.GetString(29), r.GetString(30), r.GetString(31),
+                r.IsDBNull(32) ? null : r.GetString(32), r.IsDBNull(33) ? null : r.GetString(33),
+                r.IsDBNull(34) ? null : r.GetString(34), r.IsDBNull(35) ? null : r.GetString(35),
+                r.IsDBNull(36) ? null : r.GetString(36), text, r.GetString(37));
+            result.Add((ReadDoc(r), prov, MakeSnippet(text, query)));
         }
         return result;
     }
@@ -266,7 +347,7 @@ public sealed class LexIndexReader : IDisposable
         {
             var (where, ps) = WithFilters("1=1", filters, excludeAsOf: false);
             using var cmd = Cmd($"""
-                SELECT {DocColsQualified}
+                SELECT {SelectDocCols("d")}
                 FROM docs d
                 WHERE {where} AND {string.Join(" AND ", clauses)}
                 ORDER BY d.valid_from DESC
@@ -423,6 +504,13 @@ public sealed class LexIndexReader : IDisposable
     /// </summary>
     public string ComputeContentDigest()
     {
+        if (IsV3)
+        {
+            using var blobs = Cmd("SELECT text_sha, encoding, original_size, payload FROM text_blobs ORDER BY text_sha", []);
+            using var br = blobs.ExecuteReader();
+            while (br.Read())
+                _ = DecodeAndVerify(br.GetString(1), br.GetInt32(2), (byte[])br.GetValue(3), br.GetString(0));
+        }
         var sb = new System.Text.StringBuilder();
         using (var cmd = Cmd($"SELECT key, language, valid_from, valid_to, record_sha FROM docs ORDER BY key, language", []))
         using (var r = cmd.ExecuteReader())
@@ -466,7 +554,7 @@ public sealed class LexIndexReader : IDisposable
 
     public DocRow? ByKey(string key)
     {
-        using var cmd = Cmd($"SELECT {DocCols} FROM docs WHERE key=$k ORDER BY language LIMIT 1", []);
+        using var cmd = Cmd($"SELECT {SelectDocCols()} FROM docs WHERE key=$k ORDER BY language LIMIT 1", []);
         cmd.Parameters.AddWithValue("$k", key);
         using var r = cmd.ExecuteReader();
         return r.Read() ? ReadDoc(r) : null;
@@ -476,7 +564,7 @@ public sealed class LexIndexReader : IDisposable
     {
         var (where, ps) = WithFilters("1=1", filters, excludeAsOf: true);
         using var cmd = Cmd($"""
-            SELECT {DocCols} FROM docs d
+            SELECT {SelectDocCols()} FROM docs d
             WHERE {where} AND valid_from = (SELECT MAX(valid_from) FROM docs d2 WHERE d2.group_key = d.group_key)
             GROUP BY group_key
             ORDER BY group_key LIMIT $lim OFFSET $off
@@ -679,6 +767,14 @@ public sealed class LexIndexReader : IDisposable
         if (f.Collection is not null) { sql += " AND collection=$fcol"; ps.Add(new SqliteParameter("$fcol", f.Collection)); }
         if (f.Kind is not null) { sql += " AND kind=$fkind"; ps.Add(new SqliteParameter("$fkind", f.Kind)); }
         if (f.Language is not null) { sql += " AND language=$flang"; ps.Add(new SqliteParameter("$flang", f.Language)); }
+        if (f.Hierarchy is not null || f.ActForm is not null || f.BindingStatus is not null || f.Domain is not null)
+        {
+            if (!IsV3) return (sql + " AND 0=1", ps);
+            if (f.Hierarchy is not null) { sql += " AND hierarchy=$fhier"; ps.Add(new SqliteParameter("$fhier", f.Hierarchy)); }
+            if (f.ActForm is not null) { sql += " AND act_form=$fform"; ps.Add(new SqliteParameter("$fform", f.ActForm)); }
+            if (f.BindingStatus is not null) { sql += " AND binding_status=$fbind"; ps.Add(new SqliteParameter("$fbind", f.BindingStatus)); }
+            if (f.Domain is not null) { sql += " AND ('|' || domains || '|') LIKE $fdomain"; ps.Add(new SqliteParameter("$fdomain", "%|" + f.Domain + "|%")); }
+        }
         if (f.Works is { Count: > 0 } works)
         {
             // Matches either the slug or the publisher's own identifier, so a caller can scope
@@ -727,7 +823,12 @@ public sealed class LexIndexReader : IDisposable
         SourceUri: r.IsDBNull(15) ? null : r.GetString(15), Title: r.IsDBNull(16) ? null : r.GetString(16),
         TitleShort: r.IsDBNull(17) ? null : r.GetString(17), Body: null,
         PublicationDate: r.IsDBNull(18) ? null : r.GetString(18), StatusNote: r.IsDBNull(19) ? null : r.GetString(19),
-        Profile: r.FieldCount > 21 && !r.IsDBNull(21) ? r.GetString(21) : null);
+        Profile: r.FieldCount > 21 && !r.IsDBNull(21) ? r.GetString(21) : null,
+        Hierarchy: r.FieldCount > 22 && !r.IsDBNull(22) ? r.GetString(22) : null,
+        Domains: r.FieldCount > 23 && !r.IsDBNull(23) ? r.GetString(23) : null,
+        ActForm: r.FieldCount > 24 && !r.IsDBNull(24) ? r.GetString(24) : null,
+        BindingStatus: r.FieldCount > 25 && !r.IsDBNull(25) ? r.GetString(25) : null,
+        ConsolidationStatus: r.FieldCount > 26 && !r.IsDBNull(26) ? r.GetString(26) : null);
 
     /// <summary>Rid of a doc row (key|language|valid_from) — the provisions foreign key.</summary>
     public static string RidOf(DocRow d) => $"{d.Key}|{d.Language}|{d.ValidFrom}";
@@ -735,6 +836,7 @@ public sealed class LexIndexReader : IDisposable
     /// <summary>All provisions of one document version, in document order.</summary>
     public List<ProvisionRow> Provisions(string rid)
     {
+        if (IsV3) return ProvisionsV3(rid);
         using var cmd = Cmd("""
             SELECT rid, seq, anchor, provision_id, ptype, num, heading, path, article_valid_from,
                    work_title, text_md, text_sha
@@ -751,6 +853,59 @@ public sealed class LexIndexReader : IDisposable
             WorkTitle: r.IsDBNull(9) ? null : r.GetString(9),
             TextMd: r.GetString(10), TextSha: r.GetString(11)));
         return list;
+    }
+
+    private List<ProvisionRow> ProvisionsV3(string rid)
+    {
+        using var cmd = Cmd("""
+            SELECT p.rid, p.seq, p.anchor, p.provision_id, p.ptype, p.num, p.heading, p.path,
+                   p.article_valid_from, p.work_title, p.text_sha,
+                   b.encoding, b.original_size, b.payload
+            FROM provisions p JOIN text_blobs b ON b.text_sha=p.text_sha
+            WHERE p.rid=$rid ORDER BY p.seq
+            """, []);
+        cmd.Parameters.AddWithValue("$rid", rid);
+        var list = new List<ProvisionRow>();
+        using var r = cmd.ExecuteReader();
+        while (r.Read())
+        {
+            var text = DecodeAndVerify(r.GetString(11), r.GetInt32(12), (byte[])r.GetValue(13), r.GetString(10));
+            list.Add(new ProvisionRow(
+                r.GetString(0), r.GetInt32(1), r.GetString(2), r.GetString(3), r.GetString(4),
+                r.IsDBNull(5) ? null : r.GetString(5), r.IsDBNull(6) ? null : r.GetString(6),
+                r.IsDBNull(7) ? null : r.GetString(7), r.IsDBNull(8) ? null : r.GetString(8),
+                r.IsDBNull(9) ? null : r.GetString(9), text, r.GetString(10)));
+        }
+        return list;
+    }
+
+    private static string DecodeAndVerify(string encoding, int originalSize, byte[] payload, string expectedSha)
+    {
+        byte[] utf8;
+        if (encoding == "raw") utf8 = payload;
+        else if (encoding == "br4")
+        {
+            using var input = new MemoryStream(payload);
+            using var brotli = new BrotliStream(input, CompressionMode.Decompress);
+            using var output = new MemoryStream(originalSize);
+            brotli.CopyTo(output);
+            utf8 = output.ToArray();
+        }
+        else throw new InvalidDataException($"Unknown text blob encoding '{encoding}'.");
+
+        if (utf8.Length != originalSize || !Convert.ToHexStringLower(SHA256.HashData(utf8)).Equals(expectedSha, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException($"Text blob '{expectedSha}' failed its size or SHA-256 check.");
+        return Encoding.UTF8.GetString(utf8);
+    }
+
+    private static string MakeSnippet(string text, string query)
+    {
+        var term = query.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? "";
+        var at = term.Length == 0 ? 0 : text.IndexOf(term, StringComparison.OrdinalIgnoreCase);
+        if (at < 0) at = 0;
+        var start = Math.Max(0, at - 60);
+        var length = Math.Min(180, text.Length - start);
+        return (start > 0 ? "... " : "") + text.Substring(start, length) + (start + length < text.Length ? " ..." : "");
     }
 
     /// <summary>One provision of one document version, by anchor.</summary>
@@ -804,7 +959,7 @@ public sealed class LexIndexReader : IDisposable
         return cmd.ExecuteScalar() is not null;
     }
 
-    /// <summary>Document text reconstructed from its provisions (lex-index/2 stores text once).</summary>
+    /// <summary>Document text reconstructed from its authoritative provision occurrences.</summary>
     public string? BuildBody(DocRow d)
     {
         var provs = Provisions(RidOf(d));

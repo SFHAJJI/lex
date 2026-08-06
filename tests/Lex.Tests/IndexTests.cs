@@ -81,6 +81,24 @@ public class IndexTests : IDisposable
     }
 
     [Fact]
+    public void Editing_a_version_three_blob_is_refused_even_when_occurrence_hashes_are_unchanged()
+    {
+        using (var reader = Build())
+            Assert.Equal(reader.Stamp["content_digest"], reader.ComputeContentDigest());
+
+        using (var conn = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={_db}"))
+        {
+            conn.Open();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "UPDATE text_blobs SET payload=X'00' WHERE rowid=(SELECT MIN(rowid) FROM text_blobs)";
+            Assert.Equal(1, cmd.ExecuteNonQuery());
+        }
+
+        using var tampered = LexIndexReader.Open(_db);
+        Assert.ThrowsAny<Exception>(() => tampered.ComputeContentDigest());
+    }
+
+    [Fact]
     public void AsOf_stabs_the_correct_version_and_distinguishes_refusals()
     {
         using var r = Build();
@@ -130,6 +148,99 @@ public class IndexTests : IDisposable
         Assert.Contains("the thing shall apply everywhere", body);
         Assert.Contains("penalties for the thing are mild", body);
         Assert.Null(d.Body);   // never stored on the row; reconstruction is explicit
+    }
+
+    [Fact]
+    public void Version_three_stores_repeated_wording_once_but_preserves_each_occurrence()
+    {
+        var first = Row("t-pub:w1:2020-01-01", "w1", "2020-01-01", "2021-12-31", text: true);
+        var second = Row("t-pub:w1:2022-01-01", "w1", "2022-01-01", null, text: true);
+        var repeated = string.Join(' ', Enumerable.Repeat("authoritative repeated provision wording", 80));
+        IndexBuilder.Build(_db, new Dictionary<string, string> { ["collection"] = "t-pub" },
+            [first, second], [Prov(first, 0, "art_1", repeated), Prov(second, 0, "art_1", repeated)],
+            [], [], null);
+
+        using (var db = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={_db};Mode=ReadOnly"))
+        {
+            db.Open();
+            using var cmd = db.CreateCommand();
+            cmd.CommandText = "SELECT (SELECT COUNT(*) FROM provisions), (SELECT COUNT(*) FROM lexical_states), (SELECT COUNT(*) FROM text_blobs), (SELECT encoding FROM text_blobs)";
+            using var row = cmd.ExecuteReader();
+            Assert.True(row.Read());
+            Assert.Equal(2, row.GetInt32(0));
+            Assert.Equal(1, row.GetInt32(1));
+            Assert.Equal(1, row.GetInt32(2));
+            Assert.Equal("br4", row.GetString(3));
+        }
+
+        using var reader = LexIndexReader.Open(_db);
+        Assert.Equal(repeated, Assert.Single(reader.Provisions(LexIndexReader.RidOf(first))).TextMd);
+        Assert.Equal(repeated, Assert.Single(reader.Provisions(LexIndexReader.RidOf(second))).TextMd);
+        Assert.Single(reader.Search("authoritative", FilterSet.All, 10));
+    }
+
+    [Fact]
+    public void Version_three_keeps_small_text_raw_and_filters_normalized_legal_metadata()
+    {
+        var doc = Row("t-pub:w1:2020-01-01", "w1", "2020-01-01", null, text: true) with
+        {
+            Hierarchy = "eu_secondary",
+            Domains = "|financial_services|aml|",
+            ActForm = "regulation",
+            BindingStatus = "binding",
+            ConsolidationStatus = "published"
+        };
+        IndexBuilder.Build(_db, new Dictionary<string, string> { ["collection"] = "t-pub" },
+            [doc], [Prov(doc, 0, "art_1", "short exact text")], [], [], null);
+
+        using var reader = LexIndexReader.Open(_db);
+        var filter = new FilterSet(null, null, null, null, null, "eu_secondary", "regulation", "binding", "aml");
+        var hit = Assert.Single(reader.Search("short", filter, 10));
+        Assert.Equal("eu_secondary", hit.Doc.Hierarchy);
+        Assert.Equal("published", hit.Doc.ConsolidationStatus);
+
+        using var db = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={_db};Mode=ReadOnly");
+        db.Open();
+        using var cmd = db.CreateCommand();
+        cmd.CommandText = "SELECT encoding FROM text_blobs";
+        Assert.Equal("raw", cmd.ExecuteScalar());
+    }
+
+    [Fact]
+    public void Version_two_indexes_remain_mountable_and_reconstruct_exact_text()
+    {
+        using (var db = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={_db}"))
+        {
+            db.Open();
+            using var cmd = db.CreateCommand();
+            cmd.CommandText = """
+                CREATE TABLE stamp(k TEXT PRIMARY KEY, v TEXT NOT NULL);
+                INSERT INTO stamp VALUES ('schema','lex-index/2'),('collection','legacy');
+                CREATE TABLE docs(
+                  key TEXT, collection TEXT, group_key TEXT, group_identifier TEXT, kind TEXT,
+                  language TEXT, valid_from TEXT, valid_to TEXT, valid_time_source TEXT,
+                  observed_from TEXT, withdrawn INTEGER, text_available INTEGER, text_public INTEGER,
+                  record_sha TEXT, body_sha TEXT, source_uri TEXT, title TEXT, title_short TEXT,
+                  publication_date TEXT, status_note TEXT, rid TEXT, profile TEXT);
+                INSERT INTO docs VALUES(
+                  'legacy:w1:2020-01-01','legacy','w1','urn:w1','REG','en','2020-01-01',NULL,
+                  'publisher','2026-08-01T00:00:00Z',0,1,1,'abc',NULL,'https://example.org',
+                  'Legacy work','Legacy work','2020-01-01',NULL,'legacy:w1:2020-01-01|en|2020-01-01',NULL);
+                CREATE TABLE provisions(
+                  rid TEXT, seq INTEGER, anchor TEXT, provision_id TEXT, ptype TEXT, num TEXT,
+                  heading TEXT, path TEXT, article_valid_from TEXT, work_title TEXT, text_md TEXT, text_sha TEXT);
+                INSERT INTO provisions VALUES(
+                  'legacy:w1:2020-01-01|en|2020-01-01',0,'art_1','legacy:w1:2020-01-01#art_1',
+                  'article','1',NULL,NULL,NULL,'Legacy work','legacy authoritative text',
+                  '74d8dfb2885a60eaeb9379e231531497f34991316439fc46fd431c2f97e643d1');
+                """;
+            cmd.ExecuteNonQuery();
+        }
+
+        using var reader = LexIndexReader.Open(_db);
+        var doc = reader.AsOf("w1", new DateOnly(2024, 1, 1), FilterSet.All)!;
+        Assert.Equal("legacy authoritative text", Assert.Single(reader.Provisions(LexIndexReader.RidOf(doc))).TextMd);
+        Assert.Null(doc.Hierarchy);
     }
 
     [Fact]
