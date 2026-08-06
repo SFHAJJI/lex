@@ -532,7 +532,8 @@ public sealed class EurLexAdapter : ISourceAdapter
                       FILTER(
                         ?predicate != cdm:resource_legal_based_on_resource_legal
                         || ?direction = "outbound"
-                        || REGEX(STR(?relatedCelex), "^3[0-9]{4}[RL]"))
+                        || (!STRSTARTS(STR(?seedCelex), "1")
+                            && REGEX(STR(?relatedCelex), "^3[0-9]{4}[RL]")))
                     }
                     """, ct);
                 foreach (var group in rows.GroupBy(r => r["seedCelex"], StringComparer.Ordinal))
