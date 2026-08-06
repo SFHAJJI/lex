@@ -133,6 +133,15 @@
       "alternative": "Mix roadmap claims and hand-written benchmark numbers into one architecture page.",
       "reason": "An interviewer or lawyer must be able to distinguish what exists from what is proposed.",
       "cost": "Every public metric carries commits, artifact identity, environment and review status."
+    },
+    {
+      "id": "D61",
+      "title": "Export transparent reading aids",
+      "status": "building",
+      "choice": "Build citations and Markdown evidence from the exact structured article or comparison already on screen.",
+      "alternative": "Generate a polished PDF or fetch and compare the law again during export.",
+      "reason": "Lawyers can move traceable text into their work without a second result disagreeing or an unofficial file resembling a publisher document.",
+      "cost": "Markdown prioritizes inspectable provenance over print-perfect presentation and remains explicitly a reading aid."
     }
   ],
   "baseline": {

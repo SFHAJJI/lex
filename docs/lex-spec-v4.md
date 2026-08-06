@@ -1865,6 +1865,7 @@ Numbering continues from v3; v3 decisions are restated with status.
 | **D58** | Artifact trust is anchored outside the artifact: a release-pinned public-key fingerprint verifies a signed canonical manifest covering databases, vectors, model, tokenizer, scope configuration, schema and source commits. The embedded stamp remains public provenance, not the runtime trust root. | hybrid-eu/1, building |
 | **D59** | Fuzzy search is a visible additive fallback only when exact lexical retrieval is weak. It never rewrites quotations, CELEX/ECLI identifiers, article numbers, dates or short tokens, and every expansion returns in the response. | hybrid-eu/1, building |
 | **D60** | Public architecture claims are separated into current, next, decisions and benchmarks. Runtime counts come from mounted indexes; future status comes from one committed registry; measurements require code, corpus, artifact, environment, timestamp, sample count and review status. | hybrid-eu/1, building |
+| **D61** | Article and comparison exports are transparent reading aids built lazily from the exact structured MCP payload and diff pieces already on screen. They record publisher sources, dated permalinks, extraction profile and full provision hashes; they never re-fetch, re-diff or alter wording. Markdown is selected over generated PDF so an unofficial export stays inspectable and cannot plausibly resemble a publisher artifact. | hybrid-eu/1, building |
 
 ---
 
