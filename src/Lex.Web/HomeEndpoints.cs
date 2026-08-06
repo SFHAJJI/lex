@@ -27,6 +27,7 @@ public static class HomeEndpoints
             // Counts come from the mounted indexes at render time, never hand-written numbers.
             var cov = readers.Values.Select(r => r.Coverage()).ToList();
             var euWorks = cov.Where(c => c.Collection == "eu-eurlex").Sum(c => c.Groups);
+            var assetVersion = Uri.EscapeDataString(ctx.Options.CodeCommit ?? "dev");
             var tools = mcpCore.ToolDefs().OfType<JsonObject>()
                                .Select(t => t["name"]!.GetValue<string>()).ToList();
 
@@ -63,6 +64,7 @@ public static class HomeEndpoints
                 <!-- Read synchronously by the workspace on mount, so the doors never flash in or need a
                      round trip of their own. -->
                 <script type="application/json" id="doors">{liveDoors.ToJsonString()}</script>
+                <script>document.documentElement.classList.add('workspace-loading')</script>
                 """
                 + $"""
                 <!-- The workspace mounts here. Without JavaScript the page still explains itself
@@ -103,7 +105,7 @@ public static class HomeEndpoints
                 </nav>
                 </div>
                 """
-                + """
+                + $$"""
                 <style>
                   .lede { font-size:18px; color:var(--muted); margin:0 0 22px; max-width:74ch }
                   .lede b { color:var(--fg); font-variant-numeric:tabular-nums }
@@ -118,9 +120,11 @@ public static class HomeEndpoints
                   body[data-workspace="active"] .frontdoor,
                   body[data-workspace="active"] .lede,
                   body[data-workspace="active"] main > h1 { display:none }
+                  .workspace-loading #workspace { min-height:430px }
+                  @media (max-width:640px) { .workspace-loading #workspace { min-height:650px } }
                 </style>
-                <link rel="stylesheet" href="/app/workspace.css">
-                <script type="module" src="/app/workspace.js"></script>
+                <link rel="stylesheet" href="/app/workspace.css?v={{assetVersion}}">
+                <script type="module" src="/app/workspace.js?v={{assetVersion}}"></script>
                 """;
             // WebSite, so a crawler has an unambiguous name and publisher for the whole site.
             // Built as a JsonObject rather than written out as a string: JSON is mostly quotes and
