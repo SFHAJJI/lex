@@ -315,6 +315,26 @@ public class IndexTests : IDisposable
         Assert.Contains("semantic", result.Hits[0].MatchReasons);
     }
 
+    [Theory]
+    [InlineData(70)]
+    [InlineData(384)]
+    public void Semantic_vector_hamming_reads_complete_blocks_and_tail(int dimensions)
+    {
+        var vectors = Path.ChangeExtension(_db, $".{dimensions}.vectors");
+        _extra.Add(vectors);
+        var stored = Enumerable.Range(0, dimensions)
+            .Select(i => i % 3 == 0 ? -0.5f : 0.5f).ToArray();
+        var query = Enumerable.Range(0, dimensions)
+            .Select(i => i % 5 == 0 ? -0.5f : 0.5f).ToArray();
+        using (var writer = new SemanticVectorWriter(vectors, dimensions))
+            Assert.Equal(0, writer.Write(stored));
+
+        using var reader = new SemanticVectorReader(vectors);
+        var expected = Enumerable.Range(0, dimensions)
+            .Count(i => (stored[i] >= 0) != (query[i] >= 0));
+        Assert.Equal(expected, reader.HammingDistance(0, SemanticVectorReader.Binary(query)));
+    }
+
     [Fact]
     public void Fuzzy_fallback_is_visible_and_protects_identifiers()
     {
