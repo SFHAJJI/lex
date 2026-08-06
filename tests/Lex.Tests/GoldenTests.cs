@@ -93,6 +93,33 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
     }
 
     [Fact]
+    public async Task Home_reserves_workspace_height_and_versions_immutable_assets()
+    {
+        var html = await _site.Client.GetStringAsync("/");
+        Assert.Contains("classList.add('workspace-loading')", html);
+        Assert.DoesNotContain("{assetVersion}", html);
+        Assert.Matches("/app/workspace\\.css\\?v=[^\"']+", html);
+        var script = Regex.Match(html, "/app/workspace\\.js\\?v=[^\"']+");
+        Assert.True(script.Success);
+
+        var asset = await _site.Client.GetAsync(script.Value);
+        Assert.Equal(HttpStatusCode.OK, asset.StatusCode);
+        Assert.True(asset.Headers.CacheControl?.Public);
+        Assert.Equal(TimeSpan.FromDays(365), asset.Headers.CacheControl?.MaxAge);
+        Assert.Contains("immutable", asset.Headers.CacheControl?.Extensions.Select(x => x.Name) ?? []);
+    }
+
+    [Fact]
+    public async Task Html_is_compressed_when_the_client_accepts_brotli()
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/");
+        request.Headers.AcceptEncoding.ParseAdd("br");
+        using var response = await _site.Client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("br", response.Content.Headers.ContentEncoding);
+    }
+
+    [Fact]
     public async Task Architecture_separates_live_target_and_unmeasured_claims()
     {
         var current = await _site.Client.GetStringAsync("/architecture");
@@ -320,6 +347,12 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
         public Site()
         {
             Directory.CreateDirectory(_dir);
+            var appDir = Path.Combine(_dir, "wwwroot", "app");
+            Directory.CreateDirectory(appDir);
+            // The web job owns the real Vite build and DOM smoke test. This isolated asset keeps
+            // the server suite self-contained while exercising the production static-file route
+            // and immutable cache policy from a clean checkout.
+            File.WriteAllText(Path.Combine(appDir, "workspace.js"), "/* golden fixture */\n");
             BuildFixtureIndex(Path.Combine(_dir, "index-t-pub.db"));
             Environment.SetEnvironmentVariable("LEX_INDEX_DIR", _dir);
             Environment.SetEnvironmentVariable("LEX_PUBLIC_BASE_URL", "https://golden.test");
@@ -328,6 +361,7 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
 
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
+            builder.UseWebRoot(Path.Combine(_dir, "wwwroot"));
             builder.ConfigureServices(services =>
             {
                 services.RemoveAll<TimeProvider>();
