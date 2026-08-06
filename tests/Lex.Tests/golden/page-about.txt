@@ -6,9 +6,9 @@ HTTP 200
 <!-- Titles are labels, not sentences: one that ends in a full stop renders "acts., Lex" in
      the tab and in every social card, which is what the front page did until now. -->
 <title>About, Lex</title>
-<meta name="description" content="Point-in-time Luxembourg law, plus ten EU acts: what did the rule say on a given date? Permalinks, timelines, diffs and verifiable provenance.">
+<meta name="description" content="Point-in-time Luxembourg law and selected EU law: what did the rule say on a given date? Permalinks, timelines, diffs and verifiable provenance.">
 <meta property="og:title" content="About, Lex">
-<meta property="og:description" content="Point-in-time Luxembourg law, plus ten EU acts, with grounded AI answers, per-article history, and verifiable provenance.">
+<meta property="og:description" content="Point-in-time Luxembourg law and selected EU law, with grounded AI answers, per-article history, and verifiable provenance.">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Lex">
 <meta property="og:image" content="https://golden.test/og.png">
@@ -178,7 +178,7 @@ instead of guessing.</p>
 
 <div class="card">
 <b><a href="https://law.soufien.lu">law.soufien.lu</a></b> &middot; this one
-<p class="sub">Point-in-time Luxembourg law and ten EU acts: 2 works as
+<p class="sub">Point-in-time Luxembourg law and selected EU law: 2 works as
 3 dated versions, a public MCP endpoint, open datasets, and a signed index
 whose stamp commits to a digest of its own content. The hard part was never the AI; it was
 that a law has no single text, only a text per date.

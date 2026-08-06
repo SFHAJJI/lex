@@ -29,6 +29,7 @@ var options = LexOptionsSetup.FromEnvironment(builder.Environment);
 
 // ---- services --------------------------------------------------------------------------
 builder.Services.AddSingleton(Microsoft.Extensions.Options.Options.Create(options));
+builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<IndexRegistry>();
 builder.Services.AddSingleton(sp => new McpCore(sp.GetRequiredService<IndexRegistry>().All));
 builder.Services.AddSingleton(sp => new AskService(sp.GetRequiredService<McpCore>()));
@@ -50,7 +51,8 @@ var ctx = new WebContext(
     app.Services.GetRequiredService<IndexRegistry>(),
     options,
     app.Services.GetRequiredService<McpCore>(),
-    app.Services.GetRequiredService<AskService>());
+    app.Services.GetRequiredService<AskService>(),
+    app.Services.GetRequiredService<TimeProvider>());
 
 app.Logger.LogInformation("Assistant {State}; {Count} index(es) mounted from {Dir}",
     ctx.Ask.Enabled ? "enabled" : "disabled (no AOAI endpoint, key or deployment)",

@@ -198,9 +198,9 @@ public static class CatalogueEndpoints
             {
                 ["@context"] = "https://schema.org",
                 ["@type"] = "Dataset",
-                ["name"] = "Lex: point-in-time Luxembourg law and ten EU acts",
+                ["name"] = "Lex: point-in-time Luxembourg law and selected EU law",
                 ["description"] = "Every consolidated version of Luxembourg law that Legilux "
-                    + "publishes, plus ten EU acts, as dated records carrying validity intervals, "
+                    + "publishes, plus selected EU law, as dated records carrying validity intervals, "
                     + "per-article history, and a SHA-256 chain to the publisher's own bytes.",
                 ["url"] = $"{ctx.PublicBase}/browse",
                 ["license"] = "https://creativecommons.org/licenses/by/4.0/",
@@ -403,7 +403,7 @@ public static class CatalogueEndpoints
         // is the question a compliance reader actually has, and no per-work tool can answer it.
         app.MapGet("/changed", (string? from, string? to, string? order, string? publisher) =>
         {
-            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+            var today = ctx.Today;
             if (!DateOnly.TryParse(to, out var toD)) toD = today;
             if (!DateOnly.TryParse(from, out var fromD)) fromD = toD.AddYears(-1);
             if (fromD > toD) (fromD, toD) = (toD, fromD);
@@ -488,7 +488,7 @@ public static class CatalogueEndpoints
                 <div class="card"><h2 style="margin-top:0">What was in force on a date?</h2>
                 <p class="sub">The compliance question in one call: everything that applied on a given day.</p>
                 <form class="inline" action="/in-force-on" method="get">
-                  <input type="date" name="date" aria-label="Date to list laws in force on" value="{DateTime.UtcNow:yyyy-MM-dd}">
+                  <input type="date" name="date" aria-label="Date to list laws in force on" value="{ctx.Today:yyyy-MM-dd}">
                   <button type="submit">List it</button>
                 </form></div>
 

@@ -6,9 +6,9 @@ HTTP 200
 <!-- Titles are labels, not sentences: one that ends in a full stop renders "acts., Lex" in
      the tab and in every social card, which is what the front page did until now. -->
 <title>Architecture, Lex</title>
-<meta name="description" content="Point-in-time Luxembourg law, plus ten EU acts: what did the rule say on a given date? Permalinks, timelines, diffs and verifiable provenance.">
+<meta name="description" content="Point-in-time Luxembourg law and selected EU law: what did the rule say on a given date? Permalinks, timelines, diffs and verifiable provenance.">
 <meta property="og:title" content="Architecture, Lex">
-<meta property="og:description" content="Point-in-time Luxembourg law, plus ten EU acts, with grounded AI answers, per-article history, and verifiable provenance.">
+<meta property="og:description" content="Point-in-time Luxembourg law and selected EU law, with grounded AI answers, per-article history, and verifiable provenance.">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Lex">
 <meta property="og:image" content="https://golden.test/og.png">
@@ -156,8 +156,31 @@ HTTP 200
 </header>
 <main>
 <h1>Architecture</h1>
-<p class="sub">the evidence layer, the article layer, the signed indexes, and why you don't have to trust us</p>
-<p>Lex answers one question, <b>what did the rule say on that date?</b>, for Luxembourg law and ten EU acts,
+<p class="sub">what is deployed now, read separately from what comes next</p>
+<nav class="tabs" aria-label="Architecture evidence" style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 22px">
+  <a class="badge ok" href="/architecture">Current</a>
+  <a class="badge" href="/architecture/next">Next</a>
+  <a class="badge" href="/decisions">Decisions</a>
+  <a class="badge" href="/benchmarks">Benchmarks</a>
+</nav><p class="lede">This page describes the system serving requests now. Target-state work is kept
+separately on <a href="/architecture/next">Next</a>.</p>
+<div class="card"><table class="kv">
+<tr><th>retrieval</th><td>keyword, deterministic FTS5/BM25</td></tr>
+<tr><th>hosting</th><td>Azure Container Apps Consumption, France Central</td></tr>
+<tr><th>resources</th><td>0.25 vCPU, 0.5 GiB, 0 to 5 replicas</td></tr>
+<tr><th>structured UI contract</th><td>MCP JSON plus UiEffect</td></tr>
+<tr><th>comparison contract</th><td>exact authoritative provision text</td></tr>
+<tr><th>deployment observation</th><td class="mono">2026-08-06</td></tr>
+</table></div>
+<h2>Mounted coverage, read live</h2>
+<div class="card"><table><tr><th>collection</th><th>works</th><th>versions</th><th>schema</th><th>corpus commit</th></tr>
+<tr><td>t-pub</td><td class="mono">2</td>
+<td class="mono">3</td><td class="mono">lex-index/2</td>
+<td class="mono">goldenc</td></tr></table></div>
+<h2>Contracts preserved</h2>
+<p>Exact publisher text, hashes, anchors, timelines, refusals, comparisons and diffs remain
+authoritative. The backend returns structured MCP JSON and the workspace renders the separate
+<span class="mono">UiEffect</span> field.</p><p>Lex answers one question, <b>what did the rule say on that date?</b>, for Luxembourg law and the selected EU works in the mounted index,
 in a way a developer can build on and an auditor can check. Everything below is open source and open data.</p>
 
 <h2>Two layers, one hash chain</h2>

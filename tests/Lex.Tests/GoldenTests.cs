@@ -4,6 +4,9 @@ using System.Text;
 using System.Text.RegularExpressions;
 using Lex.Index;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Lex.Tests;
 
@@ -38,6 +41,8 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
         { "coverage",        "/coverage" },
         { "verify",          "/verify" },
         { "architecture",    "/architecture" },
+        { "architecture-next", "/architecture/next" },
+        { "benchmarks",      "/benchmarks" },
         { "built",           "/built" },
         { "decisions",       "/decisions" },
         { "about",           "/about" },
@@ -65,6 +70,39 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
         var res = await _site.Client.GetAsync(path);
         var body = await res.Content.ReadAsStringAsync();
         Golden.Assert($"page-{name}", $"HTTP {(int)res.StatusCode}\n{Golden.Normalise(body)}");
+    }
+
+    [Fact]
+    public async Task Architecture_separates_live_target_and_unmeasured_claims()
+    {
+        var current = await _site.Client.GetStringAsync("/architecture");
+        Assert.Contains("2</td>", current);              // mounted fixture works, not a hand-written live count
+        Assert.Contains("lex-index/2", current);
+        Assert.DoesNotContain("local compact semantic candidates", current);
+        Assert.DoesNotContain("lex-index/3", current);
+
+        var next = await _site.Client.GetStringAsync("/architecture/next");
+        Assert.Contains("local compact semantic candidates", next);
+        Assert.Contains("gated", next);
+
+        var benchmarks = await _site.Client.GetStringAsync("/benchmarks");
+        Assert.Contains("Not measured yet", benchmarks);
+        Assert.Contains("engineer-reviewed", benchmarks);
+    }
+
+    [Fact]
+    public void Architecture_registry_is_decision_complete_and_uses_known_statuses()
+    {
+        var registry = Lex.Web.ArchitectureProgram.Registry;
+        Assert.Equal(["planned", "building", "gated", "shipped", "rejected"], registry.Statuses);
+        Assert.All(registry.Milestones, m => Assert.Contains(m.Status, registry.Statuses));
+        Assert.All(registry.Decisions, d =>
+        {
+            Assert.Contains(d.Status, registry.Statuses);
+            Assert.False(string.IsNullOrWhiteSpace(d.Alternative));
+            Assert.False(string.IsNullOrWhiteSpace(d.Reason));
+            Assert.False(string.IsNullOrWhiteSpace(d.Cost));
+        });
     }
 
     /// <summary>Every advertised tool, called with arguments the fixture can answer.</summary>
@@ -238,6 +276,9 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
     /// </summary>
     public sealed class Site : WebApplicationFactory<Program>
     {
+        internal static readonly DateTimeOffset FixedNow =
+            new(2026, 8, 5, 12, 0, 0, TimeSpan.Zero);
+
         public readonly HttpClient Client;
         private readonly string _dir = Path.Combine(Path.GetTempPath(), $"lex-golden-{Guid.NewGuid():N}");
 
@@ -248,6 +289,15 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
             Environment.SetEnvironmentVariable("LEX_INDEX_DIR", _dir);
             Environment.SetEnvironmentVariable("LEX_PUBLIC_BASE_URL", "https://golden.test");
             Client = CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        }
+
+        protected override void ConfigureWebHost(IWebHostBuilder builder)
+        {
+            builder.ConfigureServices(services =>
+            {
+                services.RemoveAll<TimeProvider>();
+                services.AddSingleton<TimeProvider>(new FixedTimeProvider(FixedNow));
+            });
         }
 
         private static void BuildFixtureIndex(string db)
@@ -287,6 +337,11 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
         private static string Sha(string s) =>
             Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(s)));
 
+        private sealed class FixedTimeProvider(DateTimeOffset utcNow) : TimeProvider
+        {
+            public override DateTimeOffset GetUtcNow() => utcNow;
+        }
+
         protected override void Dispose(bool disposing)
         {
             base.Dispose(disposing);
@@ -322,7 +377,7 @@ internal static class Golden
         // couple of years of now is rewritten as <TODAY-n>, which is stable whenever it was
         // captured. Dates further out are left alone: those come from the corpus and are the
         // facts under test.
-        var today = DateTime.UtcNow.Date;
+        var today = GoldenTests.Site.FixedNow.UtcDateTime.Date;
         s = Regex.Replace(s, @"\d{4}-\d{2}-\d{2}", m =>
             DateOnly.TryParse(m.Value, out var d)
             && (today - d.ToDateTime(TimeOnly.MinValue)).TotalDays is var delta

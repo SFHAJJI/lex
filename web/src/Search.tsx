@@ -78,7 +78,7 @@ export default function Search(p: SearchProps) {
     let live = true;
     setBusy(true);
     const types = LAYERS.find((l) => l.id === layer)?.types;
-    tool<any>("search", { query: q.trim(), limit: 40, ...(asOf ? { as_of: asOf } : {}),
+    tool<any>("search", { query: q.trim(), limit: 40, as_of: asOf ?? p.today,
                           ...(types ? { document_type: types } : {}) })
       .then((res) => {
         if (!live) return;
