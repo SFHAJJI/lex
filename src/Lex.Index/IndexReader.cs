@@ -116,6 +116,15 @@ public sealed class LexIndexReader : IDisposable
             while (provisionReader.Read()) provisionNames.Add(provisionReader.GetString(0));
             if (!provisionNames.Contains("state_id"))
                 throw new InvalidOperationException($"Index {dbPath} claims schema '{schema}' but provisions is missing state_id.");
+            foreach (var table in new[] { "provision_states", "anchor_events" })
+            {
+                using var requiredColumns = conn.CreateCommand();
+                requiredColumns.CommandText =
+                    $"SELECT COUNT(*) FROM pragma_table_info('{table}') WHERE name IN ('language','is_primary_language')";
+                if (Convert.ToInt32(requiredColumns.ExecuteScalar()) != 2)
+                    throw new InvalidOperationException(
+                        $"Index {dbPath} claims schema '{schema}' but {table} is missing language identity columns.");
+            }
         }
 
         SemanticVectorReader? vectors = null;
@@ -1142,42 +1151,101 @@ public sealed class LexIndexReader : IDisposable
         => Provisions(rid).FirstOrDefault(p => p.Anchor == anchor);
 
     /// <summary>Every distinct text a provision has had, as validity intervals (the time axis).</summary>
-    public List<ProvisionStateRow> ProvisionStates(string work, string anchor)
+    public List<ProvisionStateRow> ProvisionStates(string work, string anchor, string? language = null)
     {
-        using var cmd = Cmd("""
+        var normalizedWork = NormalizeWork(work);
+        if (IsV3) language ??= PreferredHistoryLanguage(normalizedWork, anchor);
+        using var cmd = Cmd(IsV3 ? """
+            SELECT group_key, language, is_primary_language, anchor, valid_from, valid_to, text_sha, in_version,
+                   article_valid_from, validity_conflict
+            FROM provision_states
+            WHERE group_key=$w AND anchor=$a AND language=$lang
+            ORDER BY valid_from
+            """ : """
             SELECT group_key, anchor, valid_from, valid_to, text_sha, in_version,
                    article_valid_from, validity_conflict
             FROM provision_states WHERE group_key=$w AND anchor=$a ORDER BY valid_from
             """, []);
-        cmd.Parameters.AddWithValue("$w", NormalizeWork(work));
+        cmd.Parameters.AddWithValue("$w", normalizedWork);
         cmd.Parameters.AddWithValue("$a", anchor);
+        if (IsV3) cmd.Parameters.AddWithValue("$lang", language ?? "und");
         var list = new List<ProvisionStateRow>();
         using var r = cmd.ExecuteReader();
-        while (r.Read()) list.Add(new ProvisionStateRow(
-            r.GetString(0), r.GetString(1), r.GetString(2), r.IsDBNull(3) ? null : r.GetString(3),
-            r.GetString(4), r.IsDBNull(5) ? null : r.GetString(5), r.IsDBNull(6) ? null : r.GetString(6),
-            r.GetString(7) == "1" || (r.GetValue(7) is long l && l == 1)));
+        while (r.Read())
+        {
+            var offset = IsV3 ? 2 : 0;
+            list.Add(new ProvisionStateRow(
+                r.GetString(0), IsV3 ? r.GetString(1) : "und",
+                !IsV3 || r.GetInt64(2) == 1, r.GetString(1 + offset),
+                r.GetString(2 + offset), r.IsDBNull(3 + offset) ? null : r.GetString(3 + offset),
+                r.GetString(4 + offset), r.IsDBNull(5 + offset) ? null : r.GetString(5 + offset),
+                r.IsDBNull(6 + offset) ? null : r.GetString(6 + offset),
+                r.GetString(7 + offset) == "1" || (r.GetValue(7 + offset) is long l && l == 1)));
+        }
         return list;
     }
 
     /// <summary>Anchor lifecycle events for a work; optionally only those touching one anchor.</summary>
-    public List<AnchorEventRow> AnchorEvents(string work, string? anchor = null)
+    public List<AnchorEventRow> AnchorEvents(string work, string? anchor = null, string? language = null)
     {
-        using var cmd = Cmd("""
+        var normalizedWork = NormalizeWork(work);
+        if (IsV3) language ??= PreferredHistoryLanguage(normalizedWork, anchor);
+        using var cmd = Cmd(IsV3 ? """
+            SELECT group_key, language, is_primary_language, etype, from_anchor, to_anchor, anchor, text_sha, at_version
+            FROM anchor_events WHERE group_key=$w AND language=$lang
+              AND ($a IS NULL OR from_anchor=$a OR to_anchor=$a OR anchor=$a)
+            ORDER BY at_version
+            """ : """
             SELECT group_key, etype, from_anchor, to_anchor, anchor, text_sha, at_version
             FROM anchor_events WHERE group_key=$w
               AND ($a IS NULL OR from_anchor=$a OR to_anchor=$a OR anchor=$a)
             ORDER BY at_version
             """, []);
-        cmd.Parameters.AddWithValue("$w", NormalizeWork(work));
+        cmd.Parameters.AddWithValue("$w", normalizedWork);
         cmd.Parameters.AddWithValue("$a", (object?)anchor ?? DBNull.Value);
+        if (IsV3) cmd.Parameters.AddWithValue("$lang", language ?? "und");
         var list = new List<AnchorEventRow>();
         using var r = cmd.ExecuteReader();
-        while (r.Read()) list.Add(new AnchorEventRow(
-            r.GetString(0), r.GetString(1), r.IsDBNull(2) ? null : r.GetString(2),
-            r.IsDBNull(3) ? null : r.GetString(3), r.IsDBNull(4) ? null : r.GetString(4),
-            r.IsDBNull(5) ? null : r.GetString(5), r.IsDBNull(6) ? null : r.GetString(6)));
+        while (r.Read())
+        {
+            var offset = IsV3 ? 2 : 0;
+            list.Add(new AnchorEventRow(
+                r.GetString(0), IsV3 ? r.GetString(1) : "und",
+                !IsV3 || r.GetInt64(2) == 1, r.GetString(1 + offset),
+                r.IsDBNull(2 + offset) ? null : r.GetString(2 + offset),
+                r.IsDBNull(3 + offset) ? null : r.GetString(3 + offset),
+                r.IsDBNull(4 + offset) ? null : r.GetString(4 + offset),
+                r.IsDBNull(5 + offset) ? null : r.GetString(5 + offset),
+                r.IsDBNull(6 + offset) ? null : r.GetString(6 + offset)));
+        }
         return list;
+    }
+
+    private string? PreferredHistoryLanguage(string work, string? anchor)
+    {
+        using var cmd = Cmd("""
+            SELECT language
+            FROM provision_states
+            WHERE group_key=$w AND ($a IS NULL OR anchor=$a)
+            ORDER BY is_primary_language DESC, language
+            LIMIT 1
+            """, []);
+        cmd.Parameters.AddWithValue("$w", work);
+        cmd.Parameters.AddWithValue("$a", (object?)anchor ?? DBNull.Value);
+        var language = cmd.ExecuteScalar() as string;
+        if (language is not null) return language;
+
+        using var eventCommand = Cmd("""
+            SELECT language
+            FROM anchor_events
+            WHERE group_key=$w
+              AND ($a IS NULL OR from_anchor=$a OR to_anchor=$a OR anchor=$a)
+            ORDER BY is_primary_language DESC, language
+            LIMIT 1
+            """, []);
+        eventCommand.Parameters.AddWithValue("$w", work);
+        eventCommand.Parameters.AddWithValue("$a", (object?)anchor ?? DBNull.Value);
+        return eventCommand.ExecuteScalar() as string;
     }
 
     /// <summary>True if the work has any provision-level history rows.</summary>

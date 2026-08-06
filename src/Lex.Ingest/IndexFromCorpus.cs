@@ -162,11 +162,16 @@ public static class IndexFromCorpus
                 if (!File.Exists(histPath)) continue;
                 var slug = Path.GetFileName(wd);
                 using var hd = JsonDocument.Parse(File.ReadAllText(histPath));
-                if (hd.RootElement.TryGetProperty("anchors", out var anchors))
+                var primaryLanguage = hd.RootElement.TryGetProperty("primary_language", out var primary)
+                    ? primary.GetString() ?? "und" : "und";
+                void AddStates(string language, JsonElement anchors)
+                {
                     foreach (var a in anchors.EnumerateObject())
                         foreach (var s in a.Value.EnumerateArray())
                             provisionStates.Add(new ProvisionStateRow(
                                 GroupKey: slug,
+                                Language: language,
+                                IsPrimaryLanguage: language == primaryLanguage,
                                 Anchor: a.Name,
                                 ValidFrom: s.GetProperty("valid_from").GetString() ?? "",
                                 ValidTo: s.TryGetProperty("valid_to", out var vt) ? vt.GetString() : null,
@@ -174,16 +179,33 @@ public static class IndexFromCorpus
                                 InVersion: s.TryGetProperty("in_version", out var iv) ? iv.GetString() : null,
                                 ArticleValidFrom: s.TryGetProperty("article_valid_from", out var av) ? av.GetString() : null,
                                 ValidityConflict: s.TryGetProperty("validity_conflict", out var vc) && vc.GetBoolean()));
-                if (hd.RootElement.TryGetProperty("anchor_events", out var evs))
-                    foreach (var e in evs.EnumerateArray())
+                }
+                void AddEvents(string language, JsonElement eventsForLanguage)
+                {
+                    foreach (var e in eventsForLanguage.EnumerateArray())
                         anchorEventRows.Add(new AnchorEventRow(
                             GroupKey: slug,
+                            Language: language,
+                            IsPrimaryLanguage: language == primaryLanguage,
                             EType: e.GetProperty("type").GetString() ?? "",
                             FromAnchor: e.TryGetProperty("from", out var f) ? f.GetString() : null,
                             ToAnchor: e.TryGetProperty("to", out var t) ? t.GetString() : null,
                             Anchor: e.TryGetProperty("anchor", out var an) ? an.GetString() : null,
                             TextSha: e.TryGetProperty("text_sha256", out var ts) ? ts.GetString() : null,
                             AtVersion: e.TryGetProperty("at_version", out var atv) ? atv.GetString() : null));
+                }
+
+                if (hd.RootElement.TryGetProperty("anchors_by_language", out var languageHistories))
+                    foreach (var language in languageHistories.EnumerateObject())
+                        AddStates(language.Name, language.Value);
+                else if (hd.RootElement.TryGetProperty("anchors", out var legacyAnchors))
+                    AddStates(primaryLanguage, legacyAnchors);
+
+                if (hd.RootElement.TryGetProperty("anchor_events_by_language", out var languageEvents))
+                    foreach (var language in languageEvents.EnumerateObject())
+                        AddEvents(language.Name, language.Value);
+                else if (hd.RootElement.TryGetProperty("anchor_events", out var legacyEvents))
+                    AddEvents(primaryLanguage, legacyEvents);
             }
         }
 
