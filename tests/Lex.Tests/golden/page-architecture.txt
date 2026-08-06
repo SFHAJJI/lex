@@ -171,6 +171,9 @@ separately on <a href="/architecture/next">Next</a>.</p>
 <tr><th>structured UI contract</th><td>MCP JSON plus UiEffect</td></tr>
 <tr><th>comparison contract</th><td>exact authoritative provision text</td></tr>
 <tr><th>deployment observation</th><td class="mono">2026-08-06</td></tr>
+<tr><th>deployed code</th><td class="mono">not supplied by deployment</td></tr>
+<tr><th>artifact manifest set</th><td class="mono">not supplied by deployment</td></tr>
+<tr><th>immutable image</th><td class="mono">not supplied by deployment</td></tr>
 </table></div>
 <h2>Mounted coverage, read live</h2>
 <div class="card"><table><tr><th>collection</th><th>works</th><th>versions</th><th>schema</th><th>corpus commit</th></tr>

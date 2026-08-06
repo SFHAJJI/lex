@@ -16,6 +16,7 @@
 set -eu
 
 OUT="${1:-/indexes}"
+REQUIRE_MANIFEST="${LEX_REQUIRE_ARTIFACT_MANIFEST:-0}"
 mkdir -p "$OUT"
 
 # publisher repo : asset name
@@ -38,6 +39,21 @@ echo "$SETS" | while IFS=: read -r repo asset; do
   if ! head -c 15 "$OUT/$asset" | grep -q "SQLite format 3"; then
     echo "ERROR: $asset is not a SQLite database" >&2
     exit 1
+  fi
+  stem="${asset%.db}"
+  manifest="$stem.manifest.json"
+  signature="$stem.manifest.sig"
+  if curl -fsSL --retry 3 --retry-delay 5 -o "$OUT/$manifest" \
+       "https://github.com/SFHAJJI/$repo/releases/latest/download/$manifest"; then
+    curl -fsSL --retry 3 --retry-delay 5 -o "$OUT/$signature" \
+      "https://github.com/SFHAJJI/$repo/releases/latest/download/$signature"
+    echo "  fetched signed manifest: $manifest"
+  elif [ "$REQUIRE_MANIFEST" = "1" ]; then
+    echo "ERROR: $repo has no signed artifact manifest" >&2
+    exit 1
+  else
+    rm -f "$OUT/$manifest"
+    echo "  migration: no artifact manifest published yet"
   fi
   echo "  ok: $asset $((size / 1024 / 1024)) MB"
 done

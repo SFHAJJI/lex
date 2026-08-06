@@ -24,7 +24,7 @@
     {
       "id": "M2",
       "title": "Verified artifact publication",
-      "status": "planned",
+      "status": "building",
       "outcome": "A pinned trust root verifies a signed manifest for every served artifact."
     },
     {
@@ -110,7 +110,7 @@
     {
       "id": "D58",
       "title": "Pin trust outside the artifact",
-      "status": "planned",
+      "status": "building",
       "choice": "Verify a whole-artifact manifest with a public-key fingerprint pinned in the release.",
       "alternative": "Trust the public key stored beside its signature in the same database.",
       "reason": "Replacing an artifact must not let an attacker replace its trust root too.",

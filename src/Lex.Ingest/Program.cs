@@ -12,6 +12,12 @@ string? Get(string name)
     return i >= 0 && i + 1 < args0.Length ? args0[i + 1] : null;
 }
 
+IEnumerable<string> GetAll(string name)
+{
+    for (var i = 0; i < args0.Length - 1; i++)
+        if (args0[i] == name) yield return args0[i + 1];
+}
+
 // Time enters as an injected parameter (F9); the wall clock is read only at this CLI boundary.
 var now = Get("--now") is { } n ? DateTimeOffset.Parse(n) : DateTimeOffset.UtcNow;
 
@@ -125,6 +131,59 @@ switch (args0[0])
                 return 1;
         }
     }
+    case "artifact":
+    {
+        switch (args0.Length > 1 ? args0[1] : "")
+        {
+            case "manifest":
+            {
+                var root = Get("--root") ?? throw new ArgumentException("--root required");
+                var files = GetAll("--file").ToArray();
+                if (files.Length == 0) throw new ArgumentException("at least one --file required");
+                var manifestPath = Get("--manifest") ?? throw new ArgumentException("--manifest required");
+                var signaturePath = Get("--signature");
+                var keyFile = Get("--keyfile");
+                var keyId = Get("--key-id") ?? throw new ArgumentException("--key-id required");
+                var codeCommit = Get("--code-commit") ?? throw new ArgumentException("--code-commit required");
+                if ((signaturePath is null) != (keyFile is null))
+                    throw new ArgumentException("--signature and --keyfile must be supplied together; omit both for Key Vault signing");
+                var sources = GetAll("--source").Select(s => s.Split('=', 2))
+                    .ToDictionary(p => p[0], p => p.Length == 2 ? p[1] : "", StringComparer.Ordinal);
+                var manifest = ArtifactManifests.Create(
+                    root, files, keyId, now.ToString("yyyy-MM-ddTHH:mm:ssZ"), codeCommit, sources);
+                var bytes = ArtifactManifests.Serialize(manifest);
+                File.WriteAllBytes(manifestPath, bytes);
+                if (signaturePath is not null && keyFile is not null)
+                    File.WriteAllText(signaturePath,
+                        ArtifactManifests.SignBase64(bytes, File.ReadAllText(keyFile)) + "\n",
+                        new System.Text.UTF8Encoding(false));
+                Console.WriteLine($"manifest={manifestPath} signature={signaturePath ?? "external"} files={manifest.Files.Count} key_id={keyId}");
+                return 0;
+            }
+            case "verify":
+            {
+                var root = Get("--root") ?? throw new ArgumentException("--root required");
+                var manifest = Get("--manifest") ?? throw new ArgumentException("--manifest required");
+                var signature = Get("--signature") ?? throw new ArgumentException("--signature required");
+                var roots = Get("--trust-roots") ?? throw new ArgumentException("--trust-roots required");
+                var trusted = ArtifactManifests.ParseTrustRoots(File.ReadAllBytes(roots));
+                var files = ArtifactManifests.VerifyDirectory(root, manifest, signature, trusted);
+                Console.WriteLine($"artifact manifest valid: {files.Count} file(s)");
+                return 0;
+            }
+            case "trust-root":
+            {
+                var keyFile = Get("--keyfile") ?? throw new ArgumentException("--keyfile required");
+                var keyId = Get("--key-id") ?? throw new ArgumentException("--key-id required");
+                var root = ArtifactManifests.TrustRoot(keyId, File.ReadAllText(keyFile));
+                Console.WriteLine(System.Text.Encoding.UTF8.GetString(ArtifactManifests.SerializeTrustRoots([root])));
+                return 0;
+            }
+            default:
+                Console.Error.WriteLine("usage: lex artifact manifest|verify|trust-root ...");
+                return 1;
+        }
+    }
     case "dataset":
     {
         // One JSON line per provision-version, per publisher: the AI-builder consumption file.
@@ -202,4 +261,7 @@ static void Usage() => Console.Error.WriteLine("""
       lex ingest --publisher lu-legilux --corpus PATH [--now ISO]
       lex index  --corpus PATH [--articles PATH] --out FILE.db [--keyfile KEY.pem] [--now ISO]
       lex derive --publisher lu-legilux --corpus PATH --out PATH [--code-version SHA]
+      lex artifact manifest --root DIR --file RELATIVE [--file RELATIVE] --manifest FILE --signature FILE --keyfile KEY.pem --key-id ID --code-commit SHA [--source KEY=VALUE]
+      lex artifact verify --root DIR --manifest FILE --signature FILE --trust-roots FILE
+      lex artifact trust-root --keyfile KEY.pem --key-id ID
     """);

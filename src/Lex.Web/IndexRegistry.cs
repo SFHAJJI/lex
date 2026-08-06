@@ -1,5 +1,6 @@
 using Lex.Index;
 using Microsoft.Extensions.Options;
+using System.Security.Cryptography;
 
 namespace Lex.Web;
 
@@ -14,6 +15,7 @@ namespace Lex.Web;
 public sealed class IndexRegistry : IDisposable
 {
     private readonly Dictionary<string, LexIndexReader> _readers = new(StringComparer.Ordinal);
+    private readonly List<VerifiedArtifactManifest> _artifactManifests = [];
 
     public IndexRegistry(IOptions<LexOptions> options, ILogger<IndexRegistry> log)
     {
@@ -24,10 +26,45 @@ public sealed class IndexRegistry : IDisposable
             return;
         }
 
+        var manifests = Directory.EnumerateFiles(dir, "*.manifest.json").Order(StringComparer.Ordinal).ToList();
+        var verifiedFiles = new HashSet<string>(StringComparer.Ordinal);
+        if (manifests.Count == 0 && options.Value.RequireArtifactManifest)
+        {
+            log.LogCritical("Artifact manifests are required but none exist in {Dir}; no index will be mounted.", dir);
+            return;
+        }
+        try
+        {
+            foreach (var manifest in manifests)
+            {
+                var signature = manifest[..^".json".Length] + ".sig";
+                var manifestBytes = File.ReadAllBytes(manifest);
+                foreach (var path in ArtifactManifests.VerifyDirectory(
+                             dir, manifest, signature, ArtifactTrustStore.Roots))
+                    verifiedFiles.Add(path);
+                var parsed = ArtifactManifests.Parse(manifestBytes);
+                _artifactManifests.Add(new VerifiedArtifactManifest(
+                    Path.GetFileName(manifest),
+                    Convert.ToHexStringLower(SHA256.HashData(manifestBytes)),
+                    parsed.KeyId,
+                    parsed.CodeCommit,
+                    parsed.CreatedAt,
+                    parsed.Files.Select(f => f.Path).ToArray()));
+                log.LogInformation("Verified artifact manifest {Manifest}", Path.GetFileName(manifest));
+            }
+        }
+        catch (Exception ex)
+        {
+            log.LogCritical("Artifact verification failed; no index will be mounted: {Reason}", ex.Message);
+            return;
+        }
+
         foreach (var db in Directory.EnumerateFiles(dir, "index-*.db"))
         {
             try
             {
+                if (manifests.Count > 0 && !verifiedFiles.Contains(Path.GetFileName(db)))
+                    throw new InvalidDataException("the database is not listed by a verified artifact manifest");
                 var reader = LexIndexReader.Open(db);
                 _readers[reader.Collection] = reader;
                 log.LogInformation("Mounted {Db} ({Collection}, signature_valid={Valid})",
@@ -47,6 +84,8 @@ public sealed class IndexRegistry : IDisposable
 
     public IReadOnlyDictionary<string, LexIndexReader> All => _readers;
 
+    public IReadOnlyList<VerifiedArtifactManifest> VerifiedArtifactManifests => _artifactManifests;
+
     public IEnumerable<LexIndexReader> Values => _readers.Values;
 
     public int Count => _readers.Count;
@@ -64,3 +103,11 @@ public sealed class IndexRegistry : IDisposable
         _readers.Clear();
     }
 }
+
+public sealed record VerifiedArtifactManifest(
+    string File,
+    string Sha256,
+    string KeyId,
+    string CodeCommit,
+    string CreatedAt,
+    IReadOnlyList<string> Artifacts);

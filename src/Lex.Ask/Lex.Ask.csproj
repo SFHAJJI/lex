@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Lex.Mcp\Lex.Mcp.csproj" />
+    <PackageReference Include="Azure.Identity" Version="1.17.0" />
   </ItemGroup>
 
   <PropertyGroup>

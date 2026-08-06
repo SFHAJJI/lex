@@ -109,6 +109,9 @@ public static class ExplainerEndpoints
                 <tr><th>structured UI contract</th><td>{H(current.StructuredContract)}</td></tr>
                 <tr><th>comparison contract</th><td>{H(current.ComparisonContract)}</td></tr>
                 <tr><th>deployment observation</th><td class="mono">{H(current.ObservedAt)}</td></tr>
+                <tr><th>deployed code</th><td class="mono">{H(ctx.Options.CodeCommit ?? "not supplied by deployment")}</td></tr>
+                <tr><th>artifact manifest set</th><td class="mono">{H(ctx.Options.ArtifactManifestId ?? "not supplied by deployment")}</td></tr>
+                <tr><th>immutable image</th><td class="mono">{H(ctx.Options.DeployImage ?? "not supplied by deployment")}</td></tr>
                 </table></div>
                 <h2>Mounted coverage, read live</h2>
                 <div class="card"><table><tr><th>collection</th><th>works</th><th>versions</th><th>schema</th><th>corpus commit</th></tr>
@@ -251,13 +254,33 @@ public static class ExplainerEndpoints
                     ["stamp"] = stampObj,
                 });
             }
+            var manifests = new JsonArray();
+            foreach (var manifest in ctx.Registry.VerifiedArtifactManifests)
+                manifests.Add(new JsonObject
+                {
+                    ["file"] = manifest.File,
+                    ["sha256"] = manifest.Sha256,
+                    ["key_id"] = manifest.KeyId,
+                    ["code_commit"] = manifest.CodeCommit,
+                    ["created_at"] = manifest.CreatedAt,
+                    ["artifacts"] = new JsonArray(manifest.Artifacts.Select(path => JsonValue.Create(path)).ToArray()),
+                });
             return Results.Content(new JsonObject
             {
-                ["what"] = "attestation of currency: the complete signed stamp of every index this deployment serves",
+                ["what"] = "attestation of every verified release manifest and embedded index stamp this deployment serves",
+                ["artifact_trust"] = "whole-artifact manifests are verified against public-key fingerprints pinned in the application release",
+                ["artifact_signature_format"] = "ECDSA-P256-SHA256, IEEE P1363 (r||s, 64 bytes), base64",
                 ["signature_binds"] = "the canonical stamp text: every stamp field except signature/public_key, sorted by key, joined as k=v lines",
                 ["signature_format"] = "ECDSA-P256-SHA256, IEEE P1363 (r||s, 64 bytes), base64",
                 ["verify"] = "see /verify",
                 ["served_at"] = ctx.Clock.GetUtcNow().ToString("yyyy-MM-ddTHH:mm:ssZ"),
+                ["deployment"] = new JsonObject
+                {
+                    ["code_commit"] = ctx.Options.CodeCommit,
+                    ["artifact_manifest_set"] = ctx.Options.ArtifactManifestId,
+                    ["image"] = ctx.Options.DeployImage,
+                },
+                ["artifact_manifests"] = manifests,
                 ["collections"] = collections,
             }.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }), "application/json");
         });

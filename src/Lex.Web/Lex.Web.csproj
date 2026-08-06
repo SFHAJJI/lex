@@ -15,6 +15,9 @@
     <EmbeddedResource Include="..\..\docs\architecture-program.json"
                       Link="architecture-program.json"
                       LogicalName="Lex.Web.architecture-program.json" />
+    <EmbeddedResource Include="..\..\deploy\trusted-artifact-roots.json"
+                      Link="trusted-artifact-roots.json"
+                      LogicalName="Lex.Web.trusted-artifact-roots.json" />
   </ItemGroup>
 
   <PropertyGroup>

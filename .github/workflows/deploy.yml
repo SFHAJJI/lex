@@ -1,0 +1,179 @@
+name: deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      require_manifest:
+        description: Fail the image build and runtime when signed manifests are absent
+        required: true
+        type: boolean
+        default: false
+  repository_dispatch:
+    types: [verified_artifact_release]
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: lex-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      ACR_NAME: crsoufien3orem
+      ACR_SERVER: crsoufien3orem.azurecr.io
+      RESOURCE_GROUP: rg-platform
+      CONTAINER_APP: ca-lex-web
+      RUNTIME_IDENTITY: uami-lex-runtime
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Require OIDC configuration
+        shell: bash
+        run: |
+          set -eu
+          for value in AZURE_CLIENT_ID AZURE_TENANT_ID AZURE_SUBSCRIPTION_ID; do
+            [ -n "${!value:-}" ] || { echo "::error::$value is not configured in the production environment"; exit 1; }
+          done
+
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Build immutable image in ACR
+        id: image
+        shell: bash
+        env:
+          MANIFEST_INPUT: ${{ inputs.require_manifest }}
+          DISPATCH_MANIFEST: ${{ github.event.client_payload.require_manifest }}
+        run: |
+          set -eu
+          require="${MANIFEST_INPUT:-${DISPATCH_MANIFEST:-false}}"
+          [ "$require" = "true" ] && require=1 || require=0
+          release_dir=$(mktemp -d)
+          trap 'rm -rf "$release_dir"' EXIT
+          for item in \
+            lex-corpus-lu-legilux:index-lu-legilux.manifest.json \
+            lex-corpus-eu-eurlex:index-eu-eurlex.manifest.json; do
+            repo="${item%%:*}"
+            manifest="${item#*:}"
+            if ! curl --fail --silent --show-error --location \
+                 -o "$release_dir/$manifest" \
+                 "https://github.com/SFHAJJI/$repo/releases/latest/download/$manifest"; then
+              [ "$require" = "0" ] || { echo "::error::$repo has no required manifest"; exit 1; }
+              rm -f "$release_dir/$manifest"
+            fi
+          done
+          if find "$release_dir" -name '*.manifest.json' -print -quit | grep -q .; then
+            manifest_set=$(for manifest in "$release_dir"/*.manifest.json; do
+              printf '%s  %s\n' "$(sha256sum "$manifest" | cut -d' ' -f1)" "$(basename "$manifest")"
+            done | sort -k2 | sha256sum | cut -d' ' -f1)
+          else
+            manifest_set=legacy
+          fi
+          tag="sha-${GITHUB_SHA:0:12}-art-${manifest_set:0:12}"
+          image="$ACR_SERVER/lex-web:$tag"
+          az acr build --registry "$ACR_NAME" --image "lex-web:$tag" \
+            --build-arg "LEX_REQUIRE_ARTIFACT_MANIFEST=$require" \
+            --build-arg "LEX_EXPECTED_MANIFEST_SET=$manifest_set" \
+            --file Dockerfile . --no-logs
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+          echo "require_manifest=$require" >> "$GITHUB_OUTPUT"
+          echo "manifest_set=$manifest_set" >> "$GITHUB_OUTPUT"
+
+      - name: Configure identity-backed pulls and assistant access
+        id: identity
+        shell: bash
+        run: |
+          set -eu
+          runtime_id=$(az identity show -g "$RESOURCE_GROUP" -n "$RUNTIME_IDENTITY" --query id -o tsv)
+          runtime_client=$(az identity show -g "$RESOURCE_GROUP" -n "$RUNTIME_IDENTITY" --query clientId -o tsv)
+          az containerapp identity assign -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+            --user-assigned "$runtime_id" --only-show-errors
+          az containerapp registry set -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+            --server "$ACR_SERVER" --identity "$runtime_id" --only-show-errors
+          echo "runtime_client=$runtime_client" >> "$GITHUB_OUTPUT"
+
+      - name: Create and smoke-test candidate revision
+        id: candidate
+        shell: bash
+        env:
+          IMAGE: ${{ steps.image.outputs.image }}
+          REQUIRE_MANIFEST: ${{ steps.image.outputs.require_manifest }}
+          MANIFEST_SET: ${{ steps.image.outputs.manifest_set }}
+        run: |
+          set -eu
+          az containerapp revision set-mode -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" --mode multiple --only-show-errors
+          previous=$(az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+            --query "[?properties.trafficWeight > \`0\`].name | [0]" -o tsv)
+          suffix="r${GITHUB_SHA:0:10}"
+          az containerapp update -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+            --image "$IMAGE" --revision-suffix "$suffix" \
+            --set-env-vars "AOAI_USE_MANAGED_IDENTITY=1" "LEX_REQUIRE_ARTIFACT_MANIFEST=$REQUIRE_MANIFEST" \
+              "LEX_ARTIFACT_MANIFEST_ID=$MANIFEST_SET" "LEX_CODE_COMMIT=$GITHUB_SHA" "LEX_DEPLOY_IMAGE=$IMAGE" \
+            --remove-env-vars AOAI_KEY --only-show-errors
+          candidate="$CONTAINER_APP--$suffix"
+          for attempt in $(seq 1 30); do
+            state=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+              --revision "$candidate" --query properties.runningState -o tsv 2>/dev/null || true)
+            [ "$state" = "Running" ] && break
+            [ "$state" = "Failed" ] && { echo "::error::candidate revision failed"; exit 1; }
+            sleep 10
+          done
+          [ "$state" = "Running" ] || { echo "::error::candidate revision did not become ready"; exit 1; }
+          if [ -n "$previous" ] && [ "$previous" != "$candidate" ]; then
+            az containerapp ingress traffic set -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+              --revision-weight "$previous=100" "$candidate=0" --only-show-errors
+          fi
+          fqdn=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+            --revision "$candidate" --query properties.fqdn -o tsv)
+          curl --fail --show-error --silent --retry 5 --retry-delay 5 "https://$fqdn/healthz"
+          curl --fail --show-error --silent --retry 3 --retry-delay 5 \
+            -H 'Content-Type: application/json' \
+            -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"coverage","arguments":{}}}' \
+            "https://$fqdn/mcp" | grep -q '"result"'
+          echo "previous=$previous" >> "$GITHUB_OUTPUT"
+          echo "candidate=$candidate" >> "$GITHUB_OUTPUT"
+
+      - name: Promote candidate
+        shell: bash
+        env:
+          PREVIOUS: ${{ steps.candidate.outputs.previous }}
+          CANDIDATE: ${{ steps.candidate.outputs.candidate }}
+        run: |
+          set -eu
+          if [ -n "$PREVIOUS" ] && [ "$PREVIOUS" != "$CANDIDATE" ]; then
+            az containerapp ingress traffic set -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+              --revision-weight "$PREVIOUS=0" "$CANDIDATE=100" --only-show-errors
+          else
+            az containerapp ingress traffic set -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+              --revision-weight "$CANDIDATE=100" --only-show-errors
+          fi
+          curl --fail --show-error --silent --retry 5 --retry-delay 5 https://law.soufien.lu/healthz
+
+      - name: Deployment summary
+        shell: bash
+        env:
+          IMAGE: ${{ steps.image.outputs.image }}
+          CANDIDATE: ${{ steps.candidate.outputs.candidate }}
+          MANIFEST_SET: ${{ steps.image.outputs.manifest_set }}
+        run: |
+          {
+            echo "## Lex production deployment"
+            echo
+            echo "- image: \`$IMAGE\`"
+            echo "- revision: \`$CANDIDATE\`"
+            echo "- artifact manifest set: \`$MANIFEST_SET\`"
+            echo "- authentication: GitHub OIDC, managed ACR pull and managed Azure OpenAI access"
+            echo "- rollback revision retained: \`${{ steps.candidate.outputs.previous }}\`"
+            echo "- legacy secrets retained while the rollback revision exists; removal is a separate verified cleanup"
+          } >> "$GITHUB_STEP_SUMMARY"
