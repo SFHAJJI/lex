@@ -141,6 +141,7 @@ export function Compare({ work, title, from, to, anchor }: {
       }
       setState({
         loading: false, rows, unchanged: untouched, punctuation, added, removed,
+        profiles: [profA ?? "not recorded", profB ?? "not recorded"],
         sources: [pa?.document?.source_uri, pb?.document?.source_uri],
         permalinks: [pa?.document?.permalink, pb?.document?.permalink],
       });
@@ -188,6 +189,7 @@ export function Compare({ work, title, from, to, anchor }: {
     title, work, from, to, permalink: comparisonUrl,
     fromSource: state.sources?.[0], toSource: state.sources?.[1],
     fromPermalink: state.permalinks?.[0], toPermalink: state.permalinks?.[1],
+    fromExtractionProfile: state.profiles?.[0], toExtractionProfile: state.profiles?.[1],
     rows, unchanged: untouched, punctuationOnly: punct, exportedAt: new Date().toISOString(),
   });
   const comparisonCitation = comparisonCitationText(evidence());

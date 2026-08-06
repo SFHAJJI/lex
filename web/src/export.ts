@@ -33,6 +33,8 @@ export interface ComparisonEvidence {
   toSource?: string;
   fromPermalink?: string;
   toPermalink?: string;
+  fromExtractionProfile?: string;
+  toExtractionProfile?: string;
   rows: ComparisonRow[];
   unchanged: string[];
   punctuationOnly: string[];
@@ -124,8 +126,10 @@ export function comparisonEvidenceMarkdown(input: ComparisonEvidence): string {
     `- Lex comparison: ${input.permalink}`,
     `- ${input.from} Lex version: ${input.fromPermalink ?? "not recorded"}`,
     `- ${input.from} official source: ${input.fromSource ?? "not recorded"}`,
+    `- ${input.from} extraction profile: ${input.fromExtractionProfile ?? "not recorded"}`,
     `- ${input.to} Lex version: ${input.toPermalink ?? "not recorded"}`,
     `- ${input.to} official source: ${input.toSource ?? "not recorded"}`,
+    `- ${input.to} extraction profile: ${input.toExtractionProfile ?? "not recorded"}`,
     `- Exported at: ${input.exportedAt}`,
     `- Summary: ${input.rows.length} wording changes, ${input.unchanged.length} identical, ${input.punctuationOnly.length} punctuation-only`,
     "",
@@ -184,6 +188,9 @@ export function downloadMarkdown(filename: string, value: string): void {
   const link = document.createElement("a");
   link.href = url;
   link.download = filename;
+  link.hidden = true;
+  document.body.append(link);
   link.click();
-  window.setTimeout(() => URL.revokeObjectURL(url), 0);
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
