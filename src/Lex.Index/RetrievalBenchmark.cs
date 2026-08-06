@@ -90,7 +90,7 @@ public static class RetrievalBenchmarkCatalog
         void Add(string category, string query, Work work, string language = "en", string timeScope = "all_versions",
                  string? asOf = null, string? hierarchy = null, string? domain = null) => cases.Add(new(
             $"{category}-{cases.Count(c => c.Category == category) + 1:000}", category, query, language,
-            timeScope, asOf, [work.Celex.ToLowerInvariant()],
+            timeScope, asOf, [work.Celex.ToLowerInvariant().Replace('/', '-')],
             $"The query identifies {work.Topic}; the relevant work judgment is document-level and does not invent an article match.",
             "generated-unreviewed", hierarchy, domain));
 

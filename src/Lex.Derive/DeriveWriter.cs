@@ -104,7 +104,7 @@ public static class DeriveWriter
                 {
                     var l = Path.GetFileNameWithoutExtension(f);
                     if (fmx4Langs.Contains(l) && fmxByVersion[i].ContainsKey(l)) continue;   // superseded by fmx4 unit
-                    units.Add((l, f, Path.GetExtension(f) == ".xml" ? "akn" : "xhtml", Path.GetFileName(f)));
+                    units.Add((l, f, "structured-text", Path.GetFileName(f)));
                 }
                 foreach (var (l, mainPath) in fmxByVersion[i].OrderBy(kv => kv.Key, StringComparer.Ordinal))
                     if (fmx4Langs.Contains(l))
@@ -135,14 +135,29 @@ public static class DeriveWriter
                                         ?? vMeta["work_identifier"]?.GetValue<string>() ?? "";
                         var lexId = $"{publisher}:{slug}:{validFrom}";
 
-                        var profileId = unit.Kind switch
+                        Extraction extraction;
+                        string profileId;
+                        switch (unit.Kind)
                         {
-                            "akn" => AknLuProfile.ProfileId,
-                            "fmx4" => Fmx4EuProfile.ProfileId,
-                            "pdf" => PdfLuProfile.ProfileId,
-                            "pdf-memorial" => PdfMemorialLuProfile.ProfileId,
-                            _ => XhtmlEuProfile.ProfileId,
-                        };
+                            case "pdf":
+                                extraction = PdfLuProfile.Extract(File.ReadAllBytes(unit.FilePath), lexId);
+                                profileId = PdfLuProfile.ProfileId;
+                                break;
+                            case "pdf-memorial":
+                                extraction = PdfMemorialLuProfile.Extract(File.ReadAllBytes(unit.FilePath), lexId);
+                                profileId = PdfMemorialLuProfile.ProfileId;
+                                break;
+                            case "fmx4":
+                                extraction = Fmx4EuProfile.Extract(File.ReadAllText(unit.FilePath, Encoding.UTF8), lexId);
+                                profileId = Fmx4EuProfile.ProfileId;
+                                break;
+                            default:
+                                var result = StructuredTextExtractor.Extract(
+                                    File.ReadAllText(unit.FilePath, Encoding.UTF8), lexId);
+                                extraction = result.Extraction;
+                                profileId = result.ProfileId;
+                                break;
+                        }
                         var frontmatter = new Dictionary<string, string>
                         {
                             ["lex_id"] = lexId,
@@ -156,15 +171,6 @@ public static class DeriveWriter
                             ["generator"] = $"{profileId} · lex derive",
                         };
 
-                        var extraction = unit.Kind switch
-                        {
-                            // A PDF is bytes, not text; reading it as UTF-8 first would corrupt it.
-                            "pdf" => PdfLuProfile.Extract(File.ReadAllBytes(unit.FilePath), lexId),
-                            "pdf-memorial" => PdfMemorialLuProfile.Extract(File.ReadAllBytes(unit.FilePath), lexId),
-                            "akn" => AknLuProfile.Extract(File.ReadAllText(unit.FilePath, Encoding.UTF8), lexId),
-                            "fmx4" => Fmx4EuProfile.Extract(File.ReadAllText(unit.FilePath, Encoding.UTF8), lexId),
-                            _ => XhtmlEuProfile.Extract(File.ReadAllText(unit.FilePath, Encoding.UTF8), lexId),
-                        };
                         if (extraction.Provisions.Count == 0)
                         {
                             skipped++;
