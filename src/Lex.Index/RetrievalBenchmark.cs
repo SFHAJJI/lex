@@ -71,7 +71,13 @@ public static class RetrievalBenchmarkCatalog
         new("32023R1114", "markets in crypto assets", "marches de crypto actifs", "secondary_eu_law", "financial-services", ["crypto asset white paper", "stablecoin issuer reserve", "crypto service provider authorisation"], ["livre blanc crypto actif", "prestataire de services crypto"]),
         new("32023R2854", "european single access point", "point d acces unique europeen", "secondary_eu_law", "financial-services", ["public financial information access", "single access point metadata", "company disclosure collection"], ["acces information financiere", "point d acces unique"]),
         new("32024R1689", "artificial intelligence act", "reglement intelligence artificielle", "secondary_eu_law", "consumer-environment", ["high risk ai system", "prohibited artificial intelligence practice", "general purpose ai model"], ["systeme ia a haut risque", "pratique ia interdite"]),
-        new("32024R2847", "anti money laundering authority", "autorite lutte blanchiment", "secondary_eu_law", "aml-corporate", ["money laundering authority supervision", "aml direct supervision", "financial intelligence coordination"], ["supervision lutte blanchiment", "renseignement financier"]),
+        new("32024R2847", "cyber resilience act", "reglement cyberresilience", "secondary_eu_law", "consumer-environment", ["cybersecurity requirements for connected products", "product vulnerability handling", "security updates for digital products"], ["cybersecurite des produits connectes", "traitement des vulnerabilites"]),
+        new("32024R1620", "anti money laundering authority", "autorite lutte blanchiment", "secondary_eu_law", "aml-corporate", ["money laundering authority supervision", "aml direct supervision", "financial intelligence coordination"], ["supervision lutte blanchiment", "renseignement financier"]),
+        new("32003R0001", "competition rules enforcement", "mise en oeuvre des regles de concurrence", "secondary_eu_law", "competition", ["antitrust investigation powers", "competition authority cooperation", "articles 101 and 102 enforcement"], ["pouvoirs enquete concurrence", "cooperation autorites concurrence"]),
+        new("32006L0112", "common value added tax system", "systeme commun taxe valeur ajoutee", "secondary_eu_law", "tax", ["value added tax taxable transaction", "vat place of supply", "input tax deduction"], ["operation imposable tva", "deduction taxe en amont"]),
+        new("32003L0088", "working time directive", "directive temps de travail", "secondary_eu_law", "employment", ["maximum weekly working time", "minimum daily rest", "paid annual leave"], ["duree maximale hebdomadaire travail", "conge annuel paye"]),
+        new("32014L0024", "public procurement directive", "directive marches publics", "secondary_eu_law", "procurement-and-ip", ["public contract award procedure", "procurement exclusion grounds", "most economically advantageous tender"], ["procedure attribution marche public", "motifs exclusion soumissionnaire"]),
+        new("32017R1001", "european union trade mark", "marque de l union europeenne", "secondary_eu_law", "procurement-and-ip", ["eu trade mark registration", "trade mark infringement remedy", "absolute grounds for refusal"], ["enregistrement marque union", "contrefacon de marque"]),
         new("12012E/TXT", "treaty on the functioning of the european union", "traite fonctionnement union europeenne", "primary_eu_law", "primary-eu-law", ["free movement internal market", "competition treaty legal basis", "preliminary ruling jurisdiction"], ["libre circulation marche interieur", "base juridique concurrence"]),
         new("12012M/TXT", "treaty on european union", "traite sur l union europeenne", "primary_eu_law", "primary-eu-law", ["union values rule of law", "common foreign security policy", "principle of conferral"], ["valeurs de l union", "principe d attribution"]),
         new("12012P/TXT", "charter of fundamental rights", "charte des droits fondamentaux", "primary_eu_law", "primary-eu-law", ["right to effective remedy", "personal data fundamental right", "freedom of expression charter"], ["droit a un recours effectif", "liberte d expression"]),
@@ -87,8 +93,11 @@ public static class RetrievalBenchmarkCatalog
             $"The query identifies {work.Topic}; the relevant work judgment is document-level and does not invent an article match.",
             "engineer-reviewed", hierarchy, domain));
 
-        foreach (var work in Works) Add("exact", work.Celex, work);
-        foreach (var work in Works.Take(12)) Add("exact", "CELEX " + work.Celex, work);
+        for (var i = 0; i < 30; i++)
+        {
+            var work = Works[i % Works.Length];
+            Add("exact", i < Works.Length ? work.Celex : "CELEX " + work.Celex, work);
+        }
 
         for (var i = 0; i < 40; i++)
         {
@@ -96,9 +105,11 @@ public static class RetrievalBenchmarkCatalog
             Add("temporal", $"{work.Topic} rules as of 6 August 2026", work, timeScope: "as_of", asOf: "2026-08-06");
         }
 
-        foreach (var work in Works)
-            foreach (var concept in work.Concepts.Take(3)) Add("conceptual", concept, work);
-        foreach (var work in Works.Take(6)) Add("conceptual", $"{work.Concepts[0]} under {work.Topic}", work);
+        for (var i = 0; i < 60; i++)
+        {
+            var work = Works[i % Works.Length];
+            Add("conceptual", work.Concepts[(i / Works.Length) % work.Concepts.Count], work);
+        }
 
         for (var i = 0; i < 30; i++)
         {
@@ -115,9 +126,16 @@ public static class RetrievalBenchmarkCatalog
             Add("fuzzy", phrase.Replace(word, typo, StringComparison.Ordinal), work);
         }
 
+        var hierarchyWorks = Works
+            .GroupBy(w => $"{w.Hierarchy}|{w.Domain}", StringComparer.Ordinal)
+            .Select(g => g.First())
+            .Concat(Works)
+            .DistinctBy(w => w.Celex, StringComparer.Ordinal)
+            .Take(20)
+            .ToArray();
         for (var i = 0; i < 20; i++)
         {
-            var work = i < 10 ? Works[15 + i % 3] : Works[(i - 10) % 15];
+            var work = hierarchyWorks[i];
             Add("hierarchy", work.Concepts[0], work, hierarchy: work.Hierarchy, domain: work.Domain);
         }
 
