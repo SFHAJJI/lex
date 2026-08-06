@@ -48,6 +48,28 @@ public sealed class CorpusWriterTests : IDisposable
         Assert.Equal("language=fr", added.Detail);
     }
 
+    [Fact]
+    public async Task Missing_publisher_record_is_tombstoned_and_can_be_resighted()
+    {
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-01T00:00:00Z"))
+            .WriteAsync(new OneVersionAdapter("in_force", "financial-services"), default);
+
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-03T00:00:00Z"))
+            .WriteAsync(new EmptyAdapter(), default);
+
+        var path = Path.Combine(_dir, "works", "w1", "versions", "2024-01-01", "meta.json");
+        var withdrawn = JsonSerializer.Deserialize<VersionMeta>(
+            await File.ReadAllTextAsync(path), CorpusJson.Options)!;
+        Assert.Equal("withdrawn_from_source", withdrawn.Events[^1].Event);
+
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-06T00:00:00Z"))
+            .WriteAsync(new OneVersionAdapter("in_force", "financial-services"), default);
+
+        var resighted = JsonSerializer.Deserialize<VersionMeta>(
+            await File.ReadAllTextAsync(path), CorpusJson.Options)!;
+        Assert.Equal("resighted", resighted.Events[^1].Event);
+    }
+
     public void Dispose()
     {
         try { Directory.Delete(_dir, true); } catch { }
@@ -91,5 +113,26 @@ public sealed class CorpusWriterTests : IDisposable
 
         public Task<string?> FetchBody(VersionRecord version, ExpressionRecord expression, CancellationToken ct)
             => Task.FromResult<string?>(null);
+    }
+
+    private sealed class EmptyAdapter : ISourceAdapter
+    {
+        public PublisherDescriptor Describe() => new(
+            new Publisher("test", "Test", "EU", "https://example.test", Tier.A, "test", null),
+            [], ["en"], TextIncluded: false, TextPublic: false, HistoryBegins: "publisher");
+
+        public async IAsyncEnumerable<WorkRef> EnumerateWorks(
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+            await Task.CompletedTask;
+            yield break;
+        }
+
+        public Task<IReadOnlyList<VersionRecord>> FetchVersions(WorkRef work, CancellationToken ct) =>
+            Task.FromResult<IReadOnlyList<VersionRecord>>([]);
+
+        public Task<string?> FetchBody(VersionRecord version, ExpressionRecord expression, CancellationToken ct) =>
+            Task.FromResult<string?>(null);
     }
 }

@@ -29,6 +29,7 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now)
         var langs = new HashSet<string>(StringComparer.Ordinal);
         string? earliest = null, latest = null;
         int works = 0, versions = 0;
+        var seenVersionMetadata = new HashSet<string>(PathComparer);
 
         await foreach (var work in adapter.EnumerateWorks(ct))
         {
@@ -68,6 +69,7 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now)
                 var versionDir = Path.Combine(workDir, "versions", vkey);
                 Directory.CreateDirectory(versionDir);
                 var metaPath = Path.Combine(versionDir, "meta.json");
+                seenVersionMetadata.Add(Path.GetFullPath(metaPath));
 
                 var lexId = $"{pub.Id}:{work.Slug}:{vkey}";
                 VersionMeta meta;
@@ -76,6 +78,19 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now)
                 if (existing)
                 {
                     meta = JsonSerializer.Deserialize<VersionMeta>(await File.ReadAllTextAsync(metaPath, ct), CorpusJson.Options)!;
+                    var lifecycle = meta.Events.LastOrDefault(e =>
+                        e.Event is "withdrawn_from_source" or "resighted");
+                    if (lifecycle?.Event == "withdrawn_from_source")
+                    {
+                        meta.Events.Add(new EventEntry
+                        {
+                            Event = "resighted",
+                            ObservedFrom = _now,
+                            Scope = "version",
+                            Detail = "publisher record returned to the current enumeration",
+                        });
+                        changed = true;
+                    }
                     // F12: interval closure — one appended event, valid_to updated, nothing else touched.
                     var newTo = v.ValidTo?.ToString("yyyy-MM-dd");
                     if (meta.ValidTo is null && newTo is not null)
@@ -250,6 +265,8 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now)
             }
         }
 
+        TombstoneMissingVersions(seenVersionMetadata);
+
         var manifest = new ManifestDoc
         {
             Publisher = new Dictionary<string, string>
@@ -302,6 +319,45 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now)
             Url = expression.SourceUri,
         },
     };
+
+    private void TombstoneMissingVersions(IReadOnlySet<string> seenVersionMetadata)
+    {
+        var worksRoot = Path.Combine(corpusRoot, "works");
+        if (!Directory.Exists(worksRoot)) return;
+
+        foreach (var metaPath in Directory.EnumerateFiles(
+                     worksRoot, "meta.json", SearchOption.AllDirectories))
+        {
+            if (!metaPath.Contains($"{Path.DirectorySeparatorChar}versions{Path.DirectorySeparatorChar}",
+                    StringComparison.Ordinal))
+                continue;
+            if (seenVersionMetadata.Contains(Path.GetFullPath(metaPath))) continue;
+
+            var meta = JsonSerializer.Deserialize<VersionMeta>(
+                File.ReadAllText(metaPath), CorpusJson.Options)!;
+            var lifecycle = meta.Events.LastOrDefault(e =>
+                e.Event is "withdrawn_from_source" or "resighted");
+            if (lifecycle?.Event == "withdrawn_from_source") continue;
+
+            meta.Events.Add(new EventEntry
+            {
+                Event = "withdrawn_from_source",
+                ObservedFrom = _now,
+                Scope = "version",
+                Detail = "publisher record absent from the current enumeration",
+            });
+            meta.RecordSha256 = null;
+            var canonical = JsonSerializer.Serialize(meta, CorpusJson.Options);
+            meta.RecordSha256 = Convert.ToHexStringLower(
+                SHA256.HashData(Encoding.UTF8.GetBytes(canonical)));
+            File.WriteAllText(metaPath, JsonSerializer.Serialize(meta, CorpusJson.Options) + "\n");
+            Updated++;
+        }
+    }
+
+    private static StringComparer PathComparer => OperatingSystem.IsWindows()
+        ? StringComparer.OrdinalIgnoreCase
+        : StringComparer.Ordinal;
 
     private static string Min(string? a, string b) => a is null || string.CompareOrdinal(b, a) < 0 ? b : a;
     private static string Max(string? a, string b) => a is null || string.CompareOrdinal(b, a) > 0 ? b : a;

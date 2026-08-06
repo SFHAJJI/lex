@@ -10,6 +10,7 @@ public sealed record CorpusIntegrityReport(
     int ActualWorks,
     int ManifestVersions,
     int ActualVersions,
+    int CurrentVersions,
     int Expressions,
     int Observations,
     IReadOnlyList<string> Errors)
@@ -24,7 +25,7 @@ public static class CorpusIntegrity
         var errors = new List<string>();
         var manifestPath = Path.Combine(corpusRoot, "manifest.json");
         if (!File.Exists(manifestPath))
-            return new("missing", 0, 0, 0, 0, 0, 0, ["manifest.json is missing"]);
+            return new("missing", 0, 0, 0, 0, 0, 0, 0, ["manifest.json is missing"]);
 
         ManifestDoc manifest;
         try
@@ -35,7 +36,7 @@ public static class CorpusIntegrity
         }
         catch (Exception ex)
         {
-            return new("unreadable", 0, 0, 0, 0, 0, 0,
+            return new("unreadable", 0, 0, 0, 0, 0, 0, 0,
                 [$"manifest.json cannot be parsed: {ex.Message}"]);
         }
 
@@ -44,13 +45,15 @@ public static class CorpusIntegrity
 
         var worksRoot = Path.Combine(corpusRoot, "works");
         if (!Directory.Exists(worksRoot))
-            return new(manifest.Schema, manifest.Works, 0, manifest.Versions, 0, 0, 0,
+            return new(manifest.Schema, manifest.Works, 0, manifest.Versions, 0, 0, 0, 0,
                 [.. errors, "works directory is missing"]);
 
         var workIds = new HashSet<string>(StringComparer.Ordinal);
         var versionIds = new HashSet<string>(StringComparer.Ordinal);
         var actualWorks = 0;
         var actualVersions = 0;
+        var currentVersions = 0;
+        var currentWorks = new HashSet<string>(StringComparer.Ordinal);
         var expressions = 0;
         var observations = 0;
 
@@ -111,6 +114,13 @@ public static class CorpusIntegrity
 
                 if (!versionIds.Add(version.LexId))
                     errors.Add($"duplicate lex_id '{version.LexId}'");
+                var lifecycle = version.Events.LastOrDefault(e =>
+                    e.Event is "withdrawn_from_source" or "resighted");
+                if (lifecycle?.Event != "withdrawn_from_source")
+                {
+                    currentVersions++;
+                    currentWorks.Add(version.WorkIdentifier);
+                }
                 VerifyRecordHash(version, relativeVersion, errors);
 
                 var languages = new HashSet<string>(StringComparer.Ordinal);
@@ -128,13 +138,13 @@ public static class CorpusIntegrity
             }
         }
 
-        if (manifest.Works != actualWorks)
-            errors.Add($"manifest works={manifest.Works}, filesystem works={actualWorks}");
-        if (manifest.Versions != actualVersions)
-            errors.Add($"manifest versions={manifest.Versions}, filesystem versions={actualVersions}");
+        if (manifest.Works != currentWorks.Count)
+            errors.Add($"manifest works={manifest.Works}, current filesystem works={currentWorks.Count}");
+        if (manifest.Versions != currentVersions)
+            errors.Add($"manifest versions={manifest.Versions}, current filesystem versions={currentVersions}");
 
         return new(manifest.Schema, manifest.Works, actualWorks, manifest.Versions,
-            actualVersions, expressions, observations, errors);
+            actualVersions, currentVersions, expressions, observations, errors);
     }
 
     private static void VerifyRecordHash(
