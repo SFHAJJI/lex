@@ -2,6 +2,8 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { first, tool, type ProvisionItem, type RankingRow, type UiEffect } from "./api";
 import { LAYERS, publisherOf, workSlug, type LayerId, type State } from "./state";
 import { shorten } from "./pickers";
+import { EvidenceActions } from "./EvidenceActions";
+import { citationText, evidenceFilename, lawEvidenceMarkdown } from "./export";
 
 const permalink = (work: string, date: string, anchor?: string) =>
   `/${publisherOf(work)}/${workSlug(work)}/${date}${anchor ? `#${anchor}` : ""}`;
@@ -15,9 +17,9 @@ const ms = (d: string) => Date.parse(`${d}T00:00:00Z`);
  * opened an article — so re-dating dropped you at the top of a document you were reading the
  * middle of. It is the one control a point-in-time reader uses constantly, so it stays put.
  */
-export function Provision({ items, toc, validFrom, validTo, work, anchor, profile, source, onPick, onClear, onCite }: {
+export function Provision({ items, toc, validFrom, validTo, work, title, language, anchor, profile, source, onPick, onClear, onCite }: {
   items: ProvisionItem[]; toc: ProvisionItem[]; validFrom: string; validTo?: string;
-  work: string; anchor?: string; profile?: string; source?: string;
+  work: string; title: string; language?: string; anchor?: string; profile?: string; source?: string;
   // `auto` marks an article the reader did not ask for. The rail uses it to decide whether to
   // stay on the law's versions or narrow to this article's texts.
   onPick: (anchor: string, auto?: boolean) => void; onClear: () => void; onCite?: (work: string) => void;
@@ -31,6 +33,11 @@ export function Provision({ items, toc, validFrom, validTo, work, anchor, profil
   const fromGazette = profile === "pdf-memorial-lu/1";
   const outlineOnly = items.length > 0 && items.every((p) => !p.text);
   const nav = toc.length >= 6 || outlineOnly;
+  const pageUrl = typeof window === "undefined" ? "" : window.location.href;
+  const evidence = () => ({
+    title, work, validFrom, validTo, language, source, permalink: pageUrl,
+    extractionProfile: profile, provisions: items, exportedAt: new Date().toISOString(),
+  });
 
   // A code too large to render whole used to open onto an apology with a button beside it. Open
   // the first article instead, so arriving at the Code du travail means arriving at some law.
@@ -53,6 +60,10 @@ export function Provision({ items, toc, validFrom, validTo, work, anchor, profil
         )}
         {fromPdf ? <span className="tag warn">read from the publisher's PDF</span> : null}
         {fromGazette ? <span className="tag warn">cut from a gazette issue</span> : null}
+        {!outlineOnly && items.length > 0 ? (
+          <EvidenceActions citation={citationText(evidence())} markdown={() => lawEvidenceMarkdown(evidence())}
+                           filename={evidenceFilename(work, anchor ?? validFrom)} />
+        ) : null}
       </div>
       {fromPdf ? (
         <p className="pdfnote">
@@ -118,7 +129,7 @@ export function Provision({ items, toc, validFrom, validTo, work, anchor, profil
               ))}
             </div>
           ) : null}
-          {p.sha ? <div className="sha">sha256 {p.sha.slice(0, 16)}…</div> : null}
+          {p.text_sha256 ? <div className="sha">sha256 {p.text_sha256.slice(0, 16)}…</div> : null}
         </article>
       ))}
     </div>
