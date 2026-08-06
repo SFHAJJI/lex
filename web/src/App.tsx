@@ -69,6 +69,12 @@ export default function App() {
   // it changes nothing about what is displayed, only which timeline the rail belongs to.
   const chosenAnchor = useRef(false);
 
+  // The server reserves the workspace's first-paint height so the explanatory content below it
+  // does not jump when React arrives. Release that temporary reservation only after this tree is
+  // committed. Without JavaScript the server's class-adding script never runs, so the plain
+  // noscript path receives no artificial empty space.
+  useEffect(() => { document.documentElement.classList.remove("workspace-loading"); }, []);
+
   // The marketing below the fold belongs to a first-time visitor, not to someone reading a
   // law. One flag on <body> lets the server-rendered page get out of the way.
   useEffect(() => {
@@ -438,9 +444,10 @@ export default function App() {
          ui?.cited_by ? <CitedBy view={ui.cited_by}
                                  onOpen={(w, d, a) => { setUi(undefined); go({ work: w, date: d, anchor: a, mode: "read", space: "law" }); }} /> :
          ui?.in_force ? <InForce date={ui.in_force.date} total={ui.in_force.total} rows={ui.in_force.rows} onOpen={openLaw} /> :
-         s.work && s.mode === "compare" ? <Compare work={s.work} from={s.date ?? today()} to={s.to ?? today()} anchor={s.anchor} /> :
+         s.work && s.mode === "compare" ? <Compare work={s.work} title={title ?? s.work} from={s.date ?? today()} to={s.to ?? today()} anchor={s.anchor} /> :
          s.work && loaded ? <Provision items={loaded.items} toc={toc} validFrom={loaded.from} validTo={loaded.to}
-                                       work={s.work} anchor={s.anchor} profile={loaded.profile}
+                                       work={s.work} title={title ?? s.work} language={servedLang}
+                                       anchor={s.anchor} profile={loaded.profile}
                                        source={loaded.source}
                                        onCite={(w) => { setUi(undefined); go({ work: w, date: undefined, anchor: undefined, to: undefined, mode: "read", space: "law" }); }}
                                        onPick={(a, auto) => { chosenAnchor.current = !auto; go({ anchor: a }); }}

@@ -66,6 +66,7 @@
 .work:empty { min-height: 0; }
 .cnt { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
 .tag { border: 1px solid var(--line); border-radius: 99px; padding: 1px 10px; font-size: 12.5px; color: var(--muted); }
+.cnt button.tag { min-height: 30px; }
 .tag.warn { color: var(--warn); border-color: var(--warn); }
 .tag.mono, .mono { font-family: var(--mono); }
 

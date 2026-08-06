@@ -1,8 +1,12 @@
 import { useEffect, useState } from "react";
 import { CompareSkeleton } from "./Skeleton";
 import { first, tool } from "./api";
-import { diffWords, changed, type Piece } from "./diff";
+import { diffWords, changed } from "./diff";
 import { Empty } from "./views";
+import { EvidenceActions } from "./EvidenceActions";
+import {
+  comparisonCitationText, comparisonEvidenceMarkdown, evidenceFilename, type ComparisonRow,
+} from "./export";
 
 /**
  * Two dated versions of one law, and what actually moved between them.
@@ -27,18 +31,19 @@ import { Empty } from "./views";
  * And it hid every unchanged article behind a number. They are now a band you can open, between
  * the changes, which is what a diff tool does and what reading an amended law needs.
  */
-type Row = {
-  label: string; anchor: string; pieces: Piece[];
-  kind: "changed" | "added" | "removed";
-};
+type Row = ComparisonRow;
 
-export function Compare({ work, from, to, anchor }: {
-  work: string; from: string; to: string; anchor?: string;
+export function Compare({ work, title, from, to, anchor }: {
+  work: string; title: string; from: string; to: string; anchor?: string;
 }) {
   const [state, setState] = useState<{
     loading: boolean; error?: string; rows?: Row[];
     unchanged?: string[]; punctuation?: string[]; added?: number; removed?: number;
     profiles?: [string, string];
+    sources?: [string | undefined, string | undefined];
+    permalinks?: [string | undefined, string | undefined];
+    documents?: [{ lexId?: string; validFrom?: string; validTo?: string },
+                 { lexId?: string; validFrom?: string; validTo?: string }];
   }>({ loading: true });
   const [wide, setWide] = useState(() => typeof window !== "undefined" && window.innerWidth >= 900);
   const [showPunct, setShowPunct] = useState(false);
@@ -130,9 +135,22 @@ export function Compare({ work, from, to, anchor }: {
         // changed, the law did not, and both halves of that are worth saying.
         const pieces = diffWords(before, after);
         if (!changed(pieces) && kind === "changed") { punctuation.push(label); continue; }
-        rows.push({ label, anchor: k, pieces, kind });
+        rows.push({
+          label, anchor: k, pieces, kind,
+          fromSha: A.get(k)?.text_sha256,
+          toSha: B.get(k)?.text_sha256,
+        });
       }
-      setState({ loading: false, rows, unchanged: untouched, punctuation, added, removed });
+      setState({
+        loading: false, rows, unchanged: untouched, punctuation, added, removed,
+        profiles: [profA ?? "not recorded", profB ?? "not recorded"],
+        sources: [pa?.document?.source_uri, pb?.document?.source_uri],
+        permalinks: [pa?.document?.permalink, pb?.document?.permalink],
+        documents: [
+          { lexId: pa?.document?.lex_id, validFrom: pa?.document?.valid_from, validTo: pa?.document?.valid_to },
+          { lexId: pb?.document?.lex_id, validFrom: pb?.document?.valid_from, validTo: pb?.document?.valid_to },
+        ],
+      });
     })().catch((e) => live && setState({ loading: false, error: String(e?.message ?? e) }));
 
     return () => { live = false; };
@@ -172,6 +190,18 @@ export function Compare({ work, from, to, anchor }: {
   const rows = state.rows ?? [];
   const punct = state.punctuation ?? [];
   const untouched = state.unchanged ?? [];
+  const comparisonUrl = typeof window === "undefined" ? "" : window.location.href;
+  const evidence = () => ({
+    title, work, from, to, permalink: comparisonUrl,
+    fromSource: state.sources?.[0], toSource: state.sources?.[1],
+    fromPermalink: state.permalinks?.[0], toPermalink: state.permalinks?.[1],
+    fromLexId: state.documents?.[0].lexId, toLexId: state.documents?.[1].lexId,
+    fromVersionValidFrom: state.documents?.[0].validFrom, fromVersionValidTo: state.documents?.[0].validTo,
+    toVersionValidFrom: state.documents?.[1].validFrom, toVersionValidTo: state.documents?.[1].validTo,
+    fromExtractionProfile: state.profiles?.[0], toExtractionProfile: state.profiles?.[1],
+    rows, unchanged: untouched, punctuationOnly: punct, exportedAt: new Date().toISOString(),
+  });
+  const comparisonCitation = comparisonCitationText(evidence());
 
   // Side by side needs width that a phone does not have, so it is offered rather than imposed,
   // and defaults off below 900px. Unlike a code diff there is no alignment guesswork: an article
@@ -223,6 +253,8 @@ export function Compare({ work, from, to, anchor }: {
         <span className="tag">{state.removed ?? 0} removed</span>
         <span className="tag">{untouched.length} identical</span>
         <span className="tag mono">{from} → {to}</span>
+        <EvidenceActions citation={comparisonCitation} markdown={() => comparisonEvidenceMarkdown(evidence())}
+                         filename={evidenceFilename(work, `${from}-to-${to}`)} />
         {rows.length > 0 ? (
           <button className={"tag act" + (wide ? " on" : "")} onClick={() => setWide((v) => !v)}>
             {wide ? "one column" : "side by side"}
