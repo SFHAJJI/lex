@@ -172,6 +172,7 @@ HTTP 200
 issued it.</p><!-- Read synchronously by the workspace on mount, so the doors never flash in or need a
      round trip of their own. -->
 <script type="application/json" id="doors">[]</script>
+<script type="application/json" id="search-facets">{"jurisdictions":[],"hierarchies":[],"domains":[],"act_forms":[],"binding_statuses":[],"languages":["fr"]}</script>
 <script>document.documentElement.classList.add('workspace-loading')</script><!-- The workspace mounts here. Without JavaScript the page still explains itself
      and every permalink below still works, those are server-rendered documents.
      The three doors are repeated here as real links, because the block above is

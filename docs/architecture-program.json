@@ -166,6 +166,15 @@
       "alternative": "Ingest every resource labelled Act as if it had consolidation semantics.",
       "reason": "The broad Act catalogue mixes lawyer-relevant rules with notices and records whose dates and manifestations mean different things.",
       "cost": "The first increment needs a new adapter, fixtures, scope preview and retrieval tests before later form additions become configuration-led."
+    },
+    {
+      "id": "D64",
+      "title": "Drive search facets from mounted indexes",
+      "status": "building",
+      "choice": "Build jurisdiction, hierarchy, domain, form, status and language controls from values in verified mounted indexes.",
+      "alternative": "Maintain a second hard-coded list of supported scopes in the web client.",
+      "reason": "A reviewed domain or jurisdiction must become searchable without an unrelated React implementation change.",
+      "cost": "Friendly labels use stable overrides for known legal vocabulary and a deterministic fallback for new values."
     }
   ],
   "baseline": {

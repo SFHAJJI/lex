@@ -104,6 +104,37 @@ public class IndexTests : IDisposable
     }
 
     [Fact]
+    public void Search_facets_are_derived_from_mounted_index_values()
+    {
+        var stamp = new Dictionary<string, string>
+        {
+            ["collection"] = "t-pub", ["tier"] = "A", ["history_begins"] = "publisher",
+            ["built_at"] = "2026-08-01T00:00:00Z", ["corpus_commit"] = "test",
+        };
+        var first = Row("t-pub:w1:2020-01-01", "w1", "2020-01-01", null, text: true) with
+        {
+            Hierarchy = "secondary_law", Domains = "|employment|tax|", ActForm = "REG",
+            BindingStatus = "in_force",
+        };
+        var second = Row("t-pub:w2:2020-01-01", "w2", "2020-01-01", null, text: true) with
+        {
+            Domains = "|tax|consumer|", ActForm = "DIR", BindingStatus = "in_force",
+        };
+        IndexBuilder.Build(_db, stamp, [first, second],
+            [Prov(first, 0, "art_1", "first"), Prov(second, 0, "art_1", "second")],
+            [], [], StampSigner.CreateKeyPem());
+
+        using var reader = LexIndexReader.Open(_db);
+        var facets = reader.SearchFacets();
+
+        Assert.Equal(["en"], facets.Languages);
+        Assert.Equal(["secondary_law"], facets.Hierarchies);
+        Assert.Equal(["consumer", "employment", "tax"], facets.Domains);
+        Assert.Equal(["DIR", "REG"], facets.ActForms);
+        Assert.Equal(["in_force"], facets.BindingStatuses);
+    }
+
+    [Fact]
     public void Provision_history_defaults_deterministically_and_can_select_a_language()
     {
         var stamp = new Dictionary<string, string>
