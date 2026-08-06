@@ -48,7 +48,7 @@ resource "azurerm_federated_identity_credential" "deploy_github" {
   user_assigned_identity_id = azurerm_user_assigned_identity.deploy.id
   audience                  = ["api://AzureADTokenExchange"]
   issuer                    = "https://token.actions.githubusercontent.com"
-  subject                   = "repo:SFHAJJI/lex:environment:production"
+  subject                   = "repo:SFHAJJI@26882784/lex@1318835305:environment:production"
 }
 
 resource "azurerm_federated_identity_credential" "publisher_github" {
@@ -56,7 +56,7 @@ resource "azurerm_federated_identity_credential" "publisher_github" {
   user_assigned_identity_id = azurerm_user_assigned_identity.publisher.id
   audience                  = ["api://AzureADTokenExchange"]
   issuer                    = "https://token.actions.githubusercontent.com"
-  subject                   = "repo:SFHAJJI/lex-ops:ref:refs/heads/main"
+  subject                   = "repo:SFHAJJI@26882784/lex-ops@1319033296:ref:refs/heads/main"
 }
 
 resource "azurerm_role_assignment" "runtime_acr_pull" {
