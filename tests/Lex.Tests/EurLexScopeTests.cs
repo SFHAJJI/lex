@@ -72,6 +72,18 @@ public sealed class EurLexScopeTests : IDisposable
             EurLexAdapter.CelexAliasUri("12012E/TXT"));
     }
 
+    [Fact]
+    public void Original_state_is_kept_only_when_it_extends_temporal_coverage()
+    {
+        Assert.True(EurLexAdapter.ShouldIncludeOriginalState(
+            new DateOnly(2014, 9, 17), [new DateOnly(2024, 5, 20), new DateOnly(2024, 10, 18)]));
+        Assert.False(EurLexAdapter.ShouldIncludeOriginalState(
+            new DateOnly(2014, 9, 17), [new DateOnly(2014, 9, 17), new DateOnly(2024, 10, 18)]));
+        Assert.False(EurLexAdapter.ShouldIncludeOriginalState(
+            new DateOnly(2025, 1, 1), [new DateOnly(2024, 10, 18)]));
+        Assert.True(EurLexAdapter.ShouldIncludeOriginalState(new DateOnly(2014, 9, 17), []));
+    }
+
     public void Dispose()
     {
         try { Directory.Delete(_dir, true); } catch { }
