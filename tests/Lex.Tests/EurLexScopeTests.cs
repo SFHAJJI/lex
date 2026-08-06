@@ -57,6 +57,21 @@ public sealed class EurLexScopeTests : IDisposable
         Assert.Equal(expected, EurLexAdapter.NormalizeWorkSlug(celex));
     }
 
+    [Theory]
+    [InlineData("32016R0679", "https://publications.europa.eu/resource/celex/32016R0679")]
+    [InlineData("12012E/TXT", "https://publications.europa.eu/resource/celex/12012E%2FTXT")]
+    public void Cellar_resource_url_keeps_celex_as_one_encoded_path_segment(string celex, string expected)
+    {
+        Assert.Equal(expected, EurLexAdapter.CellarResourceUrl(celex));
+    }
+
+    [Fact]
+    public void Sparql_alias_keeps_primary_celex_as_one_encoded_path_segment()
+    {
+        Assert.Equal("http://publications.europa.eu/resource/celex/12012E%2FTXT",
+            EurLexAdapter.CelexAliasUri("12012E/TXT"));
+    }
+
     public void Dispose()
     {
         try { Directory.Delete(_dir, true); } catch { }
