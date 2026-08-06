@@ -1865,6 +1865,7 @@ Numbering continues from v3; v3 decisions are restated with status.
 | **D58** | Artifact trust is anchored outside the artifact: a release-pinned public-key fingerprint verifies a signed canonical manifest covering databases, vectors, model, tokenizer, scope configuration, schema and source commits. The embedded stamp remains public provenance, not the runtime trust root. | hybrid-eu/1, building |
 | **D59** | Fuzzy search is a visible additive fallback only when exact lexical retrieval is weak. It never rewrites quotations, CELEX/ECLI identifiers, article numbers, dates or short tokens, and every expansion returns in the response. | hybrid-eu/1, building |
 | **D60** | Public architecture claims are separated into current, next, decisions and benchmarks. Runtime counts come from mounted indexes; future status comes from one committed registry; measurements require code, corpus, artifact, environment, timestamp, sample count and review status. | hybrid-eu/1, building |
+| **D61** | Luxembourg scope is catalogue-specific. The current adapter is complete for the 1,399-work, 4,638-record Legilux `Consolidation` catalogue measured 2026-08-06, not the broader 150,187-resource `Act` catalogue. Expansion selects normative document classes and implements their publication, validity, manifestation and consolidation-link semantics before later class additions become configuration-led. Bulk-ingesting every `Act` as though it were a consolidation is rejected. | planned; measured boundary in `docs/luxembourg-scope.md` |
 
 ---
 

@@ -50,6 +50,12 @@
       "title": "Lawyer-facing scope filters",
       "status": "building",
       "outcome": "Jurisdiction, hierarchy, legal form, binding status, domain, language and date remain explicit."
+    },
+    {
+      "id": "M7",
+      "title": "Luxembourg original-act expansion",
+      "status": "planned",
+      "outcome": "Add reviewed normative acts outside the Legilux consolidation catalogue with document-class-specific temporal semantics."
     }
   ],
   "decisions": [
@@ -133,6 +139,15 @@
       "alternative": "Mix roadmap claims and hand-written benchmark numbers into one architecture page.",
       "reason": "An interviewer or lawyer must be able to distinguish what exists from what is proposed.",
       "cost": "Every public metric carries commits, artifact identity, environment and review status."
+    },
+    {
+      "id": "D61",
+      "title": "Expand Luxembourg by normative document class",
+      "status": "planned",
+      "choice": "Implement and review original-act semantics per admitted Legilux document class.",
+      "alternative": "Ingest every resource labelled Act as if it had consolidation semantics.",
+      "reason": "The broad Act catalogue mixes lawyer-relevant rules with notices and records whose dates and manifestations mean different things.",
+      "cost": "The first increment needs a new adapter, fixtures, scope preview and retrieval tests before later form additions become configuration-led."
     }
   ],
   "baseline": {
