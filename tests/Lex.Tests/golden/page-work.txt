@@ -122,7 +122,7 @@ HTTP 200
   .sitemap div { display:flex; flex-direction:column; gap:3px }
   .sitemap b { color:var(--fg); font-size:12px; letter-spacing:.06em; text-transform:uppercase;
                margin-bottom:4px; font-weight:600 }
-  .sitemap a { color:var(--muted) }
+  .sitemap a { color:var(--muted); min-height:24px; display:flex; align-items:center }
   .sitemap a:hover { text-decoration-color:var(--fg) }
   /* The one deliberate exception to the accent rule: a focus ring has to be the
      loudest thing on the page, and accessibility outranks the identity. */

@@ -120,7 +120,7 @@ HTTP 200
   .sitemap div { display:flex; flex-direction:column; gap:3px }
   .sitemap b { color:var(--fg); font-size:12px; letter-spacing:.06em; text-transform:uppercase;
                margin-bottom:4px; font-weight:600 }
-  .sitemap a { color:var(--muted) }
+  .sitemap a { color:var(--muted); min-height:24px; display:flex; align-items:center }
   .sitemap a:hover { text-decoration-color:var(--fg) }
   /* The one deliberate exception to the accent rule: a focus ring has to be the
      loudest thing on the page, and accessibility outranks the identity. */
@@ -192,7 +192,11 @@ reason and the bill. Status comes from the architecture registry.</p>
 <span class="sub"><b>Choice:</b> Expand ordinary terms only when exact lexical retrieval is weak and show every expansion.<br><b>Alternative:</b> Apply fuzzy expansion to every query.<br>
 <b>Why:</b> Legal identifiers, quotations and exact terms must not acquire silent near-matches.<br><b>Cost:</b> Some misspellings wait for the exact pass to return before expansion.</span></td><td><span class="badge">building</span></td></tr><tr><td class="mono">D60</td><td><b>Publish claims only with evidence</b><br>
 <span class="sub"><b>Choice:</b> Separate live facts, target state, decisions and reproducible benchmarks.<br><b>Alternative:</b> Mix roadmap claims and hand-written benchmark numbers into one architecture page.<br>
-<b>Why:</b> An interviewer or lawyer must be able to distinguish what exists from what is proposed.<br><b>Cost:</b> Every public metric carries commits, artifact identity, environment and review status.</span></td><td><span class="badge">building</span></td></tr></table></div>
+<b>Why:</b> An interviewer or lawyer must be able to distinguish what exists from what is proposed.<br><b>Cost:</b> Every public metric carries commits, artifact identity, environment and review status.</span></td><td><span class="badge">building</span></td></tr><tr><td class="mono">D61</td><td><b>Export transparent reading aids</b><br>
+<span class="sub"><b>Choice:</b> Build citations and Markdown evidence from the exact structured article or comparison already on screen.<br><b>Alternative:</b> Generate a polished PDF or fetch and compare the law again during export.<br>
+<b>Why:</b> Lawyers can move traceable text into their work without a second result disagreeing or an unofficial file resembling a publisher document.<br><b>Cost:</b> Markdown prioritizes inspectable provenance over print-perfect presentation and remains explicitly a reading aid.</span></td><td><span class="badge">building</span></td></tr><tr><td class="mono">D62</td><td><b>Keep one temporal research workspace</b><br>
+<span class="sub"><b>Choice:</b> Keep search, dated reading, version history and comparison in one URL-addressable workspace with stable legal context.<br><b>Alternative:</b> Split search, reading and comparison into separate products, or make a chatbot the primary navigation model.<br>
+<b>Why:</b> Lawyers need to see jurisdiction, applicable date, source and comparison state while moving between discovery and verification.<br><b>Cost:</b> The workspace is denser than a simple search page, so smaller screens require progressive disclosure and deliberate control grouping.</span></td><td><span class="badge">building</span></td></tr></table></div>
 <h2>Deep dive: why the legislative timeline is not the git log</h2><p class="lede">Every entry here had a reasonable alternative that other people chose. What
 follows is the choice, the road not taken, and the bill.</p>
 

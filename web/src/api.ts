@@ -35,7 +35,7 @@ export interface AskReply {
 
 export interface Subject { work: string; title?: string; date?: string; anchor?: string }
 export interface Citation { work: string; href: string; text?: string }
-export interface ProvisionItem { anchor: string; num?: string; heading?: string; text: string; sha?: string; path?: string;
+export interface ProvisionItem { anchor: string; num?: string; heading?: string; text?: string; text_sha256?: string; path?: string;
                                  citations?: Citation[] }
 export interface UiEffect {
   provision?: { subject: Subject; valid_from: string; valid_to?: string; provisions: ProvisionItem[]; permalink?: string };

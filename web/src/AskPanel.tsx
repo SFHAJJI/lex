@@ -54,7 +54,7 @@ export default function AskPanel(p: AskPanelProps) {
 
   if (!open) {
     return (
-      <button className="asklaunch" onClick={() => setOpen(true)} aria-label="Ask the assistant">
+      <button className="asklaunch" onClick={() => setOpen(true)} aria-label="Ask about any law">
         <span className="al-ic" aria-hidden="true">✦</span>
         <span className="al-t"><b>Ask about any law</b><small>on any date, in plain language</small></span>
       </button>
