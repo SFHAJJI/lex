@@ -37,6 +37,18 @@ public sealed class EurLexScopeTests : IDisposable
         Assert.Throws<InvalidDataException>(() => EurLexScopeConfig.Load(path));
     }
 
+    [Theory]
+    [InlineData("true", "in_force")]
+    [InlineData("1", "in_force")]
+    [InlineData("false", "not_in_force")]
+    [InlineData("0", "not_in_force")]
+    [InlineData(null, "unknown")]
+    [InlineData("publisher-specific", "unknown")]
+    public void Publisher_binding_status_is_normalized_for_search_filters(string? source, string expected)
+    {
+        Assert.Equal(expected, EurLexAdapter.NormalizeBindingStatus(source));
+    }
+
     public void Dispose()
     {
         try { Directory.Delete(_dir, true); } catch { }
