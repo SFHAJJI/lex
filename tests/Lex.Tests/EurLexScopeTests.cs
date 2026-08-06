@@ -66,6 +66,30 @@ public sealed class EurLexScopeTests : IDisposable
         Assert.Equal(expected, EurLexAdapter.CellarResourceUrl(celex));
     }
 
+    [Theory]
+    [InlineData("https://eur-lex.europa.eu/legal-content/FR/TXT/?uri=CELEX:32006L0112R%2810%29", true)]
+    [InlineData("https://publications.europa.eu/resource/celex/32006R1791", true)]
+    [InlineData("http://eur-lex.europa.eu/legal-content/FR/TXT/", false)]
+    [InlineData("https://europa.eu.example.org/legal-content/FR/TXT/", false)]
+    [InlineData("https://example.org/", false)]
+    public void Body_fallback_accepts_only_https_eu_institutional_hosts(string uri, bool accepted)
+    {
+        Assert.Equal(accepted, EurLexAdapter.OfficialEuUri(uri) is not null);
+    }
+
+    [Fact]
+    public async Task Bounded_reader_accepts_the_limit_and_rejects_the_next_byte()
+    {
+        var exact = await EurLexAdapter.ReadBounded(new MemoryStream(new byte[8]), 8, default);
+        var over = await EurLexAdapter.ReadBounded(new MemoryStream(new byte[9]), 8, default);
+
+        Assert.False(exact.LimitExceeded);
+        Assert.Equal(8, exact.Bytes?.Length);
+        Assert.True(over.LimitExceeded);
+        Assert.Null(over.Bytes);
+        Assert.Equal(9, over.BytesRead);
+    }
+
     [Fact]
     public void Sparql_alias_keeps_primary_celex_as_one_encoded_path_segment()
     {

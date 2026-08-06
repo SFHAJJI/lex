@@ -15,6 +15,14 @@ and English and retains every official consolidated expression available. A work
 consolidation remains present through its original official expression. Its metadata says that the
 merged wording is not published or not required; Lex does not manufacture a merge.
 
+Cellar's negotiated XHTML is the primary body source. If a language-specific expression is
+advertised but Cellar returns no body, ingestion retries the expression's official EUR-Lex URL;
+the fallback is restricted to HTTPS EU institutional hosts. Searchable XHTML has a separate
+32 MiB offline-ingest limit so annex-heavy acts are retained. Optional Formex archives have their
+own compressed, per-member and expanded-data limits; skipping an oversized Formex archive does
+not remove an already available XHTML expression. Metadata-only expressions remain explicit and
+are retried on later runs rather than silently treated as complete.
+
 Run a read-only preview before changing `approved_wave`:
 
 ```text

@@ -17,7 +17,13 @@ public sealed class EurLexAdapter : ISourceAdapter
     private const string Sparql = "https://publications.europa.eu/webapi/rdf/sparql";
     private const string Cdm = "PREFIX cdm: <http://publications.europa.eu/ontology/cdm#>\n";
     private const string Owl = "PREFIX owl: <http://www.w3.org/2002/07/owl#>\n";
-    private const int BodyCapBytes = 4 * 1024 * 1024;   // versions above this keep metadata only
+    // Primary XHTML is the searchable legal wording. Large annex-heavy acts legitimately exceed
+    // 4 MiB (Regulation 1791/2006 is about 8.7 MiB), so give it a separate offline-ingest budget.
+    // Optional Formex archives stay more tightly bounded and are guarded again after expansion.
+    private const int BodyCapBytes = 32 * 1024 * 1024;
+    private const int FormexArchiveCapBytes = 32 * 1024 * 1024;
+    private const long FormexMemberCapBytes = 64 * 1024 * 1024;
+    private const long FormexExpandedCapBytes = 128 * 1024 * 1024;
 
     // Common names are presentation metadata only. Corpus membership comes from the reviewed
     // scope configuration and bounded CDM relationships below.
@@ -98,52 +104,94 @@ public sealed class EurLexAdapter : ISourceAdapter
 
     public async Task<string?> FetchBody(VersionRecord version, ExpressionRecord expression, CancellationToken ct)
     {
-        // Verbatim consolidated XHTML from the official channel; capped by size.
-        // Cellar's 303s redirect https->http, which HttpClient refuses to follow
-        // automatically — follow manually, upgrading each hop back to https.
-        await PaceAsync(ct);
         var celex = version.Raw.GetValueOrDefault("celex");
         if (celex is null) return null;
-        var url = CellarResourceUrl(celex);
+
+        // Cellar is canonical, but a small number of language-specific corrigenda return 404
+        // there while the official EUR-Lex expression URI serves the XHTML. Retry that URI only
+        // when it remains on an EU institutional host; no third-party fallback can become evidence.
+        var urls = new List<string> { CellarResourceUrl(celex) };
+        if (OfficialEuUri(expression.SourceUri) is { } expressionUri &&
+            !string.Equals(expressionUri, urls[0], StringComparison.OrdinalIgnoreCase))
+            urls.Add(expressionUri);
+
+        FetchResult? last = null;
+        for (var attempt = 0; attempt < urls.Count; attempt++)
+        {
+            await PaceAsync(ct);
+            last = await FetchBytes(urls[attempt], expression.Language,
+                "application/xhtml+xml, text/html", BodyCapBytes, ct);
+            if (last.Bytes is null) continue;
+
+            var fallback = attempt == 0 ? "" : " (official EUR-Lex fallback)";
+            Console.Error.WriteLine($"  [eurlex] {celex}: body {last.Bytes.Length / 1024} KB{fallback}");
+            return System.Text.Encoding.UTF8.GetString(last.Bytes);
+        }
+
+        if (last?.LimitExceeded == true)
+            Console.Error.WriteLine($"  [eurlex] {celex}: official body exceeds {BodyCapBytes / 1024 / 1024} MB cap — metadata only");
+        else
+            Console.Error.WriteLine($"  [eurlex] {celex}: official body unavailable after {urls.Count} endpoint(s) (last status {(int?)last?.StatusCode})");
+        return null;
+    }
+
+    private static async Task<FetchResult> FetchBytes(
+        string initialUrl,
+        string language,
+        string accept,
+        int capBytes,
+        CancellationToken ct)
+    {
+        var url = initialUrl;
         HttpResponseMessage? resp = null;
         for (var hop = 0; hop < 6; hop++)
         {
             using var req = new HttpRequestMessage(HttpMethod.Get, url);
-            req.Headers.Accept.ParseAdd("application/xhtml+xml");
-            req.Headers.Accept.ParseAdd("text/html");
-            req.Headers.AcceptLanguage.ParseAdd(expression.Language);
+            req.Headers.TryAddWithoutValidation("Accept", accept);
+            req.Headers.AcceptLanguage.ParseAdd(language);
             resp?.Dispose();
             resp = await Http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
             if ((int)resp.StatusCode is >= 300 and < 400 && resp.Headers.Location is { } loc)
             {
                 var next = loc.IsAbsoluteUri ? loc.ToString() : new Uri(new Uri(url), loc).ToString();
                 url = next.StartsWith("http://", StringComparison.Ordinal) ? "https://" + next["http://".Length..] : next;
+                if (OfficialEuUri(url) is null)
+                {
+                    resp.Dispose();
+                    return new FetchResult(null, null, false, url);
+                }
                 continue;
             }
             break;
         }
         if (resp is null || !resp.IsSuccessStatusCode)
         {
-            Console.Error.WriteLine($"  [eurlex] {celex}: body fetch failed ({(int?)resp?.StatusCode})");
+            var status = resp?.StatusCode;
             resp?.Dispose();
-            return null;
+            return new FetchResult(null, status, false, url);
         }
         using var _ = resp;
+        if (resp.Content.Headers.ContentLength is { } contentLength && contentLength > capBytes)
+            return new FetchResult(null, resp.StatusCode, true, url);
+
         await using var stream = await resp.Content.ReadAsStreamAsync(ct);
-        using var ms = new MemoryStream();
+        var bounded = await ReadBounded(stream, capBytes, ct);
+        return new FetchResult(bounded.Bytes, resp.StatusCode, bounded.LimitExceeded, url,
+            resp.Content.Headers.ContentType?.MediaType);
+    }
+
+    internal static async Task<BoundedRead> ReadBounded(Stream stream, int capBytes, CancellationToken ct)
+    {
+        using var ms = new MemoryStream(Math.Min(capBytes, 1024 * 1024));
         var buf = new byte[64 * 1024];
         int read;
         while ((read = await stream.ReadAsync(buf, ct)) > 0)
         {
+            if (ms.Length + read > capBytes)
+                return new BoundedRead(null, ms.Length + read, true);
             ms.Write(buf, 0, read);
-            if (ms.Length > BodyCapBytes)
-            {
-                Console.Error.WriteLine($"  [eurlex] {celex}: body exceeds {BodyCapBytes / 1024 / 1024} MB cap — metadata only");
-                return null;
-            }
         }
-        Console.Error.WriteLine($"  [eurlex] {celex}: body {ms.Length / 1024} KB");
-        return System.Text.Encoding.UTF8.GetString(ms.ToArray());
+        return new BoundedRead(ms.ToArray(), ms.Length, false);
     }
 
     /// <summary>
@@ -161,52 +209,23 @@ public sealed class EurLexAdapter : ISourceAdapter
         if (version.Raw.TryGetValue("consolidation_status", out var status) && status != "published")
             return null;
 
-        await PaceAsync(ct);
         var celex = version.Raw.GetValueOrDefault("celex");
         if (celex is null) return null;
-        var url = CellarResourceUrl(celex);
-        HttpResponseMessage? resp = null;
-        for (var hop = 0; hop < 6; hop++)
+        await PaceAsync(ct);
+        // Cellar's negotiation parser requires the exact spaceless mtype parameter.
+        var fetched = await FetchBytes(CellarResourceUrl(celex), expression.Language,
+            "application/zip;mtype=fmx4", FormexArchiveCapBytes, ct);
+        if (fetched.Bytes is null || fetched.MediaType is not "application/zip")
         {
-            using var req = new HttpRequestMessage(HttpMethod.Get, url);
-            // Cellar's negotiation parser rejects "application/zip; mtype=fmx4" (500) — the
-            // exact spaceless form must go on the wire, and reading the typed Accept view
-            // afterwards would re-normalize it, so: raw header, never inspected.
-            req.Headers.TryAddWithoutValidation("Accept", "application/zip;mtype=fmx4");
-            req.Headers.AcceptLanguage.ParseAdd(expression.Language);
-            resp?.Dispose();
-            resp = await Http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
-            if ((int)resp.StatusCode is >= 300 and < 400 && resp.Headers.Location is { } loc)
-            {
-                var next = loc.IsAbsoluteUri ? loc.ToString() : new Uri(new Uri(url), loc).ToString();
-                url = next.StartsWith("http://", StringComparison.Ordinal) ? "https://" + next["http://".Length..] : next;
-                continue;
-            }
-            break;
-        }
-        if (resp is null || !resp.IsSuccessStatusCode ||
-            resp.Content.Headers.ContentType?.MediaType is not "application/zip")
-        {
-            resp?.Dispose();
-            return null;   // no fmx4 manifestation upstream (Cellar answers with a non-zip error body)
-        }
-        using var _ = resp;
-        await using var stream = await resp.Content.ReadAsStreamAsync(ct);
-        using var ms = new MemoryStream();
-        var buf = new byte[64 * 1024];
-        int read;
-        while ((read = await stream.ReadAsync(buf, ct)) > 0)
-        {
-            ms.Write(buf, 0, read);
-            if (ms.Length > BodyCapBytes)
-            {
-                Console.Error.WriteLine($"  [eurlex] {celex}: fmx4 exceeds {BodyCapBytes / 1024 / 1024} MB cap — skipped");
-                return null;
-            }
+            if (fetched.LimitExceeded)
+                Console.Error.WriteLine($"  [eurlex] {celex}: optional fmx4 exceeds {FormexArchiveCapBytes / 1024 / 1024} MB archive cap — skipped");
+            return null;
         }
 
+        using var ms = new MemoryStream(fetched.Bytes, writable: false);
         ms.Position = 0;
         var members = new List<ManifestationMember>();
+        long expandedBytes = 0;
         try
         {
             using var zip = new System.IO.Compression.ZipArchive(ms, System.IO.Compression.ZipArchiveMode.Read);
@@ -214,10 +233,22 @@ public sealed class EurLexAdapter : ISourceAdapter
             {
                 var name = Path.GetFileName(entry.Name);   // no traversal, flat member names only
                 if (name.Length == 0) continue;
+                if (entry.Length > FormexMemberCapBytes ||
+                    expandedBytes + entry.Length > FormexExpandedCapBytes)
+                {
+                    Console.Error.WriteLine($"  [eurlex] {celex}: optional fmx4 exceeds safe expanded-data limit — skipped");
+                    return null;
+                }
                 await using var es = entry.Open();
-                using var ems = new MemoryStream();
-                await es.CopyToAsync(ems, ct);
-                members.Add(new ManifestationMember(name, ems.ToArray()));
+                var member = await ReadBounded(es, checked((int)Math.Min(FormexMemberCapBytes,
+                    FormexExpandedCapBytes - expandedBytes)), ct);
+                if (member.Bytes is null)
+                {
+                    Console.Error.WriteLine($"  [eurlex] {celex}: optional fmx4 member exceeds safe limit — skipped");
+                    return null;
+                }
+                expandedBytes += member.Bytes.LongLength;
+                members.Add(new ManifestationMember(name, member.Bytes));
             }
         }
         catch (InvalidDataException)
@@ -241,8 +272,26 @@ public sealed class EurLexAdapter : ISourceAdapter
         }
 
         Console.Error.WriteLine($"  [eurlex] {celex}: fmx4 {members.Count} member(s), {members.Sum(x => x.Bytes.LongLength) / 1024} KB");
-        return new ManifestationFetch("fmx4", members, url);
+        return new ManifestationFetch("fmx4", members, fetched.SourceUri);
     }
+
+    internal static string? OfficialEuUri(string? value)
+    {
+        if (!Uri.TryCreate(value, UriKind.Absolute, out var uri) ||
+            !string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) ||
+            !(string.Equals(uri.Host, "europa.eu", StringComparison.OrdinalIgnoreCase) ||
+              uri.Host.EndsWith(".europa.eu", StringComparison.OrdinalIgnoreCase)))
+            return null;
+        return uri.AbsoluteUri;
+    }
+
+    internal sealed record BoundedRead(byte[]? Bytes, long BytesRead, bool LimitExceeded);
+    private sealed record FetchResult(
+        byte[]? Bytes,
+        System.Net.HttpStatusCode? StatusCode,
+        bool LimitExceeded,
+        string SourceUri,
+        string? MediaType = null);
 
     private async Task PaceAsync(CancellationToken ct)
     {
