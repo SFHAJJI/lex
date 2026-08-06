@@ -23,5 +23,15 @@ public sealed class RetrievalBenchmarkTests
             Assert.NotEmpty(c.Explanation);
             Assert.Equal("engineer-reviewed", c.ReviewStatus);
         });
+        var filterDomains = cases.Where(c => c.Category == "hierarchy")
+            .Select(c => c.Domain).Where(d => d is not null).Cast<string>()
+            .ToHashSet(StringComparer.Ordinal);
+        var expectedDomains = new HashSet<string>(
+        [
+            "financial-services", "aml-corporate", "competition", "tax", "employment",
+            "consumer-environment", "procurement-and-ip", "judicial-cooperation", "primary-eu-law",
+        ], StringComparer.Ordinal);
+        Assert.True(expectedDomains.IsSubsetOf(filterDomains),
+            $"Missing filter domains: {string.Join(", ", expectedDomains.Except(filterDomains))}");
     }
 }
