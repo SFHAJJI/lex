@@ -532,6 +532,10 @@ public sealed class EurLexAdapter : ISourceAdapter
                 {
                     var predicate = row["predicate"].Split('#').Last();
                     Add(row["relatedCelex"], $"relationship:{predicate}");
+                    if (selected.TryGetValue(row["seedCelex"], out var parentReasons))
+                        foreach (var domain in parentReasons.Where(r => r.StartsWith("domain:", StringComparison.Ordinal))
+                                     .Select(r => r.Split(':')[1]).Distinct(StringComparer.Ordinal).ToArray())
+                            Add(row["relatedCelex"], $"domain:{domain}:relationship:{predicate}");
                 }
             }
             if (selected.Count > _scope.RelationshipClosure.MaxTotalWorks)
@@ -565,15 +569,22 @@ public sealed class EurLexAdapter : ISourceAdapter
     }
 
     private static Dictionary<string, string> ScopeRaw(
-        string celex, string legalForm, string consolidationStatus, IEnumerable<string> reasons) => new(StringComparer.Ordinal)
+        string celex, string legalForm, string consolidationStatus, IEnumerable<string> reasons)
     {
-        ["celex"] = celex,
-        ["legal_form"] = legalForm,
-        ["hierarchy"] = celex.StartsWith('1') ? "primary_eu_law" : "secondary_eu_law",
-        ["binding_status"] = "publisher_metadata",
-        ["consolidation_status"] = consolidationStatus,
-        ["scope_reasons"] = string.Join(',', reasons.Order(StringComparer.Ordinal)),
-    };
+        var reasonList = reasons.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList();
+        var domains = reasonList.Where(r => r.StartsWith("domain:", StringComparison.Ordinal))
+            .Select(r => r.Split(':')[1]).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal);
+        return new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["celex"] = celex,
+            ["legal_form"] = legalForm,
+            ["hierarchy"] = celex.StartsWith('1') ? "primary_eu_law" : "secondary_eu_law",
+            ["binding_status"] = "publisher_metadata",
+            ["consolidation_status"] = consolidationStatus,
+            ["domains"] = string.Join(',', domains),
+            ["scope_reasons"] = string.Join(',', reasonList),
+        };
+    }
 
     private sealed record ConsolidatedState(string Celex, DateOnly Date, IReadOnlyDictionary<string, string?> Titles);
 

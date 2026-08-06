@@ -178,7 +178,7 @@ separately on <a href="/architecture/next">Next</a>.</p>
 <h2>Mounted coverage, read live</h2>
 <div class="card"><table><tr><th>collection</th><th>works</th><th>versions</th><th>schema</th><th>corpus commit</th></tr>
 <tr><td>t-pub</td><td class="mono">2</td>
-<td class="mono">3</td><td class="mono">lex-index/2</td>
+<td class="mono">3</td><td class="mono">lex-index/3</td>
 <td class="mono">goldenc</td></tr></table></div>
 <h2>Contracts preserved</h2>
 <p>Exact publisher text, hashes, anchors, timelines, refusals, comparisons and diffs remain
@@ -195,7 +195,7 @@ sha256 per file, observation chains            stable publisher-minted anchors
              deterministic, versioned,          per-anchor history + renumbering events
              IMMUTABLE extraction profiles          │
              (akn-lu/1, xhtml-eu/1, code,          ▼
-              never an LLM)                    signed SQLite indexes (lex-index/2)
+              never an LLM)                    signed SQLite indexes (lex-index/3)
                                                provisions + FTS + time axis, ECDSA-P256 stamp
                                                     │
                     this site · /mcp (any MCP client) · datasets</pre></div>

@@ -45,7 +45,7 @@ public static class IndexFromCorpus
                 {
                     var exprValidFrom = expr.ValidFrom ?? meta.ValidFrom;
 
-                    // lex-index/2: text comes from the derived consumption layer, per provision;
+                    // Text comes from the derived consumption layer, per provision;
                     // the hash chain always runs derived text -> verbatim file -> observation.
                     var rid = $"{meta.LexId}|{expr.Language}|{exprValidFrom}";
                     var derivedJson = articlesRoot is null ? null : Path.Combine(
@@ -108,7 +108,12 @@ public static class IndexFromCorpus
                         Body: null,
                         PublicationDate: meta.PublicationDate,
                         StatusNote: meta.InForceStatus,
-                        Profile: profile));
+                        Profile: profile,
+                        Hierarchy: meta.Raw.GetValueOrDefault("hierarchy"),
+                        Domains: NormalizeDomains(meta.Raw.GetValueOrDefault("domains") ?? meta.Raw.GetValueOrDefault("scope_reasons")),
+                        ActForm: meta.Raw.GetValueOrDefault("legal_form"),
+                        BindingStatus: meta.Raw.GetValueOrDefault("binding_status"),
+                        ConsolidationStatus: meta.Raw.GetValueOrDefault("consolidation_status")));
 
                     // Observation chains: obs N's observed_to = obs N+1's observed_from; last closed by tombstone.
                     for (var i = 0; i < expr.Observations.Count; i++)
@@ -188,6 +193,14 @@ public static class IndexFromCorpus
     }
 
     private static string ReadIfExists(string path) => File.Exists(path) ? File.ReadAllText(path) : "";
+
+    private static string? NormalizeDomains(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        var domains = value.Trim('|').Split([',', '|'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList();
+        return domains.Count == 0 ? null : "|" + string.Join('|', domains) + "|";
+    }
 
     private static string GitCommit(string dir)
     {

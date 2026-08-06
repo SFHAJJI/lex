@@ -94,6 +94,8 @@ public static class ExplainerEndpoints
         {
             var cov = readers.Values.Select(r => r.Coverage()).OrderBy(c => c.Collection).ToList();
             var current = architecture.Current;
+            var mountedSchemas = string.Join(", ", cov.Select(c => c.Stamp.GetValueOrDefault("schema", "unknown"))
+                                                     .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal));
             var coverageRows = string.Join("", cov.Select(c => $"""
                 <tr><td>{H(c.Collection)}</td><td class="mono">{c.Groups:n0}</td>
                 <td class="mono">{c.Rows:n0}</td><td class="mono">{H(c.Stamp.GetValueOrDefault("schema"))}</td>
@@ -133,7 +135,7 @@ public static class ExplainerEndpoints
                              deterministic, versioned,          per-anchor history + renumbering events
                              IMMUTABLE extraction profiles          │
                              (akn-lu/1, xhtml-eu/1, code,          ▼
-                              never an LLM)                    signed SQLite indexes (lex-index/2)
+                              never an LLM)                    signed SQLite indexes (MOUNTED_INDEX_SCHEMAS)
                                                                provisions + FTS + time axis, ECDSA-P256 stamp
                                                                     │
                                     this site · /mcp (any MCP client) · datasets</pre></div>
@@ -170,6 +172,7 @@ public static class ExplainerEndpoints
                 <a href="https://github.com/SFHAJJI/lex-corpus-lu-legilux">evidence repos</a> ·
                 hosted MCP: <span class="mono">claude mcp add --transport http lex https://law.soufien.lu/mcp</span></p>
                 """;
+            body = body.Replace("MOUNTED_INDEX_SCHEMAS", H(mountedSchemas), StringComparison.Ordinal);
             return Results.Content(Page("Architecture", body,
                 "what is deployed now, read separately from what comes next"), "text/html");
         });
