@@ -105,6 +105,8 @@ HTTP 200
   .cat td:first-child a { font-weight:600 }
   .cat .r { text-align:right; font-variant-numeric:tabular-nums }
   .cat .sub { font-size:12px; margin-top:2px }
+  .cat th:nth-child(4), .cat td:nth-child(4),
+  .cat th:nth-child(5), .cat td:nth-child(5) { white-space:nowrap }
   .pager { display:flex; gap:14px; align-items:baseline; margin:12px 0; font-size:14px }
   .pager span { color:var(--muted); font-variant-numeric:tabular-nums }
   form.inline { display:flex; gap:8px; flex-wrap:wrap; margin:10px 0 }
@@ -140,6 +142,13 @@ HTTP 200
     header { gap:12px; padding:12px 14px }
     h1 { font-size:25px }
     .rail .yr { font-size:10px }
+    /* Type is already available as a filter and the first date is secondary to the
+       latest state. Removing those columns leaves the law, version count, latest date
+       and text availability readable instead of spelling dates vertically. */
+    .cat th:nth-child(2), .cat td:nth-child(2),
+    .cat th:nth-child(4), .cat td:nth-child(4) { display:none }
+    .cat th, .cat td { padding-left:6px; padding-right:6px }
+    .cat td:first-child { min-width:170px }
   }
 </style></head>
 <body>
@@ -158,9 +167,13 @@ HTTP 200
 <h1>What changed, Loi sur la chose</h1>
 <p class="sub">2020-01-01 → 2022-01-01 · no interpretation, just the text delta</p>
 <div class="card"><table class="kv">
-<tr><td>on 2020-01-01</td><td class="mono"><a href="/t-pub/w1/2020-01-01">t-pub:w1:2020-01-01</a> (2020-01-01 → 2021-12-31)</td></tr>
-<tr><td>on 2022-01-01</td><td class="mono"><a href="/t-pub/w1/2022-01-01">t-pub:w1:2022-01-01</a> (2022-01-01 → <i>open</i>)</td></tr>
-</table></div><p class="sub">1 line(s) in the old middle, 1 in the new; 3 unchanged leading and 5 trailing lines trimmed.</p><div class="card"><pre style="white-space:pre-wrap;font-size:13px;margin:0"><span style="color:var(--ok)">+ la chose s applique partout, revisee</span>
+<tr><td>on 2020-01-01</td><td class="mono"><a href="/t-pub/w1/2020-01-01">t-pub:w1:2020-01-01</a> (2020-01-01 → 2021-12-31)
+&middot; <a href="https://example.org/w1/2020-01-01">official source &nearr;</a></td></tr>
+<tr><td>on 2022-01-01</td><td class="mono"><a href="/t-pub/w1/2022-01-01">t-pub:w1:2022-01-01</a> (2022-01-01 → <i>open</i>)
+&middot; <a href="https://example.org/w1/2022-01-01">official source &nearr;</a></td></tr>
+</table></div>
+<p><a href="/?space=law&amp;work=t-pub%3Aw1&amp;date=2020-01-01&amp;to=2022-01-01&amp;mode=compare"><b>Open the structured article comparison &rarr;</b></a>
+<span class="sub">matched by provision anchor, with changed, added, removed and unchanged articles separated</span></p><p class="sub">1 line(s) in the old middle, 1 in the new; 3 unchanged leading and 5 trailing lines trimmed.</p><div class="card"><pre style="white-space:pre-wrap;font-size:13px;margin:0"><span style="color:var(--ok)">+ la chose s applique partout, revisee</span>
 <span style="color:var(--accent)">− la chose s applique partout</span>
 </pre></div><div class="card"><table class="kv">
 <tr><td>tier</td><td>A, publisher-supplied validity dates</td></tr>

@@ -107,6 +107,8 @@ HTTP 200
   .cat td:first-child a { font-weight:600 }
   .cat .r { text-align:right; font-variant-numeric:tabular-nums }
   .cat .sub { font-size:12px; margin-top:2px }
+  .cat th:nth-child(4), .cat td:nth-child(4),
+  .cat th:nth-child(5), .cat td:nth-child(5) { white-space:nowrap }
   .pager { display:flex; gap:14px; align-items:baseline; margin:12px 0; font-size:14px }
   .pager span { color:var(--muted); font-variant-numeric:tabular-nums }
   form.inline { display:flex; gap:8px; flex-wrap:wrap; margin:10px 0 }
@@ -142,6 +144,13 @@ HTTP 200
     header { gap:12px; padding:12px 14px }
     h1 { font-size:25px }
     .rail .yr { font-size:10px }
+    /* Type is already available as a filter and the first date is secondary to the
+       latest state. Removing those columns leaves the law, version count, latest date
+       and text availability readable instead of spelling dates vertically. */
+    .cat th:nth-child(2), .cat td:nth-child(2),
+    .cat th:nth-child(4), .cat td:nth-child(4) { display:none }
+    .cat th, .cat td { padding-left:6px; padding-right:6px }
+    .cat td:first-child { min-width:170px }
   }
 </style></head>
 <body>
@@ -159,7 +168,7 @@ HTTP 200
 <main>
 <h1>Loi sur la chose</h1>
 <p class="sub">every version, on a time axis</p>
-<p><span class="badge">LOI</span> <span class="badge">2 version(s)</span> <a class="badge" href="https://example.org/w1/2022-01-01">official text ↗</a></p><div class="rail"><div class="axis"></div><a class="tick" style="left:1%" href="/t-pub/w1/2020-01-01" title="2020-01-01"></a><a class="tick" style="left:99%" href="/t-pub/w1/2022-01-01" title="2022-01-01"></a><span class="yr" style="left:0">2020-01-01</span><span class="yr" style="right:0">2022-01-01</span></div><p class="sub railcap">2 versions · click any mark to read the law as it stood that day</p><p><a href="/t-pub/w1/2022-01-01"><b>Read the current text →</b></a></p><details class="card"><summary>Every version as a table</summary><table><tr><th>valid</th><th>as-of view</th><th>status</th><th>provenance</th></tr><tr><td class="mono">2020-01-01 → 2021-12-31</td>
+<p><span class="badge">LOI</span> <span class="badge">2 version(s)</span> <a class="badge" href="https://example.org/w1/2022-01-01">official text ↗</a></p><div class="rail"><div class="axis"></div><a class="tick" style="left:1%" href="/t-pub/w1/2020-01-01" title="2020-01-01"></a><a class="tick" style="left:99%" href="/t-pub/w1/2022-01-01" title="2022-01-01"></a><span class="yr" style="left:0">2020-01-01</span><span class="yr" style="right:0">2022-01-01</span></div><p class="sub railcap">2 versions · click any mark to read the law as it stood that day</p><p><a href="/t-pub/w1/<TODAY>"><b>Read the text applicable today →</b></a></p><details class="card"><summary>Every version as a table</summary><table><tr><th>valid</th><th>as-of view</th><th>status</th><th>provenance</th></tr><tr><td class="mono">2020-01-01 → 2021-12-31</td>
 <td><a href="/t-pub/w1/2020-01-01">as of 2020-01-01</a></td>
 <td><span class="badge">superseded</span></td>
 <td><a class="mono" href="/provenance/t-pub:w1:2020-01-01">2020-01-01</a></td></tr><tr><td class="mono">2022-01-01 → <i>open</i></td>
