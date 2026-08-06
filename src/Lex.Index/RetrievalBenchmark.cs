@@ -53,34 +53,35 @@ public static class RetrievalBenchmarkCatalog
 {
     private sealed record Work(
         string Celex, string Topic, string French, string Hierarchy, string Domain,
+        string HistoricalAsOf,
         IReadOnlyList<string> Concepts, IReadOnlyList<string> FrenchConcepts);
 
     private static readonly Work[] Works =
     [
-        new("32013R0575", "capital requirements regulation", "exigences de fonds propres", "secondary_eu_law", "financial-services", ["bank capital adequacy", "prudential own funds", "credit institution exposures", "banking risk weights"], ["fonds propres bancaires", "risque de credit"]),
-        new("32014L0065", "markets in financial instruments", "marches d instruments financiers", "secondary_eu_law", "financial-services", ["investment firm conduct", "trading venue transparency", "investor protection rules"], ["protection des investisseurs", "entreprises d investissement"]),
-        new("32014R0910", "electronic identification and trust services", "identification electronique", "secondary_eu_law", "judicial-cooperation", ["qualified electronic signature", "digital identity trust", "electronic seal recognition"], ["signature electronique qualifiee", "services de confiance"]),
-        new("32015L2366", "payment services directive", "services de paiement", "secondary_eu_law", "financial-services", ["strong customer authentication", "payment initiation service", "unauthorised payment liability"], ["authentification forte du client", "paiement non autorise"]),
-        new("32016R0679", "general data protection regulation", "protection des donnees", "secondary_eu_law", "judicial-cooperation", ["personal data breach notice", "lawful processing consent", "data subject access right", "privacy impact assessment"], ["violation de donnees personnelles", "droit d acces de la personne"]),
-        new("32018L2001", "renewable energy directive", "energies renouvelables", "secondary_eu_law", "consumer-environment", ["renewable energy target", "guarantee of origin", "renewable self consumer"], ["objectif energie renouvelable", "garantie d origine"]),
-        new("32019L0944", "electricity market directive", "marche de l electricite", "secondary_eu_law", "consumer-environment", ["electricity consumer switching", "distribution system operator", "dynamic electricity price"], ["changement de fournisseur electricite", "gestionnaire de reseau"]),
-        new("32019R2088", "sustainable finance disclosure regulation", "publication finance durable", "secondary_eu_law", "financial-services", ["sustainability risk disclosure", "principal adverse impacts", "financial product environmental characteristics"], ["risques en matiere de durabilite", "incidences negatives"]),
-        new("32022L2555", "network and information security directive", "securite des reseaux", "secondary_eu_law", "judicial-cooperation", ["cyber incident notification", "essential entity security", "supply chain cyber risk"], ["notification incident cyber", "entite essentielle"]),
-        new("32022R2065", "digital services act", "services numeriques", "secondary_eu_law", "consumer-environment", ["online platform notice action", "systemic platform risk", "illegal online content"], ["contenu illicite en ligne", "tres grande plateforme"]),
-        new("32022R2554", "digital operational resilience", "resilience operationnelle numerique", "secondary_eu_law", "financial-services", ["ict incident reporting finance", "digital resilience testing", "third party technology risk"], ["incident tic financier", "test de resilience numerique"]),
-        new("32023R1114", "markets in crypto assets", "marches de crypto actifs", "secondary_eu_law", "financial-services", ["crypto asset white paper", "stablecoin issuer reserve", "crypto service provider authorisation"], ["livre blanc crypto actif", "prestataire de services crypto"]),
-        new("32023R2854", "data act", "reglement sur les donnees", "secondary_eu_law", "consumer-environment", ["fair access to connected product data", "business to government data sharing", "switching data processing services"], ["acces equitable donnees produit connecte", "changement service traitement donnees"]),
-        new("32024R1689", "artificial intelligence act", "reglement intelligence artificielle", "secondary_eu_law", "consumer-environment", ["high risk ai system", "prohibited artificial intelligence practice", "general purpose ai model"], ["systeme ia a haut risque", "pratique ia interdite"]),
-        new("32024R2847", "cyber resilience act", "reglement cyberresilience", "secondary_eu_law", "consumer-environment", ["cybersecurity requirements for connected products", "product vulnerability handling", "security updates for digital products"], ["cybersecurite des produits connectes", "traitement des vulnerabilites"]),
-        new("32024R1620", "anti money laundering authority", "autorite lutte blanchiment", "secondary_eu_law", "aml-corporate", ["money laundering authority supervision", "aml direct supervision", "financial intelligence coordination"], ["supervision lutte blanchiment", "renseignement financier"]),
-        new("32003R0001", "competition rules enforcement", "mise en oeuvre des regles de concurrence", "secondary_eu_law", "competition", ["antitrust investigation powers", "competition authority cooperation", "articles 101 and 102 enforcement"], ["pouvoirs enquete concurrence", "cooperation autorites concurrence"]),
-        new("32006L0112", "common value added tax system", "systeme commun taxe valeur ajoutee", "secondary_eu_law", "tax", ["value added tax taxable transaction", "vat place of supply", "input tax deduction"], ["operation imposable tva", "deduction taxe en amont"]),
-        new("32003L0088", "working time directive", "directive temps de travail", "secondary_eu_law", "employment", ["maximum weekly working time", "minimum daily rest", "paid annual leave"], ["duree maximale hebdomadaire travail", "conge annuel paye"]),
-        new("32014L0024", "public procurement directive", "directive marches publics", "secondary_eu_law", "procurement-and-ip", ["public contract award procedure", "procurement exclusion grounds", "most economically advantageous tender"], ["procedure attribution marche public", "motifs exclusion soumissionnaire"]),
-        new("32017R1001", "european union trade mark", "marque de l union europeenne", "secondary_eu_law", "procurement-and-ip", ["eu trade mark registration", "trade mark infringement remedy", "absolute grounds for refusal"], ["enregistrement marque union", "contrefacon de marque"]),
-        new("12012E/TXT", "treaty on the functioning of the european union", "traite fonctionnement union europeenne", "primary_eu_law", "primary-eu-law", ["free movement internal market", "competition treaty legal basis", "preliminary ruling jurisdiction"], ["libre circulation marche interieur", "base juridique concurrence"]),
-        new("12012M/TXT", "treaty on european union", "traite sur l union europeenne", "primary_eu_law", "primary-eu-law", ["union values rule of law", "common foreign security policy", "principle of conferral"], ["valeurs de l union", "principe d attribution"]),
-        new("12012P/TXT", "charter of fundamental rights", "charte des droits fondamentaux", "primary_eu_law", "primary-eu-law", ["right to effective remedy", "personal data fundamental right", "freedom of expression charter"], ["droit a un recours effectif", "liberte d expression"]),
+        new("32013R0575", "capital requirements regulation", "exigences de fonds propres", "secondary_eu_law", "financial-services", "2013-06-28", ["bank capital adequacy", "prudential own funds", "credit institution exposures", "banking risk weights"], ["fonds propres bancaires", "risque de credit"]),
+        new("32014L0065", "markets in financial instruments", "marches d instruments financiers", "secondary_eu_law", "financial-services", "2014-09-17", ["investment firm conduct", "trading venue transparency", "investor protection rules"], ["protection des investisseurs", "entreprises d investissement"]),
+        new("32014R0910", "electronic identification and trust services", "identification electronique", "secondary_eu_law", "judicial-cooperation", "2014-09-17", ["qualified electronic signature", "digital identity trust", "electronic seal recognition"], ["signature electronique qualifiee", "services de confiance"]),
+        new("32015L2366", "payment services directive", "services de paiement", "secondary_eu_law", "financial-services", "2015-12-23", ["strong customer authentication", "payment initiation service", "unauthorised payment liability"], ["authentification forte du client", "paiement non autorise"]),
+        new("32016R0679", "general data protection regulation", "protection des donnees", "secondary_eu_law", "judicial-cooperation", "2016-05-04", ["personal data breach notice", "lawful processing consent", "data subject access right", "privacy impact assessment"], ["violation de donnees personnelles", "droit d acces de la personne"]),
+        new("32018L2001", "renewable energy directive", "energies renouvelables", "secondary_eu_law", "consumer-environment", "2018-12-21", ["renewable energy target", "guarantee of origin", "renewable self consumer"], ["objectif energie renouvelable", "garantie d origine"]),
+        new("32019L0944", "electricity market directive", "marche de l electricite", "secondary_eu_law", "consumer-environment", "2019-06-14", ["electricity consumer switching", "distribution system operator", "dynamic electricity price"], ["changement de fournisseur electricite", "gestionnaire de reseau"]),
+        new("32019R2088", "sustainable finance disclosure regulation", "publication finance durable", "secondary_eu_law", "financial-services", "2020-07-12", ["sustainability risk disclosure", "principal adverse impacts", "financial product environmental characteristics"], ["risques en matiere de durabilite", "incidences negatives"]),
+        new("32022L2555", "network and information security directive", "securite des reseaux", "secondary_eu_law", "judicial-cooperation", "2022-12-27", ["cyber incident notification", "essential entity security", "supply chain cyber risk"], ["notification incident cyber", "entite essentielle"]),
+        new("32022R2065", "digital services act", "services numeriques", "secondary_eu_law", "consumer-environment", "2022-10-27", ["online platform notice action", "systemic platform risk", "illegal online content"], ["contenu illicite en ligne", "tres grande plateforme"]),
+        new("32022R2554", "digital operational resilience", "resilience operationnelle numerique", "secondary_eu_law", "financial-services", "2022-12-27", ["ict incident reporting finance", "digital resilience testing", "third party technology risk"], ["incident tic financier", "test de resilience numerique"]),
+        new("32023R1114", "markets in crypto assets", "marches de crypto actifs", "secondary_eu_law", "financial-services", "2023-06-09", ["crypto asset white paper", "stablecoin issuer reserve", "crypto service provider authorisation"], ["livre blanc crypto actif", "prestataire de services crypto"]),
+        new("32023R2854", "data act", "reglement sur les donnees", "secondary_eu_law", "consumer-environment", "2023-12-22", ["fair access to connected product data", "business to government data sharing", "switching data processing services"], ["acces equitable donnees produit connecte", "changement service traitement donnees"]),
+        new("32024R1689", "artificial intelligence act", "reglement intelligence artificielle", "secondary_eu_law", "consumer-environment", "2024-07-12", ["high risk ai system", "prohibited artificial intelligence practice", "general purpose ai model"], ["systeme ia a haut risque", "pratique ia interdite"]),
+        new("32024R2847", "cyber resilience act", "reglement cyberresilience", "secondary_eu_law", "consumer-environment", "2024-11-20", ["cybersecurity requirements for connected products", "product vulnerability handling", "security updates for digital products"], ["cybersecurite des produits connectes", "traitement des vulnerabilites"]),
+        new("32024R1620", "anti money laundering authority", "autorite lutte blanchiment", "secondary_eu_law", "aml-corporate", "2024-06-19", ["money laundering authority supervision", "aml direct supervision", "financial intelligence coordination"], ["supervision lutte blanchiment", "renseignement financier"]),
+        new("32003R0001", "competition rules enforcement", "mise en oeuvre des regles de concurrence", "secondary_eu_law", "competition", "2004-05-01", ["antitrust investigation powers", "competition authority cooperation", "articles 101 and 102 enforcement"], ["pouvoirs enquete concurrence", "cooperation autorites concurrence"]),
+        new("32006L0112", "common value added tax system", "systeme commun taxe valeur ajoutee", "secondary_eu_law", "tax", "2007-01-01", ["value added tax taxable transaction", "vat place of supply", "input tax deduction"], ["operation imposable tva", "deduction taxe en amont"]),
+        new("32003L0088", "working time directive", "directive temps de travail", "secondary_eu_law", "employment", "2003-11-04", ["maximum weekly working time", "minimum daily rest", "paid annual leave"], ["duree maximale hebdomadaire travail", "conge annuel paye"]),
+        new("32014L0024", "public procurement directive", "directive marches publics", "secondary_eu_law", "procurement-and-ip", "2014-03-28", ["public contract award procedure", "procurement exclusion grounds", "most economically advantageous tender"], ["procedure attribution marche public", "motifs exclusion soumissionnaire"]),
+        new("32017R1001", "european union trade mark", "marque de l union europeenne", "secondary_eu_law", "procurement-and-ip", "2017-06-16", ["eu trade mark registration", "trade mark infringement remedy", "absolute grounds for refusal"], ["enregistrement marque union", "contrefacon de marque"]),
+        new("12012E/TXT", "treaty on the functioning of the european union", "traite fonctionnement union europeenne", "primary_eu_law", "primary-eu-law", "2012-10-26", ["free movement internal market", "competition treaty legal basis", "preliminary ruling jurisdiction"], ["libre circulation marche interieur", "base juridique concurrence"]),
+        new("12012M/TXT", "treaty on european union", "traite sur l union europeenne", "primary_eu_law", "primary-eu-law", "2012-10-26", ["union values rule of law", "common foreign security policy", "principle of conferral"], ["valeurs de l union", "principe d attribution"]),
+        new("12012P/TXT", "charter of fundamental rights", "charte des droits fondamentaux", "primary_eu_law", "primary-eu-law", "2012-10-26", ["right to effective remedy", "personal data fundamental right", "freedom of expression charter"], ["droit a un recours effectif", "liberte d expression"]),
     ];
 
     public static IReadOnlyList<RetrievalBenchmarkCase> Create()
@@ -102,7 +103,8 @@ public static class RetrievalBenchmarkCatalog
         for (var i = 0; i < 40; i++)
         {
             var work = Works[i % Works.Length];
-            Add("temporal", $"{work.Topic} rules as of 6 August 2026", work, timeScope: "as_of", asOf: "2026-08-06");
+            var asOf = i < Works.Length ? "2026-08-06" : work.HistoricalAsOf;
+            Add("temporal", $"{work.Topic} rules as of {asOf}", work, timeScope: "as_of", asOf: asOf);
         }
 
         for (var i = 0; i < 60; i++)
@@ -141,8 +143,12 @@ public static class RetrievalBenchmarkCatalog
 
         var required = new Dictionary<string, int>
         {
-            ["exact"] = 30, ["temporal"] = 40, ["conceptual"] = 60,
-            ["bilingual"] = 30, ["fuzzy"] = 20, ["hierarchy"] = 20,
+            ["exact"] = 30,
+            ["temporal"] = 40,
+            ["conceptual"] = 60,
+            ["bilingual"] = 30,
+            ["fuzzy"] = 20,
+            ["hierarchy"] = 20,
         };
         foreach (var (category, count) in required)
             if (cases.Count(c => c.Category == category) != count)
