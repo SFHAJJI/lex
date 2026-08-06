@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Lex.Index;
 using static Lex.Web.PageShell;
@@ -207,6 +208,48 @@ public static class ExplainerEndpoints
         app.MapGet("/benchmarks", () =>
         {
             var b = architecture.Baseline;
+            var retrievalCases = RetrievalBenchmarkCatalog.Create();
+            var benchmarkPath = Path.Combine(ctx.Options.IndexDir, "retrieval-benchmark-eu-eurlex.json");
+            RetrievalBenchmarkReport? report = null;
+            try
+            {
+                if (File.Exists(benchmarkPath)
+                    && ctx.Registry.IsArtifactVerified(Path.GetFileName(benchmarkPath)))
+                    report = JsonSerializer.Deserialize<RetrievalBenchmarkReport>(File.ReadAllBytes(benchmarkPath),
+                        new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower });
+            }
+            catch (Exception)
+            {
+                // A benchmark is evidence, not a startup dependency. Invalid evidence is omitted.
+            }
+            var caseRows = string.Join("", retrievalCases.GroupBy(c => c.Category)
+                .OrderBy(g => g.Key, StringComparer.Ordinal)
+                .Select(g => $"<tr><td>{H(g.Key)}</td><td class=\"mono\">{g.Count()}</td></tr>"));
+            var relevance = report is null
+                ? """
+                  <div class="notice"><b>Not measured yet.</b> The public 200-case suite is a gated milestone.
+                  Hybrid will not become default until exact identifiers, temporal isolation, nDCG@10,
+                  regression, latency and memory pass their recorded thresholds.</div>
+                  """
+                : $"""
+                  <div class="notice"><b>Latest gate: {(report.ActivationGatePassed ? "passed" : "not passed")}.</b>
+                  Review status: {H(report.ReviewStatus)}. Measured {H(report.Timestamp)} over
+                  {report.SampleCount:n0} public cases.</div>
+                  <div class="card"><table>
+                  <tr><th>measure</th><th>keyword</th><th>hybrid</th></tr>
+                  <tr><td>MRR</td><td class="mono">{report.Keyword.Mrr:0.000}</td><td class="mono">{report.Hybrid.Mrr:0.000}</td></tr>
+                  <tr><td>Recall@10</td><td class="mono">{report.Keyword.RecallAt10:0.000}</td><td class="mono">{report.Hybrid.RecallAt10:0.000}</td></tr>
+                  <tr><td>nDCG@10</td><td class="mono">{report.Keyword.NdcgAt10:0.000}</td><td class="mono">{report.Hybrid.NdcgAt10:0.000}</td></tr>
+                  <tr><td>warm p95</td><td class="mono">{report.Keyword.P95Ms:0.0} ms</td><td class="mono">{report.Hybrid.P95Ms:0.0} ms</td></tr>
+                  <tr><td>warm p99</td><td class="mono">{report.Keyword.P99Ms:0.0} ms</td><td class="mono">{report.Hybrid.P99Ms:0.0} ms</td></tr>
+                  </table><p class="sub">Code <span class="mono">{H(report.CodeCommit)}</span>, corpus
+                  <span class="mono">{H(report.CorpusCommit)}</span>, manifest <span class="mono">{H(report.ManifestId)}</span>,
+                  model <span class="mono">{H(report.ModelId)}@{H(report.ModelRevision)}</span>.<br>
+                  Resource: {H(report.ResourceConfiguration)}. Working set {report.ProcessMemoryBytes / 1048576d:0.0} MiB;
+                  index {report.IndexBytes / 1048576d:0.0} MiB; vectors {report.VectorBytes / 1048576d:0.0} MiB.
+                  Gate failures: {H(report.GateFailures.Count == 0 ? "none" : string.Join("; ", report.GateFailures))}.</p></div>
+                  <p><a href="/benchmarks/latest.json">Download the complete latest benchmark report</a>.</p>
+                  """;
             var body = ArchitectureTabs("benchmarks") + $"""
                 <p class="lede">Evidence is published with identity and context. A missing measurement is
                 displayed as missing rather than replaced with an estimate.</p>
@@ -221,9 +264,11 @@ public static class ExplainerEndpoints
                 <tr><th>average working set</th><td class="mono">{b.AverageWorkingSetMib:n0} MiB</td></tr>
                 </table><p class="sub">{H(b.Note)}</p></div>
                 <h2>Retrieval relevance</h2>
-                <div class="notice"><b>Not measured yet.</b> The public 200-case suite is a gated milestone.
-                Hybrid will not become default until exact identifiers, temporal isolation, nDCG@10,
-                regression, latency and memory pass their recorded thresholds.</div>
+                {relevance}
+                <div class="card"><table><tr><th>case category</th><th>public judgments</th></tr>
+                {caseRows}</table></div>
+                <p><a href="/benchmarks/cases.json">Download all {retrievalCases.Count} public cases and judgments</a>.
+                Each case names its language, time scope, relevant work, explanation and review status.</p>
                 <h2>Publication rule</h2>
                 <p>Future reports name code and corpus commits, the signed artifact manifest, embedding model,
                 machine or Azure resource, timestamp, sample count and review status. Initial relevance
@@ -232,6 +277,21 @@ public static class ExplainerEndpoints
             return Results.Content(Page("Benchmarks", body,
                 "measured retrieval, latency, memory, index size and cost evidence"), "text/html");
         });
+
+        app.MapGet("/benchmarks/latest.json", () =>
+        {
+            var path = Path.Combine(ctx.Options.IndexDir, "retrieval-benchmark-eu-eurlex.json");
+            return File.Exists(path)
+                ? Results.File(path, "application/json")
+                : Results.NotFound(new { status = "not_measured_yet" });
+        });
+
+        app.MapGet("/benchmarks/cases.json", () => Results.Json(
+            RetrievalBenchmarkCatalog.Create(), new System.Text.Json.JsonSerializerOptions
+            {
+                PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.SnakeCaseLower,
+                WriteIndented = true,
+            }));
 
         // ---- auditor surface: public key, live attestation, verify-it-yourself ----
         app.MapGet("/pubkey.pem", () =>

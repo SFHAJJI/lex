@@ -48,7 +48,7 @@
     {
       "id": "M6",
       "title": "Lawyer-facing scope filters",
-      "status": "planned",
+      "status": "building",
       "outcome": "Jurisdiction, hierarchy, legal form, binding status, domain, language and date remain explicit."
     }
   ],
@@ -92,7 +92,7 @@
     {
       "id": "D56",
       "title": "Represent hierarchy as metadata",
-      "status": "planned",
+      "status": "building",
       "choice": "Store legal hierarchy and domain fields beside each work and state.",
       "alternative": "Create a separate database for every legal level.",
       "reason": "Hierarchy is a query filter, while physical boundaries should follow provenance and update behavior.",
@@ -119,7 +119,7 @@
     {
       "id": "D59",
       "title": "Use fuzzy matching only as fallback",
-      "status": "planned",
+      "status": "building",
       "choice": "Expand ordinary terms only when exact lexical retrieval is weak and show every expansion.",
       "alternative": "Apply fuzzy expansion to every query.",
       "reason": "Legal identifiers, quotations and exact terms must not acquire silent near-matches.",

@@ -170,7 +170,7 @@ beside the implementation. Nothing on this page is implied to be live.</p>
 <td><span class="badge">building</span></td></tr><tr><td class="mono">M4</td><td><b>Deduplicated index</b><br><span class="sub">lex-index/3 stores repeated wording once without changing timelines, exact text or diffs.</span></td>
 <td><span class="badge">building</span></td></tr><tr><td class="mono">M5</td><td><b>Local hybrid retrieval</b><br><span class="sub">Keyword and local semantic retrieval fuse deterministically only after the public quality gate passes.</span></td>
 <td><span class="badge warn">gated</span></td></tr><tr><td class="mono">M6</td><td><b>Lawyer-facing scope filters</b><br><span class="sub">Jurisdiction, hierarchy, legal form, binding status, domain, language and date remain explicit.</span></td>
-<td><span class="badge">planned</span></td></tr></table></div>
+<td><span class="badge">building</span></td></tr></table></div>
 <h2>Target path</h2>
 <div class="card"><pre class="mono" style="white-space:pre-wrap;margin:0;font-size:13px">Reviewed EU scope configuration
   -&gt; every official dated FR/EN expression plus bounded legal relationships

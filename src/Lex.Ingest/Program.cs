@@ -23,6 +23,66 @@ var now = Get("--now") is { } n ? DateTimeOffset.Parse(n) : DateTimeOffset.UtcNo
 
 switch (args0[0])
 {
+    case "embedding-smoke":
+    {
+        var modelDir = Get("--model-dir") ?? throw new ArgumentException("--model-dir required");
+        var text = Get("--text") ?? "protection des donnees personnelles";
+        using var encoder = MultilingualE5Encoder.Open(modelDir);
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var vector = encoder.Encode(text, EmbeddingInputKind.Query);
+        sw.Stop();
+        Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(new
+        {
+            encoder.ModelId,
+            encoder.ModelRevision,
+            encoder.Dimensions,
+            Tokens = encoder.CountTokens("query: " + text),
+            Norm = Math.Sqrt(vector.Sum(v => v * v)),
+            ElapsedMs = sw.Elapsed.TotalMilliseconds,
+        }));
+        return 0;
+    }
+    case "benchmark-cases":
+    {
+        var output = Get("--out") ?? throw new ArgumentException("--out required");
+        var bytes = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(
+            RetrievalBenchmarkCatalog.Create(), new System.Text.Json.JsonSerializerOptions
+            {
+                PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.SnakeCaseLower,
+                WriteIndented = true,
+            });
+        File.WriteAllBytes(output, bytes);
+        Console.Error.WriteLine($"[lex] wrote 200 public retrieval cases to {output}");
+        return 0;
+    }
+    case "benchmark":
+    {
+        var index = Get("--index") ?? throw new ArgumentException("--index required");
+        var modelDir = Get("--model-dir") ?? throw new ArgumentException("--model-dir required");
+        var vectors = Get("--vectors") ?? Path.ChangeExtension(index, ".vectors");
+        var output = Get("--out") ?? throw new ArgumentException("--out required");
+        var load = System.Diagnostics.Stopwatch.StartNew();
+        using var encoder = MultilingualE5Encoder.Open(modelDir);
+        using var reader = LexIndexReader.Open(index, encoder, vectors);
+        load.Stop();
+        var cold = System.Diagnostics.Stopwatch.StartNew();
+        _ = reader.SearchHybrid("protection des donnees personnelles", FilterSet.All, 10);
+        cold.Stop();
+        var memoryLimit = long.TryParse(Get("--memory-limit-bytes"), out var parsedMemory) ? parsedMemory : 0;
+        var report = RetrievalBenchmarkRunner.Run(reader, index, vectors,
+            Get("--code-commit") ?? "uncommitted", Get("--manifest-id") ?? "unverified",
+            Get("--machine") ?? Environment.MachineName,
+            Get("--resource") ?? "not supplied", memoryLimit,
+            load.Elapsed.TotalMilliseconds, cold.Elapsed.TotalMilliseconds, now);
+        File.WriteAllBytes(output, System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(report,
+            new System.Text.Json.JsonSerializerOptions
+            {
+                PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.SnakeCaseLower,
+                WriteIndented = true,
+            }));
+        Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(report));
+        return report.ActivationGatePassed ? 0 : 5;
+    }
     case "scope-preview":
     {
         var scopePath = Get("--scope");
@@ -59,6 +119,7 @@ switch (args0[0])
         var articles = Get("--articles");
         var outDb = Get("--out") ?? throw new ArgumentException("--out required");
         var keyFile = Get("--keyfile");
+        var embeddingModelDir = Get("--embedding-model");
         string? keyPem = null;
         if (keyFile is not null)
         {
@@ -71,7 +132,11 @@ switch (args0[0])
             keyPem = File.ReadAllText(keyFile);
         }
         Console.Error.WriteLine($"[lex] index {corpus} (articles: {articles ?? "none"}) -> {outDb}");
-        IndexFromCorpus.Build(corpus, articles, outDb, keyPem, now);
+        using var encoder = embeddingModelDir is null ? null : MultilingualE5Encoder.Open(embeddingModelDir);
+        var semantic = encoder is null ? null : new SemanticBuildOptions(
+            encoder, Get("--vectors") ?? Path.ChangeExtension(outDb, ".vectors"),
+            encoder.ModelSha256, encoder.TokenizerSha256);
+        IndexFromCorpus.Build(corpus, articles, outDb, keyPem, now, semantic);
         return 0;
     }
     case "derive":

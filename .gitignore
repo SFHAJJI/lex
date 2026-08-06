@@ -6,6 +6,8 @@ obj/
 deploy/*
 !deploy/fetch-indexes.sh
 !deploy/trusted-artifact-roots.json
+!deploy/embedding-model/
+!deploy/embedding-model/model-manifest.json
 *.db
 *.pem
 .terraform/

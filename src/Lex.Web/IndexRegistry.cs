@@ -16,6 +16,8 @@ public sealed class IndexRegistry : IDisposable
 {
     private readonly Dictionary<string, LexIndexReader> _readers = new(StringComparer.Ordinal);
     private readonly List<VerifiedArtifactManifest> _artifactManifests = [];
+    private readonly HashSet<string> _verifiedFiles = new(StringComparer.Ordinal);
+    private readonly MultilingualE5Encoder? _encoder;
 
     public IndexRegistry(IOptions<LexOptions> options, ILogger<IndexRegistry> log)
     {
@@ -27,7 +29,6 @@ public sealed class IndexRegistry : IDisposable
         }
 
         var manifests = Directory.EnumerateFiles(dir, "*.manifest.json").Order(StringComparer.Ordinal).ToList();
-        var verifiedFiles = new HashSet<string>(StringComparer.Ordinal);
         if (manifests.Count == 0 && options.Value.RequireArtifactManifest)
         {
             log.LogCritical("Artifact manifests are required but none exist in {Dir}; no index will be mounted.", dir);
@@ -41,7 +42,7 @@ public sealed class IndexRegistry : IDisposable
                 var manifestBytes = File.ReadAllBytes(manifest);
                 foreach (var path in ArtifactManifests.VerifyDirectory(
                              dir, manifest, signature, ArtifactTrustStore.Roots))
-                    verifiedFiles.Add(path);
+                    _verifiedFiles.Add(path);
                 var parsed = ArtifactManifests.Parse(manifestBytes);
                 _artifactManifests.Add(new VerifiedArtifactManifest(
                     Path.GetFileName(manifest),
@@ -59,13 +60,39 @@ public sealed class IndexRegistry : IDisposable
             return;
         }
 
+        if (!string.IsNullOrWhiteSpace(options.Value.EmbeddingModelDir))
+        {
+            try
+            {
+                var modelDir = Path.GetFullPath(options.Value.EmbeddingModelDir);
+                if (manifests.Count > 0)
+                    foreach (var file in new[] { "model-manifest.json", "model.onnx", "sentencepiece.bpe.model" })
+                    {
+                        var relative = Path.GetRelativePath(dir, Path.Combine(modelDir, file)).Replace('\\', '/');
+                        if (!_verifiedFiles.Contains(relative))
+                            throw new InvalidDataException($"embedding artifact '{relative}' is not in a verified manifest");
+                    }
+                _encoder = MultilingualE5Encoder.Open(modelDir);
+                log.LogInformation("Loaded local embedding model {Model} at {Revision}",
+                    _encoder.ModelId, _encoder.ModelRevision);
+            }
+            catch (Exception ex)
+            {
+                log.LogError("Hybrid retrieval remains disabled: {Reason}", ex.Message);
+            }
+        }
+
         foreach (var db in Directory.EnumerateFiles(dir, "index-*.db"))
         {
             try
             {
-                if (manifests.Count > 0 && !verifiedFiles.Contains(Path.GetFileName(db)))
+                if (manifests.Count > 0 && !_verifiedFiles.Contains(Path.GetFileName(db)))
                     throw new InvalidDataException("the database is not listed by a verified artifact manifest");
-                var reader = LexIndexReader.Open(db);
+                var vectorPath = Path.ChangeExtension(db, ".vectors");
+                var vectorRelative = Path.GetRelativePath(dir, vectorPath).Replace('\\', '/');
+                var hybridReady = _encoder is not null && File.Exists(vectorPath)
+                                  && (manifests.Count == 0 || _verifiedFiles.Contains(vectorRelative));
+                var reader = hybridReady ? LexIndexReader.Open(db, _encoder, vectorPath) : LexIndexReader.Open(db);
                 _readers[reader.Collection] = reader;
                 log.LogInformation("Mounted {Db} ({Collection}, signature_valid={Valid})",
                     db, reader.Collection, reader.SignatureValid);
@@ -86,6 +113,9 @@ public sealed class IndexRegistry : IDisposable
 
     public IReadOnlyList<VerifiedArtifactManifest> VerifiedArtifactManifests => _artifactManifests;
 
+    public bool IsArtifactVerified(string relativePath) =>
+        _verifiedFiles.Contains(relativePath.Replace('\\', '/'));
+
     public IEnumerable<LexIndexReader> Values => _readers.Values;
 
     public int Count => _readers.Count;
@@ -101,6 +131,7 @@ public sealed class IndexRegistry : IDisposable
     {
         foreach (var r in _readers.Values) r.Dispose();
         _readers.Clear();
+        _encoder?.Dispose();
     }
 }
 
