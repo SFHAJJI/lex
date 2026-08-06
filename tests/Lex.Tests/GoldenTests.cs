@@ -99,6 +99,13 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
     }
 
     [Fact]
+    public async Task Latest_benchmark_is_not_published_without_a_verified_manifest()
+    {
+        var response = await _site.Client.GetAsync("/benchmarks/latest.json");
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
     public void Architecture_registry_is_decision_complete_and_uses_known_statuses()
     {
         var registry = Lex.Web.ArchitectureProgram.Registry;
