@@ -24,6 +24,7 @@ public class McpContractTests : IDisposable
         {
             ["collection"] = "t-pub", ["tier"] = "A", ["history_begins"] = "publisher",
             ["built_at"] = "2026-08-01T00:00:00Z", ["corpus_commit"] = "test",
+            ["jurisdiction"] = "XX",
         };
         DocRow Row(string key, string group, string from, string? to, bool text) =>
             new(key, "t-pub", group, $"urn:{group}", "REG", "en", from, to, "publisher",
@@ -114,6 +115,22 @@ public class McpContractTests : IDisposable
         var typo = Call("search", new JsonObject { ["query"] = "everywher", ["fuzzy"] = "auto" });
         var expansions = Assert.IsType<JsonArray>(typo["query_expansions"]);
         Assert.Contains("everywher -> everywhere", expansions.Select(x => x!.GetValue<string>()));
+    }
+
+    [Fact]
+    public void Search_filters_any_registered_jurisdiction_from_index_metadata()
+    {
+        var matching = Assert.IsType<JsonArray>(_core.CallTool("search", new JsonObject
+        {
+            ["query"] = "thing", ["jurisdiction"] = "xx",
+        }));
+        Assert.Single(matching);
+
+        var absent = Assert.IsType<JsonArray>(_core.CallTool("search", new JsonObject
+        {
+            ["query"] = "thing", ["jurisdiction"] = "YY",
+        }));
+        Assert.Empty(absent);
     }
 
     [Fact]
