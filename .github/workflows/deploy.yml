@@ -110,6 +110,7 @@ jobs:
           IMAGE: ${{ steps.image.outputs.image }}
           REQUIRE_MANIFEST: ${{ steps.image.outputs.require_manifest }}
           MANIFEST_SET: ${{ steps.image.outputs.manifest_set }}
+          RUNTIME_CLIENT: ${{ steps.identity.outputs.runtime_client }}
         run: |
           set -eu
           az containerapp revision set-mode -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" --mode multiple --only-show-errors
@@ -122,15 +123,17 @@ jobs:
           az containerapp show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" -o json \
             | jq --arg previous "$previous" --arg candidate "$candidate" --arg suffix "$suffix" \
                  --arg image "$IMAGE" --arg require "$REQUIRE_MANIFEST" --arg manifest "$MANIFEST_SET" \
-                 --arg code "$GITHUB_SHA" '
+                 --arg code "$GITHUB_SHA" --arg runtimeClient "$RUNTIME_CLIENT" '
               .properties.template
               | .revisionSuffix = $suffix
               | .containers[0].image = $image
               | .containers[0].env = ((.containers[0].env // [])
-                  | map(select(.name != "AOAI_KEY" and .name != "AOAI_USE_MANAGED_IDENTITY"
+                  | map(select(.name != "AOAI_KEY" and .name != "AZURE_CLIENT_ID"
+                      and .name != "AOAI_USE_MANAGED_IDENTITY"
                       and .name != "LEX_REQUIRE_ARTIFACT_MANIFEST" and .name != "LEX_ARTIFACT_MANIFEST_ID"
                       and .name != "LEX_CODE_COMMIT" and .name != "LEX_DEPLOY_IMAGE"))
                   + [
+                      {name:"AZURE_CLIENT_ID",value:$runtimeClient},
                       {name:"AOAI_USE_MANAGED_IDENTITY",value:"1"},
                       {name:"LEX_REQUIRE_ARTIFACT_MANIFEST",value:$require},
                       {name:"LEX_ARTIFACT_MANIFEST_ID",value:$manifest},
@@ -163,6 +166,10 @@ jobs:
             -H 'Content-Type: application/json' \
             -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"coverage","arguments":{}}}' \
             "https://$fqdn/mcp" | grep -q '"result"'
+          curl --fail --show-error --silent --retry 2 --retry-all-errors --retry-delay 5 \
+            --max-time 180 -H 'Content-Type: application/json' \
+            -d '{"messages":[{"role":"user","content":"Use the coverage tool and reply with the number of mounted publishers."}]}' \
+            "https://$fqdn/api/ask" | grep -q '"reply"'
           echo "previous=$previous" >> "$GITHUB_OUTPUT"
           echo "candidate=$candidate" >> "$GITHUB_OUTPUT"
 
