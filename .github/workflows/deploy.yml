@@ -115,13 +115,37 @@ jobs:
           az containerapp revision set-mode -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" --mode multiple --only-show-errors
           previous=$(az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
             --query "[?properties.trafficWeight > \`0\`].name | [0]" -o tsv)
+          [ -n "$previous" ] || { echo "::error::no healthy production revision is receiving traffic"; exit 1; }
           suffix="r${GITHUB_SHA:0:10}"
-          az containerapp update -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
-            --image "$IMAGE" --revision-suffix "$suffix" \
-            --set-env-vars "AOAI_USE_MANAGED_IDENTITY=1" "LEX_REQUIRE_ARTIFACT_MANIFEST=$REQUIRE_MANIFEST" \
-              "LEX_ARTIFACT_MANIFEST_ID=$MANIFEST_SET" "LEX_CODE_COMMIT=$GITHUB_SHA" "LEX_DEPLOY_IMAGE=$IMAGE" \
-            --remove-env-vars AOAI_KEY --only-show-errors
           candidate="$CONTAINER_APP--$suffix"
+          app_id=$(az containerapp show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" --query id -o tsv)
+          az containerapp show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" -o json \
+            | jq --arg previous "$previous" --arg candidate "$candidate" --arg suffix "$suffix" \
+                 --arg image "$IMAGE" --arg require "$REQUIRE_MANIFEST" --arg manifest "$MANIFEST_SET" \
+                 --arg code "$GITHUB_SHA" '
+              .properties.template
+              | .revisionSuffix = $suffix
+              | .containers[0].image = $image
+              | .containers[0].env = ((.containers[0].env // [])
+                  | map(select(.name != "AOAI_KEY" and .name != "AOAI_USE_MANAGED_IDENTITY"
+                      and .name != "LEX_REQUIRE_ARTIFACT_MANIFEST" and .name != "LEX_ARTIFACT_MANIFEST_ID"
+                      and .name != "LEX_CODE_COMMIT" and .name != "LEX_DEPLOY_IMAGE"))
+                  + [
+                      {name:"AOAI_USE_MANAGED_IDENTITY",value:"1"},
+                      {name:"LEX_REQUIRE_ARTIFACT_MANIFEST",value:$require},
+                      {name:"LEX_ARTIFACT_MANIFEST_ID",value:$manifest},
+                      {name:"LEX_CODE_COMMIT",value:$code},
+                      {name:"LEX_DEPLOY_IMAGE",value:$image}
+                    ])
+              | {properties:{
+                  configuration:{ingress:{traffic:[
+                    {revisionName:$previous,weight:100},
+                    {revisionName:$candidate,weight:0}
+                  ]}},
+                  template:.
+                }}' > candidate.json
+          az rest --method patch --uri "$app_id?api-version=2025-01-01" \
+            --headers 'Content-Type=application/json' --body @candidate.json --output none
           for attempt in $(seq 1 30); do
             state=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
               --revision "$candidate" --query properties.runningState -o tsv 2>/dev/null || true)
@@ -130,10 +154,8 @@ jobs:
             sleep 10
           done
           [ "$state" = "Running" ] || { echo "::error::candidate revision did not become ready"; exit 1; }
-          if [ -n "$previous" ] && [ "$previous" != "$candidate" ]; then
-            az containerapp ingress traffic set -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
-              --revision-weight "$previous=100" "$candidate=0" --only-show-errors
-          fi
+          az containerapp ingress traffic set -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+            --revision-weight "$previous=100" "$candidate=0" --only-show-errors
           fqdn=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
             --revision "$candidate" --query properties.fqdn -o tsv)
           curl --fail --show-error --silent --retry 5 --retry-delay 5 "https://$fqdn/healthz"
