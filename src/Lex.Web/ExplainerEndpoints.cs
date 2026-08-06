@@ -809,11 +809,13 @@ public static class ExplainerEndpoints
                 <tr><td class="mono">article_history</td><td class="mono">work, anchor</td>
                     <td>every distinct text one article has had, as validity intervals, plus renumbering events.</td></tr>
                 <tr><td class="mono">timeline</td><td class="mono">work</td><td>all versions of a work with their validity windows.</td></tr>
-                <tr><td class="mono">diff</td><td class="mono">work, from, to</td><td>what changed between two versions.</td></tr>
+                <tr><td class="mono">diff</td><td class="mono">work, from_date, to_date, [language]</td><td>what changed between two versions.</td></tr>
                 <tr><td class="mono">in_force_on</td><td class="mono">date, [publisher], [document_type], [limit], [offset]</td>
                     <td>everything that applied on a given day.</td></tr>
-                <tr><td class="mono">search</td><td class="mono">query, [publisher], [as_of], [document_type], [language], [limit]</td>
-                    <td>provision-level full-text search; hits are articles, with permalinks.</td></tr>
+                <tr><td class="mono">search</td><td class="mono">query, [publisher|jurisdiction], [retrieval_mode], [time_scope], [as_of], [fuzzy], [source_class|document_type], [hierarchy], [act_form], [binding_status], [domain], [language], [works], [limit]</td>
+                    <td>provision-level search across Luxembourg and EU law. Keyword is deterministic
+                    FTS5/BM25. Hybrid adds the pinned local encoder only when verified vectors are mounted.
+                    Hits identify the exact applicable version and link back to the authoritative article.</td></tr>
                 <tr><td class="mono">provenance</td><td class="mono">lex_id</td>
                     <td>source URI, retrieval time, record hash, the append-only observation chain.</td></tr>
                 <tr><td class="mono">coverage</td><td class="mono">[publisher]</td><td>what is held, and what is knowably missing.</td></tr>
@@ -886,7 +888,8 @@ public static class ExplainerEndpoints
                     timeline: { work: "lu-legilux:loi-2020-07-17-a624" },
                     diff: { work: "lu-legilux:loi-2020-07-17-a624", from_date: "2020-07-25", to_date: "2021-02-01" },
                     in_force_on: { date: "2022-03-15", document_type: "CODE", limit: 5 },
-                    search: { query: "congé parental", publisher: "lu-legilux", limit: 3 },
+                    search: { query: "congé parental", jurisdiction: "lu", retrieval_mode: "keyword",
+                              time_scope: "as_of", as_of: "2022-03-15", fuzzy: "auto", limit: 3 },
                     provenance: { lex_id: "eu-eurlex:32016r0679:2016-05-04" },
                     coverage: {},
                     changes_in_period: { from_date: "2020-03-01", to_date: "2021-07-01", order: "by_churn", limit: 10 }

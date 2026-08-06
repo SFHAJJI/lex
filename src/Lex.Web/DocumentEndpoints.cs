@@ -42,11 +42,18 @@ public static class DocumentEndpoints
                     "text/html", statusCode: 404);
 
             var sb = new StringBuilder();
+            var workspaceUrl = "/?space=law&amp;work="
+                + Uri.EscapeDataString($"{publisher}:{work}")
+                + $"&amp;date={da:yyyy-MM-dd}&amp;to={db2:yyyy-MM-dd}&amp;mode=compare";
             sb.Append($"""
                 <div class="card"><table class="kv">
-                <tr><td>on {da:yyyy-MM-dd}</td><td class="mono"><a href="/{H(publisher)}/{H(work)}/{da:yyyy-MM-dd}">{H(a.Key)}</a> ({Interval(a)})</td></tr>
-                <tr><td>on {db2:yyyy-MM-dd}</td><td class="mono"><a href="/{H(publisher)}/{H(work)}/{db2:yyyy-MM-dd}">{H(b.Key)}</a> ({Interval(b)})</td></tr>
+                <tr><td>on {da:yyyy-MM-dd}</td><td class="mono"><a href="/{H(publisher)}/{H(work)}/{da:yyyy-MM-dd}">{H(a.Key)}</a> ({Interval(a)})
+                &middot; <a href="{H(a.SourceUri)}">official source &nearr;</a></td></tr>
+                <tr><td>on {db2:yyyy-MM-dd}</td><td class="mono"><a href="/{H(publisher)}/{H(work)}/{db2:yyyy-MM-dd}">{H(b.Key)}</a> ({Interval(b)})
+                &middot; <a href="{H(b.SourceUri)}">official source &nearr;</a></td></tr>
                 </table></div>
+                <p><a href="{workspaceUrl}"><b>Open the structured article comparison &rarr;</b></a>
+                <span class="sub">matched by provision anchor, with changed, added, removed and unchanged articles separated</span></p>
                 """);
 
             if (a.Key == b.Key)
@@ -78,7 +85,12 @@ public static class DocumentEndpoints
             var sb = new StringBuilder();
             sb.Append($"<p><span class=\"badge\">{H(rows[^1].Kind)}</span> <span class=\"badge\">{rows.Count} version(s)</span> <a class=\"badge\" href=\"{H(rows[^1].SourceUri)}\">official text ↗</a></p>");
             sb.Append(VersionRail(publisher, work, rows, null));
-            sb.Append($"<p><a href=\"/{H(publisher)}/{H(work)}/{H(rows[^1].ValidFrom)}\"><b>Read the current text →</b></a></p>");
+            var todayVersion = r.AsOf(work, ctx.Today, FilterSet.All);
+            var readDate = todayVersion is null ? rows[^1].ValidFrom : ctx.Today.ToString("yyyy-MM-dd");
+            var readLabel = todayVersion is null
+                ? "Read the latest available publisher state"
+                : "Read the text applicable today";
+            sb.Append($"<p><a href=\"/{H(publisher)}/{H(work)}/{H(readDate)}\"><b>{readLabel} →</b></a></p>");
             sb.Append("<details class=\"card\"><summary>Every version as a table</summary><table><tr><th>valid</th><th>as-of view</th><th>status</th><th>provenance</th></tr>");
             foreach (var v in rows)
                 sb.Append($"""

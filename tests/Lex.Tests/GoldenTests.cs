@@ -73,6 +73,26 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
     }
 
     [Fact]
+    public async Task Coverage_keeps_cards_outside_coverage_tables()
+    {
+        var html = await _site.Client.GetStringAsync("/coverage");
+        Assert.DoesNotMatch(new Regex("<table[^>]*>(?:(?!</table>).)*<div\\b",
+            RegexOptions.Singleline | RegexOptions.IgnoreCase), html);
+    }
+
+    [Fact]
+    public async Task Developer_search_contract_documents_every_public_filter()
+    {
+        var html = await _site.Client.GetStringAsync("/developers");
+        foreach (var field in new[]
+        {
+            "jurisdiction", "retrieval_mode", "time_scope", "as_of", "fuzzy", "source_class",
+            "hierarchy", "act_form", "binding_status", "domain", "language", "works",
+        })
+            Assert.Contains(field, html);
+    }
+
+    [Fact]
     public async Task Architecture_separates_live_target_and_unmeasured_claims()
     {
         var current = await _site.Client.GetStringAsync("/architecture");

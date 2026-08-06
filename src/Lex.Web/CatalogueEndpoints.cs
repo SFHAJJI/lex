@@ -264,6 +264,7 @@ public static class CatalogueEndpoints
                         <td>{(folder ? "<span class=\"badge\">thematic folder, not an instrument</span>" : "")}</td></tr>
                         """);
                 }
+                sb.Append("</table></div>");
                 // The confidence mix, as a count rather than a claim. Text from publisher markup and text
                 // read out of a PDF are different evidence, and the page that reports coverage is the page
                 // that should say how much of it is which.
@@ -286,7 +287,7 @@ public static class CatalogueEndpoints
                     }
                     sb.Append("</table></div>");
                 }
-                sb.Append($"</table></div>{EnvelopeCard(r, false)}");
+                sb.Append(EnvelopeCard(r, false));
                 var luGap = c.Collection == "lu-legilux"
                     ? """
                       The publisher only maintains consolidated (amendments-merged) editions for some laws , 

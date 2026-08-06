@@ -107,9 +107,9 @@ public static class Fragments
         {
             var oldSet = o.ToHashSet(StringComparer.Ordinal);
             var newSet = n.ToHashSet(StringComparer.Ordinal);
-            var removed = o.Where(l => !newSet.Contains(l)).Take(150).ToList();
-            var added = n.Where(l => !oldSet.Contains(l)).Take(150).ToList();
-            sb.Append("<div class=\"notice\">Change too large for an exact line diff here, showing removed/added line samples; exact comparison at the official source links above.</div>");
+            var removed = o.Where(l => !newSet.Contains(l)).Take(30).ToList();
+            var added = n.Where(l => !oldSet.Contains(l)).Take(30).ToList();
+            sb.Append("<div class=\"notice\">Change too large for a useful line-by-line page. Showing a small removed/added sample; use the structured article comparison above or the official source links.</div>");
             sb.Append("<div class=\"card\"><pre style=\"white-space:pre-wrap;font-size:13px;margin:0\">");
             foreach (var l in removed) sb.Append($"<span style=\"color:var(--accent)\">− {H(Trunc(l))}</span>\n");
             foreach (var l in added) sb.Append($"<span style=\"color:var(--ok)\">+ {H(Trunc(l))}</span>\n");

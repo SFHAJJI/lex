@@ -105,6 +105,8 @@ HTTP 404
   .cat td:first-child a { font-weight:600 }
   .cat .r { text-align:right; font-variant-numeric:tabular-nums }
   .cat .sub { font-size:12px; margin-top:2px }
+  .cat th:nth-child(4), .cat td:nth-child(4),
+  .cat th:nth-child(5), .cat td:nth-child(5) { white-space:nowrap }
   .pager { display:flex; gap:14px; align-items:baseline; margin:12px 0; font-size:14px }
   .pager span { color:var(--muted); font-variant-numeric:tabular-nums }
   form.inline { display:flex; gap:8px; flex-wrap:wrap; margin:10px 0 }
@@ -140,6 +142,13 @@ HTTP 404
     header { gap:12px; padding:12px 14px }
     h1 { font-size:25px }
     .rail .yr { font-size:10px }
+    /* Type is already available as a filter and the first date is secondary to the
+       latest state. Removing those columns leaves the law, version count, latest date
+       and text availability readable instead of spelling dates vertically. */
+    .cat th:nth-child(2), .cat td:nth-child(2),
+    .cat th:nth-child(4), .cat td:nth-child(4) { display:none }
+    .cat th, .cat td { padding-left:6px; padding-right:6px }
+    .cat td:first-child { min-width:170px }
   }
 </style></head>
 <body>
