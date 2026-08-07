@@ -759,6 +759,19 @@ public class IndexTests : IDisposable
         Assert.True(encoder.LargestPrefixInput <= 4_096 + "passage: ".Length);
     }
 
+    [Fact]
+    public void Empty_extracted_text_remains_a_deterministic_chunk()
+    {
+        using var encoder = new FakeEncoder();
+
+        var chunk = Assert.Single(SemanticChunker.Split("", encoder));
+
+        Assert.Equal("", chunk.Text);
+        Assert.Equal(0, chunk.Index);
+        Assert.Equal(Convert.ToHexStringLower(
+            System.Security.Cryptography.SHA256.HashData([])), chunk.Sha256);
+    }
+
     /// <summary>
     /// Reproduces the boundary combination returned by the pinned SentencePiece tokenizer for
     /// CRR Article 261 (text sha e1bc517d...): the prefix stops six characters before the end,
