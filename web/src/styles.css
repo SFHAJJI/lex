@@ -281,6 +281,7 @@ button.pick { cursor: pointer; }
 .al-t{display:flex;flex-direction:column;line-height:1.2;text-align:left}
 .al-t b{font-size:14px;font-weight:700}
 .al-t small{font-size:11.5px;opacity:.85}
+.al-short{display:none}
 
 .askpanel{position:fixed;right:20px;bottom:20px;z-index:40;width:min(430px,calc(100vw - 32px));
   max-height:min(76vh,720px);display:flex;flex-direction:column;background:var(--card);
@@ -313,8 +314,9 @@ button.pick { cursor: pointer; }
 
 @media(max-width:640px){
   .askpanel{right:8px;left:8px;bottom:8px;width:auto;max-height:82vh}
-  .asklaunch{right:12px;bottom:12px}
-  .al-t small{display:none}
+  .asklaunch{right:12px;bottom:12px;padding:11px 16px}
+  .al-wide,.al-t small{display:none}
+  .al-short{display:inline}
   .fin-hint{font-size:12px}
 }
 @media(prefers-reduced-motion:reduce){.asklaunch:hover{transform:none}}
