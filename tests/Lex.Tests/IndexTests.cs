@@ -689,6 +689,37 @@ public class IndexTests : IDisposable
     }
 
     [Fact]
+    public void Semantic_vector_scan_returns_a_bounded_deterministic_candidate_set()
+    {
+        var vectors = Path.ChangeExtension(_db, ".nearest.vectors");
+        _extra.Add(vectors);
+        using (var writer = new SemanticVectorWriter(vectors, 4))
+        {
+            writer.Write([1, 1, 1, 1]);
+            writer.Write([-1, 1, 1, 1]);
+            writer.Write([-1, -1, 1, 1]);
+            writer.Write([-1, -1, -1, 1]);
+        }
+
+        using var reader = new SemanticVectorReader(vectors);
+        var nearest = reader.NearestByHamming(SemanticVectorReader.Binary([1, 1, 1, 1]), 2);
+        Assert.Equal([(0L, 0), (1L, 1)], nearest);
+    }
+
+    [Fact]
+    public void Official_uppercase_celex_resolves_the_normalized_corpus_work()
+    {
+        var doc = Row("eu-eurlex:32006l0112:2025-01-01", "32006l0112", "2025-01-01", null, text: true);
+        IndexBuilder.Build(_db, new Dictionary<string, string> { ["collection"] = "eu-eurlex" },
+            [doc], [Prov(doc, 0, "art_1", "value added tax")], [], [], null);
+
+        using var reader = LexIndexReader.Open(_db);
+        Assert.True(reader.WorkExists("32006L0112"));
+        Assert.NotNull(reader.AsOf("eu-eurlex:32006L0112", new DateOnly(2026, 8, 7), FilterSet.All));
+        Assert.Single(reader.Timeline("32006L0112"));
+    }
+
+    [Fact]
     public void Fuzzy_fallback_is_visible_and_protects_identifiers()
     {
         var doc = Row("t-pub:privacy:2020-01-01", "privacy", "2020-01-01", null, text: true);

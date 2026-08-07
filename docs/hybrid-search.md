@@ -9,7 +9,8 @@ before opening ONNX Runtime. The model card specifies 384 dimensions and the req
 and `passage:` prefixes: <https://huggingface.co/intfloat/multilingual-e5-small>.
 
 The selected qint8 ONNX artifact is about 118 MB, plus a 5 MB SentencePiece model. This is a
-candidate cost optimization, not a claim that the current 0.5 GiB Container App is sufficient.
+candidate cost optimization. The current Container App is sized at 2 GiB from the measured
+working set and remains below the activation gate's 75% memory ceiling.
 The public benchmark records the actual working set, and hybrid cannot activate above 75 percent
 of the configured memory limit.
 

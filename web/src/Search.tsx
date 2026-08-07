@@ -95,6 +95,7 @@ const languageLabel = (code: string) =>
 
 /** A bare date is a question in itself: what applied that day. */
 const DATE_ONLY = /^\s*(\d{4}-\d{2}-\d{2})\s*$/;
+const INITIAL_ARTICLES = 8;
 
 export default function Search(p: SearchProps) {
   const [text, setText] = useState(p.state.q ?? "");
@@ -111,6 +112,7 @@ export default function Search(p: SearchProps) {
   const [language, setLanguage] = useState("");
   const [modeUsed, setModeUsed] = useState("keyword");
   const [expansions, setExpansions] = useState<string[]>([]);
+  const [articleLimit, setArticleLimit] = useState(INITIAL_ARTICLES);
   const box = useRef<HTMLInputElement>(null);
 
   useEffect(() => setText(p.state.q ?? ""), [p.state.q]);
@@ -123,13 +125,13 @@ export default function Search(p: SearchProps) {
 
   const q = p.state.q ?? "";
   const asOf = p.state.asOf;
-  const activeFilters = [retrieval === "hybrid", jurisdiction, hierarchy, domain, layer,
-                         actForm, bindingStatus, language]
+  const activeFilters = [jurisdiction, hierarchy, domain, layer, actForm, bindingStatus, language]
     .filter(Boolean).length;
 
   useEffect(() => {
     if (!q.trim()) { setWorks([]); setArticles([]); return; }
     let live = true;
+    setArticleLimit(INITIAL_ARTICLES);
     setBusy(true);
     const types = LAYERS.find((l) => l.id === layer)?.types;
     tool<any>("search", { query: q.trim(), limit: 40, time_scope: "as_of", as_of: asOf ?? p.today,
@@ -224,20 +226,27 @@ export default function Search(p: SearchProps) {
         <div className="results">
           <div className="res-head">
             <span className="sub">{busy ? "Searching…" : `${works.length} law${works.length === 1 ? "" : "s"}, ${articles.length} article${articles.length === 1 ? "" : "s"}`}</span>
-            <span className="badge">{modeUsed === "hybrid" ? "keyword + meaning" : "keyword search"}</span>
+            <span className="badge">{modeUsed === "hybrid" ? "words + meaning" : "exact words"}</span>
             <span className="grow" />
+            <div className="search-mode" role="group" aria-label="Search method">
+              <button className={retrieval === "keyword" ? "on" : ""}
+                      aria-pressed={retrieval === "keyword"}
+                      onClick={() => setRetrieval("keyword")}>Exact words</button>
+              <button className={retrieval === "hybrid" ? "on" : ""}
+                      aria-pressed={retrieval === "hybrid"}
+                      title="Adds multilingual meaning search; exact legal identifiers still use exact lookup"
+                      onClick={() => setRetrieval("hybrid")}>Words + meaning <small>preview</small></button>
+            </div>
           </div>
+
+          {retrieval === "hybrid" ? (
+            <p className="mode-note">Concept search across French and English. It can take a few seconds;
+              identifiers and quoted legal text still use exact lookup.</p>
+          ) : null}
 
           <details className="search-filters">
             <summary>Narrow results{activeFilters ? ` (${activeFilters} active)` : ""}</summary>
             <div className="filter-grid">
-              <label><span>Search method</span>
-                <select className="reslayer" value={retrieval}
-                        onChange={(e) => setRetrieval(e.target.value as "keyword" | "hybrid")}>
-                  <option value="keyword">Exact keywords</option>
-                  <option value="hybrid">Keywords + meaning (preview)</option>
-                </select>
-              </label>
               <label><span>Jurisdiction</span>
                 <select className="reslayer" value={jurisdiction}
                         onChange={(e) => setJurisdiction(e.target.value)}>
@@ -308,6 +317,7 @@ export default function Search(p: SearchProps) {
                       <span className="hitmeta">
                         <span className="mono">{w.work.split(":")[1]}</span>
                         <Validity hit={w} />
+                        <HitContext hit={w} />
                         {w.consolidationStatus === "not_published"
                           ? <span className="warntext">official merged wording not published</span> : null}
                       </span>
@@ -322,16 +332,23 @@ export default function Search(p: SearchProps) {
             <>
               <h4 className="res-h">Where it is said</h4>
               <ul className="rows">
-                {articles.map((a, i) => (
+                {articles.slice(0, articleLimit).map((a, i) => (
                   <li key={`${a.work}-${a.anchor}-${i}`}>
                     <button className="rowbtn" onClick={() => p.onOpen(a.work, a.validFrom, a.anchor)}>
                       <span>{a.num ?? a.anchor} <span className="sub">· {a.title}</span></span>
                       {a.snippet ? <span className="sub"><Marked text={a.snippet} /></span> : null}
-                      <span className="hitmeta"><Validity hit={a} />{a.language ? <span>{a.language.toUpperCase()}</span> : null}</span>
+                      <span className="hitmeta"><Validity hit={a} /><HitContext hit={a} />
+                        {a.language ? <span>{a.language.toUpperCase()}</span> : null}</span>
                     </button>
                   </li>
                 ))}
               </ul>
+              {articles.length > articleLimit ? (
+                <button className="ghost more-results"
+                        onClick={() => setArticleLimit((current) => Math.min(articles.length, current + 8))}>
+                  Show {Math.min(8, articles.length - articleLimit)} more articles
+                </button>
+              ) : null}
             </>
           ) : null}
 
@@ -354,6 +371,17 @@ export default function Search(p: SearchProps) {
 function Validity({ hit }: { hit: HitMeta }) {
   if (!hit.validFrom) return null;
   return <span>valid {hit.validFrom} → {hit.validTo ?? "ongoing"}</span>;
+}
+
+function HitContext({ hit }: { hit: HitMeta }) {
+  const reasons = (hit.matchReasons ?? []).map((reason) => reason === "semantic" ? "meaning match" :
+    reason === "exact_identifier" ? "exact identifier" : reason === "fuzzy" ? "spelling match" :
+    reason === "keyword" ? "word match" : label(reason));
+  return <>
+    {hit.hierarchy ? <span>{label(hit.hierarchy)}</span> : null}
+    {(hit.domains ?? []).slice(0, 2).map((domain) => <span key={domain}>{label(domain)}</span>)}
+    {reasons.map((reason) => <span key={reason}>{reason}</span>)}
+  </>;
 }
 
 /** The index marks matched words with guillemets; they render as marks, not as punctuation. */

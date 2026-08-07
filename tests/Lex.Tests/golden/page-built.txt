@@ -210,7 +210,8 @@ Legilux · EUR-Lex/Cellar     ────────────────�
 signing, Application Insights via OpenTelemetry, and Azure DNS. Managed identity pulls the image
 and authenticates the optional Azure OpenAI assistant. Retrieval itself is local and deterministic:
 FTS5/BM25, ONNX embeddings, fixed reranking and fusion, with no generative model in the search path.
-The web app starts at 0.25 vCPU and <b>scales to zero</b>.</p>
+The web app uses 1 vCPU and 2 GiB for the mounted lexical and semantic artifacts,
+and <b>scales to zero</b>.</p>
 
 <h2>Decisions worth defending</h2>
 <div class="card"><table>

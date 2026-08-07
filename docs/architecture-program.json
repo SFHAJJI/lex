@@ -5,12 +5,12 @@
   "statuses": ["planned", "building", "gated", "shipped", "rejected"],
   "current": {
     "retrieval": "keyword",
-    "index_schema": "lex-index/2",
+    "index_schema": "lex-index/3",
     "hosting": "Azure Container Apps Consumption",
     "region": "France Central",
-    "resource": "0.25 vCPU, 0.5 GiB",
+    "resource": "1 vCPU, 2 GiB",
     "scale": "0 to 5 replicas",
-    "observed_at": "2026-08-06",
+    "observed_at": "2026-08-07",
     "structured_contract": "MCP JSON plus UiEffect",
     "comparison_contract": "exact authoritative provision text"
   },
@@ -18,25 +18,25 @@
     {
       "id": "M1",
       "title": "Truthful architecture narrative",
-      "status": "building",
+      "status": "shipped",
       "outcome": "Separate live architecture, target architecture, decisions and measured benchmarks."
     },
     {
       "id": "M2",
       "title": "Verified artifact publication",
-      "status": "building",
+      "status": "shipped",
       "outcome": "A pinned trust root verifies a signed manifest for every served artifact."
     },
     {
       "id": "M3",
       "title": "Expandable temporal EU corpus",
-      "status": "building",
+      "status": "shipped",
       "outcome": "Configuration selects domains while every accepted work retains all official dated expressions."
     },
     {
       "id": "M4",
       "title": "Deduplicated index",
-      "status": "building",
+      "status": "shipped",
       "outcome": "lex-index/3 stores repeated wording once without changing timelines, exact text or diffs."
     },
     {
@@ -48,7 +48,7 @@
     {
       "id": "M6",
       "title": "Lawyer-facing scope filters",
-      "status": "building",
+      "status": "shipped",
       "outcome": "Jurisdiction, hierarchy, legal form, binding status, domain, language and date remain explicit."
     },
     {
@@ -60,7 +60,7 @@
     {
       "id": "M8",
       "title": "Size-gated local index hosting",
-      "status": "building",
+      "status": "shipped",
       "outcome": "Keep small verified indexes in Container Apps, but promote oversized releases from Blob onto a VM-managed local disk before traffic cutover."
     }
   ],

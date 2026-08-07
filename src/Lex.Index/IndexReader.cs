@@ -55,6 +55,7 @@ public sealed class LexIndexReader : IDisposable
     public IReadOnlyDictionary<string, string> Stamp { get; }
     public string Collection => Stamp.GetValueOrDefault("collection", "?");
     public bool SignatureValid { get; }
+    public bool HybridReady => _encoder is not null && _vectors is not null;
 
     private LexIndexReader(SqliteConnection conn, Dictionary<string, string> stamp, string schema,
                            ITextEncoder? encoder, SemanticVectorReader? vectors)
@@ -549,6 +550,16 @@ public sealed class LexIndexReader : IDisposable
 
     private List<RetrievalHit> SearchSemantic(string query, FilterSet filters, int limit)
     {
+        var queryVector = _encoder!.Encode(query, EmbeddingInputKind.Query);
+        var binary = SemanticVectorReader.Binary(queryVector);
+        var int8 = SemanticVectorReader.Int8(queryVector);
+        var nearest = _vectors!.NearestByHamming(binary, Math.Max(2_000, limit * 20));
+        if (nearest.Count == 0) return [];
+        var hamming = nearest.ToDictionary(candidate => candidate.Ordinal, candidate => candidate.Distance);
+        // Ordinals originate in the verified vector file, not user input. A literal IN list lets
+        // SQLite scan semantic_chunks once even for an older v3 artifact that predates the
+        // vector-ordinal index; future builds use ix_semantic_vector directly.
+        var ordinalSql = string.Join(',', nearest.Select(candidate => candidate.Ordinal));
         var (where, ps) = WithFilters("1=1", filters, excludeAsOf: false);
         using var cmd = Cmd($"""
             WITH eligible AS (
@@ -557,20 +568,17 @@ public sealed class LexIndexReader : IDisposable
               FROM semantic_chunks sc
               JOIN provisions p ON p.state_id=sc.state_id
               JOIN docs d ON d.rid=p.rid
-              WHERE {where}
+              WHERE sc.vector_ordinal IN ({ordinalSql}) AND {where}
             )
             SELECT state_id, vector_ordinal, rid, anchor FROM eligible WHERE occurrence_rank=1
             """, ps);
         var candidates = new List<(long State, long Ordinal, string Rid, string Anchor, int Hamming, int Dot)>();
-        var queryVector = _encoder!.Encode(query, EmbeddingInputKind.Query);
-        var binary = SemanticVectorReader.Binary(queryVector);
-        var int8 = SemanticVectorReader.Int8(queryVector);
         using (var r = cmd.ExecuteReader())
             while (r.Read())
             {
                 var ordinal = r.GetInt64(1);
                 candidates.Add((r.GetInt64(0), ordinal, r.GetString(2), r.GetString(3),
-                    _vectors!.HammingDistance(ordinal, binary), 0));
+                    hamming[ordinal], 0));
             }
         var reranked = candidates.OrderBy(c => c.Hamming).Take(500)
             .Select(c => c with { Dot = _vectors!.Int8Dot(c.Ordinal, int8) })
@@ -1034,9 +1042,13 @@ public sealed class LexIndexReader : IDisposable
         if (!work.Contains("://") && work.Contains(':'))
         {
             var parts = work.Split(':');
-            if (parts.Length >= 2) return parts[1];
+            if (parts.Length >= 2) work = parts[1];
         }
-        return work;
+        // EUR-Lex presents CELEX identifiers with an uppercase document-form letter while the
+        // canonical corpus slugs are normalized to lowercase. Official copied identifiers and
+        // canonical permalinks must resolve to the same work.
+        return System.Text.RegularExpressions.Regex.IsMatch(work, @"^\d{5}[A-Za-z]\d{4}")
+            ? work.ToLowerInvariant() : work;
     }
 
     private (string Sql, List<SqliteParameter> Ps) WithFilters(string baseSql, FilterSet f, bool excludeAsOf)

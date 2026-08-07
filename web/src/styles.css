@@ -72,7 +72,15 @@
 
 .art { border-top: 1px solid var(--line); padding: 12px 0; }
 .art h4 { margin: 0 0 5px; font-family: var(--serif); font-size: 16px; }
-.lawtxt { font-family: var(--serif); font-size: 16.5px; line-height: 1.62; white-space: pre-wrap; }
+.lawtxt { font-family: var(--serif); font-size: 16.5px; line-height: 1.62; overflow-wrap: anywhere; }
+.lawtxt > :first-child { margin-top: 0; }
+.lawtxt > :last-child { margin-bottom: 0; }
+.lawtxt p { margin: 0 0 .85em; }
+.lawtxt ol, .lawtxt ul { padding-left: 1.55em; }
+.lawtxt table { display: block; width: max-content; max-width: 100%; overflow-x: auto;
+                border-collapse: collapse; font-family: var(--sans); font-size: 13.5px; }
+.lawtxt th, .lawtxt td { border: 1px solid var(--line); padding: 6px 8px; text-align: left; }
+.lawtxt blockquote { margin-left: 0; padding-left: 14px; border-left: 2px solid var(--line); color: var(--muted); }
 .sha { font-family: var(--mono); font-size: 11.5px; color: var(--muted); margin-top: 6px; }
 
 ins { background: color-mix(in srgb, var(--ok) 16%, transparent); color: var(--ok);
@@ -438,6 +446,14 @@ button.pick { cursor: pointer; }
 .results { border-top: 1px solid var(--line); padding: 12px 16px 16px; }
 .res-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
 .res-head .sub { margin: 0; }
+.search-mode { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.search-mode button { border: 0; background: none; color: var(--muted); padding: 6px 9px;
+                      font: inherit; font-size: 12.5px; cursor: pointer; }
+.search-mode button + button { border-left: 1px solid var(--line); }
+.search-mode button.on { background: var(--fg); color: var(--bg); }
+.search-mode small { font-size: 9px; text-transform: uppercase; letter-spacing: .04em; }
+.mode-note { color: var(--muted); font-size: 12.5px; margin: -3px 0 10px; }
+.more-results { display: block; margin: 10px auto 0; }
 .reslayer { font: inherit; font-size: 13px; background: var(--bg); color: inherit;
             border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; width: 100%; }
 .search-filters { border: 1px solid var(--line); border-radius: 9px; margin: 0 0 12px; }

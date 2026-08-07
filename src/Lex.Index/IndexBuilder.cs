@@ -251,6 +251,7 @@ public static class IndexBuilder
               vector_ordinal INTEGER NOT NULL,
               UNIQUE(state_id, chunk_index));
             CREATE INDEX ix_semantic_state ON semantic_chunks(state_id);
+            CREATE INDEX ix_semantic_vector ON semantic_chunks(vector_ordinal);
             -- Cross-references, flattened so the reverse question ("which articles cite this
             -- law?") is an indexed lookup rather than a scan over every provision's JSON.
             CREATE TABLE citations(
