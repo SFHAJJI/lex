@@ -23,7 +23,16 @@ cannot know.
 **[Benchmarks](https://law.soufien.lu/benchmarks)** ·
 **[Verify it yourself](https://law.soufien.lu/verify)** ·
 **[Program](docs/hybrid-eu-roadmap.md)** ·
-**[Spec (D1-D70)](docs/lex-spec-v4.md)**
+**[Spec (D1-D71)](docs/lex-spec-v4.md)**
+
+## 74-second engineering demo
+
+[![Lex live temporal search, hybrid retrieval, comparison and deployment evidence](https://github.com/SFHAJJI/lex/releases/download/v1.2.1/lex-interviewer-preview-v2.gif)](https://github.com/SFHAJJI/lex/releases/download/v1.2.1/law-soufien-interviewer-demo-v2.mp4)
+
+*Dated retrieval → deterministic keyword or optional local hybrid search → exact
+EU article → verified temporal diff → evidence export → deployed architecture.*
+[Watch the narrated, continuous-browser MP4](https://github.com/SFHAJJI/lex/releases/download/v1.2.1/law-soufien-interviewer-demo-v2.mp4)
+or read the [release evidence](https://github.com/SFHAJJI/lex/releases/tag/v1.2.1).
 
 ## Try it in 30 seconds
 
