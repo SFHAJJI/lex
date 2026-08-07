@@ -278,6 +278,8 @@ public static class CatalogueEndpoints
                             "akn-lu/1" => "publisher XML (Akoma Ntoso), article boundaries from the publisher",
                             "fmx4-eu/1" => "publisher XML (Formex 4), article boundaries from the publisher",
                             "xhtml-eu/1" => "publisher XHTML, article boundaries from the publisher",
+                            "xhtml-eu-xlink-context/1" => "legacy publisher XHTML with its missing standard link namespace supplied; article boundaries from publisher markup, or one disclosed document-level boundary when none exists",
+                            "html-eu-tolerant/1" => "legacy publisher HTML repaired deterministically; article boundaries from publisher markup, or one disclosed document-level boundary when none exists",
                             "pdf-lu/1" => "read from the publisher's PDF, article boundaries inferred from layout",
                             "pdf-memorial-lu/1" => "cut out of an official gazette issue, both the act's boundaries and its articles inferred",
                             _ => "",

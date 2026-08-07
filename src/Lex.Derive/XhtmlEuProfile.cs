@@ -22,6 +22,11 @@ public static class XhtmlEuProfile
     public static Extraction Extract(string xhtml, string lexIdBase)
     {
         var doc = XDocument.Parse(xhtml, LoadOptions.None);
+        return Extract(doc, lexIdBase);
+    }
+
+    internal static Extraction Extract(XDocument doc, string lexIdBase)
+    {
         var root = doc.Root ?? throw new InvalidDataException("empty XHTML document");
         var notes = new List<string>();
 
