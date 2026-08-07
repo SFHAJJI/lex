@@ -14,14 +14,23 @@ public class IndexTests : IDisposable
         public int EncodeCalls { get; private set; }
         public int BatchCalls { get; private set; }
         public long CountedCharacters { get; private set; }
+        public long PrefixCharacters { get; private set; }
+        public int LargestPrefixInput { get; private set; }
         public int CountTokens(string text)
         {
             CountedCharacters += text.Length;
             return text.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length + 2;
         }
-        public void ResetTokenMetrics() => CountedCharacters = 0;
+        public void ResetTokenMetrics()
+        {
+            CountedCharacters = 0;
+            PrefixCharacters = 0;
+            LargestPrefixInput = 0;
+        }
         public int PrefixLengthForTokens(string text, int maxTokens)
         {
+            PrefixCharacters += text.Length;
+            LargestPrefixInput = Math.Max(LargestPrefixInput, text.Length);
             var words = 0;
             for (var i = 0; i < text.Length; i++)
                 if ((i == 0 || char.IsWhiteSpace(text[i - 1])) && !char.IsWhiteSpace(text[i])
@@ -728,8 +737,26 @@ public class IndexTests : IDisposable
         Assert.True(chunks.Count > 50);
         Assert.True(encoder.CountedCharacters < text.Length * 10L,
             $"Chunk preparation rescanned {encoder.CountedCharacters:N0} characters for a {text.Length:N0}-character provision.");
+        Assert.True(encoder.PrefixCharacters < text.Length * 4L,
+            $"Prefix probes copied {encoder.PrefixCharacters:N0} characters for a {text.Length:N0}-character provision.");
+        Assert.True(encoder.LargestPrefixInput <= 4_096 + "passage: ".Length,
+            $"A prefix probe received {encoder.LargestPrefixInput:N0} characters.");
         Assert.All(chunks, chunk => Assert.True(
             encoder.CountTokens("passage: " + chunk.Text) <= SemanticChunker.MaxTokens));
+    }
+
+    [Fact]
+    public void Multi_megabyte_annex_uses_bounded_prefix_windows()
+    {
+        using var encoder = new FakeEncoder();
+        var text = string.Join(' ', Enumerable.Repeat("annex", 500_000));
+        encoder.ResetTokenMetrics();
+
+        var chunks = SemanticChunker.Split(text, encoder);
+
+        Assert.True(chunks.Count > 1_000);
+        Assert.True(encoder.PrefixCharacters < text.Length * 4L);
+        Assert.True(encoder.LargestPrefixInput <= 4_096 + "passage: ".Length);
     }
 
     /// <summary>

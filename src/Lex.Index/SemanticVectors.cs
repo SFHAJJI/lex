@@ -32,14 +32,17 @@ public static class SemanticChunker
     public const int MaxTokens = 256;
     public const int OverlapTokens = 32;
     private const string PassagePrefix = "passage: ";
+    private const int InitialProbeCharacters = 4_096;
 
     public static IReadOnlyList<SemanticChunk> Split(string text, ITextEncoder encoder)
     {
-        // A full CountTokens pass made the first progress item silent for minutes when it was a
-        // multi-megabyte annex. Ask for only the first bounded token window instead. The returned
-        // boundary reaches the end exactly when the entire provision fits in one chunk.
-        var firstBoundary = encoder.PrefixLengthForTokens(PassagePrefix + text, MaxTokens);
-        if (firstBoundary >= PassagePrefix.Length + text.Length)
+        // Never materialize `prefix + the entire remaining suffix`. A 46 MB regulatory table
+        // exposed that even a token-count API which stops at 256 tokens cannot save the caller
+        // from first copying the other 45.9 MB. Probe a bounded window and grow it only when the
+        // whole window fits. For ordinary provisions this is byte-for-byte the old decision; for
+        // long annexes the tokenizer never receives the already-scanned suffix again.
+        var first = BoundedPrefix(text, 0, encoder);
+        if (first.FitsRemaining)
             return [Chunk(0, text)];
 
         var paragraphs = text.Replace("\r\n", "\n", StringComparison.Ordinal)
@@ -47,22 +50,19 @@ public static class SemanticChunker
         var pieces = new List<string>();
         foreach (var paragraph in paragraphs)
         {
-            var rest = paragraph;
-            while (rest.Length > 0)
+            var start = 0;
+            while (start < paragraph.Length)
             {
-                // Asking the tokenizer for the first boundary is bounded by MaxTokens. Counting
-                // the entire remaining suffix before every chunk made a multi-megabyte annex
-                // approach quadratic work even though each output chunk is small.
-                var boundary = encoder.PrefixLengthForTokens(PassagePrefix + rest, MaxTokens);
-                var take = Math.Max(1, boundary - PassagePrefix.Length);
-                take = Math.Min(take, rest.Length);
-                if (take == rest.Length)
+                var bounded = BoundedPrefix(paragraph, start, encoder);
+                var take = bounded.Take;
+                if (bounded.FitsRemaining)
                 {
-                    pieces.Add(rest);
+                    pieces.Add(paragraph[start..]);
                     break;
                 }
-                pieces.Add(rest[..take].Trim());
-                var overlapStart = encoder.SuffixStartForTokens(rest[..take], OverlapTokens);
+                var emitted = paragraph.Substring(start, take);
+                pieces.Add(emitted.Trim());
+                var overlapStart = encoder.SuffixStartForTokens(emitted, OverlapTokens);
                 // Some SentencePiece fragments are shorter than the requested overlap even when
                 // PrefixLengthForTokens stopped before the end of the normalized input. Its
                 // suffix boundary is then zero. Reusing the whole prefix would leave `rest`
@@ -70,12 +70,12 @@ public static class SemanticChunker
                 // The complete prefix has already been emitted, so advance past it when no proper
                 // suffix exists. This sacrifices overlap for that one boundary, never source text.
                 var nextStart = overlapStart > 0 ? overlapStart : take;
-                var next = rest[nextStart..].Trim();
-                if (next.Length >= rest.Length)
+                if (nextStart <= 0 || nextStart > take)
                     throw new InvalidDataException(
-                        $"Semantic chunk preparation made no progress: remaining={rest.Length}, " +
-                        $"boundary={boundary}, take={take}, overlap_start={overlapStart}.");
-                rest = next;
+                        $"Semantic chunk preparation made no progress: remaining={paragraph.Length - start}, " +
+                        $"take={take}, overlap_start={overlapStart}.");
+                start += nextStart;
+                while (start < paragraph.Length && char.IsWhiteSpace(paragraph[start])) start++;
             }
         }
 
@@ -97,6 +97,24 @@ public static class SemanticChunker
         }
         if (current.Count > 0) chunks.Add(Chunk(chunks.Count, string.Join("\n\n", current)));
         return chunks;
+    }
+
+    private static (int Take, bool FitsRemaining) BoundedPrefix(
+        string text, int start, ITextEncoder encoder)
+    {
+        var remaining = text.Length - start;
+        var windowLength = Math.Min(remaining, InitialProbeCharacters);
+        while (true)
+        {
+            var probe = string.Concat(PassagePrefix.AsSpan(), text.AsSpan(start, windowLength));
+            var boundary = encoder.PrefixLengthForTokens(probe, MaxTokens);
+            var take = Math.Clamp(boundary - PassagePrefix.Length, 1, windowLength);
+            if (take < windowLength)
+                return (take, FitsRemaining: false);
+            if (windowLength == remaining)
+                return (remaining, FitsRemaining: true);
+            windowLength = Math.Min(remaining, checked(windowLength * 2));
+        }
     }
 
     private static SemanticChunk Chunk(int index, string text) => new(index, text,
