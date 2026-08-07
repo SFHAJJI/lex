@@ -47,6 +47,19 @@ if (!string.IsNullOrWhiteSpace(options.AppInsightsConnectionString))
 }
 
 var app = builder.Build();
+// The public service has no user accounts, but its pages still render publisher text and should
+// not be frameable or granted browser capabilities. Keep this policy at the composition root so
+// HTML, JSON, MCP, health and static responses cannot drift into different security postures.
+app.Use(async (context, next) =>
+{
+    var headers = context.Response.Headers;
+    headers.StrictTransportSecurity = "max-age=10886400; includeSubDomains; preload";
+    headers.XContentTypeOptions = "nosniff";
+    headers.XFrameOptions = "DENY";
+    headers["Referrer-Policy"] = "same-origin";
+    headers.Append("Permissions-Policy", "camera=(), geolocation=(), microphone=(), payment=(), usb=()");
+    await next();
+});
 app.UseResponseCompression();
 app.UseStaticFiles(new StaticFileOptions
 {

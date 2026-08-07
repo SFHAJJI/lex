@@ -120,6 +120,19 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
     }
 
     [Fact]
+    public async Task Every_response_gets_the_browser_security_baseline()
+    {
+        using var response = await _site.Client.GetAsync("/");
+        Assert.Equal("max-age=10886400; includeSubDomains; preload",
+            response.Headers.GetValues("Strict-Transport-Security").Single());
+        Assert.Equal("nosniff", response.Headers.GetValues("X-Content-Type-Options").Single());
+        Assert.Equal("DENY", response.Headers.GetValues("X-Frame-Options").Single());
+        Assert.Equal("same-origin", response.Headers.GetValues("Referrer-Policy").Single());
+        Assert.Equal("camera=(), geolocation=(), microphone=(), payment=(), usb=()",
+            response.Headers.GetValues("Permissions-Policy").Single());
+    }
+
+    [Fact]
     public async Task Architecture_separates_live_target_and_unmeasured_claims()
     {
         var current = await _site.Client.GetStringAsync("/architecture");
