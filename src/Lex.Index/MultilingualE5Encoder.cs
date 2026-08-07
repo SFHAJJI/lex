@@ -110,7 +110,8 @@ public sealed class MultilingualE5Encoder : ITextEncoder
 
     public float[] Encode(string text, EmbeddingInputKind kind) => EncodeBatch([text], kind)[0];
 
-    public IReadOnlyList<float[]> EncodeBatch(IReadOnlyList<string> texts, EmbeddingInputKind kind)
+    public IReadOnlyList<float[]> EncodeBatch(
+        IReadOnlyList<string> texts, EmbeddingInputKind kind, int? padToTokens = null)
     {
         if (texts.Count == 0) return [];
         var prefix = kind == EmbeddingInputKind.Query ? "query: " : "passage: ";
@@ -128,14 +129,18 @@ public sealed class MultilingualE5Encoder : ITextEncoder
                 maxTokens = Math.Max(maxTokens, tokenized[batch].Length);
             }
 
-            var ids = Enumerable.Repeat((long)_paddingId, texts.Count * maxTokens).ToArray();
+            if (padToTokens is { } requestedPadding && requestedPadding < maxTokens)
+                throw new InvalidDataException(
+                    $"Embedding batch requires {maxTokens} tokens but its fixed padding is {requestedPadding}.");
+            var tensorTokens = padToTokens ?? maxTokens;
+            var ids = Enumerable.Repeat((long)_paddingId, texts.Count * tensorTokens).ToArray();
             var mask = new long[ids.Length];
             for (var batch = 0; batch < tokenized.Length; batch++)
             {
-                tokenized[batch].CopyTo(ids, batch * maxTokens);
-                Array.Fill(mask, 1L, batch * maxTokens, tokenized[batch].Length);
+                tokenized[batch].CopyTo(ids, batch * tensorTokens);
+                Array.Fill(mask, 1L, batch * tensorTokens, tokenized[batch].Length);
             }
-            var shape = new[] { texts.Count, maxTokens };
+            var shape = new[] { texts.Count, tensorTokens };
             var inputs = new List<NamedOnnxValue>
             {
                 NamedOnnxValue.CreateFromTensor("input_ids", new DenseTensor<long>(ids, shape)),
@@ -148,7 +153,7 @@ public sealed class MultilingualE5Encoder : ITextEncoder
             using var output = _session.Run(inputs);
             var tensor = output.First(x => x.Name is "last_hidden_state" or "token_embeddings").AsTensor<float>();
             if (tensor.Rank != 3 || tensor.Dimensions[0] != texts.Count
-                || tensor.Dimensions[1] != maxTokens || tensor.Dimensions[2] != Dimensions)
+                || tensor.Dimensions[1] != tensorTokens || tensor.Dimensions[2] != Dimensions)
                 throw new InvalidDataException("Embedding model output shape is not [batch,tokens,384].");
             var results = new float[texts.Count][];
             for (var batch = 0; batch < texts.Count; batch++)

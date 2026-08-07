@@ -17,7 +17,8 @@ public interface ITextEncoder : IDisposable
     int PrefixLengthForTokens(string text, int maxTokens);
     int SuffixStartForTokens(string text, int maxTokens);
     float[] Encode(string text, EmbeddingInputKind kind);
-    IReadOnlyList<float[]> EncodeBatch(IReadOnlyList<string> texts, EmbeddingInputKind kind)
+    IReadOnlyList<float[]> EncodeBatch(
+        IReadOnlyList<string> texts, EmbeddingInputKind kind, int? padToTokens = null)
     {
         var vectors = new float[texts.Count][];
         for (var i = 0; i < texts.Count; i++) vectors[i] = Encode(texts[i], kind);
@@ -25,7 +26,7 @@ public interface ITextEncoder : IDisposable
     }
 }
 
-public sealed record SemanticChunk(int Index, string Text, string Sha256);
+public sealed record SemanticChunk(int Index, string Text, string Sha256, int TokenCount);
 
 public static class SemanticChunker
 {
@@ -43,7 +44,7 @@ public static class SemanticChunker
         // long annexes the tokenizer never receives the already-scanned suffix again.
         var first = BoundedPrefix(text, 0, encoder);
         if (first.FitsRemaining)
-            return [Chunk(0, text)];
+            return [Chunk(0, text, encoder)];
 
         var paragraphs = text.Replace("\r\n", "\n", StringComparison.Ordinal)
             .Split("\n\n", StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
@@ -86,7 +87,7 @@ public static class SemanticChunker
             var candidate = string.Join("\n\n", current.Append(piece));
             if (current.Count > 0 && encoder.CountTokens(PassagePrefix + candidate) > MaxTokens)
             {
-                chunks.Add(Chunk(chunks.Count, string.Join("\n\n", current)));
+                chunks.Add(Chunk(chunks.Count, string.Join("\n\n", current), encoder));
                 var overlap = current.AsEnumerable().Reverse().TakeWhileAccumulated(
                     p => encoder.CountTokens(p), OverlapTokens).Reverse().ToList();
                 current = overlap.Count > 0
@@ -95,7 +96,7 @@ public static class SemanticChunker
             }
             current.Add(piece);
         }
-        if (current.Count > 0) chunks.Add(Chunk(chunks.Count, string.Join("\n\n", current)));
+        if (current.Count > 0) chunks.Add(Chunk(chunks.Count, string.Join("\n\n", current), encoder));
         return chunks;
     }
 
@@ -119,8 +120,11 @@ public static class SemanticChunker
         }
     }
 
-    private static SemanticChunk Chunk(int index, string text) => new(index, text,
-        Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(text))));
+    private static SemanticChunk Chunk(int index, string text, ITextEncoder encoder) => new(
+        index,
+        text,
+        Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(text))),
+        encoder.CountTokens(PassagePrefix + text));
 
     private static IEnumerable<T> TakeWhileAccumulated<T>(this IEnumerable<T> values, Func<T, int> cost, int maximum)
     {
@@ -288,7 +292,8 @@ public sealed record SemanticBuildOptions(
     int BatchSize = 16,
     TimeSpan? ProgressHeartbeatInterval = null,
     string ExecutionProvider = "cpu",
-    string? EmbeddingCachePath = null);
+    string? EmbeddingCachePath = null,
+    string EmbeddingProfile = "lex-embedding-profile/2-fixed-token-buckets");
 
 public enum SemanticBuildStage
 {
