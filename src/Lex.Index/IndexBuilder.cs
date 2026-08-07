@@ -114,13 +114,17 @@ public static class IndexBuilder
             ReportProgress(semantic, SemanticBuildStage.Preparation,
                 preparationCompleted, uniqueTextRows.Count, preparationWatch,
                 ref lastPreparationPercent, ref lastPreparationReport, force: true);
+            using var preparationHeartbeat = new StageHeartbeat(
+                semantic, SemanticBuildStage.Preparation, uniqueTextRows.Count, preparationWatch);
             foreach (var provision in uniqueTextRows)
             {
+                preparationHeartbeat.SetCurrent(provision.TextSha, provision.TextMd.Length);
                 var chunks = SemanticChunker.Split(provision.TextMd, semantic.Encoder);
                 chunksByTextSha.Add(provision.TextSha, chunks);
                 foreach (var chunk in chunks)
                     if (uniqueChunkHashes.Add(chunk.Sha256)) uniqueSemanticChunks.Add(chunk);
                 preparationCompleted++;
+                preparationHeartbeat.SetCompleted(preparationCompleted);
                 ReportProgress(semantic, SemanticBuildStage.Preparation,
                     preparationCompleted, uniqueTextRows.Count, preparationWatch,
                     ref lastPreparationPercent, ref lastPreparationReport,
@@ -450,6 +454,9 @@ public static class IndexBuilder
             ReportProgress(semantic, SemanticBuildStage.Finalization,
                 finalizationCompleted, 3, finalizationWatch,
                 ref lastFinalizationPercent, ref lastFinalizationReport, force: true);
+            using var finalizationHeartbeat = semantic is null ? null : new StageHeartbeat(
+                semantic, SemanticBuildStage.Finalization, 3, finalizationWatch);
+            finalizationHeartbeat?.SetCurrent("content-digest", provisionRows.Sum(row => (long)row.TextMd.Length));
 
             // The signature must bind the CONTENT, not just the metadata beside it: otherwise an
             // article's text could be edited inside a released database and the stamp would
@@ -462,9 +469,11 @@ public static class IndexBuilder
                 ["content_digest"] = ContentDigest(docRows, provisionRows),
             };
             finalizationCompleted++;
+            finalizationHeartbeat?.SetCompleted(finalizationCompleted);
             ReportProgress(semantic, SemanticBuildStage.Finalization,
                 finalizationCompleted, 3, finalizationWatch,
                 ref lastFinalizationPercent, ref lastFinalizationReport, force: true);
+            finalizationHeartbeat?.SetCurrent("embedded-stamp", stamp.Count);
             if (semantic is not null)
             {
                 stamp["embedding_model"] = semantic.Encoder.ModelId;
@@ -490,8 +499,10 @@ public static class IndexBuilder
                 insStamp.ExecuteNonQuery();
             }
 
+            finalizationHeartbeat?.SetCurrent("sqlite-commit", 0);
             tx.Commit();
             finalizationCompleted++;
+            finalizationHeartbeat?.SetCompleted(finalizationCompleted);
             ReportProgress(semantic, SemanticBuildStage.Finalization,
                 finalizationCompleted, 3, finalizationWatch,
                 ref lastFinalizationPercent, ref lastFinalizationReport, force: true);
@@ -536,9 +547,86 @@ public static class IndexBuilder
         TimeSpan? remaining = completed == 0
             ? null
             : TimeSpan.FromTicks((long)(elapsed.Ticks * (total - completed) / (double)completed));
-        semantic.Progress(new SemanticBuildProgress(completed, total, elapsed, remaining, stage));
+        EmitProgress(semantic, new SemanticBuildProgress(completed, total, elapsed, remaining, stage));
         lastReportedPercent = percent;
         lastProgressReport = elapsed;
+    }
+
+    private static void EmitProgress(SemanticBuildOptions semantic, SemanticBuildProgress progress)
+    {
+        var callback = semantic.Progress;
+        if (callback is null) return;
+        lock (callback) callback(progress);
+    }
+
+    private sealed class StageHeartbeat : IDisposable
+    {
+        private readonly SemanticBuildOptions _semantic;
+        private readonly SemanticBuildStage _stage;
+        private readonly long _total;
+        private readonly System.Diagnostics.Stopwatch _watch;
+        private readonly object _stateGate = new();
+        private readonly Timer? _timer;
+        private long _completed;
+        private string? _currentItem;
+        private long? _currentItemCharacters;
+        private TimeSpan? _currentItemStartedAt;
+
+        public StageHeartbeat(
+            SemanticBuildOptions semantic,
+            SemanticBuildStage stage,
+            long total,
+            System.Diagnostics.Stopwatch watch)
+        {
+            _semantic = semantic;
+            _stage = stage;
+            _total = total;
+            _watch = watch;
+            if (semantic.Progress is null) return;
+            var interval = semantic.ProgressHeartbeatInterval ?? TimeSpan.FromSeconds(30);
+            if (interval <= TimeSpan.Zero) return;
+            _timer = new Timer(_ => Report(), null, interval, interval);
+        }
+
+        public void SetCurrent(string item, long characters)
+        {
+            lock (_stateGate)
+            {
+                _currentItem = item;
+                _currentItemCharacters = characters;
+                _currentItemStartedAt = _watch.Elapsed;
+            }
+        }
+
+        public void SetCompleted(long completed) => Interlocked.Exchange(ref _completed, completed);
+
+        private void Report()
+        {
+            string? currentItem;
+            long? currentItemCharacters;
+            TimeSpan? currentItemElapsed;
+            lock (_stateGate)
+            {
+                currentItem = _currentItem;
+                currentItemCharacters = _currentItemCharacters;
+                currentItemElapsed = _currentItemStartedAt is { } started
+                    ? _watch.Elapsed - started : null;
+            }
+            var completed = Interlocked.Read(ref _completed);
+            var elapsed = _watch.Elapsed;
+            TimeSpan? remaining = completed == 0
+                ? null
+                : TimeSpan.FromTicks((long)(elapsed.Ticks * (_total - completed) / (double)completed));
+            EmitProgress(_semantic, new SemanticBuildProgress(
+                completed, _total, elapsed, remaining, _stage,
+                currentItem, currentItemCharacters, currentItemElapsed, IsHeartbeat: true));
+        }
+
+        public void Dispose()
+        {
+            if (_timer is null) return;
+            _timer.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        }
     }
 
     private static void Exec(SqliteConnection conn, string sql)

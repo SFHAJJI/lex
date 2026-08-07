@@ -137,14 +137,39 @@ switch (args0[0])
         using var encoder = embeddingModelDir is null ? null : MultilingualE5Encoder.Open(embeddingModelDir);
         var embeddingBatchSize = int.TryParse(Get("--embedding-batch-size"), out var parsedEmbeddingBatchSize)
             ? parsedEmbeddingBatchSize : 16;
+        var indexBudget = int.TryParse(Get("--time-budget-minutes"), out var parsedBudgetMinutes)
+            ? TimeSpan.FromMinutes(parsedBudgetMinutes) : (TimeSpan?)null;
+        if (indexBudget <= TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException("--time-budget-minutes", "Time budget must be positive.");
+        var indexWatch = System.Diagnostics.Stopwatch.StartNew();
         var semantic = encoder is null ? null : new SemanticBuildOptions(
             encoder, Get("--vectors") ?? Path.ChangeExtension(outDb, ".vectors"),
             encoder.ModelSha256, encoder.TokenizerSha256,
-            Progress: progress => Console.Error.WriteLine(
-                $"  [index-progress] stage={progress.Stage.ToString().ToLowerInvariant()} " +
-                $"items={progress.Completed}/{progress.Total} " +
-                $"percent={progress.Percent:F1} elapsed={FormatDuration(progress.Elapsed)} " +
-                $"eta={(progress.EstimatedRemaining is { } eta ? FormatDuration(eta) : "calculating")}"),
+            Progress: progress =>
+            {
+                var budgetRemaining = indexBudget is { } budget
+                    ? budget - indexWatch.Elapsed : (TimeSpan?)null;
+                var deadlineRisk = progress.EstimatedRemaining is { } phaseRemaining
+                    && budgetRemaining is { } remaining && phaseRemaining > remaining;
+                var etaConfidence = progress.EstimatedRemaining is null ? "calculating"
+                    : progress.Elapsed < TimeSpan.FromMinutes(2)
+                      || progress.Completed < Math.Min(100, progress.Total)
+                        ? "warming" : "sampled";
+                var stopRecommended = deadlineRisk && etaConfidence == "sampled";
+                Console.Error.WriteLine(
+                    $"  [index-progress] stage={progress.Stage.ToString().ToLowerInvariant()} " +
+                    $"items={progress.Completed}/{progress.Total} " +
+                    $"percent={progress.Percent:F1} phase_elapsed={FormatDuration(progress.Elapsed)} " +
+                    $"phase_eta={(progress.EstimatedRemaining is { } eta ? FormatDuration(eta) : "calculating")} " +
+                    $"eta_confidence={etaConfidence} " +
+                    $"total_elapsed={FormatDuration(indexWatch.Elapsed)}" +
+                    $"{(budgetRemaining is { } left ? $" budget_remaining={FormatDuration(left)}" : "")}" +
+                    $"{(progress.EstimatedRemaining is { } finishIn ? $" phase_finish_utc={DateTimeOffset.UtcNow.Add(finishIn):yyyy-MM-ddTHH:mm:ssZ}" : "")}" +
+                    $"{(progress.CurrentItem is { } item ? $" current={item} chars={progress.CurrentItemCharacters} item_elapsed={FormatDuration(progress.CurrentItemElapsed ?? TimeSpan.Zero)}" : "")}" +
+                    $"{(progress.IsHeartbeat ? " heartbeat=true" : "")}" +
+                    $" deadline_risk={deadlineRisk.ToString().ToLowerInvariant()}" +
+                    $" stop_recommended={stopRecommended.ToString().ToLowerInvariant()}");
+            },
             BatchSize: embeddingBatchSize);
         IndexFromCorpus.Build(corpus, articles, outDb, keyPem, now, semantic);
         return 0;
@@ -371,8 +396,12 @@ static void CopyDir(string src, string dst)
     foreach (var d in Directory.EnumerateDirectories(src)) CopyDir(d, Path.Combine(dst, Path.GetFileName(d)));
 }
 
-static string FormatDuration(TimeSpan value) =>
-    $"{(int)value.TotalHours:00}:{value.Minutes:00}:{value.Seconds:00}";
+static string FormatDuration(TimeSpan value)
+{
+    var sign = value < TimeSpan.Zero ? "-" : "";
+    var absolute = value.Duration();
+    return $"{sign}{(int)absolute.TotalHours:00}:{absolute.Minutes:00}:{absolute.Seconds:00}";
+}
 
 static void Usage() => Console.Error.WriteLine("""
     lex — point-in-time regulatory text pipeline
@@ -381,6 +410,7 @@ static void Usage() => Console.Error.WriteLine("""
       lex ingest --publisher ID --corpus PATH [--scope FILE] [--wave 1..4] [--now ISO]
       lex index  --corpus PATH [--articles PATH] --out FILE.db [--keyfile KEY.pem] [--now ISO]
                  [--embedding-model PATH] [--vectors FILE] [--embedding-batch-size N]
+                 [--time-budget-minutes N]
       lex derive --publisher lu-legilux --corpus PATH --out PATH [--code-version SHA]
       lex verify corpus --corpus PATH
       lex repair checkout-line-endings --corpus PATH

@@ -35,7 +35,11 @@ public static class SemanticChunker
 
     public static IReadOnlyList<SemanticChunk> Split(string text, ITextEncoder encoder)
     {
-        if (encoder.CountTokens(PassagePrefix + text) <= MaxTokens)
+        // A full CountTokens pass made the first progress item silent for minutes when it was a
+        // multi-megabyte annex. Ask for only the first bounded token window instead. The returned
+        // boundary reaches the end exactly when the entire provision fits in one chunk.
+        var firstBoundary = encoder.PrefixLengthForTokens(PassagePrefix + text, MaxTokens);
+        if (firstBoundary >= PassagePrefix.Length + text.Length)
             return [Chunk(0, text)];
 
         var paragraphs = text.Replace("\r\n", "\n", StringComparison.Ordinal)
@@ -234,7 +238,8 @@ public sealed record SemanticBuildOptions(
     string TokenizerSha256,
     string VectorFormat = "lex-vectors/1-binary-int8",
     Action<SemanticBuildProgress>? Progress = null,
-    int BatchSize = 16);
+    int BatchSize = 16,
+    TimeSpan? ProgressHeartbeatInterval = null);
 
 public enum SemanticBuildStage
 {
@@ -249,7 +254,11 @@ public sealed record SemanticBuildProgress(
     long Total,
     TimeSpan Elapsed,
     TimeSpan? EstimatedRemaining,
-    SemanticBuildStage Stage = SemanticBuildStage.Embeddings)
+    SemanticBuildStage Stage = SemanticBuildStage.Embeddings,
+    string? CurrentItem = null,
+    long? CurrentItemCharacters = null,
+    TimeSpan? CurrentItemElapsed = null,
+    bool IsHeartbeat = false)
 {
     public double Percent => Total == 0 ? 100 : Completed * 100d / Total;
 }

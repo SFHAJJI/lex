@@ -68,6 +68,40 @@ public class IndexTests : IDisposable
         public void Dispose() { }
     }
 
+    private sealed class BlockingEncoder : ITextEncoder
+    {
+        private readonly FakeEncoder _inner = new();
+        private int _blocked;
+        public ManualResetEventSlim Entered { get; } = new(false);
+        public ManualResetEventSlim Release { get; } = new(false);
+        public string ModelId => _inner.ModelId;
+        public string ModelRevision => _inner.ModelRevision;
+        public int Dimensions => _inner.Dimensions;
+        public int CountTokens(string text) => _inner.CountTokens(text);
+        public int PrefixLengthForTokens(string text, int maxTokens)
+        {
+            if (Interlocked.Exchange(ref _blocked, 1) == 0)
+            {
+                Entered.Set();
+                if (!Release.Wait(TimeSpan.FromSeconds(5)))
+                    throw new TimeoutException("test did not release the blocking tokenizer");
+            }
+            return _inner.PrefixLengthForTokens(text, maxTokens);
+        }
+        public int SuffixStartForTokens(string text, int maxTokens) =>
+            _inner.SuffixStartForTokens(text, maxTokens);
+        public float[] Encode(string text, EmbeddingInputKind kind) => _inner.Encode(text, kind);
+        public IReadOnlyList<float[]> EncodeBatch(IReadOnlyList<string> texts, EmbeddingInputKind kind) =>
+            _inner.EncodeBatch(texts, kind);
+        public void Dispose()
+        {
+            Release.Set();
+            Entered.Dispose();
+            Release.Dispose();
+            _inner.Dispose();
+        }
+    }
+
     private static DocRow Row(string key, string group, string from, string? to, string kind = "REG", string? title = null,
                               bool text = false, bool withdrawn = false) =>
         new(key, "t-pub", group, $"urn:{group}", kind, "en", from, to, "publisher",
@@ -448,6 +482,45 @@ public class IndexTests : IDisposable
             Assert.Equal(100, stageUpdates[^1].Percent);
             Assert.Equal(TimeSpan.Zero, stageUpdates[^1].EstimatedRemaining);
         }
+    }
+
+    [Fact]
+    public async Task Preparation_heartbeat_reports_the_current_item_before_it_finishes()
+    {
+        var doc = Row("t-pub:heartbeat:2020-01-01", "heartbeat", "2020-01-01", null, text: true);
+        var provision = Prov(doc, 0, "annex_1", "one deliberately blocked preparation item");
+        var vectors = Path.ChangeExtension(_db, ".vectors");
+        _extra.Add(vectors);
+        using var encoder = new BlockingEncoder();
+        var progress = new System.Collections.Concurrent.ConcurrentQueue<SemanticBuildProgress>();
+        var build = Task.Run(() => IndexBuilder.Build(
+            _db,
+            new Dictionary<string, string> { ["collection"] = "t-pub" },
+            [doc], [provision], [], [], null,
+            semantic: new SemanticBuildOptions(
+                encoder, vectors, "model-sha", "tokenizer-sha",
+                Progress: progress.Enqueue,
+                ProgressHeartbeatInterval: TimeSpan.FromMilliseconds(20))));
+
+        try
+        {
+            Assert.True(encoder.Entered.Wait(TimeSpan.FromSeconds(2)));
+            Assert.True(SpinWait.SpinUntil(
+                () => progress.Any(update => update.IsHeartbeat), TimeSpan.FromSeconds(2)));
+            var heartbeat = progress.First(update => update.IsHeartbeat);
+            Assert.Equal(SemanticBuildStage.Preparation, heartbeat.Stage);
+            Assert.Equal(0, heartbeat.Completed);
+            Assert.Equal(1, heartbeat.Total);
+            Assert.Equal(provision.TextSha, heartbeat.CurrentItem);
+            Assert.Equal(provision.TextMd.Length, heartbeat.CurrentItemCharacters);
+            Assert.True(heartbeat.CurrentItemElapsed > TimeSpan.Zero);
+            Assert.Null(heartbeat.EstimatedRemaining);
+        }
+        finally
+        {
+            encoder.Release.Set();
+        }
+        await build;
     }
 
     [Fact]
