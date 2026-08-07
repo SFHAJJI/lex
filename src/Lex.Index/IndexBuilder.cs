@@ -89,6 +89,46 @@ public static class IndexBuilder
     {
         var docRows = docs.ToList();
         var provisionRows = provisions.ToList();
+        Dictionary<string, IReadOnlyList<SemanticChunk>>? chunksByTextSha = null;
+        long semanticVectorTotal = 0;
+        if (semantic is not null)
+        {
+            chunksByTextSha = new Dictionary<string, IReadOnlyList<SemanticChunk>>(StringComparer.OrdinalIgnoreCase);
+            var uniqueChunkHashes = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var provision in provisionRows)
+            {
+                if (chunksByTextSha.ContainsKey(provision.TextSha)) continue;
+                var chunks = SemanticChunker.Split(provision.TextMd, semantic.Encoder);
+                chunksByTextSha.Add(provision.TextSha, chunks);
+                foreach (var chunk in chunks) uniqueChunkHashes.Add(chunk.Sha256);
+            }
+            semanticVectorTotal = uniqueChunkHashes.Count;
+        }
+
+        var semanticProgressWatch = System.Diagnostics.Stopwatch.StartNew();
+        long semanticVectorsCompleted = 0;
+        long lastReportedPercent = -1;
+        var lastProgressReport = TimeSpan.Zero;
+        void ReportSemanticProgress(bool force)
+        {
+            if (semantic?.Progress is null) return;
+            var elapsed = semanticProgressWatch.Elapsed;
+            var percent = semanticVectorTotal == 0
+                ? 100
+                : semanticVectorsCompleted * 100 / semanticVectorTotal;
+            if (!force && percent == lastReportedPercent && elapsed - lastProgressReport < TimeSpan.FromSeconds(30))
+                return;
+            TimeSpan? remaining = semanticVectorsCompleted == 0
+                ? null
+                : TimeSpan.FromTicks((long)(elapsed.Ticks
+                    * (semanticVectorTotal - semanticVectorsCompleted) / (double)semanticVectorsCompleted));
+            semantic.Progress(new SemanticBuildProgress(
+                semanticVectorsCompleted, semanticVectorTotal, elapsed, remaining));
+            lastReportedPercent = percent;
+            lastProgressReport = elapsed;
+        }
+        ReportSemanticProgress(force: true);
+
         var vectorTempPath = semantic is null ? null : semantic.VectorPath + ".tmp-" + Guid.NewGuid().ToString("N");
         using var semanticWriter = semantic is null ? null
             : new SemanticVectorWriter(vectorTempPath!, semantic.Encoder.Dimensions);
@@ -273,13 +313,15 @@ public static class IndexBuilder
                     insFts.ExecuteNonQuery();
                     if (semantic is not null)
                     {
-                        foreach (var chunk in SemanticChunker.Split(p.TextMd, semantic.Encoder))
+                        foreach (var chunk in chunksByTextSha![actualSha])
                         {
                             if (!vectorOrdinalByChunk.TryGetValue(chunk.Sha256, out var ordinal))
                             {
                                 var vector = semantic.Encoder.Encode(chunk.Text, EmbeddingInputKind.Passage);
                                 ordinal = semanticWriter!.Write(vector);
                                 vectorOrdinalByChunk.Add(chunk.Sha256, ordinal);
+                                semanticVectorsCompleted++;
+                                ReportSemanticProgress(force: semanticVectorsCompleted == semanticVectorTotal);
                             }
                             insChunk.Parameters["$state"].Value = stateId;
                             insChunk.Parameters["$index"].Value = chunk.Index;

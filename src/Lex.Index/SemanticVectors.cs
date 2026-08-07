@@ -217,4 +217,14 @@ public sealed record SemanticBuildOptions(
     string VectorPath,
     string ModelSha256,
     string TokenizerSha256,
-    string VectorFormat = "lex-vectors/1-binary-int8");
+    string VectorFormat = "lex-vectors/1-binary-int8",
+    Action<SemanticBuildProgress>? Progress = null);
+
+public sealed record SemanticBuildProgress(
+    long Completed,
+    long Total,
+    TimeSpan Elapsed,
+    TimeSpan? EstimatedRemaining)
+{
+    public double Percent => Total == 0 ? 100 : Completed * 100d / Total;
+}

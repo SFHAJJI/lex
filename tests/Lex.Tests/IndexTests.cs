@@ -398,13 +398,29 @@ public class IndexTests : IDisposable
         var vectors = Path.ChangeExtension(_db, ".vectors");
         _extra.Add(vectors);
         using var encoder = new FakeEncoder();
+        var progress = new List<SemanticBuildProgress>();
         IndexBuilder.Build(_db, new Dictionary<string, string> { ["collection"] = "t-pub" },
             [first, second],
             [Prov(first, 0, "art_1", "shared exact wording"),
              Prov(second, 0, "art_9", "shared exact wording")],
-            [], [], null, semantic: new SemanticBuildOptions(encoder, vectors, "model-sha", "tokenizer-sha"));
+            [], [], null, semantic: new SemanticBuildOptions(
+                encoder, vectors, "model-sha", "tokenizer-sha", Progress: progress.Add));
 
         Assert.Equal(1, encoder.EncodeCalls);
+        Assert.Collection(progress,
+            started =>
+            {
+                Assert.Equal(0, started.Completed);
+                Assert.Equal(1, started.Total);
+                Assert.Null(started.EstimatedRemaining);
+            },
+            completed =>
+            {
+                Assert.Equal(1, completed.Completed);
+                Assert.Equal(1, completed.Total);
+                Assert.Equal(100, completed.Percent);
+                Assert.Equal(TimeSpan.Zero, completed.EstimatedRemaining);
+            });
         using var vectorReader = new SemanticVectorReader(vectors);
         Assert.Equal(1, vectorReader.Count);
         using var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={_db}");
