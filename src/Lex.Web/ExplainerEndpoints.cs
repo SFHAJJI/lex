@@ -858,7 +858,7 @@ public static class ExplainerEndpoints
                 <div class="card"><b>Azure AI Foundry Agent Service</b>, remote MCP is native:
                 <pre class="mono" style="white-space:pre-wrap;margin:6px 0 0">{ "type": "mcp", "server_label": "lex", "server_url": "{{baseUrl}}/mcp", "require_approval": "never" }</pre></div>
                 <div class="card"><b>No framework at all</b>, it is JSON-RPC over one POST:
-                <pre class="mono" style="white-space:pre-wrap;margin:6px 0 0">curl -X POST {{baseUrl}}/mcp -H 'Content-Type: application/json' \
+                <pre class="mono" style="white-space:pre-wrap;margin:6px 0 0">curl -X POST {{baseUrl}}/mcp -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' \
                   -d '{ "jsonrpc":"2.0", "id":1, "method":"tools/call",
                         "params": { "name":"as_of",
                           "arguments": { "work":"eu-eurlex:32016r0679",
@@ -970,11 +970,15 @@ public static class ExplainerEndpoints
                     catch (err) { out.textContent = 'arguments are not valid JSON: ' + err.message; return; }
                     try {
                       const r = await fetch('/mcp', {
-                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json, text/event-stream' },
                         body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call',
                                                params: { name: tool.value, arguments: parsed } })
                       });
-                      const j = await r.json();
+                      const raw = await r.text();
+                      const data = r.headers.get('content-type')?.startsWith('text/event-stream')
+                        ? raw.split('\n').filter(line => line.startsWith('data: ')).at(-1)?.slice(6)
+                        : raw;
+                      const j = JSON.parse(data || '{}');
                       const text = j.result && j.result.content && j.result.content[0]
                         ? j.result.content[0].text : JSON.stringify(j, null, 2);
                       let pretty; try { pretty = JSON.stringify(JSON.parse(text), null, 2); } catch { pretty = text; }

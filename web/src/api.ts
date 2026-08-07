@@ -5,14 +5,22 @@
 
 let id = 0;
 
+async function mcpJson(r: Response): Promise<any> {
+  const body = await r.text();
+  if (!r.headers.get("content-type")?.startsWith("text/event-stream")) return JSON.parse(body);
+  const data = body.split("\n").filter(line => line.startsWith("data: ")).at(-1)?.slice(6);
+  if (!data) throw new Error("MCP event stream returned no data event");
+  return JSON.parse(data);
+}
+
 export async function tool<T = any>(name: string, args: Record<string, unknown>): Promise<T> {
   const r = await fetch("/mcp", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", Accept: "application/json, text/event-stream" },
     body: JSON.stringify({ jsonrpc: "2.0", id: ++id, method: "tools/call", params: { name, arguments: args } }),
   });
   if (!r.ok) throw new Error(`tool ${name} failed (${r.status})`);
-  const j = await r.json();
+  const j = await mcpJson(r);
   const text = j?.result?.content?.[0]?.text;
   if (typeof text !== "string") throw new Error(`tool ${name} returned no content`);
   return JSON.parse(text) as T;

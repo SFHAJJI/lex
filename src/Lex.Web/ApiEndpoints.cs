@@ -14,7 +14,6 @@ public static class ApiEndpoints
     public static IEndpointRouteBuilder MapApi(this IEndpointRouteBuilder app, WebContext ctx)
     {
         var readers = ctx.Registry.All;
-        var mcpCore = ctx.Mcp;
         var askService = ctx.Ask;
         string Page(string title, string body, string? subtitle = null, string nav = "",
                     string? h1 = null, string? canonicalPath = null, string? jsonLd = null,
@@ -90,27 +89,6 @@ public static class ApiEndpoints
             sb.Append("</urlset>");
             return Results.Content(sb.ToString(), "application/xml");
         });
-
-        // ---- public MCP endpoint (Streamable HTTP, stateless): any MCP client can connect ----
-        app.MapPost("/mcp", async (HttpRequest req) =>
-        {
-            using var sr = new StreamReader(req.Body);
-            var body = await sr.ReadToEndAsync();
-            JsonNode? msg;
-            try { msg = JsonNode.Parse(body); } catch { return Results.BadRequest(); }
-            if (msg is JsonArray batch)
-            {
-                var responses = new JsonArray();
-                foreach (var m in batch.ToArray())
-                    if (m is not null && mcpCore.HandleMessage(m) is { } r) responses.Add(r);
-                return responses.Count == 0 ? Results.Accepted() : Results.Json(responses);
-            }
-            if (msg is null) return Results.BadRequest();
-            var resp = mcpCore.HandleMessage(msg);
-            return resp is null ? Results.Accepted() : Results.Json(resp);
-        });
-
-        app.MapGet("/mcp", () => Results.Text("POST JSON-RPC here (MCP Streamable HTTP). Connect: claude mcp add --transport http lex <this URL>", statusCode: 405));
 
         // ---- /ask playground: chat over the MCP tools, grounded and capped ----
         app.MapGet("/ask", () => Results.Redirect("/"));

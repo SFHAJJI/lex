@@ -1,6 +1,6 @@
 {
   "program_version": "hybrid-eu/1",
-  "updated_at": "2026-08-06",
+  "updated_at": "2026-08-07",
   "review_status": "engineer-reviewed",
   "statuses": ["planned", "building", "gated", "shipped", "rejected"],
   "current": {
@@ -190,6 +190,15 @@
       "alternative": "Either implement general-purpose search and machine-learning engines inside Lex, or outsource the complete legal index to a managed search service.",
       "reason": "Libraries can optimize generic computation, but they do not know which official wording applied on a date or when Lex must refuse an unsupported consolidation claim.",
       "cost": "Lex maintains small integration layers and benchmarks replacement engines; commodity boundaries are migrated only when parity, artifact reproducibility and operational cost are measured."
+    },
+    {
+      "id": "D67",
+      "title": "Use the official MCP SDK without a premature service split",
+      "status": "shipped",
+      "choice": "Keep legal tools in the transport-neutral Lex.Mcp library, host local stdio in Lex.Mcp.Stdio, and compose the official Streamable HTTP adapter into the existing web runtime.",
+      "alternative": "Maintain handwritten JSON-RPC transports or deploy an otherwise identical MCP-only Container App behind a proxy.",
+      "reason": "The official SDK owns protocol negotiation and framing. HTTP MCP and the site consume the same indexes, scale together and have no distinct security or availability boundary, so a second runtime would duplicate memory, artifacts, cold starts and failure modes without isolating a real workload.",
+      "cost": "MCP and web revisions are promoted together today. Extract the HTTP host only when measured traffic requires independent scaling, releases, tenant isolation or an SLA; the library boundary makes that move mechanical."
     }
   ],
   "baseline": {

@@ -6,6 +6,7 @@
     <Project Path="src/Lex.Ingest/Lex.Ingest.csproj" />
     <Project Path="src/Lex.Law/Lex.Law.csproj" />
     <Project Path="src/Lex.Mcp/Lex.Mcp.csproj" />
+    <Project Path="src/Lex.Mcp.Stdio/Lex.Mcp.Stdio.csproj" />
     <Project Path="src/Lex.Sources.EurLex/Lex.Sources.EurLex.csproj" />
     <Project Path="src/Lex.Sources.Legilux/Lex.Sources.Legilux.csproj" />
     <Project Path="src/Lex.Temporal/Lex.Temporal.csproj" />

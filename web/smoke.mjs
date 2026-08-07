@@ -27,12 +27,18 @@ async function mount(url, answer) {
   // keep the current tick visible, which is unrelated to this mount contract.
   dom.window.HTMLElement.prototype.scrollTo = () => {};
   dom.window.fetch = (_url, init) => {
-    if (!answer) return Promise.resolve({ ok: true, json: async () => ({}) });
+    if (!answer) return Promise.resolve({
+      ok: true,
+      headers: { get: () => "application/json" },
+      text: async () => "{}",
+    });
     const request = JSON.parse(init?.body ?? "{}");
     const payload = answer(request.params?.name, request.params?.arguments ?? {});
+    const rpc = { jsonrpc: "2.0", id: request.id, result: { content: [{ type: "text", text: JSON.stringify(payload) }] } };
     return Promise.resolve({
       ok: true,
-      json: async () => ({ result: { content: [{ type: "text", text: JSON.stringify(payload) }] } }),
+      headers: { get: () => "text/event-stream" },
+      text: async () => `event: message\ndata: ${JSON.stringify(rpc)}\n\n`,
     });
   };
   try {
