@@ -49,10 +49,20 @@ jobs:
         id: served
         run: |
           set -uo pipefail
-          built=$(curl -sS -m 30 -X POST https://law.soufien.lu/mcp \
+          response=$(curl -sS -m 30 -X POST https://law.soufien.lu/mcp \
             -H 'Content-Type: application/json' \
             -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"coverage","arguments":{}}}' \
-            | grep -o '"built_at": *"[^"]*"' | head -1 | cut -d'"' -f4)
+            || true)
+          # MCP text content is itself a JSON string inside the JSON-RPC envelope. Parse both
+          # layers; grepping the outer response cannot see an unescaped `built_at` field.
+          coverage=$(printf '%s' "$response" \
+            | jq -er '.result.content | map(select(.type == "text")) | .[0].text' 2>/dev/null \
+            || true)
+          # Use the oldest mounted publisher build. One fresh publisher must not conceal that
+          # another has stopped advancing.
+          built=$(printf '%s' "$coverage" \
+            | jq -er 'if type == "array" then [.[].envelope.freshness.built_at] | min // empty else empty end' \
+              2>/dev/null || true)
           if [ -z "$built" ]; then
             echo "reason=law.soufien.lu did not answer a coverage call." >> "$GITHUB_OUTPUT"
             echo "stale=true" >> "$GITHUB_OUTPUT"; exit 0
