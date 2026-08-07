@@ -92,7 +92,28 @@ public sealed class IndexRegistry : IDisposable
                 var vectorRelative = Path.GetRelativePath(dir, vectorPath).Replace('\\', '/');
                 var hybridReady = _encoder is not null && File.Exists(vectorPath)
                                   && (manifests.Count == 0 || _verifiedFiles.Contains(vectorRelative));
-                var reader = hybridReady ? LexIndexReader.Open(db, _encoder, vectorPath) : LexIndexReader.Open(db);
+                LexIndexReader reader;
+                if (hybridReady)
+                {
+                    try
+                    {
+                        reader = LexIndexReader.Open(db, _encoder, vectorPath);
+                    }
+                    catch (Exception ex)
+                    {
+                        // Semantic vectors are a derived acceleration artifact. A corrupt or stale
+                        // sidecar must disable hybrid retrieval for this publisher, not hide the
+                        // independently verified legal index and its deterministic keyword search.
+                        log.LogError(
+                            "Hybrid retrieval disabled for {Db}; mounting verified lexical index: {Reason}",
+                            Path.GetFileName(db), ex.Message);
+                        reader = LexIndexReader.Open(db);
+                    }
+                }
+                else
+                {
+                    reader = LexIndexReader.Open(db);
+                }
                 _readers[reader.Collection] = reader;
                 log.LogInformation("Mounted {Db} ({Collection}, signature_valid={Valid})",
                     db, reader.Collection, reader.SignatureValid);

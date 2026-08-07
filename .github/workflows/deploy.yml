@@ -74,11 +74,13 @@ jobs:
               rm -f "$release_dir/$manifest"
             fi
           done
-          if find "$release_dir" -name '*.manifest.json' -print -quit | grep -q .; then
+          index_manifest_count=$(find "$release_dir" -name 'index-*.manifest.json' | wc -l)
+          if [ "$index_manifest_count" -eq 2 ]; then
             manifest_set=$(for manifest in "$release_dir"/*.manifest.json; do
               printf '%s  %s\n' "$(sha256sum "$manifest" | cut -d' ' -f1)" "$(basename "$manifest")"
             done | sort -k2 | sha256sum | cut -d' ' -f1)
           else
+            echo "::warning::only $index_manifest_count of 2 publisher index manifests are available; treating this as a legacy artifact set"
             manifest_set=legacy
           fi
           tag="sha-${GITHUB_SHA:0:12}-art-${manifest_set:0:12}"
@@ -171,8 +173,14 @@ jobs:
               | jq -er '.result.content | map(select(.type == "text")) | .[0].text'
           }
           coverage=$(mcp_text '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"coverage","arguments":{}}}')
+          if printf '%s' "$coverage" | jq -e '.status == "no_corpus_mounted"' >/dev/null 2>&1; then
+            printf '%s\n' "$coverage"
+            echo "::error::candidate started without a usable corpus"
+            exit 1
+          fi
           printf '%s' "$coverage" | jq -e \
-            'any(.[]; .envelope.publisher == "lu-legilux")
+            'type == "array"
+             and any(.[]; .envelope.publisher == "lu-legilux")
              and any(.[]; .envelope.publisher == "eu-eurlex")' >/dev/null
           eu_exact=$(mcp_text '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"search","arguments":{"query":"32016R0679","publisher":"eu-eurlex","retrieval_mode":"keyword","fuzzy":"off","limit":3}}}')
           printf '%s' "$eu_exact" | jq -e \
