@@ -23,7 +23,7 @@ cannot know.
 **[Benchmarks](https://law.soufien.lu/benchmarks)** ·
 **[Verify it yourself](https://law.soufien.lu/verify)** ·
 **[Program](docs/hybrid-eu-roadmap.md)** ·
-**[Spec (D1-D65)](docs/lex-spec-v4.md)**
+**[Spec (D1-D70)](docs/lex-spec-v4.md)**
 
 ## Try it in 30 seconds
 
@@ -118,8 +118,10 @@ FOUNDATION  Lex.Temporal (interval algebra)   Lex.Index (SQLite: filter-first, v
   per-article extraction (consumption). Every derived article hash-chains to
   the exact bytes the state published; `lex verify derive` re-derives and
   byte-compares.
-- **Filters before ranking, always**, enforced by construction (a non-optional
-  `FilterSet` on the only query entry point).
+- **Legal and temporal eligibility before fusion and final ranking**, enforced by
+  a non-optional `FilterSet` on the only query entry point. Hybrid may use a
+  bounded binary-vector preselection for speed, but an ineligible candidate can
+  never enter the fused result set.
 - **Signed whole-artifact manifests** (ECDSA P-256): a trust root pinned in the
   application verifies indexes, vectors, embedding assets, scope, benchmark
   and source commits before any file is mounted. The embedded index stamp
@@ -130,13 +132,12 @@ FOUNDATION  Lex.Temporal (interval algebra)   Lex.Index (SQLite: filter-first, v
 
 ## Current coverage
 
-**Luxembourg** (Legilux, Tier A): every work and current version in the
-publisher's `Consolidation` catalogue. Nothing in that collection is filtered
-out by legal form. On 2026-08-06 the publisher returned 1,399 works and 4,638
-current consolidation records, and the corpus contained all of them. Mounted
-counts, dates, corpus commit and extraction-profile mix are read from the index
-on the [live coverage page](https://law.soufien.lu/coverage), rather than copied
-into product prose that becomes stale after the next publisher run.
+**Luxembourg** (Legilux, Tier A): every work and dated version currently mounted
+from the publisher's `Consolidation` catalogue. Nothing in that collection is
+filtered out by legal form. Counts, dates, corpus commit and extraction-profile
+mix are read from the index on the
+[live coverage page](https://law.soufien.lu/coverage), rather than copied into
+product prose that becomes stale after the next publisher run.
 
 The consolidation catalogue is not all Luxembourg law. The same official
 endpoint exposes 150,187 resources classified as `Act`, including laws,
@@ -155,8 +156,10 @@ their dates, source and hashes without pretending wording was extracted. Exact
 text availability by legal form is reported from the mounted artifact on the
 coverage page.
 
-**EU** (EUR-Lex/Cellar, Tier A): a reviewed compliance shelf spanning data,
-digital, cyber, finance and energy law. The mounted index and
+**EU** (EUR-Lex/Cellar, Tier A): a reviewed Luxembourg-facing scope spanning
+financial services, AML, corporate, competition, tax, employment, consumer,
+procurement, environmental, judicial-cooperation, intellectual-property, data,
+digital, cyber and energy law, plus bounded legal-history relationships. The mounted index and
 [live coverage page](https://law.soufien.lu/coverage) are the source of truth for
 work and version counts. Full text comes from the Publications Office's
 **Formex 4** structural XML where served, including large consolidations the

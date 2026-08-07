@@ -1,10 +1,10 @@
 # Lex hybrid retrieval and EU temporal expansion
 
-Status: accepted, implementation in progress
+Status: expanded corpus and local hybrid preview shipped; default activation gated
 
 Program version: `hybrid-eu/1`
 
-Public review status: engineer-reviewed
+Benchmark review status: generated-unreviewed; no lawyer review claimed
 
 ## Product invariant
 
@@ -33,15 +33,16 @@ official publication nor legal advice; the publisher source remains the authorit
 
 ## Delivery
 
-1. Publish separate current, next, decisions and benchmarks surfaces.
-2. Sign a whole-artifact manifest and automate verified deployment through Azure OIDC.
-3. Replace the hard-coded EU shelf with reviewed domain configuration and bounded legal-history
-   closure, retaining French and English versions.
-4. Build `lex-index/3` with content-addressed text, occurrence mappings and transparent
+1. **Shipped:** separate current, next, decisions and benchmarks surfaces.
+2. **Shipped:** signed whole-artifact manifests and verified Azure OIDC deployment.
+3. **Shipped:** reviewed EU domain configuration with bounded legal-history closure and every
+   available official French and English consolidated expression.
+4. **Shipped:** `lex-index/3` with content-addressed text, occurrence mappings and transparent
    decompression.
-5. Add local multilingual embeddings, deterministic rank fusion and controlled fuzzy fallback.
-6. Enable hybrid retrieval only after the public relevance, temporal, latency and memory gates
-   pass.
+5. **Shipped as preview:** local multilingual embeddings, deterministic rank fusion and
+   controlled fuzzy fallback. Keyword remains the default.
+6. **Gated:** make hybrid the default only after the public relevance, temporal, latency and
+   memory gates pass with reviewed judgments.
 
 The machine-readable milestone and decision registry is `docs/architecture-program.json`. The
 site renders that registry so a change of status has one source of truth.
