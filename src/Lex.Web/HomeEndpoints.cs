@@ -82,7 +82,7 @@ public static class HomeEndpoints
             // the sentence above the fold merely announced that the site answers questions.
             var body = $"""
                 <p class="lede">Ask what any Luxembourg law said on any day, exactly as its publisher
-                issued it.{(euWorks > 0 ? $" Plus {euWorks:n0} selected EU works, with every dated version the mounted index holds." : "")}</p>
+                issued it.{(euWorks > 0 ? $" Plus {euWorks:n0} EU works from the reviewed scope, with every dated version the mounted index holds." : "")}</p>
                 """
                 + $"""
                 <!-- Read synchronously by the workspace on mount, so the doors never flash in or need a
@@ -161,7 +161,7 @@ public static class HomeEndpoints
                 ["@type"] = "WebSite",
                 ["name"] = "Lex",
                 ["url"] = ctx.PublicBase,
-                ["description"] = "Point-in-time retrieval of Luxembourg law and selected EU law, "
+                ["description"] = "Point-in-time retrieval of Luxembourg and reviewed-scope EU law, "
                                   + "with per-article history and verifiable provenance.",
                 ["inLanguage"] = "en",
                 ["publisher"] = new JsonObject

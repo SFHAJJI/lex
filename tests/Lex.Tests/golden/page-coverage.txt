@@ -178,7 +178,7 @@ cannot be trusted with a completeness question.</p><h2>Test Publisher <span clas
 <tr><td>stamp signature</td><td><span class="badge ok">valid (ECDSA-P256)</span></td></tr>
 
 </table></div><div class="notice"><b>What we hold, and what we honestly don't.</b>
-2 laws in 3 dated snapshots. The mounted index contains 2 selected EU works. Expansion remains gated by the reviewed scope preview and corpus release.
+2 laws in 3 dated snapshots. The mounted index contains 2 EU works from the reviewed scope. Expansion remains gated by the scope preview and corpus release.
 Of those snapshots, <b>2</b> carry the full official text and
 <b>1</b> are a dated entry with its source and hash but no wording.
 

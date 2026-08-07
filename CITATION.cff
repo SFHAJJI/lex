@@ -11,9 +11,9 @@ abstract: >-
   An engine for point-in-time retrieval of consolidated regulatory text: verbatim ingestion
   of official publisher bytes with append-only observation chains, deterministic derivation
   into per-provision records under immutable extraction profiles, signed SQLite indexes with
-  provision-level search, and eight read-only MCP tools (as_of, timeline, in_force_on, diff,
-  search, provenance, article_history, coverage) that answer with dates, hashes and explicit
-  refusals rather than guesses.
+  provision-level search, and ten read-only MCP tools (as_of, timeline, in_force_on, diff,
+  search, provenance, article_history, coverage, cited_by, changes_in_period) that answer with
+  dates, hashes and explicit refusals rather than guesses.
 keywords:
   - legal-tech
   - point-in-time

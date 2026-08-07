@@ -278,7 +278,7 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
             // Named, not gestured at. "Flagship acts" tells a reader nothing about whether the act
             // they care about is here, and the front page used to promise "EU law" over the top
             // of it.
-            "eu-eurlex" => $"{r.Coverage().Groups:n0} selected EU works are currently mounted; the wider acquis is not yet ingested, see coverage",
+            "eu-eurlex" => $"{r.Coverage().Groups:n0} EU works from the reviewed scope are currently mounted; the wider acquis is not yet ingested, see coverage",
             _ => "see the coverage tool for this publisher's known gaps",
         };
 

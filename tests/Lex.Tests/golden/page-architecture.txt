@@ -193,7 +193,7 @@ separately on <a href="/architecture/next">Next</a>.</p>
 <h2>Contracts preserved</h2>
 <p>Exact publisher text, hashes, anchors, timelines, refusals, comparisons and diffs remain
 authoritative. The backend returns structured MCP JSON and the workspace renders the separate
-<span class="mono">UiEffect</span> field.</p><p>Lex answers one question, <b>what did the rule say on that date?</b>, for Luxembourg law and the selected EU works in the mounted index,
+<span class="mono">UiEffect</span> field.</p><p>Lex answers one question, <b>what did the rule say on that date?</b>, for Luxembourg law and the reviewed-scope EU works in the mounted index,
 in a way a developer can build on and an auditor can check. Everything below is open source and open data.</p>
 
 <h2>Two layers, one hash chain</h2>

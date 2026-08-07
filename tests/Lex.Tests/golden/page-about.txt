@@ -188,7 +188,7 @@ instead of guessing.</p>
 
 <div class="card">
 <b><a href="https://law.soufien.lu">law.soufien.lu</a></b> &middot; this one
-<p class="sub">Point-in-time Luxembourg law and selected EU law: 2 works as
+<p class="sub">Point-in-time Luxembourg and reviewed-scope EU law: 2 works as
 3 dated versions, a public MCP endpoint, open datasets, and a signed index
 whose stamp commits to a digest of its own content. The hard part was never the AI; it was
 that a law has no single text, only a text per date.

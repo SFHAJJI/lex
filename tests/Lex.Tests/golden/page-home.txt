@@ -15,7 +15,7 @@ HTTP 200
 <meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="canonical" href="https://golden.test/">
-<script type="application/ld+json">{"@context":"https://schema.org","@type":"WebSite","name":"Lex","url":"https://golden.test","description":"Point-in-time retrieval of Luxembourg law and selected EU law, with per-article history and verifiable provenance.","inLanguage":"en","publisher":{"@type":"Person","name":"Soufien Hajji","url":"https://soufien.lu"}}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"WebSite","name":"Lex","url":"https://golden.test","description":"Point-in-time retrieval of Luxembourg and reviewed-scope EU law, with per-article history and verifiable provenance.","inLanguage":"en","publisher":{"@type":"Person","name":"Soufien Hajji","url":"https://soufien.lu"}}</script>
 <meta name="twitter:image" content="https://golden.test/og.png">
 <!-- The interval mark: a rule, two terminals, and a notch at the date being read.
      The same shape is the version rail at full width. An emoji was a different

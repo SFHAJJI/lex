@@ -125,7 +125,7 @@ public static class ExplainerEndpoints
                 authoritative. The backend returns structured MCP JSON and the workspace renders the separate
                 <span class="mono">UiEffect</span> field.</p>
                 """ + """
-                <p>Lex answers one question, <b>what did the rule say on that date?</b>, for Luxembourg law and the selected EU works in the mounted index,
+                <p>Lex answers one question, <b>what did the rule say on that date?</b>, for Luxembourg law and the reviewed-scope EU works in the mounted index,
                 in a way a developer can build on and an auditor can check. Everything below is open source and open data.</p>
 
                 <h2>Two layers, one hash chain</h2>
@@ -658,7 +658,7 @@ public static class ExplainerEndpoints
 
                 <div class="card">
                 <b><a href="https://law.soufien.lu">law.soufien.lu</a></b> &middot; this one
-                <p class="sub">Point-in-time Luxembourg law and selected EU law: {{works:n0}} works as
+                <p class="sub">Point-in-time Luxembourg and reviewed-scope EU law: {{works:n0}} works as
                 {{versions:n0}} dated versions, a public MCP endpoint, open datasets, and a signed index
                 whose stamp commits to a digest of its own content. The hard part was never the AI; it was
                 that a law has no single text, only a text per date.
