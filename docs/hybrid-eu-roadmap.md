@@ -87,9 +87,24 @@ Engineer-reviewed and lawyer-reviewed judgments are identified individually.
 
 ## Hosting and cost
 
-The current Azure Container Apps Consumption host remains in place. Scale-to-zero fits observed
-traffic better than an always-on VM. A VM is reconsidered only after 30 measured days show at
-least 20 percent lower complete cost, or Container Apps cannot satisfy the search latency gate.
+The current Azure Container Apps Consumption host remains in place while the verified mounted
+index set is small enough to ship and cold-start safely. Durable, immutable release artifacts live
+in Azure Blob Storage, but SQLite, FTS and vector files are never queried over Blob or Azure Files:
+the serving process always reads a verified local copy.
+
+Hosting changes are driven by measured release evidence rather than an optimistic size estimate:
+
+- a single artifact above 2 GiB is published through Blob instead of GitHub Releases;
+- a mounted index set above 2 GiB triggers a zero-traffic VM candidate benchmark;
+- a mounted index set above 4 GiB, a failed cold-start/latency/memory gate, or insufficient ACR
+  allowance to retain both production and rollback images requires a VM with a managed data disk;
+- the disk is the next managed-disk tier that can hold the active, previous and incoming verified
+  release sets plus 10 percent working headroom.
+
+The VM runs the same container. It downloads and verifies a release from Blob into a versioned
+directory, warms it, then switches an atomic `current` link. The old Container App revision and
+the preceding disk release remain rollback paths until the new host passes live acceptance. This
+avoids remote random reads and prevents a large legal corpus from becoming a container-image layer.
 
 The deployment uses immutable image tags, a pinned artifact trust root, managed identities and a
 candidate revision with smoke tests before traffic promotion. Shared ACR administration is not

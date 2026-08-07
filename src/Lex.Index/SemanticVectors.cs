@@ -231,6 +231,8 @@ public enum SemanticBuildStage
 {
     Preparation,
     Embeddings,
+    Database,
+    Finalization,
 }
 
 public sealed record SemanticBuildProgress(

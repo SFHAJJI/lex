@@ -56,6 +56,12 @@
       "title": "Luxembourg original-act expansion",
       "status": "planned",
       "outcome": "Add reviewed normative acts outside the Legilux consolidation catalogue with document-class-specific temporal semantics."
+    },
+    {
+      "id": "M8",
+      "title": "Size-gated local index hosting",
+      "status": "building",
+      "outcome": "Keep small verified indexes in Container Apps, but promote oversized releases from Blob onto a VM-managed local disk before traffic cutover."
     }
   ],
   "decisions": [
@@ -88,12 +94,12 @@
     },
     {
       "id": "D55",
-      "title": "Keep Container Apps while it is economical",
-      "status": "shipped",
-      "choice": "Retain Consumption Container Apps and scale to zero.",
-      "alternative": "Move immediately to an always-on virtual machine.",
-      "reason": "Observed traffic is low and the proposed low-cost VM assumptions did not match the actual SKU.",
-      "cost": "Cold starts remain measurable and may later justify one warm replica."
+      "title": "Move the host when the measured index outgrows the image",
+      "status": "building",
+      "choice": "Keep query files local: use Container Apps for a small verified set, and promote releases above the recorded size or runtime gates from Blob onto a VM-managed disk.",
+      "alternative": "Commit permanently to either Container Apps, a VM, Blob range reads or an Azure Files-mounted SQLite database regardless of measurements.",
+      "reason": "Blob is the durable distribution layer, while SQLite FTS and memory-mapped vectors require local random access. The completed artifact, rollback footprint and runtime gates determine the cheapest correct host.",
+      "cost": "The deployment pipeline supports two hosts and the VM path adds operating-system patching when activated."
     },
     {
       "id": "D56",

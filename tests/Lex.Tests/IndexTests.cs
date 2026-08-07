@@ -414,37 +414,10 @@ public class IndexTests : IDisposable
 
         Assert.Equal(1, encoder.EncodeCalls);
         Assert.Equal(1, encoder.BatchCalls);
-        Assert.Collection(progress,
-            preparationStarted =>
-            {
-                Assert.Equal(SemanticBuildStage.Preparation, preparationStarted.Stage);
-                Assert.Equal(0, preparationStarted.Completed);
-                Assert.Equal(1, preparationStarted.Total);
-                Assert.Null(preparationStarted.EstimatedRemaining);
-            },
-            preparationCompleted =>
-            {
-                Assert.Equal(SemanticBuildStage.Preparation, preparationCompleted.Stage);
-                Assert.Equal(1, preparationCompleted.Completed);
-                Assert.Equal(1, preparationCompleted.Total);
-                Assert.Equal(100, preparationCompleted.Percent);
-                Assert.Equal(TimeSpan.Zero, preparationCompleted.EstimatedRemaining);
-            },
-            started =>
-            {
-                Assert.Equal(SemanticBuildStage.Embeddings, started.Stage);
-                Assert.Equal(0, started.Completed);
-                Assert.Equal(1, started.Total);
-                Assert.Null(started.EstimatedRemaining);
-            },
-            completed =>
-            {
-                Assert.Equal(SemanticBuildStage.Embeddings, completed.Stage);
-                Assert.Equal(1, completed.Completed);
-                Assert.Equal(1, completed.Total);
-                Assert.Equal(100, completed.Percent);
-                Assert.Equal(TimeSpan.Zero, completed.EstimatedRemaining);
-            });
+        AssertStage(progress, SemanticBuildStage.Preparation, 1);
+        AssertStage(progress, SemanticBuildStage.Embeddings, 1);
+        AssertStage(progress, SemanticBuildStage.Database, 4);
+        AssertStage(progress, SemanticBuildStage.Finalization, 3);
         using var vectorReader = new SemanticVectorReader(vectors);
         Assert.Equal(1, vectorReader.Count);
         using var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={_db}");
@@ -455,6 +428,20 @@ public class IndexTests : IDisposable
         Assert.True(result.Read());
         Assert.Equal(2, result.GetInt32(0));
         Assert.Equal(1, result.GetInt32(1));
+
+        static void AssertStage(
+            IReadOnlyList<SemanticBuildProgress> updates, SemanticBuildStage stage, long total)
+        {
+            var stageUpdates = updates.Where(update => update.Stage == stage).ToList();
+            Assert.NotEmpty(stageUpdates);
+            Assert.Equal(0, stageUpdates[0].Completed);
+            Assert.Equal(total, stageUpdates[0].Total);
+            Assert.Null(stageUpdates[0].EstimatedRemaining);
+            Assert.Equal(total, stageUpdates[^1].Completed);
+            Assert.Equal(total, stageUpdates[^1].Total);
+            Assert.Equal(100, stageUpdates[^1].Percent);
+            Assert.Equal(TimeSpan.Zero, stageUpdates[^1].EstimatedRemaining);
+        }
     }
 
     [Fact]
