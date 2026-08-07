@@ -2,7 +2,7 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.SFHAJJI/lex",
   "title": "Lex — Temporal Luxembourg and EU Law",
-  "description": "Search, retrieve, compare, and trace official Luxembourg and reviewed EU law as of a date, with publisher provenance.",
+  "description": "Temporal search and comparison for official Luxembourg and reviewed EU law, with provenance.",
   "repository": {
     "url": "https://github.com/SFHAJJI/lex",
     "source": "github"
