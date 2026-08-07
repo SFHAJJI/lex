@@ -19,9 +19,12 @@ of the configured memory limit.
 2. Longer provisions split at paragraph boundaries. An individually oversized paragraph splits
    at a tokenizer boundary. Adjacent chunks retain up to 32 tokens of overlap.
 3. Each work, language, anchor and distinct wording is embedded once with the `passage:` prefix.
-4. The vector file stores a 1-bit sign vector for the first scan and an int8 normalized vector for
+4. Unique chunks are embedded in deterministic, bounded batches. Batch size is an indexing
+   resource setting; it does not change chunk order, vector ordinals or the final monolithic
+   SQLite/vector artifact pair.
+5. The vector file stores a 1-bit sign vector for the first scan and an int8 normalized vector for
    reranking. The file is memory-mapped, so repeated copies are not loaded into managed memory.
-5. SQLite maps each chunk and vector ordinal back to the authoritative lexical state. The vector
+6. SQLite maps each chunk and vector ordinal back to the authoritative lexical state. The vector
    file, model, tokenizer, scope and SQLite index must all appear in the signed artifact manifest.
 
 ## Query path

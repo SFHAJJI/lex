@@ -26,10 +26,15 @@ switch (args0[0])
     {
         var modelDir = Get("--model-dir") ?? throw new ArgumentException("--model-dir required");
         var text = Get("--text") ?? "protection des donnees personnelles";
+        var batchSize = int.TryParse(Get("--batch-size"), out var parsedBatchSize) ? parsedBatchSize : 1;
+        if (batchSize <= 0) throw new ArgumentOutOfRangeException("--batch-size");
         using var encoder = MultilingualE5Encoder.Open(modelDir);
         var sw = System.Diagnostics.Stopwatch.StartNew();
-        var vector = encoder.Encode(text, EmbeddingInputKind.Query);
+        var vectors = encoder.EncodeBatch(Enumerable.Repeat(text, batchSize).ToArray(), EmbeddingInputKind.Query);
         sw.Stop();
+        var vector = vectors[0];
+        var quantized = vectors.Select(SemanticVectorReader.Int8).ToArray();
+        var quantizedBytes = quantized[0].Select(value => unchecked((byte)value)).ToArray();
         Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(new
         {
             encoder.ModelId,
@@ -37,7 +42,12 @@ switch (args0[0])
             encoder.Dimensions,
             Tokens = encoder.CountTokens("query: " + text),
             Norm = Math.Sqrt(vector.Sum(v => v * v)),
+            BatchSize = batchSize,
+            BatchInt8Parity = quantized.All(candidate => candidate.SequenceEqual(quantized[0])),
+            VectorInt8Sha256 = Convert.ToHexStringLower(
+                System.Security.Cryptography.SHA256.HashData(quantizedBytes)),
             ElapsedMs = sw.Elapsed.TotalMilliseconds,
+            PerItemElapsedMs = sw.Elapsed.TotalMilliseconds / batchSize,
         }));
         return 0;
     }
@@ -125,13 +135,16 @@ switch (args0[0])
         }
         Console.Error.WriteLine($"[lex] index {corpus} (articles: {articles ?? "none"}) -> {outDb}");
         using var encoder = embeddingModelDir is null ? null : MultilingualE5Encoder.Open(embeddingModelDir);
+        var embeddingBatchSize = int.TryParse(Get("--embedding-batch-size"), out var parsedEmbeddingBatchSize)
+            ? parsedEmbeddingBatchSize : 16;
         var semantic = encoder is null ? null : new SemanticBuildOptions(
             encoder, Get("--vectors") ?? Path.ChangeExtension(outDb, ".vectors"),
             encoder.ModelSha256, encoder.TokenizerSha256,
             Progress: progress => Console.Error.WriteLine(
                 $"  [index-progress] embeddings={progress.Completed}/{progress.Total} " +
                 $"percent={progress.Percent:F1} elapsed={FormatDuration(progress.Elapsed)} " +
-                $"eta={(progress.EstimatedRemaining is { } eta ? FormatDuration(eta) : "calculating")}"));
+                $"eta={(progress.EstimatedRemaining is { } eta ? FormatDuration(eta) : "calculating")}"),
+            BatchSize: embeddingBatchSize);
         IndexFromCorpus.Build(corpus, articles, outDb, keyPem, now, semantic);
         return 0;
     }
@@ -362,9 +375,11 @@ static string FormatDuration(TimeSpan value) =>
 
 static void Usage() => Console.Error.WriteLine("""
     lex — point-in-time regulatory text pipeline
+      lex embedding-smoke --model-dir PATH [--text TEXT] [--batch-size N]
       lex scope-preview [--publisher ID] [--scope FILE] [--previous-scope FILE] [--wave 1..4]
       lex ingest --publisher ID --corpus PATH [--scope FILE] [--wave 1..4] [--now ISO]
       lex index  --corpus PATH [--articles PATH] --out FILE.db [--keyfile KEY.pem] [--now ISO]
+                 [--embedding-model PATH] [--vectors FILE] [--embedding-batch-size N]
       lex derive --publisher lu-legilux --corpus PATH --out PATH [--code-version SHA]
       lex verify corpus --corpus PATH
       lex repair checkout-line-endings --corpus PATH

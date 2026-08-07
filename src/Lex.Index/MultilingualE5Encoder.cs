@@ -18,6 +18,7 @@ public sealed class MultilingualE5Encoder : ITextEncoder
 {
     private readonly InferenceSession _session;
     private readonly SentencePieceTokenizer _tokenizer;
+    private readonly int _paddingId;
     private readonly object _gate = new();
     public string ModelId { get; }
     public string ModelRevision { get; }
@@ -35,6 +36,11 @@ public sealed class MultilingualE5Encoder : ITextEncoder
         Dimensions = manifest.Dimensions;
         ModelSha256 = manifest.Files["model.onnx"];
         TokenizerSha256 = manifest.Files["sentencepiece.bpe.model"];
+        // This raw SentencePiece model has no Hugging Face-added <pad> entry. Padding positions
+        // are excluded by both the attention mask and mean pooling, so any valid vocabulary id
+        // is only a tensor placeholder; use the model's unknown id when no explicit pad exists.
+        if (!tokenizer.Vocabulary.TryGetValue("<pad>", out _paddingId))
+            _paddingId = tokenizer.UnknownId;
     }
 
     public static MultilingualE5Encoder Open(string directory)
@@ -85,17 +91,34 @@ public sealed class MultilingualE5Encoder : ITextEncoder
     public int SuffixStartForTokens(string text, int maxTokens) =>
         _tokenizer.GetIndexByTokenCountFromEnd(text, maxTokens, out _, out _);
 
-    public float[] Encode(string text, EmbeddingInputKind kind)
+    public float[] Encode(string text, EmbeddingInputKind kind) => EncodeBatch([text], kind)[0];
+
+    public IReadOnlyList<float[]> EncodeBatch(IReadOnlyList<string> texts, EmbeddingInputKind kind)
     {
-        var prefixed = (kind == EmbeddingInputKind.Query ? "query: " : "passage: ") + text;
+        if (texts.Count == 0) return [];
+        var prefix = kind == EmbeddingInputKind.Query ? "query: " : "passage: ";
         lock (_gate)
         {
-            var tokenIds = _tokenizer.EncodeToIds(prefixed, addBeginningOfSentence: true, addEndOfSentence: true);
-            if (tokenIds.Count > 512)
-                tokenIds = tokenIds.Take(511).Append(_tokenizer.EndOfSentenceId).ToArray();
-            var ids = tokenIds.Select(id => (long)id).ToArray();
-            var mask = Enumerable.Repeat(1L, ids.Length).ToArray();
-            var shape = new[] { 1, ids.Length };
+            var tokenized = new long[texts.Count][];
+            var maxTokens = 0;
+            for (var batch = 0; batch < texts.Count; batch++)
+            {
+                var tokenIds = _tokenizer.EncodeToIds(prefix + texts[batch],
+                    addBeginningOfSentence: true, addEndOfSentence: true);
+                if (tokenIds.Count > 512)
+                    tokenIds = tokenIds.Take(511).Append(_tokenizer.EndOfSentenceId).ToArray();
+                tokenized[batch] = tokenIds.Select(id => (long)id).ToArray();
+                maxTokens = Math.Max(maxTokens, tokenized[batch].Length);
+            }
+
+            var ids = Enumerable.Repeat((long)_paddingId, texts.Count * maxTokens).ToArray();
+            var mask = new long[ids.Length];
+            for (var batch = 0; batch < tokenized.Length; batch++)
+            {
+                tokenized[batch].CopyTo(ids, batch * maxTokens);
+                Array.Fill(mask, 1L, batch * maxTokens, tokenized[batch].Length);
+            }
+            var shape = new[] { texts.Count, maxTokens };
             var inputs = new List<NamedOnnxValue>
             {
                 NamedOnnxValue.CreateFromTensor("input_ids", new DenseTensor<long>(ids, shape)),
@@ -107,22 +130,29 @@ public sealed class MultilingualE5Encoder : ITextEncoder
 
             using var output = _session.Run(inputs);
             var tensor = output.First(x => x.Name is "last_hidden_state" or "token_embeddings").AsTensor<float>();
-            if (tensor.Rank != 3 || tensor.Dimensions[2] != Dimensions)
+            if (tensor.Rank != 3 || tensor.Dimensions[0] != texts.Count
+                || tensor.Dimensions[1] != maxTokens || tensor.Dimensions[2] != Dimensions)
                 throw new InvalidDataException("Embedding model output shape is not [batch,tokens,384].");
-            var result = new float[Dimensions];
-            for (var token = 0; token < ids.Length; token++)
-                for (var dimension = 0; dimension < Dimensions; dimension++)
-                    result[dimension] += tensor[0, token, dimension];
-            var norm = 0f;
-            for (var i = 0; i < result.Length; i++)
+            var results = new float[texts.Count][];
+            for (var batch = 0; batch < texts.Count; batch++)
             {
-                result[i] /= ids.Length;
-                norm += result[i] * result[i];
+                var result = new float[Dimensions];
+                var tokenCount = tokenized[batch].Length;
+                for (var token = 0; token < tokenCount; token++)
+                    for (var dimension = 0; dimension < Dimensions; dimension++)
+                        result[dimension] += tensor[batch, token, dimension];
+                var norm = 0f;
+                for (var dimension = 0; dimension < result.Length; dimension++)
+                {
+                    result[dimension] /= tokenCount;
+                    norm += result[dimension] * result[dimension];
+                }
+                norm = MathF.Sqrt(norm);
+                if (norm == 0) throw new InvalidDataException("Embedding model returned a zero vector.");
+                for (var dimension = 0; dimension < result.Length; dimension++) result[dimension] /= norm;
+                results[batch] = result;
             }
-            norm = MathF.Sqrt(norm);
-            if (norm == 0) throw new InvalidDataException("Embedding model returned a zero vector.");
-            for (var i = 0; i < result.Length; i++) result[i] /= norm;
-            return result;
+            return results;
         }
     }
 

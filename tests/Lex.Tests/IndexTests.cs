@@ -12,6 +12,7 @@ public class IndexTests : IDisposable
         public string ModelRevision => "test-revision";
         public int Dimensions => 8;
         public int EncodeCalls { get; private set; }
+        public int BatchCalls { get; private set; }
         public int CountTokens(string text) => text.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length + 2;
         public int PrefixLengthForTokens(string text, int maxTokens)
         {
@@ -52,6 +53,11 @@ public class IndexTests : IDisposable
             var norm = MathF.Sqrt(vector.Sum(x => x * x));
             for (var i = 0; i < vector.Length; i++) vector[i] /= norm;
             return vector;
+        }
+        public IReadOnlyList<float[]> EncodeBatch(IReadOnlyList<string> texts, EmbeddingInputKind kind)
+        {
+            BatchCalls++;
+            return texts.Select(text => Encode(text, kind)).ToArray();
         }
         public void Dispose() { }
     }
@@ -407,6 +413,7 @@ public class IndexTests : IDisposable
                 encoder, vectors, "model-sha", "tokenizer-sha", Progress: progress.Add));
 
         Assert.Equal(1, encoder.EncodeCalls);
+        Assert.Equal(1, encoder.BatchCalls);
         Assert.Collection(progress,
             started =>
             {
@@ -431,6 +438,51 @@ public class IndexTests : IDisposable
         Assert.True(result.Read());
         Assert.Equal(2, result.GetInt32(0));
         Assert.Equal(1, result.GetInt32(1));
+    }
+
+    [Fact]
+    public void Semantic_embeddings_are_batched_without_changing_vector_ordinals()
+    {
+        var doc = Row("t-pub:batch:2020-01-01", "batch", "2020-01-01", null, text: true);
+        var vectors = Path.ChangeExtension(_db, ".vectors");
+        _extra.Add(vectors);
+        using var encoder = new FakeEncoder();
+        IndexBuilder.Build(_db, new Dictionary<string, string> { ["collection"] = "t-pub" },
+            [doc],
+            [Prov(doc, 0, "art_1", "first distinct wording"),
+             Prov(doc, 1, "art_2", "second distinct wording"),
+             Prov(doc, 2, "art_3", "third distinct wording")],
+            [], [], null, semantic: new SemanticBuildOptions(
+                encoder, vectors, "model-sha", "tokenizer-sha", BatchSize: 2));
+
+        Assert.Equal(3, encoder.EncodeCalls);
+        Assert.Equal(2, encoder.BatchCalls);
+        using var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={_db}");
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT vector_ordinal FROM semantic_chunks ORDER BY state_id";
+        using var result = command.ExecuteReader();
+        var ordinals = new List<long>();
+        while (result.Read()) ordinals.Add(result.GetInt64(0));
+        Assert.Equal([0L, 1L, 2L], ordinals);
+    }
+
+    [Fact]
+    public void Semantic_embedding_batch_size_must_be_positive()
+    {
+        var doc = Row("t-pub:batch:2020-01-01", "batch", "2020-01-01", null, text: true);
+        var vectors = Path.ChangeExtension(_db, ".vectors");
+        _extra.Add(vectors);
+        using var encoder = new FakeEncoder();
+
+        var exception = Assert.Throws<ArgumentOutOfRangeException>(() => IndexBuilder.Build(
+            _db, new Dictionary<string, string> { ["collection"] = "t-pub" },
+            [doc], [Prov(doc, 0, "art_1", "wording")], [], [], null,
+            semantic: new SemanticBuildOptions(
+                encoder, vectors, "model-sha", "tokenizer-sha", BatchSize: 0)));
+
+        Assert.Contains("batch size", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(0, encoder.EncodeCalls);
     }
 
     [Theory]
