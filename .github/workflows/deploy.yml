@@ -169,8 +169,13 @@ jobs:
             --revision "$candidate" --query properties.fqdn -o tsv)
           curl --fail --show-error --silent --retry 5 --retry-delay 5 "https://$fqdn/healthz"
           mcp_text() {
-            curl --fail --show-error --silent --retry 3 --retry-delay 5 \
-              -H 'Content-Type: application/json' -d "$1" "https://$fqdn/mcp" \
+            response=$(curl --fail --show-error --silent --retry 3 --retry-delay 5 \
+              -H 'Content-Type: application/json' \
+              -H 'Accept: application/json, text/event-stream' \
+              -d "$1" "https://$fqdn/mcp")
+            payload=$(printf '%s\n' "$response" | sed -n 's/^data: //p' | tail -n 1)
+            [ -n "$payload" ] || payload=$response
+            printf '%s' "$payload" \
               | jq -er '.result.content | map(select(.type == "text")) | .[0].text'
           }
           coverage=$(mcp_text '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"coverage","arguments":{}}}')
