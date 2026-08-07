@@ -47,4 +47,17 @@ jobs:
         run: ./mcp-publisher login github-oidc
 
       - name: Publish the remote server metadata
-        run: ./mcp-publisher publish
+        shell: bash
+        run: |
+          set -euo pipefail
+          if output=$(./mcp-publisher publish 2>&1); then
+            printf '%s\n' "$output"
+          elif grep -Fq 'invalid version: cannot publish duplicate version' <<<"$output"; then
+            # workflow_dispatch is deliberately retryable. The registry makes versions
+            # immutable, so an already-published identical version is the desired state.
+            printf '%s\n' "$output"
+            echo 'This immutable metadata version is already published.'
+          else
+            printf '%s\n' "$output" >&2
+            exit 1
+          fi
