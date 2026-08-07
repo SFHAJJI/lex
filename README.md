@@ -180,6 +180,15 @@ dotnet run --project src/Lex.Ingest -- derive --publisher lu-legilux --corpus ..
 dotnet run --project src/Lex.Ingest -- index --corpus ../lex-corpus-lu-legilux --articles ../lex-articles \
     --out indexes/index-lu-legilux.db --keyfile signing-key.pem
 
+# resumable large semantic backfill on a reviewed Windows DirectML adapter
+dotnet build src/Lex.Ingest -c Release -p:UseDirectML=true
+src/Lex.Ingest/bin/Release/net10.0/Lex.Ingest index \
+    --corpus ../lex-corpus-eu-eurlex --articles ../lex-articles \
+    --out indexes/index-eu-eurlex.db --embedding-model model \
+    --vectors indexes/index-eu-eurlex.vectors \
+    --embedding-directml-device 1 --embedding-batch-size 256 \
+    --embedding-cache build-cache/eu-eurlex-embeddings.db
+
 # web demo + MCP (stdio) locally
 LEX_INDEX_DIR=indexes dotnet run --project src/Lex.Web
 LEX_INDEX_DIR=indexes dotnet run --project src/Lex.Mcp.Stdio

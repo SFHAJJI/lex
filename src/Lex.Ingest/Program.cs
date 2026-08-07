@@ -28,7 +28,11 @@ switch (args0[0])
         var text = Get("--text") ?? "protection des donnees personnelles";
         var batchSize = int.TryParse(Get("--batch-size"), out var parsedBatchSize) ? parsedBatchSize : 1;
         if (batchSize <= 0) throw new ArgumentOutOfRangeException("--batch-size");
-        using var encoder = MultilingualE5Encoder.Open(modelDir);
+        var intraOpThreads = int.TryParse(Get("--intra-op-threads"), out var parsedIntraOpThreads)
+            ? parsedIntraOpThreads : (int?)null;
+        var directMlDeviceId = int.TryParse(Get("--directml-device"), out var parsedDirectMlDeviceId)
+            ? parsedDirectMlDeviceId : (int?)null;
+        using var encoder = MultilingualE5Encoder.Open(modelDir, intraOpThreads, directMlDeviceId);
         var sw = System.Diagnostics.Stopwatch.StartNew();
         var vectors = encoder.EncodeBatch(Enumerable.Repeat(text, batchSize).ToArray(), EmbeddingInputKind.Query);
         sw.Stop();
@@ -134,7 +138,12 @@ switch (args0[0])
             keyPem = File.ReadAllText(keyFile);
         }
         Console.Error.WriteLine($"[lex] index {corpus} (articles: {articles ?? "none"}) -> {outDb}");
-        using var encoder = embeddingModelDir is null ? null : MultilingualE5Encoder.Open(embeddingModelDir);
+        var embeddingIntraOpThreads = int.TryParse(Get("--embedding-intra-op-threads"), out var parsedEmbeddingThreads)
+            ? parsedEmbeddingThreads : (int?)null;
+        var embeddingDirectMlDeviceId = int.TryParse(Get("--embedding-directml-device"), out var parsedEmbeddingDevice)
+            ? parsedEmbeddingDevice : (int?)null;
+        using var encoder = embeddingModelDir is null ? null
+            : MultilingualE5Encoder.Open(embeddingModelDir, embeddingIntraOpThreads, embeddingDirectMlDeviceId);
         var embeddingBatchSize = int.TryParse(Get("--embedding-batch-size"), out var parsedEmbeddingBatchSize)
             ? parsedEmbeddingBatchSize : 16;
         var indexBudget = int.TryParse(Get("--time-budget-minutes"), out var parsedBudgetMinutes)
@@ -170,7 +179,9 @@ switch (args0[0])
                     $" deadline_risk={deadlineRisk.ToString().ToLowerInvariant()}" +
                     $" stop_recommended={stopRecommended.ToString().ToLowerInvariant()}");
             },
-            BatchSize: embeddingBatchSize);
+            BatchSize: embeddingBatchSize,
+            ExecutionProvider: encoder.ExecutionProvider,
+            EmbeddingCachePath: Get("--embedding-cache"));
         IndexFromCorpus.Build(corpus, articles, outDb, keyPem, now, semantic);
         return 0;
     }

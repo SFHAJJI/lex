@@ -560,6 +560,50 @@ public class IndexTests : IDisposable
     }
 
     [Fact]
+    public void Semantic_embedding_cache_resumes_by_chunk_and_provider_without_changing_artifact_bytes()
+    {
+        var doc = Row("t-pub:cache:2020-01-01", "cache", "2020-01-01", null, text: true);
+        var provisions = new[]
+        {
+            Prov(doc, 0, "art_1", "first cached wording"),
+            Prov(doc, 1, "art_2", "second cached wording"),
+        };
+        var vectors1 = Path.ChangeExtension(_db, ".first.vectors");
+        var db2 = Path.Combine(Path.GetTempPath(), $"lex-cache-test-{Guid.NewGuid():N}.db");
+        var vectors2 = Path.ChangeExtension(db2, ".vectors");
+        var db3 = Path.Combine(Path.GetTempPath(), $"lex-cache-provider-test-{Guid.NewGuid():N}.db");
+        var vectors3 = Path.ChangeExtension(db3, ".vectors");
+        var cache = Path.Combine(Path.GetTempPath(), $"lex-embeddings-{Guid.NewGuid():N}.db");
+        _extra.AddRange([vectors1, db2, vectors2, db3, vectors3, cache, cache + "-wal", cache + "-shm"]);
+
+        using (var first = new FakeEncoder())
+        {
+            IndexBuilder.Build(_db, new Dictionary<string, string> { ["collection"] = "t-pub" },
+                [doc], provisions, [], [], null, semantic: new SemanticBuildOptions(
+                    first, vectors1, "model-sha", "tokenizer-sha", BatchSize: 2,
+                    ExecutionProvider: "cpu;runtime=test", EmbeddingCachePath: cache));
+            Assert.Equal(2, first.EncodeCalls);
+        }
+
+        using (var resumed = new FakeEncoder())
+        {
+            IndexBuilder.Build(db2, new Dictionary<string, string> { ["collection"] = "t-pub" },
+                [doc], provisions, [], [], null, semantic: new SemanticBuildOptions(
+                    resumed, vectors2, "model-sha", "tokenizer-sha", BatchSize: 2,
+                    ExecutionProvider: "cpu;runtime=test", EmbeddingCachePath: cache));
+            Assert.Equal(0, resumed.EncodeCalls);
+        }
+        Assert.Equal(File.ReadAllBytes(vectors1), File.ReadAllBytes(vectors2));
+
+        using var otherProvider = new FakeEncoder();
+        IndexBuilder.Build(db3, new Dictionary<string, string> { ["collection"] = "t-pub" },
+            [doc], provisions, [], [], null, semantic: new SemanticBuildOptions(
+                otherProvider, vectors3, "model-sha", "tokenizer-sha", BatchSize: 2,
+                ExecutionProvider: "directml:1;runtime=test", EmbeddingCachePath: cache));
+        Assert.Equal(2, otherProvider.EncodeCalls);
+    }
+
+    [Fact]
     public void Semantic_embedding_batch_size_must_be_positive()
     {
         var doc = Row("t-pub:batch:2020-01-01", "batch", "2020-01-01", null, text: true);

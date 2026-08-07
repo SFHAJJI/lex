@@ -110,6 +110,22 @@ The deployment uses immutable image tags, a pinned artifact trust root, managed 
 candidate revision with smoke tests before traffic promotion. Shared ACR administration is not
 disabled until every consumer is audited.
 
+## Offline index builds
+
+The signed index is portable; its build machine is not part of the serving architecture. Routine
+small updates may run on a CPU Fleet runner, while a large first semantic backfill may run on a
+reviewed local GPU or temporary build worker. Both paths execute the same chunking, ordering,
+quantization, database and manifest code. The execution provider and ONNX Runtime version are
+recorded in the index stamp, and retrieval benchmarks run against the finished artifact before it
+can be promoted.
+
+Embedding work is cached by chunk SHA-256 and by a profile covering the model, revision, model and
+tokenizer hashes, vector format, dimensions, runtime and execution provider. The cache commits each
+completed batch. An interruption therefore resumes from verified content-addressed results, and a
+later scope expansion embeds only new or changed chunks. The cache is build evidence, never a query
+database or a released source of legal text; the final vector file remains one deterministic,
+ordinal-checked artifact rather than glued partial indexes.
+
 ## Risks and containment
 
 - Corpus expansion: preview counts and relationship reasons before acquisition; abort anomalous

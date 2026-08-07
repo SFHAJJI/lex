@@ -208,6 +208,15 @@
       "alternative": "Maintain a quadratic handwritten LCS matrix or delegate the legal comparison workflow to a generic text-diff library.",
       "reason": "DiffPlex removes commodity algorithm code and quadratic memory while Lex retains the temporal and legal correctness boundary.",
       "cost": "Lex keeps output caps, escaping and compatibility tests, and must continue auditing the dependency; DiffPlex does not decide whether two legal provisions are comparable."
+    },
+    {
+      "id": "D69",
+      "title": "Make semantic builds portable and resumable",
+      "status": "shipped",
+      "choice": "Run the same deterministic index writer on CPU or a reviewed local DirectML GPU, record the runtime/provider, and cache compatible quantized vectors by chunk hash and complete embedding profile.",
+      "alternative": "Recompute every vector on each ephemeral Fleet run, publish partial shards, or require the serving host to perform ingestion.",
+      "reason": "A 770,450-chunk first backfill exceeds the free runner window, while content-addressed results are independently reusable without changing legal text, chunk order or final vector ordinals.",
+      "cost": "The build cache is additional private evidence to retain and validate; provider changes intentionally invalidate it, and every final artifact still requires benchmarks and signed-manifest promotion."
     }
   ],
   "baseline": {

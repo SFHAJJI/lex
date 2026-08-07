@@ -161,14 +161,28 @@ public sealed class SemanticVectorWriter : IDisposable
     public long Write(float[] normalized)
     {
         if (normalized.Length != _dimensions) throw new InvalidDataException("Embedding dimension mismatch.");
+        return WriteRecord(Quantize(normalized));
+    }
+
+    public long WriteRecord(ReadOnlySpan<byte> record)
+    {
+        if (record.Length != RecordBytes(_dimensions))
+            throw new InvalidDataException("Quantized embedding record dimension mismatch.");
         var ordinal = _count++;
-        var binary = new byte[BinaryBytes(_dimensions)];
-        for (var i = 0; i < normalized.Length; i++)
-            if (normalized[i] >= 0) binary[i >> 3] |= (byte)(1 << (i & 7));
-        _writer.Write(binary);
-        for (var i = 0; i < normalized.Length; i++)
-            _writer.Write((sbyte)Math.Clamp((int)Math.Round(normalized[i] * 127f), -127, 127));
+        _writer.Write(record);
         return ordinal;
+    }
+
+    public static byte[] Quantize(float[] normalized)
+    {
+        var binaryBytes = BinaryBytes(normalized.Length);
+        var record = new byte[RecordBytes(normalized.Length)];
+        for (var i = 0; i < normalized.Length; i++)
+            if (normalized[i] >= 0) record[i >> 3] |= (byte)(1 << (i & 7));
+        for (var i = 0; i < normalized.Length; i++)
+            record[binaryBytes + i] = unchecked((byte)(sbyte)Math.Clamp(
+                (int)Math.Round(normalized[i] * 127f), -127, 127));
+        return record;
     }
 
     public void Dispose()
@@ -183,6 +197,7 @@ public sealed class SemanticVectorWriter : IDisposable
     }
 
     internal static int BinaryBytes(int dimensions) => (dimensions + 7) / 8;
+    public static int RecordBytes(int dimensions) => BinaryBytes(dimensions) + dimensions;
 }
 
 public sealed class SemanticVectorReader : IDisposable
@@ -271,7 +286,9 @@ public sealed record SemanticBuildOptions(
     string VectorFormat = "lex-vectors/1-binary-int8",
     Action<SemanticBuildProgress>? Progress = null,
     int BatchSize = 16,
-    TimeSpan? ProgressHeartbeatInterval = null);
+    TimeSpan? ProgressHeartbeatInterval = null,
+    string ExecutionProvider = "cpu",
+    string? EmbeddingCachePath = null);
 
 public enum SemanticBuildStage
 {

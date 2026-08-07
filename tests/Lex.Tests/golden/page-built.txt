@@ -233,7 +233,7 @@ The web app starts at 0.25 vCPU and <b>scales to zero</b>.</p>
     <td>A &gt;5% drop in works, or a re-derivation that is not byte-identical, aborts the run.
     A partial upstream response must never rewrite history.</td></tr>
 </table>
-<p class="sub" style="margin:8px 0 0">16 delivery decisions like these are read from
+<p class="sub" style="margin:8px 0 0">17 delivery decisions like these are read from
 the architecture registry, alongside the numbered specification decisions. Each records its
 rationale, so "why did you do it that way" has a written answer rather than a recollection.</p></div>
 
