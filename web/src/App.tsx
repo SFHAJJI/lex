@@ -411,7 +411,7 @@ export default function App() {
                 <input type="date" value={s.date ?? today()} aria-label="Date to show the law as it stood"
                        onChange={(e) => go({ date: e.target.value })} />
               </label>
-              <LawPicker current="change law" onPick={pickLaw} />
+              <LawPicker current="choose another" onPick={pickLaw} />
               <a className="pick" href={`/${publisherOf(s.work)}/${workSlug(s.work)}`}>permalink ↗</a>
             </div>
           </div>

@@ -89,7 +89,12 @@ switch (args0[0])
             Get("--code-commit") ?? "uncommitted", Get("--manifest-id") ?? "unverified",
             Get("--machine") ?? Environment.MachineName,
             Get("--resource") ?? "not supplied", memoryLimit,
-            load.Elapsed.TotalMilliseconds, cold.Elapsed.TotalMilliseconds, now);
+            load.Elapsed.TotalMilliseconds, cold.Elapsed.TotalMilliseconds, now,
+            progress => Console.Error.WriteLine(
+                $"[benchmark-progress] stage={progress.Stage} items={progress.Completed}/{progress.Total} "
+                + $"percent={(progress.Total == 0 ? 100 : progress.Completed * 100d / progress.Total):0.0} "
+                + $"elapsed={progress.Elapsed:hh\\:mm\\:ss} "
+                + $"eta={(progress.EstimatedRemaining is null ? "calculating" : progress.EstimatedRemaining.Value.ToString(@"hh\:mm\:ss"))}"));
         File.WriteAllBytes(output, System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(report,
             new System.Text.Json.JsonSerializerOptions
             {

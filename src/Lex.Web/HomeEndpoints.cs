@@ -82,7 +82,7 @@ public static class HomeEndpoints
             // the sentence above the fold merely announced that the site answers questions.
             var body = $"""
                 <p class="lede">Ask what any Luxembourg law said on any day, exactly as its publisher
-                issued it.{(euWorks > 0 ? $" Plus {euWorks:n0} EU works from the reviewed scope, with every dated version the mounted index holds." : "")}</p>
+                issued it.{(euWorks > 0 ? $" Search {euWorks:n0} EU acts and related legal materials too, across every dated version the mounted index holds." : "")}</p>
                 """
                 + $"""
                 <!-- Read synchronously by the workspace on mount, so the doors never flash in or need a
@@ -112,11 +112,11 @@ public static class HomeEndpoints
                 + $"""
                 <div class="frontdoor">
                 <p class="sub">
-                <span class="badge">{cov.Sum(c => c.Groups):n0} laws</span>
+                <span class="badge">{cov.Sum(c => c.Groups):n0} legal works</span>
                 <span class="badge">{cov.Sum(c => c.Rows):n0} dated versions</span>
                 <span class="badge">{cov.Sum(c => c.TextServed):n0} with full text</span>
                 <span class="badge">{H(cov.Select(c => c.EarliestValidFrom).Min())} → {H(cov.Select(c => c.LatestValidFrom).Max())}</span>
-                <span class="badge ok">cryptographically signed</span></p>
+                <span class="badge ok" title="SHA-256 hashes and signed release manifests">source integrity verified</span></p>
                 <p class="sub">Free assistant, daily limit. <a href="/ai">Connect your own AI</a> for
                 unlimited use.</p>
 
@@ -169,7 +169,7 @@ public static class HomeEndpoints
                     ["@type"] = "Person", ["name"] = "Soufien Hajji", ["url"] = "https://soufien.lu",
                 },
             }.ToJsonString();
-            return Results.Content(Page("Luxembourg law as it stood on any date", body, null, "ask",
+            return Results.Content(Page("Luxembourg and EU law as it stood on any date", body, null, "ask",
                 h1: "A law is not one document.", canonicalPath: "/", jsonLd: siteLd), "text/html");
         });
 

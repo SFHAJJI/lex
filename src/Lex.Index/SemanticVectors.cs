@@ -249,6 +249,31 @@ public sealed class SemanticVectorReader : IDisposable
         return distance;
     }
 
+    /// <summary>
+    /// Scans the compact binary prefix in physical vector order and retains only the closest
+    /// candidates. Legal/date filters are applied to this bounded set by the index reader.
+    /// Keeping the scan here avoids the previous cold path, which joined every semantic mapping,
+    /// provision occurrence and document before it knew which vectors were remotely relevant.
+    /// </summary>
+    public IReadOnlyList<(long Ordinal, int Distance)> NearestByHamming(
+        byte[] queryBits, int limit)
+    {
+        if (queryBits.Length != _binaryBytes) throw new ArgumentException("Query bit dimension mismatch.");
+        if (limit <= 0) throw new ArgumentOutOfRangeException(nameof(limit));
+        var queue = new PriorityQueue<(long Ordinal, int Distance), long>();
+        for (long ordinal = 0; ordinal < Count; ordinal++)
+        {
+            var distance = HammingDistance(ordinal, queryBits);
+            // PriorityQueue removes its smallest priority. Negating distance and ordinal makes
+            // the worst retained candidate leave first and keeps ties deterministic.
+            var priority = -(((long)distance << 32) | (uint)ordinal);
+            queue.Enqueue((ordinal, distance), priority);
+            if (queue.Count > limit) queue.Dequeue();
+        }
+        return queue.UnorderedItems.Select(item => item.Element)
+            .OrderBy(item => item.Distance).ThenBy(item => item.Ordinal).ToList();
+    }
+
     public int Int8Dot(long ordinal, sbyte[] query)
     {
         ValidateOrdinal(ordinal);

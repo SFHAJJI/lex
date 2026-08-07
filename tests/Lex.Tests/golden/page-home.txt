@@ -5,9 +5,9 @@ HTTP 200
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Titles are labels, not sentences: one that ends in a full stop renders "acts., Lex" in
      the tab and in every social card, which is what the front page did until now. -->
-<title>Luxembourg law as it stood on any date, Lex</title>
+<title>Luxembourg and EU law as it stood on any date, Lex</title>
 <meta name="description" content="Point-in-time Luxembourg and reviewed EU law: what did the rule say on a given date? Permalinks, timelines, diffs and verifiable provenance.">
-<meta property="og:title" content="Luxembourg law as it stood on any date, Lex">
+<meta property="og:title" content="Luxembourg and EU law as it stood on any date, Lex">
 <meta property="og:description" content="Point-in-time Luxembourg and reviewed EU law, with grounded AI answers, per-article history, and verifiable provenance.">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Lex">
@@ -190,11 +190,11 @@ issued it.</p><!-- Read synchronously by the workspace on mount, so the doors ne
   <a href="/changed">what changed</a>, <a href="/stories">stories</a>.</p>
   </noscript></div><div class="frontdoor">
 <p class="sub">
-<span class="badge">2 laws</span>
+<span class="badge">2 legal works</span>
 <span class="badge">3 dated versions</span>
 <span class="badge">2 with full text</span>
 <span class="badge">2019-06-01 → 2022-01-01</span>
-<span class="badge ok">cryptographically signed</span></p>
+<span class="badge ok" title="SHA-256 hashes and signed release manifests">source integrity verified</span></p>
 <p class="sub">Free assistant, daily limit. <a href="/ai">Connect your own AI</a> for
 unlimited use.</p>
 

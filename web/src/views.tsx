@@ -4,6 +4,8 @@ import { LAYERS, publisherOf, workSlug, type LayerId, type State } from "./state
 import { shorten } from "./pickers";
 import { EvidenceActions } from "./EvidenceActions";
 import { citationText, evidenceFilename, lawEvidenceMarkdown } from "./export";
+import Markdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 const permalink = (work: string, date: string, anchor?: string) =>
   `/${publisherOf(work)}/${workSlug(work)}/${date}${anchor ? `#${anchor}` : ""}`;
@@ -115,7 +117,9 @@ export function Provision({ items, toc, validFrom, validTo, work, title, languag
             <a href={permalink(work, validFrom, p.anchor)}>{p.num ?? p.anchor}</a>
             {p.heading ? <span className="sub">, {plain(p.heading)}</span> : null}
           </h4>
-          <div className="lawtxt">{p.text}</div>
+          {/* Publisher text never becomes executable markup: react-markdown creates React nodes
+              and ignores raw HTML by default. Export and comparison keep the untouched string. */}
+          <div className="lawtxt"><Markdown remarkPlugins={[remarkGfm]}>{p.text}</Markdown></div>
           {/* The acts this article points at. The publisher writes them into the text and the
               derive step captures them with their ELI target, so they can be followed rather
               than merely read. This is the shape legal research actually has: one rule leads to

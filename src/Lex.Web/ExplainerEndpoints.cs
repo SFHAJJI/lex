@@ -101,6 +101,11 @@ public static class ExplainerEndpoints
             var current = architecture.Current;
             var mountedSchemas = string.Join(", ", cov.Select(c => c.Stamp.GetValueOrDefault("schema", "unknown"))
                                                      .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal));
+            var hybridCollections = ctx.Registry.Values.Where(reader => reader.HybridReady)
+                .Select(reader => reader.Collection).Order(StringComparer.Ordinal).ToList();
+            var liveRetrieval = hybridCollections.Count == 0
+                ? $"{current.Retrieval}, deterministic FTS5/BM25"
+                : $"keyword default; local hybrid preview available (gated) on {string.Join(", ", hybridCollections)}";
             var coverageRows = string.Join("", cov.Select(c => $"""
                 <tr><td>{H(c.Collection)}</td><td class="mono">{c.Groups:n0}</td>
                 <td class="mono">{c.Rows:n0}</td><td class="mono">{H(c.Stamp.GetValueOrDefault("schema"))}</td>
@@ -110,7 +115,7 @@ public static class ExplainerEndpoints
                 <p class="lede">This page describes the system serving requests now. Target-state work is kept
                 separately on <a href="/architecture/next">Next</a>.</p>
                 <div class="card"><table class="kv">
-                <tr><th>retrieval</th><td>{H(current.Retrieval)}, deterministic FTS5/BM25</td></tr>
+                <tr><th>retrieval</th><td>{H(liveRetrieval)}</td></tr>
                 <tr><th>hosting</th><td>{H(current.Hosting)}, {H(current.Region)}</td></tr>
                 <tr><th>resources</th><td>{H(current.Resource)}, {H(current.Scale)}</td></tr>
                 <tr><th>structured UI contract</th><td>{H(current.StructuredContract)}</td></tr>
@@ -488,7 +493,8 @@ public static class ExplainerEndpoints
                 signing, Application Insights via OpenTelemetry, and Azure DNS. Managed identity pulls the image
                 and authenticates the optional Azure OpenAI assistant. Retrieval itself is local and deterministic:
                 FTS5/BM25, ONNX embeddings, fixed reranking and fusion, with no generative model in the search path.
-                The web app starts at 0.25 vCPU and <b>scales to zero</b>.</p>
+                The web app uses 1 vCPU and 2 GiB for the mounted lexical and semantic artifacts,
+                and <b>scales to zero</b>.</p>
 
                 <h2>Decisions worth defending</h2>
                 <div class="card"><table>

@@ -161,24 +161,31 @@ public static class RetrievalBenchmarkCatalog
 
 public static class RetrievalBenchmarkRunner
 {
+    public sealed record Progress(string Stage, int Completed, int Total,
+        TimeSpan Elapsed, TimeSpan? EstimatedRemaining);
+
     public static RetrievalBenchmarkReport Run(
         LexIndexReader reader, string indexPath, string? vectorPath,
         string codeCommit, string manifestId, string machine, string resourceConfiguration,
-        long memoryLimitBytes, double modelLoadMs, double coldQueryMs, DateTimeOffset timestamp)
+        long memoryLimitBytes, double modelLoadMs, double coldQueryMs, DateTimeOffset timestamp,
+        Action<Progress>? progress = null)
     {
         var cases = RetrievalBenchmarkCatalog.Create();
         _ = reader.SearchHybrid("benchmark warmup", FilterSet.All, 1);
-        var keyword = Evaluate(cases, c => reader.SearchKeyword(c.Query, Filters(c), 10, c.Category == "fuzzy"));
-        var hybrid = Evaluate(cases, c => reader.SearchHybrid(c.Query, Filters(c), 10));
+        var keyword = Evaluate("keyword", cases,
+            c => reader.SearchKeyword(c.Query, Filters(c), 10, c.Category == "fuzzy"), progress);
+        var hybrid = Evaluate("hybrid", cases, c => reader.SearchHybrid(c.Query, Filters(c), 10), progress);
         var failures = new List<string>();
         if (cases.Any(c => c.ReviewStatus is not ("engineer-reviewed" or "lawyer-reviewed")))
             failures.Add("relevance judgments have not been reviewed");
         if (hybrid.ExactFirstAccuracy < 1) failures.Add("exact legal identifier accuracy is below 100 percent");
         if (hybrid.TemporalLeakageFailures != 0) failures.Add("temporal leakage is not zero");
-        var conceptualKeyword = Evaluate(cases.Where(c => c.Category == "conceptual").ToList(),
-            c => reader.SearchKeyword(c.Query, Filters(c), 10, false));
-        var conceptualHybrid = Evaluate(cases.Where(c => c.Category == "conceptual").ToList(),
-            c => reader.SearchHybrid(c.Query, Filters(c), 10));
+        var conceptualKeyword = Evaluate("conceptual-keyword",
+            cases.Where(c => c.Category == "conceptual").ToList(),
+            c => reader.SearchKeyword(c.Query, Filters(c), 10, false), progress);
+        var conceptualHybrid = Evaluate("conceptual-hybrid",
+            cases.Where(c => c.Category == "conceptual").ToList(),
+            c => reader.SearchHybrid(c.Query, Filters(c), 10), progress);
         if (conceptualKeyword.NdcgAt10 == 0 || conceptualHybrid.NdcgAt10 < conceptualKeyword.NdcgAt10 * 1.10)
             failures.Add("conceptual nDCG@10 did not improve by at least 10 percent");
         if (hybrid.NdcgAt10 + 0.000001 < keyword.NdcgAt10 * 0.98)
@@ -211,7 +218,8 @@ public static class RetrievalBenchmarkRunner
         null, c.Hierarchy, null, null, c.Domain);
 
     private static RetrievalMetrics Evaluate(
-        IReadOnlyList<RetrievalBenchmarkCase> cases, Func<RetrievalBenchmarkCase, SearchExecution> search)
+        string stage, IReadOnlyList<RetrievalBenchmarkCase> cases,
+        Func<RetrievalBenchmarkCase, SearchExecution> search, Action<Progress>? progress)
     {
         var reciprocal = 0d;
         var recall = 0d;
@@ -220,12 +228,19 @@ public static class RetrievalBenchmarkRunner
         var exactCount = 0;
         var leakage = 0;
         var latency = new List<double>(cases.Count);
-        foreach (var c in cases)
+        var phase = Stopwatch.StartNew();
+        progress?.Invoke(new Progress(stage, 0, cases.Count, phase.Elapsed, null));
+        for (var index = 0; index < cases.Count; index++)
         {
+            var c = cases[index];
             var sw = Stopwatch.StartNew();
             var result = search(c);
             sw.Stop();
             latency.Add(sw.Elapsed.TotalMilliseconds);
+            var completed = index + 1;
+            if (completed == cases.Count || completed % 10 == 0)
+                progress?.Invoke(new Progress(stage, completed, cases.Count, phase.Elapsed,
+                    completed == 0 ? null : phase.Elapsed * (cases.Count - completed) / completed));
             var works = result.Hits.Select(h => h.Doc.GroupKey.ToLowerInvariant()).ToList();
             var first = works.FindIndex(w => c.RelevantWorks.Contains(w, StringComparer.Ordinal));
             if (first >= 0) reciprocal += 1d / (first + 1);
