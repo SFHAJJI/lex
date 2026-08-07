@@ -177,8 +177,11 @@ the endpoint.</p>
 <h2>Connect</h2>
 <div class="card"><b>Claude Code</b>
 <pre class="mono" style="white-space:pre-wrap;margin:6px 0 0">claude mcp add --transport http lex http://localhost/mcp</pre></div>
-<div class="card"><b>Claude Desktop, Cursor, any MCP client</b>
-<pre class="mono" style="white-space:pre-wrap;margin:6px 0 0">{ "mcpServers": { "lex": { "url": "http://localhost/mcp" } } }</pre></div>
+<div class="card"><b>VS Code, Cursor, or another client with remote HTTP support</b>
+<pre class="mono" style="white-space:pre-wrap;margin:6px 0 0">{ "servers": { "lex": { "type": "http", "url": "http://localhost/mcp" } } }</pre></div>
+<div class="card"><b>Legacy stdio-only client</b>, use the pinned third-party bridge
+(Node.js 18+; Lex remains hosted):
+<pre class="mono" style="white-space:pre-wrap;margin:6px 0 0">{ "mcpServers": { "lex": { "command": "npx", "args": ["-y", "mcp-remote@0.1.38", "http://localhost/mcp"] } } }</pre></div>
 <div class="card"><b>Azure AI Foundry Agent Service</b>, remote MCP is native:
 <pre class="mono" style="white-space:pre-wrap;margin:6px 0 0">{ "type": "mcp", "server_label": "lex", "server_url": "http://localhost/mcp", "require_approval": "never" }</pre></div>
 <div class="card"><b>No framework at all</b>, it is JSON-RPC over one POST:

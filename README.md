@@ -33,11 +33,17 @@ Give any MCP-capable AI the full toolset, no key, no install:
 claude mcp add --transport http lex https://law.soufien.lu/mcp
 ```
 
+Modern clients such as VS Code and Cursor connect to the hosted endpoint directly:
+
+```json
+{ "servers": { "lex": { "type": "http", "url": "https://law.soufien.lu/mcp" } } }
+```
+
 For a client that only accepts local stdio servers, bridge to the same hosted
-endpoint with the maintained `mcp-remote` adapter:
+endpoint with a pinned version of the third-party `mcp-remote` adapter (Node.js 18+):
 
 ```
-npx -y mcp-remote https://law.soufien.lu/mcp
+npx -y mcp-remote@0.1.38 https://law.soufien.lu/mcp
 ```
 
 The hosted endpoint is canonical: no legal corpus, vector files or Azure
