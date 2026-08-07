@@ -87,6 +87,21 @@ public sealed class CorpusIntegrityTests : IDisposable
         Assert.True(CorpusIntegrity.Verify(_dir).IsValid);
     }
 
+    [Fact]
+    public async Task Record_hash_uses_one_cross_platform_canonical_serialization()
+    {
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-06T00:00:00Z"))
+            .WriteAsync(new TextAdapter(), default);
+
+        var metaPath = Path.Combine(_dir, "works", "w1", "versions", "2024-01-01", "meta.json");
+        var meta = JsonSerializer.Deserialize<VersionMeta>(
+            await File.ReadAllTextAsync(metaPath), CorpusJson.Options)!;
+
+        Assert.Equal(
+            "811743eb26717658450f6dcb520c6d2700b50e0bd50b5115ccfb68b2f24e2ca0",
+            meta.RecordSha256);
+    }
+
     public void Dispose()
     {
         try { Directory.Delete(_dir, true); } catch { }

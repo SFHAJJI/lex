@@ -10,6 +10,9 @@ public static class CorpusJson
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
         DictionaryKeyPolicy = JsonNamingPolicy.SnakeCaseLower,
         WriteIndented = true,
+        // record_sha256 is computed from this serialization. Pin the newline so the
+        // canonical record is identical on Windows developer machines and Linux CI.
+        NewLine = "\r\n",
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     };
 }
