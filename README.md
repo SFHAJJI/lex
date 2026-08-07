@@ -33,6 +33,19 @@ Give any MCP-capable AI the full toolset, no key, no install:
 claude mcp add --transport http lex https://law.soufien.lu/mcp
 ```
 
+For a client that only accepts local stdio servers, bridge to the same hosted
+endpoint with the maintained `mcp-remote` adapter:
+
+```
+npx -y mcp-remote https://law.soufien.lu/mcp
+```
+
+The hosted endpoint is canonical: no legal corpus, vector files or Azure
+credentials are downloaded to the client. Lex also publishes its remote-server
+metadata to the official MCP Registry from GitHub Actions using OIDC. There is
+no Lex npm package yet; the command above is a compatibility bridge, not a
+second implementation.
+
 Or ask the [live site](https://law.soufien.lu). A real answer, verbatim:
 
 > **Q: What did CRR Article 92 require as capital ratios on 1 March 2020, and has that text changed since?**
