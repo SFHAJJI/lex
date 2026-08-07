@@ -197,7 +197,7 @@ beside the implementation. Nothing on this page is implied to be live.</p>
 <p>Hybrid retrieval remains gated until its public relevance, temporal, latency and memory
 thresholds pass. Missing official consolidation remains a named gap, never generated wording.</p>
 <p class="sub">Program <span class="mono">hybrid-eu/1</span>, updated
-<span class="mono">2026-08-06</span>, review status
+<span class="mono">2026-08-07</span>, review status
 <span class="mono">engineer-reviewed</span>.</p>
 </main>
 <footer>

@@ -74,6 +74,7 @@ and if they ever drift from the live system, that is a bug worth reporting:
 
 ```bash
 curl -s -X POST https://law.soufien.lu/mcp -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"article_history",
        "arguments":{"work":"eu-eurlex:32013r0575","anchor":"art_92"}}}'
 ```
@@ -101,7 +102,8 @@ it is visibly separate, carries the tool trace and is not part of the record.
 ## Architecture (one screen)
 
 ```
-APPS        Lex.Ingest (CLI)   Lex.Mcp (MCP server)        Lex.Web (demo)   Lex.Ask (AI loop)
+APPS        Lex.Ingest (CLI)   Lex.Mcp.Stdio (local host)   Lex.Web (site + HTTP MCP)   Lex.Ask (AI loop)
+PROTOCOL    Lex.Mcp (legal tools + official MCP SDK bridge; transport-neutral library)
 DERIVED     Lex.Derive, evidence -> per-article Markdown+JSON (immutable profiles: akn-lu/1, fmx4-eu/1, xhtml-eu/1)
 ADAPTERS    Lex.Sources.Legilux (Tier A, SPARQL)   Lex.Sources.EurLex (Tier A, Cellar + Formex)
 MODEL       Lex.Law, Publisher, Work, Version, Expression, Observation. No publisher names.
@@ -180,8 +182,14 @@ dotnet run --project src/Lex.Ingest -- index --corpus ../lex-corpus-lu-legilux -
 
 # web demo + MCP (stdio) locally
 LEX_INDEX_DIR=indexes dotnet run --project src/Lex.Web
-LEX_INDEX_DIR=indexes dotnet run --project src/Lex.Mcp
+LEX_INDEX_DIR=indexes dotnet run --project src/Lex.Mcp.Stdio
 ```
+
+`Lex.Mcp` contains the legal tools and official SDK bridge, not a deployment entry point.
+The standalone stdio executable is isolated in `Lex.Mcp.Stdio`; production composes the same
+library into `Lex.Web` for Streamable HTTP. Co-hosting is deliberate while site and MCP traffic
+share one immutable index set and one scale/SLA boundary. D67 records the measured triggers for
+extracting an independently deployed MCP service rather than adding a second runtime for optics.
 
 The generated key above is for local development only. Production publication
 uses GitHub OIDC to ask the non-exportable Azure Key Vault key to sign the

@@ -34,6 +34,9 @@ builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<IndexRegistry>();
 builder.Services.AddSingleton(sp => new McpCore(sp.GetRequiredService<IndexRegistry>().All));
 builder.Services.AddSingleton(sp => new AskService(sp.GetRequiredService<McpCore>()));
+builder.Services.AddMcpServer(McpSdkBridge.Configure)
+    .WithHttpTransport(options => options.Stateless = true)
+    .WithLexTools();
 builder.Services.AddResponseCompression(options => options.EnableForHttps = true);
 
 // Foundry-hybrid observability (D45 posture: keep the loop, adopt the platform's tracing):
@@ -84,7 +87,8 @@ app.Logger.LogInformation("Assistant {State}; {Count} index(es) mounted from {Di
 
 // ---- routes ----------------------------------------------------------------------------
 // Grouped by the question each one answers, not by HTTP verb or by URL shape.
-app.MapApi(ctx)          // the MCP endpoint, the assistant, robots.txt, healthz
+app.MapMcp("/mcp");
+app.MapApi(ctx)          // the assistant, public metadata APIs, robots.txt and healthz
    .MapHome(ctx)         // the front page and the workspace mount
    .MapExplainers(ctx)   // how it works, how it was built, the decisions, how to verify
    .MapCatalogue(ctx)    // browse, search, in force on a date, what changed

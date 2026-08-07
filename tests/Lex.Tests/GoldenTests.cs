@@ -222,7 +222,7 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
                   + tool + "\",\"arguments\":" + args + "}}";
         var res = await _site.Client.PostAsync("/mcp",
             new StringContent(rpc, Encoding.UTF8, "application/json"));
-        var body = await res.Content.ReadAsStringAsync();
+        var body = await McpJson(res);
         // A malformed request returns an empty body, and an empty snapshot would happily become
         // the baseline and then "pass" forever. The first version of this file did exactly that.
         Xunit.Assert.True(body.Length > 40, $"{tool} returned {body.Length} chars: {body}");
@@ -234,7 +234,8 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
     {
         var res = await _site.Client.PostAsync("/mcp", new StringContent(
             """{"jsonrpc":"2.0","id":1,"method":"tools/list"}""", Encoding.UTF8, "application/json"));
-        Golden.Assert("tools-list", Golden.Normalise(await res.Content.ReadAsStringAsync()));
+        Assert.Equal("text/event-stream", res.Content.Headers.ContentType?.MediaType);
+        Golden.Assert("tools-list", Golden.Normalise(await McpJson(res)));
     }
 
     /// <summary>
@@ -251,9 +252,9 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
     [InlineData("2024-11-05", "2024-11-05")]   // older but supported
     [InlineData("2025-11-25", "2025-11-25")]   // what mcp-proxy asks for
     [InlineData("1999-01-01", "2025-11-25")]   // nonsense, falls back to ours
-    [InlineData("tomorrow", "2025-11-25")]     // not even a date
+    [InlineData("tomorrow", null)]              // malformed versions are protocol errors
     public async Task Initialize_answers_with_a_protocol_version_we_actually_speak(
-        string requested, string expected)
+        string requested, string? expected)
     {
         // Built as a JsonObject rather than a raw literal: this payload ends in "}}}", and a C#
         // raw interpolated string needs more '$' than it has consecutive closing braces. Quoting
@@ -275,10 +276,47 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
         };
         var res = await _site.Client.PostAsync("/mcp",
             new StringContent(req.ToJsonString(), Encoding.UTF8, "application/json"));
-        var body = await res.Content.ReadAsStringAsync();
+        var body = await McpJson(res);
         using var doc = System.Text.Json.JsonDocument.Parse(body);
+        if (expected is null)
+        {
+            Xunit.Assert.True(doc.RootElement.TryGetProperty("error", out _), body);
+            return;
+        }
         var actual = doc.RootElement.GetProperty("result").GetProperty("protocolVersion").GetString();
         Xunit.Assert.Equal(expected, actual);
+    }
+
+    private static async Task<string> McpJson(HttpResponseMessage response)
+    {
+        var body = await response.Content.ReadAsStringAsync();
+        if (response.Content.Headers.ContentType?.MediaType != "text/event-stream") return body;
+
+        var data = body.Split('\n')
+            .Where(line => line.StartsWith("data: ", StringComparison.Ordinal))
+            .Select(line => line[6..])
+            .LastOrDefault();
+        if (data is null)
+            throw new Xunit.Sdk.XunitException($"MCP SSE response carried no data event: {body}");
+
+        // The SDK owns wire framing and may choose harmless JSON escaping or member ordering.
+        // Canonicalize the envelope so existing snapshots continue proving that the tool payloads
+        // themselves did not change during the transport migration.
+        var parsed = System.Text.Json.Nodes.JsonNode.Parse(data)!.AsObject();
+        var canonical = new System.Text.Json.Nodes.JsonObject
+        {
+            ["jsonrpc"] = parsed["jsonrpc"]?.DeepClone(),
+            ["id"] = parsed["id"]?.DeepClone(),
+        };
+        if (parsed["result"] is { } result) canonical["result"] = result.DeepClone();
+        if (parsed["error"] is { } error) canonical["error"] = error.DeepClone();
+        return canonical.ToJsonString(new System.Text.Json.JsonSerializerOptions
+        {
+            // The official SDK deliberately uses the framework's conservative encoder on the
+            // wire. Re-emitting with the relaxed encoder restores the old snapshot spelling
+            // (\" instead of \u0022 inside text blocks) without changing the decoded value.
+            Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+        });
     }
 
     /// <summary>
@@ -382,6 +420,8 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
             Environment.SetEnvironmentVariable("LEX_INDEX_DIR", _dir);
             Environment.SetEnvironmentVariable("LEX_PUBLIC_BASE_URL", "https://golden.test");
             Client = CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+            Client.DefaultRequestHeaders.Accept.ParseAdd("application/json");
+            Client.DefaultRequestHeaders.Accept.ParseAdd("text/event-stream");
         }
 
         protected override void ConfigureWebHost(IWebHostBuilder builder)
