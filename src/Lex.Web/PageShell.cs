@@ -39,13 +39,13 @@ public static class PageShell
     /// about itself should: Google discards a description repeated across a site and writes its
     /// own, so an identical string on 1,423 pages is the same as having none at all.
     private const string SiteDescription =
-        "Point-in-time Luxembourg law and selected EU law: what did the rule say on a given date? "
+        "Point-in-time Luxembourg and reviewed EU law: what did the rule say on a given date? "
         + "Permalinks, timelines, diffs and verifiable provenance.";
 
     /// The social-card fallback is shorter on purpose: a card clips where a search result does
     /// not. A page that supplies its own description is specific enough to serve both.
     private const string SocialDescription =
-        "Point-in-time Luxembourg law and selected EU law, with grounded AI answers, "
+        "Point-in-time Luxembourg and reviewed EU law, with grounded AI answers, "
         + "per-article history, and verifiable provenance.";
 
     // `title` is what search engines and social cards get; `h1` is what a reader sees, when the

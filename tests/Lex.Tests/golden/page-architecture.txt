@@ -6,14 +6,15 @@ HTTP 200
 <!-- Titles are labels, not sentences: one that ends in a full stop renders "acts., Lex" in
      the tab and in every social card, which is what the front page did until now. -->
 <title>Architecture, Lex</title>
-<meta name="description" content="Point-in-time Luxembourg law and selected EU law: what did the rule say on a given date? Permalinks, timelines, diffs and verifiable provenance.">
+<meta name="description" content="Point-in-time Luxembourg and reviewed EU law: what did the rule say on a given date? Permalinks, timelines, diffs and verifiable provenance.">
 <meta property="og:title" content="Architecture, Lex">
-<meta property="og:description" content="Point-in-time Luxembourg law and selected EU law, with grounded AI answers, per-article history, and verifiable provenance.">
+<meta property="og:description" content="Point-in-time Luxembourg and reviewed EU law, with grounded AI answers, per-article history, and verifiable provenance.">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Lex">
 <meta property="og:image" content="https://golden.test/og.png">
 <meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
+<link rel="canonical" href="https://golden.test/architecture">
 <meta name="twitter:image" content="https://golden.test/og.png">
 <!-- The interval mark: a rule, two terminals, and a notch at the date being read.
      The same shape is the version rail at full width. An emoji was a different
@@ -192,7 +193,7 @@ separately on <a href="/architecture/next">Next</a>.</p>
 <h2>Contracts preserved</h2>
 <p>Exact publisher text, hashes, anchors, timelines, refusals, comparisons and diffs remain
 authoritative. The backend returns structured MCP JSON and the workspace renders the separate
-<span class="mono">UiEffect</span> field.</p><p>Lex answers one question, <b>what did the rule say on that date?</b>, for Luxembourg law and the selected EU works in the mounted index,
+<span class="mono">UiEffect</span> field.</p><p>Lex answers one question, <b>what did the rule say on that date?</b>, for Luxembourg law and the reviewed-scope EU works in the mounted index,
 in a way a developer can build on and an auditor can check. Everything below is open source and open data.</p>
 
 <h2>Two layers, one hash chain</h2>
