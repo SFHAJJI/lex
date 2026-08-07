@@ -63,7 +63,19 @@ public static class SemanticChunker
                 }
                 pieces.Add(rest[..take].Trim());
                 var overlapStart = encoder.SuffixStartForTokens(rest[..take], OverlapTokens);
-                rest = rest[overlapStart..].Trim();
+                // Some SentencePiece fragments are shorter than the requested overlap even when
+                // PrefixLengthForTokens stopped before the end of the normalized input. Its
+                // suffix boundary is then zero. Reusing the whole prefix would leave `rest`
+                // unchanged forever; the Fleet heartbeat exposed that exact loop on CRR Art. 261.
+                // The complete prefix has already been emitted, so advance past it when no proper
+                // suffix exists. This sacrifices overlap for that one boundary, never source text.
+                var nextStart = overlapStart > 0 ? overlapStart : take;
+                var next = rest[nextStart..].Trim();
+                if (next.Length >= rest.Length)
+                    throw new InvalidDataException(
+                        $"Semantic chunk preparation made no progress: remaining={rest.Length}, " +
+                        $"boundary={boundary}, take={take}, overlap_start={overlapStart}.");
+                rest = next;
             }
         }
 

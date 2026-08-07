@@ -732,6 +732,34 @@ public class IndexTests : IDisposable
             encoder.CountTokens("passage: " + chunk.Text) <= SemanticChunker.MaxTokens));
     }
 
+    /// <summary>
+    /// Reproduces the boundary combination returned by the pinned SentencePiece tokenizer for
+    /// CRR Article 261 (text sha e1bc517d...): the prefix stops six characters before the end,
+    /// but that prefix is shorter than the requested overlap so its suffix begins at zero.
+    /// </summary>
+    private sealed class ZeroOverlapBoundaryEncoder : ITextEncoder
+    {
+        public string ModelId => "test/non-progress";
+        public string ModelRevision => "1";
+        public int Dimensions => 1;
+        public int CountTokens(string text) => 2;
+        public int PrefixLengthForTokens(string text, int maxTokens) => text.Length == 75 ? 69 : text.Length;
+        public int SuffixStartForTokens(string text, int maxTokens) => 0;
+        public float[] Encode(string text, EmbeddingInputKind kind) => [1f];
+        public void Dispose() { }
+    }
+
+    [Fact]
+    public void A_zero_overlap_boundary_still_advances_without_losing_text()
+    {
+        using var encoder = new ZeroOverlapBoundaryEncoder();
+        var text = new string('x', 66);
+
+        var chunks = SemanticChunker.Split(text, encoder);
+
+        Assert.Equal(text, Assert.Single(chunks).Text.Replace("\n\n", "", StringComparison.Ordinal));
+    }
+
     [Fact]
     public void Unknown_schema_is_refused_explicitly()
     {
