@@ -126,6 +126,12 @@ later scope expansion embeds only new or changed chunks. The cache is build evid
 database or a released source of legal text; the final vector file remains one deterministic,
 ordinal-checked artifact rather than glued partial indexes.
 
+GPU inference uses a small fixed set of token shapes only after the authoritative chunk boundaries
+have been selected. Chunks are grouped into 32, 64, 128, 256 and 512-token buckets; padding is masked
+and exists only inside the inference tensor. It cannot change stored wording, hashes, citations,
+vector ordinals, temporal occurrences, rendering or comparison. The embedding profile is part of
+the cache key and index stamp so a shape-policy change cannot silently reuse incompatible evidence.
+
 ## Risks and containment
 
 - Corpus expansion: preview counts and relationship reasons before acquisition; abort anomalous

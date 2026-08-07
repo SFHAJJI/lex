@@ -153,8 +153,19 @@ public static class IndexBuilder
         {
             using var embeddingHeartbeat = new StageHeartbeat(
                 semantic, SemanticBuildStage.Embeddings, semanticVectorTotal, semanticProgressWatch);
-            foreach (var batch in uniqueSemanticChunks!.Chunk(semantic.BatchSize))
+            var bucketedChunks = uniqueSemanticChunks!
+                .Select((chunk, originalOrder) => new
+                {
+                    Chunk = chunk,
+                    OriginalOrder = originalOrder,
+                    PaddingTokens = EmbeddingTokenBucket(chunk.TokenCount),
+                })
+                .GroupBy(item => item.PaddingTokens)
+                .OrderBy(group => group.Key);
+            foreach (var bucket in bucketedChunks)
+            foreach (var items in bucket.OrderBy(item => item.OriginalOrder).Chunk(semantic.BatchSize))
             {
+                var batch = items.Select(item => item.Chunk).ToArray();
                 embeddingHeartbeat.SetCurrent(
                     $"{batch[0].Sha256}..{batch[^1].Sha256}",
                     batch.Sum(chunk => (long)chunk.Text.Length));
@@ -168,7 +179,9 @@ public static class IndexBuilder
                 if (missingIndexes.Count > 0)
                 {
                     var vectors = semantic.Encoder.EncodeBatch(
-                        missingIndexes.Select(i => batch[i].Text).ToArray(), EmbeddingInputKind.Passage);
+                        missingIndexes.Select(i => batch[i].Text).ToArray(),
+                        EmbeddingInputKind.Passage,
+                        bucket.Key);
                     if (vectors.Count != missingIndexes.Count)
                         throw new InvalidDataException("Embedding encoder returned the wrong batch size.");
                     var additions = new List<(string ChunkSha, byte[] Record)>(missingIndexes.Count);
@@ -509,6 +522,7 @@ public static class IndexBuilder
                 stamp["vector_format"] = semantic.VectorFormat;
                 stamp["vector_file"] = Path.GetFileName(semantic.VectorPath);
                 stamp["embedding_execution_provider"] = semantic.ExecutionProvider;
+                stamp["embedding_profile"] = semantic.EmbeddingProfile;
             }
             if (signingKeyPem is not null)
             {
@@ -554,6 +568,18 @@ public static class IndexBuilder
             throw;
         }
     }
+
+    private static int EmbeddingTokenBucket(int tokenCount) => tokenCount switch
+    {
+        <= 0 => throw new InvalidDataException("Semantic chunk token count must be positive."),
+        <= 32 => 32,
+        <= 64 => 64,
+        <= 128 => 128,
+        <= 256 => 256,
+        <= 512 => 512,
+        _ => throw new InvalidDataException(
+            $"Semantic chunk has {tokenCount} tokens; the pinned encoder supports at most 512."),
+    };
 
     private static void ReportProgress(
         SemanticBuildOptions? semantic,

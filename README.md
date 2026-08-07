@@ -189,6 +189,9 @@ src/Lex.Ingest/bin/Release/net10.0/Lex.Ingest index \
     --embedding-directml-device 1 --embedding-batch-size 256 \
     --embedding-cache build-cache/eu-eurlex-embeddings.db
 
+# The chunker fixes legal-text boundaries before the GPU groups immutable chunks
+# into 32/64/128/256/512-token inference buckets. Masked padding is never stored.
+
 # web demo + MCP (stdio) locally
 LEX_INDEX_DIR=indexes dotnet run --project src/Lex.Web
 LEX_INDEX_DIR=indexes dotnet run --project src/Lex.Mcp.Stdio

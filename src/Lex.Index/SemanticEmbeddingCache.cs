@@ -101,6 +101,7 @@ internal sealed class SemanticEmbeddingCache : IDisposable
             options.ModelSha256,
             options.TokenizerSha256,
             options.VectorFormat,
+            options.EmbeddingProfile,
             options.ExecutionProvider,
             options.Encoder.Dimensions.ToString(System.Globalization.CultureInfo.InvariantCulture));
         return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(canonical)));

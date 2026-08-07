@@ -217,6 +217,15 @@
       "alternative": "Recompute every vector on each ephemeral Fleet run, publish partial shards, or require the serving host to perform ingestion.",
       "reason": "A 770,450-chunk first backfill exceeds the free runner window, while content-addressed results are independently reusable without changing legal text, chunk order or final vector ordinals.",
       "cost": "The build cache is additional private evidence to retain and validate; provider changes intentionally invalidate it, and every final artifact still requires benchmarks and signed-manifest promotion."
+    },
+    {
+      "id": "D70",
+      "title": "Stabilize GPU tensor shapes after legal chunking",
+      "status": "shipped",
+      "choice": "Select authoritative provision and paragraph chunk boundaries first, then group the immutable chunks into 32/64/128/256/512-token inference buckets with masked transient padding.",
+      "alternative": "Compile a new DirectML graph shape for each batch maximum, pad every chunk to 512 tokens, or change legal chunk boundaries to fit the GPU.",
+      "reason": "Variable tensor shapes caused repeated DirectML graph preparation and an unbounded backfill ETA. A few fixed shapes retain the exact text and reduce compilation churn without paying maximum-sequence compute for every short provision.",
+      "cost": "Bucket order becomes part of the deterministic embedding profile and cache identity. The build may have one partially filled batch per bucket, and every shape-policy change intentionally invalidates the embedding cache."
     }
   ],
   "baseline": {

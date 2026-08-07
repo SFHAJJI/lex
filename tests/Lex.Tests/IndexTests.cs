@@ -13,6 +13,7 @@ public class IndexTests : IDisposable
         public int Dimensions => 8;
         public int EncodeCalls { get; private set; }
         public int BatchCalls { get; private set; }
+        public List<int?> BatchPaddings { get; } = [];
         public long CountedCharacters { get; private set; }
         public long PrefixCharacters { get; private set; }
         public int LargestPrefixInput { get; private set; }
@@ -69,9 +70,11 @@ public class IndexTests : IDisposable
             for (var i = 0; i < vector.Length; i++) vector[i] /= norm;
             return vector;
         }
-        public IReadOnlyList<float[]> EncodeBatch(IReadOnlyList<string> texts, EmbeddingInputKind kind)
+        public IReadOnlyList<float[]> EncodeBatch(
+            IReadOnlyList<string> texts, EmbeddingInputKind kind, int? padToTokens = null)
         {
             BatchCalls++;
+            BatchPaddings.Add(padToTokens);
             return texts.Select(text => Encode(text, kind)).ToArray();
         }
         public void Dispose() { }
@@ -100,8 +103,9 @@ public class IndexTests : IDisposable
         public int SuffixStartForTokens(string text, int maxTokens) =>
             _inner.SuffixStartForTokens(text, maxTokens);
         public float[] Encode(string text, EmbeddingInputKind kind) => _inner.Encode(text, kind);
-        public IReadOnlyList<float[]> EncodeBatch(IReadOnlyList<string> texts, EmbeddingInputKind kind) =>
-            _inner.EncodeBatch(texts, kind);
+        public IReadOnlyList<float[]> EncodeBatch(
+            IReadOnlyList<string> texts, EmbeddingInputKind kind, int? padToTokens = null) =>
+            _inner.EncodeBatch(texts, kind, padToTokens);
         public void Dispose()
         {
             Release.Set();
@@ -560,6 +564,32 @@ public class IndexTests : IDisposable
     }
 
     [Fact]
+    public void Semantic_embeddings_use_stable_token_buckets_only_after_chunking()
+    {
+        var doc = Row("t-pub:buckets:2020-01-01", "buckets", "2020-01-01", null, text: true);
+        var vectors = Path.ChangeExtension(_db, ".vectors");
+        _extra.Add(vectors);
+        var shortText = "short provision";
+        var mediumText = string.Join(' ', Enumerable.Repeat("medium", 40));
+        var longText = string.Join(' ', Enumerable.Repeat("long", 90));
+        using var encoder = new FakeEncoder();
+
+        Assert.Equal(shortText, Assert.Single(SemanticChunker.Split(shortText, encoder)).Text);
+        Assert.Equal(mediumText, Assert.Single(SemanticChunker.Split(mediumText, encoder)).Text);
+        Assert.Equal(longText, Assert.Single(SemanticChunker.Split(longText, encoder)).Text);
+
+        IndexBuilder.Build(_db, new Dictionary<string, string> { ["collection"] = "t-pub" },
+            [doc],
+            [Prov(doc, 0, "art_1", shortText),
+             Prov(doc, 1, "art_2", mediumText),
+             Prov(doc, 2, "art_3", longText)],
+            [], [], null, semantic: new SemanticBuildOptions(
+                encoder, vectors, "model-sha", "tokenizer-sha", BatchSize: 16));
+
+        Assert.Equal([32, 64, 128], encoder.BatchPaddings);
+    }
+
+    [Fact]
     public void Semantic_embedding_cache_resumes_by_chunk_and_provider_without_changing_artifact_bytes()
     {
         var doc = Row("t-pub:cache:2020-01-01", "cache", "2020-01-01", null, text: true);
@@ -573,8 +603,13 @@ public class IndexTests : IDisposable
         var vectors2 = Path.ChangeExtension(db2, ".vectors");
         var db3 = Path.Combine(Path.GetTempPath(), $"lex-cache-provider-test-{Guid.NewGuid():N}.db");
         var vectors3 = Path.ChangeExtension(db3, ".vectors");
+        var db4 = Path.Combine(Path.GetTempPath(), $"lex-cache-profile-test-{Guid.NewGuid():N}.db");
+        var vectors4 = Path.ChangeExtension(db4, ".vectors");
         var cache = Path.Combine(Path.GetTempPath(), $"lex-embeddings-{Guid.NewGuid():N}.db");
-        _extra.AddRange([vectors1, db2, vectors2, db3, vectors3, cache, cache + "-wal", cache + "-shm"]);
+        _extra.AddRange([
+            vectors1, db2, vectors2, db3, vectors3, db4, vectors4,
+            cache, cache + "-wal", cache + "-shm"
+        ]);
 
         using (var first = new FakeEncoder())
         {
@@ -601,6 +636,14 @@ public class IndexTests : IDisposable
                 otherProvider, vectors3, "model-sha", "tokenizer-sha", BatchSize: 2,
                 ExecutionProvider: "directml:1;runtime=test", EmbeddingCachePath: cache));
         Assert.Equal(2, otherProvider.EncodeCalls);
+
+        using var otherProfile = new FakeEncoder();
+        IndexBuilder.Build(db4, new Dictionary<string, string> { ["collection"] = "t-pub" },
+            [doc], provisions, [], [], null, semantic: new SemanticBuildOptions(
+                otherProfile, vectors4, "model-sha", "tokenizer-sha", BatchSize: 2,
+                ExecutionProvider: "cpu;runtime=test", EmbeddingCachePath: cache,
+                EmbeddingProfile: "test-profile/other"));
+        Assert.Equal(2, otherProfile.EncodeCalls);
     }
 
     [Fact]

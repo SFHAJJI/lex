@@ -34,7 +34,10 @@ switch (args0[0])
             ? parsedDirectMlDeviceId : (int?)null;
         using var encoder = MultilingualE5Encoder.Open(modelDir, intraOpThreads, directMlDeviceId);
         var sw = System.Diagnostics.Stopwatch.StartNew();
-        var vectors = encoder.EncodeBatch(Enumerable.Repeat(text, batchSize).ToArray(), EmbeddingInputKind.Query);
+        var padToTokens = int.TryParse(Get("--pad-to-tokens"), out var parsedPadding)
+            ? parsedPadding : (int?)null;
+        var vectors = encoder.EncodeBatch(
+            Enumerable.Repeat(text, batchSize).ToArray(), EmbeddingInputKind.Query, padToTokens);
         sw.Stop();
         var vector = vectors[0];
         var quantized = vectors.Select(SemanticVectorReader.Int8).ToArray();
