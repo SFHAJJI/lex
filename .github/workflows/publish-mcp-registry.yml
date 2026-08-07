@@ -17,11 +17,22 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          curl --fail --silent --show-error --retry 3 \
+          body=$(curl --fail --silent --show-error --retry 3 \
             -H 'Content-Type: application/json' \
+            -H 'Accept: application/json, text/event-stream' \
             -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' \
-            https://law.soufien.lu/mcp \
-            | jq -e '.result.tools | length == 10' >/dev/null
+            https://law.soufien.lu/mcp)
+
+          # The official Streamable HTTP SDK returns a standards-compliant SSE frame. Keep the
+          # check tolerant of a plain JSON response too so a future negotiated transport change
+          # cannot turn a healthy endpoint into a false publication failure.
+          if printf '%s' "$body" | jq -e '.result.tools | length == 10' >/dev/null 2>&1; then
+            :
+          else
+            printf '%s\n' "$body" \
+              | sed -n 's/^data: //p' \
+              | jq -se '(map(select(.result.tools)) | last | .result.tools | length) == 10' >/dev/null
+          fi
 
       - name: Install the official MCP publisher
         shell: bash
