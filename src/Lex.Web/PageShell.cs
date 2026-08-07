@@ -23,6 +23,9 @@ public static class PageShell
     private static string Extras(string publicBase, string? canonicalPath, string? jsonLd)
     {
         var sb = new System.Text.StringBuilder();
+        if (canonicalPath == "/")
+            sb.Append(Environment.NewLine)
+              .Append("""<meta name="msvalidate.01" content="73BB80753B8306270C2C9E61856D23F1">""");
         if (canonicalPath is not null)
             sb.Append(Environment.NewLine)
               .Append($"""<link rel="canonical" href="{publicBase}{canonicalPath}">""");
