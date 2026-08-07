@@ -127,7 +127,11 @@ switch (args0[0])
         using var encoder = embeddingModelDir is null ? null : MultilingualE5Encoder.Open(embeddingModelDir);
         var semantic = encoder is null ? null : new SemanticBuildOptions(
             encoder, Get("--vectors") ?? Path.ChangeExtension(outDb, ".vectors"),
-            encoder.ModelSha256, encoder.TokenizerSha256);
+            encoder.ModelSha256, encoder.TokenizerSha256,
+            Progress: progress => Console.Error.WriteLine(
+                $"  [index-progress] embeddings={progress.Completed}/{progress.Total} " +
+                $"percent={progress.Percent:F1} elapsed={FormatDuration(progress.Elapsed)} " +
+                $"eta={(progress.EstimatedRemaining is { } eta ? FormatDuration(eta) : "calculating")}"));
         IndexFromCorpus.Build(corpus, articles, outDb, keyPem, now, semantic);
         return 0;
     }
@@ -352,6 +356,9 @@ static void CopyDir(string src, string dst)
     foreach (var f in Directory.EnumerateFiles(src)) File.Copy(f, Path.Combine(dst, Path.GetFileName(f)));
     foreach (var d in Directory.EnumerateDirectories(src)) CopyDir(d, Path.Combine(dst, Path.GetFileName(d)));
 }
+
+static string FormatDuration(TimeSpan value) =>
+    $"{(int)value.TotalHours:00}:{value.Minutes:00}:{value.Seconds:00}";
 
 static void Usage() => Console.Error.WriteLine("""
     lex — point-in-time regulatory text pipeline
