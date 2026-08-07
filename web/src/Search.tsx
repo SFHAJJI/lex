@@ -5,6 +5,7 @@ import { ScopeFilters } from "./ScopeFilters";
 import type { State } from "./state";
 import { shorten } from "./pickers";
 import { ResultsSkeleton } from "./Skeleton";
+import { fusePublisherHits } from "./searchFusion";
 
 /**
  * One box, one date.
@@ -119,10 +120,7 @@ export default function Search(p: SearchProps) {
       .then((res) => {
         if (!live) return;
         const envelopes = Array.isArray(res) ? res : [res];
-        const hits = envelopes.flatMap((e: any) => (e?.hits ?? []).map((hit: any) => ({
-          ...hit,
-          _jurisdiction: e?.envelope?.jurisdiction,
-        })));
+        const hits = fusePublisherHits<any>(envelopes);
         setModeUsed(envelopes.some((e: any) => e?.retrieval_mode === "hybrid") ? "hybrid" : "keyword");
         setExpansions([...new Set(envelopes.flatMap((e: any) => e?.query_expansions ?? []))] as string[]);
         // The same hits answer two different questions, so they are split rather than ranked

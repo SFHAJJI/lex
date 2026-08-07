@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { tool } from "./api";
 import { jurisdictionForPublisher, jurisdictionLabel } from "./facets";
+import { fusePublisherHits } from "./searchFusion";
 
 /** A work the user can choose, collapsed from provision-level search hits. */
 export interface WorkHit { work: string; title: string; validFrom?: string; jurisdiction?: string }
@@ -39,14 +40,14 @@ export function LawPicker({ current, onPick, inline }: { current?: string; onPic
     const timer = setTimeout(async () => {
       try {
         const res = await tool<any>("search", { query: q.trim(), limit: 12 });
-        const all = (Array.isArray(res) ? res : [res]).flatMap((c: any) => c?.hits ?? []);
+        const all = fusePublisherHits<any>(res);
         const seen = new Map<string, WorkHit>();
         for (const h of all) {
           const lex = String(h.lex_id ?? "");
           const work = lex.split(":").slice(0, 2).join(":");
           if (work && !seen.has(work))
             seen.set(work, { work, title: shorten(h.title) ?? work, validFrom: h.valid_from,
-                             jurisdiction: jurisdictionForPublisher(work.split(":")[0]) });
+                             jurisdiction: h._jurisdiction ?? jurisdictionForPublisher(work.split(":")[0]) });
         }
         if (live) setHits([...seen.values()].slice(0, 10));
       } catch { if (live) setHits([]); }

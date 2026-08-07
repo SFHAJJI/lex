@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "test": "node --test src/export.test.ts",
+    "test": "node --test src/*.test.ts",
     "build": "tsc --noEmit && npm test && vite build && node smoke.mjs"
   },
   "dependencies": {
