@@ -90,19 +90,24 @@ public static class IndexBuilder
         var docRows = docs.ToList();
         var provisionRows = provisions.ToList();
         Dictionary<string, IReadOnlyList<SemanticChunk>>? chunksByTextSha = null;
+        List<SemanticChunk>? uniqueSemanticChunks = null;
         long semanticVectorTotal = 0;
         if (semantic is not null)
         {
+            if (semantic.BatchSize <= 0)
+                throw new ArgumentOutOfRangeException(nameof(semantic), "Semantic batch size must be positive.");
             chunksByTextSha = new Dictionary<string, IReadOnlyList<SemanticChunk>>(StringComparer.OrdinalIgnoreCase);
+            uniqueSemanticChunks = [];
             var uniqueChunkHashes = new HashSet<string>(StringComparer.Ordinal);
             foreach (var provision in provisionRows)
             {
                 if (chunksByTextSha.ContainsKey(provision.TextSha)) continue;
                 var chunks = SemanticChunker.Split(provision.TextMd, semantic.Encoder);
                 chunksByTextSha.Add(provision.TextSha, chunks);
-                foreach (var chunk in chunks) uniqueChunkHashes.Add(chunk.Sha256);
+                foreach (var chunk in chunks)
+                    if (uniqueChunkHashes.Add(chunk.Sha256)) uniqueSemanticChunks.Add(chunk);
             }
-            semanticVectorTotal = uniqueChunkHashes.Count;
+            semanticVectorTotal = uniqueSemanticChunks.Count;
         }
 
         var semanticProgressWatch = System.Diagnostics.Stopwatch.StartNew();
@@ -132,8 +137,26 @@ public static class IndexBuilder
         var vectorTempPath = semantic is null ? null : semantic.VectorPath + ".tmp-" + Guid.NewGuid().ToString("N");
         using var semanticWriter = semantic is null ? null
             : new SemanticVectorWriter(vectorTempPath!, semantic.Encoder.Dimensions);
+        var vectorOrdinalByChunk = new Dictionary<string, long>(StringComparer.Ordinal);
         try
         {
+        if (semantic is not null)
+        {
+            foreach (var batch in uniqueSemanticChunks!.Chunk(semantic.BatchSize))
+            {
+                var vectors = semantic.Encoder.EncodeBatch(
+                    batch.Select(chunk => chunk.Text).ToArray(), EmbeddingInputKind.Passage);
+                if (vectors.Count != batch.Length)
+                    throw new InvalidDataException("Embedding encoder returned the wrong batch size.");
+                for (var i = 0; i < batch.Length; i++)
+                {
+                    var ordinal = semanticWriter!.Write(vectors[i]);
+                    vectorOrdinalByChunk.Add(batch[i].Sha256, ordinal);
+                    semanticVectorsCompleted++;
+                }
+                ReportSemanticProgress(force: semanticVectorsCompleted == semanticVectorTotal);
+            }
+        }
         if (File.Exists(dbPath)) File.Delete(dbPath);
         using var conn = new SqliteConnection($"Data Source={dbPath}");
         conn.Open();
@@ -267,8 +290,6 @@ public static class IndexBuilder
             insChunk.Parameters.Add(new SqliteParameter("$index", SqliteType.Integer));
             insChunk.Parameters.Add(new SqliteParameter("$sha", SqliteType.Text));
             insChunk.Parameters.Add(new SqliteParameter("$ordinal", SqliteType.Integer));
-            var vectorOrdinalByChunk = new Dictionary<string, long>(StringComparer.Ordinal);
-
             var insProv = conn.CreateCommand();
             insProv.CommandText = """
                 INSERT INTO provisions VALUES ($rid,$seq,$a,$pid,$pt,$n,$h,$path,$avf,$wt,$sha,$state)
@@ -316,13 +337,7 @@ public static class IndexBuilder
                         foreach (var chunk in chunksByTextSha![actualSha])
                         {
                             if (!vectorOrdinalByChunk.TryGetValue(chunk.Sha256, out var ordinal))
-                            {
-                                var vector = semantic.Encoder.Encode(chunk.Text, EmbeddingInputKind.Passage);
-                                ordinal = semanticWriter!.Write(vector);
-                                vectorOrdinalByChunk.Add(chunk.Sha256, ordinal);
-                                semanticVectorsCompleted++;
-                                ReportSemanticProgress(force: semanticVectorsCompleted == semanticVectorTotal);
-                            }
+                                throw new InvalidDataException($"Semantic chunk '{chunk.Sha256}' was not embedded.");
                             insChunk.Parameters["$state"].Value = stateId;
                             insChunk.Parameters["$index"].Value = chunk.Index;
                             insChunk.Parameters["$sha"].Value = chunk.Sha256;

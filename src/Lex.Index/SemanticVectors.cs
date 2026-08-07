@@ -17,6 +17,12 @@ public interface ITextEncoder : IDisposable
     int PrefixLengthForTokens(string text, int maxTokens);
     int SuffixStartForTokens(string text, int maxTokens);
     float[] Encode(string text, EmbeddingInputKind kind);
+    IReadOnlyList<float[]> EncodeBatch(IReadOnlyList<string> texts, EmbeddingInputKind kind)
+    {
+        var vectors = new float[texts.Count][];
+        for (var i = 0; i < texts.Count; i++) vectors[i] = Encode(texts[i], kind);
+        return vectors;
+    }
 }
 
 public sealed record SemanticChunk(int Index, string Text, string Sha256);
@@ -218,7 +224,8 @@ public sealed record SemanticBuildOptions(
     string ModelSha256,
     string TokenizerSha256,
     string VectorFormat = "lex-vectors/1-binary-int8",
-    Action<SemanticBuildProgress>? Progress = null);
+    Action<SemanticBuildProgress>? Progress = null,
+    int BatchSize = 16);
 
 public sealed record SemanticBuildProgress(
     long Completed,
