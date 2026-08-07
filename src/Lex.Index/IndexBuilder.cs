@@ -89,6 +89,10 @@ public static class IndexBuilder
     {
         var docRows = docs.ToList();
         var provisionRows = provisions.ToList();
+        var provisionStateRows = (provisionStates ?? []).ToList();
+        var anchorEventRows = (anchorEvents ?? []).ToList();
+        var eventRows = events.ToList();
+        var observationRows = observations.ToList();
         Dictionary<string, IReadOnlyList<SemanticChunk>>? chunksByTextSha = null;
         List<SemanticChunk>? uniqueSemanticChunks = null;
         long semanticVectorTotal = 0;
@@ -232,8 +236,30 @@ public static class IndexBuilder
             CREATE VIRTUAL TABLE fts_vocab USING fts5vocab(fts, 'row');
             """);
 
+        System.Diagnostics.Stopwatch? finalizationWatch = null;
+        long finalizationCompleted = 0;
+        long lastFinalizationPercent = -1;
+        var lastFinalizationReport = TimeSpan.Zero;
         using (var tx = conn.BeginTransaction())
         {
+            var databaseWatch = System.Diagnostics.Stopwatch.StartNew();
+            var databaseTotal = (long)docRows.Count + provisionRows.Count + provisionStateRows.Count
+                + anchorEventRows.Count + eventRows.Count + observationRows.Count;
+            long databaseCompleted = 0;
+            long lastDatabasePercent = -1;
+            var lastDatabaseReport = TimeSpan.Zero;
+            ReportProgress(semantic, SemanticBuildStage.Database,
+                databaseCompleted, databaseTotal, databaseWatch,
+                ref lastDatabasePercent, ref lastDatabaseReport, force: true);
+            void DatabaseItemCompleted()
+            {
+                databaseCompleted++;
+                ReportProgress(semantic, SemanticBuildStage.Database,
+                    databaseCompleted, databaseTotal, databaseWatch,
+                    ref lastDatabasePercent, ref lastDatabaseReport,
+                    force: databaseCompleted == databaseTotal);
+            }
+
             var insDoc = conn.CreateCommand();
             insDoc.CommandText = """
                 INSERT OR REPLACE INTO docs VALUES ($key,$col,$gk,$gi,$kind,$lang,$vf,$vt,$vts,$of,$wd,$ta,$tp,$rs,$bs,$su,$t,$ts2,$pd,$sn,$rid,$prof,$hier,$domains,$form,$binding,$consolidation)
@@ -257,6 +283,7 @@ public static class IndexBuilder
                 Set(insDoc, "$form", d.ActForm); Set(insDoc, "$binding", d.BindingStatus);
                 Set(insDoc, "$consolidation", d.ConsolidationStatus);
                 insDoc.ExecuteNonQuery();
+                DatabaseItemCompleted();
             }
 
             var docByRid = docRows.ToDictionary(d => $"{d.Key}|{d.Language}|{d.ValidFrom}", StringComparer.Ordinal);
@@ -357,13 +384,14 @@ public static class IndexBuilder
                 Set(insProv, "$wt", p.WorkTitle); Set(insProv, "$sha", actualSha);
                 insProv.ExecuteNonQuery();
                 WriteCitations(conn, p);
+                DatabaseItemCompleted();
             }
 
             var insState = conn.CreateCommand();
             insState.CommandText = "INSERT INTO provision_states VALUES ($gk,$lang,$primary,$a,$vf,$vt,$sha,$iv,$avf,$vc)";
             foreach (var p in new[] { "$gk", "$lang", "$primary", "$a", "$vf", "$vt", "$sha", "$iv", "$avf", "$vc" })
                 insState.Parameters.Add(new SqliteParameter(p, SqliteType.Text));
-            foreach (var s in provisionStates ?? [])
+            foreach (var s in provisionStateRows)
             {
                 Set(insState, "$gk", s.GroupKey); Set(insState, "$lang", s.Language);
                 Set(insState, "$primary", s.IsPrimaryLanguage ? "1" : "0");
@@ -371,13 +399,14 @@ public static class IndexBuilder
                 Set(insState, "$vt", s.ValidTo); Set(insState, "$sha", s.TextSha); Set(insState, "$iv", s.InVersion);
                 Set(insState, "$avf", s.ArticleValidFrom); Set(insState, "$vc", s.ValidityConflict ? "1" : "0");
                 insState.ExecuteNonQuery();
+                DatabaseItemCompleted();
             }
 
             var insAe = conn.CreateCommand();
             insAe.CommandText = "INSERT INTO anchor_events VALUES ($gk,$lang,$primary,$et,$fa,$ta,$a,$sha,$av)";
             foreach (var p in new[] { "$gk", "$lang", "$primary", "$et", "$fa", "$ta", "$a", "$sha", "$av" })
                 insAe.Parameters.Add(new SqliteParameter(p, SqliteType.Text));
-            foreach (var e in anchorEvents ?? [])
+            foreach (var e in anchorEventRows)
             {
                 Set(insAe, "$gk", e.GroupKey); Set(insAe, "$lang", e.Language);
                 Set(insAe, "$primary", e.IsPrimaryLanguage ? "1" : "0");
@@ -385,30 +414,42 @@ public static class IndexBuilder
                 Set(insAe, "$ta", e.ToAnchor); Set(insAe, "$a", e.Anchor); Set(insAe, "$sha", e.TextSha);
                 Set(insAe, "$av", e.AtVersion);
                 insAe.ExecuteNonQuery();
+                DatabaseItemCompleted();
             }
 
             var insEv = conn.CreateCommand();
             insEv.CommandText = "INSERT INTO events VALUES ($key,$scope,$event,$of,$detail)";
             foreach (var p in new[] { "$key", "$scope", "$event", "$of", "$detail" })
                 insEv.Parameters.Add(new SqliteParameter(p, SqliteType.Text));
-            foreach (var e in events)
+            foreach (var e in eventRows)
             {
                 Set(insEv, "$key", e.Key); Set(insEv, "$scope", e.Scope); Set(insEv, "$event", e.Event);
                 Set(insEv, "$of", e.ObservedFrom); Set(insEv, "$detail", e.Detail);
                 insEv.ExecuteNonQuery();
+                DatabaseItemCompleted();
             }
 
             var insObs = conn.CreateCommand();
             insObs.CommandText = "INSERT INTO obs_history VALUES ($key,$lang,$evf,$sha,$su,$of,$ot)";
             foreach (var p in new[] { "$key", "$lang", "$evf", "$sha", "$su", "$of", "$ot" })
                 insObs.Parameters.Add(new SqliteParameter(p, SqliteType.Text));
-            foreach (var o in observations)
+            foreach (var o in observationRows)
             {
                 Set(insObs, "$key", o.Key); Set(insObs, "$lang", o.Language); Set(insObs, "$evf", o.ExprValidFrom);
                 Set(insObs, "$sha", o.Sha256); Set(insObs, "$su", o.SourceUri); Set(insObs, "$of", o.ObservedFrom);
                 Set(insObs, "$ot", o.ObservedTo);
                 insObs.ExecuteNonQuery();
+                DatabaseItemCompleted();
             }
+
+            if (databaseTotal == 0)
+                ReportProgress(semantic, SemanticBuildStage.Database,
+                    0, 0, databaseWatch, ref lastDatabasePercent, ref lastDatabaseReport, force: true);
+
+            finalizationWatch = System.Diagnostics.Stopwatch.StartNew();
+            ReportProgress(semantic, SemanticBuildStage.Finalization,
+                finalizationCompleted, 3, finalizationWatch,
+                ref lastFinalizationPercent, ref lastFinalizationReport, force: true);
 
             // The signature must bind the CONTENT, not just the metadata beside it: otherwise an
             // article's text could be edited inside a released database and the stamp would
@@ -420,6 +461,10 @@ public static class IndexBuilder
                 ["algorithm"] = StampSigner.Algorithm,
                 ["content_digest"] = ContentDigest(docRows, provisionRows),
             };
+            finalizationCompleted++;
+            ReportProgress(semantic, SemanticBuildStage.Finalization,
+                finalizationCompleted, 3, finalizationWatch,
+                ref lastFinalizationPercent, ref lastFinalizationReport, force: true);
             if (semantic is not null)
             {
                 stamp["embedding_model"] = semantic.Encoder.ModelId;
@@ -446,12 +491,22 @@ public static class IndexBuilder
             }
 
             tx.Commit();
+            finalizationCompleted++;
+            ReportProgress(semantic, SemanticBuildStage.Finalization,
+                finalizationCompleted, 3, finalizationWatch,
+                ref lastFinalizationPercent, ref lastFinalizationReport, force: true);
         }
         if (semantic is not null)
         {
             semanticWriter!.Dispose();
             File.Move(vectorTempPath!, semantic.VectorPath, overwrite: true);
         }
+        // The last step is publication of the durable vector file (or a no-op for lexical-only
+        // builds). Keep the same clock so stage elapsed time remains monotonic.
+        finalizationCompleted++;
+        ReportProgress(semantic, SemanticBuildStage.Finalization,
+            finalizationCompleted, 3, finalizationWatch!,
+            ref lastFinalizationPercent, ref lastFinalizationReport, force: true);
         }
         catch
         {

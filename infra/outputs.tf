@@ -26,3 +26,13 @@ output "tenant_id" {
 output "subscription_id" {
   value = var.subscription_id
 }
+
+output "index_vm_candidate" {
+  description = "Zero-traffic index-host candidate; null until the measured host gate enables it."
+  value = var.enable_index_vm ? {
+    name         = azurerm_linux_virtual_machine.index[0].name
+    hostname     = trimsuffix(azurerm_dns_a_record.index_candidate[0].fqdn, ".")
+    public_ip    = azurerm_public_ip.index[0].ip_address
+    data_disk_gb = azurerm_managed_disk.index[0].disk_size_gb
+  } : null
+}
