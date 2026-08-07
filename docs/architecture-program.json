@@ -181,6 +181,15 @@
       "alternative": "Maintain a second hard-coded list of supported scopes in the web client.",
       "reason": "A reviewed domain or jurisdiction must become searchable without an unrelated React implementation change.",
       "cost": "Friendly labels use stable overrides for known legal vocabulary and a deterministic fallback for new values."
+    },
+    {
+      "id": "D66",
+      "title": "Own legal semantics, reuse commodity engines",
+      "status": "shipped",
+      "choice": "Keep temporal selection, legal provenance, consolidation refusals, hierarchy filtering and authoritative provision mapping in Lex, while delegating keyword scoring, model inference, tokenization, document parsing and cryptographic primitives to maintained libraries.",
+      "alternative": "Either implement general-purpose search and machine-learning engines inside Lex, or outsource the complete legal index to a managed search service.",
+      "reason": "Libraries can optimize generic computation, but they do not know which official wording applied on a date or when Lex must refuse an unsupported consolidation claim.",
+      "cost": "Lex maintains small integration layers and benchmarks replacement engines; commodity boundaries are migrated only when parity, artifact reproducibility and operational cost are measured."
     }
   ],
   "baseline": {
