@@ -23,7 +23,7 @@ cannot know.
 **[Benchmarks](https://law.soufien.lu/benchmarks)** ·
 **[Verify it yourself](https://law.soufien.lu/verify)** ·
 **[Program](docs/hybrid-eu-roadmap.md)** ·
-**[Spec (D1-D64)](docs/lex-spec-v4.md)**
+**[Spec (D1-D65)](docs/lex-spec-v4.md)**
 
 ## Try it in 30 seconds
 
@@ -48,9 +48,9 @@ npx -y mcp-remote@0.1.38 https://law.soufien.lu/mcp
 
 The hosted endpoint is canonical: no legal corpus, vector files or Azure
 credentials are downloaded to the client. Lex also publishes its remote-server
-metadata to the official MCP Registry from GitHub Actions using OIDC. There is
-no Lex npm package yet; the command above is a compatibility bridge, not a
-second implementation.
+metadata to the official MCP Registry from GitHub Actions using OIDC. Lex
+intentionally does not publish an npm package: the command above is a
+compatibility bridge for older clients, not a second implementation.
 
 Or ask the [live site](https://law.soufien.lu). A real answer, verbatim:
 
@@ -63,7 +63,7 @@ Or ask the [live site](https://law.soufien.lu). A real answer, verbatim:
 >, `eu-eurlex:32013r0575:2019-12-25` (valid 2019-12-25 → 2020-06-26),
 > [permalink](https://law.soufien.lu/eu-eurlex/32013r0575/2019-12-25#art_92).
 >
-> Article 92 has had **four distinct texts** since 2013-2013-06-28 → 2021-06-28,
+> Article 92 has had **four distinct texts** since 2013-06-28 → 2021-06-28,
 > 2021-06-29 → 2022-12-31, 2023-01-01 → 2024-12-31, 2025-01-01 onward, each with
 > its own permalink and sha256.
 
