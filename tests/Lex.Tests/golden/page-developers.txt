@@ -115,6 +115,9 @@ HTTP 200
   .pager span { color:var(--muted); font-variant-numeric:tabular-nums }
   form.inline { display:flex; gap:8px; flex-wrap:wrap; margin:10px 0 }
   input,select,button { font:inherit; padding:7px 10px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--fg) }
+  /* Publisher names are evidence-facing labels, not layout constraints. Allow a select
+     to shrink inside the mobile content column while keeping its full option text. */
+  form.inline select { min-width:0; max-width:100% }
   button { background:var(--fg); color:var(--bg); border-color:var(--fg); cursor:pointer }
   footer { border-top:1px solid var(--line); margin-top:40px; padding:16px 20px; color:var(--muted); font-size:13px }
   .notice { border-left:3px solid var(--warn); padding:10px 14px; background:var(--card); border-radius:0 8px 8px 0; margin:12px 0; font-size:14.5px }
