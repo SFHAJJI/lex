@@ -880,7 +880,7 @@ public static class ExplainerEndpoints
                     <td>every distinct text one article has had, as validity intervals, plus renumbering events.</td></tr>
                 <tr><td class="mono">timeline</td><td class="mono">work</td><td>all versions of a work with their validity windows.</td></tr>
                 <tr><td class="mono">diff</td><td class="mono">work, from_date, to_date, [language]</td><td>what changed between two versions.</td></tr>
-                <tr><td class="mono">in_force_on</td><td class="mono">date, [publisher], [document_type], [limit], [offset]</td>
+                <tr><td class="mono">in_force_on</td><td class="mono">date, [publisher|jurisdiction], [source_class|document_type], [hierarchy], [act_form], [binding_status], [domain], [language], [limit], [offset]</td>
                     <td>everything that applied on a given day.</td></tr>
                 <tr><td class="mono">search</td><td class="mono">query, [publisher|jurisdiction], [retrieval_mode], [time_scope], [as_of], [fuzzy], [source_class|document_type], [hierarchy], [act_form], [binding_status], [domain], [language], [works], [limit]</td>
                     <td>provision-level search across Luxembourg and EU law. Keyword is deterministic
@@ -892,7 +892,7 @@ public static class ExplainerEndpoints
                 <tr><td class="mono">cited_by</td><td class="mono">work, [limit]</td>
                     <td>which articles point AT this law, from the cross-references the publisher writes
                     into its own text. Answers "what depends on this", "who amended it".</td></tr>
-                <tr><td class="mono">changes_in_period</td><td class="mono">from_date, to_date, [publisher], [document_type], [order], [limit], [offset]</td>
+                <tr><td class="mono">changes_in_period</td><td class="mono">from_date, to_date, [publisher|jurisdiction], [source_class|document_type], [hierarchy], [act_form], [binding_status], [domain], [language], [order], [limit], [offset]</td>
                     <td>across the corpus: which works gained versions in a window, and how many.
                     The aggregate counterpart of diff and timeline, which cover one work.</td></tr>
                 </table></div>
@@ -1137,31 +1137,47 @@ public static class ExplainerEndpoints
                 + "where the question is what was punishable on the day of the act.",
                 "Que disait le Code pénal luxembourgeois au 1er janvier 2020 ?");
 
-            // The same aggregate that changes_in_period exposes: the page and the API answer this
-            // from one code path, so the site never knows something an MCP client cannot get.
-            if (readers.TryGetValue("lu-legilux", out var luR))
+            // The same cross-index aggregate that changes_in_period exposes: one ranking over the
+            // selected corpus, never a Luxembourg-only list with EU bolted on elsewhere. Keep the
+            // publisher beside each row because work slugs are only unique inside a publisher.
+            var churn = readers
+                .SelectMany(entry => entry.Value
+                    .ChangesInPeriod("2020-03-01", "2021-07-01", null, byChurn: true, limit: 5)
+                    .Select(change => new
+                    {
+                        Publisher = entry.Key,
+                        Jurisdiction = entry.Value.Stamp.GetValueOrDefault("jurisdiction", entry.Key),
+                        Change = change,
+                    }))
+                .OrderByDescending(row => row.Change.VersionsInPeriod)
+                .ThenByDescending(row => row.Change.LastChange, StringComparer.Ordinal)
+                .ThenBy(row => row.Publisher, StringComparer.Ordinal)
+                .ThenBy(row => row.Change.GroupKey, StringComparer.Ordinal)
+                .Take(5)
+                .ToList();
+            if (churn.Count > 0)
             {
-                var churn = luR.ChangesInPeriod("2020-03-01", "2021-07-01", null, byChurn: true, limit: 5);
-                if (churn.Count > 0)
+                sb.Append("""
+                    <div class="card"><h2 style="margin:0 0 4px">Which laws moved most during the pandemic</h2>
+                    <p class="sub" style="margin:0 0 10px">March 2020 to July 2021, across every mounted jurisdiction,
+                    ranked by how many new versions each law produced. Computed live, and available to your own code as
+                    <span class="mono">changes_in_period(order="by_churn")</span>.</p><table>
+                    <tr><th>law</th><th>jurisdiction</th><th>new versions</th><th></th></tr>
+                    """);
+                foreach (var row in churn)
                 {
-                    sb.Append("""
-                        <div class="card"><h2 style="margin:0 0 4px">Which laws moved most during the pandemic</h2>
-                        <p class="sub" style="margin:0 0 10px">March 2020, July 2021, ranked by how many new versions
-                        each law produced. Computed live, and available to your own code as
-                        <span class="mono">changes_in_period(order="by_churn")</span>.</p><table>
-                        <tr><th>law</th><th>new versions</th><th></th></tr>
-                        """);
-                    foreach (var c in churn)
-                        sb.Append($"""
-                            <tr><td><a href="/lu-legilux/{H(c.GroupKey)}">{H(TitleShorten(c.Title) ?? c.GroupKey)}</a></td>
-                            <td class="mono">{c.VersionsInPeriod}</td>
-                            <td><a href="/lu-legilux/{H(c.GroupKey)}/diff/{H(c.FirstChange)}/{H(c.LastChange)}">what changed</a></td></tr>
-                            """);
-                    sb.Append("""
-                        </table><p class="sub" style="margin:8px 0 0">
-                        <a href="/changed?from=2020-03-01&amp;to=2021-07-01&amp;order=by_churn"><b>Explore any period →</b></a></p></div>
+                    var c = row.Change;
+                    sb.Append($"""
+                        <tr><td><a href="/{H(row.Publisher)}/{H(c.GroupKey)}">{H(TitleShorten(c.Title) ?? c.GroupKey)}</a></td>
+                        <td><span class="badge">{H(row.Jurisdiction)}</span></td>
+                        <td class="mono">{c.VersionsInPeriod}</td>
+                        <td><a href="/{H(row.Publisher)}/{H(c.GroupKey)}/diff/{H(c.FirstChange)}/{H(c.LastChange)}">what changed</a></td></tr>
                         """);
                 }
+                sb.Append("""
+                    </table><p class="sub" style="margin:8px 0 0">
+                    <a href="/?space=time&amp;from=2020-03-01&amp;until=2021-07-01&amp;order=by_churn"><b>Explore this period →</b></a></p></div>
+                    """);
             }
 
             sb.Append("""

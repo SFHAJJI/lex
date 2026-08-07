@@ -26,30 +26,41 @@ public static class HomeEndpoints
         {
             // Counts come from the mounted indexes at render time, never hand-written numbers.
             var cov = readers.Values.Select(r => r.Coverage()).ToList();
-            var euWorks = cov.Where(c => c.Collection == "eu-eurlex").Sum(c => c.Groups);
             var assetVersion = Uri.EscapeDataString(ctx.Options.CodeCommit ?? "dev");
             var tools = mcpCore.ToolDefs().OfType<JsonObject>()
                                .Select(t => t["name"]!.GetValue<string>()).ToList();
             var facetSets = readers.Values.Select(r => r.SearchFacets()).ToList();
-            JsonArray Values(IEnumerable<string> values) => new(values
+            JsonArray Values(IEnumerable<string?> values) => new(values
                 .Where(value => !string.IsNullOrWhiteSpace(value))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .OrderBy(value => value, StringComparer.OrdinalIgnoreCase)
-                .Select(value => (JsonNode)value).ToArray());
+                .Select(value => (JsonNode)value!).ToArray());
             var searchFacets = new JsonObject
             {
                 ["jurisdictions"] = new JsonArray(readers.Values
-                    .Select(r => r.Stamp.GetValueOrDefault("jurisdiction"))
-                    .Where(value => !string.IsNullOrWhiteSpace(value))
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .OrderBy(value => value, StringComparer.OrdinalIgnoreCase)
-                    .Select(value => (JsonNode)new JsonObject
+                    .Where(r => !string.IsNullOrWhiteSpace(r.Stamp.GetValueOrDefault("jurisdiction")))
+                    .OrderBy(r => r.Stamp.GetValueOrDefault("jurisdiction"), StringComparer.OrdinalIgnoreCase)
+                    .Select(r =>
                     {
-                        ["value"] = value!.ToLowerInvariant(),
-                        ["code"] = value.ToUpperInvariant(),
+                        var value = r.Stamp.GetValueOrDefault("jurisdiction")!;
+                        var facets = r.SearchFacets();
+                        var coverage = r.Coverage();
+                        return (JsonNode)new JsonObject
+                        {
+                            ["value"] = value.ToLowerInvariant(),
+                            ["code"] = value.ToUpperInvariant(),
+                            ["publisher"] = r.Collection,
+                            ["hierarchies"] = Values(facets.Hierarchies),
+                            ["domains"] = Values(facets.Domains),
+                            ["source_classes"] = Values(coverage.Kinds.Select(k => k.Kind)),
+                            ["act_forms"] = Values(facets.ActForms),
+                            ["binding_statuses"] = Values(facets.BindingStatuses),
+                            ["languages"] = Values(facets.Languages),
+                        };
                     }).ToArray()),
                 ["hierarchies"] = Values(facetSets.SelectMany(f => f.Hierarchies)),
                 ["domains"] = Values(facetSets.SelectMany(f => f.Domains)),
+                ["source_classes"] = Values(cov.SelectMany(c => c.Kinds.Select(k => k.Kind))),
                 ["act_forms"] = Values(facetSets.SelectMany(f => f.ActForms)),
                 ["binding_statuses"] = Values(facetSets.SelectMany(f => f.BindingStatuses)),
                 ["languages"] = Values(facetSets.SelectMany(f => f.Languages)),
@@ -67,7 +78,8 @@ public static class HomeEndpoints
             {
                 ("lu-legilux", "constitution-1868-10-17-n1", "The Constitution"),
                 ("lu-legilux", "loi-2006-07-31-n2", "Code du travail"),
-                ("lu-legilux", "loi-1879-06-18-n1", "Code pénal"),
+                ("eu-eurlex", "32016R0679", "GDPR"),
+                ("eu-eurlex", "32013R0575", "Capital Requirements Regulation"),
             };
             var liveDoors = new JsonArray();
             foreach (var (pub, work, label) in doors)
@@ -81,8 +93,9 @@ public static class HomeEndpoints
             // promotional cards, where the visitors most likely to bounce never reached it — while
             // the sentence above the fold merely announced that the site answers questions.
             var body = $"""
-                <p class="lede">Ask what any Luxembourg law said on any day, exactly as its publisher
-                issued it.{(euWorks > 0 ? $" Search {euWorks:n0} EU acts and related legal materials too, across every dated version the mounted index holds." : "")}</p>
+                <p class="lede">Search Luxembourg and reviewed-scope EU law as it stood on any date,
+                with exact publisher wording, validity intervals and provenance. Coverage is derived
+                from every dated version in the verified indexes mounted now.</p>
                 """
                 + $"""
                 <!-- Read synchronously by the workspace on mount, so the doors never flash in or need a

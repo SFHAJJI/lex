@@ -40,7 +40,19 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
             Tool("timeline", "Every state a document has been in: validity intervals and version keys, publisher-asserted.",
                 new JsonObject { ["work"] = S(workDesc), ["limit"] = I("max versions (default 100)"), ["offset"] = I("pagination offset") }, ["work"]),
             Tool("in_force_on", "The set of works in force on a date, computed from validity intervals at query time, deduplicated by work. Carries a mandatory population disclosure.",
-                new JsonObject { ["date"] = S("ISO date"), ["publisher"] = S("optional publisher id, e.g. lu-legilux"), ["document_type"] = S("optional type code, e.g. CODE"), ["limit"] = I("default 50"), ["offset"] = I("pagination offset") }, ["date"]),
+                new JsonObject
+                {
+                    ["date"] = S("ISO date"), ["publisher"] = S("optional publisher id, e.g. lu-legilux"),
+                    ["jurisdiction"] = S("optional jurisdiction code from index metadata, e.g. LU or EU"),
+                    ["document_type"] = S("backward-compatible source document class filter"),
+                    ["source_class"] = S("optional source document class"),
+                    ["hierarchy"] = S("optional normalized legal hierarchy"),
+                    ["act_form"] = S("optional legal act form"),
+                    ["binding_status"] = S("optional binding status"),
+                    ["domain"] = S("optional reviewed legal domain"),
+                    ["language"] = S("optional language code"),
+                    ["limit"] = I("default 50"), ["offset"] = I("pagination offset"),
+                }, ["date"]),
             Tool("diff", "What changed between two dates for one work: which versions applied, and where both texts are held, retrieve them via as_of to compare.",
                 new JsonObject { ["work"] = S(workDesc), ["from_date"] = S("ISO date"), ["to_date"] = S("ISO date"), ["language"] = S("language code") }, ["work", "from_date", "to_date"]),
             Tool("search", "Filtered legal search. keyword is deterministic FTS5/BM25; hybrid adds the pinned local encoder and fixed RRF when verified vectors are mounted. No generative model participates. Returns hits WITHOUT body text; full state via as_of.",
@@ -53,7 +65,7 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                     ["hierarchy"] = S("optional normalized legal hierarchy"),
                     ["act_form"] = S("optional legal act form"),
                     ["binding_status"] = S("optional binding status"),
-                    ["domain"] = S("optional reviewed EU domain id"),
+                    ["domain"] = S("optional reviewed legal domain id"),
                     ["language"] = S("optional language code"),
                     ["retrieval_mode"] = S("keyword or hybrid; default keyword until activation"),
                     ["time_scope"] = S("all_versions or as_of"),
@@ -85,7 +97,14 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                     ["from_date"] = S("ISO date, start of window (inclusive)"),
                     ["to_date"] = S("ISO date, end of window (inclusive)"),
                     ["publisher"] = S("optional publisher id"),
-                    ["document_type"] = S("optional type code(s), comma-separated; prefix with ! to exclude, e.g. !RECUEIL,!CODE_RECUEIL for instruments only"),
+                    ["jurisdiction"] = S("optional jurisdiction code from index metadata, e.g. LU or EU"),
+                    ["document_type"] = S("optional source document class(es), comma-separated; prefix with ! to exclude, e.g. !RECUEIL,!CODE_RECUEIL for instruments only"),
+                    ["source_class"] = S("optional source document class; alias of document_type"),
+                    ["hierarchy"] = S("optional normalized legal hierarchy"),
+                    ["act_form"] = S("optional legal act form"),
+                    ["binding_status"] = S("optional binding status"),
+                    ["domain"] = S("optional reviewed legal domain"),
+                    ["language"] = S("optional language code"),
                     ["order"] = S("by_date (default) or by_churn"),
                     ["limit"] = I("default 20"),
                     ["offset"] = I("skip this many, for paging"),
@@ -93,22 +112,28 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
         ];
     }
 
-    private JsonObject Envelope(LexIndexReader r, string status, bool provisional = false) => new()
+    private JsonObject Envelope(LexIndexReader r, string status, bool provisional = false)
     {
-        ["publisher"] = r.Collection,
-        ["tier"] = r.Stamp.GetValueOrDefault("tier"),
-        ["history_begins"] = r.Stamp.GetValueOrDefault("history_begins"),
-        ["status"] = status,
-        ["provisional"] = provisional,
-        ["freshness"] = new JsonObject
+        var envelope = new JsonObject
         {
-            ["corpus_commit"] = r.Stamp.GetValueOrDefault("corpus_commit"),
-            ["built_at"] = r.Stamp.GetValueOrDefault("built_at"),
-            ["last_confirmed_at"] = r.Stamp.GetValueOrDefault("built_at"),
-            ["last_confirmed_source"] = "index-build",
-            ["stamp_signature_valid"] = r.SignatureValid,
-        },
-    };
+            ["publisher"] = r.Collection,
+            ["tier"] = r.Stamp.GetValueOrDefault("tier"),
+            ["history_begins"] = r.Stamp.GetValueOrDefault("history_begins"),
+            ["status"] = status,
+            ["provisional"] = provisional,
+            ["freshness"] = new JsonObject
+            {
+                ["corpus_commit"] = r.Stamp.GetValueOrDefault("corpus_commit"),
+                ["built_at"] = r.Stamp.GetValueOrDefault("built_at"),
+                ["last_confirmed_at"] = r.Stamp.GetValueOrDefault("built_at"),
+                ["last_confirmed_source"] = "index-build",
+                ["stamp_signature_valid"] = r.SignatureValid,
+            },
+        };
+        var jurisdiction = r.Stamp.GetValueOrDefault("jurisdiction");
+        if (!string.IsNullOrWhiteSpace(jurisdiction)) envelope["jurisdiction"] = jurisdiction;
+        return envelope;
+    }
 
     // Base URL for permalinks is deployment config only (never derived from or stored in
     // signed content); the field is omitted entirely when unconfigured so air-gapped
@@ -412,10 +437,19 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                 var date = Date("date");
                 var limit = Int("limit", 50); var offset = Int("offset", 0);
                 var pub = Str("publisher");
+                var jurisdiction = Str("jurisdiction");
                 var outp = new JsonArray();
-                foreach (var r in readers.Values.Where(x => pub is null || x.Collection == pub))
+                foreach (var r in readers.Values.Where(x =>
+                             (pub is null || x.Collection == pub)
+                             && (jurisdiction is null || string.Equals(
+                                 x.Stamp.GetValueOrDefault("jurisdiction"),
+                                 jurisdiction,
+                                 StringComparison.OrdinalIgnoreCase))))
                 {
-                    var (rows, total) = r.InForceOn(date, new FilterSet(null, null, Str("document_type"), Str("language")), limit, offset);
+                    var filter = new FilterSet(null, null, Str("source_class") ?? Str("document_type"),
+                        Str("language"), null, Str("hierarchy"), Str("act_form"),
+                        Str("binding_status"), Str("domain"));
+                    var (rows, total) = r.InForceOn(date, filter, limit, offset);
                     outp.Add(new JsonObject
                     {
                         ["envelope"] = Envelope(r, "ok", ProvisionalFor(r, date)),
@@ -705,19 +739,27 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                 var to = Str("to_date") ?? throw new ArgumentException("to_date required");
                 if (string.CompareOrdinal(from, to) > 0) (from, to) = (to, from);
                 var pub = Str("publisher");
+                var jurisdiction = Str("jurisdiction");
                 // Comma-separated, and a leading "!" inverts: "!RECUEIL,!CODE_RECUEIL" asks for
                 // everything that is not a thematic collection, which is what a reader means by
                 // "laws" and would otherwise require naming every other type.
-                var kinds = Str("document_type")
+                var kinds = (Str("source_class") ?? Str("document_type"))
                     ?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                var filter = new FilterSet(null, null, null, Str("language"), null,
+                    Str("hierarchy"), Str("act_form"), Str("binding_status"), Str("domain"));
                 var byChurn = string.Equals(Str("order"), "by_churn", StringComparison.OrdinalIgnoreCase);
                 var limit = Int("limit", 20);
                 var offset = Int("offset", 0);
                 var outp = new JsonArray();
-                foreach (var r in readers.Values.Where(x => pub is null || x.Collection == pub))
+                foreach (var r in readers.Values.Where(x =>
+                             (pub is null || x.Collection == pub)
+                             && (jurisdiction is null || string.Equals(
+                                 x.Stamp.GetValueOrDefault("jurisdiction"),
+                                 jurisdiction,
+                                 StringComparison.OrdinalIgnoreCase))))
                 {
-                    var (works, versions) = r.ChangeTotals(from, to, kinds);
-                    var rows = r.ChangesInPeriod(from, to, kinds, byChurn, limit, offset);
+                    var (works, versions) = r.ChangeTotals(from, to, kinds, filter);
+                    var rows = r.ChangesInPeriod(from, to, kinds, byChurn, limit, offset, filter);
                     outp.Add(new JsonObject
                     {
                         ["envelope"] = Envelope(r, works == 0 ? "no_changes_in_period" : "ok"),
@@ -748,9 +790,18 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                                 // word, so "2 new versions" and "nothing changed" are both true.
                                 ["distinct_texts"] = c.DistinctTexts,
                                 ["wording_changed"] = c.DistinctTexts > 1,
+                                ["text_comparable"] = c.TextComparable,
                                 ["diff_from"] = c.Baseline ?? c.FirstChange,
                                 ["diff_to"] = c.LastChange,
                             };
+                            if (c.SourceClass is not null) o["source_class"] = c.SourceClass;
+                            if (c.Hierarchy is not null) o["hierarchy"] = c.Hierarchy;
+                            if (c.Domains is not null)
+                                o["domains"] = new JsonArray(c.Domains.Trim('|').Split('|',
+                                    StringSplitOptions.RemoveEmptyEntries).Select(x => (JsonNode)x).ToArray());
+                            if (c.ActForm is not null) o["act_form"] = c.ActForm;
+                            if (c.BindingStatus is not null) o["binding_status"] = c.BindingStatus;
+                            if (c.Language is not null) o["language"] = c.Language;
                             if (_publicBase is not null)
                             {
                                 o["permalink"] = $"{_publicBase}/{r.Collection}/{c.GroupKey}/{c.LastChange}";

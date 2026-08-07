@@ -676,11 +676,19 @@ public sealed class LexIndexReader : IDisposable
     }
 
     public List<ChangeRow> ChangesInPeriod(string from, string to, IReadOnlyList<string>? kinds,
-                                           bool byChurn, int limit, int offset = 0)
+                                           bool byChurn, int limit, int offset = 0,
+                                           FilterSet? filter = null)
     {
-        var where = "d.withdrawn=0 AND d.valid_from >= $from AND d.valid_from <= $to"
-                    + KindClause(kinds, "d.");
+        var scoped = (filter ?? FilterSet.All) with
+        {
+            Kind = kinds is { Count: > 0 } ? string.Join(',', kinds) : filter?.Kind,
+        };
+        var (where, parameters) = WithFilters(
+            "d.valid_from >= $from AND d.valid_from <= $to", scoped, excludeAsOf: true);
         var order = byChurn ? "versions DESC, last_change DESC" : "last_change DESC, versions DESC";
+        var metadata = IsV3
+            ? "MAX(d.kind), MAX(d.hierarchy), MAX(d.domains), MAX(d.act_form), MAX(d.binding_status), MAX(d.language)"
+            : "MAX(d.kind), NULL, NULL, NULL, NULL, MAX(d.language)";
         using var cmd = Cmd($"""
             SELECT d.group_key,
                    COUNT(DISTINCT d.valid_from) AS versions,
@@ -695,16 +703,16 @@ public sealed class LexIndexReader : IDisposable
                    -- comparison with itself whenever a work moved exactly once.
                    (SELECT MAX(t3.valid_from) FROM docs t3
                      WHERE t3.group_key = d.group_key AND t3.valid_from < MIN(d.valid_from)) AS baseline,
-                   0 AS distinct_texts
+                   0 AS distinct_texts,
+                   {metadata}
             FROM docs d
             WHERE {where}
             GROUP BY d.group_key
             ORDER BY {order}
             LIMIT $lim OFFSET $off
-            """, []);
+            """, parameters);
         cmd.Parameters.AddWithValue("$from", from);
         cmd.Parameters.AddWithValue("$to", to);
-        BindKinds(cmd, kinds);
         cmd.Parameters.AddWithValue("$lim", limit);
         cmd.Parameters.AddWithValue("$off", Math.Max(0, offset));
         var list = new List<ChangeRow>();
@@ -712,14 +720,21 @@ public sealed class LexIndexReader : IDisposable
         while (r.Read())
             list.Add(new ChangeRow(r.GetString(0), r.GetInt32(1), r.GetString(2), r.GetString(3),
                 r.IsDBNull(4) ? null : r.GetString(4), r.GetInt32(5),
-                r.IsDBNull(6) ? null : r.GetString(6)));
+                r.IsDBNull(6) ? null : r.GetString(6), 0, false,
+                r.IsDBNull(8) ? null : r.GetString(8),
+                r.IsDBNull(9) ? null : r.GetString(9),
+                r.IsDBNull(10) ? null : r.GetString(10),
+                r.IsDBNull(11) ? null : r.GetString(11),
+                r.IsDBNull(12) ? null : r.GetString(12),
+                r.IsDBNull(13) ? null : r.GetString(13)));
         r.Close();
         // Answered per row rather than in the aggregate above, because it is a question about
         // the PROVISIONS and the aggregate is a question about versions. Two small indexed reads
         // per row; the report returns at most a page of them.
-        return list.Select(c => c with
+        return list.Select(c =>
         {
-            DistinctTexts = DistinctWordings(c.GroupKey, c.Baseline ?? c.FirstChange, c.LastChange),
+            var comparison = WordingComparison(c.GroupKey, c.Baseline ?? c.FirstChange, c.LastChange);
+            return c with { DistinctTexts = comparison.Distinct, TextComparable = comparison.BothAvailable };
         }).ToList();
     }
 
@@ -738,11 +753,15 @@ public sealed class LexIndexReader : IDisposable
     /// answered a question nobody asked: what matters is whether THIS comparison shows anything.
     /// </summary>
     public int DistinctWordings(string work, string from, string to)
+        => WordingComparison(work, from, to).Distinct;
+
+    private (int Distinct, bool BothAvailable) WordingComparison(string work, string from, string to)
     {
         var a = WordingDigest(work, from);
         var b = WordingDigest(work, to);
-        if (a is null && b is null) return 0;
-        return a == b ? 1 : 2;
+        if (a is null && b is null) return (0, false);
+        if (a is null || b is null) return (2, false);
+        return (a == b ? 1 : 2, true);
     }
 
     /// <summary>The ordered provision hashes of the version in force on a date, or null.</summary>
@@ -769,13 +788,19 @@ public sealed class LexIndexReader : IDisposable
     }
 
     /// <summary>Totals for a window: how many works moved and how many new versions appeared.</summary>
-    public (int Works, int Versions) ChangeTotals(string from, string to, IReadOnlyList<string>? kinds)
+    public (int Works, int Versions) ChangeTotals(string from, string to,
+                                                  IReadOnlyList<string>? kinds,
+                                                  FilterSet? filter = null)
     {
-        var where = "valid_from >= $from AND valid_from <= $to" + KindClause(kinds, "");
-        using var cmd = Cmd($"SELECT COUNT(DISTINCT group_key), COUNT(DISTINCT group_key || valid_from) FROM docs WHERE {where}", []);
+        var scoped = (filter ?? FilterSet.All) with
+        {
+            Kind = kinds is { Count: > 0 } ? string.Join(',', kinds) : filter?.Kind,
+        };
+        var (where, parameters) = WithFilters(
+            "valid_from >= $from AND valid_from <= $to", scoped, excludeAsOf: true);
+        using var cmd = Cmd($"SELECT COUNT(DISTINCT group_key), COUNT(DISTINCT group_key || valid_from) FROM docs WHERE {where}", parameters);
         cmd.Parameters.AddWithValue("$from", from);
         cmd.Parameters.AddWithValue("$to", to);
-        BindKinds(cmd, kinds);
         using var r = cmd.ExecuteReader();
         return r.Read() ? (r.GetInt32(0), r.GetInt32(1)) : (0, 0);
     }

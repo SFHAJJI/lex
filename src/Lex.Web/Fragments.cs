@@ -1,6 +1,7 @@
 using System.Text;
 using DiffPlex;
 using Lex.Index;
+using Markdig;
 using static Lex.Web.PageShell;
 
 namespace Lex.Web;
@@ -17,6 +18,15 @@ namespace Lex.Web;
 /// </summary>
 public static class Fragments
 {
+    // Publisher text is stored as deterministic Markdown. The React reader already parses it;
+    // canonical/no-JavaScript pages must use the same presentation contract instead of exposing
+    // Markdown punctuation. Raw HTML stays disabled because legal text is evidence, never markup
+    // that a publisher (or a malformed source file) may execute in a reader's browser.
+    private static readonly MarkdownPipeline LegalMarkdownPipeline = new MarkdownPipelineBuilder()
+        .UsePipeTables()
+        .DisableHtml()
+        .Build();
+
     // The absolute URL to print in a copy-paste connect command.
     //
     // req.Scheme is "http" in production: Container Apps terminates TLS at the ingress and forwards
@@ -84,7 +94,10 @@ public static class Fragments
         return t.Length > 110 ? t[..110].TrimEnd() + "…" : t;
     }
 
-    public static string Interval(DocRow d) => d.ValidTo is null ? $"{d.ValidFrom} → <i>open</i>" : $"{d.ValidFrom} → {d.ValidTo}";
+    public static string Interval(DocRow d) => d.ValidTo is null ? $"{d.ValidFrom} → open" : $"{d.ValidFrom} → {d.ValidTo}";
+
+    public static string RenderLegalMarkdown(string text) =>
+        Markdown.ToHtml(text ?? string.Empty, LegalMarkdownPipeline);
 
     public static string RenderDiff(string oldText, string newText)
     {

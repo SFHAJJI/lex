@@ -108,8 +108,8 @@ HTTP 200
   .cat td:first-child a { font-weight:600 }
   .cat .r { text-align:right; font-variant-numeric:tabular-nums }
   .cat .sub { font-size:12px; margin-top:2px }
-  .cat th:nth-child(4), .cat td:nth-child(4),
-  .cat th:nth-child(5), .cat td:nth-child(5) { white-space:nowrap }
+  .cat th:nth-child(5), .cat td:nth-child(5),
+  .cat th:nth-child(6), .cat td:nth-child(6) { white-space:nowrap }
   .pager { display:flex; gap:14px; align-items:baseline; margin:12px 0; font-size:14px }
   .pager span { color:var(--muted); font-variant-numeric:tabular-nums }
   form.inline { display:flex; gap:8px; flex-wrap:wrap; margin:10px 0 }
@@ -136,6 +136,10 @@ HTTP 200
   .rail .yr { position:absolute; top:30px; font-family:var(--mono); font-size:11px; color:var(--muted) }
   .railcap { margin:2px 0 18px } .nowmark { color:var(--accent) }
   .lawbody { font-family:var(--serif); font-size:16.5px; line-height:1.62 }
+  .legal-markdown { margin-top:8px }
+  .legal-markdown > :first-child { margin-top:0 }
+  .legal-markdown > :last-child { margin-bottom:0 }
+  .legal-markdown table { font-family:var(--sans); font-size:14px }
   /* Phones: law texts carry wide tables and long pre blocks. Let each scroll inside
      itself rather than pushing the whole page sideways. Desktop is untouched. */
   @media (max-width:640px) {
@@ -148,10 +152,11 @@ HTTP 200
     /* Type is already available as a filter and the first date is secondary to the
        latest state. Removing those columns leaves the law, version count, latest date
        and text availability readable instead of spelling dates vertically. */
-    .cat th:nth-child(2), .cat td:nth-child(2),
-    .cat th:nth-child(4), .cat td:nth-child(4) { display:none }
+    .cat th:nth-child(3), .cat td:nth-child(3),
+    .cat th:nth-child(5), .cat td:nth-child(5),
+    .cat th:nth-child(6), .cat td:nth-child(6) { display:none }
     .cat th, .cat td { padding-left:6px; padding-right:6px }
-    .cat td:first-child { min-width:170px }
+    .cat td:first-child { min-width:130px }
   }
 </style></head>
 <body>

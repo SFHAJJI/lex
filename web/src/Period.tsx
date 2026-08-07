@@ -1,4 +1,6 @@
-import { LAYERS, type LayerId, type State } from "./state";
+import { jurisdictionLabel, jurisdictionValue, SEARCH_FACETS } from "./facets";
+import { ScopeFilters } from "./ScopeFilters";
+import type { State } from "./state";
 
 type Order = NonNullable<State["order"]>;
 
@@ -18,11 +20,17 @@ export interface PeriodProps {
   from: string;
   until: string;
   order: Order;
-  layer: LayerId;
+  jurisdiction?: string;
+  hierarchy?: string;
+  domain?: string;
+  sourceClass?: string;
+  actForm?: string;
+  bindingStatus?: string;
+  language?: string;
   today: string;
   onWindow: (from: string, until: string) => void;
   onOrder: (o: Order) => void;
-  onLayer: (l: LayerId) => void;
+  onRefine: (next: Partial<State>) => void;
 }
 
 const iso = (d: Date) => d.toISOString().slice(0, 10);
@@ -82,16 +90,28 @@ export default function Period(p: PeriodProps) {
         </div>
       </div>
 
-      {/* Which layer of the law, asked once, here with the other filters. It lived above the rows
-          before, so filtering down to nothing removed the control that would undo it. */}
-      <div className="layers" role="tablist" aria-label="Which layer of the law">
-        {LAYERS.map((l) => (
-          <button key={l.id} role="tab" aria-selected={l.id === p.layer}
-                  className={"layer" + (l.id === p.layer ? " on" : "")}
-                  title={l.hint} onClick={() => p.onLayer(l.id)}>
-            {l.label}
-          </button>
+      <div className="period-scope" role="group" aria-label="Jurisdiction to monitor">
+        <span className="scope-label">Jurisdiction</span>
+        <button className={!p.jurisdiction ? "on" : ""} aria-pressed={!p.jurisdiction}
+                onClick={() => p.onRefine({
+                  jurisdiction: undefined, hierarchy: undefined, domain: undefined,
+                  sourceClass: undefined, actForm: undefined, bindingStatus: undefined,
+                  language: undefined,
+                })}>Every jurisdiction</button>
+        {SEARCH_FACETS.jurisdictions.map((item) => (
+          <button key={item.value} className={jurisdictionValue(p.jurisdiction) === item.value ? "on" : ""}
+                  aria-pressed={jurisdictionValue(p.jurisdiction) === item.value}
+                  onClick={() => p.onRefine({
+                    jurisdiction: item.value, hierarchy: undefined, domain: undefined,
+                    sourceClass: undefined, actForm: undefined, bindingStatus: undefined,
+                    language: undefined,
+                  })}>{jurisdictionLabel(item.code)}</button>
         ))}
+      </div>
+
+      <div className="period-filters">
+        <ScopeFilters values={p} onChange={p.onRefine} summary="Narrow changes"
+                      showJurisdiction={false} sourceDefault="Legal instruments" />
       </div>
     </section>
   );

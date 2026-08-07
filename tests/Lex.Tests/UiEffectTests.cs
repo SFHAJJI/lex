@@ -8,9 +8,9 @@ namespace Lex.Tests;
 ///
 /// The assistant answers in prose AND sets the workspace, and the second half is the part with no
 /// visible failure mode: if the mapping breaks, the answer still reads correctly while the
-/// controls beneath it quietly disagree with it. A reader asked for statutes, was given statutes,
-/// and sees the Laws tab selected. Nothing errors. That is why this is tested rather than checked
-/// by eye once.
+/// controls beneath it quietly disagree with it. A reader asked for EU regulations, was given EU
+/// regulations, and sees an unfiltered Luxembourg scope. Nothing errors. That is why this is
+/// tested rather than checked by eye once.
 /// </summary>
 public class UiEffectTests
 {
@@ -41,17 +41,16 @@ public class UiEffectTests
     };
 
     [Theory]
-    [InlineData("!RECUEIL,!CODE_RECUEIL", "instruments")]
-    [InlineData("Constitution,CONV,PROT,TC,ORD", "constitution")]
-    [InlineData("LOI,CODE", "statutes")]
-    [InlineData("RGD,RMIN,AMIN,AGD,RGC,AGC,ARGD,RI", "regulations")]
-    [InlineData("RECUEIL,CODE_RECUEIL", "collections")]
-    public void A_type_filter_selects_the_matching_layer(string types, string expected)
+    [InlineData("!RECUEIL,!CODE_RECUEIL")]
+    [InlineData("LOI,CODE")]
+    [InlineData("REG")]
+    [InlineData("DIR")]
+    public void A_source_class_filter_reaches_the_same_mixed_corpus_control(string types)
     {
         var eff = UiMapper.From("changes_in_period", Args(("document_type", types)), Changes(types));
 
         Assert.NotNull(eff.Workspace);
-        Assert.Equal(expected, eff.Workspace!.Layer);
+        Assert.Equal(types, eff.Workspace!.SourceClass);
     }
 
     [Fact]
@@ -75,6 +74,56 @@ public class UiEffectTests
     }
 
     [Fact]
+    public void A_mixed_period_combines_publishers_and_keeps_each_jurisdiction()
+    {
+        JsonObject Part(string publisher, string jurisdiction, string work, int works) => new()
+        {
+            ["envelope"] = new JsonObject
+            {
+                ["status"] = "ok", ["publisher"] = publisher, ["jurisdiction"] = jurisdiction,
+            },
+            ["window"] = new JsonObject { ["from"] = "2025-01-01", ["to"] = "2026-01-01" },
+            ["order"] = "by_churn", ["works_changed"] = works, ["new_versions"] = works,
+            ["changes"] = new JsonArray(new JsonObject
+            {
+                ["work"] = work, ["versions_in_period"] = 1, ["versions_total"] = 2,
+                ["first_change"] = "2025-06-01", ["last_change"] = "2025-06-01",
+            }),
+        };
+        var result = new JsonArray(
+            Part("lu-legilux", "LU", "lu-legilux:loi-1", 2),
+            Part("eu-eurlex", "EU", "eu-eurlex:32025R0001", 3));
+
+        var eff = UiMapper.From("changes_in_period", new JsonObject(), result);
+
+        Assert.Equal(5, eff.Ranking!.WorksChanged);
+        Assert.Equal(2, eff.Ranking.Rows.Count);
+        Assert.Equal(["LU", "EU"], eff.Ranking.Rows.Select(row => row.Jurisdiction));
+    }
+
+    [Fact]
+    public void Every_filter_argument_maps_to_the_visible_workspace_control()
+    {
+        var args = Args(
+            ("jurisdiction", "eu"), ("hierarchy", "secondary_eu_law"),
+            ("domain", "financial-services"), ("source_class", "REG"),
+            ("act_form", "REG"), ("binding_status", "in_force"), ("language", "en"));
+
+        var eff = UiMapper.From("search", args, new JsonObject
+        {
+            ["envelope"] = new JsonObject { ["status"] = "ok" }, ["hits"] = new JsonArray(),
+        });
+
+        Assert.Equal("eu", eff.Workspace!.Jurisdiction);
+        Assert.Equal("secondary_eu_law", eff.Workspace.Hierarchy);
+        Assert.Equal("financial-services", eff.Workspace.Domain);
+        Assert.Equal("REG", eff.Workspace.SourceClass);
+        Assert.Equal("REG", eff.Workspace.ActForm);
+        Assert.Equal("in_force", eff.Workspace.BindingStatus);
+        Assert.Equal("en", eff.Workspace.Language);
+    }
+
+    [Fact]
     public void A_language_narrowed_search_sets_the_language_control()
     {
         // This one matters beyond tidiness: the Constitution exists in French, German and
@@ -87,7 +136,7 @@ public class UiEffectTests
         });
 
         Assert.Equal("de", eff.Workspace!.Language);
-        Assert.Null(eff.Workspace.Layer);
+        Assert.Null(eff.Workspace.SourceClass);
     }
 
     [Fact]
@@ -156,12 +205,13 @@ public class UiEffectTests
         // One turn can call several tools. The workspace must end in ONE state, not the last one
         // that happened to be written.
         var merged = UiEffect.Merge([
-            new UiEffect(Workspace: new WorkspaceView(Layer: "statutes")),
+            new UiEffect(Workspace: new WorkspaceView(Jurisdiction: "lu", SourceClass: "LOI,CODE")),
             new UiEffect(Ranking: new RankingView("2025-01-01", "2026-01-01", "by_churn", 1, 1, [])),
-            new UiEffect(Workspace: new WorkspaceView(Layer: "collections")),
+            new UiEffect(Workspace: new WorkspaceView(Jurisdiction: "eu", SourceClass: "REG")),
         ]);
 
-        Assert.Equal("statutes", merged.Workspace!.Layer);
+        Assert.Equal("lu", merged.Workspace!.Jurisdiction);
+        Assert.Equal("LOI,CODE", merged.Workspace.SourceClass);
         Assert.NotNull(merged.Ranking);
         Assert.False(merged.IsEmpty);
     }

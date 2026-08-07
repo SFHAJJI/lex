@@ -50,13 +50,20 @@ export interface UiEffect {
   diff?: { subject: Subject; from_date: string; to_date: string; note?: string };
   history?: { subject: Subject; anchor: string; distinct_texts: number; states: { valid_from: string; valid_to?: string; sha?: string; permalink?: string }[] };
   ranking?: { from_date: string; to_date: string; order: string; works_changed: number; new_versions: number; rows: RankingRow[] };
-  in_force?: { date: string; total: number; rows: { work: string; title?: string; kind?: string; valid_from: string; permalink?: string }[] };
+  in_force?: { date: string; total: number; rows: {
+    work: string; title?: string; kind?: string; valid_from: string; permalink?: string;
+    jurisdiction?: string; hierarchy?: string;
+  }[] };
   cited_by?: { cited_work: string; citing_articles: number;
-               rows: { work: string; title?: string; valid_from: string; anchor: string; num?: string; permalink?: string }[] };
+               rows: { work: string; title?: string; valid_from: string; anchor: string; num?: string;
+                       permalink?: string; jurisdiction?: string }[] };
   // Not a view: how the workspace should be SET. The assistant reaches the same controls a reader
-  // does, so "show me only the statutes" leaves the Statutes layer selected rather than describing
-  // a filter the visitor then has to find.
-  workspace?: { layer?: string; page?: number; language?: string };
+  // does, so "show me EU regulations" leaves the matching jurisdiction and legal metadata
+  // selected rather than describing filters the visitor then has to find.
+  workspace?: {
+    jurisdiction?: string; hierarchy?: string; domain?: string; source_class?: string;
+    act_form?: string; binding_status?: string; page?: number; language?: string;
+  };
   gap?: { status: string; work?: string; date?: string; explanation: string; available: string[] };
 }
 export interface RankingRow {
@@ -69,7 +76,9 @@ export interface RankingRow {
   baseline?: string | null; diff_from?: string; diff_to?: string;
   // How many distinct wordings the comparison span actually holds. 1 means the act was reissued
   // without a word changing, which is why a row could say "2" and its comparison say nothing.
-  distinct_texts?: number; wording_changed?: boolean;
+  distinct_texts?: number; wording_changed?: boolean; text_comparable?: boolean;
+  jurisdiction?: string; hierarchy?: string; domains?: string[]; source_class?: string;
+  act_form?: string; binding_status?: string; language?: string;
 }
 
 /** A step the agent completed, naming what it found. */

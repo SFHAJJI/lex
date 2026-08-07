@@ -44,6 +44,7 @@ export function Compare({ work, title, from, to, anchor }: {
     permalinks?: [string | undefined, string | undefined];
     documents?: [{ lexId?: string; validFrom?: string; validTo?: string },
                  { lexId?: string; validFrom?: string; validTo?: string }];
+    unavailable?: [string | undefined, string | undefined];
   }>({ loading: true });
   const [wide, setWide] = useState(() => typeof window !== "undefined" && window.innerWidth >= 900);
   const [showPunct, setShowPunct] = useState(false);
@@ -82,6 +83,17 @@ export function Compare({ work, title, from, to, anchor }: {
       const pb = first<any>(ob, (x) => Array.isArray(x?.provisions) && x.provisions.length > 0);
       const A = new Map<string, any>((pa?.provisions ?? []).map((p: any) => [p.anchor, p]));
       const B = new Map<string, any>((pb?.provisions ?? []).map((p: any) => [p.anchor, p]));
+      const statusA: string | undefined = pa?.envelope?.status ?? pa?.status;
+      const statusB: string | undefined = pb?.envelope?.status ?? pb?.status;
+      // An empty selected anchor can honestly mean "this article did not exist yet". An empty
+      // whole document with text_withheld/no_version cannot: treating unavailable evidence as
+      // an insertion or deletion would manufacture a legislative change from a data gap.
+      const unavailableA = A.size === 0 && statusA && statusA !== "anchor_not_in_version";
+      const unavailableB = B.size === 0 && statusB && statusB !== "anchor_not_in_version";
+      if (unavailableA || unavailableB) {
+        if (live) setState({ loading: false, error: "UNAVAILABLE_SIDE", unavailable: [statusA, statusB] });
+        return;
+      }
       if (A.size === 0 && B.size === 0) {
         if (live) setState({ loading: false, error: "NO_TEXT" });
         return;
@@ -171,6 +183,18 @@ export function Compare({ work, title, from, to, anchor }: {
         is the amendment record: when each version applied, where it came from, and its hash.
       </Empty>
     );
+  if (state.error === "UNAVAILABLE_SIDE") {
+    const [a, b] = state.unavailable ?? [];
+    return (
+      <Empty>
+        This comparison is unavailable because the publisher evidence is incomplete for one of
+        the requested dates ({from}: <span className="mono">{a ?? "no text"}</span>; {to}:{" "}
+        <span className="mono">{b ?? "no text"}</span>). Lex will not turn missing text into
+        apparent additions or removals. Open the <a href={`/${work.replace(":", "/")}/${from}`}>{from} record</a>
+        {" and "}<a href={`/${work.replace(":", "/")}/${to}`}>{to} record</a> to inspect each source.
+      </Empty>
+    );
+  }
   if (state.error === "PROFILE_MISMATCH") {
     const [pA, pB] = state.profiles ?? ["", ""];
     return (

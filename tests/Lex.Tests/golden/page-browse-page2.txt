@@ -15,7 +15,7 @@ HTTP 200
 <meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="canonical" href="https://golden.test/browse">
-<script type="application/ld+json">{"@context":"https://schema.org","@type":"Dataset","name":"Lex: point-in-time Luxembourg and reviewed-scope EU law","description":"Every consolidated version of Luxembourg law that Legilux publishes, plus reviewed-scope EU law, as dated records carrying validity intervals, per-article history, and a SHA-256 chain to the publisher\u0027s own bytes.","url":"https://golden.test/browse","license":"https://creativecommons.org/licenses/by/4.0/","isAccessibleForFree":true,"creator":{"@type":"Person","name":"Soufien Hajji","url":"https://soufien.lu"},"keywords":["legislation","Luxembourg","European Union","consolidated law","point-in-time","legal data","open data"],"temporalCoverage":"2019-06-01/2022-01-01","spatialCoverage":[{"@type":"Country","name":"Luxembourg"},{"@type":"Place","name":"European Union"}],"distribution":[{"@type":"DataDownload","encodingFormat":"application/json","contentUrl":"https://github.com/SFHAJJI/lex-articles","description":"Per-article JSON, JSONL and parquet, CC-BY."},{"@type":"DataDownload","encodingFormat":"application/json","contentUrl":"https://golden.test/mcp","description":"Public MCP endpoint, ten read-only tools, no key."}]}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"Dataset","name":"Lex: point-in-time Luxembourg and reviewed-scope EU law","description":"Official dated Luxembourg expressions and reviewed-scope EU law, including every available official consolidation in the mounted scope, with validity intervals, per-article history, explicit coverage gaps, and a SHA-256 chain to the publisher\u0027s own bytes.","url":"https://golden.test/browse","license":"https://creativecommons.org/licenses/by/4.0/","isAccessibleForFree":true,"creator":{"@type":"Person","name":"Soufien Hajji","url":"https://soufien.lu"},"keywords":["legislation","Luxembourg","European Union","consolidated law","point-in-time","legal data","open data"],"temporalCoverage":"2019-06-01/2022-01-01","spatialCoverage":[{"@type":"Country","name":"Luxembourg"},{"@type":"Place","name":"European Union"}],"distribution":[{"@type":"DataDownload","encodingFormat":"application/json","contentUrl":"https://github.com/SFHAJJI/lex-articles","description":"Per-article JSON, JSONL and parquet, CC-BY."},{"@type":"DataDownload","encodingFormat":"application/json","contentUrl":"https://golden.test/mcp","description":"Public MCP endpoint, ten read-only tools, no key."}]}</script>
 <meta name="twitter:image" content="https://golden.test/og.png">
 <link rel="preload" href="/fonts/IBMPlexSans-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/fonts/SourceSerif4-latin.woff2" as="font" type="font/woff2" crossorigin>
@@ -110,8 +110,8 @@ HTTP 200
   .cat td:first-child a { font-weight:600 }
   .cat .r { text-align:right; font-variant-numeric:tabular-nums }
   .cat .sub { font-size:12px; margin-top:2px }
-  .cat th:nth-child(4), .cat td:nth-child(4),
-  .cat th:nth-child(5), .cat td:nth-child(5) { white-space:nowrap }
+  .cat th:nth-child(5), .cat td:nth-child(5),
+  .cat th:nth-child(6), .cat td:nth-child(6) { white-space:nowrap }
   .pager { display:flex; gap:14px; align-items:baseline; margin:12px 0; font-size:14px }
   .pager span { color:var(--muted); font-variant-numeric:tabular-nums }
   form.inline { display:flex; gap:8px; flex-wrap:wrap; margin:10px 0 }
@@ -138,6 +138,10 @@ HTTP 200
   .rail .yr { position:absolute; top:30px; font-family:var(--mono); font-size:11px; color:var(--muted) }
   .railcap { margin:2px 0 18px } .nowmark { color:var(--accent) }
   .lawbody { font-family:var(--serif); font-size:16.5px; line-height:1.62 }
+  .legal-markdown { margin-top:8px }
+  .legal-markdown > :first-child { margin-top:0 }
+  .legal-markdown > :last-child { margin-bottom:0 }
+  .legal-markdown table { font-family:var(--sans); font-size:14px }
   /* Phones: law texts carry wide tables and long pre blocks. Let each scroll inside
      itself rather than pushing the whole page sideways. Desktop is untouched. */
   @media (max-width:640px) {
@@ -150,10 +154,11 @@ HTTP 200
     /* Type is already available as a filter and the first date is secondary to the
        latest state. Removing those columns leaves the law, version count, latest date
        and text availability readable instead of spelling dates vertically. */
-    .cat th:nth-child(2), .cat td:nth-child(2),
-    .cat th:nth-child(4), .cat td:nth-child(4) { display:none }
+    .cat th:nth-child(3), .cat td:nth-child(3),
+    .cat th:nth-child(5), .cat td:nth-child(5),
+    .cat th:nth-child(6), .cat td:nth-child(6) { display:none }
     .cat th, .cat td { padding-left:6px; padding-right:6px }
-    .cat td:first-child { min-width:170px }
+    .cat td:first-child { min-width:130px }
   }
 </style></head>
 <body>
@@ -198,12 +203,16 @@ behind it. A work is a law; a version is what that law said between two dates.
 <span class="badge">3 versions</span>
 <span class="badge">2019-06-01 &rarr; 2022-01-01</span>
 <span class="badge ok">signed index</span>
-<div class="sub" style="margin-top:6px">Dense and reliable from 2017 onward; real but sparse before; isolated snapshots back to 1849; forward to 2030.</div>
+<div class="sub" style="margin-top:6px">Mounted coverage: 2019-06-01 to 2022-01-01. Scope and known gaps are stated on the <a href="/coverage">coverage page</a>.</div>
 </div><h2>Look something up</h2>
-<form class="inline" action="/search"><input name="q" placeholder="words in the text, e.g. protection des donn&#233;es" style="flex:1;min-width:240px"><button>Search</button></form>
+<form class="inline" action="/search"><input name="q" aria-label="Words to search in legal text" placeholder="words in the text, e.g. protection des donn&#233;es" style="flex:1;min-width:240px"><button>Search</button></form>
 <form class="inline" action="/go-asof">
-  <input name="work" placeholder="work slug, e.g. code-travail" style="flex:1;min-width:200px">
-  <input name="date" type="date" value="2022-03-15">
+  <input name="work" aria-label="Work slug or Lex ID" placeholder="work slug or Lex ID" style="flex:1;min-width:200px">
+  <select name="publisher" aria-label="Jurisdiction or publisher">
+    <option value="">find it across every jurisdiction</option>
+    <option value="t-pub">Test Publisher</option>
+  </select>
+  <input name="date" type="date" aria-label="Date on which to read the work" value="2022-03-15">
   <button>As of date</button>
 </form>
 </main>

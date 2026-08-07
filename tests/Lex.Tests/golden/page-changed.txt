@@ -108,8 +108,8 @@ HTTP 200
   .cat td:first-child a { font-weight:600 }
   .cat .r { text-align:right; font-variant-numeric:tabular-nums }
   .cat .sub { font-size:12px; margin-top:2px }
-  .cat th:nth-child(4), .cat td:nth-child(4),
-  .cat th:nth-child(5), .cat td:nth-child(5) { white-space:nowrap }
+  .cat th:nth-child(5), .cat td:nth-child(5),
+  .cat th:nth-child(6), .cat td:nth-child(6) { white-space:nowrap }
   .pager { display:flex; gap:14px; align-items:baseline; margin:12px 0; font-size:14px }
   .pager span { color:var(--muted); font-variant-numeric:tabular-nums }
   form.inline { display:flex; gap:8px; flex-wrap:wrap; margin:10px 0 }
@@ -136,6 +136,10 @@ HTTP 200
   .rail .yr { position:absolute; top:30px; font-family:var(--mono); font-size:11px; color:var(--muted) }
   .railcap { margin:2px 0 18px } .nowmark { color:var(--accent) }
   .lawbody { font-family:var(--serif); font-size:16.5px; line-height:1.62 }
+  .legal-markdown { margin-top:8px }
+  .legal-markdown > :first-child { margin-top:0 }
+  .legal-markdown > :last-child { margin-bottom:0 }
+  .legal-markdown table { font-family:var(--sans); font-size:14px }
   /* Phones: law texts carry wide tables and long pre blocks. Let each scroll inside
      itself rather than pushing the whole page sideways. Desktop is untouched. */
   @media (max-width:640px) {
@@ -148,10 +152,11 @@ HTTP 200
     /* Type is already available as a filter and the first date is secondary to the
        latest state. Removing those columns leaves the law, version count, latest date
        and text availability readable instead of spelling dates vertically. */
-    .cat th:nth-child(2), .cat td:nth-child(2),
-    .cat th:nth-child(4), .cat td:nth-child(4) { display:none }
+    .cat th:nth-child(3), .cat td:nth-child(3),
+    .cat th:nth-child(5), .cat td:nth-child(5),
+    .cat th:nth-child(6), .cat td:nth-child(6) { display:none }
     .cat th, .cat td { padding-left:6px; padding-right:6px }
-    .cat td:first-child { min-width:170px }
+    .cat td:first-child { min-width:130px }
   }
 </style></head>
 <body>
@@ -174,6 +179,7 @@ dates, the corpus-wide view that a single law's timeline cannot give you.</p>
 <form class="inline" method="get">
   <label class="sub">from <input type="date" name="from" value="2019-01-01"></label>
   <label class="sub">to <input type="date" name="to" value="2023-01-01"></label>
+  <select name="publisher" aria-label="Jurisdiction or publisher"><option value="">Every jurisdiction</option><option value="t-pub">Test Publisher</option></select>
   <select name="order">
     <option value="by_date" selected>most recently changed</option>
     <option value="by_churn">changed most often</option>
@@ -189,11 +195,11 @@ dates, the corpus-wide view that a single law's timeline cannot give you.</p>
   producing <b>3 new version(s)</b>.
   
 </div><h2>t-pub, 2 law(s) moved, 3 new version(s)</h2><div class="card"><table><tr><th>law</th><th>new versions</th><th>window</th><th></th></tr><tr><td><a href="/t-pub/w1">Loi sur la chose</a>
-    <div class="sub mono" style="font-size:12px">w1 · 2 version(s) in all</div></td>
+    <div class="sub mono" style="font-size:12px">t-pub · w1 · 2 version(s) in all</div></td>
 <td class="mono">2</td>
 <td class="mono">2020-01-01 → 2022-01-01</td>
 <td><a href="/t-pub/w1/diff/2020-01-01/2022-01-01">what changed</a></td></tr><tr><td><a href="/t-pub/w2">Reglement sans texte</a>
-    <div class="sub mono" style="font-size:12px">w2 · 1 version(s) in all</div></td>
+    <div class="sub mono" style="font-size:12px">t-pub · w2 · 1 version(s) in all</div></td>
 <td class="mono">1</td>
 <td class="mono">2019-06-01</td>
 <td><a href="/t-pub/w2/2019-06-01">read</a></td></tr></table></div><p class="sub">Same data, from your own code:

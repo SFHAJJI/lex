@@ -59,7 +59,8 @@ public static class CatalogueEndpoints
                 CatalogueOrder.MostVersions => merged.OrderByDescending(x => x.Versions).ThenBy(x => x.GroupKey, StringComparer.Ordinal),
                 CatalogueOrder.MostRecent => merged.OrderByDescending(x => x.LastFrom, StringComparer.Ordinal).ThenBy(x => x.GroupKey, StringComparer.Ordinal),
                 CatalogueOrder.Oldest => merged.OrderBy(x => x.FirstFrom, StringComparer.Ordinal).ThenBy(x => x.GroupKey, StringComparer.Ordinal),
-                _ => merged.OrderBy(x => x.GroupKey, StringComparer.Ordinal),
+                _ => merged.OrderBy(x => x.TitleShort ?? x.Title ?? x.GroupKey, StringComparer.OrdinalIgnoreCase)
+                           .ThenBy(x => x.GroupKey, StringComparer.Ordinal),
             };
             var rows = merged.Skip((page - 1) * CatalogPage).Take(CatalogPage).ToList();
             var pages = Math.Max(1, (total + CatalogPage - 1) / CatalogPage);
@@ -121,10 +122,12 @@ public static class CatalogueEndpoints
             {
                 sb.Append("""
                     <div class="card" style="overflow-x:auto"><table class="cat">
-                    <tr><th>work</th><th>type</th><th class="r">versions</th><th>first</th><th>last</th><th>text</th></tr>
+                    <tr><th>work</th><th>jurisdiction</th><th>type</th><th class="r">versions</th><th>first</th><th>last</th><th>text</th></tr>
                     """);
                 foreach (var w in rows)
                 {
+                    var jurisdiction = readers.GetValueOrDefault(w.Collection)?.Stamp
+                        .GetValueOrDefault("jurisdiction", w.Collection) ?? w.Collection;
                     var mark = w.HasText
                         ? """<span class="badge ok">full text</span>"""
                         : """<span class="badge">record only</span>""";
@@ -132,6 +135,7 @@ public static class CatalogueEndpoints
                         <tr>
                           <td><a href="/{H(w.Collection)}/{H(w.GroupKey)}">{H(w.TitleShort ?? w.Title ?? w.GroupKey)}</a>
                               <div class="sub mono">{H(w.GroupKey)}</div></td>
+                          <td><span class="badge">{H(jurisdiction)}</span></td>
                           <td class="mono">{H(w.Kind ?? "")}</td>
                           <td class="r">{w.Versions:n0}</td>
                           <td class="mono">{H(w.FirstFrom)}</td>
@@ -153,7 +157,7 @@ public static class CatalogueEndpoints
             }
 
             // The curated links keep their home, below the thing they used to stand in for.
-            sb.Append("""
+            sb.Append($"""
                 <h2>Start here</h2>
                 <ul>
                   <li><a href="/lu-legilux/rgd-1998-08-03-n4/2018-01-01">Nouveau Code de proc&#233;dure civile, as it stood on 1 Jan 2018</a></li>
@@ -176,16 +180,20 @@ public static class CatalogueEndpoints
                     <span class="badge">{c.Rows:n0} versions</span>
                     <span class="badge">{H(c.EarliestValidFrom)} &rarr; {H(c.LatestValidFrom)}</span>
                     <span class="badge {(r.SignatureValid ? "ok" : "warn")}">{(r.SignatureValid ? "signed index" : "unsigned")}</span>
-                    <div class="sub" style="margin-top:6px">Dense and reliable from 2017 onward; real but sparse before; isolated snapshots back to 1849; forward to 2030.</div>
+                    <div class="sub" style="margin-top:6px">Mounted coverage: {H(c.EarliestValidFrom)} to {H(c.LatestValidFrom)}. Scope and known gaps are stated on the <a href="/coverage">coverage page</a>.</div>
                     </div>
                     """);
             }
-            sb.Append("""
+            sb.Append($"""
                 <h2>Look something up</h2>
-                <form class="inline" action="/search"><input name="q" placeholder="words in the text, e.g. protection des donn&#233;es" style="flex:1;min-width:240px"><button>Search</button></form>
+                <form class="inline" action="/search"><input name="q" aria-label="Words to search in legal text" placeholder="words in the text, e.g. protection des donn&#233;es" style="flex:1;min-width:240px"><button>Search</button></form>
                 <form class="inline" action="/go-asof">
-                  <input name="work" placeholder="work slug, e.g. code-travail" style="flex:1;min-width:200px">
-                  <input name="date" type="date" value="2022-03-15">
+                  <input name="work" aria-label="Work slug or Lex ID" placeholder="work slug or Lex ID" style="flex:1;min-width:200px">
+                  <select name="publisher" aria-label="Jurisdiction or publisher">
+                    <option value="">find it across every jurisdiction</option>
+                    {string.Join("", readers.Values.OrderBy(r => r.Collection, StringComparer.Ordinal).Select(r => $"<option value=\"{H(r.Collection)}\">{H(r.Stamp.GetValueOrDefault("publisher_name", r.Collection))}</option>"))}
+                  </select>
+                  <input name="date" type="date" aria-label="Date on which to read the work" value="2022-03-15">
                   <button>As of date</button>
                 </form>
                 """);
@@ -199,9 +207,9 @@ public static class CatalogueEndpoints
                 ["@context"] = "https://schema.org",
                 ["@type"] = "Dataset",
                 ["name"] = "Lex: point-in-time Luxembourg and reviewed-scope EU law",
-                ["description"] = "Every consolidated version of Luxembourg law that Legilux "
-                    + "publishes, plus reviewed-scope EU law, as dated records carrying validity intervals, "
-                    + "per-article history, and a SHA-256 chain to the publisher's own bytes.",
+                ["description"] = "Official dated Luxembourg expressions and reviewed-scope EU law, "
+                    + "including every available official consolidation in the mounted scope, with validity intervals, "
+                    + "per-article history, explicit coverage gaps, and a SHA-256 chain to the publisher's own bytes.",
                 ["url"] = $"{ctx.PublicBase}/browse",
                 ["license"] = "https://creativecommons.org/licenses/by/4.0/",
                 ["isAccessibleForFree"] = true,
@@ -236,8 +244,23 @@ public static class CatalogueEndpoints
                 "browse", canonicalPath: "/browse", jsonLd: datasetLd), "text/html");
         });
 
-        app.MapGet("/go-asof", (string work, string date) =>
-            Results.Redirect($"/lu-legilux/{Uri.EscapeDataString(work.Trim())}/{Uri.EscapeDataString(date)}"));
+        app.MapGet("/go-asof", (string work, string date, string? publisher) =>
+        {
+            var value = work.Trim();
+            var colon = value.IndexOf(':');
+            if (colon > 0 && readers.ContainsKey(value[..colon]))
+            {
+                publisher = value[..colon];
+                value = value[(colon + 1)..];
+            }
+            if (!string.IsNullOrWhiteSpace(publisher) && readers.ContainsKey(publisher))
+                return Results.Redirect($"/{Uri.EscapeDataString(publisher)}/{Uri.EscapeDataString(value)}/{Uri.EscapeDataString(date)}");
+
+            // A bare slug is not globally unique. Let the mixed-corpus identifier search resolve
+            // it rather than silently treating every future jurisdiction as Luxembourg.
+            return Results.Redirect("/?space=search&q=" + Uri.EscapeDataString(value)
+                + "&asOf=" + Uri.EscapeDataString(date));
+        });
 
         app.MapGet("/coverage", () =>
         {
@@ -290,18 +313,22 @@ public static class CatalogueEndpoints
                     sb.Append("</table></div>");
                 }
                 sb.Append(EnvelopeCard(r, false));
-                var luGap = c.Collection == "lu-legilux"
-                    ? """
+                var jurisdiction = r.Stamp.GetValueOrDefault("jurisdiction", "").ToUpperInvariant();
+                var luGap = jurisdiction switch
+                {
+                    "LU" => """
                       The publisher only maintains consolidated (amendments-merged) editions for some laws , 
                       the codes and frequently amended acts. Lex holds <b>all of those</b>. The other
                       ≈24,579 Luxembourg acts never get a consolidated edition; they are <b>not here yet</b>
                       (and we won't guess dates for texts we haven't seen).
-                      """
-                    : $" The mounted index contains {c.Groups:n0} EU acts and related legal materials from the reviewed scope. Expansion remains gated by the scope preview and corpus release.";
+                      """,
+                    "EU" => $" The mounted index contains {c.Groups:n0} EU acts and related legal materials from the reviewed scope. Expansion remains gated by the scope preview and corpus release.",
+                    _ => $" The mounted index contains {c.Groups:n0} works from this publisher's configured scope. See its release manifest for exact inclusion rules.",
+                };
                 // Measured against the publisher's own catalogue, 2026-08-04. The cause is the file format
                 // offered per version, not our pipeline and not the age of the act, and it lands mostly on
                 // documents that are not instruments at all.
-                var gapWhy = c.Collection == "lu-legilux"
+                var gapWhy = jurisdiction == "LU"
                     ? """
                       <b>Why:</b> Lex ingests the publisher's XML, because XML is the only format that marks
                       where each article begins and ends, which is what makes an article citable, hashable and
@@ -329,13 +356,18 @@ public static class CatalogueEndpoints
         app.MapGet("/in-force-on", (string? date, string? publisher, string? kind, int? page) =>
         {
             var sb = new StringBuilder();
-            var kindOptions = string.Join("", (readers.Values.FirstOrDefault()?.Coverage().Kinds ?? [])
+            var kindOptions = string.Join("", readers.Values.SelectMany(r => r.Coverage().Kinds)
                 .Where(k => k.Kind is not null)
+                .GroupBy(k => k.Kind, StringComparer.OrdinalIgnoreCase).Select(g => g.First())
+                .OrderBy(k => k.Kind, StringComparer.OrdinalIgnoreCase)
                 .Select(k => $"<option {(k.Kind == kind ? "selected" : "")}>{H(k.Kind)}</option>"));
+            var publisherOptions = string.Join("", readers.Values.OrderBy(r => r.Collection, StringComparer.Ordinal)
+                .Select(r => $"<option value=\"{H(r.Collection)}\"{(publisher == r.Collection ? " selected" : "")}>{H(r.Stamp.GetValueOrDefault("publisher_name", r.Collection))}</option>"));
             sb.Append($"""
                 <form class="inline">
-                  <input type="date" name="date" value="{H(date ?? "2022-03-15")}">
-                  <select name="kind"><option value="">any type</option>{kindOptions}</select>
+                  <input type="date" name="date" aria-label="Date to list works in force" value="{H(date ?? "2022-03-15")}">
+                  <select name="publisher" aria-label="Jurisdiction or publisher"><option value="">Every jurisdiction</option>{publisherOptions}</select>
+                  <select name="kind"><option value="">any source class</option>{kindOptions}</select>
                   <button>Show</button>
                 </form>
                 """);
@@ -357,13 +389,19 @@ public static class CatalogueEndpoints
                     if (total > limit)
                     {
                         sb.Append("<p>");
-                        if (p > 0) sb.Append($"<a href=\"?date={d:yyyy-MM-dd}&kind={H(kind)}&page={p}\">← previous</a> &nbsp;");
-                        if ((p + 1) * limit < total) sb.Append($"<a href=\"?date={d:yyyy-MM-dd}&kind={H(kind)}&page={p + 2}\">next →</a>");
+                        if (p > 0) sb.Append($"<a href=\"?date={d:yyyy-MM-dd}&publisher={H(publisher)}&kind={H(kind)}&page={p}\">← previous</a> &nbsp;");
+                        if ((p + 1) * limit < total) sb.Append($"<a href=\"?date={d:yyyy-MM-dd}&publisher={H(publisher)}&kind={H(kind)}&page={p + 2}\">next →</a>");
                         sb.Append($" <span class=\"sub\">page {p + 1} of {(total + limit - 1) / limit}</span></p>");
                     }
+                    var gap = r.Stamp.GetValueOrDefault("jurisdiction", "").ToUpperInvariant() switch
+                    {
+                        "LU" => "Approximately 24,579 never-consolidated Luxembourg acts are not ingested (date coverage unmeasured).",
+                        "EU" => "EU coverage is the reviewed configured scope, not the complete EUR-Lex universe.",
+                        _ => "Coverage is limited to this publisher's configured and verified scope.",
+                    };
                     sb.Append($"""
                         <div class="notice"><b>Population disclosure.</b> Basis: versioned works only ({r.Coverage().Groups:n0} works).
-                        ≈24,579 never-consolidated LU acts are not ingested (date coverage unmeasured), see <a href="/coverage">coverage</a>.</div>
+                        {H(gap)} See <a href="/coverage">coverage</a>.</div>
                         """);
                     sb.Append(EnvelopeCard(r, IsProvisional(r, d)));
                 }
@@ -372,23 +410,32 @@ public static class CatalogueEndpoints
                 "The compliance question in one call: which instruments applied on that day?"), "text/html");
         });
 
-        app.MapGet("/search", (string? q, string? kind) =>
+        app.MapGet("/search", (string? q, string? kind, string? publisher) =>
         {
             var sb = new StringBuilder();
+            var publisherOptions = string.Join("", readers.Values.OrderBy(r => r.Collection, StringComparer.Ordinal)
+                .Select(r => $"<option value=\"{H(r.Collection)}\"{(publisher == r.Collection ? " selected" : "")}>{H(r.Stamp.GetValueOrDefault("publisher_name", r.Collection))}</option>"));
+            var kindOptions = string.Join("", readers.Values.SelectMany(r => r.Coverage().Kinds)
+                .Where(k => k.Kind is not null).GroupBy(k => k.Kind, StringComparer.OrdinalIgnoreCase)
+                .Select(g => g.First()).OrderBy(k => k.Kind, StringComparer.OrdinalIgnoreCase)
+                .Select(k => $"<option{(k.Kind == kind ? " selected" : "")}>{H(k.Kind)}</option>"));
             sb.Append($"""
-                <form class="inline"><input name="q" value="{H(q)}" placeholder="search article text &amp; titles" style="flex:1;min-width:240px"><button>Search</button></form>
+                <form class="inline"><input name="q" value="{H(q)}" aria-label="Words to search in legal text" placeholder="search article text &amp; titles" style="flex:1;min-width:240px">
+                <select name="publisher" aria-label="Jurisdiction or publisher"><option value="">Every jurisdiction</option>{publisherOptions}</select>
+                <select name="kind" aria-label="Source class"><option value="">any source class</option>{kindOptions}</select>
+                <button>Search</button></form>
                 <p class="sub">Article-level full-text search over every held provision. Filters run before ranking, always.</p>
                 """);
             if (!string.IsNullOrWhiteSpace(q))
             {
-                foreach (var r in readers.Values)
+                foreach (var r in readers.Values.Where(r => publisher is null || r.Collection == publisher))
                 {
                     var hits = r.Search(q, new FilterSet(null, null, string.IsNullOrEmpty(kind) ? null : kind, null), 90)
                         .GroupBy(h => (h.Doc.GroupKey, h.Prov.Anchor)).Select(g => g.First())
                         .GroupBy(h => h.Doc.GroupKey).SelectMany(g => g.Take(2))
                         .Take(15)
                         .ToList();
-                    sb.Append($"<h2>{H(r.Stamp.GetValueOrDefault("publisher_name"))}, {hits.Count} hit(s)</h2>");
+                    sb.Append($"<h2>{H(r.Stamp.GetValueOrDefault("publisher_name"))} ({H(r.Stamp.GetValueOrDefault("jurisdiction"))}), {hits.Count} hit(s)</h2>");
                     foreach (var (docRow, prov, snippet) in hits)
                         sb.Append($"""
                             <div class="card"><a href="/{H(docRow.Collection)}/{H(docRow.GroupKey)}/{H(docRow.ValidFrom)}#{H(prov.Anchor)}"><b>{H(DocTitle(docRow))}</b>
@@ -413,6 +460,8 @@ public static class CatalogueEndpoints
             var byChurn = order == "by_churn";
             var f = fromD.ToString("yyyy-MM-dd");
             var t = toD.ToString("yyyy-MM-dd");
+            var publisherOptions = string.Join("", readers.Values.OrderBy(r => r.Collection, StringComparer.Ordinal)
+                .Select(r => $"<option value=\"{H(r.Collection)}\"{(publisher == r.Collection ? " selected" : "")}>{H(r.Stamp.GetValueOrDefault("publisher_name", r.Collection))}</option>"));
 
             var sb = new StringBuilder($"""
                 <p class="lede">Every law in Lex that gained a new version between two
@@ -420,6 +469,7 @@ public static class CatalogueEndpoints
                 <form class="inline" method="get">
                   <label class="sub">from <input type="date" name="from" value="{f}"></label>
                   <label class="sub">to <input type="date" name="to" value="{t}"></label>
+                  <select name="publisher" aria-label="Jurisdiction or publisher"><option value="">Every jurisdiction</option>{publisherOptions}</select>
                   <select name="order">
                     <option value="by_date"{(byChurn ? "" : " selected")}>most recently changed</option>
                     <option value="by_churn"{(byChurn ? " selected" : "")}>changed most often</option>
@@ -445,15 +495,19 @@ public static class CatalogueEndpoints
                 blocks.Append($"<h2>{H(r.Collection)}, {works:n0} law(s) moved, {versions:n0} new version(s)</h2>");
                 blocks.Append("<div class=\"card\"><table><tr><th>law</th><th>new versions</th><th>window</th><th></th></tr>");
                 foreach (var c in rows)
+                {
+                    var diffFrom = c.Baseline ?? c.FirstChange;
+                    var canCompare = diffFrom != c.LastChange && c.DistinctTexts > 1;
                     blocks.Append($"""
                         <tr><td><a href="/{H(r.Collection)}/{H(c.GroupKey)}">{H(TitleShorten(c.Title) ?? c.GroupKey)}</a>
-                            <div class="sub mono" style="font-size:12px">{H(c.GroupKey)} · {c.VersionsTotal} version(s) in all</div></td>
+                            <div class="sub mono" style="font-size:12px">{H(r.Stamp.GetValueOrDefault("jurisdiction", r.Collection))} · {H(c.GroupKey)} · {c.VersionsTotal} version(s) in all</div></td>
                         <td class="mono">{c.VersionsInPeriod}</td>
                         <td class="mono">{H(c.FirstChange)}{(c.FirstChange == c.LastChange ? "" : " → " + H(c.LastChange))}</td>
-                        <td>{(c.FirstChange == c.LastChange
+                        <td>{(!canCompare
                                 ? $"<a href=\"/{H(r.Collection)}/{H(c.GroupKey)}/{H(c.LastChange)}\">read</a>"
-                                : $"<a href=\"/{H(r.Collection)}/{H(c.GroupKey)}/diff/{H(c.FirstChange)}/{H(c.LastChange)}\">what changed</a>")}</td></tr>
+                                : $"<a href=\"/{H(r.Collection)}/{H(c.GroupKey)}/diff/{H(diffFrom)}/{H(c.LastChange)}\">what changed</a>")}</td></tr>
                         """);
+                }
                 blocks.Append("</table></div>");
             }
 

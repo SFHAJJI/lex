@@ -15,7 +15,7 @@ public static class UiMapper
 {
     public static UiEffect From(string tool, JsonObject args, JsonNode result)
     {
-        var node = result is JsonArray arr ? arr.OfType<JsonObject>().FirstOrDefault(HasContent) ?? arr.OfType<JsonObject>().FirstOrDefault() : result as JsonObject;
+        var node = result is JsonArray arr ? Aggregate(tool, arr) : result as JsonObject;
         if (node is null) return new UiEffect();
         var status = (node["envelope"]?["status"] ?? node["status"])?.GetValue<string>();
 
@@ -50,6 +50,52 @@ public static class UiMapper
         => o["provisions"] is JsonArray { Count: > 0 } || o["states"] is JsonArray { Count: > 0 }
            || o["changes"] is JsonArray { Count: > 0 } || o["works"] is JsonArray { Count: > 0 }
            || o["document"] is JsonObject || o["from"] is JsonObject;
+
+    /// <summary>
+    /// Corpus-wide tools return one envelope per mounted publisher. A UI effect is one view, so
+    /// selecting the first non-empty envelope silently turned an EU + Luxembourg answer into
+    /// whichever index happened to be enumerated first. Combine only the explicitly aggregate
+    /// tool shapes and retain each row's jurisdiction before mapping the view.
+    /// </summary>
+    private static JsonObject? Aggregate(string tool, JsonArray result)
+    {
+        var parts = result.OfType<JsonObject>().ToList();
+        if (parts.Count == 0) return null;
+        if (tool is not ("changes_in_period" or "in_force_on" or "cited_by"))
+            return parts.FirstOrDefault(HasContent) ?? parts[0];
+
+        var combined = (parts.FirstOrDefault(HasContent) ?? parts[0]).DeepClone().AsObject();
+        var field = tool switch
+        {
+            "changes_in_period" => "changes",
+            "in_force_on" => "works",
+            _ => "citations",
+        };
+        var rows = new JsonArray();
+        foreach (var part in parts)
+        {
+            var jurisdiction = S(part["envelope"] as JsonObject, "jurisdiction");
+            if (part[field] is not JsonArray source) continue;
+            foreach (var item in source.OfType<JsonObject>())
+            {
+                var row = item.DeepClone().AsObject();
+                if (jurisdiction is not null && row["jurisdiction"] is null)
+                    row["jurisdiction"] = jurisdiction;
+                rows.Add(row);
+            }
+        }
+        combined[field] = rows;
+        if (tool == "changes_in_period")
+        {
+            combined["works_changed"] = parts.Sum(p => p["works_changed"]?.GetValue<int>() ?? 0);
+            combined["new_versions"] = parts.Sum(p => p["new_versions"]?.GetValue<int>() ?? 0);
+        }
+        else if (tool == "in_force_on")
+            combined["total_works_in_force"] = parts.Sum(p => p["total_works_in_force"]?.GetValue<int>() ?? 0);
+        else
+            combined["citing_articles"] = rows.Count;
+        return combined;
+    }
 
     private static UiEffect Provision(JsonObject o, JsonObject args)
     {
@@ -95,34 +141,22 @@ public static class UiMapper
             Note: S(o, "note")));
     }
 
-    /// <summary>
-    /// Which of the workspace's layers a set of document types corresponds to. The assistant
-    /// asks the index in the index's vocabulary ("LOI,CODE"); the workspace thinks in layers. This
-    /// is the translation, so that asking the assistant for statutes leaves the reader looking at
-    /// the Statutes tab rather than at an unexplained subset of everything.
-    /// </summary>
-    private static string? LayerOf(string? types) => types?.Replace(" ", "") switch
-    {
-        null or "" => null,
-        "!RECUEIL,!CODE_RECUEIL" => "instruments",
-        "Constitution,CONV,PROT,TC,ORD" => "constitution",
-        "LOI,CODE" => "statutes",
-        "RGD,RMIN,AMIN,AGD,RGC,AGC,ARGD,RI" => "regulations",
-        "RECUEIL,CODE_RECUEIL" => "collections",
-        var t when t.Contains("Constitution") => "constitution",
-        var t when t.Contains("LOI") || t.Contains("CODE") => "statutes",
-        var t when t.Contains("RGD") || t.Contains("RMIN") => "regulations",
-        _ => null,
-    };
-
     /// Controls the assistant set on the way to its answer, so the workspace lands the same way.
-    private static UiEffect Workspace(JsonObject args)
+    private static UiEffect Workspace(JsonObject args, int? page = null)
     {
-        var layer = LayerOf(S(args, "document_type"));
-        var lang = S(args, "language");
-        return layer is null && lang is null
+        var view = new WorkspaceView(
+            Jurisdiction: S(args, "jurisdiction"),
+            Hierarchy: S(args, "hierarchy"),
+            Domain: S(args, "domain"),
+            SourceClass: S(args, "source_class") ?? S(args, "document_type"),
+            ActForm: S(args, "act_form"),
+            BindingStatus: S(args, "binding_status"),
+            Page: page,
+            Language: S(args, "language"));
+        return view is { Jurisdiction: null, Hierarchy: null, Domain: null, SourceClass: null,
+                         ActForm: null, BindingStatus: null, Page: null, Language: null }
             ? new UiEffect()
-            : new UiEffect(Workspace: new WorkspaceView(Layer: layer, Language: lang));
+            : new UiEffect(Workspace: view);
     }
 
     private static UiEffect Cited(JsonObject o)
@@ -133,12 +167,14 @@ public static class UiMapper
             CitingArticles: o["citing_articles"]?.GetValue<int>() ?? rows.Count,
             Rows: rows.OfType<JsonObject>().Select(c => new CitedByRow(
                 Work: S(c, "work") ?? "", Title: S(c, "title"), ValidFrom: S(c, "valid_from") ?? "",
-                Anchor: S(c, "anchor") ?? "", Num: S(c, "num"), Permalink: S(c, "permalink"))).ToList()));
+                Anchor: S(c, "anchor") ?? "", Num: S(c, "num"), Permalink: S(c, "permalink"),
+                Jurisdiction: S(c, "jurisdiction"))).ToList()));
     }
 
     private static UiEffect Ranking(JsonObject o, JsonObject args)
     {
         if (o["changes"] is not JsonArray rows || rows.Count == 0) return new UiEffect();
+        var offset = o["offset"]?.GetValue<int>() ?? 0;
         return new UiEffect(Ranking: new RankingView(
             FromDate: S(o["window"] as JsonObject ?? [], "from") ?? "",
             ToDate: S(o["window"] as JsonObject ?? [], "to") ?? "",
@@ -153,10 +189,15 @@ public static class UiMapper
                 Baseline: S(c, "baseline"), DiffFrom: S(c, "diff_from"), DiffTo: S(c, "diff_to"),
                 DistinctTexts: c["distinct_texts"]?.GetValue<int>() ?? 0,
                 WordingChanged: c["wording_changed"]?.GetValue<bool>() ?? true,
+                TextComparable: c["text_comparable"]?.GetValue<bool>() ?? false,
+                Jurisdiction: S(c, "jurisdiction"), Hierarchy: S(c, "hierarchy"),
+                Domains: c["domains"] is JsonArray domains
+                    ? domains.Select(d => d?.GetValue<string>() ?? "").Where(d => d.Length > 0).ToList()
+                    : null,
+                SourceClass: S(c, "source_class"), ActForm: S(c, "act_form"),
+                BindingStatus: S(c, "binding_status"), Language: S(c, "language"),
                 Permalink: S(c, "permalink"), DiffPermalink: S(c, "diff_permalink"))).ToList()),
-            Workspace: LayerOf(S(args, "document_type")) is { } lay
-                ? new WorkspaceView(Layer: lay, Page: (o["offset"]?.GetValue<int>() ?? 0) / 25)
-                : null);
+            Workspace: Workspace(args, offset > 0 ? offset / 25 : null).Workspace);
     }
 
     private static UiEffect InForce(JsonObject o, JsonObject args)
@@ -166,8 +207,10 @@ public static class UiMapper
             Date: S(args, "date") ?? "",
             Total: o["total_works_in_force"]?.GetValue<int>() ?? docs.Count,
             Rows: docs.OfType<JsonObject>().Take(60).Select(d => new InForceRow(
-                Work: S(d, "lex_id") ?? "", Title: S(d, "title"), Kind: S(d, "document_type"),
-                ValidFrom: S(d, "valid_from") ?? "", Permalink: S(d, "permalink"))).ToList()));
+                Work: WorkOf(S(d, "lex_id")) ?? S(d, "work") ?? "", Title: S(d, "title"), Kind: S(d, "document_type"),
+                ValidFrom: S(d, "valid_from") ?? "", Permalink: S(d, "permalink"),
+                Jurisdiction: S(d, "jurisdiction"), Hierarchy: S(d, "hierarchy"))).ToList()),
+            Workspace: Workspace(args).Workspace);
     }
 
     private static Subject SubjectOf(JsonObject doc, JsonObject args) => new(

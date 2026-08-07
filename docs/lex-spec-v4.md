@@ -1206,7 +1206,7 @@ Every state that document has been in, and what changed it. Paginated with
 ### 9.3 `in_force_on`
 
 ```
-in_force_on(date, publisher?, document_type?, language?, limit?, cursor?)
+in_force_on(date, publisher?, jurisdiction?, source_class?, document_type?, hierarchy?, act_form?, binding_status?, domain?, language?, limit?, cursor?)
     → [ Version ] + population + envelope
 ```
 
