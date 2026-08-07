@@ -30,6 +30,21 @@ public static class StructuredTextExtractor
             // rejecting it here would silently remove historical law from the search layer.
         }
 
+        if (source.Contains("xlink:", StringComparison.Ordinal))
+        {
+            try
+            {
+                return new Result(
+                    LegacyXlinkEuProfile.Extract(source, lexIdBase),
+                    LegacyXlinkEuProfile.ProfileId);
+            }
+            catch (XmlException)
+            {
+                // More than the missing publisher namespace is malformed. The general
+                // tolerant profile below remains the final structured-text fallback.
+            }
+        }
+
         return new Result(
             TolerantHtmlEuProfile.Extract(source, lexIdBase),
             TolerantHtmlEuProfile.ProfileId);
@@ -42,6 +57,88 @@ public static class StructuredTextExtractor
         var span = source.AsSpan(0, Math.Min(source.Length, 16_384));
         return span.Contains("<akomaNtoso", StringComparison.OrdinalIgnoreCase)
                || span.Contains(":akomaNtoso", StringComparison.OrdinalIgnoreCase);
+    }
+}
+
+/// <summary>
+/// Extraction profile "xhtml-eu-xlink-context/1". Some official legacy EUR-Lex XHTML uses
+/// xlink:href without declaring the standard XLink namespace. Supply that missing parser
+/// context and normalize only those link attributes in the derived DOM. Publisher evidence
+/// bytes are never rewritten.
+/// </summary>
+public static class LegacyXlinkEuProfile
+{
+    public const string ProfileId = "xhtml-eu-xlink-context/1";
+    private const string XlinkUri = "http://www.w3.org/1999/xlink";
+
+    public static Extraction Extract(string xhtml, string lexIdBase)
+    {
+        try
+        {
+            var nameTable = new NameTable();
+            var namespaces = new XmlNamespaceManager(nameTable);
+            namespaces.AddNamespace("xlink", XlinkUri);
+            var context = new XmlParserContext(nameTable, namespaces, null, XmlSpace.None);
+            var settings = new XmlReaderSettings
+            {
+                DtdProcessing = DtdProcessing.Parse,
+                XmlResolver = null,
+            };
+
+            using var input = new StringReader(xhtml);
+            using var reader = XmlReader.Create(input, settings, context);
+            var document = System.Xml.Linq.XDocument.Load(reader, System.Xml.Linq.LoadOptions.None);
+            NormalizeXlinkHref(document);
+            var structured = XhtmlEuProfile.Extract(document, lexIdBase);
+            if (structured.Provisions.Count > 0) return structured;
+            return TolerantHtmlEuProfile.Extract(
+                document.ToString(System.Xml.Linq.SaveOptions.DisableFormatting), lexIdBase);
+        }
+        catch (XmlException)
+        {
+            return ExtractMalformedHtml(xhtml, lexIdBase);
+        }
+    }
+
+    private static Extraction ExtractMalformedHtml(string html, string lexIdBase)
+    {
+        var document = new HtmlDocument
+        {
+            OptionAutoCloseOnEnd = true,
+            OptionCheckSyntax = false,
+            OptionFixNestedTags = true,
+            OptionOutputAsXml = true,
+            OptionWriteEmptyNodes = true,
+        };
+        document.LoadHtml(html);
+
+        var root = document.DocumentNode.SelectSingleNode("//html")
+                   ?? throw new XmlException("legacy XHTML has no html root");
+        root.SetAttributeValue("xmlns:xlink", XlinkUri);
+        foreach (var element in root.DescendantsAndSelf())
+        {
+            var href = element.Attributes["xlink:href"];
+            if (href is not null && element.Attributes["href"] is null)
+                element.SetAttributeValue("href", href.Value);
+        }
+
+        var normalized = document.DocumentNode.WriteTo();
+        var structured = XhtmlEuProfile.Extract(normalized, lexIdBase);
+        return structured.Provisions.Count > 0
+            ? structured
+            : TolerantHtmlEuProfile.Extract(normalized, lexIdBase);
+    }
+
+    private static void NormalizeXlinkHref(System.Xml.Linq.XDocument document)
+    {
+        var xlink = System.Xml.Linq.XNamespace.Get(XlinkUri);
+        foreach (var element in document.Descendants())
+        {
+            var link = element.Attribute(xlink + "href");
+            if (link is null) continue;
+            element.SetAttributeValue("href", link.Value);
+            link.Remove();
+        }
     }
 }
 

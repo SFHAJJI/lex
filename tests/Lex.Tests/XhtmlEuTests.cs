@@ -27,6 +27,25 @@ public class XhtmlEuTests
         <body><p>Authoritative fragment wording.</p></body></html>
         """;
 
+    private const string LegacyUndeclaredXlink = """
+        <?xml version="1.0" encoding="utf-8"?>
+        <html xmlns="http://www.w3.org/1999/xhtml"><body><div>
+        <p class="title-article-norm">Article 1</p>
+        <p><a xlink:href="https://example.test/source">Official link</a> applies.</p>
+        </div></body></html>
+        """;
+
+    private const string LegacyMalformedUndeclaredXlink = """
+        <html><head><meta http-equiv=Content-Type content="text/html"></head><body>
+        <div><p class=title-article-norm>Article 1</p>
+        <p><a xlink:href="https://example.test/source">Official link</a><br>applies.</p></div>
+        </body></html>
+        """;
+
+    private const string LegacyXlinkFragmentWithoutBoundaries = """
+        <html><body><p><a xlink:href="https://example.test/source">Official fragment wording.</a></p></body></html>
+        """;
+
     [Fact]
     public void Structured_dispatch_uses_tolerant_profile_for_malformed_legacy_html()
     {
@@ -56,6 +75,41 @@ public class XhtmlEuTests
         var provision = Assert.Single(result.Extraction.Provisions);
         Assert.Equal("document", provision.Type);
         Assert.Equal("Authoritative fragment wording.", provision.TextMd);
+        Assert.Contains("document-level fallback", Assert.Single(result.Extraction.Notes));
+    }
+
+    [Fact]
+    public void Structured_dispatch_supplies_the_missing_standard_xlink_context()
+    {
+        var result = StructuredTextExtractor.Extract(LegacyUndeclaredXlink, "lex:test");
+
+        Assert.Equal(LegacyXlinkEuProfile.ProfileId, result.ProfileId);
+        var provision = Assert.Single(result.Extraction.Provisions);
+        Assert.Equal("art_1", provision.Anchor);
+        Assert.Contains("Official link applies.", provision.TextMd);
+    }
+
+    [Fact]
+    public void Structured_dispatch_repairs_xlink_inside_malformed_legacy_html()
+    {
+        var result = StructuredTextExtractor.Extract(LegacyMalformedUndeclaredXlink, "lex:test");
+
+        Assert.Equal(LegacyXlinkEuProfile.ProfileId, result.ProfileId);
+        var provision = Assert.Single(result.Extraction.Provisions);
+        Assert.Equal("art_1", provision.Anchor);
+        Assert.Contains("Official link", provision.TextMd);
+        Assert.Contains("applies.", provision.TextMd);
+    }
+
+    [Fact]
+    public void Structured_dispatch_preserves_xlink_fragments_without_inventing_boundaries()
+    {
+        var result = StructuredTextExtractor.Extract(LegacyXlinkFragmentWithoutBoundaries, "lex:test");
+
+        Assert.Equal(LegacyXlinkEuProfile.ProfileId, result.ProfileId);
+        var provision = Assert.Single(result.Extraction.Provisions);
+        Assert.Equal("document", provision.Type);
+        Assert.Equal("Official fragment wording.", provision.TextMd);
         Assert.Contains("document-level fallback", Assert.Single(result.Extraction.Notes));
     }
 
