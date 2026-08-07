@@ -482,6 +482,10 @@ public class IndexTests : IDisposable
         Assert.Equal(2, result.GetInt32(0));
         Assert.Equal(1, result.GetInt32(1));
 
+        using var reader = LexIndexReader.Open(_db, encoder, vectors);
+        var hybrid = reader.SearchHybrid("shared exact wording", FilterSet.All, 10);
+        Assert.Equal(["first", "second"], hybrid.Hits.Select(hit => hit.Doc.GroupKey).Order());
+
         static void AssertStage(
             IReadOnlyList<SemanticBuildProgress> updates, SemanticBuildStage stage, long total)
         {

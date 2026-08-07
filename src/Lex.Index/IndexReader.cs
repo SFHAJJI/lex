@@ -148,10 +148,21 @@ public sealed class LexIndexReader : IDisposable
             vectors = new SemanticVectorReader(vectorPath);
             if (vectors.Dimensions != encoder.Dimensions)
                 throw new InvalidDataException("The semantic vector dimension does not match the runtime encoder.");
-            using var count = conn.CreateCommand();
-            count.CommandText = "SELECT COUNT(*) FROM semantic_chunks";
-            if (Convert.ToInt64(count.ExecuteScalar()) != vectors.Count)
-                throw new InvalidDataException("The semantic vector count does not match the index mapping.");
+            using var mapping = conn.CreateCommand();
+            mapping.CommandText = """
+                SELECT
+                  (SELECT COUNT(*) FROM semantic_chunks
+                     WHERE vector_ordinal < 0 OR vector_ordinal >= $vector_count),
+                  (SELECT COUNT(DISTINCT vector_ordinal) FROM semantic_chunks)
+                """;
+            mapping.Parameters.AddWithValue("$vector_count", vectors.Count);
+            using var mappingReader = mapping.ExecuteReader();
+            if (!mappingReader.Read())
+                throw new InvalidDataException("The semantic vector mapping cannot be read.");
+            if (mappingReader.GetInt64(0) != 0)
+                throw new InvalidDataException("The semantic vector mapping contains an invalid ordinal.");
+            if (mappingReader.GetInt64(1) != vectors.Count)
+                throw new InvalidDataException("The semantic vector file contains an unmapped record.");
         }
         return new LexIndexReader(conn, stamp, schema!, encoder, vectors);
     }
