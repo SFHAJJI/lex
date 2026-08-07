@@ -149,8 +149,13 @@ public static class IndexBuilder
         {
         if (semantic is not null)
         {
+            using var embeddingHeartbeat = new StageHeartbeat(
+                semantic, SemanticBuildStage.Embeddings, semanticVectorTotal, semanticProgressWatch);
             foreach (var batch in uniqueSemanticChunks!.Chunk(semantic.BatchSize))
             {
+                embeddingHeartbeat.SetCurrent(
+                    $"{batch[0].Sha256}..{batch[^1].Sha256}",
+                    batch.Sum(chunk => (long)chunk.Text.Length));
                 var vectors = semantic.Encoder.EncodeBatch(
                     batch.Select(chunk => chunk.Text).ToArray(), EmbeddingInputKind.Passage);
                 if (vectors.Count != batch.Length)
@@ -161,6 +166,7 @@ public static class IndexBuilder
                     vectorOrdinalByChunk.Add(batch[i].Sha256, ordinal);
                     semanticVectorsCompleted++;
                 }
+                embeddingHeartbeat.SetCompleted(semanticVectorsCompleted);
                 ReportProgress(semantic, SemanticBuildStage.Embeddings,
                     semanticVectorsCompleted, semanticVectorTotal, semanticProgressWatch,
                     ref lastReportedPercent, ref lastProgressReport,
