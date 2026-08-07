@@ -25,9 +25,11 @@ public sealed class MultilingualE5Encoder : ITextEncoder
     public int Dimensions { get; }
     public string ModelSha256 { get; }
     public string TokenizerSha256 { get; }
+    public string ExecutionProvider { get; }
 
     private MultilingualE5Encoder(
-        InferenceSession session, SentencePieceTokenizer tokenizer, PinnedEmbeddingModel manifest)
+        InferenceSession session, SentencePieceTokenizer tokenizer, PinnedEmbeddingModel manifest,
+        string executionProvider)
     {
         _session = session;
         _tokenizer = tokenizer;
@@ -36,6 +38,7 @@ public sealed class MultilingualE5Encoder : ITextEncoder
         Dimensions = manifest.Dimensions;
         ModelSha256 = manifest.Files["model.onnx"];
         TokenizerSha256 = manifest.Files["sentencepiece.bpe.model"];
+        ExecutionProvider = executionProvider;
         // This raw SentencePiece model has no Hugging Face-added <pad> entry. Padding positions
         // are excluded by both the attention mask and mean pooling, so any valid vocabulary id
         // is only a tensor placeholder; use the model's unknown id when no explicit pad exists.
@@ -43,7 +46,8 @@ public sealed class MultilingualE5Encoder : ITextEncoder
             _paddingId = tokenizer.UnknownId;
     }
 
-    public static MultilingualE5Encoder Open(string directory)
+    public static MultilingualE5Encoder Open(
+        string directory, int? intraOpThreads = null, int? directMlDeviceId = null)
     {
         var manifestPath = Path.Combine(directory, "model-manifest.json");
         var manifest = JsonSerializer.Deserialize<PinnedEmbeddingModel>(
@@ -62,19 +66,32 @@ public sealed class MultilingualE5Encoder : ITextEncoder
                 throw new InvalidDataException($"Embedding artifact '{relative}' failed its SHA-256 check.");
         }
 
-        var options = new SessionOptions
+        if (intraOpThreads <= 0)
+            throw new ArgumentOutOfRangeException(nameof(intraOpThreads));
+        var options = new SessionOptions { GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL };
+        if (directMlDeviceId is { } deviceId)
         {
-            GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL,
-            InterOpNumThreads = 1,
-            IntraOpNumThreads = Math.Max(1, Math.Min(2, Environment.ProcessorCount)),
-        };
+            options.ExecutionMode = ExecutionMode.ORT_SEQUENTIAL;
+            options.EnableMemoryPattern = false;
+            options.AppendExecutionProvider_DML(deviceId);
+        }
+        else
+        {
+            options.InterOpNumThreads = 1;
+            options.IntraOpNumThreads = intraOpThreads
+                ?? Math.Max(1, Math.Min(2, Environment.ProcessorCount));
+        }
         var session = new InferenceSession(Path.Combine(directory, "model.onnx"), options);
         using var tokenizerStream = File.OpenRead(Path.Combine(directory, "sentencepiece.bpe.model"));
         try
         {
             var tokenizer = SentencePieceTokenizer.Create(tokenizerStream, addBeginningOfSentence: true,
                 addEndOfSentence: true, specialTokens: null);
-            return new MultilingualE5Encoder(session, tokenizer, manifest);
+            var runtime = typeof(InferenceSession).Assembly.GetName().Version?.ToString() ?? "unknown";
+            var provider = directMlDeviceId is { } id
+                ? $"directml:{id};onnxruntime={runtime}"
+                : $"cpu;onnxruntime={runtime};intra_op_threads={options.IntraOpNumThreads}";
+            return new MultilingualE5Encoder(session, tokenizer, manifest, provider);
         }
         catch
         {
