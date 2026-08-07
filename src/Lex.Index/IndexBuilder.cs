@@ -99,13 +99,28 @@ public static class IndexBuilder
             chunksByTextSha = new Dictionary<string, IReadOnlyList<SemanticChunk>>(StringComparer.OrdinalIgnoreCase);
             uniqueSemanticChunks = [];
             var uniqueChunkHashes = new HashSet<string>(StringComparer.Ordinal);
+            var seenTextHashes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var uniqueTextRows = new List<ProvisionRow>();
             foreach (var provision in provisionRows)
+                if (seenTextHashes.Add(provision.TextSha)) uniqueTextRows.Add(provision);
+            var preparationWatch = System.Diagnostics.Stopwatch.StartNew();
+            long preparationCompleted = 0;
+            long lastPreparationPercent = -1;
+            var lastPreparationReport = TimeSpan.Zero;
+            ReportProgress(semantic, SemanticBuildStage.Preparation,
+                preparationCompleted, uniqueTextRows.Count, preparationWatch,
+                ref lastPreparationPercent, ref lastPreparationReport, force: true);
+            foreach (var provision in uniqueTextRows)
             {
-                if (chunksByTextSha.ContainsKey(provision.TextSha)) continue;
                 var chunks = SemanticChunker.Split(provision.TextMd, semantic.Encoder);
                 chunksByTextSha.Add(provision.TextSha, chunks);
                 foreach (var chunk in chunks)
                     if (uniqueChunkHashes.Add(chunk.Sha256)) uniqueSemanticChunks.Add(chunk);
+                preparationCompleted++;
+                ReportProgress(semantic, SemanticBuildStage.Preparation,
+                    preparationCompleted, uniqueTextRows.Count, preparationWatch,
+                    ref lastPreparationPercent, ref lastPreparationReport,
+                    force: preparationCompleted == uniqueTextRows.Count);
             }
             semanticVectorTotal = uniqueSemanticChunks.Count;
         }
@@ -114,25 +129,9 @@ public static class IndexBuilder
         long semanticVectorsCompleted = 0;
         long lastReportedPercent = -1;
         var lastProgressReport = TimeSpan.Zero;
-        void ReportSemanticProgress(bool force)
-        {
-            if (semantic?.Progress is null) return;
-            var elapsed = semanticProgressWatch.Elapsed;
-            var percent = semanticVectorTotal == 0
-                ? 100
-                : semanticVectorsCompleted * 100 / semanticVectorTotal;
-            if (!force && percent == lastReportedPercent && elapsed - lastProgressReport < TimeSpan.FromSeconds(30))
-                return;
-            TimeSpan? remaining = semanticVectorsCompleted == 0
-                ? null
-                : TimeSpan.FromTicks((long)(elapsed.Ticks
-                    * (semanticVectorTotal - semanticVectorsCompleted) / (double)semanticVectorsCompleted));
-            semantic.Progress(new SemanticBuildProgress(
-                semanticVectorsCompleted, semanticVectorTotal, elapsed, remaining));
-            lastReportedPercent = percent;
-            lastProgressReport = elapsed;
-        }
-        ReportSemanticProgress(force: true);
+        ReportProgress(semantic, SemanticBuildStage.Embeddings,
+            semanticVectorsCompleted, semanticVectorTotal, semanticProgressWatch,
+            ref lastReportedPercent, ref lastProgressReport, force: true);
 
         var vectorTempPath = semantic is null ? null : semantic.VectorPath + ".tmp-" + Guid.NewGuid().ToString("N");
         using var semanticWriter = semantic is null ? null
@@ -154,7 +153,10 @@ public static class IndexBuilder
                     vectorOrdinalByChunk.Add(batch[i].Sha256, ordinal);
                     semanticVectorsCompleted++;
                 }
-                ReportSemanticProgress(force: semanticVectorsCompleted == semanticVectorTotal);
+                ReportProgress(semantic, SemanticBuildStage.Embeddings,
+                    semanticVectorsCompleted, semanticVectorTotal, semanticProgressWatch,
+                    ref lastReportedPercent, ref lastProgressReport,
+                    force: semanticVectorsCompleted == semanticVectorTotal);
             }
         }
         if (File.Exists(dbPath)) File.Delete(dbPath);
@@ -458,6 +460,30 @@ public static class IndexBuilder
                 File.Delete(vectorTempPath);
             throw;
         }
+    }
+
+    private static void ReportProgress(
+        SemanticBuildOptions? semantic,
+        SemanticBuildStage stage,
+        long completed,
+        long total,
+        System.Diagnostics.Stopwatch watch,
+        ref long lastReportedPercent,
+        ref TimeSpan lastProgressReport,
+        bool force)
+    {
+        if (semantic?.Progress is null) return;
+        var elapsed = watch.Elapsed;
+        var percent = total == 0 ? 100 : completed * 100 / total;
+        if (!force && percent == lastReportedPercent
+            && elapsed - lastProgressReport < TimeSpan.FromSeconds(30))
+            return;
+        TimeSpan? remaining = completed == 0
+            ? null
+            : TimeSpan.FromTicks((long)(elapsed.Ticks * (total - completed) / (double)completed));
+        semantic.Progress(new SemanticBuildProgress(completed, total, elapsed, remaining, stage));
+        lastReportedPercent = percent;
+        lastProgressReport = elapsed;
     }
 
     private static void Exec(SqliteConnection conn, string sql)

@@ -141,7 +141,8 @@ switch (args0[0])
             encoder, Get("--vectors") ?? Path.ChangeExtension(outDb, ".vectors"),
             encoder.ModelSha256, encoder.TokenizerSha256,
             Progress: progress => Console.Error.WriteLine(
-                $"  [index-progress] embeddings={progress.Completed}/{progress.Total} " +
+                $"  [index-progress] stage={progress.Stage.ToString().ToLowerInvariant()} " +
+                $"items={progress.Completed}/{progress.Total} " +
                 $"percent={progress.Percent:F1} elapsed={FormatDuration(progress.Elapsed)} " +
                 $"eta={(progress.EstimatedRemaining is { } eta ? FormatDuration(eta) : "calculating")}"),
             BatchSize: embeddingBatchSize);

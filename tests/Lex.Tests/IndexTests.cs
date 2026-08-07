@@ -415,14 +415,31 @@ public class IndexTests : IDisposable
         Assert.Equal(1, encoder.EncodeCalls);
         Assert.Equal(1, encoder.BatchCalls);
         Assert.Collection(progress,
+            preparationStarted =>
+            {
+                Assert.Equal(SemanticBuildStage.Preparation, preparationStarted.Stage);
+                Assert.Equal(0, preparationStarted.Completed);
+                Assert.Equal(1, preparationStarted.Total);
+                Assert.Null(preparationStarted.EstimatedRemaining);
+            },
+            preparationCompleted =>
+            {
+                Assert.Equal(SemanticBuildStage.Preparation, preparationCompleted.Stage);
+                Assert.Equal(1, preparationCompleted.Completed);
+                Assert.Equal(1, preparationCompleted.Total);
+                Assert.Equal(100, preparationCompleted.Percent);
+                Assert.Equal(TimeSpan.Zero, preparationCompleted.EstimatedRemaining);
+            },
             started =>
             {
+                Assert.Equal(SemanticBuildStage.Embeddings, started.Stage);
                 Assert.Equal(0, started.Completed);
                 Assert.Equal(1, started.Total);
                 Assert.Null(started.EstimatedRemaining);
             },
             completed =>
             {
+                Assert.Equal(SemanticBuildStage.Embeddings, completed.Stage);
                 Assert.Equal(1, completed.Completed);
                 Assert.Equal(1, completed.Total);
                 Assert.Equal(100, completed.Percent);

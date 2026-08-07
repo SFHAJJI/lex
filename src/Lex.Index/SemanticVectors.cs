@@ -227,11 +227,18 @@ public sealed record SemanticBuildOptions(
     Action<SemanticBuildProgress>? Progress = null,
     int BatchSize = 16);
 
+public enum SemanticBuildStage
+{
+    Preparation,
+    Embeddings,
+}
+
 public sealed record SemanticBuildProgress(
     long Completed,
     long Total,
     TimeSpan Elapsed,
-    TimeSpan? EstimatedRemaining)
+    TimeSpan? EstimatedRemaining,
+    SemanticBuildStage Stage = SemanticBuildStage.Embeddings)
 {
     public double Percent => Total == 0 ? 100 : Completed * 100d / Total;
 }

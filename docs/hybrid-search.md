@@ -27,6 +27,10 @@ of the configured memory limit.
 6. SQLite maps each chunk and vector ordinal back to the authoritative lexical state. The vector
    file, model, tokenizer, scope and SQLite index must all appear in the signed artifact manifest.
 
+Index builds report the deterministic text/chunk preparation phase separately from ONNX embedding.
+Each phase exposes its own completed count, percentage, elapsed time and ETA so a quiet preparation
+pass cannot be mistaken for a stalled model run.
+
 ## Query path
 
 Exact CELEX and ECLI identifiers are prioritized. Keyword candidates and semantic candidates are
