@@ -57,8 +57,11 @@ public static class ExplainerEndpoints
 
                 <h2>Connect in one line</h2>
                 <div class="card"><b>Claude Code</b><pre class="mono" style="white-space:pre-wrap">claude mcp add --transport http lex {{baseUrl}}/mcp</pre></div>
-                <div class="card"><b>Claude Desktop / any MCP client</b>, add a remote MCP server:
-                <pre class="mono" style="white-space:pre-wrap">{ "mcpServers": { "lex": { "url": "{{baseUrl}}/mcp" } } }</pre></div>
+                <div class="card"><b>VS Code, Cursor, or another client with remote HTTP support</b>:
+                <pre class="mono" style="white-space:pre-wrap">{ "servers": { "lex": { "type": "http", "url": "{{baseUrl}}/mcp" } } }</pre></div>
+                <div class="card"><b>Legacy stdio-only client</b>, use the pinned third-party bridge
+                (Node.js 18+; Lex remains hosted):
+                <pre class="mono" style="white-space:pre-wrap">{ "mcpServers": { "lex": { "command": "npx", "args": ["-y", "mcp-remote@0.1.38", "{{baseUrl}}/mcp"] } } }</pre></div>
 
                 <h2>What a conversation looks like</h2>
                 <div class="card"><pre style="white-space:pre-wrap;font-size:14px;margin:0">
@@ -847,8 +850,11 @@ public static class ExplainerEndpoints
                 <h2>Connect</h2>
                 <div class="card"><b>Claude Code</b>
                 <pre class="mono" style="white-space:pre-wrap;margin:6px 0 0">claude mcp add --transport http lex {{baseUrl}}/mcp</pre></div>
-                <div class="card"><b>Claude Desktop, Cursor, any MCP client</b>
-                <pre class="mono" style="white-space:pre-wrap;margin:6px 0 0">{ "mcpServers": { "lex": { "url": "{{baseUrl}}/mcp" } } }</pre></div>
+                <div class="card"><b>VS Code, Cursor, or another client with remote HTTP support</b>
+                <pre class="mono" style="white-space:pre-wrap;margin:6px 0 0">{ "servers": { "lex": { "type": "http", "url": "{{baseUrl}}/mcp" } } }</pre></div>
+                <div class="card"><b>Legacy stdio-only client</b>, use the pinned third-party bridge
+                (Node.js 18+; Lex remains hosted):
+                <pre class="mono" style="white-space:pre-wrap;margin:6px 0 0">{ "mcpServers": { "lex": { "command": "npx", "args": ["-y", "mcp-remote@0.1.38", "{{baseUrl}}/mcp"] } } }</pre></div>
                 <div class="card"><b>Azure AI Foundry Agent Service</b>, remote MCP is native:
                 <pre class="mono" style="white-space:pre-wrap;margin:6px 0 0">{ "type": "mcp", "server_label": "lex", "server_url": "{{baseUrl}}/mcp", "require_approval": "never" }</pre></div>
                 <div class="card"><b>No framework at all</b>, it is JSON-RPC over one POST:
