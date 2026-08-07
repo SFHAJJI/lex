@@ -88,7 +88,8 @@ public static class ExplainerEndpoints
                 runs the same tools. Prefer no AI at all? Everything is also a <a href="/">permalink</a>.</p>
                 """;
             return Results.Content(Page("Use Lex with your AI", body,
-                "your model + our evidence, MCP endpoint, one line to connect"), "text/html");
+                "your model + our evidence, MCP endpoint, one line to connect",
+                canonicalPath: "/ai"), "text/html");
         });
 
         app.MapGet("/architecture", () =>
@@ -175,7 +176,8 @@ public static class ExplainerEndpoints
                 """;
             body = body.Replace("MOUNTED_INDEX_SCHEMAS", H(mountedSchemas), StringComparison.Ordinal);
             return Results.Content(Page("Architecture", body,
-                "what is deployed now, read separately from what comes next"), "text/html");
+                "what is deployed now, read separately from what comes next",
+                canonicalPath: "/architecture"), "text/html");
         });
 
         app.MapGet("/architecture/next", () =>
@@ -203,7 +205,8 @@ public static class ExplainerEndpoints
                 <span class="mono">{H(architecture.ReviewStatus)}</span>.</p>
                 """;
             return Results.Content(Page("Next architecture", body,
-                "the accepted target, its gates, and what has actually shipped"), "text/html");
+                "the accepted target, its gates, and what has actually shipped",
+                canonicalPath: "/architecture/next"), "text/html");
         });
 
         app.MapGet("/benchmarks", () =>
@@ -279,7 +282,8 @@ public static class ExplainerEndpoints
                 Reviewed cases are identified individually.</p>
                 """;
             return Results.Content(Page("Benchmarks", body,
-                "measured retrieval, latency, memory, index size and cost evidence"), "text/html");
+                "measured retrieval, latency, memory, index size and cost evidence",
+                canonicalPath: "/benchmarks"), "text/html");
         });
 
         app.MapGet("/benchmarks/latest.json", () =>
@@ -431,7 +435,8 @@ public static class ExplainerEndpoints
                 <a href="https://github.com/SFHAJJI/lex-articles/blob/main/SCHEMA.md">SCHEMA.md</a>.</p>
                 """;
             return Results.Content(Page("Verify", body,
-                "the signature, the hash chain, and how to check both without trusting us"), "text/html");
+                "the signature, the hash chain, and how to check both without trusting us",
+                canonicalPath: "/verify"), "text/html");
         });
 
         // ---- /built: the engineering story. Written for someone deciding whether the person who
@@ -616,7 +621,8 @@ public static class ExplainerEndpoints
                 <a href="/verify"><b>Verify a build yourself →</b></a> ·
                 <a href="https://github.com/SFHAJJI/lex-articles" rel="noopener"><b>The dataset →</b></a></p>
                 """;
-            return Results.Content(Page("How it was built", body, null, "how"), "text/html");
+            return Results.Content(Page("How it was built", body, null, "how",
+                canonicalPath: "/built"), "text/html");
         });
 
         // ---- /about: who built this, and what else they have built.
@@ -687,7 +693,7 @@ public static class ExplainerEndpoints
                 """;
             return Results.Content(Page("About", body,
                 "Senior .NET, Azure and AI engineer in Luxembourg. Lex is one of three systems built the same way.",
-                "about"), "text/html");
+                "about", canonicalPath: "/about"), "text/html");
         });
 
         // ---- /decisions: the choices, with what each one cost.
@@ -819,7 +825,7 @@ public static class ExplainerEndpoints
                 """;
             return Results.Content(Page("Decisions", body,
                 "The choices that shaped Lex, each with the alternative it was chosen over and what it cost.",
-                "how"), "text/html");
+                "how", canonicalPath: "/decisions"), "text/html");
         });
 
         // ---- /developers: everything an engineer needs — every tool, four ways to connect,
@@ -972,7 +978,8 @@ public static class ExplainerEndpoints
                 })();
                 </script>
                 """;
-            return Results.Content(Page("For developers", body, null, "dev"), "text/html");
+            return Results.Content(Page("For developers", body, null, "dev",
+                canonicalPath: "/developers"), "text/html");
         });
 
         // ---- /how-it-works: one page, plain language first, technical depth on scroll.
@@ -1039,7 +1046,8 @@ public static class ExplainerEndpoints
                 say so themselves. Lex reports what a text said on a date; deciding what that means for a
                 situation is a lawyer's job.</div>
                 """;
-            return Results.Content(Page("How it works", body, null, "how"), "text/html");
+            return Results.Content(Page("How it works", body, null, "how",
+                canonicalPath: "/how-it-works"), "text/html");
         });
 
         app.MapGet("/stories", () =>
@@ -1147,7 +1155,8 @@ public static class ExplainerEndpoints
                   <a href="/coverage">here is exactly what it holds and what it lacks</a>.</div>
                 """);
             return Results.Content(Page("Stories, watch the law move", sb.ToString(),
-                "real histories from the Luxembourg and selected EU corpora, computed live", "find"), "text/html");
+                "real histories from the Luxembourg and reviewed EU corpora, computed live", "find",
+                canonicalPath: "/stories"), "text/html");
         });
 
         return app;

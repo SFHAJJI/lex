@@ -6,14 +6,15 @@ HTTP 200
 <!-- Titles are labels, not sentences: one that ends in a full stop renders "acts., Lex" in
      the tab and in every social card, which is what the front page did until now. -->
 <title>Stories, watch the law move, Lex</title>
-<meta name="description" content="Point-in-time Luxembourg law and selected EU law: what did the rule say on a given date? Permalinks, timelines, diffs and verifiable provenance.">
+<meta name="description" content="Point-in-time Luxembourg and reviewed EU law: what did the rule say on a given date? Permalinks, timelines, diffs and verifiable provenance.">
 <meta property="og:title" content="Stories, watch the law move, Lex">
-<meta property="og:description" content="Point-in-time Luxembourg law and selected EU law, with grounded AI answers, per-article history, and verifiable provenance.">
+<meta property="og:description" content="Point-in-time Luxembourg and reviewed EU law, with grounded AI answers, per-article history, and verifiable provenance.">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Lex">
 <meta property="og:image" content="https://golden.test/og.png">
 <meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
+<link rel="canonical" href="https://golden.test/stories">
 <meta name="twitter:image" content="https://golden.test/og.png">
 <!-- The interval mark: a rule, two terminals, and a notch at the date being read.
      The same shape is the version rail at full width. An emoji was a different
@@ -165,7 +166,7 @@ HTTP 200
 </header>
 <main>
 <h1>Stories, watch the law move</h1>
-<p class="sub">real histories from the Luxembourg and selected EU corpora, computed live</p>
+<p class="sub">real histories from the Luxembourg and reviewed EU corpora, computed live</p>
 <p>Point-in-time retrieval sounds abstract until you watch a law move. These are real
 histories held by Lex, every number below is computed from the signed indexes as this
 page renders, and every link lands on the evidence.</p><div class="card"><b>The honest half.</b> A demo that only shows wins is a brochure.
