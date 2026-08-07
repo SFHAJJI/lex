@@ -15,6 +15,14 @@ public class VisualDiffTests
     }
 
     [Fact]
+    public void Legal_markdown_tables_are_keyboard_scrollable()
+    {
+        var html = Fragments.RenderLegalMarkdown("| article | wording |\n| --- | --- |\n| 1 | text |");
+
+        Assert.Contains("<table tabindex=\"0\" aria-label=\"Scrollable legal table\">", html);
+    }
+
+    [Fact]
     public void Presentation_diff_keeps_new_wording_before_replaced_wording()
     {
         var html = Fragments.RenderDiff("Article 1\nold wording\nEnd", "Article 1\nnew wording\nEnd");

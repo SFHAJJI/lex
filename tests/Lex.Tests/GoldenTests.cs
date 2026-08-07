@@ -93,6 +93,24 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
     }
 
     [Fact]
+    public async Task Static_search_controls_keep_accessible_names_and_mobile_bounds()
+    {
+        var changed = await _site.Client.GetStringAsync("/changed?from=2019-01-01&to=2023-01-01");
+        var search = await _site.Client.GetStringAsync("/search?q=travail");
+
+        Assert.Contains("name=\"order\" aria-label=\"Change ranking\"", changed);
+        Assert.Contains("form.inline select { min-width:0; max-width:100% }", search);
+    }
+
+    [Fact]
+    public async Task Architecture_wide_table_is_keyboard_scrollable()
+    {
+        var html = await _site.Client.GetStringAsync("/architecture");
+
+        Assert.Contains("<table tabindex=\"0\" aria-label=\"Mounted index collections\">", html);
+    }
+
+    [Fact]
     public async Task Home_reserves_workspace_height_and_versions_immutable_assets()
     {
         var html = await _site.Client.GetStringAsync("/");

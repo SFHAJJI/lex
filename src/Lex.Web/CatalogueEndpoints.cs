@@ -470,7 +470,7 @@ public static class CatalogueEndpoints
                   <label class="sub">from <input type="date" name="from" value="{f}"></label>
                   <label class="sub">to <input type="date" name="to" value="{t}"></label>
                   <select name="publisher" aria-label="Jurisdiction or publisher"><option value="">Every jurisdiction</option>{publisherOptions}</select>
-                  <select name="order">
+                  <select name="order" aria-label="Change ranking">
                     <option value="by_date"{(byChurn ? "" : " selected")}>most recently changed</option>
                     <option value="by_churn"{(byChurn ? " selected" : "")}>changed most often</option>
                   </select>

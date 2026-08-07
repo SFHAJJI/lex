@@ -126,7 +126,7 @@ public static class ExplainerEndpoints
                 <tr><th>immutable image</th><td class="mono">{H(ctx.Options.DeployImage ?? "not supplied by deployment")}</td></tr>
                 </table></div>
                 <h2>Mounted coverage, read live</h2>
-                <div class="card"><table><tr><th>collection</th><th>works</th><th>versions</th><th>schema</th><th>corpus commit</th></tr>
+                <div class="card"><table tabindex="0" aria-label="Mounted index collections"><tr><th>collection</th><th>works</th><th>versions</th><th>schema</th><th>corpus commit</th></tr>
                 {coverageRows}</table></div>
                 <h2>Contracts preserved</h2>
                 <p>Exact publisher text, hashes, anchors, timelines, refusals, comparisons and diffs remain

@@ -96,8 +96,18 @@ public static class Fragments
 
     public static string Interval(DocRow d) => d.ValidTo is null ? $"{d.ValidFrom} → open" : $"{d.ValidFrom} → {d.ValidTo}";
 
-    public static string RenderLegalMarkdown(string text) =>
-        Markdown.ToHtml(text ?? string.Empty, LegalMarkdownPipeline);
+    public static string RenderLegalMarkdown(string text)
+    {
+        var html = Markdown.ToHtml(text ?? string.Empty, LegalMarkdownPipeline);
+
+        // On phones, PageShell deliberately makes wide legal tables independently scrollable.
+        // A scroll region must be keyboard-focusable too. Markdig owns this generated element,
+        // so enrich its stable table opening here instead of post-processing whole pages or
+        // making every ordinary layout card an unnecessary tab stop.
+        return html.Replace("<table>",
+            "<table tabindex=\"0\" aria-label=\"Scrollable legal table\">",
+            StringComparison.Ordinal);
+    }
 
     public static string RenderDiff(string oldText, string newText)
     {
