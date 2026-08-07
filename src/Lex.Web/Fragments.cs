@@ -1,4 +1,5 @@
 using System.Text;
+using DiffPlex;
 using Lex.Index;
 using static Lex.Web.PageShell;
 
@@ -117,22 +118,23 @@ public static class Fragments
             return sb.ToString();
         }
 
-        // Classic LCS DP on the trimmed middle.
-        var dp = new int[o.Length + 1, n.Length + 1];
-        for (var i = o.Length - 1; i >= 0; i--)
-            for (var j = n.Length - 1; j >= 0; j--)
-                dp[i, j] = o[i] == n[j] ? dp[i + 1, j + 1] + 1 : Math.Max(dp[i + 1, j], dp[i, j + 1]);
-
+        // DiffPlex owns the commodity line-diff algorithm. Legal comparability, dated-version
+        // selection and provision alignment have already happened before this presentation-only
+        // fallback is called. Run it on the original strings so an inserted empty line remains a
+        // real piece; serialising the trimmed arrays would make zero lines and one empty line
+        // indistinguishable.
+        var diff = Differ.Instance.CreateLineDiffs(oldText, newText, ignoreWhitespace: false);
         sb.Append("<div class=\"card\"><pre style=\"white-space:pre-wrap;font-size:13px;margin:0\">");
-        int x = 0, y = 0, emitted = 0;
+        var emitted = 0;
         const int maxEmit = 500;
-        while ((x < o.Length || y < n.Length) && emitted < maxEmit)
+        foreach (var block in diff.DiffBlocks)
         {
-            if (x < o.Length && y < n.Length && o[x] == n[y]) { x++; y++; continue; }
-            if (y < n.Length && (x >= o.Length || dp[x, y + 1] >= dp[x + 1, y]))
-            { sb.Append($"<span style=\"color:var(--ok)\">+ {H(Trunc(n[y]))}</span>\n"); y++; emitted++; }
-            else
-            { sb.Append($"<span style=\"color:var(--accent)\">− {H(Trunc(o[x]))}</span>\n"); x++; emitted++; }
+            // Preserve the established UI convention: new wording first, then replaced wording.
+            for (var i = 0; i < block.InsertCountB && emitted < maxEmit; i++, emitted++)
+                sb.Append($"<span style=\"color:var(--ok)\">+ {H(Trunc(diff.PiecesNew[block.InsertStartB + i]))}</span>\n");
+            for (var i = 0; i < block.DeleteCountA && emitted < maxEmit; i++, emitted++)
+                sb.Append($"<span style=\"color:var(--accent)\">− {H(Trunc(diff.PiecesOld[block.DeleteStartA + i]))}</span>\n");
+            if (emitted >= maxEmit) break;
         }
         if (emitted >= maxEmit) sb.Append("<span class=\"sub\">… diff truncated at 500 changed lines …</span>\n");
         if (emitted == 0) sb.Append("<span class=\"sub\">(only whitespace-level differences in the extraction)</span>\n");

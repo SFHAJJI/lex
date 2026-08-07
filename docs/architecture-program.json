@@ -199,6 +199,15 @@
       "alternative": "Maintain handwritten JSON-RPC transports or deploy an otherwise identical MCP-only Container App behind a proxy.",
       "reason": "The official SDK owns protocol negotiation and framing. HTTP MCP and the site consume the same indexes, scale together and have no distinct security or availability boundary, so a second runtime would duplicate memory, artifacts, cold starts and failure modes without isolating a real workload.",
       "cost": "MCP and web revisions are promoted together today. Extract the HTTP host only when measured traffic requires independent scaling, releases, tenant isolation or an SLA; the library boundary makes that move mechanical."
+    },
+    {
+      "id": "D68",
+      "title": "Delegate only the generic visual diff algorithm",
+      "status": "shipped",
+      "choice": "Use DiffPlex for the bounded line-diff shown after Lex has selected and aligned comparable legal text.",
+      "alternative": "Maintain a quadratic handwritten LCS matrix or delegate the legal comparison workflow to a generic text-diff library.",
+      "reason": "DiffPlex removes commodity algorithm code and quadratic memory while Lex retains the temporal and legal correctness boundary.",
+      "cost": "Lex keeps output caps, escaping and compatibility tests, and must continue auditing the dependency; DiffPlex does not decide whether two legal provisions are comparable."
     }
   ],
   "baseline": {
