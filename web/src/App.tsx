@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { askStreaming, first, tool, type AskReply, type ProvisionItem, type Step, type UiEffect } from "./api";
-import { LAYERS, publisherOf, useWorkspace, workSlug, type Space, type State } from "./state";
+import { publisherOf, useWorkspace, workSlug, type Space, type State } from "./state";
 import { CitedBy, Empty, Gap, InForce, Provision, Ranking, VersionRail, hasView, modeFor } from "./views";
 import { Compare } from "./Compare";
 import { LawPicker, shorten } from "./pickers";
@@ -9,6 +9,7 @@ import Search from "./Search";
 import Period from "./Period";
 import Coach, { COACH_KEY } from "./Coach";
 import { CompareSkeleton, LawSkeleton, ReportSkeleton } from "./Skeleton";
+import { jurisdictionForPublisher, jurisdictionLabel } from "./facets";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -78,9 +79,9 @@ export default function App() {
   // The marketing below the fold belongs to a first-time visitor, not to someone reading a
   // law. One flag on <body> lets the server-rendered page get out of the way.
   useEffect(() => {
-    const busyWith = s.work || s.q || s.from;
+    const busyWith = s.work || s.q || s.from || s.asOf;
     document.body.dataset.workspace = busyWith ? "active" : "";
-  }, [s.work, s.q, s.from]);
+  }, [s.work, s.q, s.from, s.asOf]);
 
   // Every version of the loaded work: powers the version count and the previous/next stepper,
   // which is the most-wanted action in a point-in-time reader and did not exist.
@@ -192,14 +193,18 @@ export default function App() {
   useEffect(() => {
     if (s.work || !s.from || !s.until) return;
     let live = true;
-    // The layer is now a filter the server applies, so the list is no longer ranked and then
-    // thinned: every row that comes back belongs to the chosen layer. That also removes the old
-    // failure where a longer window returned FEWER laws, because collections had eaten the top 25
-    // before they were folded away.
-    const layer = LAYERS.find((l) => l.id === (s.layer ?? "instruments")) ?? LAYERS[0];
     tool<any>("changes_in_period", {
       from_date: s.from, to_date: s.until, order: s.order ?? "by_churn",
-      document_type: layer.types, limit: PAGE, offset: page * PAGE })
+      source_class: s.sourceClass ?? "!RECUEIL,!CODE_RECUEIL",
+      ...(s.jurisdiction ? { jurisdiction: s.jurisdiction } : {}),
+      ...(s.hierarchy ? { hierarchy: s.hierarchy } : {}),
+      ...(s.domain ? { domain: s.domain } : {}),
+      ...(s.actForm ? { act_form: s.actForm } : {}),
+      ...(s.bindingStatus ? { binding_status: s.bindingStatus } : {}),
+      ...(s.language ? { language: s.language } : {}),
+      // Each publisher ranks independently. Asking each for the prefix needed by this page,
+      // then sorting and slicing once below, produces one honest cross-publisher pagination.
+      limit: (page + 1) * PAGE, offset: 0 })
       .then((res) => {
         if (!live) return;
         // changes_in_period asks ACROSS the corpus, so its answer is the union of the
@@ -207,21 +212,26 @@ export default function App() {
         // rows reported 3 EU acts for the pandemic and silently dropped the hundreds of
         // Luxembourg ones behind it, because the EU index answers first.
         const envs = (Array.isArray(res) ? res : [res]) as any[];
-        const rows = envs.flatMap((e) => e?.changes ?? []);
+        const rows = envs.flatMap((e) => (e?.changes ?? []).map((row: any) => ({
+          ...row,
+          jurisdiction: e?.envelope?.jurisdiction,
+        })));
         const by = s.order ?? "by_churn";
         rows.sort((a: any, b: any) => by === "by_churn"
           ? (b.versions_in_period ?? 0) - (a.versions_in_period ?? 0)
           : String(b.last_change ?? "").localeCompare(String(a.last_change ?? "")));
-        setUi(rows.length
+        const visibleRows = rows.slice(page * PAGE, (page + 1) * PAGE);
+        setUi(visibleRows.length
           ? { ranking: { from_date: s.from!, to_date: s.until!, order: by,
                          works_changed: envs.reduce((n, e) => n + (e?.works_changed ?? 0), 0),
                          new_versions: envs.reduce((n, e) => n + (e?.new_versions ?? 0), 0),
-                         rows } }
+                         rows: visibleRows } }
           : { gap: { status: "no_changes_in_period", explanation: "Nothing changed in that window.", available: [] } });
       })
-      .catch(() => {});
+      .catch(() => { if (live) setUi({ gap: { status: "error", explanation: "The change report could not be loaded. Try again.", available: [] } }); });
     return () => { live = false; };
-  }, [s.work, s.from, s.until, s.order, s.layer, page]);
+  }, [s.work, s.from, s.until, s.order, s.jurisdiction, s.hierarchy, s.domain,
+      s.sourceClass, s.actForm, s.bindingStatus, s.language, page]);
 
   // "What was in force on this day": the compliance question, answered deterministically like
   // every other control in the workspace rather than only through the assistant.
@@ -230,23 +240,40 @@ export default function App() {
     // an empty search means once a date is set.
     if (s.work || s.q || !s.asOf || s.space === "time") return;
     let live = true;
-    tool<any>("in_force_on", { date: s.asOf, limit: 60 })
+    tool<any>("in_force_on", {
+      date: s.asOf, limit: (page + 1) * PAGE, offset: 0,
+      ...(s.jurisdiction ? { jurisdiction: s.jurisdiction } : {}),
+      ...(s.hierarchy ? { hierarchy: s.hierarchy } : {}),
+      ...(s.domain ? { domain: s.domain } : {}),
+      ...(s.sourceClass ? { source_class: s.sourceClass } : {}),
+      ...(s.actForm ? { act_form: s.actForm } : {}),
+      ...(s.bindingStatus ? { binding_status: s.bindingStatus } : {}),
+      ...(s.language ? { language: s.language } : {}),
+    })
       .then((res) => {
         if (!live) return;
         const envs = (Array.isArray(res) ? res : [res]) as any[];
         // in_force_on returns `works` with a `total_works_in_force` count, and its rows carry
         // work/title/document_type/valid_from. Mapped here to the shape the view already speaks.
         const rows = envs.flatMap((e) => (e?.works ?? []).map((w: any) => ({
-          work: w.work, title: w.title, kind: w.document_type,
+          work: w.lex_id
+            ? String(w.lex_id).split(":").slice(0, 2).join(":")
+            : `${e?.envelope?.publisher}:${w.work}`,
+          title: w.title, kind: w.document_type,
           valid_from: w.valid_from, permalink: w.permalink,
+          jurisdiction: e?.envelope?.jurisdiction,
+          hierarchy: w.hierarchy,
         })));
-        setUi(rows.length
-          ? { in_force: { date: s.asOf!, total: envs.reduce((n, e) => n + (e?.total_works_in_force ?? 0), 0), rows } }
+        rows.sort((a: any, b: any) => String(a.title ?? a.work).localeCompare(String(b.title ?? b.work)));
+        const visibleRows = rows.slice(page * PAGE, (page + 1) * PAGE);
+        setUi(visibleRows.length
+          ? { in_force: { date: s.asOf!, total: envs.reduce((n, e) => n + (e?.total_works_in_force ?? 0), 0), rows: visibleRows } }
           : { gap: { status: "no_result", explanation: `Nothing is recorded as in force on ${s.asOf}.`, available: [] } });
       })
-      .catch(() => {});
+      .catch(() => { if (live) setUi({ gap: { status: "error", explanation: "The in-force list could not be loaded. Try again.", available: [] } }); });
     return () => { live = false; };
-  }, [s.space, s.asOf, s.work, s.q]);
+  }, [s.space, s.asOf, s.work, s.q, s.jurisdiction, s.hierarchy, s.domain,
+      s.sourceClass, s.actForm, s.bindingStatus, s.language, page]);
 
   // With an article open the rail narrows to THAT article's distinct texts — the question a
   // reader actually has ("when did this paragraph change?") rather than "when was anything
@@ -278,13 +305,23 @@ export default function App() {
       // A refusal keeps its steps out of the transcript: visible effort followed by a weak
       // answer measures WORSE than the same answer delivered instantly and quietly.
       if (r.narrated === false) setSteps([]);
-      // Controls the assistant set on the way to its answer. Applied before the view, so the
-      // layer tabs and the page already read correctly when the rows land under them.
+      // Controls the assistant set on the way to its answer. Applied before the view, so
+      // jurisdiction and legal metadata already agree with the rows that land under them.
+      let refinement: Partial<State> = {};
       if (r.ui?.workspace) {
         const w = r.ui.workspace;
         if (typeof w.page === "number") setPage(Math.max(0, w.page));
-        if (w.layer) go({ layer: w.layer as State["layer"] });
+        refinement = {
+          ...(w.jurisdiction ? { jurisdiction: w.jurisdiction } : {}),
+          ...(w.hierarchy ? { hierarchy: w.hierarchy } : {}),
+          ...(w.domain ? { domain: w.domain } : {}),
+          ...(w.source_class ? { sourceClass: w.source_class } : {}),
+          ...(w.act_form ? { actForm: w.act_form } : {}),
+          ...(w.binding_status ? { bindingStatus: w.binding_status } : {}),
+          ...(w.language ? { language: w.language } : {}),
+        };
       }
+      let navigated = false;
       if (hasView(r.ui)) {
         setUi(r.ui);
         const subj = r.ui!.provision?.subject ?? r.ui!.history?.subject ?? r.ui!.diff?.subject;
@@ -295,14 +332,17 @@ export default function App() {
         if (subj?.work) {
           setTitle(subj.title);
           if (r.ui!.provision) setLoaded({ items: r.ui!.provision.provisions, from: r.ui!.provision.valid_from, to: r.ui!.provision.valid_to });
-          go({ work: subj.work, date: subj.date ?? r.ui!.provision?.valid_from, anchor: subj.anchor, mode: m ?? "read",
+          go({ ...refinement, work: subj.work, date: subj.date ?? r.ui!.provision?.valid_from, anchor: subj.anchor, mode: m ?? "read",
                space: "law",
                ...(r.ui!.diff ? { date: r.ui!.diff.from_date, to: r.ui!.diff.to_date } : {}) });
+          navigated = true;
         } else if (r.ui!.ranking) {
-          go({ work: undefined, from: r.ui!.ranking.from_date, until: r.ui!.ranking.to_date,
+          go({ ...refinement, work: undefined, from: r.ui!.ranking.from_date, until: r.ui!.ranking.to_date,
                order: r.ui!.ranking.order as State["order"], mode: "read", space: "time" });
+          navigated = true;
         }
       }
+      if (!navigated && Object.keys(refinement).length > 0) go(refinement);
     } catch { setSaid("The request failed, try again."); }
     finally { setBusy(false); }
   }, [busy, go]);
@@ -337,6 +377,7 @@ export default function App() {
   const switchTo = (sp: Space) => {
     setUi(undefined);
     setSaid(undefined);
+    setPage(0);
     if (sp === "time") go({ space: sp, work: undefined, anchor: undefined, from: s.from ?? shift(today(), -365), until: s.until ?? today(), order: s.order ?? "by_churn" });
     else go({ space: sp, work: undefined, anchor: undefined, from: undefined, until: undefined });
   };
@@ -351,15 +392,21 @@ export default function App() {
       {front ? (
         <Search
           state={s} today={today()}
-          onQuery={(q) => { setUi(undefined); go({ q: q || undefined, work: undefined, from: undefined, until: undefined, space: "search" }); }}
-          onAsOf={(d) => { setUi(undefined); go({ asOf: d }); }}
+          onQuery={(q) => { setPage(0); setUi(undefined); go({ q: q || undefined, work: undefined, from: undefined, until: undefined, space: "search" }); }}
+          onAsOf={(d) => { setPage(0); setUi(undefined); go({ asOf: d }); }}
+          onRefine={(next) => { setPage(0); setUi(undefined); go(next); }}
           onOpen={(work, date, anchor) => { setUi(undefined); go({ work, date, anchor, mode: "read", space: "law" }); }}
           onMonitor={() => switchTo("time")}
         />
       ) : (
         <nav className="doors">
-          <button className="backhome" onClick={() => { setUi(undefined); setSaid(undefined); go({ work: undefined, q: undefined, from: undefined, until: undefined, anchor: undefined, to: undefined, space: undefined }); }}>
-            ← everything
+          <button className="backhome" onClick={() => { setPage(0); setUi(undefined); setSaid(undefined); go({
+            work: undefined, q: undefined, asOf: undefined, from: undefined, until: undefined,
+            anchor: undefined, to: undefined, space: undefined, jurisdiction: undefined,
+            hierarchy: undefined, domain: undefined, sourceClass: undefined, actForm: undefined,
+            bindingStatus: undefined, language: undefined,
+          }); }}>
+            ← home
           </button>
           <button className={space === "search" ? "on" : ""} onClick={() => switchTo("search")}>search</button>
           <button className={space === "time" ? "on" : ""} onClick={() => switchTo("time")}>what changed</button>
@@ -368,10 +415,13 @@ export default function App() {
 
       {space === "time" && !s.work ? (
         <Period from={s.from ?? shift(today(), -365)} until={s.until ?? today()}
-                order={s.order ?? "by_churn"} layer={s.layer ?? "instruments"} today={today()}
+                order={s.order ?? "by_churn"} today={today()}
+                jurisdiction={s.jurisdiction} hierarchy={s.hierarchy} domain={s.domain}
+                sourceClass={s.sourceClass} actForm={s.actForm}
+                bindingStatus={s.bindingStatus} language={s.language}
                 onWindow={(from, until) => { setPage(0); setUi(undefined); go({ from, until }); }}
                 onOrder={(o) => { setPage(0); setUi(undefined); go({ order: o }); }}
-                onLayer={(l) => { setPage(0); setUi(undefined); go({ layer: l }); }} />
+                onRefine={(next) => { setPage(0); setUi(undefined); go(next); }} />
       ) : null}
 
       {coached ? null : (
@@ -386,6 +436,9 @@ export default function App() {
           <div className="t">
             <h2>{title ?? workSlug(s.work)}</h2>
             <div className="meta">
+              {jurisdictionForPublisher(publisherOf(s.work)) ? (
+                <span className="pill jurisdiction">{jurisdictionLabel(jurisdictionForPublisher(publisherOf(s.work))!)}</span>
+              ) : null}
               {loaded ? (
                 <span className={`pill ${loaded.to ? "old" : "live"}`}>
                   {loaded.to ? "superseded" : "in force"}
@@ -438,12 +491,14 @@ export default function App() {
          ui?.ranking ? <Ranking rows={ui.ranking.rows} worksChanged={ui.ranking.works_changed}
                                 newVersions={ui.ranking.new_versions} from={ui.ranking.from_date}
                                 to={ui.ranking.to_date} onOpen={openDiff} onOpenRecord={openLaw}
-                                layer={s.layer ?? "instruments"} page={page}
-                                hasMore={ui.ranking.rows.length >= PAGE}
+                                page={page}
+                                hasMore={(page * PAGE) + ui.ranking.rows.length < ui.ranking.works_changed}
                                 onPage={(p) => { setPage(Math.max(0, p)); setUi(undefined); }} /> :
          ui?.cited_by ? <CitedBy view={ui.cited_by}
                                  onOpen={(w, d, a) => { setUi(undefined); go({ work: w, date: d, anchor: a, mode: "read", space: "law" }); }} /> :
-         ui?.in_force ? <InForce date={ui.in_force.date} total={ui.in_force.total} rows={ui.in_force.rows} onOpen={openLaw} /> :
+         ui?.in_force ? <InForce date={ui.in_force.date} total={ui.in_force.total} rows={ui.in_force.rows}
+                                  page={page} hasMore={(page * PAGE) + ui.in_force.rows.length < ui.in_force.total}
+                                  onPage={(p) => { setPage(Math.max(0, p)); setUi(undefined); }} onOpen={openLaw} /> :
          s.work && s.mode === "compare" ? <Compare work={s.work} title={title ?? s.work} from={s.date ?? today()} to={s.to ?? today()} anchor={s.anchor} /> :
          s.work && loaded ? <Provision items={loaded.items} toc={toc} validFrom={loaded.from} validTo={loaded.to}
                                        work={s.work} title={title ?? s.work} language={servedLang}

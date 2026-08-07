@@ -105,7 +105,16 @@ public sealed record ChangeRow(
     // Distinct wordings across the comparison span, baseline included. 1 means the publisher
     // reissued the act without altering a word, which is a real and common answer: "2 new
     // versions, wording unchanged". 0 means no version in the span carries text at all.
-    int DistinctTexts = 0);
+    int DistinctTexts = 0,
+    // True only when both comparison endpoints carry provision text. DistinctTexts alone cannot
+    // express the asymmetric case where one publisher state is text-bearing and the other is not.
+    bool TextComparable = false,
+    string? SourceClass = null,
+    string? Hierarchy = null,
+    string? Domains = null,
+    string? ActForm = null,
+    string? BindingStatus = null,
+    string? Language = null);
 
 /// <summary>
 /// F5 — the one rule that cannot be relaxed, as a construct: every query entry point

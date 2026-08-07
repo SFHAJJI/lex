@@ -122,15 +122,13 @@ del { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var
               border-radius: 4px; overflow: hidden; }
 .bar .fill { position: absolute; inset: 0 auto 0 0; background: var(--accent); opacity: .2; }
 .bar .lbl { position: absolute; left: 9px; top: 3px; font-size: 14px; white-space: nowrap;
-            overflow: hidden; text-overflow: ellipsis; right: 8px; }
+            overflow: hidden; text-overflow: ellipsis; right: 145px; }
 .bar .num { font-family: var(--mono); font-size: 14px; text-align: right; }
 .bar:hover .fill { opacity: .34; }
 /* A row whose work carries no text is still a real answer about amendments, so it stays in the
    list and says what it is rather than being hidden or looking identical to a readable one. */
 .bar.notext .fill { opacity: .08; }
 .bar.notext .lbl { color: var(--muted); }
-/* The label yields to the marker rather than sliding under it on a narrow screen. */
-.bar.notext .lbl { right: 92px; overflow: hidden; text-overflow: ellipsis; }
 .bar .mark { position: absolute; right: 9px; top: 5px; font-size: 10.5px; letter-spacing: .04em;
              text-transform: uppercase; color: var(--muted); border: 1px solid var(--line);
              border-radius: 99px; padding: 0 7px; background: var(--bg); }
@@ -387,12 +385,16 @@ button.pick { cursor: pointer; }
 .ctx-h:hover { color: var(--fg); }
 .ctx-b { font-size: 12px; color: var(--muted); margin: 8px 0 0; line-height: 1.7; }
 
-/* Layers of the law, by weight rather than by the publisher's fifteen type codes. */
-.layers { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 10px; }
-.layer { background: none; border: 1px solid var(--line); border-radius: 99px; padding: 4px 12px;
-         font: inherit; font-size: 13px; color: var(--muted); cursor: pointer; }
-.layer:hover { color: var(--fg); border-color: var(--muted); }
-.layer.on { background: var(--fg); border-color: var(--fg); color: var(--bg); font-weight: 600; }
+/* Jurisdiction is the first scope choice on a mixed corpus; specialist metadata stays folded. */
+.period-scope { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin-bottom: 10px; }
+.period-scope .scope-label { color: var(--muted); font-size: 11px; letter-spacing: .05em;
+                             text-transform: uppercase; margin-right: 4px; }
+.period-scope button { background: none; border: 1px solid var(--line); border-radius: 99px;
+                       padding: 4px 12px; font: inherit; font-size: 13px; color: var(--muted);
+                       cursor: pointer; }
+.period-scope button:hover { color: var(--fg); border-color: var(--muted); }
+.period-scope button.on { background: var(--fg); border-color: var(--fg); color: var(--bg);
+                          font-weight: 600; }
 .layers-hint { font-size: 12.5px; color: var(--muted); margin: 0; }
 
 .pager { display: flex; align-items: center; gap: 14px; margin-top: 16px; }
@@ -459,6 +461,8 @@ button.pick { cursor: pointer; }
 .search-filters { border: 1px solid var(--line); border-radius: 9px; margin: 0 0 12px; }
 .search-filters summary { cursor: pointer; padding: 7px 10px; font-size: 13px; color: var(--muted); }
 .search-filters[open] summary { border-bottom: 1px solid var(--line); color: var(--fg); }
+.period-filters { margin-top: 2px; }
+.date-scope { padding: 0 16px 4px; }
 .filter-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px;
                padding: 10px; }
 .filter-grid label { min-width: 0; }
@@ -481,6 +485,8 @@ button.pick { cursor: pointer; }
   .res-head { flex-wrap: wrap; }
   .res-head .grow { display: none; }
   .filter-grid { grid-template-columns: 1fr; }
+  .bar .lbl { right: 92px; font-size: 13px; }
+  .bar .mark { max-width: 76px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .asklaunch { max-width: calc(100vw - 24px); }
 
   /* A native date input keeps a large intrinsic width on mobile browsers. In the law header it

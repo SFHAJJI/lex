@@ -30,7 +30,7 @@ export interface AskPanelProps {
 const SUGGESTIONS = [
   "What did the Covid rules say on 1 February 2021?",
   "How has Article 92 of the CRR changed?",
-  "Which Luxembourg laws changed most during the pandemic?",
+  "Which EU and Luxembourg laws changed most during the pandemic?",
   "Que disait le Code du travail en 2019 ?",
 ];
 

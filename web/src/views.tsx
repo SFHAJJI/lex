@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { first, tool, type ProvisionItem, type RankingRow, type UiEffect } from "./api";
-import { LAYERS, publisherOf, workSlug, type LayerId, type State } from "./state";
+import { type ProvisionItem, type RankingRow, type UiEffect } from "./api";
+import { facetLabel, jurisdictionLabel } from "./facets";
+import { publisherOf, workSlug, type State } from "./state";
 import { shorten } from "./pickers";
 import { EvidenceActions } from "./EvidenceActions";
 import { citationText, evidenceFilename, lawEvidenceMarkdown } from "./export";
@@ -315,36 +316,6 @@ function labelled(dates: string[], xs: number[], width: number, cur: number, cmp
   return keep;
 }
 
-/** Compare: fetches both versions itself, then shows only what moved. */
-function useRowFacts(rows: RankingRow[]) {
-  const [facts, setFacts] = useState<Record<string, { text: boolean; title?: string; kind?: string }>>({});
-  const key = rows.map((r) => r.work).join("|");
-  useEffect(() => {
-    let live = true;
-    setFacts({});
-    const queue = rows.slice();
-    const worker = async () => {
-      for (;;) {
-        const r = queue.shift();
-        if (!r || !live) return;
-        let fact: { text: boolean; title?: string; kind?: string } = { text: false };
-        try {
-          const res = await tool<any>("as_of", { work: r.work, date: r.last_change, mode: "outline" });
-          const one = first<any>(res, (x) => Array.isArray(x?.provisions) && x.provisions.length > 0)
-                   ?? (Array.isArray(res) ? res[0] : res);
-          const doc = one?.document ?? one;
-          fact = { text: (one?.provisions?.length ?? 0) > 0, title: label(doc?.title),
-                   kind: doc?.document_type ?? undefined };
-        } catch { /* a row that cannot be checked stays unmarked rather than wrongly marked */ }
-        if (live) setFacts((f) => ({ ...f, [r.work]: fact }));
-      }
-    };
-    void Promise.all(Array.from({ length: Math.min(6, rows.length) }, worker));
-    return () => { live = false; };
-  }, [key]);
-  return facts;
-}
-
 /**
  * What changed in a period.
  *
@@ -353,25 +324,21 @@ function useRowFacts(rows: RankingRow[]) {
  * window they crowded the top and squeezed the laws out. Six years showed 7 laws where one year
  * showed 16, while the totals above correctly rose from 264 to 860.
  *
- * A collection turned out to be nothing special: it is simply another document type. So the layer
- * is a filter the server applies, every row that arrives already belongs to the chosen layer, and
- * the widget that used to hide them is gone. Layers are by legal weight rather than by the
- * publisher's fifteen codes, because a reader asks about laws and regulations, not about RGC.
+ * A collection is simply another source class. Jurisdiction and legal metadata are applied by the
+ * server before ranking, and every mixed-corpus row keeps the jurisdiction that owns its work.
  */
-export function Ranking({ rows, worksChanged, newVersions, from, to, layer, page, hasMore,
+export function Ranking({ rows, worksChanged, newVersions, from, to, page, hasMore,
                           onOpen, onOpenRecord, onPage }: {
   rows: RankingRow[]; worksChanged: number; newVersions: number; from: string; to: string;
-  layer: LayerId; page: number; hasMore: boolean;
+  page: number; hasMore: boolean;
   onOpen: (work: string, from: string, to: string) => void;
   onOpenRecord: (work: string, date: string) => void;
   onPage: (p: number) => void;
 }) {
-  const facts = useRowFacts(rows);
   const max = Math.max(1, ...rows.map((r) => r.versions_in_period));
-  const current = LAYERS.find((l) => l.id === layer) ?? LAYERS[0];
 
-  // The layer tabs used to live here, above the rows, which meant a filter that matched nothing
-  // took its own escape hatch down with it. They belong with the window and the ordering.
+  // Scope controls stay above the rows, so a filter that matches nothing never removes its own
+  // escape hatch.
   return (
     <>
       {/* One row, not three. The layer's meaning belongs beside its counts, because "820 changed"
@@ -380,13 +347,12 @@ export function Ranking({ rows, worksChanged, newVersions, from, to, layer, page
         <span className="tag">{worksChanged.toLocaleString()} changed</span>
         <span className="tag">{newVersions.toLocaleString()} new versions</span>
         <span className="tag mono">{from} → {to}</span>
-        <span className="layers-hint">{current.hint}</span>
+        <span className="layers-hint">Every selected jurisdiction shares one dated ranking</span>
       </div>
 
       <div className="bars">
         {rows.map((r) => {
-          const f = facts[r.work];
-          const name = f?.title ?? label(r.title) ?? humanSlug(r.work);
+          const name = label(r.title) ?? humanSlug(r.work);
           // Where the comparison starts. The server sends the version in force BEFORE the
           // window; without it the row opened first_change against last_change, and those are
           // the same date whenever a law moved once, so the comparison ran a version against
@@ -400,23 +366,29 @@ export function Ranking({ rows, worksChanged, newVersions, from, to, layer, page
           // into that comparison makes working software look broken, so the row says it instead
           // and opens for reading. distinct_texts counts wordings, not versions.
           const reissued = r.distinct_texts === 1;
-          const comparable = !!f?.text && from !== to && !reissued;
-          const why = !f?.text ? "No text is published for this version, open its record"
+          const comparable = r.text_comparable === true && from !== to && !reissued;
+          const why = r.distinct_texts === 0 ? "No text is published for these states, open the dated record"
+            : !r.text_comparable ? "Both endpoints do not carry comparable provision text; open the later record"
             : reissued ? `Reissued ${n} time${n === 1 ? "" : "s"} in this window without the wording changing`
             : comparable ? `Compare ${from} with ${to}`
             : "This law's first version falls in this window, so there is nothing earlier to compare it with";
+          const state = r.distinct_texts === 0 ? "record only" : !r.text_comparable ? "comparison unavailable"
+            : reissued ? "same wording"
+            : !comparable ? "first version" : undefined;
+          const badge = [r.jurisdiction?.toUpperCase(), state].filter(Boolean).join(" · ");
+          const legalContext = [r.jurisdiction ? jurisdictionLabel(r.jurisdiction) : undefined,
+                                r.hierarchy ? facetLabel(r.hierarchy) : undefined]
+            .filter(Boolean).join(" · ");
           return (
-            <button key={r.work} className={"bar" + (f && !f.text ? " notext" : "")}
-                    title={why}
+            <button key={r.work} className={"bar" + (r.distinct_texts === 0 ? " notext" : "")}
+                    title={legalContext ? `${legalContext}: ${why}` : why}
                     onClick={() => comparable
                       ? onOpen(r.work, from, to)
                       : onOpenRecord(r.work, r.last_change)}>
               <span className="track">
                 <span className="fill" style={{ width: `${(n / max) * 100}%` }} />
                 <span className="lbl">{name}</span>
-                {f && !f.text ? <span className="mark">record only</span>
-                  : reissued ? <span className="mark">same wording</span>
-                  : !comparable ? <span className="mark">first version</span> : null}
+                {badge ? <span className="mark">{badge}</span> : null}
               </span>
               {/* "4" beside a comparison showing one edit read as a contradiction. It counts
                   versions the publisher issued, which is not the same as edits to the wording. */}
@@ -427,7 +399,7 @@ export function Ranking({ rows, worksChanged, newVersions, from, to, layer, page
       </div>
 
       {rows.length === 0 ? (
-        <Empty>Nothing in this layer changed in that window.</Empty>
+        <Empty>Nothing in this legal scope changed in that window.</Empty>
       ) : null}
 
       {(page > 0 || hasMore) ? (
@@ -445,10 +417,13 @@ export function Ranking({ rows, worksChanged, newVersions, from, to, layer, page
   );
 }
 
-export function InForce({ date, total, rows, onOpen }: {
+export function InForce({ date, total, rows, page, hasMore, onOpen, onPage }: {
   date: string; total: number;
-  rows: { work: string; title?: string; kind?: string; valid_from: string }[];
+  rows: { work: string; title?: string; kind?: string; valid_from: string;
+          jurisdiction?: string; hierarchy?: string }[];
+  page: number; hasMore: boolean;
   onOpen: (work: string, date: string) => void;
+  onPage: (page: number) => void;
 }) {
   return (
     <>
@@ -461,11 +436,23 @@ export function InForce({ date, total, rows, onOpen }: {
           <li key={r.work}>
             <button className="rowbtn" onClick={() => onOpen(r.work, r.valid_from)}>
               <span>{r.title ?? r.work}</span>
-              <span className="sub mono">{r.kind ?? ""} · since {r.valid_from}</span>
+              <span className="hitmeta">
+                {r.jurisdiction ? <span>{jurisdictionLabel(r.jurisdiction)}</span> : null}
+                {r.hierarchy ? <span>{facetLabel(r.hierarchy)}</span> : null}
+                {r.kind ? <span>{facetLabel(r.kind)}</span> : null}
+                <span className="mono">since {r.valid_from}</span>
+              </span>
             </button>
           </li>
         ))}
       </ul>
+      {(page > 0 || hasMore) ? (
+        <div className="pager">
+          <button className="ghost" disabled={page === 0} onClick={() => onPage(page - 1)}>← previous</button>
+          <span className="sub mono">{page * 25 + 1}–{page * 25 + rows.length} of {total.toLocaleString()}</span>
+          <button className="ghost" disabled={!hasMore} onClick={() => onPage(page + 1)}>next →</button>
+        </div>
+      ) : null}
     </>
   );
 }
@@ -553,7 +540,10 @@ export function CitedBy({ view, onOpen }: {
           <li key={`${r.work}-${r.anchor}-${i}`}>
             <button className="rowbtn" onClick={() => onOpen(r.work, r.valid_from, r.anchor)}>
               <span>{label(r.title) ?? humanSlug(r.work)}{r.num ? `, ${r.num}` : ""}</span>
-              <span className="sub mono">{r.valid_from} · {r.anchor}</span>
+              <span className="hitmeta">
+                {r.jurisdiction ? <span>{jurisdictionLabel(r.jurisdiction)}</span> : null}
+                <span className="mono">{r.valid_from} · {r.anchor}</span>
+              </span>
             </button>
           </li>
         ))}

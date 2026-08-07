@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { tool } from "./api";
+import { jurisdictionForPublisher, jurisdictionLabel } from "./facets";
 
 /** A work the user can choose, collapsed from provision-level search hits. */
-export interface WorkHit { work: string; title: string; validFrom?: string }
+export interface WorkHit { work: string; title: string; validFrom?: string; jurisdiction?: string }
 
 /**
  * Searchable law picker. Uses the public `search` tool — including its
@@ -44,7 +45,8 @@ export function LawPicker({ current, onPick, inline }: { current?: string; onPic
           const lex = String(h.lex_id ?? "");
           const work = lex.split(":").slice(0, 2).join(":");
           if (work && !seen.has(work))
-            seen.set(work, { work, title: shorten(h.title) ?? work, validFrom: h.valid_from });
+            seen.set(work, { work, title: shorten(h.title) ?? work, validFrom: h.valid_from,
+                             jurisdiction: jurisdictionForPublisher(work.split(":")[0]) });
         }
         if (live) setHits([...seen.values()].slice(0, 10));
       } catch { if (live) setHits([]); }
@@ -78,7 +80,8 @@ export function LawPicker({ current, onPick, inline }: { current?: string; onPic
               <li key={h.work}>
                 <button onClick={() => { onPick(h); if (!inline) setOpen(false); setQ(""); }}>
                   <span>{h.title}</span>
-                  <span className="sub mono">{h.work}</span>
+                  <span className="sub">{h.jurisdiction ? jurisdictionLabel(h.jurisdiction) : h.work.split(":")[0]}
+                    <span className="mono"> · {h.work.split(":").slice(1).join(":")}</span></span>
                 </button>
               </li>
             ))}

@@ -38,8 +38,10 @@ public class McpContractTests : IDisposable
 
         var docs = new[]
         {
-            Row("t-pub:w1:2020-01-01", "w1", "2020-01-01", "2021-12-31", true),
-            Row("t-pub:w1:2022-01-01", "w1", "2022-01-01", null, true),
+            Row("t-pub:w1:2020-01-01", "w1", "2020-01-01", "2021-12-31", true) with
+                { Hierarchy = "secondary_law", Domains = "|finance|", ActForm = "REG", BindingStatus = "in_force" },
+            Row("t-pub:w1:2022-01-01", "w1", "2022-01-01", null, true) with
+                { Hierarchy = "secondary_law", Domains = "|finance|", ActForm = "REG", BindingStatus = "in_force" },
             Row("t-pub:w2:2019-06-01", "w2", "2019-06-01", null, false),   // held, but no text
         };
         var provisions = new[]
@@ -145,6 +147,36 @@ public class McpContractTests : IDisposable
         Assert.Empty(absent);
     }
 
+    [Theory]
+    [InlineData("changes_in_period")]
+    [InlineData("in_force_on")]
+    public void Every_corpus_wide_tool_filters_registered_jurisdictions(string tool)
+    {
+        var common = tool == "changes_in_period"
+            ? new JsonObject { ["from_date"] = "2019-01-01", ["to_date"] = "2026-01-01" }
+            : new JsonObject { ["date"] = "2022-06-01" };
+        common["jurisdiction"] = "xx";
+        Assert.Single(Assert.IsType<JsonArray>(_core.CallTool(tool, common)));
+
+        common["jurisdiction"] = "YY";
+        Assert.Empty(Assert.IsType<JsonArray>(_core.CallTool(tool, common)));
+    }
+
+    [Fact]
+    public void Changes_in_period_applies_hierarchy_domain_and_form_before_counting()
+    {
+        var result = Call("changes_in_period", new JsonObject
+        {
+            ["from_date"] = "2019-01-01", ["to_date"] = "2026-01-01",
+            ["hierarchy"] = "secondary_law", ["domain"] = "finance",
+            ["act_form"] = "REG", ["binding_status"] = "in_force",
+        });
+
+        Assert.Equal(1, result["works_changed"]!.GetValue<int>());
+        var row = Assert.Single(Assert.IsType<JsonArray>(result["changes"]));
+        Assert.Equal("secondary_law", row!["hierarchy"]!.GetValue<string>());
+    }
+
     [Fact]
     public void Search_as_of_returns_only_the_applicable_version()
     {
@@ -240,6 +272,9 @@ public class McpContractTests : IDisposable
         { ["from_date"] = "2019-01-01", ["to_date"] = "2023-01-01" });
         Assert.Equal(2, moved["works_changed"]!.GetValue<int>());
         Assert.Equal(3, moved["new_versions"]!.GetValue<int>());
+        var rows = moved["changes"]!.AsArray().OfType<JsonObject>().ToList();
+        Assert.True(rows.Single(r => r["work"]!.GetValue<string>() == "t-pub:w1")["text_comparable"]!.GetValue<bool>());
+        Assert.False(rows.Single(r => r["work"]!.GetValue<string>() == "t-pub:w2")["text_comparable"]!.GetValue<bool>());
 
         var quiet = Call("changes_in_period", new JsonObject
         { ["from_date"] = "2024-01-01", ["to_date"] = "2024-12-31" });

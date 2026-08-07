@@ -1086,8 +1086,48 @@ public class IndexTests : IDisposable
 
         Assert.Equal(2, amended.VersionsInPeriod);
         Assert.Equal(2, amended.DistinctTexts);      // two versions, two wordings
+        Assert.True(amended.TextComparable);
         Assert.Equal(2, reissued.VersionsInPeriod);
         Assert.Equal(1, reissued.DistinctTexts);     // two versions, one wording
+        Assert.True(reissued.TextComparable);
+    }
+
+    [Fact]
+    public void Period_filters_use_mounted_v3_metadata_before_ranking_and_counting()
+    {
+        var stamp = new Dictionary<string, string>
+        {
+            ["collection"] = "eu-test", ["jurisdiction"] = "EU", ["tier"] = "A",
+            ["history_begins"] = "publisher", ["built_at"] = "2026-08-01T00:00:00Z",
+            ["corpus_commit"] = "test",
+        };
+        var finance = Row("eu-test:reg:2025-01-01", "reg", "2025-01-01", null,
+            kind: "REG", title: "Finance regulation", text: true) with
+        {
+            Hierarchy = "secondary_eu_law", Domains = "|financial-services|", ActForm = "REG",
+            BindingStatus = "in_force",
+        };
+        var treaty = Row("eu-test:treaty:2025-01-01", "treaty", "2025-01-01", null,
+            kind: "TREATY", title: "Treaty", text: true) with
+        {
+            Hierarchy = "primary_eu_law", Domains = "|institutional|", ActForm = "TREATY",
+            BindingStatus = "in_force",
+        };
+        IndexBuilder.Build(_db, stamp, [finance, treaty],
+            [Prov(finance, 0, "art_1", "capital rule"), Prov(treaty, 0, "art_1", "institutional rule")],
+            [], [], StampSigner.CreateKeyPem());
+
+        using var reader = LexIndexReader.Open(_db);
+        var filter = new FilterSet(null, null, null, "en", null,
+            "secondary_eu_law", "REG", "in_force", "financial-services");
+        var rows = reader.ChangesInPeriod("2025-01-01", "2025-12-31", null, true, 25, 0, filter);
+        var totals = reader.ChangeTotals("2025-01-01", "2025-12-31", null, filter);
+
+        var row = Assert.Single(rows);
+        Assert.Equal("reg", row.GroupKey);
+        Assert.Equal("secondary_eu_law", row.Hierarchy);
+        Assert.Equal("|financial-services|", row.Domains);
+        Assert.Equal((1, 1), totals);
     }
 
     private LexIndexReader BuildReissued()

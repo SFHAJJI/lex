@@ -16,9 +16,19 @@ async function mount(url, answer) {
   // The server emits the suggested starting points, validated against the index, so the mount
   // has to be given one to exercise the path that reads them.
   const doors = JSON.stringify([{ work: "lu-legilux:loi-1879-06-18-n1", label: "Code penal" }]);
+  const facets = JSON.stringify({
+    jurisdictions: [
+      { value: "lu", code: "LU", hierarchies: [], domains: [], source_classes: ["LOI", "RGD"], act_forms: [], binding_statuses: [], languages: ["fr"] },
+      { value: "eu", code: "EU", hierarchies: ["primary_eu_law", "secondary_eu_law"], domains: ["financial-services"], source_classes: ["REG", "DIR"], act_forms: ["REG", "DIR"], binding_statuses: ["in_force"], languages: ["en", "fr"] },
+    ],
+    hierarchies: ["primary_eu_law", "secondary_eu_law"], domains: ["financial-services"],
+    source_classes: ["LOI", "RGD", "REG", "DIR"], act_forms: ["REG", "DIR"],
+    binding_statuses: ["in_force"], languages: ["fr", "en"],
+  });
   const dom = new JSDOM(
     `<!doctype html><html><body>` +
     `<script type="application/json" id="doors">${doors}</script>` +
+    `<script type="application/json" id="search-facets">${facets}</script>` +
     `<div id="workspace"></div></body></html>`, {
     runScripts: "outside-only",
     url,
@@ -77,13 +87,16 @@ for (const [re, want, why] of [
   if (re.test(html) !== want) { console.error(`FAIL — ${why}`); process.exit(1); }
 }
 // The report is a second surface, not a tab of the first: it must bring its own window, its own
-// ordering and its own layers, and must NOT render the search box underneath itself.
+// ordering and mounted-index jurisdiction scope, and must NOT render the search box underneath it.
 const report = await mount("https://law.soufien.lu/?space=time&from=2025-01-01&until=2026-01-01");
 for (const [re, want, why] of [
   [/class="period"/, true, "the report lost its header"],
   [/type="date"/, true, "the report lost its window controls"],
   [/class="seg"/, true, "the report lost its ordering control"],
-  [/class="layer/, true, "the report lost its layer tabs"],
+  [/class="period-scope"/, true, "the report lost its jurisdiction control"],
+  [/Every jurisdiction/, true, "the report no longer defaults to every mounted jurisdiction"],
+  [/European Union/, true, "the EU jurisdiction emitted by the mounted index is missing"],
+  [/class="layer/, false, "the Luxembourg-only legal layer tabs returned to the mixed report"],
   [/class="onebox"/, false, "the search box renders inside the report"],
 ]) {
   if (re.test(report) !== want) { console.error(`FAIL (report) — ${why}`); process.exit(1); }
@@ -141,6 +154,29 @@ for (const [re, why] of [
   [/download evidence \(\.md\)/, "the comparison lost evidence download"],
 ]) {
   if (!re.test(comparison)) { console.error(`FAIL (comparison export) - ${why}`); process.exit(1); }
+}
+
+// Missing publisher evidence is not a deletion. Pin the refusal so an absent body can never be
+// rendered as every article being added/removed after a future refactor of the comparison path.
+const unavailableAnswer = (name, args) => {
+  if (name === "timeline") return {
+    versions: ["2020-01-01", "2021-01-01"].map((date) => ({ ...document(date), text_available: date !== "2020-01-01" })),
+  };
+  if (name !== "as_of") return {};
+  if (args.date === "2020-01-01") return {
+    envelope: { status: "text_withheld" }, document: document(String(args.date)), provisions: [],
+  };
+  return { envelope: { status: "ok" }, document: document(String(args.date)),
+           provisions: [provision(args.mode === "outline" ? null : "The rate is six.", "new")] };
+};
+const unavailable = await mount(
+  "https://law.soufien.lu/?space=law&work=eu-eurlex%3A32016R0679&date=2020-01-01&to=2021-01-01&mode=compare",
+  unavailableAnswer,
+);
+if (!/will not turn missing text into apparent additions or removals/.test(unavailable)
+    || /1 added|1 removed/.test(unavailable)) {
+  console.error("FAIL (comparison evidence gap) - unavailable text was presented as a legal change");
+  process.exit(1);
 }
 
 console.log(`ok - home ${html.length} chars, report ${report.length} chars, law and comparison evidence actions`);

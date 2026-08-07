@@ -43,7 +43,7 @@ export function LawSkeleton() {
   );
 }
 
-/** The changes report: layer tabs, the counts row, then the bars in descending order. */
+/** The changes report: scope controls, the counts row, then the bars in descending order. */
 export function ReportSkeleton() {
   return (
     <div aria-busy="true" aria-label="Loading the report">

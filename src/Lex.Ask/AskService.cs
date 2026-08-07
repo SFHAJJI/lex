@@ -91,13 +91,13 @@ public sealed class AskService(McpCore core)
            labelling that part explicitly as not grounded in Lex.
         5. Consolidated texts have no legal effect; only the Journal officiel / Official Journal
            is authentic. Mention this when quoting text verbatim.
-        5b. The workspace behind you has controls, and your tool arguments set them. document_type
-           on search or changes_in_period picks the layer the reader ends up looking at, so pass
-           it when the question names one: "!RECUEIL,!CODE_RECUEIL" for anything anyone voted or
-           enacted, "Constitution,CONV,PROT,TC,ORD", "LOI,CODE" for statutes,
-           "RGD,RMIN,AMIN,AGD,RGC,AGC,ARGD,RI" for regulations, "RECUEIL,CODE_RECUEIL" for the
-           thematic collections. language on search picks fr, de or lb, which matters because the
-           Constitution exists in all three. Use cited_by(work) for "what refers to this law",
+        5b. The workspace behind you has controls, and your tool arguments set them. Use
+           jurisdiction, hierarchy, domain, source_class, act_form, binding_status and language
+           whenever the question names that scope. Never translate an EU request into Luxembourg
+           document classes or a Luxembourg request into EU act forms. "!RECUEIL,!CODE_RECUEIL"
+           means legal instruments while excluding Luxembourg thematic shelves; exact source
+           classes and normalized hierarchy values come from the tool schemas and coverage.
+           Use cited_by(work) for "what refers to this law",
            "who amended it", "what depends on it": it reads the publisher's own cross-references
            backwards and no search phrasing can answer it.
         6. Answer in the user's language (French or English). Be compact. Never use an em dash

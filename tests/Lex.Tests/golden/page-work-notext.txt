@@ -109,8 +109,8 @@ HTTP 200
   .cat td:first-child a { font-weight:600 }
   .cat .r { text-align:right; font-variant-numeric:tabular-nums }
   .cat .sub { font-size:12px; margin-top:2px }
-  .cat th:nth-child(4), .cat td:nth-child(4),
-  .cat th:nth-child(5), .cat td:nth-child(5) { white-space:nowrap }
+  .cat th:nth-child(5), .cat td:nth-child(5),
+  .cat th:nth-child(6), .cat td:nth-child(6) { white-space:nowrap }
   .pager { display:flex; gap:14px; align-items:baseline; margin:12px 0; font-size:14px }
   .pager span { color:var(--muted); font-variant-numeric:tabular-nums }
   form.inline { display:flex; gap:8px; flex-wrap:wrap; margin:10px 0 }
@@ -137,6 +137,10 @@ HTTP 200
   .rail .yr { position:absolute; top:30px; font-family:var(--mono); font-size:11px; color:var(--muted) }
   .railcap { margin:2px 0 18px } .nowmark { color:var(--accent) }
   .lawbody { font-family:var(--serif); font-size:16.5px; line-height:1.62 }
+  .legal-markdown { margin-top:8px }
+  .legal-markdown > :first-child { margin-top:0 }
+  .legal-markdown > :last-child { margin-bottom:0 }
+  .legal-markdown table { font-family:var(--sans); font-size:14px }
   /* Phones: law texts carry wide tables and long pre blocks. Let each scroll inside
      itself rather than pushing the whole page sideways. Desktop is untouched. */
   @media (max-width:640px) {
@@ -149,10 +153,11 @@ HTTP 200
     /* Type is already available as a filter and the first date is secondary to the
        latest state. Removing those columns leaves the law, version count, latest date
        and text availability readable instead of spelling dates vertically. */
-    .cat th:nth-child(2), .cat td:nth-child(2),
-    .cat th:nth-child(4), .cat td:nth-child(4) { display:none }
+    .cat th:nth-child(3), .cat td:nth-child(3),
+    .cat th:nth-child(5), .cat td:nth-child(5),
+    .cat th:nth-child(6), .cat td:nth-child(6) { display:none }
     .cat th, .cat td { padding-left:6px; padding-right:6px }
-    .cat td:first-child { min-width:170px }
+    .cat td:first-child { min-width:130px }
   }
 </style></head>
 <body>
@@ -171,12 +176,12 @@ HTTP 200
 <h1>Reglement sans texte</h1>
 <p class="sub">as it stood on <span class="asof">2020-01-01</span>, permalink: /t-pub/w2/2020-01-01</p>
 <div class="notice" style="border-left-color:var(--ok)"><b>Point-in-time view as at 2020-01-01.</b>
-This is the latest state the publisher has consolidated, valid 2019-06-01 → &lt;i&gt;open&lt;/i&gt;.</div><div class="notice"><b>Text withheld.</b> This deployment runs in metadata-only mode: the legal text is not
+This is the latest state the publisher has consolidated, valid 2019-06-01 → open.</div><div class="notice"><b>Text withheld.</b> This deployment runs in metadata-only mode: the legal text is not
 stored or republished here pending publisher rights confirmation (status <span class="mono">text_withheld</span>).
 Read the official text at
 <a href="https://example.org/w2/2019-06-01" rel="noopener">https://example.org/w2/2019-06-01</a>.</div><div class="card"><table class="kv">
 <tr><td>as of</td><td><b>2020-01-01</b> → this version applied</td></tr>
-<tr><td>valid</td><td class="mono">2019-06-01 → <i>open</i> <span class="badge">publisher-asserted</span></td></tr>
+<tr><td>valid</td><td class="mono">2019-06-01 → open <span class="badge">publisher-asserted</span></td></tr>
 <tr><td>type</td><td><span class="badge">RGD</span> Reglement sans texte</td></tr>
 <tr><td>language</td><td>fr</td></tr>
 <tr><td>published</td><td class="mono">2019-06-01</td></tr>

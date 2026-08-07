@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { tool } from "./api";
-import { LAYERS, type LayerId, type State } from "./state";
+import { facetLabel as label, jurisdictionForPublisher, jurisdictionLabel } from "./facets";
+import { ScopeFilters } from "./ScopeFilters";
+import type { State } from "./state";
 import { shorten } from "./pickers";
 import { ResultsSkeleton } from "./Skeleton";
 
@@ -30,11 +32,13 @@ export interface SearchProps {
   onOpen: (work: string, date?: string, anchor?: string) => void;
   onQuery: (q: string) => void;
   onAsOf: (d?: string) => void;
+  onRefine: (next: Partial<State>) => void;
   onMonitor: () => void;
 }
 
 type HitMeta = {
   validFrom?: string; validTo?: string; hierarchy?: string; language?: string;
+  jurisdiction?: string;
   domains?: string[]; consolidationStatus?: string; matchReasons?: string[];
 };
 type WorkHit = HitMeta & { work: string; title: string };
@@ -51,12 +55,6 @@ type ArticleHit = HitMeta & {
  * here, because this bundle has no idea what the index holds.
  */
 type Door = { work: string; label: string };
-type SearchFacets = {
-  jurisdictions: { value: string; code: string }[];
-  hierarchies: string[]; domains: string[]; act_forms: string[];
-  binding_statuses: string[]; languages: string[];
-};
-
 const DOORS: Door[] = (() => {
   try {
     const el = document.getElementById("doors");
@@ -67,32 +65,6 @@ const DOORS: Door[] = (() => {
   }
 })();
 
-const SEARCH_FACETS: SearchFacets = (() => {
-  const empty: SearchFacets = { jurisdictions: [], hierarchies: [], domains: [], act_forms: [],
-                                binding_statuses: [], languages: [] };
-  try {
-    const text = document.getElementById("search-facets")?.textContent;
-    return text ? { ...empty, ...JSON.parse(text) } : empty;
-  } catch {
-    return empty;
-  }
-})();
-
-const LABELS: Record<string, string> = {
-  primary_eu_law: "EU primary law", secondary_eu_law: "EU secondary law",
-  "financial-services": "Financial services", "aml-corporate": "AML and corporate",
-  "consumer-environment": "Consumer and environment", "procurement-and-ip": "Procurement and IP",
-  "judicial-cooperation": "Judicial cooperation",
-  REG: "Regulation", DIR: "Directive", DEC: "Decision", TREATY: "Treaty", CHARTER: "Charter",
-  in_force: "In force", not_in_force: "Not in force", unknown: "Not classified",
-};
-const label = (value: string) => LABELS[value] ?? value.replaceAll("_", " ").replaceAll("-", " ")
-  .replace(/\b\w/g, (letter) => letter.toUpperCase());
-const jurisdictionLabel = ({ code }: { code: string }) => code === "EU" ? "European Union" :
-  new Intl.DisplayNames(["en"], { type: "region" }).of(code) ?? code;
-const languageLabel = (code: string) =>
-  new Intl.DisplayNames(["en"], { type: "language" }).of(code) ?? code;
-
 /** A bare date is a question in itself: what applied that day. */
 const DATE_ONLY = /^\s*(\d{4}-\d{2}-\d{2})\s*$/;
 const INITIAL_ARTICLES = 8;
@@ -102,16 +74,9 @@ export default function Search(p: SearchProps) {
   const [works, setWorks] = useState<WorkHit[]>([]);
   const [articles, setArticles] = useState<ArticleHit[]>([]);
   const [busy, setBusy] = useState(false);
-  const [layer, setLayer] = useState<LayerId | "">("");
-  const [retrieval, setRetrieval] = useState<"keyword" | "hybrid">("keyword");
-  const [jurisdiction, setJurisdiction] = useState("");
-  const [hierarchy, setHierarchy] = useState("");
-  const [domain, setDomain] = useState("");
-  const [actForm, setActForm] = useState("");
-  const [bindingStatus, setBindingStatus] = useState("");
-  const [language, setLanguage] = useState("");
   const [modeUsed, setModeUsed] = useState("keyword");
   const [expansions, setExpansions] = useState<string[]>([]);
+  const [error, setError] = useState<string>();
   const [articleLimit, setArticleLimit] = useState(INITIAL_ARTICLES);
   const box = useRef<HTMLInputElement>(null);
 
@@ -125,15 +90,24 @@ export default function Search(p: SearchProps) {
 
   const q = p.state.q ?? "";
   const asOf = p.state.asOf;
-  const activeFilters = [jurisdiction, hierarchy, domain, layer, actForm, bindingStatus, language]
-    .filter(Boolean).length;
+  const retrieval = p.state.retrieval ?? "keyword";
+  const jurisdiction = p.state.jurisdiction ?? "";
+  const hierarchy = p.state.hierarchy ?? "";
+  const domain = p.state.domain ?? "";
+  const sourceClass = p.state.sourceClass ?? "";
+  const actForm = p.state.actForm ?? "";
+  const bindingStatus = p.state.bindingStatus ?? "";
+  const language = p.state.language ?? "";
 
   useEffect(() => {
-    if (!q.trim()) { setWorks([]); setArticles([]); return; }
+    if (!q.trim()) { setWorks([]); setArticles([]); setError(undefined); return; }
     let live = true;
     setArticleLimit(INITIAL_ARTICLES);
     setBusy(true);
-    const types = LAYERS.find((l) => l.id === layer)?.types;
+    setError(undefined);
+    setExpansions([]);
+    setWorks([]);
+    setArticles([]);
     tool<any>("search", { query: q.trim(), limit: 40, time_scope: "as_of", as_of: asOf ?? p.today,
                           retrieval_mode: retrieval, fuzzy: "auto",
                           ...(jurisdiction ? { jurisdiction } : {}),
@@ -141,11 +115,14 @@ export default function Search(p: SearchProps) {
                           ...(actForm ? { act_form: actForm } : {}),
                           ...(bindingStatus ? { binding_status: bindingStatus } : {}),
                           ...(language ? { language } : {}),
-                          ...(types ? { document_type: types } : {}) })
+                          ...(sourceClass ? { source_class: sourceClass } : {}) })
       .then((res) => {
         if (!live) return;
         const envelopes = Array.isArray(res) ? res : [res];
-        const hits = envelopes.flatMap((e: any) => e?.hits ?? []);
+        const hits = envelopes.flatMap((e: any) => (e?.hits ?? []).map((hit: any) => ({
+          ...hit,
+          _jurisdiction: e?.envelope?.jurisdiction,
+        })));
         setModeUsed(envelopes.some((e: any) => e?.retrieval_mode === "hybrid") ? "hybrid" : "keyword");
         setExpansions([...new Set(envelopes.flatMap((e: any) => e?.query_expansions ?? []))] as string[]);
         // The same hits answer two different questions, so they are split rather than ranked
@@ -158,6 +135,7 @@ export default function Search(p: SearchProps) {
           if (!work) continue;
           const title = shorten(h.title) ?? work;
           const meta: HitMeta = {
+            jurisdiction: h._jurisdiction ?? jurisdictionForPublisher(work.split(":")[0]),
             validFrom: h.valid_from, validTo: h.valid_to, hierarchy: h.hierarchy,
             language: h.language, domains: Array.isArray(h.domains) ? h.domains : [],
             consolidationStatus: h.consolidation_status,
@@ -171,10 +149,10 @@ export default function Search(p: SearchProps) {
         setWorks([...byWork.values()].slice(0, 8));
         setArticles(arts.slice(0, 25));
       })
-      .catch(() => { if (live) { setWorks([]); setArticles([]); } })
+      .catch(() => { if (live) { setWorks([]); setArticles([]); setError("Search could not be reached. Try again."); } })
       .finally(() => { if (live) setBusy(false); });
     return () => { live = false; };
-  }, [q, asOf, layer, retrieval, jurisdiction, hierarchy, domain, actForm, bindingStatus, language]);
+  }, [q, asOf, retrieval, jurisdiction, hierarchy, domain, sourceClass, actForm, bindingStatus, language]);
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -222,20 +200,26 @@ export default function Search(p: SearchProps) {
         <button className="door" onClick={p.onMonitor}>What changed recently</button>
       </div>
 
+      {!q && asOf ? (
+        <div className="date-scope">
+          <ScopeFilters values={p.state} onChange={p.onRefine} summary="Narrow laws in force" />
+        </div>
+      ) : null}
+
       {q ? (
         <div className="results">
           <div className="res-head">
-            <span className="sub">{busy ? "Searching…" : `${works.length} law${works.length === 1 ? "" : "s"}, ${articles.length} article${articles.length === 1 ? "" : "s"}`}</span>
+            <span className="sub">{busy ? "Searching…" : `${works.length} law${works.length === 1 ? "" : "s"}, ${articles.length} article${articles.length === 1 ? "" : "s"} shown`}</span>
             <span className="badge">{modeUsed === "hybrid" ? "words + meaning" : "exact words"}</span>
             <span className="grow" />
             <div className="search-mode" role="group" aria-label="Search method">
               <button className={retrieval === "keyword" ? "on" : ""}
                       aria-pressed={retrieval === "keyword"}
-                      onClick={() => setRetrieval("keyword")}>Exact words</button>
+                      onClick={() => p.onRefine({ retrieval: "keyword" })}>Exact words</button>
               <button className={retrieval === "hybrid" ? "on" : ""}
                       aria-pressed={retrieval === "hybrid"}
                       title="Adds multilingual meaning search; exact legal identifiers still use exact lookup"
-                      onClick={() => setRetrieval("hybrid")}>Words + meaning <small>preview</small></button>
+                      onClick={() => p.onRefine({ retrieval: "hybrid" })}>Words + meaning <small>preview</small></button>
             </div>
           </div>
 
@@ -244,67 +228,13 @@ export default function Search(p: SearchProps) {
               identifiers and quoted legal text still use exact lookup.</p>
           ) : null}
 
-          <details className="search-filters">
-            <summary>Narrow results{activeFilters ? ` (${activeFilters} active)` : ""}</summary>
-            <div className="filter-grid">
-              <label><span>Jurisdiction</span>
-                <select className="reslayer" value={jurisdiction}
-                        onChange={(e) => setJurisdiction(e.target.value)}>
-                  <option value="">Every jurisdiction</option>
-                  {SEARCH_FACETS.jurisdictions.map((item) =>
-                    <option key={item.value} value={item.value}>{jurisdictionLabel(item)}</option>)}
-                </select>
-              </label>
-              <label><span>Hierarchy</span>
-                <select className="reslayer" value={hierarchy}
-                        onChange={(e) => setHierarchy(e.target.value)}>
-                  <option value="">Every hierarchy</option>
-                  {SEARCH_FACETS.hierarchies.map((value) =>
-                    <option key={value} value={value}>{label(value)}</option>)}
-                </select>
-              </label>
-              <label><span>Practice area</span>
-                <select className="reslayer" value={domain} onChange={(e) => setDomain(e.target.value)}>
-                  <option value="">Every practice area</option>
-                  {SEARCH_FACETS.domains.map((value) =>
-                    <option key={value} value={value}>{label(value)}</option>)}
-                </select>
-              </label>
-              <label><span>Kind of law</span>
-                <select className="reslayer" value={layer}
-                        onChange={(e) => setLayer(e.target.value as LayerId | "")}>
-                  <option value="">Every kind of law</option>
-                  {LAYERS.map((l) => <option key={l.id} value={l.id}>{l.label}</option>)}
-                </select>
-              </label>
-              <label><span>EU legal form</span>
-                <select className="reslayer" value={actForm} onChange={(e) => setActForm(e.target.value)}>
-                  <option value="">Every legal form</option>
-                  {SEARCH_FACETS.act_forms.map((value) =>
-                    <option key={value} value={value}>{label(value)}</option>)}
-                </select>
-              </label>
-              <label><span>EU legal status</span>
-                <select className="reslayer" value={bindingStatus}
-                        onChange={(e) => setBindingStatus(e.target.value)}>
-                  <option value="">Every status</option>
-                  {SEARCH_FACETS.binding_statuses.map((value) =>
-                    <option key={value} value={value}>{label(value)}</option>)}
-                </select>
-              </label>
-              <label><span>Language</span>
-                <select className="reslayer" value={language} onChange={(e) => setLanguage(e.target.value)}>
-                  <option value="">Every language</option>
-                  {SEARCH_FACETS.languages.map((value) =>
-                    <option key={value} value={value}>{languageLabel(value)}</option>)}
-                </select>
-              </label>
-            </div>
-          </details>
+          <ScopeFilters values={p.state} onChange={p.onRefine} />
 
           {expansions.length > 0 ? <p className="sub expansion">Spelling fallback tried: {expansions.join(", ")}</p> : null}
 
           {busy && works.length === 0 && articles.length === 0 ? <ResultsSkeleton /> : null}
+
+          {error ? <div className="empty"><p>{error}</p></div> : null}
 
           {works.length > 0 ? (
             <>
@@ -352,7 +282,7 @@ export default function Search(p: SearchProps) {
             </>
           ) : null}
 
-          {!busy && works.length === 0 && articles.length === 0 ? (
+          {!busy && !error && works.length === 0 && articles.length === 0 ? (
             <div className="empty">
               <p>Nothing in the corpus matches that.</p>
               <p className="sub">
@@ -378,6 +308,7 @@ function HitContext({ hit }: { hit: HitMeta }) {
     reason === "exact_identifier" ? "exact identifier" : reason === "fuzzy" ? "spelling match" :
     reason === "keyword" ? "word match" : label(reason));
   return <>
+    {hit.jurisdiction ? <span>{jurisdictionLabel(hit.jurisdiction)}</span> : null}
     {hit.hierarchy ? <span>{label(hit.hierarchy)}</span> : null}
     {(hit.domains ?? []).slice(0, 2).map((domain) => <span key={domain}>{label(domain)}</span>)}
     {reasons.map((reason) => <span key={reason}>{reason}</span>)}

@@ -104,7 +104,8 @@ public static class DocumentEndpoints
             sb.Append(EnvelopeCard(r, false));
             // The name of the law, then where it is from. Someone looking for this page types the
             // name of a law and a country, never the consolidation label the publisher prefixes.
-            var jurisdiction = publisher == "eu-eurlex" ? "EU law" : "Luxembourg law";
+            var jurisdictionInfo = JurisdictionOf(r);
+            var jurisdiction = jurisdictionInfo.LawLabel;
             // Publisher titles end in a full stop. A title is a label, so the stop is dropped
             // rather than left to land mid-sentence as "Luxemburg.. Full text as it stood ...".
             var name = (StripConsolidationLabel(t) ?? t).TrimEnd('.', ' ');
@@ -130,8 +131,8 @@ public static class DocumentEndpoints
                 ["legislationIdentifier"] = rows[^1].GroupIdentifier,
                 ["legislationJurisdiction"] = new JsonObject
                 {
-                    ["@type"] = publisher == "eu-eurlex" ? "AdministrativeArea" : "Country",
-                    ["name"] = publisher == "eu-eurlex" ? "European Union" : "Luxembourg",
+                    ["@type"] = jurisdictionInfo.SchemaType,
+                    ["name"] = jurisdictionInfo.Name,
                 },
                 ["legislationDate"] = rows[0].ValidFrom,
                 ["legislationLegalForce"] = rows[^1].ValidTo is null && !rows[^1].Withdrawn
@@ -284,7 +285,7 @@ public static class DocumentEndpoints
                         <b>{H(title)}</b>
                         <a class="sub mono" href="#{H(p.Anchor)}" title="permalink to this provision">#{H(p.Anchor)}</a>
                         {(p.ArticleValidFrom is not null && p.ArticleValidFrom != doc.ValidFrom ? $"<span class=\"badge\">applicable {H(p.ArticleValidFrom)}</span>" : "")}
-                        <pre style="white-space:pre-wrap;font:14px/1.65 Georgia,'Times New Roman',serif;margin:8px 0 0">{H(p.TextMd)}</pre>
+                        <div class="lawbody legal-markdown">{RenderLegalMarkdown(p.TextMd)}</div>
                         </div>
                         """);
                     shown++;
@@ -340,4 +341,22 @@ public static class DocumentEndpoints
     {
         ["@type"] = "ListItem", ["position"] = position, ["name"] = name, ["item"] = url,
     };
+
+    /// <summary>
+    /// Human and schema.org labels come from the mounted artifact, not from the collection ID.
+    /// The explicit EU/LU names are presentation rules for today's indexes; an added jurisdiction
+    /// still receives an honest label instead of accidentally being called Luxembourg law.
+    /// </summary>
+    private static (string LawLabel, string Name, string SchemaType) JurisdictionOf(LexIndexReader reader)
+    {
+        var code = reader.Stamp.GetValueOrDefault("jurisdiction", "").Trim();
+        return code.ToUpperInvariant() switch
+        {
+            "EU" => ("EU law", "European Union", "AdministrativeArea"),
+            "LU" => ("Luxembourg law", "Luxembourg", "Country"),
+            _ => ($"{(code.Length > 0 ? code : reader.Stamp.GetValueOrDefault("publisher_name", reader.Collection))} law",
+                  code.Length > 0 ? code : reader.Stamp.GetValueOrDefault("publisher_name", reader.Collection),
+                  "AdministrativeArea"),
+        };
+    }
 }

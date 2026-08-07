@@ -74,7 +74,10 @@ public sealed record RankingRow(string Work, string? Title, int VersionsInPeriod
     // The state before the window, so a row the assistant surfaces opens the same comparison a
     // clicked row does. Null when the window contains the work's first version.
     string? Baseline = null, string? DiffFrom = null, string? DiffTo = null,
-    int DistinctTexts = 0, bool WordingChanged = true);
+    int DistinctTexts = 0, bool WordingChanged = true, bool TextComparable = false,
+    string? Jurisdiction = null, string? Hierarchy = null,
+    IReadOnlyList<string>? Domains = null, string? SourceClass = null,
+    string? ActForm = null, string? BindingStatus = null, string? Language = null);
 
 public sealed record InForceView(string Date, int Total, IReadOnlyList<InForceRow> Rows);
 
@@ -82,14 +85,24 @@ public sealed record InForceView(string Date, int Total, IReadOnlyList<InForceRo
 public sealed record CitedByView(string CitedWork, int CitingArticles, IReadOnlyList<CitedByRow> Rows);
 
 public sealed record CitedByRow(string Work, string? Title, string ValidFrom, string Anchor,
-                                string? Num, string? Permalink);
+                                string? Num, string? Permalink, string? Jurisdiction = null);
 
 /// <summary>
 /// How the workspace should be set, as opposed to what it should show. Null means "leave it".
 /// </summary>
-public sealed record WorkspaceView(string? Layer = null, int? Page = null, string? Language = null);
+public sealed record WorkspaceView(
+    string? Jurisdiction = null,
+    string? Hierarchy = null,
+    string? Domain = null,
+    string? SourceClass = null,
+    string? ActForm = null,
+    string? BindingStatus = null,
+    int? Page = null,
+    string? Language = null);
 
-public sealed record InForceRow(string Work, string? Title, string? Kind, string ValidFrom, string? Permalink);
+public sealed record InForceRow(string Work, string? Title, string? Kind, string ValidFrom,
+                                string? Permalink, string? Jurisdiction = null,
+                                string? Hierarchy = null);
 
 /// <summary>An honest gap: what was asked for, and why Lex cannot show it.</summary>
 public sealed record GapView(string Status, string? Work, string? Date, string Explanation,

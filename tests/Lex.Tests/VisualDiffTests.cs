@@ -5,6 +5,16 @@ namespace Lex.Tests;
 public class VisualDiffTests
 {
     [Fact]
+    public void Legal_markdown_is_formatted_but_never_executes_source_html()
+    {
+        var html = Fragments.RenderLegalMarkdown("**Article 1.** Safe text\n\n<script>alert('unsafe')</script>");
+
+        Assert.Contains("<strong>Article 1.</strong>", html);
+        Assert.DoesNotContain("<script>", html, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("&lt;script&gt;", html);
+    }
+
+    [Fact]
     public void Presentation_diff_keeps_new_wording_before_replaced_wording()
     {
         var html = Fragments.RenderDiff("Article 1\nold wording\nEnd", "Article 1\nnew wording\nEnd");
