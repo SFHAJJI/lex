@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { CompareSkeleton } from "./Skeleton";
 import { first, tool } from "./api";
 import { diffWords, changed } from "./diff";
+import { assessAnchorPopulation, scopeOutline } from "./comparison";
 import { Empty } from "./views";
 import { EvidenceActions } from "./EvidenceActions";
 import {
@@ -45,6 +46,7 @@ export function Compare({ work, title, from, to, anchor }: {
     documents?: [{ lexId?: string; validFrom?: string; validTo?: string },
                  { lexId?: string; validFrom?: string; validTo?: string }];
     unavailable?: [string | undefined, string | undefined];
+    anchorPopulation?: { before: number; after: number; shared: number };
   }>({ loading: true });
   const [wide, setWide] = useState(() => typeof window !== "undefined" && window.innerWidth >= 900);
   const [showPunct, setShowPunct] = useState(false);
@@ -81,8 +83,13 @@ export function Compare({ work, title, from, to, anchor }: {
       const [oa, ob] = await Promise.all([outline(from), outline(to)]);
       const pa = first<any>(oa, (x) => Array.isArray(x?.provisions) && x.provisions.length > 0);
       const pb = first<any>(ob, (x) => Array.isArray(x?.provisions) && x.provisions.length > 0);
-      const A = new Map<string, any>((pa?.provisions ?? []).map((p: any) => [p.anchor, p]));
-      const B = new Map<string, any>((pb?.provisions ?? []).map((p: any) => [p.anchor, p]));
+      // Keep the client honest during rolling deployment too: an older MCP build ignored
+      // anchors in outline mode and returned the whole document, which made an article-scoped
+      // permalink display hundreds of unrelated additions and removals.
+      const provisionsA = scopeOutline<any>(pa?.provisions ?? [], anchor);
+      const provisionsB = scopeOutline<any>(pb?.provisions ?? [], anchor);
+      const A = new Map<string, any>(provisionsA.map((p: any) => [p.anchor, p]));
+      const B = new Map<string, any>(provisionsB.map((p: any) => [p.anchor, p]));
       const statusA: string | undefined = pa?.envelope?.status ?? pa?.status;
       const statusB: string | undefined = pb?.envelope?.status ?? pb?.status;
       // An empty selected anchor can honestly mean "this article did not exist yet". An empty
@@ -110,6 +117,18 @@ export function Compare({ work, title, from, to, anchor }: {
       const profB: string | undefined = pb?.document?.extraction_profile;
       if (profA && profB && profA !== profB) {
         if (live) setState({ loading: false, error: "PROFILE_MISMATCH", profiles: [profA, profB] });
+        return;
+      }
+
+      const anchorPopulation = assessAnchorPopulation(provisionsA, provisionsB);
+      if (!anchor && !anchorPopulation.comparable) {
+        if (live) setState({
+          loading: false,
+          error: "ANCHOR_POPULATION_MISMATCH",
+          anchorPopulation,
+          sources: [pa?.document?.source_uri, pb?.document?.source_uri],
+          permalinks: [pa?.document?.permalink, pb?.document?.permalink],
+        });
         return;
       }
 
@@ -204,6 +223,21 @@ export function Compare({ work, title, from, to, anchor }: {
         anchor schemes and cannot be lined up. A comparison here would report differences invented by
         the two parsers rather than made by the legislator, so Lex will not draw one. Open each
         version on its own, or compare the publisher's own texts:{" "}
+        <a href={`/${work.replace(":", "/")}/${from}`}>{from}</a>{" and "}
+        <a href={`/${work.replace(":", "/")}/${to}`}>{to}</a>.
+      </Empty>
+    );
+  }
+  if (state.error === "ANCHOR_POPULATION_MISMATCH") {
+    const population = state.anchorPopulation;
+    return (
+      <Empty>
+        These versions use the same extraction profile, but only {population?.shared ?? 0} of the
+        {" "}{Math.min(population?.before ?? 0, population?.after ?? 0)} provision anchors remain
+        continuous. The publisher appears to have regenerated its internal identifiers, so a
+        whole-document diff would mislabel unchanged articles as removed and added. Lex will not
+        present that as a legal change. Open an article from either version to compare an anchor
+        that is present on both dates, or inspect the publisher records:{" "}
         <a href={`/${work.replace(":", "/")}/${from}`}>{from}</a>{" and "}
         <a href={`/${work.replace(":", "/")}/${to}`}>{to}</a>.
       </Empty>

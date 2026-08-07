@@ -184,7 +184,7 @@ HTTP 200
 &middot; <a href="https://example.org/w1/2022-01-01">official source &nearr;</a></td></tr>
 </table></div>
 <p><a href="/?space=law&amp;work=t-pub%3Aw1&amp;date=2020-01-01&amp;to=2022-01-01&amp;mode=compare"><b>Open the structured article comparison &rarr;</b></a>
-<span class="sub">matched by provision anchor, with changed, added, removed and unchanged articles separated</span></p><p class="sub">1 line(s) in the old middle, 1 in the new; 3 unchanged leading and 5 trailing lines trimmed.</p><div class="card"><pre style="white-space:pre-wrap;font-size:13px;margin:0"><span style="color:var(--ok)">+ la chose s applique partout, revisee</span>
+<span class="sub">matched by provision anchor when continuity is sufficient; otherwise Lex refuses rather than inventing changes</span></p><p class="sub">1 line(s) in the old middle, 1 in the new; 3 unchanged leading and 5 trailing lines trimmed.</p><div class="card"><pre style="white-space:pre-wrap;font-size:13px;margin:0"><span style="color:var(--ok)">+ la chose s applique partout, revisee</span>
 <span style="color:var(--accent)">− la chose s applique partout</span>
 </pre></div><div class="card"><table class="kv">
 <tr><td>tier</td><td>A, publisher-supplied validity dates</td></tr>

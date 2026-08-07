@@ -53,7 +53,7 @@ public static class DocumentEndpoints
                 &middot; <a href="{H(b.SourceUri)}">official source &nearr;</a></td></tr>
                 </table></div>
                 <p><a href="{workspaceUrl}"><b>Open the structured article comparison &rarr;</b></a>
-                <span class="sub">matched by provision anchor, with changed, added, removed and unchanged articles separated</span></p>
+                <span class="sub">matched by provision anchor when continuity is sufficient; otherwise Lex refuses rather than inventing changes</span></p>
                 """);
 
             if (a.Key == b.Key)

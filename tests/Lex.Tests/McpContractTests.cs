@@ -221,6 +221,26 @@ public class McpContractTests : IDisposable
     }
 
     [Fact]
+    public void Outline_anchor_scope_is_applied_instead_of_returning_the_whole_document()
+    {
+        var selected = Call("as_of", new JsonObject
+        {
+            ["work"] = "t-pub:w1", ["date"] = "2022-06-01",
+            ["mode"] = "outline", ["anchors"] = "art_1",
+        });
+        Assert.Equal("art_1", Assert.Single(selected["provisions"]!.AsArray())!["anchor"]!.GetValue<string>());
+
+        var absent = Call("as_of", new JsonObject
+        {
+            ["work"] = "t-pub:w1", ["date"] = "2022-06-01",
+            ["mode"] = "outline", ["anchors"] = "art_999",
+        });
+        Assert.Empty(absent["provisions"]!.AsArray());
+        Assert.Equal("anchor_not_in_version", Status(absent));
+        Assert.Equal("art_999", Assert.Single(absent["anchors_not_in_version"]!.AsArray())!.GetValue<string>());
+    }
+
+    [Fact]
     public void Full_carries_the_text_and_carries_it_once()
     {
         var o = Call("as_of", new JsonObject
