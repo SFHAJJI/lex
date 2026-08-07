@@ -103,6 +103,8 @@ public static class SemanticChunker
         string text, int start, ITextEncoder encoder)
     {
         var remaining = text.Length - start;
+        if (remaining == 0)
+            return (Take: 0, FitsRemaining: true);
         var windowLength = Math.Min(remaining, InitialProbeCharacters);
         while (true)
         {
