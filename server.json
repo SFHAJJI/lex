@@ -1,0 +1,17 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.SFHAJJI/lex",
+  "title": "Lex — Temporal Luxembourg and EU Law",
+  "description": "Search, retrieve, compare, and trace official Luxembourg and reviewed EU law as of a date, with publisher provenance.",
+  "repository": {
+    "url": "https://github.com/SFHAJJI/lex",
+    "source": "github"
+  },
+  "version": "1.1.0",
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://law.soufien.lu/mcp"
+    }
+  ]
+}
