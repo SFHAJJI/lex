@@ -13,7 +13,13 @@ public class IndexTests : IDisposable
         public int Dimensions => 8;
         public int EncodeCalls { get; private set; }
         public int BatchCalls { get; private set; }
-        public int CountTokens(string text) => text.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length + 2;
+        public long CountedCharacters { get; private set; }
+        public int CountTokens(string text)
+        {
+            CountedCharacters += text.Length;
+            return text.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length + 2;
+        }
+        public void ResetTokenMetrics() => CountedCharacters = 0;
         public int PrefixLengthForTokens(string text, int maxTokens)
         {
             var words = 0;
@@ -560,6 +566,97 @@ public class IndexTests : IDisposable
         Assert.Equal(first.Select(c => c.Sha256), second.Select(c => c.Sha256));
         Assert.All(first, c => Assert.True(
             encoder.CountTokens("passage: " + c.Text) <= SemanticChunker.MaxTokens));
+    }
+
+    [Fact]
+    public void Linear_chunk_preparation_preserves_the_existing_chunk_contract()
+    {
+        using var encoder = new FakeEncoder();
+        var paragraph = string.Join(' ', Enumerable.Range(0, 900).Select(i => $"term{i}"));
+        var cases = new[]
+        {
+            "short provision",
+            paragraph,
+            $"short opening\n\n{paragraph}\n\nshort closing",
+            string.Join("\n\n", Enumerable.Repeat("a compact legal paragraph", 150)),
+        };
+
+        foreach (var text in cases)
+            Assert.Equal(LegacyChunkTexts(text, encoder),
+                SemanticChunker.Split(text, encoder).Select(chunk => chunk.Text));
+
+        static IReadOnlyList<string> LegacyChunkTexts(string text, ITextEncoder encoder)
+        {
+            if (encoder.CountTokens("passage: " + text) <= SemanticChunker.MaxTokens)
+                return [text];
+            var pieces = new List<string>();
+            foreach (var paragraph in text.Replace("\r\n", "\n", StringComparison.Ordinal)
+                         .Split("\n\n", StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                var rest = paragraph;
+                while (encoder.CountTokens("passage: " + rest) > SemanticChunker.MaxTokens)
+                {
+                    var take = Math.Max(1, encoder.PrefixLengthForTokens(
+                        "passage: " + rest, SemanticChunker.MaxTokens) - "passage: ".Length);
+                    take = Math.Min(take, rest.Length);
+                    pieces.Add(rest[..take].Trim());
+                    var overlapStart = encoder.SuffixStartForTokens(
+                        rest[..take], SemanticChunker.OverlapTokens);
+                    rest = rest[overlapStart..].Trim();
+                }
+                if (rest.Length > 0) pieces.Add(rest);
+            }
+
+            var chunks = new List<string>();
+            var current = new List<string>();
+            foreach (var piece in pieces)
+            {
+                var candidate = string.Join("\n\n", current.Append(piece));
+                if (current.Count > 0
+                    && encoder.CountTokens("passage: " + candidate) > SemanticChunker.MaxTokens)
+                {
+                    chunks.Add(string.Join("\n\n", current));
+                    var overlap = TakeWhileAccumulated(current.AsEnumerable().Reverse(),
+                        part => encoder.CountTokens(part), SemanticChunker.OverlapTokens).Reverse().ToList();
+                    current = overlap.Count > 0
+                        && encoder.CountTokens("passage: " + string.Join("\n\n", overlap.Append(piece)))
+                            <= SemanticChunker.MaxTokens
+                        ? overlap : [];
+                }
+                current.Add(piece);
+            }
+            if (current.Count > 0) chunks.Add(string.Join("\n\n", current));
+            return chunks;
+
+            static IEnumerable<T> TakeWhileAccumulated<T>(
+                IEnumerable<T> values, Func<T, int> cost, int maximum)
+            {
+                var total = 0;
+                foreach (var value in values)
+                {
+                    var next = cost(value);
+                    if (total + next > maximum) yield break;
+                    total += next;
+                    yield return value;
+                }
+            }
+        }
+    }
+
+    [Fact]
+    public void Oversized_single_paragraph_does_not_rescan_every_remaining_suffix()
+    {
+        using var encoder = new FakeEncoder();
+        var text = string.Join(' ', Enumerable.Repeat("annex", 20_000));
+        encoder.ResetTokenMetrics();
+
+        var chunks = SemanticChunker.Split(text, encoder);
+
+        Assert.True(chunks.Count > 50);
+        Assert.True(encoder.CountedCharacters < text.Length * 10L,
+            $"Chunk preparation rescanned {encoder.CountedCharacters:N0} characters for a {text.Length:N0}-character provision.");
+        Assert.All(chunks, chunk => Assert.True(
+            encoder.CountTokens("passage: " + chunk.Text) <= SemanticChunker.MaxTokens));
     }
 
     [Fact]

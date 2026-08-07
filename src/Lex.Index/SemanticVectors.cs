@@ -31,10 +31,11 @@ public static class SemanticChunker
 {
     public const int MaxTokens = 256;
     public const int OverlapTokens = 32;
+    private const string PassagePrefix = "passage: ";
 
     public static IReadOnlyList<SemanticChunk> Split(string text, ITextEncoder encoder)
     {
-        if (encoder.CountTokens("passage: " + text) <= MaxTokens)
+        if (encoder.CountTokens(PassagePrefix + text) <= MaxTokens)
             return [Chunk(0, text)];
 
         var paragraphs = text.Replace("\r\n", "\n", StringComparison.Ordinal)
@@ -43,15 +44,23 @@ public static class SemanticChunker
         foreach (var paragraph in paragraphs)
         {
             var rest = paragraph;
-            while (encoder.CountTokens("passage: " + rest) > MaxTokens)
+            while (rest.Length > 0)
             {
-                var take = Math.Max(1, encoder.PrefixLengthForTokens("passage: " + rest, MaxTokens) - "passage: ".Length);
+                // Asking the tokenizer for the first boundary is bounded by MaxTokens. Counting
+                // the entire remaining suffix before every chunk made a multi-megabyte annex
+                // approach quadratic work even though each output chunk is small.
+                var boundary = encoder.PrefixLengthForTokens(PassagePrefix + rest, MaxTokens);
+                var take = Math.Max(1, boundary - PassagePrefix.Length);
                 take = Math.Min(take, rest.Length);
+                if (take == rest.Length)
+                {
+                    pieces.Add(rest);
+                    break;
+                }
                 pieces.Add(rest[..take].Trim());
                 var overlapStart = encoder.SuffixStartForTokens(rest[..take], OverlapTokens);
                 rest = rest[overlapStart..].Trim();
             }
-            if (rest.Length > 0) pieces.Add(rest);
         }
 
         var chunks = new List<SemanticChunk>();
@@ -59,13 +68,13 @@ public static class SemanticChunker
         foreach (var piece in pieces)
         {
             var candidate = string.Join("\n\n", current.Append(piece));
-            if (current.Count > 0 && encoder.CountTokens("passage: " + candidate) > MaxTokens)
+            if (current.Count > 0 && encoder.CountTokens(PassagePrefix + candidate) > MaxTokens)
             {
                 chunks.Add(Chunk(chunks.Count, string.Join("\n\n", current)));
                 var overlap = current.AsEnumerable().Reverse().TakeWhileAccumulated(
                     p => encoder.CountTokens(p), OverlapTokens).Reverse().ToList();
                 current = overlap.Count > 0
-                    && encoder.CountTokens("passage: " + string.Join("\n\n", overlap.Append(piece))) <= MaxTokens
+                    && encoder.CountTokens(PassagePrefix + string.Join("\n\n", overlap.Append(piece))) <= MaxTokens
                     ? overlap : [];
             }
             current.Add(piece);
