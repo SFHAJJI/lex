@@ -299,12 +299,14 @@ public static class CatalogueEndpoints
                         var what = pr.Profile switch
                         {
                             "akn-lu/1" => "publisher XML (Akoma Ntoso), article boundaries from the publisher",
+                            "akn-lu-document/1" => "publisher XML (Akoma Ntoso), exposed as one document because the publisher supplied no article or annex boundary",
                             "fmx4-eu/1" => "publisher XML (Formex 4), article boundaries from the publisher",
                             "xhtml-eu/1" => "publisher XHTML, article boundaries from the publisher",
                             "xhtml-eu-xlink-context/1" => "legacy publisher XHTML with its missing standard link namespace supplied; article boundaries from publisher markup, or one disclosed document-level boundary when none exists",
                             "html-eu-tolerant/1" => "legacy publisher HTML repaired deterministically; article boundaries from publisher markup, or one disclosed document-level boundary when none exists",
                             "pdf-lu/1" => "read from the publisher's PDF, article boundaries inferred from layout",
                             "pdf-memorial-lu/1" => "cut out of an official gazette issue, both the act's boundaries and its articles inferred",
+                            "pdf-memorial-lu/2" => "cut out of a verified official-gazette section; older article typography normalized, or one disclosed document boundary when the section has no unambiguous single article sequence",
                             _ => "",
                         };
                         sb.Append($"<tr><td class=\"mono\">{H(pr.Profile)}</td><td>{pr.Versions:n0}</td></tr>"
@@ -317,7 +319,7 @@ public static class CatalogueEndpoints
                 var luGap = jurisdiction switch
                 {
                     "LU" => """
-                      The publisher only maintains consolidated (amendments-merged) editions for some laws , 
+                      The publisher only maintains consolidated (amendments-merged) editions for some laws,
                       the codes and frequently amended acts. Lex holds <b>all of those</b>. The other
                       ≈24,579 Luxembourg acts never get a consolidated edition; they are <b>not here yet</b>
                       (and we won't guess dates for texts we haven't seen).
@@ -335,9 +337,10 @@ public static class CatalogueEndpoints
                       comparable across dates. Legilux offers XML for 2,892 of its consolidations, PDF only for
                       1,611, and no file at all for 130. Roughly 1,371 of those PDF-only versions are the
                       thematic folders marked above, which nobody voted and which carry no rule of their own.
-                      Across every genuine instrument, from the Constitution down to ministerial regulations,
-                      about 240 versions lack text. The wording still exists at the publisher, and each of these
-                      entries links to it.
+                      The live rows above are the current result, not a copied estimate. The remaining wordless
+                      records are publisher collections with no single authoritative instrument text, fileless
+                      catalogue records, or a source Lex refused because the requested act's identity could not
+                      be proved inside the linked gazette issue. Each record still links to the publisher.
                       """
                     : "";
                 sb.Append($"""

@@ -113,7 +113,7 @@ it is visibly separate, carries the tool trace and is not part of the record.
 ```
 APPS        Lex.Ingest (CLI)   Lex.Mcp.Stdio (local host)   Lex.Web (site + HTTP MCP)   Lex.Ask (AI loop)
 PROTOCOL    Lex.Mcp (legal tools + official MCP SDK bridge; transport-neutral library)
-DERIVED     Lex.Derive, evidence -> per-article Markdown+JSON (immutable profiles: akn-lu/1, fmx4-eu/1, xhtml-eu/1)
+DERIVED     Lex.Derive, evidence -> provision Markdown+JSON (immutable profiles include akn-lu/1, akn-lu-document/1, pdf-memorial-lu/2, fmx4-eu/1, xhtml-eu/1)
 ADAPTERS    Lex.Sources.Legilux (Tier A, SPARQL)   Lex.Sources.EurLex (Tier A, Cellar + Formex)
 MODEL       Lex.Law, Publisher, Work, Version, Expression, Observation. No publisher names.
 FOUNDATION  Lex.Temporal (interval algebra)   Lex.Index (SQLite: filter-first, verified artifacts)
