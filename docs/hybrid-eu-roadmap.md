@@ -43,9 +43,17 @@ official publication nor legal advice; the publisher source remains the authorit
    controlled fuzzy fallback. Keyword remains the default.
 6. **Gated:** make hybrid the default only after the public relevance, temporal, latency and
    memory gates pass with reviewed judgments.
+7. **Building through experiment:** add provenance-aware work-name and model-derived discovery
+   enrichment, then deliver one evidence-grounded Microsoft Agent Framework legal-research agent,
+   typed clarification, bounded memory and jurisdiction-first result UX. The experiment chooses
+   safe fields, weights and orchestration; Agent Framework itself is an accepted requirement.
 
 The machine-readable milestone and decision registry is `docs/architecture-program.json`. The
 site renders that registry so a change of status has one source of truth.
+
+The accepted experiment, safety boundaries, rejected alternatives and conditional delivery plan
+are recorded in [Search enrichment and legal-research agent](retrieval-agent-enrichment-plan.md).
+Nothing in that target document is current production behavior until its registry status changes.
 
 ## Corpus policy
 
