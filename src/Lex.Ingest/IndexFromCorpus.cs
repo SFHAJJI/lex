@@ -17,6 +17,10 @@ public static class IndexFromCorpus
         var manifest = JsonSerializer.Deserialize<ManifestDoc>(
             File.ReadAllText(Path.Combine(corpusRoot, "manifest.json")), CorpusJson.Options)!;
         var publisherId = manifest.Publisher["id"];
+        if (workEnrichmentPath is not null
+            && manifest.PublisherDiscoverySchema != ManifestDoc.CurrentPublisherDiscoverySchema)
+            throw new InvalidDataException(
+                "The corpus predates publisher-discovery migration. Re-ingest it before applying reviewed work aliases.");
 
         var docs = new List<DocRow>();
         var provisions = new List<ProvisionRow>();
@@ -222,9 +226,10 @@ public static class IndexFromCorpus
         }
 
         stamp["derived_provisions"] = provisions.Count.ToString();
+        var heldWorks = docs.Select(doc => (doc.GroupKey, doc.Language)).ToHashSet();
         var workSearch = workEnrichmentPath is null
             ? null
-            : WorkEnrichmentFile.Load(workEnrichmentPath, publisherId);
+            : WorkEnrichmentFile.Load(workEnrichmentPath, publisherId, heldWorks);
         IndexBuilder.Build(dbPath, stamp, docs, provisions, events, observations, signingKeyPem,
             provisionStates, anchorEventRows, semantic, workSearch);
         Console.Error.WriteLine($"  [index] {dbPath}: {docs.Count} rows, {provisions.Count} provisions, {provisionStates.Count} states, {anchorEventRows.Count} anchor events, signed={(signingKeyPem is not null)}");

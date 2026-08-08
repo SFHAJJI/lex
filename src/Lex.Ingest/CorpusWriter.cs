@@ -370,6 +370,7 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now, TextWrit
             ValidToLatest = latest,
             HistoryBegins = desc.HistoryBegins,
             IngesterVersion = "0.1.0",
+            PublisherDiscoverySchema = ManifestDoc.CurrentPublisherDiscoverySchema,
         };
         WriteIfChanged(Path.Combine(corpusRoot, "manifest.json"), JsonSerializer.Serialize(manifest, CorpusJson.Options));
         WriteIfChanged(Path.Combine(corpusRoot, "NOTICE"), Notice(pub, desc.TextIncluded));

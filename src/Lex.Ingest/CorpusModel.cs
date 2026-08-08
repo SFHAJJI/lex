@@ -90,6 +90,7 @@ public sealed class VersionMeta
 
 public sealed class ManifestDoc
 {
+    public const string CurrentPublisherDiscoverySchema = "publisher-discovery/1";
     public string Schema { get; set; } = "lex-corpus/3";
     public required Dictionary<string, string> Publisher { get; set; }
     public required string Tier { get; set; }
@@ -110,4 +111,5 @@ public sealed class ManifestDoc
     public string? ValidToLatest { get; set; }
     public required string HistoryBegins { get; set; }
     public required string IngesterVersion { get; set; }
+    public string? PublisherDiscoverySchema { get; set; }
 }

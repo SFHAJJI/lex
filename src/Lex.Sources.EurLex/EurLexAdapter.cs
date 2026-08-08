@@ -28,29 +28,6 @@ public sealed class EurLexAdapter : ISourceAdapter
     private const long FormexMemberCapBytes = 64 * 1024 * 1024;
     private const long FormexExpandedCapBytes = 128 * 1024 * 1024;
 
-    // Common names are presentation metadata only. Corpus membership comes from the reviewed
-    // scope configuration and bounded CDM relationships below.
-    // Common names in universal professional use — adapter-provided display aliases,
-    // never a substitute for the publisher's own title (kept verbatim in Title).
-    private static readonly Dictionary<string, string> CommonNames = new(StringComparer.Ordinal)
-    {
-        ["32016R0679"] = "GDPR",
-        ["32022R2554"] = "DORA",
-        ["32024R1689"] = "AI Act",
-        ["32022L2555"] = "NIS2",
-        ["32014L0065"] = "MiFID II",
-        ["32013R0575"] = "CRR",
-        ["32015L2366"] = "PSD2",
-        ["32019R2088"] = "SFDR",
-        ["32018L2001"] = "RED II",
-        ["32019L0944"] = "Electricity Market Directive",
-        ["32014R0910"] = "eIDAS",
-        ["32024R2847"] = "Cyber Resilience Act",
-        ["32023R2854"] = "Data Act",
-        ["32022R2065"] = "DSA",
-        ["32023R1114"] = "MiCA",
-    };
-
     private static readonly HttpClient Http = CreateClient();
     private DateTimeOffset _lastRequest = DateTimeOffset.MinValue;
     private readonly Dictionary<string, List<VersionRecord>> _byWork = new(StringComparer.Ordinal);
@@ -333,7 +310,6 @@ public sealed class EurLexAdapter : ISourceAdapter
                     .GroupBy(r => r["lang"], StringComparer.Ordinal)
                     .ToDictionary(g => g.Key, g => g.First().GetValueOrDefault("title"), StringComparer.Ordinal);
                 var baseTitle = titles.GetValueOrDefault("en") ?? titles.GetValueOrDefault("fr");
-                var commonName = CommonNames.GetValueOrDefault(baseCelex);
                 var inForce = baseTitleRows.FirstOrDefault(r => r.ContainsKey("inforce"))
                     ?.GetValueOrDefault("inforce");
                 var bindingStatus = NormalizeBindingStatus(inForce);
@@ -371,7 +347,7 @@ public sealed class EurLexAdapter : ISourceAdapter
                         var title = state.Titles.GetValueOrDefault(lang) ?? titles.GetValueOrDefault(lang) ?? baseTitle;
                         var sourceUri = $"https://eur-lex.europa.eu/legal-content/{lang.ToUpperInvariant()}/TXT/?uri=CELEX:{Uri.EscapeDataString(celex)}";
                         return new ExpressionRecord(lang, date, validTo, "publisher", title,
-                            DisplayTitle(commonName, title, celex), sourceUri);
+                            OfficialDisplayTitle(title, celex), sourceUri);
                     }).ToArray();
                     list.Add(new VersionRecord(
                         Id: new Identifier($"http://publications.europa.eu/resource/celex/{celex}"),
@@ -416,7 +392,7 @@ public sealed class EurLexAdapter : ISourceAdapter
                                 var title = titles.GetValueOrDefault(lang) ?? baseTitle;
                                 var sourceUri = $"https://eur-lex.europa.eu/legal-content/{lang.ToUpperInvariant()}/TXT/?uri=CELEX:{Uri.EscapeDataString(baseCelex)}";
                                 return new ExpressionRecord(lang, originalDate, originalValidTo, "publisher", title,
-                                    DisplayTitle(commonName, title, baseCelex), sourceUri);
+                                    OfficialDisplayTitle(title, baseCelex), sourceUri);
                             }).ToArray();
                             list.Insert(0, new VersionRecord(
                                 new Identifier(workUri), new Identifier(workUri), typeCode, originalDate, originalValidTo,
@@ -430,7 +406,7 @@ public sealed class EurLexAdapter : ISourceAdapter
 
                 _byWork[workUri] = list;
                 _works[workUri] = new WorkRef(new Identifier(workUri), slug, typeCode,
-                    DisplayTitle(commonName, baseTitle, baseCelex));
+                    OfficialDisplayTitle(baseTitle, baseCelex));
                 Console.Error.WriteLine($"  [eurlex] {baseCelex}: {versions.Count} consolidation(s), {list.Count} temporal state(s)");
             }
             _loaded = true;
@@ -809,11 +785,8 @@ public sealed class EurLexAdapter : ISourceAdapter
         return cut > 0 ? title[..cut] : title.Length > 90 ? title[..90] + "…" : title;
     }
 
-    private static string DisplayTitle(string? commonName, string? title, string fallback)
-    {
-        var s = ShortTitle(title);
-        return commonName is null ? s ?? fallback : s is null ? commonName : $"{commonName} — {s}";
-    }
+    internal static string OfficialDisplayTitle(string? title, string fallback) =>
+        ShortTitle(title) ?? fallback;
 
     private async Task<List<Dictionary<string, string>>> SelectAsync(string query, CancellationToken ct)
     {

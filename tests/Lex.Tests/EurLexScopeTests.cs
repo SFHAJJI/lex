@@ -112,6 +112,17 @@ public sealed class EurLexScopeTests : IDisposable
                 amending: false, correcting: true, consolidated: false));
     }
 
+    [Fact]
+    public void Corpus_display_titles_are_derived_only_from_the_official_title()
+    {
+        var title = EurLexAdapter.OfficialDisplayTitle(
+            "Regulation (EU) 2016/679 of the European Parliament and of the Council",
+            "32016R0679");
+
+        Assert.Equal("Regulation (EU) 2016/679", title);
+        Assert.DoesNotContain("GDPR", title, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData("32016R0679", "32016r0679")]
     [InlineData("12012E/TXT", "12012e-txt")]

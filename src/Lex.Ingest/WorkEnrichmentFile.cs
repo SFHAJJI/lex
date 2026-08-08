@@ -16,7 +16,10 @@ public static class WorkEnrichmentFile
         UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
     };
 
-    public static WorkSearchBuildOptions Load(string path, string collection)
+    public static WorkSearchBuildOptions Load(
+        string path,
+        string collection,
+        IReadOnlySet<(string Work, string Language)>? heldWorks = null)
     {
         var bytes = File.ReadAllBytes(path);
         Contract contract;
@@ -36,10 +39,14 @@ public static class WorkEnrichmentFile
         var aliases = (contract.Aliases
                 ?? throw new InvalidDataException("Work enrichment aliases are required."))
             .Select(ToAlias).Where(item => item.Collection == collection)
+            .Where(item => heldWorks is null
+                           || heldWorks.Contains((item.Value.Work, item.Value.Language)))
             .Select(item => item.Value).ToArray();
         var discovery = (contract.Discovery
                 ?? throw new InvalidDataException("Work enrichment discovery is required."))
             .Select(ToDiscovery).Where(item => item.Collection == collection)
+            .Where(item => heldWorks is null
+                           || heldWorks.Contains((item.Value.Work, item.Value.Language)))
             .Select(item => item.Value).ToArray();
         return new WorkSearchBuildOptions(aliases, discovery,
             Convert.ToHexStringLower(SHA256.HashData(bytes)));
