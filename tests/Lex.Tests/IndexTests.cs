@@ -13,6 +13,7 @@ public class IndexTests : IDisposable
         public int Dimensions => 8;
         public int EncodeCalls { get; private set; }
         public int BatchCalls { get; private set; }
+        public List<int> BatchSizes { get; } = [];
         public List<int?> BatchPaddings { get; } = [];
         public long CountedCharacters { get; private set; }
         public long PrefixCharacters { get; private set; }
@@ -74,6 +75,7 @@ public class IndexTests : IDisposable
             IReadOnlyList<string> texts, EmbeddingInputKind kind, int? padToTokens = null)
         {
             BatchCalls++;
+            BatchSizes.Add(texts.Count);
             BatchPaddings.Add(padToTokens);
             return texts.Select(text => Encode(text, kind)).ToArray();
         }
@@ -442,6 +444,7 @@ public class IndexTests : IDisposable
             [], [], null, semantic: new SemanticBuildOptions(encoder, vectors, "model-sha", "tokenizer-sha"));
 
         using var reader = LexIndexReader.Open(_db, encoder, vectors);
+        Assert.Equal("32768", reader.Stamp["embedding_max_batch_tokens"]);
         Assert.Empty(reader.Search("employment termination", FilterSet.All, 10));
         var result = reader.SearchHybrid("employment termination", FilterSet.All, 10);
         Assert.Equal("hybrid", result.RetrievalMode);
@@ -594,6 +597,27 @@ public class IndexTests : IDisposable
     }
 
     [Fact]
+    public void Semantic_embedding_batches_are_bounded_by_padded_token_budget()
+    {
+        var doc = Row("t-pub:token-budget:2020-01-01", "token-budget", "2020-01-01", null, text: true);
+        var vectors = Path.ChangeExtension(_db, ".vectors");
+        _extra.Add(vectors);
+        using var encoder = new FakeEncoder();
+        var provisions = Enumerable.Range(0, 130)
+            .Select(index => Prov(doc, index, $"art_{index + 1}",
+                string.Join(' ', Enumerable.Repeat($"word{index}", 200))))
+            .ToArray();
+
+        IndexBuilder.Build(_db, new Dictionary<string, string> { ["collection"] = "t-pub" },
+            [doc], provisions, [], [], null, semantic: new SemanticBuildOptions(
+                encoder, vectors, "model-sha", "tokenizer-sha",
+                BatchSize: 256, MaxBatchTokens: 32_768));
+
+        Assert.Equal([128, 2], encoder.BatchSizes);
+        Assert.All(encoder.BatchPaddings, padding => Assert.Equal(256, padding));
+    }
+
+    [Fact]
     public void Semantic_embedding_cache_resumes_by_chunk_and_provider_without_changing_artifact_bytes()
     {
         var doc = Row("t-pub:cache:2020-01-01", "cache", "2020-01-01", null, text: true);
@@ -665,6 +689,24 @@ public class IndexTests : IDisposable
                 encoder, vectors, "model-sha", "tokenizer-sha", BatchSize: 0)));
 
         Assert.Contains("batch size", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(0, encoder.EncodeCalls);
+    }
+
+    [Fact]
+    public void Semantic_embedding_batch_token_budget_must_be_positive()
+    {
+        var doc = Row("t-pub:batch-budget:2020-01-01", "batch-budget", "2020-01-01", null, text: true);
+        var vectors = Path.ChangeExtension(_db, ".vectors");
+        _extra.Add(vectors);
+        using var encoder = new FakeEncoder();
+
+        var exception = Assert.Throws<ArgumentOutOfRangeException>(() => IndexBuilder.Build(
+            _db, new Dictionary<string, string> { ["collection"] = "t-pub" },
+            [doc], [Prov(doc, 0, "art_1", "wording")], [], [], null,
+            semantic: new SemanticBuildOptions(
+                encoder, vectors, "model-sha", "tokenizer-sha", MaxBatchTokens: 0)));
+
+        Assert.Contains("token budget", exception.Message, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(0, encoder.EncodeCalls);
     }
 

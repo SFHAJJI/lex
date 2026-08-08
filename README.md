@@ -199,10 +199,13 @@ src/Lex.Ingest/bin/Release/net10.0/Lex.Ingest index \
     --out indexes/index-eu-eurlex.db --embedding-model model \
     --vectors indexes/index-eu-eurlex.vectors \
     --embedding-directml-device 1 --embedding-batch-size 256 \
+    --embedding-max-batch-tokens 32768 \
     --embedding-cache build-cache/eu-eurlex-embeddings.db
 
 # The chunker fixes legal-text boundaries before the GPU groups immutable chunks
-# into 32/64/128/256/512-token inference buckets. Masked padding is never stored.
+# into 32/64/128/256/512-token inference buckets. A fixed padded-token budget reduces
+# the item count for long buckets so one reviewed batch size cannot exhaust the GPU.
+# Masked padding is never stored.
 
 # web demo + MCP (stdio) locally
 LEX_INDEX_DIR=indexes dotnet run --project src/Lex.Web
