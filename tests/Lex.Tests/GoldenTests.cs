@@ -121,20 +121,18 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
         Assert.Contains("<select name=\"kind\" aria-label=\"Source class\">", inForce);
         Assert.Contains("<table tabindex=\"0\" aria-label=\"Text coverage by document type\">", coverage);
 
-        var expected = new Dictionary<string, string>
+        var expected = new Dictionary<string, string[]>
         {
-            ["/architecture/next"] = "Architecture delivery milestones",
-            ["/decisions"] = "Architecture decision register",
-            ["/built"] = "Correctness evaluation layers",
+            ["/architecture/next"] = ["Architecture delivery milestones"],
+            ["/decisions"] = ["Architecture decision register"],
+            ["/built"] = ["Mounted index provenance", "Correctness evaluation layers"],
         };
-        foreach (var (path, label) in expected)
+        foreach (var (path, labels) in expected)
         {
             var html = await _site.Client.GetStringAsync(path);
-            Assert.Contains($"<table tabindex=\"0\" aria-label=\"{label}\">", html);
+            foreach (var label in labels)
+                Assert.Contains($"<table tabindex=\"0\" aria-label=\"{label}\">", html);
         }
-
-        var built = await _site.Client.GetStringAsync("/built");
-        Assert.Contains("<table tabindex=\"0\" aria-label=\"Mounted index provenance\">", built);
     }
 
     [Fact]
