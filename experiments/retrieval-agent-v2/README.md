@@ -28,6 +28,32 @@ dotnet run --project experiments/retrieval-agent-v2/Lex.RetrievalExperiment -- e
   --model-dir C:\lex-retrieval-agent-evidence-v2\model `
   --output C:\lex-retrieval-agent-evidence-v2\reports\enrichment-semantic-analysis.json
 
+dotnet run --project experiments/retrieval-agent-v2/Lex.RetrievalExperiment -- work-search-build `
+  --workbench C:\lex-retrieval-agent-evidence-v2\workbench\candidate-a.db `
+  --analysis C:\lex-retrieval-agent-evidence-v2\reports\enrichment-semantic-analysis-v1.json `
+  --aliases experiments/retrieval-agent-v2/reviewed-aliases.json `
+  --threshold 0.9 `
+  --output C:\lex-retrieval-agent-evidence-v2\workbench\work-search-v1.db `
+  --report C:\lex-retrieval-agent-evidence-v2\reports\work-search-build-v1.json
+
+dotnet run --project experiments/retrieval-agent-v2/Lex.RetrievalExperiment -- work-search-eval `
+  --index C:\lex-retrieval-agent-evidence-v2\workbench\work-search-v1.db `
+  --scenarios experiments/retrieval-agent-v2/scenarios.json `
+  --output C:\lex-retrieval-agent-evidence-v2\reports\work-search-eval-v1.json
+
+dotnet run --project experiments/retrieval-agent-v2/Lex.RetrievalExperiment -- work-vector-build `
+  --index C:\lex-retrieval-agent-evidence-v2\workbench\work-search-v1.db `
+  --model-dir C:\lex-retrieval-agent-evidence-v2\model `
+  --output C:\lex-retrieval-agent-evidence-v2\workbench\work-search-v1.vectors `
+  --report C:\lex-retrieval-agent-evidence-v2\reports\work-vector-build-v1.json
+
+dotnet run --project experiments/retrieval-agent-v2/Lex.RetrievalExperiment -- work-hybrid-eval `
+  --index C:\lex-retrieval-agent-evidence-v2\workbench\work-search-v1.db `
+  --vectors C:\lex-retrieval-agent-evidence-v2\workbench\work-search-v1.vectors `
+  --model-dir C:\lex-retrieval-agent-evidence-v2\model `
+  --scenarios experiments/retrieval-agent-v2/scenarios.json `
+  --output C:\lex-retrieval-agent-evidence-v2\reports\work-hybrid-eval-v1.json
+
 dotnet run --project experiments/retrieval-agent-v2/Lex.RetrievalExperiment -- baseline `
   --index-dir C:\lex-retrieval-agent-evidence-v2\baseline `
   --model-dir C:\lex-retrieval-agent-evidence-v2\model `

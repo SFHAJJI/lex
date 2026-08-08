@@ -66,6 +66,5 @@ taxonomy identifiers and may produce evidence-anchored free-form provision conce
 - protected legal text, titles, identifiers, dates, hierarchy, status, relationships, and hashes are
   not writable by enrichment.
 
-The next gate is a work-level retrieval experiment with reviewed professional aliases, publisher
-concepts, and the `0.90` weak proposal set. No enrichment graduates unless frozen exact, temporal,
-identity, read, and diff cases remain unchanged and descriptive relevance improves.
+The `0.90` weak proposal set advanced to the work-level retrieval experiment documented in
+`work-retrieval-summary.md`. No enrichment has graduated to a signed or deployed product artifact.

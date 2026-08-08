@@ -22,15 +22,15 @@
 - [x] Generate common-name, description, concept, synonym, and practice-area proposals for the
       fixture works without writing protected legal fields.
 - [x] Record deployment, prompt hash, evidence, timestamp, and rejection reasons.
-- [ ] Test repeatability and evidence anchors; review strong aliases and export accepted weak
+- [x] Test repeatability and evidence anchors; review strong aliases and export accepted weak
       discovery fields separately from rejected proposals.
 - Verify: rerunning index construction from the accepted export is deterministic.
 
 ## Task 4: Work-level retrieval experiment
 
-- [ ] Write failing ranking and authoritative-identity tests.
-- [ ] Add the smallest work-level FTS experiment that passes them.
-- [ ] Compare FTS-only with FTS plus one work discovery vector; measure tiny and full-shadow
+- [x] Write failing ranking and authoritative-identity tests.
+- [x] Add the smallest work-level FTS experiment that passes them.
+- [x] Compare FTS-only with FTS plus separate work and discovery vectors; measure full-shadow
       latency, size, descriptive recall, and hybrid exact-name behavior.
 - Verify: exact/alias/title matrix passes and hash/read/diff invariants pass.
 

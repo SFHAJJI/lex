@@ -34,6 +34,11 @@ void Usage() => Console.Error.WriteLine("""
       workbench-init --index-dir PATH --output FILE
       enrichment-sample --workbench FILE --endpoint URI --deployment NAME --works FILE --runs N --output FILE
       enrichment-analyze --report FILE --model-dir PATH --output FILE
+      work-search-build --workbench FILE --analysis FILE --aliases FILE --threshold N --output FILE --report FILE
+      work-search-eval --index FILE --scenarios FILE --output FILE
+      work-vector-build --index FILE --model-dir PATH --output FILE --report FILE
+      work-vector-verify --index FILE --vectors FILE --output FILE
+      work-hybrid-eval --index FILE --vectors FILE --model-dir PATH --scenarios FILE --output FILE
     """);
 
 if (arguments[0] == "workbench-init")
@@ -94,6 +99,113 @@ if (arguments[0] == "enrichment-analyze")
     File.WriteAllBytes(analysisOutput, JsonSerializer.SerializeToUtf8Bytes(analysis,
         new JsonSerializerOptions { WriteIndented = true }));
     Console.Error.WriteLine($"[enrichment-analysis] wrote {analysisOutput}");
+    return 0;
+}
+
+if (arguments[0] == "work-search-build")
+{
+    var workSearchWorkbench = RequiredPath("--workbench");
+    var workSearchAnalysis = RequiredPath("--analysis");
+    var workSearchAliases = RequiredPath("--aliases");
+    var workSearchOutput = RequiredPath("--output");
+    var workSearchReport = RequiredPath("--report");
+    if (File.Exists(workSearchOutput) || File.Exists(workSearchReport))
+        throw new IOException("Refusing to overwrite a work-search artifact or report.");
+    if (!double.TryParse(RequiredValue("--threshold"),
+            System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture,
+            out var threshold))
+        throw new ArgumentException("--threshold must be a number");
+    var buildReport = WorkSearchExperiment.Build(
+        workSearchWorkbench, workSearchAnalysis, workSearchAliases, threshold, workSearchOutput);
+    Directory.CreateDirectory(Path.GetDirectoryName(workSearchReport)
+        ?? throw new ArgumentException("Report must include a directory."));
+    File.WriteAllBytes(workSearchReport, JsonSerializer.SerializeToUtf8Bytes(buildReport,
+        new JsonSerializerOptions { WriteIndented = true }));
+    Console.Error.WriteLine($"[work-search-build] wrote {workSearchOutput}");
+    return 0;
+}
+
+if (arguments[0] == "work-search-eval")
+{
+    var workSearchIndex = RequiredPath("--index");
+    var workSearchScenarios = RequiredPath("--scenarios");
+    var workSearchEvaluation = RequiredPath("--output");
+    if (File.Exists(workSearchEvaluation))
+        throw new IOException($"Refusing to overwrite existing report: {workSearchEvaluation}");
+    var evaluation = WorkSearchExperiment.Evaluate(workSearchIndex, workSearchScenarios);
+    Directory.CreateDirectory(Path.GetDirectoryName(workSearchEvaluation)
+        ?? throw new ArgumentException("Output must include a directory."));
+    File.WriteAllBytes(workSearchEvaluation, JsonSerializer.SerializeToUtf8Bytes(evaluation,
+        new JsonSerializerOptions { WriteIndented = true }));
+    Console.Error.WriteLine($"[work-search-eval] wrote {workSearchEvaluation}");
+    return 0;
+}
+
+if (arguments[0] == "work-vector-build")
+{
+    var vectorSourceIndex = RequiredPath("--index");
+    var vectorModelDirectory = RequiredPath("--model-dir");
+    var vectorOutput = RequiredPath("--output");
+    var vectorReport = RequiredPath("--report");
+    if (File.Exists(vectorOutput) || File.Exists(vectorReport))
+        throw new IOException("Refusing to overwrite a work-vector artifact or report.");
+    var buildReport = WorkSearchExperiment.BuildVectors(vectorSourceIndex, vectorModelDirectory, vectorOutput);
+    Directory.CreateDirectory(Path.GetDirectoryName(vectorReport)
+        ?? throw new ArgumentException("Report must include a directory."));
+    File.WriteAllBytes(vectorReport, JsonSerializer.SerializeToUtf8Bytes(buildReport,
+        new JsonSerializerOptions { WriteIndented = true }));
+    Console.Error.WriteLine($"[work-vector-build] wrote {vectorOutput}");
+    return 0;
+}
+
+if (arguments[0] == "work-vector-verify")
+{
+    var verifyIndex = RequiredPath("--index");
+    var verifyVectors = RequiredPath("--vectors");
+    var verifyOutput = RequiredPath("--output");
+    if (File.Exists(verifyOutput))
+        throw new IOException($"Refusing to overwrite existing report: {verifyOutput}");
+    var digest = WorkVectorIndex.InputDigest(verifyIndex);
+    using var vectorReader = new SemanticVectorReader(verifyVectors);
+    if (vectorReader.Count != digest.Count)
+        throw new InvalidDataException("Vector count does not match ordered vector inputs.");
+    using var indexStream = File.OpenRead(verifyIndex);
+    using var vectorStream = File.OpenRead(verifyVectors);
+    var verifyReport = new JsonObject
+    {
+        ["schema"] = "lex-work-vector-verification/1",
+        ["captured_at"] = DateTimeOffset.UtcNow.ToString("O"),
+        ["index_sha256"] = Convert.ToHexStringLower(SHA256.HashData(indexStream)),
+        ["vector_sha256"] = Convert.ToHexStringLower(SHA256.HashData(vectorStream)),
+        ["vector_input_count"] = digest.Count,
+        ["vector_input_sha256"] = digest.Sha256,
+        ["dimensions"] = vectorReader.Dimensions,
+    };
+    Directory.CreateDirectory(Path.GetDirectoryName(verifyOutput)
+        ?? throw new ArgumentException("Output must include a directory."));
+    File.WriteAllBytes(verifyOutput, JsonSerializer.SerializeToUtf8Bytes(verifyReport,
+        new JsonSerializerOptions { WriteIndented = true }));
+    Console.Error.WriteLine($"[work-vector-verify] wrote {verifyOutput}");
+    return 0;
+}
+
+if (arguments[0] == "work-hybrid-eval")
+{
+    var hybridIndex = RequiredPath("--index");
+    var hybridVectors = RequiredPath("--vectors");
+    var hybridModelDirectory = RequiredPath("--model-dir");
+    var hybridScenarios = RequiredPath("--scenarios");
+    var hybridOutput = RequiredPath("--output");
+    if (File.Exists(hybridOutput))
+        throw new IOException($"Refusing to overwrite existing report: {hybridOutput}");
+    var evaluation = WorkSearchExperiment.EvaluateHybrid(
+        hybridIndex, hybridVectors, hybridModelDirectory, hybridScenarios);
+    Directory.CreateDirectory(Path.GetDirectoryName(hybridOutput)
+        ?? throw new ArgumentException("Output must include a directory."));
+    File.WriteAllBytes(hybridOutput, JsonSerializer.SerializeToUtf8Bytes(evaluation,
+        new JsonSerializerOptions { WriteIndented = true }));
+    Console.Error.WriteLine($"[work-hybrid-eval] wrote {hybridOutput}");
     return 0;
 }
 
