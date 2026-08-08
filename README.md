@@ -23,7 +23,7 @@ cannot know.
 **[Benchmarks](https://law.soufien.lu/benchmarks)** ·
 **[Verify it yourself](https://law.soufien.lu/verify)** ·
 **[Program](docs/hybrid-eu-roadmap.md)** ·
-**[Spec (D1-D72)](docs/lex-spec-v4.md)**
+**[Spec (D1-D74)](docs/lex-spec-v4.md)**
 
 ## 74-second engineering demo
 
@@ -159,10 +159,12 @@ boundary and the proposed normative-act increment are documented in
 Where official XML exists, text is retained as verbatim Akoma Ntoso. The
 deterministic `pdf-lu/1` fallback handles eligible born-digital consolidated
 PDFs and records that article boundaries came from typography rather than
-publisher markup. The pipeline refuses thematic folder PDFs, whole-gazette
-scans and fileless records as authoritative article text; those versions keep
-their dates, source and hashes without pretending wording was extracted. Exact
-text availability by legal form is reported from the mounted artifact on the
+publisher markup. Narrow `pdf-memorial-lu/2` recovery first verifies the requested
+act inside an official-gazette issue, then exposes only a strongly identified
+section and visibly labels its inferred boundaries in the reader. Thematic
+folders, unverified gazette matches and fileless records remain metadata-only;
+Lex does not trade provenance for a larger text count. Exact text availability
+and extraction-profile mix are reported from the mounted artifact on the
 coverage page.
 
 **EU** (EUR-Lex/Cellar, Tier A): a reviewed Luxembourg-facing scope spanning

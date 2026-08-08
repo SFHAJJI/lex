@@ -26,9 +26,8 @@ public static class ApiEndpoints
         app.MapGet("/robots.txt", () => Results.Text(
             $"User-agent: *\nAllow: /\nSitemap: {ctx.PublicBase}/sitemap.xml\n"));
 
-        // Every work, plus the pages worth indexing. Versions are deliberately left out: there
-        // are 4,705 of them, they are near-duplicates of one another, and the work page links
-        // them all, which is what a crawler follows anyway.
+        // Every work, plus the pages worth indexing. Version URLs are emitted separately below;
+        // counts always come from the mounted readers rather than a comment that goes stale.
         app.MapGet("/sitemap.xml", () =>
         {
             var sb = new StringBuilder();

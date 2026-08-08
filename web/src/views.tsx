@@ -11,6 +11,7 @@ import { remarkLegalText } from "./legalText.ts";
 import {
   futureStateLabel, intervalLabel, usesPublisherVersionDates,
 } from "./temporal";
+import { extractionDisclosure } from "./extractionProfile";
 
 const permalink = (work: string, date: string, anchor?: string) =>
   `/${publisherOf(work)}/${workSlug(work)}/${date}${anchor ? `#${anchor}` : ""}`;
@@ -33,11 +34,13 @@ export function Provision({ items, toc, validFrom, validTo, work, title, languag
 }) {
   // Where this text came from. Publisher markup and a read PDF are not the same claim, and the
   // difference has to reach the person reading the words, not stop at a field in a JSON file.
-  // Two levels, because the risks differ: pdf-lu/1 read a document that IS this act, so the doubt
-  // is only about where an article begins. pdf-memorial-lu/1 had to find this act inside a whole
-  // issue of the official gazette, so the doubt extends to whether this is the right act at all.
-  const fromPdf = profile === "pdf-lu/1";
-  const fromGazette = profile === "pdf-memorial-lu/1";
+  // Two levels, because the risks differ: pdf-lu profiles read a document that IS this act, so
+  // the doubt is only about where an article begins. pdf-memorial-lu profiles had to find this
+  // act inside a whole official-gazette issue. Classify by immutable profile family so a new,
+  // narrower profile version cannot accidentally lose the disclosure in the reader.
+  const disclosure = extractionDisclosure(profile);
+  const fromPdf = disclosure === "publisher-pdf";
+  const fromGazette = disclosure === "gazette";
   const outlineOnly = items.length > 0 && items.every((p) => !p.text);
   const nav = toc.length >= 6 || outlineOnly;
   const pageUrl = typeof window === "undefined" ? "" : window.location.href;
@@ -90,10 +93,10 @@ export function Provision({ items, toc, validFrom, validTo, work, title, languag
             several unrelated acts.
           </p>
           <p>
-            So the words below are the publisher's, but two things are ours: finding where this act
-            begins and ends inside that issue, and dividing it into articles. Both are inferred from
-            the layout. An error here would not misplace a heading, it would show you a different
-            act, so treat this as a reading aid and confirm anything that matters.
+            The extractor verifies the requested act before showing any wording. The words below
+            are the publisher's, but finding the relevant section inside the issue and, where the
+            document permits it, dividing that section into articles are ours. Those boundaries are
+            inferred from layout, so treat this as a reading aid and confirm anything that matters.
           </p>
           {source ? (
             <p>
