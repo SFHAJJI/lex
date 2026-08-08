@@ -453,6 +453,40 @@ public class IndexTests : IDisposable
     }
 
     [Fact]
+    public void Equal_rrf_scores_prefer_a_keyword_hit_over_a_semantic_only_hit()
+    {
+        // A direct word match can fall outside the semantic top 100 when many short provisions
+        // share the query's embedding direction. Both rank-one candidates then receive the same
+        // RRF score. Recency is not a relevance signal and must not put a semantic-only result
+        // ahead of the provision that contains the word the reader actually typed.
+        var lexical = Row("t-pub:lexical:2020-01-01", "lexical", "2020-01-01", null, text: true);
+        var semantic = Enumerable.Range(0, 101)
+            .Select(i => Row($"t-pub:semantic-{i}:2026-01-01", $"semantic-{i}", "2026-01-01", null, text: true))
+            .ToArray();
+        var docs = new[] { lexical }.Concat(semantic).ToArray();
+        var provisions = new[]
+            {
+                Prov(lexical, 0, "art_1", "privacy dismissal bank miscellaneous"),
+            }
+            .Concat(semantic.Select(doc => Prov(doc, 0, "art_1", "personal")))
+            .ToArray();
+        var vectors = Path.ChangeExtension(_db, ".vectors");
+        _extra.Add(vectors);
+        using var encoder = new FakeEncoder();
+        IndexBuilder.Build(_db, new Dictionary<string, string> { ["collection"] = "t-pub" },
+            docs, provisions, [], [], null,
+            semantic: new SemanticBuildOptions(encoder, vectors, "model-sha", "tokenizer-sha"));
+
+        using var reader = LexIndexReader.Open(_db, encoder, vectors);
+        var result = reader.SearchHybrid("privacy", FilterSet.All, 5);
+
+        Assert.Equal("lexical", result.Hits[0].Doc.GroupKey);
+        Assert.Equal(["keyword"], result.Hits[0].MatchReasons);
+        Assert.Equal(result.Hits[0].Score, result.Hits[1].Score);
+        Assert.Equal(["semantic"], result.Hits[1].MatchReasons);
+    }
+
+    [Fact]
     public void Identical_chunks_share_one_embedding_and_vector_ordinal()
     {
         var first = Row("t-pub:first:2020-01-01", "first", "2020-01-01", null, text: true);
