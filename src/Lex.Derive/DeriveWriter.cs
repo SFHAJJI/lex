@@ -145,8 +145,15 @@ public static class DeriveWriter
                                 profileId = PdfLuProfile.ProfileId;
                                 break;
                             case "pdf-memorial":
-                                extraction = PdfMemorialLuProfile.Extract(File.ReadAllBytes(unit.FilePath), lexId);
+                                var memorialBytes = File.ReadAllBytes(unit.FilePath);
+                                extraction = PdfMemorialLuProfile.Extract(memorialBytes, lexId);
                                 profileId = PdfMemorialLuProfile.ProfileId;
+                                if (extraction.Provisions.Count == 0)
+                                {
+                                    extraction = PdfMemorialLuProfileV2.Extract(
+                                        memorialBytes, lexId, workTitle);
+                                    profileId = PdfMemorialLuProfileV2.ProfileId;
+                                }
                                 break;
                             case "fmx4":
                                 extraction = Fmx4EuProfile.Extract(File.ReadAllText(unit.FilePath, Encoding.UTF8), lexId);

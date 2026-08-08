@@ -235,6 +235,15 @@
       "alternative": "Call every open-ended version interval ‘in force’ because both publishers expose dated version histories.",
       "reason": "A consolidation dated 2016 for an EU regulation can predate its application. Calling that date entry into force would turn a correct publisher timeline into legally misleading UI and structured metadata.",
       "cost": "Every new publisher must declare its timeline semantics. Older EUR-Lex artifacts need a narrow compatibility fallback until the next signed rebuild."
+    },
+    {
+      "id": "D73",
+      "title": "Recover official text without weakening provenance",
+      "status": "shipped",
+      "choice": "Add immutable fallback profiles that verify the requested act before deriving an official AKN body, older gazette article typography, or one document when the official section has no unambiguous single article sequence.",
+      "alternative": "Broaden the existing published profiles, OCR every PDF, or attach the first readable legal text in a linked gazette issue.",
+      "reason": "Coverage is useful only when each recovered word still belongs to the requested official instrument and the extraction confidence remains visible.",
+      "cost": "A confirmed publisher source mismatch remains wordless, profile boundaries may block visual comparison, and every new document shape needs a regression fixture plus full-corpus validation."
     }
   ],
   "baseline": {

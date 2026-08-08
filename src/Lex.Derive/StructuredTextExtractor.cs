@@ -16,7 +16,14 @@ public static class StructuredTextExtractor
     public static Result Extract(string source, string lexIdBase)
     {
         if (LooksLikeAkomaNtoso(source))
-            return new Result(AknLuProfile.Extract(source, lexIdBase), AknLuProfile.ProfileId);
+        {
+            var articles = AknLuProfile.Extract(source, lexIdBase);
+            if (articles.Provisions.Count > 0)
+                return new Result(articles, AknLuProfile.ProfileId);
+            return new Result(
+                AknLuDocumentProfile.Extract(source, lexIdBase),
+                AknLuDocumentProfile.ProfileId);
+        }
 
         try
         {

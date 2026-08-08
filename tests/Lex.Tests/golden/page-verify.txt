@@ -237,7 +237,8 @@ extractor on the same evidence and compare the result; the defence is never mere
 <p>Clone the evidence repo and the code, then re-derive offline:</p>
 <div class="card"><pre class="mono" style="white-space:pre-wrap">git clone https://github.com/SFHAJJI/lex &amp;&amp; git clone https://github.com/SFHAJJI/lex-corpus-lu-legilux
 cd lex &amp;&amp; dotnet run --project src/Lex.Ingest -- verify derive --publisher lu-legilux --corpus ../lex-corpus-lu-legilux --articles ../lex-articles</pre></div>
-<p class="sub">Extraction profiles are immutable (<span class="mono">akn-lu/1</span>, <span class="mono">xhtml-eu/1</span>);
+<p class="sub">Extraction profiles are immutable (<span class="mono">akn-lu/1</span>, <span class="mono">akn-lu-document/1</span>,
+<span class="mono">pdf-memorial-lu/2</span>, <span class="mono">xhtml-eu/1</span>);
 a citation pinned under a profile verifies under that profile, forever. Contract:
 <a href="https://github.com/SFHAJJI/lex-articles/blob/main/SCHEMA.md">SCHEMA.md</a>.</p>
 </main>
