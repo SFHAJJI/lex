@@ -197,7 +197,7 @@ public static class ExplainerEndpoints
             var body = ArchitectureTabs("next") + $"""
                 <p class="lede">The accepted target architecture, with status read from the registry committed
                 beside the implementation. Nothing on this page is implied to be live.</p>
-                <div class="card"><table><tr><th>milestone</th><th>outcome</th><th>status</th></tr>{rows}</table></div>
+                <div class="card"><table tabindex="0" aria-label="Architecture delivery milestones"><tr><th>milestone</th><th>outcome</th><th>status</th></tr>{rows}</table></div>
                 <h2>Target path</h2>
                 <div class="card"><pre class="mono" style="white-space:pre-wrap;margin:0;font-size:13px">Reviewed EU scope configuration
                   -&gt; every official dated FR/EN expression plus bounded legal relationships
@@ -551,7 +551,7 @@ public static class ExplainerEndpoints
                 each index also carries a public provenance stamp recording when and from which corpus commit it
                 was built. Every tool response returns that provenance. <b>This is the embedded stamp read live
                 from the running indexes:</b></p>
-                <div class="card"><table>
+                <div class="card"><table tabindex="0" aria-label="Mounted index provenance">
                 <tr><th>publisher</th><th>index built</th><th>from corpus commit</th><th>signature</th></tr>
                 {string.Join("", readers.Values.OrderBy(r => r.Collection, StringComparer.Ordinal).Select(r => $"""
                     <tr><td>{H(r.Collection)}</td>
@@ -583,7 +583,7 @@ public static class ExplainerEndpoints
                 </div>
 
                 <h2>How correctness is proven, not claimed</h2>
-                <div class="card"><table>
+                <div class="card"><table tabindex="0" aria-label="Correctness evaluation layers">
                 <tr><th>mechanism</th><th>what it guarantees</th></tr>
                 <tr><td>Unit, contract, golden and architecture-fitness suites</td><td>parsers, temporal logic,
                 backward-compatible APIs, pages, index schemas, trust and deployment invariants</td></tr>
@@ -722,7 +722,7 @@ public static class ExplainerEndpoints
             var body = ArchitectureTabs("decisions") + $"""
                 <p class="lede">Every program decision records the chosen path, a credible alternative, the
                 reason and the bill. Status comes from the architecture registry.</p>
-                <div class="card"><table><tr><th>decision</th><th>choice, alternative and cost</th><th>status</th></tr>
+                <div class="card"><table tabindex="0" aria-label="Architecture decision register"><tr><th>decision</th><th>choice, alternative and cost</th><th>status</th></tr>
                 {programRows}</table></div>
                 <h2>Deep dive: why the legislative timeline is not the git log</h2>
                 """ + $$"""

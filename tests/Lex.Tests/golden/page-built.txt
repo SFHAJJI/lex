@@ -105,7 +105,7 @@ HTTP 200
                 color:var(--muted); text-decoration:none }
   .filters .f:hover { border-color:var(--fg); color:var(--fg); text-decoration:none }
   .filters .f.on { border-color:var(--fg); color:var(--fg); font-weight:600 }
-  .filters .n { opacity:.65; font-size:11.5px; font-variant-numeric:tabular-nums }
+  .filters .n { opacity:1; font-size:11.5px; font-variant-numeric:tabular-nums }
   .cat td:first-child a { font-weight:600 }
   .cat .r { text-align:right; font-variant-numeric:tabular-nums }
   .cat .sub { font-size:12px; margin-top:2px }
@@ -276,7 +276,7 @@ LU and EU search, then promotes it. The preceding revision remains available for
 each index also carries a public provenance stamp recording when and from which corpus commit it
 was built. Every tool response returns that provenance. <b>This is the embedded stamp read live
 from the running indexes:</b></p>
-<div class="card"><table>
+<div class="card"><table tabindex="0" aria-label="Mounted index provenance">
 <tr><th>publisher</th><th>index built</th><th>from corpus commit</th><th>signature</th></tr>
 <tr><td>t-pub</td>
 <td class="mono"><TIMESTAMP></td>
@@ -306,7 +306,7 @@ same day, and pinned with a fingerprint test so the profile can never drift agai
 </div>
 
 <h2>How correctness is proven, not claimed</h2>
-<div class="card"><table>
+<div class="card"><table tabindex="0" aria-label="Correctness evaluation layers">
 <tr><th>mechanism</th><th>what it guarantees</th></tr>
 <tr><td>Unit, contract, golden and architecture-fitness suites</td><td>parsers, temporal logic,
 backward-compatible APIs, pages, index schemas, trust and deployment invariants</td></tr>

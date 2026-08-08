@@ -107,7 +107,7 @@ HTTP 200
                 color:var(--muted); text-decoration:none }
   .filters .f:hover { border-color:var(--fg); color:var(--fg); text-decoration:none }
   .filters .f.on { border-color:var(--fg); color:var(--fg); font-weight:600 }
-  .filters .n { opacity:.65; font-size:11.5px; font-variant-numeric:tabular-nums }
+  .filters .n { opacity:1; font-size:11.5px; font-variant-numeric:tabular-nums }
   .cat td:first-child a { font-weight:600 }
   .cat .r { text-align:right; font-variant-numeric:tabular-nums }
   .cat .sub { font-size:12px; margin-top:2px }

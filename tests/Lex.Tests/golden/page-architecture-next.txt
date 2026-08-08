@@ -105,7 +105,7 @@ HTTP 200
                 color:var(--muted); text-decoration:none }
   .filters .f:hover { border-color:var(--fg); color:var(--fg); text-decoration:none }
   .filters .f.on { border-color:var(--fg); color:var(--fg); font-weight:600 }
-  .filters .n { opacity:.65; font-size:11.5px; font-variant-numeric:tabular-nums }
+  .filters .n { opacity:1; font-size:11.5px; font-variant-numeric:tabular-nums }
   .cat td:first-child a { font-weight:600 }
   .cat .r { text-align:right; font-variant-numeric:tabular-nums }
   .cat .sub { font-size:12px; margin-top:2px }
@@ -185,7 +185,7 @@ HTTP 200
   <a class="badge" href="/benchmarks">Benchmarks</a>
 </nav><p class="lede">The accepted target architecture, with status read from the registry committed
 beside the implementation. Nothing on this page is implied to be live.</p>
-<div class="card"><table><tr><th>milestone</th><th>outcome</th><th>status</th></tr><tr><td class="mono">M1</td><td><b>Truthful architecture narrative</b><br><span class="sub">Separate live architecture, target architecture, decisions and measured benchmarks.</span></td>
+<div class="card"><table tabindex="0" aria-label="Architecture delivery milestones"><tr><th>milestone</th><th>outcome</th><th>status</th></tr><tr><td class="mono">M1</td><td><b>Truthful architecture narrative</b><br><span class="sub">Separate live architecture, target architecture, decisions and measured benchmarks.</span></td>
 <td><span class="badge ok">shipped</span></td></tr><tr><td class="mono">M2</td><td><b>Verified artifact publication</b><br><span class="sub">A pinned trust root verifies a signed manifest for every served artifact.</span></td>
 <td><span class="badge ok">shipped</span></td></tr><tr><td class="mono">M3</td><td><b>Expandable temporal EU corpus</b><br><span class="sub">Configuration selects domains while every accepted work retains all official dated expressions.</span></td>
 <td><span class="badge ok">shipped</span></td></tr><tr><td class="mono">M4</td><td><b>Deduplicated index</b><br><span class="sub">lex-index/3 stores repeated wording once without changing timelines, exact text or diffs.</span></td>
