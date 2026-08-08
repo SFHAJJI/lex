@@ -1,0 +1,38 @@
+{
+  "schema": "lex-clarification-dimensions/1",
+  "dimensions": [
+    {
+      "id": "local_manufacturing_mechanism",
+      "triggers": [
+        "fabrication locale",
+        "local manufacturing",
+        "contenu local",
+        "local content",
+        "préférence locale",
+        "domestic preference"
+      ],
+      "question": "Quel mécanisme juridique visez-vous ?",
+      "options": [
+        {
+          "label": "Marchés publics",
+          "aliases": ["marchés publics", "commande publique", "public procurement"]
+        },
+        {
+          "label": "Enchères d'énergie renouvelable",
+          "aliases": [
+            "enchères",
+            "mécanismes de soutien",
+            "renewable energy auction",
+            "renewable energy auctions",
+            "support scheme",
+            "support schemes"
+          ]
+        },
+        {
+          "label": "Aides d'État",
+          "aliases": ["aides d'état", "aide d'état", "state aid"]
+        }
+      ]
+    }
+  ]
+}

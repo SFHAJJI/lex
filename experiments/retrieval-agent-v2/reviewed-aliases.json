@@ -1,0 +1,83 @@
+{
+  "schema": "lex-reviewed-work-aliases/1",
+  "aliases": [
+    {
+      "work": "eu-eurlex:32016r0679",
+      "language": "fr",
+      "value": "RGPD",
+      "reviewed_by": "owner:sfhajji"
+    },
+    {
+      "work": "eu-eurlex:32016r0679",
+      "language": "fr",
+      "value": "Règlement général sur la protection des données (RGPD)",
+      "reviewed_by": "owner:sfhajji"
+    },
+    {
+      "work": "eu-eurlex:32016r0679",
+      "language": "fr",
+      "value": "Règlement général sur la protection des données",
+      "reviewed_by": "owner:sfhajji"
+    },
+    {
+      "work": "eu-eurlex:32016r0679",
+      "language": "en",
+      "value": "GDPR",
+      "reviewed_by": "owner:sfhajji"
+    },
+    {
+      "work": "eu-eurlex:32016r0679",
+      "language": "en",
+      "value": "General Data Protection Regulation",
+      "reviewed_by": "owner:sfhajji"
+    },
+    {
+      "work": "eu-eurlex:32022r2554",
+      "language": "fr",
+      "value": "DORA",
+      "reviewed_by": "owner:sfhajji"
+    },
+    {
+      "work": "eu-eurlex:32022r2554",
+      "language": "fr",
+      "value": "Règlement sur la résilience opérationnelle numérique",
+      "reviewed_by": "owner:sfhajji"
+    },
+    {
+      "work": "eu-eurlex:32022r2554",
+      "language": "en",
+      "value": "DORA",
+      "reviewed_by": "owner:sfhajji"
+    },
+    {
+      "work": "eu-eurlex:32022r2554",
+      "language": "en",
+      "value": "Digital Operational Resilience Act",
+      "reviewed_by": "owner:sfhajji"
+    },
+    {
+      "work": "eu-eurlex:32024r1689",
+      "language": "fr",
+      "value": "Règlement sur l'intelligence artificielle",
+      "reviewed_by": "owner:sfhajji"
+    },
+    {
+      "work": "eu-eurlex:32024r1689",
+      "language": "en",
+      "value": "AI Act",
+      "reviewed_by": "owner:sfhajji"
+    },
+    {
+      "work": "eu-eurlex:32024r1689",
+      "language": "en",
+      "value": "EU AI Act",
+      "reviewed_by": "owner:sfhajji"
+    },
+    {
+      "work": "eu-eurlex:32024r1689",
+      "language": "en",
+      "value": "Artificial Intelligence Act",
+      "reviewed_by": "owner:sfhajji"
+    }
+  ]
+}

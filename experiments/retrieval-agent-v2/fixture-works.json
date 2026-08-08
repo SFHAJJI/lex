@@ -1,0 +1,10 @@
+{
+  "schema": "lex-enrichment-fixture-works/1",
+  "works": [
+    { "work": "eu-eurlex:32016r0679", "language": "fr" },
+    { "work": "eu-eurlex:32022r2554", "language": "fr" },
+    { "work": "eu-eurlex:32024r1689", "language": "fr" },
+    { "work": "eu-eurlex:32024r1735", "language": "fr" },
+    { "work": "lu-legilux:loi-2018-08-01-a686", "language": "fr" }
+  ]
+}

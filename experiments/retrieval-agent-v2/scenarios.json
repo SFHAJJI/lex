@@ -1,0 +1,165 @@
+{
+  "schema": "lex-retrieval-agent-scenarios/1",
+  "review_status": "engineer-authored; not lawyer-reviewed",
+  "created_at": "2026-08-08T13:51:25Z",
+  "cases": [
+    {
+      "id": "search-exact-celex-gdpr",
+      "surface": "search",
+      "query": "32016R0679",
+      "language": "fr",
+      "expected_work": "eu-eurlex:32016r0679",
+      "expected_rank_max": 1
+    },
+    {
+      "id": "search-name-rgpd",
+      "surface": "search",
+      "query": "RGPD",
+      "language": "fr",
+      "expected_work": "eu-eurlex:32016r0679",
+      "expected_rank_max": 1
+    },
+    {
+      "id": "search-name-gdpr",
+      "surface": "search",
+      "query": "GDPR",
+      "language": "en",
+      "expected_work": "eu-eurlex:32016r0679",
+      "expected_rank_max": 1
+    },
+    {
+      "id": "search-full-professional-name-rgpd",
+      "surface": "search",
+      "query": "Règlement Général sur la Protection des Données (RGPD)",
+      "language": "fr",
+      "expected_work": "eu-eurlex:32016r0679",
+      "expected_rank_max": 1
+    },
+    {
+      "id": "search-name-dora",
+      "surface": "search",
+      "query": "DORA",
+      "language": "fr",
+      "expected_work": "eu-eurlex:32022r2554",
+      "expected_rank_max": 1
+    },
+    {
+      "id": "search-name-ai-act",
+      "surface": "search",
+      "query": "AI Act",
+      "language": "en",
+      "expected_work": "eu-eurlex:32024r1689",
+      "expected_rank_max": 1
+    },
+    {
+      "id": "search-long-alias-and-provision",
+      "surface": "search",
+      "query": "obligation RGPD de notifier une violation de données dans les 72 heures",
+      "language": "fr",
+      "expected_work": "eu-eurlex:32016r0679",
+      "expected_anchor_any": ["art_33", "art_34"],
+      "expected_rank_max": 3
+    },
+    {
+      "id": "search-descriptive-breach",
+      "surface": "search",
+      "query": "notifier à l'autorité une violation de données personnelles dans les 72 heures",
+      "language": "fr",
+      "expected_work": "eu-eurlex:32016r0679",
+      "expected_anchor_any": ["art_33"],
+      "expected_rank_max": 3
+    },
+    {
+      "id": "search-descriptive-ict-third-party",
+      "surface": "search",
+      "query": "gestion du risque lié aux prestataires TIC tiers pour les entités financières",
+      "language": "fr",
+      "expected_work": "eu-eurlex:32022r2554",
+      "expected_rank_max": 3
+    },
+    {
+      "id": "search-descriptive-photovoltaic-resilience",
+      "surface": "search",
+      "query": "critères de résilience et durabilité dans les enchères d'énergie renouvelable pour favoriser les équipements photovoltaïques fabriqués en Europe",
+      "language": "fr",
+      "expected_work": "eu-eurlex:32024r1735",
+      "expected_anchor_any": ["art_25", "art_26"],
+      "expected_rank_max": 3,
+      "if_missing": "report_corpus_gap"
+    },
+    {
+      "id": "search-explicit-corrigendum",
+      "surface": "search",
+      "query": "rectificatif règlement UE 2016/679",
+      "language": "fr",
+      "expected_work": "eu-eurlex:32016r0679r(02)",
+      "expected_rank_max": 1
+    },
+    {
+      "id": "search-luxembourg-data-protection-authority",
+      "surface": "search",
+      "query": "organisation de la Commission nationale pour la protection des données",
+      "language": "fr",
+      "expected_work": "lu-legilux:loi-2018-08-01-a686",
+      "expected_rank_max": 3
+    },
+    {
+      "id": "assistant-named-rgpd",
+      "surface": "assistant",
+      "turns": ["Montre-moi le RGPD"],
+      "expected_work": "eu-eurlex:32016r0679",
+      "clarification": "forbidden",
+      "requires_exact_validation": true
+    },
+    {
+      "id": "assistant-descriptive-breach",
+      "surface": "assistant",
+      "turns": ["Quel texte impose de notifier une violation de données dans les 72 heures ?"],
+      "expected_work": "eu-eurlex:32016r0679",
+      "expected_anchor_any": ["art_33"],
+      "clarification": "not_required",
+      "requires_exact_validation": true
+    },
+    {
+      "id": "assistant-descriptive-photovoltaic",
+      "surface": "assistant",
+      "turns": ["Quelles règles européennes peuvent favoriser des panneaux photovoltaïques fabriqués en Europe dans les marchés publics ou les mécanismes de soutien ?"],
+      "expected_work": "eu-eurlex:32024r1735",
+      "expected_anchor_any": ["art_25", "art_26"],
+      "clarification": "allowed_once",
+      "clarification_options_any": ["Marchés publics", "Enchères d'énergie renouvelable", "Les deux"],
+      "requires_exact_validation": true,
+      "if_missing": "report_corpus_gap"
+    },
+    {
+      "id": "assistant-material-ambiguity",
+      "surface": "assistant",
+      "turns": ["Quelles règles européennes favorisent la fabrication locale ?"],
+      "clarification": "required_once",
+      "clarification_options_any": ["Marchés publics", "Enchères d'énergie renouvelable", "Aides d'État"],
+      "requires_exact_validation": false
+    },
+    {
+      "id": "assistant-temporal-follow-up",
+      "surface": "assistant",
+      "turns": [
+        "Que disait l'article 33 du RGPD au 15 mars 2019 ?",
+        "Et au 1er janvier 2025 ?"
+      ],
+      "expected_work": "eu-eurlex:32016r0679",
+      "expected_anchor_any": ["art_33"],
+      "expected_dates": ["2019-03-15", "2025-01-01"],
+      "clarification": "forbidden",
+      "requires_exact_validation": true
+    },
+    {
+      "id": "assistant-unknown-work",
+      "surface": "assistant",
+      "turns": ["Que dit le règlement européen ZORBAX 2099 ?"],
+      "expected_status": "unknown_or_gap",
+      "clarification": "allowed_once",
+      "requires_exact_validation": false
+    }
+  ]
+}
+

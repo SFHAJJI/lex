@@ -1,0 +1,59 @@
+{
+  "schema": "lex-retrieval-agent-inputs/1",
+  "captured_at": "2026-08-08T13:51:25Z",
+  "evidence_root": "C:\\lex-retrieval-agent-evidence-v2",
+  "code_commit": "3a40da3ee2b607edbc5e332b12adcdbcb5aa4ba9",
+  "corpus_commits": {
+    "eu-eurlex": "8d109f4ec52d98716e4e86a0557a3cf6d56f5785",
+    "lu-legilux": "36f76aba3cab4b1a5fb2c55e1c986ceca23f56c6",
+    "articles": "9737b155c520477df395a012523b7ee2423200cb"
+  },
+  "machine": {
+    "name": "DESKTOP-PAP2DNP",
+    "os": "Microsoft Windows NT 10.0.26200.0",
+    "processor": "13th Gen Intel(R) Core(TM) i5-13500H",
+    "memory_bytes": 16858472448
+  },
+  "files": [
+    {
+      "role": "eu-index",
+      "source": "C:\\lex-eu-release-output-final-20260808\\index-eu-eurlex.db",
+      "copy": "baseline\\index-eu-eurlex.db",
+      "bytes": 582193152,
+      "sha256": "288f87b7275c6024192fd672205f2333699de0a804f4bacbc6379327faaf787e"
+    },
+    {
+      "role": "eu-vectors",
+      "source": "C:\\lex-eu-release-output-final-20260808\\index-eu-eurlex.vectors",
+      "copy": "baseline\\index-eu-eurlex.vectors",
+      "bytes": 334927040,
+      "sha256": "e5d04e56efccbf8a0f65ab9c3cdc5234b37581dc360d221ca0efb1dafe515981"
+    },
+    {
+      "role": "lu-index",
+      "source": "C:\\lex-lu-release-output-final-20260808\\index-lu-legilux.db",
+      "copy": "baseline\\index-lu-legilux.db",
+      "bytes": 563343360,
+      "sha256": "d812cdcb3f10789e806a1fd368b6e9b9e82f97a2c4dcd5d7524c1237d866b4ee"
+    },
+    {
+      "role": "lu-vectors",
+      "source": "C:\\lex-lu-release-output-final-20260808\\index-lu-legilux.vectors",
+      "copy": "baseline\\index-lu-legilux.vectors",
+      "bytes": 46030496,
+      "sha256": "746672f2eb0130e67b10f13645be0461035b8f5a68d459be53c9f63554bbcf66"
+    },
+    {
+      "role": "embedding-model",
+      "copy": "model\\model.onnx",
+      "bytes": 118346824,
+      "sha256": "dd476dd0c2514e9b9be83aeb3853fac0763e0bdf4a71645407587d77c48a2d88"
+    },
+    {
+      "role": "embedding-tokenizer",
+      "copy": "model\\sentencepiece.bpe.model",
+      "bytes": 5069051,
+      "sha256": "cfc8146abe2a0488e9e2a0c56de7952f7c11ab059eca145a0a727afce0db2865"
+    }
+  ]
+}
