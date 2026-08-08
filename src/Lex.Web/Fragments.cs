@@ -52,16 +52,30 @@ public static class Fragments
         </table></div>
         """;
 
-    public static string MissingTextBox(DocRow d) => d.TextAvailable ? $"""
-        <div class="notice"><b>Text withheld.</b> Lex holds publisher text for this version, but a publication gate
-        prevents serving the wording (status <span class="mono">text_withheld</span>). Read the official text at
-        <a href="{H(d.SourceUri)}" rel="noopener">{H(d.SourceUri)}</a>.</div>
-        """ : $"""
-        <div class="notice"><b>Provision text not available.</b> Lex holds the publisher record and timeline, but no
-        safely derived provision text for this version (status <span class="mono">text_not_available</span>).
-        It will not manufacture article boundaries or wording. Read the official record at
-        <a href="{H(d.SourceUri)}" rel="noopener">{H(d.SourceUri)}</a>.</div>
-        """;
+    public static string MissingTextBox(DocRow d)
+    {
+        if (d.TextAvailable)
+            return $"""
+                <div class="notice"><b>Text withheld.</b> Lex holds publisher text for this version, but a publication gate
+                prevents serving the wording (status <span class="mono">text_withheld</span>). Read the official text at
+                <a href="{H(d.SourceUri)}" rel="noopener">{H(d.SourceUri)}</a>.</div>
+                """;
+
+        if (d.Kind is "RECUEIL" or "CODE_RECUEIL")
+            return $"""
+                <div class="notice"><b>Thematic collection, not one legal instrument.</b> This Legilux record groups
+                member acts. Lex does not present its compilation PDF as one law or manufacture provision boundaries
+                across those acts. Browse the official collection at
+                <a href="{H(d.SourceUri)}" rel="noopener">{H(d.SourceUri)}</a>.</div>
+                """;
+
+        return $"""
+            <div class="notice"><b>Provision text not available.</b> Lex holds the publisher record and timeline, but no
+            safely derived provision text for this version (status <span class="mono">text_not_available</span>).
+            It will not manufacture article boundaries or wording. Read the official record at
+            <a href="{H(d.SourceUri)}" rel="noopener">{H(d.SourceUri)}</a>.</div>
+            """;
+    }
 
     public static bool IsProvisional(LexIndexReader r, DateOnly d)
     {

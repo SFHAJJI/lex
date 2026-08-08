@@ -5,9 +5,10 @@ namespace Lex.Sources.Legilux;
 
 /// <summary>
 /// Tier A metadata: the publisher supplies validity intervals (jolux:dateApplicability).
-/// Runs in METADATA-ONLY mode as a standing state (spec D42): no published, robots-compliant
-/// body channel exists, so FetchBody always returns null with the corpus recording
-/// text.available=false, reason=pending-gate.
+/// D44 superseded the original metadata-only D42 design: official manifestation metadata
+/// resolves to robots-permitted, CC-BY content files on legilux.public.lu/filestore.
+/// Missing XML follows D49's bounded official-PDF ladder; collection PDFs and source-file gaps
+/// remain explicit metadata-only states rather than fabricated legal text.
 /// Probe results 2026-08-01: Work = jolux:isMemberOf target; DocumentType = the
 /// consolidation's own jolux:typeDocument; compilations (CODE/RECUEIL) are Works like any other.
 /// </summary>

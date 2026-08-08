@@ -10,8 +10,8 @@ namespace Lex.Ingest;
 /// The single component that writes corpus files (C1 layout, C3 rules, F12 discipline).
 /// Adapters never touch disk (F8). Version directories are valid_from-only and are never
 /// renamed (D41). meta.json changes only when observed reality changes; every change
-/// appends the corresponding chain entry (F12). Body files are append-only (none are
-/// written at all in metadata-only mode, D42).
+/// appends the corresponding chain entry (F12). Body files are append-only; a declared
+/// metadata-only expression writes no body and records the reason instead.
 /// </summary>
 public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now, TextWriter? progress = null)
 {
