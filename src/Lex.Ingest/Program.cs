@@ -226,7 +226,8 @@ switch (args0[0])
     }
     case "verify":
     {
-        // verify corpus --corpus X | verify stamp --db X | verify derive --publisher P --corpus X --articles Y
+        // verify corpus --corpus X | verify stamp --db X [--work-enrichment FILE]
+        // | verify derive --publisher P --corpus X --articles Y
         switch (args0.Length > 1 ? args0[1] : "")
         {
             case "corpus":
@@ -243,6 +244,7 @@ switch (args0[0])
             case "stamp":
             {
                 var db = Get("--db") ?? throw new ArgumentException("--db required");
+                var enrichment = Get("--work-enrichment");
                 using var r = Lex.Index.LexIndexReader.Open(db);
                 // A valid signature over the metadata proves nothing about the text. Recompute
                 // the content digest from what the database actually holds and compare it with
@@ -250,12 +252,21 @@ switch (args0[0])
                 var claimed = r.Stamp.GetValueOrDefault("content_digest") ?? "";
                 var actual = r.ComputeContentDigest();
                 var contentOk = claimed.Length > 0 && claimed == actual;
+                var expectedEnrichment = enrichment is null ? null : Convert.ToHexStringLower(
+                    System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(enrichment)));
+                var actualEnrichment = r.Stamp.GetValueOrDefault("enrichment_digest");
+                var enrichmentOk = expectedEnrichment is null
+                                   || string.Equals(expectedEnrichment, actualEnrichment,
+                                       StringComparison.OrdinalIgnoreCase);
                 Console.WriteLine($"collection={r.Collection} schema={r.Stamp.GetValueOrDefault("schema")} " +
                     $"algorithm={r.Stamp.GetValueOrDefault("algorithm")} corpus_commit={r.Stamp.GetValueOrDefault("corpus_commit")} " +
                     $"built_at={r.Stamp.GetValueOrDefault("built_at")} signature_valid={r.SignatureValid} " +
                     $"content_digest={(claimed.Length == 0 ? "absent (index predates content binding)" : contentOk ? "matches" : "MISMATCH — contents were altered")}");
+                Console.WriteLine($"enrichment_digest={(expectedEnrichment is null
+                    ? "not_checked" : enrichmentOk ? "matches" : "MISMATCH")}");
                 if (!r.SignatureValid) return 3;
-                return claimed.Length == 0 || contentOk ? 0 : 4;
+                if (claimed.Length > 0 && !contentOk) return 4;
+                return enrichmentOk ? 0 : 5;
             }
             case "derive":
             {
@@ -293,7 +304,7 @@ switch (args0[0])
                 finally { try { Directory.Delete(tmp, true); } catch { } }
             }
             default:
-                Console.Error.WriteLine("usage: lex verify corpus --corpus X | lex verify stamp --db X | lex verify derive --publisher P --corpus X --articles Y [--work slug]");
+                Console.Error.WriteLine("usage: lex verify corpus --corpus X | lex verify stamp --db X [--work-enrichment FILE] | lex verify derive --publisher P --corpus X --articles Y [--work slug]");
                 return 1;
         }
     }
