@@ -78,6 +78,23 @@ public class VisualDiffTests
     }
 
     [Fact]
+    public void Missing_collection_text_explains_that_the_record_is_a_folder_not_a_failed_law()
+    {
+        var collection = new DocRow(
+            "lu-legilux:recueil-tax:2026-01-01", "lu-legilux", "recueil-tax",
+            "urn:recueil-tax", "RECUEIL", "fr", "2026-01-01", null, "publisher",
+            "2026-01-02T00:00:00Z", false, false, false, "record", null,
+            "https://example.test/recueil", "Tax collection", "Tax collection", null,
+            "applicable", null, null, null, null, null, null);
+
+        var html = Fragments.MissingTextBox(collection);
+
+        Assert.Contains("Thematic collection", html);
+        Assert.Contains("not one legal instrument", html);
+        Assert.DoesNotContain("Provision text not available", html);
+    }
+
+    [Fact]
     public void Presentation_diff_keeps_new_wording_before_replaced_wording()
     {
         var html = Fragments.RenderDiff("Article 1\nold wording\nEnd", "Article 1\nnew wording\nEnd");

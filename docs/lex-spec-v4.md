@@ -81,11 +81,11 @@ generates interpretive text (§9.9, fitness rule F10).
 Scope is defined by **publisher**, not by sector. A publisher enters scope when
 the §1.5 intake completes.
 
-**In scope, text expected republishable, pending stated gates:**
+**In scope, with each publisher's current acquisition state:**
 
 | Publisher | What | Access | Gate |
 |---|---|---|---|
-| Legilux (LU) | Laws, grand-ducal regulations, codes, Constitution, règlements CSSF | SPARQL endpoint, verified | **R2**, written confirmation that the reuse grant covers act *content*, and **R19**, a compliant body-acquisition channel (§2.5). Until both: timeline + metadata + link-out only. |
+| Legilux (LU) | Laws, grand-ducal regulations, codes, Constitution, règlements CSSF | SPARQL metadata plus official CC-BY manifestation files | **Cleared by D44**. Verbatim Akoma Ntoso XML is preferred; D49/D73 define bounded official-PDF recovery and explicit gaps. |
 | EUR-Lex / Cellar (EU) | Regulations, directives, delegated & implementing acts, consolidated versions | SPARQL endpoint | Volume/rate measurement (R13) before nightly commitment |
 | EBA, ESMA, EIOPA (EU) | Guidelines, Q&A, final RTS/ITS reports | Website; reuse permitted with attribution | none, first Tier B source, observation clock starts in increment A (§14.1) |
 | BCL (LU) | Règlements and circulaires of the central bank | Website; reuse permitted with attribution | intake refresh before adapter work |
@@ -296,14 +296,13 @@ supersede the open questions above):**
   exactly one Work, no double-counting in `in_force_on`.
 - **Corpus count now 4,644** consolidations (+8 since the §2.1 measurement, the corpus is live). Codes are deep: code de l'environnement 195 versions,
   santé 121, éducation nationale 115.
-- **R19 SETTLED, negative, and now a standing state (D42).** SPARQL carries
+- **Historical 2026-08-01 probe, superseded later that day by D44.** SPARQL carries
   no text literals; an Expression's `isEmbodiedBy` manifestation URLs live on
   the robots-disallowed `data.` subdomain; the main domain serves a JavaScript
   shell for every `/eli/` path; the SPA's internal API is unpublished and
-  **will not be reverse-engineered or used**. Conclusion: **no published,
-  robots-compliant body channel exists.** `Lex.Sources.Legilux` runs in C4's
-  metadata-only mode permanently until a lawful channel appears. The public
-  product is the timeline, which §1.6 already argues is the scarce artefact.
+  **will not be reverse-engineered or used**. A subsequent manifestation probe found the
+  publisher's documented, robots-permitted CC-BY filestore channel. D44 therefore supersedes
+  the metadata-only conclusion while preserving the no-SPA-reverse-engineering rule.
 - **Etiquette note:** the ingest User-Agent identifies the project
   (`Lex/x.y (+repository URL)`), not a personal address.
 
@@ -727,7 +726,8 @@ lex-corpus-lu-cssf/
 - `history_begins` is `"publisher"` for Tier A, or an ISO date for Tier B, the
   day observation began. Propagated to every response for that publisher.
 - `text_public` starts `false` and flips to `true` only when the publisher's
-  text gate (§1.5 Q4, for Legilux, R2 + R19) has cleared **in writing**. All
+  text gate has cleared with recorded evidence (for Legilux, D44 records the official
+  CC-BY content-file channel). All
   public-facing surfaces honour it (D38, §12.2); the index stamp table carries a
   copy (§8.1).
 - v3's `works_search_only` field is **deleted** (§1.7): a manifest may not
@@ -1886,7 +1886,7 @@ Numbering continues from v3; v3 decisions are restated with status.
 
 | # | Risk | Kills what | How to settle |
 |---|---|---|---|
-| **R2** | Does the Legilux reuse grant cover act *content*? (dataset self-describes as metadata; database right arts. 67-70; open-data law art. 1(6); art. 67(3) conditions) | public republication of act text | **Standing closed gate**, no letter will be sent (operating constraint). Moot in practice: D42's metadata-only mode never republishes text; the metadata corpus is squarely CC-BY |
+| **R2** | ~~Does the Legilux reuse grant cover act content?~~ | public republication of act text | **SETTLED by D44**: the official manifestation metadata identifies content files under CC-BY-4.0, including commercial reuse. |
 | R4 | Embedding model chosen without an evaluation set | search quality, silently | 30 real fr/de questions from real articles, before model choice |
 | R6 | ~~Do articles carry their own `dateApplicability`?~~ |, | **SETTLED 2026-08-01**: yes, 100% of 503,867 articles (§2.1). Article-level as-of is a lookup |
 | R7 | Corpus repo growth | the storage model | pack 79 versions of one code, measure; thresholds + pre-decided shape in §7.6 |
@@ -1900,7 +1900,7 @@ Numbering continues from v3; v3 decisions are restated with status.
 | R16 | Tier B derived history mistaken for real history | credibility, permanently | D32: publisher-dates-first, refusals, F7, gap recording (§11.3) |
 | R17 | A competitor ships point-in-time first | positioning | observation clocks are the uncopyable head start (§1.6); claims re-verified per §14.5 |
 | **R18** | Tier C metadata republication vs all-rights-reserved ToS | the CSSF/CNPD product; regulator goodwill | §1.5 Q5 letter + documented legal basis before increment D |
-| **R19** | ~~Legilux body acquisition channel~~ |, | **SETTLED 2026-08-01, negative** (§2.1): no published compliant channel; metadata-only mode is the standing state (D42) |
+| **R19** | ~~Legilux body acquisition channel~~ |, | **SETTLED positive by D44**: official, robots-permitted `legilux.public.lu/filestore` manifestations; the unpublished SPA API remains out of scope. |
 | **R20** | Flat-corpus dates: does JOLux carry publication/EIF dates for never-consolidated acts? | whether the flat corpus can ever join `in_force_on` | probe when the flat-corpus increment is scheduled; until then §7.7 |
 
 ---
@@ -1909,8 +1909,8 @@ Numbering continues from v3; v3 decisions are restated with status.
 
 Interpretation, advice, or compliance conclusions. Case law. ISO/IFRS/LuxSE
 text. Switzerland. A REST layer between Lex components. Per-publisher MCP
-servers or an AI router across MCP servers (D27). A model in the public demo
-(§12.1). A plugin discovery mechanism. Delta storage. A user account system.
+servers or an AI router across MCP servers (D27). A plugin discovery mechanism.
+Delta storage. A user account system.
 The flat corpus, until its increment (§7.7). Anything that writes to a
 publisher's systems.
 
@@ -1928,8 +1928,8 @@ one is a **standing closed gate**, and the design operates fully inside it.
 
 | Gate | Blocks | State |
 |---|---|---|
-| R2 (Legilux act-content right) | public act text on any surface | standing closed; moot under D42 metadata-only mode, no text is stored or served |
-| R19 (body channel) | body ingestion | **settled negative** (§2.1); metadata-only is the standing state |
+| R2 (Legilux act-content right) | public act text on any surface | **cleared by D44** with the publisher's machine-readable CC-BY manifestation evidence |
+| R19 (body channel) | body ingestion | **cleared by D44**; official filestore manifestations are used, never the unpublished SPA API |
 | R18 (CSSF/CNPD metadata basis) | increment D shipping | documented-legal-basis path only (§14.4); demand-driven anyway |
 | R11 (open-data-law scope) | CSSF tier upgrade | CSSF stays Tier C |
 | Dispatcher credential | §11 ops hub | fine-grained PAT interim (deadline: N=3 publishers or 90 days, §11.1) |
