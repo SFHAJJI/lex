@@ -135,6 +135,11 @@ public static class IndexFromCorpus
             ["collection"] = publisherId,
             ["publisher_name"] = manifest.Publisher.GetValueOrDefault("name", publisherId),
             ["jurisdiction"] = manifest.Publisher.GetValueOrDefault("jurisdiction", ""),
+            // Legal time is publisher-specific. EUR-Lex expression dates identify official
+            // consolidated wording states; Legilux applicability dates identify when text
+            // applied. New publishers must declare the semantic explicitly in their manifest.
+            ["timeline_semantics"] = manifest.Publisher.GetValueOrDefault("timeline_semantics",
+                publisherId == "eu-eurlex" ? "official_consolidation_state" : "publisher_applicability"),
             ["tier"] = manifest.Tier,
             ["history_begins"] = manifest.HistoryBegins,
             ["text_included"] = manifest.TextIncluded ? "true" : "false",

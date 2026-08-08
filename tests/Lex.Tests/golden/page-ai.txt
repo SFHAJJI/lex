@@ -201,13 +201,14 @@ returned text, dates and hashes, Lex itself never interprets anything.</p>
         ←   the exact text valid that day + interval + sha256 + signed stamp
 
     AI      "As of 15 March 2019, the applicable framework was … [quotes the
-            retrieved text; cites validity 2018-08-20 → 2019-… ; links provenance]"
+            retrieved text; cites the publisher timeline interval 2018-08-20 → 2019-… ; links provenance]"
 </pre></div>
 
 <h2>The 10 tools</h2>
 <p class="sub">as_of · timeline · in_force_on · diff · search · article_history · provenance · coverage · cited_by · changes_in_period , 
 read-only, deterministic, every response carries its dates, its hash, and an honest refusal
-(<span class="mono">no_version_for_date</span>, <span class="mono">text_withheld</span>) when Lex cannot know.</p>
+(<span class="mono">no_version_for_date</span>, <span class="mono">text_not_available</span>,
+<span class="mono">text_withheld</span>) when Lex cannot know.</p>
 
 <h2>Azure AI Foundry agents</h2>
 <div class="card">Foundry's Agent Service speaks remote MCP natively, point an agent at this

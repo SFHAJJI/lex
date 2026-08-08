@@ -113,8 +113,41 @@ public class McpContractTests : IDisposable
         // "we do not have this law" and "we do not have its text" are different answers, and
         // conflating them is as wrong as inventing text.
         var o = Call("as_of", new JsonObject { ["work"] = "t-pub:w2", ["date"] = "2020-01-01" });
-        Assert.Equal("text_withheld", Status(o));
+        Assert.Equal("text_not_available", Status(o));
         Assert.NotEqual("unknown_work", Status(o));
+    }
+
+    [Fact]
+    public void A_real_publication_gate_remains_distinct_from_missing_text()
+    {
+        var db = Path.Combine(Path.GetTempPath(), $"lex-withheld-{Guid.NewGuid():N}.db");
+        try
+        {
+            var stamp = new Dictionary<string, string>
+            {
+                ["collection"] = "gated", ["tier"] = "A", ["history_begins"] = "publisher",
+                ["built_at"] = "2026-08-01T00:00:00Z", ["corpus_commit"] = "test",
+            };
+            var doc = new DocRow("gated:w1:2020-01-01", "gated", "w1", "urn:w1", "REG", "en",
+                "2020-01-01", null, "publisher", "2026-08-01T00:00:00Z", false,
+                true, false, "abc", "body", "https://example.org",
+                "Gated work", "Gated work", null, "2020-01-01", null);
+            IndexBuilder.Build(db, stamp, [doc], [], [], [], StampSigner.CreateKeyPem());
+            using var reader = LexIndexReader.Open(db);
+            var core = new McpCore(new Dictionary<string, LexIndexReader> { ["gated"] = reader });
+            var result = Assert.IsType<JsonObject>(core.CallTool("as_of", new JsonObject
+            {
+                ["work"] = "gated:w1", ["date"] = "2021-01-01",
+            }));
+
+            Assert.Equal("text_withheld", Status(result));
+            Assert.NotNull(result["text_withheld_reason"]);
+            Assert.Null(result["text_unavailable_reason"]);
+        }
+        finally
+        {
+            try { File.Delete(db); } catch { }
+        }
     }
 
     [Fact]

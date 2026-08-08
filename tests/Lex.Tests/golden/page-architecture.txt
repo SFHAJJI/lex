@@ -212,7 +212,7 @@ in a way a developer can build on and an auditor can check. Everything below is 
 lex-corpus-lu-legilux   lex-corpus-eu-eurlex   lex-articles
 the exact bytes the state published       →   per-ARTICLE Markdown + JSON
 sha256 per file, observation chains            publisher anchors + measured continuity gate
-                                               validity intervals per provision
+                                               publisher timeline intervals per provision
              deterministic, versioned,          per-anchor history + renumbering events
              IMMUTABLE extraction profiles          │
              (akn-lu/1, xhtml-eu/1, code,          ▼
@@ -228,16 +228,17 @@ repo: re-run the pinned open-source extractor on the state's bytes and you get t
 <h2>The retrieval unit is the article</h2>
 <p>Search hits, <span class="mono">as_of</span> (with <span class="mono">outline</span> and
 <span class="mono">select</span> modes), and the <span class="mono">article_history</span> tool all operate
-per provision. "What did Article 92 say over its life?" is a file read: every distinct text as a validity
-interval, plus mechanically detected renumberings (identical-hash matching, never interpretation).</p>
+per provision. "What did Article 92 say over its life?" is a file read: every distinct text on its
+publisher timeline, plus mechanically detected renumberings (identical-hash matching, never interpretation).</p>
 
 <h2>Honesty as an API contract</h2>
 <div class="card"><table>
 <tr><th>refusal status</th><th>meaning</th></tr>
-<tr><td class="mono">no_version_for_date</td><td>the work exists; no version was valid on that date</td></tr>
+<tr><td class="mono">no_version_for_date</td><td>the work exists; no publisher version covers that date</td></tr>
 <tr><td class="mono">unknown_work / unknown_anchor</td><td>Lex does not hold it, and says so</td></tr>
 <tr><td class="mono">anchor_not_in_version</td><td>that article did not exist in that version (knowing this IS the product)</td></tr>
 <tr><td class="mono">text_withheld</td><td>metadata held, text gate not cleared; official link provided</td></tr>
+<tr><td class="mono">text_not_available</td><td>publisher record held; no safely derived provision text; official link provided</td></tr>
 <tr><td class="mono">outside_observed_window</td><td>before the observation history begins</td></tr>
 </table></div>
 <p>A flagged wrong answer is still wrong, so Lex refuses instead; <a href="/coverage">coverage</a> exists to

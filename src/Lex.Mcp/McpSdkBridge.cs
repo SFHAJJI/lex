@@ -20,7 +20,7 @@ public static class McpSdkBridge
         "take lex_id from the hit, then as_of. The `work` parameter accepts a work-level lex_id " +
         "(publisher:workkey), a version-level lex_id (version segment ignored), or a verbatim " +
         "publisher identifier. Refusal statuses (outside_observed_window / no_version_for_date / " +
-        "text_withheld) are honest answers, not errors.";
+        "text_withheld, text_not_available) are honest answers, not errors.";
 
     public static void Configure(McpServerOptions options)
     {

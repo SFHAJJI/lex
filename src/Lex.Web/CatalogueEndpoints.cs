@@ -165,7 +165,7 @@ public static class CatalogueEndpoints
                   <li><a href="/lu-legilux/recueil-protection_donnees">Recueil protection des donn&#233;es, timeline</a></li>
                   <li><a href="/in-force-on?date=2022-03-15&amp;kind=CODE">Which codes were in force on 15 Mar 2022?</a></li>
                   <li><a href="/eu-eurlex/32013r0575">CRR (EU) 575/2013-22 consolidated versions, incl. future-dated</a></li>
-                  <li><a href="/eu-eurlex/32016r0679/2019-01-01">GDPR as it stood on 1 Jan 2019, with full text</a></li>
+                  <li><a href="/eu-eurlex/32016r0679/2019-01-01">GDPR, official consolidated wording selected for 1 Jan 2019</a></li>
                   <li><a href="/eu-eurlex/32013r0575/diff/2020-01-01/2024-01-01">CRR: what changed between 2020 and 2024?</a></li>
                 </ul>
                 """);
@@ -208,7 +208,7 @@ public static class CatalogueEndpoints
                 ["@type"] = "Dataset",
                 ["name"] = "Lex: point-in-time Luxembourg and reviewed-scope EU law",
                 ["description"] = "Official dated Luxembourg expressions and reviewed-scope EU law, "
-                    + "including every available official consolidation in the mounted scope, with validity intervals, "
+                    + "including every available official consolidation in the mounted scope, with explicit publisher timeline semantics, "
                     + "per-article history, explicit coverage gaps, and a SHA-256 chain to the publisher's own bytes.",
                 ["url"] = $"{ctx.PublicBase}/browse",
                 ["license"] = "https://creativecommons.org/licenses/by/4.0/",
@@ -346,7 +346,7 @@ public static class CatalogueEndpoints
                     Of those snapshots, <b>{c.TextServed:n0}</b> carry the full official text and
                     <b>{c.Rows - c.TextServed:n0}</b> are a dated entry with its source and hash but no wording.
                     {gapWhy}
-                    Those answer with <span class="mono">text_withheld</span> rather than pretending.
+                    Those answer with <span class="mono">text_not_available</span> rather than pretending.
                     History can never go deeper than what the publisher itself digitised.</div>
                     """);
             }
@@ -365,7 +365,7 @@ public static class CatalogueEndpoints
                 .Select(r => $"<option value=\"{H(r.Collection)}\"{(publisher == r.Collection ? " selected" : "")}>{H(r.Stamp.GetValueOrDefault("publisher_name", r.Collection))}</option>"));
             sb.Append($"""
                 <form class="inline">
-                  <input type="date" name="date" aria-label="Date to list works in force" value="{H(date ?? "2022-03-15")}">
+                  <input type="date" name="date" aria-label="Date whose publisher states to list" value="{H(date ?? "2022-03-15")}">
                   <select name="publisher" aria-label="Jurisdiction or publisher"><option value="">Every jurisdiction</option>{publisherOptions}</select>
                   <select name="kind" aria-label="Source class"><option value="">any source class</option>{kindOptions}</select>
                   <button>Show</button>
@@ -378,12 +378,16 @@ public static class CatalogueEndpoints
                 foreach (var r in readers.Values.Where(r => publisher is null || r.Collection == publisher))
                 {
                     var (rows, total) = r.InForceOn(d, new FilterSet(null, null, string.IsNullOrEmpty(kind) ? null : kind, null), limit, p * limit);
-                    sb.Append($"<h2>{H(r.Stamp.GetValueOrDefault("publisher_name"))}, {total:n0} works in force on {d:yyyy-MM-dd}</h2>");
-                    sb.Append("<div class=\"card\"><table><tr><th>work</th><th>type</th><th>version valid</th></tr>");
+                    var publisherVersionDates = UsesPublisherVersionDates(r);
+                    var populationLabel = publisherVersionDates
+                        ? "works with an official consolidated wording state covering"
+                        : "works applicable on";
+                    sb.Append($"<h2>{H(r.Stamp.GetValueOrDefault("publisher_name"))}, {total:n0} {populationLabel} {d:yyyy-MM-dd}</h2>");
+                    sb.Append($"<div class=\"card\"><table><tr><th>work</th><th>type</th><th>{(publisherVersionDates ? "publisher wording state" : "applicability interval")}</th></tr>");
                     foreach (var row in rows)
                         sb.Append($"""
                             <tr><td><a href="/{H(row.Collection)}/{H(row.GroupKey)}/{d:yyyy-MM-dd}">{H(DocTitle(row))}</a></td>
-                            <td><span class="badge">{H(row.Kind)}</span></td><td class="mono">{Interval(row)}</td></tr>
+                            <td><span class="badge">{H(row.Kind)}</span></td><td class="mono">{IntervalLabel(r, row)}</td></tr>
                             """);
                     sb.Append("</table></div>");
                     if (total > limit)
@@ -406,8 +410,8 @@ public static class CatalogueEndpoints
                     sb.Append(EnvelopeCard(r, IsProvisional(r, d)));
                 }
             }
-            return Results.Content(Page("In force on a date", sb.ToString(),
-                "The compliance question in one call: which instruments applied on that day?"), "text/html");
+            return Results.Content(Page("Publisher state on a date", sb.ToString(),
+                "Luxembourg rows describe applicability; EU rows describe official consolidated wording states, not entry into force."), "text/html");
         });
 
         app.MapGet("/search", (string? q, string? kind, string? publisher) =>
@@ -440,7 +444,7 @@ public static class CatalogueEndpoints
                         sb.Append($"""
                             <div class="card"><a href="/{H(docRow.Collection)}/{H(docRow.GroupKey)}/{H(docRow.ValidFrom)}#{H(prov.Anchor)}"><b>{H(DocTitle(docRow))}</b>
                             ,  {H(prov.Num ?? prov.Heading ?? prov.Anchor)}</a>
-                            <span class="badge">{H(docRow.Kind)}</span> <span class="badge mono">{Interval(docRow)}</span>
+                            <span class="badge">{H(docRow.Kind)}</span> <span class="badge mono">{IntervalLabel(r, docRow)}</span>
                             <div class="snippet">{H(snippet)}</div>
                             <div class="mono sub">{H(prov.ProvisionId)}</div></div>
                             """);
@@ -531,21 +535,21 @@ public static class CatalogueEndpoints
         app.MapGet("/find", () =>
         {
             var body = $"""
-                <p class="lede">Three ways in. All of them end at the same place: the text of a law
-                as it stood on a date you choose.</p>
+                <p class="lede">Three ways in. All of them end at the same place: exact publisher wording
+                selected on a date you choose, with the publisher's time semantics made explicit.</p>
 
                 <div class="card"><h2 style="margin-top:0">Search by words</h2>
                 <p class="sub">Finds the individual article, not just the law, search runs over every provision.</p>
                 <form class="inline" action="/search" method="get">
                   <input name="q" aria-label="Words to search for in the text" style="flex:1;min-width:240px" placeholder="e.g. congé parental, breach notification, own funds">
-                  <input type="date" name="as_of" aria-label="Only versions in force on this date">
+                  <input type="date" name="as_of" aria-label="Only publisher states covering this date">
                   <button type="submit">Search</button>
                 </form></div>
 
-                <div class="card"><h2 style="margin-top:0">What was in force on a date?</h2>
-                <p class="sub">The compliance question in one call: everything that applied on a given day.</p>
+                <div class="card"><h2 style="margin-top:0">What did each publisher record on a date?</h2>
+                <p class="sub">Luxembourg results describe applicability. EU results identify official consolidated wording states and do not claim entry into force.</p>
                 <form class="inline" action="/in-force-on" method="get">
-                  <input type="date" name="date" aria-label="Date to list laws in force on" value="{ctx.Today:yyyy-MM-dd}">
+                  <input type="date" name="date" aria-label="Date whose publisher states to list" value="{ctx.Today:yyyy-MM-dd}">
                   <button type="submit">List it</button>
                 </form></div>
 

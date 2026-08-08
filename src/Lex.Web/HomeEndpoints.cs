@@ -93,8 +93,8 @@ public static class HomeEndpoints
             // promotional cards, where the visitors most likely to bounce never reached it — while
             // the sentence above the fold merely announced that the site answers questions.
             var body = $"""
-                <p class="lede">Search Luxembourg and reviewed-scope EU law as it stood on any date,
-                with exact publisher wording, validity intervals and provenance. Coverage is derived
+                <p class="lede">Search Luxembourg applicability and reviewed-scope official EU consolidated wording by date,
+                with exact publisher text, explicit timeline semantics and provenance. Coverage is derived
                 from every dated version in the verified indexes mounted now.</p>
                 """
                 + $"""
@@ -182,7 +182,7 @@ public static class HomeEndpoints
                     ["@type"] = "Person", ["name"] = "Soufien Hajji", ["url"] = "https://soufien.lu",
                 },
             }.ToJsonString();
-            return Results.Content(Page("Luxembourg and EU law as it stood on any date", body, null, "ask",
+            return Results.Content(Page("Luxembourg and EU law by publisher date", body, null, "ask",
                 h1: "A law is not one document.", canonicalPath: "/", jsonLd: siteLd), "text/html");
         });
 

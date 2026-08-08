@@ -177,21 +177,21 @@ HTTP 200
 <main>
 <h1>Find a law</h1>
 
-<p class="lede">Three ways in. All of them end at the same place: the text of a law
-as it stood on a date you choose.</p>
+<p class="lede">Three ways in. All of them end at the same place: exact publisher wording
+selected on a date you choose, with the publisher's time semantics made explicit.</p>
 
 <div class="card"><h2 style="margin-top:0">Search by words</h2>
 <p class="sub">Finds the individual article, not just the law, search runs over every provision.</p>
 <form class="inline" action="/search" method="get">
   <input name="q" aria-label="Words to search for in the text" style="flex:1;min-width:240px" placeholder="e.g. congé parental, breach notification, own funds">
-  <input type="date" name="as_of" aria-label="Only versions in force on this date">
+  <input type="date" name="as_of" aria-label="Only publisher states covering this date">
   <button type="submit">Search</button>
 </form></div>
 
-<div class="card"><h2 style="margin-top:0">What was in force on a date?</h2>
-<p class="sub">The compliance question in one call: everything that applied on a given day.</p>
+<div class="card"><h2 style="margin-top:0">What did each publisher record on a date?</h2>
+<p class="sub">Luxembourg results describe applicability. EU results identify official consolidated wording states and do not claim entry into force.</p>
 <form class="inline" action="/in-force-on" method="get">
-  <input type="date" name="date" aria-label="Date to list laws in force on" value="<TODAY>">
+  <input type="date" name="date" aria-label="Date whose publisher states to list" value="<TODAY>">
   <button type="submit">List it</button>
 </form></div>
 

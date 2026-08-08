@@ -149,7 +149,7 @@
     {
       "id": "D61",
       "title": "Export transparent reading aids",
-      "status": "building",
+      "status": "shipped",
       "choice": "Build citations and Markdown evidence from the exact structured article or comparison already on screen.",
       "alternative": "Generate a polished PDF or fetch and compare the law again during export.",
       "reason": "Lawyers can move traceable text into their work without a second result disagreeing or an unofficial file resembling a publisher document.",
@@ -158,7 +158,7 @@
     {
       "id": "D62",
       "title": "Keep one temporal research workspace",
-      "status": "building",
+      "status": "shipped",
       "choice": "Keep search, dated reading, version history and comparison in one URL-addressable workspace with stable legal context.",
       "alternative": "Split search, reading and comparison into separate products, or make a chatbot the primary navigation model.",
       "reason": "Lawyers need to see jurisdiction, applicable date, source and comparison state while moving between discovery and verification.",
@@ -176,7 +176,7 @@
     {
       "id": "D64",
       "title": "Drive search facets from mounted indexes",
-      "status": "building",
+      "status": "shipped",
       "choice": "Build jurisdiction, hierarchy, domain, form, status and language controls from values in verified mounted indexes.",
       "alternative": "Maintain a second hard-coded list of supported scopes in the web client.",
       "reason": "A reviewed domain or jurisdiction must become searchable without an unrelated React implementation change.",
@@ -226,6 +226,15 @@
       "alternative": "Compile a new DirectML graph shape for each batch maximum, pad every chunk to 512 tokens, or change legal chunk boundaries to fit the GPU.",
       "reason": "Variable tensor shapes caused repeated DirectML graph preparation and an unbounded backfill ETA. A few fixed shapes retain the exact text and reduce compilation churn without paying maximum-sequence compute for every short provision.",
       "cost": "Bucket order becomes part of the deterministic embedding profile and cache identity. The build may have one partially filled batch per bucket, and every shape-policy change intentionally invalidates the embedding cache."
+    },
+    {
+      "id": "D72",
+      "title": "Keep publisher time semantics explicit",
+      "status": "shipped",
+      "choice": "Label Legilux applicability intervals as legal applicability, and EUR-Lex consolidated-expression dates as official publisher wording states across the workspace, exports, canonical pages and MCP envelopes.",
+      "alternative": "Call every open-ended version interval ‘in force’ because both publishers expose dated version histories.",
+      "reason": "A consolidation dated 2016 for an EU regulation can predate its application. Calling that date entry into force would turn a correct publisher timeline into legally misleading UI and structured metadata.",
+      "cost": "Every new publisher must declare its timeline semantics. Older EUR-Lex artifacts need a narrow compatibility fallback until the next signed rebuild."
     }
   ],
   "baseline": {

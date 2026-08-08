@@ -74,13 +74,14 @@ public static class ExplainerEndpoints
                         ←   the exact text valid that day + interval + sha256 + signed stamp
 
                     AI      "As of 15 March 2019, the applicable framework was … [quotes the
-                            retrieved text; cites validity 2018-08-20 → 2019-… ; links provenance]"
+                            retrieved text; cites the publisher timeline interval 2018-08-20 → 2019-… ; links provenance]"
                 </pre></div>
 
                 <h2>The {{tools.Count}} tools</h2>
                 <p class="sub">{{string.Join(" · ", tools)}} , 
                 read-only, deterministic, every response carries its dates, its hash, and an honest refusal
-                (<span class="mono">no_version_for_date</span>, <span class="mono">text_withheld</span>) when Lex cannot know.</p>
+                (<span class="mono">no_version_for_date</span>, <span class="mono">text_not_available</span>,
+                <span class="mono">text_withheld</span>) when Lex cannot know.</p>
 
                 <h2>Azure AI Foundry agents</h2>
                 <div class="card">Foundry's Agent Service speaks remote MCP natively, point an agent at this
@@ -141,7 +142,7 @@ public static class ExplainerEndpoints
                 lex-corpus-lu-legilux   lex-corpus-eu-eurlex   lex-articles
                 the exact bytes the state published       →   per-ARTICLE Markdown + JSON
                 sha256 per file, observation chains            publisher anchors + measured continuity gate
-                                                               validity intervals per provision
+                                                               publisher timeline intervals per provision
                              deterministic, versioned,          per-anchor history + renumbering events
                              IMMUTABLE extraction profiles          │
                              (akn-lu/1, xhtml-eu/1, code,          ▼
@@ -157,16 +158,17 @@ public static class ExplainerEndpoints
                 <h2>The retrieval unit is the article</h2>
                 <p>Search hits, <span class="mono">as_of</span> (with <span class="mono">outline</span> and
                 <span class="mono">select</span> modes), and the <span class="mono">article_history</span> tool all operate
-                per provision. "What did Article 92 say over its life?" is a file read: every distinct text as a validity
-                interval, plus mechanically detected renumberings (identical-hash matching, never interpretation).</p>
+                per provision. "What did Article 92 say over its life?" is a file read: every distinct text on its
+                publisher timeline, plus mechanically detected renumberings (identical-hash matching, never interpretation).</p>
 
                 <h2>Honesty as an API contract</h2>
                 <div class="card"><table>
                 <tr><th>refusal status</th><th>meaning</th></tr>
-                <tr><td class="mono">no_version_for_date</td><td>the work exists; no version was valid on that date</td></tr>
+                <tr><td class="mono">no_version_for_date</td><td>the work exists; no publisher version covers that date</td></tr>
                 <tr><td class="mono">unknown_work / unknown_anchor</td><td>Lex does not hold it, and says so</td></tr>
                 <tr><td class="mono">anchor_not_in_version</td><td>that article did not exist in that version (knowing this IS the product)</td></tr>
                 <tr><td class="mono">text_withheld</td><td>metadata held, text gate not cleared; official link provided</td></tr>
+                <tr><td class="mono">text_not_available</td><td>publisher record held; no safely derived provision text; official link provided</td></tr>
                 <tr><td class="mono">outside_observed_window</td><td>before the observation history begins</td></tr>
                 </table></div>
                 <p>A flagged wrong answer is still wrong, so Lex refuses instead; <a href="/coverage">coverage</a> exists to
@@ -764,12 +766,12 @@ public static class ExplainerEndpoints
                 <p>Five reasons. Each is a fact about legislation rather than a preference about tools.</p>
                 <div class="card">
                 <p><b>1. Git's clock is the wrong clock.</b> A commit records when <i>I</i> learned
-                something, never when the law applied. Last night's ingest added versions that took effect
-                on 1 January 2026 and versions that take effect years from now. Git timestamps both with
-                last night. <span class="mono">git log</span> answers "when did we find out", which is a
-                real question, but it is not the question this product exists for.</p>
+                something, never the publisher's legal-time coordinate. Legilux supplies applicability
+                dates; EUR-Lex supplies dates for official consolidated wording states. Git timestamps
+                both with the observation time. <span class="mono">git log</span> answers "when did we find
+                out", which is a real question, but not either publisher timeline.</p>
 
-                <p><b>2. Law is dated into the future.</b> Lex holds versions valid to
+                <p><b>2. Luxembourg law is dated into the future.</b> The mounted corpus holds Legilux applicability dates to
                 <span class="mono">{{H(latest)}}</span>. Publishers routinely issue today a text that
                 becomes binding years from now. Git cannot express a commit that becomes true later, so a
                 git-as-history model must either publish future law as if it were current, or drop it.
@@ -777,8 +779,9 @@ public static class ExplainerEndpoints
 
                 <p><b>3. Publishers backfill.</b> A consolidation covering 2019 can be issued in 2026.
                 Under git-as-history that arrives as a 2026 change to the law, which is simply false. The
-                fix is to record two things separately: when the text applied, and when we saw it. That is
-                two columns, and it is not something a commit graph can carry.</p>
+                fix is to record two things separately: the publisher's stated wording coordinate, with
+                its declared semantics, and when we observed it. That is structured bitemporal evidence,
+                and it is not something a commit graph can carry.</p>
 
                 <p><b>4. <span class="mono">git diff</span> cannot see a renumbering.</b> When Article 7
                 becomes Article 7-1 with its wording untouched, that is a rename <i>inside</i> a file, not
@@ -874,14 +877,14 @@ public static class ExplainerEndpoints
                 <div class="card"><table>
                 <tr><th>tool</th><th>arguments</th><th>answers</th></tr>
                 <tr><td class="mono">as_of</td><td class="mono">work, date, [language], [mode: full\|outline\|select], [anchors]</td>
-                    <td>the text in force on a date. <span class="mono">outline</span> lists article anchors only;
+                    <td>the publisher wording state covering a date. For Legilux this is applicability; for EUR-Lex it is an official consolidated wording state. <span class="mono">outline</span> lists article anchors only;
                     <span class="mono">select</span> returns just the anchors you name, use it, codes are large.</td></tr>
                 <tr><td class="mono">article_history</td><td class="mono">work, anchor</td>
-                    <td>every distinct text one article has had, as validity intervals, plus renumbering events.</td></tr>
-                <tr><td class="mono">timeline</td><td class="mono">work</td><td>all versions of a work with their validity windows.</td></tr>
+                    <td>every distinct text one article has had on its publisher timeline, plus renumbering events.</td></tr>
+                <tr><td class="mono">timeline</td><td class="mono">work</td><td>all publisher versions of a work with explicit timeline semantics.</td></tr>
                 <tr><td class="mono">diff</td><td class="mono">work, from_date, to_date, [language]</td><td>what changed between two versions.</td></tr>
                 <tr><td class="mono">in_force_on</td><td class="mono">date, [publisher|jurisdiction], [source_class|document_type], [hierarchy], [act_form], [binding_status], [domain], [language], [limit], [offset]</td>
-                    <td>everything that applied on a given day.</td></tr>
+                    <td>publisher states covering a day: Legilux applicability and EUR-Lex official consolidation states, distinguished in the envelope.</td></tr>
                 <tr><td class="mono">search</td><td class="mono">query, [publisher|jurisdiction], [retrieval_mode], [time_scope], [as_of], [fuzzy], [source_class|document_type], [hierarchy], [act_form], [binding_status], [domain], [language], [works], [limit]</td>
                     <td>provision-level search across Luxembourg and EU law. Keyword is deterministic
                     FTS5/BM25. Hybrid adds the pinned local encoder only when verified vectors are mounted.
@@ -916,6 +919,7 @@ public static class ExplainerEndpoints
                 <span class="mono">no_version_for_date</span> · <span class="mono">unknown_work</span> ·
                 <span class="mono">unknown_anchor</span> · <span class="mono">anchor_not_in_version</span> ·
                 <span class="mono">no_provision_history</span> · <span class="mono">text_withheld</span> ·
+                <span class="mono">text_not_available</span> ·
                 <span class="mono">outside_observed_window</span>. Build against them: an empty result and a
                 refusal are different things.</p>
 

@@ -10,6 +10,7 @@ import Period from "./Period";
 import Coach, { COACH_KEY } from "./Coach";
 import { CompareSkeleton, LawSkeleton, ReportSkeleton } from "./Skeleton";
 import { jurisdictionForPublisher, jurisdictionLabel } from "./facets";
+import { latestStateLabel, temporalStatusLabel } from "./temporal";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -59,7 +60,8 @@ export default function App() {
   // for this work that is French while "de" sorts first. A control that misreports the state it
   // controls is worse than no control.
   const [servedLang, setServedLang] = useState<string>();
-  const [held, setHeld] = useState<{ text: number; total: number; official?: string }>();
+  const [timelineSemantics, setTimelineSemantics] = useState<string>();
+  const [held, setHeld] = useState<{ text: number; total: number; official?: string; kind?: string }>();
   const [page, setPage] = useState(0);
   const [states, setStates] = useState<string[]>([]);
   const [coached, setCoached] = useState(() => {
@@ -94,13 +96,17 @@ export default function App() {
   // reader say it once, and lets the chips stop offering text that does not exist.
   useEffect(() => {
     chosenAnchor.current = false;
-    if (!s.work) { setVersions([]); setLangs([]); setServedLang(undefined); setHeld(undefined); return; }
+    if (!s.work) { setVersions([]); setLangs([]); setServedLang(undefined); setTimelineSemantics(undefined); setHeld(undefined); return; }
+    // Never carry one publisher's time semantics across a work switch while the next timeline
+    // is loading. The work-id fallback remains correct for currently mounted legacy artifacts.
+    setTimelineSemantics(undefined);
     let live = true;
     tool<any>("timeline", { work: s.work, limit: 400 })
       .then((res) => {
         if (!live) return;
         const one = first<any>(res, (x) => Array.isArray(x?.versions) && x.versions.length > 0);
         const vs = (one?.versions ?? []) as any[];
+        setTimelineSemantics(one?.envelope?.timeline_semantics);
         const dates = [...new Set(vs.map((v) => String(v.valid_from)))] as string[];
         setVersions(dates.sort());
         // Which languages this work exists in. The Constitution is published in French, German
@@ -109,9 +115,10 @@ export default function App() {
         // broken. Naming the language being read costs one chip and removes the contradiction.
         setLangs([...new Set(vs.map((v) => String(v.language)).filter(Boolean))].sort());
         setHeld({ text: vs.filter((v) => v.text_available).length, total: vs.length,
-                  official: vs[vs.length - 1]?.source_uri });
+                  official: vs[vs.length - 1]?.source_uri,
+                  kind: vs[vs.length - 1]?.document_type });
       })
-      .catch(() => { if (live) { setVersions([]); setLangs([]); setHeld(undefined); } });
+      .catch(() => { if (live) { setVersions([]); setLangs([]); setTimelineSemantics(undefined); setHeld(undefined); } });
     return () => { live = false; };
   }, [s.work]);
 
@@ -215,6 +222,7 @@ export default function App() {
         const rows = envs.flatMap((e) => (e?.changes ?? []).map((row: any) => ({
           ...row,
           jurisdiction: e?.envelope?.jurisdiction,
+          timeline_semantics: e?.envelope?.timeline_semantics,
         })));
         const by = s.order ?? "by_churn";
         rows.sort((a: any, b: any) => by === "by_churn"
@@ -263,12 +271,13 @@ export default function App() {
           valid_from: w.valid_from, permalink: w.permalink,
           jurisdiction: e?.envelope?.jurisdiction,
           hierarchy: w.hierarchy,
+          timeline_semantics: e?.envelope?.timeline_semantics,
         })));
         rows.sort((a: any, b: any) => String(a.title ?? a.work).localeCompare(String(b.title ?? b.work)));
         const visibleRows = rows.slice(page * PAGE, (page + 1) * PAGE);
         setUi(visibleRows.length
           ? { in_force: { date: s.asOf!, total: envs.reduce((n, e) => n + (e?.total_works_in_force ?? 0), 0), rows: visibleRows } }
-          : { gap: { status: "no_result", explanation: `Nothing is recorded as in force on ${s.asOf}.`, available: [] } });
+          : { gap: { status: "no_result", explanation: `No publisher state covers ${s.asOf} in this scope.`, available: [] } });
       })
       .catch(() => { if (live) setUi({ gap: { status: "error", explanation: "The in-force list could not be loaded. Try again.", available: [] } }); });
     return () => { live = false; };
@@ -441,10 +450,10 @@ export default function App() {
               ) : null}
               {loaded ? (
                 <span className={`pill ${loaded.to ? "old" : "live"}`}>
-                  {loaded.to ? "superseded" : "in force"}
+                  {temporalStatusLabel(s.work, loaded.to, timelineSemantics)}
                 </span>
               ) : null}
-              {loaded ? <span>{loaded.from} → {loaded.to ?? "today"}</span> : null}
+              {loaded ? <span>{loaded.from} → {loaded.to ?? latestStateLabel(s.work, timelineSemantics)}</span> : null}
               {/* Which language you are reading. It only appears when the work exists in more
                   than one, which is rare and always worth saying: the Constitution is published
                   in French, German and Luxembourgish, and one stored title serves all three, so
@@ -461,7 +470,7 @@ export default function App() {
               ) : null}
               <span className="grow" />
               <label className="pick"><i>{s.mode === "compare" ? "from" : "showing"}</i>
-                <input type="date" value={s.date ?? today()} aria-label="Date to show the law as it stood"
+                <input type="date" value={s.date ?? today()} aria-label="Date whose publisher state to show"
                        onChange={(e) => go({ date: e.target.value })} />
               </label>
               <LawPicker current="choose another" onPick={pickLaw} />
@@ -473,7 +482,7 @@ export default function App() {
 
       {space === "law" && s.work ? (
         <VersionRail dates={railDates} current={at} compareTo={s.mode === "compare" ? s.to : undefined}
-                     scope={railScope} today={today()}
+                     scope={railScope} today={today()} work={s.work} timelineSemantics={timelineSemantics}
                      onPick={(d) => { setUi(undefined); go({ date: d, to: undefined, mode: "read" }); }}
                      onCompare={(d) => {
                        // Shift-click makes the pair, so comparing never means retyping a date
@@ -503,6 +512,7 @@ export default function App() {
          s.work && loaded ? <Provision items={loaded.items} toc={toc} validFrom={loaded.from} validTo={loaded.to}
                                        work={s.work} title={title ?? s.work} language={servedLang}
                                        anchor={s.anchor} profile={loaded.profile}
+                                       timelineSemantics={timelineSemantics}
                                        source={loaded.source}
                                        onCite={(w) => { setUi(undefined); go({ work: w, date: undefined, anchor: undefined, to: undefined, mode: "read", space: "law" }); }}
                                        onPick={(a, auto) => { chosenAnchor.current = !auto; go({ anchor: a }); }}

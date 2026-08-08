@@ -197,7 +197,7 @@ Test attribution.</div>
 </div><details class="card"><summary><b>Provenance and validity</b>
 <span class="sub">dates, identifier, hash</span></summary><table class="kv">
 <tr><td>as of</td><td><b>2022-06-01</b> → this version applied</td></tr>
-<tr><td>valid</td><td class="mono">2022-01-01 → open <span class="badge">publisher-asserted</span></td></tr>
+<tr><td>valid</td><td class="mono">in force 2022-01-01 → open <span class="badge">publisher-asserted</span></td></tr>
 <tr><td>type</td><td><span class="badge">LOI</span> Loi sur la chose</td></tr>
 <tr><td>language</td><td>fr</td></tr>
 <tr><td>published</td><td class="mono">2022-01-01</td></tr>
@@ -216,7 +216,7 @@ never what it means for your situation.</p>
 “Open” = still current as far as the publisher has consolidated.
 Each article carries its own hash so you can prove it was not tampered with , 
 <a href="/verify">here is how</a>.</p></details><p><a href="/t-pub/w1/2020-01-01">← previous version (2020-01-01)</a> &nbsp;&nbsp;<a href="/t-pub/w1/diff/2020-01-01/2022-01-01">what changed?</a> &nbsp;&nbsp;<a href="/t-pub/w1">timeline</a></p><div class="card"><table class="kv">
-<tr><td>tier</td><td>A, publisher-supplied validity dates</td></tr>
+<tr><td>tier</td><td>A, publisher-supplied applicability dates</td></tr>
 <tr><td>history begins</td><td>publisher</td></tr>
 <tr><td>index built</td><td class="mono"><TIMESTAMP> · corpus goldenc</td></tr>
 <tr><td>stamp signature</td><td><span class="badge ok">valid (ECDSA-P256)</span></td></tr>

@@ -183,7 +183,7 @@ cannot be trusted with a completeness question.</p><h2>Test Publisher <span clas
 <td></td></tr><tr><td>RGD</td><td>1</td>
 <td>0 <span class="mono" style="opacity:.6">0%</span></td>
 <td></td></tr></table></div><div class="card"><table class="kv">
-<tr><td>tier</td><td>A, publisher-supplied validity dates</td></tr>
+<tr><td>tier</td><td>A, publisher-supplied applicability dates</td></tr>
 <tr><td>history begins</td><td>publisher</td></tr>
 <tr><td>index built</td><td class="mono"><TIMESTAMP> · corpus goldenc</td></tr>
 <tr><td>stamp signature</td><td><span class="badge ok">valid (ECDSA-P256)</span></td></tr>
@@ -193,7 +193,7 @@ cannot be trusted with a completeness question.</p><h2>Test Publisher <span clas
 Of those snapshots, <b>2</b> carry the full official text and
 <b>1</b> are a dated entry with its source and hash but no wording.
 
-Those answer with <span class="mono">text_withheld</span> rather than pretending.
+Those answer with <span class="mono">text_not_available</span> rather than pretending.
 History can never go deeper than what the publisher itself digitised.</div>
 </main>
 <footer>

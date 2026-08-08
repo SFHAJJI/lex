@@ -44,7 +44,10 @@ public sealed class AskService(McpCore core)
     private static string SystemPrompt(string host, int toolCount) => $"""
         You are the answer layer of Lex, a point-in-time retrieval system for consolidated
         regulatory text (Luxembourg via Legilux, EU via EUR-Lex). You have {toolCount} read-only tools
-        over signed indexes. Every version carries publisher-asserted validity dates and hashes.
+        over signed indexes. Every version carries publisher-asserted timeline coordinates, explicit
+        timeline_semantics and hashes. Legilux publisher_applicability dates may be described as in
+        force; EUR-Lex official_consolidation_state dates identify wording states and are NOT
+        entry-into-force or application dates.
         Today's date (UTC) is {DateTime.UtcNow:yyyy-MM-dd}: use it for "today"/"current" questions
         (one as_of call with this date — do not probe multiple dates).
 
@@ -55,8 +58,9 @@ public sealed class AskService(McpCore core)
            (long documents: mode=outline first, then mode=select with the anchors you need —
            never pull mode=full on a code); article_history(work, anchor) for "what did Article X
            say over its life / when did it change / was it renumbered"; timeline for whole-document
-           versions; diff for what changed between two dates; in_force_on for what applied on a
-           date; changes_in_period(from_date, to_date) for ACROSS-the-corpus questions ("what
+           versions; diff for what changed between two dates; in_force_on for the publisher state
+           covering a date (legal applicability only when timeline_semantics says so);
+           changes_in_period(from_date, to_date) for ACROSS-the-corpus questions ("what
            changed between 2025 and 2026", "which laws changed most during the pandemic" —
            add order=by_churn to rank by how often each moved); coverage for what Lex holds.
            changes_in_period is DIFFERENT from search: its counts and rankings ARE the answer
@@ -74,14 +78,15 @@ public sealed class AskService(McpCore core)
            You have at most 2 searches per question; coverage is only for questions about what
            Lex holds. Include no URL in your answer that was not returned by a tool in this
            conversation.
-        2. Cite what you used: document title, lex_id, validity interval (valid_from -> valid_to),
+        2. Cite what you used: document title, lex_id, publisher timeline interval
+           (valid_from -> valid_to), timeline_semantics,
            and the "permalink" URL returned by the tools, copied VERBATIM — never construct or
            edit URLs yourself. Quote only the relevant provisions.
         3. Lex answers what the rule WAS, never what it means: no interpretation, no legal advice,
            no compliance conclusions. If asked for advice, give the grounded text and say that
            interpretation is out of scope.
         4. Honest refusals: when a tool answers no_version_for_date, outside_observed_window,
-           unknown_work or text_withheld, or coverage shows a gap, say plainly what Lex does not
+           unknown_work, text_withheld or text_not_available, or coverage shows a gap, say plainly what Lex does not
            hold and link the official source. Be PRECISE about which of these it is: "Lex does not
            have this law" and "Lex has this law but not its text" are different statements, and
            claiming the first when the second is true is as wrong as inventing text. A work that
@@ -225,12 +230,14 @@ public sealed class AskService(McpCore core)
         if (eff.Ranking is { } r)
             return new Step("found", $"{r.WorksChanged:n0} laws changed between {r.FromDate} and {r.ToDate}");
         if (eff.Provision is { } pv)
-            return new Step("read", $"{title ?? work}, {pv.Provisions.Count} article(s) as in force on {pv.ValidFrom}",
+            return new Step("read", $"{title ?? work}, {pv.Provisions.Count} article(s) "
+                + (pv.Subject.Work.StartsWith("eu-eurlex:", StringComparison.Ordinal)
+                    ? $"in publisher version {pv.ValidFrom}" : $"as in force on {pv.ValidFrom}"),
                 pv.Subject.Work, pv.ValidFrom, pv.Provisions.FirstOrDefault()?.Anchor);
         if (eff.History is { } h)
             return new Step("history", $"{h.Anchor} has had {h.DistinctTexts} distinct text(s)", h.Subject.Work, null, h.Anchor);
         if (eff.InForce is { } f)
-            return new Step("found", $"{f.Total:n0} laws in force on {f.Date}");
+            return new Step("found", $"{f.Total:n0} publisher states cover {f.Date}");
         if (eff.Diff is { } d)
             return new Step("diff", $"comparing {d.FromDate} with {d.ToDate}", d.Subject.Work, d.FromDate);
         if (tool == "search")
@@ -296,13 +303,15 @@ public sealed class AskService(McpCore core)
                     // and its own permalinks read as ungrounded when the model cited them.
                     if (o["anchor"] is not null && o["states"] is JsonArray states && docs.Count < 24)
                     {
+                        var consolidationDates = o["envelope"]?["timeline_semantics"]?.GetValue<string>()
+                            == "official_consolidation_state";
                         var first = states.OfType<JsonObject>().FirstOrDefault();
                         var last = states.OfType<JsonObject>().LastOrDefault();
                         var pins = new JsonArray(states.OfType<JsonObject>().Take(6).Select(s =>
                             (JsonNode)new JsonObject
                             {
                                 ["anchor"] = o["anchor"]?.DeepClone(),
-                                ["quote"] = $"in force {s["valid_from"]} → {s["valid_to"] ?? "open"} (text sha {(s["text_sha256"]?.GetValue<string>() ?? "")[..Math.Min(12, (s["text_sha256"]?.GetValue<string>() ?? "").Length)]})",
+                                ["quote"] = $"{(consolidationDates ? "publisher state" : "in force")} {s["valid_from"]} → {s["valid_to"] ?? (consolidationDates ? "latest held" : "open")} (text sha {(s["text_sha256"]?.GetValue<string>() ?? "")[..Math.Min(12, (s["text_sha256"]?.GetValue<string>() ?? "").Length)]})",
                                 ["permalink"] = s["permalink"]?.DeepClone(),
                             }).ToArray());
                         docs.Add(new JsonObject

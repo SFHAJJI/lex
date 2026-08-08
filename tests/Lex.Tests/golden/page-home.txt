@@ -5,9 +5,9 @@ HTTP 200
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Titles are labels, not sentences: one that ends in a full stop renders "acts., Lex" in
      the tab and in every social card, which is what the front page did until now. -->
-<title>Luxembourg and EU law as it stood on any date, Lex</title>
+<title>Luxembourg and EU law by publisher date, Lex</title>
 <meta name="description" content="Point-in-time Luxembourg and reviewed EU law: what did the rule say on a given date? Permalinks, timelines, diffs and verifiable provenance.">
-<meta property="og:title" content="Luxembourg and EU law as it stood on any date, Lex">
+<meta property="og:title" content="Luxembourg and EU law by publisher date, Lex">
 <meta property="og:description" content="Point-in-time Luxembourg and reviewed EU law, with grounded AI answers, per-article history, and verifiable provenance.">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Lex">
@@ -180,8 +180,8 @@ HTTP 200
 <main>
 <h1>A law is not one document.</h1>
 
-<p class="lede">Search Luxembourg and reviewed-scope EU law as it stood on any date,
-with exact publisher wording, validity intervals and provenance. Coverage is derived
+<p class="lede">Search Luxembourg applicability and reviewed-scope official EU consolidated wording by date,
+with exact publisher text, explicit timeline semantics and provenance. Coverage is derived
 from every dated version in the verified indexes mounted now.</p><!-- Read synchronously by the workspace on mount, so the doors never flash in or need a
      round trip of their own. -->
 <script type="application/json" id="doors">[]</script>

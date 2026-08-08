@@ -7,6 +7,10 @@ import { EvidenceActions } from "./EvidenceActions";
 import { citationText, evidenceFilename, lawEvidenceMarkdown } from "./export";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { remarkLegalText } from "./legalText.ts";
+import {
+  futureStateLabel, intervalLabel, usesPublisherVersionDates,
+} from "./temporal";
 
 const permalink = (work: string, date: string, anchor?: string) =>
   `/${publisherOf(work)}/${workSlug(work)}/${date}${anchor ? `#${anchor}` : ""}`;
@@ -20,9 +24,9 @@ const ms = (d: string) => Date.parse(`${d}T00:00:00Z`);
  * opened an article — so re-dating dropped you at the top of a document you were reading the
  * middle of. It is the one control a point-in-time reader uses constantly, so it stays put.
  */
-export function Provision({ items, toc, validFrom, validTo, work, title, language, anchor, profile, source, onPick, onClear, onCite }: {
+export function Provision({ items, toc, validFrom, validTo, work, title, language, anchor, profile, source, timelineSemantics, onPick, onClear, onCite }: {
   items: ProvisionItem[]; toc: ProvisionItem[]; validFrom: string; validTo?: string;
-  work: string; title: string; language?: string; anchor?: string; profile?: string; source?: string;
+  work: string; title: string; language?: string; anchor?: string; profile?: string; source?: string; timelineSemantics?: string;
   // `auto` marks an article the reader did not ask for. The rail uses it to decide whether to
   // stay on the law's versions or narrow to this article's texts.
   onPick: (anchor: string, auto?: boolean) => void; onClear: () => void; onCite?: (work: string) => void;
@@ -38,7 +42,7 @@ export function Provision({ items, toc, validFrom, validTo, work, title, languag
   const nav = toc.length >= 6 || outlineOnly;
   const pageUrl = typeof window === "undefined" ? "" : window.location.href;
   const evidence = () => ({
-    title, work, validFrom, validTo, language, source, permalink: pageUrl,
+    title, work, validFrom, validTo, language, source, permalink: pageUrl, timelineSemantics,
     extractionProfile: profile, provisions: items, exportedAt: new Date().toISOString(),
   });
 
@@ -55,7 +59,7 @@ export function Provision({ items, toc, validFrom, validTo, work, title, languag
   const body = (
     <div className="text">
       <div className="cnt">
-        <span className="tag">in force {validFrom} → {validTo ?? "open"}</span>
+        <span className="tag">{intervalLabel(work, validFrom, validTo, timelineSemantics)}</span>
         {anchor ? (
           <button className="tag act" onClick={onClear}>article {anchor} ✕</button>
         ) : (
@@ -120,7 +124,7 @@ export function Provision({ items, toc, validFrom, validTo, work, title, languag
           </h4>
           {/* Publisher text never becomes executable markup: react-markdown creates React nodes
               and ignores raw HTML by default. Export and comparison keep the untouched string. */}
-          <div className="lawtxt"><Markdown remarkPlugins={[remarkGfm]}>{p.text}</Markdown></div>
+          <div className="lawtxt"><Markdown remarkPlugins={[remarkGfm, remarkLegalText]}>{p.text}</Markdown></div>
           {/* The acts this article points at. The publisher writes them into the text and the
               derive step captures them with their ELI target, so they can be followed rather
               than merely read. This is the shape legal research actually has: one rule leads to
@@ -157,8 +161,8 @@ export function Provision({ items, toc, validFrom, validTo, work, title, languag
  * navigate to, because the history is the navigation. Scope follows the reader: with an
  * article open it shows that article's distinct texts, otherwise the law's own versions.
  */
-export function VersionRail({ dates, current, compareTo, scope, today, onPick, onCompare, onClear }: {
-  dates: string[]; current?: string; compareTo?: string; scope: string; today: string;
+export function VersionRail({ dates, current, compareTo, scope, today, work, timelineSemantics, onPick, onCompare, onClear }: {
+  dates: string[]; current?: string; compareTo?: string; scope: string; today: string; work: string; timelineSemantics?: string;
   onPick: (d: string) => void; onCompare: (d: string) => void; onClear: () => void;
 }) {
   const box = useRef<HTMLDivElement>(null);
@@ -216,7 +220,7 @@ export function VersionRail({ dates, current, compareTo, scope, today, onPick, o
       <div className="railhead">
         <span className="tag">{dates.length} {scope}</span>
         {median > 0 ? <span className="tag">every {median} days (median)</span> : null}
-        {ahead > 0 ? <span className="tag warn">{ahead} not yet in force</span> : null}
+        {ahead > 0 ? <span className="tag warn">{futureStateLabel(work, ahead, timelineSemantics)}</span> : null}
         {/* Keyed off compareTo, not off finding it on the rail: a compared date need not be one
             of these ticks (article texts are a subset of the law's versions), and a comparison
             with no visible way out is a trap. */}
@@ -261,7 +265,9 @@ export function VersionRail({ dates, current, compareTo, scope, today, onPick, o
           {dates.map((d, k) => (
             <button key={d}
                     className={`tick${k === i ? " on" : ""}${k === j ? " cmp" : ""}${d > today ? " future" : ""}`}
-                    style={{ left: xs[k] }} title={`${d}${d > today ? ", not yet in force" : ""}`}
+                    style={{ left: xs[k] }} title={`${d}${d > today
+                      ? `, ${usesPublisherVersionDates(work, timelineSemantics) ? "publisher version dated after today" : "not yet in force"}`
+                      : ""}`}
                     tabIndex={labels.has(k) || k === i ? 0 : -1}
                     aria-label={`${d}${k === i ? " (showing)" : ""}`}
                     onClick={(e) => pick(d, e.shiftKey)} />
@@ -420,7 +426,7 @@ export function Ranking({ rows, worksChanged, newVersions, from, to, page, hasMo
 export function InForce({ date, total, rows, page, hasMore, onOpen, onPage }: {
   date: string; total: number;
   rows: { work: string; title?: string; kind?: string; valid_from: string;
-          jurisdiction?: string; hierarchy?: string }[];
+          jurisdiction?: string; hierarchy?: string; timeline_semantics?: string }[];
   page: number; hasMore: boolean;
   onOpen: (work: string, date: string) => void;
   onPage: (page: number) => void;
@@ -428,7 +434,7 @@ export function InForce({ date, total, rows, page, hasMore, onOpen, onPage }: {
   return (
     <>
       <div className="cnt">
-        <span className="tag">{total.toLocaleString()} in force</span>
+        <span className="tag">{total.toLocaleString()} publisher states</span>
         <span className="tag mono">on {date}</span>
       </div>
       <ul className="rows">
@@ -440,7 +446,9 @@ export function InForce({ date, total, rows, page, hasMore, onOpen, onPage }: {
                 {r.jurisdiction ? <span>{jurisdictionLabel(r.jurisdiction)}</span> : null}
                 {r.hierarchy ? <span>{facetLabel(r.hierarchy)}</span> : null}
                 {r.kind ? <span>{facetLabel(r.kind)}</span> : null}
-                <span className="mono">since {r.valid_from}</span>
+                <span className="mono">
+                  {usesPublisherVersionDates(r.work, r.timeline_semantics) ? `publisher version ${r.valid_from}` : `in force since ${r.valid_from}`}
+                </span>
               </span>
             </button>
           </li>
@@ -469,29 +477,43 @@ export function InForce({ date, total, rows, page, hasMore, onOpen, onPage }: {
  */
 export function Gap({ status, explanation, available, held }: {
   status: string; explanation: string; available: string[];
-  held?: { text: number; total: number; official?: string };
+  held?: { text: number; total: number; official?: string; kind?: string };
 }) {
   const whole = held && held.total > 0 && held.text === 0;
+  const collection = whole && (held?.kind === "RECUEIL" || held?.kind === "CODE_RECUEIL");
   return (
     <div className="gap">
       <div className="cnt"><span className="tag warn mono">{status}</span></div>
       {whole ? (
         <>
-          <p><b>Lex holds the amendment record for this law, not its wording.</b></p>
-          <p className="sub">
-            Lex reads the publisher's machine-readable XML, because XML is the only format that
-            marks where each article begins and ends, which is what makes an article citable,
-            hashable and comparable across dates. For this law the publisher does not issue it, on
-            any of its {held!.total.toLocaleString()} versions, so no date here will show wording.
-          </p>
-          <p className="sub">
-            What is held for every one of them: the dates it applied between, the source it came
-            from, and the hash of the record. The rail above is the history itself, and it is
-            complete. The wording usually still exists at the publisher, as a PDF.
-          </p>
+          {collection ? (
+            <>
+              <p><b>This is a publisher collection, not one legal instrument.</b></p>
+              <p className="sub">
+                Legilux uses this record as a thematic shelf containing many separate acts. Lex
+                keeps its {held!.total.toLocaleString()} dated catalogue states, but will not join
+                the shelf's PDFs into invented wording for a single “law”. Search or browse the
+                individual instruments in the collection to read and compare authoritative text.
+              </p>
+            </>
+          ) : (
+            <>
+              <p><b>Lex holds this instrument's publisher record, but no safely extracted wording.</b></p>
+              <p className="sub">
+                Ingestion checked the official structured text, standalone document PDF and
+                gazette fallback available for these {held!.total.toLocaleString()} states. None
+                produced article text with boundaries Lex can defend, so it refuses to manufacture
+                a citable or comparable version.
+              </p>
+              <p className="sub">
+                The publisher dates, source links and record hashes remain available in the rail.
+                Use the official record below for the wording.
+              </p>
+            </>
+          )}
           {held!.official ? (
             <p className="sub">
-              <a href={held!.official} target="_blank" rel="noopener noreferrer">Open this law at the publisher ↗</a>
+              <a href={held!.official} target="_blank" rel="noopener noreferrer">Open the publisher record ↗</a>
             </p>
           ) : null}
         </>

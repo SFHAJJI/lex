@@ -5,7 +5,7 @@ import { fusePublisherHits } from "./searchFusion.ts";
 test("cross-publisher fusion preserves local ranks and gives both jurisdictions visible slots", () => {
   const result = fusePublisherHits([
     {
-      envelope: { publisher: "eu-eurlex", jurisdiction: "EU" },
+      envelope: { publisher: "eu-eurlex", jurisdiction: "EU", timeline_semantics: "official_consolidation_state" },
       hits: Array.from({ length: 12 }, (_, i) => ({ lex_id: `eu-eurlex:e${i}:v:art_${i}` })),
     },
     {
@@ -15,6 +15,8 @@ test("cross-publisher fusion preserves local ranks and gives both jurisdictions 
   ]);
 
   assert.deepEqual(result.slice(0, 6).map(hit => hit._jurisdiction), ["EU", "LU", "EU", "LU", "EU", "LU"]);
+  assert.equal(result[0]._timelineSemantics, "official_consolidation_state");
+  assert.equal(result[1]._timelineSemantics, undefined);
   assert.deepEqual(result.slice(0, 4).map(hit => hit.lex_id), [
     "eu-eurlex:e0:v:art_0", "lu-legilux:l0:v:art_0",
     "eu-eurlex:e1:v:art_1", "lu-legilux:l1:v:art_1",

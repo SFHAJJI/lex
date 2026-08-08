@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.RegularExpressions;
 using DiffPlex;
 using Lex.Index;
 using Markdig;
@@ -27,6 +28,11 @@ public static class Fragments
         .DisableHtml()
         .Build();
 
+    private static readonly Regex UnparsedStrong = new(
+        @"\*\*([^*\s<>\r\n](?:[^*<>\r\n]*?[^*\s<>\r\n])?)\*\*", RegexOptions.Compiled);
+    private static readonly Regex UnparsedEmphasis = new(
+        @"\*([^*\s<>\r\n](?:[^*<>\r\n]*?[^*\s<>\r\n])?)\*", RegexOptions.Compiled);
+
     // The absolute URL to print in a copy-paste connect command.
     //
     // req.Scheme is "http" in production: Container Apps terminates TLS at the ingress and forwards
@@ -38,7 +44,7 @@ public static class Fragments
 
     public static string EnvelopeCard(LexIndexReader r, bool provisional) => $"""
         <div class="card"><table class="kv">
-        <tr><td>tier</td><td>{H(r.Stamp.GetValueOrDefault("tier"))}, publisher-supplied validity dates</td></tr>
+        <tr><td>tier</td><td>{H(r.Stamp.GetValueOrDefault("tier"))}, {(UsesPublisherVersionDates(r) ? "publisher-supplied consolidated wording-state dates" : "publisher-supplied applicability dates")}</td></tr>
         <tr><td>history begins</td><td>{H(r.Stamp.GetValueOrDefault("history_begins"))}</td></tr>
         <tr><td>index built</td><td class="mono">{H(r.Stamp.GetValueOrDefault("built_at"))} · corpus {H(r.Stamp.GetValueOrDefault("corpus_commit"))}</td></tr>
         <tr><td>stamp signature</td><td>{(r.SignatureValid ? "<span class=\"badge ok\">valid (ECDSA-P256)</span>" : "<span class=\"badge warn\">unsigned</span>")}</td></tr>
@@ -46,10 +52,14 @@ public static class Fragments
         </table></div>
         """;
 
-    public static string TextWithheldBox(DocRow d) => $"""
-        <div class="notice"><b>Text withheld.</b> This deployment runs in metadata-only mode: the legal text is not
-        stored or republished here pending publisher rights confirmation (status <span class="mono">text_withheld</span>).
-        Read the official text at
+    public static string MissingTextBox(DocRow d) => d.TextAvailable ? $"""
+        <div class="notice"><b>Text withheld.</b> Lex holds publisher text for this version, but a publication gate
+        prevents serving the wording (status <span class="mono">text_withheld</span>). Read the official text at
+        <a href="{H(d.SourceUri)}" rel="noopener">{H(d.SourceUri)}</a>.</div>
+        """ : $"""
+        <div class="notice"><b>Provision text not available.</b> Lex holds the publisher record and timeline, but no
+        safely derived provision text for this version (status <span class="mono">text_not_available</span>).
+        It will not manufacture article boundaries or wording. Read the official record at
         <a href="{H(d.SourceUri)}" rel="noopener">{H(d.SourceUri)}</a>.</div>
         """;
 
@@ -96,9 +106,31 @@ public static class Fragments
 
     public static string Interval(DocRow d) => d.ValidTo is null ? $"{d.ValidFrom} → open" : $"{d.ValidFrom} → {d.ValidTo}";
 
+    /// <summary>
+    /// Which legal-time claim a publisher's version axis supports. New publishers declare this
+    /// in the signed stamp; the EUR-Lex fallback keeps older verified artifacts honest during a
+    /// rolling upgrade. An official consolidation date is not an entry-into-force date.
+    /// </summary>
+    public static bool UsesPublisherVersionDates(LexIndexReader r)
+        => UsesPublisherVersionDates(r.Collection, r.Stamp);
+
+    public static bool UsesPublisherVersionDates(string collection, IReadOnlyDictionary<string, string> stamp)
+        => stamp.GetValueOrDefault("timeline_semantics") == "official_consolidation_state"
+           || (!stamp.ContainsKey("timeline_semantics") && collection == "eu-eurlex");
+
+    public static string IntervalLabel(LexIndexReader r, DocRow d) => UsesPublisherVersionDates(r)
+        ? $"publisher version {d.ValidFrom} → {d.ValidTo ?? "latest held"}"
+        : $"in force {d.ValidFrom} → {d.ValidTo ?? "open"}";
+
     public static string RenderLegalMarkdown(string text)
     {
         var html = Markdown.ToHtml(text ?? string.Empty, LegalMarkdownPipeline);
+
+        // Frozen v1 publisher profiles can place an italic span directly between text spans,
+        // yielding `word:*formula*word`. CommonMark leaves that delimiter literal. Valid
+        // emphasis has already become <em>/<strong> here, so remove only balanced delimiters
+        // that survived rendering; ordinary arithmetic such as `A * B` has no pair to match.
+        html = UnparsedEmphasis.Replace(UnparsedStrong.Replace(html, "$1"), "$1");
 
         // On phones, PageShell deliberately makes wide legal tables independently scrollable.
         // A scroll region must be keyboard-focusable too. Markdig owns this generated element,

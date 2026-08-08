@@ -37,9 +37,9 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                     ["mode"] = S("full | outline | select (default full)"),
                     ["anchors"] = S("optional comma-separated provision anchors for mode=outline; required for mode=select, e.g. art_1er,art_33"),
                 }, ["work", "date"]),
-            Tool("timeline", "Every state a document has been in: validity intervals and version keys, publisher-asserted.",
+            Tool("timeline", "Every publisher state a document has been in: timeline intervals, version keys, and explicit timeline_semantics. Legilux intervals describe applicability; EUR-Lex intervals describe official consolidated wording states, not entry into force.",
                 new JsonObject { ["work"] = S(workDesc), ["limit"] = I("max versions (default 100)"), ["offset"] = I("pagination offset") }, ["work"]),
-            Tool("in_force_on", "The set of works in force on a date, computed from validity intervals at query time, deduplicated by work. Carries a mandatory population disclosure.",
+            Tool("in_force_on", "Compatibility name for publisher states covering a date, computed from timeline intervals and deduplicated by work. Legilux states describe applicability; EUR-Lex states are official consolidated wording states and must not be called entry into force. Every envelope carries timeline_semantics and the result carries a mandatory population disclosure.",
                 new JsonObject
                 {
                     ["date"] = S("ISO date"), ["publisher"] = S("optional publisher id, e.g. lu-legilux"),
@@ -53,7 +53,7 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                     ["language"] = S("optional language code"),
                     ["limit"] = I("default 50"), ["offset"] = I("pagination offset"),
                 }, ["date"]),
-            Tool("diff", "What changed between two dates for one work: which versions applied, and where both texts are held, retrieve them via as_of to compare.",
+            Tool("diff", "What changed between two dates for one work: which publisher versions cover the selected dates and, where both texts are held, retrieve them via as_of to compare. Read timeline_semantics before describing legal applicability.",
                 new JsonObject { ["work"] = S(workDesc), ["from_date"] = S("ISO date"), ["to_date"] = S("ISO date"), ["language"] = S("language code") }, ["work", "from_date", "to_date"]),
             Tool("search", "Filtered legal search. keyword is deterministic FTS5/BM25; hybrid adds the pinned local encoder and fixed RRF when verified vectors are mounted. No generative model participates. Returns hits WITHOUT body text; full state via as_of.",
                 new JsonObject
@@ -74,7 +74,7 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                     ["works"] = S("optional comma-separated work ids: restrict search to these works"),
                     ["limit"] = I("default 10"),
                 }, ["query"]),
-            Tool("article_history", "Every distinct text ONE provision (article/annex) has had, as validity intervals — plus its lifecycle events (inserted/removed/renumbered, renumbering detected mechanically by identical text hash). The answer to \"what did Article X say over its life / when did it change\".",
+            Tool("article_history", "Every distinct text ONE provision (article/annex) has had on its publisher timeline, plus lifecycle events (inserted/removed/renumbered, renumbering detected mechanically by identical text hash). Read timeline_semantics before calling an interval legal applicability. Answers \"what did Article X say over its life / when did it change\".",
                 new JsonObject
                 {
                     ["work"] = S(workDesc),
@@ -132,8 +132,22 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
         };
         var jurisdiction = r.Stamp.GetValueOrDefault("jurisdiction");
         if (!string.IsNullOrWhiteSpace(jurisdiction)) envelope["jurisdiction"] = jurisdiction;
+        // Version coordinates do not all make the same legal claim. In particular, EUR-Lex
+        // consolidated-expression dates are official wording-state dates, not entry-into-force
+        // dates. New signed artifacts carry the field; the collection fallback keeps older
+        // verified EU releases honest during rolling deployment.
+        envelope["timeline_semantics"] = r.Stamp.GetValueOrDefault("timeline_semantics",
+            r.Collection == "eu-eurlex" ? "official_consolidation_state" : "publisher_applicability");
         return envelope;
     }
+
+    private static string TextStatus(DocRow d) => !d.TextAvailable ? "text_not_available"
+        : d.TextPublic ? "ok" : "text_withheld";
+
+    private static string ComparisonTextStatus(DocRow a, DocRow b)
+        => !a.TextAvailable || !b.TextAvailable ? "text_not_available"
+         : a.TextPublic && b.TextPublic ? "ok"
+         : "text_withheld";
 
     // Base URL for permalinks is deployment config only (never derived from or stored in
     // signed content); the field is omitted entirely when unconfigured so air-gapped
@@ -360,7 +374,7 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                         ["work"] = w,
                         ["date"] = date.ToString("yyyy-MM-dd"),
                     };
-                var status = doc.TextPublic ? "ok" : "text_withheld";
+                var status = TextStatus(doc);
                 var mode = Str("mode") ?? "full";
                 var o = new JsonObject
                 {
@@ -422,6 +436,8 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                 }
                 if (status == "text_withheld")
                     o["text_withheld_reason"] = "publisher text gate pending; read the official text at source_uri";
+                else if (status == "text_not_available")
+                    o["text_unavailable_reason"] = "publisher record held; no safely derived provision text is available; read source_uri";
                 return o;
             }
             case "timeline":
@@ -502,7 +518,7 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                 // Only when BOTH profiles are known and they disagree. Profile is null when a
                 // version carries no text at all, and two unknowns are not evidence of a
                 // mismatch: claiming one would be the same overreach in the other direction,
-                // and that case is already told the truth by text_withheld.
+                // and that case is already told the truth by text_not_available/text_withheld.
                 var pa = a1.Profile;
                 var pb = b1.Profile;
                 var profilesDiffer = pa is not null && pb is not null && pa != pb;
@@ -510,7 +526,7 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                 return new JsonObject
                 {
                     ["envelope"] = Envelope(r, profilesDiffer ? "profiles_differ"
-                                               : a1.TextPublic && b1.TextPublic ? "ok" : "text_withheld"),
+                                               : ComparisonTextStatus(a1, b1)),
                     ["changed"] = changed,
                     ["provision_level_comparable"] = comparable,
                     ["from"] = DocJson(a1, false),
@@ -604,7 +620,9 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                             d["match"] = "work_identifier_or_title";
                             d["match_note"] = doc.TextPublic
                                 ? "THIS WORK IS HELD by Lex, matched on its identifier or title rather than its wording. Call as_of on it for the text."
-                                : "THIS WORK IS HELD by Lex — versions, dates and provenance are available via timeline / in_force_on / provenance. Only the per-article TEXT is absent (the publisher offers no machine-readable body). Never report this work as missing or unknown; report that the text specifically is not held.";
+                                : doc.TextAvailable
+                                    ? "THIS WORK IS HELD by Lex; publisher text exists but is not publicly served. Versions, dates and provenance remain available. Never report the work as missing."
+                                    : "THIS WORK IS HELD by Lex; versions, publisher dates and provenance are available via timeline / in_force_on / provenance, but no safely derived provision text is available. Never report the work as missing or unknown; report the text gap precisely.";
                             if (_publicBase is not null)
                                 d["permalink"] = $"{_publicBase}/{doc.Collection}/{doc.GroupKey}/{doc.ValidFrom}";
                             hitsArr.Add(d);

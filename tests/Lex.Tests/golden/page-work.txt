@@ -15,7 +15,7 @@ HTTP 200
 <meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="canonical" href="https://golden.test/t-pub/w1">
-<script type="application/ld+json">[{"@context":"https://schema.org","@type":"Legislation","name":"Loi sur la chose","url":"https://golden.test/t-pub/w1","legislationIdentifier":"urn:w1","legislationJurisdiction":{"@type":"AdministrativeArea","name":"Test Publisher"},"legislationDate":"2020-01-01","legislationLegalForce":"https://schema.org/InForce","inLanguage":"fr","temporalCoverage":"2020-01-01/..","license":"https://creativecommons.org/licenses/by/4.0/","isBasedOn":"https://example.org/w1/2022-01-01","legislationType":"LOI"},{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Catalogue","item":"https://golden.test/browse"},{"@type":"ListItem","position":2,"name":"Test Publisher law","item":"https://golden.test/browse?publisher=t-pub"},{"@type":"ListItem","position":3,"name":"Loi sur la chose","item":"https://golden.test/t-pub/w1"}]}]</script>
+<script type="application/ld+json">[{"@context":"https://schema.org","@type":"Legislation","name":"Loi sur la chose","url":"https://golden.test/t-pub/w1","legislationIdentifier":"urn:w1","legislationJurisdiction":{"@type":"AdministrativeArea","name":"Test Publisher"},"legislationDate":"2020-01-01","inLanguage":"fr","temporalCoverage":"2020-01-01/..","license":"https://creativecommons.org/licenses/by/4.0/","isBasedOn":"https://example.org/w1/2022-01-01","legislationLegalForce":"https://schema.org/InForce","legislationType":"LOI"},{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Catalogue","item":"https://golden.test/browse"},{"@type":"ListItem","position":2,"name":"Test Publisher law","item":"https://golden.test/browse?publisher=t-pub"},{"@type":"ListItem","position":3,"name":"Loi sur la chose","item":"https://golden.test/t-pub/w1"}]}]</script>
 <meta name="twitter:image" content="https://golden.test/og.png">
 <link rel="preload" href="/fonts/IBMPlexSans-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/fonts/SourceSerif4-latin.woff2" as="font" type="font/woff2" crossorigin>
@@ -179,14 +179,14 @@ HTTP 200
 <main>
 <h1>Loi sur la chose</h1>
 <p class="sub">every version, on a time axis</p>
-<p><span class="badge">LOI</span> <span class="badge">2 version(s)</span> <a class="badge" href="https://example.org/w1/2022-01-01">official text ↗</a></p><div class="rail"><div class="axis"></div><a class="tick" style="left:1%" href="/t-pub/w1/2020-01-01" title="2020-01-01"></a><a class="tick" style="left:99%" href="/t-pub/w1/2022-01-01" title="2022-01-01"></a><span class="yr" style="left:0">2020-01-01</span><span class="yr" style="right:0">2022-01-01</span></div><p class="sub railcap">2 versions · click any mark to read the law as it stood that day</p><p><a href="/t-pub/w1/<TODAY>"><b>Read the text applicable today →</b></a></p><details class="card"><summary>Every version as a table</summary><table><tr><th>valid</th><th>as-of view</th><th>status</th><th>provenance</th></tr><tr><td class="mono">2020-01-01 → 2021-12-31</td>
+<p><span class="badge">LOI</span> <span class="badge">2 version(s)</span> <a class="badge" href="https://example.org/w1/2022-01-01">official text ↗</a></p><div class="rail"><div class="axis"></div><a class="tick" style="left:1%" href="/t-pub/w1/2020-01-01" title="2020-01-01"></a><a class="tick" style="left:99%" href="/t-pub/w1/2022-01-01" title="2022-01-01"></a><span class="yr" style="left:0">2020-01-01</span><span class="yr" style="right:0">2022-01-01</span></div><p class="sub railcap">2 versions · click any mark to read the law as it stood that day</p><p><a href="/t-pub/w1/<TODAY>"><b>Read the text applicable today →</b></a></p><details class="card"><summary>Every version as a table</summary><table><tr><th>valid</th><th>as-of view</th><th>status</th><th>provenance</th></tr><tr><td class="mono">in force 2020-01-01 → 2021-12-31</td>
 <td><a href="/t-pub/w1/2020-01-01">as of 2020-01-01</a></td>
 <td><span class="badge">superseded</span></td>
-<td><a class="mono" href="/provenance/t-pub:w1:2020-01-01">2020-01-01</a></td></tr><tr><td class="mono">2022-01-01 → open</td>
+<td><a class="mono" href="/provenance/t-pub:w1:2020-01-01">2020-01-01</a></td></tr><tr><td class="mono">in force 2022-01-01 → open</td>
 <td><a href="/t-pub/w1/2022-01-01">as of 2022-01-01</a></td>
 <td><span class="badge ok">open</span></td>
 <td><a class="mono" href="/provenance/t-pub:w1:2022-01-01">2022-01-01</a></td></tr></table></details><p class="sub">Every state this document has been in, as asserted by the publisher. The corpus repo's <span class="mono">git log</span> for this work shows the same history.</p><div class="card"><table class="kv">
-<tr><td>tier</td><td>A, publisher-supplied validity dates</td></tr>
+<tr><td>tier</td><td>A, publisher-supplied applicability dates</td></tr>
 <tr><td>history begins</td><td>publisher</td></tr>
 <tr><td>index built</td><td class="mono"><TIMESTAMP> · corpus goldenc</td></tr>
 <tr><td>stamp signature</td><td><span class="badge ok">valid (ECDSA-P256)</span></td></tr>

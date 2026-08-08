@@ -203,14 +203,14 @@ the endpoint.</p>
 <div class="card"><table>
 <tr><th>tool</th><th>arguments</th><th>answers</th></tr>
 <tr><td class="mono">as_of</td><td class="mono">work, date, [language], [mode: full\|outline\|select], [anchors]</td>
-    <td>the text in force on a date. <span class="mono">outline</span> lists article anchors only;
+    <td>the publisher wording state covering a date. For Legilux this is applicability; for EUR-Lex it is an official consolidated wording state. <span class="mono">outline</span> lists article anchors only;
     <span class="mono">select</span> returns just the anchors you name, use it, codes are large.</td></tr>
 <tr><td class="mono">article_history</td><td class="mono">work, anchor</td>
-    <td>every distinct text one article has had, as validity intervals, plus renumbering events.</td></tr>
-<tr><td class="mono">timeline</td><td class="mono">work</td><td>all versions of a work with their validity windows.</td></tr>
+    <td>every distinct text one article has had on its publisher timeline, plus renumbering events.</td></tr>
+<tr><td class="mono">timeline</td><td class="mono">work</td><td>all publisher versions of a work with explicit timeline semantics.</td></tr>
 <tr><td class="mono">diff</td><td class="mono">work, from_date, to_date, [language]</td><td>what changed between two versions.</td></tr>
 <tr><td class="mono">in_force_on</td><td class="mono">date, [publisher|jurisdiction], [source_class|document_type], [hierarchy], [act_form], [binding_status], [domain], [language], [limit], [offset]</td>
-    <td>everything that applied on a given day.</td></tr>
+    <td>publisher states covering a day: Legilux applicability and EUR-Lex official consolidation states, distinguished in the envelope.</td></tr>
 <tr><td class="mono">search</td><td class="mono">query, [publisher|jurisdiction], [retrieval_mode], [time_scope], [as_of], [fuzzy], [source_class|document_type], [hierarchy], [act_form], [binding_status], [domain], [language], [works], [limit]</td>
     <td>provision-level search across Luxembourg and EU law. Keyword is deterministic
     FTS5/BM25. Hybrid adds the pinned local encoder only when verified vectors are mounted.
@@ -245,6 +245,7 @@ the JSON below is exactly what an MCP client receives.</p>
 <span class="mono">no_version_for_date</span> · <span class="mono">unknown_work</span> ·
 <span class="mono">unknown_anchor</span> · <span class="mono">anchor_not_in_version</span> ·
 <span class="mono">no_provision_history</span> · <span class="mono">text_withheld</span> ·
+<span class="mono">text_not_available</span> ·
 <span class="mono">outside_observed_window</span>. Build against them: an empty result and a
 refusal are different things.</p>
 

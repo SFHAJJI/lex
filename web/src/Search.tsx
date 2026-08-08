@@ -6,6 +6,7 @@ import type { State } from "./state";
 import { shorten } from "./pickers";
 import { ResultsSkeleton } from "./Skeleton";
 import { fusePublisherHits } from "./searchFusion";
+import { intervalLabel } from "./temporal";
 
 /**
  * One box, one date.
@@ -40,6 +41,7 @@ export interface SearchProps {
 type HitMeta = {
   validFrom?: string; validTo?: string; hierarchy?: string; language?: string;
   jurisdiction?: string;
+  timelineSemantics?: string;
   domains?: string[]; consolidationStatus?: string; matchReasons?: string[];
 };
 type WorkHit = HitMeta & { work: string; title: string };
@@ -134,6 +136,7 @@ export default function Search(p: SearchProps) {
           const title = shorten(h.title) ?? work;
           const meta: HitMeta = {
             jurisdiction: h._jurisdiction ?? jurisdictionForPublisher(work.split(":")[0]),
+            timelineSemantics: h._timelineSemantics,
             validFrom: h.valid_from, validTo: h.valid_to, hierarchy: h.hierarchy,
             language: h.language, domains: Array.isArray(h.domains) ? h.domains : [],
             consolidationStatus: h.consolidation_status,
@@ -167,10 +170,10 @@ export default function Search(p: SearchProps) {
                aria-label="Search for a law, an identifier, or words in the text" />
         {/* The date sits beside the question, not behind a tab, because every question this
             corpus answers has an "as of when" and that is the entire point of it. */}
-        <label className="asof" title="Read everything as it stood on this date">
+        <label className="asof" title="Select the publisher state covering this date">
           <i>as of</i>
           <input type="date" value={asOf ?? ""} max="2030-12-31"
-                 aria-label="Read everything as it stood on this date"
+                 aria-label="Select the publisher state covering this date"
                  onChange={(e) => p.onAsOf(e.target.value || undefined)} />
         </label>
         <button type="submit">Search</button>
@@ -178,7 +181,7 @@ export default function Search(p: SearchProps) {
 
       <div className="onehint">
         {asOf
-          ? <>Reading the corpus as it stood on <b>{asOf}</b>. <button className="linky" onClick={() => p.onAsOf(undefined)}>use today instead</button></>
+          ? <>Searching publisher states covering <b>{asOf}</b>. <button className="linky" onClick={() => p.onAsOf(undefined)}>use today instead</button></>
           : <>Reading the corpus as it stands today. Set a date to read it as it was.</>}
       </div>
 
@@ -200,7 +203,7 @@ export default function Search(p: SearchProps) {
 
       {!q && asOf ? (
         <div className="date-scope">
-          <ScopeFilters values={p.state} onChange={p.onRefine} summary="Narrow laws in force" />
+          <ScopeFilters values={p.state} onChange={p.onRefine} summary="Narrow the legal scope" />
         </div>
       ) : null}
 
@@ -296,9 +299,9 @@ export default function Search(p: SearchProps) {
   );
 }
 
-function Validity({ hit }: { hit: HitMeta }) {
+function Validity({ hit }: { hit: HitMeta & { work: string } }) {
   if (!hit.validFrom) return null;
-  return <span>valid {hit.validFrom} → {hit.validTo ?? "ongoing"}</span>;
+  return <span>{intervalLabel(hit.work, hit.validFrom, hit.validTo, hit.timelineSemantics)}</span>;
 }
 
 function HitContext({ hit }: { hit: HitMeta }) {

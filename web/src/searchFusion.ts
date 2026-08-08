@@ -5,13 +5,14 @@
  * largest) corpus from consuming every visible result slot.
  */
 export type PublisherEnvelope<T extends object> = {
-  envelope?: { publisher?: string; jurisdiction?: string };
+  envelope?: { publisher?: string; jurisdiction?: string; timeline_semantics?: string };
   hits?: T[];
 };
 
 export type FusedHit<T extends object> = T & {
   _jurisdiction?: string;
   _publisher?: string;
+  _timelineSemantics?: string;
 };
 
 type Candidate<T extends object> = {
@@ -51,6 +52,7 @@ export function fusePublisherHits<T extends object>(
       ?? envelope.envelope?.jurisdiction
       ?? `publisher-${envelopeIndex}`;
     const jurisdiction = envelope.envelope?.jurisdiction;
+    const timelineSemantics = envelope.envelope?.timeline_semantics;
     for (const [rank, raw] of (envelope.hits ?? []).entries()) {
       const identity = hitIdentity(raw as Record<string, unknown>, publisher, rank);
       const contribution = 1 / (RRF_K + rank + 1);
@@ -61,7 +63,8 @@ export function fusePublisherHits<T extends object>(
         continue;
       }
       candidates.set(identity, {
-        hit: { ...raw, _jurisdiction: jurisdiction, _publisher: publisher },
+        hit: { ...raw, _jurisdiction: jurisdiction, _publisher: publisher,
+               _timelineSemantics: timelineSemantics },
         score: contribution,
         bestRank: rank,
         publisher,
