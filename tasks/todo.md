@@ -2,9 +2,11 @@
 
 ## Task 1: Baseline and scenario manifest
 
-- [ ] Copy a small real corpus and full index shadows into a new experiment output directory.
-- [ ] Record source commits, file hashes, model hashes, machine details, and baseline results.
-- [ ] Add machine-readable scenarios for exact, descriptive, ambiguous, temporal, and gap cases.
+- [x] Copy full index shadows and the pinned model into a new experiment output directory; fixture
+      extraction follows from this immutable baseline.
+- [x] Record source commits, file hashes, model hashes, machine details, protected-table hashes,
+      representative reads/diffs, and baseline retrieval results.
+- [x] Add machine-readable scenarios for exact, descriptive, ambiguous, temporal, and gap cases.
 - Verify: manifest validation passes and original release hashes remain unchanged.
 
 ## Task 2: Enrichment workbench contract
