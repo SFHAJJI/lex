@@ -29,13 +29,13 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
         var workDesc = "Work-level lex_id (publisher:workkey), version-level lex_id (version segment ignored), or verbatim publisher identifier. Unknown document -> call search first.";
         return
         [
-            Tool("as_of", "The state of one document as it stood on one date. Pure lookup, no ranking. mode=outline lists the provisions (articles/annexes) without text — use it first on long documents; mode=select returns only the named anchors' text; mode=full (default) returns the whole text. Every provision carries its own permalink and hash.",
+            Tool("as_of", "The state of one document as it stood on one date. Pure lookup, no ranking. mode=outline lists provisions without text and may be narrowed with anchors; mode=select returns only the named anchors' text; mode=full (default) returns the whole text. Every provision carries its own permalink and hash.",
                 new JsonObject
                 {
                     ["work"] = S(workDesc), ["date"] = S("ISO date YYYY-MM-DD"),
                     ["language"] = S("optional language code, e.g. fr"),
                     ["mode"] = S("full | outline | select (default full)"),
-                    ["anchors"] = S("comma-separated provision anchors for mode=select, e.g. art_1er,art_33"),
+                    ["anchors"] = S("optional comma-separated provision anchors for mode=outline; required for mode=select, e.g. art_1er,art_33"),
                 }, ["work", "date"]),
             Tool("timeline", "Every state a document has been in: validity intervals and version keys, publisher-asserted.",
                 new JsonObject { ["work"] = S(workDesc), ["limit"] = I("max versions (default 100)"), ["offset"] = I("pagination offset") }, ["work"]),
@@ -258,6 +258,32 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
         return hit.Count > 0 ? hit : family.Take(6).Select(p => p.Anchor).ToList();
     }
 
+    private void AddSelectedProvisions(JsonObject output, DocRow document,
+        IReadOnlyList<ProvisionRow> all, IReadOnlyList<string> wanted, bool withText)
+    {
+        var found = new JsonArray();
+        var missing = new JsonArray();
+        foreach (var anchorName in wanted)
+        {
+            var provision = all.FirstOrDefault(x => x.Anchor == anchorName);
+            if (provision is null) missing.Add((JsonNode)anchorName);
+            else found.Add((JsonNode)ProvisionJson(document, provision, withText));
+        }
+
+        output["provisions"] = found;
+        if (missing.Count == 0) return;
+
+        output["anchors_not_in_version"] = missing;
+        if (found.Count == 0) output["envelope"]!["status"] = "anchor_not_in_version";
+        var near = NearestAnchors(wanted, all);
+        if (near.Count > 0)
+            output["nearest_anchors"] = new JsonArray(near.Select(x => (JsonNode)x).ToArray());
+        output["anchors_in_version"] = all.Count;
+        output["anchor_note"] = near.Count > 0
+            ? "This work numbers its provisions in its own scheme. nearest_anchors are anchors it actually has; call as_of mode=select with one of those, or mode=outline without anchors for the full list. Do NOT fall back to full-text search for a provision of a known work."
+            : $"This version holds {all.Count} provisions under other anchors. Call as_of mode=outline without anchors to list them, then select from that list. Do NOT fall back to full-text search for a provision of a known work.";
+    }
+
     private (LexIndexReader r, string norm)? Resolve(string work, string? publisher)
     {
         if (publisher is not null && readers.TryGetValue(publisher, out var rp)) return (rp, work);
@@ -346,8 +372,14 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                     case "outline":
                     {
                         o["document"] = DocJson(doc, withText: false);
-                        o["provisions"] = new JsonArray(r.Provisions(rid)
-                            .Select(p => (JsonNode)ProvisionJson(doc, p, withText: false)).ToArray());
+                        var all = r.Provisions(rid);
+                        var wanted = (Str("anchors") ?? "").Split(',',
+                            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                        if (wanted.Length == 0)
+                            o["provisions"] = new JsonArray(all
+                                .Select(p => (JsonNode)ProvisionJson(doc, p, withText: false)).ToArray());
+                        else
+                            AddSelectedProvisions(o, doc, all, wanted, withText: false);
                         break;
                     }
                     case "select":
@@ -356,32 +388,9 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                         if (wanted.Length == 0) throw new ArgumentException("mode=select requires anchors");
                         o["document"] = DocJson(doc, withText: false);
                         var all = r.Provisions(rid);
-                        var found = new JsonArray();
-                        var missing = new JsonArray();
-                        foreach (var anchorName in wanted)
-                        {
-                            var p = all.FirstOrDefault(x => x.Anchor == anchorName);
-                            if (p is null) missing.Add((JsonNode)anchorName);
-                            else found.Add((JsonNode)ProvisionJson(doc, p, withText: doc.TextPublic));
-                        }
-                        o["provisions"] = found;
-                        if (missing.Count > 0)
-                        {
-                            o["anchors_not_in_version"] = missing;   // honest refusal per anchor
-                            if (found.Count == 0) o["envelope"]!["status"] = "anchor_not_in_version";
-                            // A truthful "no" that leaves the caller nowhere to go is how an
-                            // assistant ends up guessing. Asked for art_1er of the Code du travail
-                            // it got an empty list, fell back to full-text search, and answered out
-                            // of the electricity act. The code has no Article 1 at all: it numbers
-                            // its provisions L. 010-1, L. 111-1, and nothing in the reply said so.
-                            var near = NearestAnchors(wanted, all);
-                            if (near.Count > 0)
-                                o["nearest_anchors"] = new JsonArray(near.Select(x => (JsonNode)x).ToArray());
-                            o["anchors_in_version"] = all.Count;
-                            o["anchor_note"] = near.Count > 0
-                                ? "This work numbers its provisions in its own scheme. nearest_anchors are anchors it actually has; call as_of mode=select with one of those, or mode=outline for the full list. Do NOT fall back to full-text search for a provision of a known work."
-                                : $"This version holds {all.Count} provisions under other anchors. Call as_of mode=outline to list them, then select from that list. Do NOT fall back to full-text search for a provision of a known work.";
-                        }
+                        // Keep refusal metadata identical in outline and select so a client can
+                        // narrow a comparison without losing the honest next step.
+                        AddSelectedProvisions(o, doc, all, wanted, withText: doc.TextPublic);
                         break;
                     }
                     default:

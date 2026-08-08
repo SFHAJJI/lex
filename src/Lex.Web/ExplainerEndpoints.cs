@@ -140,7 +140,7 @@ public static class ExplainerEndpoints
                 <div class="card"><pre class="mono" style="white-space:pre-wrap;font-size:12.5px;margin:0">EVIDENCE LAYER (append-only, verbatim)          CONSUMPTION LAYER (regenerable, clean)
                 lex-corpus-lu-legilux   lex-corpus-eu-eurlex   lex-articles
                 the exact bytes the state published       →   per-ARTICLE Markdown + JSON
-                sha256 per file, observation chains            stable publisher-minted anchors
+                sha256 per file, observation chains            publisher anchors + measured continuity gate
                                                                validity intervals per provision
                              deterministic, versioned,          per-anchor history + renumbering events
                              IMMUTABLE extraction profiles          │
