@@ -240,7 +240,7 @@ public sealed class RetrievalBenchmarkTests
         var manifests = new[]
         {
             new Lex.Web.VerifiedArtifactManifest("index.manifest.json", new string('1', 64),
-                "key", report.CodeCommit, report.Timestamp, ["index-eu-eurlex.db"]),
+                "key", new string('a', 40), report.Timestamp, ["index-eu-eurlex.db"]),
             new Lex.Web.VerifiedArtifactManifest("benchmark.manifest.json", new string('2', 64),
                 "key", report.CodeCommit, report.Timestamp,
                 ["retrieval-benchmark-eu-eurlex.json"]),

@@ -1277,8 +1277,6 @@ public static class ExplainerEndpoints
                && indexManifests.Length == 1
                && string.Equals(report.CodeCommit, benchmarkManifests[0].CodeCommit,
                    StringComparison.OrdinalIgnoreCase)
-               && string.Equals(report.CodeCommit, indexManifests[0].CodeCommit,
-                   StringComparison.OrdinalIgnoreCase)
                && string.Equals(report.ManifestId, indexManifests[0].Sha256,
                    StringComparison.OrdinalIgnoreCase);
     }
