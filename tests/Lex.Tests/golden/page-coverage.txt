@@ -104,7 +104,7 @@ HTTP 200
                 color:var(--muted); text-decoration:none }
   .filters .f:hover { border-color:var(--fg); color:var(--fg); text-decoration:none }
   .filters .f.on { border-color:var(--fg); color:var(--fg); font-weight:600 }
-  .filters .n { opacity:.65; font-size:11.5px; font-variant-numeric:tabular-nums }
+  .filters .n { opacity:1; font-size:11.5px; font-variant-numeric:tabular-nums }
   .cat td:first-child a { font-weight:600 }
   .cat .r { text-align:right; font-variant-numeric:tabular-nums }
   .cat .sub { font-size:12px; margin-top:2px }
@@ -178,7 +178,7 @@ HTTP 200
 <h1>Coverage, what we hold, and what we lack</h1>
 
 <p>This tool exists to say what we do <b>not</b> have. A system that cannot state its own gaps
-cannot be trusted with a completeness question.</p><h2>Test Publisher <span class="badge">t-pub</span></h2><div class="card"><table><tr><th>document type</th><th>versions</th><th>with text</th><th></th></tr><tr><td>LOI</td><td>2</td>
+cannot be trusted with a completeness question.</p><h2>Test Publisher <span class="badge">t-pub</span></h2><div class="card"><table tabindex="0" aria-label="Text coverage by document type"><tr><th>document type</th><th>versions</th><th>with text</th><th></th></tr><tr><td>LOI</td><td>2</td>
 <td>2 <span class="mono" style="opacity:.6">100%</span></td>
 <td></td></tr><tr><td>RGD</td><td>1</td>
 <td>0 <span class="mono" style="opacity:.6">0%</span></td>

@@ -275,7 +275,7 @@ public static class CatalogueEndpoints
                 sb.Append($"<h2>{H(r.Stamp.GetValueOrDefault("publisher_name"))} <span class=\"badge\">{H(c.Collection)}</span></h2>");
                 // Per type, held versus readable. The second number is the one that matters, and it is
                 // computed from the index rather than written down, so it cannot drift from the corpus.
-                sb.Append("<div class=\"card\"><table><tr><th>document type</th><th>versions</th>"
+                sb.Append("<div class=\"card\"><table tabindex=\"0\" aria-label=\"Text coverage by document type\"><tr><th>document type</th><th>versions</th>"
                         + "<th>with text</th><th></th></tr>");
                 foreach (var k in c.Kinds)
                 {
@@ -293,7 +293,7 @@ public static class CatalogueEndpoints
                 // that should say how much of it is which.
                 if (c.Profiles.Count > 0)
                 {
-                    sb.Append("<div class=\"card\"><table><tr><th>how the text was obtained</th><th>versions</th></tr>");
+                    sb.Append("<div class=\"card\"><table tabindex=\"0\" aria-label=\"Extraction confidence by profile\"><tr><th>how the text was obtained</th><th>versions</th></tr>");
                     foreach (var pr in c.Profiles)
                     {
                         var what = pr.Profile switch
@@ -367,7 +367,7 @@ public static class CatalogueEndpoints
                 <form class="inline">
                   <input type="date" name="date" aria-label="Date to list works in force" value="{H(date ?? "2022-03-15")}">
                   <select name="publisher" aria-label="Jurisdiction or publisher"><option value="">Every jurisdiction</option>{publisherOptions}</select>
-                  <select name="kind"><option value="">any source class</option>{kindOptions}</select>
+                  <select name="kind" aria-label="Source class"><option value="">any source class</option>{kindOptions}</select>
                   <button>Show</button>
                 </form>
                 """);

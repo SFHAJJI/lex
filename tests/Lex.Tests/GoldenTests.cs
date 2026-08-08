@@ -111,6 +111,33 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
     }
 
     [Fact]
+    public async Task Static_catalogue_and_wide_evidence_tables_remain_accessible()
+    {
+        var browse = await _site.Client.GetStringAsync("/browse");
+        var inForce = await _site.Client.GetStringAsync("/in-force-on?date=2021-01-01");
+        var coverage = await _site.Client.GetStringAsync("/coverage");
+
+        Assert.Contains(".filters .n { opacity:1;", browse);
+        Assert.Contains("<select name=\"kind\" aria-label=\"Source class\">", inForce);
+        Assert.Contains("<table tabindex=\"0\" aria-label=\"Text coverage by document type\">", coverage);
+
+        var expected = new Dictionary<string, string>
+        {
+            ["/architecture/next"] = "Architecture delivery milestones",
+            ["/decisions"] = "Architecture decision register",
+            ["/built"] = "Correctness evaluation layers",
+        };
+        foreach (var (path, label) in expected)
+        {
+            var html = await _site.Client.GetStringAsync(path);
+            Assert.Contains($"<table tabindex=\"0\" aria-label=\"{label}\">", html);
+        }
+
+        var built = await _site.Client.GetStringAsync("/built");
+        Assert.Contains("<table tabindex=\"0\" aria-label=\"Mounted index provenance\">", built);
+    }
+
+    [Fact]
     public async Task Home_reserves_workspace_height_and_versions_immutable_assets()
     {
         var html = await _site.Client.GetStringAsync("/");

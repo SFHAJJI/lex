@@ -105,7 +105,7 @@ HTTP 200
                 color:var(--muted); text-decoration:none }
   .filters .f:hover { border-color:var(--fg); color:var(--fg); text-decoration:none }
   .filters .f.on { border-color:var(--fg); color:var(--fg); font-weight:600 }
-  .filters .n { opacity:.65; font-size:11.5px; font-variant-numeric:tabular-nums }
+  .filters .n { opacity:1; font-size:11.5px; font-variant-numeric:tabular-nums }
   .cat td:first-child a { font-weight:600 }
   .cat .r { text-align:right; font-variant-numeric:tabular-nums }
   .cat .sub { font-size:12px; margin-top:2px }
@@ -185,7 +185,7 @@ HTTP 200
   <a class="badge" href="/benchmarks">Benchmarks</a>
 </nav><p class="lede">Every program decision records the chosen path, a credible alternative, the
 reason and the bill. Status comes from the architecture registry.</p>
-<div class="card"><table><tr><th>decision</th><th>choice, alternative and cost</th><th>status</th></tr>
+<div class="card"><table tabindex="0" aria-label="Architecture decision register"><tr><th>decision</th><th>choice, alternative and cost</th><th>status</th></tr>
 <tr><td class="mono">D52</td><td><b>Select binding acts, then close legal relationships</b><br>
 <span class="sub"><b>Choice:</b> Use reviewed domain configuration and bounded legal-history relationships.<br><b>Alternative:</b> Ingest roughly 59,100 works selected only by broad subject codes.<br>
 <b>Why:</b> A lawyer needs complete context for selected law, not a large shelf with arbitrary gaps.<br><b>Cost:</b> Selection rules and relationship traversal require review and dry-run reporting.</span></td><td><span class="badge">building</span></td></tr><tr><td class="mono">D53</td><td><b>Store repeated wording once</b><br>
