@@ -190,7 +190,7 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
 
         var benchmarks = await _site.Client.GetStringAsync("/benchmarks");
         Assert.Contains("Not measured yet", benchmarks);
-        Assert.Contains("generated-unreviewed", benchmarks);
+        Assert.Contains("engineer-reviewed retrieval judgments", benchmarks);
     }
 
     [Fact]
@@ -211,7 +211,14 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
         var json = await _site.Client.GetStringAsync("/benchmarks/cases.json");
         var cases = System.Text.Json.Nodes.JsonNode.Parse(json)!.AsArray();
         Assert.Equal(200, cases.Count);
-        Assert.All(cases, c => Assert.Equal("generated-unreviewed", c!["review_status"]!.GetValue<string>()));
+        Assert.All(cases, c =>
+        {
+            Assert.Equal("engineer-reviewed", c!["review_status"]!.GetValue<string>());
+            Assert.Contains(c["split"]!.GetValue<string>(), new[] { "tuning", "holdout" });
+            var collection = c["collection"]!.GetValue<string>();
+            Assert.All(c["relevant_works"]!.AsArray(), work =>
+                Assert.StartsWith(collection + ":", work!.GetValue<string>()));
+        });
     }
 
     [Fact]

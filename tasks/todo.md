@@ -40,7 +40,7 @@
 
 - [ ] Checkpoint 2: publisher-only retrieval and protected-content gates pass
 
-- [ ] Task 7: Correct and expand the retrieval benchmark
+- [x] Task 7: Correct and expand the retrieval benchmark
   - Acceptance: canonical collection/work identity; FR/EN EU/LU positives, negatives, ambiguity,
     role, comparison, and gap cases; separate tuning and holdout sets.
   - Verify: benchmark self-tests and frozen baseline report.

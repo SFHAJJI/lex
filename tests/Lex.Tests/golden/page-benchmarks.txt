@@ -212,14 +212,15 @@ displayed as missing rather than replaced with an estimate.</p>
 Hybrid will not become default until exact identifiers, temporal isolation, nDCG@10,
 regression, latency and memory pass their recorded thresholds.</div>
 <div class="card"><table><tr><th>case category</th><th>public judgments</th></tr>
-<tr><td>bilingual</td><td class="mono">30</td></tr><tr><td>conceptual</td><td class="mono">60</td></tr><tr><td>exact</td><td class="mono">30</td></tr><tr><td>fuzzy</td><td class="mono">20</td></tr><tr><td>hierarchy</td><td class="mono">20</td></tr><tr><td>temporal</td><td class="mono">40</td></tr></table></div>
+<tr><td>ambiguity</td><td class="mono">10</td></tr><tr><td>bilingual</td><td class="mono">25</td></tr><tr><td>comparison</td><td class="mono">10</td></tr><tr><td>conceptual</td><td class="mono">40</td></tr><tr><td>exact</td><td class="mono">30</td></tr><tr><td>fuzzy</td><td class="mono">15</td></tr><tr><td>gap</td><td class="mono">10</td></tr><tr><td>hierarchy</td><td class="mono">15</td></tr><tr><td>negative</td><td class="mono">10</td></tr><tr><td>role</td><td class="mono">10</td></tr><tr><td>temporal</td><td class="mono">25</td></tr></table></div>
 <p><a href="/benchmarks/cases.json">Download all 200 public cases and judgments</a>.
-Each case names its language, time scope, relevant work, explanation and review status.</p>
+Each case names its collection, tuning or holdout split, language, time scope,
+canonical collection/work identities, expected intent state, explanation and review status.</p>
 <h2>Publication rule</h2>
 <p>Future reports name code and corpus commits, the signed artifact manifest, embedding model,
-machine or Azure resource, timestamp, sample count and review status. Initial relevance
-generated judgments are labelled generated-unreviewed and cannot pass the activation gate.
-Reviewed cases are identified individually.</p>
+machine or Azure resource, timestamp, sample count and review status. The public labels are
+engineer-reviewed retrieval judgments, not legal conclusions. Tuning and holdout results are
+reported separately, and only the holdout can authorize a default change.</p>
 </main>
 <footer>
 <!-- Fourteen links in one undifferentiated run answered no question a reader had. Three

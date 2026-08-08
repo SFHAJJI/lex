@@ -61,14 +61,16 @@ switch (args0[0])
     case "benchmark-cases":
     {
         var output = Get("--out") ?? throw new ArgumentException("--out required");
+        var cases = RetrievalBenchmarkCatalog.Load(
+            Get("--cases") ?? Path.Combine(AppContext.BaseDirectory, "retrieval-cases.json"));
         var bytes = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(
-            RetrievalBenchmarkCatalog.Create(), new System.Text.Json.JsonSerializerOptions
+            cases, new System.Text.Json.JsonSerializerOptions
             {
                 PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.SnakeCaseLower,
                 WriteIndented = true,
             });
         File.WriteAllBytes(output, bytes);
-        Console.Error.WriteLine($"[lex] wrote 200 public retrieval cases to {output}");
+        Console.Error.WriteLine($"[lex] wrote {cases.Count} public retrieval cases to {output}");
         return 0;
     }
     case "benchmark":
@@ -77,6 +79,10 @@ switch (args0[0])
         var modelDir = Get("--model-dir") ?? throw new ArgumentException("--model-dir required");
         var vectors = Get("--vectors") ?? Path.ChangeExtension(index, ".vectors");
         var output = Get("--out") ?? throw new ArgumentException("--out required");
+        var caseSet = RetrievalBenchmarkCatalog.LoadSet(
+            Get("--cases") ?? Path.Combine(AppContext.BaseDirectory, "retrieval-cases.json"));
+        var baseline = RetrievalBenchmarkCatalog.LoadBaseline(
+            Path.Combine(AppContext.BaseDirectory, "retrieval-baseline-v2.json"));
         var load = System.Diagnostics.Stopwatch.StartNew();
         using var encoder = MultilingualE5Encoder.Open(modelDir);
         using var reader = LexIndexReader.Open(index, encoder, vectors);
@@ -85,7 +91,7 @@ switch (args0[0])
         _ = reader.SearchHybrid("protection des donnees personnelles", FilterSet.All, 10);
         cold.Stop();
         var memoryLimit = long.TryParse(Get("--memory-limit-bytes"), out var parsedMemory) ? parsedMemory : 0;
-        var report = RetrievalBenchmarkRunner.Run(reader, index, vectors,
+        var report = RetrievalBenchmarkRunner.Run(reader, caseSet, baseline, index, vectors,
             Get("--code-commit") ?? "uncommitted", Get("--manifest-id") ?? "unverified",
             Get("--machine") ?? Environment.MachineName,
             Get("--resource") ?? "not supplied", memoryLimit,
