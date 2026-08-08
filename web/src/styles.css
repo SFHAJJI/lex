@@ -340,7 +340,7 @@ button.pick { cursor: pointer; }
 .co-h{display:flex;align-items:baseline;gap:10px;margin-bottom:8px}
 .co-h b{font-family:var(--serif);font-size:15px}
 .co-x{margin-left:auto;background:none;border:0;color:var(--muted);cursor:pointer;
-      font-size:13px;padding:0 2px;line-height:1}
+      font-size:13px;padding:0;line-height:1;min-width:44px;height:44px;display:grid;place-items:center}
 .co-x:hover{color:var(--fg)}
 .co-steps{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:6px 22px}
 .co-steps li{display:flex;align-items:flex-start;gap:8px;font-size:13.5px;color:var(--muted)}

@@ -1,3 +1,4 @@
+using Lex.Index;
 using Lex.Web;
 
 namespace Lex.Tests;
@@ -41,6 +42,39 @@ public class VisualDiffTests
         Assert.Contains("where:TREA", html);
         Assert.Contains("A * B", html);
         Assert.DoesNotContain("*TREA", html);
+    }
+
+    [Fact]
+    public void Structural_legal_labels_do_not_expose_markdown_delimiters()
+    {
+        Assert.Equal("Chapitre 2bis — Mesures", Fragments.PlainLegalLabel("**Chapitre 2*bis*** — **Mesures**"));
+    }
+
+    [Fact]
+    public void Inline_legal_labels_render_emphasis_without_paragraph_or_executable_html()
+    {
+        var html = Fragments.RenderLegalInline("Article 22 *bis* <script>alert(1)</script>");
+
+        Assert.Contains("Article 22 <em>bis</em>", html);
+        Assert.Contains("&lt;script&gt;alert(1)&lt;/script&gt;", html);
+        Assert.DoesNotContain("<p>", html);
+        Assert.DoesNotContain("<script>", html);
+    }
+
+    [Fact]
+    public void Static_version_history_has_touch_friendly_named_date_links()
+    {
+        static DocRow Version(string date) => new(
+            $"lu-legilux:work:{date}", "lu-legilux", "work", "urn:work", "LOI", "fr",
+            date, null, "publisher", "2026-08-08T00:00:00Z", false, true, true,
+            "record", "body", "https://example.test", "Law", "Law", null, date, null);
+
+        var html = Fragments.VersionRail("lu-legilux", "work",
+            [Version("2020-01-01"), Version("2021-01-01"), Version("2022-01-01")], "2021-01-01");
+
+        Assert.Contains("<details class=\"railversions\">", html);
+        Assert.Contains("aria-label=\"Read version 2020-01-01\"", html);
+        Assert.Contains("aria-current=\"date\"", html);
     }
 
     [Fact]
