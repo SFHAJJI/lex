@@ -280,7 +280,7 @@ button.pick { cursor: pointer; }
    Closed, it is a secondary action in the ordinary reading flow. Opened, it becomes a dialog.
    Keeping the launcher out of the fixed layer prevents it covering search suggestions, evidence
    controls and footer links on narrow or short viewports. */
-.askslot{display:flex;justify-content:flex-end;margin:-10px 0 16px;min-height:49px}
+.askslot{display:flex;justify-content:flex-end;margin:-10px 0 16px;min-height:55px}
 .asklaunch{position:static;display:flex;align-items:center;gap:11px;
   background: var(--fg);color:var(--bg);border:0;border-radius:99px;padding:12px 20px 12px 16px;
   cursor:pointer;font-family:inherit;box-shadow:0 8px 26px rgba(0,0,0,.22);transition:transform .16s,box-shadow .16s}
