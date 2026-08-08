@@ -24,7 +24,8 @@ test("law evidence preserves legal text and records provenance", () => {
   assert.match(markdown, /Official source: https:\/\/eur-lex\.example\/source/);
   assert.match(markdown, /Text SHA-256: abc123/);
   assert.ok(markdown.includes(text));
-  assert.match(citationText(input), /Article 1 \| version in force from 2018-05-25/);
+  assert.match(citationText(input), /Article 1 \| publisher version dated 2018-05-25/);
+  assert.match(markdown, /Publisher version date: 2018-05-25 to latest held/);
 });
 
 test("comparison evidence reconstructs both exact sides from the displayed diff", () => {

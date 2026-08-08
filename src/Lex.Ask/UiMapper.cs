@@ -21,7 +21,7 @@ public static class UiMapper
 
         // A refusal is a first-class view: say what is missing and what does exist instead.
         if (status is "no_version_for_date" or "unknown_work" or "unknown_anchor"
-            or "anchor_not_in_version" or "text_withheld" or "no_provision_history"
+            or "anchor_not_in_version" or "text_withheld" or "text_not_available" or "no_provision_history"
             or "outside_observed_window")
             return new UiEffect(Gap: new GapView(
                 Status: status,
@@ -228,11 +228,12 @@ public static class UiMapper
 
     private static string Explain(string status) => status switch
     {
-        "no_version_for_date" => "Lex holds this law, but no version of it was in force on that date.",
+        "no_version_for_date" => "Lex holds this law, but no publisher version covers that date.",
         "unknown_work" => "Lex does not hold this work at all.",
         "unknown_anchor" => "That article identifier does not exist in this law.",
-        "anchor_not_in_version" => "That article did not exist in the version in force on that date.",
-        "text_withheld" => "Lex holds this version's record and dates, but the publisher offers no machine-readable text for it.",
+        "anchor_not_in_version" => "That article did not exist in the publisher version selected for that date.",
+        "text_withheld" => "Lex holds this version and its text, but a publication gate prevents serving the wording.",
+        "text_not_available" => "Lex holds this publisher record and dates, but no safely derived provision text is available.",
         "no_provision_history" => "Lex holds this work without per-article history, so single articles cannot be traced through time.",
         "outside_observed_window" => "That date falls outside the window Lex has observed.",
         _ => "Lex cannot answer this from what it holds.",

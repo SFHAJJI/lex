@@ -187,7 +187,7 @@ HTTP 200
 <span class="sub">matched by provision anchor when continuity is sufficient; otherwise Lex refuses rather than inventing changes</span></p><p class="sub">1 line(s) in the old middle, 1 in the new; 3 unchanged leading and 5 trailing lines trimmed.</p><div class="card"><pre style="white-space:pre-wrap;font-size:13px;margin:0"><span style="color:var(--ok)">+ la chose s applique partout, revisee</span>
 <span style="color:var(--accent)">− la chose s applique partout</span>
 </pre></div><div class="card"><table class="kv">
-<tr><td>tier</td><td>A, publisher-supplied validity dates</td></tr>
+<tr><td>tier</td><td>A, publisher-supplied applicability dates</td></tr>
 <tr><td>history begins</td><td>publisher</td></tr>
 <tr><td>index built</td><td class="mono"><TIMESTAMP> · corpus goldenc</td></tr>
 <tr><td>stamp signature</td><td><span class="badge ok">valid (ECDSA-P256)</span></td></tr>

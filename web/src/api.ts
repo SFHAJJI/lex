@@ -52,7 +52,7 @@ export interface UiEffect {
   ranking?: { from_date: string; to_date: string; order: string; works_changed: number; new_versions: number; rows: RankingRow[] };
   in_force?: { date: string; total: number; rows: {
     work: string; title?: string; kind?: string; valid_from: string; permalink?: string;
-    jurisdiction?: string; hierarchy?: string;
+    jurisdiction?: string; hierarchy?: string; timeline_semantics?: string;
   }[] };
   cited_by?: { cited_work: string; citing_articles: number;
                rows: { work: string; title?: string; valid_from: string; anchor: string; num?: string;

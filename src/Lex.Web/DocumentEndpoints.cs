@@ -57,14 +57,14 @@ public static class DocumentEndpoints
                 """);
 
             if (a.Key == b.Key)
-                sb.Append("<div class=\"notice\"><b>No change.</b> The same version applied on both dates.</div>");
+                sb.Append("<div class=\"notice\"><b>No change.</b> The same publisher version covers both selected dates.</div>");
             else if (a.TextPublic && b.TextPublic
                      && r.BuildBody(a) is { } bodyA && r.BuildBody(b) is { } bodyB)
                 sb.Append(RenderDiff(bodyA, bodyB));
             else
                 sb.Append($"""
                     <div class="notice"><b>Different versions applied</b>, but a text diff is unavailable here
-                    (status <span class="mono">text_withheld</span>). Compare at the official source:
+                    (status <span class="mono">{(!a.TextAvailable || !b.TextAvailable ? "text_not_available" : "text_withheld")}</span>). Compare at the official source:
                     <a href="{H(a.SourceUri)}">version of {H(a.ValidFrom)}</a> vs
                     <a href="{H(b.SourceUri)}">version of {H(b.ValidFrom)}</a>.</div>
                     """);
@@ -82,21 +82,24 @@ public static class DocumentEndpoints
                 return Results.Content(Page("Unknown work", $"<p>status <span class=\"mono\">unknown_work</span>, no work <b>{H(work)}</b> in {H(publisher)}. Try <a href=\"/search\">search</a>.</p>"), "text/html", statusCode: 404);
 
             var t = DocTitle(rows[^1]);
+            var publisherVersionDates = UsesPublisherVersionDates(r);
             var sb = new StringBuilder();
             sb.Append($"<p><span class=\"badge\">{H(rows[^1].Kind)}</span> <span class=\"badge\">{rows.Count} version(s)</span> <a class=\"badge\" href=\"{H(rows[^1].SourceUri)}\">official text ↗</a></p>");
             sb.Append(VersionRail(publisher, work, rows, null));
             var todayVersion = r.AsOf(work, ctx.Today, FilterSet.All);
             var readDate = todayVersion is null ? rows[^1].ValidFrom : ctx.Today.ToString("yyyy-MM-dd");
-            var readLabel = todayVersion is null
-                ? "Read the latest available publisher state"
-                : "Read the text applicable today";
+            var readLabel = publisherVersionDates
+                ? "Read the latest held publisher version"
+                : todayVersion is null ? "Read the latest available publisher state" : "Read the text applicable today";
             sb.Append($"<p><a href=\"/{H(publisher)}/{H(work)}/{H(readDate)}\"><b>{readLabel} →</b></a></p>");
-            sb.Append("<details class=\"card\"><summary>Every version as a table</summary><table><tr><th>valid</th><th>as-of view</th><th>status</th><th>provenance</th></tr>");
+            sb.Append($"<details class=\"card\"><summary>Every version as a table</summary><table><tr><th>{(publisherVersionDates ? "publisher state" : "valid")}</th><th>as-of view</th><th>status</th><th>provenance</th></tr>");
             foreach (var v in rows)
                 sb.Append($"""
-                    <tr><td class="mono">{Interval(v)}</td>
+                    <tr><td class="mono">{IntervalLabel(r, v)}</td>
                     <td><a href="/{H(publisher)}/{H(work)}/{H(v.ValidFrom)}">as of {H(v.ValidFrom)}</a></td>
-                    <td>{(v.ValidTo is null ? "<span class=\"badge ok\">open</span>" : "<span class=\"badge\">superseded</span>")}</td>
+                    <td>{(v.ValidTo is null
+                        ? $"<span class=\"badge ok\">{(publisherVersionDates ? "latest held" : "open")}</span>"
+                        : $"<span class=\"badge\">{(publisherVersionDates ? "earlier state" : "superseded")}</span>")}</td>
                     <td><a class="mono" href="/provenance/{H(v.Key)}">{H(v.Key.Split(':')[^1])}</a></td></tr>
                     """);
             sb.Append("</table></details>");
@@ -135,23 +138,34 @@ public static class DocumentEndpoints
                     ["name"] = jurisdictionInfo.Name,
                 },
                 ["legislationDate"] = rows[0].ValidFrom,
-                ["legislationLegalForce"] = rows[^1].ValidTo is null && !rows[^1].Withdrawn
-                    ? "https://schema.org/InForce" : "https://schema.org/NotInForce",
                 ["inLanguage"] = lang,
                 ["temporalCoverage"] = rows[^1].ValidTo is null
                     ? $"{rows[0].ValidFrom}/.." : $"{rows[0].ValidFrom}/{rows[^1].ValidTo}",
                 ["license"] = "https://creativecommons.org/licenses/by/4.0/",
                 ["isBasedOn"] = rows[^1].SourceUri,
             };
+            // An open consolidation interval proves only that this is the latest wording EUR-Lex
+            // holds. It does not prove legal force. EU scope metadata carries that classification;
+            // Luxembourg applicability intervals can support it directly.
+            var force = rows[^1].BindingStatus switch
+            {
+                "in_force" => "https://schema.org/InForce",
+                "not_in_force" => "https://schema.org/NotInForce",
+                _ when !publisherVersionDates => rows[^1].ValidTo is null && !rows[^1].Withdrawn
+                    ? "https://schema.org/InForce" : "https://schema.org/NotInForce",
+                _ => null,
+            };
+            if (force is not null) lawLd["legislationLegalForce"] = force;
             if (rows[^1].Kind is { } kind) lawLd["legislationType"] = kind;
 
             // "version(s)" is fine in a table header a reader is already looking at. In a search
             // result it is the one string on the page written by a machine for a machine.
             var n = rows.Count == 1 ? "1 version" : $"{rows.Count} versions";
-            var span = rows[^1].ValidTo is null
-                ? $"{n} from {rows[0].ValidFrom} to today"
+            var span = publisherVersionDates
+                ? $"{n} dated {rows[0].ValidFrom} to {rows[^1].ValidFrom}"
+                : rows[^1].ValidTo is null ? $"{n} from {rows[0].ValidFrom} to today"
                 : $"{n}, {rows[0].ValidFrom} to {rows[^1].ValidTo}";
-            var lawDesc = $"{name}. Full text as it stood on any date: {span}, "
+            var lawDesc = $"{name}. {(publisherVersionDates ? "Full text by official publisher-version date" : "Full text as it stood on any date")}: {span}, "
                         + "with per-article history and a link to the official text.";
 
             // Breadcrumbs alongside the Legislation record. A top-level array is valid JSON-LD and
@@ -206,6 +220,7 @@ public static class DocumentEndpoints
             }
 
             var all = r.Timeline(work);
+            var publisherVersionDates = UsesPublisherVersionDates(r);
             var idx = all.FindIndex(x => x.Key == doc.Key && x.Language == doc.Language);
             var prev = idx > 0 ? all[idx - 1] : null;
             var next = idx >= 0 && idx < all.Count - 1 ? all[idx + 1] : null;
@@ -214,7 +229,14 @@ public static class DocumentEndpoints
             sb.Append(VersionRail(publisher, work, all, doc.ValidFrom));
             // Unambiguous temporal-status banner (the legislation.gov.uk precedent): the reader
             // must never wonder WHICH state of the law they are looking at.
-            sb.Append(next is not null
+            sb.Append(publisherVersionDates
+                ? $"""
+                   <div class="notice" style="border-left-color:var(--ok)"><b>Official publisher wording state selected for {d:yyyy-MM-dd}.</b>
+                   This is the consolidated version dated {H(doc.ValidFrom)}. Its interval on Lex's
+                   publisher-version axis is {H(IntervalLabel(r, doc))}; that is not a claim about
+                   entry into force or application.</div>
+                   """
+                : next is not null
                 ? $"""
                    <div class="notice"><b>Point-in-time view as at {d:yyyy-MM-dd}.</b> This version has been
                    <b>superseded</b>, it applied {H(Interval(doc))}. <a href="/{H(publisher)}/{H(work)}">Jump to the
@@ -229,7 +251,17 @@ public static class DocumentEndpoints
             // homepage. The two things they must know — what a consolidated text is, and that it
             // carries no legal force — belong here, in plain words, not only on the front door.
             // Collapsed, and below the law: a reader who came for Article 12 should meet Article 12.
-            var primer = """
+            var primer = publisherVersionDates ? """
+                <details class="card"><summary><b>New here? What am I looking at?</b></summary>
+                <p>This is an <b>official consolidated text</b>: the original act with later
+                amendments merged by EUR-Lex for the date shown above.</p>
+                <p><b>The consolidation date is not an entry-into-force or application date.</b>
+                It identifies a publisher wording state. The authentic legal acts remain those
+                published in the Official Journal; Lex preserves the consolidated wording, source
+                and hashes as a reading and comparison aid.</p>
+                <p class="sub">Each article carries its own hash so you can verify that Lex served
+                the indexed text unchanged, <a href="/verify">here is how</a>.</p></details>
+                """ : """
                 <details class="card"><summary><b>New here? What am I looking at?</b></summary>
                 <p>This is a <b>consolidated</b> text: the original law with every later amendment merged in,
                 as the official publisher produced it for a given date. Laws are amended constantly, so
@@ -246,8 +278,8 @@ public static class DocumentEndpoints
                 """;
             var record = $"""
                 <table class="kv">
-                <tr><td>as of</td><td><b>{d:yyyy-MM-dd}</b> → this version applied</td></tr>
-                <tr><td>valid</td><td class="mono">{Interval(doc)} <span class="badge">{H(doc.ValidTimeSource)}-asserted</span></td></tr>
+                <tr><td>as of</td><td><b>{d:yyyy-MM-dd}</b> → {(publisherVersionDates ? "this publisher state was selected" : "this version applied")}</td></tr>
+                <tr><td>{(publisherVersionDates ? "publisher state" : "valid")}</td><td class="mono">{IntervalLabel(r, doc)} <span class="badge">{H(doc.ValidTimeSource)}-asserted</span></td></tr>
                 <tr><td>type</td><td><span class="badge">{H(doc.Kind)}</span> {H(doc.Title ?? "")}</td></tr>
                 <tr><td>language</td><td>{H(doc.Language)}</td></tr>
                 {(doc.PublicationDate is null ? "" : $"<tr><td>published</td><td class=\"mono\">{H(doc.PublicationDate)}</td></tr>")}
@@ -303,7 +335,7 @@ public static class DocumentEndpoints
             {
                 // No wording is held, so the record is not a receipt for the answer, it IS the answer.
                 // Hiding it here would leave the page with nothing on it.
-                sb.Append(TextWithheldBox(doc));
+                sb.Append(MissingTextBox(doc));
                 sb.Append($"""<div class="card">{record}</div>""");
             }
             sb.Append(primer);
@@ -323,9 +355,10 @@ public static class DocumentEndpoints
             // thousand self-inflicted duplicates competing with each other; the canonical names the
             // date the version actually starts, which is the one URL worth ranking.
             var vName = (StripConsolidationLabel(DocTitle(doc)) ?? DocTitle(doc)).TrimEnd('.', ' ');
-            var vDesc = $"{vName}, as it stood on {d:yyyy-MM-dd}. "
-                      + $"This version applied from {doc.ValidFrom}"
-                      + (doc.ValidTo is null ? " and is still in force." : $" to {doc.ValidTo}.");
+            var vDesc = publisherVersionDates
+                ? $"{vName}, official consolidated publisher version dated {doc.ValidFrom}. This date identifies a wording state, not entry into force."
+                : $"{vName}, as it stood on {d:yyyy-MM-dd}. This version applied from {doc.ValidFrom}"
+                  + (doc.ValidTo is null ? " and is still in force." : $" to {doc.ValidTo}.");
             return Results.Content(Page($"{vName}, as of {d:yyyy-MM-dd}", sb.ToString(),
                 $"as it stood on <span class=\"asof\">{d:yyyy-MM-dd}</span>, " +
                 $"permalink: /{H(publisher)}/{H(work)}/{d:yyyy-MM-dd}",

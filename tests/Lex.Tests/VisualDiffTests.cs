@@ -5,6 +5,15 @@ namespace Lex.Tests;
 public class VisualDiffTests
 {
     [Fact]
+    public void Timeline_semantics_are_explicit_and_keep_legacy_eurlex_artifacts_honest()
+    {
+        Assert.True(Fragments.UsesPublisherVersionDates("new-publisher",
+            new Dictionary<string, string> { ["timeline_semantics"] = "official_consolidation_state" }));
+        Assert.True(Fragments.UsesPublisherVersionDates("eu-eurlex", new Dictionary<string, string>()));
+        Assert.False(Fragments.UsesPublisherVersionDates("lu-legilux", new Dictionary<string, string>()));
+    }
+
+    [Fact]
     public void Legal_markdown_is_formatted_but_never_executes_source_html()
     {
         var html = Fragments.RenderLegalMarkdown("**Article 1.** Safe text\n\n<script>alert('unsafe')</script>");
@@ -20,6 +29,18 @@ public class VisualDiffTests
         var html = Fragments.RenderLegalMarkdown("| article | wording |\n| --- | --- |\n| 1 | text |");
 
         Assert.Contains("<table tabindex=\"0\" aria-label=\"Scrollable legal table\">", html);
+    }
+
+    [Fact]
+    public void Legal_markdown_hides_only_profile_emphasis_that_commonmark_cannot_parse()
+    {
+        var html = Fragments.RenderLegalMarkdown(
+            "amount follows:*TREA = max{U-TREA; x Â· S-TREA}*where:TREA is defined; A * B remains");
+
+        Assert.Contains("follows:TREA = max", html);
+        Assert.Contains("where:TREA", html);
+        Assert.Contains("A * B", html);
+        Assert.DoesNotContain("*TREA", html);
     }
 
     [Fact]

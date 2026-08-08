@@ -179,7 +179,7 @@ HTTP 404
 <p class="sub">as of 1200-01-01, honest refusal</p>
 <div class="notice">status <span class="mono">no_version_for_date</span>, the work exists, but no
 version covers <b>1200-01-01</b>. The publisher's digitised history for this work covers:</div><ul><li><a href="/t-pub/w1/2020-01-01" class="mono">2020-01-01 → 2021-12-31</a></li><li><a href="/t-pub/w1/2022-01-01" class="mono">2022-01-01 → open</a></li></ul><div class="card"><table class="kv">
-<tr><td>tier</td><td>A, publisher-supplied validity dates</td></tr>
+<tr><td>tier</td><td>A, publisher-supplied applicability dates</td></tr>
 <tr><td>history begins</td><td>publisher</td></tr>
 <tr><td>index built</td><td class="mono"><TIMESTAMP> · corpus goldenc</td></tr>
 <tr><td>stamp signature</td><td><span class="badge ok">valid (ECDSA-P256)</span></td></tr>

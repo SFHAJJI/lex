@@ -8,10 +8,13 @@
     "build": "tsc --noEmit && npm test && vite build && node smoke.mjs"
   },
   "dependencies": {
+    "mdast-util-to-string": "4.0.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-markdown": "^10.1.0",
-    "remark-gfm": "^4.0.1"
+    "remark-gfm": "^4.0.1",
+    "remark-parse": "11.0.0",
+    "unified": "11.0.5"
   },
   "devDependencies": {
     "@types/node": "^26.1.2",

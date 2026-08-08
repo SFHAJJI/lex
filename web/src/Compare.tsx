@@ -8,6 +8,7 @@ import { EvidenceActions } from "./EvidenceActions";
 import {
   comparisonCitationText, comparisonEvidenceMarkdown, evidenceFilename, type ComparisonRow,
 } from "./export";
+import { legalDisplayText } from "./legalText.ts";
 
 /**
  * Two dated versions of one law, and what actually moved between them.
@@ -164,12 +165,17 @@ export function Compare({ work, title, from, to, anchor }: {
         // yields no changed pieces at all and needs no separate test here. These are still counted
         // and named rather than silently dropped, because the bytes really did move: the hash
         // changed, the law did not, and both halves of that are worth saying.
-        const pieces = diffWords(before, after);
+        // The reader renders Markdown, so compare the same visible legal text. This avoids
+        // presenting profile-generated ** markers as legislation while retaining the exact
+        // stored Markdown on the evidence row for download and hash verification.
+        const pieces = diffWords(legalDisplayText(before), legalDisplayText(after));
         if (!changed(pieces) && kind === "changed") { punctuation.push(label); continue; }
         rows.push({
           label, anchor: k, pieces, kind,
           fromSha: A.get(k)?.text_sha256,
           toSha: B.get(k)?.text_sha256,
+          fromText: before,
+          toText: after,
         });
       }
       setState({

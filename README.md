@@ -23,7 +23,7 @@ cannot know.
 **[Benchmarks](https://law.soufien.lu/benchmarks)** ·
 **[Verify it yourself](https://law.soufien.lu/verify)** ·
 **[Program](docs/hybrid-eu-roadmap.md)** ·
-**[Spec (D1-D71)](docs/lex-spec-v4.md)**
+**[Spec (D1-D72)](docs/lex-spec-v4.md)**
 
 ## 74-second engineering demo
 
@@ -136,7 +136,7 @@ FOUNDATION  Lex.Temporal (interval algebra)   Lex.Index (SQLite: filter-first, v
   and source commits before any file is mounted. The embedded index stamp
   remains public provenance, not its own trust root.
 - **Honest refusals**: `no_version_for_date`, `anchor_not_in_version`,
-  `outside_observed_window`, `text_withheld`, a flagged wrong answer is still
+  `outside_observed_window`, `text_not_available`, `text_withheld`, a flagged wrong answer is still
   a wrong answer, so Lex refuses instead.
 
 ## Current coverage

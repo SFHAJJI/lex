@@ -1,5 +1,6 @@
 import type { ProvisionItem } from "./api";
 import type { Piece } from "./diff";
+import { evidenceIntervalField, evidenceIntervalLabel } from "./temporal.ts";
 
 export interface LawEvidence {
   title: string;
@@ -10,6 +11,7 @@ export interface LawEvidence {
   source?: string;
   permalink: string;
   extractionProfile?: string;
+  timelineSemantics?: string;
   provisions: ProvisionItem[];
   exportedAt: string;
 }
@@ -21,6 +23,9 @@ export interface ComparisonRow {
   pieces: Piece[];
   fromSha?: string;
   toSha?: string;
+  /** Exact stored Markdown; visual diff pieces are a presentation-only plain-text projection. */
+  fromText?: string;
+  toText?: string;
 }
 
 export interface ComparisonEvidence {
@@ -57,7 +62,7 @@ export function citationText(input: LawEvidence): string {
   return [
     oneLine(input.title),
     item ? itemLabel(item) : undefined,
-    `version in force from ${input.validFrom}${input.validTo ? ` to ${input.validTo}` : ""}`,
+    evidenceIntervalLabel(input.work, input.validFrom, input.validTo, input.timelineSemantics),
     input.work,
     input.permalink,
     input.source,
@@ -90,7 +95,8 @@ export function lawEvidenceMarkdown(input: LawEvidence): string {
     "> Reading aid exported from Lex. This is not an official publication and is not legal advice.",
     "",
     `- Work: ${input.work}`,
-    `- Version in force: ${input.validFrom} to ${input.validTo ?? "open"}`,
+    `- ${evidenceIntervalField(input.work, input.validFrom, input.validTo, input.timelineSemantics)}`,
+    `- Timeline semantics: ${input.timelineSemantics ?? (input.work.startsWith("eu-eurlex:") ? "official_consolidation_state" : "publisher_applicability")}`,
     `- Language: ${input.language ?? "not recorded"}`,
     `- Lex permalink: ${input.permalink}`,
     `- Official source: ${input.source ?? "not recorded"}`,
@@ -119,6 +125,9 @@ const versionText = (row: ComparisonRow, side: "before" | "after") => row.pieces
   .filter((piece) => side === "before" ? piece.k !== "+" : piece.k !== "-")
   .map((piece) => piece.t)
   .join("");
+
+const exactVersionText = (row: ComparisonRow, side: "before" | "after") =>
+  (side === "before" ? row.fromText : row.toText) ?? versionText(row, side);
 
 /** Export only the comparison already computed for the screen. No second diff is performed. */
 export function comparisonEvidenceMarkdown(input: ComparisonEvidence): string {
@@ -157,11 +166,11 @@ export function comparisonEvidenceMarkdown(input: ComparisonEvidence): string {
     lines.push(
       `### ${input.from}`,
       "",
-      row.kind === "added" ? "Not present in this version." : versionText(row, "before"),
+      row.kind === "added" ? "Not present in this version." : exactVersionText(row, "before"),
       "",
       `### ${input.to}`,
       "",
-      row.kind === "removed" ? "Not present in this version." : versionText(row, "after"),
+      row.kind === "removed" ? "Not present in this version." : exactVersionText(row, "after"),
       "",
     );
   }

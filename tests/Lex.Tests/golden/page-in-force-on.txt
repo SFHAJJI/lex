@@ -5,9 +5,9 @@ HTTP 200
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Titles are labels, not sentences: one that ends in a full stop renders "acts., Lex" in
      the tab and in every social card, which is what the front page did until now. -->
-<title>In force on a date, Lex</title>
+<title>Publisher state on a date, Lex</title>
 <meta name="description" content="Point-in-time Luxembourg and reviewed EU law: what did the rule say on a given date? Permalinks, timelines, diffs and verifiable provenance.">
-<meta property="og:title" content="In force on a date, Lex">
+<meta property="og:title" content="Publisher state on a date, Lex">
 <meta property="og:description" content="Point-in-time Luxembourg and reviewed EU law, with grounded AI answers, per-article history, and verifiable provenance.">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Lex">
@@ -175,18 +175,18 @@ HTTP 200
   <a class="navlink" href="/developers">For developers</a>
 </header>
 <main>
-<h1>In force on a date</h1>
-<p class="sub">The compliance question in one call: which instruments applied on that day?</p>
+<h1>Publisher state on a date</h1>
+<p class="sub">Luxembourg rows describe applicability; EU rows describe official consolidated wording states, not entry into force.</p>
 <form class="inline">
-  <input type="date" name="date" aria-label="Date to list works in force" value="2021-01-01">
+  <input type="date" name="date" aria-label="Date whose publisher states to list" value="2021-01-01">
   <select name="publisher" aria-label="Jurisdiction or publisher"><option value="">Every jurisdiction</option><option value="t-pub">Test Publisher</option></select>
   <select name="kind" aria-label="Source class"><option value="">any source class</option><option >LOI</option><option >RGD</option></select>
   <button>Show</button>
-</form><h2>Test Publisher, 2 works in force on 2021-01-01</h2><div class="card"><table><tr><th>work</th><th>type</th><th>version valid</th></tr><tr><td><a href="/t-pub/w1/2021-01-01">Loi sur la chose</a></td>
-<td><span class="badge">LOI</span></td><td class="mono">2020-01-01 → 2021-12-31</td></tr><tr><td><a href="/t-pub/w2/2021-01-01">Reglement sans texte</a></td>
-<td><span class="badge">RGD</span></td><td class="mono">2019-06-01 → open</td></tr></table></div><div class="notice"><b>Population disclosure.</b> Basis: versioned works only (2 works).
+</form><h2>Test Publisher, 2 works applicable on 2021-01-01</h2><div class="card"><table><tr><th>work</th><th>type</th><th>applicability interval</th></tr><tr><td><a href="/t-pub/w1/2021-01-01">Loi sur la chose</a></td>
+<td><span class="badge">LOI</span></td><td class="mono">in force 2020-01-01 → 2021-12-31</td></tr><tr><td><a href="/t-pub/w2/2021-01-01">Reglement sans texte</a></td>
+<td><span class="badge">RGD</span></td><td class="mono">in force 2019-06-01 → open</td></tr></table></div><div class="notice"><b>Population disclosure.</b> Basis: versioned works only (2 works).
 Coverage is limited to this publisher&#39;s configured and verified scope. See <a href="/coverage">coverage</a>.</div><div class="card"><table class="kv">
-<tr><td>tier</td><td>A, publisher-supplied validity dates</td></tr>
+<tr><td>tier</td><td>A, publisher-supplied applicability dates</td></tr>
 <tr><td>history begins</td><td>publisher</td></tr>
 <tr><td>index built</td><td class="mono"><TIMESTAMP> · corpus goldenc</td></tr>
 <tr><td>stamp signature</td><td><span class="badge ok">valid (ECDSA-P256)</span></td></tr>
