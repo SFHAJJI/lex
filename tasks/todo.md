@@ -6,7 +6,7 @@
   - Verify: focused `WorkSearchTests` and `IndexTests`, then full .NET suite.
   - Files: `src/Lex.Index/*`, `tests/Lex.Tests/*`
 
-- [ ] Task 2: Finalize and produce `lex-work-enrichment/1`
+- [x] Task 2: Finalize and produce `lex-work-enrichment/1`
   - Acceptance: canonical schema, provenance, reviewer approval, evidence/content binding, and a
     deterministic producer whose output the strict consumer accepts.
   - Verify: producer byte-repeat test, rejection tests, ingest integration test.

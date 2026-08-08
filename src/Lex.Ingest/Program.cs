@@ -127,6 +127,15 @@ switch (args0[0])
         await new CorpusWriter(corpus, now).WriteAsync(adapter, CancellationToken.None);
         return 0;
     }
+    case "work-enrichment-build":
+    {
+        var input = Get("--input") ?? throw new ArgumentException("--input required");
+        var output = Get("--out") ?? throw new ArgumentException("--out required");
+        var collection = Get("--collection") ?? throw new ArgumentException("--collection required");
+        WorkEnrichmentFile.BuildReviewedArtifact(input, output, collection);
+        Console.Error.WriteLine($"[lex] wrote reviewed work enrichment for {collection} to {output}");
+        return 0;
+    }
     case "index":
     {
         var corpus = Get("--corpus") ?? throw new ArgumentException("--corpus required");
@@ -432,6 +441,7 @@ static void Usage() => Console.Error.WriteLine("""
       lex embedding-smoke --model-dir PATH [--text TEXT] [--batch-size N]
       lex scope-preview [--publisher ID] [--scope FILE] [--previous-scope FILE] [--wave 1..4]
       lex ingest --publisher ID --corpus PATH [--scope FILE] [--wave 1..4] [--now ISO]
+      lex work-enrichment-build --input REVIEWED.json --out CANONICAL.json --collection ID
       lex index  --corpus PATH [--articles PATH] --out FILE.db [--keyfile KEY.pem] [--now ISO]
                  [--embedding-model PATH] [--vectors FILE] [--embedding-batch-size N]
                  [--time-budget-minutes N] [--work-enrichment FILE.json]

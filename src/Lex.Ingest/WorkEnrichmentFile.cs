@@ -45,6 +45,67 @@ public static class WorkEnrichmentFile
             Convert.ToHexStringLower(SHA256.HashData(bytes)));
     }
 
+    public static void BuildReviewedArtifact(string inputPath, string outputPath, string collection)
+    {
+        collection = Required(collection, "collection");
+        var options = Load(inputPath, collection);
+        var artifact = new
+        {
+            schema = Schema,
+            aliases = options.ReviewedAliases
+                .OrderBy(alias => alias.Work, StringComparer.Ordinal)
+                .ThenBy(alias => alias.Language, StringComparer.Ordinal)
+                .ThenBy(alias => WorkSearch.Normalize(alias.Value), StringComparer.Ordinal)
+                .ThenBy(alias => alias.Value, StringComparer.Ordinal)
+                .Select(alias => new
+                {
+                    collection,
+                    work = alias.Work,
+                    language = alias.Language,
+                    value = alias.Value,
+                    reviewed_by = alias.ReviewedBy,
+                }).ToArray(),
+            discovery = options.Discovery
+                .OrderBy(item => item.Work, StringComparer.Ordinal)
+                .ThenBy(item => item.Language, StringComparer.Ordinal)
+                .ThenBy(item => item.Kind, StringComparer.Ordinal)
+                .ThenBy(item => WorkSearch.Normalize(item.Value), StringComparer.Ordinal)
+                .ThenBy(item => item.Value, StringComparer.Ordinal)
+                .Select(item => new
+                {
+                    collection,
+                    work = item.Work,
+                    language = item.Language,
+                    kind = item.Kind,
+                    value = item.Value,
+                    model_deployment = item.ModelDeployment,
+                    prompt_sha256 = item.PromptSha256,
+                    schema_sha256 = item.SchemaSha256,
+                    generated_at = item.GeneratedAt,
+                    confidence = item.Confidence,
+                    repeat_runs = item.RepeatRuns,
+                    agreement_ratio = item.AgreementRatio,
+                    evidence = item.Evidence
+                        .OrderBy(evidence => evidence.Version, StringComparer.Ordinal)
+                        .ThenBy(evidence => evidence.Anchor, StringComparer.Ordinal)
+                        .ThenBy(evidence => evidence.TextSha256, StringComparer.Ordinal)
+                        .Select(evidence => new
+                        {
+                            version = evidence.Version,
+                            anchor = evidence.Anchor,
+                            text_sha256 = evidence.TextSha256,
+                        }).ToArray(),
+                }).ToArray(),
+        };
+        var bytes = JsonSerializer.SerializeToUtf8Bytes(artifact, new JsonSerializerOptions
+        {
+            WriteIndented = true,
+        });
+        using var output = new FileStream(outputPath, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+        output.Write(bytes);
+        output.WriteByte((byte)'\n');
+    }
+
     private static (string Collection, ReviewedWorkAliasRow Value) ToAlias(Alias item) =>
         (Required(item.Collection, "alias.collection"), new ReviewedWorkAliasRow(
             Required(item.Work, "alias.work"),
