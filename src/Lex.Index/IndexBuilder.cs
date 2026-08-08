@@ -100,6 +100,8 @@ public static class IndexBuilder
         {
             if (semantic.BatchSize <= 0)
                 throw new ArgumentOutOfRangeException(nameof(semantic), "Semantic batch size must be positive.");
+            if (semantic.MaxBatchTokens <= 0)
+                throw new ArgumentOutOfRangeException(nameof(semantic), "Semantic batch token budget must be positive.");
             chunksByTextSha = new Dictionary<string, IReadOnlyList<SemanticChunk>>(StringComparer.OrdinalIgnoreCase);
             uniqueSemanticChunks = [];
             var uniqueChunkHashes = new HashSet<string>(StringComparer.Ordinal);
@@ -163,47 +165,51 @@ public static class IndexBuilder
                 .GroupBy(item => item.PaddingTokens)
                 .OrderBy(group => group.Key);
             foreach (var bucket in bucketedChunks)
-            foreach (var items in bucket.OrderBy(item => item.OriginalOrder).Chunk(semantic.BatchSize))
             {
-                var batch = items.Select(item => item.Chunk).ToArray();
-                embeddingHeartbeat.SetCurrent(
-                    $"{batch[0].Sha256}..{batch[^1].Sha256}",
-                    batch.Sum(chunk => (long)chunk.Text.Length));
-                var records = new byte[batch.Length][];
-                var missingIndexes = new List<int>();
-                for (var i = 0; i < batch.Length; i++)
+                var bucketBatchSize = Math.Max(1,
+                    Math.Min(semantic.BatchSize, semantic.MaxBatchTokens / bucket.Key));
+                foreach (var items in bucket.OrderBy(item => item.OriginalOrder).Chunk(bucketBatchSize))
                 {
-                    if (embeddingCache is null || !embeddingCache.TryRead(batch[i].Sha256, out records[i]!))
-                        missingIndexes.Add(i);
-                }
-                if (missingIndexes.Count > 0)
-                {
-                    var vectors = semantic.Encoder.EncodeBatch(
-                        missingIndexes.Select(i => batch[i].Text).ToArray(),
-                        EmbeddingInputKind.Passage,
-                        bucket.Key);
-                    if (vectors.Count != missingIndexes.Count)
-                        throw new InvalidDataException("Embedding encoder returned the wrong batch size.");
-                    var additions = new List<(string ChunkSha, byte[] Record)>(missingIndexes.Count);
-                    for (var i = 0; i < missingIndexes.Count; i++)
+                    var batch = items.Select(item => item.Chunk).ToArray();
+                    embeddingHeartbeat.SetCurrent(
+                        $"{batch[0].Sha256}..{batch[^1].Sha256}",
+                        batch.Sum(chunk => (long)chunk.Text.Length));
+                    var records = new byte[batch.Length][];
+                    var missingIndexes = new List<int>();
+                    for (var i = 0; i < batch.Length; i++)
                     {
-                        var batchIndex = missingIndexes[i];
-                        records[batchIndex] = SemanticVectorWriter.Quantize(vectors[i]);
-                        additions.Add((batch[batchIndex].Sha256, records[batchIndex]));
+                        if (embeddingCache is null || !embeddingCache.TryRead(batch[i].Sha256, out records[i]!))
+                            missingIndexes.Add(i);
                     }
-                    embeddingCache?.Store(additions);
+                    if (missingIndexes.Count > 0)
+                    {
+                        var vectors = semantic.Encoder.EncodeBatch(
+                            missingIndexes.Select(i => batch[i].Text).ToArray(),
+                            EmbeddingInputKind.Passage,
+                            bucket.Key);
+                        if (vectors.Count != missingIndexes.Count)
+                            throw new InvalidDataException("Embedding encoder returned the wrong batch size.");
+                        var additions = new List<(string ChunkSha, byte[] Record)>(missingIndexes.Count);
+                        for (var i = 0; i < missingIndexes.Count; i++)
+                        {
+                            var batchIndex = missingIndexes[i];
+                            records[batchIndex] = SemanticVectorWriter.Quantize(vectors[i]);
+                            additions.Add((batch[batchIndex].Sha256, records[batchIndex]));
+                        }
+                        embeddingCache?.Store(additions);
+                    }
+                    for (var i = 0; i < batch.Length; i++)
+                    {
+                        var ordinal = semanticWriter!.WriteRecord(records[i]);
+                        vectorOrdinalByChunk.Add(batch[i].Sha256, ordinal);
+                        semanticVectorsCompleted++;
+                    }
+                    embeddingHeartbeat.SetCompleted(semanticVectorsCompleted);
+                    ReportProgress(semantic, SemanticBuildStage.Embeddings,
+                        semanticVectorsCompleted, semanticVectorTotal, semanticProgressWatch,
+                        ref lastReportedPercent, ref lastProgressReport,
+                        force: semanticVectorsCompleted == semanticVectorTotal);
                 }
-                for (var i = 0; i < batch.Length; i++)
-                {
-                    var ordinal = semanticWriter!.WriteRecord(records[i]);
-                    vectorOrdinalByChunk.Add(batch[i].Sha256, ordinal);
-                    semanticVectorsCompleted++;
-                }
-                embeddingHeartbeat.SetCompleted(semanticVectorsCompleted);
-                ReportProgress(semantic, SemanticBuildStage.Embeddings,
-                    semanticVectorsCompleted, semanticVectorTotal, semanticProgressWatch,
-                    ref lastReportedPercent, ref lastProgressReport,
-                    force: semanticVectorsCompleted == semanticVectorTotal);
             }
         }
         if (File.Exists(dbPath)) File.Delete(dbPath);
@@ -524,6 +530,8 @@ public static class IndexBuilder
                 stamp["vector_file"] = Path.GetFileName(semantic.VectorPath);
                 stamp["embedding_execution_provider"] = semantic.ExecutionProvider;
                 stamp["embedding_profile"] = semantic.EmbeddingProfile;
+                stamp["embedding_max_batch_tokens"] = semantic.MaxBatchTokens.ToString(
+                    System.Globalization.CultureInfo.InvariantCulture);
             }
             if (signingKeyPem is not null)
             {

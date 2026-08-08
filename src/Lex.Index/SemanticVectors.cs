@@ -315,6 +315,7 @@ public sealed record SemanticBuildOptions(
     string VectorFormat = "lex-vectors/1-binary-int8",
     Action<SemanticBuildProgress>? Progress = null,
     int BatchSize = 16,
+    int MaxBatchTokens = 32_768,
     TimeSpan? ProgressHeartbeatInterval = null,
     string ExecutionProvider = "cpu",
     string? EmbeddingCachePath = null,

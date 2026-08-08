@@ -154,6 +154,9 @@ switch (args0[0])
             : MultilingualE5Encoder.Open(embeddingModelDir, embeddingIntraOpThreads, embeddingDirectMlDeviceId);
         var embeddingBatchSize = int.TryParse(Get("--embedding-batch-size"), out var parsedEmbeddingBatchSize)
             ? parsedEmbeddingBatchSize : 16;
+        var embeddingMaxBatchTokens = int.TryParse(
+            Get("--embedding-max-batch-tokens"), out var parsedEmbeddingMaxBatchTokens)
+            ? parsedEmbeddingMaxBatchTokens : 32_768;
         var indexBudget = int.TryParse(Get("--time-budget-minutes"), out var parsedBudgetMinutes)
             ? TimeSpan.FromMinutes(parsedBudgetMinutes) : (TimeSpan?)null;
         if (indexBudget <= TimeSpan.Zero)
@@ -188,6 +191,7 @@ switch (args0[0])
                     $" stop_recommended={stopRecommended.ToString().ToLowerInvariant()}");
             },
             BatchSize: embeddingBatchSize,
+            MaxBatchTokens: embeddingMaxBatchTokens,
             ExecutionProvider: encoder.ExecutionProvider,
             EmbeddingCachePath: Get("--embedding-cache"));
         IndexFromCorpus.Build(corpus, articles, outDb, keyPem, now, semantic);

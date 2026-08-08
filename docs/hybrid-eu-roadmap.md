@@ -132,6 +132,9 @@ have been selected. Chunks are grouped into 32, 64, 128, 256 and 512-token bucke
 and exists only inside the inference tensor. It cannot change stored wording, hashes, citations,
 vector ordinals, temporal occurrences, rendering or comparison. The embedding profile is part of
 the cache key and index stamp so a shape-policy change cannot silently reuse incompatible evidence.
+The caller's item batch is also capped by a 32,768 padded-token budget per inference call. Short
+buckets retain throughput while long buckets use fewer items, preventing a batch size reviewed on
+short provisions from exhausting GPU memory on long annex chunks. The effective budget is stamped.
 
 ## Risks and containment
 
