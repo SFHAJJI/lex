@@ -52,7 +52,7 @@
   - Verify: publisher-only versus enriched ablation plus size/memory/latency gates.
   - Files: workbench/producer, `src/Lex.Index/*`, tests, reports
 
-- [ ] Task 9: Implement Retrieval Agent v2
+- [x] Task 9: Implement Retrieval Agent v2
   - Acceptance: raw-user resolution precedes planning; generated names remain candidates; claim-
     typed evidence and coverage disclosure gate answers.
   - Verify: selected experiment scenarios plus new ambiguity/gap/adversarial cases.

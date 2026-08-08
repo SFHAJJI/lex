@@ -122,7 +122,7 @@ export default function AskPanel(p: AskPanelProps) {
           </div>
 
           <form className="ap-form" onSubmit={(e) => { e.preventDefault(); p.onSubmit(p.q); p.setQ(""); }}>
-            <input ref={input} value={p.q} onChange={(e) => p.setQ(e.target.value)} disabled={p.busy}
+            <input ref={input} name="assistant-question" value={p.q} onChange={(e) => p.setQ(e.target.value)} disabled={p.busy}
                    placeholder="What did a law say on a date?" aria-label="Ask" />
             <button type="submit" disabled={p.busy}>{p.busy ? "…" : "Ask"}</button>
           </form>

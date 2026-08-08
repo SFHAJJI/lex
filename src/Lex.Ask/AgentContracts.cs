@@ -1,33 +1,55 @@
 using System.Text.RegularExpressions;
+using System.Text.Json.Serialization;
 
 namespace Lex.Ask;
 
+[JsonConverter(typeof(JsonStringEnumConverter))]
 internal enum AgentEvidenceKind
 {
+    [JsonStringEnumMemberName("pointer")]
     Pointer,
+    [JsonStringEnumMemberName("legal_text")]
     LegalText,
+    [JsonStringEnumMemberName("timeline")]
     Timeline,
+    [JsonStringEnumMemberName("change")]
     Change,
+    [JsonStringEnumMemberName("ranking")]
     Ranking,
+    [JsonStringEnumMemberName("coverage")]
     Coverage,
+    [JsonStringEnumMemberName("provenance")]
     Provenance,
 }
 
+[JsonConverter(typeof(JsonStringEnumConverter))]
 internal enum AgentClaimKind
 {
+    [JsonStringEnumMemberName("legal_text")]
     LegalText,
+    [JsonStringEnumMemberName("timeline")]
     Timeline,
+    [JsonStringEnumMemberName("change")]
     Change,
+    [JsonStringEnumMemberName("ranking")]
     Ranking,
+    [JsonStringEnumMemberName("coverage")]
     Coverage,
+    [JsonStringEnumMemberName("provenance")]
     Provenance,
 }
 
+[JsonConverter(typeof(JsonStringEnumConverter))]
 internal enum AgentAnswerStatus
 {
+    [JsonStringEnumMemberName("answer")]
     Answer,
+    [JsonStringEnumMemberName("gap")]
     Gap,
+    [JsonStringEnumMemberName("clarify")]
     Clarify,
+    [JsonStringEnumMemberName("refusal")]
+    Refusal,
 }
 
 internal sealed record AgentEvidence(
@@ -38,7 +60,9 @@ internal sealed record AgentEvidence(
     string? Date,
     string? TextSha256,
     string? Permalink,
-    bool RequiresCoverageDisclosure = false);
+    bool RequiresCoverageDisclosure = false,
+    string? Title = null,
+    string? Excerpt = null);
 
 internal sealed record AgentClaim(
     string Text,
@@ -55,9 +79,26 @@ internal sealed record AgentAnswerDraft(
     string? CoverageDisclosure,
     AgentClarification? Clarification);
 
+[JsonConverter(typeof(JsonStringEnumConverter))]
+internal enum AgentJudgmentDisposition
+{
+    [JsonStringEnumMemberName("pass")]
+    Pass,
+    [JsonStringEnumMemberName("repair")]
+    Repair,
+    [JsonStringEnumMemberName("refuse")]
+    Refuse,
+}
+
+internal sealed record AgentGroundingJudgment(
+    AgentJudgmentDisposition Disposition,
+    IReadOnlyList<string> Issues,
+    AgentAnswerDraft? Replacement);
+
 internal static class AgentAnswerContract
 {
-    private static readonly Regex Url = new(@"https://[^\s<>()]+", RegexOptions.CultureInvariant);
+    private static readonly Regex Url = new(@"https?://[^\s<>()]+",
+        RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
 
     public static AgentAnswerDraft Validate(
         AgentAnswerDraft draft,
@@ -77,11 +118,23 @@ internal static class AgentAnswerContract
                 .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
             if (options.Length is < 2 or > 4)
                 throw new InvalidDataException("A clarification requires two to four distinct options.");
+            if (ContainsUrl(answer) || ContainsUrl(question) || options.Any(ContainsUrl))
+                throw new InvalidDataException("A clarification cannot contain links because it has no evidence.");
             return draft with
             {
                 Answer = answer,
                 Clarification = new AgentClarification(question, options),
             };
+        }
+
+        if (draft.Status == AgentAnswerStatus.Refusal)
+        {
+            if (draft.Clarification is not null || draft.Claims.Count != 0 || draft.Permalinks.Count != 0
+                || draft.CoverageDisclosure is not null)
+                throw new InvalidDataException("An evidence-limited refusal contains no claims or citations.");
+            if (ContainsUrl(answer))
+                throw new InvalidDataException("An evidence-limited refusal cannot contain links.");
+            return draft with { Answer = answer };
         }
 
         if (draft.Clarification is not null || draft.Claims.Count == 0)
@@ -107,17 +160,6 @@ internal static class AgentAnswerContract
         if (draft.Status == AgentAnswerStatus.Gap && claims.Any(claim => claim.Kind != AgentClaimKind.Coverage))
             throw new InvalidDataException("A corpus gap may make coverage claims only.");
 
-        var allowedLinks = used.Select(item => item.Permalink)
-            .Where(link => link is not null).Select(link => link!).ToHashSet(StringComparer.Ordinal);
-        var links = draft.Permalinks.Select(link => Bounded(link, 2_000, "permalink"))
-            .Distinct(StringComparer.Ordinal).ToArray();
-        if (links.Length != draft.Permalinks.Count
-            || links.Any(link => !Uri.TryCreate(link, UriKind.Absolute, out var uri)
-                                 || uri.Scheme != Uri.UriSchemeHttps || !allowedLinks.Contains(link))
-            || Url.Matches(answer).Select(match => match.Value.TrimEnd('.', ',', ';', ':'))
-                .Any(link => !allowedLinks.Contains(link)))
-            throw new InvalidDataException("Every answer link must exactly match returned evidence.");
-
         var disclosureRequired = claims.Any(claim => claim.Kind == AgentClaimKind.Coverage)
                                  || used.Any(item => item.RequiresCoverageDisclosure);
         var disclosure = draft.CoverageDisclosure?.Trim();
@@ -125,6 +167,16 @@ internal static class AgentAnswerContract
             disclosure = Bounded(disclosure, 1_000, "coverage disclosure");
         else if (disclosure is not null)
             disclosure = Bounded(disclosure, 1_000, "coverage disclosure");
+
+        var allowedLinks = used.Select(item => item.Permalink)
+            .Where(link => link is not null && IsHttpsAbsolute(link)).Select(link => link!)
+            .ToHashSet(StringComparer.Ordinal);
+        var links = draft.Permalinks.Select(link => Bounded(link, 2_000, "permalink"))
+            .Distinct(StringComparer.Ordinal).ToArray();
+        if (links.Length != draft.Permalinks.Count
+            || links.Any(link => !IsHttpsAbsolute(link) || !allowedLinks.Contains(link))
+            || LinksIn(answer).Concat(LinksIn(disclosure)).Any(link => !allowedLinks.Contains(link)))
+            throw new InvalidDataException("Every rendered link must exactly match returned evidence.");
 
         return draft with
         {
@@ -146,11 +198,48 @@ internal static class AgentAnswerContract
         _ => false,
     };
 
+    private static bool ContainsUrl(string value) => Url.IsMatch(value);
+
+    private static bool IsHttpsAbsolute(string value) =>
+        Uri.TryCreate(value, UriKind.Absolute, out var uri)
+        && string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase);
+
+    private static IEnumerable<string> LinksIn(string? value) => value is null
+        ? []
+        : Url.Matches(value).Select(match => match.Value.TrimEnd('.', ',', ';', ':'));
+
     private static string Bounded(string? value, int maximum, string field)
     {
         var bounded = value?.Trim() ?? "";
         if (bounded.Length is 0 || bounded.Length > maximum)
             throw new InvalidDataException($"{field} must contain 1 to {maximum} characters.");
         return bounded;
+    }
+}
+
+internal static class AgentGroundingJudgmentContract
+{
+    public static AgentGroundingJudgment Validate(
+        AgentGroundingJudgment judgment,
+        AgentAnswerDraft draft,
+        IReadOnlyList<AgentEvidence> evidence)
+    {
+        AgentAnswerContract.Validate(draft, evidence);
+        var issues = judgment.Issues.Select(issue => issue.Trim())
+            .Where(issue => issue.Length > 0).Distinct(StringComparer.Ordinal).Take(5).ToArray();
+        return judgment.Disposition switch
+        {
+            AgentJudgmentDisposition.Pass when issues.Length == 0 && judgment.Replacement is null =>
+                judgment with { Issues = [] },
+            AgentJudgmentDisposition.Repair when issues.Length > 0 && judgment.Replacement is not null =>
+                judgment with
+                {
+                    Issues = issues,
+                    Replacement = AgentAnswerContract.Validate(judgment.Replacement, evidence),
+                },
+            AgentJudgmentDisposition.Refuse when issues.Length > 0 && judgment.Replacement is null =>
+                judgment with { Issues = issues },
+            _ => throw new InvalidDataException("Grounding judgment violates the pass, repair, or refusal contract."),
+        };
     }
 }

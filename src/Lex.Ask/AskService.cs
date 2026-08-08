@@ -81,6 +81,7 @@ public sealed class AskService(McpCore core)
     private readonly int _globalDaily = EnvInt("ASK_GLOBAL_DAILY", 400);
     private readonly ConcurrentDictionary<string, int> _counters = new();
     private readonly SemaphoreSlim _gate = new(4);
+    private AgentAnswerFinalizer? _answerFinalizer;
 
     public bool Enabled => !string.IsNullOrEmpty(_endpoint)
                            && (_useManagedIdentity || !string.IsNullOrEmpty(_key));
@@ -261,9 +262,16 @@ public sealed class AskService(McpCore core)
     };
 
     /// <summary>The reply body: prose, the raw trace, and the merged rendering directive.</summary>
-    private static JsonObject Body(string reply, JsonArray trace, List<UiEffect> effects)
+    private static JsonObject Body(
+        string reply,
+        JsonArray trace,
+        List<UiEffect> effects,
+        AgentClarification? clarification = null)
     {
         var body = new JsonObject { ["reply"] = reply, ["trace"] = trace };
+        if (clarification is not null)
+            body["clarification"] = JsonNode.Parse(
+                System.Text.Json.JsonSerializer.Serialize(clarification, UiJson));
         var merged = UiEffect.Merge(effects);
         // A turn that used tools and produced nothing to render is a refusal — the most
         // characteristic thing this product does. It gets a view like any other answer,
@@ -340,6 +348,7 @@ public sealed class AskService(McpCore core)
                     pins.Add(new JsonObject
                     {
                         ["anchor"] = p["anchor"]?.DeepClone(),
+                        ["text_sha256"] = p["text_sha256"]?.DeepClone(),
                         ["quote"] = text is null ? null : text.Length > 280 ? text[..280] + "…" : text,
                         ["permalink"] = p["permalink"]?.DeepClone(),
                     });
@@ -485,6 +494,7 @@ public sealed class AskService(McpCore core)
             var searchCalls = 0;
             var worksFound = new Dictionary<string, string>(StringComparer.Ordinal);
             var resolutionGuard = new WorkResolutionGuard();
+            var evidence = new AgentEvidenceLedger();
             var textToolUsed = false;
             // D31 shape: effects are collected across every tool call in the turn and merged
             // into ONE payload, so a single reply can carry prose plus more than one view.
@@ -506,6 +516,7 @@ public sealed class AskService(McpCore core)
             resolutionGuard.ObserveSearch(rawResult, isRawUserQuery: true);
             searchCalls = 1;
             var (rawStatus, rawDocs) = Summarize(rawResult);
+            evidence.Observe("search", rawStatus, rawDocs, rawResult);
             trace.Add(new JsonObject
             {
                 ["tool"] = "search",
@@ -668,6 +679,7 @@ public sealed class AskService(McpCore core)
                             var node = core.CallTool(name, args);
                             if (name == "search") resolutionGuard.ObserveSearch(node, isRawUserQuery: false);
                             var (st, docs) = Summarize(node);
+                            evidence.Observe(name, st, docs, node);
                             if (name is "as_of" or "timeline" or "diff" or "article_history" or "in_force_on")
                                 textToolUsed = true;
                             toolSpan?.SetTag("lex.status", st ?? "ok");
@@ -730,7 +742,10 @@ public sealed class AskService(McpCore core)
                     reply = trace.Count > 0
                         ? "I retrieved the evidence below but could not compose an answer. Try asking for a narrower slice (a single law, or a shorter period)."
                         : "I could not produce an answer. Try rephrasing.";
-                return (200, Body(reply, trace, effects));
+                var grounded = await Finalizer().FinalizeAsync(
+                    rawUserQuery, reply, evidence.Evidence, ct);
+                reply = AgentAnswerFinalizer.Render(grounded);
+                return (200, Body(reply, trace, effects, grounded.Clarification));
             }
             return (200, Body("Tool budget for one question exhausted. Try a narrower question.", trace, effects));
         }
@@ -747,6 +762,11 @@ public sealed class AskService(McpCore core)
             Console.Error.WriteLine($"[ask] upstream unreachable: {ex.Message}");
             return (502, new JsonObject { ["error"] = "The model upstream is unreachable right now. Try again shortly." });
         }
+        catch (System.ClientModel.ClientResultException ex)
+        {
+            Console.Error.WriteLine($"[ask] agent upstream failed: {ex.Status}");
+            return (502, new JsonObject { ["error"] = "The model upstream returned an error. Try again shortly." });
+        }
         catch (Exception ex)
         {
             Console.Error.WriteLine($"[ask] {ex}");
@@ -757,4 +777,8 @@ public sealed class AskService(McpCore core)
             _gate.Release();
         }
     }
+
+    private AgentAnswerFinalizer Finalizer() =>
+        LazyInitializer.EnsureInitialized(ref _answerFinalizer, () => new AgentAnswerFinalizer(
+            _endpoint!, _deployment, _credential, _useManagedIdentity ? null : _key));
 }

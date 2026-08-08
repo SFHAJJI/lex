@@ -74,6 +74,10 @@ public sealed class RetrievalAgentContractTests
         };
         Assert.Equal(disclosed.CoverageDisclosure,
             AgentAnswerContract.Validate(disclosed, [coverage]).CoverageDisclosure);
+        Assert.Throws<InvalidDataException>(() => AgentAnswerContract.Validate(disclosed with
+        {
+            CoverageDisclosure = "See https://example.com/invented for missing material.",
+        }, [coverage]));
     }
 
     [Fact]
@@ -93,6 +97,100 @@ public sealed class RetrievalAgentContractTests
         Assert.Throws<InvalidDataException>(() => AgentAnswerContract.Validate(
             draft with { Claims = [new AgentClaim("A claim", AgentClaimKind.LegalText, ["text:1"])] },
             [LegalText]));
+        Assert.Throws<InvalidDataException>(() => AgentAnswerContract.Validate(draft with
+        {
+            Clarification = new AgentClarification(
+                "Choose at https://example.com/invented", ["GDPR", "DORA"]),
+        }, []));
+    }
+
+    [Theory]
+    [InlineData("http://example.com/invented")]
+    [InlineData("HTTPS://example.com/invented")]
+    public void Every_rendered_field_rejects_unallowlisted_url_forms(string url)
+    {
+        var answer = Answer(new AgentClaim("Held text", AgentClaimKind.LegalText, ["text:1"]));
+        Assert.Throws<InvalidDataException>(() => AgentAnswerContract.Validate(
+            answer with { Answer = $"Held text {url}" }, [LegalText]));
+        Assert.Throws<InvalidDataException>(() => AgentAnswerContract.Validate(
+            answer with { CoverageDisclosure = $"Coverage detail {url}" }, [LegalText]));
+
+        var clarify = new AgentAnswerDraft(AgentAnswerStatus.Clarify, "Which law?", [], [], null,
+            new AgentClarification($"Which law? {url}", ["GDPR", "DORA"]));
+        Assert.Throws<InvalidDataException>(() => AgentAnswerContract.Validate(clarify, []));
+
+        var refusal = new AgentAnswerDraft(AgentAnswerStatus.Refusal, $"Insufficient evidence {url}",
+            [], [], null, null);
+        Assert.Throws<InvalidDataException>(() => AgentAnswerContract.Validate(refusal, []));
+    }
+
+    [Fact]
+    public void Insecure_evidence_permalink_cannot_authorize_the_same_rendered_url()
+    {
+        const string insecure = "http://attacker.invalid/law";
+        var evidence = LegalText with { Permalink = insecure };
+        var draft = Answer(new AgentClaim("Held text", AgentClaimKind.LegalText, ["text:1"]));
+
+        Assert.Throws<InvalidDataException>(() => AgentAnswerContract.Validate(
+            draft with { Answer = $"Held text {insecure}" }, [evidence]));
+        Assert.Throws<InvalidDataException>(() => AgentAnswerContract.Validate(
+            draft with { CoverageDisclosure = $"Coverage detail {insecure}" }, [evidence]));
+    }
+
+    [Fact]
+    public void Grounding_judgment_passes_repairs_or_refuses_through_the_same_contract()
+    {
+        var draft = Answer(new AgentClaim(
+            "The returned provision contains the rule.", AgentClaimKind.LegalText, ["text:1"]));
+
+        Assert.Equal(AgentJudgmentDisposition.Pass, AgentGroundingJudgmentContract.Validate(
+            new(AgentJudgmentDisposition.Pass, [], null), draft, [LegalText]).Disposition);
+        Assert.Equal(AgentJudgmentDisposition.Repair, AgentGroundingJudgmentContract.Validate(
+            new(AgentJudgmentDisposition.Repair, ["Too broad"],
+                draft with { Answer = "The returned provision contains this wording." }),
+            draft, [LegalText]).Disposition);
+        Assert.Equal(AgentJudgmentDisposition.Refuse, AgentGroundingJudgmentContract.Validate(
+            new(AgentJudgmentDisposition.Refuse, ["Evidence is insufficient"], null),
+            draft, [LegalText]).Disposition);
+        Assert.Throws<InvalidDataException>(() => AgentGroundingJudgmentContract.Validate(
+            new(AgentJudgmentDisposition.Pass, ["Contradiction"], null), draft, [LegalText]));
+    }
+
+    [Fact]
+    public void Evidence_limited_refusal_needs_no_fabricated_claim()
+    {
+        var refusal = new AgentAnswerDraft(
+            AgentAnswerStatus.Refusal,
+            "The returned evidence is insufficient.",
+            [], [], null, null);
+
+        Assert.Equal(refusal.Answer, AgentAnswerContract.Validate(refusal, []).Answer);
+    }
+
+    [Fact]
+    public void Framework_prompt_serializes_evidence_kinds_as_stable_strings()
+    {
+        var prompt = AgentAnswerFinalizer.EvidencePrompt([LegalText]);
+
+        Assert.Contains("\"kind\":\"legal_text\"", prompt, StringComparison.Ordinal);
+        Assert.Contains("\"id\":\"text:1\"", prompt, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Every_synthesized_factual_claim_requires_the_conditional_judge()
+    {
+        var coverage = new AgentAnswerDraft(
+            AgentAnswerStatus.Gap,
+            "The requested material is not held.",
+            [new AgentClaim("The material is not held.", AgentClaimKind.Coverage, ["coverage:1"])],
+            [], "Coverage is incomplete.", null);
+        var clarify = new AgentAnswerDraft(
+            AgentAnswerStatus.Clarify,
+            "Which law?", [], [], null,
+            new AgentClarification("Which law?", ["GDPR", "DORA"]));
+
+        Assert.True(AgentAnswerFinalizer.RequiresJudge(coverage));
+        Assert.False(AgentAnswerFinalizer.RequiresJudge(clarify));
     }
 
     private static AgentAnswerDraft Answer(AgentClaim claim) => new(
