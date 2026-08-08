@@ -70,8 +70,8 @@ public sealed record RetrievalBenchmarkReport(
     long MemoryLimitBytes,
     long IndexBytes,
     long VectorBytes,
-    RetrievalMetrics Keyword,
-    RetrievalMetrics Hybrid,
+    RetrievalMetrics KeywordTuning,
+    RetrievalMetrics HybridTuning,
     RetrievalMetrics KeywordHoldout,
     RetrievalMetrics HybridHoldout,
     int TuningSampleCount,
@@ -262,9 +262,10 @@ public static class RetrievalBenchmarkRunner
         if (tuning.Length == 0 || holdout.Length == 0)
             throw new InvalidDataException("Every mounted collection requires tuning and holdout cases.");
         _ = reader.SearchHybrid("benchmark warmup", FilterSet.All, 1);
-        var keyword = Evaluate("keyword", cases,
+        var keyword = Evaluate("keyword-tuning", tuning,
             c => reader.SearchKeyword(c.Query, Filters(c), 10, c.Category == "fuzzy"), progress);
-        var hybrid = Evaluate("hybrid", cases, c => reader.SearchHybrid(c.Query, Filters(c), 10), progress);
+        var hybrid = Evaluate("hybrid-tuning", tuning,
+            c => reader.SearchHybrid(c.Query, Filters(c), 10), progress);
         var keywordHoldout = Evaluate("keyword-holdout", holdout,
             c => reader.SearchKeyword(c.Query, Filters(c), 10, c.Category == "fuzzy"), progress);
         var hybridHoldout = Evaluate("hybrid-holdout", holdout,
@@ -300,14 +301,14 @@ public static class RetrievalBenchmarkRunner
             failures.Add("conceptual nDCG@10 did not improve by at least 10 percent");
         if (hybridHoldout.NdcgAt10 + 0.000001 < keywordHoldout.NdcgAt10 * 0.98)
             failures.Add("holdout nDCG@10 regressed by more than 2 percent");
-        if (hybrid.P95Ms > 250) failures.Add("warm p95 exceeds 250 ms");
+        failures.AddRange(HoldoutLatencyFailures(hybridHoldout));
         var workingSet = Process.GetCurrentProcess().WorkingSet64;
         if (memoryLimitBytes <= 0) failures.Add("configured memory limit was not supplied");
         else if (workingSet >= memoryLimitBytes * 0.75)
             failures.Add("process memory is not below 75 percent of the configured limit");
 
         return new RetrievalBenchmarkReport(
-            "lex-retrieval-benchmark/2", timestamp.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ"),
+            "lex-retrieval-benchmark/3", timestamp.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ"),
             cases.Length, AggregateReviewStatus(cases), baseline.Schema,
             baseline.CasesSha256, caseSet.Sha256, $"{baseline.ReviewedBy}@{baseline.ReviewedAt}", codeCommit,
             corpusCommit, manifestId, modelId, modelRevision, machine, resourceConfiguration,
@@ -329,6 +330,9 @@ public static class RetrievalBenchmarkRunner
             failures.Add("benchmark review status does not match the frozen attestation");
         return failures;
     }
+
+    internal static IReadOnlyList<string> HoldoutLatencyFailures(RetrievalMetrics hybridHoldout) =>
+        hybridHoldout.P95Ms > 250 ? ["holdout warm p95 exceeds 250 ms"] : [];
 
     private static string AggregateReviewStatus(IReadOnlyList<RetrievalBenchmarkCase> cases)
     {

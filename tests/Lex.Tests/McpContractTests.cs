@@ -106,6 +106,10 @@ public class McpContractTests : IDisposable
             Assert.False(string.IsNullOrWhiteSpace(t["description"]?.GetValue<string>()));
             Assert.NotNull(t["inputSchema"]?["properties"]);
         });
+        var search = _core.ToolDefs().OfType<JsonObject>()
+            .Single(tool => tool["name"]!.GetValue<string>() == "search");
+        Assert.Equal(1, search["inputSchema"]!["properties"]!["limit"]!["minimum"]!.GetValue<int>());
+        Assert.Equal(50, search["inputSchema"]!["properties"]!["limit"]!["maximum"]!.GetValue<int>());
     }
 
     [Theory]
@@ -278,6 +282,35 @@ public class McpContractTests : IDisposable
             ["query"] = "thing", ["jurisdiction"] = "YY",
         }));
         Assert.Empty(absent);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    [InlineData(51)]
+    [InlineData(int.MaxValue)]
+    public void Search_rejects_limits_outside_documented_bounds_before_multiplication(int limit)
+    {
+        var error = Assert.Throws<ArgumentOutOfRangeException>(() =>
+            _core.CallTool("search", new JsonObject
+            {
+                ["query"] = "thing",
+                ["limit"] = limit,
+            }));
+
+        Assert.Contains("between 1 and 50", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Search_rejects_an_unbounded_query_before_retrieval()
+    {
+        var error = Assert.Throws<ArgumentException>(() =>
+            _core.CallTool("search", new JsonObject
+            {
+                ["query"] = new string('x', 1_001),
+            }));
+
+        Assert.Contains("1000 characters", error.Message, StringComparison.Ordinal);
     }
 
     [Fact]

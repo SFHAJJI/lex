@@ -230,6 +230,92 @@ public sealed class RetrievalBenchmarkTests
     }
 
     [Fact]
+    public void Verified_benchmark_claims_must_match_its_index_and_benchmark_manifests()
+    {
+        var report = Report() with
+        {
+            ManifestId = new string('1', 64),
+            CodeCommit = new string('b', 40),
+        };
+        var manifests = new[]
+        {
+            new Lex.Web.VerifiedArtifactManifest("index.manifest.json", new string('1', 64),
+                "key", report.CodeCommit, report.Timestamp, ["index-eu-eurlex.db"]),
+            new Lex.Web.VerifiedArtifactManifest("benchmark.manifest.json", new string('2', 64),
+                "key", report.CodeCommit, report.Timestamp,
+                ["retrieval-benchmark-eu-eurlex.json"]),
+        };
+
+        Assert.True(Lex.Web.ExplainerEndpoints.BenchmarkClaimsMatchVerifiedManifests(
+            report, "eu-eurlex", manifests));
+        Assert.False(Lex.Web.ExplainerEndpoints.BenchmarkClaimsMatchVerifiedManifests(
+            report with { ManifestId = new string('3', 64) }, "eu-eurlex", manifests));
+        Assert.False(Lex.Web.ExplainerEndpoints.BenchmarkClaimsMatchVerifiedManifests(
+            report with { CodeCommit = new string('c', 40) }, "eu-eurlex", manifests));
+    }
+
+    [Fact]
+    public void Runner_reports_tuning_and_holdout_without_cross_split_aggregation()
+    {
+        var db = Path.Combine(Path.GetTempPath(), $"lex-benchmark-{Guid.NewGuid():N}.db");
+        try
+        {
+            var doc = Doc("eu-eurlex", "known");
+            var provision = new ProvisionRow($"{doc.Key}|en|2024-01-01", 0, "art_1",
+                $"{doc.Key}#art_1", "article", "1", null, null, null, doc.Title,
+                "knownterm", Convert.ToHexStringLower(
+                    SHA256.HashData(System.Text.Encoding.UTF8.GetBytes("knownterm"))));
+            IndexBuilder.Build(db, new Dictionary<string, string>
+            {
+                ["collection"] = "eu-eurlex",
+                ["built_at"] = "2026-08-09T00:00:00Z",
+                ["corpus_commit"] = "corpus-commit",
+            }, [doc], [provision], [], [], null);
+            using var reader = LexIndexReader.Open(db);
+            var cases = new[]
+            {
+                new RetrievalBenchmarkCase("tuning", "conceptual", "knownterm", "en",
+                    "all_versions", null, ["eu-eurlex:known"], "known hit",
+                    "engineer-reviewed", Collection: "eu-eurlex", Split: "tuning"),
+                new RetrievalBenchmarkCase("holdout", "exact", "missingterm", "en",
+                    "all_versions", null, ["eu-eurlex:known"], "known miss",
+                    "engineer-reviewed", Collection: "eu-eurlex", Split: "holdout"),
+            };
+            var caseSet = new RetrievalBenchmarkCaseSet(cases, new string('d', 64));
+            var baseline = new RetrievalBenchmarkBaseline("lex-retrieval-baseline/2",
+                "evals/retrieval-cases.json", caseSet.Sha256, 2, "engineer-reviewed",
+                "reviewer", "2026-08-09");
+
+            var report = RetrievalBenchmarkRunner.Run(reader, caseSet, baseline, db, null,
+                new string('b', 40), new string('1', 64), "runner", "2 GiB", 2_147_483_648,
+                1, 1, DateTimeOffset.Parse("2026-08-09T00:00:00Z"));
+
+            Assert.Equal("lex-retrieval-benchmark/3", report.Schema);
+            Assert.Equal(1, report.KeywordTuning.Mrr);
+            Assert.Equal(1, report.HybridTuning.Mrr);
+            Assert.Equal(0, report.KeywordHoldout.Mrr);
+            Assert.Equal(0, report.HybridHoldout.Mrr);
+            Assert.False(report.ActivationGatePassed);
+        }
+        finally
+        {
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            try { File.Delete(db); } catch { }
+        }
+    }
+
+    [Fact]
+    public void Activation_latency_is_authorized_only_by_holdout_measurements()
+    {
+        var fastTuning = new RetrievalMetrics(1, 1, 1, 1, 0, 1, 10, 20, 1, 1, 1);
+        var slowHoldout = fastTuning with { P95Ms = 251 };
+
+        Assert.Empty(RetrievalBenchmarkRunner.HoldoutLatencyFailures(fastTuning));
+        Assert.Equal("holdout warm p95 exceeds 250 ms",
+            Assert.Single(RetrievalBenchmarkRunner.HoldoutLatencyFailures(slowHoldout)));
+    }
+
+    [Fact]
     public void Deployment_fetches_and_tracks_both_publisher_benchmark_manifests()
     {
         var root = RepoRoot();
@@ -252,7 +338,7 @@ public sealed class RetrievalBenchmarkTests
     {
         var metrics = new RetrievalMetrics(1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1);
         return new RetrievalBenchmarkReport(
-            "lex-retrieval-benchmark/2", "2026-08-09T00:00:00Z", 1, "reviewed",
+            "lex-retrieval-benchmark/3", "2026-08-09T00:00:00Z", 1, "reviewed",
             "lex-retrieval-baseline/2", new string('a', 64), new string('a', 64),
             "reviewer@2026-08-09", new string('b', 40), "corpus-commit", "manifest-digest",
             "intfloat/multilingual-e5-small", "model-revision", "runner-1", "1 cpu, 2 GiB",

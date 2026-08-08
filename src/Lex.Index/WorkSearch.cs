@@ -315,7 +315,7 @@ public static class WorkSearch
                     """;
                 Add(candidates, "$query", "publisher : (" + tokenQuery + ")");
                 Add(candidates, "$language", language);
-                Add(candidates, "$candidate_limit", Math.Max(100, limit * 20));
+                Add(candidates, "$candidate_limit", (int)Math.Clamp((long)limit * 20, 100, 500));
                 using var candidateRows = candidates.ExecuteReader();
                 while (candidateRows.Read()) candidateIds.Add(candidateRows.GetInt64(0));
             }

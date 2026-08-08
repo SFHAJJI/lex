@@ -255,14 +255,16 @@ public static class ExplainerEndpoints
                   {H(report.Timestamp)} over {report.SampleCount:n0} cases.</div>
                   <div class="card"><table>
                   <tr><th>measure</th><th>keyword</th><th>hybrid</th></tr>
-                  <tr><td>MRR</td><td class="mono">{F(report.Keyword.Mrr, "0.000")}</td><td class="mono">{F(report.Hybrid.Mrr, "0.000")}</td></tr>
-                  <tr><td>Recall@10</td><td class="mono">{F(report.Keyword.RecallAt10, "0.000")}</td><td class="mono">{F(report.Hybrid.RecallAt10, "0.000")}</td></tr>
-                  <tr><td>nDCG@10</td><td class="mono">{F(report.Keyword.NdcgAt10, "0.000")}</td><td class="mono">{F(report.Hybrid.NdcgAt10, "0.000")}</td></tr>
+                  <tr><td>tuning MRR</td><td class="mono">{F(report.KeywordTuning.Mrr, "0.000")}</td><td class="mono">{F(report.HybridTuning.Mrr, "0.000")}</td></tr>
+                  <tr><td>tuning Recall@10</td><td class="mono">{F(report.KeywordTuning.RecallAt10, "0.000")}</td><td class="mono">{F(report.HybridTuning.RecallAt10, "0.000")}</td></tr>
+                  <tr><td>tuning nDCG@10</td><td class="mono">{F(report.KeywordTuning.NdcgAt10, "0.000")}</td><td class="mono">{F(report.HybridTuning.NdcgAt10, "0.000")}</td></tr>
                   <tr><td>holdout nDCG@10</td><td class="mono">{F(report.KeywordHoldout.NdcgAt10, "0.000")}</td><td class="mono">{F(report.HybridHoldout.NdcgAt10, "0.000")}</td></tr>
                   <tr><td>holdout no-hit accuracy</td><td class="mono">{F(report.KeywordHoldout.NoHitAccuracy, "0.000")}</td><td class="mono">{F(report.HybridHoldout.NoHitAccuracy, "0.000")}</td></tr>
                   <tr><td>holdout resolution accuracy</td><td class="mono">{F(report.KeywordHoldout.ResolutionAccuracy, "0.000")}</td><td class="mono">{F(report.HybridHoldout.ResolutionAccuracy, "0.000")}</td></tr>
-                  <tr><td>warm p95</td><td class="mono">{F(report.Keyword.P95Ms, "0.0")} ms</td><td class="mono">{F(report.Hybrid.P95Ms, "0.0")} ms</td></tr>
-                  <tr><td>warm p99</td><td class="mono">{F(report.Keyword.P99Ms, "0.0")} ms</td><td class="mono">{F(report.Hybrid.P99Ms, "0.0")} ms</td></tr>
+                  <tr><td>holdout warm p95</td><td class="mono">{F(report.KeywordHoldout.P95Ms, "0.0")} ms</td><td class="mono">{F(report.HybridHoldout.P95Ms, "0.0")} ms</td></tr>
+                  <tr><td>holdout warm p99</td><td class="mono">{F(report.KeywordHoldout.P99Ms, "0.0")} ms</td><td class="mono">{F(report.HybridHoldout.P99Ms, "0.0")} ms</td></tr>
+                  <tr><td>tuning warm p95</td><td class="mono">{F(report.KeywordTuning.P95Ms, "0.0")} ms</td><td class="mono">{F(report.HybridTuning.P95Ms, "0.0")} ms</td></tr>
+                  <tr><td>tuning warm p99</td><td class="mono">{F(report.KeywordTuning.P99Ms, "0.0")} ms</td><td class="mono">{F(report.HybridTuning.P99Ms, "0.0")} ms</td></tr>
                   </table><p class="sub">Code <span class="mono">{H(report.CodeCommit)}</span>, corpus
                   <span class="mono">{H(report.CorpusCommit)}</span>, manifest <span class="mono">{H(report.ManifestId)}</span>,
                   model <span class="mono">{H(report.ModelId)}@{H(report.ModelRevision)}</span>.<br>
@@ -343,18 +345,20 @@ public static class ExplainerEndpoints
                 var expectedHoldout = retrievalCases.Count(item => item.Collection == collection
                     && item.Split == "holdout");
                 return report is not null
-                       && report.Schema == "lex-retrieval-benchmark/2"
+                       && report.Schema == "lex-retrieval-benchmark/3"
                        && report.BaselineSchema == retrievalBaseline.Schema
                        && report.SampleCount == expectedCases
                        && report.TuningSampleCount == expectedTuning
                        && report.HoldoutSampleCount == expectedHoldout
-                       && report.Keyword is not null
-                       && report.Hybrid is not null
+                       && report.KeywordTuning is not null
+                       && report.HybridTuning is not null
                        && report.KeywordHoldout is not null
                        && report.HybridHoldout is not null
                        && report.GateFailures is not null
                        && report.ActivationGatePassed == (report.GateFailures.Count == 0)
                        && RetrievalBenchmarkGate.HasReleaseIdentity(report)
+                       && BenchmarkClaimsMatchVerifiedManifests(
+                           report, collection, ctx.Registry.VerifiedArtifactManifests)
                        && report.ReviewAttestation
                            == $"{retrievalBaseline.ReviewedBy}@{retrievalBaseline.ReviewedAt}"
                        && string.Equals(report.ExpectedCasesSha256, retrievalBaseline.CasesSha256,
@@ -1257,6 +1261,26 @@ public static class ExplainerEndpoints
         });
 
         return app;
+    }
+
+    public static bool BenchmarkClaimsMatchVerifiedManifests(
+        RetrievalBenchmarkReport report, string collection,
+        IReadOnlyCollection<VerifiedArtifactManifest> manifests)
+    {
+        var benchmarkFile = $"retrieval-benchmark-{collection}.json";
+        var indexFile = $"index-{collection}.db";
+        var benchmarkManifests = manifests.Where(item =>
+            item.Artifacts.Contains(benchmarkFile, StringComparer.Ordinal)).ToArray();
+        var indexManifests = manifests.Where(item =>
+            item.Artifacts.Contains(indexFile, StringComparer.Ordinal)).ToArray();
+        return benchmarkManifests.Length == 1
+               && indexManifests.Length == 1
+               && string.Equals(report.CodeCommit, benchmarkManifests[0].CodeCommit,
+                   StringComparison.OrdinalIgnoreCase)
+               && string.Equals(report.CodeCommit, indexManifests[0].CodeCommit,
+                   StringComparison.OrdinalIgnoreCase)
+               && string.Equals(report.ManifestId, indexManifests[0].Sha256,
+                   StringComparison.OrdinalIgnoreCase);
     }
 
     private static IReadOnlyList<RetrievalBenchmarkCase> LoadRetrievalCases()

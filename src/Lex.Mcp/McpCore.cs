@@ -24,7 +24,13 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
             },
         };
         JsonObject S(string d) => new() { ["type"] = "string", ["description"] = d };
-        JsonObject I(string d) => new() { ["type"] = "integer", ["description"] = d };
+        JsonObject I(string d, int? minimum = null, int? maximum = null)
+        {
+            var value = new JsonObject { ["type"] = "integer", ["description"] = d };
+            if (minimum is not null) value["minimum"] = minimum.Value;
+            if (maximum is not null) value["maximum"] = maximum.Value;
+            return value;
+        }
 
         var workDesc = "Work-level lex_id (publisher:workkey), version-level lex_id (version segment ignored), or verbatim publisher identifier. Unknown document -> call search first.";
         return
@@ -72,7 +78,7 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                     ["as_of"] = S("ISO date required when time_scope=as_of"),
                     ["fuzzy"] = S("auto or off; visible fallback only"),
                     ["works"] = S("optional comma-separated work ids: restrict search to these works"),
-                    ["limit"] = I("default 10"),
+                    ["limit"] = I("default 10; minimum 1, maximum 50", 1, 50),
                 }, ["query"]),
             Tool("article_history", "Every distinct text ONE provision (article/annex) has had on its publisher timeline, plus lifecycle events (inserted/removed/renumbered, renumbering detected mechanically by identical text hash). Read timeline_semantics before calling an interval legal applicability. Answers \"what did Article X say over its life / when did it change\".",
                 new JsonObject
@@ -343,6 +349,14 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
 
         string? Str(string k) => a[k]?.GetValue<string>();
         int Int(string k, int dflt) => a[k] is { } n && int.TryParse(n.ToString(), out var v) ? v : dflt;
+        int BoundedInt(string k, int dflt, int minimum, int maximum)
+        {
+            var value = Int(k, dflt);
+            if (value < minimum || value > maximum)
+                throw new ArgumentOutOfRangeException(k,
+                    $"{k} must be between {minimum} and {maximum}");
+            return value;
+        }
 
         // Every required date goes through here. `diff` used to parse its two dates with the
         // null-forgiving operator, so a caller that omitted one, or spelled it `from` instead of
@@ -547,13 +561,15 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
             case "search":
             {
                 var q = Str("query") ?? throw new ArgumentException("query required");
+                if (q.Length > 1_000)
+                    throw new ArgumentException("query must not exceed 1000 characters", "query");
                 var timeScope = Str("time_scope") ?? (Str("as_of") is null ? "all_versions" : "as_of");
                 if (timeScope is not ("all_versions" or "as_of")) throw new ArgumentException("time_scope must be all_versions or as_of");
                 DateOnly? asOf = timeScope == "as_of"
                     ? DateOnly.Parse(Str("as_of") ?? throw new ArgumentException("as_of required when time_scope=as_of")) : null;
                 var pub = Str("publisher");
                 var jurisdiction = Str("jurisdiction");
-                var limit = Int("limit", 10);
+                var limit = BoundedInt("limit", 10, 1, 50);
                 var requestedMode = Str("retrieval_mode") ?? "keyword";
                 if (requestedMode is not ("keyword" or "hybrid")) throw new ArgumentException("retrieval_mode must be keyword or hybrid");
                 var fuzzy = Str("fuzzy") ?? "auto";

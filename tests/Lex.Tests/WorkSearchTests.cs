@@ -373,6 +373,29 @@ public sealed class WorkSearchTests : IDisposable
     }
 
     [Fact]
+    public void Publisher_metadata_search_has_a_fixed_candidate_ceiling()
+    {
+        var db = TempDb();
+        var source = "https://publications.europa.eu/resource/authority/eurovoc/1";
+        var docs = Enumerable.Range(0, 1_200).Select(index =>
+            Doc($"eu:work-{index}:2024-01-01", $"work-{index}", $"Regulation {index}") with
+            {
+                PublisherMetadata =
+                [
+                    new PublisherMetadataRow("eurovoc", $"subject-{index}", "fr",
+                        "sharedterm", source),
+                ],
+            }).ToArray();
+        IndexBuilder.Build(db, Stamp(), docs, [], [], [], null);
+
+        using var reader = LexIndexReader.Open(db);
+        var result = reader.SearchKeyword("sharedterm", FilterSet.All, 10, false);
+
+        Assert.Equal(10, result.Hits.Count);
+        Assert.All(result.Hits, hit => Assert.Contains("work_metadata", hit.MatchReasons));
+    }
+
+    [Fact]
     public void Parsed_role_intent_cannot_override_an_explicit_conflicting_filter()
     {
         var db = TempDb();
