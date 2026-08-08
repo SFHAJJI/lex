@@ -220,8 +220,10 @@ public sealed class PdfMemorialLuProfileV2Tests
         Assert.StartsWith("Premier corps", result.Provisions[0].TextMd);
     }
 
-    [Fact]
-    public void Roman_looking_II_is_eleven_only_between_articles_ten_and_twelve()
+    [Theory]
+    [InlineData("Article II")]
+    [InlineData("ARTICLE II")]
+    public void Roman_looking_II_is_eleven_only_between_articles_ten_and_twelve(string articleEleven)
     {
         var result = PdfMemorialLuProfileV2.FromPages([Issue(
             "CONVENTION COORDONNEE INSTITUANT L'UNION ECONOMIQUE",
@@ -229,7 +231,7 @@ public sealed class PdfMemorialLuProfileV2Tests
             "Premier corps.",
             "Article 10",
             "Dixième corps.",
-            "Article II",
+            articleEleven,
             "Onzième corps.",
             "Article 12",
             "Douzième corps.")],

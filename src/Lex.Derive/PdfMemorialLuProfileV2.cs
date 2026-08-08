@@ -26,7 +26,7 @@ public static class PdfMemorialLuProfileV2
     private static readonly Regex AmbiguousElevenHead = new(
         "^[ \\t\\u00ab\\ufffd\\\"]*Article[ \\t\\u00a0]+II"
         + "[ \\t\\u00a0]*\\.?[ \\t\\u00a0]*(?<separator>[-\\u2013\\u2014])?[ \\t]*",
-        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+        RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
 
     private static readonly Regex NextAct = new(
         @"^[ \t]*(Loi|R[èe]glement grand-ducal|Arr[êe]t[ée] grand-ducal|R[èe]glement minist[ée]riel|Arr[êe]t[ée] minist[ée]riel)\s+du\s+\d",
