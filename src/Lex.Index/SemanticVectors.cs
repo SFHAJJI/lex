@@ -256,12 +256,17 @@ public sealed class SemanticVectorReader : IDisposable
     /// provision occurrence and document before it knew which vectors were remotely relevant.
     /// </summary>
     public IReadOnlyList<(long Ordinal, int Distance)> NearestByHamming(
-        byte[] queryBits, int limit)
+        byte[] queryBits, int limit) => NearestByHamming(queryBits, limit, 0, Count);
+
+    public IReadOnlyList<(long Ordinal, int Distance)> NearestByHamming(
+        byte[] queryBits, int limit, long startOrdinal, long count)
     {
         if (queryBits.Length != _binaryBytes) throw new ArgumentException("Query bit dimension mismatch.");
         if (limit <= 0) throw new ArgumentOutOfRangeException(nameof(limit));
+        if (startOrdinal < 0 || count < 0 || startOrdinal > Count - count)
+            throw new InvalidDataException("Semantic vector scan range is outside the file.");
         var queue = new PriorityQueue<(long Ordinal, int Distance), long>();
-        for (long ordinal = 0; ordinal < Count; ordinal++)
+        for (var ordinal = startOrdinal; ordinal < startOrdinal + count; ordinal++)
         {
             var distance = HammingDistance(ordinal, queryBits);
             // PriorityQueue removes its smallest priority. Negating distance and ordinal makes
@@ -325,6 +330,7 @@ public enum SemanticBuildStage
 {
     Preparation,
     Embeddings,
+    WorkEmbeddings,
     Database,
     Finalization,
 }

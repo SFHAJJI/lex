@@ -14,20 +14,35 @@ public sealed class WorkSearchTests : IDisposable
         public string ModelId => "test/work-search";
         public string ModelRevision => "1";
         public int Dimensions => 8;
+        public List<int> BatchSizes { get; } = [];
+        public List<int?> BatchPaddings { get; } = [];
         public int CountTokens(string text) => text.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length + 2;
         public int PrefixLengthForTokens(string text, int maxTokens) => text.Length;
         public int SuffixStartForTokens(string text, int maxTokens) => 0;
         public float[] Encode(string text, EmbeddingInputKind kind)
         {
             var result = new float[Dimensions];
-            foreach (var character in text) result[character % Dimensions]++;
+            foreach (var token in WorkSearch.Normalize(text).Split(' ', StringSplitOptions.RemoveEmptyEntries))
+            {
+                var slot = token switch
+                {
+                    "solar" or "photovoltaic" or "tender" or "procurement" => 0,
+                    "privacy" or "personal" or "data" => 1,
+                    _ => 2 + Math.Abs(StringComparer.Ordinal.GetHashCode(token) % (Dimensions - 2)),
+                };
+                result[slot]++;
+            }
             var norm = MathF.Sqrt(result.Sum(value => value * value));
             for (var index = 0; index < result.Length; index++) result[index] /= norm;
             return result;
         }
         public IReadOnlyList<float[]> EncodeBatch(
-            IReadOnlyList<string> texts, EmbeddingInputKind kind, int? padToTokens = null) =>
-            texts.Select(text => Encode(text, kind)).ToArray();
+            IReadOnlyList<string> texts, EmbeddingInputKind kind, int? padToTokens = null)
+        {
+            BatchSizes.Add(texts.Count);
+            BatchPaddings.Add(padToTokens);
+            return texts.Select(text => Encode(text, kind)).ToArray();
+        }
         public void Dispose() { }
     }
 
@@ -82,11 +97,13 @@ public sealed class WorkSearchTests : IDisposable
         Assert.Equal("32016r0679", result.Hits[0].Doc.GroupKey);
         Assert.Contains("contained_alias", result.Hits[0].MatchReasons);
         Assert.Equal(EnrichmentDigest, reader.Stamp["enrichment_digest"]);
+        Assert.Equal("0", reader.Stamp["work_vector_records"]);
+        Assert.DoesNotContain("vector_layout", reader.Stamp.Keys);
         Assert.Empty(result.QueryExpansions);
     }
 
     [Fact]
-    public void Weak_discovery_improves_recall_but_does_not_outrank_direct_legal_wording()
+    public void Weak_discovery_is_quarantined_from_ordinary_keyword_search()
     {
         var db = TempDb();
         var direct = Doc("eu:direct:2020-01-01", "direct", "Direct evidence act");
@@ -106,8 +123,7 @@ public sealed class WorkSearchTests : IDisposable
         var result = reader.SearchKeyword("photovoltaic procurement", FilterSet.All, 10, fuzzyAuto: false);
 
         Assert.Equal("direct", result.Hits[0].Doc.GroupKey);
-        Assert.Contains(result.Hits, hit => hit.Doc.GroupKey == "tagged"
-            && hit.MatchReasons.Contains("work_discovery"));
+        Assert.DoesNotContain(result.Hits, hit => hit.MatchReasons.Contains("work_discovery"));
     }
 
     [Fact]
@@ -135,26 +151,57 @@ public sealed class WorkSearchTests : IDisposable
         var doc = Doc("eu:32016r0679:2016-05-04", "32016r0679", "GDPR");
         IndexBuilder.Build(db, Stamp(), [doc], [Provision(doc, "Personal data protection.")],
             [], [], null);
-        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
         using (var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={db}"))
         {
             connection.Open();
             using var command = connection.CreateCommand();
             command.CommandText = """
+                DELETE FROM stamp WHERE k IN ('work_search_records','work_vector_records','vector_layout');
                 DROP TABLE work_fts;
                 DROP TABLE work_discovery;
+                DROP TABLE work_vectors;
                 DROP TABLE work_names;
                 DROP TABLE work_records;
                 """;
             command.ExecuteNonQuery();
         }
-        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
-
         using var reader = LexIndexReader.Open(db);
         var result = reader.SearchKeyword("32016R0679", FilterSet.All, 10, fuzzyAuto: false);
 
         Assert.Equal("32016r0679", Assert.Single(result.Hits).Doc.GroupKey);
         Assert.Contains("exact_identifier", result.Hits[0].MatchReasons);
+    }
+
+    [Fact]
+    public void Hybrid_falls_back_when_an_earlier_v3_index_has_no_work_catalog()
+    {
+        var db = TempDb();
+        var vectors = TempFile(".vectors");
+        var doc = Doc("eu:32016r0679:2016-05-04", "32016r0679", "GDPR");
+        using var encoder = new TestEncoder();
+        IndexBuilder.Build(db, Stamp(), [doc], [Provision(doc, "Personal data protection.")],
+            [], [], null,
+            semantic: new SemanticBuildOptions(encoder, vectors, "model-sha", "tokenizer-sha"));
+        using (var legacyVectors = new SemanticVectorWriter(vectors, encoder.Dimensions))
+            legacyVectors.Write(encoder.Encode("Personal data protection.", EmbeddingInputKind.Passage));
+        using (var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={db}"))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = """
+                DELETE FROM stamp WHERE k IN ('work_search_records','work_vector_records','vector_layout');
+                DROP TABLE work_fts;
+                DROP TABLE work_discovery;
+                DROP TABLE work_vectors;
+                DROP TABLE work_names;
+                DROP TABLE work_records;
+                """;
+            command.ExecuteNonQuery();
+        }
+        using var reader = LexIndexReader.Open(db, encoder, vectors);
+        var result = reader.SearchHybrid("personal data", FilterSet.All, 10, fuzzyAuto: false);
+
+        Assert.Contains(result.Hits, hit => hit.Doc.GroupKey == "32016r0679");
     }
 
     [Fact]
@@ -178,6 +225,186 @@ public sealed class WorkSearchTests : IDisposable
         Assert.Equal("keyword", result.RetrievalMode);
         Assert.Equal("32016r0679", result.Hits[0].Doc.GroupKey);
         Assert.Contains("contained_alias", result.Hits[0].MatchReasons);
+    }
+
+    [Fact]
+    public void Hybrid_quarantines_weak_concept_vectors_from_ordinary_search()
+    {
+        var db = TempDb();
+        var vectors = TempFile(".vectors");
+        var target = Doc("eu:target:2020-01-01", "target", "Net-zero industry rules");
+        var neighbour = Doc("eu:neighbour:2020-01-01", "neighbour", "Reporting rules");
+        var targetProvision = Provision(target, "Manufacturers submit annual reports.");
+        var neighbourProvision = Provision(neighbour, "Operators keep accounting records.");
+        var progress = new List<SemanticBuildProgress>();
+        using var encoder = new TestEncoder();
+        IndexBuilder.Build(db, Stamp(), [target, neighbour], [targetProvision, neighbourProvision],
+            [], [], null,
+            semantic: new SemanticBuildOptions(
+                encoder, vectors, "model-sha", "tokenizer-sha", Progress: progress.Add),
+            workSearch: new WorkSearchBuildOptions([], [
+                new WorkDiscoveryRow("target", "fr", "concept", "solar tender criteria",
+                    "test-model", new string('a', 64), new string('b', 64),
+                    "2026-08-08T00:00:00Z", 0.91, 3, 1.0,
+                    [new WorkEvidenceAnchor(target.Key, "art_1", targetProvision.TextSha)])
+            ], EnrichmentDigest));
+
+        using var allVectors = new SemanticVectorReader(vectors);
+        Assert.Equal(5, allVectors.Count);
+        using (var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={db}"))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = "SELECT MIN(vector_ordinal),MAX(vector_ordinal),COUNT(*) FROM work_vectors";
+            using var row = command.ExecuteReader();
+            Assert.True(row.Read());
+            Assert.Equal(2, row.GetInt64(0));
+            Assert.Equal(4, row.GetInt64(1));
+            Assert.Equal(3, row.GetInt64(2));
+        }
+        using var reader = LexIndexReader.Open(db, encoder, vectors);
+        var result = reader.SearchHybrid("photovoltaic procurement", FilterSet.All, 10, fuzzyAuto: false);
+
+        Assert.Equal("hybrid", result.RetrievalMode);
+        Assert.DoesNotContain(result.Hits, hit => hit.MatchReasons.Contains("semantic_concept"));
+        Assert.Contains(progress, item => item.Stage == SemanticBuildStage.WorkEmbeddings
+            && item.Completed == 3 && item.Total == 3);
+        Assert.Equal("3", reader.Stamp["work_vector_records"]);
+        Assert.Equal("lex-vectors/1-mixed-provision-work", reader.Stamp["vector_layout"]);
+    }
+
+    [Fact]
+    public void A_partial_work_catalog_is_rejected_instead_of_silently_disabled()
+    {
+        var db = TempDb();
+        var doc = Doc("eu:32016r0679:2016-05-04", "32016r0679", "GDPR");
+        IndexBuilder.Build(db, Stamp(), [doc], [Provision(doc, "Personal data protection.")],
+            [], [], null,
+            workSearch: new WorkSearchBuildOptions([], [], EnrichmentDigest));
+        using (var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={db}"))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = "DROP TABLE work_fts";
+            command.ExecuteNonQuery();
+        }
+
+        var error = Assert.Throws<InvalidDataException>(() => LexIndexReader.Open(db));
+        Assert.Contains("partial work catalog", error.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void A_current_artifact_cannot_masquerade_as_legacy_after_losing_its_work_catalog()
+    {
+        var db = TempDb();
+        var doc = Doc("eu:32016r0679:2016-05-04", "32016r0679", "GDPR");
+        IndexBuilder.Build(db, Stamp(), [doc], [Provision(doc, "Personal data protection.")],
+            [], [], null,
+            workSearch: new WorkSearchBuildOptions([], [], EnrichmentDigest));
+        using (var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={db}"))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = """
+                DROP TABLE work_fts;
+                DROP TABLE work_discovery;
+                DROP TABLE work_vectors;
+                DROP TABLE work_names;
+                DROP TABLE work_records;
+                """;
+            command.ExecuteNonQuery();
+        }
+
+        var error = Assert.Throws<InvalidDataException>(() => LexIndexReader.Open(db));
+        Assert.Contains("inconsistent work catalog", error.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Hybrid_rejects_a_work_vector_ordinal_outside_the_single_artifact()
+    {
+        var db = TempDb();
+        var vectors = TempFile(".vectors");
+        var doc = Doc("eu:target:2020-01-01", "target", "Net-zero industry rules");
+        var provision = Provision(doc, "Manufacturers submit annual reports.");
+        using var encoder = new TestEncoder();
+        IndexBuilder.Build(db, Stamp(), [doc], [provision], [], [], null,
+            semantic: new SemanticBuildOptions(encoder, vectors, "model-sha", "tokenizer-sha"),
+            workSearch: new WorkSearchBuildOptions([], [
+                new WorkDiscoveryRow("target", "fr", "concept", "solar tender criteria",
+                    "test-model", new string('a', 64), new string('b', 64),
+                    "2026-08-08T00:00:00Z", 0.91, 3, 1.0,
+                    [new WorkEvidenceAnchor(doc.Key, "art_1", provision.TextSha)])
+            ], EnrichmentDigest));
+        using (var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={db}"))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = "UPDATE work_vectors SET vector_ordinal=999 WHERE work_vector_id=1";
+            command.ExecuteNonQuery();
+        }
+        Assert.Throws<InvalidDataException>(() => LexIndexReader.Open(db, encoder, vectors));
+    }
+
+    [Fact]
+    public void Hybrid_rejects_a_work_vector_without_a_held_work_identity()
+    {
+        var db = TempDb();
+        var vectors = TempFile(".vectors");
+        var doc = Doc("eu:target:2020-01-01", "target", "Net-zero industry rules");
+        using var encoder = new TestEncoder();
+        IndexBuilder.Build(db, Stamp(), [doc], [Provision(doc, "Reporting duties.")], [], [], null,
+            semantic: new SemanticBuildOptions(encoder, vectors, "model-sha", "tokenizer-sha"));
+        using (var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={db}"))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = "UPDATE work_vectors SET work_id=999 WHERE work_vector_id=1";
+            command.ExecuteNonQuery();
+        }
+
+        var error = Assert.Throws<InvalidDataException>(() =>
+            LexIndexReader.Open(db, encoder, vectors));
+        Assert.Contains("work identity", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Work_vector_batches_refuse_inputs_above_the_configured_token_budget()
+    {
+        var db = TempDb();
+        var vectors = TempFile(".vectors");
+        var doc = Doc("eu:target:2020-01-01", "target",
+            "A deliberately long official work title for the budget test");
+        using var encoder = new TestEncoder();
+
+        var error = Assert.Throws<InvalidDataException>(() => IndexBuilder.Build(
+            db, Stamp(), [doc], [], [], [], null,
+            semantic: new SemanticBuildOptions(
+                encoder, vectors, "model-sha", "tokenizer-sha", MaxBatchTokens: 4),
+            workSearch: new WorkSearchBuildOptions([], [], EnrichmentDigest)));
+
+        Assert.Contains("work-vector input", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Work_vector_batches_use_fixed_padding_and_split_at_the_token_budget()
+    {
+        var db = TempDb();
+        var vectors = TempFile(".vectors");
+        using var encoder = new TestEncoder();
+        var docs = new[]
+        {
+            Doc("eu:first:2020-01-01", "first", "First work"),
+            Doc("eu:second:2020-01-01", "second", "Second work"),
+            Doc("eu:third:2020-01-01", "third", "Third work"),
+        };
+
+        IndexBuilder.Build(db, Stamp(), docs, [], [], [], null,
+            semantic: new SemanticBuildOptions(
+                encoder, vectors, "model-sha", "tokenizer-sha",
+                BatchSize: 32, MaxBatchTokens: 64));
+
+        Assert.Equal([2, 1], encoder.BatchSizes);
+        Assert.Equal([32, 32], encoder.BatchPaddings);
     }
 
     private string TempDb()
@@ -219,7 +446,6 @@ public sealed class WorkSearchTests : IDisposable
 
     public void Dispose()
     {
-        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
         foreach (var file in _files)
             try { File.Delete(file); } catch { /* temporary test artifact */ }
     }

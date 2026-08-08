@@ -282,10 +282,10 @@
       "id": "D75",
       "title": "Separate authoritative text from provenance-aware search enrichment",
       "status": "building",
-      "choice": "Use a disposable evidence-backed LLM workbench to derive work-level discovery candidates; require publisher confirmation or review for strong aliases, admit only validated and provenance-labelled descriptions and concepts as weak recall signals, and merge them into the rebuilt signed index.",
-      "alternative": "Treat generated metadata as legal fact or a strong rank signal, maintain a runtime sidecar database, or repeat work metadata inside every provision vector.",
-      "reason": "Professional names and descriptive concepts improve discovery at corpus scale, while protected fields and legal text identity remain deterministic, auditable and inseparable from the verified artifact.",
-      "cost": "Proposal provenance, evidence anchors, collision and repeatability checks, review workflow, separate legal and enrichment digests, and regression benchmarks become build responsibilities."
+      "choice": "Build a publisher-first work catalog from official identifiers, titles, short titles and classifications, plus reviewed collision-aware aliases. Store accepted model-derived concepts in a quarantined trust class and activate them only if a separate held-out ablation proves incremental value without ranking or latency regressions. Any work vectors share the existing signed vector artifact through typed SQLite ordinal mappings.",
+      "alternative": "Treat generated metadata as legal fact or a strong rank signal, maintain a runtime sidecar database, repeat work metadata inside every provision vector, or keep professional names in application code.",
+      "reason": "Professional names require deterministic publisher metadata and reviewed overrides, while descriptive discovery requires candidate retrieval without silently converting a repeated model output into authority. A single verified artifact keeps provenance and rollback atomic.",
+      "cost": "Publisher metadata retention, alias collision handling, proposal provenance, evidence anchors, separate legal and enrichment digests, typed ordinal validation, clean corpus migration and independent regression benchmarks become build responsibilities."
     },
     {
       "id": "D76",

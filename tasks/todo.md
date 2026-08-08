@@ -1,6 +1,6 @@
 # Publisher-first retrieval tasks
 
-- [ ] Task 1: Finish and review the stalled work catalog and mixed-vector mapping
+- [x] Task 1: Finish and review the stalled work catalog and mixed-vector mapping
   - Acceptance: contiguous typed vector mappings; exact/weak ranking separation; current assistant
     cannot auto-select from weak discovery.
   - Verify: focused `WorkSearchTests` and `IndexTests`, then full .NET suite.

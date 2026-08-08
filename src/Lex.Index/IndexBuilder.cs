@@ -301,6 +301,11 @@ public static class IndexBuilder
               confidence REAL NOT NULL, repeat_runs INTEGER NOT NULL,
               agreement_ratio REAL NOT NULL, evidence_json TEXT NOT NULL,
               UNIQUE(work_id,kind,normalized));
+            CREATE TABLE work_vectors(
+              work_vector_id INTEGER PRIMARY KEY,
+              work_id INTEGER NOT NULL, evidence_kind TEXT NOT NULL, evidence_value TEXT,
+              vector_ordinal INTEGER NOT NULL UNIQUE);
+            CREATE INDEX ix_work_vectors_work ON work_vectors(work_id);
             CREATE VIRTUAL TABLE work_fts USING fts5(
               group_key UNINDEXED, language UNINDEXED,
               identifiers, aliases, titles, facets, discovery,
@@ -359,8 +364,6 @@ public static class IndexBuilder
                 insDoc.ExecuteNonQuery();
                 DatabaseItemCompleted();
             }
-
-            WorkSearch.Populate(conn, docRows, provisionRows, workSearch);
 
             var docByRid = docRows.ToDictionary(d => $"{d.Key}|{d.Language}|{d.ValidFrom}", StringComparer.Ordinal);
             var insBlob = conn.CreateCommand();
@@ -522,6 +525,9 @@ public static class IndexBuilder
                 ReportProgress(semantic, SemanticBuildStage.Database,
                     0, 0, databaseWatch, ref lastDatabasePercent, ref lastDatabaseReport, force: true);
 
+            WorkSearch.Populate(
+                conn, docRows, provisionRows, workSearch, semantic, semanticWriter, embeddingCache);
+
             finalizationWatch = System.Diagnostics.Stopwatch.StartNew();
             ReportProgress(semantic, SemanticBuildStage.Finalization,
                 finalizationCompleted, 3, finalizationWatch,
@@ -540,6 +546,22 @@ public static class IndexBuilder
                 ["algorithm"] = StampSigner.Algorithm,
                 ["content_digest"] = ContentDigest(docRows, provisionRows),
             };
+            using (var workCounts = conn.CreateCommand())
+            {
+                workCounts.CommandText = """
+                    SELECT (SELECT COUNT(*) FROM work_records),
+                           (SELECT COUNT(*) FROM work_vectors)
+                    """;
+                using var countRow = workCounts.ExecuteReader();
+                if (!countRow.Read()) throw new InvalidDataException("Work search counts cannot be read.");
+                var workVectorRecords = countRow.GetInt64(1);
+                stamp["work_search_records"] = countRow.GetInt64(0).ToString(
+                    System.Globalization.CultureInfo.InvariantCulture);
+                stamp["work_vector_records"] = workVectorRecords.ToString(
+                    System.Globalization.CultureInfo.InvariantCulture);
+                if (workVectorRecords > 0)
+                    stamp["vector_layout"] = "lex-vectors/1-mixed-provision-work";
+            }
             if (workSearch is not null)
                 stamp["enrichment_digest"] = workSearch.EnrichmentDigest;
             finalizationCompleted++;
@@ -606,7 +628,7 @@ public static class IndexBuilder
         }
     }
 
-    private static int EmbeddingTokenBucket(int tokenCount) => tokenCount switch
+    internal static int EmbeddingTokenBucket(int tokenCount) => tokenCount switch
     {
         <= 0 => throw new InvalidDataException("Semantic chunk token count must be positive."),
         <= 32 => 32,

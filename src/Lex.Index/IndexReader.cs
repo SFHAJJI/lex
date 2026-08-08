@@ -53,13 +53,15 @@ public sealed class LexIndexReader : IDisposable
     private readonly ITextEncoder? _encoder;
     private readonly SemanticVectorReader? _vectors;
     private readonly bool _hasWorkSearch;
+    private readonly long _provisionVectorCount;
     public IReadOnlyDictionary<string, string> Stamp { get; }
     public string Collection => Stamp.GetValueOrDefault("collection", "?");
     public bool SignatureValid { get; }
     public bool HybridReady => _encoder is not null && _vectors is not null;
 
     private LexIndexReader(SqliteConnection conn, Dictionary<string, string> stamp, string schema,
-                           ITextEncoder? encoder, SemanticVectorReader? vectors, bool hasWorkSearch)
+                           ITextEncoder? encoder, SemanticVectorReader? vectors, bool hasWorkSearch,
+                           long provisionVectorCount)
     {
         _conn = conn;
         Stamp = stamp;
@@ -67,6 +69,7 @@ public sealed class LexIndexReader : IDisposable
         _encoder = encoder;
         _vectors = vectors;
         _hasWorkSearch = hasWorkSearch;
+        _provisionVectorCount = provisionVectorCount;
         SignatureValid = stamp.ContainsKey("signature") && StampSigner.Verify(stamp);
     }
 
@@ -140,15 +143,49 @@ public sealed class LexIndexReader : IDisposable
             }
         }
 
-        var hasWorkSearch = new[] { "work_records", "work_names", "work_fts" }.All(table =>
+        var workCatalogTables = new[]
+            { "work_records", "work_names", "work_fts", "work_discovery", "work_vectors" };
+        var presentWorkCatalogTables = workCatalogTables.Count(table =>
         {
             using var tableCommand = conn.CreateCommand();
             tableCommand.CommandText = "SELECT 1 FROM sqlite_master WHERE name=$name";
             tableCommand.Parameters.AddWithValue("$name", table);
             return tableCommand.ExecuteScalar() is not null;
         });
+        if (presentWorkCatalogTables is > 0 && presentWorkCatalogTables != workCatalogTables.Length)
+            throw new InvalidDataException(
+                $"Index {dbPath} contains a partial work catalog. Rebuild it instead of silently disabling work search.");
+        var hasWorkSearch = presentWorkCatalogTables == workCatalogTables.Length;
+        var hasWorkSearchStamp = stamp.ContainsKey("work_search_records")
+                                 || stamp.ContainsKey("work_vector_records")
+                                 || stamp.ContainsKey("vector_layout");
+        if (hasWorkSearch != hasWorkSearchStamp)
+            throw new InvalidDataException(
+                $"Index {dbPath} has inconsistent work catalog tables and stamp claims.");
+        if (hasWorkSearch)
+        {
+            if (!long.TryParse(stamp.GetValueOrDefault("work_search_records"), out var stampedWorks)
+                || !long.TryParse(stamp.GetValueOrDefault("work_vector_records"), out var stampedWorkVectors)
+                || stampedWorks < 0 || stampedWorkVectors < 0)
+                throw new InvalidDataException($"Index {dbPath} has invalid work catalog counts in its stamp.");
+            using var workCounts = conn.CreateCommand();
+            workCounts.CommandText = """
+                SELECT (SELECT COUNT(*) FROM work_records),
+                       (SELECT COUNT(*) FROM work_vectors)
+                """;
+            using var workCountRow = workCounts.ExecuteReader();
+            if (!workCountRow.Read()
+                || workCountRow.GetInt64(0) != stampedWorks
+                || workCountRow.GetInt64(1) != stampedWorkVectors)
+                throw new InvalidDataException($"Index {dbPath} work catalog counts do not match its stamp.");
+            var vectorLayout = stamp.GetValueOrDefault("vector_layout");
+            if ((stampedWorkVectors > 0 && vectorLayout != "lex-vectors/1-mixed-provision-work")
+                || (stampedWorkVectors == 0 && vectorLayout is not null))
+                throw new InvalidDataException($"Index {dbPath} has an invalid work vector layout claim.");
+        }
 
         SemanticVectorReader? vectors = null;
+        long provisionVectorCount = 0;
         if (encoder is not null || vectorPath is not null)
         {
             if (encoder is null || vectorPath is null)
@@ -161,21 +198,74 @@ public sealed class LexIndexReader : IDisposable
                 throw new InvalidDataException("The semantic vector dimension does not match the runtime encoder.");
             using var mapping = conn.CreateCommand();
             mapping.CommandText = """
-                SELECT
-                  (SELECT COUNT(*) FROM semantic_chunks
-                     WHERE vector_ordinal < 0 OR vector_ordinal >= $vector_count),
-                  (SELECT COUNT(DISTINCT vector_ordinal) FROM semantic_chunks)
+                SELECT COUNT(DISTINCT vector_ordinal),
+                       COALESCE(MIN(vector_ordinal),-1),COALESCE(MAX(vector_ordinal),-1)
+                FROM semantic_chunks
                 """;
-            mapping.Parameters.AddWithValue("$vector_count", vectors.Count);
             using var mappingReader = mapping.ExecuteReader();
             if (!mappingReader.Read())
                 throw new InvalidDataException("The semantic vector mapping cannot be read.");
-            if (mappingReader.GetInt64(0) != 0)
-                throw new InvalidDataException("The semantic vector mapping contains an invalid ordinal.");
-            if (mappingReader.GetInt64(1) != vectors.Count)
+            provisionVectorCount = mappingReader.GetInt64(0);
+            var provisionMin = mappingReader.GetInt64(1);
+            var provisionMax = mappingReader.GetInt64(2);
+            if (provisionVectorCount > 0
+                && (provisionMin != 0 || provisionMax != provisionVectorCount - 1))
+                throw new InvalidDataException("Provision vector ordinals are not contiguous from zero.");
+
+            long workVectorCount = 0;
+            using var workTable = conn.CreateCommand();
+            workTable.CommandText =
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='work_vectors'";
+            if (workTable.ExecuteScalar() is not null)
+            {
+                using var invalidWorkMappings = conn.CreateCommand();
+                invalidWorkMappings.CommandText = """
+                    SELECT COUNT(*)
+                    FROM work_vectors v
+                    LEFT JOIN work_records r ON r.work_id=v.work_id
+                    WHERE r.work_id IS NULL
+                       OR (v.evidence_kind='work' AND v.evidence_value IS NOT NULL)
+                       OR (v.evidence_kind<>'work' AND (
+                           v.evidence_kind NOT IN ('description','concept','search_synonym','practice_area')
+                           OR v.evidence_value IS NULL OR trim(v.evidence_value)=''))
+                    """;
+                if (Convert.ToInt64(invalidWorkMappings.ExecuteScalar()) != 0)
+                    throw new InvalidDataException("The work vector mapping has invalid evidence or work identity.");
+                using var workMapping = conn.CreateCommand();
+                workMapping.CommandText = """
+                    SELECT COUNT(DISTINCT vector_ordinal),
+                           COALESCE(MIN(vector_ordinal),-1),COALESCE(MAX(vector_ordinal),-1)
+                    FROM work_vectors
+                    """;
+                using var workReader = workMapping.ExecuteReader();
+                if (!workReader.Read())
+                    throw new InvalidDataException("The work vector mapping cannot be read.");
+                workVectorCount = workReader.GetInt64(0);
+                var workMin = workReader.GetInt64(1);
+                var workMax = workReader.GetInt64(2);
+                if (workVectorCount > 0 && (workMin != provisionVectorCount
+                    || workMax != provisionVectorCount + workVectorCount - 1))
+                    throw new InvalidDataException("Work vector ordinals are not contiguous after provisions.");
+                if (workVectorCount > 0)
+                {
+                    using var baseCoverage = conn.CreateCommand();
+                    baseCoverage.CommandText = """
+                        SELECT COUNT(*) FROM (
+                          SELECT r.work_id
+                          FROM work_records r
+                          LEFT JOIN work_vectors v ON v.work_id=r.work_id
+                          GROUP BY r.work_id
+                          HAVING SUM(CASE WHEN v.evidence_kind='work' THEN 1 ELSE 0 END) <> 1)
+                        """;
+                    if (Convert.ToInt64(baseCoverage.ExecuteScalar()) != 0)
+                        throw new InvalidDataException("Every work must have exactly one base vector.");
+                }
+            }
+            if (provisionVectorCount + workVectorCount != vectors.Count)
                 throw new InvalidDataException("The semantic vector file contains an unmapped record.");
         }
-        return new LexIndexReader(conn, stamp, schema!, encoder, vectors, hasWorkSearch);
+        return new LexIndexReader(
+            conn, stamp, schema!, encoder, vectors, hasWorkSearch, provisionVectorCount);
     }
 
     private const string DocCols = """
@@ -429,7 +519,9 @@ public sealed class LexIndexReader : IDisposable
                 reason is "exact_identifier" or "exact_alias" or "contained_identifier" or "contained_alias") == true)
             return keyword;
         var lexical = keyword.Hits;
-        var semantic = SearchSemantic(query, filters, 100);
+        var queryVector = _encoder.Encode(query, EmbeddingInputKind.Query);
+        var semantic = SearchSemantic(query, queryVector, filters, 100);
+        var semanticWorks = SearchWorkSemanticCatalog(queryVector, filters, 100);
         var fused = new Dictionary<string, RetrievalHit>(StringComparer.Ordinal);
         var scores = new Dictionary<string, double>(StringComparer.Ordinal);
         static string Key(DocRow d, ProvisionRow p) => $"{d.GroupKey}|{d.Language}|{p.Anchor}|{p.TextSha}";
@@ -449,6 +541,30 @@ public sealed class LexIndexReader : IDisposable
                 fused[key] = prior with { MatchReasons = ["keyword", "semantic"] };
             else fused[key] = h;
         }
+        for (var i = 0; i < semanticWorks.Count; i++)
+        {
+            var work = semanticWorks[i];
+            var key = fused.Where(candidate =>
+                    candidate.Value.Doc.Key == work.Doc.Key
+                    && candidate.Value.Doc.Language == work.Doc.Language
+                    && candidate.Value.Doc.ValidFrom == work.Doc.ValidFrom)
+                .OrderByDescending(candidate => scores.GetValueOrDefault(candidate.Key))
+                .Select(candidate => candidate.Key)
+                .FirstOrDefault();
+            if (key is null)
+            {
+                var standalone = WorkRetrievalHit(work);
+                key = Key(standalone.Doc, standalone.Provision);
+                fused[key] = standalone;
+            }
+            var weight = work.Reason == "semantic_concept" ? 0.60 : 0.65;
+            scores[key] = scores.GetValueOrDefault(key) + weight / (60 + i + 1);
+            if (fused.TryGetValue(key, out var prior))
+                fused[key] = prior with
+                {
+                    MatchReasons = prior.MatchReasons.Append(work.Reason).Distinct().ToArray(),
+                };
+        }
         var hits = fused.Select(kv => kv.Value with { Score = scores[kv.Key] })
             .OrderByDescending(h => h.Score)
             // RRF intentionally gives the first lexical and first semantic-only candidates the
@@ -457,7 +573,8 @@ public sealed class LexIndexReader : IDisposable
             // the provision containing the literal words the reader typed.
             .ThenByDescending(h =>
                 (h.MatchReasons.Contains("keyword") ? 2 : 0)
-                + (h.MatchReasons.Contains("semantic") ? 1 : 0))
+                + (h.MatchReasons.Contains("semantic") ? 1 : 0)
+                + (h.MatchReasons.Contains("semantic_work") ? 1 : 0))
             .ThenByDescending(h => h.Doc.ValidFrom, StringComparer.Ordinal)
             .Take(limit).ToList();
         return new SearchExecution("hybrid", hits, keyword.QueryExpansions);
@@ -526,8 +643,21 @@ public sealed class LexIndexReader : IDisposable
     }
 
     private IReadOnlyList<WorkSearchHit> SearchWorkCatalog(string query, FilterSet filters, int limit)
+        => ResolveWorkMatches(
+            WorkSearch.Find(_conn, query, filters.Language, Math.Max(limit * 2, 20)), filters);
+
+    private IReadOnlyList<WorkSearchHit> SearchWorkSemanticCatalog(
+        float[] queryVector, FilterSet filters, int limit)
     {
-        var matches = WorkSearch.Find(_conn, query, filters.Language, Math.Max(limit * 2, 20));
+        if (!_hasWorkSearch || _encoder is null || limit <= 0) return [];
+        return ResolveWorkMatches(
+                WorkSearch.FindSemantic(_conn, _vectors!, queryVector, limit), filters)
+            .Take(limit).ToArray();
+    }
+
+    private IReadOnlyList<WorkSearchHit> ResolveWorkMatches(
+        IReadOnlyList<WorkMatch> matches, FilterSet filters)
+    {
         var result = new List<WorkSearchHit>();
         foreach (var match in matches)
         {
@@ -637,12 +767,13 @@ public sealed class LexIndexReader : IDisposable
         return previous[^1];
     }
 
-    private List<RetrievalHit> SearchSemantic(string query, FilterSet filters, int limit)
+    private List<RetrievalHit> SearchSemantic(
+        string query, float[] queryVector, FilterSet filters, int limit)
     {
-        var queryVector = _encoder!.Encode(query, EmbeddingInputKind.Query);
         var binary = SemanticVectorReader.Binary(queryVector);
         var int8 = SemanticVectorReader.Int8(queryVector);
-        var nearest = _vectors!.NearestByHamming(binary, Math.Max(2_000, limit * 20));
+        var nearest = _vectors!.NearestByHamming(
+            binary, Math.Max(2_000, limit * 20), 0, _provisionVectorCount);
         if (nearest.Count == 0) return [];
         var hamming = nearest.ToDictionary(candidate => candidate.Ordinal, candidate => candidate.Distance);
         // Ordinals originate in the verified vector file, not user input. A literal IN list lets
@@ -1174,13 +1305,15 @@ public sealed class LexIndexReader : IDisposable
             ? work.ToLowerInvariant() : work;
     }
 
-    private (string Sql, List<SqliteParameter> Ps) WithFilters(string baseSql, FilterSet f, bool excludeAsOf)
+    private (string Sql, List<SqliteParameter> Ps) WithFilters(
+        string baseSql, FilterSet f, bool excludeAsOf, string? alias = null)
     {
         var ps = new List<SqliteParameter>();
+        string Column(string name) => alias is null ? name : $"{alias}.{name}";
         // Withdrawn publisher records remain addressable by exact provenance tools, but they
         // are not eligible public-search or catalogue candidates after their tombstone.
-        var sql = baseSql + " AND withdrawn=0";
-        if (f.Collection is not null) { sql += " AND collection=$fcol"; ps.Add(new SqliteParameter("$fcol", f.Collection)); }
+        var sql = baseSql + $" AND {Column("withdrawn")}=0";
+        if (f.Collection is not null) { sql += $" AND {Column("collection")}=$fcol"; ps.Add(new SqliteParameter("$fcol", f.Collection)); }
         if (f.Kind is not null)
         {
             var kinds = f.Kind.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
@@ -1189,32 +1322,32 @@ public sealed class LexIndexReader : IDisposable
             {
                 var names = kinds.Select((_, i) => $"$fkind{i}").ToList();
                 sql += negate
-                    ? $" AND (kind IS NULL OR kind NOT IN ({string.Join(',', names)}))"
-                    : $" AND kind IN ({string.Join(',', names)})";
+                    ? $" AND ({Column("kind")} IS NULL OR {Column("kind")} NOT IN ({string.Join(',', names)}))"
+                    : $" AND {Column("kind")} IN ({string.Join(',', names)})";
                 for (var i = 0; i < kinds.Length; i++)
                     ps.Add(new SqliteParameter($"$fkind{i}", kinds[i].TrimStart('!')));
             }
         }
-        if (f.Language is not null) { sql += " AND language=$flang"; ps.Add(new SqliteParameter("$flang", f.Language)); }
+        if (f.Language is not null) { sql += $" AND {Column("language")}=$flang"; ps.Add(new SqliteParameter("$flang", f.Language)); }
         if (f.Hierarchy is not null || f.ActForm is not null || f.BindingStatus is not null || f.Domain is not null)
         {
             if (!IsV3) return (sql + " AND 0=1", ps);
-            if (f.Hierarchy is not null) { sql += " AND hierarchy=$fhier"; ps.Add(new SqliteParameter("$fhier", f.Hierarchy)); }
-            if (f.ActForm is not null) { sql += " AND act_form=$fform"; ps.Add(new SqliteParameter("$fform", f.ActForm)); }
-            if (f.BindingStatus is not null) { sql += " AND binding_status=$fbind"; ps.Add(new SqliteParameter("$fbind", f.BindingStatus)); }
-            if (f.Domain is not null) { sql += " AND ('|' || domains || '|') LIKE $fdomain"; ps.Add(new SqliteParameter("$fdomain", "%|" + f.Domain + "|%")); }
+            if (f.Hierarchy is not null) { sql += $" AND {Column("hierarchy")}=$fhier"; ps.Add(new SqliteParameter("$fhier", f.Hierarchy)); }
+            if (f.ActForm is not null) { sql += $" AND {Column("act_form")}=$fform"; ps.Add(new SqliteParameter("$fform", f.ActForm)); }
+            if (f.BindingStatus is not null) { sql += $" AND {Column("binding_status")}=$fbind"; ps.Add(new SqliteParameter("$fbind", f.BindingStatus)); }
+            if (f.Domain is not null) { sql += $" AND ('|' || {Column("domains")} || '|') LIKE $fdomain"; ps.Add(new SqliteParameter("$fdomain", "%|" + f.Domain + "|%")); }
         }
         if (f.Works is { Count: > 0 } works)
         {
             // Matches either the slug or the publisher's own identifier, so a caller can scope
             // with whichever of the two it happens to be holding.
             var names = works.Select((_, i) => $"$fw{i}").ToList();
-            sql += $" AND (group_key IN ({string.Join(",", names)}) OR group_identifier IN ({string.Join(",", names)}))";
+            sql += $" AND ({Column("group_key")} IN ({string.Join(",", names)}) OR {Column("group_identifier")} IN ({string.Join(",", names)}))";
             for (var i = 0; i < works.Count; i++) ps.Add(new SqliteParameter($"$fw{i}", works[i]));
         }
         if (!excludeAsOf && f.AsOf is { } d)
         {
-            sql += " AND valid_from <= $fasof AND (valid_to IS NULL OR valid_to >= $fasof)";
+            sql += $" AND {Column("valid_from")} <= $fasof AND ({Column("valid_to")} IS NULL OR {Column("valid_to")} >= $fasof)";
             ps.Add(new SqliteParameter("$fasof", d.ToString("yyyy-MM-dd")));
         }
         return (sql, ps);
