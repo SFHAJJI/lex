@@ -193,7 +193,7 @@ HTTP 200
 <select name="publisher" aria-label="Jurisdiction or publisher"><option value="">Every jurisdiction</option><option value="t-pub">Test Publisher</option></select>
 <select name="kind" aria-label="Source class"><option value="">any source class</option><option>LOI</option><option>RGD</option></select>
 <button>Search</button></form>
-<p class="sub">Article-level full-text search over every held provision. Filters run before ranking, always.</p><h2>Test Publisher (), 0 hit(s)</h2>
+<p class="sub">Work and article search over the same current retrieval path as the workspace. Filters run before ranking, always.</p><h2>Test Publisher (), 0 hit(s)</h2>
 </main>
 <footer>
 <!-- Fourteen links in one undifferentiated run answered no question a reader had. Three

@@ -12,13 +12,13 @@
   - Verify: producer byte-repeat test, rejection tests, ingest integration test.
   - Files: `src/Lex.Ingest/*`, `src/Lex.Index/WorkSearch.cs`, `tests/Lex.Tests/*`
 
-- [ ] Task 3: Decompose queries and unify public retrieval semantics
+- [x] Task 3: Decompose queries and unify public retrieval semantics
   - Acceptance: names/articles/roles/residual terms are separated; SPA, no-JavaScript, MCP, and
     assistant defaults are consistent; exact names do not hide requested provision retrieval.
   - Verify: RED/GREEN query tests and cross-surface contract tests.
   - Files: `src/Lex.Index/*`, `src/Lex.Mcp/*`, `src/Lex.Web/CatalogueEndpoints.cs`, tests
 
-- [ ] Checkpoint 1: full .NET tests and web build pass; DCO commits are clean
+- [x] Checkpoint 1: full .NET tests and web build pass; DCO commits are clean
 
 - [ ] Task 4: Retain publisher discovery metadata and document role
   - Acceptance: FR/EN short titles, EuroVoc/directory identifiers and labels, language/time,

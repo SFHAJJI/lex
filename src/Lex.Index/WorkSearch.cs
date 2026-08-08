@@ -36,9 +36,11 @@ public sealed record WorkSearchBuildOptions(
     IReadOnlyList<WorkDiscoveryRow> Discovery,
     string EnrichmentDigest);
 
-public sealed record WorkSearchHit(DocRow Doc, string Reason, double Score);
+public sealed record WorkSearchHit(
+    DocRow Doc, string Reason, double Score, string? MatchedValue = null);
 
-internal sealed record WorkMatch(long WorkId, string Reason, double Score);
+internal sealed record WorkMatch(
+    long WorkId, string Reason, double Score, string? MatchedValue = null);
 
 /// <summary>
 /// Work identity and discovery metadata. This layer never stores or rewrites legal text.
@@ -188,7 +190,7 @@ public static class WorkSearch
         using (var exact = connection.CreateCommand())
         {
             exact.CommandText = """
-                SELECT n.work_id,n.kind
+                SELECT n.work_id,n.kind,n.normalized
                 FROM work_names n
                 JOIN work_records r ON r.work_id=n.work_id
                 WHERE n.normalized=$normalized AND ($language IS NULL OR r.language=$language)
@@ -201,13 +203,13 @@ public static class WorkSearch
             Add(exact, "$language", language);
             using var rows = exact.ExecuteReader();
             while (rows.Read() && hits.Count < limit)
-                AddExact(rows.GetInt64(0), rows.GetString(1), "exact");
+                AddExact(rows.GetInt64(0), rows.GetString(1), rows.GetString(2), "exact");
         }
 
         using (var contained = connection.CreateCommand())
         {
             contained.CommandText = """
-                SELECT n.work_id,n.kind,length(n.normalized) AS name_length
+                SELECT n.work_id,n.kind,n.normalized,length(n.normalized) AS name_length
                 FROM work_names n
                 JOIN work_records r ON r.work_id=n.work_id
                 WHERE instr(' ' || $normalized || ' ',' ' || n.normalized || ' ') > 0
@@ -226,7 +228,7 @@ public static class WorkSearch
             Add(contained, "$language", language);
             using var rows = contained.ExecuteReader();
             while (rows.Read() && hits.Count < limit)
-                AddExact(rows.GetInt64(0), rows.GetString(1), "contained");
+                AddExact(rows.GetInt64(0), rows.GetString(1), rows.GetString(2), "contained");
         }
 
         var tokens = normalized.Split(' ', StringSplitOptions.RemoveEmptyEntries)
@@ -262,7 +264,7 @@ public static class WorkSearch
             }
         }
 
-        void AddExact(long workId, string kind, string prefix)
+        void AddExact(long workId, string kind, string matchedValue, string prefix)
         {
             if (!seen.Add(workId)) return;
             var suffix = kind switch
@@ -271,7 +273,8 @@ public static class WorkSearch
                 "reviewed_alias" => "alias",
                 _ => "title",
             };
-            hits.Add(new WorkMatch(workId, $"{prefix}_{suffix}", -1000 + hits.Count));
+            hits.Add(new WorkMatch(
+                workId, $"{prefix}_{suffix}", -1000 + hits.Count, matchedValue));
         }
     }
 

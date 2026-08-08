@@ -515,13 +515,16 @@ public sealed class LexIndexReader : IDisposable
             return SearchKeyword(query, filters, limit, fuzzyAuto);
 
         var keyword = SearchKeyword(query, filters, 100, fuzzyAuto);
-        if (keyword.Hits.FirstOrDefault()?.MatchReasons.Any(reason =>
-                reason is "exact_identifier" or "exact_alias" or "contained_identifier" or "contained_alias") == true)
+        var plan = keyword.QueryPlan!;
+        if (plan.ArticleNumber is not null
+            || (plan.HasStrongWorkMatch && plan.ProvisionQuery.Length == 0))
             return keyword;
+        var semanticQuery = plan.ProvisionQuery.Length == 0 ? query : plan.ProvisionQuery;
+        var effectiveFilters = ConstrainToWorks(filters, plan);
         var lexical = keyword.Hits;
-        var queryVector = _encoder.Encode(query, EmbeddingInputKind.Query);
-        var semantic = SearchSemantic(query, queryVector, filters, 100);
-        var semanticWorks = SearchWorkSemanticCatalog(queryVector, filters, 100);
+        var queryVector = _encoder.Encode(semanticQuery, EmbeddingInputKind.Query);
+        var semantic = SearchSemantic(semanticQuery, queryVector, effectiveFilters, 100);
+        var semanticWorks = SearchWorkSemanticCatalog(queryVector, effectiveFilters, 100);
         var fused = new Dictionary<string, RetrievalHit>(StringComparer.Ordinal);
         var scores = new Dictionary<string, double>(StringComparer.Ordinal);
         static string Key(DocRow d, ProvisionRow p) => $"{d.GroupKey}|{d.Language}|{p.Anchor}|{p.TextSha}";
@@ -577,35 +580,78 @@ public sealed class LexIndexReader : IDisposable
                 + (h.MatchReasons.Contains("semantic_work") ? 1 : 0))
             .ThenByDescending(h => h.Doc.ValidFrom, StringComparer.Ordinal)
             .Take(limit).ToList();
-        return new SearchExecution("hybrid", hits, keyword.QueryExpansions);
+        return new SearchExecution("hybrid", hits, keyword.QueryExpansions, plan);
     }
 
     public SearchExecution SearchKeyword(string query, FilterSet filters, int limit, bool fuzzyAuto)
     {
-        if (!_hasWorkSearch) return SearchKeywordWithoutWorkCatalog(query, filters, limit, fuzzyAuto);
+        if (!_hasWorkSearch)
+        {
+            var legacyPlan = IsV3 ? BasicQueryPlan(query) : new SearchQueryPlan(
+                query, query, [], null, null, false);
+            if (IsV3 && legacyPlan.ArticleNumber is not null)
+            {
+                var legacyArticleRows = SearchArticleIntent(
+                    legacyPlan.ArticleNumber, filters, limit, legacyPlan.ProvisionQuery);
+                return new SearchExecution("keyword", legacyArticleRows.Select((hit, rank) =>
+                    new RetrievalHit(hit.Doc, hit.Prov, hit.Snippet, 2d / (rank + 1),
+                        ["article_intent"])).ToList(), [], legacyPlan);
+            }
+            return SearchKeywordWithoutWorkCatalog(
+                legacyPlan.ProvisionQuery, filters, limit, fuzzyAuto) with { QueryPlan = legacyPlan };
+        }
 
-        var workMatches = SearchWorkCatalog(query, filters, limit);
-        var strong = workMatches.Where(hit => hit.Reason.StartsWith("exact_", StringComparison.Ordinal)
-                                               || hit.Reason.StartsWith("contained_", StringComparison.Ordinal))
+        var workMatches = ResolveWorkMatches(
+            WorkSearch.Find(_conn, query, filters.Language, Math.Max(limit * 2, 20)), filters);
+        var uniqueExactTitles = workMatches.Where(hit => hit.Reason == "exact_title")
+            .GroupBy(hit => hit.MatchedValue, StringComparer.Ordinal)
+            .Where(group => group.Select(hit => hit.Doc.GroupKey)
+                .Distinct(StringComparer.Ordinal).Take(2).Count() == 1)
+            .Select(group => group.Key).ToHashSet(StringComparer.Ordinal);
+        var strong = workMatches.Where(hit => hit.Reason is
+                "exact_identifier" or "exact_alias" or "contained_identifier" or "contained_alias"
+                || (hit.Reason == "exact_title" && uniqueExactTitles.Contains(hit.MatchedValue)))
             .ToList();
+        var plan = BuildQueryPlan(query, strong);
         var weak = workMatches.Where(hit => !hit.Reason.StartsWith("exact_", StringComparison.Ordinal)
-                                             && !hit.Reason.StartsWith("contained_", StringComparison.Ordinal));
-        var provision = SearchKeywordWithoutWorkCatalog(
-            query, filters, limit, fuzzyAuto && strong.Count == 0);
-        var combined = strong.Select(WorkRetrievalHit)
-            .Concat(provision.Hits)
+                                             && !hit.Reason.StartsWith("contained_", StringComparison.Ordinal))
+            .Where(hit => !plan.HasStrongWorkMatch
+                          || plan.WorkConstraints.Contains(hit.Doc.GroupKey, StringComparer.Ordinal));
+        var effectiveFilters = ConstrainToWorks(filters, plan);
+        var articleRows = plan.ArticleNumber is null
+            ? []
+            : SearchArticleIntent(plan.ArticleNumber, effectiveFilters, limit,
+                plan.HasStrongWorkMatch ? null : plan.ProvisionQuery);
+        var articleHits = articleRows
+                .Select((hit, rank) => new RetrievalHit(
+                    hit.Doc, hit.Prov, hit.Snippet, 2d / (rank + 1), ["article_intent"]))
+                .ToList();
+        var exactIdentifierFallback = plan.ProvisionQuery.Length == 0 && IsExactLegalIdentifier(query);
+        var provision = plan.ArticleNumber is not null
+            ? new SearchExecution("keyword", [], [])
+            : SearchKeywordWithoutWorkCatalog(
+                exactIdentifierFallback ? query : plan.ProvisionQuery,
+                exactIdentifierFallback ? filters : effectiveFilters,
+                limit,
+                fuzzyAuto && strong.Count == 0 && plan.ProvisionQuery.Length > 0);
+        var directEvidence = articleHits.Concat(provision.Hits).ToList();
+        var combined = (directEvidence.Count > 0
+                ? directEvidence.Concat(strong.Select(WorkRetrievalHit))
+                : strong.Select(WorkRetrievalHit))
             .Concat(weak.Select(WorkRetrievalHit))
-            .GroupBy(hit => $"{hit.Doc.GroupKey}|{hit.Provision.Anchor}|{hit.Provision.TextSha}",
+            .GroupBy(hit => $"{hit.Doc.GroupKey}|{hit.Doc.Language}|{hit.Provision.Anchor}|{hit.Provision.TextSha}",
                 StringComparer.Ordinal)
             .Select(group => group.First())
             .Take(limit)
             .ToList();
-        return new SearchExecution("keyword", combined, provision.QueryExpansions);
+        return new SearchExecution("keyword", combined, provision.QueryExpansions, plan);
     }
 
     private SearchExecution SearchKeywordWithoutWorkCatalog(
         string query, FilterSet filters, int limit, bool fuzzyAuto)
     {
+        if (string.IsNullOrWhiteSpace(query))
+            return new SearchExecution("keyword", [], []);
         if (IsExactLegalIdentifier(query))
         {
             var works = SearchWorksByIdentifierOrTitle(query, filters, limit)
@@ -642,9 +688,153 @@ public sealed class LexIndexReader : IDisposable
             expansions.Select(e => $"{e.Source} -> {e.Target}").ToList());
     }
 
-    private IReadOnlyList<WorkSearchHit> SearchWorkCatalog(string query, FilterSet filters, int limit)
-        => ResolveWorkMatches(
-            WorkSearch.Find(_conn, query, filters.Language, Math.Max(limit * 2, 20)), filters);
+    private static readonly HashSet<string> ConversationalSearchWords = new(StringComparer.Ordinal)
+    {
+        "a", "about", "an", "are", "ce", "ces", "comment", "de", "des", "did", "do", "does",
+        "du", "est", "for", "la", "le", "les", "me", "please", "que", "quel", "quelle",
+        "quels", "quelles", "quoi", "show", "the", "tell", "what",
+    };
+
+    private static readonly (string Phrase, string Role)[] RolePhrases =
+    [
+        ("implementing regulation", "implementing"),
+        ("implementing", "implementing"), ("execution", "implementing"),
+        ("delegated act", "delegated"), ("acte delegue", "delegated"),
+        ("delegated", "delegated"), ("delegue", "delegated"),
+        ("amending", "amending"), ("modificatif", "amending"),
+        ("corrigendum", "corrigendum"), ("rectificatif", "corrigendum"),
+        ("consolidated", "consolidated"), ("consolide", "consolidated"),
+    ];
+
+    private static SearchQueryPlan BasicQueryPlan(string query)
+    {
+        var normalized = WorkSearch.Normalize(query);
+        var article = ArticleNumber(normalized);
+        var residual = RemoveArticleIntent(normalized, article);
+        var role = RolePhrases.FirstOrDefault(item => ContainsPhrase(normalized, item.Phrase)).Role;
+        residual = RemoveRoleIntent(residual, role);
+        var filtered = string.Join(' ', residual.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Where(token => !ConversationalSearchWords.Contains(token)));
+        if (article is null && role is null && filtered == normalized)
+            filtered = query.Trim();
+        return new SearchQueryPlan(query, filtered, [], article, role, false);
+    }
+
+    private static SearchQueryPlan BuildQueryPlan(
+        string query, IReadOnlyList<WorkSearchHit> strongMatches)
+    {
+        var basic = BasicQueryPlan(query);
+        if (strongMatches.Count == 0) return basic;
+        var residual = " " + WorkSearch.Normalize(query) + " ";
+        foreach (var name in strongMatches.Select(match => match.MatchedValue)
+                     .Where(value => !string.IsNullOrWhiteSpace(value))
+                     .Distinct(StringComparer.Ordinal)
+                     .OrderByDescending(value => value!.Length))
+            residual = residual.Replace(" " + name + " ", " ", StringComparison.Ordinal);
+        residual = RemoveArticleIntent(residual.Trim(), basic.ArticleNumber);
+        residual = RemoveRoleIntent(residual, basic.RoleIntent);
+        residual = string.Join(' ', residual.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Where(token => !ConversationalSearchWords.Contains(token)));
+        var works = strongMatches.Select(match => match.Doc.GroupKey)
+            .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        return basic with
+        {
+            ProvisionQuery = residual,
+            WorkConstraints = works,
+            HasStrongWorkMatch = works.Length > 0,
+        };
+    }
+
+    private static FilterSet ConstrainToWorks(FilterSet filters, SearchQueryPlan plan) =>
+        !plan.HasStrongWorkMatch ? filters : filters with { Works = plan.WorkConstraints };
+
+    private static string? ArticleNumber(string normalized)
+    {
+        var match = System.Text.RegularExpressions.Regex.Match(normalized,
+            @"(?:^|\s)(?:article|art)\s+(?<number>(?:[a-z]\s+)?[0-9]+(?:(?:er)|[a-z])?(?:\s+[0-9]+)*(?:\s+(?:bis|ter|quater))?)(?:\s|$)",
+            System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+        return match.Success ? match.Groups["number"].Value : null;
+    }
+
+    private static string RemoveArticleIntent(string normalized, string? articleNumber) =>
+        articleNumber is null ? normalized : System.Text.RegularExpressions.Regex.Replace(
+            normalized,
+            @"(?:^|\s)(?:article|art)\s+" +
+            System.Text.RegularExpressions.Regex.Escape(articleNumber) + @"(?:\s|$)",
+            " ", System.Text.RegularExpressions.RegexOptions.CultureInvariant).Trim();
+
+    private static string RemoveRoleIntent(string normalized, string? role)
+    {
+        if (role is null) return normalized;
+        var result = " " + normalized + " ";
+        foreach (var phrase in RolePhrases.Where(item => item.Role == role)
+                     .Select(item => item.Phrase).OrderByDescending(value => value.Length))
+            result = result.Replace(" " + phrase + " ", " ", StringComparison.Ordinal);
+        return result.Trim();
+    }
+
+    private static bool ContainsPhrase(string normalized, string phrase) =>
+        (" " + normalized + " ").Contains(" " + phrase + " ", StringComparison.Ordinal);
+
+    private List<(DocRow Doc, ProvisionRow Prov, string Snippet)> SearchArticleIntent(
+        string articleNumber, FilterSet filters, int limit, string? residualQuery = null)
+    {
+        var compact = articleNumber.Replace(" ", "", StringComparison.Ordinal);
+        var anchor = "art_" + articleNumber.Replace(' ', '_');
+        var (where, parameters) = WithFilters("1=1", filters, excludeAsOf: false, alias: "d");
+        var hasResidual = !string.IsNullOrWhiteSpace(residualQuery);
+        var ftsJoin = hasResidual ? "JOIN fts ON fts.rowid=p.state_id" : "";
+        var ftsPredicate = hasResidual ? "AND fts MATCH $residual" : "";
+        var score = hasResidual ? "bm25(fts,10.0,4.0,6.0,1.0)" : "0.0";
+        using var command = Cmd($"""
+            WITH eligible AS (
+              SELECT p.rid,p.seq,p.anchor,p.provision_id,p.ptype,p.num,p.heading,p.path,
+                     p.article_valid_from,p.work_title,p.text_sha,d.key AS doc_key,{score} AS score,
+                     ROW_NUMBER() OVER (
+                       PARTITION BY p.state_id ORDER BY d.valid_from DESC,p.rid
+                     ) AS occurrence_rank
+              FROM provisions p
+              {ftsJoin}
+              JOIN docs d ON d.rid=p.rid
+              WHERE {where} AND p.ptype='article'
+                AND (
+                  lower(replace(replace(replace(p.num,' ',''),'.',''),'-',''))=$number
+                  OR lower(replace(replace(p.anchor,'.',''),'-','_'))=$anchor
+                )
+                {ftsPredicate}
+            )
+            SELECT {SelectDocCols("d")},
+                   e.rid,e.seq,e.anchor,e.provision_id,e.ptype,e.num,e.heading,e.path,
+                   e.article_valid_from,e.work_title,e.text_sha,
+                   b.encoding,b.original_size,b.payload
+            FROM eligible e
+            JOIN docs d ON d.key=e.doc_key AND d.rid=e.rid
+            JOIN text_blobs b ON b.text_sha=e.text_sha
+            WHERE e.occurrence_rank=1
+            ORDER BY e.score,d.valid_from DESC,e.seq,e.rid
+            LIMIT $limit
+            """, parameters);
+        command.Parameters.AddWithValue("$number", compact);
+        command.Parameters.AddWithValue("$anchor", anchor);
+        command.Parameters.AddWithValue("$limit", limit);
+        if (hasResidual) command.Parameters.AddWithValue("$residual", Fts5Escape(residualQuery!));
+        var result = new List<(DocRow, ProvisionRow, string)>();
+        using var rows = command.ExecuteReader();
+        while (rows.Read())
+        {
+            var text = DecodeAndVerify(
+                rows.GetString(38), rows.GetInt32(39), (byte[])rows.GetValue(40), rows.GetString(37));
+            var provision = new ProvisionRow(
+                rows.GetString(27), rows.GetInt32(28), rows.GetString(29), rows.GetString(30),
+                rows.GetString(31), rows.IsDBNull(32) ? null : rows.GetString(32),
+                rows.IsDBNull(33) ? null : rows.GetString(33),
+                rows.IsDBNull(34) ? null : rows.GetString(34),
+                rows.IsDBNull(35) ? null : rows.GetString(35),
+                rows.IsDBNull(36) ? null : rows.GetString(36), text, rows.GetString(37));
+            result.Add((ReadDoc(rows), provision, MakeSnippet(text, articleNumber)));
+        }
+        return result;
+    }
 
     private IReadOnlyList<WorkSearchHit> SearchWorkSemanticCatalog(
         float[] queryVector, FilterSet filters, int limit)
@@ -682,7 +872,8 @@ public sealed class LexIndexReader : IDisposable
             command.Parameters.AddWithValue("$work_group", groupKey);
             command.Parameters.AddWithValue("$work_language", language);
             using var rows = command.ExecuteReader();
-            if (rows.Read()) result.Add(new WorkSearchHit(ReadDoc(rows), match.Reason, match.Score));
+            if (rows.Read()) result.Add(new WorkSearchHit(
+                ReadDoc(rows), match.Reason, match.Score, match.MatchedValue));
         }
         return result;
     }

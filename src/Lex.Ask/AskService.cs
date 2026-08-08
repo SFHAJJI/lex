@@ -70,8 +70,13 @@ public sealed class AskService(McpCore core)
            nothing. Only fetch a work's text if the user asks what a specific law now SAYS.
            Search hits are POINTERS, never evidence of content:
            after search identifies the work, you MUST call as_of / timeline / diff before answering
-           anything about what the text says or how it changed. Never repeat a search that found
-           nothing: retry ONCE with the official name or a synonym (e.g. "DORA" -> "digital
+           anything about what the text says or how it changed. Never repeat the same search.
+           Read query_plan before selecting a work: work_constraints with
+           has_strong_work_match=true came from deterministic resolution of the user's raw words.
+           Do not replace those works with a law name you generated. If article_number is present
+           but no hit carries article_intent, do not substitute another article; report that the
+           requested provision was not found in the selected scope.
+           Retry ONCE with the official name or a synonym (e.g. "DORA" -> "digital
            operational resilience", acronyms -> full titles, or the CELEX number like 32022r2554
            for EU acts), then move to the right tool or answer honestly that Lex has no match.
            Typical flow: one search -> pick the best hit's work -> as_of / timeline / diff -> answer.

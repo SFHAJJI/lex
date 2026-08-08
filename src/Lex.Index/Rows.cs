@@ -66,7 +66,16 @@ public sealed record RetrievalHit(
 public sealed record SearchExecution(
     string RetrievalMode,
     IReadOnlyList<RetrievalHit> Hits,
-    IReadOnlyList<string> QueryExpansions);
+    IReadOnlyList<string> QueryExpansions,
+    SearchQueryPlan? QueryPlan = null);
+
+public sealed record SearchQueryPlan(
+    string RawQuery,
+    string ProvisionQuery,
+    IReadOnlyList<string> WorkConstraints,
+    string? ArticleNumber,
+    string? RoleIntent,
+    bool HasStrongWorkMatch);
 
 /// <summary>One distinct text state of one provision across versions (the per-anchor time axis).</summary>
 public sealed record ProvisionStateRow(

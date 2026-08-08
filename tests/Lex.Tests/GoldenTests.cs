@@ -1,6 +1,7 @@
 using System.Net;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using Lex.Index;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -270,6 +271,39 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
         // the baseline and then "pass" forever. The first version of this file did exactly that.
         Xunit.Assert.True(body.Length > 40, $"{tool} returned {body.Length} chars: {body}");
         Golden.Assert($"tool-{name}", Golden.Normalise(body));
+    }
+
+    [Fact]
+    public async Task Static_search_and_mcp_use_the_same_current_retrieval_contract()
+    {
+        var page = await _site.Client.GetStringAsync("/search?q=chose");
+        var request = new JsonObject
+        {
+            ["jsonrpc"] = "2.0",
+            ["id"] = 1,
+            ["method"] = "tools/call",
+            ["params"] = new JsonObject
+            {
+                ["name"] = "search",
+                ["arguments"] = new JsonObject
+                {
+                    ["query"] = "chose", ["limit"] = 15,
+                    ["time_scope"] = "as_of", ["as_of"] = "2026-08-05",
+                    ["retrieval_mode"] = "keyword", ["fuzzy"] = "auto",
+                },
+            },
+        };
+        var response = await _site.Client.PostAsync("/mcp",
+            new StringContent(request.ToJsonString(), Encoding.UTF8, "application/json"));
+        var wire = JsonNode.Parse(await McpJson(response))!.AsObject();
+        var text = wire["result"]?["content"]?[0]?["text"]?.GetValue<string>() ?? "[]";
+        var envelopes = JsonNode.Parse(text)!.AsArray();
+        var hits = envelopes[0]?["hits"]!.AsArray() ?? [];
+
+        Assert.NotEmpty(hits);
+        Assert.All(hits.OfType<JsonObject>(), hit =>
+            Assert.Contains(hit["provision_id"]!.GetValue<string>(), page, StringComparison.Ordinal));
+        Assert.DoesNotContain("t-pub:w1:2020-01-01#", page, StringComparison.Ordinal);
     }
 
     [Fact]

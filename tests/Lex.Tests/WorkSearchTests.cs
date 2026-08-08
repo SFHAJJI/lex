@@ -103,6 +103,166 @@ public sealed class WorkSearchTests : IDisposable
     }
 
     [Fact]
+    public void Article_intent_inside_a_named_work_query_returns_the_requested_provision()
+    {
+        var db = TempDb();
+        var regulation = Doc("eu:32016r0679:2016-05-04", "32016r0679", "GDPR");
+        var article = Provision(regulation,
+            "The controller shall notify a personal data breach to the supervisory authority.",
+            anchor: "art_33", number: "33");
+        IndexBuilder.Build(db, Stamp(), [regulation], [article], [], [], null,
+            workSearch: new WorkSearchBuildOptions(
+                [Alias("32016r0679", "fr", "RGPD")], [], EnrichmentDigest));
+
+        using var reader = LexIndexReader.Open(db);
+        var result = reader.SearchKeyword(
+            "What does delegated Article 33 RGPD require?", FilterSet.All, 10, fuzzyAuto: false);
+
+        Assert.Equal("art_33", result.Hits[0].Provision.Anchor);
+        Assert.Contains("article_intent", result.Hits[0].MatchReasons);
+        Assert.Equal("33", result.QueryPlan!.ArticleNumber);
+        Assert.Equal("delegated", result.QueryPlan.RoleIntent);
+        Assert.Equal(["32016r0679"], result.QueryPlan.WorkConstraints);
+    }
+
+    [Fact]
+    public void Named_work_resolution_scopes_residual_provision_search()
+    {
+        var db = TempDb();
+        var regulation = Doc("eu:32016r0679:2016-05-04", "32016r0679", "GDPR");
+        var unrelated = Doc("eu:unrelated:2020-01-01", "unrelated", "Reporting Act");
+        IndexBuilder.Build(db, Stamp(), [regulation, unrelated],
+            [Provision(regulation, "Controllers have reporting obligations."),
+             Provision(unrelated, "Companies have reporting obligations.")], [], [], null,
+            workSearch: new WorkSearchBuildOptions(
+                [Alias("32016r0679", "fr", "RGPD")], [], EnrichmentDigest));
+
+        using var reader = LexIndexReader.Open(db);
+        var result = reader.SearchKeyword(
+            "RGPD reporting obligations", FilterSet.All, 10, fuzzyAuto: false);
+
+        Assert.Equal("reporting obligations", result.QueryPlan!.ProvisionQuery);
+        Assert.Contains(result.Hits, hit => hit.Doc.GroupKey == "32016r0679"
+            && hit.Provision.Anchor == "art_1");
+        Assert.DoesNotContain(result.Hits, hit => hit.Doc.GroupKey == "unrelated");
+    }
+
+    [Fact]
+    public void A_contained_generic_official_title_does_not_become_an_authoritative_scope()
+    {
+        var db = TempDb();
+        var titleOnly = Doc("eu:title:2020-01-01", "title", "Reporting obligations");
+        var direct = Doc("eu:direct:2020-01-01", "direct", "Companies Act");
+        IndexBuilder.Build(db, Stamp(), [titleOnly, direct],
+            [Provision(titleOnly, "Unrelated administrative wording."),
+             Provision(direct, "Companies have reporting obligations.")], [], [], null);
+
+        using var reader = LexIndexReader.Open(db);
+        var result = reader.SearchKeyword(
+            "what are reporting obligations for companies", FilterSet.All, 10, fuzzyAuto: false);
+
+        Assert.False(result.QueryPlan!.HasStrongWorkMatch);
+        Assert.Contains(result.Hits, hit => hit.Doc.GroupKey == "direct"
+            && hit.Provision.Anchor == "art_1");
+    }
+
+    [Fact]
+    public void A_missing_requested_article_never_falls_through_to_a_different_article()
+    {
+        var db = TempDb();
+        var regulation = Doc("eu:32016r0679:2016-05-04", "32016r0679", "GDPR");
+        IndexBuilder.Build(db, Stamp(), [regulation],
+            [Provision(regulation, "Personal data breach notification.", "art_33", "33")],
+            [], [], null,
+            workSearch: new WorkSearchBuildOptions(
+                [Alias("32016r0679", "fr", "RGPD")], [], EnrichmentDigest));
+
+        using var reader = LexIndexReader.Open(db);
+        var result = reader.SearchKeyword(
+            "Article 99 RGPD breach", FilterSet.All, 10, fuzzyAuto: false);
+
+        Assert.Equal("99", result.QueryPlan!.ArticleNumber);
+        Assert.DoesNotContain(result.Hits, hit => hit.Provision.Anchor == "art_33");
+    }
+
+    [Fact]
+    public void Unscoped_article_intent_never_returns_a_different_numbered_article()
+    {
+        var db = TempDb();
+        var numbered = Doc("eu:numbered:2020-01-01", "numbered", "Numbered Act");
+        var wording = Doc("eu:wording:2020-01-01", "wording", "Breach Act");
+        IndexBuilder.Build(db, Stamp(), [numbered, wording],
+            [Provision(numbered, "Unrelated wording.", "art_33", "33"),
+             Provision(wording, "Personal data breach notification.", "art_1", "1")],
+            [], [], null);
+
+        using var reader = LexIndexReader.Open(db);
+        var result = reader.SearchKeyword(
+            "Article 33 breach", FilterSet.All, 10, fuzzyAuto: false);
+
+        Assert.Equal("33", result.QueryPlan!.ArticleNumber);
+        Assert.DoesNotContain(result.Hits, hit => hit.Provision.Anchor == "art_1");
+    }
+
+    [Fact]
+    public void Role_intent_is_removed_from_the_residual_provision_query()
+    {
+        var db = TempDb();
+        var regulation = Doc("eu:32016r0679:2016-05-04", "32016r0679", "GDPR");
+        IndexBuilder.Build(db, Stamp(), [regulation],
+            [Provision(regulation, "Controllers have reporting obligations.")], [], [], null,
+            workSearch: new WorkSearchBuildOptions(
+                [Alias("32016r0679", "fr", "RGPD")], [], EnrichmentDigest));
+
+        using var reader = LexIndexReader.Open(db);
+        var result = reader.SearchKeyword(
+            "delegated RGPD reporting obligations", FilterSet.All, 10, fuzzyAuto: false);
+
+        Assert.Equal("delegated", result.QueryPlan!.RoleIntent);
+        Assert.Equal("reporting obligations", result.QueryPlan.ProvisionQuery);
+        Assert.Contains(result.Hits, hit => hit.Provision.Anchor == "art_1");
+    }
+
+    [Fact]
+    public void Article_intent_accepts_digit_suffixed_numbers()
+    {
+        var db = TempDb();
+        var regulation = Doc("eu:act:2020-01-01", "act", "Example Act");
+        IndexBuilder.Build(db, Stamp(), [regulation],
+            [Provision(regulation, "Specific rule.", "art_6a", "6a")], [], [], null,
+            workSearch: new WorkSearchBuildOptions(
+                [Alias("act", "fr", "Example")], [], EnrichmentDigest));
+
+        using var reader = LexIndexReader.Open(db);
+        var result = reader.SearchKeyword(
+            "Article 6a Example", FilterSet.All, 10, fuzzyAuto: false);
+
+        Assert.Equal("6a", result.QueryPlan!.ArticleNumber);
+        Assert.Equal("art_6a", result.Hits[0].Provision.Anchor);
+        Assert.Contains("article_intent", result.Hits[0].MatchReasons);
+    }
+
+    [Fact]
+    public void Article_intent_normalizes_lettered_code_numbers_without_guessing_the_work()
+    {
+        var db = TempDb();
+        var code = Doc("eu:code:2020-01-01", "code", "Employment Code");
+        IndexBuilder.Build(db, Stamp(), [code],
+            [Provision(code, "Employment notice rules.", "art_l_111-1", "L. 111-1")],
+            [], [], null,
+            workSearch: new WorkSearchBuildOptions(
+                [Alias("code", "fr", "Code emploi")], [], EnrichmentDigest));
+
+        using var reader = LexIndexReader.Open(db);
+        var result = reader.SearchKeyword(
+            "Article L. 111-1 du Code emploi", FilterSet.All, 10, fuzzyAuto: false);
+
+        Assert.Equal("art_l_111-1", result.Hits[0].Provision.Anchor);
+        Assert.Equal("l 111 1", result.QueryPlan!.ArticleNumber);
+        Assert.Equal(["code"], result.QueryPlan.WorkConstraints);
+    }
+
+    [Fact]
     public void Weak_discovery_is_quarantined_from_ordinary_keyword_search()
     {
         var db = TempDb();
@@ -170,6 +330,11 @@ public sealed class WorkSearchTests : IDisposable
 
         Assert.Equal("32016r0679", Assert.Single(result.Hits).Doc.GroupKey);
         Assert.Contains("exact_identifier", result.Hits[0].MatchReasons);
+
+        var conversational = reader.SearchKeyword(
+            "what does personal data", FilterSet.All, 10, fuzzyAuto: false);
+        Assert.Equal("personal data", conversational.QueryPlan!.ProvisionQuery);
+        Assert.Contains(conversational.Hits, hit => hit.Doc.GroupKey == "32016r0679");
     }
 
     [Fact]
@@ -437,11 +602,12 @@ public sealed class WorkSearchTests : IDisposable
         "official_consolidation_state", "2026-08-08T00:00:00Z", false, true, true,
         "record-sha", null, "https://example.invalid", title, title, null, key[^10..], null);
 
-    private static ProvisionRow Provision(DocRow doc, string text)
+    private static ProvisionRow Provision(
+        DocRow doc, string text, string anchor = "art_1", string number = "1")
     {
         var sha = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(text)));
-        return new ProvisionRow($"{doc.Key}|{doc.Language}|{doc.ValidFrom}", 0, "art_1",
-            $"{doc.Key}#art_1", "article", "1", null, null, null, doc.Title, text, sha);
+        return new ProvisionRow($"{doc.Key}|{doc.Language}|{doc.ValidFrom}", 0, anchor,
+            $"{doc.Key}#{anchor}", "article", number, null, null, null, doc.Title, text, sha);
     }
 
     public void Dispose()

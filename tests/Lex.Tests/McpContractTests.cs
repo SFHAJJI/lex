@@ -158,6 +158,9 @@ public class McpContractTests : IDisposable
             ["query"] = "thing", ["retrieval_mode"] = "hybrid",
         });
         Assert.Equal("keyword", noVectors["retrieval_mode"]!.GetValue<string>());
+        var plan = Assert.IsType<JsonObject>(noVectors["query_plan"]);
+        Assert.Equal("thing", plan["provision_query"]!.GetValue<string>());
+        Assert.False(plan["has_strong_work_match"]!.GetValue<bool>());
 
         var typo = Call("search", new JsonObject { ["query"] = "everywher", ["fuzzy"] = "auto" });
         var expansions = Assert.IsType<JsonArray>(typo["query_expansions"]);
@@ -178,6 +181,66 @@ public class McpContractTests : IDisposable
             ["query"] = "thing", ["jurisdiction"] = "YY",
         }));
         Assert.Empty(absent);
+    }
+
+    [Fact]
+    public void An_exact_work_match_in_one_publisher_suppresses_unresolved_publisher_noise()
+    {
+        var euDb = Path.Combine(Path.GetTempPath(), $"lex-mcp-eu-{Guid.NewGuid():N}.db");
+        var luDb = Path.Combine(Path.GetTempPath(), $"lex-mcp-lu-{Guid.NewGuid():N}.db");
+        try
+        {
+            static DocRow Doc(string collection, string work, string title) => new(
+                $"{collection}:{work}:2020-01-01", collection, work, $"urn:{work}", "REG",
+                "fr", "2020-01-01", null, "publisher", "2026-08-08T00:00:00Z",
+                false, true, true, "record", null, "https://example.invalid", title, title,
+                null, "2020-01-01", null);
+            static ProvisionRow Provision(DocRow doc, string text) => new(
+                $"{doc.Key}|fr|2020-01-01", 0, "art_1", $"{doc.Key}#art_1", "article", "1",
+                null, null, null, doc.Title, text,
+                Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(
+                    System.Text.Encoding.UTF8.GetBytes(text))));
+            static Dictionary<string, string> Stamp(string collection) => new()
+            {
+                ["collection"] = collection, ["built_at"] = "2026-08-08T00:00:00Z",
+                ["corpus_commit"] = "test",
+            };
+
+            var gdpr = Doc("eu", "gdpr", "General Data Protection Regulation");
+            var guide = Doc("eu", "guide", "Guide to RGPD reporting");
+            var unrelated = Doc("lu", "reporting", "Reporting Act");
+            IndexBuilder.Build(euDb, Stamp("eu"), [gdpr, guide],
+                [Provision(gdpr, "Controllers have reporting obligations.")], [], [], null,
+                workSearch: new WorkSearchBuildOptions(
+                    [new ReviewedWorkAliasRow("gdpr", "fr", "RGPD", "reviewer")], [],
+                    new string('a', 64)));
+            IndexBuilder.Build(luDb, Stamp("lu"), [unrelated],
+                [Provision(unrelated, "Companies have reporting obligations.")], [], [], null);
+            using var eu = LexIndexReader.Open(euDb);
+            using var lu = LexIndexReader.Open(luDb);
+            var core = new McpCore(new Dictionary<string, LexIndexReader>
+                { ["eu"] = eu, ["lu"] = lu });
+
+            var result = Assert.IsType<JsonArray>(core.CallTool("search", new JsonObject
+            {
+                ["query"] = "RGPD reporting obligations",
+            }));
+            var euResult = result.OfType<JsonObject>().Single(item =>
+                item["envelope"]?["publisher"]?.GetValue<string>() == "eu");
+            var luResult = result.OfType<JsonObject>().Single(item =>
+                item["envelope"]?["publisher"]?.GetValue<string>() == "lu");
+
+            var euHits = Assert.IsType<JsonArray>(euResult["hits"]);
+            Assert.NotEmpty(euHits);
+            Assert.All(euHits.OfType<JsonObject>(), hit =>
+                Assert.Equal("gdpr", hit["work"]!.GetValue<string>()));
+            Assert.Empty(Assert.IsType<JsonArray>(luResult["hits"]));
+        }
+        finally
+        {
+            try { File.Delete(euDb); } catch { }
+            try { File.Delete(luDb); } catch { }
+        }
     }
 
     [Theory]
