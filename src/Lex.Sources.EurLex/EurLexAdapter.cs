@@ -12,7 +12,7 @@ namespace Lex.Sources.EurLex;
 /// (publications.europa.eu — robots.txt: Allow /), sequential and paced.
 /// NOTE: consolidated texts carry no legal effect; only OJ acts are authentic (§9.6).
 /// </summary>
-public sealed class EurLexAdapter : ISourceAdapter
+public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory
 {
     private const string Sparql = "https://publications.europa.eu/webapi/rdf/sparql";
     private const string Cdm = "PREFIX cdm: <http://publications.europa.eu/ontology/cdm#>\n";
@@ -35,6 +35,8 @@ public sealed class EurLexAdapter : ISourceAdapter
     private readonly Dictionary<string, HashSet<string>> _selectionReasons = new(StringComparer.Ordinal);
     private readonly EurLexScopeConfig _scope;
     private readonly int _wave;
+    private int _expectedWorks;
+    private readonly List<SourceBuildIssue> _buildIssues = [];
     private bool _loaded;
     private readonly SemaphoreSlim _initLock = new(1, 1);
 
@@ -68,6 +70,10 @@ public sealed class EurLexAdapter : ISourceAdapter
         TextIncluded: true,
         TextPublic: true,   // reuse right measured (Decision 2011/833/EU)
         HistoryBegins: "publisher");
+
+    public SourceBuildInventory GetBuildInventory() =>
+        new(_expectedWorks, _buildIssues.OrderBy(issue => issue.Work, StringComparer.Ordinal)
+            .ThenBy(issue => issue.Code, StringComparer.Ordinal).ToArray());
 
     public async IAsyncEnumerable<WorkRef> EnumerateWorks([EnumeratorCancellation] CancellationToken ct)
     {
@@ -289,6 +295,7 @@ public sealed class EurLexAdapter : ISourceAdapter
         {
             if (_loaded) return;
             var selected = await ResolveScopeAsync(ct);
+            _expectedWorks = selected.Count;
             var allConsolidations = await LoadConsolidationsAsync(selected.Keys, ct);
             var allMetadata = await LoadWorkMetadataAsync(selected.Keys, ct);
             var allPublisherMetadata = await LoadPublisherMetadataAsync(selected.Keys, ct);
@@ -303,6 +310,9 @@ public sealed class EurLexAdapter : ISourceAdapter
                 if (baseTitleRows.Count == 0)
                 {
                     Console.Error.WriteLine($"  [eurlex] {baseCelex}: official work metadata unavailable");
+                    _buildIssues.Add(new SourceBuildIssue(
+                        "publisher_metadata_unavailable", NormalizeWorkSlug(baseCelex),
+                        "Cellar returned no official work metadata for the selected CELEX identifier."));
                     continue;
                 }
                 var titles = baseTitleRows

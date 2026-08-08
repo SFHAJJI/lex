@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Lex.Index;
 
@@ -141,6 +143,13 @@ public static class IndexFromCorpus
             }
         }
 
+        var buildIssues = manifest.BuildIssues.OrderBy(issue => issue.Work, StringComparer.Ordinal)
+            .ThenBy(issue => issue.Code, StringComparer.Ordinal)
+            .ThenBy(issue => issue.Detail, StringComparer.Ordinal).ToArray();
+        var buildIssuesJson = JsonSerializer.Serialize(buildIssues, new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+        });
         var stamp = new Dictionary<string, string>
         {
             ["collection"] = publisherId,
@@ -164,7 +173,12 @@ public static class IndexFromCorpus
             ["ingester_version"] = manifest.IngesterVersion,
             ["works"] = docs.Select(d => d.GroupKey).Distinct().Count().ToString(),
             ["versions"] = docs.Select(d => d.Key).Distinct().Count().ToString(),
+            ["build_issues_json"] = buildIssuesJson,
+            ["build_issues_digest"] = Convert.ToHexStringLower(
+                SHA256.HashData(Encoding.UTF8.GetBytes(buildIssuesJson))),
         };
+        if (manifest.ScopeExpectedWorks is { } scopeExpectedWorks)
+            stamp["scope_expected_works"] = scopeExpectedWorks.ToString();
 
         // Per-anchor time axis + lifecycle events, from the derived layer's history.json
         var provisionStates = new List<ProvisionStateRow>();

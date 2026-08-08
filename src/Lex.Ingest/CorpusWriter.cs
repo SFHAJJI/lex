@@ -38,11 +38,24 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now, TextWrit
         // report a real denominator. A percentage without a denominator is not actionable; an
         // elapsed time without observed throughput is not an ETA.
         var plan = new List<(WorkRef Work, IReadOnlyList<VersionRecord> Versions)>();
+        var localBuildIssues = new List<SourceBuildIssue>();
+        var enumeratedWorks = 0;
         await foreach (var work in adapter.EnumerateWorks(ct))
         {
+            enumeratedWorks++;
             var versionsOfWork = await adapter.FetchVersions(work, ct);
-            if (versionsOfWork.Count > 0) plan.Add((work, versionsOfWork));
+            if (versionsOfWork.Count > 0)
+                plan.Add((work, versionsOfWork));
+            else
+                localBuildIssues.Add(new SourceBuildIssue(
+                    "no_versions", work.Slug, "The publisher enumeration returned no version records."));
         }
+        var sourceInventory = (adapter as ISourceBuildInventory)?.GetBuildInventory();
+        var expectedWorks = Math.Max(enumeratedWorks, sourceInventory?.ExpectedWorks ?? 0);
+        var buildIssues = localBuildIssues.Concat(sourceInventory?.Issues ?? [])
+            .Distinct().OrderBy(issue => issue.Work, StringComparer.Ordinal)
+            .ThenBy(issue => issue.Code, StringComparer.Ordinal)
+            .ThenBy(issue => issue.Detail, StringComparer.Ordinal).ToList();
         var totalExpressions = plan.Sum(item => item.Versions.Sum(version => (long)version.Expressions.Count));
         long processedExpressions = 0;
         var lastReportedPercent = -1;
@@ -366,6 +379,8 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now, TextWrit
             Expressions = expressions,
             ExpressionsWithText = expressionsWithText,
             ExpressionsWithoutText = expressions - expressionsWithText,
+            ScopeExpectedWorks = expectedWorks,
+            BuildIssues = buildIssues,
             ValidFromEarliest = earliest,
             ValidToLatest = latest,
             HistoryBegins = desc.HistoryBegins,

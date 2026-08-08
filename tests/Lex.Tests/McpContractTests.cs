@@ -20,11 +20,18 @@ public class McpContractTests : IDisposable
 
     public McpContractTests()
     {
+        const string buildIssues =
+            "[{\"code\":\"publisher_metadata_unavailable\",\"work\":\"w3\",\"detail\":\"test gap\"}]";
         var stamp = new Dictionary<string, string>
         {
             ["collection"] = "t-pub", ["tier"] = "A", ["history_begins"] = "publisher",
             ["built_at"] = "2026-08-01T00:00:00Z", ["corpus_commit"] = "test",
             ["jurisdiction"] = "XX",
+            ["scope_expected_works"] = "3",
+            ["build_issues_json"] = buildIssues,
+            ["build_issues_digest"] = Convert.ToHexStringLower(
+                System.Security.Cryptography.SHA256.HashData(
+                    System.Text.Encoding.UTF8.GetBytes(buildIssues))),
         };
         DocRow Row(string key, string group, string from, string? to, bool text) =>
             new(key, "t-pub", group, $"urn:{group}", "REG", "en", from, to, "publisher",
@@ -161,10 +168,100 @@ public class McpContractTests : IDisposable
         var plan = Assert.IsType<JsonObject>(noVectors["query_plan"]);
         Assert.Equal("thing", plan["provision_query"]!.GetValue<string>());
         Assert.False(plan["has_strong_work_match"]!.GetValue<bool>());
+        Assert.Equal("not_requested", plan["work_resolution_status"]!.GetValue<string>());
+        Assert.True(plan["work_catalog_available"]!.GetValue<bool>());
+
+        var unknown = Call("search", new JsonObject { ["query"] = "32024R9999" });
+        var unknownPlan = Assert.IsType<JsonObject>(unknown["query_plan"]);
+        Assert.Equal("unresolved", unknownPlan["work_resolution_status"]!.GetValue<string>());
+        Assert.Equal("unresolved",
+            unknownPlan["work_resolutions"]![0]!["status"]!.GetValue<string>());
 
         var typo = Call("search", new JsonObject { ["query"] = "everywher", ["fuzzy"] = "auto" });
         var expansions = Assert.IsType<JsonArray>(typo["query_expansions"]);
         Assert.Contains("everywher -> everywhere", expansions.Select(x => x!.GetValue<string>()));
+    }
+
+    [Fact]
+    public void Global_resolution_preserves_known_and_unknown_mentions_across_publishers()
+    {
+        var euPath = Path.Combine(Path.GetTempPath(), $"lex-eu-{Guid.NewGuid():N}.db");
+        var luPath = Path.Combine(Path.GetTempPath(), $"lex-lu-{Guid.NewGuid():N}.db");
+        try
+        {
+            static DocRow Doc(string collection, string work, string title) => new(
+                $"{collection}:{work}:2024-01-01", collection, work, $"urn:{work}", "REG", "fr",
+                "2024-01-01", null, "publisher", "2026-08-08T00:00:00Z", false,
+                true, true, "record", "body", "https://example.test", title, title,
+                null, "2024-01-01", null);
+            static Dictionary<string, string> Stamp(string collection) => new()
+            {
+                ["collection"] = collection, ["tier"] = "A", ["history_begins"] = "publisher",
+                ["built_at"] = "2026-08-08T00:00:00Z", ["corpus_commit"] = "test",
+            };
+            var gdpr = Doc("eu", "32016r0679", "Privacy regulation");
+            var lu = Doc("lu", "local", "Local act");
+            IndexBuilder.Build(euPath, Stamp("eu"), [gdpr], [], [], [], null,
+                workSearch: new WorkSearchBuildOptions(
+                    [new ReviewedWorkAliasRow("32016r0679", "fr", "GDPR", "test")],
+                    [], new string('a', 64)));
+            IndexBuilder.Build(luPath, Stamp("lu"), [lu], [], [], [], null);
+            using var euReader = LexIndexReader.Open(euPath);
+            using var luReader = LexIndexReader.Open(luPath);
+            var core = new McpCore(new Dictionary<string, LexIndexReader>
+                { ["eu"] = euReader, ["lu"] = luReader });
+
+            var response = Assert.IsType<JsonArray>(core.CallTool("search", new JsonObject
+            {
+                ["query"] = "compare GDPR and 32024R9999 reporting obligations",
+            }));
+            var plan = Assert.IsType<JsonObject>(response[0]!["query_plan"]);
+            Assert.Equal("unresolved", plan["global_work_resolution_status"]!.GetValue<string>());
+            var resolutions = Assert.IsType<JsonArray>(plan["global_work_resolutions"]);
+            Assert.Contains(resolutions.OfType<JsonObject>(), item =>
+                item["mention"]!.GetValue<string>() == "gdpr"
+                && item["status"]!.GetValue<string>() == "resolved");
+            Assert.Contains(resolutions.OfType<JsonObject>(), item =>
+                item["mention"]!.GetValue<string>() == "32024R9999"
+                && item["status"]!.GetValue<string>() == "unresolved");
+        }
+        finally
+        {
+            try { File.Delete(euPath); } catch { }
+            try { File.Delete(luPath); } catch { }
+        }
+    }
+
+    [Fact]
+    public void Coverage_reports_overfull_signed_inventory_as_a_mismatch()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"lex-overfull-{Guid.NewGuid():N}.db");
+        try
+        {
+            var stamp = new Dictionary<string, string>
+            {
+                ["collection"] = "overfull", ["tier"] = "A", ["history_begins"] = "publisher",
+                ["built_at"] = "2026-08-08T00:00:00Z", ["corpus_commit"] = "test",
+                ["scope_expected_works"] = "1", ["build_issues_json"] = "[]",
+                ["build_issues_digest"] = Convert.ToHexStringLower(
+                    System.Security.Cryptography.SHA256.HashData("[]"u8)),
+            };
+            DocRow Doc(string work) => new($"overfull:{work}:2024-01-01", "overfull", work,
+                $"urn:{work}", "REG", "en", "2024-01-01", null, "publisher",
+                "2026-08-08T00:00:00Z", false, false, false, "record", null,
+                "https://example.test", work, work, null, "2024-01-01", null);
+            IndexBuilder.Build(path, stamp, [Doc("one"), Doc("stale")], [], [], [], null);
+            using var reader = LexIndexReader.Open(path);
+            var core = new McpCore(new Dictionary<string, LexIndexReader> { ["overfull"] = reader });
+
+            var response = Assert.IsType<JsonArray>(core.CallTool("coverage", new JsonObject()));
+            Assert.Equal("overfull", response[0]!["build_inventory_status"]!.GetValue<string>());
+            Assert.False(response[0]!["build_complete"]!.GetValue<bool>());
+        }
+        finally
+        {
+            try { File.Delete(path); } catch { }
+        }
     }
 
     [Fact]
@@ -375,6 +472,10 @@ public class McpContractTests : IDisposable
     {
         var o = Call("coverage", []);
         Assert.Equal(3, o["versions"]!.GetValue<int>());
+        Assert.Equal(3, o["scope_expected_works"]!.GetValue<int>());
+        Assert.Equal("incomplete", o["build_inventory_status"]!.GetValue<string>());
+        Assert.False(o["build_complete"]!.GetValue<bool>());
+        Assert.Equal("w3", o["build_issues"]![0]!["work"]!.GetValue<string>());
         Assert.NotNull(o["known_gaps"]);
         // text stats must distinguish held-with-text from held-without
         Assert.Equal(2, o["text"]!["versions_with_text_served"]!.GetValue<int>());

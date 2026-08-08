@@ -199,6 +199,97 @@ public sealed class WorkSearchTests : IDisposable
     }
 
     [Fact]
+    public void Build_issue_inventory_digest_is_verified_when_an_index_mounts()
+    {
+        var db = TempDb();
+        const string issues = "[{\"code\":\"no_versions\",\"work\":\"missing\"}]";
+        var stamp = Stamp();
+        stamp["build_issues_json"] = issues;
+        stamp["build_issues_digest"] = Convert.ToHexStringLower(
+            SHA256.HashData(Encoding.UTF8.GetBytes(issues)));
+        IndexBuilder.Build(db, stamp, [], [], [], [], null);
+        using (var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={db}"))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = "UPDATE stamp SET v='[]' WHERE k='build_issues_json'";
+            command.ExecuteNonQuery();
+        }
+
+        Assert.Throws<InvalidDataException>(() => LexIndexReader.Open(db));
+    }
+
+    [Theory]
+    [InlineData("{}")]
+    [InlineData("[{}]")]
+    [InlineData("[{\"code\":1,\"work\":\"w1\"}]")]
+    public void Malformed_signed_build_issue_inventory_is_rejected_at_mount(string issues)
+    {
+        var db = TempDb();
+        var stamp = Stamp();
+        stamp["build_issues_json"] = issues;
+        stamp["build_issues_digest"] = Convert.ToHexStringLower(
+            SHA256.HashData(Encoding.UTF8.GetBytes(issues)));
+        IndexBuilder.Build(db, stamp, [], [], [], [], null);
+
+        Assert.Throws<InvalidDataException>(() => LexIndexReader.Open(db));
+    }
+
+    [Fact]
+    public void Oversized_signed_build_issue_inventory_is_rejected_at_mount()
+    {
+        var db = TempDb();
+        var issues = "[{\"code\":\"gap\",\"work\":\"w1\",\"detail\":\""
+                     + new string('x', 2001) + "\"}]";
+        var stamp = Stamp();
+        stamp["build_issues_json"] = issues;
+        stamp["build_issues_digest"] = Convert.ToHexStringLower(
+            SHA256.HashData(Encoding.UTF8.GetBytes(issues)));
+        IndexBuilder.Build(db, stamp, [], [], [], [], null);
+
+        Assert.Throws<InvalidDataException>(() => LexIndexReader.Open(db));
+    }
+
+    [Theory]
+    [InlineData("garbage")]
+    [InlineData("-1")]
+    [InlineData("1000001")]
+    public void Invalid_expected_work_count_is_rejected_at_mount(string expected)
+    {
+        var db = TempDb();
+        var stamp = Stamp();
+        stamp["scope_expected_works"] = expected;
+        stamp["build_issues_json"] = "[]";
+        stamp["build_issues_digest"] = Convert.ToHexStringLower(SHA256.HashData("[]"u8));
+        IndexBuilder.Build(db, stamp, [], [], [], [], null);
+
+        Assert.Throws<InvalidDataException>(() => LexIndexReader.Open(db));
+    }
+
+    [Fact]
+    public void Expected_work_count_requires_the_signed_issue_inventory()
+    {
+        var db = TempDb();
+        var stamp = Stamp();
+        stamp["scope_expected_works"] = "1";
+        IndexBuilder.Build(db, stamp, [], [], [], [], null);
+
+        Assert.Throws<InvalidDataException>(() => LexIndexReader.Open(db));
+    }
+
+    [Fact]
+    public void Fully_legacy_inventory_absence_remains_mountable_and_unavailable()
+    {
+        var db = TempDb();
+        IndexBuilder.Build(db, Stamp(), [], [], [], [], null);
+
+        using var reader = LexIndexReader.Open(db);
+
+        Assert.Null(reader.Coverage().ExpectedWorks);
+        Assert.Empty(reader.Coverage().BuildIssues!);
+    }
+
+    [Fact]
     public void Role_intent_filters_provision_retrieval_by_publisher_document_role()
     {
         var db = TempDb();
@@ -338,6 +429,138 @@ public sealed class WorkSearchTests : IDisposable
         Assert.Equal("0", reader.Stamp["work_vector_records"]);
         Assert.DoesNotContain("vector_layout", reader.Stamp.Keys);
         Assert.Empty(result.QueryExpansions);
+    }
+
+    [Fact]
+    public void Duplicate_official_titles_are_reported_as_ambiguous_not_auto_selected()
+    {
+        var db = TempDb();
+        var first = Doc("eu:first:2024-01-01", "first", "Reporting Act");
+        var second = Doc("eu:second:2024-01-01", "second", "Reporting Act");
+        IndexBuilder.Build(db, Stamp(), [first, second], [], [], [], null);
+
+        using var reader = LexIndexReader.Open(db);
+        var result = reader.SearchKeyword("Reporting Act", FilterSet.All, 10, false);
+
+        Assert.Equal("ambiguous", result.QueryPlan!.WorkResolutionStatus);
+        Assert.False(result.QueryPlan.HasStrongWorkMatch);
+        Assert.Empty(result.QueryPlan.WorkConstraints);
+        var resolution = Assert.Single(result.QueryPlan.WorkResolutions!);
+        Assert.Equal(["first", "second"], resolution.Candidates);
+        Assert.All(result.Hits, hit => Assert.Contains(hit.MatchReasons,
+            reason => reason.StartsWith("ambiguous_", StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public void Multiple_reviewed_names_resolve_as_multiple_explicit_work_constraints()
+    {
+        var db = TempDb();
+        var gdpr = Doc("eu:gdpr:2024-01-01", "gdpr", "Privacy regulation");
+        var dora = Doc("eu:dora:2024-01-01", "dora", "Resilience regulation");
+        IndexBuilder.Build(db, Stamp(), [gdpr, dora],
+            [Provision(gdpr, "Reporting obligations."), Provision(dora, "Reporting obligations.")],
+            [], [], null, workSearch: new WorkSearchBuildOptions(
+                [Alias("gdpr", "fr", "GDPR"), Alias("dora", "fr", "DORA")],
+                [], EnrichmentDigest));
+
+        using var reader = LexIndexReader.Open(db);
+        var result = reader.SearchKeyword(
+            "compare GDPR and DORA reporting obligations", FilterSet.All, 10, false);
+
+        Assert.Equal("resolved", result.QueryPlan!.WorkResolutionStatus);
+        Assert.Equal(["dora", "gdpr"], result.QueryPlan.WorkConstraints);
+        Assert.Equal(2, result.QueryPlan.WorkResolutions!.Count);
+        Assert.All(result.QueryPlan.WorkResolutions, item => Assert.Equal("resolved", item.Status));
+        Assert.Contains(result.Hits, hit => hit.Doc.GroupKey == "gdpr");
+        Assert.Contains(result.Hits, hit => hit.Doc.GroupKey == "dora");
+    }
+
+    [Fact]
+    public void Multiple_names_for_one_work_remain_distinct_resolutions_with_one_constraint()
+    {
+        var db = TempDb();
+        var gdpr = Doc("eu:gdpr:2024-01-01", "gdpr", "Privacy regulation");
+        IndexBuilder.Build(db, Stamp(), [gdpr], [Provision(gdpr, "Reporting obligations.")],
+            [], [], null, workSearch: new WorkSearchBuildOptions(
+                [Alias("gdpr", "fr", "GDPR"), Alias("gdpr", "fr", "RGPD")],
+                [], EnrichmentDigest));
+
+        using var reader = LexIndexReader.Open(db);
+        var result = reader.SearchKeyword(
+            "compare GDPR and RGPD reporting obligations", FilterSet.All, 10, false);
+
+        Assert.Equal("resolved", result.QueryPlan!.WorkResolutionStatus);
+        Assert.Equal(["gdpr"], result.QueryPlan.WorkConstraints);
+        Assert.Equal(["gdpr", "rgpd"], result.QueryPlan.WorkResolutions!
+            .Select(item => item.Mention).ToArray());
+        Assert.All(result.QueryPlan.WorkResolutions!, item => Assert.Equal(["gdpr"], item.Candidates));
+    }
+
+    [Fact]
+    public void Mixed_known_and_unknown_identifiers_preserve_each_resolution_state()
+    {
+        var db = TempDb();
+        var gdpr = Doc("eu:32016r0679:2024-01-01", "32016r0679", "Privacy regulation");
+        IndexBuilder.Build(db, Stamp(), [gdpr], [Provision(gdpr, "Reporting obligations.")],
+            [], [], null, workSearch: new WorkSearchBuildOptions(
+                [Alias("32016r0679", "fr", "GDPR")], [], EnrichmentDigest));
+
+        using var reader = LexIndexReader.Open(db);
+        var result = reader.SearchKeyword(
+            "compare GDPR and 32024R9999 reporting obligations", FilterSet.All, 10, false);
+
+        Assert.Equal("unresolved", result.QueryPlan!.WorkResolutionStatus);
+        Assert.Equal(["32016r0679"], result.QueryPlan.WorkConstraints);
+        Assert.Contains(result.QueryPlan.WorkResolutions!, item =>
+            item.Mention == "gdpr" && item.Status == "resolved");
+        Assert.Contains(result.QueryPlan.WorkResolutions!, item =>
+            item.Mention == "32024R9999" && item.Status == "unresolved");
+    }
+
+    [Fact]
+    public void Multiple_unknown_identifiers_in_prose_are_each_reported_unresolved()
+    {
+        var db = TempDb();
+        IndexBuilder.Build(db, Stamp(), [], [], [], [], null);
+
+        using var reader = LexIndexReader.Open(db);
+        var result = reader.SearchKeyword(
+            "compare 32024R9999 with 32023L9998", FilterSet.All, 10, false);
+
+        Assert.Equal("unresolved", result.QueryPlan!.WorkResolutionStatus);
+        Assert.Equal(["32024R9999", "32023L9998"], result.QueryPlan.WorkResolutions!
+            .Select(item => item.Mention).ToArray());
+        Assert.All(result.QueryPlan.WorkResolutions!, item => Assert.Equal("unresolved", item.Status));
+    }
+
+    [Fact]
+    public void Unknown_exact_legal_identifier_is_explicitly_unresolved()
+    {
+        var db = TempDb();
+        IndexBuilder.Build(db, Stamp(), [], [], [], [], null);
+
+        using var reader = LexIndexReader.Open(db);
+        var result = reader.SearchKeyword("32024R9999", FilterSet.All, 10, false);
+
+        Assert.Equal("unresolved", result.QueryPlan!.WorkResolutionStatus);
+        Assert.Empty(result.QueryPlan.WorkConstraints);
+        Assert.Equal("32024R9999", Assert.Single(result.QueryPlan.WorkResolutions!).Mention);
+    }
+
+    [Fact]
+    public void Known_exact_identifier_keeps_identity_evidence_and_resolves_case_insensitively()
+    {
+        var db = TempDb();
+        var gdpr = Doc("eu:32016r0679:2024-01-01", "32016r0679", "Privacy regulation");
+        IndexBuilder.Build(db, Stamp(), [gdpr], [], [], [], null);
+
+        using var reader = LexIndexReader.Open(db);
+        var result = reader.SearchKeyword("32016R0679", FilterSet.All, 10, false);
+
+        Assert.Equal("resolved", result.QueryPlan!.WorkResolutionStatus);
+        Assert.Equal(["32016r0679"], result.QueryPlan.WorkConstraints);
+        Assert.Contains(result.Hits, hit => hit.Doc.GroupKey == "32016r0679"
+            && hit.MatchReasons.Contains("exact_identifier"));
     }
 
     [Fact]
@@ -582,6 +805,8 @@ public sealed class WorkSearchTests : IDisposable
 
         Assert.Equal("32016r0679", Assert.Single(result.Hits).Doc.GroupKey);
         Assert.Contains("exact_identifier", result.Hits[0].MatchReasons);
+        Assert.False(result.QueryPlan!.WorkCatalogAvailable);
+        Assert.Equal("resolved", result.QueryPlan.WorkResolutionStatus);
 
         var conversational = reader.SearchKeyword(
             "what does personal data", FilterSet.All, 10, fuzzyAuto: false);

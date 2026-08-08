@@ -107,6 +107,8 @@ public sealed class ManifestDoc
     public int Expressions { get; set; }
     public int ExpressionsWithText { get; set; }
     public int ExpressionsWithoutText { get; set; }
+    public int? ScopeExpectedWorks { get; set; }
+    public List<SourceBuildIssue> BuildIssues { get; set; } = [];
     public string? ValidFromEarliest { get; set; }
     public string? ValidToLatest { get; set; }
     public required string HistoryBegins { get; set; }

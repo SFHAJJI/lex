@@ -580,6 +580,29 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                     .ToList();
                 var hasGlobalStrongWorkMatch = executions.Any(item =>
                     item.Execution.QueryPlan?.HasStrongWorkMatch == true);
+                var globalResolutions = executions.SelectMany(item =>
+                        (item.Execution.QueryPlan?.WorkResolutions ?? []).Select(resolution => new
+                        {
+                            resolution.Mention,
+                            resolution.Status,
+                            Candidates = resolution.Candidates
+                                .Select(candidate => $"{item.Reader.Collection}:{candidate}"),
+                        }))
+                    .GroupBy(item => item.Mention, StringComparer.Ordinal)
+                    .Select(group =>
+                    {
+                        var candidates = group.SelectMany(item => item.Candidates)
+                            .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+                        var status = group.Any(item => item.Status == "ambiguous") || candidates.Length > 1
+                            ? "ambiguous" : candidates.Length == 1 ? "resolved" : "unresolved";
+                        return new { Mention = group.Key, Status = status, Candidates = candidates };
+                    }).OrderBy(item => item.Mention, StringComparer.Ordinal).ToArray();
+                var globalResolutionStatus = globalResolutions.Any(item => item.Status == "ambiguous")
+                    ? "ambiguous"
+                    : globalResolutions.Any(item => item.Status == "unresolved") ? "unresolved"
+                    : globalResolutions.Any(item => item.Status == "resolved") ? "resolved"
+                    : executions.Any(item => item.Execution.QueryPlan?.WorkCatalogAvailable == false)
+                        ? "unavailable" : "not_requested";
                 foreach (var (r, execution) in executions)
                 {
                     // provision-level hits: the retrieval unit is the article; at most two
@@ -652,6 +675,25 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                             ["article_number"] = plan.ArticleNumber,
                             ["role_intent"] = plan.RoleIntent,
                             ["has_strong_work_match"] = plan.HasStrongWorkMatch,
+                            ["work_resolution_status"] = plan.WorkResolutionStatus,
+                            ["work_catalog_available"] = plan.WorkCatalogAvailable,
+                            ["global_work_resolution_status"] = globalResolutionStatus,
+                            ["global_work_resolutions"] = new JsonArray(globalResolutions
+                                .Select(resolution => (JsonNode)new JsonObject
+                                {
+                                    ["mention"] = resolution.Mention,
+                                    ["status"] = resolution.Status,
+                                    ["candidates"] = new JsonArray(resolution.Candidates
+                                        .Select(candidate => (JsonNode)candidate).ToArray()),
+                                }).ToArray()),
+                            ["work_resolutions"] = new JsonArray(
+                                (plan.WorkResolutions ?? []).Select(resolution => (JsonNode)new JsonObject
+                                {
+                                    ["mention"] = resolution.Mention,
+                                    ["status"] = resolution.Status,
+                                    ["candidates"] = new JsonArray(resolution.Candidates
+                                        .Select(candidate => (JsonNode)candidate).ToArray()),
+                                }).ToArray()),
                         },
                         ["query_expansions"] = new JsonArray(execution.QueryExpansions.Select(x => (JsonNode)x).ToArray()),
                         ["artifact_manifest_id"] = Environment.GetEnvironmentVariable("LEX_ARTIFACT_MANIFEST_ID"),
@@ -877,6 +919,20 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                         ["envelope"] = Envelope(r, "ok"),
                         ["publisher_name"] = r.Stamp.GetValueOrDefault("publisher_name"),
                         ["works"] = c.Groups,
+                        ["scope_expected_works"] = c.ExpectedWorks,
+                        ["build_inventory_status"] = c.ExpectedWorks is null ? "unavailable"
+                            : c.Groups > c.ExpectedWorks ? "overfull"
+                            : c.Groups == c.ExpectedWorks && (c.BuildIssues?.Count ?? 0) == 0
+                                ? "complete" : "incomplete",
+                        ["build_complete"] = c.ExpectedWorks is null ? null
+                            : c.Groups == c.ExpectedWorks && (c.BuildIssues?.Count ?? 0) == 0,
+                        ["build_issues"] = new JsonArray((c.BuildIssues ?? [])
+                            .Select(issue => (JsonNode)new JsonObject
+                            {
+                                ["code"] = issue.Code,
+                                ["work"] = issue.Work,
+                                ["detail"] = issue.Detail,
+                            }).ToArray()),
                         ["versions"] = c.Rows,
                         ["valid_from_earliest"] = c.EarliestValidFrom,
                         ["valid_from_latest"] = c.LatestValidFrom,

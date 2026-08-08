@@ -14,6 +14,58 @@ namespace Lex.Ask;
 // Stateless per request; capped per IP and per day.
 public sealed class AskService(McpCore core)
 {
+    internal sealed class WorkResolutionGuard
+    {
+        private readonly HashSet<string> _resolved = new(StringComparer.Ordinal);
+        private bool _searchObserved;
+
+        public void ObserveSearch(JsonNode result)
+        {
+            foreach (var response in result is JsonArray array
+                         ? array.OfType<JsonObject>()
+                         : result is JsonObject single ? [single] : [])
+            {
+                if (response["query_plan"] is not JsonObject plan) continue;
+                var status = plan["global_work_resolution_status"]?.GetValue<string>()
+                             ?? plan["work_resolution_status"]?.GetValue<string>();
+                _searchObserved = true;
+                var resolutions = plan["global_work_resolutions"] as JsonArray
+                                  ?? plan["work_resolutions"] as JsonArray;
+                if (resolutions is not null)
+                    foreach (var resolution in resolutions.OfType<JsonObject>()
+                                 .Where(item => item["status"]?.GetValue<string>() == "resolved"))
+                        foreach (var candidate in resolution["candidates"]?.AsArray() ?? [])
+                            if (candidate?.GetValue<string>() is { } work) _resolved.Add(WorkKey(work));
+                // A problem description with no named law may select a work only from an actual
+                // provision hit. Standalone work discovery has no anchor and stays a candidate
+                // until the user confirms it.
+                if (status == "not_requested" && response["hits"] is JsonArray hits)
+                    foreach (var hit in hits.OfType<JsonObject>()
+                                 .Where(item => item["anchor"]?.GetValue<string>() is { Length: > 0 }))
+                        if (hit["lex_id"]?.GetValue<string>() is { } lexId)
+                            _resolved.Add(WorkKey(lexId));
+            }
+        }
+
+        public bool Allows(string tool, JsonObject args)
+        {
+            if (!_searchObserved) return true;
+            var work = tool == "provenance"
+                ? args["lex_id"]?.GetValue<string>()
+                : args["work"]?.GetValue<string>();
+            if (work is null || tool is not (
+                    "as_of" or "timeline" or "diff" or "article_history" or "cited_by" or "provenance"))
+                return true;
+            return _resolved.Contains(WorkKey(work));
+        }
+
+        private static string WorkKey(string value)
+        {
+            var parts = value.Split(':');
+            return parts.Length >= 2 ? $"{parts[0]}:{parts[1]}" : value;
+        }
+    }
+
     /// <summary>OTel source for the agent loop; registered by the host when tracing is configured.</summary>
     public const string ActivitySourceName = "Lex.Ask";
     private static readonly System.Diagnostics.ActivitySource Activity = new(ActivitySourceName);
@@ -71,9 +123,15 @@ public sealed class AskService(McpCore core)
            Search hits are POINTERS, never evidence of content:
            after search identifies the work, you MUST call as_of / timeline / diff before answering
            anything about what the text says or how it changed. Never repeat the same search.
-           Read query_plan before selecting a work: work_constraints with
-           has_strong_work_match=true came from deterministic resolution of the user's raw words.
-           Do not replace those works with a law name you generated. If article_number is present
+           Read query_plan before selecting a work. `resolved` work_resolutions are deterministic
+           resolutions of the user's raw words and their work_constraints may be used together
+           for multi-law questions. Check global_work_resolution_status before the publisher-local
+           status. If either relevant status is ambiguous, unresolved, or
+           unavailable, do not select a candidate automatically: state the candidates or the
+           availability problem and ask for confirmation when needed. `not_requested` means the
+           user described a problem without naming a law; use direct provision evidence and
+           discovery as candidates rather than claiming a missing law. Do not replace resolved
+           works with a law name you generated. If article_number is present
            but no hit carries article_intent, do not substitute another article; report that the
            requested provision was not found in the selected scope.
            Retry ONCE with the official name or a synonym (e.g. "DORA" -> "digital
@@ -112,11 +170,12 @@ public sealed class AskService(McpCore core)
            backwards and no search phrasing can answer it.
         6. Answer in the user's language (French or English). Be compact. Never use an em dash
            or an en dash: use a comma, a colon or a full stop. No exceptions.
-        7. ACT, never ask permission. Do not reply with "shall I…", "do you mean…" or an offer
+        7. ACT, never ask permission for routine retrieval. Do not reply with "shall I…" or an offer
            to look something up: call the tool and answer. When a question is vague (a period
            without exact dates, a law without a date) choose the most reasonable reading,
-           SAY which reading you used in one clause, and give the answer. The only thing you
-           may ask for is a genuinely missing subject (a question with no identifiable law,
+           SAY which reading you used in one clause, and give the answer. This does not override
+           rule 1: ask the user to choose when work resolution is ambiguous or unresolved. You
+           may also ask for a genuinely missing subject (a question with no identifiable law,
            date or topic at all).
         """;
 
@@ -421,6 +480,7 @@ public sealed class AskService(McpCore core)
             var trace = new JsonArray();
             var searchCalls = 0;
             var worksFound = new Dictionary<string, string>(StringComparer.Ordinal);
+            var resolutionGuard = new WorkResolutionGuard();
             var textToolUsed = false;
             // D31 shape: effects are collected across every tool call in the turn and merged
             // into ONE payload, so a single reply can carry prose plus more than one view.
@@ -541,9 +601,25 @@ public sealed class AskService(McpCore core)
                                 });
                                 continue;
                             }
+                            if (!resolutionGuard.Allows(name, args))
+                            {
+                                entry["status"] = "work_resolution_required";
+                                trace.Add(entry);
+                                messages.Add(new JsonObject
+                                {
+                                    ["role"] = "tool", ["tool_call_id"] = id,
+                                    ["content"] = new JsonObject
+                                    {
+                                        ["error"] = "work resolution is ambiguous, unresolved, or unavailable",
+                                        ["required_action"] = "Ask the user to choose a returned candidate or provide an official identifier before calling a work-specific tool.",
+                                    }.ToJsonString(),
+                                });
+                                continue;
+                            }
                             using var toolSpan = Activity.StartActivity("tool");
                             toolSpan?.SetTag("gen_ai.tool.name", name);
                             var node = core.CallTool(name, args);
+                            if (name == "search") resolutionGuard.ObserveSearch(node);
                             var (st, docs) = Summarize(node);
                             if (name is "as_of" or "timeline" or "diff" or "article_history" or "in_force_on")
                                 textToolUsed = true;

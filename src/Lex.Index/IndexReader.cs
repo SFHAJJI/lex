@@ -2,6 +2,7 @@ using Microsoft.Data.Sqlite;
 using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 
 namespace Lex.Index;
 
@@ -19,6 +20,8 @@ public sealed record CoverageProfile(string Profile, int Versions);
 /// question that decides whether a language control belongs to the site or to the document.
 public sealed record CoverageLanguage(string Language, int Works, int Versions);
 
+public sealed record CoverageBuildIssue(string Code, string Work, string? Detail);
+
 public sealed record CoverageInfo(
     string Collection,
     int Groups,
@@ -30,7 +33,9 @@ public sealed record CoverageInfo(
     int TextServed,
     IReadOnlyList<CoverageProfile> Profiles,
     IReadOnlyList<CoverageLanguage> Languages,
-    int MultilingualWorks);
+    int MultilingualWorks,
+    int? ExpectedWorks = null,
+    IReadOnlyList<CoverageBuildIssue>? BuildIssues = null);
 
 /// Values that the mounted index can actually accept as public search filters. Keeping this
 /// inventory beside the data means adding a reviewed domain or jurisdiction does not require a
@@ -55,6 +60,8 @@ public sealed class LexIndexReader : IDisposable
     private readonly bool _hasWorkSearch;
     private readonly int _workCatalogVersion;
     private readonly long _provisionVectorCount;
+    private readonly IReadOnlyList<CoverageBuildIssue> _buildIssues;
+    private readonly int? _expectedWorks;
     public IReadOnlyDictionary<string, string> Stamp { get; }
     public string Collection => Stamp.GetValueOrDefault("collection", "?");
     public bool SignatureValid { get; }
@@ -62,7 +69,8 @@ public sealed class LexIndexReader : IDisposable
 
     private LexIndexReader(SqliteConnection conn, Dictionary<string, string> stamp, string schema,
                            ITextEncoder? encoder, SemanticVectorReader? vectors, bool hasWorkSearch,
-                           int workCatalogVersion, long provisionVectorCount)
+                           int workCatalogVersion, long provisionVectorCount,
+                           IReadOnlyList<CoverageBuildIssue> buildIssues, int? expectedWorks)
     {
         _conn = conn;
         Stamp = stamp;
@@ -72,6 +80,8 @@ public sealed class LexIndexReader : IDisposable
         _hasWorkSearch = hasWorkSearch;
         _workCatalogVersion = workCatalogVersion;
         _provisionVectorCount = provisionVectorCount;
+        _buildIssues = buildIssues;
+        _expectedWorks = expectedWorks;
         SignatureValid = stamp.ContainsKey("signature") && StampSigner.Verify(stamp);
     }
 
@@ -87,6 +97,30 @@ public sealed class LexIndexReader : IDisposable
             cmd.CommandText = "SELECT k, v FROM stamp";
             using var r = cmd.ExecuteReader();
             while (r.Read()) stamp[r.GetString(0)] = r.GetString(1);
+        }
+        var buildIssuesJson = stamp.GetValueOrDefault("build_issues_json");
+        var buildIssuesDigest = stamp.GetValueOrDefault("build_issues_digest");
+        var expectedWorksValue = stamp.GetValueOrDefault("scope_expected_works");
+        if (expectedWorksValue is not null
+            && (buildIssuesJson is null || buildIssuesDigest is null))
+            throw new InvalidDataException(
+                $"Index {dbPath} has an expected-work count without a build-issue inventory.");
+        if ((buildIssuesJson is null) != (buildIssuesDigest is null)
+            || buildIssuesJson is not null && !string.Equals(
+                Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(buildIssuesJson))),
+                buildIssuesDigest, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException($"Index {dbPath} has an invalid build-issue inventory digest.");
+        var buildIssues = ValidateBuildIssues(buildIssuesJson, dbPath);
+        int? expectedWorks = null;
+        if (expectedWorksValue is not null)
+        {
+            if (!int.TryParse(expectedWorksValue,
+                    System.Globalization.NumberStyles.None,
+                    System.Globalization.CultureInfo.InvariantCulture, out var parsedExpected)
+                || parsedExpected < 0 || parsedExpected > 1_000_000)
+                throw new InvalidDataException(
+                    $"Index {dbPath} has an invalid expected-work count.");
+            expectedWorks = parsedExpected;
         }
         // §8.4 — refuse unknown schemas explicitly; never guess, never migrate silently.
         var schema = stamp.GetValueOrDefault("schema");
@@ -305,7 +339,56 @@ public sealed class LexIndexReader : IDisposable
         }
         return new LexIndexReader(
             conn, stamp, schema!, encoder, vectors, hasWorkSearch, workCatalogVersion,
-            provisionVectorCount);
+            provisionVectorCount, buildIssues, expectedWorks);
+    }
+
+    private static IReadOnlyList<CoverageBuildIssue> ValidateBuildIssues(
+        string? json, string dbPath)
+    {
+        if (json is null) return [];
+        try
+        {
+            using var document = JsonDocument.Parse(json, new JsonDocumentOptions
+            {
+                MaxDepth = 4,
+                AllowTrailingCommas = false,
+                CommentHandling = JsonCommentHandling.Disallow,
+            });
+            if (document.RootElement.ValueKind != JsonValueKind.Array
+                || document.RootElement.GetArrayLength() > 1000)
+                throw new InvalidDataException("Build issues must be an array with at most 1000 entries.");
+            var issues = new List<CoverageBuildIssue>();
+            foreach (var element in document.RootElement.EnumerateArray())
+            {
+                if (element.ValueKind != JsonValueKind.Object
+                    || !element.TryGetProperty("code", out var codeElement)
+                    || codeElement.ValueKind != JsonValueKind.String
+                    || !element.TryGetProperty("work", out var workElement)
+                    || workElement.ValueKind != JsonValueKind.String)
+                    throw new InvalidDataException("Each build issue requires string code and work fields.");
+                var code = codeElement.GetString()!;
+                var work = workElement.GetString()!;
+                string? detail = null;
+                if (element.TryGetProperty("detail", out var detailElement))
+                {
+                    if (detailElement.ValueKind == JsonValueKind.String)
+                        detail = detailElement.GetString();
+                    else if (detailElement.ValueKind != JsonValueKind.Null)
+                        throw new InvalidDataException("Build issue detail must be a string or null.");
+                }
+                if (string.IsNullOrWhiteSpace(code) || code.Length > 128
+                    || string.IsNullOrWhiteSpace(work) || work.Length > 512
+                    || detail?.Length > 2000)
+                    throw new InvalidDataException("Build issue fields are empty or exceed their bounds.");
+                issues.Add(new CoverageBuildIssue(code, work, detail));
+            }
+            return issues;
+        }
+        catch (Exception exception) when (exception is JsonException or InvalidOperationException)
+        {
+            throw new InvalidDataException(
+                $"Index {dbPath} has a malformed build-issue inventory.", exception);
+        }
     }
 
     private const string DocCols = """
@@ -635,8 +718,8 @@ public sealed class LexIndexReader : IDisposable
     {
         if (!_hasWorkSearch)
         {
-            var legacyPlan = IsV3 ? BasicQueryPlan(query) : new SearchQueryPlan(
-                query, query, [], null, null, false);
+            var legacyPlan = (IsV3 ? BasicQueryPlan(query) : new SearchQueryPlan(
+                query, query, [], null, null, false)) with { WorkCatalogAvailable = false };
             if (HasRoleConflict(filters, legacyPlan))
                 return new SearchExecution("keyword", [], [], legacyPlan);
             if (IsV3 && legacyPlan.ArticleNumber is not null)
@@ -647,8 +730,9 @@ public sealed class LexIndexReader : IDisposable
                     new RetrievalHit(hit.Doc, hit.Prov, hit.Snippet, 2d / (rank + 1),
                         ["article_intent"])).ToList(), [], legacyPlan);
             }
-            return SearchKeywordWithoutWorkCatalog(
-                legacyPlan.ProvisionQuery, filters, limit, fuzzyAuto) with { QueryPlan = legacyPlan };
+            var legacy = SearchKeywordWithoutWorkCatalog(
+                legacyPlan.ProvisionQuery, filters, limit, fuzzyAuto);
+            return legacy with { QueryPlan = LegacyIdentifierResolution(query, legacyPlan, legacy.Hits) };
         }
 
         var catalogMatches = WorkSearch.Find(
@@ -656,16 +740,17 @@ public sealed class LexIndexReader : IDisposable
             _workCatalogVersion >= 2);
         var identityFilters = filters with { DocumentRole = null };
         var workMatches = ResolveWorkMatches(catalogMatches, identityFilters);
-        var uniqueExactTitles = workMatches.Where(hit => hit.Reason == "exact_title")
-            .GroupBy(hit => hit.MatchedValue, StringComparer.Ordinal)
-            .Where(group => group.Select(hit => hit.Doc.GroupKey)
-                .Distinct(StringComparer.Ordinal).Take(2).Count() == 1)
-            .Select(group => group.Key).ToHashSet(StringComparer.Ordinal);
-        var strong = workMatches.Where(hit => hit.Reason is
+        var identityMatches = workMatches.Where(hit => hit.Reason is
                 "exact_identifier" or "exact_alias" or "contained_identifier" or "contained_alias"
-                || (hit.Reason == "exact_title" && uniqueExactTitles.Contains(hit.MatchedValue)))
+                or "exact_title")
             .ToList();
-        var plan = BuildQueryPlan(query, strong);
+        var resolutions = BuildWorkResolutions(query, identityMatches);
+        var resolvedMentions = resolutions.Where(item => item.Status == "resolved")
+            .Select(item => WorkSearch.Normalize(item.Mention)).ToHashSet(StringComparer.Ordinal);
+        var strong = identityMatches.Where(hit => hit.MatchedValue is not null
+                                                   && resolvedMentions.Contains(hit.MatchedValue))
+            .ToList();
+        var plan = BuildQueryPlan(query, identityMatches, resolutions);
         if (HasRoleConflict(filters, plan))
             return new SearchExecution("keyword", [], [], plan);
         var requestedRole = filters.DocumentRole
@@ -703,6 +788,12 @@ public sealed class LexIndexReader : IDisposable
         var combined = (directEvidence.Count > 0
                 ? directEvidence.Concat(resultStrong.Select(WorkRetrievalHit))
                 : resultStrong.Select(WorkRetrievalHit))
+            .Concat(identityMatches.Where(hit => hit.MatchedValue is not null
+                                                  && !resolvedMentions.Contains(hit.MatchedValue))
+                .Select(hit => WorkRetrievalHit(hit) with
+                {
+                    MatchReasons = ["ambiguous_" + hit.Reason],
+                }))
             .Concat(weak.Select(WorkRetrievalHit))
             .GroupBy(hit => $"{hit.Doc.GroupKey}|{hit.Doc.Language}|{hit.Provision.Anchor}|{hit.Provision.TextSha}",
                 StringComparer.Ordinal)
@@ -791,19 +882,29 @@ public sealed class LexIndexReader : IDisposable
             .Where(token => !ConversationalSearchWords.Contains(token)));
         if (article is null && role is null && filtered == normalized)
             filtered = query.Trim();
-        return new SearchQueryPlan(query, filtered, [], article, role, false);
+        var identifiers = LegalIdentifierTokens(query);
+        return new SearchQueryPlan(
+            query, filtered, [], article, role, false,
+            identifiers.Count == 0 ? "not_requested" : "unresolved",
+            identifiers.Select(identifier => new WorkResolution(identifier, "unresolved", [])).ToArray());
     }
 
     private static SearchQueryPlan BuildQueryPlan(
-        string query, IReadOnlyList<WorkSearchHit> strongMatches)
+        string query,
+        IReadOnlyList<WorkSearchHit> identityMatches,
+        IReadOnlyList<WorkResolution> resolutions)
     {
         var basic = BasicQueryPlan(query);
-        if (strongMatches.Count == 0) return basic;
+        if (identityMatches.Count == 0) return basic;
         var normalized = WorkSearch.Normalize(query);
-        var role = basic.RoleIntent ?? AmbiguousRolePhrases
-            .FirstOrDefault(item => ContainsPhrase(normalized, item.Phrase)).Role;
+        var resolved = resolutions.Where(item => item.Status == "resolved").ToArray();
+        var role = basic.RoleIntent;
+        if (role is null && resolved.Length > 0)
+            role = AmbiguousRolePhrases
+                .FirstOrDefault(item => ContainsPhrase(normalized, item.Phrase)).Role;
         var residual = " " + normalized + " ";
-        foreach (var name in strongMatches.Select(match => match.MatchedValue)
+        foreach (var name in identityMatches.Select(match => match.MatchedValue)
+                     .Concat(resolutions.Select(resolution => WorkSearch.Normalize(resolution.Mention)))
                      .Where(value => !string.IsNullOrWhiteSpace(value))
                      .Distinct(StringComparer.Ordinal)
                      .OrderByDescending(value => value!.Length))
@@ -812,7 +913,7 @@ public sealed class LexIndexReader : IDisposable
         residual = RemoveRoleIntent(residual, role);
         residual = string.Join(' ', residual.Split(' ', StringSplitOptions.RemoveEmptyEntries)
             .Where(token => !ConversationalSearchWords.Contains(token)));
-        var works = strongMatches.Select(match => match.Doc.GroupKey)
+        var works = resolved.SelectMany(item => item.Candidates)
             .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
         return basic with
         {
@@ -820,6 +921,65 @@ public sealed class LexIndexReader : IDisposable
             WorkConstraints = works,
             RoleIntent = role,
             HasStrongWorkMatch = works.Length > 0,
+            WorkResolutionStatus = ResolutionStatus(resolutions),
+            WorkResolutions = resolutions,
+        };
+    }
+
+    private static IReadOnlyList<WorkResolution> BuildWorkResolutions(
+        string query, IReadOnlyList<WorkSearchHit> identityMatches)
+    {
+        var matches = identityMatches
+            .Where(match => !string.IsNullOrWhiteSpace(match.MatchedValue))
+            .GroupBy(match => WorkSearch.Normalize(match.MatchedValue!), StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.Select(match => match.Doc.GroupKey)
+                .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray(),
+                StringComparer.Ordinal);
+        var result = new List<WorkResolution>();
+        var consumed = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var identifier in LegalIdentifierTokens(query))
+        {
+            var normalized = WorkSearch.Normalize(identifier);
+            var candidates = matches.GetValueOrDefault(normalized) ?? [];
+            consumed.Add(normalized);
+            result.Add(new WorkResolution(identifier, candidates.Length switch
+            {
+                0 => "unresolved",
+                1 => "resolved",
+                _ => "ambiguous",
+            }, candidates));
+        }
+        foreach (var (mention, candidates) in matches.Where(item => !consumed.Contains(item.Key)))
+            result.Add(new WorkResolution(mention,
+                candidates.Length == 1 ? "resolved" : "ambiguous", candidates));
+        return result.OrderBy(item => WorkSearch.Normalize(item.Mention), StringComparer.Ordinal).ToArray();
+    }
+
+    private static string ResolutionStatus(IReadOnlyList<WorkResolution> resolutions) =>
+        resolutions.Any(item => item.Status == "ambiguous") ? "ambiguous"
+        : resolutions.Any(item => item.Status == "unresolved") ? "unresolved"
+        : resolutions.Any(item => item.Status == "resolved") ? "resolved"
+        : "not_requested";
+
+    private static SearchQueryPlan LegacyIdentifierResolution(
+        string query, SearchQueryPlan plan, IReadOnlyList<RetrievalHit> hits)
+    {
+        var identifier = ExactLegalIdentifierToken(query);
+        if (identifier is null) return plan;
+        var candidates = hits.Select(hit => hit.Doc.GroupKey)
+            .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        var status = candidates.Length switch
+        {
+            0 => "unresolved",
+            1 => "resolved",
+            _ => "ambiguous",
+        };
+        return plan with
+        {
+            WorkConstraints = status == "resolved" ? candidates : [],
+            HasStrongWorkMatch = status == "resolved",
+            WorkResolutionStatus = status,
+            WorkResolutions = [new WorkResolution(identifier, status, candidates)],
         };
     }
 
@@ -1013,6 +1173,22 @@ public sealed class LexIndexReader : IDisposable
         if (celex.Success) return celex.Groups["identifier"].Value;
         return System.Text.RegularExpressions.Regex.IsMatch(trimmed, "^ECLI:[A-Z0-9:.]+$",
             System.Text.RegularExpressions.RegexOptions.IgnoreCase) ? trimmed : null;
+    }
+
+    private static IReadOnlyList<string> LegalIdentifierTokens(string query)
+    {
+        var results = new List<string>();
+        foreach (System.Text.RegularExpressions.Match match in
+                 System.Text.RegularExpressions.Regex.Matches(query,
+                     @"(?<![A-Z0-9])(?:CELEX\s*)?(?<identifier>[136][0-9]{4}[A-Z][0-9]{4}|1[0-9]{4}[A-Z]/TXT)(?![A-Z0-9])|(?<![A-Z0-9])(?<ecli>ECLI:[A-Z0-9:.]+)(?![A-Z0-9])",
+                     System.Text.RegularExpressions.RegexOptions.IgnoreCase
+                     | System.Text.RegularExpressions.RegexOptions.CultureInvariant))
+        {
+            var value = match.Groups["identifier"].Success
+                ? match.Groups["identifier"].Value : match.Groups["ecli"].Value;
+            if (!results.Contains(value, StringComparer.OrdinalIgnoreCase)) results.Add(value);
+        }
+        return results;
     }
 
     private static string ReplaceToken(string query, string source, string target) =>
@@ -1563,7 +1739,8 @@ public sealed class LexIndexReader : IDisposable
 
         return new CoverageInfo(Collection, ar.GetInt32(0), ar.GetInt32(1),
             ar.IsDBNull(2) ? null : ar.GetString(2), ar.IsDBNull(3) ? null : ar.GetString(3), kinds, Stamp,
-            ar.IsDBNull(4) ? 0 : ar.GetInt32(4), profiles, languages, multilingual);
+            ar.IsDBNull(4) ? 0 : ar.GetInt32(4), profiles, languages, multilingual,
+            _expectedWorks, _buildIssues);
     }
 
     private static string NormalizeWork(string work)

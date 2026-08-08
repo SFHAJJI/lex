@@ -126,6 +126,39 @@ public sealed class CorpusWriterTests : IDisposable
         Assert.Equal("resighted", resighted.Events[^1].Event);
     }
 
+    [Fact]
+    public async Task Manifest_records_expected_works_that_produced_no_versions()
+    {
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-08T00:00:00Z"))
+            .WriteAsync(new OneVersionAdapter(
+                "in_force", "finance", hasVersions: false), default);
+
+        var manifest = JsonSerializer.Deserialize<ManifestDoc>(
+            await File.ReadAllTextAsync(Path.Combine(_dir, "manifest.json")), CorpusJson.Options)!;
+        Assert.Equal(1, manifest.ScopeExpectedWorks);
+        var issue = Assert.Single(manifest.BuildIssues);
+        Assert.Equal("no_versions", issue.Code);
+        Assert.Equal("w1", issue.Work);
+    }
+
+    [Fact]
+    public void Legacy_manifest_without_expected_scope_keeps_inventory_unavailable()
+    {
+        var manifest = JsonSerializer.Deserialize<ManifestDoc>("""
+            {
+              "publisher":{"id":"test"},
+              "tier":"A",
+              "attribution":"test",
+              "text_included":false,
+              "text_public":false,
+              "history_begins":"publisher",
+              "ingester_version":"old"
+            }
+            """, CorpusJson.Options)!;
+
+        Assert.Null(manifest.ScopeExpectedWorks);
+    }
+
     public void Dispose()
     {
         try { Directory.Delete(_dir, true); } catch { }
@@ -137,7 +170,8 @@ public sealed class CorpusWriterTests : IDisposable
         IReadOnlyList<string>? languages = null,
         string titleShort = "Work one",
         IReadOnlyList<PublisherMetadataRecord>? publisherMetadata = null,
-        IReadOnlyList<string>? documentRoles = null) : ISourceAdapter
+        IReadOnlyList<string>? documentRoles = null,
+        bool hasVersions = true) : ISourceAdapter
     {
         private readonly WorkRef _work = new(new Identifier("official:w1"), "w1", "REG", "Work one");
 
@@ -155,6 +189,7 @@ public sealed class CorpusWriterTests : IDisposable
 
         public Task<IReadOnlyList<VersionRecord>> FetchVersions(WorkRef work, CancellationToken ct)
         {
+            if (!hasVersions) return Task.FromResult<IReadOnlyList<VersionRecord>>([]);
             IReadOnlyList<VersionRecord> versions =
             [
                 new(

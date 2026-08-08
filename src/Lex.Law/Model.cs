@@ -83,6 +83,17 @@ public sealed record PublisherDescriptor(
     bool TextPublic,                  // D38: true only when the publisher's text-reuse right is measured
     string HistoryBegins);            // "publisher" for Tier A, ISO date for Tier B
 
+public sealed record SourceBuildIssue(string Code, string Work, string? Detail = null);
+
+public sealed record SourceBuildInventory(
+    int ExpectedWorks,
+    IReadOnlyList<SourceBuildIssue> Issues);
+
+public interface ISourceBuildInventory
+{
+    SourceBuildInventory GetBuildInventory();
+}
+
 /// <summary>One file inside an alternative manifestation (an archive member). Bytes are publisher-verbatim.</summary>
 public sealed record ManifestationMember(string Name, byte[] Bytes);
 

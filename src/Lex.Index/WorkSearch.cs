@@ -209,6 +209,7 @@ public static class WorkSearch
         if (normalized.Length == 0) return [];
         var hits = new List<WorkMatch>();
         var seen = new HashSet<long>();
+        var seenIdentities = new HashSet<(long WorkId, string Value)>();
 
         using (var exact = connection.CreateCommand())
         {
@@ -354,7 +355,11 @@ public static class WorkSearch
 
         void AddExact(long workId, string kind, string matchedValue, string prefix)
         {
-            if (!seen.Add(workId)) return;
+            // Resolution is per mention, not per work. "GDPR and RGPD" deliberately yields
+            // two identity matches even though both names resolve to the same work. The work is
+            // still marked seen so weaker FTS metadata cannot add a third duplicate hit.
+            if (!seenIdentities.Add((workId, matchedValue))) return;
+            seen.Add(workId);
             var suffix = kind switch
             {
                 "official_identifier" => "identifier",

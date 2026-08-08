@@ -32,7 +32,7 @@
   - Verify: migration invariant, corpus/index comparison, professional-name evals.
   - Files: EUR-Lex source/corpus tooling, enrichment data, tests, migration docs
 
-- [ ] Task 6: Complete resolver and coverage states
+- [x] Task 6: Complete resolver and coverage states
   - Acceptance: each named entity returns resolved/ambiguous/unresolved/unavailable; multi-work
     queries work; signed build inventory exposes freshness and known failures without overclaiming.
   - Verify: collision, outage, comparison, and coverage tests.

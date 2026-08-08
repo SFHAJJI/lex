@@ -78,13 +78,21 @@ public sealed record SearchExecution(
     IReadOnlyList<string> QueryExpansions,
     SearchQueryPlan? QueryPlan = null);
 
+public sealed record WorkResolution(
+    string Mention,
+    string Status,
+    IReadOnlyList<string> Candidates);
+
 public sealed record SearchQueryPlan(
     string RawQuery,
     string ProvisionQuery,
     IReadOnlyList<string> WorkConstraints,
     string? ArticleNumber,
     string? RoleIntent,
-    bool HasStrongWorkMatch);
+    bool HasStrongWorkMatch,
+    string WorkResolutionStatus = "not_requested",
+    IReadOnlyList<WorkResolution>? WorkResolutions = null,
+    bool WorkCatalogAvailable = true);
 
 /// <summary>One distinct text state of one provision across versions (the per-anchor time axis).</summary>
 public sealed record ProvisionStateRow(
