@@ -50,6 +50,68 @@ public sealed class EurLexScopeTests : IDisposable
         Assert.Equal(expected, EurLexAdapter.NormalizeBindingStatus(source));
     }
 
+    [Fact]
+    public void Pinned_cellar_rows_preserve_bilingual_discovery_metadata_without_splitting_short_titles()
+    {
+        var titles = new[]
+        {
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["lang"] = "en",
+                ["title_short"] = "gdpr, personal data, personal data protection",
+            },
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["lang"] = "fr",
+                ["title_short"] = "rgdp, GDPR, Protection des données à caractère personnel",
+            },
+        };
+        var subjects = new[]
+        {
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["kind"] = "eurovoc",
+                ["identifier"] = "http://eurovoc.europa.eu/5181",
+                ["lang"] = "en",
+                ["label"] = "protection of personal data",
+            },
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["kind"] = "directory",
+                ["identifier"] = "http://publications.europa.eu/resource/authority/dir-eu-legal-act/152020",
+                ["lang"] = "fr",
+                ["label"] = "Protection des données à caractère personnel",
+            },
+        };
+
+        var metadata = EurLexAdapter.BuildPublisherMetadata("32016R0679", titles, subjects);
+
+        Assert.Contains(metadata, item => item.Kind == "publisher_short_title"
+            && item.Language == "en"
+            && item.Label == "gdpr, personal data, personal data protection");
+        Assert.DoesNotContain(metadata, item => item.Kind == "publisher_short_title"
+            && item.Label == "gdpr");
+        Assert.Contains(metadata, item => item.Kind == "eurovoc"
+            && item.Identifier == "http://eurovoc.europa.eu/5181"
+            && item.Language == "en");
+        Assert.Contains(metadata, item => item.Kind == "directory"
+            && item.Language == "fr"
+            && item.SourceUri == item.Identifier);
+    }
+
+    [Fact]
+    public void Cellar_resource_type_and_relationships_produce_only_controlled_document_roles()
+    {
+        Assert.Equal(["amending", "consolidated", "delegated"],
+            EurLexAdapter.DocumentRoles(
+                "http://publications.europa.eu/resource/authority/resource-type/REG_DEL",
+                amending: true, correcting: false, consolidated: true));
+        Assert.Equal(["corrigendum", "implementing"],
+            EurLexAdapter.DocumentRoles(
+                "http://publications.europa.eu/resource/authority/resource-type/REG_IMPL",
+                amending: false, correcting: true, consolidated: false));
+    }
+
     [Theory]
     [InlineData("32016R0679", "32016r0679")]
     [InlineData("12012E/TXT", "12012e-txt")]

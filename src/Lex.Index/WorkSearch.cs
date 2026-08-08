@@ -52,6 +52,11 @@ public static class WorkSearch
         "description", "concept", "search_synonym", "practice_area",
     };
 
+    private static readonly HashSet<string> AllowedDocumentRoles = new(StringComparer.Ordinal)
+    {
+        "amending", "consolidated", "corrigendum", "delegated", "implementing",
+    };
+
     private static readonly HashSet<string> StopWords = new(StringComparer.Ordinal)
     {
         "and", "avec", "aux", "dans", "des", "du", "elle", "est", "et", "for", "les",
@@ -96,12 +101,17 @@ public static class WorkSearch
                 group.Key.GroupKey,
                 group.Key.Language,
                 group.OrderByDescending(doc => doc.ValidFrom, StringComparer.Ordinal).First(),
+                group.OrderBy(doc => doc.ValidFrom, StringComparer.Ordinal).ToArray(),
                 group.Select(doc => doc.GroupIdentifier).Where(NotBlank).Distinct(StringComparer.Ordinal).ToArray(),
                 group.Select(doc => doc.Title).Where(NotBlank).Distinct(StringComparer.Ordinal).Cast<string>().ToArray(),
                 group.Select(doc => doc.TitleShort).Where(NotBlank).Distinct(StringComparer.Ordinal).Cast<string>().ToArray()))
             .OrderBy(source => source.Work, StringComparer.Ordinal)
             .ThenBy(source => source.Language, StringComparer.Ordinal)
             .ToArray();
+        if (docs.Any(doc => (doc.DocumentRoles ?? []).Any(role => !AllowedDocumentRoles.Contains(role))))
+            throw new InvalidDataException("Document metadata contains an unsupported role.");
+        if (docs.Any(doc => (doc.PublisherMetadata?.Count ?? 0) > 512))
+            throw new InvalidDataException("A document exceeds the publisher metadata limit.");
         var sourceKeys = sources.Select(source => (source.Work, source.Language)).ToHashSet();
         var aliases = options?.ReviewedAliases ?? [];
         var discovery = options?.Discovery ?? [];
@@ -147,12 +157,21 @@ public static class WorkSearch
                 InsertName(connection, workId, "reviewed_alias", alias.Value, alias.ReviewedBy);
             foreach (var item in workDiscovery)
                 InsertDiscovery(connection, workId, item);
+            foreach (var doc in source.Docs)
+                foreach (var metadata in (doc.PublisherMetadata ?? []).Distinct())
+                    InsertPublisherMetadata(connection, workId, doc, metadata);
+
+            var publisherValues = source.Docs
+                .SelectMany(doc => doc.PublisherMetadata ?? [])
+                .Select(value => value.Value)
+                .Where(NotBlank).Distinct(StringComparer.Ordinal).Cast<string>().ToArray();
+            var roles = source.Latest.DocumentRoles ?? [];
 
             using var fts = connection.CreateCommand();
             fts.CommandText = """
                 INSERT INTO work_fts(
-                  rowid,group_key,language,identifiers,aliases,titles,facets,discovery)
-                VALUES ($id,$work,$language,$identifiers,$aliases,$titles,$facets,$discovery)
+                  rowid,group_key,language,identifiers,aliases,titles,facets,publisher,discovery)
+                VALUES ($id,$work,$language,$identifiers,$aliases,$titles,$facets,$publisher,$discovery)
                 """;
             Add(fts, "$id", workId);
             Add(fts, "$work", source.Work);
@@ -161,7 +180,9 @@ public static class WorkSearch
             Add(fts, "$aliases", string.Join(' ', workAliases.Select(alias => alias.Value)));
             Add(fts, "$titles", string.Join(' ', source.Titles.Concat(source.ShortTitles)));
             Add(fts, "$facets", string.Join(' ', new[]
-                { source.Latest.Hierarchy, source.Latest.Domains, source.Latest.ActForm }.Where(NotBlank)));
+                { source.Latest.Hierarchy, source.Latest.Domains, source.Latest.ActForm }
+                .Where(NotBlank).Concat(roles)));
+            Add(fts, "$publisher", string.Join(' ', publisherValues));
             Add(fts, "$discovery", string.Join(' ', workDiscovery.Select(item => item.Value)));
             fts.ExecuteNonQuery();
 
@@ -169,7 +190,8 @@ public static class WorkSearch
                 "names: " + string.Join(' ', workAliases.Select(alias => alias.Value)
                     .Concat(source.Titles).Concat(source.ShortTitles))
                 + "\nsubjects: " + string.Join(' ', new[]
-                    { source.Latest.Hierarchy, source.Latest.Domains, source.Latest.ActForm }.Where(NotBlank))));
+                    { source.Latest.Hierarchy, source.Latest.Domains, source.Latest.ActForm }
+                    .Where(NotBlank).Concat(roles))));
             vectorInputs.AddRange(workDiscovery.Select(item =>
                 (workId, item.Kind, (string?)item.Value, $"legal {item.Kind}: {item.Value}")));
         }
@@ -178,7 +200,8 @@ public static class WorkSearch
     }
 
     internal static IReadOnlyList<WorkMatch> Find(
-        SqliteConnection connection, string query, string? language, int limit,
+        SqliteConnection connection, string query, string? language, DateOnly? asOf,
+        int limit, bool hasPublisherMetadata,
         bool includeWeakDiscovery = false)
     {
         if (limit <= 0) return [];
@@ -237,6 +260,9 @@ public static class WorkSearch
         if (tokens.Length == 0 || hits.Count >= limit) return hits;
         var tokenQuery = string.Join(" OR ", tokens.Select(token => $"\"{token.Replace("\"", "\"\"")}\""));
         AddFtsMatches("{identifiers aliases titles facets} : (" + tokenQuery + ")", "work_metadata");
+        if (hasPublisherMetadata)
+            AddPublisherMatches(tokens);
+        if (hits.Count >= limit) return hits;
         if (includeWeakDiscovery)
             AddFtsMatches("discovery : (" + tokenQuery + ")", "work_discovery");
         return hits;
@@ -245,8 +271,11 @@ public static class WorkSearch
         {
             if (hits.Count >= limit) return;
             using var search = connection.CreateCommand();
-            search.CommandText = """
-                SELECT rowid,bm25(work_fts,0,0,12,10,8,3,2) AS score
+            var rank = hasPublisherMetadata
+                ? "bm25(work_fts,0,0,12,10,8,3,5,2)"
+                : "bm25(work_fts,0,0,12,10,8,3,2)";
+            search.CommandText = $"""
+                SELECT rowid,{rank} AS score
                 FROM work_fts
                 WHERE work_fts MATCH $query AND ($language IS NULL OR language=$language)
                 ORDER BY score,rowid
@@ -261,6 +290,65 @@ public static class WorkSearch
                 var workId = matches.GetInt64(0);
                 if (!seen.Add(workId)) continue;
                 hits.Add(new WorkMatch(workId, reason, matches.GetDouble(1)));
+            }
+        }
+
+        void AddPublisherMatches(IReadOnlyList<string> searchTokens)
+        {
+            if (hits.Count >= limit) return;
+            var tokenQuery = string.Join(" OR ", searchTokens.Select(token =>
+                $"\"{token.Replace("\"", "\"\"")}\""));
+            var candidateIds = new List<long>();
+            using (var candidates = connection.CreateCommand())
+            {
+                candidates.CommandText = """
+                    SELECT rowid FROM work_fts
+                    WHERE work_fts MATCH $query AND ($language IS NULL OR language=$language)
+                    ORDER BY bm25(work_fts),rowid
+                    LIMIT $candidate_limit
+                    """;
+                Add(candidates, "$query", "publisher : (" + tokenQuery + ")");
+                Add(candidates, "$language", language);
+                Add(candidates, "$candidate_limit", Math.Max(100, limit * 20));
+                using var candidateRows = candidates.ExecuteReader();
+                while (candidateRows.Read()) candidateIds.Add(candidateRows.GetInt64(0));
+            }
+            if (candidateIds.Count == 0) return;
+            using var search = connection.CreateCommand();
+            var tokenPredicates = searchTokens.Select((_, index) =>
+                $"instr(' ' || m.normalized || ' ',' ' || $token{index} || ' ') > 0").ToArray();
+            var tokenScore = string.Join(" + ", searchTokens.Select((_, index) =>
+                $"CASE WHEN {tokenPredicates[index]} THEN 1 ELSE 0 END"));
+            var workParameters = candidateIds.Select((_, index) => $"$publisher_work{index}").ToArray();
+            search.CommandText = $"""
+                SELECT m.work_id,({tokenScore}) AS matched_tokens,m.normalized
+                FROM work_publisher_metadata m
+                JOIN work_records r ON r.work_id=m.work_id
+                WHERE m.work_id IN ({string.Join(',', workParameters)}) AND m.normalized<>''
+                  AND ($language IS NULL OR r.language=$language)
+                  AND (( $as_of IS NULL AND m.valid_to IS NULL)
+                       OR ($as_of IS NOT NULL AND m.valid_from <= $as_of
+                           AND (m.valid_to IS NULL OR m.valid_to >= $as_of)))
+                  AND ({string.Join(" OR ", tokenPredicates)})
+                ORDER BY CASE WHEN m.normalized=$normalized THEN 0 ELSE 1 END,
+                         matched_tokens DESC,m.work_id,m.kind,m.identifier
+                LIMIT $limit
+                """;
+            Add(search, "$normalized", normalized);
+            Add(search, "$language", language);
+            Add(search, "$as_of", asOf?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+            Add(search, "$limit", Math.Max(20, limit * 2));
+            for (var index = 0; index < searchTokens.Count; index++)
+                Add(search, $"$token{index}", searchTokens[index]);
+            for (var index = 0; index < candidateIds.Count; index++)
+                Add(search, workParameters[index], candidateIds[index]);
+            using var matches = search.ExecuteReader();
+            while (matches.Read() && hits.Count < limit)
+            {
+                var workId = matches.GetInt64(0);
+                if (!seen.Add(workId)) continue;
+                hits.Add(new WorkMatch(workId, "work_metadata", -10 - matches.GetInt32(1),
+                    matches.GetString(2)));
             }
         }
 
@@ -375,6 +463,37 @@ public static class WorkSearch
                     || !heldEvidence.Contains((evidence.Version, evidence.Anchor, evidence.TextSha256))))
                 throw new InvalidDataException("Discovery metadata references evidence not held by this index build.");
         }
+    }
+
+    private static void InsertPublisherMetadata(
+        SqliteConnection connection, long workId, DocRow doc, PublisherMetadataRow metadata)
+    {
+        if (metadata.Kind is not ("publisher_short_title" or "eurovoc" or "directory")
+            || string.IsNullOrWhiteSpace(metadata.Identifier)
+            || string.IsNullOrWhiteSpace(metadata.SourceUri)
+            || metadata.Identifier.Length > 2048 || metadata.SourceUri.Length > 2048
+            || metadata.Value?.Length > 4096
+            || (metadata.Kind == "publisher_short_title" && string.IsNullOrWhiteSpace(metadata.Value))
+            || !Uri.TryCreate(metadata.SourceUri, UriKind.Absolute, out var source)
+            || source.Scheme is not ("http" or "https")
+            || (metadata.Language is not null && metadata.Language != doc.Language))
+            throw new InvalidDataException("Publisher metadata is invalid or has the wrong language.");
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            INSERT OR IGNORE INTO work_publisher_metadata(
+              work_id,kind,identifier,value,normalized,language,valid_from,valid_to,source_uri)
+            VALUES ($work,$kind,$identifier,$value,$normalized,$language,$from,$to,$source)
+            """;
+        Add(command, "$work", workId);
+        Add(command, "$kind", metadata.Kind);
+        Add(command, "$identifier", metadata.Identifier);
+        Add(command, "$value", metadata.Value);
+        Add(command, "$normalized", Normalize(metadata.Value ?? ""));
+        Add(command, "$language", metadata.Language);
+        Add(command, "$from", doc.ValidFrom);
+        Add(command, "$to", doc.ValidTo);
+        Add(command, "$source", metadata.SourceUri);
+        command.ExecuteNonQuery();
     }
 
     private static void InsertName(
@@ -506,6 +625,7 @@ public static class WorkSearch
         string Work,
         string Language,
         DocRow Latest,
+        IReadOnlyList<DocRow> Docs,
         IReadOnlyList<string> Identifiers,
         IReadOnlyList<string> Titles,
         IReadOnlyList<string> ShortTitles);

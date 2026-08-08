@@ -20,7 +20,7 @@
 
 - [x] Checkpoint 1: full .NET tests and web build pass; DCO commits are clean
 
-- [ ] Task 4: Retain publisher discovery metadata and document role
+- [x] Task 4: Retain publisher discovery metadata and document role
   - Acceptance: FR/EN short titles, EuroVoc/directory identifiers and labels, language/time,
     provenance, and controlled role survive publisher-to-index flow.
   - Verify: adapter contract tests against pinned fixtures and index query tests.

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Lex.Law;
 
 namespace Lex.Ingest;
 
@@ -82,6 +83,8 @@ public sealed class VersionMeta
     public List<ExpressionMeta> Expressions { get; set; } = [];
     public List<Dictionary<string, string>> Relations { get; set; } = [];
     public Dictionary<string, string> Raw { get; set; } = [];
+    public List<PublisherMetadataRecord>? PublisherMetadata { get; set; }
+    public List<string>? DocumentRoles { get; set; }
     public string? RecordSha256 { get; set; }
 }
 

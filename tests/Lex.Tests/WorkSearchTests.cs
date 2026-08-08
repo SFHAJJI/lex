@@ -72,6 +72,244 @@ public sealed class WorkSearchTests : IDisposable
     }
 
     [Fact]
+    public void Publisher_discovery_is_searchable_but_cannot_become_an_exact_work_constraint()
+    {
+        var db = TempDb();
+        var source = "https://eur-lex.europa.eu/legal-content/FR/TXT/?uri=CELEX:32016R0679";
+        var doc = Doc("eu:32016r0679:2016-05-04", "32016r0679", "Regulation (EU) 2016/679") with
+        {
+            PublisherMetadata =
+            [
+                new PublisherMetadataRow(
+                    "publisher_short_title",
+                    "http://publications.europa.eu/ontology/cdm#expression_title_short",
+                    "fr",
+                    "gdpr, personal data, personal data protection",
+                    source),
+            ],
+        };
+        IndexBuilder.Build(db, Stamp(), [doc], [], [], [], null);
+
+        using var reader = LexIndexReader.Open(db);
+        var result = reader.SearchKeyword("GDPR", FilterSet.All, 10, fuzzyAuto: false);
+
+        Assert.False(result.QueryPlan!.HasStrongWorkMatch);
+        Assert.Contains(result.Hits, hit => hit.Doc.GroupKey == "32016r0679"
+            && hit.MatchReasons.Contains("work_metadata"));
+        using var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={db}");
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT kind,identifier,value,language,valid_from,source_uri
+            FROM work_publisher_metadata
+            """;
+        using var row = command.ExecuteReader();
+        Assert.True(row.Read());
+        Assert.Equal("publisher_short_title", row.GetString(0));
+        Assert.Equal(source, row.GetString(5));
+    }
+
+    [Fact]
+    public void Publisher_discovery_respects_the_requested_version_date()
+    {
+        var db = TempDb();
+        var source = "https://eur-lex.europa.eu/legal-content/FR/TXT/?uri=CELEX:32016R0679";
+        var earlier = Doc("eu:32016r0679:2020-01-01", "32016r0679", "Privacy regulation") with
+        {
+            ValidTo = "2022-01-01",
+            PublisherMetadata =
+            [
+                new PublisherMetadataRow("publisher_short_title", "short-title", "fr",
+                    "legacyname", source),
+            ],
+        };
+        var later = Doc("eu:32016r0679:2022-01-01", "32016r0679", "Privacy regulation") with
+        {
+            PublisherMetadata =
+            [
+                new PublisherMetadataRow("publisher_short_title", "short-title", "fr",
+                    "modernname", source),
+            ],
+        };
+        IndexBuilder.Build(db, Stamp(), [earlier, later], [], [], [], null);
+
+        using var reader = LexIndexReader.Open(db);
+        var historical = FilterSet.All with { AsOf = new DateOnly(2021, 6, 1) };
+
+        Assert.Contains(reader.SearchKeyword("legacyname", historical, 10, false).Hits,
+            hit => hit.Doc.ValidFrom == "2020-01-01");
+        Assert.Empty(reader.SearchKeyword("modernname", historical, 10, false).Hits);
+    }
+
+    [Fact]
+    public void Publisher_metadata_normalization_is_bound_by_the_content_digest()
+    {
+        var db = TempDb();
+        var doc = Doc("eu:delegated:2024-01-01", "delegated", "Delegated regulation") with
+        {
+            PublisherMetadata =
+            [
+                new PublisherMetadataRow("eurovoc", "subject-1", "fr", "energy",
+                    "https://publications.europa.eu/resource/authority/eurovoc/1"),
+            ],
+            DocumentRoles = ["delegated"],
+        };
+        IndexBuilder.Build(db, Stamp(), [doc], [], [], [], null);
+        string committed;
+        using (var reader = LexIndexReader.Open(db))
+        {
+            committed = reader.Stamp["content_digest"];
+            Assert.Equal(committed, reader.ComputeContentDigest());
+        }
+
+        using (var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={db}"))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = "UPDATE work_publisher_metadata SET normalized='gdpr'";
+            command.ExecuteNonQuery();
+        }
+
+        using var tampered = LexIndexReader.Open(db);
+        Assert.NotEqual(committed, tampered.ComputeContentDigest());
+    }
+
+    [Fact]
+    public void Document_roles_are_bound_by_the_content_digest()
+    {
+        var db = TempDb();
+        var doc = Doc("eu:delegated:2024-01-01", "delegated", "Delegated regulation") with
+        {
+            DocumentRoles = ["delegated"],
+        };
+        IndexBuilder.Build(db, Stamp(), [doc], [], [], [], null);
+        string committed;
+        using (var reader = LexIndexReader.Open(db))
+            committed = reader.Stamp["content_digest"];
+        using (var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={db}"))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = "UPDATE document_roles SET role='implementing'";
+            command.ExecuteNonQuery();
+        }
+
+        using var tampered = LexIndexReader.Open(db);
+        Assert.NotEqual(committed, tampered.ComputeContentDigest());
+    }
+
+    [Fact]
+    public void Role_intent_filters_provision_retrieval_by_publisher_document_role()
+    {
+        var db = TempDb();
+        var delegated = Doc("eu:delegated:2024-01-01", "delegated", "Delegated regulation") with
+        {
+            DocumentRoles = ["delegated"],
+        };
+        var implementing = Doc("eu:implementing:2024-01-01", "implementing", "Implementing regulation") with
+        {
+            DocumentRoles = ["implementing"],
+        };
+        IndexBuilder.Build(db, Stamp(), [delegated, implementing],
+            [Provision(delegated, "Operators have reporting obligations."),
+             Provision(implementing, "Operators have reporting obligations.")], [], [], null);
+
+        using var reader = LexIndexReader.Open(db);
+        var result = reader.SearchKeyword(
+            "delegated regulation reporting obligations", FilterSet.All, 10, fuzzyAuto: false);
+
+        Assert.Equal("delegated", result.QueryPlan!.RoleIntent);
+        Assert.Contains(result.Hits, hit => hit.Doc.GroupKey == "delegated");
+        Assert.DoesNotContain(result.Hits, hit => hit.Doc.GroupKey == "implementing");
+    }
+
+    [Fact]
+    public void Ordinary_execution_language_is_not_inferred_as_an_implementing_document_role()
+    {
+        var db = TempDb();
+        var doc = Doc("eu:ordinary:2024-01-01", "ordinary", "Ordinary regulation");
+        IndexBuilder.Build(db, Stamp(), [doc],
+            [Provision(doc, "The execution of the contract remains subject to review.")],
+            [], [], null);
+
+        using var reader = LexIndexReader.Open(db);
+        var result = reader.SearchKeyword("execution contract", FilterSet.All, 10, false);
+
+        Assert.Null(result.QueryPlan!.RoleIntent);
+        Assert.Contains(result.Hits, hit => hit.Doc.GroupKey == "ordinary");
+    }
+
+    [Fact]
+    public void Document_role_filter_is_valid_across_catalogue_query_entry_points()
+    {
+        var db = TempDb();
+        var doc = Doc("eu:delegated:2024-01-01", "delegated", "Delegated regulation") with
+        {
+            DocumentRoles = ["delegated"],
+        };
+        IndexBuilder.Build(db, Stamp(), [doc], [Provision(doc, "Reporting obligations.")],
+            [], [], null);
+        using var reader = LexIndexReader.Open(db);
+        var filter = FilterSet.All with { DocumentRole = "delegated" };
+
+        Assert.Single(reader.InForceOn(new DateOnly(2025, 1, 1), filter, 10, 0).Rows);
+        Assert.Single(reader.GroupsPage(10, 0, filter));
+        Assert.Single(reader.SearchWorksByIdentifierOrTitle("delegated", filter, 10));
+        Assert.Single(reader.ChangesInPeriod(
+            "2023-01-01", "2025-01-01", null, false, 10, filter: filter));
+    }
+
+    [Fact]
+    public void Publisher_discovery_cannot_starve_a_canonical_title_match()
+    {
+        var db = TempDb();
+        var source = "https://publications.europa.eu/resource/authority/eurovoc/1";
+        var noisy = Enumerable.Range(0, 30).Select(index =>
+            Doc($"eu:noise-{index}:2024-01-01", $"noise-{index}", $"Noise regulation {index}") with
+            {
+                PublisherMetadata =
+                [
+                    new PublisherMetadataRow("eurovoc", $"subject-{index}", "fr", "alpha", source),
+                ],
+            }).ToArray();
+        var target = Doc("eu:target:2024-01-01", "target", "Alpha Gamma Regulation");
+        IndexBuilder.Build(db, Stamp(), noisy.Append(target).ToArray(), [], [], [], null);
+
+        using var reader = LexIndexReader.Open(db);
+        var result = reader.SearchKeyword("alpha gamma", FilterSet.All, 5, false);
+
+        Assert.Contains(result.Hits, hit => hit.Doc.GroupKey == "target");
+    }
+
+    [Fact]
+    public void Parsed_role_intent_cannot_override_an_explicit_conflicting_filter()
+    {
+        var db = TempDb();
+        var vectors = TempFile(".vectors");
+        var delegated = Doc("eu:delegated:2024-01-01", "delegated", "Delegated regulation") with
+        {
+            DocumentRoles = ["delegated"],
+        };
+        var implementing = Doc("eu:implementing:2024-01-01", "implementing", "Implementing regulation") with
+        {
+            DocumentRoles = ["implementing"],
+        };
+        using var encoder = new TestEncoder();
+        IndexBuilder.Build(db, Stamp(), [delegated, implementing],
+            [Provision(delegated, "Operators have reporting obligations."),
+             Provision(implementing, "Operators have reporting obligations.")], [], [], null,
+            semantic: new SemanticBuildOptions(encoder, vectors, "model-sha", "tokenizer-sha"));
+
+        using var reader = LexIndexReader.Open(db, encoder, vectors);
+        var filter = FilterSet.All with { DocumentRole = "implementing" };
+
+        Assert.Empty(reader.SearchKeyword(
+            "delegated regulation reporting obligations", filter, 10, false).Hits);
+        Assert.Empty(reader.SearchHybrid(
+            "delegated regulation reporting obligations", filter, 10, false).Hits);
+    }
+
+    [Fact]
     public void Reviewed_alias_inside_a_long_query_pins_the_base_work_before_its_corrigendum()
     {
         var db = TempDb();
@@ -106,7 +344,10 @@ public sealed class WorkSearchTests : IDisposable
     public void Article_intent_inside_a_named_work_query_returns_the_requested_provision()
     {
         var db = TempDb();
-        var regulation = Doc("eu:32016r0679:2016-05-04", "32016r0679", "GDPR");
+        var regulation = Doc("eu:32016r0679:2016-05-04", "32016r0679", "GDPR") with
+        {
+            DocumentRoles = ["delegated"],
+        };
         var article = Provision(regulation,
             "The controller shall notify a personal data breach to the supervisory authority.",
             anchor: "art_33", number: "33");
@@ -129,7 +370,10 @@ public sealed class WorkSearchTests : IDisposable
     public void Named_work_resolution_scopes_residual_provision_search()
     {
         var db = TempDb();
-        var regulation = Doc("eu:32016r0679:2016-05-04", "32016r0679", "GDPR");
+        var regulation = Doc("eu:32016r0679:2016-05-04", "32016r0679", "GDPR") with
+        {
+            DocumentRoles = ["delegated"],
+        };
         var unrelated = Doc("eu:unrelated:2020-01-01", "unrelated", "Reporting Act");
         IndexBuilder.Build(db, Stamp(), [regulation, unrelated],
             [Provision(regulation, "Controllers have reporting obligations."),
@@ -208,7 +452,10 @@ public sealed class WorkSearchTests : IDisposable
     public void Role_intent_is_removed_from_the_residual_provision_query()
     {
         var db = TempDb();
-        var regulation = Doc("eu:32016r0679:2016-05-04", "32016r0679", "GDPR");
+        var regulation = Doc("eu:32016r0679:2016-05-04", "32016r0679", "GDPR") with
+        {
+            DocumentRoles = ["delegated"],
+        };
         IndexBuilder.Build(db, Stamp(), [regulation],
             [Provision(regulation, "Controllers have reporting obligations.")], [], [], null,
             workSearch: new WorkSearchBuildOptions(
@@ -309,19 +556,24 @@ public sealed class WorkSearchTests : IDisposable
     {
         var db = TempDb();
         var doc = Doc("eu:32016r0679:2016-05-04", "32016r0679", "GDPR");
-        IndexBuilder.Build(db, Stamp(), [doc], [Provision(doc, "Personal data protection.")],
+        IndexBuilder.Build(db, Stamp(), [doc],
+            [Provision(doc, "Personal data protection and execution measures.")],
             [], [], null);
         using (var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={db}"))
         {
             connection.Open();
             using var command = connection.CreateCommand();
             command.CommandText = """
-                DELETE FROM stamp WHERE k IN ('work_search_records','work_vector_records','vector_layout');
+                DELETE FROM stamp WHERE k IN (
+                  'work_search_records','work_vector_records','vector_layout',
+                  'work_catalog_version','publisher_metadata_records','document_role_records');
                 DROP TABLE work_fts;
                 DROP TABLE work_discovery;
                 DROP TABLE work_vectors;
                 DROP TABLE work_names;
                 DROP TABLE work_records;
+                DROP TABLE work_publisher_metadata;
+                DROP TABLE document_roles;
                 """;
             command.ExecuteNonQuery();
         }
@@ -335,6 +587,45 @@ public sealed class WorkSearchTests : IDisposable
             "what does personal data", FilterSet.All, 10, fuzzyAuto: false);
         Assert.Equal("personal data", conversational.QueryPlan!.ProvisionQuery);
         Assert.Contains(conversational.Hits, hit => hit.Doc.GroupKey == "32016r0679");
+    }
+
+    [Fact]
+    public void Earlier_five_table_work_catalogs_still_mount_without_new_metadata_tables()
+    {
+        var db = TempDb();
+        var doc = Doc("eu:32016r0679:2016-05-04", "32016r0679", "General Data Protection Regulation");
+        IndexBuilder.Build(db, Stamp(), [doc],
+            [Provision(doc, "Personal data protection and execution measures.")],
+            [], [], null,
+            workSearch: new WorkSearchBuildOptions(
+                [Alias("32016r0679", "fr", "RGPD")], [], EnrichmentDigest));
+        using (var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={db}"))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = """
+                DROP TABLE work_fts;
+                CREATE VIRTUAL TABLE work_fts USING fts5(
+                  group_key UNINDEXED, language UNINDEXED,
+                  identifiers, aliases, titles, facets, discovery,
+                  tokenize='unicode61 remove_diacritics 2');
+                INSERT INTO work_fts(rowid,group_key,language,identifiers,aliases,titles,facets,discovery)
+                  SELECT work_id,group_key,language,group_identifier,'RGPD',title,'',''
+                  FROM work_records;
+                DROP TABLE work_publisher_metadata;
+                DROP TABLE document_roles;
+                DELETE FROM stamp WHERE k IN (
+                  'work_catalog_version','publisher_metadata_records','document_role_records');
+                """;
+            command.ExecuteNonQuery();
+        }
+
+        using var reader = LexIndexReader.Open(db);
+        var result = reader.SearchKeyword("RGPD personal data", FilterSet.All, 10, false);
+
+        Assert.Contains(result.Hits, hit => hit.Doc.GroupKey == "32016r0679");
+        Assert.Contains(reader.SearchKeyword("execution measures", FilterSet.All, 10, false).Hits,
+            hit => hit.Doc.GroupKey == "32016r0679");
     }
 
     [Fact]
@@ -354,12 +645,16 @@ public sealed class WorkSearchTests : IDisposable
             connection.Open();
             using var command = connection.CreateCommand();
             command.CommandText = """
-                DELETE FROM stamp WHERE k IN ('work_search_records','work_vector_records','vector_layout');
+                DELETE FROM stamp WHERE k IN (
+                  'work_search_records','work_vector_records','vector_layout',
+                  'work_catalog_version','publisher_metadata_records','document_role_records');
                 DROP TABLE work_fts;
                 DROP TABLE work_discovery;
                 DROP TABLE work_vectors;
                 DROP TABLE work_names;
                 DROP TABLE work_records;
+                DROP TABLE work_publisher_metadata;
+                DROP TABLE document_roles;
                 """;
             command.ExecuteNonQuery();
         }
@@ -476,6 +771,8 @@ public sealed class WorkSearchTests : IDisposable
                 DROP TABLE work_vectors;
                 DROP TABLE work_names;
                 DROP TABLE work_records;
+                DROP TABLE work_publisher_metadata;
+                DROP TABLE document_roles;
                 """;
             command.ExecuteNonQuery();
         }

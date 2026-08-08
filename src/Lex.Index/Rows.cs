@@ -1,5 +1,12 @@
 namespace Lex.Index;
 
+public sealed record PublisherMetadataRow(
+    string Kind,
+    string Identifier,
+    string? Language,
+    string? Value,
+    string SourceUri);
+
 /// <summary>
 /// One row per expression current-state (generic "versioned document" vocabulary —
 /// this layer knows nothing about law or any publisher, per fitness rule F1).
@@ -35,7 +42,9 @@ public sealed record DocRow(
     string? Domains = null,
     string? ActForm = null,
     string? BindingStatus = null,
-    string? ConsolidationStatus = null);
+    string? ConsolidationStatus = null,
+    IReadOnlyList<PublisherMetadataRow>? PublisherMetadata = null,
+    IReadOnlyList<string>? DocumentRoles = null);
 
 /// <summary>One provision (article/annex) of one document version — the retrieval unit.</summary>
 public sealed record ProvisionRow(
@@ -157,7 +166,8 @@ public sealed record FilterSet(
     string? Hierarchy = null,
     string? ActForm = null,
     string? BindingStatus = null,
-    string? Domain = null)
+    string? Domain = null,
+    string? DocumentRole = null)
 {
     public static readonly FilterSet All = new(null, null, null, null);
 }

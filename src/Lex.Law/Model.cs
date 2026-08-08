@@ -45,6 +45,17 @@ public sealed record ExpressionRecord(
     string? TitleShort,
     string? SourceUri);
 
+/// <summary>
+/// Publisher-supplied work discovery metadata. It is searchable metadata, not legal wording and
+/// not an exact identifier unless a separate reviewed alias says so.
+/// </summary>
+public sealed record PublisherMetadataRecord(
+    string Kind,
+    string Identifier,
+    string? Language,
+    string? Label,
+    string SourceUri);
+
 public sealed record RelationRecord(string Type, Identifier Target);
 
 /// <summary>One state of a Work, valid between two dates.</summary>
@@ -59,7 +70,9 @@ public sealed record VersionRecord(
     DateOnly? PublicationDate,
     IReadOnlyList<ExpressionRecord> Expressions,
     IReadOnlyList<RelationRecord> Relations,
-    IReadOnlyDictionary<string, string> Raw);
+    IReadOnlyDictionary<string, string> Raw,
+    IReadOnlyList<PublisherMetadataRecord>? PublisherMetadata = null,
+    IReadOnlyList<string>? DocumentRoles = null);
 
 /// <summary>What an adapter declares about its publisher (C4).</summary>
 public sealed record PublisherDescriptor(

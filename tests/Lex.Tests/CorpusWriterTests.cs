@@ -70,6 +70,39 @@ public sealed class CorpusWriterTests : IDisposable
     }
 
     [Fact]
+    public async Task Existing_record_refreshes_publisher_discovery_metadata_and_expression_short_title()
+    {
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-01T00:00:00Z"))
+            .WriteAsync(new OneVersionAdapter(
+                "in_force", "financial-services", titleShort: "GDPR - Regulation"), default);
+        var publisherMetadata = new[]
+        {
+            new PublisherMetadataRecord(
+                "publisher_short_title",
+                "http://publications.europa.eu/ontology/cdm#expression_title_short",
+                "en",
+                "gdpr, personal data protection",
+                "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32016R0679"),
+        };
+
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-06T00:00:00Z"))
+            .WriteAsync(new OneVersionAdapter(
+                "in_force", "financial-services", titleShort: "Regulation",
+                publisherMetadata: publisherMetadata, documentRoles: ["delegated"]), default);
+
+        var path = Path.Combine(_dir, "works", "w1", "versions", "2024-01-01", "meta.json");
+        var meta = JsonSerializer.Deserialize<VersionMeta>(await File.ReadAllTextAsync(path), CorpusJson.Options)!;
+
+        Assert.Equal("Regulation", Assert.Single(meta.Expressions).TitleShort);
+        Assert.Equal(publisherMetadata, meta.PublisherMetadata);
+        Assert.Equal(["delegated"], meta.DocumentRoles);
+        var revision = meta.Events.Last(e => e.Event == "metadata_revised");
+        Assert.Contains("expressions.en.title_short", revision.Detail);
+        Assert.Contains("publisher_metadata", revision.Detail);
+        Assert.Contains("document_roles", revision.Detail);
+    }
+
+    [Fact]
     public async Task Missing_publisher_record_is_tombstoned_and_can_be_resighted()
     {
         await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-01T00:00:00Z"))
@@ -97,7 +130,12 @@ public sealed class CorpusWriterTests : IDisposable
     }
 
     private sealed class OneVersionAdapter(
-        string bindingStatus, string domain, IReadOnlyList<string>? languages = null) : ISourceAdapter
+        string bindingStatus,
+        string domain,
+        IReadOnlyList<string>? languages = null,
+        string titleShort = "Work one",
+        IReadOnlyList<PublisherMetadataRecord>? publisherMetadata = null,
+        IReadOnlyList<string>? documentRoles = null) : ISourceAdapter
     {
         private readonly WorkRef _work = new(new Identifier("official:w1"), "w1", "REG", "Work one");
 
@@ -122,12 +160,12 @@ public sealed class CorpusWriterTests : IDisposable
                     "publisher", "true", new DateOnly(2024, 1, 1),
                     (languages ?? ["en"]).Select(language => new ExpressionRecord(
                         language, new DateOnly(2024, 1, 1), null, "publisher",
-                        "Work one", "Work one", $"https://example.test/v1/{language}")).ToArray(),
+                        "Work one", titleShort, $"https://example.test/v1/{language}")).ToArray(),
                     [], new Dictionary<string, string>
                     {
                         ["binding_status"] = bindingStatus,
                         ["domains"] = domain,
-                    })
+                    }, publisherMetadata, documentRoles)
             ];
             return Task.FromResult(versions);
         }

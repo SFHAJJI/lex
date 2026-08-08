@@ -152,6 +152,41 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now, TextWrit
                         meta.Raw[key] = value;
                         revised.Add($"raw.{key}");
                     }
+                    var publisherMetadata = CanonicalPublisherMetadata(v.PublisherMetadata);
+                    if (!(meta.PublisherMetadata ?? []).SequenceEqual(publisherMetadata))
+                    {
+                        meta.PublisherMetadata = publisherMetadata.Count == 0 ? null : publisherMetadata;
+                        revised.Add("publisher_metadata");
+                    }
+                    var documentRoles = (v.DocumentRoles ?? []).Distinct(StringComparer.Ordinal)
+                        .Order(StringComparer.Ordinal).ToList();
+                    if (!(meta.DocumentRoles ?? []).SequenceEqual(documentRoles, StringComparer.Ordinal))
+                    {
+                        meta.DocumentRoles = documentRoles.Count == 0 ? null : documentRoles;
+                        revised.Add("document_roles");
+                    }
+
+                    foreach (var expression in v.Expressions)
+                    {
+                        var current = meta.Expressions.FirstOrDefault(e => e.Language == expression.Language);
+                        if (current is null) continue;
+                        if (current.Title != expression.Title)
+                        {
+                            current.Title = expression.Title;
+                            revised.Add($"expressions.{expression.Language}.title");
+                        }
+                        if (current.TitleShort != expression.TitleShort)
+                        {
+                            current.TitleShort = expression.TitleShort;
+                            revised.Add($"expressions.{expression.Language}.title_short");
+                        }
+                        if (current.SourceUri != expression.SourceUri)
+                        {
+                            current.SourceUri = expression.SourceUri;
+                            current.Text.Url = expression.SourceUri;
+                            revised.Add($"expressions.{expression.Language}.source_uri");
+                        }
+                    }
                     if (revised.Count > 0)
                     {
                         meta.Events.Add(new EventEntry
@@ -199,6 +234,10 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now, TextWrit
                         Relations = v.Relations.Select(r => new Dictionary<string, string>
                         { ["type"] = r.Type, ["target"] = r.Target.Value }).ToList(),
                         Raw = new Dictionary<string, string>(v.Raw),
+                        PublisherMetadata = CanonicalPublisherMetadata(v.PublisherMetadata) is { Count: > 0 } metadata
+                            ? metadata : null,
+                        DocumentRoles = (v.DocumentRoles ?? []).Distinct(StringComparer.Ordinal)
+                            .Order(StringComparer.Ordinal).ToList() is { Count: > 0 } roles ? roles : null,
                     };
                 }
 
@@ -361,6 +400,16 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now, TextWrit
             Url = expression.SourceUri,
         },
     };
+
+    private static List<PublisherMetadataRecord> CanonicalPublisherMetadata(
+        IReadOnlyList<PublisherMetadataRecord>? values) => (values ?? [])
+        .Distinct()
+        .OrderBy(value => value.Kind, StringComparer.Ordinal)
+        .ThenBy(value => value.Identifier, StringComparer.Ordinal)
+        .ThenBy(value => value.Language, StringComparer.Ordinal)
+        .ThenBy(value => value.Label, StringComparer.Ordinal)
+        .ThenBy(value => value.SourceUri, StringComparer.Ordinal)
+        .ToList();
 
     private void TombstoneMissingVersions(IReadOnlySet<string> seenVersionMetadata)
     {

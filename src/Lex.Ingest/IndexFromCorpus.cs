@@ -115,7 +115,13 @@ public static class IndexFromCorpus
                         Domains: NormalizeDomains(meta.Raw.GetValueOrDefault("domains") ?? meta.Raw.GetValueOrDefault("scope_reasons")),
                         ActForm: meta.Raw.GetValueOrDefault("legal_form"),
                         BindingStatus: meta.Raw.GetValueOrDefault("binding_status"),
-                        ConsolidationStatus: meta.Raw.GetValueOrDefault("consolidation_status")));
+                        ConsolidationStatus: meta.Raw.GetValueOrDefault("consolidation_status"),
+                        PublisherMetadata: (meta.PublisherMetadata ?? [])
+                            .Where(value => value.Language is null || value.Language == expr.Language)
+                            .Select(value => new PublisherMetadataRow(
+                                value.Kind, value.Identifier, value.Language, value.Label, value.SourceUri))
+                            .ToArray(),
+                        DocumentRoles: meta.DocumentRoles ?? []));
 
                     // Observation chains: obs N's observed_to = obs N+1's observed_from; last closed by tombstone.
                     for (var i = 0; i < expr.Observations.Count; i++)
