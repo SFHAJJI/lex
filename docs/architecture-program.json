@@ -1,6 +1,6 @@
 {
   "program_version": "hybrid-eu/1",
-  "updated_at": "2026-08-07",
+  "updated_at": "2026-08-08",
   "review_status": "engineer-reviewed",
   "statuses": ["planned", "building", "gated", "shipped", "rejected"],
   "current": {
@@ -62,6 +62,12 @@
       "title": "Size-gated local index hosting",
       "status": "shipped",
       "outcome": "Keep small verified indexes in Container Apps, but promote oversized releases from Blob onto a VM-managed local disk before traffic cutover."
+    },
+    {
+      "id": "M9",
+      "title": "Reviewed search enrichment and legal-research agent",
+      "status": "building",
+      "outcome": "Prove provenance-aware work discovery metadata, deterministic work-name retrieval, a Microsoft Agent Framework legal-research agent, bounded memory and jurisdiction-first results without changing authoritative legal text."
     }
   ],
   "decisions": [
@@ -271,6 +277,33 @@
       "alternative": "Use one item count for every token bucket, lower all batches to the longest bucket's limit, or retry opaque out-of-memory failures manually.",
       "reason": "A batch that is efficient for 32-token provisions can exhaust an 8 GB DirectML worker in the longest bucket even though every legal chunk and model is valid.",
       "cost": "Long buckets use more inference calls, the token budget becomes stamped build configuration, and hardware-specific tuning must remain a transient grouping concern rather than changing legal chunks."
+    },
+    {
+      "id": "D75",
+      "title": "Separate authoritative text from provenance-aware search enrichment",
+      "status": "building",
+      "choice": "Use a disposable evidence-backed LLM workbench to derive work-level discovery candidates; require publisher confirmation or review for strong aliases, admit only validated and provenance-labelled descriptions and concepts as weak recall signals, and merge them into the rebuilt signed index.",
+      "alternative": "Treat generated metadata as legal fact or a strong rank signal, maintain a runtime sidecar database, or repeat work metadata inside every provision vector.",
+      "reason": "Professional names and descriptive concepts improve discovery at corpus scale, while protected fields and legal text identity remain deterministic, auditable and inseparable from the verified artifact.",
+      "cost": "Proposal provenance, evidence anchors, collision and repeatability checks, review workflow, separate legal and enrichment digests, and regression benchmarks become build responsibilities."
+    },
+    {
+      "id": "D76",
+      "title": "Keep navigation deterministic and use one Agent Framework legal-research agent",
+      "status": "building",
+      "choice": "Resolve named works deterministically, then use one Microsoft Agent Framework research agent over compact read-only MCP evidence with typed clarification, bounded memory, citation validation and a conditional judge; the experiment selects the orchestration, not the framework.",
+      "alternative": "Pass every user sentence to one search call, make the chatbot the primary navigator, or introduce a hierarchy of peer agents.",
+      "reason": "Exact lookup should not become stochastic, while descriptive legal problems need iterative query planning and evidence validation that a search box cannot perform.",
+      "cost": "The agent adds model latency, tokens, session/privacy handling and evaluation work; the current assistant remains live until the Agent Framework implementation passes repeated correctness and cost gates."
+    },
+    {
+      "id": "D77",
+      "title": "Partition results by jurisdiction and keep overlapping dimensions as facets",
+      "status": "planned",
+      "choice": "Show Luxembourg and EU result sections, nest matching passages under each law, and scope hierarchy, practice area, class, form, status and language controls to the selected jurisdiction.",
+      "alternative": "Interleave every publisher result without a source partition, or group by overlapping practice areas and duplicate the same work across categories.",
+      "reason": "Jurisdiction is a disjoint provenance boundary; the other legal dimensions overlap and are clearer as filters than as competing result taxonomies.",
+      "cost": "The search response/UI need per-jurisdiction counts, dependent facet handling, accessible disclosure and responsive regression tests."
     }
   ],
   "baseline": {
