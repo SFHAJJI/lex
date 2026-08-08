@@ -19,7 +19,7 @@ public sealed class AskService(McpCore core)
         private readonly HashSet<string> _resolved = new(StringComparer.Ordinal);
         private bool _searchObserved;
 
-        public void ObserveSearch(JsonNode result)
+        public void ObserveSearch(JsonNode result, bool isRawUserQuery = true)
         {
             foreach (var response in result is JsonArray array
                          ? array.OfType<JsonObject>()
@@ -31,7 +31,7 @@ public sealed class AskService(McpCore core)
                 _searchObserved = true;
                 var resolutions = plan["global_work_resolutions"] as JsonArray
                                   ?? plan["work_resolutions"] as JsonArray;
-                if (resolutions is not null)
+                if (isRawUserQuery && resolutions is not null)
                     foreach (var resolution in resolutions.OfType<JsonObject>()
                                  .Where(item => item["status"]?.GetValue<string>() == "resolved"))
                         foreach (var candidate in resolution["candidates"]?.AsArray() ?? [])
@@ -460,14 +460,18 @@ public sealed class AskService(McpCore core)
             return (400, new JsonObject { ["error"] = $"Send 1 to {MaxHistory} messages." });
 
         var messages = new JsonArray { new JsonObject { ["role"] = "system", ["content"] = SystemPrompt(host, core.ToolDefs().Count) } };
+        string? rawUserQuery = null;
         foreach (var m in history)
         {
             var role = m?["role"]?.GetValue<string>();
             var content = m?["content"]?.GetValue<string>() ?? "";
             if (role is not ("user" or "assistant")) return (400, new JsonObject { ["error"] = "Roles must be user/assistant." });
             if (content.Length > MaxMessageChars) return (400, new JsonObject { ["error"] = $"Messages are capped at {MaxMessageChars} characters." });
+            if (role == "user") rawUserQuery = content;
             messages.Add(new JsonObject { ["role"] = role, ["content"] = content });
         }
+        if (string.IsNullOrWhiteSpace(rawUserQuery))
+            return (400, new JsonObject { ["error"] = "At least one user message is required." });
 
         if (!TryCount(ip, out var why)) return (429, new JsonObject { ["error"] = why });
 
@@ -486,6 +490,49 @@ public sealed class AskService(McpCore core)
             // into ONE payload, so a single reply can carry prose plus more than one view.
             var effects = new List<UiEffect>();
             var listRendered = false;
+
+            // Resolve the user's own words before a model can introduce a law name. This search
+            // is the authority boundary for named works and also supplies direct provision
+            // evidence for problem-first questions. Later model reformulations may improve recall,
+            // but a name invented by the planner remains only a candidate.
+            var rawArgs = new JsonObject
+            {
+                ["query"] = rawUserQuery,
+                ["retrieval_mode"] = "keyword",
+                ["fuzzy"] = "auto",
+                ["limit"] = 8,
+            };
+            var rawResult = core.CallTool("search", rawArgs);
+            resolutionGuard.ObserveSearch(rawResult, isRawUserQuery: true);
+            searchCalls = 1;
+            var (rawStatus, rawDocs) = Summarize(rawResult);
+            trace.Add(new JsonObject
+            {
+                ["tool"] = "search",
+                ["phase"] = "raw_user_resolution",
+                ["args"] = rawArgs.DeepClone(),
+                ["status"] = rawStatus,
+                ["docs"] = rawDocs,
+            });
+            var rawEffect = UiMapper.From("search", rawArgs, rawResult);
+            if (!rawEffect.IsEmpty) effects.Add(rawEffect);
+            onStep?.Invoke(Describe("search", rawArgs, rawEffect, rawDocs));
+            foreach (var d in rawDocs.OfType<JsonObject>())
+                if (d["lex_id"]?.GetValue<string>() is { } lexId)
+                {
+                    var parts = lexId.Split(':');
+                    if (parts.Length >= 2)
+                        worksFound.TryAdd($"{parts[0]}:{parts[1]}", d["title"]?.GetValue<string>() ?? "");
+                }
+            messages.Insert(1, new JsonObject
+            {
+                ["role"] = "system",
+                ["content"] = "Deterministic raw-user resolution ran before planning. "
+                    + "Treat resolved names and direct provision hits in this result as authoritative for this turn. "
+                    + "Names introduced by later reformulations are candidates only. Result:\n"
+                    + TruncateResult(rawResult),
+            });
+
             // Reasoning shares the completion budget: over a large tool result the model can
             // spend all of it thinking and return an empty message. When that happens we retry
             // the same conversation once at lower effort, which leaves room to actually write.
@@ -619,7 +666,7 @@ public sealed class AskService(McpCore core)
                             using var toolSpan = Activity.StartActivity("tool");
                             toolSpan?.SetTag("gen_ai.tool.name", name);
                             var node = core.CallTool(name, args);
-                            if (name == "search") resolutionGuard.ObserveSearch(node);
+                            if (name == "search") resolutionGuard.ObserveSearch(node, isRawUserQuery: false);
                             var (st, docs) = Summarize(node);
                             if (name is "as_of" or "timeline" or "diff" or "article_history" or "in_force_on")
                                 textToolUsed = true;

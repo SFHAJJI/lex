@@ -82,6 +82,18 @@ public sealed class AskResolutionGuardTests
             new JsonObject { ["work"] = "eu-eurlex:32016r0679" }));
     }
 
+    [Fact]
+    public void A_model_generated_name_remains_a_candidate_not_an_authority()
+    {
+        var guard = new AskService.WorkResolutionGuard();
+        guard.ObserveSearch(SearchResult("not_requested"), isRawUserQuery: true);
+        guard.ObserveSearch(SearchResult("resolved",
+            ("DORA", "resolved", new[] { "eu-eurlex:32022r2554" })), isRawUserQuery: false);
+
+        Assert.False(guard.Allows("as_of",
+            new JsonObject { ["work"] = "eu-eurlex:32022r2554" }));
+    }
+
     private static JsonArray SearchResult(string status,
         params (string Mention, string Status, string[] Candidates)[] resolutions) =>
     [
