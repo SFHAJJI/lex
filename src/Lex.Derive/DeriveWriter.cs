@@ -52,10 +52,11 @@ public static class DeriveWriter
                     .OrderBy(d => Path.GetFileName(d), StringComparer.Ordinal).ToList()
                 : [];
 
-            // D48: per-work profile choice — a work+language switches to fmx4-eu/1 only when
-            // EVERY version that has a body for that language also has a Formex main member.
-            // Mixed profiles inside one work would fabricate provision-text diffs between
-            // versions that are formatting artifacts, not law.
+            // D48: prefer one profile across a work+language when EVERY version that has a
+            // primary body also has Formex. If a particular version has no primary body at all,
+            // however, its official Formex must remain usable as a recovery source. That can
+            // introduce a profile boundary, so comparison endpoints refuse to pair provisions
+            // across it rather than omitting the publisher's wording from search and reading.
             var fmxByVersion = versionDirs.Select(Fmx4Mains).ToList();
             // D49: the PDF fallback. Unlike fmx4 this is decided PER VERSION, not per work,
             // because it is a fallback rather than a format upgrade: one law is routinely XML on
@@ -107,7 +108,7 @@ public static class DeriveWriter
                     units.Add((l, f, "structured-text", Path.GetFileName(f)));
                 }
                 foreach (var (l, mainPath) in fmxByVersion[i].OrderBy(kv => kv.Key, StringComparer.Ordinal))
-                    if (fmx4Langs.Contains(l))
+                    if (fmx4Langs.Contains(l) || !units.Any(u => u.Lang == l))
                         units.Add((l, mainPath, "fmx4", $"{l}.fmx4/{Path.GetFileName(mainPath)}"));
                 // Only where the publisher served no structural body for that language on that
                 // date. Deriving a version twice, once from its XML and once from its PDF, would

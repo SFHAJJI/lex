@@ -1,4 +1,5 @@
 using Lex.Derive;
+using System.Text.Json.Nodes;
 using Xunit;
 
 namespace Lex.Tests;
@@ -137,4 +138,56 @@ public class Fmx4Tests
             x1.Provisions.Select(p => (p.Anchor, p.TextSha256, p.MdStart, p.MdEnd)),
             x2.Provisions.Select(p => (p.Anchor, p.TextSha256, p.MdStart, p.MdEnd)));
     }
+
+    [Fact]
+    public void Formex_recovers_a_textless_version_even_when_an_older_version_uses_html()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"lex-fmx-recovery-{Guid.NewGuid():N}");
+        var corpus = Path.Combine(root, "corpus");
+        var output = Path.Combine(root, "articles");
+        try
+        {
+            var work = Path.Combine(corpus, "works", "32000r0001");
+            Directory.CreateDirectory(work);
+            File.WriteAllText(Path.Combine(work, "meta.json"), "{\"title\":\"Recovery fixture\"}");
+
+            var htmlVersion = Path.Combine(work, "versions", "2020-01-01");
+            Directory.CreateDirectory(htmlVersion);
+            File.WriteAllText(Path.Combine(htmlVersion, "meta.json"), VersionMeta("en.html"));
+            File.WriteAllText(Path.Combine(htmlVersion, "en.html"), """
+                <html><body><p class="title-article-norm">Article 1</p>
+                <p>Original publisher wording.</p></body></html>
+                """);
+
+            var fmxVersion = Path.Combine(work, "versions", "2021-01-01");
+            Directory.CreateDirectory(Path.Combine(fmxVersion, "en.fmx4"));
+            File.WriteAllText(Path.Combine(fmxVersion, "meta.json"), VersionMeta("en.fmx4/main.xml"));
+            File.WriteAllText(Path.Combine(fmxVersion, "en.fmx4", "main.xml"), Fmx);
+
+            var stats = DeriveWriter.Derive(corpus, output, "eu-eurlex");
+
+            Assert.Empty(stats.Errors);
+            var recovered = Path.Combine(output, "eu-eurlex", "works", "32000r0001",
+                "versions", "2021-01-01", "en.json");
+            Assert.True(File.Exists(recovered), "publisher Formex must fill an otherwise textless expression");
+            var json = JsonNode.Parse(File.ReadAllText(recovered))!;
+            Assert.Equal(Fmx4EuProfile.ProfileId, json["generator"]?["profile"]?.GetValue<string>());
+            Assert.NotEmpty(json["provisions"]?.AsArray() ?? []);
+        }
+        finally
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+        }
+    }
+
+    private static string VersionMeta(string observationFile) => $$"""
+        {
+          "work_identifier": "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32000R0001",
+          "expressions": [{
+            "language": "en",
+            "source_uri": "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32000R0001",
+            "observations": [{ "file": "{{observationFile}}", "sha256": "fixture" }]
+          }]
+        }
+        """;
 }
