@@ -11,7 +11,8 @@ namespace Lex.Ingest;
 public static class IndexFromCorpus
 {
     public static void Build(string corpusRoot, string? articlesRoot, string dbPath, string? signingKeyPem,
-                             DateTimeOffset now, SemanticBuildOptions? semantic = null)
+                             DateTimeOffset now, SemanticBuildOptions? semantic = null,
+                             string? workEnrichmentPath = null)
     {
         var manifest = JsonSerializer.Deserialize<ManifestDoc>(
             File.ReadAllText(Path.Combine(corpusRoot, "manifest.json")), CorpusJson.Options)!;
@@ -215,8 +216,11 @@ public static class IndexFromCorpus
         }
 
         stamp["derived_provisions"] = provisions.Count.ToString();
+        var workSearch = workEnrichmentPath is null
+            ? null
+            : WorkEnrichmentFile.Load(workEnrichmentPath, publisherId);
         IndexBuilder.Build(dbPath, stamp, docs, provisions, events, observations, signingKeyPem,
-            provisionStates, anchorEventRows, semantic);
+            provisionStates, anchorEventRows, semantic, workSearch);
         Console.Error.WriteLine($"  [index] {dbPath}: {docs.Count} rows, {provisions.Count} provisions, {provisionStates.Count} states, {anchorEventRows.Count} anchor events, signed={(signingKeyPem is not null)}");
     }
 

@@ -194,7 +194,8 @@ switch (args0[0])
             MaxBatchTokens: embeddingMaxBatchTokens,
             ExecutionProvider: encoder.ExecutionProvider,
             EmbeddingCachePath: Get("--embedding-cache"));
-        IndexFromCorpus.Build(corpus, articles, outDb, keyPem, now, semantic);
+        IndexFromCorpus.Build(corpus, articles, outDb, keyPem, now, semantic,
+            Get("--work-enrichment"));
         return 0;
     }
     case "derive":
@@ -433,7 +434,7 @@ static void Usage() => Console.Error.WriteLine("""
       lex ingest --publisher ID --corpus PATH [--scope FILE] [--wave 1..4] [--now ISO]
       lex index  --corpus PATH [--articles PATH] --out FILE.db [--keyfile KEY.pem] [--now ISO]
                  [--embedding-model PATH] [--vectors FILE] [--embedding-batch-size N]
-                 [--time-budget-minutes N]
+                 [--time-budget-minutes N] [--work-enrichment FILE.json]
       lex derive --publisher lu-legilux --corpus PATH --out PATH [--code-version SHA]
       lex verify corpus --corpus PATH
       lex repair checkout-line-endings --corpus PATH
