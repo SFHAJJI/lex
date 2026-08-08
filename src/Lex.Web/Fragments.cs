@@ -130,7 +130,7 @@ public static class Fragments
         // yielding `word:*formula*word`. CommonMark leaves that delimiter literal. Valid
         // emphasis has already become <em>/<strong> here, so remove only balanced delimiters
         // that survived rendering; ordinary arithmetic such as `A * B` has no pair to match.
-        html = UnparsedEmphasis.Replace(UnparsedStrong.Replace(html, "$1"), "$1");
+        html = CleanUnparsedEmphasis(html);
 
         // On phones, PageShell deliberately makes wide legal tables independently scrollable.
         // A scroll region must be keyboard-focusable too. Markdig owns this generated element,
@@ -140,6 +140,25 @@ public static class Fragments
             "<table tabindex=\"0\" aria-label=\"Scrollable legal table\">",
             StringComparison.Ordinal);
     }
+
+    /// <summary>
+    /// Render the emphasis used in publisher labels while guaranteeing an inline-only result.
+    /// Encoding happens first, so a label can produce only text plus the two tags added here.
+    /// </summary>
+    public static string RenderLegalInline(string? text) =>
+        UnparsedEmphasis.Replace(UnparsedStrong.Replace(H(text), "<strong>$1</strong>"), "<em>$1</em>");
+
+    private static string CleanUnparsedEmphasis(string html) =>
+        UnparsedEmphasis.Replace(UnparsedStrong.Replace(html, "$1"), "$1");
+
+    /// <summary>
+    /// Structural labels arrive beside the Markdown legal text and can inherit its emphasis
+    /// delimiters. They are escaped heading text, not Markdown, so remove those presentation
+    /// markers instead of showing punctuation such as <c>**Chapitre**</c> to readers.
+    /// </summary>
+    public static string PlainLegalLabel(string? text) =>
+        (text ?? string.Empty).Replace("**", string.Empty, StringComparison.Ordinal)
+                              .Replace("*", string.Empty, StringComparison.Ordinal);
 
     public static string RenderDiff(string oldText, string newText)
     {
@@ -225,7 +244,16 @@ public static class Fragments
             sb.Append($"<span class=\"yr\" style=\"{align}\">{H(v.ValidFrom)}</span>");
         }
         sb.Append("</div>");
-        sb.Append($"<p class=\"sub railcap\">{ds.Count} versions · click any mark to read the law as it stood that day"
+        sb.Append($"<details class=\"railversions\"><summary>Browse {ds.Count} dated versions</summary><div class=\"vchips\">");
+        foreach (var (v, _) in ds)
+        {
+            var activeClass = v.ValidFrom == activeFrom ? " act" : "";
+            var ariaCurrent = v.ValidFrom == activeFrom ? " aria-current=\"date\"" : "";
+            sb.Append($"<a class=\"vchip{activeClass}\"{ariaCurrent} aria-label=\"Read version {H(v.ValidFrom)}\" "
+                    + $"href=\"/{H(publisher)}/{H(work)}/{H(v.ValidFrom)}\">{H(v.ValidFrom)}</a>");
+        }
+        sb.Append("</div></details>");
+        sb.Append($"<p class=\"sub railcap\">{ds.Count} versions · choose a date to read the law as it stood that day"
                 + (activeFrom is null ? "" : " · <span class=\"nowmark\">▌</span> the one you are reading") + "</p>");
         return sb.ToString();
     }

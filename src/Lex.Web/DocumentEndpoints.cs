@@ -298,7 +298,7 @@ public static class DocumentEndpoints
                     <details class="card"><summary><b>Outline, {provisions.Count} provisions</b></summary><p>
                     """);
                 foreach (var p in provisions)
-                    sb.Append($"<a href=\"#{H(p.Anchor)}\" class=\"badge\">{H(p.Num ?? p.Heading ?? p.Anchor)}</a> ");
+                    sb.Append($"<a href=\"#{H(p.Anchor)}\" class=\"badge\">{RenderLegalInline(p.Num ?? p.Heading ?? p.Anchor)}</a> ");
                 sb.Append("</p></details>");
 
                 string? lastPath = null;
@@ -307,14 +307,14 @@ public static class DocumentEndpoints
                 {
                     if (p.Path is not null && p.Path != lastPath)
                     {
-                        sb.Append($"<h2 style=\"margin-top:26px\">{H(p.Path)}</h2>");
+                        sb.Append($"<h2 style=\"margin-top:26px\">{RenderLegalInline(PlainLegalLabel(p.Path))}</h2>");
                         lastPath = p.Path;
                     }
                     var title = p.Num is null && p.Heading is null ? p.Anchor
                         : string.Join(", ", new[] { p.Num, p.Heading }.Where(s => !string.IsNullOrEmpty(s)));
                     sb.Append($"""
                         <div class="card" id="{H(p.Anchor)}">
-                        <b>{H(title)}</b>
+                        <b>{RenderLegalInline(title)}</b>
                         <a class="sub mono" href="#{H(p.Anchor)}" title="permalink to this provision">#{H(p.Anchor)}</a>
                         {(p.ArticleValidFrom is not null && p.ArticleValidFrom != doc.ValidFrom ? $"<span class=\"badge\">applicable {H(p.ArticleValidFrom)}</span>" : "")}
                         <div class="lawbody legal-markdown">{RenderLegalMarkdown(p.TextMd)}</div>

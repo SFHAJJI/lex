@@ -138,6 +138,12 @@ HTTP 200
   .rail .tick.act { top:5px; height:33px; width:2px; background:var(--accent); opacity:1 }
   .rail .yr { position:absolute; top:30px; font-family:var(--mono); font-size:11px; color:var(--muted) }
   .railcap { margin:2px 0 18px } .nowmark { color:var(--accent) }
+  .railversions { display:none }
+  .vchips { display:flex; gap:6px; overflow-x:auto; padding:8px 1px 4px; scrollbar-width:thin }
+  .vchip { flex:none; min-height:44px; display:inline-flex; align-items:center; padding:4px 11px;
+           border:1px solid var(--line); border-radius:99px; font-family:var(--mono); font-size:11px;
+           color:var(--muted); text-decoration:none }
+  .vchip.act { border-color:var(--accent); color:var(--accent); font-weight:600 }
   .lawbody { font-family:var(--serif); font-size:16.5px; line-height:1.62 }
   .legal-markdown { margin-top:8px }
   .legal-markdown > :first-child { margin-top:0 }
@@ -145,6 +151,12 @@ HTTP 200
   .legal-markdown table { font-family:var(--sans); font-size:14px }
   /* Phones: law texts carry wide tables and long pre blocks. Let each scroll inside
      itself rather than pushing the whole page sideways. Desktop is untouched. */
+  @media (max-width:900px) {
+    .rail { display:none }
+    .railversions { display:block; margin:12px 0 4px }
+    .railversions summary { min-height:44px; display:flex; align-items:center; cursor:pointer;
+                            color:var(--link); font-size:13px }
+  }
   @media (max-width:640px) {
     main { padding:20px 14px 48px }
     table { display:block; overflow-x:auto }
