@@ -18,7 +18,7 @@ public static class PageShell
     /// The optional head tags, emitted as nothing at all when absent.
     ///
     /// Written inline in the template first, which left two blank lines in the head of every page
-    /// that passed neither. Small, but it is the head of 1,409 pages.
+    /// that passed neither. Small, but this code runs at the head of every canonical page.
     /// </summary>
     private static string Extras(string publicBase, string? canonicalPath, string? jsonLd)
     {

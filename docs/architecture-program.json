@@ -183,6 +183,15 @@
       "cost": "Friendly labels use stable overrides for known legal vocabulary and a deterministic fallback for new values."
     },
     {
+      "id": "D65",
+      "title": "Make semantic indexing bounded and deterministic",
+      "status": "shipped",
+      "choice": "Choose legal chunk boundaries first, then embed first-seen unique chunks in bounded batches with item-level progress and resumable compatible results.",
+      "alternative": "Copy a whole remaining annex for every chunk, let hardware shape legal boundaries, or publish partial vector shards.",
+      "reason": "Large annexes must finish within a predictable memory and time budget without changing the text, chunk order, citations or final vector ordinals.",
+      "cost": "Batch and cache settings become stamped build configuration, and an incompatible model, tokenizer, vector format or runtime deliberately invalidates reuse."
+    },
+    {
       "id": "D66",
       "title": "Own legal semantics, reuse commodity engines",
       "status": "shipped",
@@ -226,6 +235,15 @@
       "alternative": "Compile a new DirectML graph shape for each batch maximum, pad every chunk to 512 tokens, or change legal chunk boundaries to fit the GPU.",
       "reason": "Variable tensor shapes caused repeated DirectML graph preparation and an unbounded backfill ETA. A few fixed shapes retain the exact text and reduce compilation churn without paying maximum-sequence compute for every short provision.",
       "cost": "Bucket order becomes part of the deterministic embedding profile and cache identity. The build may have one partially filled batch per bucket, and every shape-policy change intentionally invalidates the embedding cache."
+    },
+    {
+      "id": "D71",
+      "title": "Fuse jurisdictions without comparing incomparable scores",
+      "status": "shipped",
+      "choice": "Rank each publisher locally, then combine eligible Luxembourg and EU results with deterministic reciprocal-rank fusion while retaining provenance.",
+      "alternative": "Concatenate indexes or compare raw BM25 and vector scores produced by different publisher corpora.",
+      "reason": "A single lawyer-facing result list needs both jurisdictions, but raw relevance scores are not calibrated across independently built indexes.",
+      "cost": "Cross-publisher ordering is rank-based rather than a global score, and exact duplicate hits must be collapsed before presentation."
     },
     {
       "id": "D72",

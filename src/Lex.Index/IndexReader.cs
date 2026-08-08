@@ -275,8 +275,8 @@ public sealed class LexIndexReader : IDisposable
     /// the date the version starts. Grouped rather than selected, because a work published in
     /// several languages has one row per language behind a single URL.
     ///
-    /// One query rather than a Timeline call per work, which would be 1,409 round trips to build
-    /// one file.
+    /// One query rather than a Timeline call per work, which would require one round trip for
+    /// every mounted work merely to build one file.
     /// </summary>
     public List<(string Collection, string GroupKey, string ValidFrom, string? LastObserved)> VersionPaths()
     {
