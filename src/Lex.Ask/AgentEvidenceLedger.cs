@@ -4,6 +4,8 @@ namespace Lex.Ask;
 
 internal sealed class AgentEvidenceLedger
 {
+    private const int MaxEvidenceItems = 64;
+    private const int MaxEvidenceChars = 96_000;
     private static readonly HashSet<string> GapStatuses = new(StringComparer.Ordinal)
     {
         "no_corpus_mounted",
@@ -19,6 +21,7 @@ internal sealed class AgentEvidenceLedger
     };
 
     private readonly List<AgentEvidence> _evidence = [];
+    private int _evidenceChars;
     private int _call;
 
     public IReadOnlyList<AgentEvidence> Evidence => _evidence;
@@ -105,10 +108,30 @@ internal sealed class AgentEvidenceLedger
         string? permalink,
         bool disclosure,
         string? title,
-        string? excerpt) =>
-        _evidence.Add(new AgentEvidence(
-            $"{tool}:{call}:{ordinal}", kind, work, anchor, date, textSha256, permalink,
-            disclosure, title, excerpt));
+        string? excerpt)
+    {
+        var item = new AgentEvidence(
+            $"{tool}:{call}:{ordinal}", kind,
+            Bounded(work, 300), Bounded(anchor, 300), Bounded(date, 50),
+            Bounded(textSha256, 128), Bounded(permalink, 2_048), disclosure,
+            Bounded(title, 500), Bounded(excerpt, 8_000));
+        _evidence.Add(item);
+        _evidenceChars += CharacterCount(item);
+        while (_evidence.Count > MaxEvidenceItems || _evidenceChars > MaxEvidenceChars)
+        {
+            _evidenceChars -= CharacterCount(_evidence[0]);
+            _evidence.RemoveAt(0);
+        }
+    }
+
+    private static string? Bounded(string? value, int maximum) =>
+        value is null || value.Length <= maximum ? value : value[..maximum];
+
+    private static int CharacterCount(AgentEvidence item) =>
+        item.Id.Length + (item.Work?.Length ?? 0) + (item.Anchor?.Length ?? 0)
+        + (item.Date?.Length ?? 0) + (item.TextSha256?.Length ?? 0)
+        + (item.Permalink?.Length ?? 0) + (item.Title?.Length ?? 0)
+        + (item.Excerpt?.Length ?? 0);
 
     private static string? WorkKey(string? value)
     {

@@ -243,6 +243,35 @@ public sealed class AgentEvidenceLedgerTests
         Assert.Equal("second text", Assert.Single(ledger.Evidence).Excerpt);
     }
 
+    [Fact]
+    public void Finalizer_evidence_is_bounded_across_the_complete_tool_loop()
+    {
+        var ledger = new AgentEvidenceLedger();
+        for (var call = 0; call < 80; call++)
+            ledger.Observe("as_of", "ok",
+            [
+                new JsonObject
+                {
+                    ["lex_id"] = $"eu-eurlex:work-{call}:2025-01-01",
+                    ["title"] = new string('t', 2_000),
+                    ["pinpoints"] = new JsonArray
+                    {
+                        new JsonObject
+                        {
+                            ["anchor"] = $"art_{call}",
+                            ["quote"] = new string('x', 8_000),
+                            ["permalink"] = $"https://law.soufien.lu/work-{call}#art_{call}",
+                        },
+                    },
+                },
+            ]);
+
+        Assert.True(ledger.Evidence.Count <= 64);
+        Assert.True(AgentAnswerFinalizer.EvidencePrompt(ledger.Evidence).Length <= 120_000);
+        Assert.Equal("eu-eurlex:work-79", ledger.Evidence[^1].Work);
+        Assert.DoesNotContain(ledger.Evidence, item => item.Work == "eu-eurlex:work-0");
+    }
+
     private static JsonObject AsOf(string lexId, string text) => new()
     {
         ["document"] = new JsonObject { ["lex_id"] = lexId },
