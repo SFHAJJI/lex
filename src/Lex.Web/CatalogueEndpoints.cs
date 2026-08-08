@@ -345,7 +345,7 @@ public static class CatalogueEndpoints
                     : "";
                 sb.Append($"""
                     <div class="notice"><b>What we hold, and what we honestly don't.</b>
-                    {c.Groups:n0} laws in {c.Rows:n0} dated snapshots.{luGap}
+                    {c.Groups:n0} publisher works and collections in {c.Rows:n0} dated snapshots.{luGap}
                     Of those snapshots, <b>{c.TextServed:n0}</b> carry the full official text and
                     <b>{c.Rows - c.TextServed:n0}</b> are a dated entry with its source and hash but no wording.
                     {gapWhy}
@@ -563,7 +563,7 @@ public static class CatalogueEndpoints
                    <a href="/changed?from=2020-03-01&amp;to=2021-07-01&amp;order=by_churn">the pandemic, ranked by churn</a></p></div>
 
                 <div class="card"><h2 style="margin-top:0">Browse everything</h2>
-                <p class="sub">All {readers.Values.Sum(r => r.Coverage().Groups):n0} laws, by publisher and type.</p>
+                <p class="sub">All {readers.Values.Sum(r => r.Coverage().Groups):n0} publisher works and collections, by source and type.</p>
                 <p><a href="/browse"><b>Open the catalogue →</b></a></p></div>
 
                 <p class="sub">Not sure where to start? The <a href="/">assistant</a> takes a plain question,

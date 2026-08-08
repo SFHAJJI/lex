@@ -601,7 +601,7 @@ public static class ExplainerEndpoints
                 </table></div>
 
                 <h2>Scale</h2>
-                <p><span class="badge">{cov.Sum(c => c.Groups):n0} laws</span>
+                <p><span class="badge">{cov.Sum(c => c.Groups):n0} works</span>
                 <span class="badge">{cov.Sum(c => c.Rows):n0} dated versions</span>
                 <span class="badge">lex-index/2 + lex-index/3 readers</span>
                 <span class="badge">3 official XML/HTML dialects</span>
@@ -1044,7 +1044,7 @@ public static class ExplainerEndpoints
                 <a href="/lu-legilux/rgd-1998-08-03-n4/1900-01-01">Watch it refuse →</a></p>
 
                 <h2>What it holds today</h2>
-                <p><span class="badge">{cov.Sum(c => c.Groups):n0} laws</span>
+                <p><span class="badge">{cov.Sum(c => c.Groups):n0} works</span>
                 <span class="badge">{cov.Sum(c => c.Rows):n0} dated versions</span>
                 <span class="badge">{cov.Sum(c => c.TextServed):n0} with full text</span>
                 <span class="badge">refreshed nightly</span></p>

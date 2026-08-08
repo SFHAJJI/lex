@@ -333,7 +333,7 @@ behavior is measured against published judgments before hybrid can become the de
 </table></div>
 
 <h2>Scale</h2>
-<p><span class="badge">2 laws</span>
+<p><span class="badge">2 works</span>
 <span class="badge">3 dated versions</span>
 <span class="badge">lex-index/2 + lex-index/3 readers</span>
 <span class="badge">3 official XML/HTML dialects</span>

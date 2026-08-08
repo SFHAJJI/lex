@@ -192,9 +192,9 @@ HTTP 200
 <main>
 <h1>A law is not one document.</h1>
 
-<p class="lede">Search Luxembourg applicability and reviewed-scope official EU consolidated wording by date,
-with exact publisher text, explicit timeline semantics and provenance. Coverage is derived
-from every dated version in the verified indexes mounted now.</p><!-- Read synchronously by the workspace on mount, so the doors never flash in or need a
+<p class="lede">Research Luxembourg and EU law as it stood on a chosen date. Read and compare
+exact official wording, with clear date semantics, sources and explicit gaps. Coverage always
+comes from the verified indexes mounted now.</p><!-- Read synchronously by the workspace on mount, so the doors never flash in or need a
      round trip of their own. -->
 <script type="application/json" id="doors">[]</script>
 <script type="application/json" id="search-facets">{"jurisdictions":[],"hierarchies":[],"domains":[],"source_classes":["LOI","RGD"],"act_forms":[],"binding_statuses":[],"languages":["fr"]}</script>
