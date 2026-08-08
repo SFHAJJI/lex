@@ -523,12 +523,18 @@ public sealed class LexIndexReader : IDisposable
         || System.Text.RegularExpressions.Regex.IsMatch(token, "^(celex|ecli|article|art)$",
             System.Text.RegularExpressions.RegexOptions.IgnoreCase);
 
-    private static bool IsExactLegalIdentifier(string query) =>
-        System.Text.RegularExpressions.Regex.IsMatch(query.Trim(),
-            "^(?:CELEX\\s*)?(?:[136][0-9]{4}[A-Z][0-9]{4}|1[0-9]{4}[A-Z]/TXT)$",
-            System.Text.RegularExpressions.RegexOptions.IgnoreCase)
-        || System.Text.RegularExpressions.Regex.IsMatch(query.Trim(), "^ECLI:[A-Z0-9:.]+$",
+    private static bool IsExactLegalIdentifier(string query) => ExactLegalIdentifierToken(query) is not null;
+
+    private static string? ExactLegalIdentifierToken(string query)
+    {
+        var trimmed = query.Trim();
+        var celex = System.Text.RegularExpressions.Regex.Match(trimmed,
+            "^(?:CELEX\\s*)?(?<identifier>[136][0-9]{4}[A-Z][0-9]{4}|1[0-9]{4}[A-Z]/TXT)$",
             System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (celex.Success) return celex.Groups["identifier"].Value;
+        return System.Text.RegularExpressions.Regex.IsMatch(trimmed, "^ECLI:[A-Z0-9:.]+$",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase) ? trimmed : null;
+    }
 
     private static string ReplaceToken(string query, string source, string target) =>
         System.Text.RegularExpressions.Regex.Replace(query,
@@ -625,6 +631,7 @@ public sealed class LexIndexReader : IDisposable
         var terms = query.Split([' ', ',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Where(t => t.Length >= 2).Take(6).ToList();
         if (terms.Count == 0) return [];
+        var exactIdentifier = ExactLegalIdentifierToken(query);
 
         var hits = Lookup(terms.Select((t, i) =>
             $"(d.title LIKE $t{i} OR d.group_key LIKE $t{i} OR d.group_identifier LIKE $t{i})"), terms);
@@ -637,14 +644,22 @@ public sealed class LexIndexReader : IDisposable
         List<DocRow> Lookup(IEnumerable<string> clauses, IReadOnlyList<string> values)
         {
             var (where, ps) = WithFilters("1=1", filters, excludeAsOf: false);
+            var exactOrder = exactIdentifier is null ? "" : """
+                CASE WHEN lower(d.group_key) = lower(replace($exact_identifier, '/', '-'))
+                       OR lower(d.group_identifier) = lower($exact_identifier)
+                       OR lower(d.group_identifier) LIKE '%/' || lower($exact_identifier)
+                       OR lower(d.group_identifier) LIKE '%:' || lower($exact_identifier)
+                     THEN 0 ELSE 1 END,
+                """;
             using var cmd = Cmd($"""
                 SELECT {SelectDocCols("d")}
                 FROM docs d
                 WHERE {where} AND {string.Join(" AND ", clauses)}
-                ORDER BY d.valid_from DESC
+                ORDER BY {exactOrder} d.valid_from DESC
                 LIMIT $lim
                 """, ps);
             for (var i = 0; i < values.Count; i++) cmd.Parameters.AddWithValue($"$t{i}", "%" + values[i] + "%");
+            if (exactIdentifier is not null) cmd.Parameters.AddWithValue("$exact_identifier", exactIdentifier);
             cmd.Parameters.AddWithValue("$lim", limit);
             var result = new List<DocRow>();
             using var r = cmd.ExecuteReader();

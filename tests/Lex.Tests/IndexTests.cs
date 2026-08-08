@@ -834,6 +834,30 @@ public class IndexTests : IDisposable
     }
 
     [Fact]
+    public void Exact_celex_ranks_the_named_act_before_its_newer_corrigendum()
+    {
+        var act = Row("t-pub:32016r0679:2016-05-04", "32016r0679", "2016-05-04", null,
+            title: "Regulation (EU) 2016/679") with
+        {
+            GroupIdentifier = "http://publications.europa.eu/resource/celex/32016R0679",
+        };
+        var corrigendum = Row("t-pub:32016r0679r(02):2018-05-23", "32016r0679r(02)",
+            "2018-05-23", null, title: "Corrigendum to Regulation (EU) 2016/679") with
+        {
+            GroupIdentifier = "http://publications.europa.eu/resource/celex/32016R0679R(02)",
+        };
+        IndexBuilder.Build(_db, new Dictionary<string, string> { ["collection"] = "t-pub" },
+            [act, corrigendum], [], [], [], null);
+        using var reader = LexIndexReader.Open(_db);
+
+        var result = reader.SearchKeyword("32016R0679", FilterSet.All, 10, fuzzyAuto: false);
+
+        Assert.Equal("32016r0679", result.Hits[0].Doc.GroupKey);
+        Assert.Equal("32016r0679r(02)", result.Hits[1].Doc.GroupKey);
+        Assert.All(result.Hits, hit => Assert.Equal(["exact_identifier"], hit.MatchReasons));
+    }
+
+    [Fact]
     public void Semantic_chunks_are_deterministic_and_bounded()
     {
         using var encoder = new FakeEncoder();
