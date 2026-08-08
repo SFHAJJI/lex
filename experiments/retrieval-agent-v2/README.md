@@ -59,4 +59,44 @@ dotnet run --project experiments/retrieval-agent-v2/Lex.RetrievalExperiment -- b
   --model-dir C:\lex-retrieval-agent-evidence-v2\model `
   --scenarios experiments/retrieval-agent-v2/scenarios.json `
   --output C:\lex-retrieval-agent-evidence-v2\reports\baseline.json
+
+dotnet run --project experiments/retrieval-agent-v2/Lex.RetrievalExperiment -- agent-typed-plan `
+  --endpoint https://oai-soufien-dev.openai.azure.com `
+  --deployment gpt-5-mini `
+  --scenarios experiments/retrieval-agent-v2/scenarios.json `
+  --clarifications experiments/retrieval-agent-v2/clarification-dimensions.json `
+  --runs 3 `
+  --output C:\lex-retrieval-agent-evidence-v2\reports\typed-plan.json
+
+dotnet run --project experiments/retrieval-agent-v2/Lex.RetrievalExperiment -- agent-typed-exec `
+  --plans C:\lex-retrieval-agent-evidence-v2\reports\typed-plan.json `
+  --scenarios experiments/retrieval-agent-v2/scenarios.json `
+  --work-index C:\lex-retrieval-agent-evidence-v2\workbench\work-search-v4.db `
+  --work-vectors C:\lex-retrieval-agent-evidence-v2\workbench\work-search-v2.vectors `
+  --index-dir C:\lex-retrieval-agent-evidence-v2\baseline `
+  --model-dir C:\lex-retrieval-agent-evidence-v2\model `
+  --today 2026-08-08 `
+  --output C:\lex-retrieval-agent-evidence-v2\reports\typed-plan-exec.json
+
+dotnet run --project experiments/retrieval-agent-v2/Lex.RetrievalExperiment -- agent-direct `
+  --endpoint https://oai-soufien-dev.openai.azure.com `
+  --deployment gpt-5-mini `
+  --scenarios experiments/retrieval-agent-v2/scenarios.json `
+  --clarifications experiments/retrieval-agent-v2/clarification-dimensions.json `
+  --work-index C:\lex-retrieval-agent-evidence-v2\workbench\work-search-v4.db `
+  --work-vectors C:\lex-retrieval-agent-evidence-v2\workbench\work-search-v2.vectors `
+  --index-dir C:\lex-retrieval-agent-evidence-v2\baseline `
+  --model-dir C:\lex-retrieval-agent-evidence-v2\model `
+  --today 2026-08-08 `
+  --runs 3 `
+  --output C:\lex-retrieval-agent-evidence-v2\reports\direct-agent.json
+
+dotnet run --project experiments/retrieval-agent-v2/Lex.RetrievalExperiment -- agent-grounding `
+  --endpoint https://oai-soufien-dev.openai.azure.com `
+  --deployment gpt-5-mini `
+  --executions C:\lex-retrieval-agent-evidence-v2\reports\typed-plan-exec.json `
+  --output C:\lex-retrieval-agent-evidence-v2\reports\grounded-answer.json
 ```
+
+The direct variant is retained only as rejected experimental evidence. It must not be copied into
+production. See `agent-experiment-summary.md`.

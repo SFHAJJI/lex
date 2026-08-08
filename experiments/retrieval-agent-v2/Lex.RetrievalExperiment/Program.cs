@@ -39,6 +39,10 @@ void Usage() => Console.Error.WriteLine("""
       work-vector-build --index FILE --model-dir PATH --output FILE --report FILE
       work-vector-verify --index FILE --vectors FILE --output FILE
       work-hybrid-eval --index FILE --vectors FILE --model-dir PATH --scenarios FILE --output FILE
+      agent-typed-plan --endpoint URI --deployment NAME --scenarios FILE --clarifications FILE --runs N --output FILE
+      agent-typed-exec --plans FILE --scenarios FILE --work-index FILE --work-vectors FILE --index-dir PATH --model-dir PATH --today DATE --output FILE
+      agent-direct --endpoint URI --deployment NAME --scenarios FILE --clarifications FILE --work-index FILE --work-vectors FILE --index-dir PATH --model-dir PATH --today DATE --runs N --output FILE
+      agent-grounding --endpoint URI --deployment NAME --executions FILE --output FILE
     """);
 
 if (arguments[0] == "workbench-init")
@@ -209,6 +213,119 @@ if (arguments[0] == "work-hybrid-eval")
     return 0;
 }
 
+if (arguments[0] == "agent-typed-plan")
+{
+    var typedPlanEndpoint = RequiredValue("--endpoint");
+    var typedPlanDeployment = RequiredValue("--deployment");
+    var typedPlanScenarios = RequiredPath("--scenarios");
+    var typedPlanClarifications = RequiredPath("--clarifications");
+    var typedPlanOutput = RequiredPath("--output");
+    if (!int.TryParse(RequiredValue("--runs"), out var typedPlanRuns))
+        throw new ArgumentException("--runs must be an integer");
+    if (File.Exists(typedPlanOutput))
+        throw new IOException($"Refusing to overwrite existing report: {typedPlanOutput}");
+    var report = await TypedPlanExperiment.RunAsync(
+        typedPlanEndpoint,
+        typedPlanDeployment,
+        typedPlanScenarios,
+        typedPlanClarifications,
+        typedPlanRuns,
+        CancellationToken.None);
+    Directory.CreateDirectory(Path.GetDirectoryName(typedPlanOutput)
+        ?? throw new ArgumentException("Output must include a directory."));
+    File.WriteAllBytes(typedPlanOutput, JsonSerializer.SerializeToUtf8Bytes(report,
+        new JsonSerializerOptions { WriteIndented = true }));
+    Console.Error.WriteLine($"[typed-plan] wrote {typedPlanOutput}");
+    return 0;
+}
+
+if (arguments[0] == "agent-typed-exec")
+{
+    var executionPlans = RequiredPath("--plans");
+    var executionScenarios = RequiredPath("--scenarios");
+    var executionWorkIndex = RequiredPath("--work-index");
+    var executionWorkVectors = RequiredPath("--work-vectors");
+    var executionIndexDirectory = RequiredPath("--index-dir");
+    var executionModelDirectory = RequiredPath("--model-dir");
+    var executionOutput = RequiredPath("--output");
+    if (!DateOnly.TryParseExact(RequiredValue("--today"), "yyyy-MM-dd", out var executionToday))
+        throw new ArgumentException("--today must be an ISO date");
+    if (File.Exists(executionOutput))
+        throw new IOException($"Refusing to overwrite existing report: {executionOutput}");
+    var report = PlanExecutionExperiment.Run(
+        executionPlans,
+        executionScenarios,
+        executionWorkIndex,
+        executionWorkVectors,
+        executionIndexDirectory,
+        executionModelDirectory,
+        executionToday);
+    Directory.CreateDirectory(Path.GetDirectoryName(executionOutput)
+        ?? throw new ArgumentException("Output must include a directory."));
+    File.WriteAllBytes(executionOutput, JsonSerializer.SerializeToUtf8Bytes(report,
+        new JsonSerializerOptions { WriteIndented = true }));
+    Console.Error.WriteLine($"[typed-exec] wrote {executionOutput}");
+    return 0;
+}
+
+if (arguments[0] == "agent-direct")
+{
+    var directEndpoint = RequiredValue("--endpoint");
+    var directDeployment = RequiredValue("--deployment");
+    var directScenarios = RequiredPath("--scenarios");
+    var directClarifications = RequiredPath("--clarifications");
+    var directWorkIndex = RequiredPath("--work-index");
+    var directWorkVectors = RequiredPath("--work-vectors");
+    var directIndexDirectory = RequiredPath("--index-dir");
+    var directModelDirectory = RequiredPath("--model-dir");
+    var directOutput = RequiredPath("--output");
+    if (!DateOnly.TryParseExact(RequiredValue("--today"), "yyyy-MM-dd", out var directToday))
+        throw new ArgumentException("--today must be an ISO date");
+    if (!int.TryParse(RequiredValue("--runs"), out var directRuns))
+        throw new ArgumentException("--runs must be an integer");
+    if (File.Exists(directOutput))
+        throw new IOException($"Refusing to overwrite existing report: {directOutput}");
+    var report = await DirectAssistantExperiment.RunAsync(
+        directEndpoint,
+        directDeployment,
+        directScenarios,
+        directClarifications,
+        directWorkIndex,
+        directWorkVectors,
+        directIndexDirectory,
+        directModelDirectory,
+        directToday,
+        directRuns,
+        CancellationToken.None);
+    Directory.CreateDirectory(Path.GetDirectoryName(directOutput)
+        ?? throw new ArgumentException("Output must include a directory."));
+    File.WriteAllBytes(directOutput, JsonSerializer.SerializeToUtf8Bytes(report,
+        new JsonSerializerOptions { WriteIndented = true }));
+    Console.Error.WriteLine($"[direct-agent] wrote {directOutput}");
+    return 0;
+}
+
+if (arguments[0] == "agent-grounding")
+{
+    var groundingEndpoint = RequiredValue("--endpoint");
+    var groundingDeployment = RequiredValue("--deployment");
+    var groundingExecutions = RequiredPath("--executions");
+    var groundingOutput = RequiredPath("--output");
+    if (File.Exists(groundingOutput))
+        throw new IOException($"Refusing to overwrite existing report: {groundingOutput}");
+    var report = await GroundedAnswerExperiment.RunAsync(
+        groundingEndpoint,
+        groundingDeployment,
+        groundingExecutions,
+        CancellationToken.None);
+    Directory.CreateDirectory(Path.GetDirectoryName(groundingOutput)
+        ?? throw new ArgumentException("Output must include a directory."));
+    File.WriteAllBytes(groundingOutput, JsonSerializer.SerializeToUtf8Bytes(report,
+        new JsonSerializerOptions { WriteIndented = true }));
+    Console.Error.WriteLine($"[grounding] wrote {groundingOutput}");
+    return 0;
+}
+
 if (arguments[0] != "baseline")
 {
     Usage();
@@ -266,7 +383,7 @@ JsonObject SnapshotProtectedTables(string dbPath)
                     _ => Encoding.UTF8.GetBytes(Convert.ToString(value,
                         System.Globalization.CultureInfo.InvariantCulture) ?? ""),
                 };
-                hash.AppendData([value is byte[] ? (byte)2 : (byte)1]);
+                hash.AppendData([value is byte[]? (byte)2 : (byte)1]);
                 hash.AppendData(BitConverter.GetBytes(bytes.LongLength));
                 hash.AppendData(bytes);
             }

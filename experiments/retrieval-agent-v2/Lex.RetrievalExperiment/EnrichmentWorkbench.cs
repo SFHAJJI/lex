@@ -13,7 +13,7 @@ public static class EnrichmentWorkbench
         if (parent is null) throw new ArgumentException("Output must include a directory.", nameof(outputPath));
         Directory.CreateDirectory(parent);
 
-        using var workbench = new SqliteConnection($"Data Source={outputPath};Pooling=False" );
+        using var workbench = new SqliteConnection($"Data Source={outputPath};Pooling=False");
         workbench.Open();
         using (var schema = workbench.CreateCommand())
         {

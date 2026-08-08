@@ -11,7 +11,9 @@ public sealed record WorkSemanticHit(
     string Language,
     string? Title,
     double Score,
-    string? DocumentRole = null);
+    string? DocumentRole = null,
+    string EvidenceKind = "work",
+    string? EvidenceValue = null);
 
 public sealed record WorkVectorBuildInfo(long Count, int Dimensions, string ModelId, string ModelRevision);
 
@@ -74,7 +76,8 @@ public static class WorkVectorIndex
             {
                 var record = records[checked((int)candidate.Ordinal)];
                 return new WorkSemanticHit(record.Work, record.Language, record.Title,
-                    vectors.Int8Dot(candidate.Ordinal, queryInt8) / (127d * 127d), record.DocumentRole);
+                    vectors.Int8Dot(candidate.Ordinal, queryInt8) / (127d * 127d),
+                    record.DocumentRole, record.EvidenceKind, record.EvidenceValue);
             })
             .Where(hit => (language is null || hit.Language == language)
                           && (requestedRole is null || hit.DocumentRole == requestedRole))
@@ -112,7 +115,8 @@ public static class WorkVectorIndex
             records.Add(new VectorRecord(
                 rows.GetString(0), rows.GetString(1), rows.IsDBNull(2) ? null : rows.GetString(2),
                 $"names: {aliases} {titles}\nsubjects: {facets}",
-                rows.IsDBNull(6) ? null : rows.GetString(6)));
+                rows.IsDBNull(6) ? null : rows.GetString(6),
+                "work", null));
         }
         rows.Close();
         using var discovery = database.CreateCommand();
@@ -129,7 +133,8 @@ public static class WorkVectorIndex
                 discoveryRows.GetString(0), discoveryRows.GetString(1),
                 discoveryRows.IsDBNull(2) ? null : discoveryRows.GetString(2),
                 $"legal {discoveryRows.GetString(3)}: {discoveryRows.GetString(4)}",
-                discoveryRows.IsDBNull(5) ? null : discoveryRows.GetString(5)));
+                discoveryRows.IsDBNull(5) ? null : discoveryRows.GetString(5),
+                discoveryRows.GetString(3), discoveryRows.GetString(4)));
         records = records.OrderBy(record => record.Work, StringComparer.Ordinal)
             .ThenBy(record => record.Language, StringComparer.Ordinal)
             .ThenBy(record => record.EmbeddingText, StringComparer.Ordinal).ToList();
@@ -141,17 +146,21 @@ public static class WorkVectorIndex
         string Language,
         string? Title,
         string EmbeddingText,
-        string? DocumentRole);
+        string? DocumentRole,
+        string EvidenceKind,
+        string? EvidenceValue);
 }
 
 public static class WorkHybridSearch
 {
+    public const double WorkSemanticWeight = 0.65;
+    public const double DiscoverySemanticWeight = 0.60;
+
     public static IReadOnlyList<WorkSearchHit> Fuse(
         IReadOnlyList<WorkSearchHit> lexical,
         IReadOnlyList<WorkSemanticHit> semantic,
         int limit)
     {
-        const double semanticWeight = 0.65;
         const int rrfK = 60;
         var candidates = new Dictionary<(string Work, string Language), Candidate>();
         for (var rank = 0; rank < lexical.Count; rank++)
@@ -159,24 +168,33 @@ public static class WorkHybridSearch
             var hit = lexical[rank];
             var key = (hit.Work, hit.Language);
             candidates[key] = new Candidate(hit.Title, 1d / (rrfK + rank + 1), hit.Reason, true, false,
-                hit.Reason.StartsWith("exact_", StringComparison.Ordinal));
+                StrongName(hit.Reason));
         }
         for (var rank = 0; rank < semantic.Count; rank++)
         {
             var hit = semantic[rank];
             var key = (hit.Work, hit.Language);
+            var semanticWeight = hit.EvidenceKind == "work"
+                ? WorkSemanticWeight
+                : DiscoverySemanticWeight;
             var semanticScore = semanticWeight / (rrfK + rank + 1);
             if (candidates.TryGetValue(key, out var candidate))
-                candidates[key] = candidate with { Score = candidate.Score + semanticScore, Semantic = true };
+                candidates[key] = candidate with
+                {
+                    Score = candidate.Score + semanticScore,
+                    Semantic = true,
+                    SemanticReason = SemanticReason(hit),
+                };
             else
-                candidates[key] = new Candidate(hit.Title, semanticScore, "semantic", false, true, false);
+                candidates[key] = new Candidate(
+                    hit.Title, semanticScore, SemanticReason(hit), false, true, false, SemanticReason(hit));
         }
         return candidates.Select(item => new WorkSearchHit(
                 item.Key.Work,
                 item.Key.Language,
                 item.Value.Title,
                 item.Value.Exact ? item.Value.Reason
-                    : item.Value.Lexical && item.Value.Semantic ? "keyword+semantic"
+                    : item.Value.Lexical && item.Value.Semantic ? $"keyword+{item.Value.SemanticReason}"
                     : item.Value.Reason,
                 item.Value.Score + (item.Value.Exact ? 1 : 0)))
             .OrderByDescending(hit => hit.Score)
@@ -192,5 +210,13 @@ public static class WorkHybridSearch
         string Reason,
         bool Lexical,
         bool Semantic,
-        bool Exact);
+        bool Exact,
+        string SemanticReason = "semantic_work");
+
+    private static bool StrongName(string reason) =>
+        reason.StartsWith("exact_", StringComparison.Ordinal)
+        || reason.StartsWith("contained_", StringComparison.Ordinal);
+
+    private static string SemanticReason(WorkSemanticHit hit) =>
+        hit.EvidenceKind == "work" ? "semantic_work" : "semantic_concept";
 }

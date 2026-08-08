@@ -1,4 +1,4 @@
-# Work-level retrieval experiment v4
+# Work-level retrieval experiment v8
 
 Status: experiment evidence only. Neither the catalog nor its vectors were signed, published, or
 deployed.
@@ -15,13 +15,14 @@ artifacts:
 
 Keyword search can match a concept literally. Hybrid search can match a semantic neighbour of a
 concept without appending tags to provision text or repeating metadata for every provision. Fixed
-RRF (`k=60`) fuses lexical and semantic candidates; exact identifiers, aliases, and titles remain
+RRF (`k=60`) fuses lexical and semantic candidates; work-name/title semantics use weight `0.65`
+and weaker generated concept evidence uses `0.60`. Exact identifiers, aliases, and titles remain
 pinned ahead of semantic evidence.
 
 ## Reproducible result
 
-- Evaluation: `C:\lex-retrieval-agent-evidence-v2\reports\work-hybrid-eval-v4.json`
-- Evaluation SHA-256: `cff50d89a761a25892f5369d788eafe4d1f9eec6f6154f684e0771dcde3f8257`
+- Evaluation: `C:\lex-retrieval-agent-evidence-v2\reports\work-hybrid-eval-v8.json`
+- Evaluation SHA-256: `bdb037fc2eb8ba5e7075c974c5b80767cf6a915cd552011386cf38c27a41dcb5`
 - Catalog bytes: `16384000`
 - Catalog SHA-256: `e5f0fd1cfb3803f779b9ef98f58f9c2c0d4943ea18a60cdc49e36b21ed9cbab0`
 - Vector bytes: `1695632`
@@ -32,14 +33,13 @@ pinned ahead of semantic evidence.
 - Work/language base vectors: `3899`
 - Weak concept vectors: `26`
 - Total vectors: `3925`
-- Warm p50 over this small 12-case suite: `60.15 ms`
-- p95 including first cold model query: `166.25 ms`
+- Warm p50 over this small 12-case suite: `65.13 ms`
+- p95 including first cold model query: `168.60 ms`
 
-All held positive cases ranked the intended work first: CELEX, RGPD, GDPR, the full French GDPR
-name, DORA, AI Act, a long alias-plus-provision query, GDPR breach notification, descriptive DORA
-third-party risk, an explicit GDPR corrigendum request, and the Luxembourg CNPD law. The
-photovoltaic-resilience target remained absent because the required Net-Zero Industry Act is not in
-the frozen corpus. Retrieval correctly did not invent it.
+All frozen ranking gates passed. Every EU positive case ranked the intended work first. The
+Luxembourg CNPD law ranked second, inside its specified top-three gate. The photovoltaic-resilience
+target remained absent because the required Net-Zero Industry Act is not in the frozen corpus.
+Retrieval correctly did not invent it.
 
 ## Failed variants and correction
 
@@ -47,7 +47,10 @@ One aggregate vector per work diluted the useful concepts and made descriptive r
 separate concept vector per accepted concept fixed that failure. The first hybrid pass then ranked
 the base GDPR act above its corrigendum for an explicit `rectificatif` query. Raising or lowering
 scores would have been a workaround: the missing field was publisher document role. Adding the
-generic role field and applying it as query intent restored the corrigendum to rank one.
+generic role field and applying it as query intent restored the corrigendum to rank one. A later
+review found concept and base-work vectors had equal fusion weight. `0.35` made useful descriptive
+discovery regress; the measured `0.60` weight is lower than the `0.65` base-work weight and passes
+all frozen gates. This is a sample calibration, not a universal production constant.
 
 ## Verdict
 

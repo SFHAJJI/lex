@@ -210,6 +210,40 @@ public static class WorkSearchIndex
             }
         }
 
+        using (var contained = database.CreateCommand())
+        {
+            contained.CommandText = """
+                SELECT n.work,n.language,r.title,n.kind,length(n.normalized) AS name_length
+                FROM work_names n
+                JOIN work_records r ON r.work=n.work AND r.language=n.language
+                WHERE instr(' ' || $normalized || ' ',' ' || n.normalized || ' ') > 0
+                  AND length(n.normalized) >= 4
+                  AND ($language IS NULL OR n.language=$language)
+                  AND ($document_role IS NULL OR r.document_role=$document_role)
+                ORDER BY CASE n.kind
+                  WHEN 'official_identifier' THEN 0
+                  WHEN 'reviewed_alias' THEN 1
+                  ELSE 2 END,name_length DESC,n.work,n.language
+                """;
+            Add(contained, "$normalized", normalized);
+            Add(contained, "$language", language);
+            Add(contained, "$document_role", requestedRole);
+            using var rows = contained.ExecuteReader();
+            while (rows.Read() && hits.Count < limit)
+            {
+                var key = (rows.GetString(0), rows.GetString(1));
+                if (!seen.Add(key)) continue;
+                var kind = rows.GetString(3);
+                hits.Add(new WorkSearchHit(key.Item1, key.Item2, rows.IsDBNull(2) ? null : rows.GetString(2),
+                    kind switch
+                    {
+                        "official_identifier" => "contained_identifier",
+                        "reviewed_alias" => "contained_alias",
+                        _ => "contained_title",
+                    }, -900 + hits.Count));
+            }
+        }
+
         var tokens = normalized.Split(' ', StringSplitOptions.RemoveEmptyEntries)
             .Where(token => (token.Length >= 3 || token.All(char.IsDigit)) && !StopWords.Contains(token))
             .Distinct(StringComparer.Ordinal).ToArray();
@@ -282,6 +316,11 @@ public static class WorkSearchIndex
 
 public static class WorkQueryIntent
 {
+    private static readonly System.Text.RegularExpressions.Regex ArticleReference = new(
+        @"(?<![\p{L}\p{N}])(?:article|art\.?)\s*(?<number>\d+[a-z]?)(?![\p{L}\p{N}])",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase
+        | System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
     public static string? DocumentRole(string normalizedQuery)
     {
         var tokens = normalizedQuery.Split(' ', StringSplitOptions.RemoveEmptyEntries)
@@ -290,4 +329,20 @@ public static class WorkQueryIntent
             ? "corrigendum"
             : null;
     }
+
+    public static string? ArticleAnchor(string query)
+    {
+        var match = ArticleReference.Match(query);
+        return match.Success ? $"art_{match.Groups["number"].Value.ToLowerInvariant()}" : null;
+    }
+
+    public static string? ConsensusArticleAnchor(IEnumerable<string> queries) =>
+        queries.Select(ArticleAnchor)
+            .Where(anchor => anchor is not null)
+            .GroupBy(anchor => anchor, StringComparer.Ordinal)
+            .Where(group => group.Count() >= 2)
+            .OrderByDescending(group => group.Count())
+            .ThenBy(group => group.Key, StringComparer.Ordinal)
+            .Select(group => group.Key)
+            .FirstOrDefault();
 }

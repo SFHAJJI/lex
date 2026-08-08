@@ -36,23 +36,25 @@
 
 ## Task 5: Typed-plan Agent Framework variant
 
-- [ ] Define typed plan/clarification contracts and compact MCP execution results.
-- [ ] Run all descriptive and ambiguous scenarios three times.
-- [ ] Record tool paths, result ranks, latency, tokens, and failures.
+- [x] Define typed plan/clarification contracts and compact MCP execution results.
+- [x] Run all descriptive and ambiguous scenarios three times.
+- [x] Record tool paths, result ranks, latency, tokens, and failures.
 - Verify: results JSON validates and no run is omitted.
 
 ## Task 6: Direct tool-calling Agent Framework variant
 
-- [ ] Expose compact read-only functions over the same `McpCore`.
-- [ ] Apply deterministic subject pre-resolution and two-search cap.
-- [ ] Run the same scenarios and metrics three times.
+- [x] Expose compact read-only functions over the same `McpCore`.
+- [x] Apply deterministic subject pre-resolution and two-search cap.
+- [x] Run the same scenarios and metrics three times; reject the variant after a model-invented
+      instrument produced a false selection in a known corpus-gap case.
 - Verify: comparable results JSON validates and tool calls stay within limits.
 
 ## Task 7: Citation, judge, and memory gates
 
-- [ ] Add deterministic citation/work/date/anchor validation.
-- [ ] Test conditional judge pass, repair, and refusal cases.
-- [ ] Test bounded session continuation and restoration after process restart.
+- [x] Add deterministic citation/work/date/anchor/source/hash validation.
+- [x] Test conditional judge pass, repair, and refusal cases, including bounded correction and
+      honest refusal after malformed composition.
+- [x] Test bounded session continuation and restoration after process restart.
 - Verify: no unsupported claim remains and temporal follow-ups do not leak.
 
 ## Task 8: Jurisdiction-first result prototype

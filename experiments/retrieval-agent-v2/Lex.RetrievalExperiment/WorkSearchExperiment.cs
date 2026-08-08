@@ -142,6 +142,11 @@ public static class WorkSearchExperiment
             var semanticRank = Rank(semantic.Select(hit => hit.Work), expected);
             var rank = expected is null ? null : hits.Select((hit, index) => (hit, index))
                 .Where(item => item.hit.Work == expected).Select(item => (int?)item.index + 1).FirstOrDefault();
+            var expectedRankMaximum = scenario["expected_rank_max"]?.GetValue<int>();
+            var allowsMissingCorpus = scenario["if_missing"]?.GetValue<string>() == "report_corpus_gap";
+            var passed = rank is null
+                ? allowsMissingCorpus
+                : expectedRankMaximum is null || rank <= expectedRankMaximum;
             results.Add(new JsonObject
             {
                 ["id"] = id,
@@ -150,6 +155,9 @@ public static class WorkSearchExperiment
                 ["lexical_work_rank"] = lexicalRank,
                 ["semantic_work_rank"] = semanticRank,
                 ["work_rank"] = rank,
+                ["expected_rank_max"] = expectedRankMaximum,
+                ["allows_missing_corpus"] = allowsMissingCorpus,
+                ["passed"] = passed,
                 ["elapsed_ms"] = stopwatch.Elapsed.TotalMilliseconds,
                 ["hits"] = new JsonArray(hits.Take(10).Select(hit => (JsonNode)new JsonObject
                 {
@@ -173,6 +181,9 @@ public static class WorkSearchExperiment
             ["model_sha256"] = encoder.ModelSha256,
             ["tokenizer_sha256"] = encoder.TokenizerSha256,
             ["execution_provider"] = encoder.ExecutionProvider,
+            ["passed"] = results.OfType<JsonObject>().All(result => result["passed"]?.GetValue<bool>() == true),
+            ["failure_count"] = results.OfType<JsonObject>()
+                .Count(result => result["passed"]?.GetValue<bool>() != true),
             ["results"] = results,
         };
     }
@@ -243,9 +254,11 @@ public static class WorkSearchExperiment
     private static string? Value(SqliteDataReader rows, int ordinal) =>
         rows.IsDBNull(ordinal) ? null : rows.GetString(ordinal);
 
-    private static string Hash(string path)
+    public static string HashFile(string path)
     {
         using var stream = File.OpenRead(path);
         return Convert.ToHexStringLower(SHA256.HashData(stream));
     }
+
+    private static string Hash(string path) => HashFile(path);
 }

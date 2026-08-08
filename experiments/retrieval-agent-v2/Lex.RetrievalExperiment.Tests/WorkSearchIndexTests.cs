@@ -17,6 +17,8 @@ public sealed class WorkSearchIndexTests
             var alias = WorkSearchIndex.Search(path, "RGPD", "fr", 10);
             var fullName = WorkSearchIndex.Search(path,
                 "Règlement Général sur la Protection des Données (RGPD)", "fr", 10);
+            var embeddedAlias = WorkSearchIndex.Search(path,
+                "Que disait Article 33 du RGPD au 15 mars 2019 ?", "fr", 10);
             var descriptive = WorkSearchIndex.Search(path,
                 "notifier à l'autorité une violation de données personnelles dans les 72 heures", "fr", 10);
             var rectificatif = WorkSearchIndex.Search(path,
@@ -25,6 +27,8 @@ public sealed class WorkSearchIndexTests
             Assert.Equal("eu-eurlex:32016r0679", alias[0].Work);
             Assert.Equal("exact_alias", alias[0].Reason);
             Assert.Equal("eu-eurlex:32016r0679", fullName[0].Work);
+            Assert.Equal("eu-eurlex:32016r0679", embeddedAlias[0].Work);
+            Assert.Equal("contained_alias", embeddedAlias[0].Reason);
             Assert.Equal("eu-eurlex:32016r0679", descriptive[0].Work);
             Assert.Equal("eu-eurlex:32016r0679r(02)", rectificatif[0].Work);
         }
@@ -74,7 +78,14 @@ public sealed class WorkSearchIndexTests
         Assert.Equal(gdpr.Work, pinned[0].Work);
         Assert.Equal("exact_alias", pinned[0].Reason);
         Assert.Equal(gdpr.Work, recovered[0].Work);
-        Assert.Equal("keyword+semantic", recovered[0].Reason);
+        Assert.Equal("keyword+semantic_work", recovered[0].Reason);
+
+        var concept = WorkHybridSearch.Fuse([], [
+            semanticGdpr with { EvidenceKind = "concept", EvidenceValue = "notification des violations" },
+        ], 10);
+        var workMeaning = WorkHybridSearch.Fuse([], [semanticGdpr], 10);
+        Assert.Equal("semantic_concept", concept[0].Reason);
+        Assert.True(concept[0].Score < workMeaning[0].Score);
     }
 
     [Fact]
@@ -106,6 +117,22 @@ public sealed class WorkSearchIndexTests
     [InlineData("GDPR", null)]
     public void Query_intent_detects_only_an_explicit_document_role(string query, string? expected) =>
         Assert.Equal(expected, WorkQueryIntent.DocumentRole(EnrichmentContract.Normalize(query)));
+
+    [Theory]
+    [InlineData("Que disait l'article 33 du RGPD ?", "art_33")]
+    [InlineData("Read Art. 6 today", "art_6")]
+    [InlineData("RGPD notification violation", null)]
+    public void Query_intent_preserves_only_an_explicit_article_reference(string query, string? expected) =>
+        Assert.Equal(expected, WorkQueryIntent.ArticleAnchor(query));
+
+    [Fact]
+    public void Query_intent_requires_two_queries_to_agree_before_promoting_an_inferred_article()
+    {
+        Assert.Equal("art_33", WorkQueryIntent.ConsensusArticleAnchor(
+            ["article 33 notification", "Article 33 breach notification", "article 34 communication"]));
+        Assert.Null(WorkQueryIntent.ConsensusArticleAnchor(
+            ["article 5 principles", "article 6 lawfulness", "article 15 access"]));
+    }
 
     private static WorkSearchSource[] Sources() =>
     [
