@@ -401,7 +401,11 @@ export default function App() {
       {front ? (
         <Search
           state={s} today={today()}
-          onQuery={(q) => { setPage(0); setUi(undefined); go({ q: q || undefined, work: undefined, from: undefined, until: undefined, space: "search" }); }}
+          onSubmit={({ query, asOf }) => { setPage(0); setUi(undefined); go({
+            q: query || undefined,
+            ...(asOf ? { asOf } : {}),
+            work: undefined, from: undefined, until: undefined, space: "search",
+          }); }}
           onAsOf={(d) => { setPage(0); setUi(undefined); go({ asOf: d }); }}
           onRefine={(next) => { setPage(0); setUi(undefined); go(next); }}
           onOpen={(work, date, anchor) => { setUi(undefined); go({ work, date, anchor, mode: "read", space: "law" }); }}
