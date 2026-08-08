@@ -7,6 +7,7 @@ import { shorten } from "./pickers";
 import { ResultsSkeleton } from "./Skeleton";
 import { fusePublisherHits } from "./searchFusion";
 import { intervalLabel } from "./temporal";
+import { searchSubmission, type SearchSubmission } from "./searchSubmission";
 
 /**
  * One box, one date.
@@ -32,7 +33,7 @@ export interface SearchProps {
   state: State;
   today: string;
   onOpen: (work: string, date?: string, anchor?: string) => void;
-  onQuery: (q: string) => void;
+  onSubmit: (submission: SearchSubmission) => void;
   onAsOf: (d?: string) => void;
   onRefine: (next: Partial<State>) => void;
   onMonitor: () => void;
@@ -68,8 +69,6 @@ const DOORS: Door[] = (() => {
   }
 })();
 
-/** A bare date is a question in itself: what applied that day. */
-const DATE_ONLY = /^\s*(\d{4}-\d{2}-\d{2})\s*$/;
 const INITIAL_ARTICLES = 8;
 
 export default function Search(p: SearchProps) {
@@ -157,9 +156,7 @@ export default function Search(p: SearchProps) {
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    const m = DATE_ONLY.exec(text);
-    if (m) { p.onAsOf(m[1]); p.onQuery(""); return; }
-    p.onQuery(text);
+    p.onSubmit(searchSubmission(text));
   };
 
   return (
@@ -189,7 +186,7 @@ export default function Search(p: SearchProps) {
           moment you searched for anything, the only route to the report disappeared with it. */}
       <div className="doors">
         {q ? (
-          <button className="door" onClick={() => { setText(""); p.onQuery(""); }}>clear</button>
+          <button className="door" onClick={() => { setText(""); p.onSubmit({ query: "" }); }}>clear</button>
         ) : DOORS.length > 0 ? (
           <>
             <span className="doors-h">Try</span>
