@@ -19,9 +19,9 @@
 
 ## Task 3: LLM discovery enrichment sample
 
-- [ ] Generate common-name, description, concept, synonym, and practice-area proposals for the
+- [x] Generate common-name, description, concept, synonym, and practice-area proposals for the
       fixture works without writing protected legal fields.
-- [ ] Record deployment, prompt hash, evidence, timestamp, and rejection reasons.
+- [x] Record deployment, prompt hash, evidence, timestamp, and rejection reasons.
 - [ ] Test repeatability and evidence anchors; review strong aliases and export accepted weak
       discovery fields separately from rejected proposals.
 - Verify: rerunning index construction from the accepted export is deterministic.

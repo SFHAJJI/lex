@@ -103,7 +103,9 @@ public static partial class EnrichmentContract
             json["reviewed_by"]?.GetValue<string>());
     }
 
-    public static EnrichmentValidation Validate(IReadOnlyList<EnrichmentProposal> proposals)
+    public static EnrichmentValidation Validate(
+        IReadOnlyList<EnrichmentProposal> proposals,
+        IReadOnlySet<EvidenceAnchor>? heldEvidence = null)
     {
         var accepted = new List<AcceptedEnrichment>();
         var rejected = new List<RejectedEnrichment>();
@@ -133,6 +135,8 @@ public static partial class EnrichmentContract
                          || string.IsNullOrWhiteSpace(evidence.Anchor)
                          || !Sha256Pattern().IsMatch(evidence.TextSha256)))
                 reason = "invalid_evidence";
+            else if (heldEvidence is not null && proposal.Evidence.Any(evidence => !heldEvidence.Contains(evidence)))
+                reason = "evidence_not_held";
             else if (StrongKinds.Contains(proposal.Kind) && string.IsNullOrWhiteSpace(proposal.ReviewedBy))
                 reason = "alias_requires_review";
             else if (StrongKinds.Contains(proposal.Kind)
@@ -239,4 +243,3 @@ public static partial class EnrichmentContract
             : value;
     }
 }
-

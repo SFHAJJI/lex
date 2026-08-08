@@ -15,6 +15,19 @@ dotnet run --project experiments/retrieval-agent-v2/Lex.RetrievalExperiment -- w
   --index-dir C:\lex-retrieval-agent-evidence-v2\baseline `
   --output C:\lex-retrieval-agent-evidence-v2\workbench\candidate.db
 
+dotnet run --project experiments/retrieval-agent-v2/Lex.RetrievalExperiment -- enrichment-sample `
+  --workbench C:\lex-retrieval-agent-evidence-v2\workbench\candidate.db `
+  --endpoint https://oai-soufien-dev.openai.azure.com `
+  --deployment gpt-5-mini `
+  --works experiments/retrieval-agent-v2/fixture-works.json `
+  --runs 2 `
+  --output C:\lex-retrieval-agent-evidence-v2\reports\enrichment-sample.json
+
+dotnet run --project experiments/retrieval-agent-v2/Lex.RetrievalExperiment -- enrichment-analyze `
+  --report C:\lex-retrieval-agent-evidence-v2\reports\enrichment-sample.json `
+  --model-dir C:\lex-retrieval-agent-evidence-v2\model `
+  --output C:\lex-retrieval-agent-evidence-v2\reports\enrichment-semantic-analysis.json
+
 dotnet run --project experiments/retrieval-agent-v2/Lex.RetrievalExperiment -- baseline `
   --index-dir C:\lex-retrieval-agent-evidence-v2\baseline `
   --model-dir C:\lex-retrieval-agent-evidence-v2\model `

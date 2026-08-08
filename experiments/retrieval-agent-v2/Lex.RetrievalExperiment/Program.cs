@@ -15,24 +15,31 @@ if (arguments.Length == 0)
     return 2;
 }
 
-string Required(string name)
+string RequiredValue(string name)
 {
     var index = Array.IndexOf(arguments, name);
     if (index < 0 || index + 1 >= arguments.Length)
         throw new ArgumentException($"{name} required");
-    return Path.GetFullPath(arguments[index + 1]);
+    var value = arguments[index + 1];
+    if (string.IsNullOrWhiteSpace(value) || value.StartsWith("--", StringComparison.Ordinal))
+        throw new ArgumentException($"{name} required");
+    return value;
 }
+
+string RequiredPath(string name) => Path.GetFullPath(RequiredValue(name));
 
 void Usage() => Console.Error.WriteLine("""
     usage:
       baseline --index-dir PATH --model-dir PATH --scenarios FILE --output FILE
       workbench-init --index-dir PATH --output FILE
+      enrichment-sample --workbench FILE --endpoint URI --deployment NAME --works FILE --runs N --output FILE
+      enrichment-analyze --report FILE --model-dir PATH --output FILE
     """);
 
 if (arguments[0] == "workbench-init")
 {
-    var sourceDir = Required("--index-dir");
-    var workbenchOutput = Required("--output");
+    var sourceDir = RequiredPath("--index-dir");
+    var workbenchOutput = RequiredPath("--output");
     var sourceIndexes = Directory.EnumerateFiles(sourceDir, "index-*.db").Order().ToArray();
     EnrichmentWorkbench.Create(sourceIndexes, workbenchOutput);
     using var created = new SqliteConnection($"Data Source={workbenchOutput};Mode=ReadOnly;Pooling=False");
@@ -43,16 +50,63 @@ if (arguments[0] == "workbench-init")
     return 0;
 }
 
+if (arguments[0] == "enrichment-sample")
+{
+    var workbenchPath = RequiredPath("--workbench");
+    var endpointValue = RequiredValue("--endpoint");
+    if (!Uri.TryCreate(endpointValue, UriKind.Absolute, out var endpoint)
+        || endpoint.Scheme != Uri.UriSchemeHttps)
+        throw new ArgumentException("--endpoint must be an absolute HTTPS URI");
+    var deployment = RequiredValue("--deployment");
+    var worksPath = RequiredPath("--works");
+    var enrichmentOutput = RequiredPath("--output");
+    if (File.Exists(enrichmentOutput))
+        throw new IOException($"Refusing to overwrite existing report: {enrichmentOutput}");
+    var runArgument = Array.IndexOf(arguments, "--runs");
+    var runCount = runArgument >= 0 && runArgument + 1 < arguments.Length
+        && int.TryParse(arguments[runArgument + 1], out var parsedRuns) ? parsedRuns : 2;
+    var worksRoot = JsonNode.Parse(File.ReadAllBytes(worksPath))?.AsObject()
+        ?? throw new InvalidDataException("Fixture works file is empty.");
+    var fixtures = worksRoot["works"]?.AsArray().OfType<JsonObject>().Select(item => (
+        Work: item["work"]?.GetValue<string>() ?? throw new InvalidDataException("Fixture work is required."),
+        Language: item["language"]?.GetValue<string>() ?? throw new InvalidDataException("Fixture language is required.")))
+        .ToArray() ?? throw new InvalidDataException("Fixture works array is required.");
+    var enrichmentReport = await EnrichmentSampleGenerator.RunAsync(
+        workbenchPath, endpoint, deployment, fixtures, runCount, CancellationToken.None);
+    Directory.CreateDirectory(Path.GetDirectoryName(enrichmentOutput)
+        ?? throw new ArgumentException("Output must include a directory."));
+    File.WriteAllBytes(enrichmentOutput, JsonSerializer.SerializeToUtf8Bytes(enrichmentReport,
+        new JsonSerializerOptions { WriteIndented = true }));
+    Console.Error.WriteLine($"[enrichment] wrote {fixtures.Length} work reports to {enrichmentOutput}");
+    return 0;
+}
+
+if (arguments[0] == "enrichment-analyze")
+{
+    var reportPath = RequiredPath("--report");
+    var analysisModelDir = RequiredPath("--model-dir");
+    var analysisOutput = RequiredPath("--output");
+    if (File.Exists(analysisOutput))
+        throw new IOException($"Refusing to overwrite existing report: {analysisOutput}");
+    var analysis = EnrichmentSampleAnalyzer.Analyze(reportPath, analysisModelDir);
+    Directory.CreateDirectory(Path.GetDirectoryName(analysisOutput)
+        ?? throw new ArgumentException("Output must include a directory."));
+    File.WriteAllBytes(analysisOutput, JsonSerializer.SerializeToUtf8Bytes(analysis,
+        new JsonSerializerOptions { WriteIndented = true }));
+    Console.Error.WriteLine($"[enrichment-analysis] wrote {analysisOutput}");
+    return 0;
+}
+
 if (arguments[0] != "baseline")
 {
     Usage();
     return 2;
 }
 
-var indexDir = Required("--index-dir");
-var modelDir = Required("--model-dir");
-var scenarioPath = Required("--scenarios");
-var outputPath = Required("--output");
+var indexDir = RequiredPath("--index-dir");
+var modelDir = RequiredPath("--model-dir");
+var scenarioPath = RequiredPath("--scenarios");
+var outputPath = RequiredPath("--output");
 if (File.Exists(outputPath))
     throw new IOException($"Refusing to overwrite existing report: {outputPath}");
 

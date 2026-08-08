@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using Lex.Index;
 using Lex.RetrievalExperiment;
 using Microsoft.Data.Sqlite;
 
@@ -55,6 +56,146 @@ public sealed class EnrichmentContractTests
 
         Assert.Equal("weak_discovery", accepted.RankTier);
         Assert.Equal("model-derived", accepted.Provenance);
+    }
+
+    [Fact]
+    public void Evidence_must_resolve_to_the_exact_authoritative_anchor_and_hash()
+    {
+        var proposal = Proposal("description", "notification des violations de données") with
+        {
+            RepeatRuns = 2,
+            AgreementRatio = 1,
+        };
+        var heldEvidence = new HashSet<EvidenceAnchor>
+        {
+            new("eu-eurlex:32016r0679", "2016-05-04", "art_1",
+                "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"),
+        };
+
+        var rejection = Assert.Single(EnrichmentContract.Validate([proposal], heldEvidence).Rejected);
+
+        Assert.Equal("evidence_not_held", rejection.Reason);
+    }
+
+    [Fact]
+    public void Consensus_counts_only_normalized_candidates_with_the_same_evidence()
+    {
+        var evidence = new EvidenceAnchor("eu-eurlex:32016r0679", "2016-05-04", "art_33", EvidenceSha);
+        var runs = new IReadOnlyList<ModelDiscoveryCandidate>[]
+        {
+            [new("concept", "Violation de données", 0.91, [evidence]),
+             new("concept", "notification sous 72 heures", 0.8, [evidence])],
+            [new("concept", "violation de donnees", 0.89, [evidence])],
+        };
+
+        var proposals = ProposalConsensus.Merge(
+            "eu-eurlex:32016r0679", "fr", runs, "gpt-5-mini", EvidenceSha);
+
+        var repeated = Assert.Single(proposals, proposal => proposal.RepeatRuns == 2);
+        Assert.Equal("violation de donnees", EnrichmentContract.Normalize(repeated.Value));
+        Assert.Equal(1, repeated.AgreementRatio);
+        Assert.Single(proposals, proposal => proposal.RepeatRuns == 1);
+    }
+
+    [Fact]
+    public void Malformed_model_item_is_rejected_without_losing_valid_candidates()
+    {
+        var evidence = new EvidenceAnchor("eu-eurlex:32016r0679", "2016-05-04", "art_33", EvidenceSha);
+        var raw = $$"""
+            {
+              "items": [
+                {
+                  "kind": "concept",
+                  "value": "notification sous 72 heures",
+                  "confidence": 0.9,
+                  "evidence": [{ "anchor": "art_33", "text_sha256": "{{EvidenceSha}}" }]
+                },
+                {
+                  "kind": "concept",
+                  "value": "confiance mal typée",
+                  "confidence": "0.9",
+                  "evidence": [{ "anchor": "art_33", "text_sha256": "{{EvidenceSha}}" }]
+                }
+              ]
+            }
+            """;
+
+        var parsed = ModelDiscoveryParser.Parse(raw, evidence.Work, evidence.Version, new HashSet<EvidenceAnchor> { evidence });
+
+        Assert.Single(parsed.Candidates);
+        Assert.Equal("notification sous 72 heures", parsed.Candidates[0].Value);
+        Assert.Equal("confidence_not_number", Assert.Single(parsed.RejectedItems).Reason);
+    }
+
+    [Fact]
+    public void Semantic_consensus_matches_only_weak_paraphrases_with_shared_exact_evidence()
+    {
+        var shared = new EvidenceAnchor("eu-eurlex:32016r0679", "2016-05-04", "art_33", EvidenceSha);
+        var other = shared with { Anchor = "art_34" };
+        var runs = new IReadOnlyList<ModelDiscoveryCandidate>[]
+        {
+            [new("concept", "notification des violations", 0.9, [shared]),
+             new("concept", "same words but other evidence", 0.9, [other]),
+             new("alias", "RGPD", 1, [shared])],
+            [new("description", "signalement des fuites de données", 0.92, [shared]),
+             new("concept", "unrelated concept", 0.95, [shared]),
+             new("alias", "GDPR", 1, [shared])],
+        };
+        using var encoder = new FakeEncoder(new Dictionary<string, float[]>
+        {
+            ["notification des violations"] = [1, 0],
+            ["signalement des fuites de données"] = [0.99f, 0.1f],
+            ["same words but other evidence"] = [1, 0],
+            ["unrelated concept"] = [0, 1],
+            ["RGPD"] = [1, 0],
+            ["GDPR"] = [1, 0],
+        });
+
+        var matches = SemanticProposalMatcher.Match(
+            "eu-eurlex:32016r0679", "fr", runs, "gpt-5-mini", EvidenceSha, encoder, 0.9);
+
+        var match = Assert.Single(matches);
+        Assert.Equal(2, match.RepeatRuns);
+        Assert.Equal(1, match.AgreementRatio);
+        Assert.Single(match.Evidence);
+        Assert.All(match.Evidence, evidence => Assert.Equal("art_33", evidence.Anchor));
+    }
+
+    [Fact]
+    public void Semantic_consensus_does_not_reserve_a_candidate_when_the_other_side_is_already_used()
+    {
+        var evidence = new EvidenceAnchor("eu-eurlex:32016r0679", "2016-05-04", "art_33", EvidenceSha);
+        var runs = new IReadOnlyList<ModelDiscoveryCandidate>[]
+        {
+            [new("concept", "left exact", 0.9, [evidence]),
+             new("concept", "left second", 0.9, [evidence])],
+            [new("concept", "right exact", 0.9, [evidence]),
+             new("concept", "right second", 0.9, [evidence])],
+        };
+        using var encoder = new FakeEncoder(new Dictionary<string, float[]>
+        {
+            ["left exact"] = [1, 0],
+            ["right exact"] = [1, 0],
+            ["left second"] = [0.99f, 0.1f],
+            ["right second"] = [0.9f, 0.435f],
+        });
+
+        var matches = SemanticProposalMatcher.Match(
+            "eu-eurlex:32016r0679", "fr", runs, "gpt-5-mini", EvidenceSha, encoder, 0.9);
+
+        Assert.Equal(2, matches.Count);
+    }
+
+    private sealed class FakeEncoder(IReadOnlyDictionary<string, float[]> vectors) : ITextEncoder
+    {
+        public string ModelId => "fake";
+        public string ModelRevision => "1";
+        public int Dimensions => 2;
+        public int CountTokens(string text) => text.Length;
+        public int PrefixLengthForTokens(string text, int maxTokens) => Math.Min(text.Length, maxTokens);
+        public int SuffixStartForTokens(string text, int maxTokens) => Math.Max(0, text.Length - maxTokens);
+        public float[] Encode(string text, EmbeddingInputKind kind) => vectors[text];
+        public void Dispose() { }
     }
 
     [Fact]
