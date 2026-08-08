@@ -46,7 +46,7 @@
   - Verify: benchmark self-tests and frozen baseline report.
   - Files: `src/Lex.Index/RetrievalBenchmark.cs`, `evals/*`, tests, docs
 
-- [ ] Task 8: Graduate bounded weak enrichment only if ablation passes
+- [x] Task 8: Keep bounded weak enrichment quarantined because no candidate set is eligible
   - Acceptance: per-work/per-kind caps, lifecycle/revalidation, ranking and rollback gates; no exact
     resolution or citation path; measurable holdout gain.
   - Verify: publisher-only versus enriched ablation plus size/memory/latency gates.

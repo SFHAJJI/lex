@@ -36,6 +36,33 @@ public sealed class WorkEnrichmentFileTests : IDisposable
     }
 
     [Fact]
+    public void Production_weak_enrichment_decision_is_bound_to_empty_discovery_and_frozen_cases()
+    {
+        var root = RepoRoot();
+        var decision = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(
+            Path.Combine(root, "evals", "weak-enrichment-decision.json")))!.AsObject();
+        Assert.Equal("lex-weak-enrichment-decision/1", decision["schema"]!.GetValue<string>());
+        Assert.Equal("eu-eurlex", decision["collection"]!.GetValue<string>());
+        Assert.Equal("config/eu-work-enrichment.json",
+            decision["enrichment_file"]!.GetValue<string>());
+        Assert.Equal("evals/retrieval-cases.json", decision["cases_file"]!.GetValue<string>());
+        string DeclaredPath(string property) => Path.Combine(root,
+            decision[property]!.GetValue<string>().Replace('/', Path.DirectorySeparatorChar));
+        var enrichmentPath = DeclaredPath("enrichment_file");
+        var casesPath = DeclaredPath("cases_file");
+        var enrichment = WorkEnrichmentFile.Load(enrichmentPath, "eu-eurlex");
+        var casesSha = Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(casesPath)));
+
+        Assert.Empty(enrichment.Discovery);
+        Assert.Equal(0, decision["discovery_records"]!.GetValue<int>());
+        Assert.Equal("not_eligible", decision["decision"]!.GetValue<string>());
+        Assert.False(decision["production_activation"]!.GetValue<bool>());
+        Assert.Equal(Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(enrichmentPath))),
+            decision["enrichment_sha256"]!.GetValue<string>());
+        Assert.Equal(casesSha, decision["cases_sha256"]!.GetValue<string>());
+    }
+
+    [Fact]
     public void Production_aliases_are_filtered_to_the_held_scope_and_language()
     {
         var held = new HashSet<(string Work, string Language)>

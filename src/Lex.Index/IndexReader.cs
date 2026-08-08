@@ -204,7 +204,8 @@ public sealed class LexIndexReader : IDisposable
                                  || stamp.ContainsKey("vector_layout")
                                  || stamp.ContainsKey("work_catalog_version")
                                  || stamp.ContainsKey("publisher_metadata_records")
-                                 || stamp.ContainsKey("document_role_records");
+                                 || stamp.ContainsKey("document_role_records")
+                                 || stamp.ContainsKey("weak_discovery_records");
         if (hasWorkSearch != hasWorkSearchStamp)
             throw new InvalidDataException(
                 $"Index {dbPath} has inconsistent work catalog tables and stamp claims.");
@@ -230,26 +231,45 @@ public sealed class LexIndexReader : IDisposable
                 throw new InvalidDataException($"Index {dbPath} has invalid work catalog counts in its stamp.");
             var stampedPublisherMetadata = 0L;
             var stampedDocumentRoles = 0L;
+            long? stampedWeakDiscovery = null;
             if (workCatalogVersion == 2
                 && (!long.TryParse(stamp.GetValueOrDefault("publisher_metadata_records"), out stampedPublisherMetadata)
                     || !long.TryParse(stamp.GetValueOrDefault("document_role_records"), out stampedDocumentRoles)
                     || stampedPublisherMetadata < 0 || stampedDocumentRoles < 0))
                 throw new InvalidDataException($"Index {dbPath} has invalid extended work catalog counts in its stamp.");
+            if (stamp.TryGetValue("weak_discovery_records", out var weakDiscoveryValue))
+            {
+                if (!long.TryParse(weakDiscoveryValue, out var parsedWeakDiscovery)
+                    || parsedWeakDiscovery < 0)
+                    throw new InvalidDataException(
+                        $"Index {dbPath} has an invalid weak discovery count in its stamp.");
+                stampedWeakDiscovery = parsedWeakDiscovery;
+            }
             using var workCounts = conn.CreateCommand();
             workCounts.CommandText = workCatalogVersion == 2
                 ? """
                     SELECT (SELECT COUNT(*) FROM work_records),
                            (SELECT COUNT(*) FROM work_vectors),
                            (SELECT COUNT(*) FROM work_publisher_metadata),
-                           (SELECT COUNT(*) FROM document_roles)
+                           (SELECT COUNT(*) FROM document_roles),
+                           (SELECT COUNT(*) FROM work_discovery)
                     """
-                : "SELECT (SELECT COUNT(*) FROM work_records),(SELECT COUNT(*) FROM work_vectors)";
+                : """
+                    SELECT (SELECT COUNT(*) FROM work_records),
+                           (SELECT COUNT(*) FROM work_vectors),
+                           (SELECT COUNT(*) FROM work_discovery)
+                    """;
             using var workCountRow = workCounts.ExecuteReader();
-            if (!workCountRow.Read()
+            var actualWeakDiscovery = workCountRow.Read()
+                ? workCountRow.GetInt64(workCatalogVersion == 2 ? 4 : 2)
+                : -1;
+            if (actualWeakDiscovery < 0
                 || workCountRow.GetInt64(0) != stampedWorks
                 || workCountRow.GetInt64(1) != stampedWorkVectors
                 || workCatalogVersion == 2 && (workCountRow.GetInt64(2) != stampedPublisherMetadata
-                                               || workCountRow.GetInt64(3) != stampedDocumentRoles))
+                                               || workCountRow.GetInt64(3) != stampedDocumentRoles)
+                || stampedWeakDiscovery is not null
+                   && actualWeakDiscovery != stampedWeakDiscovery)
                 throw new InvalidDataException($"Index {dbPath} work catalog counts do not match its stamp.");
             var vectorLayout = stamp.GetValueOrDefault("vector_layout");
             if ((stampedWorkVectors > 0 && vectorLayout != "lex-vectors/1-mixed-provision-work")

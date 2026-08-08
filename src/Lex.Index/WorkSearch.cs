@@ -47,6 +47,11 @@ internal sealed record WorkMatch(
 /// </summary>
 public static class WorkSearch
 {
+    public const int MaxDiscoveryPerKind = 4;
+    public const int MaxDiscoveryPerWorkLanguage = 12;
+    public const int MaxEvidenceAnchors = 8;
+    public const int MaxDiscoveryValueLength = 512;
+
     private static readonly HashSet<string> WeakKinds = new(StringComparer.Ordinal)
     {
         "description", "concept", "search_synonym", "practice_area",
@@ -449,13 +454,27 @@ public static class WorkSearch
                 (provision.ProvisionId[..provision.ProvisionId.LastIndexOf('#')],
                     provision.Anchor, provision.TextSha))
             .ToHashSet();
+        if (discovery.Any(item => string.IsNullOrWhiteSpace(item.Value)))
+            throw new InvalidDataException("Discovery metadata contains an empty value.");
+        if (discovery.GroupBy(item => (item.Work, item.Language))
+            .Any(group => group.Count() > MaxDiscoveryPerWorkLanguage))
+            throw new InvalidDataException("Discovery metadata exceeds the per-work language cap.");
+        if (discovery.GroupBy(item => (item.Work, item.Language, item.Kind))
+            .Any(group => group.Count() > MaxDiscoveryPerKind))
+            throw new InvalidDataException("Discovery metadata exceeds the per-kind cap.");
+        if (discovery.GroupBy(item =>
+                (item.Work, item.Language, item.Kind, Value: Normalize(item.Value)))
+            .Any(group => group.Count() > 1))
+            throw new InvalidDataException("Discovery metadata contains a duplicate normalized value.");
         foreach (var item in discovery)
         {
             if (!sourceKeys.Contains((item.Work, item.Language)))
                 throw new InvalidDataException("Discovery metadata references an unknown work-language record.");
             if (!WeakKinds.Contains(item.Kind))
                 throw new InvalidDataException($"Discovery kind '{item.Kind}' is not a weak search field.");
-            if (Normalize(item.Value).Length < 2 || item.Confidence is < 0.7 or > 1
+            if (string.IsNullOrWhiteSpace(item.Value)
+                || item.Value.Length > MaxDiscoveryValueLength
+                || Normalize(item.Value).Length < 2 || item.Confidence is < 0.7 or > 1
                 || item.RepeatRuns < 2 || item.AgreementRatio is < 0.8 or > 1)
                 throw new InvalidDataException("Discovery metadata did not pass repeatability and confidence gates.");
             if (!IsSha(item.PromptSha256) || !IsSha(item.SchemaSha256)
@@ -463,7 +482,9 @@ public static class WorkSearch
                 || !DateTimeOffset.TryParse(item.GeneratedAt, CultureInfo.InvariantCulture,
                     DateTimeStyles.AssumeUniversal, out _))
                 throw new InvalidDataException("Discovery metadata has invalid model provenance.");
-            if (item.Evidence.Count == 0 || item.Evidence.Any(evidence =>
+            if (item.Evidence is null || item.Evidence.Count is 0 or > MaxEvidenceAnchors
+                || item.Evidence.Distinct().Count() != item.Evidence.Count
+                || item.Evidence.Any(evidence =>
                     !IsSha(evidence.TextSha256)
                     || !heldEvidence.Contains((evidence.Version, evidence.Anchor, evidence.TextSha256))))
                 throw new InvalidDataException("Discovery metadata references evidence not held by this index build.");

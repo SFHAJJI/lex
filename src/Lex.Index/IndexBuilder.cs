@@ -104,6 +104,26 @@ public static class IndexBuilder
         using var roleRows = roles.ExecuteReader();
         while (roleRows.Read())
             AppendDigestRecord(output, "role", roleRows.GetString(0), roleRows.GetString(1));
+        using var discovery = connection.CreateCommand();
+        discovery.CommandText = """
+            SELECT r.group_key,r.language,d.kind,d.value,d.normalized,d.model_deployment,
+                   d.prompt_sha256,d.schema_sha256,d.generated_at,d.confidence,
+                   d.repeat_runs,d.agreement_ratio,d.evidence_json
+            FROM work_discovery d
+            JOIN work_records r ON r.work_id=d.work_id
+            ORDER BY r.group_key,r.language,d.kind,d.normalized,d.model_deployment,
+                     d.prompt_sha256,d.schema_sha256,d.generated_at,d.evidence_json
+            """;
+        using var discoveryRows = discovery.ExecuteReader();
+        while (discoveryRows.Read())
+            AppendDigestRecord(output, "weak-discovery",
+                discoveryRows.GetString(0), discoveryRows.GetString(1), discoveryRows.GetString(2),
+                discoveryRows.GetString(3), discoveryRows.GetString(4), discoveryRows.GetString(5),
+                discoveryRows.GetString(6), discoveryRows.GetString(7), discoveryRows.GetString(8),
+                discoveryRows.GetDouble(9).ToString("R", System.Globalization.CultureInfo.InvariantCulture),
+                discoveryRows.GetInt64(10).ToString(System.Globalization.CultureInfo.InvariantCulture),
+                discoveryRows.GetDouble(11).ToString("R", System.Globalization.CultureInfo.InvariantCulture),
+                discoveryRows.GetString(12));
     }
 
     private static void AppendDigestRecord(StringBuilder output, params string?[] fields)
@@ -614,7 +634,8 @@ public static class IndexBuilder
                     SELECT (SELECT COUNT(*) FROM work_records),
                            (SELECT COUNT(*) FROM work_vectors),
                            (SELECT COUNT(*) FROM work_publisher_metadata),
-                           (SELECT COUNT(*) FROM document_roles)
+                           (SELECT COUNT(*) FROM document_roles),
+                           (SELECT COUNT(*) FROM work_discovery)
                     """;
                 using var countRow = workCounts.ExecuteReader();
                 if (!countRow.Read()) throw new InvalidDataException("Work search counts cannot be read.");
@@ -626,6 +647,8 @@ public static class IndexBuilder
                 stamp["publisher_metadata_records"] = countRow.GetInt64(2).ToString(
                     System.Globalization.CultureInfo.InvariantCulture);
                 stamp["document_role_records"] = countRow.GetInt64(3).ToString(
+                    System.Globalization.CultureInfo.InvariantCulture);
+                stamp["weak_discovery_records"] = countRow.GetInt64(4).ToString(
                     System.Globalization.CultureInfo.InvariantCulture);
                 if (workVectorRecords > 0)
                     stamp["vector_layout"] = "lex-vectors/1-mixed-provision-work";

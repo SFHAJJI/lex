@@ -1,0 +1,13 @@
+{
+  "schema": "lex-weak-enrichment-decision/1",
+  "decided_at": "2026-08-09",
+  "collection": "eu-eurlex",
+  "enrichment_file": "config/eu-work-enrichment.json",
+  "enrichment_sha256": "d41bcdd0cb0ae9e155930121de40caff5e6cc472cb28e7b687c5e7eff39ae97f",
+  "cases_file": "evals/retrieval-cases.json",
+  "cases_sha256": "d952bb259a8a5bd8859056c9440bcc566127dbcc4f908bd1330b97de1b508f77",
+  "discovery_records": 0,
+  "decision": "not_eligible",
+  "production_activation": false,
+  "reason": "The reviewed production artifact contains no model-derived discovery candidates, so an incremental holdout ablation cannot be run and weak discovery remains quarantined."
+}

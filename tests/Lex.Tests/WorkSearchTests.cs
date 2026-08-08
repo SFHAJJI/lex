@@ -757,6 +757,65 @@ public sealed class WorkSearchTests : IDisposable
     }
 
     [Fact]
+    public void Weak_discovery_is_bounded_per_work_kind_and_evidence_set()
+    {
+        var db = TempDb();
+        var doc = Doc("eu:target:2020-01-01", "target", "Target regulation");
+        var provision = Provision(doc, "Authoritative publisher wording.");
+        WorkDiscoveryRow Discovery(int index, IReadOnlyList<WorkEvidenceAnchor>? evidence = null) =>
+            new("target", "fr", "concept", $"bounded concept {index}", "test-model",
+                new string('a', 64), new string('b', 64), "2026-08-08T00:00:00Z",
+                0.91, 3, 1.0, evidence ??
+                [new WorkEvidenceAnchor(doc.Key, provision.Anchor, provision.TextSha)]);
+
+        var tooManyConcepts = Enumerable.Range(0, WorkSearch.MaxDiscoveryPerKind + 1)
+            .Select(index => Discovery(index)).ToArray();
+        var kindError = Assert.Throws<InvalidDataException>(() => IndexBuilder.Build(
+            db, Stamp(), [doc], [provision], [], [], null,
+            workSearch: new WorkSearchBuildOptions([], tooManyConcepts, EnrichmentDigest)));
+        Assert.Contains("per-kind", kindError.Message, StringComparison.OrdinalIgnoreCase);
+
+        var tooMuchEvidence = Enumerable.Range(0, WorkSearch.MaxEvidenceAnchors + 1)
+            .Select(index => new WorkEvidenceAnchor(doc.Key, provision.Anchor, provision.TextSha))
+            .ToArray();
+        var evidenceError = Assert.Throws<InvalidDataException>(() => IndexBuilder.Build(
+            TempDb(), Stamp(), [doc], [provision], [], [], null,
+            workSearch: new WorkSearchBuildOptions([], [Discovery(0, tooMuchEvidence)],
+                EnrichmentDigest)));
+        Assert.Contains("evidence", evidenceError.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Weak_discovery_rows_are_bound_by_the_signed_content_digest()
+    {
+        var db = TempDb();
+        var doc = Doc("eu:target:2020-01-01", "target", "Target regulation");
+        var provision = Provision(doc, "Authoritative publisher wording.");
+        var discovery = new WorkDiscoveryRow(
+            "target", "fr", "concept", "bounded concept", "test-model",
+            new string('a', 64), new string('b', 64), "2026-08-08T00:00:00Z",
+            0.91, 3, 1.0,
+            [new WorkEvidenceAnchor(doc.Key, provision.Anchor, provision.TextSha)]);
+        IndexBuilder.Build(db, Stamp(), [doc], [provision], [], [], StampSigner.CreateKeyPem(),
+            workSearch: new WorkSearchBuildOptions([], [discovery], EnrichmentDigest));
+        string committed;
+        using (var reader = LexIndexReader.Open(db))
+        {
+            committed = reader.Stamp["content_digest"];
+            Assert.Equal(committed, reader.ComputeContentDigest());
+        }
+        using (var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={db}"))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = "UPDATE work_discovery SET value='tampered concept'";
+            command.ExecuteNonQuery();
+        }
+        using var tampered = LexIndexReader.Open(db);
+        Assert.NotEqual(committed, tampered.ComputeContentDigest());
+    }
+
+    [Fact]
     public void Enrichment_cannot_change_the_authoritative_content_digest()
     {
         var plainDb = TempDb();
@@ -789,7 +848,8 @@ public sealed class WorkSearchTests : IDisposable
             command.CommandText = """
                 DELETE FROM stamp WHERE k IN (
                   'work_search_records','work_vector_records','vector_layout',
-                  'work_catalog_version','publisher_metadata_records','document_role_records');
+                  'work_catalog_version','publisher_metadata_records','document_role_records',
+                  'weak_discovery_records');
                 DROP TABLE work_fts;
                 DROP TABLE work_discovery;
                 DROP TABLE work_vectors;
@@ -840,17 +900,35 @@ public sealed class WorkSearchTests : IDisposable
                 DROP TABLE work_publisher_metadata;
                 DROP TABLE document_roles;
                 DELETE FROM stamp WHERE k IN (
-                  'work_catalog_version','publisher_metadata_records','document_role_records');
+                  'work_catalog_version','publisher_metadata_records','document_role_records',
+                  'weak_discovery_records');
                 """;
             command.ExecuteNonQuery();
         }
 
-        using var reader = LexIndexReader.Open(db);
-        var result = reader.SearchKeyword("RGPD personal data", FilterSet.All, 10, false);
-
-        Assert.Contains(result.Hits, hit => hit.Doc.GroupKey == "32016r0679");
-        Assert.Contains(reader.SearchKeyword("execution measures", FilterSet.All, 10, false).Hits,
-            hit => hit.Doc.GroupKey == "32016r0679");
+        using (var reader = LexIndexReader.Open(db))
+        {
+            var result = reader.SearchKeyword("RGPD personal data", FilterSet.All, 10, false);
+            Assert.Contains(result.Hits, hit => hit.Doc.GroupKey == "32016r0679");
+            Assert.Contains(reader.SearchKeyword("execution measures", FilterSet.All, 10, false).Hits,
+                hit => hit.Doc.GroupKey == "32016r0679");
+        }
+        using (var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={db}"))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = "INSERT INTO stamp(k,v) VALUES ('weak_discovery_records','0')";
+            command.ExecuteNonQuery();
+        }
+        using (LexIndexReader.Open(db)) { }
+        using (var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={db}"))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = "UPDATE stamp SET v='1' WHERE k='weak_discovery_records'";
+            command.ExecuteNonQuery();
+        }
+        Assert.Throws<InvalidDataException>(() => LexIndexReader.Open(db));
     }
 
     [Fact]
@@ -872,7 +950,8 @@ public sealed class WorkSearchTests : IDisposable
             command.CommandText = """
                 DELETE FROM stamp WHERE k IN (
                   'work_search_records','work_vector_records','vector_layout',
-                  'work_catalog_version','publisher_metadata_records','document_role_records');
+                  'work_catalog_version','publisher_metadata_records','document_role_records',
+                  'weak_discovery_records');
                 DROP TABLE work_fts;
                 DROP TABLE work_discovery;
                 DROP TABLE work_vectors;

@@ -64,3 +64,9 @@ can authorize a default change.
 `evals/retrieval-baseline-v2.json` binds this pre-tuning case set and split by SHA-256. Its runtime
 measurement status remains explicitly pending until the signed production candidate indexes exist;
 the release benchmark replaces that absence with measured artifact, machine and commit identities.
+
+`evals/weak-enrichment-decision.json` records the separate weak-discovery activation decision. The
+reviewed EU enrichment artifact currently contains no model-derived discovery records, so weak FTS
+and concept-vector fields are not eligible for ablation and remain excluded from every public search
+default. Any future candidate artifact is capped per work and kind, and every evidence anchor and
+text hash is revalidated against the held index during each immutable rebuild before benchmarking.
