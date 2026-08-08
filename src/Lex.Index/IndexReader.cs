@@ -439,7 +439,15 @@ public sealed class LexIndexReader : IDisposable
             else fused[key] = h;
         }
         var hits = fused.Select(kv => kv.Value with { Score = scores[kv.Key] })
-            .OrderByDescending(h => h.Score).ThenByDescending(h => h.Doc.ValidFrom, StringComparer.Ordinal)
+            .OrderByDescending(h => h.Score)
+            // RRF intentionally gives the first lexical and first semantic-only candidates the
+            // same score. On that exact tie, evidence strength is the relevance signal; document
+            // recency is not. Without this tie-break a newer semantic near-neighbour can outrank
+            // the provision containing the literal words the reader typed.
+            .ThenByDescending(h =>
+                (h.MatchReasons.Contains("keyword") ? 2 : 0)
+                + (h.MatchReasons.Contains("semantic") ? 1 : 0))
+            .ThenByDescending(h => h.Doc.ValidFrom, StringComparer.Ordinal)
             .Take(limit).ToList();
         return new SearchExecution("hybrid", hits, keyword.QueryExpansions);
     }
