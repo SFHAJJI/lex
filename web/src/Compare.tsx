@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { CompareSkeleton } from "./Skeleton";
 import { first, tool } from "./api";
 import { diffWords, changed } from "./diff";
-import { assessAnchorPopulation, scopeOutline } from "./comparison";
+import { assessAnchorPopulation, isUnavailableOutlineSide, scopeOutline } from "./comparison";
 import { Empty } from "./views";
 import { EvidenceActions } from "./EvidenceActions";
 import {
@@ -95,8 +95,8 @@ export function Compare({ work, title, from, to, anchor }: {
       // An empty selected anchor can honestly mean "this article did not exist yet". An empty
       // whole document with text_withheld/no_version cannot: treating unavailable evidence as
       // an insertion or deletion would manufacture a legislative change from a data gap.
-      const unavailableA = A.size === 0 && statusA && statusA !== "anchor_not_in_version";
-      const unavailableB = B.size === 0 && statusB && statusB !== "anchor_not_in_version";
+      const unavailableA = isUnavailableOutlineSide(A.size, statusA, Boolean(anchor));
+      const unavailableB = isUnavailableOutlineSide(B.size, statusB, Boolean(anchor));
       if (unavailableA || unavailableB) {
         if (live) setState({ loading: false, error: "UNAVAILABLE_SIDE", unavailable: [statusA, statusB] });
         return;

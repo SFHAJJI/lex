@@ -16,6 +16,19 @@ export function scopeOutline<T extends OutlineProvision>(items: T[], anchor?: st
 }
 
 /**
+ * During a rolling deployment an older MCP server can return status=ok plus a full outline after
+ * ignoring an anchor filter. Once the current client scopes that response, zero rows means the
+ * requested anchor is absent, not that the publisher evidence is unavailable. Explicit evidence
+ * failures such as no_version or text_withheld remain unavailable on both old and new servers.
+ */
+export function isUnavailableOutlineSide(
+  provisionCount: number, status: string | undefined, anchorRequested: boolean,
+): boolean {
+  if (provisionCount !== 0 || !status || status === "anchor_not_in_version") return false;
+  return !anchorRequested || status !== "ok";
+}
+
+/**
  * A shared extraction profile proves which parser ran, not that a publisher preserved its
  * internal identifiers. Large Legilux recueils can regenerate almost every art_N identifier
  * after one consolidation. Below this continuity floor, added/removed counts would describe

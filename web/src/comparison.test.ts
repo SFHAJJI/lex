@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { assessAnchorPopulation, scopeOutline } from "./comparison.ts";
+import {
+  assessAnchorPopulation, isUnavailableOutlineSide, scopeOutline,
+} from "./comparison.ts";
 
 const provision = (anchor: string) => ({ anchor });
 
@@ -32,4 +34,11 @@ test("an article-scoped comparison cannot leak the rest of an outline", () => {
   const outline = [provision("art_N10060"), provision("unrelated_1"), provision("unrelated_2")];
 
   assert.deepEqual(scopeOutline(outline, "art_N10060"), [provision("art_N10060")]);
+});
+
+test("rolling-deploy anchor misses are not misclassified as unavailable evidence", () => {
+  assert.equal(isUnavailableOutlineSide(0, "ok", true), false);
+  assert.equal(isUnavailableOutlineSide(0, "text_withheld", true), true);
+  assert.equal(isUnavailableOutlineSide(0, "no_version", true), true);
+  assert.equal(isUnavailableOutlineSide(0, "ok", false), true);
 });
