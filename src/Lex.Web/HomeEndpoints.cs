@@ -93,9 +93,9 @@ public static class HomeEndpoints
             // promotional cards, where the visitors most likely to bounce never reached it — while
             // the sentence above the fold merely announced that the site answers questions.
             var body = $"""
-                <p class="lede">Search Luxembourg applicability and reviewed-scope official EU consolidated wording by date,
-                with exact publisher text, explicit timeline semantics and provenance. Coverage is derived
-                from every dated version in the verified indexes mounted now.</p>
+                <p class="lede">Research Luxembourg and EU law as it stood on a chosen date. Read and compare
+                exact official wording, with clear date semantics, sources and explicit gaps. Coverage always
+                comes from the verified indexes mounted now.</p>
                 """
                 + $"""
                 <!-- Read synchronously by the workspace on mount, so the doors never flash in or need a
