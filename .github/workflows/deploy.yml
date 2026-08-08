@@ -189,9 +189,12 @@ jobs:
              and any(.[]; .envelope.publisher == "lu-legilux")
              and any(.[]; .envelope.publisher == "eu-eurlex")' >/dev/null
           eu_exact=$(mcp_text '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"search","arguments":{"query":"32016R0679","publisher":"eu-eurlex","retrieval_mode":"keyword","fuzzy":"off","limit":3}}}')
+          # Corrigenda share the canonical CELEX prefix. Merely finding the base act somewhere in
+          # the list would miss the exact-ranking regression this deployment gate exists to catch.
           printf '%s' "$eu_exact" | jq -e \
             '.[0].retrieval_mode == "keyword"
-             and any(.[0].hits[]; .work == "32016r0679")' >/dev/null
+             and .[0].hits[0].work == "32016r0679"
+             and (.[0].hits[0].match_reasons | index("exact_identifier")) != null' >/dev/null
           if [ "$REQUIRE_MANIFEST" = "1" ]; then
             [ "$MANIFEST_SET" != "legacy" ] || { echo "::error::signed deployment resolved to legacy artifacts"; exit 1; }
             printf '%s' "$eu_exact" | jq -e --arg manifest "$MANIFEST_SET" \
