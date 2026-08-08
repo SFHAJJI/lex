@@ -52,19 +52,21 @@ public sealed class LexIndexReader : IDisposable
     private readonly string _schema;
     private readonly ITextEncoder? _encoder;
     private readonly SemanticVectorReader? _vectors;
+    private readonly bool _hasWorkSearch;
     public IReadOnlyDictionary<string, string> Stamp { get; }
     public string Collection => Stamp.GetValueOrDefault("collection", "?");
     public bool SignatureValid { get; }
     public bool HybridReady => _encoder is not null && _vectors is not null;
 
     private LexIndexReader(SqliteConnection conn, Dictionary<string, string> stamp, string schema,
-                           ITextEncoder? encoder, SemanticVectorReader? vectors)
+                           ITextEncoder? encoder, SemanticVectorReader? vectors, bool hasWorkSearch)
     {
         _conn = conn;
         Stamp = stamp;
         _schema = schema;
         _encoder = encoder;
         _vectors = vectors;
+        _hasWorkSearch = hasWorkSearch;
         SignatureValid = stamp.ContainsKey("signature") && StampSigner.Verify(stamp);
     }
 
@@ -138,6 +140,14 @@ public sealed class LexIndexReader : IDisposable
             }
         }
 
+        var hasWorkSearch = new[] { "work_records", "work_names", "work_fts" }.All(table =>
+        {
+            using var tableCommand = conn.CreateCommand();
+            tableCommand.CommandText = "SELECT 1 FROM sqlite_master WHERE name=$name";
+            tableCommand.Parameters.AddWithValue("$name", table);
+            return tableCommand.ExecuteScalar() is not null;
+        });
+
         SemanticVectorReader? vectors = null;
         if (encoder is not null || vectorPath is not null)
         {
@@ -165,7 +175,7 @@ public sealed class LexIndexReader : IDisposable
             if (mappingReader.GetInt64(1) != vectors.Count)
                 throw new InvalidDataException("The semantic vector file contains an unmapped record.");
         }
-        return new LexIndexReader(conn, stamp, schema!, encoder, vectors);
+        return new LexIndexReader(conn, stamp, schema!, encoder, vectors, hasWorkSearch);
     }
 
     private const string DocCols = """
@@ -415,7 +425,8 @@ public sealed class LexIndexReader : IDisposable
             return SearchKeyword(query, filters, limit, fuzzyAuto);
 
         var keyword = SearchKeyword(query, filters, 100, fuzzyAuto);
-        if (keyword.Hits.FirstOrDefault()?.MatchReasons.Contains("exact_identifier") == true)
+        if (keyword.Hits.FirstOrDefault()?.MatchReasons.Any(reason =>
+                reason is "exact_identifier" or "exact_alias" or "contained_identifier" or "contained_alias") == true)
             return keyword;
         var lexical = keyword.Hits;
         var semantic = SearchSemantic(query, filters, 100);
@@ -454,6 +465,30 @@ public sealed class LexIndexReader : IDisposable
 
     public SearchExecution SearchKeyword(string query, FilterSet filters, int limit, bool fuzzyAuto)
     {
+        if (!_hasWorkSearch) return SearchKeywordWithoutWorkCatalog(query, filters, limit, fuzzyAuto);
+
+        var workMatches = SearchWorkCatalog(query, filters, limit);
+        var strong = workMatches.Where(hit => hit.Reason.StartsWith("exact_", StringComparison.Ordinal)
+                                               || hit.Reason.StartsWith("contained_", StringComparison.Ordinal))
+            .ToList();
+        var weak = workMatches.Where(hit => !hit.Reason.StartsWith("exact_", StringComparison.Ordinal)
+                                             && !hit.Reason.StartsWith("contained_", StringComparison.Ordinal));
+        var provision = SearchKeywordWithoutWorkCatalog(
+            query, filters, limit, fuzzyAuto && strong.Count == 0);
+        var combined = strong.Select(WorkRetrievalHit)
+            .Concat(provision.Hits)
+            .Concat(weak.Select(WorkRetrievalHit))
+            .GroupBy(hit => $"{hit.Doc.GroupKey}|{hit.Provision.Anchor}|{hit.Provision.TextSha}",
+                StringComparer.Ordinal)
+            .Select(group => group.First())
+            .Take(limit)
+            .ToList();
+        return new SearchExecution("keyword", combined, provision.QueryExpansions);
+    }
+
+    private SearchExecution SearchKeywordWithoutWorkCatalog(
+        string query, FilterSet filters, int limit, bool fuzzyAuto)
+    {
         if (IsExactLegalIdentifier(query))
         {
             var works = SearchWorksByIdentifierOrTitle(query, filters, limit)
@@ -489,6 +524,46 @@ public sealed class LexIndexReader : IDisposable
         return new SearchExecution("keyword", hits,
             expansions.Select(e => $"{e.Source} -> {e.Target}").ToList());
     }
+
+    private IReadOnlyList<WorkSearchHit> SearchWorkCatalog(string query, FilterSet filters, int limit)
+    {
+        var matches = WorkSearch.Find(_conn, query, filters.Language, Math.Max(limit * 2, 20));
+        var result = new List<WorkSearchHit>();
+        foreach (var match in matches)
+        {
+            using var identity = Cmd(
+                "SELECT group_key,language FROM work_records WHERE work_id=$work_id", []);
+            identity.Parameters.AddWithValue("$work_id", match.WorkId);
+            using var identityRow = identity.ExecuteReader();
+            if (!identityRow.Read()) continue;
+            var groupKey = identityRow.GetString(0);
+            var language = identityRow.GetString(1);
+            identityRow.Close();
+
+            var (where, parameters) = WithFilters(
+                "group_key=$work_group AND language=$work_language", filters, excludeAsOf: false);
+            using var command = Cmd($"""
+                SELECT {SelectDocCols()}
+                FROM docs
+                WHERE {where}
+                ORDER BY valid_from DESC
+                LIMIT 1
+                """, parameters);
+            command.Parameters.AddWithValue("$work_group", groupKey);
+            command.Parameters.AddWithValue("$work_language", language);
+            using var rows = command.ExecuteReader();
+            if (rows.Read()) result.Add(new WorkSearchHit(ReadDoc(rows), match.Reason, match.Score));
+        }
+        return result;
+    }
+
+    private static RetrievalHit WorkRetrievalHit(WorkSearchHit hit) => new(
+        hit.Doc,
+        new ProvisionRow(RidOf(hit.Doc), 0, "", hit.Doc.Key, "work", null, null, null, null,
+            hit.Doc.Title, "", hit.Doc.BodySha ?? ""),
+        hit.Doc.Title ?? hit.Doc.GroupKey,
+        hit.Score,
+        [hit.Reason]);
 
     private List<(string Source, string Target)> FuzzyExpansions(string query)
     {

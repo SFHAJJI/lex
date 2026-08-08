@@ -85,7 +85,8 @@ public static class IndexBuilder
         string? signingKeyPem,
         IEnumerable<ProvisionStateRow>? provisionStates = null,
         IEnumerable<AnchorEventRow>? anchorEvents = null,
-        SemanticBuildOptions? semantic = null)
+        SemanticBuildOptions? semantic = null,
+        WorkSearchBuildOptions? workSearch = null)
     {
         var docRows = docs.ToList();
         var provisionRows = provisions.ToList();
@@ -281,6 +282,29 @@ public static class IndexBuilder
             CREATE TABLE obs_history(key TEXT, language TEXT, expr_valid_from TEXT,
               sha256 TEXT, source_uri TEXT, observed_from TEXT, observed_to TEXT);
             CREATE INDEX ix_obs_key ON obs_history(key, language, expr_valid_from);
+            CREATE TABLE work_records(
+              work_id INTEGER PRIMARY KEY,
+              group_key TEXT NOT NULL, language TEXT NOT NULL,
+              title TEXT, title_short TEXT, group_identifier TEXT,
+              hierarchy TEXT, domains TEXT, act_form TEXT,
+              UNIQUE(group_key,language));
+            CREATE TABLE work_names(
+              work_id INTEGER NOT NULL, kind TEXT NOT NULL,
+              value TEXT NOT NULL, normalized TEXT NOT NULL, reviewed_by TEXT,
+              UNIQUE(work_id,kind,normalized));
+            CREATE INDEX ix_work_names_exact ON work_names(normalized,kind,work_id);
+            CREATE TABLE work_discovery(
+              work_id INTEGER NOT NULL, kind TEXT NOT NULL,
+              value TEXT NOT NULL, normalized TEXT NOT NULL,
+              model_deployment TEXT NOT NULL, prompt_sha256 TEXT NOT NULL,
+              schema_sha256 TEXT NOT NULL, generated_at TEXT NOT NULL,
+              confidence REAL NOT NULL, repeat_runs INTEGER NOT NULL,
+              agreement_ratio REAL NOT NULL, evidence_json TEXT NOT NULL,
+              UNIQUE(work_id,kind,normalized));
+            CREATE VIRTUAL TABLE work_fts USING fts5(
+              group_key UNINDEXED, language UNINDEXED,
+              identifiers, aliases, titles, facets, discovery,
+              tokenize='unicode61 remove_diacritics 2');
             CREATE TABLE stamp(k TEXT PRIMARY KEY, v TEXT NOT NULL);
             CREATE VIRTUAL TABLE fts USING fts5(work_title, num, heading, text_md, content='');
             CREATE VIRTUAL TABLE fts_vocab USING fts5vocab(fts, 'row');
@@ -335,6 +359,8 @@ public static class IndexBuilder
                 insDoc.ExecuteNonQuery();
                 DatabaseItemCompleted();
             }
+
+            WorkSearch.Populate(conn, docRows, provisionRows, workSearch);
 
             var docByRid = docRows.ToDictionary(d => $"{d.Key}|{d.Language}|{d.ValidFrom}", StringComparer.Ordinal);
             var insBlob = conn.CreateCommand();
@@ -514,6 +540,8 @@ public static class IndexBuilder
                 ["algorithm"] = StampSigner.Algorithm,
                 ["content_digest"] = ContentDigest(docRows, provisionRows),
             };
+            if (workSearch is not null)
+                stamp["enrichment_digest"] = workSearch.EnrichmentDigest;
             finalizationCompleted++;
             finalizationHeartbeat?.SetCompleted(finalizationCompleted);
             ReportProgress(semantic, SemanticBuildStage.Finalization,
