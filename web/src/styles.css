@@ -276,10 +276,12 @@ button.pick { cursor: pointer; }
   border-radius:9px;border:1px solid var(--line);background:var(--bg)}
 .fin-body form.sel button[type=submit]{border-radius:9px;padding:11px 20px}
 
-/* ================= the assistant, in the corner =================
-   Summoned rather than stumbled into. Nothing on the page competes with it, and browsing is no
-   longer the fallback for people it failed. */
-.asklaunch{position:fixed;right:20px;bottom:20px;z-index:40;display:flex;align-items:center;gap:11px;
+/* ================= the assistant, summoned without covering the law =================
+   Closed, it is a secondary action in the ordinary reading flow. Opened, it becomes a dialog.
+   Keeping the launcher out of the fixed layer prevents it covering search suggestions, evidence
+   controls and footer links on narrow or short viewports. */
+.askslot{display:flex;justify-content:flex-end;margin:-10px 0 16px;min-height:55px}
+.asklaunch{position:static;display:flex;align-items:center;gap:11px;
   background: var(--fg);color:var(--bg);border:0;border-radius:99px;padding:12px 20px 12px 16px;
   cursor:pointer;font-family:inherit;box-shadow:0 8px 26px rgba(0,0,0,.22);transition:transform .16s,box-shadow .16s}
 .asklaunch:hover{transform:translateY(-2px);box-shadow:0 12px 32px rgba(0,0,0,.28)}
@@ -320,7 +322,7 @@ button.pick { cursor: pointer; }
 
 @media(max-width:640px){
   .askpanel{right:8px;left:8px;bottom:8px;width:auto;max-height:82vh}
-  .asklaunch{right:12px;bottom:12px;padding:11px 16px}
+  .asklaunch{padding:11px 16px}
   .al-wide,.al-t small{display:none}
   .al-short{display:inline}
   .fin-hint{font-size:12px}

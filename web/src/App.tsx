@@ -422,6 +422,11 @@ export default function App() {
         </nav>
       )}
 
+      <AskPanel q={q} setQ={setQ} busy={busy} steps={steps} said={said} onSubmit={submit}
+                followUps={chipsFor(s, ui, (held?.text ?? 1) > 0).map((c) => ({
+                  label: c.label, run: () => { setUi(undefined); go(c.go); } }))}
+                onOpenStep={(st) => { setUi(undefined); go({ work: st.work, date: st.date, anchor: st.anchor, mode: "read", space: "law" }); }} />
+
       {space === "time" && !s.work ? (
         <Period from={s.from ?? shift(today(), -365)} until={s.until ?? today()}
                 order={s.order ?? "by_churn"} today={today()}
@@ -535,10 +540,6 @@ export default function App() {
         </div>
       ) : null}
 
-      <AskPanel q={q} setQ={setQ} busy={busy} steps={steps} said={said} onSubmit={submit}
-                followUps={chipsFor(s, ui, (held?.text ?? 1) > 0).map((c) => ({
-                  label: c.label, run: () => { setUi(undefined); go(c.go); } }))}
-                onOpenStep={(st) => { setUi(undefined); go({ work: st.work, date: st.date, anchor: st.anchor, mode: "read", space: "law" }); }} />
     </div>
   );
 }

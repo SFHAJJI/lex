@@ -2,16 +2,17 @@ import { useEffect, useRef, useState } from "react";
 import type { Step } from "./api";
 
 /**
- * The assistant, out of the page and into a corner.
+ * The assistant, secondary to the legal search until a reader deliberately opens it.
  *
  * It used to sit at the top with the browse controls directly underneath, which asked every
  * visitor to choose between two doors before knowing what either led to, and made the filters
  * look like a fallback for people the AI had failed. They are not: reading a law by name or by
  * date is the ordinary path, and the assistant is the shortcut for people who would rather ask.
  *
- * So the page is the corpus, and this is a thing you summon. Same pattern as the energy co-pilot,
- * for the same reason: a launcher costs nothing until it is wanted, and once open it is plainly a
- * conversation with a machine rather than a search box that happens to reply in prose.
+ * So the page is the corpus, and this is a thing you summon. The closed launcher stays in the
+ * document flow: a fixed button used to cover legal controls and footer links at every audited
+ * viewport. Once opened, the panel is plainly a conversation with a machine rather than a search
+ * box that happens to reply in prose.
  */
 export interface AskPanelProps {
   q: string;
@@ -54,18 +55,21 @@ export default function AskPanel(p: AskPanelProps) {
 
   if (!open) {
     return (
-      <button className="asklaunch" onClick={() => setOpen(true)} aria-label="Ask about any law">
-        <span className="al-ic" aria-hidden="true">✦</span>
-        <span className="al-t">
-          <b><span className="al-wide">Ask about any law</span><span className="al-short">Ask</span></b>
-          <small>on any date, in plain language</small>
-        </span>
-      </button>
+      <div className="askslot">
+        <button className="asklaunch" onClick={() => setOpen(true)} aria-label="Ask about any law">
+          <span className="al-ic" aria-hidden="true">✦</span>
+          <span className="al-t">
+            <b><span className="al-wide">Ask about any law</span><span className="al-short">Ask</span></b>
+            <small>on any date, in plain language</small>
+          </span>
+        </button>
+      </div>
     );
   }
 
   return (
-    <aside className={"askpanel" + (min ? " min" : "")} role="dialog" aria-label="Assistant">
+    <div className="askslot">
+      <aside className={"askpanel" + (min ? " min" : "")} role="dialog" aria-label="Assistant">
       <header className="ap-head">
         <span className="ap-title"><span className="al-ic" aria-hidden="true">✦</span> Assistant</span>
         <button className="ap-x" onClick={() => setMin(!min)} aria-label={min ? "Expand" : "Minimise"}>
@@ -124,6 +128,7 @@ export default function AskPanel(p: AskPanelProps) {
           </form>
         </>
       )}
-    </aside>
+      </aside>
+    </div>
   );
 }
