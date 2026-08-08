@@ -11,6 +11,10 @@ Experiment commands require explicit `--index-dir`, `--model-dir`, and `--output
 command signs, publishes, or deploys an artifact.
 
 ```powershell
+dotnet run --project experiments/retrieval-agent-v2/Lex.RetrievalExperiment -- workbench-init `
+  --index-dir C:\lex-retrieval-agent-evidence-v2\baseline `
+  --output C:\lex-retrieval-agent-evidence-v2\workbench\candidate.db
+
 dotnet run --project experiments/retrieval-agent-v2/Lex.RetrievalExperiment -- baseline `
   --index-dir C:\lex-retrieval-agent-evidence-v2\baseline `
   --model-dir C:\lex-retrieval-agent-evidence-v2\model `

@@ -36,3 +36,10 @@ It also records exact response digests for:
 
 Every enriched candidate must reproduce all protected-table and representative-evidence digests.
 
+## Workbench extraction
+
+Two independent builds materialized 3,899 latest work-language publisher records from the copied
+indexes. Both 3,600,384-byte SQLite workbenches have SHA-256
+`8cb8cde959cdbbef6e3244cb4cc03fdbc3fcb17047e7cc0d11ab34161f868902`. The extraction is therefore
+byte-deterministic on the measured machine. One real record without a publisher title is preserved
+as null rather than assigned generated official metadata.

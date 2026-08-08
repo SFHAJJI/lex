@@ -5,12 +5,13 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Lex.Index;
 using Lex.Mcp;
+using Lex.RetrievalExperiment;
 using Microsoft.Data.Sqlite;
 
 var arguments = Environment.GetCommandLineArgs().Skip(1).ToArray();
-if (arguments.Length == 0 || arguments[0] != "baseline")
+if (arguments.Length == 0)
 {
-    Console.Error.WriteLine("usage: baseline --index-dir PATH --model-dir PATH --scenarios FILE --output FILE");
+    Usage();
     return 2;
 }
 
@@ -20,6 +21,32 @@ string Required(string name)
     if (index < 0 || index + 1 >= arguments.Length)
         throw new ArgumentException($"{name} required");
     return Path.GetFullPath(arguments[index + 1]);
+}
+
+void Usage() => Console.Error.WriteLine("""
+    usage:
+      baseline --index-dir PATH --model-dir PATH --scenarios FILE --output FILE
+      workbench-init --index-dir PATH --output FILE
+    """);
+
+if (arguments[0] == "workbench-init")
+{
+    var sourceDir = Required("--index-dir");
+    var workbenchOutput = Required("--output");
+    var sourceIndexes = Directory.EnumerateFiles(sourceDir, "index-*.db").Order().ToArray();
+    EnrichmentWorkbench.Create(sourceIndexes, workbenchOutput);
+    using var created = new SqliteConnection($"Data Source={workbenchOutput};Mode=ReadOnly;Pooling=False");
+    created.Open();
+    using var count = created.CreateCommand();
+    count.CommandText = "SELECT COUNT(*) FROM publisher_works";
+    Console.Error.WriteLine($"[workbench] wrote {count.ExecuteScalar()} work-language records to {workbenchOutput}");
+    return 0;
+}
+
+if (arguments[0] != "baseline")
+{
+    Usage();
+    return 2;
 }
 
 var indexDir = Required("--index-dir");

@@ -11,10 +11,10 @@
 
 ## Task 2: Enrichment workbench contract
 
-- [ ] Write failing tests for allowed proposal fields, evidence requirements, normalization, and
+- [x] Write failing tests for allowed proposal fields, evidence requirements, normalization, and
       alias collisions.
-- [ ] Implement deterministic publisher extraction and provenance-aware accepted export.
-- [ ] Prove forbidden legal fields cannot pass validation.
+- [x] Implement deterministic publisher extraction and provenance-aware accepted export.
+- [x] Prove forbidden legal fields cannot pass validation.
 - Verify: focused unit tests and deterministic export hash pass.
 
 ## Task 3: LLM discovery enrichment sample
