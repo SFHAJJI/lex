@@ -1,8 +1,8 @@
 # Search enrichment and legal-research agent
 
-Status: scoped experiment passed; publisher-first production implementation is building and no unmerged behavior is claimed as shipped
+Status: publisher-first retrieval and Retrieval Agent v2 shipped to production on 2026-08-09; hybrid default activation remains gated
 
-Decision status: D75 building, D76 gated, D77 planned
+Decision status: D75 shipped with model-derived weak discovery quarantined, D76 shipped, D77 shipped
 
 Review status: engineer-reviewed experiment evidence and adversarial architecture review; lawyer review remains pending
 
@@ -266,10 +266,12 @@ The plan can graduate only when:
 - ordinary unaffected retrieval regresses no more than the existing two-percent program gate;
 - latency, token and Azure-cost measurements justify the selected agent variant.
 
-Until those gates pass, keyword remains the default, the current assistant architecture remains
-live, and the Next Architecture page must label this program as building. Failure means iterate on
-the Agent Framework orchestration or enrichment contract, not fall back to an unstructured chat
-implementation.
+The publisher-first catalog, reviewed aliases, query decomposition, deterministic clarification,
+tool authorization, grounded Agent Framework path and jurisdiction-scoped result experience passed
+their production gates. The signed release benchmark did not pass the hybrid-default gate, so
+keyword remains the default and local hybrid remains an explicit preview. Model-derived weak
+discovery is absent from the production enrichment artifact. Failure of either future gate means
+iterate on retrieval or enrichment, not weaken the evidence contract or use unstructured chat.
 
 ## Alternatives rejected
 
@@ -282,15 +284,18 @@ implementation.
 - Chatbot-first navigation: hides date, source, jurisdiction and comparison context.
 - Grouping results by practice area, form or language: overlapping dimensions duplicate works.
 
-## Delivery after validation
+## Production delivery
 
-The experiment passed, so production work is being reimplemented in small reviewed PRs:
+The experiment was reimplemented through small reviewed changes and deployed on 2026-08-09:
 
 1. provenance-aware enrichment contract, offline LLM workbench and work-level FTS;
 2. ranking and authoritative-identity gates;
 3. deterministic subject resolver and typed assistant contract;
 4. selected Microsoft Agent Framework execution, bounded memory and conditional judge;
 5. jurisdiction-first result/facet UX;
-6. full signed index rebuild, public benchmarks, candidate deployment and controlled promotion.
+6. full signed EU and Luxembourg index rebuild, public benchmarks, candidate deployment and
+   controlled promotion.
 
-The disposable experiment branch is never merged wholesale.
+The disposable experiment branch was not merged wholesale. Lawyer review of relevance judgments
+remains pending, and hybrid-default plus any model-derived weak discovery activation remain future
+measured decisions.

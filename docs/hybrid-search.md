@@ -61,9 +61,10 @@ tuning and holdout metrics separately, including no-hit, resolution and role-int
 Missing configuration fails the gate rather than becoming an estimate. Only holdout measurements
 can authorize a default change.
 
-`evals/retrieval-baseline-v2.json` binds this pre-tuning case set and split by SHA-256. Its runtime
-measurement status remains explicitly pending until the signed production candidate indexes exist;
-the release benchmark replaces that absence with measured artifact, machine and commit identities.
+`evals/retrieval-baseline-v2.json` binds this pre-tuning case set and split by SHA-256. Signed
+production reports now publish measured artifact, machine, resource and commit identities for both
+mounted collections at `/benchmarks`. The combined activation gate is false: holdout relevance and
+latency thresholds are not met, so keyword remains the production default.
 
 `evals/weak-enrichment-decision.json` records the separate weak-discovery activation decision. The
 reviewed EU enrichment artifact currently contains no model-derived discovery records, so weak FTS

@@ -196,7 +196,7 @@ HTTP 200
   <a class="badge" href="/decisions">Decisions</a>
   <a class="badge" href="/benchmarks">Benchmarks</a>
 </nav><p class="lede">The accepted target architecture, with status read from the registry committed
-beside the implementation. Nothing on this page is implied to be live.</p>
+beside the implementation. Only milestones marked shipped are live; gated and planned work is not.</p>
 <div class="card"><table tabindex="0" aria-label="Architecture delivery milestones"><tr><th>milestone</th><th>outcome</th><th>status</th></tr><tr><td class="mono">M1</td><td><b>Truthful architecture narrative</b><br><span class="sub">Separate live architecture, target architecture, decisions and measured benchmarks.</span></td>
 <td><span class="badge ok">shipped</span></td></tr><tr><td class="mono">M2</td><td><b>Verified artifact publication</b><br><span class="sub">A pinned trust root verifies a signed manifest for every served artifact.</span></td>
 <td><span class="badge ok">shipped</span></td></tr><tr><td class="mono">M3</td><td><b>Expandable temporal EU corpus</b><br><span class="sub">Configuration selects domains while every accepted work retains all official dated expressions.</span></td>
@@ -205,8 +205,8 @@ beside the implementation. Nothing on this page is implied to be live.</p>
 <td><span class="badge warn">gated</span></td></tr><tr><td class="mono">M6</td><td><b>Lawyer-facing scope filters</b><br><span class="sub">Jurisdiction, hierarchy, legal form, binding status, domain, language and date remain explicit.</span></td>
 <td><span class="badge ok">shipped</span></td></tr><tr><td class="mono">M7</td><td><b>Luxembourg original-act expansion</b><br><span class="sub">Add reviewed normative acts outside the Legilux consolidation catalogue with document-class-specific temporal semantics.</span></td>
 <td><span class="badge">planned</span></td></tr><tr><td class="mono">M8</td><td><b>Size-gated local index hosting</b><br><span class="sub">Keep small verified indexes in Container Apps, but promote oversized releases from Blob onto a VM-managed local disk before traffic cutover.</span></td>
-<td><span class="badge ok">shipped</span></td></tr><tr><td class="mono">M9</td><td><b>Reviewed search enrichment and legal-research agent</b><br><span class="sub">Prove provenance-aware work discovery metadata, deterministic work-name retrieval, a Microsoft Agent Framework legal-research agent, bounded memory and jurisdiction-first results without changing authoritative legal text.</span></td>
-<td><span class="badge">building</span></td></tr></table></div>
+<td><span class="badge ok">shipped</span></td></tr><tr><td class="mono">M9</td><td><b>Reviewed search enrichment and legal-research agent</b><br><span class="sub">Publisher metadata, reviewed aliases, deterministic work resolution, guarded Agent Framework research, bounded memory and jurisdiction-first results are live without changing authoritative legal text. Model-derived weak discovery remains excluded from production retrieval.</span></td>
+<td><span class="badge ok">shipped</span></td></tr></table></div>
 <h2>Target path</h2>
 <div class="card"><pre class="mono" style="white-space:pre-wrap;margin:0;font-size:13px">Reviewed EU scope configuration
   -&gt; every official dated FR/EN expression plus bounded legal relationships
@@ -218,7 +218,7 @@ beside the implementation. Nothing on this page is implied to be live.</p>
 <p>Hybrid retrieval remains gated until its public relevance, temporal, latency and memory
 thresholds pass. Missing official consolidation remains a named gap, never generated wording.</p>
 <p class="sub">Program <span class="mono">hybrid-eu/1</span>, updated
-<span class="mono">2026-08-08</span>, review status
+<span class="mono">2026-08-09</span>, review status
 <span class="mono">engineer-reviewed</span>.</p>
 </main>
 <footer>

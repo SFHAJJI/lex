@@ -219,9 +219,10 @@ publisher's own file, all without trusting this site.
 <h2>What it will not do</h2>
 <p>It will not guess. If you ask for a date Lex has no version for, it says so with a reason
 code (<span class="mono">no_version_for_date</span>) instead of producing a plausible text.
-The assistant on the front page is a small model whose only job is to pick the right lookup
-and quote what comes back, every answer shows the evidence underneath it, so you can check
-the answer against the source without leaving the page.
+The assistant on the front page may plan searches and explain retrieved evidence, but it cannot
+authorize its own law choice or invent legal text. Deterministic guards resolve names, require
+clarification when evidence is weak, validate citations and preserve publisher gaps. Every
+factual answer shows the evidence underneath it so you can check the source without leaving the page.
 <a href="/lu-legilux/rgd-1998-08-03-n4/1900-01-01">Watch it refuse →</a></p>
 
 <h2>What it holds today</h2>

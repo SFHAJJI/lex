@@ -175,8 +175,9 @@ public static class ExplainerEndpoints
                 </table></div>
                 <p>A flagged wrong answer is still wrong, so Lex refuses instead; <a href="/coverage">coverage</a> exists to
                 state what we do <b>not</b> have. The AI layer (<a href="/">the front page</a>) is additive and separated:
-                one model + system prompt over the same in-process tool core the public <span class="mono">/mcp</span> serves
-                ,  parity by construction; no framework, no interpretation (fitness rule F10).</p>
+                one Agent Framework research agent uses the same in-process tool core the public
+                <span class="mono">/mcp</span> serves. Application code, not the model, owns work resolution,
+                tool authorization, citations, typed gaps and legal text (fitness rule F10).</p>
 
                 <h2>Build on it</h2>
                 <p>
@@ -200,7 +201,7 @@ public static class ExplainerEndpoints
                 """));
             var body = ArchitectureTabs("next") + $"""
                 <p class="lede">The accepted target architecture, with status read from the registry committed
-                beside the implementation. Nothing on this page is implied to be live.</p>
+                beside the implementation. Only milestones marked shipped are live; gated and planned work is not.</p>
                 <div class="card"><table tabindex="0" aria-label="Architecture delivery milestones"><tr><th>milestone</th><th>outcome</th><th>status</th></tr>{rows}</table></div>
                 <h2>Target path</h2>
                 <div class="card"><pre class="mono" style="white-space:pre-wrap;margin:0;font-size:13px">Reviewed EU scope configuration
@@ -575,10 +576,10 @@ public static class ExplainerEndpoints
                 <tr><td><b>Refusals are part of the API</b></td>
                     <td>Seven typed refusal codes instead of empty results. A caller can distinguish "no such
                     law", "no version that day" and "text withheld". Cost: more surface to test.</td></tr>
-                <tr><td><b>A small model, tightly fenced</b></td>
-                    <td>The assistant only picks lookups and quotes results, no agent framework, no chain of
-                    reasoning over law. Cheap, auditable, and wrong answers are visible against the evidence
-                    shown beside them.</td></tr>
+                <tr><td><b>One research agent, deterministic authority</b></td>
+                    <td>Agent Framework may plan compact searches and synthesize returned evidence. Application
+                    code resolves named works, authorizes work-specific tools, validates citations, preserves
+                    typed gaps and conditionally judges factual prose. Cost: added model latency and evaluation.</td></tr>
                 <tr><td><b>Nightly commits nothing when unsure</b></td>
                     <td>A &gt;5% drop in works, or a re-derivation that is not byte-identical, aborts the run.
                     A partial upstream response must never rewrite history.</td></tr>
@@ -1102,9 +1103,10 @@ public static class ExplainerEndpoints
                 <h2>What it will not do</h2>
                 <p>It will not guess. If you ask for a date Lex has no version for, it says so with a reason
                 code (<span class="mono">no_version_for_date</span>) instead of producing a plausible text.
-                The assistant on the front page is a small model whose only job is to pick the right lookup
-                and quote what comes back, every answer shows the evidence underneath it, so you can check
-                the answer against the source without leaving the page.
+                The assistant on the front page may plan searches and explain retrieved evidence, but it cannot
+                authorize its own law choice or invent legal text. Deterministic guards resolve names, require
+                clarification when evidence is weak, validate citations and preserve publisher gaps. Every
+                factual answer shows the evidence underneath it so you can check the source without leaving the page.
                 <a href="/lu-legilux/rgd-1998-08-03-n4/1900-01-01">Watch it refuse →</a></p>
 
                 <h2>What it holds today</h2>

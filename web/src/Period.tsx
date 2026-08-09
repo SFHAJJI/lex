@@ -62,11 +62,11 @@ export default function Period(p: PeriodProps) {
         <h2>What changed</h2>
         <span className="grow" />
         <label className="pick"><i>from</i>
-          <input type="date" value={p.from} max={p.until} aria-label="Start of the window"
+          <input name="period-from" type="date" value={p.from} max={p.until} aria-label="Start of the window"
                  onChange={(e) => e.target.value && p.onWindow(e.target.value, p.until)} />
         </label>
         <label className="pick"><i>to</i>
-          <input type="date" value={p.until} min={p.from} aria-label="End of the window"
+          <input name="period-until" type="date" value={p.until} min={p.from} aria-label="End of the window"
                  onChange={(e) => e.target.value && p.onWindow(p.from, e.target.value)} />
         </label>
       </div>

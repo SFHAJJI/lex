@@ -236,7 +236,12 @@ mounted publisher by default and can filter jurisdiction, date, hierarchy,
 legal form, binding status, domain and language. Keyword retrieval is
 deterministic FTS5/BM25. Hybrid adds the pinned local encoder and fixed rank
 fusion when verified vectors are mounted; no generative model participates in
-retrieval. `coverage` exists to say what Lex does **not** have, because a system
+retrieval. Official work metadata and reviewed aliases such as `RGPD`, `GDPR`,
+`DORA`, and `AI Act` resolve deterministically. Model-derived weak discovery is
+not active, and keyword remains the production default because the signed hybrid
+holdout gate has not passed. The optional Agent Framework assistant runs over
+the same tools, while application code retains work resolution, tool authorization,
+citation and gap authority. `coverage` exists to say what Lex does **not** have, because a system
 that cannot state its own gaps cannot be trusted with a completeness question.
 
 ## Contributing

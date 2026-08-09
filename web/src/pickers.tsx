@@ -66,7 +66,7 @@ export function LawPicker({ current, onPick, inline }: { current?: string; onPic
       )}
       {open ? (
         <div className={inline ? "pop open" : "pop"} id="lawpop">
-          <input autoFocus={!inline} value={q} onChange={(e) => setQ(e.target.value)}
+          <input name="law-query" autoFocus={!inline} value={q} onChange={(e) => setQ(e.target.value)}
                  placeholder="name, subject, or identifier (32016r0679)" aria-label="Find a law" />
           {busy ? (
             <ul className="rows">

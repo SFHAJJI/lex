@@ -67,6 +67,12 @@ async function mount(url, answer) {
   return out;
 }
 
+const controlsWithoutIdentity = (markup) => {
+  const probe = new JSDOM(`<body>${markup}</body>`);
+  return [...probe.window.document.querySelectorAll("input, select, textarea")]
+    .filter((control) => !control.id && !control.getAttribute("name"));
+};
+
 const html = await mount("https://law.soufien.lu/");
 // The front page is one search box and one date, and that is a decision worth pinning: the four
 // tabs it replaced were four query TYPES, which asked a reader to classify their own question
@@ -86,6 +92,10 @@ for (const [re, want, why] of [
 ]) {
   if (re.test(html) !== want) { console.error(`FAIL — ${why}`); process.exit(1); }
 }
+if (controlsWithoutIdentity(html).length > 0) {
+  console.error("FAIL - an interactive home control has neither id nor name");
+  process.exit(1);
+}
 // The report is a second surface, not a tab of the first: it must bring its own window, its own
 // ordering and mounted-index jurisdiction scope, and must NOT render the search box underneath it.
 const report = await mount("https://law.soufien.lu/?space=time&from=2025-01-01&until=2026-01-01");
@@ -100,6 +110,11 @@ for (const [re, want, why] of [
   [/class="onebox"/, false, "the search box renders inside the report"],
 ]) {
   if (re.test(report) !== want) { console.error(`FAIL (report) — ${why}`); process.exit(1); }
+}
+
+if (controlsWithoutIdentity(report).length > 0) {
+  console.error("FAIL (report) - an interactive report control has neither id nor name");
+  process.exit(1);
 }
 
 // Evidence extraction is a reader action, so pin it on real reader states rather than merely
@@ -131,6 +146,10 @@ for (const [re, why] of [
 ]) {
   if (!re.test(law)) { console.error(`FAIL (law export) - ${why}`); process.exit(1); }
 }
+if (controlsWithoutIdentity(law).length > 0) {
+  console.error("FAIL (law) - an interactive reader control has neither id nor name");
+  process.exit(1);
+}
 
 const compareAnswer = (name, args) => {
   if (name === "timeline") return {
@@ -154,6 +173,10 @@ for (const [re, why] of [
   [/download evidence \(\.md\)/, "the comparison lost evidence download"],
 ]) {
   if (!re.test(comparison)) { console.error(`FAIL (comparison export) - ${why}`); process.exit(1); }
+}
+if (controlsWithoutIdentity(comparison).length > 0) {
+  console.error("FAIL (comparison) - an interactive comparison control has neither id nor name");
+  process.exit(1);
 }
 
 // Missing publisher evidence is not a deletion. Pin the refusal so an absent body can never be

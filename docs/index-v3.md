@@ -1,6 +1,6 @@
 # `lex-index/3`
 
-Status: building
+Status: shipped and verified in production
 
 `lex-index/3` changes physical storage without changing legal identity or the public comparison
 contract. Each dated version still has one occurrence row for every provision. The occurrence
@@ -40,5 +40,5 @@ Before a version-3 index replaces version 2, build both from the same corpus com
 4. keyword results for the public benchmark;
 5. database size, build time, memory and warm and cold latency.
 
-The production architecture page continues to report the schema read from mounted indexes. The
-milestone remains `building` until a verified version-3 artifact is deployed.
+The production architecture page reports the schema read from mounted indexes. Verified version-3
+EU and Luxembourg artifacts were promoted together on 2026-08-09.
