@@ -16,9 +16,31 @@ public sealed class WorkSearchTests : IDisposable
         public int Dimensions => 8;
         public List<int> BatchSizes { get; } = [];
         public List<int?> BatchPaddings { get; } = [];
+        public List<string[]> BatchTexts { get; } = [];
         public int CountTokens(string text) => text.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length + 2;
-        public int PrefixLengthForTokens(string text, int maxTokens) => text.Length;
-        public int SuffixStartForTokens(string text, int maxTokens) => 0;
+        public int PrefixLengthForTokens(string text, int maxTokens)
+        {
+            var words = 0;
+            for (var index = 0; index < text.Length; index++)
+                if ((index == 0 || char.IsWhiteSpace(text[index - 1]))
+                    && !char.IsWhiteSpace(text[index])
+                    && ++words >= Math.Max(1, maxTokens - 2))
+                {
+                    var end = text.IndexOf(' ', index);
+                    return end < 0 ? text.Length : end;
+                }
+            return text.Length;
+        }
+        public int SuffixStartForTokens(string text, int maxTokens)
+        {
+            var words = 0;
+            for (var index = text.Length - 1; index >= 0; index--)
+                if (!char.IsWhiteSpace(text[index])
+                    && (index == 0 || char.IsWhiteSpace(text[index - 1]))
+                    && ++words >= Math.Max(1, maxTokens - 2))
+                    return index;
+            return 0;
+        }
         public float[] Encode(string text, EmbeddingInputKind kind)
         {
             var result = new float[Dimensions];
@@ -41,6 +63,7 @@ public sealed class WorkSearchTests : IDisposable
         {
             BatchSizes.Add(texts.Count);
             BatchPaddings.Add(padToTokens);
+            BatchTexts.Add(texts.ToArray());
             return texts.Select(text => Encode(text, kind)).ToArray();
         }
         public void Dispose() { }
@@ -1172,6 +1195,36 @@ public sealed class WorkSearchTests : IDisposable
             workSearch: new WorkSearchBuildOptions([], [], EnrichmentDigest)));
 
         Assert.Contains("work-vector input", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Work_vector_metadata_is_bounded_before_it_reaches_the_encoder_limit()
+    {
+        var db = TempDb();
+        var vectors = TempFile(".vectors");
+        var longTitle = string.Join(' ', Enumerable.Repeat("privacy", 700));
+        var doc = Doc("eu:target:2020-01-01", "target", longTitle) with
+        {
+            Hierarchy = "energy policy",
+        };
+        using var encoder = new TestEncoder();
+
+        IndexBuilder.Build(db, Stamp(), [doc], [], [], [], null,
+            semantic: new SemanticBuildOptions(
+                encoder, vectors, "model-sha", "tokenizer-sha",
+                BatchSize: 32, MaxBatchTokens: 32_768));
+
+        Assert.All(encoder.BatchPaddings, padding => Assert.InRange(padding!.Value, 1, 512));
+        Assert.Contains(encoder.BatchTexts.SelectMany(batch => batch), text =>
+            text.StartsWith("subjects: energy policy", StringComparison.Ordinal)
+            && text.Contains("\nnames: privacy", StringComparison.Ordinal));
+        using var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={db}");
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT COUNT(*) FROM work_vectors";
+        Assert.Equal(1, Convert.ToInt64(command.ExecuteScalar()));
+        using var reader = LexIndexReader.Open(db, encoder, vectors);
+        Assert.Equal("lex-vectors/1-mixed-provision-work", reader.Stamp["vector_layout"]);
     }
 
     [Fact]
