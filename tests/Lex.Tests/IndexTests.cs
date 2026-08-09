@@ -1127,6 +1127,44 @@ public class IndexTests : IDisposable
         Assert.Equal(1, kinds["DIR"]);
     }
 
+    [Fact]
+    public void Catalogue_reports_exact_text_coverage_and_uses_stable_work_metadata()
+    {
+        var stamp = new Dictionary<string, string>
+        {
+            ["collection"] = "t-pub", ["tier"] = "A", ["history_begins"] = "publisher",
+            ["built_at"] = "2026-08-01T00:00:00Z", ["corpus_commit"] = "test",
+        };
+        var first = Row("t-pub:shelf:2020-01-01", "shelf", "2020-01-01", "2020-12-31",
+            kind: "CODE_RECUEIL", title: "Official collection", text: true);
+        var second = Row("t-pub:shelf:2021-01-01", "shelf", "2021-01-01", "2021-12-31",
+            kind: "CODE_RECUEIL", title: "Official collection", text: false);
+        // Publisher metadata can be sparse on a later state. A work catalogue must not erase
+        // the work's known class and title merely because its newest record omitted both.
+        var sparseLatest = Row("t-pub:shelf:2022-01-01", "shelf", "2022-01-01", null,
+            kind: "CODE_RECUEIL", title: "placeholder", text: false) with
+        {
+            Kind = null, Title = null, TitleShort = null,
+        };
+        var db = Path.Combine(Path.GetTempPath(), $"lex-catalogue-{Guid.NewGuid():N}.db");
+        _extra.Add(db);
+        IndexBuilder.Build(db, stamp, [first, second, sparseLatest],
+            [Prov(first, 0, "art_1", "held wording")], [], [], StampSigner.CreateKeyPem());
+
+        using var reader = LexIndexReader.Open(db);
+        var row = Assert.Single(reader.Catalogue(
+            new FilterSet(null, null, "CODE_RECUEIL", null), null,
+            CatalogueOrder.Name, 50, 0).Rows);
+
+        // Source class is a work-level catalogue facet: once the work matches, its complete
+        // timeline is summarised rather than silently dropping the sparse latest state.
+        Assert.Equal(3, row.Versions);
+        Assert.Equal(1, row.TextVersions);
+        Assert.True(row.HasText);
+        Assert.Equal("CODE_RECUEIL", row.Kind);
+        Assert.Equal("Official collection", row.Title);
+    }
+
     // ---- what a "what changed" row must be compared against ----
     //
     // A row reports how many versions a work gained in a window. Opening it used to compare

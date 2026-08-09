@@ -300,10 +300,10 @@
       "id": "D77",
       "title": "Partition results by jurisdiction and keep overlapping dimensions as facets",
       "status": "shipped",
-      "choice": "Show Luxembourg and EU result sections, nest matching passages under each law, and scope hierarchy, practice area, class, form, status and language controls to the selected jurisdiction.",
+      "choice": "Show Luxembourg and EU result sections, nest matching passages under each law, and scope hierarchy, practice area, class, form, status and language controls to the selected jurisdiction. Browse remains a flat work catalogue rather than an invented taxonomy: it exposes every publisher source class and reports exact readable-version coverage.",
       "alternative": "Interleave every publisher result without a source partition, or group by overlapping practice areas and duplicate the same work across categories.",
       "reason": "Jurisdiction is a disjoint provenance boundary; the other legal dimensions overlap and are clearer as filters than as competing result taxonomies.",
-      "cost": "The search response/UI need per-jurisdiction counts, dependent facet handling, accessible disclosure and responsive regression tests."
+      "cost": "The search and catalogue UI need per-jurisdiction counts, dependent facet handling, readable source-class labels, exact per-work text counts, accessible disclosure and responsive regression tests."
     }
   ],
   "baseline": {

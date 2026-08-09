@@ -501,6 +501,17 @@ main,footer{transition:margin-right .18s ease}
 .res-h { font-family: var(--serif); font-size: 14px; margin: 14px 0 6px; color: var(--muted);
          letter-spacing: .02em; }
 .res-h:first-of-type { margin-top: 0; }
+.res-h small { margin-left: 8px; font-family: var(--sans); font-size: 11px; font-weight: 400;
+               letter-spacing: 0; }
+.res-jurisdiction + .res-jurisdiction { margin-top: 18px; }
+.res-worklist { border-top: 1px solid var(--line); }
+.res-work { border-bottom: 1px solid var(--line); }
+.res-work-head { font-weight: 600; }
+.res-passages { margin: 0 0 9px 18px; padding-left: 12px; border-left: 2px solid var(--line); }
+.res-passages-label { padding: 4px 9px 2px; color: var(--muted); font-size: 10px;
+                      letter-spacing: .06em; text-transform: uppercase; }
+.res-passages .rows li:first-child { border-top: 0; }
+.res-passages .rowbtn { padding-top: 7px; padding-bottom: 7px; }
 
 @media (max-width: 640px) {
   .one { display: grid; grid-template-columns: minmax(0, 1fr); }

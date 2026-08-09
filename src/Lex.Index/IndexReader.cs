@@ -1624,14 +1624,25 @@ public sealed class LexIndexReader : IDisposable
     public (List<CatalogueRow> Rows, int Total) Catalogue(
         FilterSet filters, bool? hasText, CatalogueOrder order, int limit, int offset)
     {
-        var (where, ps) = WithFilters("1=1", filters, excludeAsOf: false);
-        // A GROUP BY carrying more than one MIN/MAX leaves SQLite's bare columns undefined, so the
-        // title and type come from a window function pinned to the newest surviving version rather
-        // than from whichever row the aggregate happened to walk last.
+        // Source class is a work-level catalogue facet. A publisher can omit classification on
+        // one dated state while earlier states identify the work unambiguously; filtering that
+        // work must not truncate its timeline or make its newest state disappear from the count.
+        var summaryFilters = filters with { Kind = null };
+        var (where, ps) = WithFilters("1=1", summaryFilters, excludeAsOf: false);
+        if (filters.Kind is not null)
+        {
+            where += " AND EXISTS (SELECT 1 FROM docs ck WHERE ck.group_key=docs.group_key"
+                   + " AND ck.kind=$catalog_kind AND ck.withdrawn=0)";
+            ps.Add(new SqliteParameter("$catalog_kind", filters.Kind));
+        }
+
+        // Sparse publisher metadata is resolved per field, newest known value first. Taking every
+        // field from the newest row made one absent title erase a title held on all prior states.
         var ctes = $"""
             WITH f AS (SELECT * FROM docs WHERE {where}),
                  agg AS (SELECT group_key, COUNT(*) AS versions, MIN(valid_from) AS first_from,
-                                MAX(valid_from) AS last_from, MAX(text_public) AS has_text,
+                                MAX(valid_from) AS last_from, SUM(text_public) AS text_versions,
+                                MAX(text_public) AS has_text,
                                 -- When we last SAW a change for this work. valid_from is when a
                                 -- law takes effect, which is legitimately in the future for a
                                 -- deferred commencement; observed_from is when the record entered
@@ -1639,18 +1650,27 @@ public sealed class LexIndexReader : IDisposable
                                 -- a last-modified time for the page that renders it.
                                 MAX(observed_from) AS last_observed
                          FROM f GROUP BY group_key),
-                 newest AS (SELECT group_key, collection, title, title_short, kind,
-                                   ROW_NUMBER() OVER (PARTITION BY group_key
-                                                      ORDER BY valid_from DESC, key DESC) AS rn
-                            FROM f)
+                 meta AS (SELECT DISTINCT group_key,
+                                  FIRST_VALUE(collection) OVER (
+                                      PARTITION BY group_key ORDER BY valid_from DESC, key DESC) AS collection,
+                                  FIRST_VALUE(title) OVER (
+                                      PARTITION BY group_key
+                                      ORDER BY (title IS NULL OR title=''), valid_from DESC, key DESC) AS title,
+                                  FIRST_VALUE(title_short) OVER (
+                                      PARTITION BY group_key
+                                      ORDER BY (title_short IS NULL OR title_short=''), valid_from DESC, key DESC) AS title_short,
+                                  FIRST_VALUE(kind) OVER (
+                                      PARTITION BY group_key
+                                      ORDER BY (kind IS NULL OR kind=''), valid_from DESC, key DESC) AS kind
+                           FROM f)
             """;
         var having = hasText switch { true => " AND a.has_text = 1", false => " AND a.has_text = 0", _ => "" };
         var orderBy = order switch
         {
-            CatalogueOrder.MostVersions => "a.versions DESC, n.group_key ASC",
-            CatalogueOrder.MostRecent => "a.last_from DESC, n.group_key ASC",
-            CatalogueOrder.Oldest => "a.first_from ASC, n.group_key ASC",
-            _ => "n.group_key ASC",
+            CatalogueOrder.MostVersions => "a.versions DESC, m.group_key ASC",
+            CatalogueOrder.MostRecent => "a.last_from DESC, m.group_key ASC",
+            CatalogueOrder.Oldest => "a.first_from ASC, m.group_key ASC",
+            _ => "m.group_key ASC",
         };
 
         using var count = Cmd($"{ctes} SELECT COUNT(*) FROM agg a WHERE 1=1{having}", ps);
@@ -1658,9 +1678,9 @@ public sealed class LexIndexReader : IDisposable
 
         using var cmd = Cmd($"""
             {ctes}
-            SELECT n.collection, n.group_key, n.title, n.title_short, n.kind,
-                   a.versions, a.first_from, a.last_from, a.has_text, a.last_observed
-            FROM agg a JOIN newest n ON n.group_key = a.group_key AND n.rn = 1
+            SELECT m.collection, m.group_key, m.title, m.title_short, m.kind,
+                   a.versions, a.text_versions, a.first_from, a.last_from, a.has_text, a.last_observed
+            FROM agg a JOIN meta m ON m.group_key = a.group_key
             WHERE 1=1{having}
             ORDER BY {orderBy}
             LIMIT $lim OFFSET $off
@@ -1676,8 +1696,8 @@ public sealed class LexIndexReader : IDisposable
                 rd.IsDBNull(2) ? null : rd.GetString(2),
                 rd.IsDBNull(3) ? null : rd.GetString(3),
                 rd.IsDBNull(4) ? null : rd.GetString(4),
-                rd.GetInt32(5), rd.GetString(6), rd.GetString(7), rd.GetInt32(8) == 1,
-                rd.IsDBNull(9) ? null : rd.GetString(9)));
+                rd.GetInt32(5), rd.GetInt32(6), rd.GetString(7), rd.GetString(8), rd.GetInt32(9) == 1,
+                rd.IsDBNull(10) ? null : rd.GetString(10)));
         return (rows, total);
     }
 

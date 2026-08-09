@@ -237,7 +237,9 @@ are orthogonal. They remain facets rather than result groups.
 
 When a jurisdiction is selected, the UI shows only values emitted by that jurisdiction and hides
 empty or single-choice facets. In all-scope mode, values are marked or grouped by applicability.
-Changing jurisdiction clears incompatible dependent filters. Counts, loading, empty and error
+Changing jurisdiction clears incompatible dependent filters. The catalogue follows the same rule,
+exposes every mounted publisher source class without inventing a hierarchy, and reports readable
+dated versions exactly rather than as a work-level full-text flag. Counts, loading, empty and error
 states remain explicit, and filter state stays URL-addressable.
 
 ## Experiment scenarios and evidence

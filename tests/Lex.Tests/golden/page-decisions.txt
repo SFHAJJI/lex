@@ -106,9 +106,18 @@ HTTP 200
   .filters .f:hover { border-color:var(--fg); color:var(--fg); text-decoration:none }
   .filters .f.on { border-color:var(--fg); color:var(--fg); font-weight:600 }
   .filters .n { opacity:1; font-size:11.5px; font-variant-numeric:tabular-nums }
+  .filters .raw { margin-left:3px; font-size:10.5px; opacity:.8 }
+  .filters > .facetgroups { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr));
+                            gap:8px; align-items:start; margin-left:80px }
+  .facetgroup { border:1px solid var(--line); border-radius:8px; background:var(--card) }
+  .facetgroup summary { cursor:pointer; padding:7px 10px; font-size:12.5px; color:var(--fg) }
+  .facetgroup summary span { color:var(--muted); margin-left:5px }
+  .facetgroup > div { display:flex; flex-wrap:wrap; gap:6px; padding:3px 8px 9px }
+  .sourceclasses { margin-left:80px }
   .cat td:first-child a { font-weight:600 }
   .cat .r { text-align:right; font-variant-numeric:tabular-nums }
   .cat .sub { font-size:12px; margin-top:2px }
+  .cat-mobile { display:none }
   .cat th:nth-child(5), .cat td:nth-child(5),
   .cat th:nth-child(6), .cat td:nth-child(6) { white-space:nowrap }
   .pager { display:flex; gap:14px; align-items:baseline; margin:12px 0; font-size:14px }
@@ -165,14 +174,21 @@ HTTP 200
     header { gap:12px; padding:12px 14px }
     h1 { font-size:25px }
     .rail .yr { font-size:10px }
-    /* Type is already available as a filter and the first date is secondary to the
-       latest state. Removing those columns leaves the law, version count, latest date
-       and text availability readable instead of spelling dates vertically. */
-    .cat th:nth-child(3), .cat td:nth-child(3),
-    .cat th:nth-child(5), .cat td:nth-child(5),
-    .cat th:nth-child(6), .cat td:nth-child(6) { display:none }
-    .cat th, .cat td { padding-left:6px; padding-right:6px }
-    .cat td:first-child { min-width:130px }
+    .filters i { width:100%; margin:3px 0 1px }
+    .filters > .facetgroups { margin-left:0; grid-template-columns:1fr }
+    .sourceclasses { margin-left:0 }
+    .catcard { overflow:visible; padding:4px 14px }
+    .cat, .cat tbody { display:block; overflow:visible }
+    .cat tr { display:grid; grid-template-columns:minmax(0,1fr); padding:10px 0;
+              border-bottom:1px solid var(--line) }
+    .cat tr:first-child { display:none }
+    .cat td { display:none; border:0; padding:0 }
+    .cat td:first-child, .cat td:last-child { display:block; min-width:0 }
+    .cat td:last-child { margin-top:7px }
+    .cat td:first-child a { display:block; overflow-wrap:anywhere }
+    .cat .badge { white-space:normal; line-height:1.35 }
+    .cat-desktop { display:none }
+    .cat-mobile { display:block }
   }
 </style></head>
 <body>
@@ -249,8 +265,8 @@ reason and the bill. Status comes from the architecture registry.</p>
 <b>Why:</b> Professional names require deterministic publisher metadata and reviewed overrides, while descriptive discovery requires candidate retrieval without silently converting a repeated model output into authority. A single verified artifact keeps provenance and rollback atomic.<br><b>Cost:</b> Publisher metadata retention, alias collision handling, proposal provenance, evidence anchors, separate legal and enrichment digests, typed ordinal validation, clean corpus migration and independent regression benchmarks become build responsibilities.</span></td><td><span class="badge ok">shipped</span></td></tr><tr><td class="mono">D76</td><td><b>Keep retrieval authority deterministic and use Agent Framework for grounded composition</b><br>
 <span class="sub"><b>Choice:</b> Resolve the raw user query and authorize work-specific tools in application code, run a bounded tool-calling retrieval loop over the shared MCP core, then use Agent Framework for claim-typed evidence composition and the conditional grounding judge.<br><b>Alternative:</b> Give a model authority over work identity and citations, make the chatbot the primary navigator, or introduce a hierarchy of peer research agents.<br>
 <b>Why:</b> Exact lookup and tool permission must not become stochastic, while synthesized prose benefits from structured composition and an independent evidence check.<br><b>Cost:</b> The bounded retrieval loop and Framework composer/judge add model latency, tokens, session/privacy handling and evaluation work. The planner is application-hosted rather than a single Agent Framework research agent.</span></td><td><span class="badge ok">shipped</span></td></tr><tr><td class="mono">D77</td><td><b>Partition results by jurisdiction and keep overlapping dimensions as facets</b><br>
-<span class="sub"><b>Choice:</b> Show Luxembourg and EU result sections, nest matching passages under each law, and scope hierarchy, practice area, class, form, status and language controls to the selected jurisdiction.<br><b>Alternative:</b> Interleave every publisher result without a source partition, or group by overlapping practice areas and duplicate the same work across categories.<br>
-<b>Why:</b> Jurisdiction is a disjoint provenance boundary; the other legal dimensions overlap and are clearer as filters than as competing result taxonomies.<br><b>Cost:</b> The search response/UI need per-jurisdiction counts, dependent facet handling, accessible disclosure and responsive regression tests.</span></td><td><span class="badge ok">shipped</span></td></tr></table></div>
+<span class="sub"><b>Choice:</b> Show Luxembourg and EU result sections, nest matching passages under each law, and scope hierarchy, practice area, class, form, status and language controls to the selected jurisdiction. Browse remains a flat work catalogue rather than an invented taxonomy: it exposes every publisher source class and reports exact readable-version coverage.<br><b>Alternative:</b> Interleave every publisher result without a source partition, or group by overlapping practice areas and duplicate the same work across categories.<br>
+<b>Why:</b> Jurisdiction is a disjoint provenance boundary; the other legal dimensions overlap and are clearer as filters than as competing result taxonomies.<br><b>Cost:</b> The search and catalogue UI need per-jurisdiction counts, dependent facet handling, readable source-class labels, exact per-work text counts, accessible disclosure and responsive regression tests.</span></td><td><span class="badge ok">shipped</span></td></tr></table></div>
 <h2>Deep dive: why the legislative timeline is not the git log</h2><p class="lede">Every entry here had a reasonable alternative that other people chose. What
 follows is the choice, the road not taken, and the bill.</p>
 

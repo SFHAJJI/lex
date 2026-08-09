@@ -85,6 +85,35 @@ public static class Fragments
 
     public static string DocTitle(DocRow d) => d.TitleShort ?? d.Title ?? d.GroupKey;
 
+    private static readonly IReadOnlyDictionary<string, string> SourceClassLabels =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["A"] = "Order", ["AGC"] = "Government-in-Council order",
+            ["AGD"] = "Grand-ducal order", ["AMIN"] = "Ministerial order",
+            ["ARGD"] = "Royal grand-ducal order", ["CODE"] = "Code",
+            ["CODE_RECUEIL"] = "Code collection", ["CONV"] = "Convention",
+            ["Constitution"] = "Constitution", ["DIV"] = "Other", ["LOI"] = "Law",
+            ["ORD"] = "Ordinance", ["PA"] = "Administrative publication",
+            ["PROT"] = "Protocol", ["RBCL"] = "Central Bank of Luxembourg regulation",
+            ["RECUEIL"] = "Thematic collection", ["REG"] = "Regulation",
+            ["RGC"] = "Government-in-Council regulation", ["RGD"] = "Grand-ducal regulation",
+            ["RI"] = "Internal rules", ["RMIN"] = "Ministerial regulation",
+            ["ST"] = "Statutes", ["TC"] = "Consolidated text",
+            ["REG_DEL"] = "Delegated regulation", ["REG_IMPL"] = "Implementing regulation",
+            ["DIR"] = "Directive", ["DIR_DEL"] = "Delegated directive",
+            ["DIR_IMPL"] = "Implementing directive", ["DEC"] = "Decision",
+            ["DEC_DEL"] = "Delegated decision", ["DEC_IMPL"] = "Implementing decision",
+            ["DEC_ENTSCHEID"] = "Decision", ["TREATY"] = "Treaty",
+            ["CORRIGENDUM"] = "Corrigendum",
+        };
+
+    public static string SourceClassLabel(string? sourceClass) =>
+        string.IsNullOrWhiteSpace(sourceClass) ? "Not classified"
+        : SourceClassLabels.GetValueOrDefault(sourceClass, "Source class");
+
+    public static bool IsThematicCollection(string? sourceClass) =>
+        sourceClass is "RECUEIL" or "CODE_RECUEIL";
+
     // Legilux prefixes every title with the consolidation it came from: "Version consolidée
     // applicable au DD/MM/YYYY : <real title>", in whichever language the expression is in.
     //
