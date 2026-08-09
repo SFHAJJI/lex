@@ -48,10 +48,25 @@ markers are protected. The response publishes every expansion.
 
 ## Public evaluation
 
-`RetrievalBenchmarkCatalog` publishes exactly 200 generated, unreviewed document-level candidates:
-30 identifiers, 40 temporal, 60 conceptual, 30 bilingual, 20 fuzzy and 20 hierarchy/filter cases.
-`/benchmarks/cases.json` exposes them. The benchmark command records commits, manifest, model,
-machine/resource configuration, sample count, index and vector size, process memory, model load,
-cold query and warm p50/p95/p99. Missing configuration fails the gate rather than becoming an
-estimate. Generated candidates cannot pass the activation gate. Each judgment must be reviewed and
-labelled individually before its relevance measurement can authorize a default change.
+`RetrievalBenchmarkCatalog` publishes exactly 200 engineer-reviewed retrieval judgments across EU
+and Luxembourg: exact professional names and identifiers, temporal, conceptual, bilingual, fuzzy,
+hierarchy/filter, role, multi-work comparison, negative, ambiguity and known-gap cases. Every
+relevant identity includes both collection and work, and every case is frozen into a tuning or
+holdout split. These are retrieval labels, not legal conclusions.
+
+`/benchmarks/cases.json` exposes them. The benchmark command selects the cases for the mounted
+collection and records commits, manifest, model, machine/resource configuration, sample count,
+index and vector size, process memory, model load, cold query and warm p50/p95/p99. Reports expose
+tuning and holdout metrics separately, including no-hit, resolution and role-intent accuracy.
+Missing configuration fails the gate rather than becoming an estimate. Only holdout measurements
+can authorize a default change.
+
+`evals/retrieval-baseline-v2.json` binds this pre-tuning case set and split by SHA-256. Its runtime
+measurement status remains explicitly pending until the signed production candidate indexes exist;
+the release benchmark replaces that absence with measured artifact, machine and commit identities.
+
+`evals/weak-enrichment-decision.json` records the separate weak-discovery activation decision. The
+reviewed EU enrichment artifact currently contains no model-derived discovery records, so weak FTS
+and concept-vector fields are not eligible for ablation and remain excluded from every public search
+default. Any future candidate artifact is capped per work and kind, and every evidence anchor and
+text hash is revalidated against the held index during each immutable rebuild before benchmarking.

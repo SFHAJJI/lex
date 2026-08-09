@@ -36,9 +36,37 @@ export interface AskReply {
   reply: string;
   trace?: { tool: string; status?: string }[];
   ui?: UiEffect;
+  clarification?: { question: string; options: string[] };
   error?: string;
   /** False when the answer was a refusal: its steps are withheld from the transcript. */
   narrated?: boolean;
+}
+export interface AskMessage { role: "user" | "assistant"; content: string }
+
+const MAX_ASK_HISTORY = 12;
+const MAX_ASK_MESSAGE_CHARS = 4000;
+
+export function askQuestionError(value: string): string | undefined {
+  return value.trim().length > MAX_ASK_MESSAGE_CHARS
+    ? "Questions are capped at 4,000 characters. Please narrow this question."
+    : undefined;
+}
+
+export function boundedAskHistory(value: unknown): AskMessage[] {
+  if (!Array.isArray(value)) return [];
+  const history = value.filter((item): item is AskMessage =>
+    (item?.role === "user" || item?.role === "assistant")
+    && typeof item?.content === "string"
+    && item.content.trim().length > 0)
+    .map((item) => {
+      if (item.role === "user" && item.content.length > MAX_ASK_MESSAGE_CHARS)
+        throw new RangeError("A user message exceeds the server limit.");
+      return { ...item, content: item.role === "assistant"
+        ? item.content.slice(0, MAX_ASK_MESSAGE_CHARS) : item.content };
+    })
+    .slice(-MAX_ASK_HISTORY);
+  while (history[0]?.role === "assistant") history.shift();
+  return history;
 }
 
 export interface Subject { work: string; title?: string; date?: string; anchor?: string }
@@ -91,17 +119,17 @@ export interface Step { kind: string; text: string; work?: string; date?: string
  * plain endpoint if the stream is unavailable.
  */
 export async function askStreaming(
-  question: string,
+  messages: AskMessage[],
   onStep: (s: Step) => void,
   signal?: AbortSignal,
 ): Promise<AskReply> {
   const r = await fetch("/api/ask/stream", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ messages: [{ role: "user", content: question }] }),
+    body: JSON.stringify({ messages }),
     signal,
   });
-  if (!r.ok || !r.body) return ask(question, signal);
+  if (!r.ok || !r.body) return ask(messages, signal);
 
   const reader = r.body.getReader();
   const decoder = new TextDecoder();
@@ -129,11 +157,11 @@ export async function askStreaming(
   return done ?? { reply: "The answer stream ended early. Try again." };
 }
 
-export async function ask(question: string, signal?: AbortSignal): Promise<AskReply> {
+export async function ask(messages: AskMessage[], signal?: AbortSignal): Promise<AskReply> {
   const r = await fetch("/api/ask", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ messages: [{ role: "user", content: question }] }),
+    body: JSON.stringify({ messages }),
     signal,
   });
   return (await r.json()) as AskReply;

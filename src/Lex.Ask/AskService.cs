@@ -14,6 +14,58 @@ namespace Lex.Ask;
 // Stateless per request; capped per IP and per day.
 public sealed class AskService(McpCore core)
 {
+    internal sealed class WorkResolutionGuard
+    {
+        private readonly HashSet<string> _resolved = new(StringComparer.Ordinal);
+        private bool _searchObserved;
+
+        public void ObserveSearch(JsonNode result, bool isRawUserQuery = true)
+        {
+            foreach (var response in result is JsonArray array
+                         ? array.OfType<JsonObject>()
+                         : result is JsonObject single ? [single] : [])
+            {
+                if (response["query_plan"] is not JsonObject plan) continue;
+                var status = plan["global_work_resolution_status"]?.GetValue<string>()
+                             ?? plan["work_resolution_status"]?.GetValue<string>();
+                _searchObserved = true;
+                var resolutions = plan["global_work_resolutions"] as JsonArray
+                                  ?? plan["work_resolutions"] as JsonArray;
+                if (isRawUserQuery && resolutions is not null)
+                    foreach (var resolution in resolutions.OfType<JsonObject>()
+                                 .Where(item => item["status"]?.GetValue<string>() == "resolved"))
+                        foreach (var candidate in resolution["candidates"]?.AsArray() ?? [])
+                            if (candidate?.GetValue<string>() is { } work) _resolved.Add(WorkKey(work));
+                // A problem description with no named law may select a work only from an actual
+                // provision hit. Standalone work discovery has no anchor and stays a candidate
+                // until the user confirms it.
+                if (status == "not_requested" && response["hits"] is JsonArray hits)
+                    foreach (var hit in hits.OfType<JsonObject>()
+                                 .Where(item => item["anchor"]?.GetValue<string>() is { Length: > 0 }))
+                        if (hit["lex_id"]?.GetValue<string>() is { } lexId)
+                            _resolved.Add(WorkKey(lexId));
+            }
+        }
+
+        public bool Allows(string tool, JsonObject args)
+        {
+            if (!_searchObserved) return true;
+            var work = tool == "provenance"
+                ? args["lex_id"]?.GetValue<string>()
+                : args["work"]?.GetValue<string>();
+            if (work is null || tool is not (
+                    "as_of" or "timeline" or "diff" or "article_history" or "cited_by" or "provenance"))
+                return true;
+            return _resolved.Contains(WorkKey(work));
+        }
+
+        private static string WorkKey(string value)
+        {
+            var parts = value.Split(':');
+            return parts.Length >= 2 ? $"{parts[0]}:{parts[1]}" : value;
+        }
+    }
+
     /// <summary>OTel source for the agent loop; registered by the host when tracing is configured.</summary>
     public const string ActivitySourceName = "Lex.Ask";
     private static readonly System.Diagnostics.ActivitySource Activity = new(ActivitySourceName);
@@ -29,6 +81,7 @@ public sealed class AskService(McpCore core)
     private readonly int _globalDaily = EnvInt("ASK_GLOBAL_DAILY", 400);
     private readonly ConcurrentDictionary<string, int> _counters = new();
     private readonly SemaphoreSlim _gate = new(4);
+    private AgentAnswerFinalizer? _answerFinalizer;
 
     public bool Enabled => !string.IsNullOrEmpty(_endpoint)
                            && (_useManagedIdentity || !string.IsNullOrEmpty(_key));
@@ -70,8 +123,19 @@ public sealed class AskService(McpCore core)
            nothing. Only fetch a work's text if the user asks what a specific law now SAYS.
            Search hits are POINTERS, never evidence of content:
            after search identifies the work, you MUST call as_of / timeline / diff before answering
-           anything about what the text says or how it changed. Never repeat a search that found
-           nothing: retry ONCE with the official name or a synonym (e.g. "DORA" -> "digital
+           anything about what the text says or how it changed. Never repeat the same search.
+           Read query_plan before selecting a work. `resolved` work_resolutions are deterministic
+           resolutions of the user's raw words and their work_constraints may be used together
+           for multi-law questions. Check global_work_resolution_status before the publisher-local
+           status. If either relevant status is ambiguous, unresolved, or
+           unavailable, do not select a candidate automatically: state the candidates or the
+           availability problem and ask for confirmation when needed. `not_requested` means the
+           user described a problem without naming a law; use direct provision evidence and
+           discovery as candidates rather than claiming a missing law. Do not replace resolved
+           works with a law name you generated. If article_number is present
+           but no hit carries article_intent, do not substitute another article; report that the
+           requested provision was not found in the selected scope.
+           Retry ONCE with the official name or a synonym (e.g. "DORA" -> "digital
            operational resilience", acronyms -> full titles, or the CELEX number like 32022r2554
            for EU acts), then move to the right tool or answer honestly that Lex has no match.
            Typical flow: one search -> pick the best hit's work -> as_of / timeline / diff -> answer.
@@ -107,11 +171,12 @@ public sealed class AskService(McpCore core)
            backwards and no search phrasing can answer it.
         6. Answer in the user's language (French or English). Be compact. Never use an em dash
            or an en dash: use a comma, a colon or a full stop. No exceptions.
-        7. ACT, never ask permission. Do not reply with "shall I…", "do you mean…" or an offer
+        7. ACT, never ask permission for routine retrieval. Do not reply with "shall I…" or an offer
            to look something up: call the tool and answer. When a question is vague (a period
            without exact dates, a law without a date) choose the most reasonable reading,
-           SAY which reading you used in one clause, and give the answer. The only thing you
-           may ask for is a genuinely missing subject (a question with no identifiable law,
+           SAY which reading you used in one clause, and give the answer. This does not override
+           rule 1: ask the user to choose when work resolution is ambiguous or unresolved. You
+           may also ask for a genuinely missing subject (a question with no identifiable law,
            date or topic at all).
         """;
 
@@ -197,9 +262,16 @@ public sealed class AskService(McpCore core)
     };
 
     /// <summary>The reply body: prose, the raw trace, and the merged rendering directive.</summary>
-    private static JsonObject Body(string reply, JsonArray trace, List<UiEffect> effects)
+    private static JsonObject Body(
+        string reply,
+        JsonArray trace,
+        List<UiEffect> effects,
+        AgentClarification? clarification = null)
     {
         var body = new JsonObject { ["reply"] = reply, ["trace"] = trace };
+        if (clarification is not null)
+            body["clarification"] = JsonNode.Parse(
+                System.Text.Json.JsonSerializer.Serialize(clarification, UiJson));
         var merged = UiEffect.Merge(effects);
         // A turn that used tools and produced nothing to render is a refusal — the most
         // characteristic thing this product does. It gets a view like any other answer,
@@ -276,6 +348,7 @@ public sealed class AskService(McpCore core)
                     pins.Add(new JsonObject
                     {
                         ["anchor"] = p["anchor"]?.DeepClone(),
+                        ["text_sha256"] = p["text_sha256"]?.DeepClone(),
                         ["quote"] = text is null ? null : text.Length > 280 ? text[..280] + "…" : text,
                         ["permalink"] = p["permalink"]?.DeepClone(),
                     });
@@ -396,14 +469,18 @@ public sealed class AskService(McpCore core)
             return (400, new JsonObject { ["error"] = $"Send 1 to {MaxHistory} messages." });
 
         var messages = new JsonArray { new JsonObject { ["role"] = "system", ["content"] = SystemPrompt(host, core.ToolDefs().Count) } };
+        string? rawUserQuery = null;
         foreach (var m in history)
         {
             var role = m?["role"]?.GetValue<string>();
             var content = m?["content"]?.GetValue<string>() ?? "";
             if (role is not ("user" or "assistant")) return (400, new JsonObject { ["error"] = "Roles must be user/assistant." });
             if (content.Length > MaxMessageChars) return (400, new JsonObject { ["error"] = $"Messages are capped at {MaxMessageChars} characters." });
+            if (role == "user") rawUserQuery = content;
             messages.Add(new JsonObject { ["role"] = role, ["content"] = content });
         }
+        if (string.IsNullOrWhiteSpace(rawUserQuery))
+            return (400, new JsonObject { ["error"] = "At least one user message is required." });
 
         if (!TryCount(ip, out var why)) return (429, new JsonObject { ["error"] = why });
 
@@ -416,11 +493,57 @@ public sealed class AskService(McpCore core)
             var trace = new JsonArray();
             var searchCalls = 0;
             var worksFound = new Dictionary<string, string>(StringComparer.Ordinal);
+            var resolutionGuard = new WorkResolutionGuard();
+            var evidence = new AgentEvidenceLedger();
             var textToolUsed = false;
             // D31 shape: effects are collected across every tool call in the turn and merged
             // into ONE payload, so a single reply can carry prose plus more than one view.
             var effects = new List<UiEffect>();
             var listRendered = false;
+
+            // Resolve the user's own words before a model can introduce a law name. This search
+            // is the authority boundary for named works and also supplies direct provision
+            // evidence for problem-first questions. Later model reformulations may improve recall,
+            // but a name invented by the planner remains only a candidate.
+            var rawArgs = new JsonObject
+            {
+                ["query"] = rawUserQuery,
+                ["retrieval_mode"] = "keyword",
+                ["fuzzy"] = "auto",
+                ["limit"] = 8,
+            };
+            var rawResult = core.CallTool("search", rawArgs);
+            resolutionGuard.ObserveSearch(rawResult, isRawUserQuery: true);
+            searchCalls = 1;
+            var (rawStatus, rawDocs) = Summarize(rawResult);
+            evidence.Observe("search", rawStatus, rawDocs, rawResult);
+            trace.Add(new JsonObject
+            {
+                ["tool"] = "search",
+                ["phase"] = "raw_user_resolution",
+                ["args"] = rawArgs.DeepClone(),
+                ["status"] = rawStatus,
+                ["docs"] = rawDocs,
+            });
+            var rawEffect = UiMapper.From("search", rawArgs, rawResult);
+            if (!rawEffect.IsEmpty) effects.Add(rawEffect);
+            onStep?.Invoke(Describe("search", rawArgs, rawEffect, rawDocs));
+            foreach (var d in rawDocs.OfType<JsonObject>())
+                if (d["lex_id"]?.GetValue<string>() is { } lexId)
+                {
+                    var parts = lexId.Split(':');
+                    if (parts.Length >= 2)
+                        worksFound.TryAdd($"{parts[0]}:{parts[1]}", d["title"]?.GetValue<string>() ?? "");
+                }
+            messages.Insert(1, new JsonObject
+            {
+                ["role"] = "system",
+                ["content"] = "Deterministic raw-user resolution ran before planning. "
+                    + "Treat resolved names and direct provision hits in this result as authoritative for this turn. "
+                    + "Names introduced by later reformulations are candidates only. Result:\n"
+                    + TruncateResult(rawResult),
+            });
+
             // Reasoning shares the completion budget: over a large tool result the model can
             // spend all of it thinking and return an empty message. When that happens we retry
             // the same conversation once at lower effort, which leaves room to actually write.
@@ -536,10 +659,27 @@ public sealed class AskService(McpCore core)
                                 });
                                 continue;
                             }
+                            if (!resolutionGuard.Allows(name, args))
+                            {
+                                entry["status"] = "work_resolution_required";
+                                trace.Add(entry);
+                                messages.Add(new JsonObject
+                                {
+                                    ["role"] = "tool", ["tool_call_id"] = id,
+                                    ["content"] = new JsonObject
+                                    {
+                                        ["error"] = "work resolution is ambiguous, unresolved, or unavailable",
+                                        ["required_action"] = "Ask the user to choose a returned candidate or provide an official identifier before calling a work-specific tool.",
+                                    }.ToJsonString(),
+                                });
+                                continue;
+                            }
                             using var toolSpan = Activity.StartActivity("tool");
                             toolSpan?.SetTag("gen_ai.tool.name", name);
                             var node = core.CallTool(name, args);
+                            if (name == "search") resolutionGuard.ObserveSearch(node, isRawUserQuery: false);
                             var (st, docs) = Summarize(node);
+                            evidence.Observe(name, st, docs, node);
                             if (name is "as_of" or "timeline" or "diff" or "article_history" or "in_force_on")
                                 textToolUsed = true;
                             toolSpan?.SetTag("lex.status", st ?? "ok");
@@ -602,7 +742,10 @@ public sealed class AskService(McpCore core)
                     reply = trace.Count > 0
                         ? "I retrieved the evidence below but could not compose an answer. Try asking for a narrower slice (a single law, or a shorter period)."
                         : "I could not produce an answer. Try rephrasing.";
-                return (200, Body(reply, trace, effects));
+                var grounded = await Finalizer().FinalizeAsync(
+                    rawUserQuery, reply, evidence.Evidence, ct);
+                reply = AgentAnswerFinalizer.Render(grounded);
+                return (200, Body(reply, trace, effects, grounded.Clarification));
             }
             return (200, Body("Tool budget for one question exhausted. Try a narrower question.", trace, effects));
         }
@@ -619,6 +762,11 @@ public sealed class AskService(McpCore core)
             Console.Error.WriteLine($"[ask] upstream unreachable: {ex.Message}");
             return (502, new JsonObject { ["error"] = "The model upstream is unreachable right now. Try again shortly." });
         }
+        catch (System.ClientModel.ClientResultException ex)
+        {
+            Console.Error.WriteLine($"[ask] agent upstream failed: {ex.Status}");
+            return (502, new JsonObject { ["error"] = "The model upstream returned an error. Try again shortly." });
+        }
         catch (Exception ex)
         {
             Console.Error.WriteLine($"[ask] {ex}");
@@ -629,4 +777,8 @@ public sealed class AskService(McpCore core)
             _gate.Release();
         }
     }
+
+    private AgentAnswerFinalizer Finalizer() =>
+        LazyInitializer.EnsureInitialized(ref _answerFinalizer, () => new AgentAnswerFinalizer(
+            _endpoint!, _deployment, _credential, _useManagedIdentity ? null : _key));
 }

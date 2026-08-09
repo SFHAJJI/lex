@@ -162,14 +162,14 @@ export default function Search(p: SearchProps) {
   return (
     <section className="finder" aria-label="Search the corpus">
       <form className="one" onSubmit={submit}>
-        <input ref={box} className="onebox" value={text} onChange={(e) => setText(e.target.value)}
+        <input ref={box} name="query" className="onebox" value={text} onChange={(e) => setText(e.target.value)}
                placeholder="A law, an identifier, or words in the text"
                aria-label="Search for a law, an identifier, or words in the text" />
         {/* The date sits beside the question, not behind a tab, because every question this
             corpus answers has an "as of when" and that is the entire point of it. */}
         <label className="asof" title="Select the publisher state covering this date">
           <i>as of</i>
-          <input type="date" value={asOf ?? ""} max="2030-12-31"
+          <input name="as-of" type="date" value={asOf ?? ""} max="2030-12-31"
                  aria-label="Select the publisher state covering this date"
                  onChange={(e) => p.onAsOf(e.target.value || undefined)} />
         </label>

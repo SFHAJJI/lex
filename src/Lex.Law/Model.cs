@@ -45,6 +45,17 @@ public sealed record ExpressionRecord(
     string? TitleShort,
     string? SourceUri);
 
+/// <summary>
+/// Publisher-supplied work discovery metadata. It is searchable metadata, not legal wording and
+/// not an exact identifier unless a separate reviewed alias says so.
+/// </summary>
+public sealed record PublisherMetadataRecord(
+    string Kind,
+    string Identifier,
+    string? Language,
+    string? Label,
+    string SourceUri);
+
 public sealed record RelationRecord(string Type, Identifier Target);
 
 /// <summary>One state of a Work, valid between two dates.</summary>
@@ -59,7 +70,9 @@ public sealed record VersionRecord(
     DateOnly? PublicationDate,
     IReadOnlyList<ExpressionRecord> Expressions,
     IReadOnlyList<RelationRecord> Relations,
-    IReadOnlyDictionary<string, string> Raw);
+    IReadOnlyDictionary<string, string> Raw,
+    IReadOnlyList<PublisherMetadataRecord>? PublisherMetadata = null,
+    IReadOnlyList<string>? DocumentRoles = null);
 
 /// <summary>What an adapter declares about its publisher (C4).</summary>
 public sealed record PublisherDescriptor(
@@ -69,6 +82,17 @@ public sealed record PublisherDescriptor(
     bool TextIncluded,
     bool TextPublic,                  // D38: true only when the publisher's text-reuse right is measured
     string HistoryBegins);            // "publisher" for Tier A, ISO date for Tier B
+
+public sealed record SourceBuildIssue(string Code, string Work, string? Detail = null);
+
+public sealed record SourceBuildInventory(
+    int ExpectedWorks,
+    IReadOnlyList<SourceBuildIssue> Issues);
+
+public interface ISourceBuildInventory
+{
+    SourceBuildInventory GetBuildInventory();
+}
 
 /// <summary>One file inside an alternative manifestation (an archive member). Bytes are publisher-verbatim.</summary>
 public sealed record ManifestationMember(string Name, byte[] Bytes);

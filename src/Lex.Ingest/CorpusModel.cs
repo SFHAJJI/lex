@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Lex.Law;
 
 namespace Lex.Ingest;
 
@@ -82,11 +83,14 @@ public sealed class VersionMeta
     public List<ExpressionMeta> Expressions { get; set; } = [];
     public List<Dictionary<string, string>> Relations { get; set; } = [];
     public Dictionary<string, string> Raw { get; set; } = [];
+    public List<PublisherMetadataRecord>? PublisherMetadata { get; set; }
+    public List<string>? DocumentRoles { get; set; }
     public string? RecordSha256 { get; set; }
 }
 
 public sealed class ManifestDoc
 {
+    public const string CurrentPublisherDiscoverySchema = "publisher-discovery/1";
     public string Schema { get; set; } = "lex-corpus/3";
     public required Dictionary<string, string> Publisher { get; set; }
     public required string Tier { get; set; }
@@ -103,8 +107,11 @@ public sealed class ManifestDoc
     public int Expressions { get; set; }
     public int ExpressionsWithText { get; set; }
     public int ExpressionsWithoutText { get; set; }
+    public int? ScopeExpectedWorks { get; set; }
+    public List<SourceBuildIssue> BuildIssues { get; set; } = [];
     public string? ValidFromEarliest { get; set; }
     public string? ValidToLatest { get; set; }
     public required string HistoryBegins { get; set; }
     public required string IngesterVersion { get; set; }
+    public string? PublisherDiscoverySchema { get; set; }
 }

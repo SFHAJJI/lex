@@ -64,21 +64,20 @@ echo "$SETS" | while IFS=: read -r repo asset; do
     rm -f "$OUT/$manifest"
     echo "  migration: no artifact manifest published yet"
   fi
-  if [ "$repo" = "lex-corpus-eu-eurlex" ]; then
-    benchmark="retrieval-benchmark-eu-eurlex.json"
-    benchmark_manifest="retrieval-benchmark-eu-eurlex.manifest.json"
-    benchmark_signature="retrieval-benchmark-eu-eurlex.manifest.sig"
-    if curl -fsSL --retry 3 --retry-delay 5 -o "$OUT/$benchmark" \
-         "https://github.com/SFHAJJI/$repo/releases/latest/download/$benchmark" \
-      && curl -fsSL --retry 3 --retry-delay 5 -o "$OUT/$benchmark_manifest" \
-         "https://github.com/SFHAJJI/$repo/releases/latest/download/$benchmark_manifest" \
-      && curl -fsSL --retry 3 --retry-delay 5 -o "$OUT/$benchmark_signature" \
-         "https://github.com/SFHAJJI/$repo/releases/latest/download/$benchmark_signature"; then
-      echo "  fetched signed public retrieval benchmark: $benchmark"
-    else
-      rm -f "$OUT/$benchmark" "$OUT/$benchmark_manifest" "$OUT/$benchmark_signature"
-      echo "  retrieval benchmark not published yet"
-    fi
+  collection="${stem#index-}"
+  benchmark="retrieval-benchmark-$collection.json"
+  benchmark_manifest="retrieval-benchmark-$collection.manifest.json"
+  benchmark_signature="retrieval-benchmark-$collection.manifest.sig"
+  if curl -fsSL --retry 3 --retry-delay 5 -o "$OUT/$benchmark" \
+       "https://github.com/SFHAJJI/$repo/releases/latest/download/$benchmark" \
+    && curl -fsSL --retry 3 --retry-delay 5 -o "$OUT/$benchmark_manifest" \
+       "https://github.com/SFHAJJI/$repo/releases/latest/download/$benchmark_manifest" \
+    && curl -fsSL --retry 3 --retry-delay 5 -o "$OUT/$benchmark_signature" \
+       "https://github.com/SFHAJJI/$repo/releases/latest/download/$benchmark_signature"; then
+    echo "  fetched signed public retrieval benchmark: $benchmark"
+  else
+    rm -f "$OUT/$benchmark" "$OUT/$benchmark_manifest" "$OUT/$benchmark_signature"
+    echo "  retrieval benchmark not published yet"
   fi
   echo "  ok: $asset $((size / 1024 / 1024)) MB"
 done

@@ -24,7 +24,13 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
             },
         };
         JsonObject S(string d) => new() { ["type"] = "string", ["description"] = d };
-        JsonObject I(string d) => new() { ["type"] = "integer", ["description"] = d };
+        JsonObject I(string d, int? minimum = null, int? maximum = null)
+        {
+            var value = new JsonObject { ["type"] = "integer", ["description"] = d };
+            if (minimum is not null) value["minimum"] = minimum.Value;
+            if (maximum is not null) value["maximum"] = maximum.Value;
+            return value;
+        }
 
         var workDesc = "Work-level lex_id (publisher:workkey), version-level lex_id (version segment ignored), or verbatim publisher identifier. Unknown document -> call search first.";
         return
@@ -55,7 +61,7 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                 }, ["date"]),
             Tool("diff", "What changed between two dates for one work: which publisher versions cover the selected dates and, where both texts are held, retrieve them via as_of to compare. Read timeline_semantics before describing legal applicability.",
                 new JsonObject { ["work"] = S(workDesc), ["from_date"] = S("ISO date"), ["to_date"] = S("ISO date"), ["language"] = S("language code") }, ["work", "from_date", "to_date"]),
-            Tool("search", "Filtered legal search. keyword is deterministic FTS5/BM25; hybrid adds the pinned local encoder and fixed RRF when verified vectors are mounted. No generative model participates. Returns hits WITHOUT body text; full state via as_of.",
+            Tool("search", "Filtered legal search. keyword is deterministic FTS5/BM25; hybrid adds the pinned local encoder and fixed RRF when verified vectors are mounted. No generative model participates. The response query_plan separates resolved work constraints, article and role intent, and residual provision terms. Returns hits WITHOUT body text; full state via as_of.",
                 new JsonObject
                 {
                     ["query"] = S("search terms"), ["publisher"] = S("optional publisher id"),
@@ -72,7 +78,7 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                     ["as_of"] = S("ISO date required when time_scope=as_of"),
                     ["fuzzy"] = S("auto or off; visible fallback only"),
                     ["works"] = S("optional comma-separated work ids: restrict search to these works"),
-                    ["limit"] = I("default 10"),
+                    ["limit"] = I("default 10; minimum 1, maximum 50", 1, 50),
                 }, ["query"]),
             Tool("article_history", "Every distinct text ONE provision (article/annex) has had on its publisher timeline, plus lifecycle events (inserted/removed/renumbered, renumbering detected mechanically by identical text hash). Read timeline_semantics before calling an interval legal applicability. Answers \"what did Article X say over its life / when did it change\".",
                 new JsonObject
@@ -343,6 +349,14 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
 
         string? Str(string k) => a[k]?.GetValue<string>();
         int Int(string k, int dflt) => a[k] is { } n && int.TryParse(n.ToString(), out var v) ? v : dflt;
+        int BoundedInt(string k, int dflt, int minimum, int maximum)
+        {
+            var value = Int(k, dflt);
+            if (value < minimum || value > maximum)
+                throw new ArgumentOutOfRangeException(k,
+                    $"{k} must be between {minimum} and {maximum}");
+            return value;
+        }
 
         // Every required date goes through here. `diff` used to parse its two dates with the
         // null-forgiving operator, so a caller that omitted one, or spelled it `from` instead of
@@ -547,13 +561,15 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
             case "search":
             {
                 var q = Str("query") ?? throw new ArgumentException("query required");
+                if (q.Length > 1_000)
+                    throw new ArgumentException("query must not exceed 1000 characters", "query");
                 var timeScope = Str("time_scope") ?? (Str("as_of") is null ? "all_versions" : "as_of");
                 if (timeScope is not ("all_versions" or "as_of")) throw new ArgumentException("time_scope must be all_versions or as_of");
                 DateOnly? asOf = timeScope == "as_of"
                     ? DateOnly.Parse(Str("as_of") ?? throw new ArgumentException("as_of required when time_scope=as_of")) : null;
                 var pub = Str("publisher");
                 var jurisdiction = Str("jurisdiction");
-                var limit = Int("limit", 10);
+                var limit = BoundedInt("limit", 10, 1, 50);
                 var requestedMode = Str("retrieval_mode") ?? "keyword";
                 if (requestedMode is not ("keyword" or "hybrid")) throw new ArgumentException("retrieval_mode must be keyword or hybrid");
                 var fuzzy = Str("fuzzy") ?? "auto";
@@ -565,22 +581,51 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                 var works = Str("works")?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                                         .Select(w => w.Contains(':') ? w[(w.IndexOf(':') + 1)..] : w).ToArray();
                 var outp = new JsonArray();
-                foreach (var r in readers.Values.Where(x =>
-                             (pub is null || x.Collection == pub)
-                             && (jurisdiction is null || string.Equals(
-                                 x.Stamp.GetValueOrDefault("jurisdiction"),
-                                 jurisdiction,
-                                 StringComparison.OrdinalIgnoreCase))))
+                var filter = new FilterSet(asOf, null, Str("source_class") ?? Str("document_type"),
+                    Str("language"), works, Str("hierarchy"), Str("act_form"),
+                    Str("binding_status"), Str("domain"));
+                var executions = readers.Values.Where(x =>
+                        (pub is null || x.Collection == pub)
+                        && (jurisdiction is null || string.Equals(
+                            x.Stamp.GetValueOrDefault("jurisdiction"),
+                            jurisdiction,
+                            StringComparison.OrdinalIgnoreCase)))
+                    .Select(reader => (Reader: reader, Execution: requestedMode == "hybrid"
+                        ? reader.SearchHybrid(q, filter, limit * 6, fuzzy == "auto")
+                        : reader.SearchKeyword(q, filter, limit * 6, fuzzy == "auto")))
+                    .ToList();
+                var hasGlobalStrongWorkMatch = executions.Any(item =>
+                    item.Execution.QueryPlan?.HasStrongWorkMatch == true);
+                var globalResolutions = executions.SelectMany(item =>
+                        (item.Execution.QueryPlan?.WorkResolutions ?? []).Select(resolution => new
+                        {
+                            resolution.Mention,
+                            resolution.Status,
+                            Candidates = resolution.Candidates
+                                .Select(candidate => $"{item.Reader.Collection}:{candidate}"),
+                        }))
+                    .GroupBy(item => item.Mention, StringComparer.Ordinal)
+                    .Select(group =>
+                    {
+                        var candidates = group.SelectMany(item => item.Candidates)
+                            .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+                        var status = group.Any(item => item.Status == "ambiguous") || candidates.Length > 1
+                            ? "ambiguous" : candidates.Length == 1 ? "resolved" : "unresolved";
+                        return new { Mention = group.Key, Status = status, Candidates = candidates };
+                    }).OrderBy(item => item.Mention, StringComparer.Ordinal).ToArray();
+                var globalResolutionStatus = globalResolutions.Any(item => item.Status == "ambiguous")
+                    ? "ambiguous"
+                    : globalResolutions.Any(item => item.Status == "unresolved") ? "unresolved"
+                    : globalResolutions.Any(item => item.Status == "resolved") ? "resolved"
+                    : executions.Any(item => item.Execution.QueryPlan?.WorkCatalogAvailable == false)
+                        ? "unavailable" : "not_requested";
+                foreach (var (r, execution) in executions)
                 {
-                    var filter = new FilterSet(asOf, null, Str("source_class") ?? Str("document_type"),
-                        Str("language"), works, Str("hierarchy"), Str("act_form"),
-                        Str("binding_status"), Str("domain"));
                     // provision-level hits: the retrieval unit is the article; at most two
                     // provisions per work so one huge code cannot monopolize the result set
-                    var execution = requestedMode == "hybrid"
-                        ? r.SearchHybrid(q, filter, limit * 6, fuzzy == "auto")
-                        : r.SearchKeyword(q, filter, limit * 6, fuzzy == "auto");
-                    var hits = execution.Hits
+                    var suppressUnresolvedPublisher = hasGlobalStrongWorkMatch
+                                                      && execution.QueryPlan?.HasStrongWorkMatch != true;
+                    var hits = (suppressUnresolvedPublisher ? [] : execution.Hits)
                         .GroupBy(h => (h.Doc.GroupKey, h.Provision.Anchor)).Select(g => g.First())
                         .GroupBy(h => h.Doc.GroupKey).SelectMany(g => g.Take(2))
                         .Take(limit).ToList();
@@ -602,15 +647,18 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                     // Identifier/title fallback: works holding no per-article text are invisible
                     // to the provision FTS, and no indexed text contains a work's own identifier
                     // (a CELEX number lives in the slug) — both must still be findable.
-                    if (hits.Count < limit)
+                    if (!suppressUnresolvedPublisher && hits.Count < limit)
                     {
                         var seen = hits.Select(h => h.Doc.GroupKey).ToHashSet(StringComparer.Ordinal);
+                        var fallbackFilter = execution.QueryPlan?.HasStrongWorkMatch == true
+                            ? filter with { Works = execution.QueryPlan.WorkConstraints }
+                            : filter;
                         // `works` has to reach this branch too. It did not, so a caller that named
                         // its subject and got few article hits was handed unrelated works to fill
                         // the quota — the documented scope silently ignored on exactly the path a
                         // scoped search is most likely to take.
                         foreach (var doc in r.SearchWorksByIdentifierOrTitle(q,
-                                     filter, limit * 4)
+                                     fallbackFilter, limit * 4)
                                  .GroupBy(x => x.GroupKey)
                                  .Select(g => g.OrderByDescending(x => x.ValidFrom, StringComparer.Ordinal).First())
                                  .Where(x => !seen.Contains(x.GroupKey))
@@ -635,6 +683,34 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                         ["retrieval_mode"] = execution.RetrievalMode,
                         ["time_scope"] = timeScope,
                         ["as_of"] = asOf?.ToString("yyyy-MM-dd"),
+                        ["query_plan"] = execution.QueryPlan is not { } plan ? null : new JsonObject
+                        {
+                            ["provision_query"] = plan.ProvisionQuery,
+                            ["work_constraints"] = new JsonArray(
+                                plan.WorkConstraints.Select(work => (JsonNode)work).ToArray()),
+                            ["article_number"] = plan.ArticleNumber,
+                            ["role_intent"] = plan.RoleIntent,
+                            ["has_strong_work_match"] = plan.HasStrongWorkMatch,
+                            ["work_resolution_status"] = plan.WorkResolutionStatus,
+                            ["work_catalog_available"] = plan.WorkCatalogAvailable,
+                            ["global_work_resolution_status"] = globalResolutionStatus,
+                            ["global_work_resolutions"] = new JsonArray(globalResolutions
+                                .Select(resolution => (JsonNode)new JsonObject
+                                {
+                                    ["mention"] = resolution.Mention,
+                                    ["status"] = resolution.Status,
+                                    ["candidates"] = new JsonArray(resolution.Candidates
+                                        .Select(candidate => (JsonNode)candidate).ToArray()),
+                                }).ToArray()),
+                            ["work_resolutions"] = new JsonArray(
+                                (plan.WorkResolutions ?? []).Select(resolution => (JsonNode)new JsonObject
+                                {
+                                    ["mention"] = resolution.Mention,
+                                    ["status"] = resolution.Status,
+                                    ["candidates"] = new JsonArray(resolution.Candidates
+                                        .Select(candidate => (JsonNode)candidate).ToArray()),
+                                }).ToArray()),
+                        },
                         ["query_expansions"] = new JsonArray(execution.QueryExpansions.Select(x => (JsonNode)x).ToArray()),
                         ["artifact_manifest_id"] = Environment.GetEnvironmentVariable("LEX_ARTIFACT_MANIFEST_ID"),
                         ["hits"] = hitsArr,
@@ -859,6 +935,20 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                         ["envelope"] = Envelope(r, "ok"),
                         ["publisher_name"] = r.Stamp.GetValueOrDefault("publisher_name"),
                         ["works"] = c.Groups,
+                        ["scope_expected_works"] = c.ExpectedWorks,
+                        ["build_inventory_status"] = c.ExpectedWorks is null ? "unavailable"
+                            : c.Groups > c.ExpectedWorks ? "overfull"
+                            : c.Groups == c.ExpectedWorks && (c.BuildIssues?.Count ?? 0) == 0
+                                ? "complete" : "incomplete",
+                        ["build_complete"] = c.ExpectedWorks is null ? null
+                            : c.Groups == c.ExpectedWorks && (c.BuildIssues?.Count ?? 0) == 0,
+                        ["build_issues"] = new JsonArray((c.BuildIssues ?? [])
+                            .Select(issue => (JsonNode)new JsonObject
+                            {
+                                ["code"] = issue.Code,
+                                ["work"] = issue.Work,
+                                ["detail"] = issue.Detail,
+                            }).ToArray()),
                         ["versions"] = c.Rows,
                         ["valid_from_earliest"] = c.EarliestValidFrom,
                         ["valid_from_latest"] = c.LatestValidFrom,

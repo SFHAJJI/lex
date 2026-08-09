@@ -431,26 +431,49 @@ public static class CatalogueEndpoints
                 <select name="publisher" aria-label="Jurisdiction or publisher"><option value="">Every jurisdiction</option>{publisherOptions}</select>
                 <select name="kind" aria-label="Source class"><option value="">any source class</option>{kindOptions}</select>
                 <button>Search</button></form>
-                <p class="sub">Article-level full-text search over every held provision. Filters run before ranking, always.</p>
+                <p class="sub">Work and article search over the same current retrieval path as the workspace. Filters run before ranking, always.</p>
                 """);
             if (!string.IsNullOrWhiteSpace(q))
             {
-                foreach (var r in readers.Values.Where(r => publisher is null || r.Collection == publisher))
+                var searchArguments = new JsonObject
                 {
-                    var hits = r.Search(q, new FilterSet(null, null, string.IsNullOrEmpty(kind) ? null : kind, null), 90)
-                        .GroupBy(h => (h.Doc.GroupKey, h.Prov.Anchor)).Select(g => g.First())
-                        .GroupBy(h => h.Doc.GroupKey).SelectMany(g => g.Take(2))
-                        .Take(15)
-                        .ToList();
-                    sb.Append($"<h2>{H(r.Stamp.GetValueOrDefault("publisher_name"))} ({H(r.Stamp.GetValueOrDefault("jurisdiction"))}), {hits.Count} hit(s)</h2>");
-                    foreach (var (docRow, prov, snippet) in hits)
+                    ["query"] = q,
+                    ["limit"] = 15,
+                    ["time_scope"] = "as_of",
+                    ["as_of"] = ctx.Today.ToString("yyyy-MM-dd"),
+                    ["retrieval_mode"] = "keyword",
+                    ["fuzzy"] = "auto",
+                };
+                if (!string.IsNullOrEmpty(publisher)) searchArguments["publisher"] = publisher;
+                if (!string.IsNullOrEmpty(kind)) searchArguments["document_type"] = kind;
+                var envelopes = mcpCore.CallTool("search", searchArguments) as JsonArray ?? [];
+                foreach (var result in envelopes.OfType<JsonObject>())
+                {
+                    var publisherId = result["envelope"]?["publisher"]?.GetValue<string>() ?? "";
+                    if (!readers.TryGetValue(publisherId, out var reader)) continue;
+                    var hits = result["hits"] as JsonArray ?? [];
+                    sb.Append($"<h2>{H(reader.Stamp.GetValueOrDefault("publisher_name"))} ({H(reader.Stamp.GetValueOrDefault("jurisdiction"))}), {hits.Count} hit(s)</h2>");
+                    foreach (var hit in hits.OfType<JsonObject>())
+                    {
+                        var work = hit["work"]?.GetValue<string>() ?? "";
+                        var validFrom = hit["valid_from"]?.GetValue<string>() ?? "";
+                        var validTo = hit["valid_to"]?.GetValue<string>();
+                        var anchor = hit["anchor"]?.GetValue<string>();
+                        var title = hit["title"]?.GetValue<string>() ?? work;
+                        var sourceClass = hit["document_type"]?.GetValue<string>();
+                        var snippet = hit["snippet"]?.GetValue<string>() ?? "";
+                        var provisionId = hit["provision_id"]?.GetValue<string>() ?? work;
+                        var provisionLabel = hit["provision_num"]?.GetValue<string>()
+                            ?? hit["provision_heading"]?.GetValue<string>() ?? anchor;
+                        var href = $"/{H(publisherId)}/{H(work)}/{H(validFrom)}"
+                            + (anchor is null ? "" : $"#{H(anchor)}");
                         sb.Append($"""
-                            <div class="card"><a href="/{H(docRow.Collection)}/{H(docRow.GroupKey)}/{H(docRow.ValidFrom)}#{H(prov.Anchor)}"><b>{H(DocTitle(docRow))}</b>
-                            ,  {H(prov.Num ?? prov.Heading ?? prov.Anchor)}</a>
-                            <span class="badge">{H(docRow.Kind)}</span> <span class="badge mono">{IntervalLabel(r, docRow)}</span>
+                            <div class="card"><a href="{href}"><b>{H(title)}</b>{(provisionLabel is null ? "" : $",  {H(provisionLabel)}")}</a>
+                            <span class="badge">{H(sourceClass)}</span> <span class="badge mono">{H(validFrom)} â†’ {H(validTo ?? "open")}</span>
                             <div class="snippet">{H(snippet)}</div>
-                            <div class="mono sub">{H(prov.ProvisionId)}</div></div>
+                            <div class="mono sub">{H(provisionId)}</div></div>
                             """);
+                    }
                 }
             }
             return Results.Content(Page("Search", sb.ToString()), "text/html");

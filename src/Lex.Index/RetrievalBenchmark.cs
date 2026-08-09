@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Security.Cryptography;
 using System.Text.Json;
 
 namespace Lex.Index;
@@ -14,7 +15,25 @@ public sealed record RetrievalBenchmarkCase(
     string Explanation,
     string ReviewStatus,
     string? Hierarchy = null,
-    string? Domain = null);
+    string? Domain = null,
+    string Collection = "",
+    string Split = "tuning",
+    string? ExpectedResolution = null,
+    string? ExpectedRole = null,
+    bool ExpectNoHits = false);
+
+public sealed record RetrievalBenchmarkCaseSet(
+    IReadOnlyList<RetrievalBenchmarkCase> Cases,
+    string Sha256);
+
+public sealed record RetrievalBenchmarkBaseline(
+    string Schema,
+    string CasesFile,
+    string CasesSha256,
+    int SampleCount,
+    string ReviewStatus,
+    string ReviewedBy,
+    string ReviewedAt);
 
 public sealed record RetrievalMetrics(
     double Mrr,
@@ -24,13 +43,20 @@ public sealed record RetrievalMetrics(
     int TemporalLeakageFailures,
     double P50Ms,
     double P95Ms,
-    double P99Ms);
+    double P99Ms,
+    double NoHitAccuracy,
+    double ResolutionAccuracy,
+    double RoleIntentAccuracy);
 
 public sealed record RetrievalBenchmarkReport(
     string Schema,
     string Timestamp,
     int SampleCount,
     string ReviewStatus,
+    string BaselineSchema,
+    string ExpectedCasesSha256,
+    string ActualCasesSha256,
+    string ReviewAttestation,
     string CodeCommit,
     string CorpusCommit,
     string ManifestId,
@@ -44,118 +70,173 @@ public sealed record RetrievalBenchmarkReport(
     long MemoryLimitBytes,
     long IndexBytes,
     long VectorBytes,
-    RetrievalMetrics Keyword,
-    RetrievalMetrics Hybrid,
+    RetrievalMetrics KeywordTuning,
+    RetrievalMetrics HybridTuning,
+    RetrievalMetrics KeywordHoldout,
+    RetrievalMetrics HybridHoldout,
+    int TuningSampleCount,
+    int HoldoutSampleCount,
     bool ActivationGatePassed,
     IReadOnlyList<string> GateFailures);
 
+public static class RetrievalBenchmarkGate
+{
+    public static bool HasReleaseIdentity(
+        string codeCommit, string corpusCommit, string manifestId,
+        string modelId, string modelRevision, string machine,
+        string resourceConfiguration, long memoryLimitBytes)
+    {
+        return codeCommit is not null && codeCommit.Length == 40 && codeCommit.All(Uri.IsHexDigit)
+            && Known(corpusCommit, "unknown")
+            && Known(manifestId, "unverified", "legacy")
+            && Known(modelId, "none", "unknown")
+            && Known(modelRevision, "none", "unknown")
+            && Known(machine, "unknown", "not supplied")
+            && Known(resourceConfiguration, "unknown", "not supplied")
+            && memoryLimitBytes > 0;
+    }
+
+    public static bool HasReleaseIdentity(RetrievalBenchmarkReport report) => HasReleaseIdentity(
+        report.CodeCommit, report.CorpusCommit, report.ManifestId,
+        report.ModelId, report.ModelRevision, report.Machine,
+        report.ResourceConfiguration, report.MemoryLimitBytes);
+
+    public static bool ReportsAreCompatible(
+        IReadOnlyCollection<RetrievalBenchmarkReport> reports, int expectedCount)
+    {
+        return reports.Count == expectedCount
+            && reports.All(HasReleaseIdentity)
+            && reports.Select(item => item.CodeCommit).Distinct(StringComparer.Ordinal).Count() == 1
+            && reports.Select(item => $"{item.ModelId}@{item.ModelRevision}")
+                .Distinct(StringComparer.Ordinal).Count() == 1
+            && reports.Select(item => item.ResourceConfiguration)
+                .Distinct(StringComparer.Ordinal).Count() == 1
+            && reports.Select(item => item.MemoryLimitBytes).Distinct().Count() == 1;
+    }
+
+    private static bool Known(string? value, params string[] placeholders) =>
+        !string.IsNullOrWhiteSpace(value)
+        && !placeholders.Contains(value, StringComparer.OrdinalIgnoreCase);
+}
+
 public static class RetrievalBenchmarkCatalog
 {
-    private sealed record Work(
-        string Celex, string Topic, string French, string Hierarchy, string Domain,
-        string HistoricalAsOf,
-        IReadOnlyList<string> Concepts, IReadOnlyList<string> FrenchConcepts);
-
-    private static readonly Work[] Works =
-    [
-        new("32013R0575", "capital requirements regulation", "exigences de fonds propres", "secondary_eu_law", "financial-services", "2013-06-28", ["bank capital adequacy", "prudential own funds", "credit institution exposures", "banking risk weights"], ["fonds propres bancaires", "risque de credit"]),
-        new("32014L0065", "markets in financial instruments", "marches d instruments financiers", "secondary_eu_law", "financial-services", "2014-09-17", ["investment firm conduct", "trading venue transparency", "investor protection rules"], ["protection des investisseurs", "entreprises d investissement"]),
-        new("32014R0910", "electronic identification and trust services", "identification electronique", "secondary_eu_law", "judicial-cooperation", "2014-09-17", ["qualified electronic signature", "digital identity trust", "electronic seal recognition"], ["signature electronique qualifiee", "services de confiance"]),
-        new("32015L2366", "payment services directive", "services de paiement", "secondary_eu_law", "financial-services", "2015-12-23", ["strong customer authentication", "payment initiation service", "unauthorised payment liability"], ["authentification forte du client", "paiement non autorise"]),
-        new("32016R0679", "general data protection regulation", "protection des donnees", "secondary_eu_law", "judicial-cooperation", "2016-05-04", ["personal data breach notice", "lawful processing consent", "data subject access right", "privacy impact assessment"], ["violation de donnees personnelles", "droit d acces de la personne"]),
-        new("32018L2001", "renewable energy directive", "energies renouvelables", "secondary_eu_law", "consumer-environment", "2018-12-21", ["renewable energy target", "guarantee of origin", "renewable self consumer"], ["objectif energie renouvelable", "garantie d origine"]),
-        new("32019L0944", "electricity market directive", "marche de l electricite", "secondary_eu_law", "consumer-environment", "2019-06-14", ["electricity consumer switching", "distribution system operator", "dynamic electricity price"], ["changement de fournisseur electricite", "gestionnaire de reseau"]),
-        new("32019R2088", "sustainable finance disclosure regulation", "publication finance durable", "secondary_eu_law", "financial-services", "2020-07-12", ["sustainability risk disclosure", "principal adverse impacts", "financial product environmental characteristics"], ["risques en matiere de durabilite", "incidences negatives"]),
-        new("32022L2555", "network and information security directive", "securite des reseaux", "secondary_eu_law", "judicial-cooperation", "2022-12-27", ["cyber incident notification", "essential entity security", "supply chain cyber risk"], ["notification incident cyber", "entite essentielle"]),
-        new("32022R2065", "digital services act", "services numeriques", "secondary_eu_law", "consumer-environment", "2022-10-27", ["online platform notice action", "systemic platform risk", "illegal online content"], ["contenu illicite en ligne", "tres grande plateforme"]),
-        new("32022R2554", "digital operational resilience", "resilience operationnelle numerique", "secondary_eu_law", "financial-services", "2022-12-27", ["ict incident reporting finance", "digital resilience testing", "third party technology risk"], ["incident tic financier", "test de resilience numerique"]),
-        new("32023R1114", "markets in crypto assets", "marches de crypto actifs", "secondary_eu_law", "financial-services", "2023-06-09", ["crypto asset white paper", "stablecoin issuer reserve", "crypto service provider authorisation"], ["livre blanc crypto actif", "prestataire de services crypto"]),
-        new("32023R2854", "data act", "reglement sur les donnees", "secondary_eu_law", "consumer-environment", "2023-12-22", ["fair access to connected product data", "business to government data sharing", "switching data processing services"], ["acces equitable donnees produit connecte", "changement service traitement donnees"]),
-        new("32024R1689", "artificial intelligence act", "reglement intelligence artificielle", "secondary_eu_law", "consumer-environment", "2024-07-12", ["high risk ai system", "prohibited artificial intelligence practice", "general purpose ai model"], ["systeme ia a haut risque", "pratique ia interdite"]),
-        new("32024R2847", "cyber resilience act", "reglement cyberresilience", "secondary_eu_law", "consumer-environment", "2024-11-20", ["cybersecurity requirements for connected products", "product vulnerability handling", "security updates for digital products"], ["cybersecurite des produits connectes", "traitement des vulnerabilites"]),
-        new("32024R1620", "anti money laundering authority", "autorite lutte blanchiment", "secondary_eu_law", "aml-corporate", "2024-06-19", ["money laundering authority supervision", "aml direct supervision", "financial intelligence coordination"], ["supervision lutte blanchiment", "renseignement financier"]),
-        new("32003R0001", "competition rules enforcement", "mise en oeuvre des regles de concurrence", "secondary_eu_law", "competition", "2004-05-01", ["antitrust investigation powers", "competition authority cooperation", "articles 101 and 102 enforcement"], ["pouvoirs enquete concurrence", "cooperation autorites concurrence"]),
-        new("32006L0112", "common value added tax system", "systeme commun taxe valeur ajoutee", "secondary_eu_law", "tax", "2007-01-01", ["value added tax taxable transaction", "vat place of supply", "input tax deduction"], ["operation imposable tva", "deduction taxe en amont"]),
-        new("32003L0088", "working time directive", "directive temps de travail", "secondary_eu_law", "employment", "2003-11-04", ["maximum weekly working time", "minimum daily rest", "paid annual leave"], ["duree maximale hebdomadaire travail", "conge annuel paye"]),
-        new("32014L0024", "public procurement directive", "directive marches publics", "secondary_eu_law", "procurement-and-ip", "2014-03-28", ["public contract award procedure", "procurement exclusion grounds", "most economically advantageous tender"], ["procedure attribution marche public", "motifs exclusion soumissionnaire"]),
-        new("32017R1001", "european union trade mark", "marque de l union europeenne", "secondary_eu_law", "procurement-and-ip", "2017-06-16", ["eu trade mark registration", "trade mark infringement remedy", "absolute grounds for refusal"], ["enregistrement marque union", "contrefacon de marque"]),
-        new("12012E/TXT", "treaty on the functioning of the european union", "traite fonctionnement union europeenne", "primary_eu_law", "primary-eu-law", "2012-10-26", ["free movement internal market", "competition treaty legal basis", "preliminary ruling jurisdiction"], ["libre circulation marche interieur", "base juridique concurrence"]),
-        new("12012M/TXT", "treaty on european union", "traite sur l union europeenne", "primary_eu_law", "primary-eu-law", "2012-10-26", ["union values rule of law", "common foreign security policy", "principle of conferral"], ["valeurs de l union", "principe d attribution"]),
-        new("12012P/TXT", "charter of fundamental rights", "charte des droits fondamentaux", "primary_eu_law", "primary-eu-law", "2012-10-26", ["right to effective remedy", "personal data fundamental right", "freedom of expression charter"], ["droit a un recours effectif", "liberte d expression"]),
-    ];
-
-    public static IReadOnlyList<RetrievalBenchmarkCase> Create()
+    private static readonly JsonSerializerOptions JsonOptions = new()
     {
-        var cases = new List<RetrievalBenchmarkCase>();
-        void Add(string category, string query, Work work, string language = "en", string timeScope = "all_versions",
-                 string? asOf = null, string? hierarchy = null, string? domain = null) => cases.Add(new(
-            $"{category}-{cases.Count(c => c.Category == category) + 1:000}", category, query, language,
-            timeScope, asOf, [work.Celex.ToLowerInvariant().Replace('/', '-')],
-            $"The query identifies {work.Topic}; the relevant work judgment is document-level and does not invent an article match.",
-            "generated-unreviewed", hierarchy, domain));
+        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+    };
 
-        for (var i = 0; i < 30; i++)
+    private static readonly HashSet<string> Categories = new(StringComparer.Ordinal)
+    {
+        "exact", "temporal", "conceptual", "bilingual", "fuzzy", "hierarchy",
+        "role", "comparison", "negative", "ambiguity", "gap",
+    };
+
+    public static RetrievalBenchmarkCaseSet LoadSet(Stream stream)
+    {
+        using var bytes = new MemoryStream();
+        stream.CopyTo(bytes);
+        var payload = bytes.ToArray();
+        List<RetrievalBenchmarkCase> cases;
+        try
         {
-            var work = Works[i % Works.Length];
-            Add("exact", i < Works.Length ? work.Celex : "CELEX " + work.Celex, work);
+            cases = JsonSerializer.Deserialize<List<RetrievalBenchmarkCase>>(payload, JsonOptions)
+                    ?? throw new InvalidDataException("Retrieval benchmark cases are missing.");
         }
-
-        for (var i = 0; i < 40; i++)
+        catch (JsonException exception)
         {
-            var work = Works[i % Works.Length];
-            var asOf = i < Works.Length ? "2026-08-06" : work.HistoricalAsOf;
-            Add("temporal", $"{work.Topic} rules as of {asOf}", work, timeScope: "as_of", asOf: asOf);
+            throw new InvalidDataException("Retrieval benchmark cases are malformed JSON.", exception);
         }
-
-        for (var i = 0; i < 60; i++)
+        if (cases.Count is 0 or > 10_000 || cases.Any(item => item is null)
+            || cases.Any(item => string.IsNullOrWhiteSpace(item.Id) || item.Id.Length > 128)
+            || cases.Select(item => item.Id).Distinct(StringComparer.Ordinal).Count() != cases.Count)
+            throw new InvalidDataException("Retrieval benchmark case identifiers are empty, duplicated, or unbounded.");
+        foreach (var item in cases)
         {
-            var work = Works[i % Works.Length];
-            Add("conceptual", work.Concepts[(i / Works.Length) % work.Concepts.Count], work);
+            if (string.IsNullOrWhiteSpace(item.Collection)
+                || item.Collection.Length > 128
+                || string.IsNullOrWhiteSpace(item.Query) || item.Query.Length > 1000
+                || string.IsNullOrWhiteSpace(item.Explanation) || item.Explanation.Length > 2000
+                || !Categories.Contains(item.Category)
+                || item.Language is not ("en" or "fr")
+                || item.TimeScope is not ("all_versions" or "as_of")
+                || item.TimeScope == "as_of" != (item.AsOf is not null)
+                || item.AsOf is not null && !DateOnly.TryParseExact(
+                    item.AsOf, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture,
+                    System.Globalization.DateTimeStyles.None, out _)
+                || item.Split is not ("tuning" or "holdout")
+                || item.ReviewStatus is not ("generated-unreviewed" or "engineer-reviewed" or "lawyer-reviewed")
+                || item.RelevantWorks is null || item.RelevantWorks.Count > 10
+                || item.RelevantWorks.Count != item.RelevantWorks.Distinct(StringComparer.Ordinal).Count()
+                || item.RelevantWorks.Any(work => !work.StartsWith(item.Collection + ":", StringComparison.Ordinal)))
+                throw new InvalidDataException($"Retrieval benchmark case '{item.Id}' is malformed.");
+            if (item.ExpectNoHits && item.RelevantWorks.Count > 0
+                || item.Category is ("negative" or "gap") && !item.ExpectNoHits
+                || item.ExpectedResolution is not null
+                   && item.ExpectedResolution is not ("not_requested" or "resolved" or "ambiguous" or "unresolved" or "unavailable")
+                || item.ExpectedRole is not null
+                   && item.ExpectedRole is not ("delegated" or "implementing" or "amending" or "corrigendum" or "consolidated"))
+                throw new InvalidDataException($"Retrieval benchmark case '{item.Id}' has contradictory expectations.");
         }
+        var splitLeak = cases.GroupBy(item =>
+                (item.Collection, Query: NormalizeQuery(item.Query)))
+            .FirstOrDefault(group => group.Select(item => item.Split)
+                .Distinct(StringComparer.Ordinal).Skip(1).Any());
+        if (splitLeak is not null)
+            throw new InvalidDataException(
+                $"Query '{splitLeak.Key.Query}' occurs in both tuning and holdout for one collection.");
+        return new RetrievalBenchmarkCaseSet(cases,
+            Convert.ToHexStringLower(SHA256.HashData(payload)));
+    }
 
-        for (var i = 0; i < 30; i++)
+    public static RetrievalBenchmarkCaseSet LoadSet(string path)
+    {
+        using var stream = File.OpenRead(path);
+        return LoadSet(stream);
+    }
+
+    public static IReadOnlyList<RetrievalBenchmarkCase> Load(Stream stream) => LoadSet(stream).Cases;
+    public static IReadOnlyList<RetrievalBenchmarkCase> Load(string path) => LoadSet(path).Cases;
+
+    public static RetrievalBenchmarkBaseline LoadBaseline(Stream stream)
+    {
+        RetrievalBenchmarkBaseline baseline;
+        try
         {
-            var work = Works[i % Works.Length];
-            Add("bilingual", work.FrenchConcepts[(i / Works.Length) % work.FrenchConcepts.Count], work, "fr");
+            baseline = JsonSerializer.Deserialize<RetrievalBenchmarkBaseline>(stream, JsonOptions)
+                       ?? throw new InvalidDataException("Retrieval benchmark baseline is missing.");
         }
-
-        for (var i = 0; i < 20; i++)
+        catch (JsonException exception)
         {
-            var work = Works[i % Works.Length];
-            var phrase = work.Concepts[0];
-            var word = phrase.Split(' ').OrderByDescending(w => w.Length).First();
-            var typo = word.Length < 5 ? word + "x" : word.Remove(word.Length / 2, 1);
-            Add("fuzzy", phrase.Replace(word, typo, StringComparison.Ordinal), work);
+            throw new InvalidDataException("Retrieval benchmark baseline is malformed JSON.", exception);
         }
+        if (baseline.Schema != "lex-retrieval-baseline/2"
+            || string.IsNullOrWhiteSpace(baseline.CasesFile)
+            || baseline.CasesSha256 is null || baseline.CasesSha256.Length != 64
+            || baseline.CasesSha256.Any(character => !Uri.IsHexDigit(character))
+            || baseline.SampleCount is <= 0 or > 10_000
+            || baseline.ReviewStatus is not ("engineer-reviewed" or "lawyer-reviewed")
+            || string.IsNullOrWhiteSpace(baseline.ReviewedBy)
+            || !DateOnly.TryParseExact(baseline.ReviewedAt, "yyyy-MM-dd",
+                System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None, out _))
+            throw new InvalidDataException("Retrieval benchmark baseline is incomplete or unsupported.");
+        return baseline;
+    }
 
-        var hierarchyWorks = Works
-            .GroupBy(w => $"{w.Hierarchy}|{w.Domain}", StringComparer.Ordinal)
-            .Select(g => g.First())
-            .Concat(Works)
-            .DistinctBy(w => w.Celex, StringComparer.Ordinal)
-            .Take(20)
+    public static RetrievalBenchmarkBaseline LoadBaseline(string path)
+    {
+        using var stream = File.OpenRead(path);
+        return LoadBaseline(stream);
+    }
+
+    private static string NormalizeQuery(string value)
+    {
+        var characters = value.ToLowerInvariant()
+            .Select(character => char.IsLetterOrDigit(character) ? character : ' ')
             .ToArray();
-        for (var i = 0; i < 20; i++)
-        {
-            var work = hierarchyWorks[i];
-            Add("hierarchy", work.Concepts[0], work, hierarchy: work.Hierarchy, domain: work.Domain);
-        }
-
-        var required = new Dictionary<string, int>
-        {
-            ["exact"] = 30,
-            ["temporal"] = 40,
-            ["conceptual"] = 60,
-            ["bilingual"] = 30,
-            ["fuzzy"] = 20,
-            ["hierarchy"] = 20,
-        };
-        foreach (var (category, count) in required)
-            if (cases.Count(c => c.Category == category) != count)
-                throw new InvalidOperationException($"Benchmark category '{category}' is not {count} cases.");
-        if (cases.Count != 200 || cases.Select(c => c.Id).Distinct(StringComparer.Ordinal).Count() != 200)
-            throw new InvalidOperationException("Retrieval benchmark must contain 200 uniquely identified cases.");
-        return cases;
+        return string.Join(' ', new string(characters)
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries));
     }
 }
 
@@ -165,46 +246,93 @@ public static class RetrievalBenchmarkRunner
         TimeSpan Elapsed, TimeSpan? EstimatedRemaining);
 
     public static RetrievalBenchmarkReport Run(
-        LexIndexReader reader, string indexPath, string? vectorPath,
+        LexIndexReader reader, RetrievalBenchmarkCaseSet caseSet,
+        RetrievalBenchmarkBaseline baseline,
+        string indexPath, string? vectorPath,
         string codeCommit, string manifestId, string machine, string resourceConfiguration,
         long memoryLimitBytes, double modelLoadMs, double coldQueryMs, DateTimeOffset timestamp,
         Action<Progress>? progress = null)
     {
-        var cases = RetrievalBenchmarkCatalog.Create();
+        var cases = caseSet.Cases.Where(item => item.Collection == reader.Collection).ToArray();
+        if (cases.Length == 0)
+            throw new InvalidDataException(
+                $"The benchmark contains no cases for mounted collection '{reader.Collection}'.");
+        var tuning = cases.Where(item => item.Split == "tuning").ToArray();
+        var holdout = cases.Where(item => item.Split == "holdout").ToArray();
+        if (tuning.Length == 0 || holdout.Length == 0)
+            throw new InvalidDataException("Every mounted collection requires tuning and holdout cases.");
         _ = reader.SearchHybrid("benchmark warmup", FilterSet.All, 1);
-        var keyword = Evaluate("keyword", cases,
+        var keyword = Evaluate("keyword-tuning", tuning,
             c => reader.SearchKeyword(c.Query, Filters(c), 10, c.Category == "fuzzy"), progress);
-        var hybrid = Evaluate("hybrid", cases, c => reader.SearchHybrid(c.Query, Filters(c), 10), progress);
-        var failures = new List<string>();
+        var hybrid = Evaluate("hybrid-tuning", tuning,
+            c => reader.SearchHybrid(c.Query, Filters(c), 10), progress);
+        var keywordHoldout = Evaluate("keyword-holdout", holdout,
+            c => reader.SearchKeyword(c.Query, Filters(c), 10, c.Category == "fuzzy"), progress);
+        var hybridHoldout = Evaluate("hybrid-holdout", holdout,
+            c => reader.SearchHybrid(c.Query, Filters(c), 10), progress);
+        var failures = BaselineFailures(caseSet, baseline).ToList();
+        var corpusCommit = reader.Stamp.GetValueOrDefault("corpus_commit", "unknown");
+        var modelId = reader.Stamp.GetValueOrDefault("embedding_model", "none");
+        var modelRevision = reader.Stamp.GetValueOrDefault("embedding_revision", "none");
+        if (!RetrievalBenchmarkGate.HasReleaseIdentity(
+                codeCommit, corpusCommit, manifestId, modelId, modelRevision,
+                machine, resourceConfiguration, memoryLimitBytes))
+            failures.Add("release identity or resource configuration is missing or unverified");
         if (cases.Any(c => c.ReviewStatus is not ("engineer-reviewed" or "lawyer-reviewed")))
             failures.Add("relevance judgments have not been reviewed");
-        if (hybrid.ExactFirstAccuracy < 1) failures.Add("exact legal identifier accuracy is below 100 percent");
-        if (hybrid.TemporalLeakageFailures != 0) failures.Add("temporal leakage is not zero");
-        var conceptualKeyword = Evaluate("conceptual-keyword",
-            cases.Where(c => c.Category == "conceptual").ToList(),
-            c => reader.SearchKeyword(c.Query, Filters(c), 10, false), progress);
-        var conceptualHybrid = Evaluate("conceptual-hybrid",
-            cases.Where(c => c.Category == "conceptual").ToList(),
+        if (hybridHoldout.ExactFirstAccuracy < 1)
+            failures.Add("holdout exact legal identifier accuracy is below 100 percent");
+        if (hybridHoldout.TemporalLeakageFailures != 0) failures.Add("holdout temporal leakage is not zero");
+        if (hybridHoldout.NoHitAccuracy < 1) failures.Add("holdout negative or gap accuracy is below 100 percent");
+        if (hybridHoldout.ResolutionAccuracy < 1) failures.Add("holdout work resolution accuracy is below 100 percent");
+        if (hybridHoldout.RoleIntentAccuracy < 1) failures.Add("holdout role intent accuracy is below 100 percent");
+        var comparisonCases = holdout.Where(c => c.Category == "comparison").ToArray();
+        var comparisonHybrid = Evaluate("comparison-hybrid", comparisonCases,
             c => reader.SearchHybrid(c.Query, Filters(c), 10), progress);
-        if (conceptualKeyword.NdcgAt10 == 0 || conceptualHybrid.NdcgAt10 < conceptualKeyword.NdcgAt10 * 1.10)
+        if (comparisonHybrid.RecallAt10 < 1)
+            failures.Add("holdout comparison work recall is below 100 percent");
+        var conceptualCases = holdout.Where(c => c.Category == "conceptual").ToArray();
+        var conceptualKeyword = Evaluate("conceptual-keyword", conceptualCases,
+            c => reader.SearchKeyword(c.Query, Filters(c), 10, false), progress);
+        var conceptualHybrid = Evaluate("conceptual-hybrid", conceptualCases,
+            c => reader.SearchHybrid(c.Query, Filters(c), 10), progress);
+        if (conceptualKeyword.NdcgAt10 == 0
+            || conceptualHybrid.NdcgAt10 < conceptualKeyword.NdcgAt10 * 1.10)
             failures.Add("conceptual nDCG@10 did not improve by at least 10 percent");
-        if (hybrid.NdcgAt10 + 0.000001 < keyword.NdcgAt10 * 0.98)
-            failures.Add("full-suite nDCG@10 regressed by more than 2 percent");
-        if (hybrid.P95Ms > 250) failures.Add("warm p95 exceeds 250 ms");
+        if (hybridHoldout.NdcgAt10 + 0.000001 < keywordHoldout.NdcgAt10 * 0.98)
+            failures.Add("holdout nDCG@10 regressed by more than 2 percent");
+        failures.AddRange(HoldoutLatencyFailures(hybridHoldout));
         var workingSet = Process.GetCurrentProcess().WorkingSet64;
         if (memoryLimitBytes <= 0) failures.Add("configured memory limit was not supplied");
-        else if (workingSet >= memoryLimitBytes * 0.75) failures.Add("process memory is not below 75 percent of the configured limit");
+        else if (workingSet >= memoryLimitBytes * 0.75)
+            failures.Add("process memory is not below 75 percent of the configured limit");
 
         return new RetrievalBenchmarkReport(
-            "lex-retrieval-benchmark/1", timestamp.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ"),
-            cases.Count, AggregateReviewStatus(cases), codeCommit,
-            reader.Stamp.GetValueOrDefault("corpus_commit", "unknown"), manifestId,
-            reader.Stamp.GetValueOrDefault("embedding_model", "none"),
-            reader.Stamp.GetValueOrDefault("embedding_revision", "none"), machine, resourceConfiguration,
+            "lex-retrieval-benchmark/3", timestamp.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ"),
+            cases.Length, AggregateReviewStatus(cases), baseline.Schema,
+            baseline.CasesSha256, caseSet.Sha256, $"{baseline.ReviewedBy}@{baseline.ReviewedAt}", codeCommit,
+            corpusCommit, manifestId, modelId, modelRevision, machine, resourceConfiguration,
             modelLoadMs, coldQueryMs, workingSet, memoryLimitBytes, new FileInfo(indexPath).Length,
             vectorPath is not null && File.Exists(vectorPath) ? new FileInfo(vectorPath).Length : 0,
-            keyword, hybrid, failures.Count == 0, failures);
+            keyword, hybrid, keywordHoldout, hybridHoldout, tuning.Length, holdout.Length,
+            failures.Count == 0, failures);
     }
+
+    internal static IReadOnlyList<string> BaselineFailures(
+        RetrievalBenchmarkCaseSet caseSet, RetrievalBenchmarkBaseline baseline)
+    {
+        var failures = new List<string>();
+        if (!string.Equals(caseSet.Sha256, baseline.CasesSha256, StringComparison.OrdinalIgnoreCase))
+            failures.Add("benchmark cases do not match the frozen baseline digest");
+        if (caseSet.Cases.Count != baseline.SampleCount)
+            failures.Add("benchmark case count does not match the frozen baseline");
+        if (caseSet.Cases.Any(item => item.ReviewStatus != baseline.ReviewStatus))
+            failures.Add("benchmark review status does not match the frozen attestation");
+        return failures;
+    }
+
+    internal static IReadOnlyList<string> HoldoutLatencyFailures(RetrievalMetrics hybridHoldout) =>
+        hybridHoldout.P95Ms > 250 ? ["holdout warm p95 exceeds 250 ms"] : [];
 
     private static string AggregateReviewStatus(IReadOnlyList<RetrievalBenchmarkCase> cases)
     {
@@ -217,7 +345,7 @@ public static class RetrievalBenchmarkRunner
         c.AsOf is null ? null : DateOnly.Parse(c.AsOf), null, null, c.Language,
         null, c.Hierarchy, null, null, c.Domain);
 
-    private static RetrievalMetrics Evaluate(
+    internal static RetrievalMetrics Evaluate(
         string stage, IReadOnlyList<RetrievalBenchmarkCase> cases,
         Func<RetrievalBenchmarkCase, SearchExecution> search, Action<Progress>? progress)
     {
@@ -226,6 +354,13 @@ public static class RetrievalBenchmarkRunner
         var ndcg = 0d;
         var exactCorrect = 0;
         var exactCount = 0;
+        var noHitCorrect = 0;
+        var noHitCount = 0;
+        var resolutionCorrect = 0;
+        var resolutionCount = 0;
+        var roleCorrect = 0;
+        var roleCount = 0;
+        var rankingCount = 0;
         var leakage = 0;
         var latency = new List<double>(cases.Count);
         var phase = Stopwatch.StartNew();
@@ -240,14 +375,27 @@ public static class RetrievalBenchmarkRunner
             var completed = index + 1;
             if (completed == cases.Count || completed % 10 == 0)
                 progress?.Invoke(new Progress(stage, completed, cases.Count, phase.Elapsed,
-                    completed == 0 ? null : phase.Elapsed * (cases.Count - completed) / completed));
-            var works = result.Hits.Select(h => h.Doc.GroupKey.ToLowerInvariant()).ToList();
-            var first = works.FindIndex(w => c.RelevantWorks.Contains(w, StringComparer.Ordinal));
-            if (first >= 0) reciprocal += 1d / (first + 1);
-            var relevantAt10 = works.Take(10).Distinct(StringComparer.Ordinal)
-                .Count(w => c.RelevantWorks.Contains(w, StringComparer.Ordinal));
-            recall += (double)relevantAt10 / c.RelevantWorks.Count;
-            if (first is >= 0 and < 10) ndcg += 1d / Math.Log2(first + 2);
+                    phase.Elapsed * (cases.Count - completed) / completed));
+            var rankedWorks = result.Hits.Select(h =>
+                    $"{h.Doc.Collection}:{h.Doc.GroupKey}".ToLowerInvariant())
+                .Distinct(StringComparer.Ordinal).ToList();
+            var first = rankedWorks.FindIndex(w => c.RelevantWorks.Contains(w, StringComparer.Ordinal));
+            if (c.RelevantWorks.Count > 0)
+            {
+                rankingCount++;
+                if (first >= 0) reciprocal += 1d / (first + 1);
+                var worksAt10 = rankedWorks.Take(10).ToArray();
+                var relevantAt10 = worksAt10
+                    .Count(w => c.RelevantWorks.Contains(w, StringComparer.Ordinal));
+                recall += (double)relevantAt10 / c.RelevantWorks.Count;
+                var dcg = worksAt10.Select((work, rank) =>
+                        c.RelevantWorks.Contains(work, StringComparer.Ordinal)
+                            ? 1d / Math.Log2(rank + 2) : 0)
+                    .Sum();
+                var ideal = Enumerable.Range(0, Math.Min(10, c.RelevantWorks.Count))
+                    .Sum(rank => 1d / Math.Log2(rank + 2));
+                ndcg += dcg / ideal;
+            }
             if (c.Category == "exact")
             {
                 exactCount++;
@@ -256,12 +404,32 @@ public static class RetrievalBenchmarkRunner
             if (c.AsOf is not null)
                 leakage += result.Hits.Count(h => string.CompareOrdinal(h.Doc.ValidFrom, c.AsOf) > 0
                     || h.Doc.ValidTo is not null && string.CompareOrdinal(h.Doc.ValidTo, c.AsOf) < 0);
+            if (c.ExpectNoHits)
+            {
+                noHitCount++;
+                if (result.Hits.Count == 0) noHitCorrect++;
+            }
+            if (c.ExpectedResolution is not null)
+            {
+                resolutionCount++;
+                if (result.QueryPlan?.WorkResolutionStatus == c.ExpectedResolution) resolutionCorrect++;
+            }
+            if (c.ExpectedRole is not null)
+            {
+                roleCount++;
+                if (result.QueryPlan?.RoleIntent == c.ExpectedRole) roleCorrect++;
+            }
         }
         latency.Sort();
         double Percentile(double p) => latency.Count == 0 ? 0 : latency[(int)Math.Ceiling(p * latency.Count) - 1];
         return new RetrievalMetrics(
-            reciprocal / cases.Count, recall / cases.Count, ndcg / cases.Count,
+            rankingCount == 0 ? 1 : reciprocal / rankingCount,
+            rankingCount == 0 ? 1 : recall / rankingCount,
+            rankingCount == 0 ? 1 : ndcg / rankingCount,
             exactCount == 0 ? 1 : (double)exactCorrect / exactCount, leakage,
-            Percentile(.50), Percentile(.95), Percentile(.99));
+            Percentile(.50), Percentile(.95), Percentile(.99),
+            noHitCount == 0 ? 1 : (double)noHitCorrect / noHitCount,
+            resolutionCount == 0 ? 1 : (double)resolutionCorrect / resolutionCount,
+            roleCount == 0 ? 1 : (double)roleCorrect / roleCount);
     }
 }

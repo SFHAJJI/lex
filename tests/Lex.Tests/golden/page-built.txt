@@ -325,8 +325,9 @@ backward-compatible APIs, pages, index schemas, trust and deployment invariants<
 <tr><td>Frozen profile fingerprints</td><td>a published extraction can never change output</td></tr>
 <tr><td>Determinism guard in CI</td><td>re-derivation is byte-identical or the run commits nothing</td></tr>
 <tr><td>End-to-end assistant evals</td><td>the assistant picks the right tools and never cites a source it was not given</td></tr>
-<tr><td>200-case retrieval benchmark</td><td>exact, temporal, conceptual, bilingual, typo and hierarchy
-behavior is measured against published judgments before hybrid can become the default</td></tr>
+<tr><td>200-case retrieval benchmark</td><td>EU and Luxembourg exact, temporal, conceptual,
+bilingual, typo, hierarchy, role, comparison, negative, ambiguity and gap behavior is
+measured on separate tuning and holdout judgments before hybrid can become the default</td></tr>
 <tr><td>LLM-judged groundedness</td><td>answers scored against the evidence actually returned</td></tr>
 <tr><td>Pinned whole-artifact manifests</td><td>anyone can verify every released input was not altered,
 <a href="/verify">recipe</a></td></tr>

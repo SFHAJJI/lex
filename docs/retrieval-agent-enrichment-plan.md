@@ -1,10 +1,10 @@
 # Search enrichment and legal-research agent
 
-Status: accepted implementation direction under experiment; no target behavior is claimed as shipped
+Status: scoped experiment passed; publisher-first production implementation is building and no unmerged behavior is claimed as shipped
 
 Decision status: D75 building, D76 gated, D77 planned
 
-Review status: engineer-reviewed architecture; experiment results not measured yet
+Review status: engineer-reviewed experiment evidence and adversarial architecture review; lawyer review remains pending
 
 ## Why this program exists
 
@@ -19,7 +19,30 @@ The search bar remains the deterministic front door. The assistant becomes an op
 layer over the same read-only MCP tools. A generative model never becomes a search index, a source
 of legal text, or a substitute for publisher evidence.
 
-## Target architecture, if the experiment passes
+## Experiment decision, 2026-08-08
+
+The disposable spike is recorded in draft PR #99 at commit `6c3ec59`. It selected a typed Agent
+Framework plan followed by deterministic execution and validation for its frozen subscope. The direct
+tool-calling comparator was rejected after a contract failure and after two of three photovoltaic
+gap runs substituted Directive 2014/24/EU instead of reporting the corpus gap.
+
+The selected run recorded zero deterministic or gap false positives across 18 planner runs and 21
+turns. Its grounding suite recorded zero citation escapes, 10 judge passes, one repaired answer,
+one evidence-limited refusal, six correctly reported gaps, three typed clarifications and a cold-
+inclusive work-retrieval p95 of 168.60 ms. The immutable evidence identifiers are:
+
+- work evaluation: `bdb037fc2eb8ba5e7075c974c5b80767cf6a915cd552011386cf38c27a41dcb5`;
+- planner: `4c5b528224643b2f73c2e67f509e3c8cc55529f3d6eacaa4118efba7e7450258`;
+- typed execution: `641c3332062f0159a898caf669cd164bae423ae059c18f4851e712632af2781e`;
+- grounding: `9f74e5868a3faa3d9293137720d61da97e632cdd7cc9566dd4a1a90fd71b0c6e`;
+- rejected direct comparator: `9410255cc12e30ab9cc142ca1f0050eefe7fcef5ad89b94bbb17a6df1785de55`.
+
+These are engineer-reviewed experiment results, not lawyer-reviewed relevance judgments, a
+full-corpus enrichment validation or production claims. Production code is reimplemented in small
+PRs rather than merging the spike. Official publisher metadata and reviewed aliases ship first;
+model-derived discovery remains inactive until a separate held-out ablation justifies it.
+
+## Selected target architecture
 
 ```text
 search bar
@@ -63,9 +86,12 @@ The enrichment database is a disposable build workbench, not a runtime service.
 6. Export additions and overrides with their provenance. Do not duplicate publisher metadata into
    the reviewed configuration.
 7. Merge publisher metadata, reviewed aliases and validated model-derived discovery fields during
-   indexing. Build one compact work-level FTS record and, if the experiment proves value, one
-   work-level discovery vector per work. Include the enrichment digest in the artifact manifest.
-   Runtime opens only the rebuilt signed index.
+   indexing. Build one compact work-level FTS record, one base work vector and separate quarantined
+   vectors for each accepted discovery concept. Append those typed records to the same
+   vector artifact as provision chunks and map their disjoint ordinal range in SQLite. Record the
+   enrichment digest and mixed-vector layout in the artifact stamp and signed manifest. Runtime
+   opens only the rebuilt signed index and its one verified vector artifact. Ordinary production
+   retrieval ignores quarantined concept fields until their independent graduation gate passes.
 
 The LLM may publish validated discovery aids into the signed index; it never publishes legal
 evidence. Legal text, official titles, identifiers, dates, hierarchy, binding status,
@@ -101,11 +127,32 @@ Lex does not assign one global weight to every enriched field. It uses match tie
 7. semantic similarity.
 
 An exact alias such as `RGPD` may pin one unambiguous work. A broad subject phrase such as
-`protection des données` may improve discovery but cannot override exact title, heading or body
-evidence. A model-derived signal cannot by itself pin a work: promotion requires corroboration from
-official title/body evidence or semantic provision evidence. Rejected or unvalidated proposals
-have no weight because they are absent from the index. Identifiers and aliases are never
-fuzzy-expanded. Ambiguous aliases cannot pin a work.
+`protection des données` may eventually nominate a work as a weak discovery result but never becomes
+legal evidence. Exact identifiers and reviewed aliases remain deterministic. Publisher work
+semantics may nominate candidates; model-derived keyword and concept-vector fields are currently
+quarantined from ordinary retrieval. They can receive a bounded lower weight only after an
+independent holdout proves that they improve residual discovery without reversing direct provision
+evidence or creating weak-only assistant selection. Rejected or unvalidated proposals have no
+weight because they are absent from the index. Identifiers and aliases are never fuzzy-expanded.
+Ambiguous aliases cannot pin a work.
+
+## Single vector artifact decision
+
+The experiment used a separate work-vector sidecar to isolate the spike. Production deliberately
+does not copy that deployment detail. Provision, base-work and accepted-concept embeddings share
+one immutable `lex-vectors/1` artifact, while SQLite records each vector's typed ordinal mapping.
+Provision ordinals remain a contiguous first range and work ordinals a contiguous second range;
+the reader verifies complete, non-overlapping coverage before serving hybrid search.
+
+Every semantic build creates base-work vectors from publisher titles and facets. Supplying a
+reviewed enrichment artifact may add quarantined aliases and concept records but is not required to
+make official work metadata searchable. This prevents deployment configuration from silently
+disabling the publisher-metadata layer and keeps weak activation independently reversible.
+
+Each embedding still stores a binary sign code for the fast candidate scan and an int8 code for
+reranking. Those are two compact encodings of the same model output, not two embeddings. One query
+embedding is reused for both provision and work scans. This keeps the experiment's measured ranking
+shape while removing a second Azure artifact, manifest entry and mount/failure boundary.
 
 Domains and hierarchy remain primarily filters. If the assistant infers a domain rather than the
 user selecting it, the experiment must compare scoped and unscoped candidates before excluding
@@ -156,6 +203,11 @@ Conversation memory is bounded and restorable. A Container App restart or scale-
 not silently change a follow-up into an unrelated first question. The experiment will compare
 Agent Framework session serialization with a short client-restored history and record the chosen
 retention/privacy boundary. Durable personal profiling is out of scope.
+
+Accepted, signed work cards are the durable reusable output of offline enrichment. They may improve
+both deterministic search and future assistant planning. Provider prompt caching may reduce the
+cost of a repeated stable prompt prefix, but it is ephemeral: it is never conversation memory,
+legal evidence, an enrichment store or a deployment dependency.
 
 ## Grounding gate
 
@@ -232,7 +284,7 @@ implementation.
 
 ## Delivery after validation
 
-If the experiment passes, production work is reimplemented in small reviewed PRs:
+The experiment passed, so production work is being reimplemented in small reviewed PRs:
 
 1. provenance-aware enrichment contract, offline LLM workbench and work-level FTS;
 2. ranking and authoritative-identity gates;

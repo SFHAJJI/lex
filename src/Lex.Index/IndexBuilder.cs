@@ -62,7 +62,10 @@ public static class IndexBuilder
         return tail.Count == 0 ? null : string.Join("-", tail);
     }
 
-    private static string ContentDigest(IEnumerable<DocRow> docs, IEnumerable<ProvisionRow> provisions)
+    private static string ContentDigest(
+        SqliteConnection connection,
+        IEnumerable<DocRow> docs,
+        IEnumerable<ProvisionRow> provisions)
     {
         var sb = new System.Text.StringBuilder();
         foreach (var d in docs.OrderBy(d => d.Key, StringComparer.Ordinal).ThenBy(d => d.Language, StringComparer.Ordinal))
@@ -71,8 +74,63 @@ public static class IndexBuilder
         foreach (var p in provisions.OrderBy(p => p.Rid, StringComparer.Ordinal).ThenBy(p => p.Seq))
             sb.Append(p.ProvisionId).Append('|')
               .Append(Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(p.TextMd)))).Append('\n');
+        AppendPublisherMetadataDigest(connection, sb);
         return Convert.ToHexStringLower(
             System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(sb.ToString())));
+    }
+
+    internal static void AppendPublisherMetadataDigest(SqliteConnection connection, StringBuilder output)
+    {
+        using (var metadata = connection.CreateCommand())
+        {
+            metadata.CommandText = """
+                SELECT r.group_key,r.language,m.kind,m.identifier,m.value,m.normalized,
+                       m.language,m.valid_from,m.valid_to,m.source_uri
+                FROM work_publisher_metadata m
+                JOIN work_records r ON r.work_id=m.work_id
+                ORDER BY r.group_key,r.language,m.kind,m.identifier,COALESCE(m.value,''),
+                         COALESCE(m.language,''),m.valid_from,COALESCE(m.valid_to,''),m.source_uri
+                """;
+            using var rows = metadata.ExecuteReader();
+            while (rows.Read())
+                AppendDigestRecord(output, "publisher",
+                    rows.GetString(0), rows.GetString(1), rows.GetString(2), rows.GetString(3),
+                    rows.IsDBNull(4) ? null : rows.GetString(4), rows.GetString(5),
+                    rows.IsDBNull(6) ? null : rows.GetString(6), rows.GetString(7),
+                    rows.IsDBNull(8) ? null : rows.GetString(8), rows.GetString(9));
+        }
+        using var roles = connection.CreateCommand();
+        roles.CommandText = "SELECT rid,role FROM document_roles ORDER BY rid,role";
+        using var roleRows = roles.ExecuteReader();
+        while (roleRows.Read())
+            AppendDigestRecord(output, "role", roleRows.GetString(0), roleRows.GetString(1));
+        using var discovery = connection.CreateCommand();
+        discovery.CommandText = """
+            SELECT r.group_key,r.language,d.kind,d.value,d.normalized,d.model_deployment,
+                   d.prompt_sha256,d.schema_sha256,d.generated_at,d.confidence,
+                   d.repeat_runs,d.agreement_ratio,d.evidence_json
+            FROM work_discovery d
+            JOIN work_records r ON r.work_id=d.work_id
+            ORDER BY r.group_key,r.language,d.kind,d.normalized,d.model_deployment,
+                     d.prompt_sha256,d.schema_sha256,d.generated_at,d.evidence_json
+            """;
+        using var discoveryRows = discovery.ExecuteReader();
+        while (discoveryRows.Read())
+            AppendDigestRecord(output, "weak-discovery",
+                discoveryRows.GetString(0), discoveryRows.GetString(1), discoveryRows.GetString(2),
+                discoveryRows.GetString(3), discoveryRows.GetString(4), discoveryRows.GetString(5),
+                discoveryRows.GetString(6), discoveryRows.GetString(7), discoveryRows.GetString(8),
+                discoveryRows.GetDouble(9).ToString("R", System.Globalization.CultureInfo.InvariantCulture),
+                discoveryRows.GetInt64(10).ToString(System.Globalization.CultureInfo.InvariantCulture),
+                discoveryRows.GetDouble(11).ToString("R", System.Globalization.CultureInfo.InvariantCulture),
+                discoveryRows.GetString(12));
+    }
+
+    private static void AppendDigestRecord(StringBuilder output, params string?[] fields)
+    {
+        foreach (var field in fields)
+            output.Append(field is null ? -1 : Encoding.UTF8.GetByteCount(field)).Append(':').Append(field);
+        output.Append('\n');
     }
 
     public static void Build(
@@ -85,7 +143,8 @@ public static class IndexBuilder
         string? signingKeyPem,
         IEnumerable<ProvisionStateRow>? provisionStates = null,
         IEnumerable<AnchorEventRow>? anchorEvents = null,
-        SemanticBuildOptions? semantic = null)
+        SemanticBuildOptions? semantic = null,
+        WorkSearchBuildOptions? workSearch = null)
     {
         var docRows = docs.ToList();
         var provisionRows = provisions.ToList();
@@ -234,6 +293,9 @@ public static class IndexBuilder
             CREATE INDEX ix_docs_group ON docs(group_key, valid_from);
             CREATE INDEX ix_docs_stab ON docs(collection, kind, valid_from, valid_to);
             CREATE INDEX ix_docs_rid ON docs(rid);
+            CREATE TABLE document_roles(
+              rid TEXT NOT NULL, role TEXT NOT NULL, PRIMARY KEY(rid,role));
+            CREATE INDEX ix_document_roles_role ON document_roles(role,rid);
             CREATE TABLE provisions(
               rid TEXT NOT NULL, seq INTEGER NOT NULL, anchor TEXT NOT NULL,
               provision_id TEXT NOT NULL, ptype TEXT NOT NULL, num TEXT, heading TEXT,
@@ -281,6 +343,43 @@ public static class IndexBuilder
             CREATE TABLE obs_history(key TEXT, language TEXT, expr_valid_from TEXT,
               sha256 TEXT, source_uri TEXT, observed_from TEXT, observed_to TEXT);
             CREATE INDEX ix_obs_key ON obs_history(key, language, expr_valid_from);
+            CREATE TABLE work_records(
+              work_id INTEGER PRIMARY KEY,
+              group_key TEXT NOT NULL, language TEXT NOT NULL,
+              title TEXT, title_short TEXT, group_identifier TEXT,
+              hierarchy TEXT, domains TEXT, act_form TEXT,
+              UNIQUE(group_key,language));
+            CREATE TABLE work_names(
+              work_id INTEGER NOT NULL, kind TEXT NOT NULL,
+              value TEXT NOT NULL, normalized TEXT NOT NULL, reviewed_by TEXT,
+              UNIQUE(work_id,kind,normalized));
+            CREATE INDEX ix_work_names_exact ON work_names(normalized,kind,work_id);
+            CREATE TABLE work_discovery(
+              work_id INTEGER NOT NULL, kind TEXT NOT NULL,
+              value TEXT NOT NULL, normalized TEXT NOT NULL,
+              model_deployment TEXT NOT NULL, prompt_sha256 TEXT NOT NULL,
+              schema_sha256 TEXT NOT NULL, generated_at TEXT NOT NULL,
+              confidence REAL NOT NULL, repeat_runs INTEGER NOT NULL,
+              agreement_ratio REAL NOT NULL, evidence_json TEXT NOT NULL,
+              UNIQUE(work_id,kind,normalized));
+            CREATE TABLE work_publisher_metadata(
+              work_id INTEGER NOT NULL, kind TEXT NOT NULL, identifier TEXT NOT NULL,
+              value TEXT, normalized TEXT NOT NULL, language TEXT, valid_from TEXT NOT NULL, valid_to TEXT,
+              source_uri TEXT NOT NULL,
+              UNIQUE(work_id,kind,identifier,value,language,valid_from));
+            CREATE INDEX ix_work_publisher_metadata
+              ON work_publisher_metadata(work_id,kind,language,valid_from);
+            CREATE INDEX ix_work_publisher_metadata_normalized
+              ON work_publisher_metadata(normalized,language,valid_from);
+            CREATE TABLE work_vectors(
+              work_vector_id INTEGER PRIMARY KEY,
+              work_id INTEGER NOT NULL, evidence_kind TEXT NOT NULL, evidence_value TEXT,
+              vector_ordinal INTEGER NOT NULL UNIQUE);
+            CREATE INDEX ix_work_vectors_work ON work_vectors(work_id);
+            CREATE VIRTUAL TABLE work_fts USING fts5(
+              group_key UNINDEXED, language UNINDEXED,
+              identifiers, aliases, titles, facets, publisher, discovery,
+              tokenize='unicode61 remove_diacritics 2');
             CREATE TABLE stamp(k TEXT PRIMARY KEY, v TEXT NOT NULL);
             CREATE VIRTUAL TABLE fts USING fts5(work_title, num, heading, text_md, content='');
             CREATE VIRTUAL TABLE fts_vocab USING fts5vocab(fts, 'row');
@@ -316,6 +415,10 @@ public static class IndexBuilder
                 """;
             foreach (var p in new[] { "$key", "$col", "$gk", "$gi", "$kind", "$lang", "$vf", "$vt", "$vts", "$of", "$wd", "$ta", "$tp", "$rs", "$bs", "$su", "$t", "$ts2", "$pd", "$sn", "$rid", "$prof", "$hier", "$domains", "$form", "$binding", "$consolidation" })
                 insDoc.Parameters.Add(new SqliteParameter(p, SqliteType.Text));
+            var insRole = conn.CreateCommand();
+            insRole.CommandText = "INSERT OR IGNORE INTO document_roles(rid,role) VALUES ($rid,$role)";
+            insRole.Parameters.Add(new SqliteParameter("$rid", SqliteType.Text));
+            insRole.Parameters.Add(new SqliteParameter("$role", SqliteType.Text));
 
             foreach (var d in docRows)
             {
@@ -333,6 +436,13 @@ public static class IndexBuilder
                 Set(insDoc, "$form", d.ActForm); Set(insDoc, "$binding", d.BindingStatus);
                 Set(insDoc, "$consolidation", d.ConsolidationStatus);
                 insDoc.ExecuteNonQuery();
+                foreach (var role in (d.DocumentRoles ?? []).Distinct(StringComparer.Ordinal)
+                             .Order(StringComparer.Ordinal))
+                {
+                    insRole.Parameters["$rid"].Value = rid;
+                    insRole.Parameters["$role"].Value = role;
+                    insRole.ExecuteNonQuery();
+                }
                 DatabaseItemCompleted();
             }
 
@@ -496,6 +606,9 @@ public static class IndexBuilder
                 ReportProgress(semantic, SemanticBuildStage.Database,
                     0, 0, databaseWatch, ref lastDatabasePercent, ref lastDatabaseReport, force: true);
 
+            WorkSearch.Populate(
+                conn, docRows, provisionRows, workSearch, semantic, semanticWriter, embeddingCache);
+
             finalizationWatch = System.Diagnostics.Stopwatch.StartNew();
             ReportProgress(semantic, SemanticBuildStage.Finalization,
                 finalizationCompleted, 3, finalizationWatch,
@@ -512,8 +625,36 @@ public static class IndexBuilder
             {
                 ["schema"] = SchemaVersion,
                 ["algorithm"] = StampSigner.Algorithm,
-                ["content_digest"] = ContentDigest(docRows, provisionRows),
+                ["content_digest"] = ContentDigest(conn, docRows, provisionRows),
+                ["work_catalog_version"] = "2",
             };
+            using (var workCounts = conn.CreateCommand())
+            {
+                workCounts.CommandText = """
+                    SELECT (SELECT COUNT(*) FROM work_records),
+                           (SELECT COUNT(*) FROM work_vectors),
+                           (SELECT COUNT(*) FROM work_publisher_metadata),
+                           (SELECT COUNT(*) FROM document_roles),
+                           (SELECT COUNT(*) FROM work_discovery)
+                    """;
+                using var countRow = workCounts.ExecuteReader();
+                if (!countRow.Read()) throw new InvalidDataException("Work search counts cannot be read.");
+                var workVectorRecords = countRow.GetInt64(1);
+                stamp["work_search_records"] = countRow.GetInt64(0).ToString(
+                    System.Globalization.CultureInfo.InvariantCulture);
+                stamp["work_vector_records"] = workVectorRecords.ToString(
+                    System.Globalization.CultureInfo.InvariantCulture);
+                stamp["publisher_metadata_records"] = countRow.GetInt64(2).ToString(
+                    System.Globalization.CultureInfo.InvariantCulture);
+                stamp["document_role_records"] = countRow.GetInt64(3).ToString(
+                    System.Globalization.CultureInfo.InvariantCulture);
+                stamp["weak_discovery_records"] = countRow.GetInt64(4).ToString(
+                    System.Globalization.CultureInfo.InvariantCulture);
+                if (workVectorRecords > 0)
+                    stamp["vector_layout"] = "lex-vectors/1-mixed-provision-work";
+            }
+            if (workSearch is not null)
+                stamp["enrichment_digest"] = workSearch.EnrichmentDigest;
             finalizationCompleted++;
             finalizationHeartbeat?.SetCompleted(finalizationCompleted);
             ReportProgress(semantic, SemanticBuildStage.Finalization,
@@ -578,7 +719,7 @@ public static class IndexBuilder
         }
     }
 
-    private static int EmbeddingTokenBucket(int tokenCount) => tokenCount switch
+    internal static int EmbeddingTokenBucket(int tokenCount) => tokenCount switch
     {
         <= 0 => throw new InvalidDataException("Semantic chunk token count must be positive."),
         <= 32 => 32,

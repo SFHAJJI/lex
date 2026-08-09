@@ -23,6 +23,16 @@ public class FitnessTests
 
     private static readonly string[] PublisherWords = ["jolux", "cdm:", "legilux", "eurlex", "cellar", "cssf"];
 
+    [Fact]
+    public void EurLex_professional_names_live_in_reviewed_data_not_adapter_code()
+    {
+        var source = File.ReadAllText(
+            Path.Combine(RepoRoot(), "src", "Lex.Sources.EurLex", "EurLexAdapter.cs"));
+
+        Assert.DoesNotContain("CommonNames", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"GDPR\"", source, StringComparison.Ordinal);
+    }
+
     // F1 — foundations know nothing about regulation or any publisher.
     [Theory]
     [InlineData("Lex.Temporal")]

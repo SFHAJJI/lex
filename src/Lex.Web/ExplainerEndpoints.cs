@@ -26,6 +26,8 @@ public static class ExplainerEndpoints
         var publicBase = ctx.PublicBase;
         var mcpCore = ctx.Mcp;
         var architecture = ArchitectureProgram.Registry;
+        var retrievalCases = LoadRetrievalCases();
+        var retrievalBaseline = LoadRetrievalBaseline();
 
         string ArchitectureTabs(string active)
         {
@@ -224,40 +226,45 @@ public static class ExplainerEndpoints
             static string F(double value, string format) =>
                 value.ToString(format, CultureInfo.InvariantCulture);
             var b = architecture.Baseline;
-            var retrievalCases = RetrievalBenchmarkCatalog.Create();
-            var benchmarkPath = Path.Combine(ctx.Options.IndexDir, "retrieval-benchmark-eu-eurlex.json");
-            RetrievalBenchmarkReport? report = null;
-            try
-            {
-                if (File.Exists(benchmarkPath)
-                    && ctx.Registry.IsArtifactVerified(Path.GetFileName(benchmarkPath)))
-                    report = JsonSerializer.Deserialize<RetrievalBenchmarkReport>(File.ReadAllBytes(benchmarkPath),
-                        new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower });
-            }
-            catch (Exception)
-            {
-                // A benchmark is evidence, not a startup dependency. Invalid evidence is omitted.
-            }
+            var expectedCollections = retrievalCases.Select(item => item.Collection)
+                .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+            var reports = expectedCollections.Select(collection =>
+                    (Collection: collection, Report: LoadReport(collection)))
+                .Where(item => item.Report is not null)
+                .ToDictionary(item => item.Collection, item => item.Report!, StringComparer.Ordinal);
+            var compatible = RetrievalBenchmarkGate.ReportsAreCompatible(
+                reports.Values.ToArray(), expectedCollections.Length);
+            var combinedPassed = compatible && reports.Values.All(item => item.ActivationGatePassed);
+            var reportEntry = reports.OrderBy(item => item.Key, StringComparer.Ordinal).FirstOrDefault();
+            var report = reportEntry.Value;
             var caseRows = string.Join("", retrievalCases.GroupBy(c => c.Category)
                 .OrderBy(g => g.Key, StringComparer.Ordinal)
                 .Select(g => $"<tr><td>{H(g.Key)}</td><td class=\"mono\">{g.Count()}</td></tr>"));
             var relevance = report is null
-                ? """
-                  <div class="notice"><b>Not measured yet.</b> The public 200-case suite is a gated milestone.
+                ? $"""
+                  <div class="notice"><b>Not measured yet.</b> The public {retrievalCases.Count}-case suite is a gated milestone.
                   Hybrid will not become default until exact identifiers, temporal isolation, nDCG@10,
                   regression, latency and memory pass their recorded thresholds.</div>
                   """
                 : $"""
-                  <div class="notice"><b>Latest gate: {(report.ActivationGatePassed ? "passed" : "not passed")}.</b>
-                  Review status: {H(report.ReviewStatus)}. Measured {H(report.Timestamp)} over
-                  {report.SampleCount:n0} public cases.</div>
+                  <div class="notice"><b>Latest combined gate: {(combinedPassed ? "passed" : "not passed")}.</b>
+                  Measured collections: {reports.Count:n0}/{expectedCollections.Length:n0}.
+                  Reports must share case digest, code, model and resource configuration, and each must name
+                  its verified publisher release manifest, before this can pass.
+                  Detail below: {H(reportEntry.Key)}, review status {H(report.ReviewStatus)}, measured
+                  {H(report.Timestamp)} over {report.SampleCount:n0} cases.</div>
                   <div class="card"><table>
                   <tr><th>measure</th><th>keyword</th><th>hybrid</th></tr>
-                  <tr><td>MRR</td><td class="mono">{F(report.Keyword.Mrr, "0.000")}</td><td class="mono">{F(report.Hybrid.Mrr, "0.000")}</td></tr>
-                  <tr><td>Recall@10</td><td class="mono">{F(report.Keyword.RecallAt10, "0.000")}</td><td class="mono">{F(report.Hybrid.RecallAt10, "0.000")}</td></tr>
-                  <tr><td>nDCG@10</td><td class="mono">{F(report.Keyword.NdcgAt10, "0.000")}</td><td class="mono">{F(report.Hybrid.NdcgAt10, "0.000")}</td></tr>
-                  <tr><td>warm p95</td><td class="mono">{F(report.Keyword.P95Ms, "0.0")} ms</td><td class="mono">{F(report.Hybrid.P95Ms, "0.0")} ms</td></tr>
-                  <tr><td>warm p99</td><td class="mono">{F(report.Keyword.P99Ms, "0.0")} ms</td><td class="mono">{F(report.Hybrid.P99Ms, "0.0")} ms</td></tr>
+                  <tr><td>tuning MRR</td><td class="mono">{F(report.KeywordTuning.Mrr, "0.000")}</td><td class="mono">{F(report.HybridTuning.Mrr, "0.000")}</td></tr>
+                  <tr><td>tuning Recall@10</td><td class="mono">{F(report.KeywordTuning.RecallAt10, "0.000")}</td><td class="mono">{F(report.HybridTuning.RecallAt10, "0.000")}</td></tr>
+                  <tr><td>tuning nDCG@10</td><td class="mono">{F(report.KeywordTuning.NdcgAt10, "0.000")}</td><td class="mono">{F(report.HybridTuning.NdcgAt10, "0.000")}</td></tr>
+                  <tr><td>holdout nDCG@10</td><td class="mono">{F(report.KeywordHoldout.NdcgAt10, "0.000")}</td><td class="mono">{F(report.HybridHoldout.NdcgAt10, "0.000")}</td></tr>
+                  <tr><td>holdout no-hit accuracy</td><td class="mono">{F(report.KeywordHoldout.NoHitAccuracy, "0.000")}</td><td class="mono">{F(report.HybridHoldout.NoHitAccuracy, "0.000")}</td></tr>
+                  <tr><td>holdout resolution accuracy</td><td class="mono">{F(report.KeywordHoldout.ResolutionAccuracy, "0.000")}</td><td class="mono">{F(report.HybridHoldout.ResolutionAccuracy, "0.000")}</td></tr>
+                  <tr><td>holdout warm p95</td><td class="mono">{F(report.KeywordHoldout.P95Ms, "0.0")} ms</td><td class="mono">{F(report.HybridHoldout.P95Ms, "0.0")} ms</td></tr>
+                  <tr><td>holdout warm p99</td><td class="mono">{F(report.KeywordHoldout.P99Ms, "0.0")} ms</td><td class="mono">{F(report.HybridHoldout.P99Ms, "0.0")} ms</td></tr>
+                  <tr><td>tuning warm p95</td><td class="mono">{F(report.KeywordTuning.P95Ms, "0.0")} ms</td><td class="mono">{F(report.HybridTuning.P95Ms, "0.0")} ms</td></tr>
+                  <tr><td>tuning warm p99</td><td class="mono">{F(report.KeywordTuning.P99Ms, "0.0")} ms</td><td class="mono">{F(report.HybridTuning.P99Ms, "0.0")} ms</td></tr>
                   </table><p class="sub">Code <span class="mono">{H(report.CodeCommit)}</span>, corpus
                   <span class="mono">{H(report.CorpusCommit)}</span>, manifest <span class="mono">{H(report.ManifestId)}</span>,
                   model <span class="mono">{H(report.ModelId)}@{H(report.ModelRevision)}</span>.<br>
@@ -284,12 +291,13 @@ public static class ExplainerEndpoints
                 <div class="card"><table><tr><th>case category</th><th>public judgments</th></tr>
                 {caseRows}</table></div>
                 <p><a href="/benchmarks/cases.json">Download all {retrievalCases.Count} public cases and judgments</a>.
-                Each case names its language, time scope, relevant work, explanation and review status.</p>
+                Each case names its collection, tuning or holdout split, language, time scope,
+                canonical collection/work identities, expected intent state, explanation and review status.</p>
                 <h2>Publication rule</h2>
                 <p>Future reports name code and corpus commits, the signed artifact manifest, embedding model,
-                machine or Azure resource, timestamp, sample count and review status. Initial relevance
-                generated judgments are labelled generated-unreviewed and cannot pass the activation gate.
-                Reviewed cases are identified individually.</p>
+                machine or Azure resource, timestamp, sample count and review status. The public labels are
+                engineer-reviewed retrieval judgments, not legal conclusions. Tuning and holdout results are
+                reported separately, and only the holdout can authorize a default change.</p>
                 """;
             return Results.Content(Page("Benchmarks", body,
                 "measured retrieval, latency, memory, index size and cost evidence",
@@ -298,18 +306,73 @@ public static class ExplainerEndpoints
 
         app.MapGet("/benchmarks/latest.json", () =>
         {
-            var path = Path.Combine(ctx.Options.IndexDir, "retrieval-benchmark-eu-eurlex.json");
-            return File.Exists(path) && ctx.Registry.IsArtifactVerified(Path.GetFileName(path))
-                ? Results.File(path, "application/json")
-                : Results.NotFound(new { status = "not_measured_yet" });
+            var collections = retrievalCases.Select(item => item.Collection)
+                .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+            var reports = collections.Select(collection =>
+                    (Collection: collection, Report: LoadReport(collection)))
+                .Where(item => item.Report is not null).ToArray();
+            if (reports.Length == 0) return Results.NotFound(new { status = "not_measured_yet" });
+            var compatible = RetrievalBenchmarkGate.ReportsAreCompatible(
+                reports.Select(item => item.Report!).ToArray(), collections.Length);
+            return Results.Json(new
+            {
+                schema = "lex-retrieval-benchmark-set/1",
+                activation_gate_passed = compatible && reports.All(item => item.Report!.ActivationGatePassed),
+                expected_collections = collections,
+                reports = reports.ToDictionary(item => item.Collection, item => item.Report),
+            });
         });
 
         app.MapGet("/benchmarks/cases.json", () => Results.Json(
-            RetrievalBenchmarkCatalog.Create(), new System.Text.Json.JsonSerializerOptions
+            retrievalCases, new System.Text.Json.JsonSerializerOptions
             {
                 PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.SnakeCaseLower,
                 WriteIndented = true,
             }));
+
+        RetrievalBenchmarkReport? LoadReport(string collection)
+        {
+            var path = Path.Combine(ctx.Options.IndexDir, $"retrieval-benchmark-{collection}.json");
+            try
+            {
+                if (!File.Exists(path) || !ctx.Registry.IsArtifactVerified(Path.GetFileName(path)))
+                    return null;
+                var report = JsonSerializer.Deserialize<RetrievalBenchmarkReport>(File.ReadAllBytes(path),
+                    new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower });
+                var expectedCases = retrievalCases.Count(item => item.Collection == collection);
+                var expectedTuning = retrievalCases.Count(item => item.Collection == collection
+                    && item.Split == "tuning");
+                var expectedHoldout = retrievalCases.Count(item => item.Collection == collection
+                    && item.Split == "holdout");
+                return report is not null
+                       && report.Schema == "lex-retrieval-benchmark/3"
+                       && report.BaselineSchema == retrievalBaseline.Schema
+                       && report.SampleCount == expectedCases
+                       && report.TuningSampleCount == expectedTuning
+                       && report.HoldoutSampleCount == expectedHoldout
+                       && report.KeywordTuning is not null
+                       && report.HybridTuning is not null
+                       && report.KeywordHoldout is not null
+                       && report.HybridHoldout is not null
+                       && report.GateFailures is not null
+                       && report.ActivationGatePassed == (report.GateFailures.Count == 0)
+                       && RetrievalBenchmarkGate.HasReleaseIdentity(report)
+                       && BenchmarkClaimsMatchVerifiedManifests(
+                           report, collection, ctx.Registry.VerifiedArtifactManifests)
+                       && report.ReviewAttestation
+                           == $"{retrievalBaseline.ReviewedBy}@{retrievalBaseline.ReviewedAt}"
+                       && string.Equals(report.ExpectedCasesSha256, retrievalBaseline.CasesSha256,
+                           StringComparison.OrdinalIgnoreCase)
+                       && string.Equals(report.ActualCasesSha256, retrievalBaseline.CasesSha256,
+                           StringComparison.OrdinalIgnoreCase)
+                    ? report : null;
+            }
+            catch (Exception)
+            {
+                // Benchmark evidence is fail-closed and never a startup dependency.
+                return null;
+            }
+        }
 
         // ---- auditor surface: public key, live attestation, verify-it-yourself ----
         app.MapGet("/pubkey.pem", () =>
@@ -593,8 +656,9 @@ public static class ExplainerEndpoints
                 <tr><td>Frozen profile fingerprints</td><td>a published extraction can never change output</td></tr>
                 <tr><td>Determinism guard in CI</td><td>re-derivation is byte-identical or the run commits nothing</td></tr>
                 <tr><td>End-to-end assistant evals</td><td>the assistant picks the right tools and never cites a source it was not given</td></tr>
-                <tr><td>200-case retrieval benchmark</td><td>exact, temporal, conceptual, bilingual, typo and hierarchy
-                behavior is measured against published judgments before hybrid can become the default</td></tr>
+                <tr><td>200-case retrieval benchmark</td><td>EU and Luxembourg exact, temporal, conceptual,
+                bilingual, typo, hierarchy, role, comparison, negative, ambiguity and gap behavior is
+                measured on separate tuning and holdout judgments before hybrid can become the default</td></tr>
                 <tr><td>LLM-judged groundedness</td><td>answers scored against the evidence actually returned</td></tr>
                 <tr><td>Pinned whole-artifact manifests</td><td>anyone can verify every released input was not altered,
                 <a href="/verify">recipe</a></td></tr>
@@ -1197,5 +1261,39 @@ public static class ExplainerEndpoints
         });
 
         return app;
+    }
+
+    public static bool BenchmarkClaimsMatchVerifiedManifests(
+        RetrievalBenchmarkReport report, string collection,
+        IReadOnlyCollection<VerifiedArtifactManifest> manifests)
+    {
+        var benchmarkFile = $"retrieval-benchmark-{collection}.json";
+        var indexFile = $"index-{collection}.db";
+        var benchmarkManifests = manifests.Where(item =>
+            item.Artifacts.Contains(benchmarkFile, StringComparer.Ordinal)).ToArray();
+        var indexManifests = manifests.Where(item =>
+            item.Artifacts.Contains(indexFile, StringComparer.Ordinal)).ToArray();
+        return benchmarkManifests.Length == 1
+               && indexManifests.Length == 1
+               && string.Equals(report.CodeCommit, benchmarkManifests[0].CodeCommit,
+                   StringComparison.OrdinalIgnoreCase)
+               && string.Equals(report.ManifestId, indexManifests[0].Sha256,
+                   StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static IReadOnlyList<RetrievalBenchmarkCase> LoadRetrievalCases()
+    {
+        using var stream = typeof(ExplainerEndpoints).Assembly.GetManifestResourceStream(
+            "Lex.Web.retrieval-cases.json")
+            ?? throw new InvalidOperationException("Embedded retrieval benchmark cases are missing.");
+        return RetrievalBenchmarkCatalog.Load(stream);
+    }
+
+    private static RetrievalBenchmarkBaseline LoadRetrievalBaseline()
+    {
+        using var stream = typeof(ExplainerEndpoints).Assembly.GetManifestResourceStream(
+            "Lex.Web.retrieval-baseline-v2.json")
+            ?? throw new InvalidOperationException("Embedded retrieval benchmark baseline is missing.");
+        return RetrievalBenchmarkCatalog.LoadBaseline(stream);
     }
 }

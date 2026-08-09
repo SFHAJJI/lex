@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Lex.Index;
 
@@ -11,11 +13,16 @@ namespace Lex.Ingest;
 public static class IndexFromCorpus
 {
     public static void Build(string corpusRoot, string? articlesRoot, string dbPath, string? signingKeyPem,
-                             DateTimeOffset now, SemanticBuildOptions? semantic = null)
+                             DateTimeOffset now, SemanticBuildOptions? semantic = null,
+                             string? workEnrichmentPath = null)
     {
         var manifest = JsonSerializer.Deserialize<ManifestDoc>(
             File.ReadAllText(Path.Combine(corpusRoot, "manifest.json")), CorpusJson.Options)!;
         var publisherId = manifest.Publisher["id"];
+        if (workEnrichmentPath is not null
+            && manifest.PublisherDiscoverySchema != ManifestDoc.CurrentPublisherDiscoverySchema)
+            throw new InvalidDataException(
+                "The corpus predates publisher-discovery migration. Re-ingest it before applying reviewed work aliases.");
 
         var docs = new List<DocRow>();
         var provisions = new List<ProvisionRow>();
@@ -114,7 +121,13 @@ public static class IndexFromCorpus
                         Domains: NormalizeDomains(meta.Raw.GetValueOrDefault("domains") ?? meta.Raw.GetValueOrDefault("scope_reasons")),
                         ActForm: meta.Raw.GetValueOrDefault("legal_form"),
                         BindingStatus: meta.Raw.GetValueOrDefault("binding_status"),
-                        ConsolidationStatus: meta.Raw.GetValueOrDefault("consolidation_status")));
+                        ConsolidationStatus: meta.Raw.GetValueOrDefault("consolidation_status"),
+                        PublisherMetadata: (meta.PublisherMetadata ?? [])
+                            .Where(value => value.Language is null || value.Language == expr.Language)
+                            .Select(value => new PublisherMetadataRow(
+                                value.Kind, value.Identifier, value.Language, value.Label, value.SourceUri))
+                            .ToArray(),
+                        DocumentRoles: meta.DocumentRoles ?? []));
 
                     // Observation chains: obs N's observed_to = obs N+1's observed_from; last closed by tombstone.
                     for (var i = 0; i < expr.Observations.Count; i++)
@@ -130,6 +143,13 @@ public static class IndexFromCorpus
             }
         }
 
+        var buildIssues = manifest.BuildIssues.OrderBy(issue => issue.Work, StringComparer.Ordinal)
+            .ThenBy(issue => issue.Code, StringComparer.Ordinal)
+            .ThenBy(issue => issue.Detail, StringComparer.Ordinal).ToArray();
+        var buildIssuesJson = JsonSerializer.Serialize(buildIssues, new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+        });
         var stamp = new Dictionary<string, string>
         {
             ["collection"] = publisherId,
@@ -153,7 +173,12 @@ public static class IndexFromCorpus
             ["ingester_version"] = manifest.IngesterVersion,
             ["works"] = docs.Select(d => d.GroupKey).Distinct().Count().ToString(),
             ["versions"] = docs.Select(d => d.Key).Distinct().Count().ToString(),
+            ["build_issues_json"] = buildIssuesJson,
+            ["build_issues_digest"] = Convert.ToHexStringLower(
+                SHA256.HashData(Encoding.UTF8.GetBytes(buildIssuesJson))),
         };
+        if (manifest.ScopeExpectedWorks is { } scopeExpectedWorks)
+            stamp["scope_expected_works"] = scopeExpectedWorks.ToString();
 
         // Per-anchor time axis + lifecycle events, from the derived layer's history.json
         var provisionStates = new List<ProvisionStateRow>();
@@ -215,8 +240,12 @@ public static class IndexFromCorpus
         }
 
         stamp["derived_provisions"] = provisions.Count.ToString();
+        var heldWorks = docs.Select(doc => (doc.GroupKey, doc.Language)).ToHashSet();
+        var workSearch = workEnrichmentPath is null
+            ? null
+            : WorkEnrichmentFile.Load(workEnrichmentPath, publisherId, heldWorks);
         IndexBuilder.Build(dbPath, stamp, docs, provisions, events, observations, signingKeyPem,
-            provisionStates, anchorEventRows, semantic);
+            provisionStates, anchorEventRows, semantic, workSearch);
         Console.Error.WriteLine($"  [index] {dbPath}: {docs.Count} rows, {provisions.Count} provisions, {provisionStates.Count} states, {anchorEventRows.Count} anchor events, signed={(signingKeyPem is not null)}");
     }
 

@@ -2,6 +2,7 @@ using Microsoft.Data.Sqlite;
 using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 
 namespace Lex.Index;
 
@@ -19,6 +20,8 @@ public sealed record CoverageProfile(string Profile, int Versions);
 /// question that decides whether a language control belongs to the site or to the document.
 public sealed record CoverageLanguage(string Language, int Works, int Versions);
 
+public sealed record CoverageBuildIssue(string Code, string Work, string? Detail);
+
 public sealed record CoverageInfo(
     string Collection,
     int Groups,
@@ -30,7 +33,9 @@ public sealed record CoverageInfo(
     int TextServed,
     IReadOnlyList<CoverageProfile> Profiles,
     IReadOnlyList<CoverageLanguage> Languages,
-    int MultilingualWorks);
+    int MultilingualWorks,
+    int? ExpectedWorks = null,
+    IReadOnlyList<CoverageBuildIssue>? BuildIssues = null);
 
 /// Values that the mounted index can actually accept as public search filters. Keeping this
 /// inventory beside the data means adding a reviewed domain or jurisdiction does not require a
@@ -52,19 +57,31 @@ public sealed class LexIndexReader : IDisposable
     private readonly string _schema;
     private readonly ITextEncoder? _encoder;
     private readonly SemanticVectorReader? _vectors;
+    private readonly bool _hasWorkSearch;
+    private readonly int _workCatalogVersion;
+    private readonly long _provisionVectorCount;
+    private readonly IReadOnlyList<CoverageBuildIssue> _buildIssues;
+    private readonly int? _expectedWorks;
     public IReadOnlyDictionary<string, string> Stamp { get; }
     public string Collection => Stamp.GetValueOrDefault("collection", "?");
     public bool SignatureValid { get; }
     public bool HybridReady => _encoder is not null && _vectors is not null;
 
     private LexIndexReader(SqliteConnection conn, Dictionary<string, string> stamp, string schema,
-                           ITextEncoder? encoder, SemanticVectorReader? vectors)
+                           ITextEncoder? encoder, SemanticVectorReader? vectors, bool hasWorkSearch,
+                           int workCatalogVersion, long provisionVectorCount,
+                           IReadOnlyList<CoverageBuildIssue> buildIssues, int? expectedWorks)
     {
         _conn = conn;
         Stamp = stamp;
         _schema = schema;
         _encoder = encoder;
         _vectors = vectors;
+        _hasWorkSearch = hasWorkSearch;
+        _workCatalogVersion = workCatalogVersion;
+        _provisionVectorCount = provisionVectorCount;
+        _buildIssues = buildIssues;
+        _expectedWorks = expectedWorks;
         SignatureValid = stamp.ContainsKey("signature") && StampSigner.Verify(stamp);
     }
 
@@ -80,6 +97,30 @@ public sealed class LexIndexReader : IDisposable
             cmd.CommandText = "SELECT k, v FROM stamp";
             using var r = cmd.ExecuteReader();
             while (r.Read()) stamp[r.GetString(0)] = r.GetString(1);
+        }
+        var buildIssuesJson = stamp.GetValueOrDefault("build_issues_json");
+        var buildIssuesDigest = stamp.GetValueOrDefault("build_issues_digest");
+        var expectedWorksValue = stamp.GetValueOrDefault("scope_expected_works");
+        if (expectedWorksValue is not null
+            && (buildIssuesJson is null || buildIssuesDigest is null))
+            throw new InvalidDataException(
+                $"Index {dbPath} has an expected-work count without a build-issue inventory.");
+        if ((buildIssuesJson is null) != (buildIssuesDigest is null)
+            || buildIssuesJson is not null && !string.Equals(
+                Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(buildIssuesJson))),
+                buildIssuesDigest, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException($"Index {dbPath} has an invalid build-issue inventory digest.");
+        var buildIssues = ValidateBuildIssues(buildIssuesJson, dbPath);
+        int? expectedWorks = null;
+        if (expectedWorksValue is not null)
+        {
+            if (!int.TryParse(expectedWorksValue,
+                    System.Globalization.NumberStyles.None,
+                    System.Globalization.CultureInfo.InvariantCulture, out var parsedExpected)
+                || parsedExpected < 0 || parsedExpected > 1_000_000)
+                throw new InvalidDataException(
+                    $"Index {dbPath} has an invalid expected-work count.");
+            expectedWorks = parsedExpected;
         }
         // §8.4 — refuse unknown schemas explicitly; never guess, never migrate silently.
         var schema = stamp.GetValueOrDefault("schema");
@@ -107,7 +148,8 @@ public sealed class LexIndexReader : IDisposable
 
         if (schema == IndexBuilder.SchemaVersion)
         {
-            var missingV3Docs = new[] { "hierarchy", "domains", "act_form", "binding_status", "consolidation_status" }
+            var missingV3Docs = new[]
+                { "hierarchy", "domains", "act_form", "binding_status", "consolidation_status" }
                 .Where(c => !present.Contains(c)).ToList();
             if (missingV3Docs.Count > 0)
                 throw new InvalidOperationException(
@@ -138,7 +180,105 @@ public sealed class LexIndexReader : IDisposable
             }
         }
 
+        var baseWorkCatalogTables = new[]
+            { "work_records", "work_names", "work_fts", "work_discovery", "work_vectors" };
+        var extendedWorkCatalogTables = new[] { "work_publisher_metadata", "document_roles" };
+        int PresentCount(IEnumerable<string> tables) => tables.Count(table =>
+        {
+            using var tableCommand = conn.CreateCommand();
+            tableCommand.CommandText = "SELECT 1 FROM sqlite_master WHERE name=$name";
+            tableCommand.Parameters.AddWithValue("$name", table);
+            return tableCommand.ExecuteScalar() is not null;
+        });
+        var presentBaseWorkTables = PresentCount(baseWorkCatalogTables);
+        var presentExtendedWorkTables = PresentCount(extendedWorkCatalogTables);
+        if (presentBaseWorkTables is > 0 && presentBaseWorkTables != baseWorkCatalogTables.Length
+            || presentExtendedWorkTables is > 0 && presentExtendedWorkTables != extendedWorkCatalogTables.Length)
+            throw new InvalidDataException(
+                $"Index {dbPath} contains a partial work catalog. Rebuild it instead of silently disabling work search.");
+        var workCatalogVersion = presentBaseWorkTables == 0 ? 0
+            : presentExtendedWorkTables == extendedWorkCatalogTables.Length ? 2 : 1;
+        var hasWorkSearch = workCatalogVersion > 0;
+        var hasWorkSearchStamp = stamp.ContainsKey("work_search_records")
+                                 || stamp.ContainsKey("work_vector_records")
+                                 || stamp.ContainsKey("vector_layout")
+                                 || stamp.ContainsKey("work_catalog_version")
+                                 || stamp.ContainsKey("publisher_metadata_records")
+                                 || stamp.ContainsKey("document_role_records")
+                                 || stamp.ContainsKey("weak_discovery_records");
+        if (hasWorkSearch != hasWorkSearchStamp)
+            throw new InvalidDataException(
+                $"Index {dbPath} has inconsistent work catalog tables and stamp claims.");
+        var stampedCatalogVersion = stamp.GetValueOrDefault("work_catalog_version");
+        if ((workCatalogVersion == 1 && stampedCatalogVersion is not null)
+            || (workCatalogVersion == 2 && stampedCatalogVersion != "2"))
+            throw new InvalidDataException(
+                $"Index {dbPath} has inconsistent work catalog version metadata.");
+        if (hasWorkSearch)
+        {
+            if (workCatalogVersion == 2)
+            {
+                using var publisherColumn = conn.CreateCommand();
+                publisherColumn.CommandText =
+                    "SELECT COUNT(*) FROM pragma_table_info('work_fts') WHERE name='publisher'";
+                if (Convert.ToInt32(publisherColumn.ExecuteScalar()) != 1)
+                    throw new InvalidDataException(
+                        $"Index {dbPath} work catalog is missing publisher metadata search.");
+            }
+            if (!long.TryParse(stamp.GetValueOrDefault("work_search_records"), out var stampedWorks)
+                || !long.TryParse(stamp.GetValueOrDefault("work_vector_records"), out var stampedWorkVectors)
+                || stampedWorks < 0 || stampedWorkVectors < 0)
+                throw new InvalidDataException($"Index {dbPath} has invalid work catalog counts in its stamp.");
+            var stampedPublisherMetadata = 0L;
+            var stampedDocumentRoles = 0L;
+            long? stampedWeakDiscovery = null;
+            if (workCatalogVersion == 2
+                && (!long.TryParse(stamp.GetValueOrDefault("publisher_metadata_records"), out stampedPublisherMetadata)
+                    || !long.TryParse(stamp.GetValueOrDefault("document_role_records"), out stampedDocumentRoles)
+                    || stampedPublisherMetadata < 0 || stampedDocumentRoles < 0))
+                throw new InvalidDataException($"Index {dbPath} has invalid extended work catalog counts in its stamp.");
+            if (stamp.TryGetValue("weak_discovery_records", out var weakDiscoveryValue))
+            {
+                if (!long.TryParse(weakDiscoveryValue, out var parsedWeakDiscovery)
+                    || parsedWeakDiscovery < 0)
+                    throw new InvalidDataException(
+                        $"Index {dbPath} has an invalid weak discovery count in its stamp.");
+                stampedWeakDiscovery = parsedWeakDiscovery;
+            }
+            using var workCounts = conn.CreateCommand();
+            workCounts.CommandText = workCatalogVersion == 2
+                ? """
+                    SELECT (SELECT COUNT(*) FROM work_records),
+                           (SELECT COUNT(*) FROM work_vectors),
+                           (SELECT COUNT(*) FROM work_publisher_metadata),
+                           (SELECT COUNT(*) FROM document_roles),
+                           (SELECT COUNT(*) FROM work_discovery)
+                    """
+                : """
+                    SELECT (SELECT COUNT(*) FROM work_records),
+                           (SELECT COUNT(*) FROM work_vectors),
+                           (SELECT COUNT(*) FROM work_discovery)
+                    """;
+            using var workCountRow = workCounts.ExecuteReader();
+            var actualWeakDiscovery = workCountRow.Read()
+                ? workCountRow.GetInt64(workCatalogVersion == 2 ? 4 : 2)
+                : -1;
+            if (actualWeakDiscovery < 0
+                || workCountRow.GetInt64(0) != stampedWorks
+                || workCountRow.GetInt64(1) != stampedWorkVectors
+                || workCatalogVersion == 2 && (workCountRow.GetInt64(2) != stampedPublisherMetadata
+                                               || workCountRow.GetInt64(3) != stampedDocumentRoles)
+                || stampedWeakDiscovery is not null
+                   && actualWeakDiscovery != stampedWeakDiscovery)
+                throw new InvalidDataException($"Index {dbPath} work catalog counts do not match its stamp.");
+            var vectorLayout = stamp.GetValueOrDefault("vector_layout");
+            if ((stampedWorkVectors > 0 && vectorLayout != "lex-vectors/1-mixed-provision-work")
+                || (stampedWorkVectors == 0 && vectorLayout is not null))
+                throw new InvalidDataException($"Index {dbPath} has an invalid work vector layout claim.");
+        }
+
         SemanticVectorReader? vectors = null;
+        long provisionVectorCount = 0;
         if (encoder is not null || vectorPath is not null)
         {
             if (encoder is null || vectorPath is null)
@@ -151,21 +291,124 @@ public sealed class LexIndexReader : IDisposable
                 throw new InvalidDataException("The semantic vector dimension does not match the runtime encoder.");
             using var mapping = conn.CreateCommand();
             mapping.CommandText = """
-                SELECT
-                  (SELECT COUNT(*) FROM semantic_chunks
-                     WHERE vector_ordinal < 0 OR vector_ordinal >= $vector_count),
-                  (SELECT COUNT(DISTINCT vector_ordinal) FROM semantic_chunks)
+                SELECT COUNT(DISTINCT vector_ordinal),
+                       COALESCE(MIN(vector_ordinal),-1),COALESCE(MAX(vector_ordinal),-1)
+                FROM semantic_chunks
                 """;
-            mapping.Parameters.AddWithValue("$vector_count", vectors.Count);
             using var mappingReader = mapping.ExecuteReader();
             if (!mappingReader.Read())
                 throw new InvalidDataException("The semantic vector mapping cannot be read.");
-            if (mappingReader.GetInt64(0) != 0)
-                throw new InvalidDataException("The semantic vector mapping contains an invalid ordinal.");
-            if (mappingReader.GetInt64(1) != vectors.Count)
+            provisionVectorCount = mappingReader.GetInt64(0);
+            var provisionMin = mappingReader.GetInt64(1);
+            var provisionMax = mappingReader.GetInt64(2);
+            if (provisionVectorCount > 0
+                && (provisionMin != 0 || provisionMax != provisionVectorCount - 1))
+                throw new InvalidDataException("Provision vector ordinals are not contiguous from zero.");
+
+            long workVectorCount = 0;
+            using var workTable = conn.CreateCommand();
+            workTable.CommandText =
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='work_vectors'";
+            if (workTable.ExecuteScalar() is not null)
+            {
+                using var invalidWorkMappings = conn.CreateCommand();
+                invalidWorkMappings.CommandText = """
+                    SELECT COUNT(*)
+                    FROM work_vectors v
+                    LEFT JOIN work_records r ON r.work_id=v.work_id
+                    WHERE r.work_id IS NULL
+                       OR (v.evidence_kind='work' AND v.evidence_value IS NOT NULL)
+                       OR (v.evidence_kind<>'work' AND (
+                           v.evidence_kind NOT IN ('description','concept','search_synonym','practice_area')
+                           OR v.evidence_value IS NULL OR trim(v.evidence_value)=''))
+                    """;
+                if (Convert.ToInt64(invalidWorkMappings.ExecuteScalar()) != 0)
+                    throw new InvalidDataException("The work vector mapping has invalid evidence or work identity.");
+                using var workMapping = conn.CreateCommand();
+                workMapping.CommandText = """
+                    SELECT COUNT(DISTINCT vector_ordinal),
+                           COALESCE(MIN(vector_ordinal),-1),COALESCE(MAX(vector_ordinal),-1)
+                    FROM work_vectors
+                    """;
+                using var workReader = workMapping.ExecuteReader();
+                if (!workReader.Read())
+                    throw new InvalidDataException("The work vector mapping cannot be read.");
+                workVectorCount = workReader.GetInt64(0);
+                var workMin = workReader.GetInt64(1);
+                var workMax = workReader.GetInt64(2);
+                if (workVectorCount > 0 && (workMin != provisionVectorCount
+                    || workMax != provisionVectorCount + workVectorCount - 1))
+                    throw new InvalidDataException("Work vector ordinals are not contiguous after provisions.");
+                if (workVectorCount > 0)
+                {
+                    using var baseCoverage = conn.CreateCommand();
+                    baseCoverage.CommandText = """
+                        SELECT COUNT(*) FROM (
+                          SELECT r.work_id
+                          FROM work_records r
+                          LEFT JOIN work_vectors v ON v.work_id=r.work_id
+                          GROUP BY r.work_id
+                          HAVING SUM(CASE WHEN v.evidence_kind='work' THEN 1 ELSE 0 END) <> 1)
+                        """;
+                    if (Convert.ToInt64(baseCoverage.ExecuteScalar()) != 0)
+                        throw new InvalidDataException("Every work must have exactly one base vector.");
+                }
+            }
+            if (provisionVectorCount + workVectorCount != vectors.Count)
                 throw new InvalidDataException("The semantic vector file contains an unmapped record.");
         }
-        return new LexIndexReader(conn, stamp, schema!, encoder, vectors);
+        return new LexIndexReader(
+            conn, stamp, schema!, encoder, vectors, hasWorkSearch, workCatalogVersion,
+            provisionVectorCount, buildIssues, expectedWorks);
+    }
+
+    private static IReadOnlyList<CoverageBuildIssue> ValidateBuildIssues(
+        string? json, string dbPath)
+    {
+        if (json is null) return [];
+        try
+        {
+            using var document = JsonDocument.Parse(json, new JsonDocumentOptions
+            {
+                MaxDepth = 4,
+                AllowTrailingCommas = false,
+                CommentHandling = JsonCommentHandling.Disallow,
+            });
+            if (document.RootElement.ValueKind != JsonValueKind.Array
+                || document.RootElement.GetArrayLength() > 1000)
+                throw new InvalidDataException("Build issues must be an array with at most 1000 entries.");
+            var issues = new List<CoverageBuildIssue>();
+            foreach (var element in document.RootElement.EnumerateArray())
+            {
+                if (element.ValueKind != JsonValueKind.Object
+                    || !element.TryGetProperty("code", out var codeElement)
+                    || codeElement.ValueKind != JsonValueKind.String
+                    || !element.TryGetProperty("work", out var workElement)
+                    || workElement.ValueKind != JsonValueKind.String)
+                    throw new InvalidDataException("Each build issue requires string code and work fields.");
+                var code = codeElement.GetString()!;
+                var work = workElement.GetString()!;
+                string? detail = null;
+                if (element.TryGetProperty("detail", out var detailElement))
+                {
+                    if (detailElement.ValueKind == JsonValueKind.String)
+                        detail = detailElement.GetString();
+                    else if (detailElement.ValueKind != JsonValueKind.Null)
+                        throw new InvalidDataException("Build issue detail must be a string or null.");
+                }
+                if (string.IsNullOrWhiteSpace(code) || code.Length > 128
+                    || string.IsNullOrWhiteSpace(work) || work.Length > 512
+                    || detail?.Length > 2000)
+                    throw new InvalidDataException("Build issue fields are empty or exceed their bounds.");
+                issues.Add(new CoverageBuildIssue(code, work, detail));
+            }
+            return issues;
+        }
+        catch (Exception exception) when (exception is JsonException or InvalidOperationException)
+        {
+            throw new InvalidDataException(
+                $"Index {dbPath} has a malformed build-issue inventory.", exception);
+        }
     }
 
     private const string DocCols = """
@@ -298,20 +541,24 @@ public sealed class LexIndexReader : IDisposable
     /// Deduplicated by group; deterministic (collection, group_key) ordering for stable cursors.</summary>
     public (List<DocRow> Rows, int TotalGroups) InForceOn(DateOnly date, FilterSet filters, int limit, int offset)
     {
-        var (where, ps) = WithFilters(
+        var (countWhere, countParameters) = WithFilters(
             "valid_from <= $d AND (valid_to IS NULL OR valid_to >= $d) AND withdrawn = 0",
             filters, excludeAsOf: true);
 
         int total;
-        using (var cnt = Cmd($"SELECT COUNT(DISTINCT group_key) FROM docs WHERE {where}", ps))
+        using (var cnt = Cmd(
+                   $"SELECT COUNT(DISTINCT group_key) FROM docs WHERE {countWhere}", countParameters))
         {
             cnt.Parameters.AddWithValue("$d", date.ToString("yyyy-MM-dd"));
             total = Convert.ToInt32(cnt.ExecuteScalar());
         }
 
+        var (where, ps) = WithFilters(
+            "d.valid_from <= $d AND (d.valid_to IS NULL OR d.valid_to >= $d) AND d.withdrawn = 0",
+            filters, excludeAsOf: true, alias: "d");
         using var cmd = Cmd($"""
             SELECT {SelectDocCols()} FROM docs d
-            WHERE {where} AND valid_from = (
+            WHERE {where} AND d.valid_from = (
                 SELECT MAX(d2.valid_from) FROM docs d2
                 WHERE d2.group_key = d.group_key
                   AND d2.valid_from <= $d AND (d2.valid_to IS NULL OR d2.valid_to >= $d) AND d2.withdrawn = 0)
@@ -366,7 +613,7 @@ public sealed class LexIndexReader : IDisposable
 
     private List<(DocRow Doc, ProvisionRow Prov, string Snippet)> SearchV3(string query, FilterSet filters, int limit)
     {
-        var (where, ps) = WithFilters("1=1", filters, excludeAsOf: false);
+        var (where, ps) = WithFilters("1=1", filters, excludeAsOf: false, alias: "d");
         using var cmd = Cmd($"""
             WITH matched AS (
               SELECT rowid AS state_id, bm25(fts, 10.0, 4.0, 6.0, 1.0) AS score
@@ -415,10 +662,20 @@ public sealed class LexIndexReader : IDisposable
             return SearchKeyword(query, filters, limit, fuzzyAuto);
 
         var keyword = SearchKeyword(query, filters, 100, fuzzyAuto);
-        if (keyword.Hits.FirstOrDefault()?.MatchReasons.Contains("exact_identifier") == true)
+        var plan = keyword.QueryPlan!;
+        if (HasRoleConflict(filters, plan)) return keyword;
+        if (plan.ArticleNumber is not null
+            || (plan.HasStrongWorkMatch && plan.ProvisionQuery.Length == 0))
             return keyword;
+        var semanticQuery = plan.ProvisionQuery.Length == 0 ? query : plan.ProvisionQuery;
+        var effectiveFilters = ConstrainToWorks(filters, plan);
+        if (_workCatalogVersion >= 2 && plan.RoleIntent is not null
+            && effectiveFilters.DocumentRole is null)
+            effectiveFilters = effectiveFilters with { DocumentRole = plan.RoleIntent };
         var lexical = keyword.Hits;
-        var semantic = SearchSemantic(query, filters, 100);
+        var queryVector = _encoder.Encode(semanticQuery, EmbeddingInputKind.Query);
+        var semantic = SearchSemantic(semanticQuery, queryVector, effectiveFilters, 100);
+        var semanticWorks = SearchWorkSemanticCatalog(queryVector, effectiveFilters, 100);
         var fused = new Dictionary<string, RetrievalHit>(StringComparer.Ordinal);
         var scores = new Dictionary<string, double>(StringComparer.Ordinal);
         static string Key(DocRow d, ProvisionRow p) => $"{d.GroupKey}|{d.Language}|{p.Anchor}|{p.TextSha}";
@@ -438,6 +695,30 @@ public sealed class LexIndexReader : IDisposable
                 fused[key] = prior with { MatchReasons = ["keyword", "semantic"] };
             else fused[key] = h;
         }
+        for (var i = 0; i < semanticWorks.Count; i++)
+        {
+            var work = semanticWorks[i];
+            var key = fused.Where(candidate =>
+                    candidate.Value.Doc.Key == work.Doc.Key
+                    && candidate.Value.Doc.Language == work.Doc.Language
+                    && candidate.Value.Doc.ValidFrom == work.Doc.ValidFrom)
+                .OrderByDescending(candidate => scores.GetValueOrDefault(candidate.Key))
+                .Select(candidate => candidate.Key)
+                .FirstOrDefault();
+            if (key is null)
+            {
+                var standalone = WorkRetrievalHit(work);
+                key = Key(standalone.Doc, standalone.Provision);
+                fused[key] = standalone;
+            }
+            var weight = work.Reason == "semantic_concept" ? 0.60 : 0.65;
+            scores[key] = scores.GetValueOrDefault(key) + weight / (60 + i + 1);
+            if (fused.TryGetValue(key, out var prior))
+                fused[key] = prior with
+                {
+                    MatchReasons = prior.MatchReasons.Append(work.Reason).Distinct().ToArray(),
+                };
+        }
         var hits = fused.Select(kv => kv.Value with { Score = scores[kv.Key] })
             .OrderByDescending(h => h.Score)
             // RRF intentionally gives the first lexical and first semantic-only candidates the
@@ -446,14 +727,107 @@ public sealed class LexIndexReader : IDisposable
             // the provision containing the literal words the reader typed.
             .ThenByDescending(h =>
                 (h.MatchReasons.Contains("keyword") ? 2 : 0)
-                + (h.MatchReasons.Contains("semantic") ? 1 : 0))
+                + (h.MatchReasons.Contains("semantic") ? 1 : 0)
+                + (h.MatchReasons.Contains("semantic_work") ? 1 : 0))
             .ThenByDescending(h => h.Doc.ValidFrom, StringComparer.Ordinal)
             .Take(limit).ToList();
-        return new SearchExecution("hybrid", hits, keyword.QueryExpansions);
+        return new SearchExecution("hybrid", hits, keyword.QueryExpansions, plan);
     }
 
     public SearchExecution SearchKeyword(string query, FilterSet filters, int limit, bool fuzzyAuto)
     {
+        if (!_hasWorkSearch)
+        {
+            var legacyPlan = (IsV3 ? BasicQueryPlan(query) : new SearchQueryPlan(
+                query, query, [], null, null, false)) with { WorkCatalogAvailable = false };
+            if (HasRoleConflict(filters, legacyPlan))
+                return new SearchExecution("keyword", [], [], legacyPlan);
+            if (IsV3 && legacyPlan.ArticleNumber is not null)
+            {
+                var legacyArticleRows = SearchArticleIntent(
+                    legacyPlan.ArticleNumber, filters, limit, legacyPlan.ProvisionQuery);
+                return new SearchExecution("keyword", legacyArticleRows.Select((hit, rank) =>
+                    new RetrievalHit(hit.Doc, hit.Prov, hit.Snippet, 2d / (rank + 1),
+                        ["article_intent"])).ToList(), [], legacyPlan);
+            }
+            var legacy = SearchKeywordWithoutWorkCatalog(
+                legacyPlan.ProvisionQuery, filters, limit, fuzzyAuto);
+            return legacy with { QueryPlan = LegacyIdentifierResolution(query, legacyPlan, legacy.Hits) };
+        }
+
+        var catalogMatches = WorkSearch.Find(
+            _conn, query, filters.Language, filters.AsOf, Math.Max(limit * 2, 20),
+            _workCatalogVersion >= 2);
+        var identityFilters = filters with { DocumentRole = null };
+        var workMatches = ResolveWorkMatches(catalogMatches, identityFilters);
+        var identityMatches = workMatches.Where(hit => hit.Reason is
+                "exact_identifier" or "exact_alias" or "contained_identifier" or "contained_alias"
+                or "exact_title")
+            .ToList();
+        var resolutions = BuildWorkResolutions(query, identityMatches);
+        var resolvedMentions = resolutions.Where(item => item.Status == "resolved")
+            .Select(item => WorkSearch.Normalize(item.Mention)).ToHashSet(StringComparer.Ordinal);
+        var strong = identityMatches.Where(hit => hit.MatchedValue is not null
+                                                   && resolvedMentions.Contains(hit.MatchedValue))
+            .ToList();
+        var plan = BuildQueryPlan(query, identityMatches, resolutions);
+        if (HasRoleConflict(filters, plan))
+            return new SearchExecution("keyword", [], [], plan);
+        var requestedRole = filters.DocumentRole
+                            ?? (_workCatalogVersion >= 2 ? plan.RoleIntent : null);
+        var roleMatches = requestedRole is null
+            ? workMatches
+            : ResolveWorkMatches(catalogMatches, identityFilters with { DocumentRole = requestedRole });
+        var resultStrong = strong.Where(hit => roleMatches.Any(roleHit =>
+            roleHit.Doc.GroupKey == hit.Doc.GroupKey && roleHit.Doc.Language == hit.Doc.Language)).ToList();
+        var weak = roleMatches.Where(hit => !hit.Reason.StartsWith("exact_", StringComparison.Ordinal)
+                                             && !hit.Reason.StartsWith("contained_", StringComparison.Ordinal))
+            .Where(hit => !plan.HasStrongWorkMatch
+                          || plan.WorkConstraints.Contains(hit.Doc.GroupKey, StringComparer.Ordinal));
+        var effectiveFilters = ConstrainToWorks(filters, plan);
+        if (_workCatalogVersion >= 2 && plan.RoleIntent is not null
+            && effectiveFilters.DocumentRole is null)
+            effectiveFilters = effectiveFilters with { DocumentRole = plan.RoleIntent };
+        var articleRows = plan.ArticleNumber is null
+            ? []
+            : SearchArticleIntent(plan.ArticleNumber, effectiveFilters, limit,
+                plan.HasStrongWorkMatch ? null : plan.ProvisionQuery);
+        var articleHits = articleRows
+                .Select((hit, rank) => new RetrievalHit(
+                    hit.Doc, hit.Prov, hit.Snippet, 2d / (rank + 1), ["article_intent"]))
+                .ToList();
+        var exactIdentifierFallback = plan.ProvisionQuery.Length == 0 && IsExactLegalIdentifier(query);
+        var provision = plan.ArticleNumber is not null
+            ? new SearchExecution("keyword", [], [])
+            : SearchKeywordWithoutWorkCatalog(
+                exactIdentifierFallback ? query : plan.ProvisionQuery,
+                exactIdentifierFallback ? filters : effectiveFilters,
+                limit,
+                fuzzyAuto && strong.Count == 0 && plan.ProvisionQuery.Length > 0);
+        var directEvidence = articleHits.Concat(provision.Hits).ToList();
+        var combined = (directEvidence.Count > 0
+                ? directEvidence.Concat(resultStrong.Select(WorkRetrievalHit))
+                : resultStrong.Select(WorkRetrievalHit))
+            .Concat(identityMatches.Where(hit => hit.MatchedValue is not null
+                                                  && !resolvedMentions.Contains(hit.MatchedValue))
+                .Select(hit => WorkRetrievalHit(hit) with
+                {
+                    MatchReasons = ["ambiguous_" + hit.Reason],
+                }))
+            .Concat(weak.Select(WorkRetrievalHit))
+            .GroupBy(hit => $"{hit.Doc.GroupKey}|{hit.Doc.Language}|{hit.Provision.Anchor}|{hit.Provision.TextSha}",
+                StringComparer.Ordinal)
+            .Select(group => group.First())
+            .Take(limit)
+            .ToList();
+        return new SearchExecution("keyword", combined, provision.QueryExpansions, plan);
+    }
+
+    private SearchExecution SearchKeywordWithoutWorkCatalog(
+        string query, FilterSet filters, int limit, bool fuzzyAuto)
+    {
+        if (string.IsNullOrWhiteSpace(query))
+            return new SearchExecution("keyword", [], []);
         if (IsExactLegalIdentifier(query))
         {
             var works = SearchWorksByIdentifierOrTitle(query, filters, limit)
@@ -489,6 +863,291 @@ public sealed class LexIndexReader : IDisposable
         return new SearchExecution("keyword", hits,
             expansions.Select(e => $"{e.Source} -> {e.Target}").ToList());
     }
+
+    private static readonly HashSet<string> ConversationalSearchWords = new(StringComparer.Ordinal)
+    {
+        "a", "about", "an", "are", "ce", "ces", "comment", "de", "des", "did", "do", "does",
+        "du", "est", "for", "la", "le", "les", "me", "please", "que", "quel", "quelle",
+        "quels", "quelles", "quoi", "show", "the", "tell", "what",
+    };
+
+    private static readonly (string Phrase, string Role)[] RolePhrases =
+    [
+        ("implementing regulation", "implementing"),
+        ("implementing act", "implementing"), ("reglement d execution", "implementing"),
+        ("acte d execution", "implementing"),
+        ("delegated regulation", "delegated"), ("delegated act", "delegated"),
+        ("reglement delegue", "delegated"), ("acte delegue", "delegated"),
+        ("amending regulation", "amending"), ("amending act", "amending"),
+        ("reglement modificatif", "amending"), ("acte modificatif", "amending"),
+        ("corrigendum", "corrigendum"), ("rectificatif", "corrigendum"),
+        ("consolidated", "consolidated"), ("consolide", "consolidated"),
+    ];
+
+    private static readonly (string Phrase, string Role)[] AmbiguousRolePhrases =
+    [
+        ("implementing", "implementing"),
+        ("delegated", "delegated"), ("delegue", "delegated"),
+        ("amending", "amending"), ("modificatif", "amending"),
+    ];
+
+    private static SearchQueryPlan BasicQueryPlan(string query)
+    {
+        var normalized = WorkSearch.Normalize(query);
+        var article = ArticleNumber(normalized);
+        var residual = RemoveArticleIntent(normalized, article);
+        var role = RolePhrases.FirstOrDefault(item => ContainsPhrase(normalized, item.Phrase)).Role;
+        residual = RemoveRoleIntent(residual, role);
+        var filtered = string.Join(' ', residual.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Where(token => !ConversationalSearchWords.Contains(token)));
+        if (article is null && role is null && filtered == normalized)
+            filtered = query.Trim();
+        var identifiers = LegalIdentifierTokens(query);
+        return new SearchQueryPlan(
+            query, filtered, [], article, role, false,
+            identifiers.Count == 0 ? "not_requested" : "unresolved",
+            identifiers.Select(identifier => new WorkResolution(identifier, "unresolved", [])).ToArray());
+    }
+
+    private static SearchQueryPlan BuildQueryPlan(
+        string query,
+        IReadOnlyList<WorkSearchHit> identityMatches,
+        IReadOnlyList<WorkResolution> resolutions)
+    {
+        var basic = BasicQueryPlan(query);
+        if (identityMatches.Count == 0) return basic;
+        var normalized = WorkSearch.Normalize(query);
+        var resolved = resolutions.Where(item => item.Status == "resolved").ToArray();
+        var role = basic.RoleIntent;
+        if (role is null && resolved.Length > 0)
+            role = AmbiguousRolePhrases
+                .FirstOrDefault(item => ContainsPhrase(normalized, item.Phrase)).Role;
+        var residual = " " + normalized + " ";
+        foreach (var name in identityMatches.Select(match => match.MatchedValue)
+                     .Concat(resolutions.Select(resolution => WorkSearch.Normalize(resolution.Mention)))
+                     .Where(value => !string.IsNullOrWhiteSpace(value))
+                     .Distinct(StringComparer.Ordinal)
+                     .OrderByDescending(value => value!.Length))
+            residual = residual.Replace(" " + name + " ", " ", StringComparison.Ordinal);
+        residual = RemoveArticleIntent(residual.Trim(), basic.ArticleNumber);
+        residual = RemoveRoleIntent(residual, role);
+        residual = string.Join(' ', residual.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Where(token => !ConversationalSearchWords.Contains(token)));
+        var works = resolved.SelectMany(item => item.Candidates)
+            .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        return basic with
+        {
+            ProvisionQuery = residual,
+            WorkConstraints = works,
+            RoleIntent = role,
+            HasStrongWorkMatch = works.Length > 0,
+            WorkResolutionStatus = ResolutionStatus(resolutions),
+            WorkResolutions = resolutions,
+        };
+    }
+
+    private static IReadOnlyList<WorkResolution> BuildWorkResolutions(
+        string query, IReadOnlyList<WorkSearchHit> identityMatches)
+    {
+        var matches = identityMatches
+            .Where(match => !string.IsNullOrWhiteSpace(match.MatchedValue))
+            .GroupBy(match => WorkSearch.Normalize(match.MatchedValue!), StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.Select(match => match.Doc.GroupKey)
+                .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray(),
+                StringComparer.Ordinal);
+        var result = new List<WorkResolution>();
+        var consumed = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var identifier in LegalIdentifierTokens(query))
+        {
+            var normalized = WorkSearch.Normalize(identifier);
+            var candidates = matches.GetValueOrDefault(normalized) ?? [];
+            consumed.Add(normalized);
+            result.Add(new WorkResolution(identifier, candidates.Length switch
+            {
+                0 => "unresolved",
+                1 => "resolved",
+                _ => "ambiguous",
+            }, candidates));
+        }
+        foreach (var (mention, candidates) in matches.Where(item => !consumed.Contains(item.Key)))
+            result.Add(new WorkResolution(mention,
+                candidates.Length == 1 ? "resolved" : "ambiguous", candidates));
+        return result.OrderBy(item => WorkSearch.Normalize(item.Mention), StringComparer.Ordinal).ToArray();
+    }
+
+    private static string ResolutionStatus(IReadOnlyList<WorkResolution> resolutions) =>
+        resolutions.Any(item => item.Status == "ambiguous") ? "ambiguous"
+        : resolutions.Any(item => item.Status == "unresolved") ? "unresolved"
+        : resolutions.Any(item => item.Status == "resolved") ? "resolved"
+        : "not_requested";
+
+    private static SearchQueryPlan LegacyIdentifierResolution(
+        string query, SearchQueryPlan plan, IReadOnlyList<RetrievalHit> hits)
+    {
+        var identifier = ExactLegalIdentifierToken(query);
+        if (identifier is null) return plan;
+        var candidates = hits.Select(hit => hit.Doc.GroupKey)
+            .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        var status = candidates.Length switch
+        {
+            0 => "unresolved",
+            1 => "resolved",
+            _ => "ambiguous",
+        };
+        return plan with
+        {
+            WorkConstraints = status == "resolved" ? candidates : [],
+            HasStrongWorkMatch = status == "resolved",
+            WorkResolutionStatus = status,
+            WorkResolutions = [new WorkResolution(identifier, status, candidates)],
+        };
+    }
+
+    private static FilterSet ConstrainToWorks(FilterSet filters, SearchQueryPlan plan) =>
+        !plan.HasStrongWorkMatch ? filters : filters with { Works = plan.WorkConstraints };
+
+    private static bool HasRoleConflict(FilterSet filters, SearchQueryPlan plan) =>
+        filters.DocumentRole is not null && plan.RoleIntent is not null
+        && !string.Equals(filters.DocumentRole, plan.RoleIntent, StringComparison.Ordinal);
+
+    private static string? ArticleNumber(string normalized)
+    {
+        var match = System.Text.RegularExpressions.Regex.Match(normalized,
+            @"(?:^|\s)(?:article|art)\s+(?<number>(?:[a-z]\s+)?[0-9]+(?:(?:er)|[a-z])?(?:\s+[0-9]+)*(?:\s+(?:bis|ter|quater))?)(?:\s|$)",
+            System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+        return match.Success ? match.Groups["number"].Value : null;
+    }
+
+    private static string RemoveArticleIntent(string normalized, string? articleNumber) =>
+        articleNumber is null ? normalized : System.Text.RegularExpressions.Regex.Replace(
+            normalized,
+            @"(?:^|\s)(?:article|art)\s+" +
+            System.Text.RegularExpressions.Regex.Escape(articleNumber) + @"(?:\s|$)",
+            " ", System.Text.RegularExpressions.RegexOptions.CultureInvariant).Trim();
+
+    private static string RemoveRoleIntent(string normalized, string? role)
+    {
+        if (role is null) return normalized;
+        var result = " " + normalized + " ";
+        foreach (var phrase in RolePhrases.Concat(AmbiguousRolePhrases)
+                     .Where(item => item.Role == role)
+                     .Select(item => item.Phrase).OrderByDescending(value => value.Length))
+            result = result.Replace(" " + phrase + " ", " ", StringComparison.Ordinal);
+        return result.Trim();
+    }
+
+    private static bool ContainsPhrase(string normalized, string phrase) =>
+        (" " + normalized + " ").Contains(" " + phrase + " ", StringComparison.Ordinal);
+
+    private List<(DocRow Doc, ProvisionRow Prov, string Snippet)> SearchArticleIntent(
+        string articleNumber, FilterSet filters, int limit, string? residualQuery = null)
+    {
+        var compact = articleNumber.Replace(" ", "", StringComparison.Ordinal);
+        var anchor = "art_" + articleNumber.Replace(' ', '_');
+        var (where, parameters) = WithFilters("1=1", filters, excludeAsOf: false, alias: "d");
+        var hasResidual = !string.IsNullOrWhiteSpace(residualQuery);
+        var ftsJoin = hasResidual ? "JOIN fts ON fts.rowid=p.state_id" : "";
+        var ftsPredicate = hasResidual ? "AND fts MATCH $residual" : "";
+        var score = hasResidual ? "bm25(fts,10.0,4.0,6.0,1.0)" : "0.0";
+        using var command = Cmd($"""
+            WITH eligible AS (
+              SELECT p.rid,p.seq,p.anchor,p.provision_id,p.ptype,p.num,p.heading,p.path,
+                     p.article_valid_from,p.work_title,p.text_sha,d.key AS doc_key,{score} AS score,
+                     ROW_NUMBER() OVER (
+                       PARTITION BY p.state_id ORDER BY d.valid_from DESC,p.rid
+                     ) AS occurrence_rank
+              FROM provisions p
+              {ftsJoin}
+              JOIN docs d ON d.rid=p.rid
+              WHERE {where} AND p.ptype='article'
+                AND (
+                  lower(replace(replace(replace(p.num,' ',''),'.',''),'-',''))=$number
+                  OR lower(replace(replace(p.anchor,'.',''),'-','_'))=$anchor
+                )
+                {ftsPredicate}
+            )
+            SELECT {SelectDocCols("d")},
+                   e.rid,e.seq,e.anchor,e.provision_id,e.ptype,e.num,e.heading,e.path,
+                   e.article_valid_from,e.work_title,e.text_sha,
+                   b.encoding,b.original_size,b.payload
+            FROM eligible e
+            JOIN docs d ON d.key=e.doc_key AND d.rid=e.rid
+            JOIN text_blobs b ON b.text_sha=e.text_sha
+            WHERE e.occurrence_rank=1
+            ORDER BY e.score,d.valid_from DESC,e.seq,e.rid
+            LIMIT $limit
+            """, parameters);
+        command.Parameters.AddWithValue("$number", compact);
+        command.Parameters.AddWithValue("$anchor", anchor);
+        command.Parameters.AddWithValue("$limit", limit);
+        if (hasResidual) command.Parameters.AddWithValue("$residual", Fts5Escape(residualQuery!));
+        var result = new List<(DocRow, ProvisionRow, string)>();
+        using var rows = command.ExecuteReader();
+        while (rows.Read())
+        {
+            var text = DecodeAndVerify(
+                rows.GetString(38), rows.GetInt32(39), (byte[])rows.GetValue(40), rows.GetString(37));
+            var provision = new ProvisionRow(
+                rows.GetString(27), rows.GetInt32(28), rows.GetString(29), rows.GetString(30),
+                rows.GetString(31), rows.IsDBNull(32) ? null : rows.GetString(32),
+                rows.IsDBNull(33) ? null : rows.GetString(33),
+                rows.IsDBNull(34) ? null : rows.GetString(34),
+                rows.IsDBNull(35) ? null : rows.GetString(35),
+                rows.IsDBNull(36) ? null : rows.GetString(36), text, rows.GetString(37));
+            result.Add((ReadDoc(rows), provision, MakeSnippet(text, articleNumber)));
+        }
+        return result;
+    }
+
+    private IReadOnlyList<WorkSearchHit> SearchWorkSemanticCatalog(
+        float[] queryVector, FilterSet filters, int limit)
+    {
+        if (!_hasWorkSearch || _encoder is null || limit <= 0) return [];
+        return ResolveWorkMatches(
+                WorkSearch.FindSemantic(_conn, _vectors!, queryVector, limit), filters)
+            .Take(limit).ToArray();
+    }
+
+    private IReadOnlyList<WorkSearchHit> ResolveWorkMatches(
+        IReadOnlyList<WorkMatch> matches, FilterSet filters)
+    {
+        var result = new List<WorkSearchHit>();
+        foreach (var match in matches)
+        {
+            using var identity = Cmd(
+                "SELECT group_key,language FROM work_records WHERE work_id=$work_id", []);
+            identity.Parameters.AddWithValue("$work_id", match.WorkId);
+            using var identityRow = identity.ExecuteReader();
+            if (!identityRow.Read()) continue;
+            var groupKey = identityRow.GetString(0);
+            var language = identityRow.GetString(1);
+            identityRow.Close();
+
+            var (where, parameters) = WithFilters(
+                "group_key=$work_group AND language=$work_language", filters, excludeAsOf: false);
+            using var command = Cmd($"""
+                SELECT {SelectDocCols()}
+                FROM docs
+                WHERE {where}
+                ORDER BY valid_from DESC
+                LIMIT 1
+                """, parameters);
+            command.Parameters.AddWithValue("$work_group", groupKey);
+            command.Parameters.AddWithValue("$work_language", language);
+            using var rows = command.ExecuteReader();
+            if (rows.Read()) result.Add(new WorkSearchHit(
+                ReadDoc(rows), match.Reason, match.Score, match.MatchedValue));
+        }
+        return result;
+    }
+
+    private static RetrievalHit WorkRetrievalHit(WorkSearchHit hit) => new(
+        hit.Doc,
+        new ProvisionRow(RidOf(hit.Doc), 0, "", hit.Doc.Key, "work", null, null, null, null,
+            hit.Doc.Title, "", hit.Doc.BodySha ?? ""),
+        hit.Doc.Title ?? hit.Doc.GroupKey,
+        hit.Score,
+        [hit.Reason]);
 
     private List<(string Source, string Target)> FuzzyExpansions(string query)
     {
@@ -536,6 +1195,22 @@ public sealed class LexIndexReader : IDisposable
             System.Text.RegularExpressions.RegexOptions.IgnoreCase) ? trimmed : null;
     }
 
+    private static IReadOnlyList<string> LegalIdentifierTokens(string query)
+    {
+        var results = new List<string>();
+        foreach (System.Text.RegularExpressions.Match match in
+                 System.Text.RegularExpressions.Regex.Matches(query,
+                     @"(?<![A-Z0-9])(?:CELEX\s*)?(?<identifier>[136][0-9]{4}[A-Z][0-9]{4}|1[0-9]{4}[A-Z]/TXT)(?![A-Z0-9])|(?<![A-Z0-9])(?<ecli>ECLI:[A-Z0-9:.]+)(?![A-Z0-9])",
+                     System.Text.RegularExpressions.RegexOptions.IgnoreCase
+                     | System.Text.RegularExpressions.RegexOptions.CultureInvariant))
+        {
+            var value = match.Groups["identifier"].Success
+                ? match.Groups["identifier"].Value : match.Groups["ecli"].Value;
+            if (!results.Contains(value, StringComparer.OrdinalIgnoreCase)) results.Add(value);
+        }
+        return results;
+    }
+
     private static string ReplaceToken(string query, string source, string target) =>
         System.Text.RegularExpressions.Regex.Replace(query,
             $@"(?<![\p{{L}}\p{{N}}]){System.Text.RegularExpressions.Regex.Escape(source)}(?![\p{{L}}\p{{N}}])",
@@ -562,19 +1237,20 @@ public sealed class LexIndexReader : IDisposable
         return previous[^1];
     }
 
-    private List<RetrievalHit> SearchSemantic(string query, FilterSet filters, int limit)
+    private List<RetrievalHit> SearchSemantic(
+        string query, float[] queryVector, FilterSet filters, int limit)
     {
-        var queryVector = _encoder!.Encode(query, EmbeddingInputKind.Query);
         var binary = SemanticVectorReader.Binary(queryVector);
         var int8 = SemanticVectorReader.Int8(queryVector);
-        var nearest = _vectors!.NearestByHamming(binary, Math.Max(2_000, limit * 20));
+        var nearest = _vectors!.NearestByHamming(
+            binary, Math.Max(2_000, limit * 20), 0, _provisionVectorCount);
         if (nearest.Count == 0) return [];
         var hamming = nearest.ToDictionary(candidate => candidate.Ordinal, candidate => candidate.Distance);
         // Ordinals originate in the verified vector file, not user input. A literal IN list lets
         // SQLite scan semantic_chunks once even for an older v3 artifact that predates the
         // vector-ordinal index; future builds use ix_semantic_vector directly.
         var ordinalSql = string.Join(',', nearest.Select(candidate => candidate.Ordinal));
-        var (where, ps) = WithFilters("1=1", filters, excludeAsOf: false);
+        var (where, ps) = WithFilters("1=1", filters, excludeAsOf: false, alias: "d");
         using var cmd = Cmd($"""
             WITH eligible AS (
               SELECT sc.state_id, sc.vector_ordinal, p.rid, p.anchor,
@@ -643,7 +1319,7 @@ public sealed class LexIndexReader : IDisposable
 
         List<DocRow> Lookup(IEnumerable<string> clauses, IReadOnlyList<string> values)
         {
-            var (where, ps) = WithFilters("1=1", filters, excludeAsOf: false);
+            var (where, ps) = WithFilters("1=1", filters, excludeAsOf: false, alias: "d");
             var exactOrder = exactIdentifier is null ? "" : """
                 CASE WHEN lower(d.group_key) = lower(replace($exact_identifier, '/', '-'))
                        OR lower(d.group_identifier) = lower($exact_identifier)
@@ -707,7 +1383,8 @@ public sealed class LexIndexReader : IDisposable
             Kind = kinds is { Count: > 0 } ? string.Join(',', kinds) : filter?.Kind,
         };
         var (where, parameters) = WithFilters(
-            "d.valid_from >= $from AND d.valid_from <= $to", scoped, excludeAsOf: true);
+            "d.valid_from >= $from AND d.valid_from <= $to", scoped, excludeAsOf: true,
+            alias: "d");
         var order = byChurn ? "versions DESC, last_change DESC" : "last_change DESC, versions DESC";
         var metadata = IsV3
             ? "MAX(d.kind), MAX(d.hierarchy), MAX(d.domains), MAX(d.act_form), MAX(d.binding_status), MAX(d.language)"
@@ -854,6 +1531,8 @@ public sealed class LexIndexReader : IDisposable
         using (var r = cmd.ExecuteReader())
             while (r.Read())
                 sb.Append(r.GetString(0)).Append('|').Append(r.GetString(1)).Append('\n');
+        if (_workCatalogVersion >= 2)
+            IndexBuilder.AppendPublisherMetadataDigest(_conn, sb);
         return Convert.ToHexStringLower(
             System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(sb.ToString())));
     }
@@ -894,7 +1573,7 @@ public sealed class LexIndexReader : IDisposable
 
     public List<DocRow> GroupsPage(int limit, int offset, FilterSet filters)
     {
-        var (where, ps) = WithFilters("1=1", filters, excludeAsOf: true);
+        var (where, ps) = WithFilters("1=1", filters, excludeAsOf: true, alias: "d");
         using var cmd = Cmd($"""
             SELECT {SelectDocCols()} FROM docs d
             WHERE {where} AND valid_from = (
@@ -1080,7 +1759,8 @@ public sealed class LexIndexReader : IDisposable
 
         return new CoverageInfo(Collection, ar.GetInt32(0), ar.GetInt32(1),
             ar.IsDBNull(2) ? null : ar.GetString(2), ar.IsDBNull(3) ? null : ar.GetString(3), kinds, Stamp,
-            ar.IsDBNull(4) ? 0 : ar.GetInt32(4), profiles, languages, multilingual);
+            ar.IsDBNull(4) ? 0 : ar.GetInt32(4), profiles, languages, multilingual,
+            _expectedWorks, _buildIssues);
     }
 
     private static string NormalizeWork(string work)
@@ -1099,13 +1779,15 @@ public sealed class LexIndexReader : IDisposable
             ? work.ToLowerInvariant() : work;
     }
 
-    private (string Sql, List<SqliteParameter> Ps) WithFilters(string baseSql, FilterSet f, bool excludeAsOf)
+    private (string Sql, List<SqliteParameter> Ps) WithFilters(
+        string baseSql, FilterSet f, bool excludeAsOf, string? alias = null)
     {
         var ps = new List<SqliteParameter>();
+        string Column(string name) => alias is null ? name : $"{alias}.{name}";
         // Withdrawn publisher records remain addressable by exact provenance tools, but they
         // are not eligible public-search or catalogue candidates after their tombstone.
-        var sql = baseSql + " AND withdrawn=0";
-        if (f.Collection is not null) { sql += " AND collection=$fcol"; ps.Add(new SqliteParameter("$fcol", f.Collection)); }
+        var sql = baseSql + $" AND {Column("withdrawn")}=0";
+        if (f.Collection is not null) { sql += $" AND {Column("collection")}=$fcol"; ps.Add(new SqliteParameter("$fcol", f.Collection)); }
         if (f.Kind is not null)
         {
             var kinds = f.Kind.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
@@ -1114,32 +1796,40 @@ public sealed class LexIndexReader : IDisposable
             {
                 var names = kinds.Select((_, i) => $"$fkind{i}").ToList();
                 sql += negate
-                    ? $" AND (kind IS NULL OR kind NOT IN ({string.Join(',', names)}))"
-                    : $" AND kind IN ({string.Join(',', names)})";
+                    ? $" AND ({Column("kind")} IS NULL OR {Column("kind")} NOT IN ({string.Join(',', names)}))"
+                    : $" AND {Column("kind")} IN ({string.Join(',', names)})";
                 for (var i = 0; i < kinds.Length; i++)
                     ps.Add(new SqliteParameter($"$fkind{i}", kinds[i].TrimStart('!')));
             }
         }
-        if (f.Language is not null) { sql += " AND language=$flang"; ps.Add(new SqliteParameter("$flang", f.Language)); }
-        if (f.Hierarchy is not null || f.ActForm is not null || f.BindingStatus is not null || f.Domain is not null)
+        if (f.Language is not null) { sql += $" AND {Column("language")}=$flang"; ps.Add(new SqliteParameter("$flang", f.Language)); }
+        if (f.Hierarchy is not null || f.ActForm is not null || f.BindingStatus is not null
+            || f.Domain is not null || f.DocumentRole is not null)
         {
             if (!IsV3) return (sql + " AND 0=1", ps);
-            if (f.Hierarchy is not null) { sql += " AND hierarchy=$fhier"; ps.Add(new SqliteParameter("$fhier", f.Hierarchy)); }
-            if (f.ActForm is not null) { sql += " AND act_form=$fform"; ps.Add(new SqliteParameter("$fform", f.ActForm)); }
-            if (f.BindingStatus is not null) { sql += " AND binding_status=$fbind"; ps.Add(new SqliteParameter("$fbind", f.BindingStatus)); }
-            if (f.Domain is not null) { sql += " AND ('|' || domains || '|') LIKE $fdomain"; ps.Add(new SqliteParameter("$fdomain", "%|" + f.Domain + "|%")); }
+            if (f.Hierarchy is not null) { sql += $" AND {Column("hierarchy")}=$fhier"; ps.Add(new SqliteParameter("$fhier", f.Hierarchy)); }
+            if (f.ActForm is not null) { sql += $" AND {Column("act_form")}=$fform"; ps.Add(new SqliteParameter("$fform", f.ActForm)); }
+            if (f.BindingStatus is not null) { sql += $" AND {Column("binding_status")}=$fbind"; ps.Add(new SqliteParameter("$fbind", f.BindingStatus)); }
+            if (f.Domain is not null) { sql += $" AND ('|' || {Column("domains")} || '|') LIKE $fdomain"; ps.Add(new SqliteParameter("$fdomain", "%|" + f.Domain + "|%")); }
+            if (f.DocumentRole is not null)
+            {
+                if (_workCatalogVersion < 2) return (sql + " AND 0=1", ps);
+                var outerRid = alias is null ? "docs.rid" : $"{alias}.rid";
+                sql += $" AND EXISTS (SELECT 1 FROM document_roles dr WHERE dr.rid={outerRid} AND dr.role=$frole)";
+                ps.Add(new SqliteParameter("$frole", f.DocumentRole));
+            }
         }
         if (f.Works is { Count: > 0 } works)
         {
             // Matches either the slug or the publisher's own identifier, so a caller can scope
             // with whichever of the two it happens to be holding.
             var names = works.Select((_, i) => $"$fw{i}").ToList();
-            sql += $" AND (group_key IN ({string.Join(",", names)}) OR group_identifier IN ({string.Join(",", names)}))";
+            sql += $" AND ({Column("group_key")} IN ({string.Join(",", names)}) OR {Column("group_identifier")} IN ({string.Join(",", names)}))";
             for (var i = 0; i < works.Count; i++) ps.Add(new SqliteParameter($"$fw{i}", works[i]));
         }
         if (!excludeAsOf && f.AsOf is { } d)
         {
-            sql += " AND valid_from <= $fasof AND (valid_to IS NULL OR valid_to >= $fasof)";
+            sql += $" AND {Column("valid_from")} <= $fasof AND ({Column("valid_to")} IS NULL OR {Column("valid_to")} >= $fasof)";
             ps.Add(new SqliteParameter("$fasof", d.ToString("yyyy-MM-dd")));
         }
         return (sql, ps);

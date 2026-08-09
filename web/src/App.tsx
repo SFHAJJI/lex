@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { askStreaming, first, tool, type AskReply, type ProvisionItem, type Step, type UiEffect } from "./api";
+import { askQuestionError, askStreaming, boundedAskHistory, first, tool, type AskMessage, type AskReply, type ProvisionItem, type Step, type UiEffect } from "./api";
 import { publisherOf, useWorkspace, workSlug, type Space, type State } from "./state";
 import { CitedBy, Empty, Gap, InForce, Provision, Ranking, VersionRail, hasView, modeFor } from "./views";
 import { Compare } from "./Compare";
@@ -21,6 +21,13 @@ const NAMES: Record<string, string> = {
 
 /** Rows per page in the period view. Enough to scan, small enough to arrive quickly. */
 const PAGE = 25;
+const ASK_HISTORY_KEY = "lex.ask.history.v1";
+
+function restoredAskHistory(): AskMessage[] {
+  try {
+    return boundedAskHistory(JSON.parse(sessionStorage.getItem(ASK_HISTORY_KEY) ?? "[]"));
+  } catch { return []; }
+}
 
 /** Follow-ups derived from the view on screen — always valid, and free. */
 function chipsFor(s: State, ui?: UiEffect, hasText = true): { label: string; go: Partial<State> }[] {
@@ -48,6 +55,9 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [steps, setSteps] = useState<Step[]>([]);
   const [said, setSaid] = useState<string>();
+  const [clarification, setClarification] = useState<{
+    context: string; question: string; options: string[];
+  }>();
   const [ui, setUi] = useState<UiEffect>();
   const [loaded, setLoaded] = useState<{ items: ProvisionItem[]; from: string; to?: string; profile?: string; source?: string }>();
   const [toc, setToc] = useState<ProvisionItem[]>([]);
@@ -68,6 +78,7 @@ export default function App() {
     try { return localStorage.getItem(COACH_KEY) === "1"; } catch { return true; }
   });
   const abort = useRef<AbortController>();
+  const askHistory = useRef<AskMessage[]>(restoredAskHistory());
   // Whether the article on screen was picked by the reader or opened for them. Not in the URL:
   // it changes nothing about what is displayed, only which timeline the rail belongs to.
   const chosenAnchor = useRef(false);
@@ -301,16 +312,39 @@ export default function App() {
   }, [s.work, s.anchor]);
 
   const submit = useCallback(async (text: string) => {
-    if (!text.trim() || busy) return;
-    setBusy(true); setSaid(undefined); setSteps([]);
+    const question = text.trim();
+    if (!question || busy) return;
+    const questionError = askQuestionError(question);
+    if (questionError) {
+      setSaid(questionError); setSteps([]); setClarification(undefined);
+      return;
+    }
+    setBusy(true); setSaid(undefined); setSteps([]); setClarification(undefined);
     abort.current?.abort();
     abort.current = new AbortController();
     try {
+      const messages = boundedAskHistory([
+        ...askHistory.current,
+        { role: "user", content: question } as AskMessage,
+      ]);
       const r: AskReply = await askStreaming(
-        text.trim(),
+        messages,
         (step) => setSteps((prev) => [...prev, step]),
         abort.current.signal);
-      setSaid(r.error ?? r.reply);
+      const visibleReply = r.clarification?.question ?? r.reply;
+      setSaid(r.error ?? visibleReply);
+      setClarification(r.clarification ? {
+        context: question,
+        question: r.clarification.question,
+        options: r.clarification.options,
+      } : undefined);
+      if (!r.error) {
+        askHistory.current = boundedAskHistory([
+          ...messages,
+          { role: "assistant", content: visibleReply } as AskMessage,
+        ]);
+        try { sessionStorage.setItem(ASK_HISTORY_KEY, JSON.stringify(askHistory.current)); } catch { /* tab memory is optional */ }
+      }
       // A refusal keeps its steps out of the transcript: visible effort followed by a weak
       // answer measures WORSE than the same answer delivered instantly and quietly.
       if (r.narrated === false) setSteps([]);
@@ -427,8 +461,13 @@ export default function App() {
       )}
 
       <AskPanel q={q} setQ={setQ} busy={busy} steps={steps} said={said} onSubmit={submit}
-                followUps={chipsFor(s, ui, (held?.text ?? 1) > 0).map((c) => ({
-                  label: c.label, run: () => { setUi(undefined); go(c.go); } }))}
+                followUps={clarification
+                  ? clarification.options.map((label) => ({
+                      label,
+                      run: () => submit(`${clarification.context}\nClarification choice: ${label}`),
+                    }))
+                  : chipsFor(s, ui, (held?.text ?? 1) > 0).map((c) => ({
+                      label: c.label, run: () => { setUi(undefined); go(c.go); } }))}
                 onOpenStep={(st) => { setUi(undefined); go({ work: st.work, date: st.date, anchor: st.anchor, mode: "read", space: "law" }); }} />
 
       {space === "time" && !s.work ? (

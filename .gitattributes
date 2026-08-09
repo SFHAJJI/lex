@@ -1,0 +1,3 @@
+evals/retrieval-*.json text eol=lf
+evals/weak-enrichment-decision.json text eol=lf
+config/eu-work-enrichment.json text eol=lf

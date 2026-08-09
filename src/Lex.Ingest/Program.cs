@@ -61,14 +61,16 @@ switch (args0[0])
     case "benchmark-cases":
     {
         var output = Get("--out") ?? throw new ArgumentException("--out required");
+        var cases = RetrievalBenchmarkCatalog.Load(
+            Get("--cases") ?? Path.Combine(AppContext.BaseDirectory, "retrieval-cases.json"));
         var bytes = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(
-            RetrievalBenchmarkCatalog.Create(), new System.Text.Json.JsonSerializerOptions
+            cases, new System.Text.Json.JsonSerializerOptions
             {
                 PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.SnakeCaseLower,
                 WriteIndented = true,
             });
         File.WriteAllBytes(output, bytes);
-        Console.Error.WriteLine($"[lex] wrote 200 public retrieval cases to {output}");
+        Console.Error.WriteLine($"[lex] wrote {cases.Count} public retrieval cases to {output}");
         return 0;
     }
     case "benchmark":
@@ -77,6 +79,10 @@ switch (args0[0])
         var modelDir = Get("--model-dir") ?? throw new ArgumentException("--model-dir required");
         var vectors = Get("--vectors") ?? Path.ChangeExtension(index, ".vectors");
         var output = Get("--out") ?? throw new ArgumentException("--out required");
+        var caseSet = RetrievalBenchmarkCatalog.LoadSet(
+            Get("--cases") ?? Path.Combine(AppContext.BaseDirectory, "retrieval-cases.json"));
+        var baseline = RetrievalBenchmarkCatalog.LoadBaseline(
+            Path.Combine(AppContext.BaseDirectory, "retrieval-baseline-v2.json"));
         var load = System.Diagnostics.Stopwatch.StartNew();
         using var encoder = MultilingualE5Encoder.Open(modelDir);
         using var reader = LexIndexReader.Open(index, encoder, vectors);
@@ -85,7 +91,7 @@ switch (args0[0])
         _ = reader.SearchHybrid("protection des donnees personnelles", FilterSet.All, 10);
         cold.Stop();
         var memoryLimit = long.TryParse(Get("--memory-limit-bytes"), out var parsedMemory) ? parsedMemory : 0;
-        var report = RetrievalBenchmarkRunner.Run(reader, index, vectors,
+        var report = RetrievalBenchmarkRunner.Run(reader, caseSet, baseline, index, vectors,
             Get("--code-commit") ?? "uncommitted", Get("--manifest-id") ?? "unverified",
             Get("--machine") ?? Environment.MachineName,
             Get("--resource") ?? "not supplied", memoryLimit,
@@ -125,6 +131,15 @@ switch (args0[0])
         var adapter = sourceAdapters.Resolve(publisher, Get);
         Console.Error.WriteLine($"[lex] ingest {publisher} -> {corpus}");
         await new CorpusWriter(corpus, now).WriteAsync(adapter, CancellationToken.None);
+        return 0;
+    }
+    case "work-enrichment-build":
+    {
+        var input = Get("--input") ?? throw new ArgumentException("--input required");
+        var output = Get("--out") ?? throw new ArgumentException("--out required");
+        var collection = Get("--collection") ?? throw new ArgumentException("--collection required");
+        WorkEnrichmentFile.BuildReviewedArtifact(input, output, collection);
+        Console.Error.WriteLine($"[lex] wrote reviewed work enrichment for {collection} to {output}");
         return 0;
     }
     case "index":
@@ -194,7 +209,8 @@ switch (args0[0])
             MaxBatchTokens: embeddingMaxBatchTokens,
             ExecutionProvider: encoder.ExecutionProvider,
             EmbeddingCachePath: Get("--embedding-cache"));
-        IndexFromCorpus.Build(corpus, articles, outDb, keyPem, now, semantic);
+        IndexFromCorpus.Build(corpus, articles, outDb, keyPem, now, semantic,
+            Get("--work-enrichment"));
         return 0;
     }
     case "derive":
@@ -210,7 +226,8 @@ switch (args0[0])
     }
     case "verify":
     {
-        // verify corpus --corpus X | verify stamp --db X | verify derive --publisher P --corpus X --articles Y
+        // verify corpus --corpus X | verify stamp --db X [--work-enrichment FILE]
+        // | verify derive --publisher P --corpus X --articles Y
         switch (args0.Length > 1 ? args0[1] : "")
         {
             case "corpus":
@@ -227,6 +244,24 @@ switch (args0[0])
             case "stamp":
             {
                 var db = Get("--db") ?? throw new ArgumentException("--db required");
+                var enrichment = Get("--work-enrichment");
+                var expectedCollection = Get("--expected-collection");
+                var expectedCorpusCommit = Get("--expected-corpus-commit");
+                if (expectedCollection is not null || expectedCorpusCommit is not null)
+                {
+                    var strict = IndexStampVerifier.Verify(
+                        db, expectedCollection, expectedCorpusCommit, enrichment);
+                    Console.WriteLine($"collection={strict.Collection} " +
+                        $"corpus_commit={strict.CorpusCommit} " +
+                        $"signature_valid={strict.SignatureValid} " +
+                        $"content_digest={(strict.ContentDigestMatches ? "matches"
+                            : strict.ContentDigestPresent ? "MISMATCH" : "absent")} " +
+                        $"collection_matches={strict.CollectionMatches} " +
+                        $"corpus_commit_matches={strict.CorpusCommitMatches} " +
+                        $"enrichment_digest={(enrichment is null ? "not_checked"
+                            : strict.EnrichmentDigestMatches ? "matches" : "MISMATCH")}");
+                    return strict.ExitCode;
+                }
                 using var r = Lex.Index.LexIndexReader.Open(db);
                 // A valid signature over the metadata proves nothing about the text. Recompute
                 // the content digest from what the database actually holds and compare it with
@@ -234,12 +269,21 @@ switch (args0[0])
                 var claimed = r.Stamp.GetValueOrDefault("content_digest") ?? "";
                 var actual = r.ComputeContentDigest();
                 var contentOk = claimed.Length > 0 && claimed == actual;
+                var expectedEnrichment = enrichment is null ? null : Convert.ToHexStringLower(
+                    System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(enrichment)));
+                var actualEnrichment = r.Stamp.GetValueOrDefault("enrichment_digest");
+                var enrichmentOk = expectedEnrichment is null
+                                   || string.Equals(expectedEnrichment, actualEnrichment,
+                                       StringComparison.OrdinalIgnoreCase);
                 Console.WriteLine($"collection={r.Collection} schema={r.Stamp.GetValueOrDefault("schema")} " +
                     $"algorithm={r.Stamp.GetValueOrDefault("algorithm")} corpus_commit={r.Stamp.GetValueOrDefault("corpus_commit")} " +
                     $"built_at={r.Stamp.GetValueOrDefault("built_at")} signature_valid={r.SignatureValid} " +
                     $"content_digest={(claimed.Length == 0 ? "absent (index predates content binding)" : contentOk ? "matches" : "MISMATCH — contents were altered")}");
+                Console.WriteLine($"enrichment_digest={(expectedEnrichment is null
+                    ? "not_checked" : enrichmentOk ? "matches" : "MISMATCH")}");
                 if (!r.SignatureValid) return 3;
-                return claimed.Length == 0 || contentOk ? 0 : 4;
+                if (claimed.Length > 0 && !contentOk) return 4;
+                return enrichmentOk ? 0 : 5;
             }
             case "derive":
             {
@@ -277,7 +321,7 @@ switch (args0[0])
                 finally { try { Directory.Delete(tmp, true); } catch { } }
             }
             default:
-                Console.Error.WriteLine("usage: lex verify corpus --corpus X | lex verify stamp --db X | lex verify derive --publisher P --corpus X --articles Y [--work slug]");
+                Console.Error.WriteLine("usage: lex verify corpus --corpus X | lex verify stamp --db X [--expected-collection ID] [--expected-corpus-commit SHA] [--work-enrichment FILE] | lex verify derive --publisher P --corpus X --articles Y [--work slug]");
                 return 1;
         }
     }
@@ -431,9 +475,10 @@ static void Usage() => Console.Error.WriteLine("""
       lex embedding-smoke --model-dir PATH [--text TEXT] [--batch-size N]
       lex scope-preview [--publisher ID] [--scope FILE] [--previous-scope FILE] [--wave 1..4]
       lex ingest --publisher ID --corpus PATH [--scope FILE] [--wave 1..4] [--now ISO]
+      lex work-enrichment-build --input REVIEWED.json --out CANONICAL.json --collection ID
       lex index  --corpus PATH [--articles PATH] --out FILE.db [--keyfile KEY.pem] [--now ISO]
                  [--embedding-model PATH] [--vectors FILE] [--embedding-batch-size N]
-                 [--time-budget-minutes N]
+                 [--time-budget-minutes N] [--work-enrichment FILE.json]
       lex derive --publisher lu-legilux --corpus PATH --out PATH [--code-version SHA]
       lex verify corpus --corpus PATH
       lex repair checkout-line-endings --corpus PATH

@@ -449,16 +449,17 @@ public class IndexTests : IDisposable
         var result = reader.SearchHybrid("employment termination", FilterSet.All, 10);
         Assert.Equal("hybrid", result.RetrievalMode);
         Assert.Equal("employment", result.Hits[0].Doc.GroupKey);
-        Assert.Contains("semantic", result.Hits[0].MatchReasons);
+        Assert.Contains(result.Hits[0].MatchReasons,
+            reason => reason is "semantic" or "semantic_work");
     }
 
     [Fact]
-    public void Equal_rrf_scores_prefer_a_keyword_hit_over_a_semantic_only_hit()
+    public void Direct_keyword_hit_remains_first_when_work_semantics_are_also_available()
     {
-        // A direct word match can fall outside the semantic top 100 when many short provisions
-        // share the query's embedding direction. Both rank-one candidates then receive the same
-        // RRF score. Recency is not a relevance signal and must not put a semantic-only result
-        // ahead of the provision that contains the word the reader actually typed.
+        // A direct word match can fall outside the provision-semantic top 100 when many short
+        // provisions share the query's embedding direction. Work semantics may now add another
+        // signal, but recency is still not relevance and must not put a semantic-only result ahead
+        // of the provision containing the word the reader actually typed.
         var lexical = Row("t-pub:lexical:2020-01-01", "lexical", "2020-01-01", null, text: true);
         var semantic = Enumerable.Range(0, 101)
             .Select(i => Row($"t-pub:semantic-{i}:2026-01-01", $"semantic-{i}", "2026-01-01", null, text: true))
@@ -481,9 +482,9 @@ public class IndexTests : IDisposable
         var result = reader.SearchHybrid("privacy", FilterSet.All, 5);
 
         Assert.Equal("lexical", result.Hits[0].Doc.GroupKey);
-        Assert.Equal(["keyword"], result.Hits[0].MatchReasons);
-        Assert.Equal(result.Hits[0].Score, result.Hits[1].Score);
-        Assert.Equal(["semantic"], result.Hits[1].MatchReasons);
+        Assert.Contains("keyword", result.Hits[0].MatchReasons);
+        Assert.True(result.Hits[0].Score >= result.Hits[1].Score);
+        Assert.Contains("semantic", result.Hits[1].MatchReasons);
     }
 
     [Fact]
@@ -502,14 +503,15 @@ public class IndexTests : IDisposable
             [], [], null, semantic: new SemanticBuildOptions(
                 encoder, vectors, "model-sha", "tokenizer-sha", Progress: progress.Add));
 
-        Assert.Equal(1, encoder.EncodeCalls);
-        Assert.Equal(1, encoder.BatchCalls);
+        Assert.Equal(3, encoder.EncodeCalls);
+        Assert.Equal(2, encoder.BatchCalls);
         AssertStage(progress, SemanticBuildStage.Preparation, 1);
         AssertStage(progress, SemanticBuildStage.Embeddings, 1);
+        AssertStage(progress, SemanticBuildStage.WorkEmbeddings, 2);
         AssertStage(progress, SemanticBuildStage.Database, 4);
         AssertStage(progress, SemanticBuildStage.Finalization, 3);
         using var vectorReader = new SemanticVectorReader(vectors);
-        Assert.Equal(1, vectorReader.Count);
+        Assert.Equal(3, vectorReader.Count);
         using var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={_db}");
         connection.Open();
         using var command = connection.CreateCommand();
@@ -592,8 +594,8 @@ public class IndexTests : IDisposable
             [], [], null, semantic: new SemanticBuildOptions(
                 encoder, vectors, "model-sha", "tokenizer-sha", BatchSize: 2));
 
-        Assert.Equal(3, encoder.EncodeCalls);
-        Assert.Equal(2, encoder.BatchCalls);
+        Assert.Equal(4, encoder.EncodeCalls);
+        Assert.Equal(3, encoder.BatchCalls);
         using var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={_db}");
         connection.Open();
         using var command = connection.CreateCommand();
@@ -627,7 +629,7 @@ public class IndexTests : IDisposable
             [], [], null, semantic: new SemanticBuildOptions(
                 encoder, vectors, "model-sha", "tokenizer-sha", BatchSize: 16));
 
-        Assert.Equal([32, 64, 128], encoder.BatchPaddings);
+        Assert.Equal([32, 64, 128, 32], encoder.BatchPaddings);
     }
 
     [Fact]
@@ -647,8 +649,8 @@ public class IndexTests : IDisposable
                 encoder, vectors, "model-sha", "tokenizer-sha",
                 BatchSize: 256, MaxBatchTokens: 32_768));
 
-        Assert.Equal([128, 2], encoder.BatchSizes);
-        Assert.All(encoder.BatchPaddings, padding => Assert.Equal(256, padding));
+        Assert.Equal([128, 2, 1], encoder.BatchSizes);
+        Assert.Equal([256, 256, 32], encoder.BatchPaddings);
     }
 
     [Fact]
@@ -679,7 +681,7 @@ public class IndexTests : IDisposable
                 [doc], provisions, [], [], null, semantic: new SemanticBuildOptions(
                     first, vectors1, "model-sha", "tokenizer-sha", BatchSize: 2,
                     ExecutionProvider: "cpu;runtime=test", EmbeddingCachePath: cache));
-            Assert.Equal(2, first.EncodeCalls);
+            Assert.Equal(3, first.EncodeCalls);
         }
 
         using (var resumed = new FakeEncoder())
@@ -697,7 +699,7 @@ public class IndexTests : IDisposable
             [doc], provisions, [], [], null, semantic: new SemanticBuildOptions(
                 otherProvider, vectors3, "model-sha", "tokenizer-sha", BatchSize: 2,
                 ExecutionProvider: "directml:1;runtime=test", EmbeddingCachePath: cache));
-        Assert.Equal(2, otherProvider.EncodeCalls);
+        Assert.Equal(3, otherProvider.EncodeCalls);
 
         using var otherProfile = new FakeEncoder();
         IndexBuilder.Build(db4, new Dictionary<string, string> { ["collection"] = "t-pub" },
@@ -705,7 +707,7 @@ public class IndexTests : IDisposable
                 otherProfile, vectors4, "model-sha", "tokenizer-sha", BatchSize: 2,
                 ExecutionProvider: "cpu;runtime=test", EmbeddingCachePath: cache,
                 EmbeddingProfile: "test-profile/other"));
-        Assert.Equal(2, otherProfile.EncodeCalls);
+        Assert.Equal(3, otherProfile.EncodeCalls);
     }
 
     [Fact]

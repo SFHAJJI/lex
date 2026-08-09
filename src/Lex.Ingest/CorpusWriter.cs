@@ -38,11 +38,24 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now, TextWrit
         // report a real denominator. A percentage without a denominator is not actionable; an
         // elapsed time without observed throughput is not an ETA.
         var plan = new List<(WorkRef Work, IReadOnlyList<VersionRecord> Versions)>();
+        var localBuildIssues = new List<SourceBuildIssue>();
+        var enumeratedWorks = 0;
         await foreach (var work in adapter.EnumerateWorks(ct))
         {
+            enumeratedWorks++;
             var versionsOfWork = await adapter.FetchVersions(work, ct);
-            if (versionsOfWork.Count > 0) plan.Add((work, versionsOfWork));
+            if (versionsOfWork.Count > 0)
+                plan.Add((work, versionsOfWork));
+            else
+                localBuildIssues.Add(new SourceBuildIssue(
+                    "no_versions", work.Slug, "The publisher enumeration returned no version records."));
         }
+        var sourceInventory = (adapter as ISourceBuildInventory)?.GetBuildInventory();
+        var expectedWorks = Math.Max(enumeratedWorks, sourceInventory?.ExpectedWorks ?? 0);
+        var buildIssues = localBuildIssues.Concat(sourceInventory?.Issues ?? [])
+            .Distinct().OrderBy(issue => issue.Work, StringComparer.Ordinal)
+            .ThenBy(issue => issue.Code, StringComparer.Ordinal)
+            .ThenBy(issue => issue.Detail, StringComparer.Ordinal).ToList();
         var totalExpressions = plan.Sum(item => item.Versions.Sum(version => (long)version.Expressions.Count));
         long processedExpressions = 0;
         var lastReportedPercent = -1;
@@ -152,6 +165,41 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now, TextWrit
                         meta.Raw[key] = value;
                         revised.Add($"raw.{key}");
                     }
+                    var publisherMetadata = CanonicalPublisherMetadata(v.PublisherMetadata);
+                    if (!(meta.PublisherMetadata ?? []).SequenceEqual(publisherMetadata))
+                    {
+                        meta.PublisherMetadata = publisherMetadata.Count == 0 ? null : publisherMetadata;
+                        revised.Add("publisher_metadata");
+                    }
+                    var documentRoles = (v.DocumentRoles ?? []).Distinct(StringComparer.Ordinal)
+                        .Order(StringComparer.Ordinal).ToList();
+                    if (!(meta.DocumentRoles ?? []).SequenceEqual(documentRoles, StringComparer.Ordinal))
+                    {
+                        meta.DocumentRoles = documentRoles.Count == 0 ? null : documentRoles;
+                        revised.Add("document_roles");
+                    }
+
+                    foreach (var expression in v.Expressions)
+                    {
+                        var current = meta.Expressions.FirstOrDefault(e => e.Language == expression.Language);
+                        if (current is null) continue;
+                        if (current.Title != expression.Title)
+                        {
+                            current.Title = expression.Title;
+                            revised.Add($"expressions.{expression.Language}.title");
+                        }
+                        if (current.TitleShort != expression.TitleShort)
+                        {
+                            current.TitleShort = expression.TitleShort;
+                            revised.Add($"expressions.{expression.Language}.title_short");
+                        }
+                        if (current.SourceUri != expression.SourceUri)
+                        {
+                            current.SourceUri = expression.SourceUri;
+                            current.Text.Url = expression.SourceUri;
+                            revised.Add($"expressions.{expression.Language}.source_uri");
+                        }
+                    }
                     if (revised.Count > 0)
                     {
                         meta.Events.Add(new EventEntry
@@ -199,6 +247,10 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now, TextWrit
                         Relations = v.Relations.Select(r => new Dictionary<string, string>
                         { ["type"] = r.Type, ["target"] = r.Target.Value }).ToList(),
                         Raw = new Dictionary<string, string>(v.Raw),
+                        PublisherMetadata = CanonicalPublisherMetadata(v.PublisherMetadata) is { Count: > 0 } metadata
+                            ? metadata : null,
+                        DocumentRoles = (v.DocumentRoles ?? []).Distinct(StringComparer.Ordinal)
+                            .Order(StringComparer.Ordinal).ToList() is { Count: > 0 } roles ? roles : null,
                     };
                 }
 
@@ -327,10 +379,13 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now, TextWrit
             Expressions = expressions,
             ExpressionsWithText = expressionsWithText,
             ExpressionsWithoutText = expressions - expressionsWithText,
+            ScopeExpectedWorks = expectedWorks,
+            BuildIssues = buildIssues,
             ValidFromEarliest = earliest,
             ValidToLatest = latest,
             HistoryBegins = desc.HistoryBegins,
             IngesterVersion = "0.1.0",
+            PublisherDiscoverySchema = ManifestDoc.CurrentPublisherDiscoverySchema,
         };
         WriteIfChanged(Path.Combine(corpusRoot, "manifest.json"), JsonSerializer.Serialize(manifest, CorpusJson.Options));
         WriteIfChanged(Path.Combine(corpusRoot, "NOTICE"), Notice(pub, desc.TextIncluded));
@@ -361,6 +416,16 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now, TextWrit
             Url = expression.SourceUri,
         },
     };
+
+    private static List<PublisherMetadataRecord> CanonicalPublisherMetadata(
+        IReadOnlyList<PublisherMetadataRecord>? values) => (values ?? [])
+        .Distinct()
+        .OrderBy(value => value.Kind, StringComparer.Ordinal)
+        .ThenBy(value => value.Identifier, StringComparer.Ordinal)
+        .ThenBy(value => value.Language, StringComparer.Ordinal)
+        .ThenBy(value => value.Label, StringComparer.Ordinal)
+        .ThenBy(value => value.SourceUri, StringComparer.Ordinal)
+        .ToList();
 
     private void TombstoneMissingVersions(IReadOnlySet<string> seenVersionMetadata)
     {
