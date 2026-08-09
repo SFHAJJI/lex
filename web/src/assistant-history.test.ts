@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { askQuestionError, boundedAskHistory } from "./api.ts";
+import { actionableClarificationChoices, askQuestionError, boundedAskHistory, clarificationFollowUp } from "./api.ts";
 
 test("assistant history is validated and bounded to six restored turns", () => {
   const source = Array.from({ length: 14 }, (_, index) => ({
@@ -37,4 +37,30 @@ test("an over-limit current question is rejected instead of silently changed", (
 
   assert.match(askQuestionError(question) ?? "", /4,000/);
   assert.throws(() => boundedAskHistory([{ role: "user", content: question }]), RangeError);
+});
+
+test("deterministic clarification submits the full value while generated choices retain context", () => {
+  const longWork = `lu-legilux:${"a".repeat(1000 - "lu-legilux:".length)}`;
+
+  assert.equal(clarificationFollowUp("original facts", { label: "bounded label", value: longWork }),
+    longWork);
+  assert.equal(clarificationFollowUp("original facts", { label: "Article 6" }),
+    "original facts\nClarification choice: Article 6");
+});
+
+test("clarification labels and authority values are atomic and malformed shapes fail closed", () => {
+  const valid = {
+    question: "Which law?",
+    options: ["Law A", "Law B"],
+    choices: [
+      { label: "Law A", value: "lu-legilux:a" },
+      { label: "Law B", value: "lu-legilux:b" },
+    ],
+  };
+
+  assert.deepEqual(actionableClarificationChoices(valid), valid.choices);
+  assert.equal(actionableClarificationChoices({ ...valid, choices: valid.choices.slice(0, 1) }), undefined);
+  assert.equal(actionableClarificationChoices({ ...valid, choices: [...valid.choices].reverse() }), undefined);
+  assert.equal(actionableClarificationChoices({ ...valid,
+    choices: [...valid.choices, { label: "Law C", value: "lu-legilux:c" }] }), undefined);
 });
