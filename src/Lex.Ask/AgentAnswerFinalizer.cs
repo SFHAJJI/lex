@@ -8,6 +8,8 @@ using System.ClientModel;
 
 namespace Lex.Ask;
 
+internal sealed record AgentFinalization(AgentAnswerDraft Draft, bool SynthesisFailed);
+
 internal sealed class AgentAnswerFinalizer
 {
     private const string ComposerInstructions = """
@@ -64,7 +66,7 @@ internal sealed class AgentAnswerFinalizer
             description: "Passes, repairs or refuses synthesized legal prose.");
     }
 
-    public async Task<AgentAnswerDraft> FinalizeAsync(
+    public async Task<AgentFinalization> FinalizeAsync(
         string userQuestion,
         string draftText,
         IReadOnlyList<AgentEvidence> evidence,
@@ -90,9 +92,9 @@ internal sealed class AgentAnswerFinalizer
                 // One correction is allowed. The second failure falls through to a refusal.
             }
         }
-        if (draft is null) return Refusal();
+        if (draft is null) return new(Refusal(), SynthesisFailed: true);
         if (!RequiresJudge(draft))
-            return draft;
+            return new(draft, SynthesisFailed: false);
 
         var judgeSession = await _judge.CreateSessionAsync(cancellationToken);
         var judgmentResponse = await _judge.RunAsync<AgentGroundingJudgment>(
@@ -105,16 +107,18 @@ internal sealed class AgentAnswerFinalizer
         {
             var judgment = AgentGroundingJudgmentContract.Validate(
                 judgmentResponse.Result, draft, evidence);
-            return judgment.Disposition switch
+            var finalized = judgment.Disposition switch
             {
                 AgentJudgmentDisposition.Pass => draft,
                 AgentJudgmentDisposition.Repair => judgment.Replacement!,
                 _ => Refusal(),
             };
+            return new(finalized,
+                SynthesisFailed: judgment.Disposition == AgentJudgmentDisposition.Refuse);
         }
         catch (InvalidDataException)
         {
-            return Refusal();
+            return new(Refusal(), SynthesisFailed: true);
         }
     }
 
