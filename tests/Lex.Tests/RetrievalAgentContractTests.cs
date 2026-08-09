@@ -260,6 +260,33 @@ public sealed class RetrievalAgentContractTests
     }
 
     [Fact]
+    public void A_standalone_change_ranking_does_not_duplicate_workspace_sources()
+    {
+        var source = new AgentEvidence(
+            "ranking:1:0", AgentEvidenceKind.Ranking, "lu-legilux:one", null,
+            "2024-12-31", null, "https://law.soufien.lu/lu-legilux/one/2024-12-31",
+            Title: "One");
+        var verbose = AgentAnswerContract.Validate(new AgentAnswerDraft(
+            AgentAnswerStatus.Answer,
+            "Voici le classement vérifié pour la période demandée.",
+            [new AgentClaim("One is ranked.", AgentClaimKind.Ranking, [source.Id])],
+            [source.Permalink!], null, null), [source]);
+        var ranking = new UiEffect(Ranking: new RankingView(
+            "2024-01-01", "2024-12-31", "by_churn", 371, 430, []));
+
+        var reply = AskService.ReplyFor(verbose, [ranking]);
+
+        Assert.Equal(verbose.Answer, reply);
+        Assert.DoesNotContain("https://", reply, StringComparison.OrdinalIgnoreCase);
+
+        var comparison = new UiEffect(Diff: new DiffView(
+            new Subject("eu-eurlex:32013r0575", "CRR", "2024-01-01", "art_92"),
+            "2024-01-01", "2024-12-31", null, null, null));
+        Assert.Equal(AgentAnswerFinalizer.Render(verbose),
+            AskService.ReplyFor(verbose, [ranking, comparison]));
+    }
+
+    [Fact]
     public void A_gap_alongside_an_outline_preserves_the_evidence_limited_refusal()
     {
         var refusal = new AgentAnswerDraft(
