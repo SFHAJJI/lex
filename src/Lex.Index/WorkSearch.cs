@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Data.Sqlite;
@@ -192,11 +191,13 @@ public static class WorkSearch
             fts.ExecuteNonQuery();
 
             vectorInputs.Add((workId, "work", null,
-                "names: " + string.Join(' ', workAliases.Select(alias => alias.Value)
-                    .Concat(source.Titles).Concat(source.ShortTitles))
-                + "\nsubjects: " + string.Join(' ', new[]
+                "subjects: " + string.Join(' ', new[]
                     { source.Latest.Hierarchy, source.Latest.Domains, source.Latest.ActForm }
-                    .Where(NotBlank).Concat(roles))));
+                    .Where(NotBlank).Concat(roles))
+                + "\nnames: " + string.Join(' ', workAliases.Select(alias => alias.Value)
+                    .Concat([source.Latest.Title, source.Latest.TitleShort])
+                    .Concat(source.Titles).Concat(source.ShortTitles)
+                    .Where(NotBlank).Distinct(StringComparer.Ordinal))));
             vectorInputs.AddRange(workDiscovery.Select(item =>
                 (workId, item.Kind, (string?)item.Value, $"legal {item.Kind}: {item.Value}")));
         }
@@ -570,10 +571,25 @@ public static class WorkSearch
         SemanticEmbeddingCache? cache,
         IReadOnlyList<(long WorkId, string Kind, string? Value, string Text)> inputs)
     {
+        // Work semantics is a bounded recall aid; the complete names remain in work_names and
+        // work_fts. Keep exactly one authoritative base vector per work, prioritizing the subject
+        // and current-identity prefix assembled above when historical titles exceed the encoder.
+        var chunks = inputs.Select((input, inputOrder) =>
+            {
+                var chunk = SemanticChunker.Split(input.Text, semantic.Encoder)[0];
+                return new
+                {
+                    Input = (input.WorkId, input.Kind, input.Value, Text: chunk.Text),
+                    InputOrder = inputOrder,
+                    chunk.Sha256,
+                    PaddingTokens = IndexBuilder.EmbeddingTokenBucket(chunk.TokenCount),
+                };
+            })
+            .ToArray();
         var watch = System.Diagnostics.Stopwatch.StartNew();
         long completed = 0;
         semantic.Progress?.Invoke(new SemanticBuildProgress(
-            0, inputs.Count, watch.Elapsed, null, SemanticBuildStage.WorkEmbeddings));
+            0, chunks.Length, watch.Elapsed, null, SemanticBuildStage.WorkEmbeddings));
         using var command = connection.CreateCommand();
         command.CommandText = """
             INSERT INTO work_vectors(
@@ -584,33 +600,25 @@ public static class WorkSearch
         command.Parameters.Add(new SqliteParameter("$kind", SqliteType.Text));
         command.Parameters.Add(new SqliteParameter("$value", SqliteType.Text));
         command.Parameters.Add(new SqliteParameter("$ordinal", SqliteType.Integer));
-        var buckets = inputs.Select((input, order) => new
-        {
-            Input = input,
-            Order = order,
-            PaddingTokens = IndexBuilder.EmbeddingTokenBucket(
-                semantic.Encoder.CountTokens(input.Text)),
-        }).GroupBy(item => item.PaddingTokens).OrderBy(group => group.Key);
+        var buckets = chunks.GroupBy(item => item.PaddingTokens).OrderBy(group => group.Key);
         foreach (var bucket in buckets)
         {
             if (bucket.Key > semantic.MaxBatchTokens)
                 throw new InvalidDataException("A work-vector input exceeds the embedding token budget.");
             var batchSize = Math.Max(1,
                 Math.Min(Math.Min(32, semantic.BatchSize), semantic.MaxBatchTokens / bucket.Key));
-            foreach (var items in bucket.OrderBy(item => item.Order).Chunk(batchSize))
+            foreach (var items in bucket.OrderBy(item => item.InputOrder).Chunk(batchSize))
             {
-                var batch = items.Select(item => item.Input).ToArray();
-                var hashes = batch.Select(input => Convert.ToHexStringLower(
-                    SHA256.HashData(Encoding.UTF8.GetBytes(input.Text)))).ToArray();
+                var batch = items.ToArray();
                 var records = new byte[batch.Length][];
                 var missing = new List<int>();
                 for (var index = 0; index < batch.Length; index++)
-                    if (cache is null || !cache.TryRead(hashes[index], out records[index]!))
+                    if (cache is null || !cache.TryRead(batch[index].Sha256, out records[index]!))
                         missing.Add(index);
                 if (missing.Count > 0)
                 {
                     var vectors = semantic.Encoder.EncodeBatch(
-                        missing.Select(index => batch[index].Text).ToArray(),
+                        missing.Select(index => batch[index].Input.Text).ToArray(),
                         EmbeddingInputKind.Passage, bucket.Key);
                     if (vectors.Count != missing.Count)
                         throw new InvalidDataException("Work embedding batch returned the wrong vector count.");
@@ -619,13 +627,13 @@ public static class WorkSearch
                     {
                         var batchIndex = missing[index];
                         records[batchIndex] = SemanticVectorWriter.Quantize(vectors[index]);
-                        additions.Add((hashes[batchIndex], records[batchIndex]));
+                        additions.Add((batch[batchIndex].Sha256, records[batchIndex]));
                     }
                     cache?.Store(additions);
                 }
                 for (var index = 0; index < batch.Length; index++)
                 {
-                    var input = batch[index];
+                    var input = batch[index].Input;
                     command.Parameters["$work"].Value = input.WorkId;
                     command.Parameters["$kind"].Value = input.Kind;
                     command.Parameters["$value"].Value = (object?)input.Value ?? DBNull.Value;
@@ -634,9 +642,9 @@ public static class WorkSearch
                 }
                 completed += batch.Length;
                 var remaining = TimeSpan.FromTicks(
-                    (long)(watch.Elapsed.Ticks * (inputs.Count - completed) / (double)completed));
+                    (long)(watch.Elapsed.Ticks * (chunks.Length - completed) / (double)completed));
                 semantic.Progress?.Invoke(new SemanticBuildProgress(
-                    completed, inputs.Count, watch.Elapsed, remaining,
+                    completed, chunks.Length, watch.Elapsed, remaining,
                     SemanticBuildStage.WorkEmbeddings));
             }
         }
