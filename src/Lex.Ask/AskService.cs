@@ -25,12 +25,35 @@ public sealed class AskService(McpCore core)
         private const string NoChoice = "none of these";
 
         private readonly HashSet<string> _resolved = new(StringComparer.Ordinal);
+        private readonly HashSet<string> _prior = new(StringComparer.Ordinal);
         private readonly List<(string Work, string Title)> _candidates = [];
         private bool _searchObserved;
         private bool _workIndependentAnswerObserved;
+        private bool _currentAuthorityObserved;
+        private bool _priorContextUsed;
+
+        public IReadOnlyCollection<string> ResolvedWorks => _resolved;
 
         public void ObserveSearch(JsonNode result, bool isRawUserQuery = true)
+            => ObserveSearch(result, isRawUserQuery, allowDirectProvisionAuthority: true,
+                collectCandidates: true);
+
+        public void ObserveCurrentUserSearch(JsonNode result, bool hasPriorContext)
+            => ObserveSearch(result, isRawUserQuery: true,
+                allowDirectProvisionAuthority: !hasPriorContext,
+                collectCandidates: !hasPriorContext);
+
+        public void ObservePriorUserSearch(JsonNode result)
+            => ObserveSearch(result, isRawUserQuery: true, allowDirectProvisionAuthority: false,
+                collectCandidates: false);
+
+        private void ObserveSearch(JsonNode result, bool isRawUserQuery,
+            bool allowDirectProvisionAuthority, bool collectCandidates)
         {
+            // A preflight that produced no usable envelope is still an observed search. Work-
+            // specific tools must fail closed rather than treating an empty/malformed result as
+            // if no authority check had run.
+            _searchObserved = true;
             var latestCandidates = new List<(string Work, string Title)>();
             foreach (var response in result is JsonArray array
                          ? array.OfType<JsonObject>()
@@ -39,23 +62,30 @@ public sealed class AskService(McpCore core)
                 if (response["query_plan"] is not JsonObject plan) continue;
                 var status = plan["global_work_resolution_status"]?.GetValue<string>()
                              ?? plan["work_resolution_status"]?.GetValue<string>();
-                _searchObserved = true;
                 var resolutions = plan["global_work_resolutions"] as JsonArray
                                   ?? plan["work_resolutions"] as JsonArray;
                 if (isRawUserQuery && resolutions is not null)
                     foreach (var resolution in resolutions.OfType<JsonObject>()
                                  .Where(item => item["status"]?.GetValue<string>() == "resolved"))
                         foreach (var candidate in resolution["candidates"]?.AsArray() ?? [])
-                            if (candidate?.GetValue<string>() is { } work) _resolved.Add(WorkKey(work));
+                            if (candidate?.GetValue<string>() is { } work)
+                            {
+                                _resolved.Add(WorkKey(work));
+                                _currentAuthorityObserved = true;
+                            }
                 // A problem description with no named law may select a work only from an actual
                 // provision hit. Standalone work discovery has no anchor and stays a candidate
                 // until the user confirms it.
-                if (status == "not_requested" && response["hits"] is JsonArray hits)
+                if (allowDirectProvisionAuthority && status == "not_requested"
+                    && response["hits"] is JsonArray hits)
                     foreach (var hit in hits.OfType<JsonObject>()
-                                 .Where(item => item["anchor"]?.GetValue<string>() is { Length: > 0 }))
+                                 .Where(HasDirectProvisionEvidence))
                         if (hit["lex_id"]?.GetValue<string>() is { } lexId)
+                        {
                             _resolved.Add(WorkKey(lexId));
-                if (response["hits"] is JsonArray candidateHits)
+                            _currentAuthorityObserved = true;
+                        }
+                if (collectCandidates && response["hits"] is JsonArray candidateHits)
                     foreach (var hit in candidateHits.OfType<JsonObject>()
                                  .Where(item => item["anchor"]?.GetValue<string>() is not { Length: > 0 }))
                         if (hit["lex_id"]?.GetValue<string>() is { } lexId)
@@ -70,6 +100,15 @@ public sealed class AskService(McpCore core)
             if (_candidates.Count > 8) _candidates.RemoveRange(8, _candidates.Count - 8);
         }
 
+        public void AuthorizePriorWorks(IEnumerable<string> works)
+        {
+            foreach (var work in works.Select(WorkKey).Where(IsCandidateWork))
+            {
+                _resolved.Add(work);
+                _prior.Add(work);
+            }
+        }
+
         public bool Allows(string tool, JsonObject args)
         {
             if (!_searchObserved) return true;
@@ -79,7 +118,10 @@ public sealed class AskService(McpCore core)
             if (work is null || tool is not (
                     "as_of" or "timeline" or "diff" or "article_history" or "cited_by" or "provenance"))
                 return true;
-            return _resolved.Contains(WorkKey(work));
+            var key = WorkKey(work);
+            var allowed = _resolved.Contains(key);
+            if (allowed && _prior.Contains(key)) _priorContextUsed = true;
+            return allowed;
         }
 
         public void ObserveUserConfirmation(string query)
@@ -88,7 +130,11 @@ public sealed class AskService(McpCore core)
             var value = trimmed.StartsWith(ChoicePrefix, StringComparison.Ordinal)
                 ? trimmed[ChoicePrefix.Length..].Trim()
                 : trimmed;
-            if (IsCandidateWork(value)) _resolved.Add(value);
+            if (IsCandidateWork(value))
+            {
+                _resolved.Add(value);
+                _currentAuthorityObserved = true;
+            }
         }
 
         public static bool IsExplicitNonSelection(string query) =>
@@ -99,7 +145,8 @@ public sealed class AskService(McpCore core)
 
         public GuardClarification? ClarificationFor(string? attemptedWork)
         {
-            if (_workIndependentAnswerObserved || _resolved.Count > 0 || _candidates.Count == 0)
+            if (_workIndependentAnswerObserved || _currentAuthorityObserved || _priorContextUsed
+                || _candidates.Count == 0)
                 return null;
             var attempted = attemptedWork is null ? null : WorkKey(attemptedWork);
             var ordered = _candidates
@@ -125,6 +172,14 @@ public sealed class AskService(McpCore core)
         {
             if (!IsCandidateWork(work) || candidates.Any(candidate => candidate.Work == work)) return;
             candidates.Add((work, title.Trim()));
+        }
+
+        private static bool HasDirectProvisionEvidence(JsonObject hit)
+        {
+            if (hit["anchor"]?.GetValue<string>() is not { Length: > 0 }) return false;
+            var reasons = hit["match_reasons"] as JsonArray;
+            return reasons?.Any(reason => reason?.GetValue<string>() is
+                "keyword" or "fuzzy" or "semantic") == true;
         }
 
         private static bool IsCandidateWork(string work) =>
@@ -175,9 +230,26 @@ public sealed class AskService(McpCore core)
         => int.TryParse(Environment.GetEnvironmentVariable(name), out var v) && v > 0 ? v : dflt;
 
     private const int MaxHistory = 24;
-    private const int MaxMessageChars = 4000;
+    private const int MaxUserMessageChars = 1000;
+    private const int MaxAssistantMessageChars = 4000;
+    private const int MaxContextResolutionQueries = 3;
     private const int MaxToolRounds = 8;
     private const int MaxToolResultChars = 20000;
+
+    internal static IReadOnlyList<string> ResolvePriorUserWorks(
+        IReadOnlyList<string> userQueries, Func<string, JsonNode?> resolve)
+    {
+        var prior = new WorkResolutionGuard();
+        foreach (var query in userQueries.SkipLast(1).Reverse().Take(MaxContextResolutionQueries))
+        {
+            if (WorkResolutionGuard.IsExplicitNonSelection(query)) continue;
+            prior.ObserveUserConfirmation(query);
+            if (prior.ResolvedWorks.Count == 0 && resolve(query) is { } result)
+                prior.ObservePriorUserSearch(result);
+            if (prior.ResolvedWorks.Count > 0) break;
+        }
+        return prior.ResolvedWorks.Order(StringComparer.Ordinal).ToArray();
+    }
 
     private static string SystemPrompt(string host, int toolCount) => $"""
         You are the answer layer of Lex, a point-in-time retrieval system for consolidated
@@ -613,13 +685,25 @@ public sealed class AskService(McpCore core)
 
         var messages = new JsonArray { new JsonObject { ["role"] = "system", ["content"] = SystemPrompt(host, core.ToolDefs().Count) } };
         string? rawUserQuery = null;
+        var userQueries = new List<string>();
         foreach (var m in history)
         {
             var role = m?["role"]?.GetValue<string>();
             var content = m?["content"]?.GetValue<string>() ?? "";
             if (role is not ("user" or "assistant")) return (400, new JsonObject { ["error"] = "Roles must be user/assistant." });
-            if (content.Length > MaxMessageChars) return (400, new JsonObject { ["error"] = $"Messages are capped at {MaxMessageChars} characters." });
-            if (role == "user") rawUserQuery = content;
+            var messageLimit = role == "user" ? MaxUserMessageChars : MaxAssistantMessageChars;
+            if (content.Length > messageLimit)
+                return (400, new JsonObject
+                {
+                    ["error"] = role == "user"
+                        ? "Questions are capped at 1,000 characters."
+                        : "Stored assistant messages are capped at 4,000 characters.",
+                });
+            if (role == "user")
+            {
+                rawUserQuery = content;
+                userQueries.Add(content);
+            }
             messages.Add(new JsonObject { ["role"] = role, ["content"] = content });
         }
         if (string.IsNullOrWhiteSpace(rawUserQuery))
@@ -648,6 +732,43 @@ public sealed class AskService(McpCore core)
             var effects = new List<UiEffect>();
             var listRendered = false;
 
+            // Requests are deliberately stateless, but the browser sends a bounded transcript.
+            // Re-establish the most recent user-authored work identity through the deterministic
+            // resolver. Never trust an earlier assistant answer as authority, and never carry
+            // weak discovery candidates or problem-first provision hits into a new turn.
+            var priorWorks = ResolvePriorUserWorks(userQueries, priorQuery =>
+            {
+                try
+                {
+                    return core.CallTool("search", new JsonObject
+                    {
+                        ["query"] = priorQuery,
+                        ["retrieval_mode"] = "keyword",
+                        ["fuzzy"] = "auto",
+                        ["limit"] = 8,
+                    });
+                }
+                catch (Exception ex)
+                {
+                    // Conversation context is optional. A stale earlier query must never
+                    // prevent the current, independently valid question from running.
+                    Console.Error.WriteLine($"[ask] prior user resolution skipped: {ex.Message}");
+                    return null;
+                }
+            });
+            resolutionGuard.AuthorizePriorWorks(priorWorks);
+            if (priorWorks.Count > 0)
+            {
+                trace.Add(new JsonObject
+                {
+                    ["tool"] = "search",
+                    ["phase"] = "prior_user_context",
+                    ["status"] = "resolved",
+                    ["works"] = new JsonArray(priorWorks.Select(work => (JsonNode)work).ToArray()),
+                });
+                foreach (var work in priorWorks) worksFound.TryAdd(work, "");
+            }
+
             // Resolve the user's own words before a model can introduce a law name. This search
             // is the authority boundary for named works and also supplies direct provision
             // evidence for problem-first questions. Later model reformulations may improve recall,
@@ -660,7 +781,7 @@ public sealed class AskService(McpCore core)
                 ["limit"] = 8,
             };
             var rawResult = core.CallTool("search", rawArgs);
-            resolutionGuard.ObserveSearch(rawResult, isRawUserQuery: true);
+            resolutionGuard.ObserveCurrentUserSearch(rawResult, hasPriorContext: priorWorks.Count > 0);
             resolutionGuard.ObserveUserConfirmation(rawUserQuery);
             searchCalls = 1;
             var (rawStatus, rawDocs) = Summarize(rawResult);
@@ -687,7 +808,13 @@ public sealed class AskService(McpCore core)
             {
                 ["role"] = "system",
                 ["content"] = "Deterministic raw-user resolution ran before planning. "
-                    + "Treat resolved names and direct provision hits in this result as authoritative for this turn. "
+                    + (priorWorks.Count > 0
+                        ? "Treat resolved names in the current result as authoritative. Because conversational work context exists, current direct hits remain pointers until you either use that prior work or run one focused search for a genuinely new topic. "
+                        : "Treat resolved names and direct provision hits in this result as authoritative for this turn. ")
+                    + (priorWorks.Count > 0
+                        ? "The most recent law identity deterministically resolved from earlier user-authored turns is also authorized as conversational context: "
+                            + string.Join(", ", priorWorks) + ". "
+                        : "No earlier user-authored law identity was deterministically resolved. ")
                     + "Names introduced by later reformulations are candidates only. Result:\n"
                     + TruncateResult(rawResult),
             });

@@ -744,6 +744,41 @@ public sealed class WorkSearchTests : IDisposable
     }
 
     [Fact]
+    public void Unscoped_article_intent_can_rank_matching_residual_text()
+    {
+        var db = TempDb();
+        var regulation = Doc("eu:consent:2020-01-01", "consent", "Consent Act");
+        IndexBuilder.Build(db, Stamp(), [regulation],
+            [Provision(regulation, "Conditions for consent apply on the same date.", "art_7", "7")],
+            [], [], null);
+
+        using var reader = LexIndexReader.Open(db);
+        var result = reader.SearchKeyword(
+            "Article 7 consent", FilterSet.All, 10, fuzzyAuto: false);
+
+        var article = Assert.Single(result.Hits, hit => hit.Provision.Anchor == "art_7");
+        Assert.Equal(new[] { "article_intent", "keyword" }, article.MatchReasons);
+    }
+
+    [Fact]
+    public void Conversational_article_follow_up_does_not_search_anaphoric_date_words()
+    {
+        var db = TempDb();
+        var regulation = Doc("eu:consent:2020-01-01", "consent", "Consent Act");
+        IndexBuilder.Build(db, Stamp(), [regulation],
+            [Provision(regulation, "Conditions for consent.", "art_7", "7")],
+            [], [], null);
+
+        using var reader = LexIndexReader.Open(db);
+        var result = reader.SearchKeyword(
+            "What about Article 7 on the same date?", FilterSet.All, 10, fuzzyAuto: false);
+
+        Assert.Equal("", result.QueryPlan!.ProvisionQuery);
+        var article = Assert.Single(result.Hits, hit => hit.Provision.Anchor == "art_7");
+        Assert.Equal(new[] { "article_intent" }, article.MatchReasons);
+    }
+
+    [Fact]
     public void Role_intent_is_removed_from_the_residual_provision_query()
     {
         var db = TempDb();

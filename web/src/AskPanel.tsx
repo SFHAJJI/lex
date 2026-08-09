@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { Step } from "./api";
+import type { AskMessage, Step } from "./api";
 import { STARTER_PROMPTS, parseAssistantPanelState } from "./assistantShell";
 
 export interface AskPanelProps {
@@ -8,7 +8,10 @@ export interface AskPanelProps {
   busy: boolean;
   steps: Step[];
   said?: string;
+  conversation: AskMessage[];
+  activeQuestion?: string;
   onSubmit: (text: string) => void;
+  onReset: () => void;
   onOpenStep: (step: Step) => void;
   followUps?: { label: string; run: () => void }[];
 }
@@ -36,7 +39,8 @@ export default function AskPanel(p: AskPanelProps) {
   const panel = useRef<HTMLElement>(null);
   const input = useRef<HTMLInputElement>(null);
   const launcher = useRef<HTMLButtonElement>(null);
-  const started = p.steps.length > 0 || !!p.said || p.busy;
+  const started = p.conversation.length > 0 || !!p.activeQuestion
+    || p.steps.length > 0 || !!p.said || p.busy;
 
   useEffect(() => {
     if (typeof matchMedia !== "function") return;
@@ -90,7 +94,7 @@ export default function AskPanel(p: AskPanelProps) {
 
   useEffect(() => {
     body.current?.scrollTo({ top: body.current.scrollHeight, behavior: "smooth" });
-  }, [p.steps.length, p.said]);
+  }, [p.conversation.length, p.activeQuestion, p.steps.length, p.said]);
 
   const rememberHint = () => {
     setHint(false);
@@ -123,6 +127,8 @@ export default function AskPanel(p: AskPanelProps) {
              aria-modal={!minimized && modal ? "true" : undefined} aria-label="Lex legal research assistant">
         <div className="ap-head">
           <span className="ap-title"><span className="al-ic" aria-hidden="true">✦</span> Ask Lex</span>
+          {started ? <button className="ap-reset" onClick={p.onReset}
+            aria-label="Start a new conversation">New</button> : null}
           <button className="ap-x ap-min" onClick={() => setMinimized(!minimized)}
                   aria-label={minimized ? "Expand assistant" : "Minimise assistant"}>
             {minimized ? "▴" : "▾"}
@@ -134,7 +140,7 @@ export default function AskPanel(p: AskPanelProps) {
           <p className="ap-notice">
             You are talking to an <b>AI assistant</b>. It answers only from the laws Lex holds,
             with the date and source for every claim, or it declines. It can still be wrong and
-            it is not legal advice.
+            it is not legal advice. This conversation stays in this browser tab.
           </p>
 
           <div className="ap-body" ref={body}>
@@ -144,6 +150,18 @@ export default function AskPanel(p: AskPanelProps) {
                 <button key={suggestion} className="ap-chip" onClick={() => p.onSubmit(suggestion)}>
                   {suggestion}
                 </button>)}
+            </div> : null}
+
+            {p.conversation.length > 0 ? <ol className="ap-conversation"
+              aria-label="Conversation history">
+              {p.conversation.map((message, index) => <li key={index} className={message.role}>
+                <b>{message.role === "user" ? "You" : "Lex"}</b>
+                <span>{message.content}</span>
+              </li>)}
+            </ol> : null}
+
+            {p.activeQuestion ? <div className="ap-current user">
+              <b>You</b><span>{p.activeQuestion}</span>
             </div> : null}
 
             {p.steps.length > 0 ? <ol className="steps" aria-live="polite"

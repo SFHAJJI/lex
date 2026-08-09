@@ -50,11 +50,13 @@ export interface AskClarification {
 }
 
 const MAX_ASK_HISTORY = 12;
-const MAX_ASK_MESSAGE_CHARS = 4000;
+const MAX_ASK_QUESTION_CHARS = 1000;
+const MAX_ASK_ASSISTANT_CHARS = 4000;
+const TRUNCATED_ASSISTANT_SUFFIX = "\n\n[Earlier answer shortened in conversation memory.]";
 
 export function askQuestionError(value: string): string | undefined {
-  return value.trim().length > MAX_ASK_MESSAGE_CHARS
-    ? "Questions are capped at 4,000 characters. Please narrow this question."
+  return value.trim().length > MAX_ASK_QUESTION_CHARS
+    ? "Questions are capped at 1,000 characters. Please narrow this question."
     : undefined;
 }
 
@@ -89,10 +91,13 @@ export function boundedAskHistory(value: unknown): AskMessage[] {
     && typeof item?.content === "string"
     && item.content.trim().length > 0)
     .map((item) => {
-      if (item.role === "user" && item.content.length > MAX_ASK_MESSAGE_CHARS)
+      if (item.role === "user" && item.content.length > MAX_ASK_QUESTION_CHARS)
         throw new RangeError("A user message exceeds the server limit.");
       return { ...item, content: item.role === "assistant"
-        ? item.content.slice(0, MAX_ASK_MESSAGE_CHARS) : item.content };
+        ? item.content.length <= MAX_ASK_ASSISTANT_CHARS ? item.content
+          : item.content.slice(0, MAX_ASK_ASSISTANT_CHARS - TRUNCATED_ASSISTANT_SUFFIX.length)
+            + TRUNCATED_ASSISTANT_SUFFIX
+        : item.content };
     })
     .slice(-MAX_ASK_HISTORY);
   while (history[0]?.role === "assistant") history.shift();

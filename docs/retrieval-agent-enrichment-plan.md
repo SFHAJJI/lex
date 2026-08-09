@@ -200,10 +200,13 @@ The workspace renders accessible buttons and keeps a free-text answer. Missing `
 reason to ask; the assistant may use today and disclose the assumption. Jurisdiction, legal
 mechanism or historical period should be clarified only when different answers would result.
 
-Conversation memory is bounded and restorable. A Container App restart or scale-to-zero event must
-not silently change a follow-up into an unrelated first question. The experiment will compare
-Agent Framework session serialization with a short client-restored history and record the chosen
-retention/privacy boundary. Durable personal profiling is out of scope.
+Conversation memory is bounded, visible and restorable within one browser tab. The application
+keeps at most six turns in `sessionStorage` and sends that bounded transcript with each otherwise
+stateless request, so a Container App restart or scale-to-zero event cannot silently turn a
+follow-up into an unrelated first question. On every request the server re-runs deterministic
+resolution over the most recent prior user-authored law identity; prior assistant prose is never
+authority or legal evidence. The panel shows the retained turns and provides an explicit new-
+conversation control. Durable server sessions and personal profiling remain out of scope.
 
 Accepted, signed work cards are the durable reusable output of offline enrichment. They may improve
 both deterministic search and future assistant planning. Provider prompt caching may reduce the

@@ -18,6 +18,18 @@ public sealed class AskResolutionGuardTests
     }
 
     [Fact]
+    public void An_empty_resolution_preflight_fails_closed_for_work_specific_tools()
+    {
+        var guard = new AskService.WorkResolutionGuard();
+
+        guard.ObserveSearch(new JsonArray());
+
+        Assert.False(guard.Allows("as_of",
+            new JsonObject { ["work"] = "eu-eurlex:32016r0679" }));
+        Assert.True(guard.Allows("coverage", new JsonObject()));
+    }
+
+    [Fact]
     public void Mixed_resolution_allows_only_the_explicitly_resolved_work()
     {
         var guard = new AskService.WorkResolutionGuard();
@@ -252,6 +264,48 @@ public sealed class AskResolutionGuardTests
     }
 
     [Fact]
+    public void A_bare_article_number_is_not_direct_evidence_of_a_work()
+    {
+        var guard = new AskService.WorkResolutionGuard();
+        var result = SearchResult("not_requested");
+        result[0]!["hits"] = new JsonArray
+        {
+            new JsonObject
+            {
+                ["lex_id"] = "lu-legilux:unrelated:2026-01-01",
+                ["anchor"] = "art_7",
+                ["match_reasons"] = new JsonArray("article_intent"),
+            },
+        };
+
+        guard.ObserveSearch(result);
+
+        Assert.False(guard.Allows("as_of",
+            new JsonObject { ["work"] = "lu-legilux:unrelated" }));
+    }
+
+    [Fact]
+    public void Article_intent_with_matching_residual_text_is_direct_evidence()
+    {
+        var guard = new AskService.WorkResolutionGuard();
+        var result = SearchResult("not_requested");
+        result[0]!["hits"] = new JsonArray
+        {
+            new JsonObject
+            {
+                ["lex_id"] = "eu-eurlex:32016r0679:2021-01-01",
+                ["anchor"] = "art_7",
+                ["match_reasons"] = new JsonArray("article_intent", "keyword"),
+            },
+        };
+
+        guard.ObserveSearch(result);
+
+        Assert.True(guard.Allows("as_of",
+            new JsonObject { ["work"] = "eu-eurlex:32016r0679" }));
+    }
+
+    [Fact]
     public void A_model_generated_name_remains_a_candidate_not_an_authority()
     {
         var guard = new AskService.WorkResolutionGuard();
@@ -261,6 +315,166 @@ public sealed class AskResolutionGuardTests
 
         Assert.False(guard.Allows("as_of",
             new JsonObject { ["work"] = "eu-eurlex:32022r2554" }));
+    }
+
+    [Fact]
+    public void Prior_user_resolution_can_authorize_the_same_work_on_a_follow_up()
+    {
+        var prior = new AskService.WorkResolutionGuard();
+        prior.ObservePriorUserSearch(SearchResult("resolved",
+            ("GDPR", "resolved", new[] { "eu-eurlex:32016r0679" })));
+        var current = new AskService.WorkResolutionGuard();
+
+        current.AuthorizePriorWorks(prior.ResolvedWorks);
+        current.ObserveSearch(SearchResult("not_requested"), isRawUserQuery: true);
+
+        Assert.True(current.Allows("as_of",
+            new JsonObject { ["work"] = "eu-eurlex:32016r0679" }));
+        Assert.False(current.Allows("as_of",
+            new JsonObject { ["work"] = "eu-eurlex:32022r2554" }));
+    }
+
+    [Fact]
+    public void Unused_prior_context_does_not_suppress_a_new_weak_clarification()
+    {
+        var guard = new AskService.WorkResolutionGuard();
+        guard.AuthorizePriorWorks(["eu-eurlex:32016r0679"]);
+        var current = SearchResult("not_requested");
+        current[0]!["hits"] = new JsonArray
+        {
+            WeakHit("eu-eurlex:32022r2554:2024-01-01", "DORA"),
+        };
+        guard.ObserveSearch(current, isRawUserQuery: true);
+
+        var clarification = guard.ClarificationFor(null);
+
+        Assert.NotNull(clarification);
+        Assert.Equal("eu-eurlex:32022r2554", clarification.Choices[0].Value);
+    }
+
+    [Fact]
+    public void Using_the_prior_work_for_a_typed_follow_up_suppresses_unrelated_candidates()
+    {
+        var guard = new AskService.WorkResolutionGuard();
+        guard.AuthorizePriorWorks(["eu-eurlex:32016r0679"]);
+        var current = SearchResult("not_requested");
+        current[0]!["hits"] = new JsonArray
+        {
+            WeakHit("eu-eurlex:32022r2554:2024-01-01", "DORA"),
+        };
+        guard.ObserveSearch(current, isRawUserQuery: true);
+
+        Assert.True(guard.Allows("as_of",
+            new JsonObject { ["work"] = "eu-eurlex:32016r0679" }));
+        Assert.Null(guard.ClarificationFor(null));
+    }
+
+    [Fact]
+    public void Prior_context_quarantines_unscoped_raw_hits_until_a_focused_search()
+    {
+        var guard = new AskService.WorkResolutionGuard();
+        guard.AuthorizePriorWorks(["eu-eurlex:32016r0679"]);
+        var raw = SearchResult("not_requested");
+        raw[0]!["hits"] = new JsonArray
+        {
+            new JsonObject
+            {
+                ["lex_id"] = "eu-eurlex:unrelated:2026-01-01",
+                ["anchor"] = "art_7",
+                ["match_reasons"] = new JsonArray("article_intent", "keyword"),
+            },
+            WeakHit("lu-legilux:also-unrelated:2026-01-01", "Unrelated title"),
+        };
+
+        guard.ObserveCurrentUserSearch(raw, hasPriorContext: true);
+
+        Assert.False(guard.Allows("as_of",
+            new JsonObject { ["work"] = "eu-eurlex:unrelated" }));
+        Assert.Null(guard.ClarificationFor(null));
+
+        guard.ObserveSearch(raw, isRawUserQuery: false);
+        Assert.True(guard.Allows("as_of",
+            new JsonObject { ["work"] = "eu-eurlex:unrelated" }));
+    }
+
+    [Fact]
+    public void Prior_weak_or_problem_first_hits_do_not_become_conversation_authority()
+    {
+        var prior = new AskService.WorkResolutionGuard();
+        var result = SearchResult("not_requested");
+        result[0]!["hits"] = new JsonArray
+        {
+            WeakHit("eu-eurlex:32022r2554:2024-01-01", "DORA"),
+            new JsonObject
+            {
+                ["lex_id"] = "eu-eurlex:32016r0679:2021-01-01",
+                ["anchor"] = "art_6",
+                ["match_reasons"] = new JsonArray("keyword"),
+            },
+        };
+
+        prior.ObservePriorUserSearch(result);
+
+        Assert.Empty(prior.ResolvedWorks);
+        Assert.Null(prior.ClarificationFor(null));
+    }
+
+    [Fact]
+    public void Conversation_reconstruction_uses_the_most_recent_resolved_user_turn_only()
+    {
+        var queries = new[] { "Show GDPR", "thanks", "Show DORA", "Article 7 on the same date" };
+        var searched = new List<string>();
+
+        var works = AskService.ResolvePriorUserWorks(queries, query =>
+        {
+            searched.Add(query);
+            return query switch
+            {
+                "Show DORA" => SearchResult("resolved",
+                    ("DORA", "resolved", new[] { "eu-eurlex:32022r2554" })),
+                "Show GDPR" => SearchResult("resolved",
+                    ("GDPR", "resolved", new[] { "eu-eurlex:32016r0679" })),
+                _ => SearchResult("not_requested"),
+            };
+        });
+
+        Assert.Equal(new[] { "Show DORA" }, searched);
+        Assert.Equal(new[] { "eu-eurlex:32022r2554" }, works);
+    }
+
+    [Fact]
+    public void Conversation_reconstruction_ignores_assistant_like_weak_evidence_and_resolver_errors()
+    {
+        var queries = new[] { "old question", "failing question", "current follow-up" };
+
+        var works = AskService.ResolvePriorUserWorks(queries, query =>
+        {
+            if (query == "failing question") return null;
+            var result = SearchResult("not_requested");
+            result[0]!["hits"] = new JsonArray
+            {
+                WeakHit("eu-eurlex:32022r2554:2024-01-01", "DORA"),
+            };
+            return result;
+        });
+
+        Assert.Empty(works);
+    }
+
+    [Fact]
+    public void Conversation_reconstruction_never_replays_more_than_three_prior_queries()
+    {
+        var queries = new[] { "one", "two", "three", "four", "five", "current" };
+        var searched = new List<string>();
+
+        var works = AskService.ResolvePriorUserWorks(queries, query =>
+        {
+            searched.Add(query);
+            return SearchResult("not_requested");
+        });
+
+        Assert.Empty(works);
+        Assert.Equal(new[] { "five", "four", "three" }, searched);
     }
 
     private static JsonArray SearchResult(string status,

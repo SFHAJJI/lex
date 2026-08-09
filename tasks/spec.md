@@ -131,6 +131,11 @@ and mounted publisher document/version/diff routes. Engineering and portfolio pa
 `/about`, `/architecture`, `/decisions`, `/verify`, `/developers`, `/ai`, `/built` and
 `/how-it-works` do not load the assistant.
 
+Conversation continuity is explicit rather than implied: the panel renders the bounded tab-scoped
+transcript, exposes a new-conversation control, and sends it with each stateless request. The
+backend may restore typed work authority only by deterministically resolving earlier user-authored
+text. Earlier assistant prose and weak discovery never become authority or legal evidence.
+
 ## Tech stack and commands
 
 - React 18 + TypeScript, mounted into the ASP.NET Core server-rendered shell.
