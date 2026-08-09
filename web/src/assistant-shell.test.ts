@@ -36,14 +36,14 @@ test("typed effects map to bounded workspace state rather than model-authored li
     "/?space=law&work=eu-eurlex%3A32016R0679&date=2021-01-01&anchor=art_6");
 
   const diff = assistantWorkspaceUrl({ diff: {
-    subject: { work: "eu-eurlex:32013R0575", anchor: "art_92" },
+    subject: { work: "eu-eurlex:32013R0575", anchor: "art_92", language: "en" },
     from_date: "2020-01-01", to_date: "2024-12-31",
   } });
   assert.equal(diff,
-    "/?space=law&work=eu-eurlex%3A32013R0575&date=2020-01-01&to=2024-12-31&anchor=art_92&mode=compare");
+    "/?space=law&work=eu-eurlex%3A32013R0575&date=2020-01-01&to=2024-12-31&anchor=art_92&mode=compare&language=en");
 
   assert.deepEqual(assistantWorkspaceState({ diff: {
-    subject: { work: "eu-eurlex:32013R0575", anchor: "art_92" },
+    subject: { work: "eu-eurlex:32013R0575", anchor: "art_92", language: "en" },
     from_date: "2020-01-01", to_date: "2024-12-31", status: "profiles_differ",
   } }), {
     space: "law", q: undefined, asOf: undefined, work: "eu-eurlex:32013R0575",
@@ -51,7 +51,7 @@ test("typed effects map to bounded workspace state rather than model-authored li
     from: undefined, until: undefined, order: undefined, retrieval: undefined,
     jurisdiction: undefined, hierarchy: undefined, domain: undefined,
     sourceClass: undefined, actForm: undefined, bindingStatus: undefined,
-    language: undefined,
+    language: "en",
   });
 
   const ranking = assistantWorkspaceUrl({ ranking: {

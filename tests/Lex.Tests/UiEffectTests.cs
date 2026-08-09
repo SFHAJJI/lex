@@ -322,7 +322,7 @@ public class UiEffectTests
     {
         var eff = UiMapper.From("diff",
             Args(("work", "eu-eurlex:32013r0575"), ("from_date", "2020-01-01"),
-                ("to_date", "2024-12-31"), ("anchor", "art_92")),
+                ("to_date", "2024-12-31"), ("anchor", "art_92"), ("language", "en")),
             new JsonObject
             {
                 ["envelope"] = new JsonObject { ["status"] = "profiles_differ" },
@@ -331,13 +331,14 @@ public class UiEffectTests
                 {
                     ["valid_from"] = "2019-06-27", ["title"] = "Regulation (EU) No 575/2013",
                 },
-                ["to"] = new JsonObject { ["valid_from"] = "2024-07-09" },
+                ["to"] = new JsonObject { ["valid_from"] = "2024-07-09", ["language"] = "en" },
             });
 
         Assert.Equal("art_92", eff.Diff!.Subject.Anchor);
         Assert.Equal("2020-01-01", eff.Diff.FromDate);
         Assert.Equal("2024-12-31", eff.Diff.ToDate);
         Assert.Equal("profiles_differ", eff.Diff.Status);
+        Assert.Equal("en", eff.Diff.Subject.Language);
     }
 
     [Fact]

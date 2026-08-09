@@ -245,11 +245,12 @@ public sealed class RetrievalAgentContractTests
             "the two versions were extracted by different profiles",
             Status: "profiles_differ"));
 
-        var reply = AskService.ReplyFor(draft, [comparison]);
+        var reply = AskService.ReplyFor(draft, [comparison], synthesisFailed: true);
 
         Assert.DoesNotContain("comparison is open", reply, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("cannot produce a reliable comparison", reply, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("verified publisher versions", reply, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(draft.Answer, AskService.ReplyFor(draft, [comparison]));
     }
 
     [Fact]

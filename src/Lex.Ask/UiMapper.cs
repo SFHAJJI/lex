@@ -121,7 +121,8 @@ public static class UiMapper
     {
         if (o["states"] is not JsonArray states || states.Count == 0) return new UiEffect();
         return new UiEffect(History: new HistoryView(
-            Subject: new Subject(CanonicalWork(o, args), null, null, S(o, "anchor")),
+            Subject: new Subject(CanonicalWork(o, args), null, null, S(o, "anchor"),
+                S(o, "language") ?? S(args, "language")),
             Anchor: S(o, "anchor") ?? "",
             DistinctTexts: o["distinct_texts"]?.GetValue<int>() ?? states.Count,
             States: states.OfType<JsonObject>().Select(s => new HistoryState(
@@ -136,7 +137,8 @@ public static class UiMapper
             .ToList();
         var latest = rows[^1];
         return new UiEffect(Timeline: new TimelineView(
-            Subject: new Subject(CanonicalWork(o, args), S(latest, "title"), null, null)));
+            Subject: new Subject(CanonicalWork(o, args), S(latest, "title"), null, null,
+                S(latest, "language") ?? S(args, "language"))));
     }
 
     private static UiEffect Diff(JsonObject o, JsonObject args)
@@ -149,7 +151,8 @@ public static class UiMapper
         var b = o["to"] as JsonObject;
         return new UiEffect(Diff: new DiffView(
             Subject: new Subject(CanonicalWork(o, args),
-                S(b, "title") ?? S(a, "title"), from, S(o, "anchor")),
+                S(b, "title") ?? S(a, "title"), from, S(o, "anchor"),
+                S(b, "language") ?? S(a, "language") ?? S(args, "language")),
             FromDate: from, ToDate: to,
             FromPermalink: S(a, "permalink"), ToPermalink: S(b, "permalink"),
             Note: S(o, "note"),
@@ -234,7 +237,8 @@ public static class UiMapper
         Work: WorkOf(S(doc, "lex_id")) ?? CanonicalWork(doc, args),
         Title: S(doc, "title"),
         Date: S(args, "date") ?? S(doc, "valid_from"),
-        Anchor: S(args, "anchors")?.Split(',')[0].Trim());
+        Anchor: S(args, "anchors")?.Split(',')[0].Trim(),
+        Language: S(doc, "language") ?? S(args, "language"));
 
     private static string CanonicalWork(JsonObject result, JsonObject args)
     {

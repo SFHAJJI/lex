@@ -109,7 +109,7 @@ export function boundedAskHistory(value: unknown): AskMessage[] {
   return history;
 }
 
-export interface Subject { work: string; title?: string; date?: string; anchor?: string }
+export interface Subject { work: string; title?: string; date?: string; anchor?: string; language?: string }
 export interface Citation { work: string; href: string; text?: string }
 export interface ProvisionItem { anchor: string; num?: string; heading?: string; text?: string; text_sha256?: string; path?: string;
                                  citations?: Citation[] }

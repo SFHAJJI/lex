@@ -122,7 +122,8 @@ public sealed record UiEffect(
 }
 
 /// <summary>Workspace coordinates: what the interface should have loaded and selected.</summary>
-public sealed record Subject(string Work, string? Title, string? Date, string? Anchor);
+public sealed record Subject(string Work, string? Title, string? Date, string? Anchor,
+    string? Language = null);
 
 public sealed record ProvisionView(Subject Subject, string ValidFrom, string? ValidTo,
     IReadOnlyList<ProvisionItem> Provisions, string? Permalink);

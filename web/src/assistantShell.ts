@@ -42,7 +42,7 @@ export function assistantWorkspaceState(ui?: UiEffect): Partial<State> | undefin
     from: undefined, until: undefined, order: undefined, retrieval: undefined,
     jurisdiction: undefined, hierarchy: undefined, domain: undefined,
     sourceClass: undefined, actForm: undefined, bindingStatus: undefined,
-    language: undefined,
+    language: legalSubject.language,
   };
   if (!ui.ranking && !ui.in_force && !ui.workspace) return undefined;
   const ranking = ui.ranking;
