@@ -650,7 +650,7 @@ function Outline({ items, current, onPick }: {
         <b>Contents</b>
         <span className="sub mono">{items.length}</span>
       </div>
-      <input className="filter" value={q} onChange={(e) => setQ(e.target.value)}
+      <input name="outline-filter" className="filter" value={q} onChange={(e) => setQ(e.target.value)}
              aria-label="Filter articles by number or heading"
              placeholder="Filter articles…" />
       {needle && groups.size === 0 ? <p className="sub">No article matches “{q}”.</p> : null}

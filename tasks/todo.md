@@ -26,7 +26,7 @@
   - Verify: adapter contract tests against pinned fixtures and index query tests.
   - Files: `src/Lex.Sources.EurLex/*`, `src/Lex.Law/*`, `src/Lex.Ingest/*`, tests
 
-- [ ] Task 5: Migrate off `CommonNames`
+- [x] Task 5: Migrate off `CommonNames`
   - Acceptance: reviewed data overrides cover verified gaps/errors; code table is removed only after
     clean re-ingest; no derived publisher field contains a legacy code alias.
   - Verify: migration invariant, corpus/index comparison, professional-name evals.
@@ -38,7 +38,7 @@
   - Verify: collision, outage, comparison, and coverage tests.
   - Files: `src/Lex.Index/*`, `src/Lex.Mcp/*`, `src/Lex.Ask/*`, tests
 
-- [ ] Checkpoint 2: publisher-only retrieval and protected-content gates pass
+- [x] Checkpoint 2: publisher-only retrieval and protected-content gates pass
 
 - [x] Task 7: Correct and expand the retrieval benchmark
   - Acceptance: canonical collection/work identity; FR/EN EU/LU positives, negatives, ambiguity,
@@ -59,13 +59,16 @@
   - Files: `src/Lex.Ask/*`, `src/Lex.Mcp/*`, tests/evals, docs
 
 - [ ] Checkpoint 3: full builds, reviews, security/performance gates, and ADRs pass
+  - Remaining: the signed hybrid holdout still fails relevance and latency activation thresholds.
+    Keyword retrieval therefore remains the production default. The deployed publisher-first and
+    agent safety paths passed their release gates.
 
-- [ ] Task 10: Build and promote signed production artifacts
+- [x] Task 10: Build and promote signed production artifacts
   - Acceptance: fresh corpus inputs, deterministic protected inventory, valid manifests, corrected
     benchmarks, and retained previous artifacts.
   - Verify: artifact verification commands and candidate runtime smokes.
 
-- [ ] Task 11: Deploy and verify production
+- [x] Task 11: Deploy and verify production
   - Acceptance: zero-traffic candidate passes, promotion succeeds, live critical flows and logs are
     healthy, artifact/code identities match, rollback revision remains ready.
   - Verify: GitHub run, Azure revision state, live health/MCP/search/assistant checks.

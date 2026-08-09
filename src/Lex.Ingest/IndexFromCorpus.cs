@@ -14,7 +14,7 @@ public static class IndexFromCorpus
 {
     public static void Build(string corpusRoot, string? articlesRoot, string dbPath, string? signingKeyPem,
                              DateTimeOffset now, SemanticBuildOptions? semantic = null,
-                             string? workEnrichmentPath = null)
+                             string? workEnrichmentPath = null, string? codeCommit = null)
     {
         var manifest = JsonSerializer.Deserialize<ManifestDoc>(
             File.ReadAllText(Path.Combine(corpusRoot, "manifest.json")), CorpusJson.Options)!;
@@ -169,6 +169,7 @@ public static class IndexFromCorpus
             ["modifications"] = manifest.Modifications ?? "",
             ["notice"] = ReadIfExists(Path.Combine(corpusRoot, "NOTICE")),
             ["corpus_commit"] = GitCommit(corpusRoot),
+            ["code_commit"] = NormalizeCodeCommit(codeCommit),
             ["built_at"] = now.UtcDateTime.ToString("yyyy-MM-ddTHH:mm:ssZ"),
             ["ingester_version"] = manifest.IngesterVersion,
             ["works"] = docs.Select(d => d.GroupKey).Distinct().Count().ToString(),
@@ -273,5 +274,14 @@ public static class IndexFromCorpus
                 : "uncommitted";
         }
         catch { return "uncommitted"; }
+    }
+
+    private static string NormalizeCodeCommit(string? value)
+    {
+        if (value is null) return "uncommitted";
+        var normalized = value.ToLowerInvariant();
+        if (normalized.Length != 40 || normalized.Any(c => !Uri.IsHexDigit(c)))
+            throw new InvalidDataException("The build code commit must be a full 40-character Git SHA.");
+        return normalized;
     }
 }

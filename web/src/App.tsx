@@ -518,7 +518,7 @@ export default function App() {
               ) : null}
               <span className="grow" />
               <label className="pick"><i>{s.mode === "compare" ? "from" : "showing"}</i>
-                <input type="date" value={s.date ?? today()} aria-label="Date whose publisher state to show"
+                <input name="publisher-date" type="date" value={s.date ?? today()} aria-label="Date whose publisher state to show"
                        onChange={(e) => go({ date: e.target.value })} />
               </label>
               <LawPicker current="choose another" onPick={pickLaw} />

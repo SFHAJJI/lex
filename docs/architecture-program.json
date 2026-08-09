@@ -1,6 +1,6 @@
 {
   "program_version": "hybrid-eu/1",
-  "updated_at": "2026-08-08",
+  "updated_at": "2026-08-09",
   "review_status": "engineer-reviewed",
   "statuses": ["planned", "building", "gated", "shipped", "rejected"],
   "current": {
@@ -10,7 +10,7 @@
     "region": "France Central",
     "resource": "1 vCPU, 2 GiB",
     "scale": "0 to 5 replicas",
-    "observed_at": "2026-08-07",
+    "observed_at": "2026-08-09",
     "structured_contract": "MCP JSON plus UiEffect",
     "comparison_contract": "exact authoritative provision text"
   },
@@ -60,21 +60,21 @@
     {
       "id": "M8",
       "title": "Size-gated local index hosting",
-      "status": "shipped",
-      "outcome": "Keep small verified indexes in Container Apps, but promote oversized releases from Blob onto a VM-managed local disk before traffic cutover."
+      "status": "building",
+      "outcome": "Small verified indexes run locally in Container Apps. Oversized releases remain deployment-blocked until the zero-traffic VM-managed local-disk path is implemented and measured."
     },
     {
       "id": "M9",
       "title": "Reviewed search enrichment and legal-research agent",
-      "status": "building",
-      "outcome": "Prove provenance-aware work discovery metadata, deterministic work-name retrieval, a Microsoft Agent Framework legal-research agent, bounded memory and jurisdiction-first results without changing authoritative legal text."
+      "status": "shipped",
+      "outcome": "Publisher metadata, reviewed aliases, deterministic work resolution, bounded retrieval, Agent Framework evidence composition and judging, bounded memory and jurisdiction-first results are live without changing authoritative legal text. Model-derived weak discovery remains excluded from production retrieval."
     }
   ],
   "decisions": [
     {
       "id": "D52",
       "title": "Select binding acts, then close legal relationships",
-      "status": "building",
+      "status": "shipped",
       "choice": "Use reviewed domain configuration and bounded legal-history relationships.",
       "alternative": "Ingest roughly 59,100 works selected only by broad subject codes.",
       "reason": "A lawyer needs complete context for selected law, not a large shelf with arbitrary gaps.",
@@ -83,7 +83,7 @@
     {
       "id": "D53",
       "title": "Store repeated wording once",
-      "status": "building",
+      "status": "shipped",
       "choice": "Map every dated occurrence to a content-addressed text state.",
       "alternative": "Store and embed every repeated provision occurrence.",
       "reason": "The timeline is preserved while index size, vector size and duplicate hits fall.",
@@ -105,12 +105,12 @@
       "choice": "Keep query files local: use Container Apps for a small verified set, and promote releases above the recorded size or runtime gates from Blob onto a VM-managed disk.",
       "alternative": "Commit permanently to either Container Apps, a VM, Blob range reads or an Azure Files-mounted SQLite database regardless of measurements.",
       "reason": "Blob is the durable distribution layer, while SQLite FTS and memory-mapped vectors require local random access. The completed artifact, rollback footprint and runtime gates determine the cheapest correct host.",
-      "cost": "The deployment pipeline supports two hosts and the VM path adds operating-system patching when activated."
+      "cost": "The pipeline blocks releases that exceed the active Container Apps path. A second verified VM deployment path and operating-system patching remain to be implemented before such a release can receive traffic."
     },
     {
       "id": "D56",
       "title": "Represent hierarchy as metadata",
-      "status": "building",
+      "status": "shipped",
       "choice": "Store legal hierarchy and domain fields beside each work and state.",
       "alternative": "Create a separate database for every legal level.",
       "reason": "Hierarchy is a query filter, while physical boundaries should follow provenance and update behavior.",
@@ -128,7 +128,7 @@
     {
       "id": "D58",
       "title": "Pin trust outside the artifact",
-      "status": "building",
+      "status": "shipped",
       "choice": "Verify a whole-artifact manifest with a public-key fingerprint pinned in the release.",
       "alternative": "Trust the public key stored beside its signature in the same database.",
       "reason": "Replacing an artifact must not let an attacker replace its trust root too.",
@@ -137,7 +137,7 @@
     {
       "id": "D59",
       "title": "Use fuzzy matching only as fallback",
-      "status": "building",
+      "status": "shipped",
       "choice": "Expand ordinary terms only when exact lexical retrieval is weak and show every expansion.",
       "alternative": "Apply fuzzy expansion to every query.",
       "reason": "Legal identifiers, quotations and exact terms must not acquire silent near-matches.",
@@ -146,7 +146,7 @@
     {
       "id": "D60",
       "title": "Publish claims only with evidence",
-      "status": "building",
+      "status": "shipped",
       "choice": "Separate live facts, target state, decisions and reproducible benchmarks.",
       "alternative": "Mix roadmap claims and hand-written benchmark numbers into one architecture page.",
       "reason": "An interviewer or lawyer must be able to distinguish what exists from what is proposed.",
@@ -281,7 +281,7 @@
     {
       "id": "D75",
       "title": "Separate authoritative text from provenance-aware search enrichment",
-      "status": "building",
+      "status": "shipped",
       "choice": "Build a publisher-first work catalog from official identifiers, titles, short titles and classifications, plus reviewed collision-aware aliases. Store accepted model-derived concepts in a quarantined trust class and activate them only if a separate held-out ablation proves incremental value without ranking or latency regressions. Any work vectors share the existing signed vector artifact through typed SQLite ordinal mappings.",
       "alternative": "Treat generated metadata as legal fact or a strong rank signal, maintain a runtime sidecar database, repeat work metadata inside every provision vector, or keep professional names in application code.",
       "reason": "Professional names require deterministic publisher metadata and reviewed overrides, while descriptive discovery requires candidate retrieval without silently converting a repeated model output into authority. A single verified artifact keeps provenance and rollback atomic.",
@@ -289,17 +289,17 @@
     },
     {
       "id": "D76",
-      "title": "Keep navigation deterministic and use one Agent Framework legal-research agent",
-      "status": "building",
-      "choice": "Resolve named works deterministically, then use one Microsoft Agent Framework research agent over compact read-only MCP evidence with typed clarification, bounded memory, citation validation and a conditional judge; the experiment selects the orchestration, not the framework.",
-      "alternative": "Pass every user sentence to one search call, make the chatbot the primary navigator, or introduce a hierarchy of peer agents.",
-      "reason": "Exact lookup should not become stochastic, while descriptive legal problems need iterative query planning and evidence validation that a search box cannot perform.",
-      "cost": "The agent adds model latency, tokens, session/privacy handling and evaluation work; the current assistant remains live until the Agent Framework implementation passes repeated correctness and cost gates."
+      "title": "Keep retrieval authority deterministic and use Agent Framework for grounded composition",
+      "status": "shipped",
+      "choice": "Resolve the raw user query and authorize work-specific tools in application code, run a bounded tool-calling retrieval loop over the shared MCP core, then use Agent Framework for claim-typed evidence composition and the conditional grounding judge.",
+      "alternative": "Give a model authority over work identity and citations, make the chatbot the primary navigator, or introduce a hierarchy of peer research agents.",
+      "reason": "Exact lookup and tool permission must not become stochastic, while synthesized prose benefits from structured composition and an independent evidence check.",
+      "cost": "The bounded retrieval loop and Framework composer/judge add model latency, tokens, session/privacy handling and evaluation work. The planner is application-hosted rather than a single Agent Framework research agent."
     },
     {
       "id": "D77",
       "title": "Partition results by jurisdiction and keep overlapping dimensions as facets",
-      "status": "planned",
+      "status": "shipped",
       "choice": "Show Luxembourg and EU result sections, nest matching passages under each law, and scope hierarchy, practice area, class, form, status and language controls to the selected jurisdiction.",
       "alternative": "Interleave every publisher result without a source partition, or group by overlapping practice areas and duplicate the same work across categories.",
       "reason": "Jurisdiction is a disjoint provenance boundary; the other legal dimensions overlap and are clearer as filters than as competing result taxonomies.",

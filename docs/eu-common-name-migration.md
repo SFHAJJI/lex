@@ -4,6 +4,10 @@ EUR-Lex professional names are no longer written into corpus titles by adapter c
 titles and publisher short titles remain separate. Exact professional names come from
 `config/eu-work-enrichment.json` as reviewed aliases; its model-discovery section is empty.
 
+Production migration completed on 2026-08-09. The clean corpus was re-ingested and re-derived, the
+reviewed enrichment digest is bound into the signed EU artifact, and live smoke tests resolved
+`GDPR`, `RGPD`, `DORA`, and `AI Act` as exact aliases.
+
 ## Required build sequence
 
 1. Re-ingest the EU corpus with the current adapter. This refreshes work titles and every

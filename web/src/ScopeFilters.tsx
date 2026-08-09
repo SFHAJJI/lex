@@ -24,7 +24,7 @@ export function ScopeFilters({ values, onChange, summary = "Narrow results",
       <div className="filter-grid">
         {showJurisdiction ? (
           <label><span>Jurisdiction</span>
-            <select className="reslayer" value={jurisdictionValue(values.jurisdiction) ?? ""}
+            <select name="jurisdiction" className="reslayer" value={jurisdictionValue(values.jurisdiction) ?? ""}
                     onChange={(e) => onChange({
                       jurisdiction: e.target.value || undefined,
                       hierarchy: undefined, domain: undefined, sourceClass: undefined,
@@ -37,7 +37,7 @@ export function ScopeFilters({ values, onChange, summary = "Narrow results",
           </label>
         ) : null}
         <label><span>Hierarchy</span>
-          <select className="reslayer" value={values.hierarchy ?? ""}
+          <select name="hierarchy" className="reslayer" value={values.hierarchy ?? ""}
                   onChange={(e) => onChange({ hierarchy: e.target.value || undefined })}>
             <option value="">Every hierarchy</option>
             {facets.hierarchies.map((value) =>
@@ -45,7 +45,7 @@ export function ScopeFilters({ values, onChange, summary = "Narrow results",
           </select>
         </label>
         <label><span>Practice area</span>
-          <select className="reslayer" value={values.domain ?? ""}
+          <select name="domain" className="reslayer" value={values.domain ?? ""}
                   onChange={(e) => onChange({ domain: e.target.value || undefined })}>
             <option value="">Every practice area</option>
             {facets.domains.map((value) =>
@@ -53,7 +53,7 @@ export function ScopeFilters({ values, onChange, summary = "Narrow results",
           </select>
         </label>
         <label><span>Source class</span>
-          <select className="reslayer" value={values.sourceClass ?? ""}
+          <select name="source-class" className="reslayer" value={values.sourceClass ?? ""}
                   onChange={(e) => onChange({ sourceClass: e.target.value || undefined })}>
             <option value="">{sourceDefault}</option>
             {facets.source_classes.map((value) =>
@@ -61,7 +61,7 @@ export function ScopeFilters({ values, onChange, summary = "Narrow results",
           </select>
         </label>
         <label><span>Legal form</span>
-          <select className="reslayer" value={values.actForm ?? ""}
+          <select name="act-form" className="reslayer" value={values.actForm ?? ""}
                   onChange={(e) => onChange({ actForm: e.target.value || undefined })}>
             <option value="">Every legal form</option>
             {facets.act_forms.map((value) =>
@@ -69,7 +69,7 @@ export function ScopeFilters({ values, onChange, summary = "Narrow results",
           </select>
         </label>
         <label><span>Legal status</span>
-          <select className="reslayer" value={values.bindingStatus ?? ""}
+          <select name="binding-status" className="reslayer" value={values.bindingStatus ?? ""}
                   onChange={(e) => onChange({ bindingStatus: e.target.value || undefined })}>
             <option value="">Every status</option>
             {facets.binding_statuses.map((value) =>
@@ -77,7 +77,7 @@ export function ScopeFilters({ values, onChange, summary = "Narrow results",
           </select>
         </label>
         <label><span>Language</span>
-          <select className="reslayer" value={values.language ?? ""}
+          <select name="language" className="reslayer" value={values.language ?? ""}
                   onChange={(e) => onChange({ language: e.target.value || undefined })}>
             <option value="">Every language</option>
             {facets.languages.map((value) =>

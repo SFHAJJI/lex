@@ -42,7 +42,21 @@ public sealed class IndexStampVerifierTests : IDisposable
     }
 
     [Fact]
-    public void Strict_promotion_binds_collection_corpus_content_and_enrichment()
+    public void Index_build_commit_requires_and_normalizes_a_full_git_sha()
+    {
+        var method = typeof(IndexFromCorpus).GetMethod(
+            "NormalizeCodeCommit", BindingFlags.NonPublic | BindingFlags.Static);
+        Assert.NotNull(method);
+        var normalized = Assert.IsType<string>(method.Invoke(null, [new string('A', 40)]));
+        Assert.Equal(new string('a', 40), normalized);
+
+        var bad = Assert.Throws<TargetInvocationException>(() =>
+            method.Invoke(null, ["abc"]));
+        Assert.IsType<InvalidDataException>(bad.InnerException);
+    }
+
+    [Fact]
+    public void Strict_promotion_binds_collection_corpus_code_content_and_enrichment()
     {
         var enrichment = TempFile(".json");
         File.WriteAllText(enrichment, "reviewed enrichment", new UTF8Encoding(false));
@@ -51,13 +65,17 @@ public sealed class IndexStampVerifierTests : IDisposable
         var db = Build(key, digest);
 
         var valid = IndexStampVerifier.Verify(
-            db, "eu-eurlex", new string('c', 40), enrichment);
+            db, "eu-eurlex", new string('c', 40), enrichment, new string('a', 40));
         Assert.True(valid.IsValid);
         Assert.Equal(0, valid.ExitCode);
         Assert.False(IndexStampVerifier.Verify(
             db, "lu-legilux", new string('c', 40), enrichment).CollectionMatches);
         Assert.False(IndexStampVerifier.Verify(
             db, "eu-eurlex", new string('d', 40), enrichment).CorpusCommitMatches);
+        var wrongCode = IndexStampVerifier.Verify(
+            db, "eu-eurlex", new string('c', 40), enrichment, new string('b', 40));
+        Assert.False(wrongCode.CodeCommitMatches);
+        Assert.Equal(5, wrongCode.ExitCode);
 
         var other = TempFile(".json");
         File.WriteAllText(other, "different enrichment", new UTF8Encoding(false));
@@ -73,7 +91,7 @@ public sealed class IndexStampVerifierTests : IDisposable
         }
         Resign(connection, key);
         var missing = IndexStampVerifier.Verify(
-            db, "eu-eurlex", new string('c', 40), enrichment);
+            db, "eu-eurlex", new string('c', 40), enrichment, new string('a', 40));
         Assert.False(missing.ContentDigestPresent);
         Assert.Equal(4, missing.ExitCode);
     }
@@ -98,6 +116,27 @@ public sealed class IndexStampVerifierTests : IDisposable
         Assert.Equal(4, verification.ExitCode);
     }
 
+    [Fact]
+    public void Strict_promotion_rejects_an_artifact_without_bound_build_code()
+    {
+        var key = StampSigner.CreateKeyPem();
+        var db = Build(key, new string('e', 64));
+        using var connection = new SqliteConnection($"Data Source={db}");
+        connection.Open();
+        using (var remove = connection.CreateCommand())
+        {
+            remove.CommandText = "DELETE FROM stamp WHERE k='code_commit'";
+            remove.ExecuteNonQuery();
+        }
+        Resign(connection, key);
+
+        var verification = IndexStampVerifier.Verify(
+            db, "eu-eurlex", new string('c', 40), expectedCodeCommit: new string('a', 40));
+        Assert.Null(verification.CodeCommit);
+        Assert.False(verification.CodeCommitMatches);
+        Assert.Equal(5, verification.ExitCode);
+    }
+
     private string Build(string key, string enrichmentDigest)
     {
         var db = TempFile(".db");
@@ -114,6 +153,7 @@ public sealed class IndexStampVerifierTests : IDisposable
         {
             ["collection"] = "eu-eurlex",
             ["corpus_commit"] = new string('c', 40),
+            ["code_commit"] = new string('a', 40),
             ["built_at"] = "2026-08-09T00:00:00Z",
         }, [doc], [provision], [], [], key,
             workSearch: new WorkSearchBuildOptions([], [], enrichmentDigest));
