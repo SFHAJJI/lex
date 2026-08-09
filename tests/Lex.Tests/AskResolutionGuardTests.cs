@@ -289,6 +289,20 @@ public sealed class AskResolutionGuardTests
     }
 
     [Fact]
+    public void Only_an_article_without_a_strong_work_is_a_preplanning_ambiguity()
+    {
+        var bare = SearchResult("not_requested");
+        bare[0]!["query_plan"]!["article_number"] = "7";
+        bare[0]!["query_plan"]!["has_strong_work_match"] = false;
+        var named = bare.DeepClone();
+        named[0]!["query_plan"]!["has_strong_work_match"] = true;
+
+        Assert.True(AskService.HasUnscopedArticleIntent(bare));
+        Assert.False(AskService.HasUnscopedArticleIntent(named));
+        Assert.False(AskService.HasUnscopedArticleIntent(SearchResult("not_requested")));
+    }
+
+    [Fact]
     public void Article_intent_with_matching_residual_text_is_direct_evidence()
     {
         var guard = new AskService.WorkResolutionGuard();

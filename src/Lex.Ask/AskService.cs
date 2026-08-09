@@ -254,6 +254,14 @@ public sealed class AskService(McpCore core)
         return prior.ResolvedWorks.Order(StringComparer.Ordinal).ToArray();
     }
 
+    internal static bool HasUnscopedArticleIntent(JsonNode result) =>
+        (result is JsonArray responses
+            ? responses.OfType<JsonObject>()
+            : result is JsonObject response ? [response] : [])
+        .Any(item => item["query_plan"] is JsonObject plan
+            && plan["article_number"]?.GetValue<string>() is { Length: > 0 }
+            && plan["has_strong_work_match"]?.GetValue<bool>() != true);
+
     private static string SystemPrompt(string host, int toolCount) => $"""
         You are the answer layer of Lex, a point-in-time retrieval system for consolidated
         regulatory text (Luxembourg via Legilux, EU via EUR-Lex). You have {toolCount} read-only tools
@@ -807,6 +815,13 @@ public sealed class AskService(McpCore core)
                     if (parts.Length >= 2)
                         worksFound.TryAdd($"{parts[0]}:{parts[1]}", d["title"]?.GetValue<string>() ?? "");
                 }
+            // An article number without a law is already a complete, deterministic ambiguity:
+            // many instruments contain that article. Do not spend a model round rediscovering
+            // the same boundary or turn it into a generic evidence refusal.
+            if (HasUnscopedArticleIntent(rawResult)
+                && resolutionGuard.ClarificationFor(null) is { } articleClarification)
+                return (200, Body(articleClarification.Display.Question, trace, [],
+                    articleClarification.Display, articleClarification.Choices));
             messages.Insert(1, new JsonObject
             {
                 ["role"] = "system",
