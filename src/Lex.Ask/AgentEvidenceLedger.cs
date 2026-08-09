@@ -26,7 +26,12 @@ internal sealed class AgentEvidenceLedger
 
     public IReadOnlyList<AgentEvidence> Evidence => _evidence;
 
-    public void Observe(string tool, string? status, JsonArray docs, JsonNode? result = null)
+    public void Observe(
+        string tool,
+        string? status,
+        JsonArray docs,
+        JsonNode? result = null,
+        JsonObject? arguments = null)
     {
         var call = ++_call;
         if (status is not null && GapStatuses.Contains(status))
@@ -67,6 +72,14 @@ internal sealed class AgentEvidenceLedger
             var date = doc["valid_from"]?.GetValue<string>();
             if (doc["pinpoints"] is JsonArray pinpoints && pinpoints.Count > 0)
             {
+                var requestedDate = tool == "as_of"
+                    ? (arguments?["date"] ?? arguments?["as_of"])?.GetValue<string>()
+                    : null;
+                if (!string.IsNullOrWhiteSpace(requestedDate))
+                    Add(tool, call, ordinal++, AgentEvidenceKind.Timeline, work, null,
+                        requestedDate, null, doc["permalink"]?.GetValue<string>(), false,
+                        doc["title"]?.GetValue<string>(),
+                        AsOfBindingPayload(doc, result, requestedDate, status));
                 foreach (var pinpoint in pinpoints.OfType<JsonObject>())
                 {
                     var excerpt = FullExcerpt(result, doc["lex_id"]?.GetValue<string>(),
@@ -77,7 +90,8 @@ internal sealed class AgentEvidenceLedger
                             ? AgentEvidenceKind.LegalText : kind.Value,
                         work,
                         pinpoint["anchor"]?.GetValue<string>(),
-                        date,
+                        tool == "as_of" && string.IsNullOrWhiteSpace(excerpt)
+                            ? requestedDate ?? date : date,
                         pinpoint["text_sha256"]?.GetValue<string>(),
                         pinpoint["permalink"]?.GetValue<string>() ?? doc["permalink"]?.GetValue<string>(),
                         false,
@@ -145,6 +159,26 @@ internal sealed class AgentEvidenceLedger
         if (result is null) return fallback;
         var json = result.ToJsonString();
         return json.Length <= 8_000 ? json : json[..8_000];
+    }
+
+    private static string AsOfBindingPayload(
+        JsonObject doc,
+        JsonNode? result,
+        string requestedDate,
+        string? status)
+    {
+        var semantics = result is JsonObject obj
+            ? obj["envelope"]?["timeline_semantics"]?.GetValue<string>()
+            : null;
+        return new JsonObject
+        {
+            ["status"] = status,
+            ["requested_date"] = requestedDate,
+            ["selected_valid_from"] = doc["valid_from"]?.DeepClone(),
+            ["selected_valid_to"] = doc["valid_to"]?.DeepClone(),
+            ["timeline_semantics"] = semantics,
+            ["relation"] = "selected publisher version covers requested date",
+        }.ToJsonString();
     }
 
     private static IEnumerable<(string Publisher, JsonObject Payload)> RankingAggregates(JsonNode result)
