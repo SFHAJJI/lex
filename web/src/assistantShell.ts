@@ -27,9 +27,24 @@ function workspaceUrl(values: Record<string, string | undefined>): string {
   return `/?${query.toString()}`;
 }
 
-/** Aggregate and filter tools define a complete workspace scope, including cleared old state. */
+/** Every typed operation defines a complete workspace scope, including cleared old state. */
 export function assistantWorkspaceState(ui?: UiEffect): Partial<State> | undefined {
-  if (!ui || (!ui.ranking && !ui.in_force && !ui.workspace)) return undefined;
+  if (!ui) return undefined;
+  const legalSubject = ui.diff?.subject ?? ui.provision?.subject
+    ?? ui.history?.subject ?? ui.timeline?.subject;
+  if (legalSubject?.work) return {
+    space: "law", q: undefined, asOf: undefined,
+    work: legalSubject.work,
+    date: ui.diff?.from_date ?? (ui.provision
+      ? legalSubject.date ?? ui.provision.valid_from : legalSubject.date),
+    to: ui.diff?.to_date, anchor: legalSubject.anchor ?? ui.history?.anchor,
+    mode: ui.diff ? "compare" : "read",
+    from: undefined, until: undefined, order: undefined, retrieval: undefined,
+    jurisdiction: undefined, hierarchy: undefined, domain: undefined,
+    sourceClass: undefined, actForm: undefined, bindingStatus: undefined,
+    language: legalSubject.language,
+  };
+  if (!ui.ranking && !ui.in_force && !ui.workspace) return undefined;
   const ranking = ui.ranking;
   const workspace = ui.workspace;
   return {
@@ -48,27 +63,16 @@ export function assistantWorkspaceState(ui?: UiEffect): Partial<State> | undefin
 /** Maps only typed, server-validated effects to the workspace. Model prose is never a URL. */
 export function assistantWorkspaceUrl(ui?: UiEffect): string | undefined {
   if (!ui) return undefined;
-  if (ui.diff?.subject.work) return workspaceUrl({
-    space: "law", work: ui.diff.subject.work, date: ui.diff.from_date, to: ui.diff.to_date,
-    anchor: ui.diff.subject.anchor, mode: "compare",
-  });
-  const legalSubject = ui.provision?.subject ?? ui.history?.subject ?? ui.timeline?.subject;
-  if (legalSubject?.work) return workspaceUrl({
-    space: "law", work: legalSubject.work,
-    date: ui.provision ? legalSubject.date ?? ui.provision.valid_from : legalSubject.date,
-    anchor: legalSubject.anchor ?? ui.history?.anchor,
-  });
-  if (ui.ranking || ui.in_force || ui.workspace) {
-    const state = assistantWorkspaceState(ui)!;
-    return workspaceUrl({
-      space: state.space, asOf: state.asOf, from: state.from, until: state.until,
-      order: state.order,
-      jurisdiction: state.jurisdiction, hierarchy: state.hierarchy, domain: state.domain,
-      sourceClass: state.sourceClass, actForm: state.actForm,
-      bindingStatus: state.bindingStatus, language: state.language,
-    });
-  }
-  return undefined;
+  const state = assistantWorkspaceState(ui);
+  return state ? workspaceUrl({
+    space: state.space, q: state.q, asOf: state.asOf, work: state.work,
+    date: state.date, to: state.to, anchor: state.anchor,
+    mode: state.mode === "compare" ? state.mode : undefined,
+    from: state.from, until: state.until, order: state.order,
+    jurisdiction: state.jurisdiction, hierarchy: state.hierarchy, domain: state.domain,
+    sourceClass: state.sourceClass, actForm: state.actForm,
+    bindingStatus: state.bindingStatus, language: state.language,
+  }) : undefined;
 }
 
 export function stepWorkspaceUrl(step: { work?: string; date?: string; anchor?: string }): string | undefined {

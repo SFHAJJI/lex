@@ -122,7 +122,8 @@ public sealed record UiEffect(
 }
 
 /// <summary>Workspace coordinates: what the interface should have loaded and selected.</summary>
-public sealed record Subject(string Work, string? Title, string? Date, string? Anchor);
+public sealed record Subject(string Work, string? Title, string? Date, string? Anchor,
+    string? Language = null);
 
 public sealed record ProvisionView(Subject Subject, string ValidFrom, string? ValidTo,
     IReadOnlyList<ProvisionItem> Provisions, string? Permalink);
@@ -130,7 +131,7 @@ public sealed record ProvisionView(Subject Subject, string ValidFrom, string? Va
 public sealed record ProvisionItem(string Anchor, string? Num, string? Heading, string Text, string? Sha);
 
 public sealed record DiffView(Subject Subject, string FromDate, string ToDate,
-    string? FromPermalink, string? ToPermalink, string? Note);
+    string? FromPermalink, string? ToPermalink, string? Note, string? Status = null);
 
 public sealed record HistoryView(Subject Subject, string Anchor, int DistinctTexts,
     IReadOnlyList<HistoryState> States);

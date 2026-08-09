@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { first, tool, type AskReply, type ProvisionItem, type UiEffect } from "./api";
 import { publisherOf, useWorkspace, workSlug, type Space, type State } from "./state";
-import { CitedBy, Empty, Gap, InForce, Provision, Ranking, VersionRail, hasView, modeFor } from "./views";
+import { CitedBy, Empty, Gap, InForce, Provision, Ranking, VersionRail, hasView } from "./views";
 import { Compare } from "./Compare";
 import { LawPicker, shorten } from "./pickers";
 import AssistantController from "./AssistantController";
@@ -320,16 +320,13 @@ export default function App() {
         // diff's verified article anchor or change its destination.
         const subj = r.ui!.diff?.subject ?? r.ui!.provision?.subject
           ?? r.ui!.history?.subject ?? r.ui!.timeline?.subject;
-        const m = modeFor(r.ui);
         // The space is set explicitly, never inferred. The reader is somewhere when they ask, and
         // "somewhere" is now a pinned value: answering a "what changed" question from the search
         // page used to print the prose and leave the table behind the space it belonged to.
         if (subj?.work) {
           setTitle(subj.title);
           if (r.ui!.provision) setLoaded({ items: r.ui!.provision.provisions, from: r.ui!.provision.valid_from, to: r.ui!.provision.valid_to });
-          go({ ...refinement, work: subj.work, date: subj.date ?? r.ui!.provision?.valid_from, anchor: subj.anchor, mode: m ?? "read",
-               space: "law",
-               ...(r.ui!.diff ? { date: r.ui!.diff.from_date, to: r.ui!.diff.to_date } : {}) });
+          go(assistantWorkspaceState(r.ui)!);
           navigated = true;
         } else if (r.ui!.ranking || r.ui!.in_force) {
           setPage(r.ui!.workspace?.page ?? 0);
