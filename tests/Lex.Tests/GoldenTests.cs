@@ -82,6 +82,15 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
     }
 
     [Fact]
+    public async Task About_cv_downloads_use_content_versioned_urls()
+    {
+        var html = await _site.Client.GetStringAsync("/about");
+
+        Assert.Contains("https://api.soufien.lu/cv/en?v=249c02720b500217", html);
+        Assert.Contains("https://api.soufien.lu/cv/fr?v=d7367d9ef21f00d5", html);
+    }
+
+    [Fact]
     public async Task Developer_search_contract_documents_every_public_filter()
     {
         var html = await _site.Client.GetStringAsync("/developers");
