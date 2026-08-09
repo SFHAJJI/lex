@@ -16,11 +16,21 @@ public sealed class AskService(McpCore core)
 {
     internal sealed class WorkResolutionGuard
     {
+        internal sealed record GuardClarification(
+            AgentClarification Display,
+            IReadOnlyList<GuardChoice> Choices);
+        internal sealed record GuardChoice(string Label, string Value);
+
+        private const string ChoicePrefix = "Clarification choice: ";
+        private const string NoChoice = "none of these";
+
         private readonly HashSet<string> _resolved = new(StringComparer.Ordinal);
+        private readonly List<(string Work, string Title)> _candidates = [];
         private bool _searchObserved;
 
         public void ObserveSearch(JsonNode result, bool isRawUserQuery = true)
         {
+            var latestCandidates = new List<(string Work, string Title)>();
             foreach (var response in result is JsonArray array
                          ? array.OfType<JsonObject>()
                          : result is JsonObject single ? [single] : [])
@@ -44,7 +54,19 @@ public sealed class AskService(McpCore core)
                                  .Where(item => item["anchor"]?.GetValue<string>() is { Length: > 0 }))
                         if (hit["lex_id"]?.GetValue<string>() is { } lexId)
                             _resolved.Add(WorkKey(lexId));
+                if (response["hits"] is JsonArray candidateHits)
+                    foreach (var hit in candidateHits.OfType<JsonObject>()
+                                 .Where(item => item["anchor"]?.GetValue<string>() is not { Length: > 0 }))
+                        if (hit["lex_id"]?.GetValue<string>() is { } lexId)
+                            AddCandidate(latestCandidates, WorkKey(lexId),
+                                hit["title"]?.GetValue<string>() ?? "");
             }
+            foreach (var candidate in latestCandidates.AsEnumerable().Reverse())
+            {
+                _candidates.RemoveAll(item => item.Work == candidate.Work);
+                _candidates.Insert(0, candidate);
+            }
+            if (_candidates.Count > 8) _candidates.RemoveRange(8, _candidates.Count - 8);
         }
 
         public bool Allows(string tool, JsonObject args)
@@ -57,6 +79,65 @@ public sealed class AskService(McpCore core)
                     "as_of" or "timeline" or "diff" or "article_history" or "cited_by" or "provenance"))
                 return true;
             return _resolved.Contains(WorkKey(work));
+        }
+
+        public void ObserveUserConfirmation(string query)
+        {
+            var trimmed = query.Trim();
+            var value = trimmed.StartsWith(ChoicePrefix, StringComparison.Ordinal)
+                ? trimmed[ChoicePrefix.Length..].Trim()
+                : trimmed;
+            if (IsCandidateWork(value)) _resolved.Add(value);
+        }
+
+        public static bool IsExplicitNonSelection(string query) =>
+            string.Equals(query.Trim(), NoChoice, StringComparison.Ordinal)
+            || string.Equals(query.Trim(), ChoicePrefix + NoChoice, StringComparison.Ordinal);
+
+        public GuardClarification? ClarificationFor(string? attemptedWork)
+        {
+            if (_resolved.Count > 0 || _candidates.Count == 0) return null;
+            var attempted = attemptedWork is null ? null : WorkKey(attemptedWork);
+            var ordered = _candidates
+                .OrderByDescending(candidate => candidate.Work == attempted)
+                .Take(4)
+                .ToList();
+            var choices = ordered.Select((candidate, index) => new GuardChoice(
+                CandidateOption(candidate.Title, candidate.Work, index + 1),
+                candidate.Work)).ToList();
+            if (choices.Count == 1)
+                choices.Add(new GuardChoice(
+                    "None of these; I will add more details", NoChoice));
+            var clarification = new AgentClarification(
+                "Lex found possible instruments but no direct provision evidence. Which instrument should it use?",
+                choices.Select(choice => choice.Label).ToArray());
+            var display = AgentAnswerContract.Validate(new AgentAnswerDraft(
+                AgentAnswerStatus.Clarify, clarification.Question, [], [], null, clarification), []).Clarification!;
+            return new GuardClarification(display, choices);
+        }
+
+        private static void AddCandidate(
+            List<(string Work, string Title)> candidates, string work, string title)
+        {
+            if (!IsCandidateWork(work) || candidates.Any(candidate => candidate.Work == work)) return;
+            candidates.Add((work, title.Trim()));
+        }
+
+        private static bool IsCandidateWork(string work) =>
+            work.Length is > 0 and <= 1_000
+            && !work.Contains("://", StringComparison.OrdinalIgnoreCase)
+            && (work.StartsWith("eu-eurlex:", StringComparison.Ordinal)
+                || work.StartsWith("lu-legilux:", StringComparison.Ordinal))
+            && work.Count(character => character == ':') == 1;
+
+        private static string CandidateOption(string title, string work, int ordinal)
+        {
+            if (title.Contains("://", StringComparison.OrdinalIgnoreCase)) title = "";
+            var shortWork = work.Length <= 28 ? work : work[..25] + "...";
+            var suffix = $" [{ordinal}: {shortWork}]";
+            if (string.IsNullOrWhiteSpace(title)) return $"Instrument{suffix}";
+            var boundedTitle = title[..Math.Min(title.Length, 100 - suffix.Length)].TrimEnd();
+            return boundedTitle + suffix;
         }
 
         private static string WorkKey(string value)
@@ -266,17 +347,28 @@ public sealed class AskService(McpCore core)
         string reply,
         JsonArray trace,
         List<UiEffect> effects,
-        AgentClarification? clarification = null)
+        AgentClarification? clarification = null,
+        IReadOnlyList<WorkResolutionGuard.GuardChoice>? clarificationChoices = null)
     {
         var body = new JsonObject { ["reply"] = reply, ["trace"] = trace };
         if (clarification is not null)
-            body["clarification"] = JsonNode.Parse(
-                System.Text.Json.JsonSerializer.Serialize(clarification, UiJson));
+        {
+            var serialized = JsonNode.Parse(
+                System.Text.Json.JsonSerializer.Serialize(clarification, UiJson))!.AsObject();
+            if (clarificationChoices is not null)
+                serialized["choices"] = new JsonArray(clarificationChoices.Select(choice =>
+                    (JsonNode)new JsonObject
+                    {
+                        ["label"] = choice.Label,
+                        ["value"] = choice.Value,
+                    }).ToArray());
+            body["clarification"] = serialized;
+        }
         var merged = UiEffect.Merge(effects);
         // A turn that used tools and produced nothing to render is a refusal — the most
         // characteristic thing this product does. It gets a view like any other answer,
         // rather than silently degrading to a wall of prose.
-        if (merged.IsEmpty && trace.Count > 0)
+        if (clarification is null && merged.IsEmpty && trace.Count > 0)
             merged = new UiEffect(Gap: new GapView(
                 Status: "no_result",
                 Work: null, Date: null,
@@ -481,6 +573,10 @@ public sealed class AskService(McpCore core)
         }
         if (string.IsNullOrWhiteSpace(rawUserQuery))
             return (400, new JsonObject { ["error"] = "At least one user message is required." });
+        if (WorkResolutionGuard.IsExplicitNonSelection(rawUserQuery))
+            return (200, Body(
+                "Please add another identifying detail, such as the topic, jurisdiction, official title, or identifier.",
+                [], []));
 
         if (!TryCount(ip, out var why)) return (429, new JsonObject { ["error"] = why });
 
@@ -514,6 +610,7 @@ public sealed class AskService(McpCore core)
             };
             var rawResult = core.CallTool("search", rawArgs);
             resolutionGuard.ObserveSearch(rawResult, isRawUserQuery: true);
+            resolutionGuard.ObserveUserConfirmation(rawUserQuery);
             searchCalls = 1;
             var (rawStatus, rawDocs) = Summarize(rawResult);
             evidence.Observe("search", rawStatus, rawDocs, rawResult);
@@ -663,6 +760,12 @@ public sealed class AskService(McpCore core)
                             {
                                 entry["status"] = "work_resolution_required";
                                 trace.Add(entry);
+                                var attemptedWork = name == "provenance"
+                                    ? args["lex_id"]?.GetValue<string>()
+                                    : args["work"]?.GetValue<string>();
+                                if (resolutionGuard.ClarificationFor(attemptedWork) is { } clarification)
+                                    return (200, Body(clarification.Display.Question, trace, [],
+                                        clarification.Display, clarification.Choices));
                                 messages.Add(new JsonObject
                                 {
                                     ["role"] = "tool", ["tool_call_id"] = id,
@@ -731,6 +834,9 @@ public sealed class AskService(McpCore core)
                 }
 
                 var reply = msg?["content"]?.GetValue<string>() ?? "";
+                if (resolutionGuard.ClarificationFor(null) is { } pendingClarification)
+                    return (200, Body(pendingClarification.Display.Question, trace, [],
+                        pendingClarification.Display, pendingClarification.Choices));
                 if (reply.Length == 0 && !retried)
                 {
                     // Nothing written. Same evidence, one more attempt with room to think.

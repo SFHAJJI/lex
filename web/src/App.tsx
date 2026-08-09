@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { askQuestionError, askStreaming, boundedAskHistory, first, tool, type AskMessage, type AskReply, type ProvisionItem, type Step, type UiEffect } from "./api";
+import { actionableClarificationChoices, askQuestionError, askStreaming, boundedAskHistory, clarificationFollowUp, first, tool, type AskMessage, type AskReply, type ClarificationChoice, type ProvisionItem, type Step, type UiEffect } from "./api";
 import { publisherOf, useWorkspace, workSlug, type Space, type State } from "./state";
 import { CitedBy, Empty, Gap, InForce, Provision, Ranking, VersionRail, hasView, modeFor } from "./views";
 import { Compare } from "./Compare";
@@ -56,7 +56,7 @@ export default function App() {
   const [steps, setSteps] = useState<Step[]>([]);
   const [said, setSaid] = useState<string>();
   const [clarification, setClarification] = useState<{
-    context: string; question: string; options: string[];
+    context: string; question: string; choices: ClarificationChoice[];
   }>();
   const [ui, setUi] = useState<UiEffect>();
   const [loaded, setLoaded] = useState<{ items: ProvisionItem[]; from: string; to?: string; profile?: string; source?: string }>();
@@ -333,10 +333,10 @@ export default function App() {
         abort.current.signal);
       const visibleReply = r.clarification?.question ?? r.reply;
       setSaid(r.error ?? visibleReply);
-      setClarification(r.clarification ? {
-        context: question,
-        question: r.clarification.question,
-        options: r.clarification.options,
+      const choices = r.clarification
+        ? actionableClarificationChoices(r.clarification) : undefined;
+      setClarification(r.clarification && choices ? {
+        context: question, question: r.clarification.question, choices,
       } : undefined);
       if (!r.error) {
         askHistory.current = boundedAskHistory([
@@ -462,9 +462,9 @@ export default function App() {
 
       <AskPanel q={q} setQ={setQ} busy={busy} steps={steps} said={said} onSubmit={submit}
                 followUps={clarification
-                  ? clarification.options.map((label) => ({
-                      label,
-                      run: () => submit(`${clarification.context}\nClarification choice: ${label}`),
+                  ? clarification.choices.map((choice) => ({
+                      label: choice.label,
+                      run: () => submit(clarificationFollowUp(clarification.context, choice)),
                     }))
                   : chipsFor(s, ui, (held?.text ?? 1) > 0).map((c) => ({
                       label: c.label, run: () => { setUi(undefined); go(c.go); } }))}

@@ -36,12 +36,18 @@ export interface AskReply {
   reply: string;
   trace?: { tool: string; status?: string }[];
   ui?: UiEffect;
-  clarification?: { question: string; options: string[] };
+  clarification?: AskClarification;
   error?: string;
   /** False when the answer was a refusal: its steps are withheld from the transcript. */
   narrated?: boolean;
 }
 export interface AskMessage { role: "user" | "assistant"; content: string }
+export interface ClarificationChoice { label: string; value?: string }
+export interface AskClarification {
+  question: string;
+  options: string[];
+  choices?: { label: string; value: string }[];
+}
 
 const MAX_ASK_HISTORY = 12;
 const MAX_ASK_MESSAGE_CHARS = 4000;
@@ -50,6 +56,30 @@ export function askQuestionError(value: string): string | undefined {
   return value.trim().length > MAX_ASK_MESSAGE_CHARS
     ? "Questions are capped at 4,000 characters. Please narrow this question."
     : undefined;
+}
+
+export function actionableClarificationChoices(
+  clarification: AskClarification): ClarificationChoice[] | undefined {
+  if (!Array.isArray(clarification.options)
+      || clarification.options.length < 2 || clarification.options.length > 4
+      || clarification.options.some(option => typeof option !== "string" || option.length > 100))
+    return undefined;
+  if (clarification.choices === undefined)
+    return clarification.options.map(label => ({ label }));
+  if (!Array.isArray(clarification.choices)
+      || clarification.choices.length !== clarification.options.length)
+    return undefined;
+  const valid = clarification.choices.every((choice, index) =>
+    choice && typeof choice.label === "string" && typeof choice.value === "string"
+    && choice.label === clarification.options[index]
+    && choice.label.length <= 100 && choice.value.length > 0 && choice.value.length <= 1_000);
+  return valid ? clarification.choices : undefined;
+}
+
+export function clarificationFollowUp(context: string, choice: ClarificationChoice): string {
+  return choice.value
+    ? choice.value
+    : `${context}\nClarification choice: ${choice.label}`;
 }
 
 export function boundedAskHistory(value: unknown): AskMessage[] {
