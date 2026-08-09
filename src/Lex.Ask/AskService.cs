@@ -386,12 +386,41 @@ public sealed class AskService(McpCore core)
         return body;
     }
 
-    internal static string ReplyFor(AgentAnswerDraft grounded, IEnumerable<UiEffect> effects)
+    internal static string ReplyFor(
+        AgentAnswerDraft grounded,
+        IEnumerable<UiEffect> effects,
+        bool synthesisFailed = false)
     {
         var parts = effects.ToList();
         var outlines = parts.Select(part => part.Provision)
             .Where(view => view is { Provisions.Count: > 0 })
             .ToList();
+        if (synthesisFailed
+            && grounded.Status == AgentAnswerStatus.Refusal
+            && parts.All(part => part.Gap is null))
+        {
+            var view = UiEffect.Merge(parts);
+            if (view.Diff is not null)
+                return "The requested comparison is open below.";
+            if (view.History is not null)
+                return "The selected article's history is open below.";
+            if (view.Timeline is not null)
+                return "The selected law's version timeline is open below.";
+            if (view.Ranking is not null)
+                return "The requested change ranking is open below.";
+            if (view.InForce is not null)
+                return "The publisher states covering the requested date are open below.";
+            if (view.CitedBy is not null)
+                return "The citing provisions are open below.";
+            var textView = outlines.FirstOrDefault(item => item!.Provisions
+                .Any(provision => !string.IsNullOrEmpty(provision.Text)));
+            if (textView is not null)
+                return textView.Subject.Anchor is { Length: > 0 }
+                    ? "The exact publisher text for the selected article and date is open below."
+                    : "The exact publisher text for the selected law and date is open below.";
+            if (view.Workspace is not null)
+                return "The matching catalogue results are open below.";
+        }
         if (grounded.Status == AgentAnswerStatus.Refusal
             && outlines.Count > 0
             && outlines.SelectMany(view => view!.Provisions)
@@ -872,10 +901,10 @@ public sealed class AskService(McpCore core)
                     reply = trace.Count > 0
                         ? "I retrieved the evidence below but could not compose an answer. Try asking for a narrower slice (a single law, or a shorter period)."
                         : "I could not produce an answer. Try rephrasing.";
-                var grounded = await Finalizer().FinalizeAsync(
+                var finalization = await Finalizer().FinalizeAsync(
                     rawUserQuery, reply, evidence.Evidence, ct);
-                reply = ReplyFor(grounded, effects);
-                return (200, Body(reply, trace, effects, grounded.Clarification));
+                reply = ReplyFor(finalization.Draft, effects, finalization.SynthesisFailed);
+                return (200, Body(reply, trace, effects, finalization.Draft.Clarification));
             }
             return (200, Body("Tool budget for one question exhausted. Try a narrower question.", trace, effects));
         }

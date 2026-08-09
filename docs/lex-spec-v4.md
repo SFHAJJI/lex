@@ -1608,6 +1608,10 @@ research result. A successful work-independent operation cancels unrelated weak 
 Clarification is emitted only when a work-specific operation needs an identity that remains
 genuinely ambiguous or unresolved. Reviewed aliases and official identifiers resolve
 deterministically inside ordinary sentences; weak metadata never authorizes a work-specific tool.
+If prose synthesis or its grounding judgment fails after an operation has already produced a
+valid typed view, the assistant preserves that verified workspace result and reports it with a
+deterministic navigation sentence. A deliberate legal-advice or evidence refusal is never
+rewritten, and an explicit MCP gap always wins.
 
 ---
 

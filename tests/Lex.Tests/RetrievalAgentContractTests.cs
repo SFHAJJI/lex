@@ -203,6 +203,38 @@ public sealed class RetrievalAgentContractTests
     }
 
     [Fact]
+    public void A_synthesis_failure_cannot_hide_a_successful_typed_operation()
+    {
+        var fallback = new AgentAnswerDraft(
+            AgentAnswerStatus.Refusal, "Internal evidence fallback.", [], [], null, null);
+        var text = new UiEffect(Provision: new ProvisionView(
+            new Subject("eu-eurlex:32016r0679", "GDPR", "2021-01-01", "art_6"),
+            "2016-05-04", null,
+            [new ProvisionItem("art_6", "6", "Lawfulness", "Held legal text", "abc")], null));
+
+        Assert.Equal("The exact publisher text for the selected article and date is open below.",
+            AskService.ReplyFor(fallback, [text], synthesisFailed: true));
+        var wholeLaw = new UiEffect(Provision: text.Provision! with
+        {
+            Subject = text.Provision.Subject with { Anchor = null },
+        });
+        Assert.Equal("The exact publisher text for the selected law and date is open below.",
+            AskService.ReplyFor(fallback, [wholeLaw], synthesisFailed: true));
+
+        var comparison = new UiEffect(Diff: new DiffView(
+            new Subject("eu-eurlex:32013r0575", "CRR", "2020-01-01", "art_92"),
+            "2020-01-01", "2024-12-31", null, null, null));
+        Assert.Equal("The requested comparison is open below.",
+            AskService.ReplyFor(fallback, [text, comparison], synthesisFailed: true));
+
+        var gap = new UiEffect(Gap: new GapView(
+            "text_not_available", "eu-eurlex:32016r0679", "2021-01-01",
+            "The requested text is not held.", []));
+        Assert.Equal("Internal evidence fallback.",
+            AskService.ReplyFor(fallback, [text, gap], synthesisFailed: true));
+    }
+
+    [Fact]
     public void A_gap_alongside_an_outline_preserves_the_evidence_limited_refusal()
     {
         var refusal = new AgentAnswerDraft(
