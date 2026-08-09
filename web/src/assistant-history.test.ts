@@ -1,6 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { actionableClarificationChoices, askQuestionError, boundedAskHistory, clarificationFollowUp } from "./api.ts";
+import {
+  actionableClarificationChoices,
+  askQuestionError,
+  boundedAskHistory,
+  clarificationFollowUp,
+  shouldOfferContextualFollowUps,
+} from "./api.ts";
 
 test("assistant history is validated and bounded to six restored turns", () => {
   const source = Array.from({ length: 14 }, (_, index) => ({
@@ -38,6 +44,15 @@ test("an over-limit current question is rejected instead of silently changed", (
 
   assert.match(askQuestionError(question) ?? "", /1,000/);
   assert.throws(() => boundedAskHistory([{ role: "user", content: question }]), RangeError);
+});
+
+test("a gap or error never inherits stale workspace follow-up actions", () => {
+  assert.equal(shouldOfferContextualFollowUps({ reply: "ok", ui: {} }), true);
+  assert.equal(shouldOfferContextualFollowUps({
+    reply: "not found",
+    ui: { gap: { status: "no_result", explanation: "No result", available: [] } },
+  }), false);
+  assert.equal(shouldOfferContextualFollowUps({ reply: "failed", error: "failed" }), false);
 });
 
 test("deterministic clarification submits the full value while generated choices retain context", () => {

@@ -87,7 +87,10 @@ public sealed class AskService(McpCore core)
                         }
                 if (collectCandidates && response["hits"] is JsonArray candidateHits)
                     foreach (var hit in candidateHits.OfType<JsonObject>()
-                                 .Where(item => item["anchor"]?.GetValue<string>() is not { Length: > 0 }))
+                                 // A bare article intent may return real article rows from many
+                                 // works. They are useful clarification candidates, but without
+                                 // direct lexical/semantic evidence they cannot authorize a work.
+                                 .Where(item => !HasDirectProvisionEvidence(item)))
                         if (hit["lex_id"]?.GetValue<string>() is { } lexId)
                             AddCandidate(latestCandidates, WorkKey(lexId),
                                 hit["title"]?.GetValue<string>() ?? "");

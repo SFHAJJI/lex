@@ -41,6 +41,11 @@ export interface AskReply {
   /** False when the answer was a refusal: its steps are withheld from the transcript. */
   narrated?: boolean;
 }
+
+/** Page-specific actions are useful only after an answer that did not end in a gap. */
+export function shouldOfferContextualFollowUps(reply: AskReply): boolean {
+  return !reply.error && !reply.clarification && !reply.ui?.gap;
+}
 export interface AskMessage { role: "user" | "assistant"; content: string }
 export interface ClarificationChoice { label: string; value?: string }
 export interface AskClarification {

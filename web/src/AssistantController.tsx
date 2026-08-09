@@ -5,6 +5,7 @@ import {
   askStreaming,
   boundedAskHistory,
   clarificationFollowUp,
+  shouldOfferContextualFollowUps,
   type AskMessage,
   type AskReply,
   type ClarificationChoice,
@@ -42,6 +43,7 @@ export default function AssistantController({
   const [steps, setSteps] = useState<Step[]>([]);
   const [said, setSaid] = useState<string>();
   const [resultUrl, setResultUrl] = useState<string>();
+  const [allowContextualFollowUps, setAllowContextualFollowUps] = useState(false);
   const restored = useRef(restoredAskHistory()).current;
   const [conversation, setConversation] = useState<AskMessage[]>(restored);
   const [activeQuestion, setActiveQuestion] = useState<string>();
@@ -70,6 +72,7 @@ export default function AssistantController({
     setBusy(true);
     setSaid(undefined);
     setResultUrl(undefined);
+    setAllowContextualFollowUps(false);
     setSteps([]);
     setClarification(undefined);
     abort.current?.abort();
@@ -97,6 +100,7 @@ export default function AssistantController({
       setClarification(reply.clarification && choices
         ? { context: question, choices }
         : undefined);
+      setAllowContextualFollowUps(shouldOfferContextualFollowUps(reply));
       if (!reply.error) {
         history.current = boundedAskHistory([
           ...messages,
@@ -124,6 +128,7 @@ export default function AssistantController({
     setQ("");
     setSaid(undefined);
     setResultUrl(undefined);
+    setAllowContextualFollowUps(false);
     setSteps([]);
     setClarification(undefined);
     setBusy(false);
@@ -137,7 +142,7 @@ export default function AssistantController({
       }))
     : [
         ...(resultUrl ? [{ label: "Open the structured result", run: () => location.assign(resultUrl) }] : []),
-        ...(contextualFollowUps ?? []),
+        ...(allowContextualFollowUps ? contextualFollowUps ?? [] : []),
       ];
 
   return <AskPanel
