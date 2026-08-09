@@ -727,8 +727,8 @@ public static class ExplainerEndpoints
                 It is built the way I build professionally, which is the reason it exists: the pipeline is
                 deterministic, the claims are testable, and the parts that cannot be verified say so
                 instead of guessing.</p>
-                <p><a class="pick main" href="https://api.soufien.lu/cv/en?v=249c02720b500217" rel="noopener">CV, English (PDF)</a>
-                &nbsp; <a class="pick" href="https://api.soufien.lu/cv/fr?v=d7367d9ef21f00d5" rel="noopener">CV, français (PDF)</a>
+                <p><a class="pick main" href="https://api.soufien.lu/cv/en/download" rel="noopener">CV, English (PDF)</a>
+                &nbsp; <a class="pick" href="https://api.soufien.lu/cv/fr/download" rel="noopener">CV, français (PDF)</a>
                 &nbsp; <a class="pick" href="https://www.linkedin.com/in/soufien-hajji" rel="noopener">LinkedIn ↗</a></p>
                 </div>
 
