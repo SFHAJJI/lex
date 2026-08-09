@@ -283,7 +283,8 @@ button.pick { cursor: pointer; }
 .askslot{display:contents}
 .asklaunch{position:fixed;right:18px;bottom:18px;z-index:38;display:flex;align-items:center;gap:8px;
   background:var(--fg);color:var(--bg);border:1px solid var(--fg);border-radius:10px;padding:9px 13px;
-  cursor:pointer;font:600 13px/1.2 inherit;box-shadow:0 5px 18px rgba(0,0,0,.17);
+  cursor:pointer;font-family:inherit;font-size:13px;font-weight:600;line-height:1.2;
+  box-shadow:0 5px 18px rgba(0,0,0,.17);
   transition:transform .16s,box-shadow .16s}
 .asklaunch:hover{transform:translateY(-1px);box-shadow:0 7px 22px rgba(0,0,0,.22)}
 .asklaunch:focus-visible{outline:3px solid color-mix(in srgb,var(--fg) 28%,transparent);outline-offset:3px}
