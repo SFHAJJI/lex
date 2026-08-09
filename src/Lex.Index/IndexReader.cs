@@ -746,9 +746,12 @@ public sealed class LexIndexReader : IDisposable
             {
                 var legacyArticleRows = SearchArticleIntent(
                     legacyPlan.ArticleNumber, filters, limit, legacyPlan.ProvisionQuery);
+                var legacyReasons = string.IsNullOrWhiteSpace(legacyPlan.ProvisionQuery)
+                    ? new[] { "article_intent" }
+                    : new[] { "article_intent", "keyword" };
                 return new SearchExecution("keyword", legacyArticleRows.Select((hit, rank) =>
                     new RetrievalHit(hit.Doc, hit.Prov, hit.Snippet, 2d / (rank + 1),
-                        ["article_intent"])).ToList(), [], legacyPlan);
+                        legacyReasons)).ToList(), [], legacyPlan);
             }
             var legacy = SearchKeywordWithoutWorkCatalog(
                 legacyPlan.ProvisionQuery, filters, limit, fuzzyAuto);
@@ -794,7 +797,10 @@ public sealed class LexIndexReader : IDisposable
                 plan.HasStrongWorkMatch ? null : plan.ProvisionQuery);
         var articleHits = articleRows
                 .Select((hit, rank) => new RetrievalHit(
-                    hit.Doc, hit.Prov, hit.Snippet, 2d / (rank + 1), ["article_intent"]))
+                    hit.Doc, hit.Prov, hit.Snippet, 2d / (rank + 1),
+                    !plan.HasStrongWorkMatch && !string.IsNullOrWhiteSpace(plan.ProvisionQuery)
+                        ? ["article_intent", "keyword"]
+                        : ["article_intent"]))
                 .ToList();
         var exactIdentifierFallback = plan.ProvisionQuery.Length == 0 && IsExactLegalIdentifier(query);
         var provision = plan.ArticleNumber is not null
@@ -871,6 +877,16 @@ public sealed class LexIndexReader : IDisposable
         "quels", "quelles", "quoi", "show", "the", "tell", "what",
     };
 
+    private static readonly string[] ConversationalReferencePhrases =
+    [
+        "on the same date", "at the same date", "on that date", "at that date",
+        "the same date", "same date", "that date", "this date",
+        "the same law", "same law", "that law", "this law",
+        "the same instrument", "same instrument", "that instrument", "this instrument",
+        "a la meme date", "a cette date", "la meme date", "cette date",
+        "la meme loi", "cette loi", "le meme texte", "ce texte",
+    ];
+
     private static readonly (string Phrase, string Role)[] RolePhrases =
     [
         ("implementing regulation", "implementing"),
@@ -898,6 +914,7 @@ public sealed class LexIndexReader : IDisposable
         var residual = RemoveArticleIntent(normalized, article);
         var role = RolePhrases.FirstOrDefault(item => ContainsPhrase(normalized, item.Phrase)).Role;
         residual = RemoveRoleIntent(residual, role);
+        residual = RemoveConversationalReferences(residual);
         var filtered = string.Join(' ', residual.Split(' ', StringSplitOptions.RemoveEmptyEntries)
             .Where(token => !ConversationalSearchWords.Contains(token)));
         if (article is null && role is null && filtered == normalized)
@@ -931,6 +948,7 @@ public sealed class LexIndexReader : IDisposable
             residual = residual.Replace(" " + name + " ", " ", StringComparison.Ordinal);
         residual = RemoveArticleIntent(residual.Trim(), basic.ArticleNumber);
         residual = RemoveRoleIntent(residual, role);
+        residual = RemoveConversationalReferences(residual);
         residual = string.Join(' ', residual.Split(' ', StringSplitOptions.RemoveEmptyEntries)
             .Where(token => !ConversationalSearchWords.Contains(token)));
         var works = resolved.SelectMany(item => item.Candidates)
@@ -1036,6 +1054,14 @@ public sealed class LexIndexReader : IDisposable
         return result.Trim();
     }
 
+    private static string RemoveConversationalReferences(string normalized)
+    {
+        var result = " " + normalized + " ";
+        foreach (var phrase in ConversationalReferencePhrases)
+            result = result.Replace(" " + phrase + " ", " ", StringComparison.Ordinal);
+        return result.Trim();
+    }
+
     private static bool ContainsPhrase(string normalized, string phrase) =>
         (" " + normalized + " ").Contains(" " + phrase + " ", StringComparison.Ordinal);
 
@@ -1046,11 +1072,15 @@ public sealed class LexIndexReader : IDisposable
         var anchor = "art_" + articleNumber.Replace(' ', '_');
         var (where, parameters) = WithFilters("1=1", filters, excludeAsOf: false, alias: "d");
         var hasResidual = !string.IsNullOrWhiteSpace(residualQuery);
-        var ftsJoin = hasResidual ? "JOIN fts ON fts.rowid=p.state_id" : "";
-        var ftsPredicate = hasResidual ? "AND fts MATCH $residual" : "";
-        var score = hasResidual ? "bm25(fts,10.0,4.0,6.0,1.0)" : "0.0";
+        // FTS5 ranking functions cannot be evaluated in the same SELECT as a window function.
+        // Materialize the FTS score first, then rank dated occurrences in the next CTE.
+        var matched = hasResidual
+            ? "matched AS (SELECT rowid AS state_id, bm25(fts,10.0,4.0,6.0,1.0) AS score FROM fts WHERE fts MATCH $residual),"
+            : "";
+        var ftsJoin = hasResidual ? "JOIN matched m ON m.state_id=p.state_id" : "";
+        var score = hasResidual ? "m.score" : "0.0";
         using var command = Cmd($"""
-            WITH eligible AS (
+            WITH {matched} eligible AS (
               SELECT p.rid,p.seq,p.anchor,p.provision_id,p.ptype,p.num,p.heading,p.path,
                      p.article_valid_from,p.work_title,p.text_sha,d.key AS doc_key,{score} AS score,
                      ROW_NUMBER() OVER (
@@ -1064,7 +1094,6 @@ public sealed class LexIndexReader : IDisposable
                   lower(replace(replace(replace(p.num,' ',''),'.',''),'-',''))=$number
                   OR lower(replace(replace(p.anchor,'.',''),'-','_'))=$anchor
                 )
-                {ftsPredicate}
             )
             SELECT {SelectDocCols("d")},
                    e.rid,e.seq,e.anchor,e.provision_id,e.ptype,e.num,e.heading,e.path,

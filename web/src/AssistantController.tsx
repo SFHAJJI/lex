@@ -42,11 +42,14 @@ export default function AssistantController({
   const [steps, setSteps] = useState<Step[]>([]);
   const [said, setSaid] = useState<string>();
   const [resultUrl, setResultUrl] = useState<string>();
+  const restored = useRef(restoredAskHistory()).current;
+  const [conversation, setConversation] = useState<AskMessage[]>(restored);
+  const [activeQuestion, setActiveQuestion] = useState<string>();
   const [clarification, setClarification] = useState<{
     context: string; choices: ClarificationChoice[];
   }>();
   const abort = useRef<AbortController>();
-  const history = useRef<AskMessage[]>(restoredAskHistory());
+  const history = useRef<AskMessage[]>(restored);
 
   useEffect(() => () => abort.current?.abort(), []);
 
@@ -55,18 +58,23 @@ export default function AssistantController({
     if (!question || busy) return;
     const questionError = askQuestionError(question);
     if (questionError) {
+      setConversation(history.current);
+      setActiveQuestion(question);
       setSaid(questionError);
       setSteps([]);
       setClarification(undefined);
       return;
     }
+    setConversation(history.current);
+    setActiveQuestion(question);
     setBusy(true);
     setSaid(undefined);
     setResultUrl(undefined);
     setSteps([]);
     setClarification(undefined);
     abort.current?.abort();
-    abort.current = new AbortController();
+    const controller = new AbortController();
+    abort.current = controller;
     try {
       const messages = boundedAskHistory([
         ...history.current,
@@ -74,9 +82,13 @@ export default function AssistantController({
       ]);
       const reply = await askStreaming(
         messages,
-        (step) => setSteps((previous) => [...previous, step]),
-        abort.current.signal,
+        (step) => {
+          if (abort.current === controller)
+            setSteps((previous) => [...previous, step]);
+        },
+        controller.signal,
       );
+      if (abort.current !== controller) return;
       const visibleReply = reply.clarification?.question ?? reply.reply;
       setSaid(reply.error ?? visibleReply);
       const choices = reply.clarification
@@ -98,11 +110,25 @@ export default function AssistantController({
       if (standalone) setResultUrl(assistantWorkspaceUrl(reply.ui));
       onReply?.(reply);
     } catch {
-      setSaid("The request failed, try again.");
+      if (!controller.signal.aborted) setSaid("The request failed, try again.");
     } finally {
-      setBusy(false);
+      if (abort.current === controller) setBusy(false);
     }
   }, [busy, onReply, standalone]);
+
+  const resetConversation = useCallback(() => {
+    abort.current?.abort();
+    history.current = [];
+    setConversation([]);
+    setActiveQuestion(undefined);
+    setQ("");
+    setSaid(undefined);
+    setResultUrl(undefined);
+    setSteps([]);
+    setClarification(undefined);
+    setBusy(false);
+    try { sessionStorage.removeItem(ASK_HISTORY_KEY); } catch { /* Optional tab memory. */ }
+  }, []);
 
   const followUps = clarification
     ? clarification.choices.map((choice) => ({
@@ -120,7 +146,10 @@ export default function AssistantController({
     busy={busy}
     steps={steps}
     said={said}
+    conversation={conversation}
+    activeQuestion={activeQuestion}
     onSubmit={submit}
+    onReset={resetConversation}
     followUps={followUps}
     onOpenStep={onOpenStep ?? ((step) => {
       const url = stepWorkspaceUrl(step);

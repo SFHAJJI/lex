@@ -30,12 +30,13 @@ test("assistant history cannot exceed the server message limit or begin with an 
 
   assert.deepEqual(history.map((item) => item.role), ["user", "assistant"]);
   assert.equal(history[1].content.length, 4000);
+  assert.match(history[1].content, /Earlier answer shortened in conversation memory/);
 });
 
 test("an over-limit current question is rejected instead of silently changed", () => {
-  const question = "x".repeat(4001);
+  const question = "x".repeat(1001);
 
-  assert.match(askQuestionError(question) ?? "", /4,000/);
+  assert.match(askQuestionError(question) ?? "", /1,000/);
   assert.throws(() => boundedAskHistory([{ role: "user", content: question }]), RangeError);
 });
 
