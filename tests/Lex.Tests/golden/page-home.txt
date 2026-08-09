@@ -177,7 +177,7 @@ HTTP 200
     .cat td:first-child { min-width:130px }
   }
 </style></head>
-<body>
+<body class="assistant-enabled">
 <header>
   <!-- The workspace IS the home page, so there is no "Ask" to link to from it, and /find,
        /search and /changed are the no-JavaScript twins of its three tabs rather than separate

@@ -103,3 +103,35 @@ recoverable WIP checkpoint
 
 None requiring user input before Phase 1. Repository or publisher contradictions stop the relevant
 slice for explicit resolution.
+
+---
+
+## Persistent assistant shell — implementation plan
+
+### Slice A: policy and shared controller
+
+1. Freeze route eligibility, session-state and typed-result navigation as pure tests.
+2. Extract the existing conversation/history/clarification flow into one controller used by both
+   workspace and standalone mounts.
+
+Checkpoint: current assistant tests plus the new policy/controller tests pass; no API changes.
+
+### Slice B: responsive shell and server mount
+
+3. Change the launcher to a fixed secondary action with a one-time hint and tab-scoped state.
+4. Dock desktop content through a body state class; render a modal sheet/backdrop with focus
+   containment on narrower screens.
+5. Emit `#assistant-root` and the existing bundle only on research pages; mount exactly one
+   assistant root per document.
+
+Checkpoint: web build, bundle smoke and ASP.NET route tests pass.
+
+### Slice C: release
+
+6. Verify desktop/mobile runtime behavior with Chrome DevTools, run accessibility and console/
+   network checks, then complete correctness/simplification/security review.
+7. DCO commit, push, deploy through the repository's existing production workflow and verify live
+   research and excluded routes plus rollback identity.
+
+Risks are bounded by reusing the existing API/controller, mapping only typed effects to workspace
+URLs, loading no new dependency, and retaining the current deployment rollback path.

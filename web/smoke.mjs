@@ -84,8 +84,7 @@ for (const [re, want, why] of [
   [/Code penal/, true, "the doors did not come from the server-emitted block"],
   [/class="asof"/, true, "the as-of date control is gone; the date IS the product"],
   [/class="asklaunch"/, true, "the assistant launcher is gone"],
-  [/aria-label="Ask about any law"/, true, "the assistant launcher's accessible name diverges from its visible label"],
-  [/class="al-short">Ask</, true, "the compact mobile assistant label is gone"],
+  [/<b>Ask Lex<\/b>/, true, "the assistant launcher's visible and accessible label is gone"],
   [/class="fin-tab/, false, "the query-type tabs are back; one box decides for the reader"],
   [/>\s*A topic\s*</, false, "the old topic tab is back"],
   [/>\s*History\s*</, false, "the History tab is back; the rail is meant to replace it"],
@@ -94,6 +93,26 @@ for (const [re, want, why] of [
 }
 if (controlsWithoutIdentity(html).length > 0) {
   console.error("FAIL - an interactive home control has neither id nor name");
+  process.exit(1);
+}
+
+// Server-rendered legal pages mount the same assistant controller without mounting the workspace.
+// This catches an entry-point change that would leave every permalink with a dead launcher root.
+const standaloneDom = new JSDOM(
+  "<!doctype html><html><body class=\"assistant-enabled\"><div id=\"assistant-root\"></div></body></html>",
+  { runScripts: "outside-only", url: "https://law.soufien.lu/browse" },
+);
+standaloneDom.window.HTMLElement.prototype.scrollTo = () => {};
+standaloneDom.window.fetch = () => Promise.reject(new Error("the closed assistant must not fetch"));
+try { standaloneDom.window.eval(code); }
+catch (error) {
+  console.error(`FAIL - standalone assistant threw on load: ${error.name}: ${error.message}`);
+  process.exit(1);
+}
+await new Promise((resolve) => setTimeout(resolve, 250));
+const standalone = standaloneDom.window.document.getElementById("assistant-root").innerHTML;
+if (!/class="asklaunch"/.test(standalone) || /class="ws"/.test(standalone)) {
+  console.error("FAIL - standalone research page did not mount exactly the assistant launcher");
   process.exit(1);
 }
 // The report is a second surface, not a tab of the first: it must bring its own window, its own

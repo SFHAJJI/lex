@@ -437,6 +437,55 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
         Xunit.Assert.DoesNotContain("&amp;lt;", html);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Assistant_assets_are_emitted_only_when_the_page_requests_them(bool enabled)
+    {
+        var html = Lex.Web.PageShell.Page("https://golden.test", "Page", "<p>body</p>",
+            canonicalPath: "/browse", assetVersion: "abc 123", assistant: enabled);
+
+        Xunit.Assert.Equal(enabled, html.Contains("id=\"assistant-root\"", StringComparison.Ordinal));
+        Xunit.Assert.Equal(enabled, html.Contains("workspace.js?v=abc%20123", StringComparison.Ordinal));
+        Xunit.Assert.Equal(enabled, html.Contains("workspace.css?v=abc%20123", StringComparison.Ordinal));
+        Xunit.Assert.Equal(enabled, html.Contains("class=\"assistant-enabled\"", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Actual_routes_mount_one_assistant_only_on_research_pages()
+    {
+        var researchPages = new[]
+        {
+            "/browse", "/find", "/search?q=travail", "/changed?from=2019-01-01&to=2023-01-01",
+            "/in-force-on?date=2021-01-01", "/stories", "/t-pub/w1",
+            "/t-pub/w1/2022-06-01", "/t-pub/w1/diff/2020-01-01/2022-01-01",
+        };
+        foreach (var path in researchPages)
+        {
+            var html = await _site.Client.GetStringAsync(path);
+            Assert.Contains("class=\"assistant-enabled\"", html);
+            Assert.Single(Regex.Matches(html, "id=\"assistant-root\"").Cast<Match>());
+            Assert.Single(Regex.Matches(html, "/app/workspace\\.js\\?v=").Cast<Match>());
+        }
+
+        var home = await _site.Client.GetStringAsync("/");
+        Assert.Contains("class=\"assistant-enabled\"", home);
+        Assert.DoesNotContain("id=\"assistant-root\"", home);
+        Assert.Single(Regex.Matches(home, "/app/workspace\\.js\\?v=").Cast<Match>());
+
+        foreach (var path in new[]
+        {
+            "/about", "/architecture", "/architecture/next", "/decisions", "/verify",
+            "/developers", "/ai", "/built", "/how-it-works", "/coverage", "/benchmarks",
+        })
+        {
+            var html = await _site.Client.GetStringAsync(path);
+            Assert.DoesNotContain("assistant-enabled", html);
+            Assert.DoesNotContain("assistant-root", html);
+            Assert.DoesNotContain("/app/workspace.js", html);
+        }
+    }
+
     /// <summary>
     /// The sitemap is the one page written for a machine that no human ever opens, which is
     /// exactly why it rots unwatched. Asserted as XML rather than as a snapshot: the corpus grows

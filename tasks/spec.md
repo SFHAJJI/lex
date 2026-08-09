@@ -112,3 +112,102 @@ The final implementation may use an equivalent smaller existing type if one alre
 - Numeric retrieval and latency gates are frozen from corrected baselines before tuning.
 - The existing deployment workflows, not this spec, determine the current signing and promotion
   command line.
+
+---
+
+# Spec: Persistent legal-research assistant shell
+
+## Objective
+
+Make the existing grounded assistant available from every legal-research surface without hiding
+the law or turning the assistant into the primary navigation. First-time visitors see a fixed,
+closed launcher. Opening it docks the panel beside desktop content and uses an accessible modal
+sheet on narrower screens. The same assistant conversation contract, typed `UiEffect` values and
+session history are reused everywhere; no second chat implementation or free-form DOM control is
+introduced.
+
+Research surfaces are `/`, `/browse`, `/find`, `/search`, `/changed`, `/in-force-on`, `/stories`
+and mounted publisher document/version/diff routes. Engineering and portfolio pages such as
+`/about`, `/architecture`, `/decisions`, `/verify`, `/developers`, `/ai`, `/built` and
+`/how-it-works` do not load the assistant.
+
+## Tech stack and commands
+
+- React 18 + TypeScript, mounted into the ASP.NET Core server-rendered shell.
+- Native CSS/media queries, `sessionStorage`, `localStorage` and focus management; no dependency.
+- Web test: `npm test --prefix web`
+- Web production build: `npm run build --prefix web`
+- .NET tests: `dotnet test tests/Lex.Tests/Lex.Tests.csproj --configuration Release`
+
+## Project structure
+
+- `web/src/AskPanel.tsx`: one visual panel for workspace and server-rendered research pages.
+- `web/src/AssistantController.tsx`: shared conversation/session state and streaming contract.
+- `web/src/assistantShell.ts`: persisted panel state, starter prompts and typed-result workspace links.
+- `web/src/main.tsx`: mounts the workspace or the standalone assistant root.
+- `web/src/styles.css`: fixed launcher, desktop dock and mobile modal sheet.
+- `src/Lex.Web/PageShell.cs`: emits the standalone mount only on research routes.
+- `web/src/*.test.ts`, `web/smoke.mjs`, `tests/Lex.Tests`: behavior and integration contracts.
+
+## Code style
+
+Use small pure helpers for policies and keep the model away from browser authority:
+
+```ts
+export function assistantWorkspaceUrl(ui?: UiEffect): string | undefined {
+  if (ui?.diff?.subject.work)
+    return workspaceUrl({ work: ui.diff.subject.work, date: ui.diff.from_date,
+      to: ui.diff.to_date, mode: "compare", space: "law" });
+  return undefined;
+}
+```
+
+The helper maps already-validated typed effects to known workspace state. It never executes a URL,
+selector or instruction supplied in model prose.
+
+## Testing strategy
+
+- Pure unit tests pin first-run default state, session restoration, starter prompts and typed-result
+  URL mapping.
+- Component/static tests pin a fixed launcher, desktop reflow, mobile backdrop/modal semantics,
+  Escape/close behavior and reduced-motion support.
+- Bundle smoke mounts both `#workspace` and `#assistant-root` and proves only one assistant mounts.
+- ASP.NET tests prove research pages emit the assistant assets while engineering pages do not.
+- Chrome DevTools verifies desktop and mobile layout, keyboard focus, console/network health and
+  that legal content is not obscured.
+
+## Boundaries
+
+### Always
+
+- Default closed for a first visit and remember open/minimised state only for the current tab.
+- Keep a visible close action, restore focus to the launcher and trap focus only in modal mode.
+- Reuse `/api/ask/stream`, bounded history, clarification validation and typed `UiEffect` values.
+- Show the existing AI/not-legal-advice notice before any answer.
+
+### Ask first
+
+- Adding a browser dependency, changing the assistant API or changing a legal retrieval contract.
+- Enabling the assistant on engineering/portfolio pages.
+
+### Never
+
+- Open the assistant by default for a first-time visitor.
+- Cover legal content on desktop or allow model prose to manipulate the DOM.
+- Duplicate the assistant protocol or silently submit a starter prompt.
+
+## Success criteria
+
+1. A fixed `Ask Lex` launcher appears on every agreed research route and nowhere else.
+2. First visit is closed; opening/minimising/closing survives navigation in the same tab.
+3. Desktop content reflows beside the open panel. At narrower widths the panel is a modal sheet
+   with backdrop, focus containment, Escape and an explicit close button.
+4. The four approved examples cover point-in-time reading, comparison, article history and
+   corpus-wide change ranking; typed result/follow-up actions open the correct workspace state.
+5. Existing assistant safeguards, history bounds, clarification behavior and all current web/.NET
+   tests remain green, followed by live production verification.
+
+## Open questions
+
+None. The user approved the route policy, closed-by-default behavior, responsive model, prompt set
+and typed-effect boundary before implementation.

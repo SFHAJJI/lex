@@ -18,9 +18,9 @@ public static class HomeEndpoints
         var mcpCore = ctx.Mcp;
         string Page(string title, string body, string? subtitle = null, string nav = "",
                     string? h1 = null, string? canonicalPath = null, string? jsonLd = null,
-                    string? description = null, string? lang = null)
+                    string? description = null, string? lang = null, bool assistant = true)
             => PageShell.Page(ctx.PublicBase, title, body, subtitle, nav, h1, canonicalPath,
-                              jsonLd, description, lang);
+                              jsonLd, description, lang, ctx.Options.CodeCommit, assistant);
 
         app.MapGet("/", () =>
         {

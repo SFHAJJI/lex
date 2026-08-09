@@ -276,25 +276,31 @@ button.pick { cursor: pointer; }
   border-radius:9px;border:1px solid var(--line);background:var(--bg)}
 .fin-body form.sel button[type=submit]{border-radius:9px;padding:11px 20px}
 
-/* ================= the assistant, summoned without covering the law =================
-   Closed, it is a secondary action in the ordinary reading flow. Opened, it becomes a dialog.
-   Keeping the launcher out of the fixed layer prevents it covering search suggestions, evidence
-   controls and footer links on narrow or short viewports. */
-.askslot{display:flex;justify-content:flex-end;margin:-10px 0 16px;min-height:55px}
-.asklaunch{position:static;display:flex;align-items:center;gap:11px;
+/* ================= the assistant, present without sitting on the law =================
+   The closed launcher stays reachable through long legal texts. The server reserves the small
+   footer clearance; an opened desktop panel then docks by shrinking the document column. */
+.assistant-enabled{padding-bottom:84px}
+.askslot{display:contents}
+.asklaunch{position:fixed;right:18px;bottom:18px;z-index:38;display:flex;align-items:center;gap:11px;
   background: var(--fg);color:var(--bg);border:0;border-radius:99px;padding:12px 20px 12px 16px;
   cursor:pointer;font-family:inherit;box-shadow:0 8px 26px rgba(0,0,0,.22);transition:transform .16s,box-shadow .16s}
 .asklaunch:hover{transform:translateY(-2px);box-shadow:0 12px 32px rgba(0,0,0,.28)}
+.askhint{position:fixed;right:18px;bottom:76px;z-index:37;max-width:230px;padding:7px 10px;
+  border:1px solid var(--line);border-radius:8px;background:var(--card);box-shadow:0 7px 24px rgba(0,0,0,.12);
+  color:var(--muted);font-size:12px}
 .al-ic{font-size:15px;opacity:.95}
 .al-t{display:flex;flex-direction:column;line-height:1.2;text-align:left}
 .al-t b{font-size:14px;font-weight:700}
 .al-t small{font-size:11.5px;opacity:.85}
-.al-short{display:none}
 
-.askpanel{position:fixed;right:20px;bottom:20px;z-index:40;width:min(430px,calc(100vw - 32px));
+.askpanel{position:fixed;right:16px;bottom:16px;z-index:40;width:420px;
   max-height:min(76vh,720px);display:flex;flex-direction:column;background:var(--card);
   border:1px solid var(--line);border-radius:14px;box-shadow:0 18px 52px rgba(0,0,0,.26);overflow:hidden}
-.askpanel.min{max-height:none}
+.askpanel.min{width:240px;max-height:none}
+.askbackdrop{display:none}
+body.assistant-open main,body.assistant-open footer{margin-right:452px}
+body.assistant-open main{max-width:960px}
+main,footer{transition:margin-right .18s ease}
 .ap-head{display:flex;align-items:center;gap:8px;padding:11px 12px 11px 15px;background: var(--fg);
   color:var(--bg)}
 .ap-title{font-weight:700;font-size:14.5px;flex:1;display:flex;align-items:center;gap:8px}
@@ -320,14 +326,26 @@ button.pick { cursor: pointer; }
 .backhome{background:none;border:0;padding:0;font:inherit;color:var(--muted);cursor:pointer;margin-right:4px}
 .backhome:hover{color:var(--fg)}
 
+@media(max-width:1099px){
+  body.assistant-modal{overflow:hidden}
+  body.assistant-open main,body.assistant-open footer{margin-right:0}
+  .askbackdrop{display:block;position:fixed;inset:0;z-index:39;background:rgba(7,12,17,.54)}
+  .askpanel{right:0;left:0;bottom:0;width:auto;max-height:min(84dvh,760px);border-radius:16px 16px 0 0;
+    border-width:1px 0 0}
+  .askpanel.min{right:12px;left:auto;bottom:12px;width:230px;border:1px solid var(--line);border-radius:12px}
+}
 @media(max-width:640px){
-  .askpanel{right:8px;left:8px;bottom:8px;width:auto;max-height:82vh}
+  .assistant-enabled{padding-bottom:76px}
+  .asklaunch{right:12px;bottom:12px;padding:11px 16px}
+  .askhint{right:12px;bottom:68px;max-width:210px}
   .asklaunch{padding:11px 16px}
-  .al-wide,.al-t small{display:none}
-  .al-short{display:inline}
+  .al-t small{display:none}
   .fin-hint{font-size:12px}
 }
-@media(prefers-reduced-motion:reduce){.asklaunch:hover{transform:none}}
+@media(prefers-reduced-motion:reduce){
+  .asklaunch:hover{transform:none}
+  main,footer{transition:none}
+}
 
 .ap-next{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
 .ap-chip.next{display:inline-block;width:auto;margin:0;border-radius:99px;padding:6px 12px;font-size:12.5px}
