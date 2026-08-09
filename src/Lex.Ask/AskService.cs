@@ -379,6 +379,21 @@ public sealed class AskService(McpCore core)
         return body;
     }
 
+    internal static string ReplyFor(AgentAnswerDraft grounded, IEnumerable<UiEffect> effects)
+    {
+        var parts = effects.ToList();
+        var outlines = parts.Select(part => part.Provision)
+            .Where(view => view is { Provisions.Count: > 0 })
+            .ToList();
+        if (grounded.Status == AgentAnswerStatus.Refusal
+            && outlines.Count > 0
+            && outlines.SelectMany(view => view!.Provisions)
+                .All(item => string.IsNullOrEmpty(item.Text))
+            && parts.All(part => part.Gap is null))
+            return "The selected instrument is open below. Choose a provision to inspect its exact text.";
+        return AgentAnswerFinalizer.Render(grounded);
+    }
+
     /// <summary>
     /// Names what a tool actually found, so the wait carries information rather than
     /// reassurance. Falls back to the tool's own name only when nothing was returned.
@@ -850,7 +865,7 @@ public sealed class AskService(McpCore core)
                         : "I could not produce an answer. Try rephrasing.";
                 var grounded = await Finalizer().FinalizeAsync(
                     rawUserQuery, reply, evidence.Evidence, ct);
-                reply = AgentAnswerFinalizer.Render(grounded);
+                reply = ReplyFor(grounded, effects);
                 return (200, Body(reply, trace, effects, grounded.Clarification));
             }
             return (200, Body("Tool budget for one question exhausted. Try a narrower question.", trace, effects));

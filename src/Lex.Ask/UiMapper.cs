@@ -105,7 +105,8 @@ public static class UiMapper
             Anchor: S(p, "anchor") ?? "",
             Num: S(p, "num"), Heading: S(p, "heading"),
             Text: S(p, "text") ?? S(p, "text_md") ?? "",
-            Sha: S(p, "text_sha256"))).Where(i => i.Text.Length > 0).ToList();
+            Sha: S(p, "text_sha256"))).Where(i => i.Text.Length > 0
+                || i.Anchor.Length > 0 || !string.IsNullOrWhiteSpace(i.Heading)).ToList();
         if (items.Count == 0) return new UiEffect();
         return new UiEffect(Provision: new ProvisionView(
             Subject: SubjectOf(doc, args),
