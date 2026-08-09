@@ -63,6 +63,8 @@ export default function AssistantController({
       setConversation(history.current);
       setActiveQuestion(question);
       setSaid(questionError);
+      setResultUrl(undefined);
+      setAllowContextualFollowUps(false);
       setSteps([]);
       setClarification(undefined);
       return;
@@ -122,6 +124,7 @@ export default function AssistantController({
 
   const resetConversation = useCallback(() => {
     abort.current?.abort();
+    abort.current = undefined;
     history.current = [];
     setConversation([]);
     setActiveQuestion(undefined);
