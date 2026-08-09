@@ -54,10 +54,10 @@ public class UiEffectTests
     }
 
     [Fact]
-    public void An_unfiltered_ranking_leaves_the_controls_alone()
+    public void An_unfiltered_ranking_has_no_filter_directive()
     {
-        // Null means "do not touch it". An assistant that answers a general question must not
-        // silently reset a filter the reader chose.
+        // The ranking itself owns navigation. No workspace filter means the complete corpus;
+        // the browser state mapper clears any stale scope when it applies this effect.
         var eff = UiMapper.From("changes_in_period", new JsonObject(), Changes(""));
 
         Assert.NotNull(eff.Ranking);
@@ -99,6 +99,65 @@ public class UiEffectTests
         Assert.Equal(5, eff.Ranking!.WorksChanged);
         Assert.Equal(2, eff.Ranking.Rows.Count);
         Assert.Equal(["LU", "EU"], eff.Ranking.Rows.Select(row => row.Jurisdiction));
+    }
+
+    [Fact]
+    public void A_single_publisher_period_stamps_its_jurisdiction_on_every_row()
+    {
+        var result = Changes("");
+        result["envelope"]!["jurisdiction"] = "LU";
+
+        var eff = UiMapper.From("changes_in_period",
+            Args(("jurisdiction", "lu")), result);
+
+        Assert.All(eff.Ranking!.Rows, row => Assert.Equal("LU", row.Jurisdiction));
+    }
+
+    [Fact]
+    public void Separate_publisher_rankings_merge_into_one_cross_corpus_effect()
+    {
+        static RankingView Ranking(string work, string jurisdiction, int changed, int versions) =>
+            new("2024-01-01", "2024-12-31", "by_churn", changed, versions,
+            [
+                new RankingRow(work, $"{jurisdiction} law", versions, versions,
+                    "2024-01-01", "2024-12-31", null, null,
+                    Jurisdiction: jurisdiction),
+            ]);
+
+        var merged = UiEffect.Merge([
+            new UiEffect(Ranking: Ranking("lu-legilux:one", "LU", 210, 240),
+                Workspace: new WorkspaceView(Jurisdiction: "lu")),
+            new UiEffect(Ranking: Ranking("eu-eurlex:two", "EU", 187, 200),
+                Workspace: new WorkspaceView(Jurisdiction: "eu")),
+            new UiEffect(Ranking: Ranking("third-publisher:three", "THIRD", 3, 5),
+                Workspace: new WorkspaceView(Jurisdiction: "third")),
+        ]);
+
+        Assert.Equal(400, merged.Ranking!.WorksChanged);
+        Assert.Equal(445, merged.Ranking.NewVersions);
+        Assert.Equal(["EU", "LU", "THIRD"], merged.Ranking.Rows
+            .Select(row => row.Jurisdiction).Order());
+        Assert.NotNull(merged.Workspace);
+        Assert.Null(merged.Workspace.Jurisdiction);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void An_unfiltered_ranking_dominates_a_redundant_filtered_ranking(bool broadFirst)
+    {
+        static UiEffect Broad() => new(Ranking: new RankingView(
+            "2024-01-01", "2024-12-31", "by_churn", 397, 440, []));
+        static UiEffect Luxembourg() => new(Ranking: new RankingView(
+                "2024-01-01", "2024-12-31", "by_churn", 210, 240, []),
+            Workspace: new WorkspaceView(Jurisdiction: "lu"));
+
+        var merged = UiEffect.Merge(broadFirst
+            ? [Broad(), Luxembourg()]
+            : [Luxembourg(), Broad()]);
+
+        Assert.Equal(397, merged.Ranking!.WorksChanged);
+        Assert.Null(merged.Workspace);
     }
 
     [Fact]
@@ -226,7 +285,7 @@ public class UiEffectTests
     }
 
     [Fact]
-    public void Merging_a_turn_keeps_the_first_of_each_kind()
+    public void A_rendered_ranking_owns_the_final_workspace_scope()
     {
         // One turn can call several tools. The workspace must end in ONE state, not the last one
         // that happened to be written.
@@ -236,8 +295,7 @@ public class UiEffectTests
             new UiEffect(Workspace: new WorkspaceView(Jurisdiction: "eu", SourceClass: "REG")),
         ]);
 
-        Assert.Equal("lu", merged.Workspace!.Jurisdiction);
-        Assert.Equal("LOI,CODE", merged.Workspace.SourceClass);
+        Assert.Null(merged.Workspace);
         Assert.NotNull(merged.Ranking);
         Assert.False(merged.IsEmpty);
     }

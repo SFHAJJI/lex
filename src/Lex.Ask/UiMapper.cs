@@ -176,6 +176,7 @@ public static class UiMapper
     {
         if (o["changes"] is not JsonArray rows || rows.Count == 0) return new UiEffect();
         var offset = o["offset"]?.GetValue<int>() ?? 0;
+        var jurisdiction = S(o["envelope"] as JsonObject, "jurisdiction");
         return new UiEffect(Ranking: new RankingView(
             FromDate: S(o["window"] as JsonObject ?? [], "from") ?? "",
             ToDate: S(o["window"] as JsonObject ?? [], "to") ?? "",
@@ -191,7 +192,7 @@ public static class UiMapper
                 DistinctTexts: c["distinct_texts"]?.GetValue<int>() ?? 0,
                 WordingChanged: c["wording_changed"]?.GetValue<bool>() ?? true,
                 TextComparable: c["text_comparable"]?.GetValue<bool>() ?? false,
-                Jurisdiction: S(c, "jurisdiction"), Hierarchy: S(c, "hierarchy"),
+                Jurisdiction: S(c, "jurisdiction") ?? jurisdiction, Hierarchy: S(c, "hierarchy"),
                 Domains: c["domains"] is JsonArray domains
                     ? domains.Select(d => d?.GetValue<string>() ?? "").Where(d => d.Length > 0).ToList()
                     : null,

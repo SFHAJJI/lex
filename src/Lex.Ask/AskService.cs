@@ -27,6 +27,7 @@ public sealed class AskService(McpCore core)
         private readonly HashSet<string> _resolved = new(StringComparer.Ordinal);
         private readonly List<(string Work, string Title)> _candidates = [];
         private bool _searchObserved;
+        private bool _workIndependentAnswerObserved;
 
         public void ObserveSearch(JsonNode result, bool isRawUserQuery = true)
         {
@@ -94,9 +95,12 @@ public sealed class AskService(McpCore core)
             string.Equals(query.Trim(), NoChoice, StringComparison.Ordinal)
             || string.Equals(query.Trim(), ChoicePrefix + NoChoice, StringComparison.Ordinal);
 
+        public void ObserveWorkIndependentAnswer() => _workIndependentAnswerObserved = true;
+
         public GuardClarification? ClarificationFor(string? attemptedWork)
         {
-            if (_resolved.Count > 0 || _candidates.Count == 0) return null;
+            if (_workIndependentAnswerObserved || _resolved.Count > 0 || _candidates.Count == 0)
+                return null;
             var attempted = attemptedWork is null ? null : WorkKey(attemptedWork);
             var ordered = _candidates
                 .OrderByDescending(candidate => candidate.Work == attempted)
@@ -639,7 +643,9 @@ public sealed class AskService(McpCore core)
             });
             var rawEffect = UiMapper.From("search", rawArgs, rawResult);
             if (!rawEffect.IsEmpty) effects.Add(rawEffect);
-            onStep?.Invoke(Describe("search", rawArgs, rawEffect, rawDocs));
+            // This is an authority preflight, not a research action chosen for the question.
+            // Keep it in the trace for auditability without presenting unrelated title matches
+            // as findings to the reader.
             foreach (var d in rawDocs.OfType<JsonObject>())
                 if (d["lex_id"]?.GetValue<string>() is { } lexId)
                 {
@@ -806,6 +812,8 @@ public sealed class AskService(McpCore core)
                             entry["docs"] = docs;
                             var eff = UiMapper.From(name, args, node);
                             if (!eff.IsEmpty) effects.Add(eff);
+                            if (eff.Ranking is not null || eff.InForce is not null)
+                                resolutionGuard.ObserveWorkIndependentAnswer();
                             onStep?.Invoke(Describe(name, args, eff, docs));
                             // A list view is shown as-is; it needs no enrichment. Without this
                             // the model fetches every ranked row to "confirm" it — eleven calls

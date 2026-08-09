@@ -5,6 +5,7 @@ import { CitedBy, Empty, Gap, InForce, Provision, Ranking, VersionRail, hasView,
 import { Compare } from "./Compare";
 import { LawPicker, shorten } from "./pickers";
 import AssistantController from "./AssistantController";
+import { assistantWorkspaceState } from "./assistantShell";
 import Search from "./Search";
 import Period from "./Period";
 import Coach, { COACH_KEY } from "./Coach";
@@ -326,13 +327,17 @@ export default function App() {
                space: "law",
                ...(r.ui!.diff ? { date: r.ui!.diff.from_date, to: r.ui!.diff.to_date } : {}) });
           navigated = true;
-        } else if (r.ui!.ranking) {
-          go({ ...refinement, work: undefined, from: r.ui!.ranking.from_date, until: r.ui!.ranking.to_date,
-               order: r.ui!.ranking.order as State["order"], mode: "read", space: "time" });
+        } else if (r.ui!.ranking || r.ui!.in_force) {
+          setPage(r.ui!.workspace?.page ?? 0);
+          go(assistantWorkspaceState(r.ui)!);
           navigated = true;
         }
       }
-      if (!navigated && Object.keys(refinement).length > 0) go(refinement);
+      if (!navigated) {
+        const destination = assistantWorkspaceState(r.ui);
+        if (destination) go(destination);
+        else if (Object.keys(refinement).length > 0) go(refinement);
+      }
   }, [go]);
 
   // Open on the text in force TODAY, never on the oldest version — the oldest is the one most

@@ -35,18 +35,87 @@ public sealed record UiEffect(
     {
         UiEffect acc = new();
         foreach (var p in parts)
+        {
+            var ranking = acc.Ranking;
+            var workspace = acc.Workspace;
+            if (p.Ranking is not null && ranking is null)
+            {
+                ranking = p.Ranking;
+                workspace = p.Workspace;
+            }
+            else if (p.Ranking is not null && SameRankingQuery(ranking!, p.Ranking)
+                     && workspace is null)
+            {
+                // The existing call already covers the unfiltered corpus. A narrower repeat
+                // cannot make that answer more complete and must not narrow its workspace.
+            }
+            else if (p.Ranking is not null && SameRankingQuery(ranking!, p.Ranking)
+                     && p.Workspace is null)
+            {
+                ranking = p.Ranking;
+                workspace = null;
+            }
+            else if (ranking is not null && p.Ranking is not null
+                && CanMergePublisherRankings(ranking, p.Ranking, workspace, p.Workspace))
+            {
+                ranking = MergePublisherRankings(ranking, p.Ranking);
+                workspace = workspace! with { Jurisdiction = null };
+            }
+            else if (ranking is null)
+                workspace ??= p.Workspace;
             acc = acc with
             {
                 Provision = acc.Provision ?? p.Provision,
                 Diff = acc.Diff ?? p.Diff,
                 History = acc.History ?? p.History,
-                Ranking = acc.Ranking ?? p.Ranking,
+                Ranking = ranking,
                 InForce = acc.InForce ?? p.InForce,
                 CitedBy = acc.CitedBy ?? p.CitedBy,
-                Workspace = acc.Workspace ?? p.Workspace,
+                Workspace = workspace,
                 Gap = acc.Gap ?? p.Gap,
             };
+        }
         return acc;
+    }
+
+    private static bool SameRankingQuery(RankingView first, RankingView second) =>
+        first.FromDate == second.FromDate
+        && first.ToDate == second.ToDate
+        && first.Order == second.Order;
+
+    private static bool CanMergePublisherRankings(
+        RankingView first,
+        RankingView second,
+        WorkspaceView? firstScope,
+        WorkspaceView? secondScope) =>
+        SameRankingQuery(first, second)
+        && firstScope is not null
+        && secondScope is not null
+        && !string.IsNullOrWhiteSpace(secondScope.Jurisdiction)
+        && firstScope with { Jurisdiction = null, Page = null }
+            == secondScope with { Jurisdiction = null, Page = null }
+        && (firstScope.Jurisdiction is { Length: > 0 } firstJurisdiction
+            ? !string.Equals(firstJurisdiction, secondScope.Jurisdiction,
+                StringComparison.OrdinalIgnoreCase)
+            : first.Rows.All(row => !string.IsNullOrWhiteSpace(row.Jurisdiction))
+              && !first.Rows.Any(row => string.Equals(row.Jurisdiction,
+                  secondScope.Jurisdiction, StringComparison.OrdinalIgnoreCase)));
+
+    private static RankingView MergePublisherRankings(RankingView first, RankingView second)
+    {
+        var rows = first.Rows.Concat(second.Rows)
+            .DistinctBy(row => row.Work)
+            .OrderByDescending(row => first.Order == "by_churn"
+                ? row.VersionsInPeriod : 0)
+            .ThenByDescending(row => row.LastChange, StringComparer.Ordinal)
+            .Take(50)
+            .ToList();
+        return first with
+        {
+            WorksChanged = first.WorksChanged + second.WorksChanged,
+            NewVersions = first.NewVersions + second.NewVersions,
+            Rows = rows,
+        };
     }
 }
 
@@ -88,7 +157,8 @@ public sealed record CitedByRow(string Work, string? Title, string ValidFrom, st
                                 string? Num, string? Permalink, string? Jurisdiction = null);
 
 /// <summary>
-/// How the workspace should be set, as opposed to what it should show. Null means "leave it".
+/// The complete filter scope for a workspace navigation, as opposed to what it should show.
+/// A null Workspace means no filter directive; null fields inside one mean that filter is clear.
 /// </summary>
 public sealed record WorkspaceView(
     string? Jurisdiction = null,

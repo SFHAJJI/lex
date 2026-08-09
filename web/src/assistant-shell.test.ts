@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   STARTER_PROMPTS,
+  assistantWorkspaceState,
   assistantWorkspaceUrl,
   parseAssistantPanelState,
 } from "./assistantShell.ts";
@@ -51,4 +52,51 @@ test("typed effects map to bounded workspace state rather than model-authored li
   assert.equal(assistantWorkspaceUrl({ gap: {
     status: "no_result", explanation: "No result", available: [],
   } }), undefined);
+});
+
+test("aggregate results replace stale workspace scope with the exact tool scope", () => {
+  const crossCorpus = assistantWorkspaceState({
+    ranking: {
+      from_date: "2024-01-01", to_date: "2024-12-31", order: "by_churn",
+      works_changed: 397, new_versions: 440, rows: [],
+    },
+  });
+  assert.deepEqual(crossCorpus, {
+    space: "time", q: undefined, asOf: undefined, work: undefined, date: undefined,
+    to: undefined, anchor: undefined, mode: "read", from: "2024-01-01",
+    until: "2024-12-31", order: "by_churn", retrieval: undefined,
+    jurisdiction: undefined, hierarchy: undefined, domain: undefined,
+    sourceClass: undefined, actForm: undefined, bindingStatus: undefined,
+    language: undefined,
+  });
+
+  const luxembourgOnly = {
+    ranking: {
+      from_date: "2024-01-01", to_date: "2024-12-31", order: "by_churn",
+      works_changed: 210, new_versions: 240, rows: [],
+    },
+    workspace: { jurisdiction: "lu", source_class: "LOI" },
+  };
+  assert.equal(assistantWorkspaceUrl(luxembourgOnly),
+    "/?space=time&from=2024-01-01&until=2024-12-31&order=by_churn&jurisdiction=lu&sourceClass=LOI");
+});
+
+test("dated lists and filter-only effects share the same deterministic workspace mapping", () => {
+  const inForce = {
+    in_force: { date: "2024-06-30", total: 12, rows: [] },
+    workspace: { jurisdiction: "eu", hierarchy: "secondary_eu_law" },
+  };
+  assert.deepEqual(assistantWorkspaceState(inForce), {
+    space: "search", q: undefined, asOf: "2024-06-30", work: undefined,
+    date: undefined, to: undefined, anchor: undefined, mode: "read", from: undefined,
+    until: undefined, order: undefined, retrieval: undefined, jurisdiction: "eu",
+    hierarchy: "secondary_eu_law", domain: undefined, sourceClass: undefined,
+    actForm: undefined, bindingStatus: undefined, language: undefined,
+  });
+  assert.equal(assistantWorkspaceUrl(inForce),
+    "/?space=search&asOf=2024-06-30&jurisdiction=eu&hierarchy=secondary_eu_law");
+
+  assert.equal(assistantWorkspaceUrl({ workspace: {
+    jurisdiction: "lu", source_class: "LOI,CODE",
+  } }), "/?space=search&jurisdiction=lu&sourceClass=LOI%2CCODE");
 });

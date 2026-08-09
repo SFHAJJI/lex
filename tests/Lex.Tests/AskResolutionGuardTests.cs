@@ -89,6 +89,26 @@ public sealed class AskResolutionGuardTests
     }
 
     [Fact]
+    public void Aggregate_result_answers_without_confirming_an_unrelated_search_candidate()
+    {
+        var guard = new AskService.WorkResolutionGuard();
+        var result = SearchResult("not_requested");
+        result[0]!["hits"] = new JsonArray
+        {
+            WeakHit("lu-legilux:unrelated:2024-04-21", "Unrelated title match"),
+        };
+        guard.ObserveSearch(result, isRawUserQuery: true);
+
+        Assert.NotNull(guard.ClarificationFor(null));
+
+        guard.ObserveWorkIndependentAnswer();
+
+        Assert.Null(guard.ClarificationFor(null));
+        Assert.False(guard.Allows("as_of",
+            new JsonObject { ["work"] = "lu-legilux:unrelated" }));
+    }
+
+    [Fact]
     public void Model_reformulation_can_supply_choices_without_authorizing_one()
     {
         var guard = new AskService.WorkResolutionGuard();
