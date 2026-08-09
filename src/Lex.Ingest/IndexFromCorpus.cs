@@ -268,7 +268,9 @@ public static class IndexFromCorpus
             using var p = Process.Start(psi)!;
             var output = p.StandardOutput.ReadToEnd().Trim();
             p.WaitForExit(10_000);
-            return p.ExitCode == 0 && output.Length >= 7 ? output[..7] : "uncommitted";
+            return p.ExitCode == 0 && output.Length == 40 && output.All(Uri.IsHexDigit)
+                ? output.ToLowerInvariant()
+                : "uncommitted";
         }
         catch { return "uncommitted"; }
     }

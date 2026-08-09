@@ -1,5 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Diagnostics;
+using System.Reflection;
 using Lex.Index;
 using Lex.Ingest;
 using Microsoft.Data.Sqlite;
@@ -9,6 +11,35 @@ namespace Lex.Tests;
 public sealed class IndexStampVerifierTests : IDisposable
 {
     private readonly List<string> _files = [];
+
+    [Fact]
+    public void Corpus_stamp_uses_the_full_git_commit_required_by_strict_promotion()
+    {
+        var root = new DirectoryInfo(AppContext.BaseDirectory);
+        while (root is not null
+               && !Directory.Exists(Path.Combine(root.FullName, ".git"))
+               && !File.Exists(Path.Combine(root.FullName, ".git")))
+            root = root.Parent;
+        Assert.NotNull(root);
+        var start = new ProcessStartInfo("git", "rev-parse HEAD")
+        {
+            WorkingDirectory = root.FullName,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        };
+        using var process = Process.Start(start)!;
+        var expected = process.StandardOutput.ReadToEnd().Trim().ToLowerInvariant();
+        process.WaitForExit(10_000);
+        Assert.Equal(0, process.ExitCode);
+
+        var method = typeof(IndexFromCorpus).GetMethod(
+            "GitCommit", BindingFlags.NonPublic | BindingFlags.Static);
+        Assert.NotNull(method);
+        var actual = Assert.IsType<string>(method.Invoke(null, [root.FullName]));
+
+        Assert.Equal(40, actual.Length);
+        Assert.Equal(expected, actual);
+    }
 
     [Fact]
     public void Strict_promotion_binds_collection_corpus_content_and_enrichment()
