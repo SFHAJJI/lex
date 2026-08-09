@@ -246,10 +246,10 @@ and <b>scales to zero</b>.</p>
 <tr><td><b>Refusals are part of the API</b></td>
     <td>Seven typed refusal codes instead of empty results. A caller can distinguish "no such
     law", "no version that day" and "text withheld". Cost: more surface to test.</td></tr>
-<tr><td><b>One research agent, deterministic authority</b></td>
-    <td>Agent Framework may plan compact searches and synthesize returned evidence. Application
-    code resolves named works, authorizes work-specific tools, validates citations, preserves
-    typed gaps and conditionally judges factual prose. Cost: added model latency and evaluation.</td></tr>
+<tr><td><b>Bounded retrieval, deterministic authority</b></td>
+    <td>Application code resolves named works and authorizes work-specific tools. A bounded
+    tool-calling loop gathers MCP evidence; Agent Framework then composes claim-typed prose and
+    runs the conditional judge. Citations and typed gaps remain deterministic application contracts.</td></tr>
 <tr><td><b>Nightly commits nothing when unsure</b></td>
     <td>A &gt;5% drop in works, or a re-derivation that is not byte-identical, aborts the run.
     A partial upstream response must never rewrite history.</td></tr>

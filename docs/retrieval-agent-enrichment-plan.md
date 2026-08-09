@@ -62,10 +62,11 @@ AI assistant
   -> conditional grounding judge
 ```
 
-There is one Microsoft Agent Framework legal-research agent, not a hierarchy of peer agents.
-Agent Framework is a fixed implementation boundary; the experiment selects its cleanest
-orchestration, memory and tool contracts rather than deciding whether to use it. Exact navigation,
-publisher text, timelines and rendered lists bypass generation and therefore bypass the judge.
+The spike selected a single Microsoft Agent Framework legal-research agent rather than a hierarchy
+of peer agents. Production retained the stronger deterministic boundary discovered during review:
+application code owns raw-user resolution, tool authorization and the bounded retrieval loop;
+Agent Framework owns claim-typed evidence composition and the separate conditional grounding judge.
+Exact navigation, publisher text, timelines and rendered lists bypass generation and the judge.
 
 ## Enrichment workbench
 
@@ -267,7 +268,7 @@ The plan can graduate only when:
 - latency, token and Azure-cost measurements justify the selected agent variant.
 
 The publisher-first catalog, reviewed aliases, query decomposition, deterministic clarification,
-tool authorization, grounded Agent Framework path and jurisdiction-scoped result experience passed
+tool authorization, bounded retrieval, Agent Framework evidence composition and conditional judging passed
 their production gates. The signed release benchmark did not pass the hybrid-default gate, so
 keyword remains the default and local hybrid remains an explicit preview. Model-derived weak
 discovery is absent from the production enrichment artifact. Failure of either future gate means
@@ -291,7 +292,7 @@ The experiment was reimplemented through small reviewed changes and deployed on 
 1. provenance-aware enrichment contract, offline LLM workbench and work-level FTS;
 2. ranking and authoritative-identity gates;
 3. deterministic subject resolver and typed assistant contract;
-4. selected Microsoft Agent Framework execution, bounded memory and conditional judge;
+4. bounded tool execution, Agent Framework typed composition, bounded memory and conditional judge;
 5. jurisdiction-first result/facet UX;
 6. full signed EU and Luxembourg index rebuild, public benchmarks, candidate deployment and
    controlled promotion.

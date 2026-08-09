@@ -60,14 +60,14 @@
     {
       "id": "M8",
       "title": "Size-gated local index hosting",
-      "status": "shipped",
-      "outcome": "Keep small verified indexes in Container Apps, but promote oversized releases from Blob onto a VM-managed local disk before traffic cutover."
+      "status": "building",
+      "outcome": "Small verified indexes run locally in Container Apps. Oversized releases remain deployment-blocked until the zero-traffic VM-managed local-disk path is implemented and measured."
     },
     {
       "id": "M9",
       "title": "Reviewed search enrichment and legal-research agent",
       "status": "shipped",
-      "outcome": "Publisher metadata, reviewed aliases, deterministic work resolution, guarded Agent Framework research, bounded memory and jurisdiction-first results are live without changing authoritative legal text. Model-derived weak discovery remains excluded from production retrieval."
+      "outcome": "Publisher metadata, reviewed aliases, deterministic work resolution, bounded retrieval, Agent Framework evidence composition and judging, bounded memory and jurisdiction-first results are live without changing authoritative legal text. Model-derived weak discovery remains excluded from production retrieval."
     }
   ],
   "decisions": [
@@ -101,11 +101,11 @@
     {
       "id": "D55",
       "title": "Move the host when the measured index outgrows the image",
-      "status": "shipped",
+      "status": "building",
       "choice": "Keep query files local: use Container Apps for a small verified set, and promote releases above the recorded size or runtime gates from Blob onto a VM-managed disk.",
       "alternative": "Commit permanently to either Container Apps, a VM, Blob range reads or an Azure Files-mounted SQLite database regardless of measurements.",
       "reason": "Blob is the durable distribution layer, while SQLite FTS and memory-mapped vectors require local random access. The completed artifact, rollback footprint and runtime gates determine the cheapest correct host.",
-      "cost": "The deployment pipeline supports two hosts and the VM path adds operating-system patching when activated."
+      "cost": "The pipeline blocks releases that exceed the active Container Apps path. A second verified VM deployment path and operating-system patching remain to be implemented before such a release can receive traffic."
     },
     {
       "id": "D56",
@@ -289,12 +289,12 @@
     },
     {
       "id": "D76",
-      "title": "Keep navigation deterministic and use one Agent Framework legal-research agent",
+      "title": "Keep retrieval authority deterministic and use Agent Framework for grounded composition",
       "status": "shipped",
-      "choice": "Resolve named works deterministically, then use one Microsoft Agent Framework research agent over compact read-only MCP evidence with typed clarification, bounded memory, citation validation and a conditional judge; the experiment selects the orchestration, not the framework.",
-      "alternative": "Pass every user sentence to one search call, make the chatbot the primary navigator, or introduce a hierarchy of peer agents.",
-      "reason": "Exact lookup should not become stochastic, while descriptive legal problems need iterative query planning and evidence validation that a search box cannot perform.",
-      "cost": "The agent adds model latency, tokens, session/privacy handling and evaluation work. Deterministic resolution, tool authorization, citation checks and bounded clarification remain application code rather than model discretion."
+      "choice": "Resolve the raw user query and authorize work-specific tools in application code, run a bounded tool-calling retrieval loop over the shared MCP core, then use Agent Framework for claim-typed evidence composition and the conditional grounding judge.",
+      "alternative": "Give a model authority over work identity and citations, make the chatbot the primary navigator, or introduce a hierarchy of peer research agents.",
+      "reason": "Exact lookup and tool permission must not become stochastic, while synthesized prose benefits from structured composition and an independent evidence check.",
+      "cost": "The bounded retrieval loop and Framework composer/judge add model latency, tokens, session/privacy handling and evaluation work. The planner is application-hosted rather than a single Agent Framework research agent."
     },
     {
       "id": "D77",

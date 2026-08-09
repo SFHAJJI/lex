@@ -187,13 +187,16 @@ history to hold. The fallback ladder for XML-less versions is spec D49.
 ## Run it
 
 ```
+LEX_CODE_COMMIT=$(git rev-parse HEAD)
+
 # ingest (paced, sequential; official open-data channels only)
 dotnet run --project src/Lex.Ingest -- ingest --publisher lu-legilux --corpus ../lex-corpus-lu-legilux
 
 # derive the per-article layer, build the signed index
 dotnet run --project src/Lex.Ingest -- derive --publisher lu-legilux --corpus ../lex-corpus-lu-legilux --out ../lex-articles
 dotnet run --project src/Lex.Ingest -- index --corpus ../lex-corpus-lu-legilux --articles ../lex-articles \
-    --out indexes/index-lu-legilux.db --keyfile signing-key.pem
+    --out indexes/index-lu-legilux.db --keyfile signing-key.pem \
+    --code-commit "$LEX_CODE_COMMIT"
 
 # resumable large semantic backfill on a reviewed Windows DirectML adapter
 dotnet build src/Lex.Ingest -c Release -p:UseDirectML=true
@@ -203,7 +206,8 @@ src/Lex.Ingest/bin/Release/net10.0/Lex.Ingest index \
     --vectors indexes/index-eu-eurlex.vectors \
     --embedding-directml-device 1 --embedding-batch-size 256 \
     --embedding-max-batch-tokens 32768 \
-    --embedding-cache build-cache/eu-eurlex-embeddings.db
+    --embedding-cache build-cache/eu-eurlex-embeddings.db \
+    --code-commit "$LEX_CODE_COMMIT"
 
 # The chunker fixes legal-text boundaries before the GPU groups immutable chunks
 # into 32/64/128/256/512-token inference buckets. A fixed padded-token budget reduces
@@ -239,9 +243,10 @@ fusion when verified vectors are mounted; no generative model participates in
 retrieval. Official work metadata and reviewed aliases such as `RGPD`, `GDPR`,
 `DORA`, and `AI Act` resolve deterministically. Model-derived weak discovery is
 not active, and keyword remains the production default because the signed hybrid
-holdout gate has not passed. The optional Agent Framework assistant runs over
-the same tools, while application code retains work resolution, tool authorization,
-citation and gap authority. `coverage` exists to say what Lex does **not** have, because a system
+holdout gate has not passed. The optional assistant runs a bounded retrieval loop over
+the same tools, then uses Agent Framework for claim-typed composition and a conditional
+grounding judge. Application code retains work resolution, tool authorization, citation
+and gap authority. `coverage` exists to say what Lex does **not** have, because a system
 that cannot state its own gaps cannot be trusted with a completeness question.
 
 ## Contributing
