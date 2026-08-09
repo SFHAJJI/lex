@@ -274,6 +274,7 @@ public sealed class AskResolutionGuardTests
             {
                 ["lex_id"] = "lu-legilux:unrelated:2026-01-01",
                 ["anchor"] = "art_7",
+                ["title"] = "Unrelated Act",
                 ["match_reasons"] = new JsonArray("article_intent"),
             },
         };
@@ -282,6 +283,23 @@ public sealed class AskResolutionGuardTests
 
         Assert.False(guard.Allows("as_of",
             new JsonObject { ["work"] = "lu-legilux:unrelated" }));
+        var clarification = Assert.IsType<AskService.WorkResolutionGuard.GuardClarification>(
+            guard.ClarificationFor(null));
+        Assert.Equal("lu-legilux:unrelated", clarification.Choices[0].Value);
+    }
+
+    [Fact]
+    public void Only_an_article_without_a_strong_work_is_a_preplanning_ambiguity()
+    {
+        var bare = SearchResult("not_requested");
+        bare[0]!["query_plan"]!["article_number"] = "7";
+        bare[0]!["query_plan"]!["has_strong_work_match"] = false;
+        var named = bare.DeepClone();
+        named[0]!["query_plan"]!["has_strong_work_match"] = true;
+
+        Assert.True(AskService.HasUnscopedArticleIntent(bare));
+        Assert.False(AskService.HasUnscopedArticleIntent(named));
+        Assert.False(AskService.HasUnscopedArticleIntent(SearchResult("not_requested")));
     }
 
     [Fact]

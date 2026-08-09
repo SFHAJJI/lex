@@ -87,7 +87,10 @@ public sealed class AskService(McpCore core)
                         }
                 if (collectCandidates && response["hits"] is JsonArray candidateHits)
                     foreach (var hit in candidateHits.OfType<JsonObject>()
-                                 .Where(item => item["anchor"]?.GetValue<string>() is not { Length: > 0 }))
+                                 // A bare article intent may return real article rows from many
+                                 // works. They are useful clarification candidates, but without
+                                 // direct lexical/semantic evidence they cannot authorize a work.
+                                 .Where(item => !HasDirectProvisionEvidence(item)))
                         if (hit["lex_id"]?.GetValue<string>() is { } lexId)
                             AddCandidate(latestCandidates, WorkKey(lexId),
                                 hit["title"]?.GetValue<string>() ?? "");
@@ -250,6 +253,14 @@ public sealed class AskService(McpCore core)
         }
         return prior.ResolvedWorks.Order(StringComparer.Ordinal).ToArray();
     }
+
+    internal static bool HasUnscopedArticleIntent(JsonNode result) =>
+        (result is JsonArray responses
+            ? responses.OfType<JsonObject>()
+            : result is JsonObject response ? [response] : [])
+        .Any(item => item["query_plan"] is JsonObject plan
+            && plan["article_number"]?.GetValue<string>() is { Length: > 0 }
+            && plan["has_strong_work_match"]?.GetValue<bool>() != true);
 
     private static string SystemPrompt(string host, int toolCount) => $"""
         You are the answer layer of Lex, a point-in-time retrieval system for consolidated
@@ -804,6 +815,13 @@ public sealed class AskService(McpCore core)
                     if (parts.Length >= 2)
                         worksFound.TryAdd($"{parts[0]}:{parts[1]}", d["title"]?.GetValue<string>() ?? "");
                 }
+            // An article number without a law is already a complete, deterministic ambiguity:
+            // many instruments contain that article. Do not spend a model round rediscovering
+            // the same boundary or turn it into a generic evidence refusal.
+            if (HasUnscopedArticleIntent(rawResult)
+                && resolutionGuard.ClarificationFor(null) is { } articleClarification)
+                return (200, Body(articleClarification.Display.Question, trace, [],
+                    articleClarification.Display, articleClarification.Choices));
             messages.Insert(1, new JsonObject
             {
                 ["role"] = "system",
