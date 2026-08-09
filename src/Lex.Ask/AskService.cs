@@ -797,7 +797,7 @@ public sealed class AskService(McpCore core)
                             var node = core.CallTool(name, args);
                             if (name == "search") resolutionGuard.ObserveSearch(node, isRawUserQuery: false);
                             var (st, docs) = Summarize(node);
-                            evidence.Observe(name, st, docs, node);
+                            evidence.Observe(name, st, docs, node, args);
                             if (name is "as_of" or "timeline" or "diff" or "article_history" or "in_force_on")
                                 textToolUsed = true;
                             toolSpan?.SetTag("lex.status", st ?? "ok");

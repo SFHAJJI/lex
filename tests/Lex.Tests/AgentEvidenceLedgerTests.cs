@@ -55,6 +55,60 @@ public sealed class AgentEvidenceLedgerTests
     }
 
     [Fact]
+    public void Exact_as_of_reads_preserve_the_requested_date_to_selected_version_binding()
+    {
+        var ledger = new AgentEvidenceLedger();
+        ledger.Observe("as_of", "ok",
+        [
+            new JsonObject
+            {
+                ["lex_id"] = "eu-eurlex:32016r0679:2016-05-04",
+                ["title"] = "General Data Protection Regulation",
+                ["valid_from"] = "2016-05-04",
+                ["valid_to"] = null,
+                ["permalink"] = "https://law.soufien.lu/eu-eurlex/32016r0679/2016-05-04",
+                ["pinpoints"] = new JsonArray
+                {
+                    new JsonObject
+                    {
+                        ["anchor"] = "art_6",
+                        ["text_sha256"] = "abc123",
+                        ["quote"] = "Processing shall be lawful only if...",
+                        ["permalink"] = "https://law.soufien.lu/eu-eurlex/32016r0679/2016-05-04#art_6",
+                    },
+                },
+            },
+        ], new JsonObject
+        {
+            ["envelope"] = new JsonObject
+            {
+                ["status"] = "ok",
+                ["timeline_semantics"] = "official_consolidation_state",
+            },
+        }, new JsonObject
+        {
+            ["work"] = "eu-eurlex:32016r0679",
+            ["date"] = "2021-01-01",
+            ["mode"] = "select",
+            ["anchors"] = "art_6",
+        });
+
+        var timeline = Assert.Single(ledger.Evidence,
+            item => item.Kind == AgentEvidenceKind.Timeline);
+        var legalText = Assert.Single(ledger.Evidence,
+            item => item.Kind == AgentEvidenceKind.LegalText);
+        Assert.Equal("2021-01-01", timeline.Date);
+        Assert.Contains("\"requested_date\":\"2021-01-01\"", timeline.Excerpt,
+            StringComparison.Ordinal);
+        Assert.Contains("\"selected_valid_from\":\"2016-05-04\"", timeline.Excerpt,
+            StringComparison.Ordinal);
+        Assert.Contains("\"timeline_semantics\":\"official_consolidation_state\"",
+            timeline.Excerpt, StringComparison.Ordinal);
+        Assert.Equal("2016-05-04", legalText.Date);
+        Assert.Equal("art_6", legalText.Anchor);
+    }
+
+    [Fact]
     public void Outline_reads_support_timeline_claims_not_text_claims()
     {
         var ledger = new AgentEvidenceLedger();
