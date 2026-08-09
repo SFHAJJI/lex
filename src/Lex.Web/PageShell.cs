@@ -35,6 +35,21 @@ public static class PageShell
         return sb.ToString();
     }
 
+    private static string AssistantHead(string? path, string? assetVersion, bool requested)
+    {
+        if (!requested || path == "/") return "";
+        var version = Uri.EscapeDataString(assetVersion ?? "dev");
+        return $"{Environment.NewLine}<link rel=\"stylesheet\" href=\"/app/workspace.css?v={version}\">";
+    }
+
+    private static string AssistantMount(string? path, string? assetVersion, bool requested)
+    {
+        if (!requested || path == "/") return "";
+        var version = Uri.EscapeDataString(assetVersion ?? "dev");
+        return $"{Environment.NewLine}<div id=\"assistant-root\"></div>"
+             + $"{Environment.NewLine}<script type=\"module\" src=\"/app/workspace.js?v={version}\"></script>";
+    }
+
     /// <summary>HTML-encode. Never interpolate publisher text into markup without it.</summary>
     public static string H(string? s) => System.Net.WebUtility.HtmlEncode(s ?? "");
 
@@ -62,7 +77,8 @@ public static class PageShell
     public static string Page(string publicBase, string title, string body,
                                   string? subtitle = null, string nav = "", string? h1 = null,
                                   string? canonicalPath = null, string? jsonLd = null,
-                                  string? description = null, string? lang = null) => $$"""
+                                  string? description = null, string? lang = null,
+                                  string? assetVersion = null, bool assistant = false) => $$"""
         <!DOCTYPE html>
         <html lang="{{H(lang ?? "en")}}">
         <head>
@@ -77,7 +93,7 @@ public static class PageShell
         <meta property="og:site_name" content="Lex">
         <meta property="og:image" content="{{publicBase}}/og.png">
         <meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
-        <meta name="twitter:card" content="summary_large_image">{{Extras(publicBase, canonicalPath, jsonLd)}}
+        <meta name="twitter:card" content="summary_large_image">{{Extras(publicBase, canonicalPath, jsonLd)}}{{AssistantHead(canonicalPath, assetVersion, assistant)}}
         <meta name="twitter:image" content="{{publicBase}}/og.png">
         <link rel="preload" href="/fonts/IBMPlexSans-latin.woff2" as="font" type="font/woff2" crossorigin>
         <link rel="preload" href="/fonts/SourceSerif4-latin.woff2" as="font" type="font/woff2" crossorigin>
@@ -238,7 +254,7 @@ public static class PageShell
             .cat td:first-child { min-width:130px }
           }
         </style></head>
-        <body>
+        <body{{(assistant ? " class=\"assistant-enabled\"" : "")}}>
         <header>
           <!-- The workspace IS the home page, so there is no "Ask" to link to from it, and /find,
                /search and /changed are the no-JavaScript twins of its three tabs rather than separate
@@ -285,7 +301,7 @@ public static class PageShell
           EU data: © European Union, reuse with attribution (Commission Decision 2011/833/EU);
           <b>consolidated texts have no legal effect</b>, only acts published in the Official Journal are authentic.
           · <a href="https://github.com/SFHAJJI/lex">source</a>
-        </footer>
+        </footer>{{AssistantMount(canonicalPath, assetVersion, assistant)}}
         </body></html>
         """;
 }

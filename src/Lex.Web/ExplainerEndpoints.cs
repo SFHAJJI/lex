@@ -19,9 +19,9 @@ public static class ExplainerEndpoints
         // Program.cs. That is the property the golden snapshots check.
         string Page(string title, string body, string? subtitle = null, string nav = "",
                     string? h1 = null, string? canonicalPath = null, string? jsonLd = null,
-                    string? description = null, string? lang = null)
+                    string? description = null, string? lang = null, bool assistant = false)
             => PageShell.Page(ctx.PublicBase, title, body, subtitle, nav, h1, canonicalPath,
-                              jsonLd, description, lang);
+                              jsonLd, description, lang, ctx.Options.CodeCommit, assistant);
         var readers = ctx.Registry.All;
         var publicBase = ctx.PublicBase;
         var mcpCore = ctx.Mcp;
@@ -1260,7 +1260,7 @@ public static class ExplainerEndpoints
                 """);
             return Results.Content(Page("Stories, watch the law move", sb.ToString(),
                 "real histories from the Luxembourg and reviewed EU corpora, computed live", "find",
-                canonicalPath: "/stories"), "text/html");
+                canonicalPath: "/stories", assistant: true), "text/html");
         });
 
         return app;

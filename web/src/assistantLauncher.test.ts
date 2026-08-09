@@ -4,19 +4,21 @@ import test from "node:test";
 
 const css = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
 
-test("the closed assistant launcher stays in flow while the opened panel may overlay", () => {
+test("the closed launcher is fixed and the desktop panel reserves content space", () => {
   const launcherRules = [...css.matchAll(/\.asklaunch\s*\{([^}]*)\}/g)].map((match) => match[1]);
-  const slot = css.match(/\.askslot\s*\{([^}]*)\}/)?.[1] ?? "";
   const panel = css.match(/\.askpanel\s*\{([^}]*)\}/)?.[1] ?? "";
-  const slotHeight = Number(slot.match(/min-height\s*:\s*(\d+)px/)?.[1] ?? 0);
 
   assert.ok(launcherRules.length > 0, "the launcher must have an explicit style rule");
-  for (const rule of launcherRules) {
-    assert.doesNotMatch(rule, /position\s*:\s*fixed/,
-      "no base or responsive rule may put the closed launcher over legal controls and links");
-  }
-  assert.ok(slotHeight >= 55,
-    "the slot must reserve the launcher's two text lines, padding and fractional line height");
+  assert.match(launcherRules[0], /position\s*:\s*fixed/,
+    "the assistant must remain reachable while a reader moves through a long law");
   assert.match(panel, /position\s*:\s*fixed/,
-    "the deliberately opened assistant remains a dialog over the workspace");
+    "the assistant is a stable side surface rather than part of legal text flow");
+  assert.match(css, /body\.assistant-open\s+main[^}]*margin-right\s*:/s,
+    "desktop content must reflow instead of being hidden behind the assistant");
+});
+
+test("narrow screens use an explicit modal backdrop and preserve reduced motion", () => {
+  assert.match(css, /@media\s*\(max-width:\s*1099px\)/);
+  assert.match(css, /\.askbackdrop\s*\{/);
+  assert.match(css, /@media\s*\(prefers-reduced-motion:\s*reduce\)/);
 });

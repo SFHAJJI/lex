@@ -16,6 +16,7 @@ HTTP 200
 <meta name="twitter:card" content="summary_large_image">
 <link rel="canonical" href="https://golden.test/t-pub/w1">
 <script type="application/ld+json">[{"@context":"https://schema.org","@type":"Legislation","name":"Loi sur la chose","url":"https://golden.test/t-pub/w1","legislationIdentifier":"urn:w1","legislationJurisdiction":{"@type":"AdministrativeArea","name":"Test Publisher"},"legislationDate":"2020-01-01","inLanguage":"fr","temporalCoverage":"2020-01-01/..","license":"https://creativecommons.org/licenses/by/4.0/","isBasedOn":"https://example.org/w1/2022-01-01","legislationLegalForce":"https://schema.org/InForce","legislationType":"LOI"},{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Catalogue","item":"https://golden.test/browse"},{"@type":"ListItem","position":2,"name":"Test Publisher law","item":"https://golden.test/browse?publisher=t-pub"},{"@type":"ListItem","position":3,"name":"Loi sur la chose","item":"https://golden.test/t-pub/w1"}]}]</script>
+<link rel="stylesheet" href="/app/workspace.css?v=dev">
 <meta name="twitter:image" content="https://golden.test/og.png">
 <link rel="preload" href="/fonts/IBMPlexSans-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/fonts/SourceSerif4-latin.woff2" as="font" type="font/woff2" crossorigin>
@@ -176,7 +177,7 @@ HTTP 200
     .cat td:first-child { min-width:130px }
   }
 </style></head>
-<body>
+<body class="assistant-enabled">
 <header>
   <!-- The workspace IS the home page, so there is no "Ask" to link to from it, and /find,
        /search and /changed are the no-JavaScript twins of its three tabs rather than separate
@@ -236,4 +237,6 @@ HTTP 200
   <b>consolidated texts have no legal effect</b>, only acts published in the Official Journal are authentic.
   · <a href="https://github.com/SFHAJJI/lex">source</a>
 </footer>
+<div id="assistant-root"></div>
+<script type="module" src="/app/workspace.js?v=dev"></script>
 </body></html>

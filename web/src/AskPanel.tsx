@@ -1,133 +1,176 @@
 import { useEffect, useRef, useState } from "react";
 import type { Step } from "./api";
+import { STARTER_PROMPTS, parseAssistantPanelState } from "./assistantShell";
 
-/**
- * The assistant, secondary to the legal search until a reader deliberately opens it.
- *
- * It used to sit at the top with the browse controls directly underneath, which asked every
- * visitor to choose between two doors before knowing what either led to, and made the filters
- * look like a fallback for people the AI had failed. They are not: reading a law by name or by
- * date is the ordinary path, and the assistant is the shortcut for people who would rather ask.
- *
- * So the page is the corpus, and this is a thing you summon. The closed launcher stays in the
- * document flow: a fixed button used to cover legal controls and footer links at every audited
- * viewport. Once opened, the panel is plainly a conversation with a machine rather than a search
- * box that happens to reply in prose.
- */
 export interface AskPanelProps {
   q: string;
-  setQ: (v: string) => void;
+  setQ: (value: string) => void;
   busy: boolean;
   steps: Step[];
   said?: string;
   onSubmit: (text: string) => void;
-  onOpenStep: (s: Step) => void;
-  // Next steps for the answer on screen. Lex's prompt forbids asking permission, so
-  // these are things to do rather than a question to answer: compare, read the current
-  // text, widen the window.
+  onOpenStep: (step: Step) => void;
   followUps?: { label: string; run: () => void }[];
 }
 
-const SUGGESTIONS = [
-  "What did the Covid rules say on 1 February 2021?",
-  "How has Article 92 of the CRR changed?",
-  "Which EU and Luxembourg laws changed most during the pandemic?",
-  "Que disait le Code du travail en 2019 ?",
-];
+const PANEL_KEY = "lex.ask.panel.v1";
+const HINT_KEY = "lex.ask.hint.v1";
+const MODAL_QUERY = "(max-width: 1099px)";
+const modalViewport = () => typeof matchMedia === "function" && matchMedia(MODAL_QUERY).matches;
+
+function initialPanelState() {
+  try { return parseAssistantPanelState(sessionStorage.getItem(PANEL_KEY)); }
+  catch { return parseAssistantPanelState(null); }
+}
 
 export default function AskPanel(p: AskPanelProps) {
-  const [open, setOpen] = useState(false);
-  const [min, setMin] = useState(false);
-  const box = useRef<HTMLDivElement>(null);
+  const initial = useRef(initialPanelState()).current;
+  const [open, setOpen] = useState(initial.open);
+  const [minimized, setMinimized] = useState(initial.minimized);
+  const [modal, setModal] = useState(modalViewport);
+  const [hint, setHint] = useState(() => {
+    try { return localStorage.getItem(HINT_KEY) !== "1"; }
+    catch { return false; }
+  });
+  const body = useRef<HTMLDivElement>(null);
+  const panel = useRef<HTMLElement>(null);
   const input = useRef<HTMLInputElement>(null);
+  const launcher = useRef<HTMLButtonElement>(null);
   const started = p.steps.length > 0 || !!p.said || p.busy;
 
-  // An answer arriving behind a closed panel is an answer nobody reads.
-  useEffect(() => { if (started) { setOpen(true); setMin(false); } }, [started]);
-  useEffect(() => { if (open) input.current?.focus(); }, [open]);
   useEffect(() => {
-    const esc = (e: KeyboardEvent) => { if (e.key === "Escape" && !started) setOpen(false); };
-    addEventListener("keydown", esc);
-    return () => removeEventListener("keydown", esc);
-  }, [started]);
-  useEffect(() => { box.current?.scrollTo({ top: box.current.scrollHeight, behavior: "smooth" }); },
-            [p.steps.length, p.said]);
+    if (typeof matchMedia !== "function") return;
+    const media = matchMedia(MODAL_QUERY);
+    const changed = () => setModal(media.matches);
+    media.addEventListener("change", changed);
+    return () => media.removeEventListener("change", changed);
+  }, []);
 
-  if (!open) {
-    return (
-      <div className="askslot">
-        <button className="asklaunch" onClick={() => setOpen(true)} aria-label="Ask about any law">
-          <span className="al-ic" aria-hidden="true">✦</span>
-          <span className="al-t">
-            <b><span className="al-wide">Ask about any law</span><span className="al-short">Ask</span></b>
-            <small>on any date, in plain language</small>
-          </span>
-        </button>
-      </div>
-    );
-  }
+  useEffect(() => {
+    try { sessionStorage.setItem(PANEL_KEY, JSON.stringify({ open, minimized })); }
+    catch { /* Tab-scoped state is optional in restricted browsing modes. */ }
+    document.body.classList.toggle("assistant-open", open && !minimized && !modal);
+    document.body.classList.toggle("assistant-modal", open && !minimized && modal);
+    return () => document.body.classList.remove("assistant-open", "assistant-modal");
+  }, [open, minimized, modal]);
+
+  // Never let an answer arrive behind a closed panel.
+  useEffect(() => {
+    if (p.busy || p.said) { setOpen(true); setMinimized(false); }
+  }, [p.busy, p.said]);
+
+  useEffect(() => {
+    if (open && !minimized) input.current?.focus();
+  }, [open, minimized]);
+
+  useEffect(() => {
+    if (!open || minimized) return;
+    const keydown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        close();
+        return;
+      }
+      if (event.key !== "Tab" || !modal || !panel.current) return;
+      const controls = [...panel.current.querySelectorAll<HTMLElement>(
+        "button:not([disabled]), input:not([disabled]), a[href], textarea:not([disabled]), [tabindex]:not([tabindex='-1'])",
+      )];
+      if (controls.length === 0) return;
+      const first = controls[0];
+      const last = controls.at(-1)!;
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault(); last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault(); first.focus();
+      }
+    };
+    addEventListener("keydown", keydown);
+    return () => removeEventListener("keydown", keydown);
+  }, [open, minimized, modal]);
+
+  useEffect(() => {
+    body.current?.scrollTo({ top: body.current.scrollHeight, behavior: "smooth" });
+  }, [p.steps.length, p.said]);
+
+  const rememberHint = () => {
+    setHint(false);
+    try { localStorage.setItem(HINT_KEY, "1"); } catch { /* Hint may return next visit. */ }
+  };
+  const show = () => { rememberHint(); setOpen(true); setMinimized(false); };
+  const close = () => {
+    setOpen(false);
+    setMinimized(false);
+    requestAnimationFrame(() => launcher.current?.focus());
+  };
+
+  if (!open) return (
+    <div className="askslot">
+      {hint ? <span className="askhint">Ask Lex about laws, dates and changes</span> : null}
+      <button ref={launcher} className="asklaunch" onClick={show}>
+        <span className="al-ic" aria-hidden="true">✦</span>
+        <span className="al-t">
+          <b>Ask Lex</b>
+          <small>dates, articles and changes</small>
+        </span>
+      </button>
+    </div>
+  );
 
   return (
     <div className="askslot">
-      <aside className={"askpanel" + (min ? " min" : "")} role="dialog" aria-label="Assistant">
-      <header className="ap-head">
-        <span className="ap-title"><span className="al-ic" aria-hidden="true">✦</span> Assistant</span>
-        <button className="ap-x" onClick={() => setMin(!min)} aria-label={min ? "Expand" : "Minimise"}>
-          {min ? "▴" : "▾"}
-        </button>
-        <button className="ap-x" onClick={() => setOpen(false)} aria-label="Close">✕</button>
-      </header>
+      {!minimized && modal ? <div className="askbackdrop" aria-hidden="true" onMouseDown={close} /> : null}
+      <aside ref={panel} className={`askpanel${minimized ? " min" : ""}`} role="dialog"
+             aria-modal={!minimized && modal ? "true" : undefined} aria-label="Lex legal research assistant">
+        <div className="ap-head">
+          <span className="ap-title"><span className="al-ic" aria-hidden="true">✦</span> Ask Lex</span>
+          <button className="ap-x ap-min" onClick={() => setMinimized(!minimized)}
+                  aria-label={minimized ? "Expand assistant" : "Minimise assistant"}>
+            {minimized ? "▴" : "▾"}
+          </button>
+          <button className="ap-x" onClick={close} aria-label="Close assistant">✕</button>
+        </div>
 
-      {!min && (
-        <>
-          {/* Said once, at the top, before anything it writes: this is a machine, it can be
-              wrong, and it answers from the corpus rather than from the world. */}
+        {!minimized ? <>
           <p className="ap-notice">
             You are talking to an <b>AI assistant</b>. It answers only from the laws Lex holds,
-            with the date and the source for every claim, or it declines. It can still be wrong,
-            and it is not legal advice.
+            with the date and source for every claim, or it declines. It can still be wrong and
+            it is not legal advice.
           </p>
 
-          <div className="ap-body" ref={box}>
-            {!started && (
-              <div className="ap-sugg">
-                <p className="ap-sugg-h">What can it do?</p>
-                {SUGGESTIONS.map((s) => (
-                  <button key={s} className="ap-chip" onClick={() => p.onSubmit(s)}>{s}</button>
-                ))}
-              </div>
-            )}
+          <div className="ap-body" ref={body}>
+            {!started ? <div className="ap-sugg">
+              <p className="ap-sugg-h">Try a research task</p>
+              {STARTER_PROMPTS.map((suggestion) =>
+                <button key={suggestion} className="ap-chip" onClick={() => p.onSubmit(suggestion)}>
+                  {suggestion}
+                </button>)}
+            </div> : null}
 
-            {p.steps.length > 0 && (
-              <ol className="steps" aria-live="polite" aria-label="What the assistant is finding">
-                {p.steps.map((st, i) => (
-                  <li key={i} className={st.kind}>
-                    <span>{st.text}</span>
-                    {st.work ? <button className="chipmini" onClick={() => p.onOpenStep(st)}>open →</button> : null}
-                  </li>
-                ))}
-                {p.busy ? <li className="pending"><span>working…</span></li> : null}
-              </ol>
-            )}
+            {p.steps.length > 0 ? <ol className="steps" aria-live="polite"
+              aria-label="What the assistant is finding">
+              {p.steps.map((step, index) => <li key={index} className={step.kind}>
+                <span>{step.text}</span>
+                {step.work ? <button className="chipmini" onClick={() => p.onOpenStep(step)}>open →</button> : null}
+              </li>)}
+              {p.busy ? <li className="pending"><span>working…</span></li> : null}
+            </ol> : null}
 
             {p.said ? <div className="said"><b>what I found</b>{p.said}</div> : null}
-
-            {p.said && (p.followUps?.length ?? 0) > 0 && (
-              <div className="ap-next">
-                {p.followUps!.map((f) => (
-                  <button key={f.label} className="ap-chip next" onClick={f.run}>{f.label}</button>
-                ))}
-              </div>
-            )}
+            {p.said && (p.followUps?.length ?? 0) > 0 ? <div className="ap-next">
+              {p.followUps!.map((followUp) => <button key={followUp.label} className="ap-chip next"
+                onClick={followUp.run}>{followUp.label}</button>)}
+            </div> : null}
           </div>
 
-          <form className="ap-form" onSubmit={(e) => { e.preventDefault(); p.onSubmit(p.q); p.setQ(""); }}>
-            <input ref={input} name="assistant-question" value={p.q} onChange={(e) => p.setQ(e.target.value)} disabled={p.busy}
-                   placeholder="What did a law say on a date?" aria-label="Ask" />
+          <form className="ap-form" onSubmit={(event) => {
+            event.preventDefault(); p.onSubmit(p.q); p.setQ("");
+          }}>
+            <input ref={input} name="assistant-question" value={p.q}
+              onChange={(event) => p.setQ(event.target.value)} disabled={p.busy}
+              placeholder="Ask about a law, article or date" aria-label="Ask Lex" />
             <button type="submit" disabled={p.busy}>{p.busy ? "…" : "Ask"}</button>
           </form>
-        </>
-      )}
+        </> : null}
       </aside>
     </div>
   );

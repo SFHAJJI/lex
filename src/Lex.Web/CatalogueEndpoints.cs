@@ -20,9 +20,9 @@ public static class CatalogueEndpoints
         // Program.cs. That is the property the golden snapshots check.
         string Page(string title, string body, string? subtitle = null, string nav = "",
                     string? h1 = null, string? canonicalPath = null, string? jsonLd = null,
-                    string? description = null, string? lang = null)
+                    string? description = null, string? lang = null, bool assistant = true)
             => PageShell.Page(ctx.PublicBase, title, body, subtitle, nav, h1, canonicalPath,
-                              jsonLd, description, lang);
+                              jsonLd, description, lang, ctx.Options.CodeCommit, assistant);
         var readers = ctx.Registry.All;
         var publicBase = ctx.PublicBase;
         var mcpCore = ctx.Mcp;
@@ -353,7 +353,7 @@ public static class CatalogueEndpoints
                     History can never go deeper than what the publisher itself digitised.</div>
                     """);
             }
-            return Results.Content(Page("Coverage, what we hold, and what we lack", sb.ToString()), "text/html");
+            return Results.Content(Page("Coverage, what we hold, and what we lack", sb.ToString(), assistant: false), "text/html");
         });
 
         app.MapGet("/in-force-on", (string? date, string? publisher, string? kind, int? page) =>

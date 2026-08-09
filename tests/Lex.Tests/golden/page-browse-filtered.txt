@@ -16,6 +16,7 @@ HTTP 200
 <meta name="twitter:card" content="summary_large_image">
 <link rel="canonical" href="https://golden.test/browse">
 <script type="application/ld+json">{"@context":"https://schema.org","@type":"Dataset","name":"Lex: point-in-time Luxembourg and reviewed-scope EU law","description":"Official dated Luxembourg expressions and reviewed-scope EU law, including every available official consolidation in the mounted scope, with explicit publisher timeline semantics, per-article history, explicit coverage gaps, and a SHA-256 chain to the publisher\u0027s own bytes.","url":"https://golden.test/browse","license":"https://creativecommons.org/licenses/by/4.0/","isAccessibleForFree":true,"creator":{"@type":"Person","name":"Soufien Hajji","url":"https://soufien.lu"},"keywords":["legislation","Luxembourg","European Union","consolidated law","point-in-time","legal data","open data"],"temporalCoverage":"2019-06-01/2022-01-01","spatialCoverage":[{"@type":"Country","name":"Luxembourg"},{"@type":"Place","name":"European Union"}],"distribution":[{"@type":"DataDownload","encodingFormat":"application/json","contentUrl":"https://github.com/SFHAJJI/lex-articles","description":"Per-article JSON, JSONL and parquet, CC-BY."},{"@type":"DataDownload","encodingFormat":"application/json","contentUrl":"https://golden.test/mcp","description":"Public MCP endpoint, ten read-only tools, no key."}]}</script>
+<link rel="stylesheet" href="/app/workspace.css?v=dev">
 <meta name="twitter:image" content="https://golden.test/og.png">
 <link rel="preload" href="/fonts/IBMPlexSans-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/fonts/SourceSerif4-latin.woff2" as="font" type="font/woff2" crossorigin>
@@ -176,7 +177,7 @@ HTTP 200
     .cat td:first-child { min-width:130px }
   }
 </style></head>
-<body>
+<body class="assistant-enabled">
 <header>
   <!-- The workspace IS the home page, so there is no "Ask" to link to from it, and /find,
        /search and /changed are the no-JavaScript twins of its three tabs rather than separate
@@ -272,4 +273,6 @@ behind it. A work is a law; a version is what that law said between two dates.
   <b>consolidated texts have no legal effect</b>, only acts published in the Official Journal are authentic.
   · <a href="https://github.com/SFHAJJI/lex">source</a>
 </footer>
+<div id="assistant-root"></div>
+<script type="module" src="/app/workspace.js?v=dev"></script>
 </body></html>

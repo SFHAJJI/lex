@@ -72,3 +72,35 @@
   - Acceptance: zero-traffic candidate passes, promotion succeeds, live critical flows and logs are
     healthy, artifact/code identities match, rollback revision remains ready.
   - Verify: GitHub run, Azure revision state, live health/MCP/search/assistant checks.
+
+---
+
+## Persistent assistant shell
+
+- [x] Task A1: Freeze assistant shell policy and state
+  - Acceptance: closed-first state, tab restoration, four approved prompts and typed-effect
+    workspace URLs are deterministic; server route tests own the route policy.
+  - Verify: `npm test --prefix web` fails before implementation and passes after it.
+  - Files: `web/src/assistantShell.ts`, `web/src/assistant-shell.test.ts`
+
+- [x] Task A2: Reuse one assistant controller
+  - Acceptance: workspace and standalone mounts share streaming, bounded history, clarification and
+    error handling; existing agent safeguards are unchanged.
+  - Verify: assistant history/controller tests and web typecheck.
+  - Files: `web/src/AssistantController.tsx`, `web/src/App.tsx`, `web/src/main.tsx`
+
+- [x] Task B1: Implement responsive launcher/panel behavior
+  - Acceptance: fixed closed launcher, one-time hint, session state, desktop dock, mobile backdrop,
+    focus containment, Escape/close and focus restoration.
+  - Verify: launcher tests plus Chrome desktop/mobile keyboard checks.
+  - Files: `web/src/AskPanel.tsx`, `web/src/styles.css`, tests
+
+- [x] Task B2: Mount only on research pages
+  - Acceptance: the agreed routes emit one assistant mount and assets; engineering pages emit none.
+  - Verify: ASP.NET route tests and `npm run build --prefix web` smoke.
+  - Files: `src/Lex.Web/PageShell.cs`, `tests/Lex.Tests/*`, `web/smoke.mjs`
+
+- [ ] Task C1: Review and release
+  - Acceptance: full tests and browser validation pass; no unresolved P0/P1 review finding; change
+    is committed, pushed, deployed and verified on production with rollback retained.
+  - Verify: repository test/build/deploy commands and live route/assistant smokes.
