@@ -1583,6 +1583,32 @@ Each corpus repo's README opens for the five-minute visitor, in this order:
 Increments A and B each end with an explicit **publish/announce milestone**
 (§14), the star-generating moment is scheduled, not left to chance.
 
+### 12.4 Assistant operation contract
+
+The assistant is a natural-language controller over the same deterministic legal operations as
+the workspace, not a second search product. The model selects an operation and its arguments;
+`McpCore` validates and executes them; application code derives a typed `UiEffect` only from that
+verified result; and the ordinary workspace renderer opens the same coordinates. The model never
+authors a route or a rendering directive directly.
+
+| User intent | Authoritative operation | Typed workspace result |
+|---|---|---|
+| Find a law, article or topic | `search` | Finder query and filters |
+| Read wording on a date | `as_of` | Law reader at the held version and article |
+| Inspect a work's versions | `timeline` | Law reader with its version rail |
+| Follow one article through time | `article_history` | Law reader with the article rail |
+| Compare one work between dates | `diff` plus exact `as_of` reads for wording claims | Compare view at the requested dates and optional verified article anchor |
+| List publisher states covering a date | `in_force_on` | Dated result list |
+| Rank what moved across the corpus | `changes_in_period` | Time report with the same window, order and filters |
+| Follow reverse legal references | `cited_by` | Citing-article result list |
+| Explain holdings or prove provenance | `coverage` / `provenance` | Grounded answer and evidence links; no invented workspace state |
+
+The raw-user search is an internal authority preflight and is never narrated or rendered as a
+research result. A successful work-independent operation cancels unrelated weak candidates.
+Clarification is emitted only when a work-specific operation needs an identity that remains
+genuinely ambiguous or unresolved. Reviewed aliases and official identifiers resolve
+deterministically inside ordinary sentences; weak metadata never authorizes a work-specific tool.
+
 ---
 
 ## 13. Build, release, deployment
@@ -1882,6 +1908,7 @@ Numbering continues from v3; v3 decisions are restated with status.
 | **D75** | Search enrichment is a build input, never legal evidence or a runtime database. Production first retains publisher identifiers, titles, short titles and classifications in a typed work catalog, then adds only reviewed collision-aware aliases for verified gaps. Model-derived descriptions, concepts and synonyms remain a separate quarantined trust class until an independent held-out ablation proves incremental recall without ranking, latency or unaffected-query regressions. Work vectors append after provision vectors in the same signed vector artifact with complete typed ordinal validation and a separate enrichment digest. Publisher text, official titles/identifiers, dates, hierarchy, status, relationships, occurrences and hashes are unwritable through this path; a clean corpus re-ingest and pre/post hash, read and diff invariants gate removal of the legacy code-name table. | shipped 2026-08-09; model-derived weak discovery remains quarantined |
 | **D76** | Exact navigation remains deterministic. Application code resolves the raw user query, authorizes work-specific tools and runs a bounded tool-calling retrieval loop over the same transport-neutral `McpCore`. Agent Framework then composes claim-typed prose from the evidence and runs a separate conditional grounding judge. Typed clarification, exact `as_of`/article validation, bounded restorable memory and deterministic citation validation remain outside model authority; a peer-agent research hierarchy and chatbot-first navigation remain rejected. | shipped 2026-08-09 with guarded clarification and evidence contracts |
 | **D77** | Search results use jurisdiction as the only top-level disjoint partition. Luxembourg and EU remain visible in all-scope results; matching passages nest under their work. Practice area, hierarchy, source class, legal form, legal status and language stay as jurisdiction-scoped facets because they overlap or cut across one another. Empty or single-choice facets are hidden after scope selection, incompatible state is cleared, and URLs preserve the chosen scope. | shipped 2026-08-09 |
+| **D78** | The assistant is a verified operation controller, not a second search engine. The model chooses an MCP operation; MCP validates and executes it; application code derives a typed workspace effect from the result; the normal workspace renderer then opens the same coordinates. Raw resolution stays internal, clarification exists only at a real identity boundary, and evidence-only operations never invent a visual state. | shipped 2026-08-09 |
 
 ---
 

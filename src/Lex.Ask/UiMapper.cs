@@ -36,7 +36,8 @@ public static class UiMapper
         return tool switch
         {
             "as_of" => Provision(node, args),
-            "article_history" => History(node),
+            "article_history" => History(node, args),
+            "timeline" => Timeline(node, args),
             "diff" => Diff(node, args),
             "changes_in_period" => Ranking(node, args),
             "in_force_on" => InForce(node, args),
@@ -116,15 +117,26 @@ public static class UiMapper
             Permalink: S(doc, "permalink")));
     }
 
-    private static UiEffect History(JsonObject o)
+    private static UiEffect History(JsonObject o, JsonObject args)
     {
         if (o["states"] is not JsonArray states || states.Count == 0) return new UiEffect();
         return new UiEffect(History: new HistoryView(
-            Subject: new Subject(S(o, "work") ?? "", null, null, S(o, "anchor")),
+            Subject: new Subject(CanonicalWork(o, args), null, null, S(o, "anchor")),
             Anchor: S(o, "anchor") ?? "",
             DistinctTexts: o["distinct_texts"]?.GetValue<int>() ?? states.Count,
             States: states.OfType<JsonObject>().Select(s => new HistoryState(
                 S(s, "valid_from") ?? "", S(s, "valid_to"), S(s, "text_sha256"), S(s, "permalink"))).ToList()));
+    }
+
+    private static UiEffect Timeline(JsonObject o, JsonObject args)
+    {
+        if (o["versions"] is not JsonArray versions || versions.Count == 0) return new UiEffect();
+        var rows = versions.OfType<JsonObject>()
+            .OrderBy(version => S(version, "valid_from"), StringComparer.Ordinal)
+            .ToList();
+        var latest = rows[^1];
+        return new UiEffect(Timeline: new TimelineView(
+            Subject: new Subject(CanonicalWork(o, args), S(latest, "title"), null, null)));
     }
 
     private static UiEffect Diff(JsonObject o, JsonObject args)
@@ -136,8 +148,9 @@ public static class UiMapper
         var a = o["from"] as JsonObject;
         var b = o["to"] as JsonObject;
         return new UiEffect(Diff: new DiffView(
-            Subject: new Subject(S(args, "work") ?? S(o, "work") ?? "", S(b, "title") ?? S(a, "title"), from, null),
-            FromDate: S(a, "valid_from") ?? from, ToDate: S(b, "valid_from") ?? to,
+            Subject: new Subject(CanonicalWork(o, args),
+                S(b, "title") ?? S(a, "title"), from, S(o, "anchor")),
+            FromDate: from, ToDate: to,
             FromPermalink: S(a, "permalink"), ToPermalink: S(b, "permalink"),
             Note: S(o, "note")));
     }
@@ -146,6 +159,7 @@ public static class UiMapper
     private static UiEffect Workspace(JsonObject args, int? page = null)
     {
         var view = new WorkspaceView(
+            Query: S(args, "query"),
             Jurisdiction: S(args, "jurisdiction"),
             Hierarchy: S(args, "hierarchy"),
             Domain: S(args, "domain"),
@@ -154,7 +168,7 @@ public static class UiMapper
             BindingStatus: S(args, "binding_status"),
             Page: page,
             Language: S(args, "language"));
-        return view is { Jurisdiction: null, Hierarchy: null, Domain: null, SourceClass: null,
+        return view is { Query: null, Jurisdiction: null, Hierarchy: null, Domain: null, SourceClass: null,
                          ActForm: null, BindingStatus: null, Page: null, Language: null }
             ? new UiEffect()
             : new UiEffect(Workspace: view);
@@ -176,6 +190,7 @@ public static class UiMapper
     {
         if (o["changes"] is not JsonArray rows || rows.Count == 0) return new UiEffect();
         var offset = o["offset"]?.GetValue<int>() ?? 0;
+        var jurisdiction = S(o["envelope"] as JsonObject, "jurisdiction");
         return new UiEffect(Ranking: new RankingView(
             FromDate: S(o["window"] as JsonObject ?? [], "from") ?? "",
             ToDate: S(o["window"] as JsonObject ?? [], "to") ?? "",
@@ -191,7 +206,7 @@ public static class UiMapper
                 DistinctTexts: c["distinct_texts"]?.GetValue<int>() ?? 0,
                 WordingChanged: c["wording_changed"]?.GetValue<bool>() ?? true,
                 TextComparable: c["text_comparable"]?.GetValue<bool>() ?? false,
-                Jurisdiction: S(c, "jurisdiction"), Hierarchy: S(c, "hierarchy"),
+                Jurisdiction: S(c, "jurisdiction") ?? jurisdiction, Hierarchy: S(c, "hierarchy"),
                 Domains: c["domains"] is JsonArray domains
                     ? domains.Select(d => d?.GetValue<string>() ?? "").Where(d => d.Length > 0).ToList()
                     : null,
@@ -215,10 +230,35 @@ public static class UiMapper
     }
 
     private static Subject SubjectOf(JsonObject doc, JsonObject args) => new(
-        Work: S(args, "work") ?? WorkOf(S(doc, "lex_id")) ?? "",
+        Work: WorkOf(S(doc, "lex_id")) ?? CanonicalWork(doc, args),
         Title: S(doc, "title"),
         Date: S(args, "date") ?? S(doc, "valid_from"),
         Anchor: S(args, "anchors")?.Split(',')[0].Trim());
+
+    private static string CanonicalWork(JsonObject result, JsonObject args)
+    {
+        static string? Canonical(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return null;
+            var parts = value.Split(':');
+            return parts.Length >= 2 ? $"{parts[0]}:{parts[1]}" : value;
+        }
+
+        foreach (var lexId in new[]
+                 {
+                     S(result["document"] as JsonObject, "lex_id"),
+                     S(result["from"] as JsonObject, "lex_id"),
+                     S(result["to"] as JsonObject, "lex_id"),
+                     S(result["versions"]?[0] as JsonObject, "lex_id"),
+                     S(result["states"]?[0] as JsonObject, "in_version"),
+                 })
+            if (WorkOf(lexId) is { } work) return work;
+        var returned = Canonical(S(result, "work"));
+        if (returned?.Contains(':') == true) return returned;
+        var publisher = S(result["envelope"] as JsonObject, "publisher");
+        if (publisher is not null && returned is not null) return $"{publisher}:{returned}";
+        return Canonical(S(args, "work")) ?? returned ?? "";
+    }
 
     private static string? WorkOf(string? lexId)
     {

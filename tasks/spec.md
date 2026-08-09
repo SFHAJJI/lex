@@ -206,6 +206,9 @@ selector or instruction supplied in model prose.
    corpus-wide change ranking; typed result/follow-up actions open the correct workspace state.
 5. Existing assistant safeguards, history bounds, clarification behavior and all current web/.NET
    tests remain green, followed by live production verification.
+6. Corpus-wide tools answer from their aggregate evidence without requiring a single-work
+   confirmation. Parallel publisher results merge into one typed view whose complete scope is
+   applied to the workspace URL; the internal raw-resolution preflight is not narrated as a find.
 
 ## Open questions
 

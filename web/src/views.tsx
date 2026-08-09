@@ -540,7 +540,7 @@ export function Empty({ children }: { children: React.ReactNode }) {
 }
 
 export const hasView = (ui?: UiEffect) =>
-  !!(ui && (ui.provision || ui.diff || ui.history || ui.ranking || ui.in_force || ui.cited_by || ui.gap));
+  !!(ui && (ui.provision || ui.diff || ui.history || ui.timeline || ui.ranking || ui.in_force || ui.cited_by || ui.gap));
 
 /**
  * Which articles point at one law.
@@ -580,7 +580,7 @@ export function CitedBy({ view, onOpen }: {
 /** A history answer needs no mode of its own: the rail is already showing it. */
 export function modeFor(ui?: UiEffect): State["mode"] | undefined {
   if (ui?.diff) return "compare";
-  if (ui?.history || ui?.provision) return "read";
+  if (ui?.history || ui?.timeline || ui?.provision) return "read";
   return undefined;
 }
 

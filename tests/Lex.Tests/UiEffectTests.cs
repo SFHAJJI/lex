@@ -54,10 +54,10 @@ public class UiEffectTests
     }
 
     [Fact]
-    public void An_unfiltered_ranking_leaves_the_controls_alone()
+    public void An_unfiltered_ranking_has_no_filter_directive()
     {
-        // Null means "do not touch it". An assistant that answers a general question must not
-        // silently reset a filter the reader chose.
+        // The ranking itself owns navigation. No workspace filter means the complete corpus;
+        // the browser state mapper clears any stale scope when it applies this effect.
         var eff = UiMapper.From("changes_in_period", new JsonObject(), Changes(""));
 
         Assert.NotNull(eff.Ranking);
@@ -102,9 +102,69 @@ public class UiEffectTests
     }
 
     [Fact]
+    public void A_single_publisher_period_stamps_its_jurisdiction_on_every_row()
+    {
+        var result = Changes("");
+        result["envelope"]!["jurisdiction"] = "LU";
+
+        var eff = UiMapper.From("changes_in_period",
+            Args(("jurisdiction", "lu")), result);
+
+        Assert.All(eff.Ranking!.Rows, row => Assert.Equal("LU", row.Jurisdiction));
+    }
+
+    [Fact]
+    public void Separate_publisher_rankings_merge_into_one_cross_corpus_effect()
+    {
+        static RankingView Ranking(string work, string jurisdiction, int changed, int versions) =>
+            new("2024-01-01", "2024-12-31", "by_churn", changed, versions,
+            [
+                new RankingRow(work, $"{jurisdiction} law", versions, versions,
+                    "2024-01-01", "2024-12-31", null, null,
+                    Jurisdiction: jurisdiction),
+            ]);
+
+        var merged = UiEffect.Merge([
+            new UiEffect(Ranking: Ranking("lu-legilux:one", "LU", 210, 240),
+                Workspace: new WorkspaceView(Jurisdiction: "lu")),
+            new UiEffect(Ranking: Ranking("eu-eurlex:two", "EU", 187, 200),
+                Workspace: new WorkspaceView(Jurisdiction: "eu")),
+            new UiEffect(Ranking: Ranking("third-publisher:three", "THIRD", 3, 5),
+                Workspace: new WorkspaceView(Jurisdiction: "third")),
+        ]);
+
+        Assert.Equal(400, merged.Ranking!.WorksChanged);
+        Assert.Equal(445, merged.Ranking.NewVersions);
+        Assert.Equal(["EU", "LU", "THIRD"], merged.Ranking.Rows
+            .Select(row => row.Jurisdiction).Order());
+        Assert.NotNull(merged.Workspace);
+        Assert.Null(merged.Workspace.Jurisdiction);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void An_unfiltered_ranking_dominates_a_redundant_filtered_ranking(bool broadFirst)
+    {
+        static UiEffect Broad() => new(Ranking: new RankingView(
+            "2024-01-01", "2024-12-31", "by_churn", 397, 440, []));
+        static UiEffect Luxembourg() => new(Ranking: new RankingView(
+                "2024-01-01", "2024-12-31", "by_churn", 210, 240, []),
+            Workspace: new WorkspaceView(Jurisdiction: "lu"));
+
+        var merged = UiEffect.Merge(broadFirst
+            ? [Broad(), Luxembourg()]
+            : [Luxembourg(), Broad()]);
+
+        Assert.Equal(397, merged.Ranking!.WorksChanged);
+        Assert.Null(merged.Workspace);
+    }
+
+    [Fact]
     public void Every_filter_argument_maps_to_the_visible_workspace_control()
     {
         var args = Args(
+            ("query", "capital requirements"),
             ("jurisdiction", "eu"), ("hierarchy", "secondary_eu_law"),
             ("domain", "financial-services"), ("source_class", "REG"),
             ("act_form", "REG"), ("binding_status", "in_force"), ("language", "en"));
@@ -114,7 +174,8 @@ public class UiEffectTests
             ["envelope"] = new JsonObject { ["status"] = "ok" }, ["hits"] = new JsonArray(),
         });
 
-        Assert.Equal("eu", eff.Workspace!.Jurisdiction);
+        Assert.Equal("capital requirements", eff.Workspace!.Query);
+        Assert.Equal("eu", eff.Workspace.Jurisdiction);
         Assert.Equal("secondary_eu_law", eff.Workspace.Hierarchy);
         Assert.Equal("financial-services", eff.Workspace.Domain);
         Assert.Equal("REG", eff.Workspace.SourceClass);
@@ -137,6 +198,37 @@ public class UiEffectTests
 
         Assert.Equal("de", eff.Workspace!.Language);
         Assert.Null(eff.Workspace.SourceClass);
+    }
+
+    [Fact]
+    public void A_whole_work_timeline_opens_the_law_and_its_version_rail()
+    {
+        var eff = UiMapper.From("timeline", Args(("work", "eu-eurlex:32013r0575")),
+            new JsonObject
+            {
+                ["envelope"] = new JsonObject
+                {
+                    ["status"] = "ok", ["publisher"] = "eu-eurlex",
+                },
+                ["work"] = "32013r0575",
+                ["total_count"] = 2,
+                ["versions"] = new JsonArray(
+                    new JsonObject
+                    {
+                        ["title"] = "Regulation (EU) No 575/2013",
+                        ["valid_from"] = "2020-06-27", ["valid_to"] = "2021-06-26",
+                        ["permalink"] = "https://law.soufien.lu/eu-eurlex/32013r0575/2020-06-27",
+                    },
+                    new JsonObject
+                    {
+                        ["title"] = "Regulation (EU) No 575/2013",
+                        ["valid_from"] = "2021-06-27", ["valid_to"] = null,
+                        ["permalink"] = "https://law.soufien.lu/eu-eurlex/32013r0575/2021-06-27",
+                    }),
+            });
+
+        Assert.Equal("eu-eurlex:32013r0575", eff.Timeline!.Subject.Work);
+        Assert.Null(eff.Timeline.Subject.Date);
     }
 
     [Fact]
@@ -226,7 +318,29 @@ public class UiEffectTests
     }
 
     [Fact]
-    public void Merging_a_turn_keeps_the_first_of_each_kind()
+    public void An_article_diff_keeps_the_requested_window_and_verified_anchor()
+    {
+        var eff = UiMapper.From("diff",
+            Args(("work", "eu-eurlex:32013r0575"), ("from_date", "2020-01-01"),
+                ("to_date", "2024-12-31"), ("anchor", "art_92")),
+            new JsonObject
+            {
+                ["envelope"] = new JsonObject { ["status"] = "ok" },
+                ["anchor"] = "art_92",
+                ["from"] = new JsonObject
+                {
+                    ["valid_from"] = "2019-06-27", ["title"] = "Regulation (EU) No 575/2013",
+                },
+                ["to"] = new JsonObject { ["valid_from"] = "2024-07-09" },
+            });
+
+        Assert.Equal("art_92", eff.Diff!.Subject.Anchor);
+        Assert.Equal("2020-01-01", eff.Diff.FromDate);
+        Assert.Equal("2024-12-31", eff.Diff.ToDate);
+    }
+
+    [Fact]
+    public void A_rendered_ranking_owns_the_final_workspace_scope()
     {
         // One turn can call several tools. The workspace must end in ONE state, not the last one
         // that happened to be written.
@@ -236,8 +350,7 @@ public class UiEffectTests
             new UiEffect(Workspace: new WorkspaceView(Jurisdiction: "eu", SourceClass: "REG")),
         ]);
 
-        Assert.Equal("lu", merged.Workspace!.Jurisdiction);
-        Assert.Equal("LOI,CODE", merged.Workspace.SourceClass);
+        Assert.Null(merged.Workspace);
         Assert.NotNull(merged.Ranking);
         Assert.False(merged.IsEmpty);
     }

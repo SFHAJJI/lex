@@ -59,8 +59,13 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                     ["language"] = S("optional language code"),
                     ["limit"] = I("default 50"), ["offset"] = I("pagination offset"),
                 }, ["date"]),
-            Tool("diff", "What changed between two dates for one work: which publisher versions cover the selected dates and, where both texts are held, retrieve them via as_of to compare. Read timeline_semantics before describing legal applicability.",
-                new JsonObject { ["work"] = S(workDesc), ["from_date"] = S("ISO date"), ["to_date"] = S("ISO date"), ["language"] = S("language code") }, ["work", "from_date", "to_date"]),
+            Tool("diff", "What changed between two dates for one work: which publisher versions cover the selected dates and, where both texts are held, retrieve them via as_of to compare. An optional held article anchor scopes the typed comparison workspace. Read timeline_semantics before describing legal applicability.",
+                new JsonObject
+                {
+                    ["work"] = S(workDesc), ["from_date"] = S("ISO date"),
+                    ["to_date"] = S("ISO date"), ["language"] = S("language code"),
+                    ["anchor"] = S("optional held provision anchor returned by search, e.g. art_92"),
+                }, ["work", "from_date", "to_date"]),
             Tool("search", "Filtered legal search. keyword is deterministic FTS5/BM25; hybrid adds the pinned local encoder and fixed RRF when verified vectors are mounted. No generative model participates. The response query_plan separates resolved work constraints, article and role intent, and residual provision terms. Returns hits WITHOUT body text; full state via as_of.",
                 new JsonObject
                 {
@@ -466,6 +471,7 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                 return new JsonObject
                 {
                     ["envelope"] = Envelope(r, "ok"),
+                    ["work"] = w,
                     ["total_count"] = rows.Count,
                     ["truncated"] = rows.Count > offset + limit,
                     ["versions"] = new JsonArray(rows.Skip(offset).Take(limit).Select(v => (JsonNode)DocJson(v, false)).ToArray()),
@@ -518,6 +524,31 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                 var b1 = r.AsOf(w, to, f);
                 if (a1 is null || b1 is null)
                     return new JsonObject { ["envelope"] = Envelope(r, "no_version_for_date"), ["from_resolved"] = a1 is not null, ["to_resolved"] = b1 is not null };
+                var anchor = Str("anchor")?.Trim().ToLowerInvariant();
+                if (anchor is { Length: > 0 } && (anchor.Length > 128
+                    || !System.Text.RegularExpressions.Regex.IsMatch(anchor,
+                        "^[a-z0-9][a-z0-9_.-]*$",
+                        System.Text.RegularExpressions.RegexOptions.CultureInvariant)))
+                    throw new ArgumentException("anchor must be a provision anchor returned by search, e.g. art_92");
+                if (anchor is { Length: > 0 })
+                {
+                    var anchors = r.Provisions(LexIndexReader.RidOf(a1))
+                        .Concat(r.Provisions(LexIndexReader.RidOf(b1)))
+                        .Select(provision => provision.Anchor)
+                        .Where(value => !string.IsNullOrWhiteSpace(value))
+                        .Distinct(StringComparer.Ordinal)
+                        .Order(StringComparer.Ordinal)
+                        .ToArray();
+                    if (!anchors.Contains(anchor, StringComparer.Ordinal))
+                        return new JsonObject
+                        {
+                            ["envelope"] = Envelope(r, "unknown_anchor"),
+                            ["work"] = w,
+                            ["anchor"] = anchor,
+                            ["anchors_not_in_version"] = new JsonArray(
+                                anchors.Take(100).Select(value => (JsonNode)value).ToArray()),
+                        };
+                }
                 var changed = a1.Key != b1.Key;
 
                 // Two versions of the same work are only comparable provision by provision when
@@ -537,10 +568,11 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                 var pb = b1.Profile;
                 var profilesDiffer = pa is not null && pb is not null && pa != pb;
                 var comparable = !profilesDiffer && a1.TextPublic && b1.TextPublic;
-                return new JsonObject
+                var output = new JsonObject
                 {
                     ["envelope"] = Envelope(r, profilesDiffer ? "profiles_differ"
                                                : ComparisonTextStatus(a1, b1)),
+                    ["work"] = w,
                     ["changed"] = changed,
                     ["provision_level_comparable"] = comparable,
                     ["from"] = DocJson(a1, false),
@@ -557,6 +589,8 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                                 : "different versions applied; text diff unavailable here — compare at the official source URIs")
                             : "the same version applied on both dates",
                 };
+                if (anchor is { Length: > 0 }) output["anchor"] = anchor;
+                return output;
             }
             case "search":
             {
