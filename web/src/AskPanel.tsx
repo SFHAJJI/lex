@@ -17,7 +17,6 @@ export interface AskPanelProps {
 }
 
 const PANEL_KEY = "lex.ask.panel.v1";
-const HINT_KEY = "lex.ask.hint.v1";
 const MODAL_QUERY = "(max-width: 1099px)";
 const modalViewport = () => typeof matchMedia === "function" && matchMedia(MODAL_QUERY).matches;
 
@@ -31,10 +30,6 @@ export default function AskPanel(p: AskPanelProps) {
   const [open, setOpen] = useState(initial.open);
   const [minimized, setMinimized] = useState(initial.minimized);
   const [modal, setModal] = useState(modalViewport);
-  const [hint, setHint] = useState(() => {
-    try { return localStorage.getItem(HINT_KEY) !== "1"; }
-    catch { return false; }
-  });
   const body = useRef<HTMLDivElement>(null);
   const panel = useRef<HTMLElement>(null);
   const input = useRef<HTMLInputElement>(null);
@@ -96,11 +91,7 @@ export default function AskPanel(p: AskPanelProps) {
     body.current?.scrollTo({ top: body.current.scrollHeight, behavior: "smooth" });
   }, [p.conversation.length, p.activeQuestion, p.steps.length, p.said]);
 
-  const rememberHint = () => {
-    setHint(false);
-    try { localStorage.setItem(HINT_KEY, "1"); } catch { /* Hint may return next visit. */ }
-  };
-  const show = () => { rememberHint(); setOpen(true); setMinimized(false); };
+  const show = () => { setOpen(true); setMinimized(false); };
   const close = () => {
     setOpen(false);
     setMinimized(false);
@@ -109,13 +100,10 @@ export default function AskPanel(p: AskPanelProps) {
 
   if (!open) return (
     <div className="askslot">
-      {hint ? <span className="askhint">Ask Lex about laws, dates and changes</span> : null}
-      <button ref={launcher} className="asklaunch" onClick={show}>
+      <button ref={launcher} className="asklaunch" onClick={show}
+        aria-label="Open Ask Lex legal research assistant">
         <span className="al-ic" aria-hidden="true">✦</span>
-        <span className="al-t">
-          <b>Ask Lex</b>
-          <small>dates, articles and changes</small>
-        </span>
+        <span>Ask Lex</span>
       </button>
     </div>
   );
