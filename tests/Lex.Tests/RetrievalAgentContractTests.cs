@@ -251,6 +251,12 @@ public sealed class RetrievalAgentContractTests
         Assert.Contains("cannot produce a reliable comparison", reply, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("verified publisher versions", reply, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(draft.Answer, AskService.ReplyFor(draft, [comparison]));
+
+        var gap = new UiEffect(Gap: new GapView(
+            "text_not_available", "eu-eurlex:32013r0575", "2020-01-01",
+            "The requested publisher text is not available.", []));
+        Assert.Equal(draft.Answer,
+            AskService.ReplyFor(draft, [comparison, gap], synthesisFailed: true));
     }
 
     [Fact]
