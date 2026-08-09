@@ -3,7 +3,7 @@ import type { State } from "./state";
 
 export const STARTER_PROMPTS = [
   "Show Article 6 of the GDPR as it stood on 1 January 2021.",
-  "Compare Article 92 of the CRR between 2020 and 2024.",
+  "Compare Article 92 of the CRR between 1 January 2020 and 31 December 2024.",
   "When did Article 92 of the CRR change?",
   "Which Luxembourg and EU laws changed most during 2024?",
 ];
@@ -33,7 +33,7 @@ export function assistantWorkspaceState(ui?: UiEffect): Partial<State> | undefin
   const ranking = ui.ranking;
   const workspace = ui.workspace;
   return {
-    space: ranking ? "time" : "search", q: undefined, asOf: ui.in_force?.date,
+    space: ranking ? "time" : "search", q: workspace?.query, asOf: ui.in_force?.date,
     work: undefined, date: undefined, to: undefined, anchor: undefined, mode: "read",
     from: ranking?.from_date, until: ranking?.to_date,
     order: ranking?.order as State["order"],
@@ -52,11 +52,11 @@ export function assistantWorkspaceUrl(ui?: UiEffect): string | undefined {
     space: "law", work: ui.diff.subject.work, date: ui.diff.from_date, to: ui.diff.to_date,
     anchor: ui.diff.subject.anchor, mode: "compare",
   });
-  const legal = ui.provision ?? ui.history;
-  if (legal?.subject.work) return workspaceUrl({
-    space: "law", work: legal.subject.work,
-    date: "valid_from" in legal ? legal.subject.date ?? legal.valid_from : legal.subject.date,
-    anchor: legal.subject.anchor ?? ("anchor" in legal ? legal.anchor : undefined),
+  const legalSubject = ui.provision?.subject ?? ui.history?.subject ?? ui.timeline?.subject;
+  if (legalSubject?.work) return workspaceUrl({
+    space: "law", work: legalSubject.work,
+    date: ui.provision ? legalSubject.date ?? ui.provision.valid_from : legalSubject.date,
+    anchor: legalSubject.anchor ?? ui.history?.anchor,
   });
   if (ui.ranking || ui.in_force || ui.workspace) {
     const state = assistantWorkspaceState(ui)!;

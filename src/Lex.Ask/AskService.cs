@@ -196,7 +196,8 @@ public sealed class AskService(McpCore core)
            (long documents: mode=outline first, then mode=select with the anchors you need —
            never pull mode=full on a code); article_history(work, anchor) for "what did Article X
            say over its life / when did it change / was it renumbered"; timeline for whole-document
-           versions; diff for what changed between two dates; in_force_on for the publisher state
+           versions; diff for what changed between two dates (for a named article, pass the
+           held anchor returned by search so the workspace opens that article); in_force_on for the publisher state
            covering a date (legal applicability only when timeline_semantics says so);
            changes_in_period(from_date, to_date) for ACROSS-the-corpus questions ("what
            changed between 2025 and 2026", "which laws changed most during the pandemic" —
@@ -227,6 +228,8 @@ public sealed class AskService(McpCore core)
            You have at most 2 searches per question; coverage is only for questions about what
            Lex holds. Include no URL in your answer that was not returned by a tool in this
            conversation.
+           Interpret a bare year range as the complete inclusive calendar window: 1 January of
+           the first year through 31 December of the last year, unless the user states other dates.
         2. Cite what you used: document title, lex_id, publisher timeline interval
            (valid_from -> valid_to), timeline_semantics,
            and the "permalink" URL returned by the tools, copied VERBATIM — never construct or
@@ -641,8 +644,6 @@ public sealed class AskService(McpCore core)
                 ["status"] = rawStatus,
                 ["docs"] = rawDocs,
             });
-            var rawEffect = UiMapper.From("search", rawArgs, rawResult);
-            if (!rawEffect.IsEmpty) effects.Add(rawEffect);
             // This is an authority preflight, not a research action chosen for the question.
             // Keep it in the trace for auditability without presenting unrelated title matches
             // as findings to the reader.

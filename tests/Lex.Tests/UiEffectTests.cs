@@ -164,6 +164,7 @@ public class UiEffectTests
     public void Every_filter_argument_maps_to_the_visible_workspace_control()
     {
         var args = Args(
+            ("query", "capital requirements"),
             ("jurisdiction", "eu"), ("hierarchy", "secondary_eu_law"),
             ("domain", "financial-services"), ("source_class", "REG"),
             ("act_form", "REG"), ("binding_status", "in_force"), ("language", "en"));
@@ -173,7 +174,8 @@ public class UiEffectTests
             ["envelope"] = new JsonObject { ["status"] = "ok" }, ["hits"] = new JsonArray(),
         });
 
-        Assert.Equal("eu", eff.Workspace!.Jurisdiction);
+        Assert.Equal("capital requirements", eff.Workspace!.Query);
+        Assert.Equal("eu", eff.Workspace.Jurisdiction);
         Assert.Equal("secondary_eu_law", eff.Workspace.Hierarchy);
         Assert.Equal("financial-services", eff.Workspace.Domain);
         Assert.Equal("REG", eff.Workspace.SourceClass);
@@ -196,6 +198,37 @@ public class UiEffectTests
 
         Assert.Equal("de", eff.Workspace!.Language);
         Assert.Null(eff.Workspace.SourceClass);
+    }
+
+    [Fact]
+    public void A_whole_work_timeline_opens_the_law_and_its_version_rail()
+    {
+        var eff = UiMapper.From("timeline", Args(("work", "eu-eurlex:32013r0575")),
+            new JsonObject
+            {
+                ["envelope"] = new JsonObject
+                {
+                    ["status"] = "ok", ["publisher"] = "eu-eurlex",
+                },
+                ["work"] = "32013r0575",
+                ["total_count"] = 2,
+                ["versions"] = new JsonArray(
+                    new JsonObject
+                    {
+                        ["title"] = "Regulation (EU) No 575/2013",
+                        ["valid_from"] = "2020-06-27", ["valid_to"] = "2021-06-26",
+                        ["permalink"] = "https://law.soufien.lu/eu-eurlex/32013r0575/2020-06-27",
+                    },
+                    new JsonObject
+                    {
+                        ["title"] = "Regulation (EU) No 575/2013",
+                        ["valid_from"] = "2021-06-27", ["valid_to"] = null,
+                        ["permalink"] = "https://law.soufien.lu/eu-eurlex/32013r0575/2021-06-27",
+                    }),
+            });
+
+        Assert.Equal("eu-eurlex:32013r0575", eff.Timeline!.Subject.Work);
+        Assert.Null(eff.Timeline.Subject.Date);
     }
 
     [Fact]
@@ -282,6 +315,28 @@ public class UiEffectTests
         Assert.Equal("2024-01-01", eff.Diff!.FromDate);
         Assert.Equal("2025-01-01", eff.Diff.ToDate);
         Assert.Equal("Code du travail", eff.Diff.Subject.Title);
+    }
+
+    [Fact]
+    public void An_article_diff_keeps_the_requested_window_and_verified_anchor()
+    {
+        var eff = UiMapper.From("diff",
+            Args(("work", "eu-eurlex:32013r0575"), ("from_date", "2020-01-01"),
+                ("to_date", "2024-12-31"), ("anchor", "art_92")),
+            new JsonObject
+            {
+                ["envelope"] = new JsonObject { ["status"] = "ok" },
+                ["anchor"] = "art_92",
+                ["from"] = new JsonObject
+                {
+                    ["valid_from"] = "2019-06-27", ["title"] = "Regulation (EU) No 575/2013",
+                },
+                ["to"] = new JsonObject { ["valid_from"] = "2024-07-09" },
+            });
+
+        Assert.Equal("art_92", eff.Diff!.Subject.Anchor);
+        Assert.Equal("2020-01-01", eff.Diff.FromDate);
+        Assert.Equal("2024-12-31", eff.Diff.ToDate);
     }
 
     [Fact]

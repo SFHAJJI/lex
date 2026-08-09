@@ -107,6 +107,7 @@ export interface UiEffect {
   provision?: { subject: Subject; valid_from: string; valid_to?: string; provisions: ProvisionItem[]; permalink?: string };
   diff?: { subject: Subject; from_date: string; to_date: string; note?: string };
   history?: { subject: Subject; anchor: string; distinct_texts: number; states: { valid_from: string; valid_to?: string; sha?: string; permalink?: string }[] };
+  timeline?: { subject: Subject };
   ranking?: { from_date: string; to_date: string; order: string; works_changed: number; new_versions: number; rows: RankingRow[] };
   in_force?: { date: string; total: number; rows: {
     work: string; title?: string; kind?: string; valid_from: string; permalink?: string;
@@ -119,6 +120,7 @@ export interface UiEffect {
   // does, so "show me EU regulations" leaves the matching jurisdiction and legal metadata
   // selected rather than describing filters the visitor then has to find.
   workspace?: {
+    query?: string;
     jurisdiction?: string; hierarchy?: string; domain?: string; source_class?: string;
     act_form?: string; binding_status?: string; page?: number; language?: string;
   };

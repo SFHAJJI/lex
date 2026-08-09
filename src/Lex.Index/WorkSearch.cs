@@ -243,9 +243,9 @@ public static class WorkSearch
                 FROM work_names n
                 JOIN work_records r ON r.work_id=n.work_id
                 WHERE instr(' ' || $normalized || ' ',' ' || n.normalized || ' ') > 0
-                  AND length(n.normalized) >= 4
-                  AND (n.kind='reviewed_alias'
-                       OR (n.kind='official_identifier' AND n.normalized GLOB '*[0-9]*')
+                  AND ((n.kind='reviewed_alias' AND length(n.normalized) >= 3)
+                       OR (n.kind='official_identifier' AND length(n.normalized) >= 4
+                           AND n.normalized GLOB '*[0-9]*')
                        OR (n.kind='official_title' AND length(n.normalized) >= 12
                            AND instr(n.normalized,' ') > 0))
                   AND ($language IS NULL OR r.language=$language)

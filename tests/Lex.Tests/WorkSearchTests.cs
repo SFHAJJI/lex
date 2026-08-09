@@ -636,6 +636,32 @@ public sealed class WorkSearchTests : IDisposable
     }
 
     [Fact]
+    public void Short_reviewed_alias_inside_article_comparison_resolves_the_named_work()
+    {
+        var db = TempDb();
+        var crr = Doc("eu:32013r0575:2020-01-01", "32013r0575",
+            "Regulation (EU) No 575/2013");
+        IndexBuilder.Build(db, Stamp(), [crr],
+            [Provision(crr, "Institutions shall comply with own funds requirements.",
+                "art_92", "92")], [], [], null,
+            workSearch: new WorkSearchBuildOptions(
+                [Alias("32013r0575", "fr", "CRR")], [], EnrichmentDigest));
+
+        using var reader = LexIndexReader.Open(db);
+        var result = reader.SearchKeyword(
+            "Compare Article 92 of the CRR between 2020 and 2024.",
+            FilterSet.All, 10, fuzzyAuto: false);
+
+        Assert.Equal("resolved", result.QueryPlan!.WorkResolutionStatus);
+        Assert.Equal(["32013r0575"], result.QueryPlan.WorkConstraints);
+        Assert.Equal("92", result.QueryPlan.ArticleNumber);
+        Assert.Equal("compare of between 2020 and 2024", result.QueryPlan.ProvisionQuery);
+        Assert.Contains(result.Hits, hit => hit.Doc.GroupKey == "32013r0575"
+            && hit.Provision.Anchor == "art_92"
+            && hit.MatchReasons.Contains("article_intent"));
+    }
+
+    [Fact]
     public void Named_work_resolution_scopes_residual_provision_search()
     {
         var db = TempDb();

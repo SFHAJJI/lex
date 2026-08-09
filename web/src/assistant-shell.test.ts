@@ -21,7 +21,7 @@ test("first visit is closed and only valid tab-scoped state is restored", () => 
 test("starter prompts demonstrate the four typed research capabilities", () => {
   assert.deepEqual(STARTER_PROMPTS, [
     "Show Article 6 of the GDPR as it stood on 1 January 2021.",
-    "Compare Article 92 of the CRR between 2020 and 2024.",
+    "Compare Article 92 of the CRR between 1 January 2020 and 31 December 2024.",
     "When did Article 92 of the CRR change?",
     "Which Luxembourg and EU laws changed most during 2024?",
   ]);
@@ -37,10 +37,10 @@ test("typed effects map to bounded workspace state rather than model-authored li
 
   const diff = assistantWorkspaceUrl({ diff: {
     subject: { work: "eu-eurlex:32013R0575", anchor: "art_92" },
-    from_date: "2020-01-01", to_date: "2024-01-01",
+    from_date: "2020-01-01", to_date: "2024-12-31",
   } });
   assert.equal(diff,
-    "/?space=law&work=eu-eurlex%3A32013R0575&date=2020-01-01&to=2024-01-01&anchor=art_92&mode=compare");
+    "/?space=law&work=eu-eurlex%3A32013R0575&date=2020-01-01&to=2024-12-31&anchor=art_92&mode=compare");
 
   const ranking = assistantWorkspaceUrl({ ranking: {
     from_date: "2024-01-01", to_date: "2024-12-31", order: "by_churn",
@@ -99,4 +99,20 @@ test("dated lists and filter-only effects share the same deterministic workspace
   assert.equal(assistantWorkspaceUrl({ workspace: {
     jurisdiction: "lu", source_class: "LOI,CODE",
   } }), "/?space=search&jurisdiction=lu&sourceClass=LOI%2CCODE");
+});
+
+test("search and whole-work timeline effects open their matching workspace state", () => {
+  assert.deepEqual(assistantWorkspaceState({ workspace: {
+    query: "capital requirements", jurisdiction: "eu",
+  } }), {
+    space: "search", q: "capital requirements", asOf: undefined, work: undefined,
+    date: undefined, to: undefined, anchor: undefined, mode: "read", from: undefined,
+    until: undefined, order: undefined, retrieval: undefined, jurisdiction: "eu",
+    hierarchy: undefined, domain: undefined, sourceClass: undefined, actForm: undefined,
+    bindingStatus: undefined, language: undefined,
+  });
+
+  assert.equal(assistantWorkspaceUrl({ timeline: {
+    subject: { work: "eu-eurlex:32013r0575" },
+  } }), "/?space=law&work=eu-eurlex%3A32013r0575");
 });

@@ -416,6 +416,28 @@ public class McpContractTests : IDisposable
     }
 
     [Fact]
+    public void Diff_accepts_only_a_held_article_anchor_and_returns_it_as_typed_state()
+    {
+        var result = Call("diff", new JsonObject
+        {
+            ["work"] = "t-pub:w1", ["from_date"] = "2020-06-01",
+            ["to_date"] = "2022-06-01", ["anchor"] = "art_1",
+        });
+
+        Assert.Equal("art_1", result["anchor"]!.GetValue<string>());
+        Assert.Equal("t-pub:w1", result["work"]!.GetValue<string>());
+
+        var missing = Call("diff", new JsonObject
+        {
+            ["work"] = "t-pub:w1", ["from_date"] = "2020-06-01",
+            ["to_date"] = "2022-06-01", ["anchor"] = "art_92",
+        });
+        Assert.Equal("unknown_anchor", Status(missing));
+        Assert.Contains("art_1", Assert.IsType<JsonArray>(missing["anchors_not_in_version"])
+            .Select(item => item!.GetValue<string>()));
+    }
+
+    [Fact]
     public void Selecting_an_absent_anchor_is_distinguished_from_an_unknown_work()
     {
         var o = Call("as_of", new JsonObject

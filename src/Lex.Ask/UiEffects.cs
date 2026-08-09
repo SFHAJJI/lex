@@ -15,6 +15,7 @@ public sealed record UiEffect(
     ProvisionView? Provision = null,
     DiffView? Diff = null,
     HistoryView? History = null,
+    TimelineView? Timeline = null,
     RankingView? Ranking = null,
     InForceView? InForce = null,
     CitedByView? CitedBy = null,
@@ -26,7 +27,7 @@ public sealed record UiEffect(
     GapView? Gap = null)
 {
     [System.Text.Json.Serialization.JsonIgnore]
-    public bool IsEmpty => Provision is null && Diff is null && History is null
+    public bool IsEmpty => Provision is null && Diff is null && History is null && Timeline is null
                            && Ranking is null && InForce is null && CitedBy is null
                            && Workspace is null && Gap is null;
 
@@ -68,6 +69,7 @@ public sealed record UiEffect(
                 Provision = acc.Provision ?? p.Provision,
                 Diff = acc.Diff ?? p.Diff,
                 History = acc.History ?? p.History,
+                Timeline = acc.Timeline ?? p.Timeline,
                 Ranking = ranking,
                 InForce = acc.InForce ?? p.InForce,
                 CitedBy = acc.CitedBy ?? p.CitedBy,
@@ -135,6 +137,8 @@ public sealed record HistoryView(Subject Subject, string Anchor, int DistinctTex
 
 public sealed record HistoryState(string ValidFrom, string? ValidTo, string? Sha, string? Permalink);
 
+public sealed record TimelineView(Subject Subject);
+
 public sealed record RankingView(string FromDate, string ToDate, string Order,
     int WorksChanged, int NewVersions, IReadOnlyList<RankingRow> Rows);
 
@@ -161,6 +165,7 @@ public sealed record CitedByRow(string Work, string? Title, string ValidFrom, st
 /// A null Workspace means no filter directive; null fields inside one mean that filter is clear.
 /// </summary>
 public sealed record WorkspaceView(
+    string? Query = null,
     string? Jurisdiction = null,
     string? Hierarchy = null,
     string? Domain = null,

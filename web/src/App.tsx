@@ -315,7 +315,11 @@ export default function App() {
       let navigated = false;
       if (hasView(r.ui)) {
         setUi(r.ui);
-        const subj = r.ui!.provision?.subject ?? r.ui!.history?.subject ?? r.ui!.diff?.subject;
+        // The rendered view owns navigation. A comparison turn may also read each side via
+        // as_of for grounded prose; those supporting provision effects must not steal the
+        // diff's verified article anchor or change its destination.
+        const subj = r.ui!.diff?.subject ?? r.ui!.provision?.subject
+          ?? r.ui!.history?.subject ?? r.ui!.timeline?.subject;
         const m = modeFor(r.ui);
         // The space is set explicitly, never inferred. The reader is somewhere when they ask, and
         // "somewhere" is now a pinned value: answering a "what changed" question from the search
