@@ -8,6 +8,7 @@ import { ResultsSkeleton } from "./Skeleton";
 import { fusePublisherHits } from "./searchFusion";
 import { intervalLabel } from "./temporal";
 import { searchSubmission, type SearchSubmission } from "./searchSubmission";
+import { groupSearchResults } from "./searchResults";
 
 /**
  * One box, one date.
@@ -146,8 +147,12 @@ export default function Search(p: SearchProps) {
             arts.push({ work, title, anchor: h.anchor, num: h.provision_num,
                         snippet: h.snippet, ...meta, validFrom: String(h.valid_from) });
         }
-        setWorks([...byWork.values()].slice(0, 8));
-        setArticles(arts.slice(0, 25));
+        const visibleWorks = [...byWork.values()].slice(0, 8);
+        const visibleWorkIds = new Set(visibleWorks.map((work) => work.work));
+        setWorks(visibleWorks);
+        // Passages explain why one of the visible laws matched. They are not an independent
+        // result inventory and must never introduce a ninth law after the work cap was applied.
+        setArticles(arts.filter((article) => visibleWorkIds.has(article.work)).slice(0, 25));
       })
       .catch(() => { if (live) { setWorks([]); setArticles([]); setError("Search could not be reached. Try again."); } })
       .finally(() => { if (live) setBusy(false); });
@@ -158,6 +163,10 @@ export default function Search(p: SearchProps) {
     e.preventDefault();
     p.onSubmit(searchSubmission(text));
   };
+
+  const groupedResults = groupSearchResults(works, articles);
+  const visiblePassages = new Set(articles.slice(0, articleLimit));
+  const resultLawCount = groupedResults.reduce((count, section) => count + section.works.length, 0);
 
   return (
     <section className="finder" aria-label="Search the corpus">
@@ -207,7 +216,7 @@ export default function Search(p: SearchProps) {
       {q ? (
         <div className="results">
           <div className="res-head">
-            <span className="sub">{busy ? "Searching…" : `${works.length} law${works.length === 1 ? "" : "s"}, ${articles.length} article${articles.length === 1 ? "" : "s"} shown`}</span>
+            <span className="sub">{busy ? "Searching…" : `${resultLawCount} law${resultLawCount === 1 ? "" : "s"}, ${articles.length} matching passage${articles.length === 1 ? "" : "s"}`}</span>
             <span className="badge">{modeUsed === "hybrid" ? "words + meaning" : "exact words"}</span>
             <span className="grow" />
             <div className="search-mode" role="group" aria-label="Search method">
@@ -234,50 +243,56 @@ export default function Search(p: SearchProps) {
 
           {error ? <div className="empty"><p>{error}</p></div> : null}
 
-          {works.length > 0 ? (
-            <>
-              <h4 className="res-h">Laws</h4>
-              <ul className="rows">
-                {works.map((w) => (
-                  <li key={w.work}>
-                    <button className="rowbtn" onClick={() => p.onOpen(w.work, asOf)}>
-                      <span>{w.title}</span>
-                      <span className="hitmeta">
-                        <span className="mono">{w.work.split(":")[1]}</span>
-                        <Validity hit={w} />
-                        <HitContext hit={w} />
-                        {w.consolidationStatus === "not_published"
-                          ? <span className="warntext">official merged wording not published</span> : null}
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </>
-          ) : null}
+          {groupedResults.map((section) => (
+            <section className="res-jurisdiction" key={section.jurisdiction}>
+              <h4 className="res-h">
+                {jurisdictionLabel(section.jurisdiction)}
+                <small>{section.works.length} law{section.works.length === 1 ? "" : "s"}</small>
+              </h4>
+              <div className="res-worklist">
+                {section.works.map((w) => {
+                  const passages = w.passages.filter((passage) => visiblePassages.has(passage));
+                  return (
+                    <article className="res-work" key={w.work}>
+                      <button className="rowbtn res-work-head" onClick={() => p.onOpen(w.work, asOf)}>
+                        <span>{w.title}</span>
+                        <span className="hitmeta">
+                          <span className="mono">{w.work.split(":")[1]}</span>
+                          <Validity hit={w} />
+                          <HitContext hit={w} />
+                          {w.consolidationStatus === "not_published"
+                            ? <span className="warntext">official merged wording not published</span> : null}
+                        </span>
+                      </button>
+                      {passages.length > 0 ? (
+                        <div className="res-passages">
+                          <div className="res-passages-label">Matching passages</div>
+                          <ul className="rows">
+                            {passages.map((a, i) => (
+                              <li key={`${a.work}-${a.anchor}-${i}`}>
+                                <button className="rowbtn" onClick={() => p.onOpen(a.work, a.validFrom, a.anchor)}>
+                                  <span>{a.num ?? a.anchor}</span>
+                                  {a.snippet ? <span className="sub"><Marked text={a.snippet} /></span> : null}
+                                  <span className="hitmeta"><Validity hit={a} /><HitContext hit={a} />
+                                    {a.language ? <span>{a.language.toUpperCase()}</span> : null}</span>
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ) : null}
+                    </article>
+                  );
+                })}
+              </div>
+            </section>
+          ))}
 
-          {articles.length > 0 ? (
-            <>
-              <h4 className="res-h">Where it is said</h4>
-              <ul className="rows">
-                {articles.slice(0, articleLimit).map((a, i) => (
-                  <li key={`${a.work}-${a.anchor}-${i}`}>
-                    <button className="rowbtn" onClick={() => p.onOpen(a.work, a.validFrom, a.anchor)}>
-                      <span>{a.num ?? a.anchor} <span className="sub">· {a.title}</span></span>
-                      {a.snippet ? <span className="sub"><Marked text={a.snippet} /></span> : null}
-                      <span className="hitmeta"><Validity hit={a} /><HitContext hit={a} />
-                        {a.language ? <span>{a.language.toUpperCase()}</span> : null}</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-              {articles.length > articleLimit ? (
-                <button className="ghost more-results"
-                        onClick={() => setArticleLimit((current) => Math.min(articles.length, current + 8))}>
-                  Show {Math.min(8, articles.length - articleLimit)} more articles
-                </button>
-              ) : null}
-            </>
+          {articles.length > articleLimit ? (
+            <button className="ghost more-results"
+                    onClick={() => setArticleLimit((current) => Math.min(articles.length, current + 8))}>
+              Show {Math.min(8, articles.length - articleLimit)} more matching passages
+            </button>
           ) : null}
 
           {!busy && !error && works.length === 0 && articles.length === 0 ? (
@@ -306,7 +321,6 @@ function HitContext({ hit }: { hit: HitMeta }) {
     reason === "exact_identifier" ? "exact identifier" : reason === "fuzzy" ? "spelling match" :
     reason === "keyword" ? "word match" : label(reason));
   return <>
-    {hit.jurisdiction ? <span>{jurisdictionLabel(hit.jurisdiction)}</span> : null}
     {hit.hierarchy ? <span>{label(hit.hierarchy)}</span> : null}
     {(hit.domains ?? []).slice(0, 2).map((domain) => <span key={domain}>{label(domain)}</span>)}
     {reasons.map((reason) => <span key={reason}>{reason}</span>)}

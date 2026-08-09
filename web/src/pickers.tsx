@@ -97,6 +97,7 @@ export function LawPicker({ current, onPick, inline }: { current?: string; onPic
 export function shorten(t?: string): string | undefined {
   if (!t) return t;
   const i = t.indexOf(" : ");
-  const body = i > 0 && /^(Version consolidée|Konsolidierte)/i.test(t) ? t.slice(i + 3) : t;
+  const body = i > 0 && /^(Version consolidée|Version rectifiée|Konsolidierte|Konsolidéiert)/i.test(t)
+    ? t.slice(i + 3) : t;
   return body.length > 90 ? `${body.slice(0, 90).trimEnd()}…` : body;
 }

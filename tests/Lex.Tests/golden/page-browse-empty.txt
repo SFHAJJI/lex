@@ -108,9 +108,18 @@ HTTP 200
   .filters .f:hover { border-color:var(--fg); color:var(--fg); text-decoration:none }
   .filters .f.on { border-color:var(--fg); color:var(--fg); font-weight:600 }
   .filters .n { opacity:1; font-size:11.5px; font-variant-numeric:tabular-nums }
+  .filters .raw { margin-left:3px; font-size:10.5px; opacity:.8 }
+  .filters > .facetgroups { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr));
+                            gap:8px; align-items:start; margin-left:80px }
+  .facetgroup { border:1px solid var(--line); border-radius:8px; background:var(--card) }
+  .facetgroup summary { cursor:pointer; padding:7px 10px; font-size:12.5px; color:var(--fg) }
+  .facetgroup summary span { color:var(--muted); margin-left:5px }
+  .facetgroup > div { display:flex; flex-wrap:wrap; gap:6px; padding:3px 8px 9px }
+  .sourceclasses { margin-left:80px }
   .cat td:first-child a { font-weight:600 }
   .cat .r { text-align:right; font-variant-numeric:tabular-nums }
   .cat .sub { font-size:12px; margin-top:2px }
+  .cat-mobile { display:none }
   .cat th:nth-child(5), .cat td:nth-child(5),
   .cat th:nth-child(6), .cat td:nth-child(6) { white-space:nowrap }
   .pager { display:flex; gap:14px; align-items:baseline; margin:12px 0; font-size:14px }
@@ -167,14 +176,21 @@ HTTP 200
     header { gap:12px; padding:12px 14px }
     h1 { font-size:25px }
     .rail .yr { font-size:10px }
-    /* Type is already available as a filter and the first date is secondary to the
-       latest state. Removing those columns leaves the law, version count, latest date
-       and text availability readable instead of spelling dates vertically. */
-    .cat th:nth-child(3), .cat td:nth-child(3),
-    .cat th:nth-child(5), .cat td:nth-child(5),
-    .cat th:nth-child(6), .cat td:nth-child(6) { display:none }
-    .cat th, .cat td { padding-left:6px; padding-right:6px }
-    .cat td:first-child { min-width:130px }
+    .filters i { width:100%; margin:3px 0 1px }
+    .filters > .facetgroups { margin-left:0; grid-template-columns:1fr }
+    .sourceclasses { margin-left:0 }
+    .catcard { overflow:visible; padding:4px 14px }
+    .cat, .cat tbody { display:block; overflow:visible }
+    .cat tr { display:grid; grid-template-columns:minmax(0,1fr); padding:10px 0;
+              border-bottom:1px solid var(--line) }
+    .cat tr:first-child { display:none }
+    .cat td { display:none; border:0; padding:0 }
+    .cat td:first-child, .cat td:last-child { display:block; min-width:0 }
+    .cat td:last-child { margin-top:7px }
+    .cat td:first-child a { display:block; overflow-wrap:anywhere }
+    .cat .badge { white-space:normal; line-height:1.35 }
+    .cat-desktop { display:none }
+    .cat-mobile { display:block }
   }
 </style></head>
 <body class="assistant-enabled">
@@ -191,13 +207,14 @@ HTTP 200
 </header>
 <main>
 <h1>The catalogue</h1>
-<p class="sub">Every work Lex holds, filterable by publisher, type and whether the text itself is held.</p>
-<p class="sub" style="margin-top:0">Every work Lex holds, with the number of dated versions
-behind it. A work is a law; a version is what that law said between two dates.
-<b>0</b> works match.</p><nav class="filters" aria-label="Narrow the catalogue"><div><i>publisher</i><a class="f on" href="/browse?type=NOSUCHTYPE">all</a><a class="f" href="/browse?publisher=t-pub&amp;type=NOSUCHTYPE">Test Publisher</a></div><div><i>type</i><a class="f" href="/browse">all</a><a class="f" href="/browse?type=RGD">RGD <span class="n">1</span></a><a class="f" href="/browse?type=LOI">LOI <span class="n">1</span></a></div><div><i>text</i>
-<a class="f on" href="/browse?type=NOSUCHTYPE">any</a>
-<a class="f" href="/browse?type=NOSUCHTYPE&amp;text=yes">full text held</a>
-<a class="f" href="/browse?type=NOSUCHTYPE&amp;text=no">record only</a></div>
+<p class="sub">Every legal work and publisher collection, with source class, dated versions and exact text coverage.</p>
+<p class="sub" style="margin-top:0">Every legal work and publisher collection Lex holds, with
+its dated records and readable-text coverage. A work is one legal instrument or one official
+thematic collection; a dated version is one state supplied by its publisher.
+<b>0</b> works match.</p><nav class="filters" aria-label="Narrow the catalogue"><div><i>publisher</i><a class="f on" href="/browse">all</a><a class="f" href="/browse?publisher=t-pub">Test Publisher</a></div><div class="type-filter"><i>source class</i><a class="f" href="/browse">all</a></div><div class="facetgroups" aria-label="Source classes by jurisdiction"><details class="facetgroup"><summary>t-pub · Test Publisher <span>2 classes</span></summary><div><a class="f" href="/browse?publisher=t-pub&amp;type=LOI" title="LOI">Law <span class="mono raw">LOI</span> <span class="n">1</span></a><a class="f" href="/browse?publisher=t-pub&amp;type=RGD" title="RGD">Grand-ducal regulation <span class="mono raw">RGD</span> <span class="n">1</span></a></div></details></div><div><i>text</i>
+<a class="f on" href="/browse?type=NOSUCHTYPE">any coverage</a>
+<a class="f" href="/browse?type=NOSUCHTYPE&amp;text=yes">some text held</a>
+<a class="f" href="/browse?type=NOSUCHTYPE&amp;text=no">no text held</a></div>
 <div><i>sort</i>
 <a class="f on" href="/browse?type=NOSUCHTYPE">name</a>
 <a class="f" href="/browse?type=NOSUCHTYPE&amp;sort=versions">most versions</a>

@@ -150,7 +150,7 @@ public sealed record ChangeRow(
 /// <summary>A work as the catalogue lists it: summarised across all of its versions.</summary>
 public sealed record CatalogueRow(
     string Collection, string GroupKey, string? Title, string? TitleShort, string? Kind,
-    int Versions, string FirstFrom, string LastFrom, bool HasText,
+    int Versions, int TextVersions, string FirstFrom, string LastFrom, bool HasText,
     // ISO instant, when a record for this work was last observed. Optional so that an
     // index built before this column was selected still opens.
     string? LastObserved = null);

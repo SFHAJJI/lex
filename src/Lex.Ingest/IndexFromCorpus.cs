@@ -99,7 +99,10 @@ public static class IndexFromCorpus
                         Collection: publisherId,
                         GroupKey: workMeta.Slug,
                         GroupIdentifier: workMeta.WorkIdentifier,
-                        Kind: meta.DocumentType,
+                        // A sparse version record does not erase a stable work classification.
+                        // Legilux occasionally omits typeDocument on one consolidation while the
+                        // work-level catalogue still has a dominant publisher class.
+                        Kind: meta.DocumentType ?? workMeta.DocumentType,
                         Language: expr.Language,
                         ValidFrom: exprValidFrom,
                         ValidTo: expr.ValidTo,

@@ -70,17 +70,33 @@ public static class CatalogueEndpoints
                 var q = new List<string>();
                 void Keep(string name, string? cur) { if (cur is not null) q.Add($"{name}={Uri.EscapeDataString(cur)}"); }
                 Keep("publisher", k == "publisher" ? v : pub);
-                Keep("type", k == "type" ? v : kind);
+                // Source classes belong to a publisher vocabulary. Carrying a Luxembourg code
+                // such as CODE_RECUEIL into EUR-Lex creates an empty catalogue that looks like a
+                // data outage, so changing jurisdiction clears that dependent facet.
+                Keep("type", k == "publisher" ? null : k == "type" ? v : kind);
                 Keep("text", k == "text" ? v : text switch { true => "yes", false => "no", _ => null });
                 Keep("sort", k == "sort" ? v : Q("sort"));
                 Keep("page", k == "page" ? v : null);
                 return "/browse" + (q.Count > 0 ? "?" + string.Join("&amp;", q) : "");
             }
 
+            string KindLink(string collection, string sourceClass)
+            {
+                var q = new List<string>
+                {
+                    $"publisher={Uri.EscapeDataString(collection)}",
+                    $"type={Uri.EscapeDataString(sourceClass)}",
+                };
+                if (text is not null) q.Add($"text={(text == true ? "yes" : "no")}");
+                if (Q("sort") is { } sort) q.Add($"sort={Uri.EscapeDataString(sort)}");
+                return "/browse?" + string.Join("&amp;", q);
+            }
+
             var sb = new StringBuilder();
             sb.Append($"""
-                <p class="sub" style="margin-top:0">Every work Lex holds, with the number of dated versions
-                behind it. A work is a law; a version is what that law said between two dates.
+                <p class="sub" style="margin-top:0">Every legal work and publisher collection Lex holds, with
+                its dated records and readable-text coverage. A work is one legal instrument or one official
+                thematic collection; a dated version is one state supplied by its publisher.
                 <b>{total:n0}</b> works match.</p>
                 """);
 
@@ -92,20 +108,40 @@ public static class CatalogueEndpoints
                 sb.Append($"""<a class="f{(pub == r.Collection ? " on" : "")}" href="{Link("publisher", r.Collection)}">{H(r.Stamp.GetValueOrDefault("publisher_name", r.Collection))}</a>""");
             sb.Append("</div>");
 
-            var kinds = sources.SelectMany(r => r.CatalogueKinds(null))
-                               .GroupBy(x => x.Kind)
-                               .Select(g => (Kind: g.Key, Works: g.Sum(x => x.Works)))
-                               .OrderByDescending(x => x.Works).Take(14).ToList();
-            sb.Append($"""<div><i>type</i><a class="f{(kind is null ? " on" : "")}" href="{Link("type", null)}">all</a>""");
-            foreach (var (k, n) in kinds)
-                sb.Append($"""<a class="f{(kind == k ? " on" : "")}" href="{Link("type", k)}">{H(k)} <span class="n">{n:n0}</span></a>""");
+            sb.Append($"""<div class="type-filter"><i>source class</i><a class="f{(kind is null ? " on" : "")}" href="{Link("type", null)}">all</a>""");
             sb.Append("</div>");
+            if (pub is not null)
+            {
+                var publisherKinds = sources.SelectMany(r => r.CatalogueKinds(null))
+                    .GroupBy(x => x.Kind).Select(g => (g.Key, g.Sum(x => x.Works)))
+                    .OrderByDescending(x => x.Item2).ThenBy(x => x.Key, StringComparer.Ordinal).ToList();
+                var activeClass = kind is null ? "Choose a source class" : $"{SourceClassLabel(kind)} ({kind})";
+                sb.Append($"""<details class="facetgroup sourceclasses"><summary>{H(activeClass)} <span>{publisherKinds.Count:n0} classes</span></summary><div>""");
+                foreach (var (k, n) in publisherKinds)
+                    sb.Append($"""<a class="f{(kind == k ? " on" : "")}" href="{Link("type", k)}" title="{H(k)}">{H(SourceClassLabel(k))} <span class="mono raw">{H(k)}</span> <span class="n">{n:n0}</span></a>""");
+                sb.Append("</div></details>");
+            }
+            if (pub is null)
+            {
+                sb.Append("""<div class="facetgroups" aria-label="Source classes by jurisdiction">""");
+                foreach (var r in readers.Values.OrderBy(r => r.Collection, StringComparer.Ordinal))
+                {
+                    var kinds = r.CatalogueKinds(null).OrderByDescending(x => x.Works)
+                        .ThenBy(x => x.Kind, StringComparer.Ordinal).ToList();
+                    var jurisdiction = r.Stamp.GetValueOrDefault("jurisdiction", r.Collection);
+                    sb.Append($"""<details class="facetgroup"><summary>{H(jurisdiction)} · {H(r.Stamp.GetValueOrDefault("publisher_name", r.Collection))} <span>{kinds.Count:n0} classes</span></summary><div>""");
+                    foreach (var (k, n) in kinds)
+                        sb.Append($"""<a class="f" href="{KindLink(r.Collection, k)}" title="{H(k)}">{H(SourceClassLabel(k))} <span class="mono raw">{H(k)}</span> <span class="n">{n:n0}</span></a>""");
+                    sb.Append("</div></details>");
+                }
+                sb.Append("</div>");
+            }
 
             sb.Append($"""
                 <div><i>text</i>
-                <a class="f{(text is null ? " on" : "")}" href="{Link("text", null)}">any</a>
-                <a class="f{(text == true ? " on" : "")}" href="{Link("text", "yes")}">full text held</a>
-                <a class="f{(text == false ? " on" : "")}" href="{Link("text", "no")}">record only</a></div>
+                <a class="f{(text is null ? " on" : "")}" href="{Link("text", null)}">any coverage</a>
+                <a class="f{(text == true ? " on" : "")}" href="{Link("text", "yes")}">some text held</a>
+                <a class="f{(text == false ? " on" : "")}" href="{Link("text", "no")}">no text held</a></div>
                 <div><i>sort</i>
                 <a class="f{(order == CatalogueOrder.Name ? " on" : "")}" href="{Link("sort", null)}">name</a>
                 <a class="f{(order == CatalogueOrder.MostVersions ? " on" : "")}" href="{Link("sort", "versions")}">most versions</a>
@@ -114,6 +150,15 @@ public static class CatalogueEndpoints
                 </nav>
                 """);
 
+            if (kind is "RECUEIL" or "CODE_RECUEIL")
+                sb.Append("""
+                    <div class="notice"><b>These are thematic collections, not single laws.</b>
+                    Legilux uses each record as a shelf for member acts. Lex keeps the official timeline
+                    and metadata, but does not turn a compilation PDF into invented provisions or citations.
+                    Individual member acts remain searchable when the publisher exposes them as legal works.
+                    <a href="/coverage">Read the coverage contract →</a></div>
+                    """);
+
             if (rows.Count == 0)
             {
                 sb.Append("""<div class="card"><p>No work matches those filters. <a href="/browse">Clear them</a>.</p></div>""");
@@ -121,26 +166,38 @@ public static class CatalogueEndpoints
             else
             {
                 sb.Append("""
-                    <div class="card" style="overflow-x:auto"><table class="cat">
-                    <tr><th>work</th><th>jurisdiction</th><th>type</th><th class="r">versions</th><th>first</th><th>last</th><th>text</th></tr>
+                    <div class="card catcard"><table class="cat">
+                    <tr><th>work</th><th>jurisdiction</th><th>source class</th><th class="r">dated versions</th><th>first</th><th>last</th><th>text coverage</th></tr>
                     """);
                 foreach (var w in rows)
                 {
                     var jurisdiction = readers.GetValueOrDefault(w.Collection)?.Stamp
                         .GetValueOrDefault("jurisdiction", w.Collection) ?? w.Collection;
-                    var mark = w.HasText
-                        ? """<span class="badge ok">full text</span>"""
-                        : """<span class="badge">record only</span>""";
+                    var classLabel = SourceClassLabel(w.Kind);
+                    var coverage = w.TextVersions == w.Versions
+                        ? $"all {w.Versions:n0} readable"
+                        : w.TextVersions > 0
+                            ? $"{w.TextVersions:n0} of {w.Versions:n0} readable"
+                            : IsThematicCollection(w.Kind) ? "collection metadata" : "metadata only";
+                    var coverageTitle = w.TextVersions > 0
+                        ? "Publisher text is held for these dated versions."
+                        : IsThematicCollection(w.Kind)
+                            ? "This is an official thematic collection; its compilation is not treated as one legal instrument."
+                            : "Lex holds the publisher record, but no safely derived provision text for its dated versions.";
+                    var publisherTitle = StripConsolidationLabel(w.TitleShort ?? w.Title);
+                    var title = string.IsNullOrWhiteSpace(publisherTitle)
+                        ? "Untitled publisher record" : publisherTitle;
                     sb.Append($"""
                         <tr>
-                          <td><a href="/{H(w.Collection)}/{H(w.GroupKey)}">{H(w.TitleShort ?? w.Title ?? w.GroupKey)}</a>
-                              <div class="sub mono">{H(w.GroupKey)}</div></td>
+                          <td><a href="/{H(w.Collection)}/{H(w.GroupKey)}">{H(title)}</a>
+                              <div class="sub mono cat-desktop">{H(w.GroupKey)}</div>
+                              <div class="sub cat-mobile">{H(jurisdiction)} · {H(classLabel)}{(string.IsNullOrEmpty(w.Kind) ? "" : $" ({H(w.Kind)})")} · {w.Versions:n0} dated version{(w.Versions == 1 ? "" : "s")}<br><span class="mono">{H(w.FirstFrom)} → {H(w.LastFrom)}</span></div></td>
                           <td><span class="badge">{H(jurisdiction)}</span></td>
-                          <td class="mono">{H(w.Kind ?? "")}</td>
+                          <td>{H(classLabel)}{(string.IsNullOrEmpty(w.Kind) ? "" : $" <span class=\"sub mono\">{H(w.Kind)}</span>")}</td>
                           <td class="r">{w.Versions:n0}</td>
                           <td class="mono">{H(w.FirstFrom)}</td>
                           <td class="mono">{H(w.LastFrom)}</td>
-                          <td>{mark}</td>
+                          <td><span class="badge {(w.TextVersions > 0 ? "ok" : "")}" title="{H(coverageTitle)}">{coverage}</span></td>
                         </tr>
                         """);
                 }
@@ -240,7 +297,7 @@ public static class CatalogueEndpoints
             }.ToJsonString();
 
             return Results.Content(Page("The catalogue",
-                sb.ToString(), "Every work Lex holds, filterable by publisher, type and whether the text itself is held.",
+                sb.ToString(), "Every legal work and publisher collection, with source class, dated versions and exact text coverage.",
                 "browse", canonicalPath: "/browse", jsonLd: datasetLd), "text/html");
         });
 

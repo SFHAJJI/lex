@@ -124,10 +124,16 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
     public async Task Static_catalogue_and_wide_evidence_tables_remain_accessible()
     {
         var browse = await _site.Client.GetStringAsync("/browse");
+        var scopedBrowse = await _site.Client.GetStringAsync("/browse?publisher=t-pub&type=LOI");
         var inForce = await _site.Client.GetStringAsync("/in-force-on?date=2021-01-01");
         var coverage = await _site.Client.GetStringAsync("/coverage");
 
         Assert.Contains(".filters .n { opacity:1;", browse);
+        Assert.Contains("<details class=\"facetgroup\">", browse);
+        Assert.Contains("Law <span class=\"mono raw\">LOI</span>", scopedBrowse);
+        Assert.Contains("all 2 readable", scopedBrowse);
+        Assert.Contains("href=\"/browse?publisher=t-pub\"", scopedBrowse);
+        Assert.DoesNotContain("publisher=t-pub&amp;type=LOI\">Test Publisher", scopedBrowse);
         Assert.Contains("<select name=\"kind\" aria-label=\"Source class\">", inForce);
         Assert.Contains("<table tabindex=\"0\" aria-label=\"Text coverage by document type\">", coverage);
 
