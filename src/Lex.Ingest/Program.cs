@@ -245,6 +245,23 @@ switch (args0[0])
             {
                 var db = Get("--db") ?? throw new ArgumentException("--db required");
                 var enrichment = Get("--work-enrichment");
+                var expectedCollection = Get("--expected-collection");
+                var expectedCorpusCommit = Get("--expected-corpus-commit");
+                if (expectedCollection is not null || expectedCorpusCommit is not null)
+                {
+                    var strict = IndexStampVerifier.Verify(
+                        db, expectedCollection, expectedCorpusCommit, enrichment);
+                    Console.WriteLine($"collection={strict.Collection} " +
+                        $"corpus_commit={strict.CorpusCommit} " +
+                        $"signature_valid={strict.SignatureValid} " +
+                        $"content_digest={(strict.ContentDigestMatches ? "matches"
+                            : strict.ContentDigestPresent ? "MISMATCH" : "absent")} " +
+                        $"collection_matches={strict.CollectionMatches} " +
+                        $"corpus_commit_matches={strict.CorpusCommitMatches} " +
+                        $"enrichment_digest={(enrichment is null ? "not_checked"
+                            : strict.EnrichmentDigestMatches ? "matches" : "MISMATCH")}");
+                    return strict.ExitCode;
+                }
                 using var r = Lex.Index.LexIndexReader.Open(db);
                 // A valid signature over the metadata proves nothing about the text. Recompute
                 // the content digest from what the database actually holds and compare it with
@@ -304,7 +321,7 @@ switch (args0[0])
                 finally { try { Directory.Delete(tmp, true); } catch { } }
             }
             default:
-                Console.Error.WriteLine("usage: lex verify corpus --corpus X | lex verify stamp --db X [--work-enrichment FILE] | lex verify derive --publisher P --corpus X --articles Y [--work slug]");
+                Console.Error.WriteLine("usage: lex verify corpus --corpus X | lex verify stamp --db X [--expected-collection ID] [--expected-corpus-commit SHA] [--work-enrichment FILE] | lex verify derive --publisher P --corpus X --articles Y [--work slug]");
                 return 1;
         }
     }
