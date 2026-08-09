@@ -478,11 +478,13 @@ public sealed class AskService(McpCore core)
         var outlines = parts.Select(part => part.Provision)
             .Where(view => view is { Provisions.Count: > 0 })
             .ToList();
+        var view = UiEffect.Merge(parts);
+        if (view.Diff is { Status: "profiles_differ" })
+            return "Lex cannot produce a reliable comparison for those dates because the two versions use incompatible extraction profiles. The reason and both verified publisher versions are open below.";
         if (synthesisFailed
             && grounded.Status == AgentAnswerStatus.Refusal
             && parts.All(part => part.Gap is null))
         {
-            var view = UiEffect.Merge(parts);
             if (view.Diff is not null)
                 return "The requested comparison is open below.";
             if (view.History is not null)

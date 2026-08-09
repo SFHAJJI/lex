@@ -42,6 +42,18 @@ test("typed effects map to bounded workspace state rather than model-authored li
   assert.equal(diff,
     "/?space=law&work=eu-eurlex%3A32013R0575&date=2020-01-01&to=2024-12-31&anchor=art_92&mode=compare");
 
+  assert.deepEqual(assistantWorkspaceState({ diff: {
+    subject: { work: "eu-eurlex:32013R0575", anchor: "art_92" },
+    from_date: "2020-01-01", to_date: "2024-12-31", status: "profiles_differ",
+  } }), {
+    space: "law", q: undefined, asOf: undefined, work: "eu-eurlex:32013R0575",
+    date: "2020-01-01", to: "2024-12-31", anchor: "art_92", mode: "compare",
+    from: undefined, until: undefined, order: undefined, retrieval: undefined,
+    jurisdiction: undefined, hierarchy: undefined, domain: undefined,
+    sourceClass: undefined, actForm: undefined, bindingStatus: undefined,
+    language: undefined,
+  });
+
   const ranking = assistantWorkspaceUrl({ ranking: {
     from_date: "2024-01-01", to_date: "2024-12-31", order: "by_churn",
     works_changed: 2, new_versions: 3, rows: [],
@@ -102,15 +114,18 @@ test("dated lists and filter-only effects share the same deterministic workspace
 });
 
 test("search and whole-work timeline effects open their matching workspace state", () => {
-  assert.deepEqual(assistantWorkspaceState({ workspace: {
+  const search = { workspace: {
     query: "capital requirements", jurisdiction: "eu",
-  } }), {
+  } };
+  assert.deepEqual(assistantWorkspaceState(search), {
     space: "search", q: "capital requirements", asOf: undefined, work: undefined,
     date: undefined, to: undefined, anchor: undefined, mode: "read", from: undefined,
     until: undefined, order: undefined, retrieval: undefined, jurisdiction: "eu",
     hierarchy: undefined, domain: undefined, sourceClass: undefined, actForm: undefined,
     bindingStatus: undefined, language: undefined,
   });
+  assert.equal(assistantWorkspaceUrl(search),
+    "/?space=search&q=capital+requirements&jurisdiction=eu");
 
   assert.equal(assistantWorkspaceUrl({ timeline: {
     subject: { work: "eu-eurlex:32013r0575" },

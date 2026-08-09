@@ -304,6 +304,15 @@
       "alternative": "Interleave every publisher result without a source partition, or group by overlapping practice areas and duplicate the same work across categories.",
       "reason": "Jurisdiction is a disjoint provenance boundary; the other legal dimensions overlap and are clearer as filters than as competing result taxonomies.",
       "cost": "The search and catalogue UI need per-jurisdiction counts, dependent facet handling, readable source-class labels, exact per-work text counts, accessible disclosure and responsive regression tests."
+    },
+    {
+      "id": "D78",
+      "title": "Use the assistant as a verified operation controller",
+      "status": "shipped",
+      "choice": "Let the model choose a bounded MCP operation, then derive the workspace route and rendering state only from the validated result. A typed operation replaces unrelated prior workspace coordinates; an unavailable comparison retains its status and opens the verified endpoints without claiming that a diff succeeded.",
+      "alternative": "Let model prose author routes, keep searching until a plausible law appears, or merge a new legal operation with stale search and period filters.",
+      "reason": "The same question must reach the same legal operation whether it starts from a control or natural language, and a failed comparison must remain an explicit evidence gap rather than become a confident navigation sentence.",
+      "cost": "Every MCP status that changes what can be shown must cross the typed UI contract and needs an operation-to-workspace regression."
     }
   ],
   "baseline": {

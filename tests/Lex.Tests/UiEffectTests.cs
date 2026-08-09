@@ -325,7 +325,7 @@ public class UiEffectTests
                 ("to_date", "2024-12-31"), ("anchor", "art_92")),
             new JsonObject
             {
-                ["envelope"] = new JsonObject { ["status"] = "ok" },
+                ["envelope"] = new JsonObject { ["status"] = "profiles_differ" },
                 ["anchor"] = "art_92",
                 ["from"] = new JsonObject
                 {
@@ -337,6 +337,7 @@ public class UiEffectTests
         Assert.Equal("art_92", eff.Diff!.Subject.Anchor);
         Assert.Equal("2020-01-01", eff.Diff.FromDate);
         Assert.Equal("2024-12-31", eff.Diff.ToDate);
+        Assert.Equal("profiles_differ", eff.Diff.Status);
     }
 
     [Fact]

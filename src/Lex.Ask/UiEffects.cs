@@ -130,7 +130,7 @@ public sealed record ProvisionView(Subject Subject, string ValidFrom, string? Va
 public sealed record ProvisionItem(string Anchor, string? Num, string? Heading, string Text, string? Sha);
 
 public sealed record DiffView(Subject Subject, string FromDate, string ToDate,
-    string? FromPermalink, string? ToPermalink, string? Note);
+    string? FromPermalink, string? ToPermalink, string? Note, string? Status = null);
 
 public sealed record HistoryView(Subject Subject, string Anchor, int DistinctTexts,
     IReadOnlyList<HistoryState> States);

@@ -115,7 +115,7 @@ export interface ProvisionItem { anchor: string; num?: string; heading?: string;
                                  citations?: Citation[] }
 export interface UiEffect {
   provision?: { subject: Subject; valid_from: string; valid_to?: string; provisions: ProvisionItem[]; permalink?: string };
-  diff?: { subject: Subject; from_date: string; to_date: string; note?: string };
+  diff?: { subject: Subject; from_date: string; to_date: string; note?: string; status?: string };
   history?: { subject: Subject; anchor: string; distinct_texts: number; states: { valid_from: string; valid_to?: string; sha?: string; permalink?: string }[] };
   timeline?: { subject: Subject };
   ranking?: { from_date: string; to_date: string; order: string; works_changed: number; new_versions: number; rows: RankingRow[] };

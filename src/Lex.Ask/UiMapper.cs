@@ -152,7 +152,8 @@ public static class UiMapper
                 S(b, "title") ?? S(a, "title"), from, S(o, "anchor")),
             FromDate: from, ToDate: to,
             FromPermalink: S(a, "permalink"), ToPermalink: S(b, "permalink"),
-            Note: S(o, "note")));
+            Note: S(o, "note"),
+            Status: S(o["envelope"] as JsonObject, "status") ?? S(o, "status")));
     }
 
     /// Controls the assistant set on the way to its answer, so the workspace lands the same way.

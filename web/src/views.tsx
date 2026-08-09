@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { type ProvisionItem, type RankingRow, type UiEffect } from "./api";
 import { facetLabel, jurisdictionLabel } from "./facets";
-import { publisherOf, workSlug, type State } from "./state";
+import { publisherOf, workSlug } from "./state";
 import { shorten } from "./pickers";
 import { EvidenceActions } from "./EvidenceActions";
 import { citationText, evidenceFilename, lawEvidenceMarkdown } from "./export";
@@ -577,12 +577,6 @@ export function CitedBy({ view, onOpen }: {
   );
 }
 
-/** A history answer needs no mode of its own: the rail is already showing it. */
-export function modeFor(ui?: UiEffect): State["mode"] | undefined {
-  if (ui?.diff) return "compare";
-  if (ui?.history || ui?.timeline || ui?.provision) return "read";
-  return undefined;
-}
 
 /**
  * One name for a law, everywhere it appears.

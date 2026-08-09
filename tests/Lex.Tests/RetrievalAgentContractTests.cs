@@ -235,6 +235,24 @@ public sealed class RetrievalAgentContractTests
     }
 
     [Fact]
+    public void An_unavailable_comparison_is_never_described_as_open_and_successful()
+    {
+        var draft = new AgentAnswerDraft(
+            AgentAnswerStatus.Refusal, "The requested comparison is open below.", [], [], null, null);
+        var comparison = new UiEffect(Diff: new DiffView(
+            new Subject("eu-eurlex:32013r0575", "CRR", "2020-01-01", "art_92"),
+            "2020-01-01", "2024-12-31", null, null,
+            "the two versions were extracted by different profiles",
+            Status: "profiles_differ"));
+
+        var reply = AskService.ReplyFor(draft, [comparison]);
+
+        Assert.DoesNotContain("comparison is open", reply, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("cannot produce a reliable comparison", reply, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("verified publisher versions", reply, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void A_gap_alongside_an_outline_preserves_the_evidence_limited_refusal()
     {
         var refusal = new AgentAnswerDraft(
