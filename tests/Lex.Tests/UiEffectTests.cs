@@ -180,6 +180,32 @@ public class UiEffectTests
     }
 
     [Fact]
+    public void An_as_of_outline_remains_a_navigable_provision_view_without_legal_text()
+    {
+        var eff = UiMapper.From("as_of",
+            Args(("work", "lu-legilux:code-environnement"), ("date", "2026-08-09")),
+            new JsonObject
+            {
+                ["document"] = new JsonObject
+                {
+                    ["work"] = "lu-legilux:code-environnement",
+                    ["title"] = "Code de l'environnement",
+                    ["valid_from"] = "2026-01-01",
+                },
+                ["provisions"] = new JsonArray(new JsonObject
+                {
+                    ["anchor"] = "art_1", ["num"] = "Art. 1", ["heading"] = "Scope",
+                    ["text"] = null, ["text_sha256"] = "abc",
+                }),
+            });
+
+        Assert.NotNull(eff.Provision);
+        Assert.Single(eff.Provision.Provisions);
+        Assert.Equal("", eff.Provision.Provisions[0].Text);
+        Assert.Equal("art_1", eff.Provision.Provisions[0].Anchor);
+    }
+
+    [Fact]
     public void A_half_resolved_diff_still_maps()
     {
         // A diff whose second side did not resolve used to throw inside the mapper, which loses

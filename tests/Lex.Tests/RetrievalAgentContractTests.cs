@@ -168,6 +168,56 @@ public sealed class RetrievalAgentContractTests
     }
 
     [Fact]
+    public void Outline_navigation_survives_an_evidence_limited_prose_refusal()
+    {
+        var refusal = new AgentAnswerDraft(
+            AgentAnswerStatus.Refusal, "Insufficient evidence.", [], [], null, null);
+        var outline = new UiEffect(Provision: new ProvisionView(
+            new Subject("lu-legilux:code", "Code", "2026-01-01", null),
+            "2026-01-01", null,
+            [new ProvisionItem("art_1", "1", "Scope", "", "abc")], null));
+
+        var reply = AskService.ReplyFor(refusal, [outline]);
+
+        Assert.Contains("open below", reply, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Choose a provision", reply, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_refusal_with_returned_legal_text_is_not_rewritten_as_navigation()
+    {
+        var refusal = new AgentAnswerDraft(
+            AgentAnswerStatus.Refusal, "Insufficient evidence.", [], [], null, null);
+        var text = new UiEffect(Provision: new ProvisionView(
+            new Subject("lu-legilux:code", "Code", "2026-01-01", "art_1"),
+            "2026-01-01", null,
+            [new ProvisionItem("art_1", "1", "Scope", "Held legal text", "abc")], null));
+
+        Assert.Equal("Insufficient evidence.", AskService.ReplyFor(refusal, [text]));
+        var outline = new UiEffect(Provision: text.Provision! with
+        {
+            Provisions = [new ProvisionItem("art_2", "2", "Other", "", "def")],
+        });
+        Assert.Equal("Insufficient evidence.", AskService.ReplyFor(refusal, [outline, text]));
+        Assert.Equal("Insufficient evidence.", AskService.ReplyFor(refusal, [text, outline]));
+    }
+
+    [Fact]
+    public void A_gap_alongside_an_outline_preserves_the_evidence_limited_refusal()
+    {
+        var refusal = new AgentAnswerDraft(
+            AgentAnswerStatus.Refusal, "Insufficient evidence.", [], [], null, null);
+        var outline = new UiEffect(Provision: new ProvisionView(
+            new Subject("lu-legilux:code", "Code", "2026-01-01", null),
+            "2026-01-01", null,
+            [new ProvisionItem("art_1", "1", "Scope", "", "abc")], null));
+        var gap = new UiEffect(Gap: new GapView(
+            "unknown_anchor", "lu-legilux:code", "2026-01-01", "Unknown article", []));
+
+        Assert.Equal("Insufficient evidence.", AskService.ReplyFor(refusal, [outline, gap]));
+    }
+
+    [Fact]
     public void Framework_prompt_serializes_evidence_kinds_as_stable_strings()
     {
         var prompt = AgentAnswerFinalizer.EvidencePrompt([LegalText]);
