@@ -1,4 +1,5 @@
 using Lex.Ask;
+using System.Text.Json.Nodes;
 
 namespace Lex.Tests;
 
@@ -284,6 +285,27 @@ public sealed class RetrievalAgentContractTests
             "2024-01-01", "2024-12-31", null, null, null));
         Assert.Equal(AgentAnswerFinalizer.Render(verbose),
             AskService.ReplyFor(verbose, [ranking, comparison]));
+    }
+
+    [Fact]
+    public void Assistant_change_rankings_share_the_workspace_instrument_scope()
+    {
+        var implicitScope = new JsonObject
+        {
+            ["from_date"] = "2024-01-01",
+            ["to_date"] = "2024-12-31",
+        };
+        AskService.ApplyWorkspaceDefaults("changes_in_period", implicitScope);
+        Assert.Equal("!RECUEIL,!CODE_RECUEIL",
+            implicitScope["source_class"]!.GetValue<string>());
+
+        var collections = new JsonObject { ["source_class"] = "RECUEIL,CODE_RECUEIL" };
+        AskService.ApplyWorkspaceDefaults("changes_in_period", collections);
+        Assert.Equal("RECUEIL,CODE_RECUEIL", collections["source_class"]!.GetValue<string>());
+
+        var legacyAlias = new JsonObject { ["document_type"] = "LOI" };
+        AskService.ApplyWorkspaceDefaults("changes_in_period", legacyAlias);
+        Assert.Null(legacyAlias["source_class"]);
     }
 
     [Fact]

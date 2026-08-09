@@ -262,6 +262,18 @@ public sealed class AskService(McpCore core)
             && plan["article_number"]?.GetValue<string>() is { Length: > 0 }
             && plan["has_strong_work_match"]?.GetValue<bool>() != true);
 
+    internal static void ApplyWorkspaceDefaults(string tool, JsonObject args)
+    {
+        // The public MCP keeps an omitted class filter meaningful. The application assistant,
+        // however, controls the same "What changed" workspace as a human reader, whose default
+        // population is legal instruments rather than thematic shelves. Bind that default before
+        // execution so the reported aggregate, typed effect and reloaded workspace are identical.
+        if (tool == "changes_in_period"
+            && args["source_class"] is null
+            && args["document_type"] is null)
+            args["source_class"] = "!RECUEIL,!CODE_RECUEIL";
+    }
+
     private static string SystemPrompt(string host, int toolCount) => $"""
         You are the answer layer of Lex, a point-in-time retrieval system for consolidated
         regulatory text (Luxembourg via Legilux, EU via EUR-Lex). You have {toolCount} read-only tools
@@ -927,6 +939,7 @@ public sealed class AskService(McpCore core)
                         try
                         {
                             var args = JsonNode.Parse(argsRaw) as JsonObject ?? [];
+                            ApplyWorkspaceDefaults(name, args);
                             entry["args"] = args.DeepClone();
                             // Deterministic routing guard: a mini model can churn on search;
                             // after two searches the tool redirects it to the state tools — and
