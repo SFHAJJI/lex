@@ -1153,7 +1153,9 @@ the manifest sha256 and refuses mismatches. Consequences:
 
 ## 9. MCP tool surface
 
-Seven tools. Contracts complete below; frozen for increment A (C6).
+Ten tools. The original increment A contracts below are retained as design history. The current
+HTTP and stdio contract is MCP 2.0; see [the migration note](mcp-2-migration.md) and the live
+`/developers` page for its complete tool and status surface.
 
 **The `work` parameter, defined once for all tools:** exactly three accepted
 forms, a **work-level `lex_id`** (`<publisher-id>:<work-key>`, §7.2), a
@@ -1165,20 +1167,13 @@ model gets, state the chaining explicitly: *"unknown document → call `search`
 first, take `lex_id` from the hit, then `as_of`."* Where a `lex_id` is given,
 the `publisher` parameter is redundant and, if contradictory, an error.
 
-**Refusal statuses, defined once:** every lookup tool returns exactly one of
-`ok`; `no_version_for_date` (the work exists; no version covers the date);
-`outside_observed_window` (Tier B; date precedes `history_begins`, carries
-`history_begins` so the client can say *why* it is unknowable);
-`text_not_available` (Tier C corpus shape; timeline + link returned);
-`text_withheld` (the text exists in the corpus but a rights/acquisition gate, R2/R18-class, has not cleared; carries `reason`; **distinct from
-`text_not_available`**, D38); `stale_cursor`; or `unknown_work`. A flagged
-wrong answer is still a wrong answer; refusals are how `as_of` stays truthful
-on Tier B (§7.3) and how gated publishers stay lawful in public (D38).
-
-**Cursor semantics, defined once:** cursors are opaque, bound to the
-`corpus_commit` they were issued against, and expire with it, presented
-against a different build they return `stale_cursor` (restart the query).
-Every truncating tool both returns and accepts one.
+**Legal statuses, defined once:** the implementation constants and
+[MCP 2.0 migration note](mcp-2-migration.md) define the closed vocabulary.
+`outside_observed_window` and `stale_cursor` are not public statuses because no production path
+emits them. Bounded collection tools use explicit `limit` and `offset`. Coverage and
+`history_begins` describe the observed population; `no_version_for_date` says that a held work has
+no publisher version covering the requested date. A flagged wrong answer is still a wrong answer;
+refusals keep `as_of` truthful and gated publishers lawful in public (D38).
 
 ### 9.1 `as_of`
 
@@ -1699,7 +1694,8 @@ lawful channel ever appears (D42). Budget a deployment day.
   "any regulator, any sector" is a property of the design, not a slogan.
 - Exercises the machinery carrying the project's biggest permanent-credibility
   risk (derived history, R16): publisher-stated date extraction (§7.3),
-  `outside_observed_window` refusals (§9.1), observation-gap recording (§11.3).
+  explicit coverage boundaries and `history_begins` disclosures (§9.1), observation-gap
+  recording (§11.3).
 
 ### 14.4 Increment D, Tier C, the CSSF timeline (demand-driven)
 

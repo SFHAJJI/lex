@@ -52,6 +52,17 @@ public sealed class LexOptions
     /// </summary>
     public bool RequireArtifactManifest { get; init; }
 
+    /// <summary>
+    /// Exact comma-separated publisher set required for a production-ready revision.
+    /// Deliberately scoped deployments declare their smaller set instead of silently appearing
+    /// complete with whatever happened to mount.
+    /// </summary>
+    public string RequiredPublishers { get; init; } = "";
+
+    public IReadOnlyList<string> RequiredPublisherSet => RequiredPublishers
+        .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+        .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+
     /// <summary>Immutable deployment facts injected by the release workflow.</summary>
     public string? CodeCommit { get; init; }
     public string? ArtifactManifestId { get; init; }
@@ -103,6 +114,7 @@ public static class LexOptionsSetup
         AppInsightsConnectionString =
             Environment.GetEnvironmentVariable("APPLICATIONINSIGHTS_CONNECTION_STRING"),
         RequireArtifactManifest = Environment.GetEnvironmentVariable("LEX_REQUIRE_ARTIFACT_MANIFEST") == "1",
+        RequiredPublishers = Environment.GetEnvironmentVariable("LEX_REQUIRED_PUBLISHERS") ?? "",
         CodeCommit = Environment.GetEnvironmentVariable("LEX_CODE_COMMIT"),
         ArtifactManifestId = Environment.GetEnvironmentVariable("LEX_ARTIFACT_MANIFEST_ID"),
         DeployImage = Environment.GetEnvironmentVariable("LEX_DEPLOY_IMAGE"),

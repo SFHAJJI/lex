@@ -131,3 +131,17 @@ test("search and whole-work timeline effects open their matching workspace state
     subject: { work: "eu-eurlex:32013r0575" },
   } }), "/?space=law&work=eu-eurlex%3A32013r0575");
 });
+
+test("a resolved navigation operation opens exactly its law coordinates", () => {
+  assert.deepEqual(assistantWorkspaceState({ workspace: {
+    work: "eu-eurlex:32013r0575", date: "2024-01-01", anchor: "art_92", language: "en",
+  } }), {
+    space: "law", q: undefined, asOf: undefined,
+    work: "eu-eurlex:32013r0575", date: "2024-01-01", to: undefined,
+    anchor: "art_92", mode: "read",
+    from: undefined, until: undefined, order: undefined, retrieval: undefined,
+    jurisdiction: undefined, hierarchy: undefined, domain: undefined,
+    sourceClass: undefined, actForm: undefined, bindingStatus: undefined,
+    language: "en",
+  });
+});

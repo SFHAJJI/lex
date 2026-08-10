@@ -267,8 +267,10 @@ publisher timeline, plus mechanically detected renumberings (identical-hash matc
 <tr><td class="mono">anchor_not_in_version</td><td>that article did not exist in that version (knowing this IS the product)</td></tr>
 <tr><td class="mono">text_withheld</td><td>metadata held, text gate not cleared; official link provided</td></tr>
 <tr><td class="mono">text_not_available</td><td>publisher record held; no safely derived provision text; official link provided</td></tr>
-<tr><td class="mono">outside_observed_window</td><td>before the observation history begins</td></tr>
+<tr><td class="mono">no_provision_history</td><td>the work is held without per-article history</td></tr>
 </table></div>
+<p class="sub">MCP 2.0.0 uses a closed status vocabulary. See the
+<a href="https://github.com/SFHAJJI/lex/blob/main/docs/mcp-2-migration.md" rel="noopener">migration note</a>.</p>
 <p>A flagged wrong answer is still wrong, so Lex refuses instead; <a href="/coverage">coverage</a> exists to
 state what we do <b>not</b> have. The AI layer (<a href="/">the front page</a>) is additive and separated:
 a bounded retrieval loop uses the same in-process tool core the public

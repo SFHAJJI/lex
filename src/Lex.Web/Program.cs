@@ -32,7 +32,11 @@ var options = LexOptionsSetup.FromEnvironment(builder.Environment);
 builder.Services.AddSingleton(Microsoft.Extensions.Options.Options.Create(options));
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<IndexRegistry>();
-builder.Services.AddSingleton(sp => new McpCore(sp.GetRequiredService<IndexRegistry>().All));
+builder.Services.AddSingleton(sp =>
+{
+    var registry = sp.GetRequiredService<IndexRegistry>();
+    return new McpCore(registry.All, registry.VerifiedManifestSetId);
+});
 builder.Services.AddSingleton(sp => new AskService(sp.GetRequiredService<McpCore>()));
 builder.Services.AddMcpServer(McpSdkBridge.Configure)
     .WithHttpTransport(options => options.Stateless = true)

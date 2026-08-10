@@ -14,29 +14,29 @@ Status: accepted and in progress
 - [x] Complete independent Codex and Claude adversarial reviews.
 - [x] Reconcile every P0/P1 into the accepted specification or an explicit trade-off.
 - [x] Record the maintainer verdict and implementation ownership.
-- [ ] Audit reachable `lex-ops` history and make the repository public safely.
-- [ ] Verify approved public workflows use free standard runners and bounded storage.
-- [ ] Add `promote=false` and separate promotion/rollback operations to the production OIDC path.
-- [ ] Prove signed prebuilt publication, unchanged traffic, promotion and rollback on the production
+- [x] Audit reachable `lex-ops` history and make the repository public safely.
+- [x] Verify approved public workflows use free standard runners and bounded storage.
+- [x] Add `promote=false` and separate promotion/rollback operations to the production OIDC path.
+- [x] Prove signed prebuilt publication, unchanged traffic, promotion and rollback on the production
   Container App without a staging environment.
 
 ## Increment 1: restore assistant authority
 
-- [ ] Add failing exhaustive tool/status/outcome tests and the explicit MCP 2.0 migration contract.
-- [ ] Introduce the internal operation plan and separate legal/transport outcomes.
-- [ ] Give every operation in a compound request an order-invariant authoritative outcome.
-- [ ] Add required-publisher readiness and scoped-population disclosure.
-- [ ] Make work authorization fail closed and test every approved authority source.
-- [ ] Make comparison, missing-publisher and provisional gaps dominate supporting evidence.
-- [ ] Render exact, comparison, ranking, inventory, timeline, verification, clarification, legal
+- [x] Add failing exhaustive tool/status/outcome tests and the explicit MCP 2.0 migration contract.
+- [x] Introduce the internal operation plan and separate legal/transport outcomes.
+- [x] Give every operation in a compound request an order-invariant authoritative outcome.
+- [x] Add required-publisher readiness and scoped-population disclosure.
+- [x] Make work authorization fail closed and test every approved authority source.
+- [x] Make comparison, missing-publisher and provisional gaps dominate supporting evidence.
+- [x] Render exact, comparison, ranking, inventory, timeline, verification, clarification, legal
   boundary and gap replies from localized typed templates.
-- [ ] Restrict composer and judge calls to bounded descriptive synthesis.
-- [ ] Preserve the typed result on composer, judge, cancellation and transport failure.
-- [ ] Resolve work identity only when the selected operation requires it.
-- [ ] Carry bounded temporal, provenance and verification evidence into every legal UI effect.
-- [ ] Run focused tests, full .NET tests, web tests and build.
-- [ ] Complete code-quality and adversarial reviews with no unresolved P0/P1 finding.
-- [ ] Commit the authority slices atomically.
+- [x] Restrict composer and judge calls to bounded descriptive synthesis.
+- [x] Preserve the typed result on composer, judge, cancellation and transport failure.
+- [x] Resolve work identity only when the selected operation requires it.
+- [x] Carry bounded temporal, provenance and verification evidence into every legal UI effect.
+- [x] Run focused tests, full .NET tests, web tests and build.
+- [x] Complete code-quality and adversarial reviews with no unresolved P0/P1 finding.
+- [x] Commit the authority slices atomically.
 
 ## Increment 2: stream and bound the system
 

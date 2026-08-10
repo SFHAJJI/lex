@@ -162,6 +162,11 @@ public static class ApiEndpoints
         });
 
         app.MapGet("/healthz", () => Results.Text("ok"));
+        app.MapGet("/readyz", () =>
+        {
+            var report = ctx.Registry.Readiness(ctx.Options);
+            return Results.Json(report, statusCode: report.Ready ? 200 : 503);
+        });
 
         app.MapGet("/provenance/{*key}", (string key) =>
         {

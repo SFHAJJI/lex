@@ -1,4 +1,6 @@
+using System.Text.Json;
 using System.Text.Json.Nodes;
+using Lex.Ask;
 using Lex.Index;
 using Lex.Mcp;
 using Xunit;
@@ -75,6 +77,36 @@ public class McpContractTests : IDisposable
 
     private static string? Status(JsonObject o) =>
         (o["envelope"]?["status"] ?? o["status"])?.GetValue<string>();
+
+    [Fact]
+    public void Operation_contract_retains_real_search_and_aggregate_arrays()
+    {
+        var searchArguments = new JsonObject { ["query"] = "thing" };
+        var search = _core.CallTool("search", searchArguments);
+        var exact = RequestedOperation.Create(
+            "exact", 0, "as_of", new JsonObject(), true,
+            [SupportingCallRole.WorkResolution], [OperationEffect.Provision, OperationEffect.Gap]);
+        var searchRun = OperationRun.Start(OperationPlan.Create("search-request", "en", [exact]));
+
+        searchRun.ObserveSupportingCall("exact", SupportingCallRole.WorkResolution, "search",
+            searchArguments, McpStatus.Ok, search);
+
+        var changesArguments = new JsonObject
+        {
+            ["from_date"] = "2019-01-01",
+            ["to_date"] = "2023-01-01",
+        };
+        var changes = _core.CallTool("changes_in_period", changesArguments);
+        var ranking = RequestedOperation.Create(
+            "ranking", 0, "changes_in_period", changesArguments, false, [],
+            [OperationEffect.Ranking, OperationEffect.Gap]);
+        var result = new OperationExecution(ranking).Complete(McpStatus.Ok, changes);
+
+        Assert.Equal(JsonValueKind.Array, result.Payload?.ValueKind);
+        Assert.NotEmpty(result.Payload?.EnumerateArray() ?? []);
+        Assert.Single(searchRun.SupportingCalls);
+        Assert.Equal(JsonValueKind.Array, searchRun.SupportingCalls[0].Payload.ValueKind);
+    }
 
     [Fact]
     public void Empty_mount_refusal_uses_live_coverage_instead_of_stale_counts()
@@ -544,6 +576,11 @@ public class McpContractTests : IDisposable
         { ["from_date"] = "2019-01-01", ["to_date"] = "2023-01-01" });
         Assert.Equal(2, moved["works_changed"]!.GetValue<int>());
         Assert.Equal(3, moved["new_versions"]!.GetValue<int>());
+        Assert.Equal(2, moved["population"]!["works_in_scope"]!.GetValue<int>());
+        Assert.Contains("selected publisher",
+            moved["population"]!["basis"]!.GetValue<string>());
+        Assert.False(string.IsNullOrWhiteSpace(
+            moved["population"]!["known_exclusions"]!.GetValue<string>()));
         var rows = moved["changes"]!.AsArray().OfType<JsonObject>().ToList();
         Assert.True(rows.Single(r => r["work"]!.GetValue<string>() == "t-pub:w1")["text_comparable"]!.GetValue<bool>());
         Assert.False(rows.Single(r => r["work"]!.GetValue<string>() == "t-pub:w2")["text_comparable"]!.GetValue<bool>());

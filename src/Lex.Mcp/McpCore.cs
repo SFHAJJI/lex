@@ -8,7 +8,9 @@ namespace Lex.Mcp;
 /// public HTTP endpoint both dispatch through this class. Retrieves, filters, diffs,
 /// reports — never summarises or advises (F10).
 /// </summary>
-public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
+public sealed class McpCore(
+    IReadOnlyDictionary<string, LexIndexReader> readers,
+    string? artifactManifestIdentity = null)
 {
     public JsonArray ToolDefs()
     {
@@ -149,16 +151,23 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
         // verified EU releases honest during rolling deployment.
         envelope["timeline_semantics"] = r.Stamp.GetValueOrDefault("timeline_semantics",
             r.Collection == "eu-eurlex" ? "official_consolidation_state" : "publisher_applicability");
+        envelope["artifact"] = new JsonObject
+        {
+            ["manifest_set_id"] = artifactManifestIdentity,
+            ["content_digest"] = r.Stamp.GetValueOrDefault("content_digest"),
+            ["code_commit"] = r.Stamp.GetValueOrDefault("code_commit"),
+            ["index_format"] = r.Stamp.GetValueOrDefault("index_format"),
+        };
         return envelope;
     }
 
-    private static string TextStatus(DocRow d) => !d.TextAvailable ? "text_not_available"
-        : d.TextPublic ? "ok" : "text_withheld";
+    private static string TextStatus(DocRow d) => !d.TextAvailable ? McpStatus.TextNotAvailable
+        : d.TextPublic ? McpStatus.Ok : McpStatus.TextWithheld;
 
     private static string ComparisonTextStatus(DocRow a, DocRow b)
-        => !a.TextAvailable || !b.TextAvailable ? "text_not_available"
-         : a.TextPublic && b.TextPublic ? "ok"
-         : "text_withheld";
+        => !a.TextAvailable || !b.TextAvailable ? McpStatus.TextNotAvailable
+         : a.TextPublic && b.TextPublic ? McpStatus.Ok
+         : McpStatus.TextWithheld;
 
     // Base URL for permalinks is deployment config only (never derived from or stored in
     // signed content); the field is omitted entirely when unconfigured so air-gapped
@@ -299,7 +308,7 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
         if (missing.Count == 0) return;
 
         output["anchors_not_in_version"] = missing;
-        if (found.Count == 0) output["envelope"]!["status"] = "anchor_not_in_version";
+        if (found.Count == 0) output["envelope"]!["status"] = McpStatus.AnchorNotInVersion;
         var near = NearestAnchors(wanted, all);
         if (near.Count > 0)
             output["nearest_anchors"] = new JsonArray(near.Select(x => (JsonNode)x).ToArray());
@@ -338,7 +347,7 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
         if (readers.Count == 0)
             return new JsonObject
             {
-                ["status"] = "no_corpus_mounted",
+                ["status"] = McpStatus.NoCorpusMounted,
                 ["detail"] = "This server started with zero verified indexes, so it holds no law "
                            + "and cannot answer legal questions. The engine is available, but its "
                            + "signed corpus artifacts were not mounted.",
@@ -383,13 +392,13 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                 var work = Str("work") ?? throw new ArgumentException("work required");
                 var date = Date("date");
                 var res = Resolve(work, Str("publisher"));
-                if (res is null) return new JsonObject { ["status"] = "unknown_work", ["work"] = work };
+                if (res is null) return new JsonObject { ["status"] = McpStatus.UnknownWork, ["work"] = work };
                 var (r, w) = res.Value;
                 var doc = r.AsOf(w, date, new FilterSet(null, null, null, Str("language")));
                 if (doc is null)
                     return new JsonObject
                     {
-                        ["envelope"] = Envelope(r, r.WorkExists(w) ? "no_version_for_date" : "unknown_work", ProvisionalFor(r, date)),
+                        ["envelope"] = Envelope(r, r.WorkExists(w) ? McpStatus.NoVersionForDate : McpStatus.UnknownWork, ProvisionalFor(r, date)),
                         ["work"] = w,
                         ["date"] = date.ToString("yyyy-MM-dd"),
                     };
@@ -448,14 +457,20 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                         }
                         else
                         {
-                            o["document"] = DocJson(doc with { Body = doc.TextPublic ? r.BuildBody(doc) : null }, withText: true);
+                            var body = doc.TextPublic ? r.BuildBody(doc) : null;
+                            if (doc.TextPublic && string.IsNullOrWhiteSpace(body))
+                            {
+                                status = McpStatus.TextNotAvailable;
+                                o["envelope"] = Envelope(r, status, ProvisionalFor(r, date));
+                            }
+                            o["document"] = DocJson(doc with { Body = body }, withText: true);
                         }
                         break;
                     }
                 }
-                if (status == "text_withheld")
+                if (status == McpStatus.TextWithheld)
                     o["text_withheld_reason"] = "publisher text gate pending; read the official text at source_uri";
-                else if (status == "text_not_available")
+                else if (status == McpStatus.TextNotAvailable)
                     o["text_unavailable_reason"] = "publisher record held; no safely derived provision text is available; read source_uri";
                 return o;
             }
@@ -463,14 +478,16 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
             {
                 var work = Str("work") ?? throw new ArgumentException("work required");
                 var res = Resolve(work, Str("publisher"));
-                if (res is null) return new JsonObject { ["status"] = "unknown_work", ["work"] = work };
+                if (res is null) return new JsonObject { ["status"] = McpStatus.UnknownWork, ["work"] = work };
                 var (r, w) = res.Value;
                 var rows = r.Timeline(w);
-                if (rows.Count == 0) return new JsonObject { ["envelope"] = Envelope(r, "unknown_work"), ["work"] = w };
+                if (rows.Count == 0) return new JsonObject { ["envelope"] = Envelope(r, McpStatus.UnknownWork), ["work"] = w };
                 var limit = Int("limit", 100); var offset = Int("offset", 0);
+                var provisional = rows.Any(row => DateOnly.TryParse(row.ValidFrom, out var validFrom)
+                    && ProvisionalFor(r, validFrom));
                 return new JsonObject
                 {
-                    ["envelope"] = Envelope(r, "ok"),
+                    ["envelope"] = Envelope(r, McpStatus.Ok, provisional),
                     ["work"] = w,
                     ["total_count"] = rows.Count,
                     ["truncated"] = rows.Count > offset + limit,
@@ -497,7 +514,8 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                     var (rows, total) = r.InForceOn(date, filter, limit, offset);
                     outp.Add(new JsonObject
                     {
-                        ["envelope"] = Envelope(r, "ok", ProvisionalFor(r, date)),
+                        ["envelope"] = Envelope(r, total == 0 ? McpStatus.NoResult : McpStatus.Ok,
+                            ProvisionalFor(r, date)),
                         ["population"] = new JsonObject
                         {
                             ["basis"] = "versioned works only",
@@ -517,13 +535,13 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                 var from = Date("from_date");
                 var to = Date("to_date");
                 var res = Resolve(work, Str("publisher"));
-                if (res is null) return new JsonObject { ["status"] = "unknown_work", ["work"] = work };
+                if (res is null) return new JsonObject { ["status"] = McpStatus.UnknownWork, ["work"] = work };
                 var (r, w) = res.Value;
                 var f = new FilterSet(null, null, null, Str("language"));
                 var a1 = r.AsOf(w, from, f);
                 var b1 = r.AsOf(w, to, f);
                 if (a1 is null || b1 is null)
-                    return new JsonObject { ["envelope"] = Envelope(r, "no_version_for_date"), ["from_resolved"] = a1 is not null, ["to_resolved"] = b1 is not null };
+                    return new JsonObject { ["envelope"] = Envelope(r, McpStatus.NoVersionForDate), ["from_resolved"] = a1 is not null, ["to_resolved"] = b1 is not null };
                 var anchor = Str("anchor")?.Trim().ToLowerInvariant();
                 if (anchor is { Length: > 0 } && (anchor.Length > 128
                     || !System.Text.RegularExpressions.Regex.IsMatch(anchor,
@@ -542,7 +560,7 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                     if (!anchors.Contains(anchor, StringComparer.Ordinal))
                         return new JsonObject
                         {
-                            ["envelope"] = Envelope(r, "unknown_anchor"),
+                            ["envelope"] = Envelope(r, McpStatus.UnknownAnchor),
                             ["work"] = w,
                             ["anchor"] = anchor,
                             ["anchors_not_in_version"] = new JsonArray(
@@ -570,8 +588,9 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                 var comparable = !profilesDiffer && a1.TextPublic && b1.TextPublic;
                 var output = new JsonObject
                 {
-                    ["envelope"] = Envelope(r, profilesDiffer ? "profiles_differ"
-                                               : ComparisonTextStatus(a1, b1)),
+                    ["envelope"] = Envelope(r, profilesDiffer ? McpStatus.ProfilesDiffer
+                                               : ComparisonTextStatus(a1, b1),
+                        ProvisionalFor(r, from) || ProvisionalFor(r, to)),
                     ["work"] = w,
                     ["changed"] = changed,
                     ["provision_level_comparable"] = comparable,
@@ -713,7 +732,7 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
 
                     outp.Add(new JsonObject
                     {
-                        ["envelope"] = Envelope(r, "ok"),
+                        ["envelope"] = Envelope(r, McpStatus.Ok),
                         ["retrieval_mode"] = execution.RetrievalMode,
                         ["time_scope"] = timeScope,
                         ["as_of"] = asOf?.ToString("yyyy-MM-dd"),
@@ -757,22 +776,23 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                 var work = Str("work") ?? throw new ArgumentException("work required");
                 var anchor = Str("anchor") ?? throw new ArgumentException("anchor required");
                 var res = Resolve(work, Str("publisher"));
-                if (res is null) return new JsonObject { ["status"] = "unknown_work", ["work"] = work };
+                if (res is null) return new JsonObject { ["status"] = McpStatus.UnknownWork, ["work"] = work };
                 var (r, w) = res.Value;
-                if (!r.WorkExists(w)) return new JsonObject { ["envelope"] = Envelope(r, "unknown_work"), ["work"] = w };
+                if (!r.WorkExists(w)) return new JsonObject { ["envelope"] = Envelope(r, McpStatus.UnknownWork), ["work"] = w };
                 var requestedLanguage = Str("language");
                 var states = r.ProvisionStates(w, anchor, requestedLanguage);
                 var evs = r.AnchorEvents(w, anchor, requestedLanguage);
                 if (states.Count == 0 && evs.Count == 0)
                     return new JsonObject
                     {
-                        ["envelope"] = Envelope(r, r.HasProvisionHistory(w) ? "unknown_anchor" : "no_provision_history"),
+                        ["envelope"] = Envelope(r, r.HasProvisionHistory(w) ? McpStatus.UnknownAnchor : McpStatus.NoProvisionHistory),
                         ["work"] = w,
                         ["anchor"] = anchor,
                         ["hint"] = "list anchors via as_of with mode=outline",
                     };
                 var statesArr = new JsonArray(states.Select(s =>
                 {
+                    var document = s.InVersion is null ? null : r.ByKey(s.InVersion);
                     var o = new JsonObject
                     {
                         ["valid_from"] = s.ValidFrom,
@@ -780,6 +800,10 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                         ["language"] = s.Language,
                         ["text_sha256"] = s.TextSha,
                         ["in_version"] = s.InVersion,
+                        ["source_uri"] = document?.SourceUri,
+                        ["extraction_profile"] = document?.Profile,
+                        ["record_sha256"] = document?.RecordSha,
+                        ["body_sha256"] = document?.BodySha,
                     };
                     if (s.ArticleValidFrom is not null) o["article_valid_from"] = s.ArticleValidFrom;
                     if (s.ValidityConflict) o["validity_conflict"] = true;
@@ -793,7 +817,9 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                 }).ToArray());
                 return new JsonObject
                 {
-                    ["envelope"] = Envelope(r, "ok"),
+                    ["envelope"] = Envelope(r, McpStatus.Ok,
+                        states.Any(state => DateOnly.TryParse(state.ValidFrom, out var validFrom)
+                            && ProvisionalFor(r, validFrom))),
                     ["work"] = w,
                     ["anchor"] = anchor,
                     ["language"] = states.FirstOrDefault()?.Language ?? evs.FirstOrDefault()?.Language ?? requestedLanguage,
@@ -819,7 +845,7 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                     if (d is null) continue;
                     return new JsonObject
                     {
-                        ["envelope"] = Envelope(r, "ok"),
+                        ["envelope"] = Envelope(r, McpStatus.Ok),
                         ["document"] = DocJson(d, false),
                         ["events"] = new JsonArray(r.Events(key).Select(e => (JsonNode)new JsonObject
                         {
@@ -839,7 +865,7 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                         },
                     };
                 }
-                return new JsonObject { ["status"] = "unknown_work", ["lex_id"] = key };
+                return new JsonObject { ["status"] = McpStatus.UnknownWork, ["lex_id"] = key };
             }
             case "cited_by":
             {
@@ -852,7 +878,7 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                     var hits = r.CitedBy(slug, lim);
                     outp.Add(new JsonObject
                     {
-                        ["envelope"] = Envelope(r, hits.Count == 0 ? "no_result" : "ok"),
+                        ["envelope"] = Envelope(r, hits.Count == 0 ? McpStatus.NoResult : McpStatus.Ok),
                         ["cited_work"] = w,
                         ["citing_articles"] = hits.Count,
                         ["citations"] = new JsonArray(hits.Select(h => (JsonNode)new JsonObject
@@ -899,11 +925,20 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                     var rows = r.ChangesInPeriod(from, to, kinds, byChurn, limit, offset, filter);
                     outp.Add(new JsonObject
                     {
-                        ["envelope"] = Envelope(r, works == 0 ? "no_changes_in_period" : "ok"),
+                        ["envelope"] = Envelope(r,
+                            works == 0 ? McpStatus.NoChangesInPeriod : McpStatus.Ok,
+                            DateOnly.TryParse(to, out var requestedTo) && ProvisionalFor(r, requestedTo)),
                         ["window"] = new JsonObject { ["from"] = from, ["to"] = to },
                         ["order"] = byChurn ? "by_churn" : "by_date",
                         ["works_changed"] = works,
                         ["new_versions"] = versions,
+                        ["population"] = new JsonObject
+                        {
+                            ["basis"] = "distinct non-withdrawn works in the selected publisher and legal metadata scope",
+                            ["works_in_scope"] = r.PopulationTotal(kinds, filter),
+                            ["expected_works"] = r.Coverage().ExpectedWorks,
+                            ["known_exclusions"] = KnownExclusions(r),
+                        },
                         ["shown"] = rows.Count,
                         ["offset"] = offset,
                         ["changes"] = new JsonArray(rows.Select(c =>
@@ -952,7 +987,7 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                             }
                             return (JsonNode)o;
                         }).ToArray()),
-                        ["note"] = "a 'change' is a new consolidated version dated inside the window, as asserted by the publisher; use diff or as_of on a work to see the text",
+                        ["note"] = "a row records publisher version dates inside the window; it does not by itself assert a wording change, legal effect, or entry into force; use diff or as_of to inspect text",
                     });
                 }
                 return outp;
@@ -966,7 +1001,7 @@ public sealed class McpCore(IReadOnlyDictionary<string, LexIndexReader> readers)
                     var c = r.Coverage();
                     outp.Add(new JsonObject
                     {
-                        ["envelope"] = Envelope(r, "ok"),
+                        ["envelope"] = Envelope(r, McpStatus.Ok),
                         ["publisher_name"] = r.Stamp.GetValueOrDefault("publisher_name"),
                         ["works"] = c.Groups,
                         ["scope_expected_works"] = c.ExpectedWorks,

@@ -208,7 +208,7 @@ HTTP 200
 
 <p class="lede">Lex is MCP-native: you bring the model, Lex brings the evidence.
 10 read-only tools over signed indexes, no key, no account, no rate limit on
-the endpoint.</p>
+the endpoint. The server advertises MCP 2.0.0.</p>
 
 <h2>Connect</h2>
 <div class="card"><b>Claude Code</b>
@@ -273,9 +273,9 @@ the JSON below is exactly what an MCP client receives.</p>
 <span class="mono">no_version_for_date</span> · <span class="mono">unknown_work</span> ·
 <span class="mono">unknown_anchor</span> · <span class="mono">anchor_not_in_version</span> ·
 <span class="mono">no_provision_history</span> · <span class="mono">text_withheld</span> ·
-<span class="mono">text_not_available</span> ·
-<span class="mono">outside_observed_window</span>. Build against them: an empty result and a
-refusal are different things.</p>
+<span class="mono">text_not_available</span>. Build against them: an empty result and a
+refusal are different things. See the
+<a href="https://github.com/SFHAJJI/lex/blob/main/docs/mcp-2-migration.md" rel="noopener">MCP 2.0 migration note</a>.</p>
 
 <h2>Or skip the API, take the data</h2>
 <p>Every provision of every version, one row each, licence and attribution inline.

@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using Lex.Mcp;
 
 namespace Lex.Ask;
 
@@ -13,27 +14,125 @@ namespace Lex.Ask;
 /// asked for to what the workspace does is a contract, and an untested contract is a promise.
 public static class UiMapper
 {
-    public static UiEffect From(string tool, JsonObject args, JsonNode result)
+    public static UiEffect From(RequestedOperation operation, JsonNode result)
     {
+        ArgumentNullException.ThrowIfNull(operation);
+        ArgumentNullException.ThrowIfNull(result);
+        var arguments = JsonNode.Parse(operation.Arguments.GetRawText())?.AsObject()
+            ?? throw new InvalidDataException("Operation arguments must be a JSON object.");
+        var effect = From(operation.Tool, arguments, result, "en");
+        ValidateEffects(operation, effect);
+        return effect;
+    }
+
+
+    public static UiEffect From(
+        RequestedOperation operation,
+        JsonObject executedArguments,
+        JsonNode result,
+        string locale = "en")
+    {
+        ArgumentNullException.ThrowIfNull(operation);
+        ArgumentNullException.ThrowIfNull(executedArguments);
+        ArgumentNullException.ThrowIfNull(result);
+        var effect = From(operation.Tool, executedArguments, result, locale);
+        ValidateEffects(operation, effect);
+        return effect;
+    }
+
+    public static void ValidateEffects(RequestedOperation operation, UiEffect effect)
+    {
+        ArgumentNullException.ThrowIfNull(operation);
+        ArgumentNullException.ThrowIfNull(effect);
+        var produced = EffectKinds(effect).ToArray();
+        if (produced.Length == 0)
+            throw new InvalidDataException(
+                $"Operation '{operation.OperationId}' did not produce its typed effect.");
+        var unexpected = produced.Where(item => !operation.Effects.Contains(item)).ToArray();
+        if (unexpected.Length > 0)
+            throw new InvalidDataException(
+                $"Operation '{operation.OperationId}' produced '{unexpected[0]}' outside its frozen plan.");
+    }
+
+    private static IEnumerable<OperationEffect> EffectKinds(UiEffect effect)
+    {
+        if (effect.Provision is not null) yield return OperationEffect.Provision;
+        if (effect.Diff is not null) yield return OperationEffect.Diff;
+        if (effect.History is not null) yield return OperationEffect.History;
+        if (effect.Timeline is not null) yield return OperationEffect.Timeline;
+        if (effect.Ranking is not null) yield return OperationEffect.Ranking;
+        if (effect.InForce is not null) yield return OperationEffect.InForce;
+        if (effect.CitedBy is not null) yield return OperationEffect.CitedBy;
+        if (effect.Coverage is not null) yield return OperationEffect.Coverage;
+        if (effect.Verification is not null) yield return OperationEffect.Verification;
+        if (effect.Workspace is not null) yield return OperationEffect.Workspace;
+        if (effect.Gap is not null) yield return OperationEffect.Gap;
+    }
+
+    public static UiEffect From(string tool, JsonObject args, JsonNode result, string locale = "en")
+    {
+        var evidence = EvidenceOf(result, args);
+        if (tool == "coverage") return WithEvidence(CoverageResult(result, locale), evidence);
+        if (result is JsonArray { Count: 0 })
+        {
+            var empty = tool switch
+            {
+                "changes_in_period" => Ranking(new JsonObject
+                {
+                    ["status"] = McpStatus.NoChangesInPeriod,
+                    ["window"] = new JsonObject
+                    {
+                        ["from"] = S(args, "from_date"),
+                        ["to"] = S(args, "to_date"),
+                    },
+                    ["order"] = S(args, "order") ?? "by_date",
+                    ["works_changed"] = 0,
+                    ["new_versions"] = 0,
+                    ["population"] = new JsonObject
+                    {
+                        ["basis"] = "no mounted publisher matches the selected scope",
+                        ["works_in_scope"] = 0,
+                        ["known_exclusions"] = "the selected publisher or jurisdiction is not mounted",
+                    },
+                    ["offset"] = args["offset"]?.DeepClone(),
+                    ["changes"] = new JsonArray(),
+                }, args),
+                "in_force_on" => InForce(new JsonObject
+                {
+                    ["status"] = McpStatus.NoResult,
+                    ["total_works_in_force"] = 0,
+                    ["works"] = new JsonArray(),
+                }, args),
+                "search" or "navigate" => Workspace(args),
+                _ => new UiEffect(),
+            };
+            return WithEvidence(empty, evidence);
+        }
         var node = result is JsonArray arr ? Aggregate(tool, arr) : result as JsonObject;
         if (node is null) return new UiEffect();
         var status = (node["envelope"]?["status"] ?? node["status"])?.GetValue<string>();
+        var outcome = status is null ? (LegalOutcome?)null : LegalOperationPolicy.OutcomeForStatus(status);
 
         // A refusal is a first-class view: say what is missing and what does exist instead.
-        if (status is "no_version_for_date" or "unknown_work" or "unknown_anchor"
-            or "anchor_not_in_version" or "text_withheld" or "text_not_available" or "no_provision_history"
-            or "outside_observed_window")
-            return new UiEffect(Gap: new GapView(
+        if (status is not null && outcome is LegalOutcome.NotAvailable or LegalOutcome.NotFound
+                or LegalOutcome.NotComparable)
+        {
+            var gap = new UiEffect(Gap: new GapView(
                 Status: status,
                 Work: S(node, "work") ?? S(node, "lex_id"),
                 Date: S(args, "date") ?? S(args, "as_of"),
-                Explanation: Explain(status),
+                Explanation: Explain(status, locale),
                 Available: node["versions"]?.AsArray().OfType<JsonObject>()
                                .Select(v => S(v, "valid_from") ?? "").Where(s => s.Length > 0).Take(12).ToList()
                            ?? node["anchors_not_in_version"]?.AsArray().Select(a => a?.GetValue<string>() ?? "").ToList()
                            ?? []));
+            var refused = outcome == LegalOutcome.NotComparable && tool == "diff"
+                ? UiEffect.Merge([Diff(node, args), gap])
+                : gap;
+            return WithEvidence(refused, evidence);
+        }
 
-        return tool switch
+        var mapped = tool switch
         {
             "as_of" => Provision(node, args),
             "article_history" => History(node, args),
@@ -42,9 +141,142 @@ public static class UiMapper
             "changes_in_period" => Ranking(node, args),
             "in_force_on" => InForce(node, args),
             "cited_by" => Cited(node),
+            "provenance" => Verification(node),
             "search" => Workspace(args),
+            "navigate" => Workspace(args),
             _ => new UiEffect(),
         };
+        return WithEvidence(mapped, evidence);
+    }
+
+    private static UiEffect WithEvidence(
+        UiEffect effect,
+        IReadOnlyList<EvidenceContext> evidence) => effect with
+    {
+        Provision = effect.Provision is null ? null : effect.Provision with { Evidence = evidence },
+        Diff = effect.Diff is null ? null : effect.Diff with { Evidence = evidence },
+        History = effect.History is null ? null : effect.History with { Evidence = evidence },
+        Timeline = effect.Timeline is null ? null : effect.Timeline with { Evidence = evidence },
+        Ranking = effect.Ranking is null ? null : effect.Ranking with { Evidence = evidence },
+        InForce = effect.InForce is null ? null : effect.InForce with { Evidence = evidence },
+        CitedBy = effect.CitedBy is null ? null : effect.CitedBy with { Evidence = evidence },
+        Coverage = effect.Coverage is null ? null : effect.Coverage with { Evidence = evidence },
+        Verification = effect.Verification is null
+            ? null : effect.Verification with { Evidence = evidence },
+        Workspace = effect.Workspace is null ? null : effect.Workspace with { Evidence = evidence },
+        Gap = effect.Gap is null ? null : effect.Gap with { Evidence = evidence },
+    };
+
+    private static IReadOnlyList<EvidenceContext> EvidenceOf(JsonNode result, JsonObject args)
+    {
+        var contexts = new List<EvidenceContext>();
+        var rows = result is JsonArray array
+            ? array.OfType<JsonObject>()
+            : result is JsonObject item ? [item] : [];
+        foreach (var row in rows.Take(8))
+        {
+            if (contexts.Count >= 8) break;
+            var envelope = row["envelope"] as JsonObject;
+            var freshness = envelope?["freshness"] as JsonObject;
+            var artifact = envelope?["artifact"] as JsonObject;
+            var documents = new List<JsonObject>();
+            documents.AddRange(new[]
+                {
+                    row["document"] as JsonObject,
+                    row["from"] as JsonObject,
+                    row["to"] as JsonObject,
+                }.Where(document => document is not null).Cast<JsonObject>());
+            foreach (var field in new[] { "versions", "works", "states" })
+                foreach (var document in (row[field] as JsonArray)?.OfType<JsonObject>() ?? [])
+                {
+                    if (documents.Count >= 8) break;
+                    documents.Add(document);
+                }
+            if (documents.Count == 0)
+                documents.Add(row);
+            foreach (var document in documents)
+            {
+                if (contexts.Count >= 8) break;
+                var versions = row["versions"] as JsonArray;
+                var firstVersion = versions?.OfType<JsonObject>()
+                    .OrderBy(version => S(version, "valid_from"), StringComparer.Ordinal).FirstOrDefault();
+                var lastVersion = versions?.OfType<JsonObject>()
+                    .OrderBy(version => S(version, "valid_from"), StringComparer.Ordinal).LastOrDefault();
+                var firstProvision = (document["provisions"] as JsonArray
+                    ?? row["provisions"] as JsonArray)?.OfType<JsonObject>().FirstOrDefault();
+                contexts.Add(new EvidenceContext(
+                    Publisher: S(envelope, "publisher"),
+                    Jurisdiction: S(envelope, "jurisdiction"),
+                    TimelineSemantics: S(envelope, "timeline_semantics"),
+                    RequestedDate: S(args, "date") ?? S(args, "as_of"),
+                    RequestedFromDate: S(args, "from_date")
+                        ?? S(row["window"] as JsonObject, "from"),
+                    RequestedToDate: S(args, "to_date")
+                        ?? S(row["window"] as JsonObject, "to"),
+                    ObservedAt: S(freshness, "last_confirmed_at") ?? S(freshness, "built_at"),
+                    ValidFrom: S(document, "valid_from") ?? S(firstVersion, "valid_from"),
+                    ValidTo: S(document, "valid_to") ?? S(lastVersion, "valid_to"),
+                    Provisional: envelope?["provisional"]?.GetValue<bool>() ?? false,
+                    SourceUri: S(document, "source_uri"),
+                    ExtractionProfile: S(document, "extraction_profile") ?? S(document, "profile"),
+                    RecordSha256: S(document, "record_sha256"),
+                    BodySha256: S(document, "body_sha256"),
+                    TextSha256: S(document, "text_sha256") ?? S(firstProvision, "text_sha256"),
+                    ArtifactManifestId: S(artifact, "manifest_set_id"),
+                    ContentDigest: S(artifact, "content_digest"),
+                    SignatureValid: freshness?["stamp_signature_valid"]?.GetValue<bool?>()));
+            }
+        }
+        return contexts;
+    }
+
+    private static UiEffect CoverageResult(JsonNode result, string locale)
+    {
+        var rows = result is JsonArray array
+            ? array.OfType<JsonObject>().ToList()
+            : result is JsonObject item ? [item] : [];
+        if (rows.Count == 0) return new UiEffect(Coverage: new CoverageView([]));
+        var status = LegalOperationPolicy.StatusForResult(result);
+        var outcome = LegalOperationPolicy.OutcomeForStatus(status);
+        if (outcome is LegalOutcome.NotAvailable or LegalOutcome.NotFound)
+            return new UiEffect(Gap: new GapView(status, null, null, Explain(status, locale), []));
+        return new UiEffect(Coverage: new CoverageView(rows.Select(row =>
+        {
+            var envelope = row["envelope"] as JsonObject;
+            var freshness = envelope?["freshness"] as JsonObject;
+            return new PublisherCoverage(
+                Publisher: S(envelope, "publisher") ?? "",
+                Name: S(row, "publisher_name"),
+                Tier: S(envelope, "tier"),
+                Works: row["works"]?.GetValue<int>() ?? 0,
+                Versions: row["versions"]?.GetValue<int>() ?? 0,
+                VersionsWithText: row["text"]?["versions_with_text_served"]?.GetValue<int>() ?? 0,
+                VersionsWithoutText: row["text"]?["versions_without_text"]?.GetValue<int>() ?? 0,
+                Earliest: S(row, "valid_from_earliest"),
+                Latest: S(row, "valid_from_latest"),
+                InventoryStatus: S(row, "build_inventory_status"),
+                BuildComplete: row["build_complete"]?.GetValue<bool?>(),
+                SignatureValid: freshness?["stamp_signature_valid"]?.GetValue<bool?>(),
+                KnownGaps: row["known_gaps"] is JsonArray gaps
+                    ? gaps.Select(gap => gap?.GetValue<string>() ?? "")
+                        .Where(gap => gap.Length > 0).Take(12).ToList()
+                    : []);
+        }).ToList()));
+    }
+
+    private static UiEffect Verification(JsonObject o)
+    {
+        var document = o["document"] as JsonObject ?? new JsonObject();
+        var stamp = o["stamp"] as JsonObject ?? new JsonObject();
+        return new UiEffect(Verification: new VerificationView(
+            LexId: S(document, "lex_id") ?? "",
+            Title: S(document, "title"),
+            SourceUri: S(document, "source_uri"),
+            RecordSha256: S(document, "record_sha256"),
+            BodySha256: S(document, "body_sha256"),
+            Permalink: S(document, "permalink"),
+            SignatureValid: stamp["signature_valid"]?.GetValue<bool?>(),
+            Algorithm: S(stamp, "algorithm")));
     }
 
     private static bool HasContent(JsonObject o)
@@ -90,6 +322,16 @@ public static class UiMapper
         {
             combined["works_changed"] = parts.Sum(p => p["works_changed"]?.GetValue<int>() ?? 0);
             combined["new_versions"] = parts.Sum(p => p["new_versions"]?.GetValue<int>() ?? 0);
+            combined["population"] = new JsonObject
+            {
+                ["basis"] = "sum of the selected publisher scopes",
+                ["works_in_scope"] = parts.Sum(part =>
+                    part["population"]?["works_in_scope"]?.GetValue<int>() ?? 0),
+                ["known_exclusions"] = new JsonArray(parts
+                    .Select(part => S(part["population"] as JsonObject, "known_exclusions"))
+                    .Where(value => !string.IsNullOrWhiteSpace(value))
+                    .Distinct().Select(value => (JsonNode)value!).ToArray()),
+            };
         }
         else if (tool == "in_force_on")
             combined["total_works_in_force"] = parts.Sum(p => p["total_works_in_force"]?.GetValue<int>() ?? 0);
@@ -101,13 +343,16 @@ public static class UiMapper
     private static UiEffect Provision(JsonObject o, JsonObject args)
     {
         var doc = o["document"] as JsonObject ?? o;
-        if (o["provisions"] is not JsonArray provs || provs.Count == 0) return new UiEffect();
-        var items = provs.OfType<JsonObject>().Select(p => new ProvisionItem(
-            Anchor: S(p, "anchor") ?? "",
-            Num: S(p, "num"), Heading: S(p, "heading"),
-            Text: S(p, "text") ?? S(p, "text_md") ?? "",
-            Sha: S(p, "text_sha256"))).Where(i => i.Text.Length > 0
-                || i.Anchor.Length > 0 || !string.IsNullOrWhiteSpace(i.Heading)).ToList();
+        var items = (o["provisions"] as JsonArray)?.OfType<JsonObject>()
+            .Select(p => new ProvisionItem(
+                Anchor: S(p, "anchor") ?? "",
+                Num: S(p, "num"), Heading: S(p, "heading"),
+                Text: S(p, "text") ?? S(p, "text_md") ?? "",
+                Sha: S(p, "text_sha256"))).Where(i => i.Text.Length > 0
+                    || i.Anchor.Length > 0 || !string.IsNullOrWhiteSpace(i.Heading)).ToList()
+            ?? [];
+        if (items.Count == 0 && S(doc, "text") is { Length: > 0 } documentText)
+            items.Add(new ProvisionItem("", null, S(doc, "title"), documentText, null));
         if (items.Count == 0) return new UiEffect();
         return new UiEffect(Provision: new ProvisionView(
             Subject: SubjectOf(doc, args),
@@ -171,28 +416,33 @@ public static class UiMapper
             ActForm: S(args, "act_form"),
             BindingStatus: S(args, "binding_status"),
             Page: page,
-            Language: S(args, "language"));
+            Language: S(args, "language"),
+            Work: S(args, "work"),
+            Date: S(args, "date"),
+            Anchor: S(args, "anchor"));
         return view is { Query: null, Jurisdiction: null, Hierarchy: null, Domain: null, SourceClass: null,
-                         ActForm: null, BindingStatus: null, Page: null, Language: null }
+                         ActForm: null, BindingStatus: null, Page: null, Language: null,
+                         Work: null, Date: null, Anchor: null }
             ? new UiEffect()
             : new UiEffect(Workspace: view);
     }
 
     private static UiEffect Cited(JsonObject o)
     {
-        if (o["citations"] is not JsonArray rows || rows.Count == 0) return new UiEffect();
+        if (o["citations"] is not JsonArray rows) return new UiEffect();
         return new UiEffect(CitedBy: new CitedByView(
             CitedWork: S(o, "cited_work") ?? "",
             CitingArticles: o["citing_articles"]?.GetValue<int>() ?? rows.Count,
             Rows: rows.OfType<JsonObject>().Select(c => new CitedByRow(
                 Work: S(c, "work") ?? "", Title: S(c, "title"), ValidFrom: S(c, "valid_from") ?? "",
                 Anchor: S(c, "anchor") ?? "", Num: S(c, "num"), Permalink: S(c, "permalink"),
-                Jurisdiction: S(c, "jurisdiction"))).ToList()));
+                Jurisdiction: S(c, "jurisdiction"))).ToList(),
+            Status: S(o["envelope"] as JsonObject, "status") ?? S(o, "status")));
     }
 
     private static UiEffect Ranking(JsonObject o, JsonObject args)
     {
-        if (o["changes"] is not JsonArray rows || rows.Count == 0) return new UiEffect();
+        if (o["changes"] is not JsonArray rows) return new UiEffect();
         var offset = o["offset"]?.GetValue<int>() ?? 0;
         var jurisdiction = S(o["envelope"] as JsonObject, "jurisdiction");
         return new UiEffect(Ranking: new RankingView(
@@ -216,20 +466,29 @@ public static class UiMapper
                     : null,
                 SourceClass: S(c, "source_class"), ActForm: S(c, "act_form"),
                 BindingStatus: S(c, "binding_status"), Language: S(c, "language"),
-                Permalink: S(c, "permalink"), DiffPermalink: S(c, "diff_permalink"))).ToList()),
+                Permalink: S(c, "permalink"), DiffPermalink: S(c, "diff_permalink"))).ToList(),
+            Status: S(o["envelope"] as JsonObject, "status") ?? S(o, "status"),
+            PopulationWorks: o["population"]?["works_in_scope"]?.GetValue<int>() ?? 0,
+            PopulationBasis: S(o["population"] as JsonObject, "basis"),
+            KnownExclusions: o["population"]?["known_exclusions"] is JsonArray exclusions
+                ? exclusions.Select(value => value?.GetValue<string>() ?? "")
+                    .Where(value => value.Length > 0).Take(8).ToArray()
+                : S(o["population"] as JsonObject, "known_exclusions") is { } exclusion
+                    ? [exclusion] : []),
             Workspace: Workspace(args, offset > 0 ? offset / 25 : null).Workspace);
     }
 
     private static UiEffect InForce(JsonObject o, JsonObject args)
     {
-        if (o["works"] is not JsonArray docs || docs.Count == 0) return new UiEffect();
+        if (o["works"] is not JsonArray docs) return new UiEffect();
         return new UiEffect(InForce: new InForceView(
             Date: S(args, "date") ?? "",
             Total: o["total_works_in_force"]?.GetValue<int>() ?? docs.Count,
             Rows: docs.OfType<JsonObject>().Take(60).Select(d => new InForceRow(
                 Work: WorkOf(S(d, "lex_id")) ?? S(d, "work") ?? "", Title: S(d, "title"), Kind: S(d, "document_type"),
                 ValidFrom: S(d, "valid_from") ?? "", Permalink: S(d, "permalink"),
-                Jurisdiction: S(d, "jurisdiction"), Hierarchy: S(d, "hierarchy"))).ToList()),
+                Jurisdiction: S(d, "jurisdiction"), Hierarchy: S(d, "hierarchy"))).ToList(),
+            Status: S(o["envelope"] as JsonObject, "status") ?? S(o, "status")),
             Workspace: Workspace(args).Workspace);
     }
 
@@ -272,18 +531,36 @@ public static class UiMapper
         return p.Length >= 2 ? $"{p[0]}:{p[1]}" : lexId;
     }
 
-    private static string Explain(string status) => status switch
+    private static string Explain(string status, string locale)
     {
-        "no_version_for_date" => "Lex holds this law, but no publisher version covers that date.",
-        "unknown_work" => "Lex does not hold this work at all.",
-        "unknown_anchor" => "That article identifier does not exist in this law.",
-        "anchor_not_in_version" => "That article did not exist in the publisher version selected for that date.",
-        "text_withheld" => "Lex holds this version and its text, but a publication gate prevents serving the wording.",
-        "text_not_available" => "Lex holds this publisher record and dates, but no safely derived provision text is available.",
-        "no_provision_history" => "Lex holds this work without per-article history, so single articles cannot be traced through time.",
-        "outside_observed_window" => "That date falls outside the window Lex has observed.",
-        _ => "Lex cannot answer this from what it holds.",
-    };
+        if (locale == "fr")
+            return status switch
+            {
+                McpStatus.NoCorpusMounted => "Lex ne dispose d'aucun index juridique vérifié, donc aucune opération juridique n'est disponible.",
+                McpStatus.NoVersionForDate => "Lex détient cet instrument, mais aucune version de l'éditeur ne couvre cette date.",
+                McpStatus.UnknownWork => "Lex ne détient pas cet instrument.",
+                McpStatus.UnknownAnchor => "Cet identifiant d'article n'existe pas dans cet instrument.",
+                McpStatus.AnchorNotInVersion => "Cet article n'existait pas dans la version de l'éditeur sélectionnée pour cette date.",
+                McpStatus.TextWithheld => "Lex détient cette version et son texte, mais une règle de publication empêche d'en servir le libellé.",
+                McpStatus.TextNotAvailable => "Lex détient la notice et les dates de l'éditeur, mais aucun texte de disposition ne peut être servi de manière fiable.",
+                McpStatus.NoProvisionHistory => "Lex détient cet instrument sans historique par article, donc un article isolé ne peut pas être suivi dans le temps.",
+                McpStatus.ProfilesDiffer => "Lex détient les deux versions, mais leurs profils d'extraction ne permettent pas une comparaison fiable.",
+                _ => "Lex ne peut pas répondre à partir de ce qu'il détient.",
+            };
+        return status switch
+        {
+            McpStatus.NoCorpusMounted => "Lex has no verified legal index mounted, so no legal operation is available.",
+            McpStatus.NoVersionForDate => "Lex holds this law, but no publisher version covers that date.",
+            McpStatus.UnknownWork => "Lex does not hold this work at all.",
+            McpStatus.UnknownAnchor => "That article identifier does not exist in this law.",
+            McpStatus.AnchorNotInVersion => "That article did not exist in the publisher version selected for that date.",
+            McpStatus.TextWithheld => "Lex holds this version and its text, but a publication gate prevents serving the wording.",
+            McpStatus.TextNotAvailable => "Lex holds this publisher record and dates, but no safely derived provision text is available.",
+            McpStatus.NoProvisionHistory => "Lex holds this work without per-article history, so single articles cannot be traced through time.",
+            McpStatus.ProfilesDiffer => "Lex holds both versions, but their extraction profiles do not support a reliable provision comparison.",
+            _ => "Lex cannot answer this from what it holds.",
+        };
+    }
 
     // Nullable on purpose: callers reach into optional sub-objects (`o["from"] as JsonObject`),
     // and a tool response that omits one of them must map to a missing field, not to a throw that

@@ -116,8 +116,9 @@ internal static class AgentAnswerContract
             var question = Bounded(draft.Clarification.Question, 280, "clarification question");
             var options = draft.Clarification.Options.Select(option => Bounded(option, 100, "clarification option"))
                 .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
-            if (options.Length is < 2 or > 4)
-                throw new InvalidDataException("A clarification requires two to four distinct options.");
+            if (options.Length is 1 or > 4)
+                throw new InvalidDataException(
+                    "A clarification has no options for free-text input, or two to four choices.");
             if (ContainsUrl(answer) || ContainsUrl(question) || options.Any(ContainsUrl))
                 throw new InvalidDataException("A clarification cannot contain links because it has no evidence.");
             return draft with
