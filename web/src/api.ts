@@ -67,6 +67,10 @@ export function signatureStatusLabel(value: boolean | undefined): string {
     : "signature unavailable";
 }
 
+export function populationScopeLabel(value: number | undefined): string | undefined {
+  return value === undefined ? undefined : `${value.toLocaleString()} works in selected scope`;
+}
+
 /** Page-specific actions are useful only after an answer that did not end in a gap. */
 export function shouldOfferContextualFollowUps(reply: AskReply): boolean {
   return !reply.error && !reply.clarification && !reply.ui?.gap;

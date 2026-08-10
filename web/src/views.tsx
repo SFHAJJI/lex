@@ -1,5 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { signatureStatusLabel, type ProvisionItem, type RankingRow, type UiEffect } from "./api";
+import {
+  populationScopeLabel, signatureStatusLabel, type ProvisionItem, type RankingRow, type UiEffect,
+} from "./api";
 import { facetLabel, jurisdictionLabel } from "./facets";
 import { publisherOf, workSlug } from "./state";
 import { shorten } from "./pickers";
@@ -347,6 +349,7 @@ export function Ranking({ rows, worksChanged, newVersions, populationWorks, know
   onPage: (p: number) => void;
 }) {
   const max = Math.max(1, ...rows.map((r) => r.versions_in_period));
+  const populationLabel = populationScopeLabel(populationWorks);
 
   // Scope controls stay above the rows, so a filter that matches nothing never removes its own
   // escape hatch.
@@ -357,7 +360,7 @@ export function Ranking({ rows, worksChanged, newVersions, populationWorks, know
       <div className="cnt">
         <span className="tag">{worksChanged.toLocaleString()} received publisher versions</span>
         <span className="tag">{newVersions.toLocaleString()} publisher version dates</span>
-        {populationWorks ? <span className="tag">{populationWorks.toLocaleString()} works in selected scope</span> : null}
+        {populationLabel ? <span className="tag">{populationLabel}</span> : null}
         <span className="tag mono">{from} → {to}</span>
         <span className="layers-hint">Every selected jurisdiction shares one dated ranking</span>
       </div>
