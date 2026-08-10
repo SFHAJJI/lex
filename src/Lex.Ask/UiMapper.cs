@@ -348,18 +348,29 @@ public static class UiMapper
                 Anchor: S(p, "anchor") ?? "",
                 Num: S(p, "num"), Heading: S(p, "heading"),
                 Text: S(p, "text") ?? S(p, "text_md") ?? "",
-                Sha: S(p, "text_sha256"))).Where(i => i.Text.Length > 0
+                Sha: S(p, "text_sha256"),
+                TextOmitted: p["text_omitted"]?.GetValue<bool>() == true,
+                TextOmittedReason: S(p, "text_omitted_reason"),
+                Permalink: S(p, "permalink"))).Where(i => i.Text.Length > 0
                     || i.Anchor.Length > 0 || !string.IsNullOrWhiteSpace(i.Heading)).ToList()
             ?? [];
         if (items.Count == 0 && S(doc, "text") is { Length: > 0 } documentText)
             items.Add(new ProvisionItem("", null, S(doc, "title"), documentText, null));
+        if (items.Count == 0 && doc["text_omitted"]?.GetValue<bool>() == true)
+            items.Add(new ProvisionItem("", null, S(doc, "title"), "", null,
+                TextOmitted: true,
+                TextOmittedReason: S(doc, "text_omitted_reason"),
+                Permalink: S(doc, "permalink") ?? S(doc, "source_uri")));
         if (items.Count == 0) return new UiEffect();
         return new UiEffect(Provision: new ProvisionView(
             Subject: SubjectOf(doc, args),
             ValidFrom: S(doc, "valid_from") ?? "",
             ValidTo: S(doc, "valid_to"),
             Provisions: items,
-            Permalink: S(doc, "permalink")));
+            Permalink: S(doc, "permalink"),
+            TotalProvisions: o["total_provisions"]?.GetValue<int?>(),
+            Truncated: o["truncated"]?.GetValue<bool>() ?? false,
+            TextTruncated: o["text_truncated"]?.GetValue<bool>() ?? false));
     }
 
     private static UiEffect History(JsonObject o, JsonObject args)

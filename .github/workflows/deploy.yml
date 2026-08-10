@@ -147,6 +147,7 @@ jobs:
               | .revisionSuffix = $suffix
               | .containers[0].image = $image
               | .containers[0].resources = {cpu:1.0,memory:"2Gi"}
+              | .scale = {minReplicas:1,maxReplicas:1}
               | .containers[0].env = ((.containers[0].env // [])
                   | map(select(.name != "AOAI_KEY" and .name != "AZURE_CLIENT_ID"
                       and .name != "AOAI_USE_MANAGED_IDENTITY"
@@ -179,6 +180,10 @@ jobs:
             sleep 10
           done
           [ "$state" = "Running" ] || { echo "::error::candidate revision did not become ready"; exit 1; }
+          az containerapp show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" -o json \
+            | jq -e '.properties.template.scale.minReplicas == 1
+                     and .properties.template.scale.maxReplicas == 1' >/dev/null \
+            || { echo "::error::public assistant must run on exactly one application replica"; exit 1; }
           az containerapp ingress traffic set -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
             --revision-weight "$previous=100" "$candidate=0" --only-show-errors
           fqdn=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \

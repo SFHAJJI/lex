@@ -175,7 +175,11 @@ public sealed class AskOperationControllerTests : IDisposable
 
         var response = await service.AskAsync(History("Show coverage twice."),
             Guid.NewGuid().ToString(), "law.test", cancellation.Token,
-            _ => { if (++steps == 1) cancellation.Cancel(); });
+            new AskService.AskProgressCallbacks(Step: (_, _) =>
+            {
+                if (++steps == 1) cancellation.Cancel();
+                return ValueTask.CompletedTask;
+            }));
 
         Assert.Equal(200, response.Status);
         var operations = Assert.IsType<JsonArray>(response.Body["operations"]);
@@ -481,6 +485,42 @@ public sealed class AskOperationControllerTests : IDisposable
     }
 
     [Fact]
+    public async Task Stream_reports_each_typed_operation_before_optional_synthesis()
+    {
+        var order = new List<string>();
+        var synthesizer = new OrderedSynthesizer(order);
+        JsonObject? streamedOperation = null;
+        var service = new AskService(_core, new StaticPlanner("en", new JsonArray(new JsonObject
+        {
+            ["tool"] = "coverage",
+            ["arguments"] = new JsonObject(),
+        }), synthesis: true), synthesizer);
+        var progress = new AskService.AskProgressCallbacks(
+            OperationResult: (operation, _) =>
+            {
+                order.Add("operation_result");
+                streamedOperation = operation;
+                return ValueTask.CompletedTask;
+            },
+            Synthesis: (status, _) =>
+            {
+                order.Add($"synthesis_{status}");
+                return ValueTask.CompletedTask;
+            });
+
+        var response = await service.AskAsync(
+            History("Show coverage and summarize it."), Guid.NewGuid().ToString(),
+            "law.test", CancellationToken.None, progress, "stream-request");
+
+        Assert.Equal(200, response.Status);
+        Assert.Equal("stream-request:op-1", streamedOperation?["operation_id"]?.GetValue<string>());
+        Assert.Equal("succeeded", streamedOperation?["legal_outcome"]?.GetValue<string>());
+        Assert.NotNull(streamedOperation?["ui"]?["coverage"]);
+        Assert.Equal(
+            ["operation_result", "synthesis_started", "synthesizer", "synthesis_completed"], order);
+    }
+
+    [Fact]
     public async Task Invalid_planner_arguments_fail_before_legal_calls_as_a_typed_result()
     {
         var service = new AskService(_core, new StaticPlanner("en", new JsonArray(new JsonObject
@@ -601,6 +641,22 @@ public sealed class AskOperationControllerTests : IDisposable
                     AgentAnswerStatus.Answer,
                     "A grounded descriptive synthesis is available from the verified comparison.",
                     [], [], null, null),
+                SynthesisFailed: false));
+        }
+    }
+
+    private sealed class OrderedSynthesizer(List<string> order) : IOperationSynthesizer
+    {
+        public Task<AgentFinalization> SynthesizeAsync(
+            string question,
+            string deterministicDraft,
+            IReadOnlyList<AgentEvidence> evidence,
+            CancellationToken cancellationToken)
+        {
+            order.Add("synthesizer");
+            return Task.FromResult(new AgentFinalization(
+                new AgentAnswerDraft(
+                    AgentAnswerStatus.Answer, deterministicDraft, [], [], null, null),
                 SynthesisFailed: false));
         }
     }

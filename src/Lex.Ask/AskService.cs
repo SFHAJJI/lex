@@ -17,20 +17,24 @@ public sealed class AskService
     private readonly McpCore core;
     private readonly IOperationPlanner? _planner;
     private readonly IOperationSynthesizer? _synthesizer;
+    private readonly AskAdmissionController _admission;
 
     public AskService(McpCore core)
     {
         this.core = core;
+        _admission = DefaultAdmission();
     }
 
     internal AskService(
         McpCore core,
         IOperationPlanner planner,
-        IOperationSynthesizer? synthesizer = null)
+        IOperationSynthesizer? synthesizer = null,
+        AskAdmissionController? admission = null)
     {
         this.core = core;
         _planner = planner;
         _synthesizer = synthesizer;
+        _admission = admission ?? DefaultAdmission();
     }
 
     internal sealed class WorkResolutionGuard
@@ -253,10 +257,6 @@ public sealed class AskService
         Environment.GetEnvironmentVariable("AOAI_USE_MANAGED_IDENTITY") == "1";
     private readonly TokenCredential _credential = new DefaultAzureCredential();
     private readonly string _deployment = Environment.GetEnvironmentVariable("AOAI_CHAT_DEPLOYMENT") ?? "gpt-5-mini";
-    private readonly int _perIpDaily = EnvInt("ASK_PER_IP_DAILY", 25);
-    private readonly int _globalDaily = EnvInt("ASK_GLOBAL_DAILY", 400);
-    private readonly ConcurrentDictionary<string, int> _counters = new();
-    private readonly SemaphoreSlim _gate = new(4);
     private AgentAnswerFinalizer? _answerFinalizer;
 
     public bool Enabled => _planner is not null || (!string.IsNullOrEmpty(_endpoint)
@@ -264,6 +264,22 @@ public sealed class AskService
 
     private static int EnvInt(string name, int dflt)
         => int.TryParse(Environment.GetEnvironmentVariable(name), out var v) && v > 0 ? v : dflt;
+
+    private static AskAdmissionController DefaultAdmission() => new(
+        TimeProvider.System,
+        EnvInt("ASK_PER_IP_DAILY", 25),
+        EnvInt("ASK_GLOBAL_DAILY", 400),
+        EnvInt("ASK_CONCURRENT", 4));
+
+    private static void Diagnostic(string code)
+    {
+        var safe = code.Length <= 80
+                   && code.All(character => char.IsAsciiLetterOrDigit(character)
+                       || character == '_')
+            ? code
+            : "invalid_diagnostic_code";
+        Console.Error.WriteLine($"[ask] {safe}");
+    }
 
     private const int MaxHistory = 24;
     private const int MaxUserMessageChars = 1000;
@@ -396,19 +412,16 @@ public sealed class AskService
            date or topic at all).
         """;
 
-    private bool TryCount(string ip, out string reason)
+    private static string AdmissionReason(AskAdmissionFailure failure) => failure switch
     {
-        var day = DateTime.UtcNow.ToString("yyyyMMdd");
-        if (_counters.Count > 5000)
-            foreach (var k in _counters.Keys.Where(k => !k.StartsWith(day, StringComparison.Ordinal)).ToArray())
-                _counters.TryRemove(k, out _);
-        var g = _counters.AddOrUpdate($"{day}|_global", 1, (_, v) => v + 1);
-        var p = _counters.AddOrUpdate($"{day}|{ip}", 1, (_, v) => v + 1);
-        reason = g > _globalDaily ? "The shared daily budget for this public playground is used up. Come back tomorrow, or connect your own AI via /ai (the MCP endpoint has no cap)."
-               : p > _perIpDaily ? "Daily question limit reached for your address. Come back tomorrow, or connect your own AI via /ai."
-               : "";
-        return reason.Length == 0;
-    }
+        AskAdmissionFailure.PerClientQuota =>
+            "Daily question limit reached for your address. Come back tomorrow, or use the separately bounded MCP endpoint.",
+        AskAdmissionFailure.GlobalQuota =>
+            "The shared daily budget for this public playground is used up. Come back tomorrow, or use the separately bounded MCP endpoint.",
+        AskAdmissionFailure.Busy =>
+            "The shared playground is busy. Try again shortly.",
+        _ => "The request could not be admitted.",
+    };
 
     /// <summary>
     /// The tools, minus any the turn has finished with.
@@ -954,12 +967,26 @@ public sealed class AskService
     /// </summary>
     public sealed record Step(string Kind, string Text, string? Work = null, string? Date = null, string? Anchor = null);
 
+    public sealed record AskProgressCallbacks(
+        Func<Step, CancellationToken, ValueTask>? Step = null,
+        Func<JsonObject, CancellationToken, ValueTask>? OperationResult = null,
+        Func<string, CancellationToken, ValueTask>? Synthesis = null);
+
+    private static async ValueTask NotifyProgress(Func<ValueTask> callback)
+    {
+        try { await callback(); }
+        catch (OperationCanceledException) { Diagnostic("progress_transport_disconnected"); }
+        catch (IOException) { Diagnostic("progress_transport_disconnected"); }
+        catch (ObjectDisposedException) { Diagnostic("progress_transport_disconnected"); }
+    }
+
     public async Task<(int Status, JsonObject Body)> AskAsync(
         JsonArray history,
         string ip,
         string host,
         CancellationToken ct,
-        Action<Step>? onStep = null)
+        AskProgressCallbacks? progress = null,
+        string? requestId = null)
     {
         if (!Enabled)
             return (503, new JsonObject
@@ -995,13 +1022,13 @@ public sealed class AskService
             return (200, Body(
                 "No instrument was selected. Add an official title or identifier when you want to try again.",
                 [], []));
-        if (!TryCount(ip, out var reason))
-            return (429, new JsonObject { ["error"] = reason });
-        if (!await _gate.WaitAsync(TimeSpan.Zero, ct))
-            return (429, new JsonObject { ["error"] = "The shared playground is busy. Try again shortly." });
+        var admission = _admission.TryAdmit(ip);
+        if (!admission.Accepted)
+            return (429, new JsonObject { ["error"] = AdmissionReason(admission.Failure) });
+        using var admissionLease = admission.Lease!;
 
         OperationRun? run = null;
-        var requestId = Guid.NewGuid().ToString("N");
+        requestId ??= Guid.NewGuid().ToString("N");
         var requestLocale = RequestLocale(rawUserQuery);
         try
         {
@@ -1009,7 +1036,7 @@ public sealed class AskService
                 history, host, requestId, requestLocale, ct);
             run = OperationRun.Start(plan);
             return await ExecutePlanAsync(
-                plan, run, userQueries, rawUserQuery, onStep, ct);
+                plan, run, userQueries, rawUserQuery, progress, ct);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -1021,16 +1048,16 @@ public sealed class AskService
             run?.CompletePending(TransportOutcome.TimedOut);
             return (504, new JsonObject { ["error"] = "The operation timed out. Try a narrower question." });
         }
-        catch (HttpRequestException ex)
+        catch (HttpRequestException)
         {
             run?.CompletePending(TransportOutcome.UpstreamFailed);
-            Console.Error.WriteLine($"[ask] planning upstream unreachable: {ex.Message}");
+            Diagnostic("planning_upstream_unreachable");
             return (502, new JsonObject { ["error"] = "The planning service is unavailable right now." });
         }
-        catch (InvalidDataException ex)
+        catch (InvalidDataException)
         {
             run?.CompletePendingLegal(LegalOutcome.InvalidRequest);
-            Console.Error.WriteLine($"[ask] invalid operation plan: {ex.Message}");
+            Diagnostic("invalid_operation_plan");
             var explanation = requestLocale == "fr"
                 ? "Cette demande ne correspond pas à une opération juridique valide."
                 : "This request does not map to a valid legal operation.";
@@ -1058,15 +1085,11 @@ public sealed class AskService
             });
             return (200, body);
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             run?.CompletePending(TransportOutcome.UpstreamFailed);
-            Console.Error.WriteLine($"[ask] {ex}");
+            Diagnostic("unexpected_failure");
             return (500, new JsonObject { ["error"] = "Unexpected error in the playground." });
-        }
-        finally
-        {
-            _gate.Release();
         }
     }
 
@@ -1098,7 +1121,7 @@ public sealed class AskService
         OperationRun run,
         IReadOnlyList<string> userQueries,
         string rawUserQuery,
-        Action<Step>? onStep,
+        AskProgressCallbacks? progress,
         CancellationToken ct)
     {
         var trace = new JsonArray
@@ -1128,6 +1151,15 @@ public sealed class AskService
             .Select(_ => (JsonObject?)null).ToList();
         WorkResolutionGuard.GuardClarification? clarification = null;
         AgentClarification? applicationClarification = null;
+
+        async ValueTask Report(OperationExecution execution)
+        {
+            if (progress?.OperationResult is null) return;
+            var result = execution.Result ?? throw new InvalidDataException(
+                $"Operation '{execution.Request.OperationId}' did not reach a terminal result.");
+            await NotifyProgress(() => progress.OperationResult(
+                OperationReply(result, effects[result.UserOrder]), ct));
+        }
 
         foreach (var execution in run.Executions.OrderBy(item => item.Request.UserOrder))
         {
@@ -1180,6 +1212,7 @@ public sealed class AskService
                                 : "This request does not map to a valid legal operation.",
                             []));
                     }
+                    await Report(execution);
                     continue;
                 }
                 if (operation.RequiresWorkResolution)
@@ -1197,6 +1230,7 @@ public sealed class AskService
                                 : "Lex needs a specific instrument before it can continue this operation.",
                             prepared.Clarification?.Choices.Select(choice => choice.Value).ToArray()
                                 ?? []));
+                        await Report(execution);
                         continue;
                     }
                     arguments = prepared.Arguments;
@@ -1236,9 +1270,12 @@ public sealed class AskService
                     ["status"] = summaryStatus ?? LegalOperationPolicy.StatusForResult(result),
                     ["docs"] = docs,
                 });
-                onStep?.Invoke(Describe(operation.Tool, arguments, effect, docs));
+                await Report(execution);
+                if (progress?.Step is not null)
+                    await NotifyProgress(() => progress.Step(
+                        Describe(operation.Tool, arguments, effect, docs), ct));
             }
-            catch (InvalidDataException ex)
+            catch (InvalidDataException)
             {
                 if (execution.State != OperationExecutionState.Pending) throw;
                 execution.CompleteLegal(LegalOutcome.InvalidRequest);
@@ -1254,8 +1291,9 @@ public sealed class AskService
                     ["operation_id"] = operation.OperationId,
                     ["tool"] = operation.Tool,
                     ["status"] = "invalid_request",
-                    ["detail"] = ex.Message,
+                    ["detail"] = "operation_arguments_invalid",
                 });
+                await Report(execution);
             }
         }
 
@@ -1271,6 +1309,8 @@ public sealed class AskService
         var reply = deterministicReply;
         if (plan.SynthesisRequested && displayedClarification is null)
         {
+            if (progress?.Synthesis is not null)
+                await NotifyProgress(() => progress.Synthesis("started", ct));
             var evidence = new AgentEvidenceLedger();
             foreach (var result in results.Where(item => item.Payload is not null))
             {
@@ -1296,16 +1336,21 @@ public sealed class AskService
                     throw new InvalidOperationException(
                         "No synthesis service is configured.");
                 reply = ReplyFor(finalized.Draft, effects, finalized.SynthesisFailed);
+                if (progress?.Synthesis is not null)
+                    await NotifyProgress(() => progress.Synthesis("completed", ct));
             }
             catch (Exception ex) when (ex is OperationCanceledException
                                        or HttpRequestException
                                        or InvalidDataException
                                        or InvalidOperationException)
             {
-                Console.Error.WriteLine($"[ask] optional synthesis unavailable: {ex.Message}");
+                Diagnostic("optional_synthesis_unavailable");
                 reply = deterministicReply + (plan.Locale == "fr"
                     ? " La synthèse descriptive facultative n'est pas disponible; les résultats vérifiés restent affichés."
                     : " The optional descriptive synthesis is unavailable; the verified results remain open.");
+                if (progress?.Synthesis is not null)
+                    await NotifyProgress(() => progress.Synthesis(
+                        "unavailable", CancellationToken.None));
             }
         }
         var body = Body(reply, trace, effects,
@@ -1313,24 +1358,26 @@ public sealed class AskService
         body["operations"] = new JsonArray(results.Select(result =>
         {
             var effect = effects[result.UserOrder];
-            return (JsonNode)new JsonObject
-            {
-                ["operation_id"] = result.OperationId,
-                ["order"] = result.UserOrder,
-                ["result_class"] = result.ResultClass is { } resultClass
-                    ? ContractName(resultClass) : null,
-                ["disposition"] = result.Disposition is { } disposition
-                    ? ContractName(disposition) : null,
-                ["legal_outcome"] = ContractName(result.LegalOutcome),
-                ["transport_outcome"] = ContractName(result.TransportOutcome),
-                ["effects"] = new JsonArray(result.Effects.Select(item =>
-                    (JsonNode)ContractName(item)).ToArray()),
-                ["ui"] = effect.IsEmpty ? null : JsonNode.Parse(
-                    System.Text.Json.JsonSerializer.Serialize(effect, UiJson)),
-            };
+            return (JsonNode)OperationReply(result, effect);
         }).ToArray());
         return (200, body);
     }
+
+    private static JsonObject OperationReply(OperationResult result, UiEffect effect) => new()
+    {
+        ["operation_id"] = result.OperationId,
+        ["order"] = result.UserOrder,
+        ["result_class"] = result.ResultClass is { } resultClass
+            ? ContractName(resultClass) : null,
+        ["disposition"] = result.Disposition is { } disposition
+            ? ContractName(disposition) : null,
+        ["legal_outcome"] = ContractName(result.LegalOutcome),
+        ["transport_outcome"] = ContractName(result.TransportOutcome),
+        ["effects"] = new JsonArray(result.Effects.Select(item =>
+            (JsonNode)ContractName(item)).ToArray()),
+        ["ui"] = effect.IsEmpty ? null : JsonNode.Parse(
+            System.Text.Json.JsonSerializer.Serialize(effect, UiJson)),
+    };
 
     private static UiEffect TransportGap(string locale, TransportOutcome outcome) =>
         new(Gap: new GapView(
@@ -1586,10 +1633,10 @@ public sealed class AskService
                 "Please add another identifying detail, such as the topic, jurisdiction, official title, or identifier.",
                 [], []));
 
-        if (!TryCount(ip, out var why)) return (429, new JsonObject { ["error"] = why });
-
-        if (!await _gate.WaitAsync(TimeSpan.FromSeconds(20)))
-            return (503, new JsonObject { ["error"] = "The playground is busy. Try again in a moment." });
+        var admission = _admission.TryAdmit(ip);
+        if (!admission.Accepted)
+            return (429, new JsonObject { ["error"] = AdmissionReason(admission.Failure) });
+        using var admissionLease = admission.Lease!;
         try
         {
             using var askSpan = Activity.StartActivity("ask");
@@ -1621,11 +1668,11 @@ public sealed class AskService
                         ["limit"] = 8,
                     });
                 }
-                catch (Exception ex)
+                catch (Exception)
                 {
                     // Conversation context is optional. A stale earlier query must never
                     // prevent the current, independently valid question from running.
-                    Console.Error.WriteLine($"[ask] prior user resolution skipped: {ex.Message}");
+                    Diagnostic("prior_resolution_skipped");
                     return null;
                 }
             });
@@ -1748,12 +1795,12 @@ public sealed class AskService
                 var respText = await resp.Content.ReadAsStringAsync(ct);
                 if (!resp.IsSuccessStatusCode)
                 {
-                    Console.Error.WriteLine($"[ask] upstream {(int)resp.StatusCode}: {respText[..Math.Min(500, respText.Length)]}");
+                    Diagnostic($"upstream_status_{(int)resp.StatusCode}");
                     return (502, new JsonObject { ["error"] = "The model upstream returned an error. Try again shortly." });
                 }
                 var parsed = JsonNode.Parse(respText);
                 if (parsed?["usage"]?["total_tokens"] is { } tt)
-                    Console.Error.WriteLine($"[ask] ip={ip} round={round} tokens={tt}");
+                    Diagnostic($"round_{round}_tokens_{tt}");
                 var choice = parsed?["choices"]?[0];
                 var msg = choice?["message"];
                 var toolCalls = msg?["tool_calls"] as JsonArray;
@@ -1883,10 +1930,13 @@ public sealed class AskService
                             }
                             result = TruncateResult(node);
                         }
-                        catch (Exception ex)
+                        catch (Exception)
                         {
                             entry["status"] = "error";
-                            result = new JsonObject { ["error"] = ex.Message }.ToJsonString();
+                            result = new JsonObject
+                            {
+                                ["error"] = "The legal operation failed without exposing internal details.",
+                            }.ToJsonString();
                         }
                         trace.Add(entry);
                         messages.Add(new JsonObject { ["role"] = "tool", ["tool_call_id"] = id, ["content"] = result });
@@ -1901,7 +1951,7 @@ public sealed class AskService
                 if (reply.Length == 0 && !retried)
                 {
                     // Nothing written. Same evidence, one more attempt with room to think.
-                    Console.Error.WriteLine("[ask] empty reply — retrying at medium effort");
+                    Diagnostic("empty_reply_retry");
                     retried = true;
                     continue;
                 }
@@ -1924,24 +1974,20 @@ public sealed class AskService
         {
             return (504, new JsonObject { ["error"] = "The model took too long. Try a narrower question." });
         }
-        catch (HttpRequestException ex)
+        catch (HttpRequestException)
         {
-            Console.Error.WriteLine($"[ask] upstream unreachable: {ex.Message}");
+            Diagnostic("upstream_unreachable");
             return (502, new JsonObject { ["error"] = "The model upstream is unreachable right now. Try again shortly." });
         }
         catch (System.ClientModel.ClientResultException ex)
         {
-            Console.Error.WriteLine($"[ask] agent upstream failed: {ex.Status}");
+            Diagnostic($"agent_upstream_status_{ex.Status}");
             return (502, new JsonObject { ["error"] = "The model upstream returned an error. Try again shortly." });
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            Console.Error.WriteLine($"[ask] {ex}");
+            Diagnostic("legacy_unexpected_failure");
             return (500, new JsonObject { ["error"] = "Unexpected error in the playground." });
-        }
-        finally
-        {
-            _gate.Release();
         }
     }
 

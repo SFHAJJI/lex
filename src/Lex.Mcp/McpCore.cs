@@ -12,6 +12,11 @@ public sealed class McpCore(
     IReadOnlyDictionary<string, LexIndexReader> readers,
     string? artifactManifestIdentity = null)
 {
+    private const int MaximumProvisionRows = 2000;
+    private const int MaximumHistoryRows = 500;
+    private const int MaximumProvenanceRows = 1000;
+    private const int MaximumLegalTextChars = 250_000;
+    private const int MaximumCitationRows = 100;
     public JsonArray ToolDefs()
     {
         JsonObject Tool(string name, string desc, JsonObject props, string[] required) => new()
@@ -23,9 +28,29 @@ public sealed class McpCore(
                 ["type"] = "object",
                 ["properties"] = props,
                 ["required"] = new JsonArray(required.Select(r => (JsonNode)r).ToArray()),
+                ["additionalProperties"] = false,
             },
         };
-        JsonObject S(string d) => new() { ["type"] = "string", ["description"] = d };
+        JsonObject S(string d, int maximum = 1000)
+        {
+            return new JsonObject
+            {
+                ["type"] = "string", ["description"] = d,
+                ["minLength"] = 1, ["maxLength"] = maximum,
+            };
+        }
+        JsonObject E(string d, params string[] values)
+        {
+            var value = S(d, 64);
+            value["enum"] = new JsonArray(values.Select(item => (JsonNode)item).ToArray());
+            return value;
+        }
+        JsonObject D(string d)
+        {
+            var value = S(d, 10);
+            value["pattern"] = "^[0-9]{4}-[0-9]{2}-[0-9]{2}$";
+            return value;
+        }
         JsonObject I(string d, int? minimum = null, int? maximum = null)
         {
             var value = new JsonObject { ["type"] = "integer", ["description"] = d };
@@ -40,50 +65,58 @@ public sealed class McpCore(
             Tool("as_of", "The state of one document as it stood on one date. Pure lookup, no ranking. mode=outline lists provisions without text and may be narrowed with anchors; mode=select returns only the named anchors' text; mode=full (default) returns the whole text. Every provision carries its own permalink and hash.",
                 new JsonObject
                 {
-                    ["work"] = S(workDesc), ["date"] = S("ISO date YYYY-MM-DD"),
-                    ["language"] = S("optional language code, e.g. fr"),
-                    ["mode"] = S("full | outline | select (default full)"),
+                    ["work"] = S(workDesc), ["date"] = D("ISO date YYYY-MM-DD"),
+                    ["publisher"] = S("optional publisher id when work is not publisher-qualified", 64),
+                    ["language"] = S("optional language code, e.g. fr", 16),
+                    ["mode"] = E("full | outline | select (default full)", "full", "outline", "select"),
                     ["anchors"] = S("optional comma-separated provision anchors for mode=outline; required for mode=select, e.g. art_1er,art_33"),
                 }, ["work", "date"]),
             Tool("timeline", "Every publisher state a document has been in: timeline intervals, version keys, and explicit timeline_semantics. Legilux intervals describe applicability; EUR-Lex intervals describe official consolidated wording states, not entry into force.",
-                new JsonObject { ["work"] = S(workDesc), ["limit"] = I("max versions (default 100)"), ["offset"] = I("pagination offset") }, ["work"]),
+                new JsonObject
+                {
+                    ["work"] = S(workDesc),
+                    ["publisher"] = S("optional publisher id when work is not publisher-qualified", 64),
+                    ["limit"] = I("max versions (default 100)", 1, 200),
+                    ["offset"] = I("pagination offset", 0, 100000),
+                }, ["work"]),
             Tool("in_force_on", "Compatibility name for publisher states covering a date, computed from timeline intervals and deduplicated by work. Legilux states describe applicability; EUR-Lex states are official consolidated wording states and must not be called entry into force. Every envelope carries timeline_semantics and the result carries a mandatory population disclosure.",
                 new JsonObject
                 {
-                    ["date"] = S("ISO date"), ["publisher"] = S("optional publisher id, e.g. lu-legilux"),
-                    ["jurisdiction"] = S("optional jurisdiction code from index metadata, e.g. LU or EU"),
+                    ["date"] = D("ISO date"), ["publisher"] = S("optional publisher id, e.g. lu-legilux", 64),
+                    ["jurisdiction"] = S("optional jurisdiction code from index metadata, e.g. LU or EU", 64),
                     ["document_type"] = S("backward-compatible source document class filter"),
                     ["source_class"] = S("optional source document class"),
                     ["hierarchy"] = S("optional normalized legal hierarchy"),
                     ["act_form"] = S("optional legal act form"),
                     ["binding_status"] = S("optional binding status"),
                     ["domain"] = S("optional reviewed legal domain"),
-                    ["language"] = S("optional language code"),
-                    ["limit"] = I("default 50"), ["offset"] = I("pagination offset"),
+                    ["language"] = S("optional language code", 16),
+                    ["limit"] = I("default 50", 1, 100), ["offset"] = I("pagination offset", 0, 100000),
                 }, ["date"]),
             Tool("diff", "What changed between two dates for one work: which publisher versions cover the selected dates and, where both texts are held, retrieve them via as_of to compare. An optional held article anchor scopes the typed comparison workspace. Read timeline_semantics before describing legal applicability.",
                 new JsonObject
                 {
-                    ["work"] = S(workDesc), ["from_date"] = S("ISO date"),
-                    ["to_date"] = S("ISO date"), ["language"] = S("language code"),
-                    ["anchor"] = S("optional held provision anchor returned by search, e.g. art_92"),
+                    ["work"] = S(workDesc), ["from_date"] = D("ISO date"),
+                    ["to_date"] = D("ISO date"), ["language"] = S("language code", 16),
+                    ["publisher"] = S("optional publisher id when work is not publisher-qualified", 64),
+                    ["anchor"] = S("optional held provision anchor returned by search, e.g. art_92", 128),
                 }, ["work", "from_date", "to_date"]),
             Tool("search", "Filtered legal search. keyword is deterministic FTS5/BM25; hybrid adds the pinned local encoder and fixed RRF when verified vectors are mounted. No generative model participates. The response query_plan separates resolved work constraints, article and role intent, and residual provision terms. Returns hits WITHOUT body text; full state via as_of.",
                 new JsonObject
                 {
-                    ["query"] = S("search terms"), ["publisher"] = S("optional publisher id"),
-                    ["jurisdiction"] = S("optional jurisdiction code from index metadata, e.g. LU or EU"),
+                    ["query"] = S("search terms"), ["publisher"] = S("optional publisher id", 64),
+                    ["jurisdiction"] = S("optional jurisdiction code from index metadata, e.g. LU or EU", 64),
                     ["document_type"] = S("backward-compatible document type filter"),
                     ["source_class"] = S("optional source document class"),
                     ["hierarchy"] = S("optional normalized legal hierarchy"),
                     ["act_form"] = S("optional legal act form"),
                     ["binding_status"] = S("optional binding status"),
                     ["domain"] = S("optional reviewed legal domain id"),
-                    ["language"] = S("optional language code"),
-                    ["retrieval_mode"] = S("keyword or hybrid; default keyword until activation"),
-                    ["time_scope"] = S("all_versions or as_of"),
-                    ["as_of"] = S("ISO date required when time_scope=as_of"),
-                    ["fuzzy"] = S("auto or off; visible fallback only"),
+                    ["language"] = S("optional language code", 16),
+                    ["retrieval_mode"] = E("keyword or hybrid; default keyword until activation", "keyword", "hybrid"),
+                    ["time_scope"] = E("all_versions or as_of", "all_versions", "as_of"),
+                    ["as_of"] = D("ISO date required when time_scope=as_of"),
+                    ["fuzzy"] = E("auto or off; visible fallback only", "auto", "off"),
                     ["works"] = S("optional comma-separated work ids: restrict search to these works"),
                     ["limit"] = I("default 10; minimum 1, maximum 50", 1, 50),
                 }, ["query"]),
@@ -91,36 +124,37 @@ public sealed class McpCore(
                 new JsonObject
                 {
                     ["work"] = S(workDesc),
-                    ["anchor"] = S("provision anchor, e.g. art_1er (find it via search or as_of mode=outline)"),
-                    ["language"] = S("optional language code; defaults to the work's primary derived language"),
+                    ["publisher"] = S("optional publisher id when work is not publisher-qualified", 64),
+                    ["anchor"] = S("provision anchor, e.g. art_1er (find it via search or as_of mode=outline)", 128),
+                    ["language"] = S("optional language code; defaults to the work's primary derived language", 16),
                 }, ["work", "anchor"]),
             Tool("provenance", "Proof chain for one lex_id: source URI, retrieval time, record/body hashes, event chain, corpus commit, index build, stamp signature.",
-                new JsonObject { ["lex_id"] = S("full lex_id"), ["language"] = S("optional") }, ["lex_id"]),
+                new JsonObject { ["lex_id"] = S("full lex_id"), ["language"] = S("optional", 16) }, ["lex_id"]),
             Tool("coverage", "What we hold and what we lack, tier by tier: counts, date ranges, history_begins, known gaps. This tool exists to say what we do NOT have.",
-                new JsonObject { ["publisher"] = S("optional publisher id") }, []),
+                new JsonObject { ["publisher"] = S("optional publisher id", 64) }, []),
             Tool("cited_by", "Which ARTICLES point at this law. The reverse of the cross-references the publisher writes into its own text (\"modifie par la loi du 4 juin 2020\"), captured at derive time. Answers \"what depends on this law\", \"who amended it\", \"is anything still referring to it\" — the question legal research is actually made of, and the one a search box cannot answer.",
                 new JsonObject
                 {
                     ["work"] = S("the law being cited, e.g. lu-legilux:loi-2020-06-04-a476"),
-                    ["limit"] = I("default 50"),
+                    ["limit"] = I("default 50", 1, 100),
                 }, ["work"]),
             Tool("changes_in_period", "ACROSS the corpus: which works gained new versions between two dates, how many each, and when — the aggregate counterpart of diff/timeline (which cover ONE work). Use for \"what changed between 2025 and 2026\", \"which laws changed most during the pandemic\", \"what moved last month\". order=by_churn ranks by number of new versions; by_date (default) lists most recently changed first.",
                 new JsonObject
                 {
-                    ["from_date"] = S("ISO date, start of window (inclusive)"),
-                    ["to_date"] = S("ISO date, end of window (inclusive)"),
-                    ["publisher"] = S("optional publisher id"),
-                    ["jurisdiction"] = S("optional jurisdiction code from index metadata, e.g. LU or EU"),
+                    ["from_date"] = D("ISO date, start of window (inclusive)"),
+                    ["to_date"] = D("ISO date, end of window (inclusive)"),
+                    ["publisher"] = S("optional publisher id", 64),
+                    ["jurisdiction"] = S("optional jurisdiction code from index metadata, e.g. LU or EU", 64),
                     ["document_type"] = S("optional source document class(es), comma-separated; prefix with ! to exclude, e.g. !RECUEIL,!CODE_RECUEIL for instruments only"),
                     ["source_class"] = S("optional source document class; alias of document_type"),
                     ["hierarchy"] = S("optional normalized legal hierarchy"),
                     ["act_form"] = S("optional legal act form"),
                     ["binding_status"] = S("optional binding status"),
                     ["domain"] = S("optional reviewed legal domain"),
-                    ["language"] = S("optional language code"),
-                    ["order"] = S("by_date (default) or by_churn"),
-                    ["limit"] = I("default 20"),
-                    ["offset"] = I("skip this many, for paging"),
+                    ["language"] = S("optional language code", 16),
+                    ["order"] = E("by_date (default) or by_churn", "by_date", "by_churn"),
+                    ["limit"] = I("default 20", 1, 100),
+                    ["offset"] = I("skip this many, for paging", 0, 100000),
                 }, ["from_date", "to_date"]),
         ];
     }
@@ -200,8 +234,15 @@ public sealed class McpCore(
             ["body_sha256"] = d.BodySha,
             ["source_uri"] = d.SourceUri,
             ["observed_from"] = d.ObservedFrom,
-            ["text"] = withText && d.TextPublic ? d.Body : null,
+            ["text"] = withText && d.TextPublic && d.Body?.Length <= MaximumLegalTextChars
+                ? d.Body : null,
         };
+        if (withText && d.TextPublic && d.Body?.Length > MaximumLegalTextChars)
+        {
+            o["text_omitted"] = true;
+            o["text_characters"] = d.Body.Length;
+            o["text_omitted_reason"] = "legal text exceeds the bounded MCP item size; use source_uri";
+        }
         if (d.Hierarchy is not null) o["hierarchy"] = d.Hierarchy;
         if (d.Domains is not null) o["domains"] = new JsonArray(d.Domains.Trim('|').Split('|',
             StringSplitOptions.RemoveEmptyEntries).Select(x => (JsonNode)x).ToArray());
@@ -215,6 +256,18 @@ public sealed class McpCore(
 
     private JsonObject ProvisionJson(DocRow d, ProvisionRow p, bool withText)
     {
+        var remainingTextCharacters = MaximumLegalTextChars;
+        return ProvisionJson(d, p, withText, ref remainingTextCharacters);
+    }
+
+    private JsonObject ProvisionJson(
+        DocRow d,
+        ProvisionRow p,
+        bool withText,
+        ref int remainingTextCharacters)
+    {
+        var textLength = p.TextMd?.Length ?? 0;
+        var includeText = withText && textLength <= remainingTextCharacters;
         var o = new JsonObject
         {
             ["anchor"] = p.Anchor,
@@ -225,16 +278,27 @@ public sealed class McpCore(
             ["path"] = p.Path,
             ["article_valid_from"] = p.ArticleValidFrom,
             ["text_sha256"] = p.TextSha,
-            ["text"] = withText ? p.TextMd : null,
+            ["text"] = includeText ? p.TextMd : null,
         };
+        if (includeText)
+            remainingTextCharacters -= textLength;
+        else if (withText && p.TextMd is not null)
+        {
+            o["text_omitted"] = true;
+            o["text_characters"] = textLength;
+            o["text_omitted_reason"] = "legal text exceeds the remaining bounded MCP response text budget; use permalink or source_uri";
+        }
         // The publisher's own cross-references, captured at derive time. Only with the text, since
         // an outline is a table of contents and these belong to the words.
         if (withText)
         {
             var cits = readers.GetValueOrDefault(d.Collection)?.CitationsOf($"{d.Key}|{d.Language}|{d.ValidFrom}", p.Anchor);
             if (cits is { Count: > 0 })
-                o["citations"] = new JsonArray(cits.Select(c => (JsonNode)new JsonObject
+            {
+                o["citations_truncated"] = cits.Count > MaximumCitationRows;
+                o["citations"] = new JsonArray(cits.Take(MaximumCitationRows).Select(c => (JsonNode)new JsonObject
                 { ["work"] = $"{d.Collection}:{c.Slug}", ["href"] = c.Href, ["text"] = c.Label }).ToArray());
+            }
         }
         if (_publicBase is not null)
             o["permalink"] = $"{_publicBase}/{d.Collection}/{d.GroupKey}/{d.ValidFrom}#{p.Anchor}";
@@ -297,11 +361,13 @@ public sealed class McpCore(
     {
         var found = new JsonArray();
         var missing = new JsonArray();
+        var remainingTextCharacters = MaximumLegalTextChars;
         foreach (var anchorName in wanted)
         {
             var provision = all.FirstOrDefault(x => x.Anchor == anchorName);
             if (provision is null) missing.Add((JsonNode)anchorName);
-            else found.Add((JsonNode)ProvisionJson(document, provision, withText));
+            else found.Add((JsonNode)ProvisionJson(
+                document, provision, withText, ref remainingTextCharacters));
         }
 
         output["provisions"] = found;
@@ -316,6 +382,22 @@ public sealed class McpCore(
         output["anchor_note"] = near.Count > 0
             ? "This work numbers its provisions in its own scheme. nearest_anchors are anchors it actually has; call as_of mode=select with one of those, or mode=outline without anchors for the full list. Do NOT fall back to full-text search for a provision of a known work."
             : $"This version holds {all.Count} provisions under other anchors. Call as_of mode=outline without anchors to list them, then select from that list. Do NOT fall back to full-text search for a provision of a known work.";
+    }
+
+    private static void MarkBoundedText(JsonObject output)
+    {
+        var documentTextOmitted = output["document"] is JsonObject document
+            && document["text_omitted"]?.GetValue<bool>() == true;
+        var provisionTextOmitted = output["provisions"] is JsonArray provisions
+            && provisions.OfType<JsonObject>()
+                .Any(provision => provision["text_omitted"]?.GetValue<bool>() == true);
+        if (!documentTextOmitted && !provisionTextOmitted) return;
+
+        // This is a response-size fact, not a statement about corpus coverage. Keep the legal
+        // status `ok`: the publisher text is held and the returned hashes/coordinates remain
+        // authoritative, but callers must know that this bounded response is not the whole text.
+        output["text_truncated"] = true;
+        output["truncated"] = true;
     }
 
     private (LexIndexReader r, string norm)? Resolve(string work, string? publisher)
@@ -333,6 +415,7 @@ public sealed class McpCore(
 
     public JsonNode CallTool(string name, JsonObject a)
     {
+        McpInputPolicy.Validate(name, a);
         // A build with no corpus must say so, once, in every answer.
         //
         // Source builds and incorrectly assembled releases can start without verified artifacts.
@@ -418,8 +501,12 @@ public sealed class McpCore(
                         var wanted = (Str("anchors") ?? "").Split(',',
                             StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
                         if (wanted.Length == 0)
-                            o["provisions"] = new JsonArray(all
+                        {
+                            o["total_provisions"] = all.Count;
+                            o["truncated"] = all.Count > MaximumProvisionRows;
+                            o["provisions"] = new JsonArray(all.Take(MaximumProvisionRows)
                                 .Select(p => (JsonNode)ProvisionJson(doc, p, withText: false)).ToArray());
+                        }
                         else
                             AddSelectedProvisions(o, doc, all, wanted, withText: false);
                         break;
@@ -452,8 +539,14 @@ public sealed class McpCore(
                         if (all.Count > 0)
                         {
                             o["document"] = DocJson(doc, withText: false);
-                            o["provisions"] = new JsonArray(all
-                                .Select(p => (JsonNode)ProvisionJson(doc, p, withText: doc.TextPublic)).ToArray());
+                            o["total_provisions"] = all.Count;
+                            o["truncated"] = all.Count > MaximumProvisionRows;
+                            var provisions = new JsonArray();
+                            var remainingTextCharacters = MaximumLegalTextChars;
+                            foreach (var provision in all.Take(MaximumProvisionRows))
+                                provisions.Add(ProvisionJson(doc, provision,
+                                    withText: doc.TextPublic, ref remainingTextCharacters));
+                            o["provisions"] = provisions;
                         }
                         else
                         {
@@ -472,6 +565,7 @@ public sealed class McpCore(
                     o["text_withheld_reason"] = "publisher text gate pending; read the official text at source_uri";
                 else if (status == McpStatus.TextNotAvailable)
                     o["text_unavailable_reason"] = "publisher record held; no safely derived provision text is available; read source_uri";
+                MarkBoundedText(o);
                 return o;
             }
             case "timeline":
@@ -790,7 +884,7 @@ public sealed class McpCore(
                         ["anchor"] = anchor,
                         ["hint"] = "list anchors via as_of with mode=outline",
                     };
-                var statesArr = new JsonArray(states.Select(s =>
+                var statesArr = new JsonArray(states.Take(MaximumHistoryRows).Select(s =>
                 {
                     var document = s.InVersion is null ? null : r.ByKey(s.InVersion);
                     var o = new JsonObject
@@ -824,8 +918,9 @@ public sealed class McpCore(
                     ["anchor"] = anchor,
                     ["language"] = states.FirstOrDefault()?.Language ?? evs.FirstOrDefault()?.Language ?? requestedLanguage,
                     ["distinct_texts"] = states.Count,
+                    ["truncated"] = states.Count > MaximumHistoryRows || evs.Count > MaximumHistoryRows,
                     ["states"] = statesArr,
-                    ["anchor_events"] = new JsonArray(evs.Select(e => (JsonNode)new JsonObject
+                    ["anchor_events"] = new JsonArray(evs.Take(MaximumHistoryRows).Select(e => (JsonNode)new JsonObject
                     {
                         ["type"] = e.EType,
                         ["language"] = e.Language,
@@ -843,15 +938,19 @@ public sealed class McpCore(
                 {
                     var d = r.ByKey(key);
                     if (d is null) continue;
+                    var events = r.Events(key);
+                    var observations = r.Observations(key, Str("language"));
                     return new JsonObject
                     {
                         ["envelope"] = Envelope(r, McpStatus.Ok),
                         ["document"] = DocJson(d, false),
-                        ["events"] = new JsonArray(r.Events(key).Select(e => (JsonNode)new JsonObject
+                        ["truncated"] = events.Count > MaximumProvenanceRows
+                            || observations.Count > MaximumProvenanceRows,
+                        ["events"] = new JsonArray(events.Take(MaximumProvenanceRows).Select(e => (JsonNode)new JsonObject
                         {
                             ["event"] = e.Event, ["scope"] = e.Scope, ["observed_from"] = e.ObservedFrom, ["detail"] = e.Detail,
                         }).ToArray()),
-                        ["observations"] = new JsonArray(r.Observations(key, Str("language")).Select(o => (JsonNode)new JsonObject
+                        ["observations"] = new JsonArray(observations.Take(MaximumProvenanceRows).Select(o => (JsonNode)new JsonObject
                         {
                             ["language"] = o.Language, ["expr_valid_from"] = o.ExprValidFrom, ["sha256"] = o.Sha256,
                             ["observed_from"] = o.ObservedFrom, ["observed_to"] = o.ObservedTo,

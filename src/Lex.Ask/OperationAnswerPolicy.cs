@@ -60,9 +60,15 @@ internal static class OperationAnswerPolicy
                 ? $"Lex a trouvé {cited.CitingArticles:n0} article(s) faisant référence à {cited.CitedWork}."
                 : $"Lex found {cited.CitingArticles:n0} article(s) referring to {cited.CitedWork}.";
         if (effect.Provision is { } provision)
+        {
+            if (provision.TextTruncated)
+                return fr
+                    ? $"Lex détient le texte publié de {Name(provision.Subject)} au {provision.ValidFrom}, mais cette réponse bornée n'en affiche qu'une partie. Les liens officiels sont disponibles ci-dessous."
+                    : $"Lex holds the publisher text for {Name(provision.Subject)} at {provision.ValidFrom}, but this bounded response shows only part of it. The official links are available below.";
             return fr
                 ? $"Le texte exact publié pour {Name(provision.Subject)} à la date du {provision.ValidFrom} est affiché ci-dessous."
                 : $"The exact publisher text for {Name(provision.Subject)} at {provision.ValidFrom} is open below.";
+        }
         if (effect.Diff is { } diff)
             return fr
                 ? $"La comparaison vérifiée de {Name(diff.Subject)} entre le {diff.FromDate} et le {diff.ToDate} est affichée ci-dessous."

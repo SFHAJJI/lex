@@ -63,6 +63,75 @@ public class McpContractTests : IDisposable
         _core = new McpCore(new Dictionary<string, LexIndexReader> { ["t-pub"] = _reader });
     }
 
+    [Fact]
+    public void Public_tool_arguments_are_typed_closed_and_bounded_before_execution()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => _core.CallTool("search",
+            new JsonObject { ["query"] = "law", ["limit"] = int.MaxValue }));
+        Assert.Throws<ArgumentException>(() => _core.CallTool("search",
+            new JsonObject { ["query"] = new string('q', 1001) }));
+        Assert.Throws<ArgumentException>(() => _core.CallTool("search",
+            new JsonObject { ["query"] = "law", ["limit"] = "50" }));
+        Assert.Throws<ArgumentException>(() => _core.CallTool("coverage",
+            new JsonObject { ["unexpected"] = "value" }));
+        Assert.Throws<ArgumentOutOfRangeException>(() => _core.CallTool("timeline",
+            new JsonObject { ["work"] = "t-pub:w1", ["offset"] = -1 }));
+        Assert.Throws<ArgumentException>(() => _core.CallTool("as_of", new JsonObject
+        {
+            ["work"] = "t-pub:w1", ["date"] = "2024-01-01", ["anchors"] = "art_1",
+        }));
+
+        foreach (var definition in _core.ToolDefs().OfType<JsonObject>())
+            Assert.False(definition["inputSchema"]?["additionalProperties"]?.GetValue<bool>() ?? true);
+    }
+
+    [Fact]
+    public void Full_text_response_has_one_total_budget_not_one_budget_per_provision()
+    {
+        var db = Path.Combine(Path.GetTempPath(), $"lex-mcp-text-budget-{Guid.NewGuid():N}.db");
+        try
+        {
+            var document = new DocRow(
+                "budget:work:2024-01-01", "budget", "work", "urn:work", "REG", "en",
+                "2024-01-01", null, "publisher", "2026-08-01T00:00:00Z", false,
+                true, true, "record", "body", "https://example.test/work",
+                "Budget work", "Budget work", null, "2024-01-01", null);
+            var text = new string('x', 100_000);
+            var provisions = Enumerable.Range(1, 3).Select(index => new ProvisionRow(
+                $"{document.Key}|en|2024-01-01", index, $"art_{index}",
+                $"{document.Key}#art_{index}", "article", $"Article {index}", null,
+                null, null, document.Title, text,
+                Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(
+                    System.Text.Encoding.UTF8.GetBytes(text))))).ToArray();
+            IndexBuilder.Build(db, new Dictionary<string, string>
+            {
+                ["collection"] = "budget", ["tier"] = "A",
+                ["history_begins"] = "publisher", ["built_at"] = "2026-08-01T00:00:00Z",
+                ["corpus_commit"] = "test",
+            }, [document], provisions, [], [], StampSigner.CreateKeyPem());
+            using var reader = LexIndexReader.Open(db);
+            var core = new McpCore(new Dictionary<string, LexIndexReader> { ["budget"] = reader });
+
+            var result = Assert.IsType<JsonObject>(core.CallTool("as_of", new JsonObject
+            {
+                ["work"] = "budget:work", ["date"] = "2024-06-01", ["mode"] = "full",
+            }));
+            var returned = Assert.IsType<JsonArray>(result["provisions"]);
+
+            Assert.True(returned.Sum(item => item?["text"]?.GetValue<string>().Length ?? 0)
+                <= 250_000);
+            Assert.Contains(returned.OfType<JsonObject>(), item =>
+                item["text_omitted"]?.GetValue<bool>() == true
+                && item["text_characters"]?.GetValue<int>() == 100_000);
+            Assert.True(result["text_truncated"]!.GetValue<bool>());
+            Assert.True(result["truncated"]!.GetValue<bool>());
+        }
+        finally
+        {
+            try { File.Delete(db); } catch { }
+        }
+    }
+
     public void Dispose()
     {
         _reader.Dispose();
@@ -142,6 +211,17 @@ public class McpContractTests : IDisposable
             .Single(tool => tool["name"]!.GetValue<string>() == "search");
         Assert.Equal(1, search["inputSchema"]!["properties"]!["limit"]!["minimum"]!.GetValue<int>());
         Assert.Equal(50, search["inputSchema"]!["properties"]!["limit"]!["maximum"]!.GetValue<int>());
+        Assert.Equal(64,
+            search["inputSchema"]!["properties"]!["publisher"]!["maxLength"]!.GetValue<int>());
+        Assert.Equal(["keyword", "hybrid"],
+            search["inputSchema"]!["properties"]!["retrieval_mode"]!["enum"]!.AsArray()
+                .Select(item => item!.GetValue<string>()));
+        var asOf = _core.ToolDefs().OfType<JsonObject>()
+            .Single(tool => tool["name"]!.GetValue<string>() == "as_of");
+        Assert.Equal(10,
+            asOf["inputSchema"]!["properties"]!["date"]!["maxLength"]!.GetValue<int>());
+        Assert.Equal("^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+            asOf["inputSchema"]!["properties"]!["date"]!["pattern"]!.GetValue<string>());
     }
 
     [Theory]

@@ -924,8 +924,29 @@ public static class ExplainerEndpoints
                                .Select(t => t["name"]!.GetValue<string>()).ToList();
             var body = $$"""
                 <p class="lede">Lex is MCP-native: you bring the model, Lex brings the evidence.
-                {{tools.Count}} read-only tools over signed indexes, no key, no account, no rate limit on
-                the endpoint. The server advertises MCP {{McpSdkBridge.ServerVersion}}.</p>
+                {{tools.Count}} read-only tools over signed indexes, with no key or account required.
+                The public endpoint is deliberately bounded and advertises MCP {{McpSdkBridge.ServerVersion}}.</p>
+
+                <h2 id="assistant-data">Assistant data and public limits</h2>
+                <div class="card">
+                <p>The browser retains at most six conversation turns in this tab's
+                <span class="mono">sessionStorage</span>. A submitted bounded transcript is sent to this
+                server and to Azure OpenAI when planning or optional synthesis is required. Starting a new
+                conversation clears that transcript but leaves the legal workspace in place. Do not submit
+                confidential client facts.</p>
+                <p>The application is server-stateless for conversation content. It keeps only short-lived,
+                in-memory request fingerprints and completed idempotent responses for ten minutes. Daily
+                assistant counters and rolling MCP counters use an ingress-derived client address in process
+                memory; raw addresses and raw user text are not written to application logs, traces, metrics
+                or error bodies. OpenTelemetry records an allowlist of model deployment, operation ID, tool,
+                status and document count. Azure service retention remains governed by the
+                configured Azure OpenAI and Application Insights resources.</p>
+                <p>Public MCP admits at most 8 executing and 16 queued calls, with a 2 second queue deadline;
+                hybrid search admits 2 at once. Rolling limits are 120 calls per trusted client and 600 calls
+                globally per minute. These are best-effort abuse controls: people behind one NAT can share an
+                address, and IPv6 addresses can rotate. Requests, strings, pagination and returned collections
+                are bounded before tool execution.</p>
+                </div>
 
                 <h2>Connect</h2>
                 <div class="card"><b>Claude Code</b>

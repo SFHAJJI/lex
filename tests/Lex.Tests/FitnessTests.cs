@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Text.RegularExpressions;
 
 namespace Lex.Tests;
 
@@ -22,6 +23,28 @@ public class FitnessTests
             .Where(p => !p.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}"));
 
     private static readonly string[] PublisherWords = ["jolux", "cdm:", "legilux", "eurlex", "cellar", "cssf"];
+
+    [Fact]
+    public void Assistant_telemetry_has_a_closed_metadata_only_allowlist()
+    {
+        var askSource = File.ReadAllText(
+            Path.Combine(RepoRoot(), "src", "Lex.Ask", "AskService.cs"));
+        var tags = Regex.Matches(askSource, "SetTag\\(\"([^\"]+)\"")
+            .Select(match => match.Groups[1].Value)
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Equal([
+            "gen_ai.request.model", "gen_ai.tool.name", "lex.docs",
+            "lex.operation.id", "lex.status",
+        ], tags);
+        Assert.DoesNotContain("ex.Message", askSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("respText[..", askSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("SetTag(\"lex.question", askSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("SetTag(\"client", askSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("SetTag(\"ip", askSource, StringComparison.Ordinal);
+    }
 
     [Fact]
     public void EurLex_professional_names_live_in_reviewed_data_not_adapter_code()

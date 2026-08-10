@@ -40,16 +40,16 @@ Status: accepted and in progress
 
 ## Increment 2: stream and bound the system
 
-- [ ] Emit versioned request-ID `operation_result` before optional synthesis.
-- [ ] Add idempotency, cancellation and stale-result suppression.
-- [ ] Remove automatic duplicate non-idempotent POST fallback.
-- [ ] Implement bounded carried context, atomic clarification and workspace-preserving reset.
-- [ ] Reject overlong current questions rather than silently truncating them.
-- [ ] Fix quota admission order and pin production to one replica.
-- [ ] Enforce streamed request bytes and bounded MCP inputs/outputs.
-- [ ] Enforce and load-test MCP execution, queue, hybrid and rolling-rate ceilings.
-- [ ] Add truthful data-flow disclosure, logging allowlist and prompt-injection tests.
-- [ ] Run focused tests, full .NET tests, web tests and build.
+- [x] Emit versioned request-ID `operation_result` before optional synthesis.
+- [x] Add idempotency, cancellation and stale-result suppression.
+- [x] Remove automatic duplicate non-idempotent POST fallback.
+- [x] Implement bounded carried context, atomic clarification and workspace-preserving reset.
+- [x] Reject overlong current questions rather than silently truncating them.
+- [x] Fix quota admission order and pin production to one replica.
+- [x] Enforce streamed request bytes and bounded MCP inputs/outputs.
+- [x] Enforce and load-test MCP execution, queue, hybrid and rolling-rate ceilings.
+- [x] Add truthful data-flow disclosure, logging allowlist and prompt-injection tests.
+- [x] Run focused tests, full .NET tests, web tests and build.
 - [ ] Commit server and browser stream changes separately.
 
 ## Increment 3: make the product legible

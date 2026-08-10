@@ -38,6 +38,10 @@ builder.Services.AddSingleton(sp =>
     return new McpCore(registry.All, registry.VerifiedManifestSetId);
 });
 builder.Services.AddSingleton(sp => new AskService(sp.GetRequiredService<McpCore>()));
+builder.Services.AddSingleton(sp => new AskRequestRegistry(
+    sp.GetRequiredService<TimeProvider>()));
+builder.Services.AddSingleton(sp => new McpAdmissionController(
+    sp.GetRequiredService<TimeProvider>()));
 builder.Services.AddMcpServer(McpSdkBridge.Configure)
     .WithHttpTransport(options => options.Stateless = true)
     .WithLexTools();
@@ -68,6 +72,7 @@ app.Use(async (context, next) =>
     await next();
 });
 app.UseResponseCompression();
+app.UseMcpRequestBoundaries();
 app.UseStaticFiles(new StaticFileOptions
 {
     OnPrepareResponse = context =>
@@ -83,6 +88,7 @@ var ctx = new WebContext(
     options,
     app.Services.GetRequiredService<McpCore>(),
     app.Services.GetRequiredService<AskService>(),
+    app.Services.GetRequiredService<AskRequestRegistry>(),
     app.Services.GetRequiredService<TimeProvider>());
 
 app.Logger.LogInformation("Assistant {State}; {Count} index(es) mounted from {Dir}",

@@ -137,9 +137,13 @@ public sealed record Subject(string Work, string? Title, string? Date, string? A
 
 public sealed record ProvisionView(Subject Subject, string ValidFrom, string? ValidTo,
     IReadOnlyList<ProvisionItem> Provisions, string? Permalink,
-    IReadOnlyList<EvidenceContext>? Evidence = null);
+    IReadOnlyList<EvidenceContext>? Evidence = null,
+    int? TotalProvisions = null,
+    bool Truncated = false,
+    bool TextTruncated = false);
 
-public sealed record ProvisionItem(string Anchor, string? Num, string? Heading, string Text, string? Sha);
+public sealed record ProvisionItem(string Anchor, string? Num, string? Heading, string Text, string? Sha,
+    bool TextOmitted = false, string? TextOmittedReason = null, string? Permalink = null);
 
 public sealed record DiffView(Subject Subject, string FromDate, string ToDate,
     string? FromPermalink, string? ToPermalink, string? Note, string? Status = null,
