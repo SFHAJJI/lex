@@ -80,7 +80,7 @@ export default function AssistantController({
     abort.current?.abort();
     const controller = new AbortController();
     abort.current = controller;
-    const requestId = crypto.randomUUID();
+    const idempotencyKey = crypto.randomUUID();
     const streamedOperations = new Map<string, NonNullable<AskReply["operations"]>[number]>();
     try {
       const messages = boundedAskHistory([
@@ -103,7 +103,7 @@ export default function AssistantController({
           },
         },
         controller.signal,
-        requestId,
+        idempotencyKey,
       );
       if (abort.current !== controller) return;
       const visibleReply = reply.clarification?.question ?? reply.reply;

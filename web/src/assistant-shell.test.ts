@@ -2,10 +2,37 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   STARTER_PROMPTS,
+  assistantProvisionLoad,
   assistantWorkspaceState,
   assistantWorkspaceUrl,
   parseAssistantPanelState,
 } from "./assistantShell.ts";
+
+test("navigating from an assistant reply never retains stale publisher text", () => {
+  const full = {
+    provision: {
+      subject: { work: "eu-eurlex:32016r0679", date: "2021-01-01" },
+      valid_from: "2021-01-01",
+      valid_to: "2021-12-31",
+      provisions: [{ anchor: "art_6", text: "Lawful processing." }],
+    },
+  };
+  assert.deepEqual(assistantProvisionLoad(full), {
+    items: full.provision.provisions,
+    from: "2021-01-01",
+    to: "2021-12-31",
+  });
+  assert.equal(assistantProvisionLoad({ provision: {
+    ...full.provision, text_truncated: true,
+  } }), undefined);
+  assert.equal(assistantProvisionLoad({ provision: {
+    ...full.provision, outline_only: true,
+  } }), undefined);
+  assert.equal(assistantProvisionLoad({ diff: {
+    subject: { work: "eu-eurlex:32013r0575" },
+    from_date: "2020-01-01", to_date: "2024-12-31",
+  } }), undefined);
+});
 
 test("first visit is closed and only valid tab-scoped state is restored", () => {
   assert.deepEqual(parseAssistantPanelState(null), { open: false, minimized: false });
