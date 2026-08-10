@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 using Lex.Ask;
+using Lex.Mcp;
 
 namespace Lex.Tests;
 
@@ -243,6 +244,26 @@ public sealed class AgentEvidenceLedgerTests
         var evidence = Assert.Single(ledger.Evidence);
         Assert.Equal(AgentEvidenceKind.Coverage, evidence.Kind);
         Assert.True(evidence.RequiresCoverageDisclosure);
+    }
+
+    [Fact]
+    public void An_incomparable_diff_is_gap_evidence_and_unknown_statuses_fail_closed()
+    {
+        var ledger = new AgentEvidenceLedger();
+        ledger.Observe("diff", McpStatus.ProfilesDiffer,
+        [
+            new JsonObject
+            {
+                ["lex_id"] = "eu-eurlex:32013r0575:2024-01-01",
+                ["snippet"] = "must not become change evidence",
+            },
+        ]);
+
+        var evidence = Assert.Single(ledger.Evidence);
+        Assert.Equal(AgentEvidenceKind.Coverage, evidence.Kind);
+        Assert.True(evidence.RequiresCoverageDisclosure);
+        Assert.Throws<InvalidDataException>(() =>
+            ledger.Observe("diff", "invented_future_status", []));
     }
 
     [Fact]

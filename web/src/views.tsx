@@ -1,5 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { type ProvisionItem, type RankingRow, type UiEffect } from "./api";
+import {
+  populationScopeLabel, signatureStatusLabel, type ProvisionItem, type RankingRow, type UiEffect,
+} from "./api";
 import { facetLabel, jurisdictionLabel } from "./facets";
 import { publisherOf, workSlug } from "./state";
 import { shorten } from "./pickers";
@@ -336,15 +338,18 @@ function labelled(dates: string[], xs: number[], width: number, cur: number, cmp
  * A collection is simply another source class. Jurisdiction and legal metadata are applied by the
  * server before ranking, and every mixed-corpus row keeps the jurisdiction that owns its work.
  */
-export function Ranking({ rows, worksChanged, newVersions, from, to, page, hasMore,
+export function Ranking({ rows, worksChanged, newVersions, populationWorks, knownExclusions,
+                          from, to, page, hasMore,
                           onOpen, onOpenRecord, onPage }: {
   rows: RankingRow[]; worksChanged: number; newVersions: number; from: string; to: string;
+  populationWorks?: number; knownExclusions?: string[];
   page: number; hasMore: boolean;
   onOpen: (work: string, from: string, to: string) => void;
   onOpenRecord: (work: string, date: string) => void;
   onPage: (p: number) => void;
 }) {
   const max = Math.max(1, ...rows.map((r) => r.versions_in_period));
+  const populationLabel = populationScopeLabel(populationWorks);
 
   // Scope controls stay above the rows, so a filter that matches nothing never removes its own
   // escape hatch.
@@ -353,11 +358,15 @@ export function Ranking({ rows, worksChanged, newVersions, from, to, page, hasMo
       {/* One row, not three. The layer's meaning belongs beside its counts, because "820 changed"
           only means anything once you know 820 of what. */}
       <div className="cnt">
-        <span className="tag">{worksChanged.toLocaleString()} changed</span>
-        <span className="tag">{newVersions.toLocaleString()} new versions</span>
+        <span className="tag">{worksChanged.toLocaleString()} received publisher versions</span>
+        <span className="tag">{newVersions.toLocaleString()} publisher version dates</span>
+        {populationLabel ? <span className="tag">{populationLabel}</span> : null}
         <span className="tag mono">{from} → {to}</span>
         <span className="layers-hint">Every selected jurisdiction shares one dated ranking</span>
       </div>
+      {knownExclusions && knownExclusions.length > 0
+        ? <p className="sub">Known exclusions: {knownExclusions.join(" · ")}</p>
+        : null}
 
       <div className="bars">
         {rows.map((r) => {
@@ -540,7 +549,86 @@ export function Empty({ children }: { children: React.ReactNode }) {
 }
 
 export const hasView = (ui?: UiEffect) =>
-  !!(ui && (ui.provision || ui.diff || ui.history || ui.timeline || ui.ranking || ui.in_force || ui.cited_by || ui.gap));
+  !!(ui && (ui.provision || ui.diff || ui.history || ui.timeline || ui.ranking || ui.in_force
+    || ui.cited_by || ui.coverage || ui.verification || ui.gap));
+
+export function EvidenceCoordinates({ ui }: { ui: UiEffect }) {
+  const evidence = ui.provision?.evidence ?? ui.diff?.evidence ?? ui.history?.evidence
+    ?? ui.timeline?.evidence ?? ui.ranking?.evidence ?? ui.in_force?.evidence
+    ?? ui.cited_by?.evidence ?? ui.coverage?.evidence ?? ui.verification?.evidence
+    ?? ui.gap?.evidence ?? ui.workspace?.evidence ?? [];
+  if (evidence.length === 0) return null;
+  const publishers = [...new Set(evidence.map(item => item.publisher).filter(Boolean))];
+  const semantics = [...new Set(evidence.map(item => item.timeline_semantics).filter(Boolean))];
+  const provisional = evidence.some(item => item.provisional);
+  const verificationFailed = evidence.some(item => item.signature_valid === false);
+  return (
+    <aside className={"evidence-coordinates" + (provisional || verificationFailed ? " warn" : "")}
+           aria-label="Evidence coordinates">
+      {publishers.length > 0 ? <span>{publishers.join(" + ")}</span> : null}
+      {semantics.map(value => <span key={value}>{value === "official_consolidation_state"
+        ? "official publisher wording states"
+        : value === "publisher_applicability" ? "publisher applicability dates" : value}</span>)}
+      {provisional ? <strong>Provisional future-dated publisher state</strong> : null}
+      {verificationFailed ? <strong>Signature verification failed</strong> : null}
+    </aside>
+  );
+}
+
+export function CoveragePanel({ view }: { view: NonNullable<UiEffect["coverage"]> }) {
+  const works = view.publishers.reduce((total, item) => total + item.works, 0);
+  const versions = view.publishers.reduce((total, item) => total + item.versions, 0);
+  return (
+    <section className="evidence-panel" aria-labelledby="coverage-result-title">
+      <div className="cnt">
+        <span className="tag">{works.toLocaleString()} works</span>
+        <span className="tag">{versions.toLocaleString()} versions</span>
+      </div>
+      <h2 id="coverage-result-title">Mounted legal coverage</h2>
+      <ul className="rows">
+        {view.publishers.map((publisher) => (
+          <li key={publisher.publisher}>
+            <div className="evidence-row">
+              <b>{publisher.name ?? publisher.publisher}</b>
+              <span className="hitmeta">
+                <span>{publisher.works.toLocaleString()} works</span>
+                <span>{publisher.versions.toLocaleString()} versions</span>
+                <span>{publisher.versions_with_text.toLocaleString()} with text</span>
+                <span>{signatureStatusLabel(publisher.signature_valid)}</span>
+              </span>
+              {publisher.known_gaps.length > 0
+                ? <p className="sub">Known gaps: {publisher.known_gaps.join(" · ")}</p>
+                : null}
+            </div>
+          </li>
+        ))}
+      </ul>
+      <p className="sub"><a href="/coverage">Open the complete coverage report →</a></p>
+    </section>
+  );
+}
+
+export function VerificationPanel({ view }: { view: NonNullable<UiEffect["verification"]> }) {
+  const source = view.source_uri?.startsWith("https://") ? view.source_uri : undefined;
+  return (
+    <section className="evidence-panel" aria-labelledby="verification-result-title">
+      <div className="cnt">
+        <span className={`tag ${view.signature_valid === true ? "" : "warn"}`}>
+          {signatureStatusLabel(view.signature_valid)}
+        </span>
+        {view.algorithm ? <span className="tag mono">{view.algorithm}</span> : null}
+      </div>
+      <h2 id="verification-result-title">Artifact proof</h2>
+      <p><b>{view.title ?? view.lex_id}</b></p>
+      <dl className="proof-list">
+        <dt>Lex ID</dt><dd className="mono">{view.lex_id}</dd>
+        {view.record_sha256 ? <><dt>Record SHA-256</dt><dd className="mono">{view.record_sha256}</dd></> : null}
+        {view.body_sha256 ? <><dt>Body SHA-256</dt><dd className="mono">{view.body_sha256}</dd></> : null}
+      </dl>
+      {source ? <p className="sub"><a href={source} target="_blank" rel="noopener noreferrer">Open the official source ↗</a></p> : null}
+    </section>
+  );
+}
 
 /**
  * Which articles point at one law.

@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 using Lex.Ask;
+using Lex.Mcp;
 
 namespace Lex.Tests;
 
@@ -258,17 +259,21 @@ public class UiEffectTests
     }
 
     [Fact]
-    public void An_empty_result_produces_no_view_at_all()
+    public void An_empty_result_produces_a_typed_zero_row_view()
     {
-        // A view with nothing in it would replace whatever the reader was looking at with a blank
-        // panel, which reads as breakage rather than as "that found nothing".
         var eff = UiMapper.From("cited_by", Args(("work", "lu-legilux:nothing")), new JsonObject
         {
-            ["envelope"] = new JsonObject { ["status"] = "no_result" },
+            ["envelope"] = new JsonObject { ["status"] = McpStatus.NoResult },
+            ["cited_work"] = "lu-legilux:nothing",
+            ["citing_articles"] = 0,
             ["citations"] = new JsonArray(),
         });
 
-        Assert.Null(eff.CitedBy);
+        Assert.NotNull(eff.CitedBy);
+        Assert.Equal(0, eff.CitedBy.CitingArticles);
+        Assert.Empty(eff.CitedBy.Rows);
+        Assert.Equal(McpStatus.NoResult, eff.CitedBy.Status);
+        Assert.Null(eff.Gap);
     }
 
     [Fact]

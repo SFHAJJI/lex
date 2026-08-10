@@ -1,6 +1,7 @@
 using Lex.Index;
 using Microsoft.Extensions.Options;
 using System.Security.Cryptography;
+using System.Text;
 
 namespace Lex.Web;
 
@@ -134,6 +135,15 @@ public sealed class IndexRegistry : IDisposable
 
     public IReadOnlyList<VerifiedArtifactManifest> VerifiedArtifactManifests => _artifactManifests;
 
+    public string? VerifiedManifestSetId => _artifactManifests.Count == 0 ? null
+        : Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(string.Concat(
+            _artifactManifests.OrderBy(item => item.File, StringComparer.Ordinal)
+                .Select(item => $"{item.Sha256}  {item.File}\n")))));
+
+    public ReadinessReport Readiness(LexOptions options) =>
+        ReadinessPolicy.Evaluate(_readers, options.RequiredPublisherSet,
+            options.RequireArtifactManifest, options.ArtifactManifestId, VerifiedManifestSetId);
+
     public bool IsArtifactVerified(string relativePath) =>
         _verifiedFiles.Contains(relativePath.Replace('\\', '/'));
 
@@ -163,3 +173,74 @@ public sealed record VerifiedArtifactManifest(
     string CodeCommit,
     string CreatedAt,
     IReadOnlyList<string> Artifacts);
+
+public sealed record PublisherReadiness(
+    string Publisher,
+    bool Mounted,
+    bool SignatureValid,
+    int? ExpectedWorks,
+    int ActualWorks,
+    int BuildIssueCount,
+    bool Complete);
+
+public sealed record ReadinessReport(
+    bool Ready,
+    IReadOnlyList<string> RequiredPublishers,
+    IReadOnlyList<string> MountedPublishers,
+    string? ExpectedManifestSet,
+    string? VerifiedManifestSet,
+    IReadOnlyList<PublisherReadiness> Publishers,
+    IReadOnlyList<string> Issues);
+
+public static class ReadinessPolicy
+{
+    public static ReadinessReport Evaluate(
+        IReadOnlyDictionary<string, LexIndexReader> readers,
+        IReadOnlyList<string> requiredPublishers,
+        bool requireArtifactManifest,
+        string? expectedManifestSet,
+        string? verifiedManifestSet)
+    {
+        var required = requiredPublishers.Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal).ToArray();
+        var mounted = readers.Keys.Order(StringComparer.Ordinal).ToArray();
+        var issues = new List<string>();
+        if (required.Length == 0)
+            issues.Add("required_publishers_not_configured");
+        if (!required.SequenceEqual(mounted, StringComparer.Ordinal))
+            issues.Add("mounted_publisher_set_mismatch");
+        if (requireArtifactManifest)
+        {
+            if (string.IsNullOrWhiteSpace(expectedManifestSet)
+                || string.Equals(expectedManifestSet, "legacy", StringComparison.Ordinal))
+                issues.Add("expected_manifest_set_missing");
+            if (string.IsNullOrWhiteSpace(verifiedManifestSet)
+                || !string.Equals(expectedManifestSet, verifiedManifestSet,
+                    StringComparison.OrdinalIgnoreCase))
+                issues.Add("verified_manifest_set_mismatch");
+        }
+
+        var publishers = required.Select(publisher =>
+        {
+            if (!readers.TryGetValue(publisher, out var reader))
+                return new PublisherReadiness(publisher, false, false, null, 0, 0, false);
+            var coverage = reader.Coverage();
+            var issueCount = coverage.BuildIssues?.Count ?? 0;
+            var complete = reader.SignatureValid
+                && coverage.ExpectedWorks is not null
+                && coverage.Groups == coverage.ExpectedWorks
+                && issueCount == 0;
+            if (!reader.SignatureValid) issues.Add($"{publisher}:signature_invalid");
+            if (coverage.ExpectedWorks is null) issues.Add($"{publisher}:expected_inventory_missing");
+            else if (coverage.Groups != coverage.ExpectedWorks)
+                issues.Add($"{publisher}:inventory_mismatch");
+            if (issueCount > 0) issues.Add($"{publisher}:build_issues_present");
+            return new PublisherReadiness(
+                publisher, true, reader.SignatureValid, coverage.ExpectedWorks,
+                coverage.Groups, issueCount, complete);
+        }).ToArray();
+        return new ReadinessReport(
+            issues.Count == 0 && publishers.All(item => item.Complete),
+            required, mounted, expectedManifestSet, verifiedManifestSet, publishers, issues);
+    }
+}

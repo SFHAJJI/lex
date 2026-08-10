@@ -5,8 +5,44 @@ import {
   askQuestionError,
   boundedAskHistory,
   clarificationFollowUp,
+  compoundOperationViews,
+  populationScopeLabel,
   shouldOfferContextualFollowUps,
+  signatureStatusLabel,
 } from "./api.ts";
+
+test("invalid signatures are distinct from unavailable verification", () => {
+  assert.equal(signatureStatusLabel(true), "signature verified");
+  assert.equal(signatureStatusLabel(false), "signature verification failed");
+  assert.equal(signatureStatusLabel(undefined), "signature unavailable");
+});
+
+test("an empty selected population keeps its zero denominator visible", () => {
+  assert.equal(populationScopeLabel(0), "0 works in selected scope");
+  assert.equal(populationScopeLabel(undefined), undefined);
+});
+
+test("compound operation views preserve every typed result in user order", () => {
+  const views = compoundOperationViews({
+    reply: "two results",
+    operations: [
+      {
+        operation_id: "gap", order: 1, result_class: "timeline",
+        legal_outcome: "not_found", transport_outcome: "completed", effects: ["gap"],
+        ui: { gap: { status: "unknown_work", explanation: "Unknown", available: [] } },
+      },
+      {
+        operation_id: "coverage", order: 0, result_class: "inventory",
+        legal_outcome: "succeeded", transport_outcome: "completed", effects: ["coverage"],
+        ui: { coverage: { publishers: [] } },
+      },
+    ],
+  });
+
+  assert.deepEqual(views.map((operation) => operation.operation_id), ["coverage", "gap"]);
+  assert.ok(views[0].ui?.coverage);
+  assert.ok(views[1].ui?.gap);
+});
 
 test("assistant history is validated and bounded to six restored turns", () => {
   const source = Array.from({ length: 14 }, (_, index) => ({

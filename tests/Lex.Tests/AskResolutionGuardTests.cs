@@ -138,9 +138,11 @@ public sealed class AskResolutionGuardTests
         var clarification = guard.ClarificationFor("lu-legilux:data");
 
         Assert.NotNull(clarification);
-        Assert.Equal(2, clarification.Display.Options.Count);
+        Assert.Equal(3, clarification.Display.Options.Count);
         Assert.StartsWith("Data protection law", clarification.Display.Options[0]);
         Assert.Equal("lu-legilux:data", clarification.Choices[0].Value);
+        Assert.True(AskService.WorkResolutionGuard.IsExplicitNonSelection(
+            clarification.Choices[^1].Value));
     }
 
     [Fact]
@@ -186,8 +188,8 @@ public sealed class AskResolutionGuardTests
         var clarification = guard.ClarificationFor(first);
 
         Assert.NotNull(clarification);
-        Assert.Equal(new[] { first, second }, clarification.Choices.Select(choice => choice.Value));
-        Assert.Equal(2, clarification.Display.Options.Distinct().Count());
+        Assert.Equal(new[] { first, second }, clarification.Choices.Take(2).Select(choice => choice.Value));
+        Assert.Equal(3, clarification.Display.Options.Distinct().Count());
         Assert.All(clarification.Display.Options, option => Assert.True(option.Length <= 100));
     }
 
@@ -209,6 +211,27 @@ public sealed class AskResolutionGuardTests
         Assert.Equal("lu-legilux:only", clarification.Choices[0].Value);
         Assert.True(AskService.WorkResolutionGuard.IsExplicitNonSelection(
             clarification.Choices[1].Value));
+    }
+
+    [Fact]
+    public void French_candidate_clarification_localizes_question_and_non_selection()
+    {
+        var guard = new AskService.WorkResolutionGuard();
+        var result = SearchResult("not_requested");
+        result[0]!["hits"] = new JsonArray
+        {
+            WeakHit("lu-legilux:first:2026-01-01", "Premier instrument"),
+            WeakHit("lu-legilux:second:2026-01-01", "Deuxième instrument"),
+        };
+        guard.ObserveSearch(result);
+
+        var clarification = guard.ClarificationFor(null, "fr");
+
+        Assert.NotNull(clarification);
+        Assert.StartsWith("Lex a trouvé", clarification.Display.Question);
+        Assert.StartsWith("Aucun de ceux-ci", clarification.Display.Options[^1]);
+        Assert.True(AskService.WorkResolutionGuard.IsExplicitNonSelection(
+            clarification.Choices[^1].Value));
     }
 
     [Fact]

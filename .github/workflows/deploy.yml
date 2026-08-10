@@ -141,6 +141,7 @@ jobs:
           az containerapp show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" -o json \
             | jq --arg previous "$previous" --arg candidate "$candidate" --arg suffix "$suffix" \
                  --arg image "$IMAGE" --arg require "$REQUIRE_MANIFEST" --arg manifest "$MANIFEST_SET" \
+                 --arg requiredPublishers "lu-legilux,eu-eurlex" \
                  --arg code "$GITHUB_SHA" --arg runtimeClient "$RUNTIME_CLIENT" '
               .properties.template
               | .revisionSuffix = $suffix
@@ -150,12 +151,14 @@ jobs:
                   | map(select(.name != "AOAI_KEY" and .name != "AZURE_CLIENT_ID"
                       and .name != "AOAI_USE_MANAGED_IDENTITY"
                       and .name != "LEX_REQUIRE_ARTIFACT_MANIFEST" and .name != "LEX_ARTIFACT_MANIFEST_ID"
+                      and .name != "LEX_REQUIRED_PUBLISHERS"
                       and .name != "LEX_CODE_COMMIT" and .name != "LEX_DEPLOY_IMAGE"))
                   + [
                       {name:"AZURE_CLIENT_ID",value:$runtimeClient},
                       {name:"AOAI_USE_MANAGED_IDENTITY",value:"1"},
                       {name:"LEX_REQUIRE_ARTIFACT_MANIFEST",value:$require},
                       {name:"LEX_ARTIFACT_MANIFEST_ID",value:$manifest},
+                      {name:"LEX_REQUIRED_PUBLISHERS",value:$requiredPublishers},
                       {name:"LEX_CODE_COMMIT",value:$code},
                       {name:"LEX_DEPLOY_IMAGE",value:$image}
                     ])
@@ -181,6 +184,10 @@ jobs:
           fqdn=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
             --revision "$candidate" --query properties.fqdn -o tsv)
           curl --fail --show-error --silent --retry 5 --retry-delay 5 "https://$fqdn/healthz"
+          curl --fail --show-error --silent --retry 5 --retry-delay 5 "https://$fqdn/readyz" \
+            | jq -e '.ready == true
+              and .required_publishers == ["eu-eurlex", "lu-legilux"]
+              and .mounted_publishers == ["eu-eurlex", "lu-legilux"]' >/dev/null
           mcp_text() {
             response=$(curl --fail --show-error --silent --retry 3 --retry-delay 5 \
               -H 'Content-Type: application/json' \

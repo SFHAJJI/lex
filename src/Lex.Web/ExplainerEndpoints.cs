@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Globalization;
 using Lex.Index;
+using Lex.Mcp;
 using static Lex.Web.PageShell;
 using static Lex.Web.Fragments;
 
@@ -171,8 +172,10 @@ public static class ExplainerEndpoints
                 <tr><td class="mono">anchor_not_in_version</td><td>that article did not exist in that version (knowing this IS the product)</td></tr>
                 <tr><td class="mono">text_withheld</td><td>metadata held, text gate not cleared; official link provided</td></tr>
                 <tr><td class="mono">text_not_available</td><td>publisher record held; no safely derived provision text; official link provided</td></tr>
-                <tr><td class="mono">outside_observed_window</td><td>before the observation history begins</td></tr>
+                <tr><td class="mono">no_provision_history</td><td>the work is held without per-article history</td></tr>
                 </table></div>
+                <p class="sub">MCP MCP_SERVER_VERSION uses a closed status vocabulary. See the
+                <a href="https://github.com/SFHAJJI/lex/blob/main/docs/mcp-2-migration.md" rel="noopener">migration note</a>.</p>
                 <p>A flagged wrong answer is still wrong, so Lex refuses instead; <a href="/coverage">coverage</a> exists to
                 state what we do <b>not</b> have. The AI layer (<a href="/">the front page</a>) is additive and separated:
                 a bounded retrieval loop uses the same in-process tool core the public
@@ -189,6 +192,7 @@ public static class ExplainerEndpoints
                 hosted MCP: <span class="mono">claude mcp add --transport http lex https://law.soufien.lu/mcp</span></p>
                 """;
             body = body.Replace("MOUNTED_INDEX_SCHEMAS", H(mountedSchemas), StringComparison.Ordinal);
+            body = body.Replace("MCP_SERVER_VERSION", H(McpSdkBridge.ServerVersion), StringComparison.Ordinal);
             return Results.Content(Page("Architecture", body,
                 "what is deployed now, read separately from what comes next",
                 canonicalPath: "/architecture"), "text/html");
@@ -921,7 +925,7 @@ public static class ExplainerEndpoints
             var body = $$"""
                 <p class="lede">Lex is MCP-native: you bring the model, Lex brings the evidence.
                 {{tools.Count}} read-only tools over signed indexes, no key, no account, no rate limit on
-                the endpoint.</p>
+                the endpoint. The server advertises MCP {{McpSdkBridge.ServerVersion}}.</p>
 
                 <h2>Connect</h2>
                 <div class="card"><b>Claude Code</b>
@@ -986,9 +990,9 @@ public static class ExplainerEndpoints
                 <span class="mono">no_version_for_date</span> · <span class="mono">unknown_work</span> ·
                 <span class="mono">unknown_anchor</span> · <span class="mono">anchor_not_in_version</span> ·
                 <span class="mono">no_provision_history</span> · <span class="mono">text_withheld</span> ·
-                <span class="mono">text_not_available</span> ·
-                <span class="mono">outside_observed_window</span>. Build against them: an empty result and a
-                refusal are different things.</p>
+                <span class="mono">text_not_available</span>. Build against them: an empty result and a
+                refusal are different things. See the
+                <a href="https://github.com/SFHAJJI/lex/blob/main/docs/mcp-2-migration.md" rel="noopener">MCP 2.0 migration note</a>.</p>
 
                 <h2>Or skip the API, take the data</h2>
                 <p>Every provision of every version, one row each, licence and attribution inline.

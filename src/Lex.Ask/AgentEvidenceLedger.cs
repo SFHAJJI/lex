@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using Lex.Mcp;
 
 namespace Lex.Ask;
 
@@ -6,19 +7,6 @@ internal sealed class AgentEvidenceLedger
 {
     private const int MaxEvidenceItems = 64;
     private const int MaxEvidenceChars = 96_000;
-    private static readonly HashSet<string> GapStatuses = new(StringComparer.Ordinal)
-    {
-        "no_corpus_mounted",
-        "anchor_not_in_version",
-        "no_version_for_date",
-        "no_provision_history",
-        "outside_observed_window",
-        "text_not_available",
-        "text_withheld",
-        "unknown_work",
-        "unknown_anchor",
-        "unavailable",
-    };
 
     private readonly List<AgentEvidence> _evidence = [];
     private int _evidenceChars;
@@ -34,7 +22,8 @@ internal sealed class AgentEvidenceLedger
         JsonObject? arguments = null)
     {
         var call = ++_call;
-        if (status is not null && GapStatuses.Contains(status))
+        if (status is not null && LegalOperationPolicy.OutcomeForStatus(status) is
+            LegalOutcome.NotAvailable or LegalOutcome.NotComparable or LegalOutcome.NotFound)
         {
             Add(tool, call, 0, AgentEvidenceKind.Coverage, null, null, null, null, null, true,
                 null, EvidencePayload(result, status));

@@ -1535,6 +1535,23 @@ public sealed class LexIndexReader : IDisposable
     }
 
     /// <summary>
+    /// Distinct non-withdrawn works in the exact legal metadata scope used by an aggregate.
+    /// This is the denominator disclosed beside changes_in_period, not a corpus-wide headline.
+    /// </summary>
+    public int PopulationTotal(IReadOnlyList<string>? kinds, FilterSet? filter = null)
+    {
+        var scoped = (filter ?? FilterSet.All) with
+        {
+            Kind = kinds is { Count: > 0 } ? string.Join(',', kinds) : filter?.Kind,
+        };
+        var (where, parameters) = WithFilters(
+            "1=1", scoped, excludeAsOf: true);
+        using var cmd = Cmd(
+            $"SELECT COUNT(DISTINCT group_key) FROM docs WHERE {where}", parameters);
+        return Convert.ToInt32(cmd.ExecuteScalar() ?? 0);
+    }
+
+    /// <summary>
     /// Recomputes the digest the stamp commits to, from what this database actually contains.
     /// Comparing it with the signed value is what turns "signature valid" into "the text you
     /// are reading is the text that was signed" — a signature over metadata alone cannot.

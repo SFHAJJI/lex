@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { first, tool, type AskReply, type ProvisionItem, type UiEffect } from "./api";
+import { compoundOperationViews, first, tool, type AskReply, type OperationReply,
+  type ProvisionItem, type UiEffect } from "./api";
 import { publisherOf, useWorkspace, workSlug, type Space, type State } from "./state";
-import { CitedBy, Empty, Gap, InForce, Provision, Ranking, VersionRail, hasView } from "./views";
+import { CitedBy, CoveragePanel, Empty, EvidenceCoordinates, Gap, InForce, Provision, Ranking,
+  VerificationPanel, VersionRail, hasView } from "./views";
 import { Compare } from "./Compare";
 import { LawPicker, shorten } from "./pickers";
 import AssistantController from "./AssistantController";
@@ -45,6 +47,7 @@ function shift(date: string, days: number) {
 export default function App() {
   const [s, go] = useWorkspace();
   const [ui, setUi] = useState<UiEffect>();
+  const [operationViews, setOperationViews] = useState<OperationReply[]>([]);
   const [loaded, setLoaded] = useState<{ items: ProvisionItem[]; from: string; to?: string; profile?: string; source?: string }>();
   const [toc, setToc] = useState<ProvisionItem[]>([]);
   const [title, setTitle] = useState<string>();
@@ -228,6 +231,10 @@ export default function App() {
           ? { ranking: { from_date: s.from!, to_date: s.until!, order: by,
                          works_changed: envs.reduce((n, e) => n + (e?.works_changed ?? 0), 0),
                          new_versions: envs.reduce((n, e) => n + (e?.new_versions ?? 0), 0),
+                         population_works: envs.reduce((n, e) => n + (e?.population?.works_in_scope ?? 0), 0),
+                         population_basis: "sum of the selected publisher scopes",
+                         known_exclusions: [...new Set(envs.map(e => e?.population?.known_exclusions)
+                           .filter(Boolean))] as string[],
                          rows: visibleRows } }
           : { gap: { status: "no_changes_in_period", explanation: "Nothing changed in that window.", available: [] } });
       })
@@ -296,6 +303,7 @@ export default function App() {
   }, [s.work, s.anchor]);
 
   const applyAssistantReply = useCallback((r: AskReply) => {
+      setOperationViews(compoundOperationViews(r));
       // Controls the assistant set on the way to its answer. Applied before the view, so
       // jurisdiction and legal metadata already agree with the rows that land under them.
       let refinement: Partial<State> = {};
@@ -341,10 +349,15 @@ export default function App() {
       }
   }, [go]);
 
+  const clearAssistantView = useCallback(() => {
+    setUi(undefined);
+    setOperationViews([]);
+  }, []);
+
   // Open on the text in force TODAY, never on the oldest version — the oldest is the one most
   // likely to have no stored text, so the old behaviour greeted every visitor with a refusal.
   const pickLaw = (h: { work: string; title: string }) => {
-    setUi(undefined); setTitle(h.title); setVersions([]);
+    clearAssistantView(); setTitle(h.title); setVersions([]);
     go({ work: h.work, date: undefined, anchor: undefined, to: undefined, mode: "read", space: "law" });
   };
 
@@ -362,14 +375,14 @@ export default function App() {
   const at = loaded?.from && railDates.includes(loaded.from) ? loaded.from
            : railDates.filter((d) => d <= (s.date ?? today())).pop();
 
-  const openLaw = (work: string, date: string) => { setUi(undefined); go({ work, date, to: undefined, anchor: undefined, mode: "read", space: "law" }); };
-  const openDiff = (work: string, from: string, to: string) => { setUi(undefined); go({ work, date: from, to, mode: "compare", space: "law" }); };
+  const openLaw = (work: string, date: string) => { clearAssistantView(); go({ work, date, to: undefined, anchor: undefined, mode: "read", space: "law" }); };
+  const openDiff = (work: string, from: string, to: string) => { clearAssistantView(); go({ work, date: from, to, mode: "compare", space: "law" }); };
 
   // Which framework is on screen: whatever the URL says, else inferred from what is loaded.
   const space: Space = s.space ?? (s.work ? "law" : (s.from || ui?.ranking) ? "time" : "search");
 
   const switchTo = (sp: Space) => {
-    setUi(undefined);
+    clearAssistantView();
     setPage(0);
     if (sp === "time") go({ space: sp, work: undefined, anchor: undefined, from: s.from ?? shift(today(), -365), until: s.until ?? today(), order: s.order ?? "by_churn" });
     else go({ space: sp, work: undefined, anchor: undefined, from: undefined, until: undefined });
@@ -380,24 +393,56 @@ export default function App() {
   // search box that had nothing to do with it.
   const front = !s.work && space === "search";
 
+  const renderOperation = (operation: OperationReply) => {
+    const view = operation.ui!;
+    if (view.gap) return <Gap {...view.gap} held={s.work ? held : undefined} />;
+    if (view.coverage) return <CoveragePanel view={view.coverage} />;
+    if (view.verification) return <VerificationPanel view={view.verification} />;
+    if (view.ranking) return <Ranking rows={view.ranking.rows}
+      worksChanged={view.ranking.works_changed} newVersions={view.ranking.new_versions}
+      populationWorks={view.ranking.population_works}
+      knownExclusions={view.ranking.known_exclusions}
+      from={view.ranking.from_date} to={view.ranking.to_date} onOpen={openDiff}
+      onOpenRecord={openLaw} page={0} hasMore={false} onPage={() => {}} />;
+    if (view.cited_by) return <CitedBy view={view.cited_by}
+      onOpen={(work, date, anchor) => {
+        clearAssistantView();
+        go({ work, date, anchor, mode: "read", space: "law" });
+      }} />;
+    if (view.in_force) return <InForce date={view.in_force.date} total={view.in_force.total}
+      rows={view.in_force.rows} page={0} hasMore={false} onPage={() => {}} onOpen={openLaw} />;
+    const subject = view.diff?.subject ?? view.provision?.subject
+      ?? view.history?.subject ?? view.timeline?.subject;
+    if (subject?.work) {
+      const from = view.diff?.from_date ?? view.provision?.valid_from ?? subject.date ?? today();
+      return <button className="operation-open" onClick={() => view.diff
+        ? openDiff(subject.work, view.diff.from_date, view.diff.to_date)
+        : openLaw(subject.work, from)}>
+        Open {view.diff ? "comparison" : view.history ? "article history" : view.timeline ? "timeline" : "publisher text"}
+      </button>;
+    }
+    if (view.workspace) return <p className="sub">The matching search workspace is open.</p>;
+    return null;
+  };
+
   return (
     <div className="ws">
       {front ? (
         <Search
           state={s} today={today()}
-          onSubmit={({ query, asOf }) => { setPage(0); setUi(undefined); go({
+          onSubmit={({ query, asOf }) => { setPage(0); clearAssistantView(); go({
             q: query || undefined,
             ...(asOf ? { asOf } : {}),
             work: undefined, from: undefined, until: undefined, space: "search",
           }); }}
-          onAsOf={(d) => { setPage(0); setUi(undefined); go({ asOf: d }); }}
-          onRefine={(next) => { setPage(0); setUi(undefined); go(next); }}
-          onOpen={(work, date, anchor) => { setUi(undefined); go({ work, date, anchor, mode: "read", space: "law" }); }}
+          onAsOf={(d) => { setPage(0); clearAssistantView(); go({ asOf: d }); }}
+          onRefine={(next) => { setPage(0); clearAssistantView(); go(next); }}
+          onOpen={(work, date, anchor) => { clearAssistantView(); go({ work, date, anchor, mode: "read", space: "law" }); }}
           onMonitor={() => switchTo("time")}
         />
       ) : (
         <nav className="doors">
-          <button className="backhome" onClick={() => { setPage(0); setUi(undefined); go({
+          <button className="backhome" onClick={() => { setPage(0); clearAssistantView(); go({
             work: undefined, q: undefined, asOf: undefined, from: undefined, until: undefined,
             anchor: undefined, to: undefined, space: undefined, jurisdiction: undefined,
             hierarchy: undefined, domain: undefined, sourceClass: undefined, actForm: undefined,
@@ -412,8 +457,8 @@ export default function App() {
 
       <AssistantController onReply={applyAssistantReply}
                 followUps={chipsFor(s, ui, (held?.text ?? 1) > 0).map((c) => ({
-                  label: c.label, run: () => { setUi(undefined); go(c.go); } }))}
-                onOpenStep={(st) => { setUi(undefined); go({ work: st.work, date: st.date, anchor: st.anchor, mode: "read", space: "law" }); }} />
+                  label: c.label, run: () => { clearAssistantView(); go(c.go); } }))}
+                onOpenStep={(st) => { clearAssistantView(); go({ work: st.work, date: st.date, anchor: st.anchor, mode: "read", space: "law" }); }} />
 
       {space === "time" && !s.work ? (
         <Period from={s.from ?? shift(today(), -365)} until={s.until ?? today()}
@@ -421,9 +466,9 @@ export default function App() {
                 jurisdiction={s.jurisdiction} hierarchy={s.hierarchy} domain={s.domain}
                 sourceClass={s.sourceClass} actForm={s.actForm}
                 bindingStatus={s.bindingStatus} language={s.language}
-                onWindow={(from, until) => { setPage(0); setUi(undefined); go({ from, until }); }}
-                onOrder={(o) => { setPage(0); setUi(undefined); go({ order: o }); }}
-                onRefine={(next) => { setPage(0); setUi(undefined); go(next); }} />
+                onWindow={(from, until) => { setPage(0); clearAssistantView(); go({ from, until }); }}
+                onOrder={(o) => { setPage(0); clearAssistantView(); go({ order: o }); }}
+                onRefine={(next) => { setPage(0); clearAssistantView(); go(next); }} />
       ) : null}
 
       {coached ? null : (
@@ -457,7 +502,7 @@ export default function App() {
                     <button key={l} className={l === (s.language ?? servedLang) ? "on" : ""}
                             aria-pressed={l === (s.language ?? servedLang)}
                             title={`Read this law in ${NAMES[l] ?? l}`}
-                            onClick={() => { setUi(undefined); go({ language: l }); }}>{l}</button>
+                            onClick={() => { clearAssistantView(); go({ language: l }); }}>{l}</button>
                   ))}
                 </span>
               ) : null}
@@ -476,38 +521,53 @@ export default function App() {
       {space === "law" && s.work ? (
         <VersionRail dates={railDates} current={at} compareTo={s.mode === "compare" ? s.to : undefined}
                      scope={railScope} today={today()} work={s.work} timelineSemantics={timelineSemantics}
-                     onPick={(d) => { setUi(undefined); go({ date: d, to: undefined, mode: "read" }); }}
+                     onPick={(d) => { clearAssistantView(); go({ date: d, to: undefined, mode: "read" }); }}
                      onCompare={(d) => {
                        // Shift-click makes the pair, so comparing never means retyping a date
                        // that is already on screen. Order the pair; a diff runs forwards.
                        const from = at && at < d ? at : d;
                        const to = at && at < d ? d : at ?? d;
                        if (from === to) return;
-                       setUi(undefined); go({ date: from, to, mode: "compare" });
+                       clearAssistantView(); go({ date: from, to, mode: "compare" });
                      }}
-                     onClear={() => { setUi(undefined); go({ to: undefined, mode: "read" }); }} />
+                     onClear={() => { clearAssistantView(); go({ to: undefined, mode: "read" }); }} />
       ) : null}
 
       <div className="work">
-        {ui?.gap ? <Gap {...ui.gap} held={s.work ? held : undefined} /> :
+        {operationViews.length > 1 ? (
+          <div className="operation-results" aria-label="Requested operation results">
+            {operationViews.map((operation) => (
+              <section className="operation-result" key={operation.operation_id}
+                       aria-label={`Result ${operation.order + 1}`}>
+                <p className="operation-label">Result {operation.order + 1}</p>
+                {renderOperation(operation)}
+                <EvidenceCoordinates ui={operation.ui!} />
+              </section>
+            ))}
+          </div>
+        ) : ui?.gap ? <Gap {...ui.gap} held={s.work ? held : undefined} /> :
          ui?.ranking ? <Ranking rows={ui.ranking.rows} worksChanged={ui.ranking.works_changed}
                                 newVersions={ui.ranking.new_versions} from={ui.ranking.from_date}
+                                populationWorks={ui.ranking.population_works}
+                                knownExclusions={ui.ranking.known_exclusions}
                                 to={ui.ranking.to_date} onOpen={openDiff} onOpenRecord={openLaw}
                                 page={page}
                                 hasMore={(page * PAGE) + ui.ranking.rows.length < ui.ranking.works_changed}
-                                onPage={(p) => { setPage(Math.max(0, p)); setUi(undefined); }} /> :
+                                onPage={(p) => { setPage(Math.max(0, p)); clearAssistantView(); }} /> :
          ui?.cited_by ? <CitedBy view={ui.cited_by}
-                                 onOpen={(w, d, a) => { setUi(undefined); go({ work: w, date: d, anchor: a, mode: "read", space: "law" }); }} /> :
+                                 onOpen={(w, d, a) => { clearAssistantView(); go({ work: w, date: d, anchor: a, mode: "read", space: "law" }); }} /> :
+         ui?.coverage ? <CoveragePanel view={ui.coverage} /> :
+         ui?.verification ? <VerificationPanel view={ui.verification} /> :
          ui?.in_force ? <InForce date={ui.in_force.date} total={ui.in_force.total} rows={ui.in_force.rows}
                                   page={page} hasMore={(page * PAGE) + ui.in_force.rows.length < ui.in_force.total}
-                                  onPage={(p) => { setPage(Math.max(0, p)); setUi(undefined); }} onOpen={openLaw} /> :
+                                  onPage={(p) => { setPage(Math.max(0, p)); clearAssistantView(); }} onOpen={openLaw} /> :
          s.work && s.mode === "compare" ? <Compare work={s.work} title={title ?? s.work} from={s.date ?? today()} to={s.to ?? today()} anchor={s.anchor} /> :
          s.work && loaded ? <Provision items={loaded.items} toc={toc} validFrom={loaded.from} validTo={loaded.to}
                                        work={s.work} title={title ?? s.work} language={servedLang}
                                        anchor={s.anchor} profile={loaded.profile}
                                        timelineSemantics={timelineSemantics}
                                        source={loaded.source}
-                                       onCite={(w) => { setUi(undefined); go({ work: w, date: undefined, anchor: undefined, to: undefined, mode: "read", space: "law" }); }}
+                                       onCite={(w) => { clearAssistantView(); go({ work: w, date: undefined, anchor: undefined, to: undefined, mode: "read", space: "law" }); }}
                                        onPick={(a, auto) => { chosenAnchor.current = !auto; go({ anchor: a }); }}
                                        onClear={() => go({ anchor: undefined })} /> :
          // The shape of what is coming, not the word for waiting: a code takes a moment to
@@ -518,12 +578,13 @@ export default function App() {
          !front && space === "time" && (s.from || s.until) ? <ReportSkeleton /> :
          !front && space === "time" ? <Empty>Pick a period above.</Empty> :
          null}
+        {operationViews.length <= 1 && ui ? <EvidenceCoordinates ui={ui} /> : null}
       </div>
 
       {(s.work || ui) ? (
         <div className="chips">
           {chipsFor(s, ui, (held?.text ?? 1) > 0).map((c) => (
-            <button key={c.label} className="chip" onClick={() => { setUi(undefined); go(c.go); }}>{c.label}</button>
+            <button key={c.label} className="chip" onClick={() => { clearAssistantView(); go(c.go); }}>{c.label}</button>
           ))}
         </div>
       ) : null}

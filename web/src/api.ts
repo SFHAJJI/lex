@@ -34,12 +34,41 @@ export function first<T extends object>(res: T | T[], has: (x: T) => boolean): T
 
 export interface AskReply {
   reply: string;
-  trace?: { tool: string; status?: string }[];
+  trace?: { phase?: string; operation_id?: string; tool?: string; status?: string }[];
   ui?: UiEffect;
+  operations?: OperationReply[];
   clarification?: AskClarification;
   error?: string;
   /** False when the answer was a refusal: its steps are withheld from the transcript. */
   narrated?: boolean;
+}
+export interface OperationReply {
+  operation_id: string;
+  order: number;
+  result_class?: string;
+  disposition?: string;
+  legal_outcome: string;
+  transport_outcome: string;
+  effects: string[];
+  ui?: UiEffect;
+}
+
+/** Preserve every terminal operation view in user order for compound requests. */
+export function compoundOperationViews(reply: AskReply): OperationReply[] {
+  const visible = (reply.operations ?? [])
+    .filter((operation): operation is OperationReply & { ui: UiEffect } => !!operation.ui)
+    .sort((left, right) => left.order - right.order);
+  return visible.length > 1 ? visible : [];
+}
+
+export function signatureStatusLabel(value: boolean | undefined): string {
+  return value === true ? "signature verified"
+    : value === false ? "signature verification failed"
+    : "signature unavailable";
+}
+
+export function populationScopeLabel(value: number | undefined): string | undefined {
+  return value === undefined ? undefined : `${value.toLocaleString()} works in selected scope`;
 }
 
 /** Page-specific actions are useful only after an answer that did not end in a gap. */
@@ -110,22 +139,43 @@ export function boundedAskHistory(value: unknown): AskMessage[] {
 }
 
 export interface Subject { work: string; title?: string; date?: string; anchor?: string; language?: string }
+export interface EvidenceContext {
+  publisher?: string; jurisdiction?: string; timeline_semantics?: string;
+  requested_date?: string; requested_from_date?: string; requested_to_date?: string;
+  observed_at?: string; valid_from?: string; valid_to?: string; provisional: boolean;
+  source_uri?: string; extraction_profile?: string; record_sha256?: string;
+  body_sha256?: string; text_sha256?: string; artifact_manifest_id?: string;
+  content_digest?: string; signature_valid?: boolean;
+}
 export interface Citation { work: string; href: string; text?: string }
 export interface ProvisionItem { anchor: string; num?: string; heading?: string; text?: string; text_sha256?: string; path?: string;
                                  citations?: Citation[] }
 export interface UiEffect {
-  provision?: { subject: Subject; valid_from: string; valid_to?: string; provisions: ProvisionItem[]; permalink?: string };
-  diff?: { subject: Subject; from_date: string; to_date: string; note?: string; status?: string };
-  history?: { subject: Subject; anchor: string; distinct_texts: number; states: { valid_from: string; valid_to?: string; sha?: string; permalink?: string }[] };
-  timeline?: { subject: Subject };
-  ranking?: { from_date: string; to_date: string; order: string; works_changed: number; new_versions: number; rows: RankingRow[] };
-  in_force?: { date: string; total: number; rows: {
+  provision?: { subject: Subject; valid_from: string; valid_to?: string; provisions: ProvisionItem[]; permalink?: string; evidence?: EvidenceContext[] };
+  diff?: { subject: Subject; from_date: string; to_date: string; note?: string; status?: string; evidence?: EvidenceContext[] };
+  history?: { subject: Subject; anchor: string; distinct_texts: number; states: { valid_from: string; valid_to?: string; sha?: string; permalink?: string }[]; evidence?: EvidenceContext[] };
+  timeline?: { subject: Subject; evidence?: EvidenceContext[] };
+  ranking?: { from_date: string; to_date: string; order: string; works_changed: number; new_versions: number;
+              population_works?: number; population_basis?: string; known_exclusions?: string[];
+              rows: RankingRow[]; status?: string; evidence?: EvidenceContext[] };
+  in_force?: { date: string; total: number; status?: string; evidence?: EvidenceContext[]; rows: {
     work: string; title?: string; kind?: string; valid_from: string; permalink?: string;
     jurisdiction?: string; hierarchy?: string; timeline_semantics?: string;
   }[] };
-  cited_by?: { cited_work: string; citing_articles: number;
+  cited_by?: { cited_work: string; citing_articles: number; status?: string; evidence?: EvidenceContext[];
                rows: { work: string; title?: string; valid_from: string; anchor: string; num?: string;
                        permalink?: string; jurisdiction?: string }[] };
+  coverage?: { evidence?: EvidenceContext[]; publishers: {
+    publisher: string; name?: string; tier?: string; works: number; versions: number;
+    versions_with_text: number; versions_without_text: number; earliest?: string; latest?: string;
+    inventory_status?: string; build_complete?: boolean; signature_valid?: boolean;
+    known_gaps: string[];
+  }[] };
+  verification?: {
+    lex_id: string; title?: string; source_uri?: string; record_sha256?: string;
+    body_sha256?: string; permalink?: string; signature_valid?: boolean; algorithm?: string;
+    evidence?: EvidenceContext[];
+  };
   // Not a view: how the workspace should be SET. The assistant reaches the same controls a reader
   // does, so "show me EU regulations" leaves the matching jurisdiction and legal metadata
   // selected rather than describing filters the visitor then has to find.
@@ -133,8 +183,10 @@ export interface UiEffect {
     query?: string;
     jurisdiction?: string; hierarchy?: string; domain?: string; source_class?: string;
     act_form?: string; binding_status?: string; page?: number; language?: string;
+    work?: string; date?: string; anchor?: string;
+    evidence?: EvidenceContext[];
   };
-  gap?: { status: string; work?: string; date?: string; explanation: string; available: string[] };
+  gap?: { status: string; work?: string; date?: string; explanation: string; available: string[]; evidence?: EvidenceContext[] };
 }
 export interface RankingRow {
   work: string; title?: string; versions_in_period: number; versions_total: number;

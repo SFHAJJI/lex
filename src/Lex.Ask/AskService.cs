@@ -12,8 +12,27 @@ namespace Lex.Ask;
 // no AI code). The model (Azure OpenAI chat completions, v1 surface) composes answers ONLY
 // from tool output; disabled unless the endpoint and either managed identity or a legacy key are configured.
 // Stateless per request; capped per IP and per day.
-public sealed class AskService(McpCore core)
+public sealed class AskService
 {
+    private readonly McpCore core;
+    private readonly IOperationPlanner? _planner;
+    private readonly IOperationSynthesizer? _synthesizer;
+
+    public AskService(McpCore core)
+    {
+        this.core = core;
+    }
+
+    internal AskService(
+        McpCore core,
+        IOperationPlanner planner,
+        IOperationSynthesizer? synthesizer = null)
+    {
+        this.core = core;
+        _planner = planner;
+        _synthesizer = synthesizer;
+    }
+
     internal sealed class WorkResolutionGuard
     {
         internal sealed record GuardClarification(
@@ -26,6 +45,7 @@ public sealed class AskService(McpCore core)
 
         private readonly HashSet<string> _resolved = new(StringComparer.Ordinal);
         private readonly HashSet<string> _prior = new(StringComparer.Ordinal);
+        private readonly HashSet<string> _current = new(StringComparer.Ordinal);
         private readonly List<(string Work, string Title)> _candidates = [];
         private bool _searchObserved;
         private bool _workIndependentAnswerObserved;
@@ -33,22 +53,28 @@ public sealed class AskService(McpCore core)
         private bool _priorContextUsed;
 
         public IReadOnlyCollection<string> ResolvedWorks => _resolved;
+        public IReadOnlyCollection<string> CurrentResolvedWorks => _current;
 
         public void ObserveSearch(JsonNode result, bool isRawUserQuery = true)
             => ObserveSearch(result, isRawUserQuery, allowDirectProvisionAuthority: true,
-                collectCandidates: true);
+                collectCandidates: true, markCurrent: true);
 
         public void ObserveCurrentUserSearch(JsonNode result, bool hasPriorContext)
             => ObserveSearch(result, isRawUserQuery: true,
                 allowDirectProvisionAuthority: !hasPriorContext,
-                collectCandidates: !hasPriorContext);
+                collectCandidates: !hasPriorContext, markCurrent: true);
 
         public void ObservePriorUserSearch(JsonNode result)
             => ObserveSearch(result, isRawUserQuery: true, allowDirectProvisionAuthority: false,
-                collectCandidates: false);
+                collectCandidates: false, markCurrent: false);
+
+        public void ObserveFocusedSearch(JsonNode result, bool hasPriorContext)
+            => ObserveSearch(result, isRawUserQuery: false,
+                allowDirectProvisionAuthority: !hasPriorContext,
+                collectCandidates: true, markCurrent: false);
 
         private void ObserveSearch(JsonNode result, bool isRawUserQuery,
-            bool allowDirectProvisionAuthority, bool collectCandidates)
+            bool allowDirectProvisionAuthority, bool collectCandidates, bool markCurrent)
         {
             // A preflight that produced no usable envelope is still an observed search. Work-
             // specific tools must fail closed rather than treating an empty/malformed result as
@@ -71,6 +97,7 @@ public sealed class AskService(McpCore core)
                             if (candidate?.GetValue<string>() is { } work)
                             {
                                 _resolved.Add(WorkKey(work));
+                                if (markCurrent) _current.Add(WorkKey(work));
                                 _currentAuthorityObserved = true;
                             }
                 // A problem description with no named law may select a work only from an actual
@@ -83,6 +110,7 @@ public sealed class AskService(McpCore core)
                         if (hit["lex_id"]?.GetValue<string>() is { } lexId)
                         {
                             _resolved.Add(WorkKey(lexId));
+                            if (markCurrent) _current.Add(WorkKey(lexId));
                             _currentAuthorityObserved = true;
                         }
                 if (collectCandidates && response["hits"] is JsonArray candidateHits)
@@ -136,6 +164,7 @@ public sealed class AskService(McpCore core)
             if (IsCandidateWork(value))
             {
                 _resolved.Add(value);
+                _current.Add(value);
                 _currentAuthorityObserved = true;
             }
         }
@@ -146,7 +175,7 @@ public sealed class AskService(McpCore core)
 
         public void ObserveWorkIndependentAnswer() => _workIndependentAnswerObserved = true;
 
-        public GuardClarification? ClarificationFor(string? attemptedWork)
+        public GuardClarification? ClarificationFor(string? attemptedWork, string locale = "en")
         {
             if (_workIndependentAnswerObserved || _currentAuthorityObserved || _priorContextUsed
                 || _candidates.Count == 0)
@@ -154,16 +183,20 @@ public sealed class AskService(McpCore core)
             var attempted = attemptedWork is null ? null : WorkKey(attemptedWork);
             var ordered = _candidates
                 .OrderByDescending(candidate => candidate.Work == attempted)
-                .Take(4)
+                .Take(3)
                 .ToList();
             var choices = ordered.Select((candidate, index) => new GuardChoice(
                 CandidateOption(candidate.Title, candidate.Work, index + 1),
                 candidate.Work)).ToList();
-            if (choices.Count == 1)
-                choices.Add(new GuardChoice(
-                    "None of these; I will add more details", NoChoice));
+            choices.Add(new GuardChoice(
+                locale == "fr"
+                    ? "Aucun de ceux-ci; je vais préciser ma demande"
+                    : "None of these; I will add more details",
+                NoChoice));
             var clarification = new AgentClarification(
-                "Lex found possible instruments but no direct provision evidence. Which instrument should it use?",
+                locale == "fr"
+                    ? "Lex a trouvé plusieurs instruments possibles sans preuve directe dans une disposition. Lequel doit-il utiliser ?"
+                    : "Lex found possible instruments but no direct provision evidence. Which instrument should it use?",
                 choices.Select(choice => choice.Label).ToArray());
             var display = AgentAnswerContract.Validate(new AgentAnswerDraft(
                 AgentAnswerStatus.Clarify, clarification.Question, [], [], null, clarification), []).Clarification!;
@@ -202,7 +235,7 @@ public sealed class AskService(McpCore core)
             return boundedTitle + suffix;
         }
 
-        private static string WorkKey(string value)
+        internal static string WorkKey(string value)
         {
             var parts = value.Split(':');
             return parts.Length >= 2 ? $"{parts[0]}:{parts[1]}" : value;
@@ -226,8 +259,8 @@ public sealed class AskService(McpCore core)
     private readonly SemaphoreSlim _gate = new(4);
     private AgentAnswerFinalizer? _answerFinalizer;
 
-    public bool Enabled => !string.IsNullOrEmpty(_endpoint)
-                           && (_useManagedIdentity || !string.IsNullOrEmpty(_key));
+    public bool Enabled => _planner is not null || (!string.IsNullOrEmpty(_endpoint)
+                           && (_useManagedIdentity || !string.IsNullOrEmpty(_key)));
 
     private static int EnvInt(string name, int dflt)
         => int.TryParse(Environment.GetEnvironmentVariable(name), out var v) && v > 0 ? v : dflt;
@@ -332,8 +365,8 @@ public sealed class AskService(McpCore core)
         3. Lex answers what the rule WAS, never what it means: no interpretation, no legal advice,
            no compliance conclusions. If asked for advice, give the grounded text and say that
            interpretation is out of scope.
-        4. Honest refusals: when a tool answers no_version_for_date, outside_observed_window,
-           unknown_work, text_withheld or text_not_available, or coverage shows a gap, say plainly what Lex does not
+        4. Honest refusals: when a tool answers no_version_for_date, unknown_work,
+           text_withheld or text_not_available, or coverage shows a gap, say plainly what Lex does not
            hold and link the official source. Be PRECISE about which of these it is: "Lex does not
            have this law" and "Lex has this law but not its text" are different statements, and
            claiming the first when the second is true is as wrong as inventing text. A work that
@@ -406,6 +439,217 @@ public sealed class AskService(McpCore core)
         return arr;
     }
 
+    private static string PlannerPrompt(string host) => $"""
+        You plan operations for Lex, a read-only point-in-time legal retrieval product at https://{host}.
+        Return one complete ordered operation for every legal operation the user requested. The
+        application freezes and validates the entire list before any legal tool runs. Do not answer
+        the question and do not call legal tools yourself.
+
+        Choose only these operations:
+        - search: find laws or provisions by topic and open the matching search workspace.
+        - as_of: exact publisher text for one law on one date.
+        - diff: compare one law, optionally one article, between two dates.
+        - timeline: list the versions of one law.
+        - article_history: history of one held article.
+        - changes_in_period: corpus-wide laws changed during a window. Use order=by_churn for
+          "changed most". This operation is work-independent and must never be replaced by search.
+        - in_force_on: publisher states covering a date.
+        - coverage: what Lex holds and lacks.
+        - cited_by: provisions that refer to one law.
+        - provenance: proof chain for one law or version.
+        - legal_boundary: the user asks for legal advice, a compliance conclusion, application
+          to their facts, a recommendation, or help evading a rule. Use reason only.
+        - clarification: the request has no identifiable law, date, topic, or operation. Supply
+          one question and two to four concrete options. Do not use it after a law resolves.
+
+        For a named law, put the user's exact name, acronym or identifier in work_query. Never invent
+        a canonical work id. The application resolves it deterministically. Put a mentioned article
+        number in article_number. Dates are ISO YYYY-MM-DD. Expand a bare year to its full inclusive
+        calendar boundary. For as_of with no date use {DateTime.UtcNow:yyyy-MM-dd}. Preserve the
+        user's operation order. Set synthesis=true only when the user explicitly asks you to
+        summarize or describe the accepted results; ordinary lookup and comparison use deterministic
+        application replies. A compound request must remain multiple operations.
+        "Which Luxembourg and EU laws changed most in 2024" is one changes_in_period operation with
+        from_date=2024-01-01, to_date=2024-12-31 and order=by_churn. "Compare Article 92 of CRR
+        between 2020 and 2024" is one diff with work_query=CRR, article_number=92,
+        from_date=2020-01-01 and to_date=2024-12-31.
+        """;
+
+    private static JsonArray PlannerTools() =>
+    [
+        new JsonObject
+        {
+            ["type"] = "function",
+            ["function"] = new JsonObject
+            {
+                ["name"] = "submit_operation_plan",
+                ["description"] = "Submit the complete ordered legal operation plan.",
+                ["parameters"] = new JsonObject
+                {
+                    ["type"] = "object",
+                    ["properties"] = new JsonObject
+                    {
+                        ["operations"] = new JsonObject
+                        {
+                            ["type"] = "array",
+                            ["minItems"] = 1,
+                            ["maxItems"] = OperationPlan.MaximumOperations,
+                            ["items"] = new JsonObject
+                            {
+                                ["type"] = "object",
+                                ["properties"] = new JsonObject
+                                {
+                                    ["tool"] = new JsonObject
+                                    {
+                                        ["type"] = "string",
+                                        ["enum"] = new JsonArray(
+                                            "search", "as_of", "diff", "timeline",
+                                            "article_history", "changes_in_period", "in_force_on",
+                                            "coverage", "cited_by", "provenance",
+                                            "legal_boundary", "clarification"),
+                                    },
+                                    ["arguments"] = PlannerArgumentSchema(),
+                                },
+                                ["required"] = new JsonArray("tool", "arguments"),
+                            },
+                        },
+                        ["synthesis"] = new JsonObject
+                        {
+                            ["type"] = "boolean",
+                            ["description"] = "True only when the user explicitly asks for a descriptive synthesis of the legal operation results.",
+                        },
+                    },
+                    ["required"] = new JsonArray("operations"),
+                },
+            },
+        },
+    ];
+
+    private static JsonObject PlannerArgumentSchema()
+    {
+        JsonObject S() => new() { ["type"] = "string" };
+        JsonObject I() => new() { ["type"] = "integer" };
+        var properties = new JsonObject();
+        foreach (var name in new[]
+                 {
+                     "query", "publisher", "jurisdiction", "document_type", "source_class",
+                     "hierarchy", "act_form", "binding_status", "domain", "language",
+                     "retrieval_mode", "time_scope", "as_of", "fuzzy", "works", "work",
+                     "work_query", "article_number", "date", "mode", "anchors", "from_date",
+                     "to_date", "anchor", "lex_id", "order", "reason", "question",
+                 })
+            properties[name] = S();
+        properties["limit"] = I();
+        properties["offset"] = I();
+        properties["options"] = new JsonObject
+        {
+            ["type"] = "array",
+            ["minItems"] = 2,
+            ["maxItems"] = 4,
+            ["items"] = S(),
+        };
+        return new JsonObject
+        {
+            ["type"] = "object",
+            ["properties"] = properties,
+            ["additionalProperties"] = false,
+        };
+    }
+
+    private async Task<OperationPlan> PlanOperationsAsync(
+        JsonArray history,
+        string host,
+        string requestId,
+        string locale,
+        CancellationToken ct)
+    {
+        if (_planner is not null)
+        {
+            var proposed = await _planner.PlanAsync(history, host, requestId, ct);
+            return OperationPlan.Create(
+                requestId, locale, proposed.Operations, proposed.SynthesisRequested);
+        }
+
+        var messages = new JsonArray
+        {
+            new JsonObject { ["role"] = "system", ["content"] = PlannerPrompt(host) },
+        };
+        foreach (var message in history)
+            messages.Add(message?.DeepClone());
+        var req = new JsonObject
+        {
+            ["model"] = _deployment,
+            ["messages"] = messages,
+            ["tools"] = PlannerTools(),
+            ["tool_choice"] = new JsonObject
+            {
+                ["type"] = "function",
+                ["function"] = new JsonObject { ["name"] = "submit_operation_plan" },
+            },
+            ["max_completion_tokens"] = 4000,
+            ["reasoning_effort"] = "medium",
+        };
+        using var httpReq = new HttpRequestMessage(
+            HttpMethod.Post, $"{_endpoint}/openai/v1/chat/completions")
+        {
+            Content = new StringContent(req.ToJsonString(), Encoding.UTF8, "application/json"),
+        };
+        if (_useManagedIdentity)
+        {
+            var token = await _credential.GetTokenAsync(
+                new TokenRequestContext(["https://cognitiveservices.azure.com/.default"]), ct);
+            httpReq.Headers.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token.Token);
+        }
+        else
+            httpReq.Headers.Add("api-key", _key);
+
+        using var response = await _http.SendAsync(httpReq, ct);
+        var responseText = await response.Content.ReadAsStringAsync(ct);
+        if (!response.IsSuccessStatusCode)
+            throw new HttpRequestException(
+                $"Planning upstream returned HTTP {(int)response.StatusCode}.");
+        JsonNode? parsed;
+        try
+        {
+            parsed = JsonNode.Parse(responseText);
+        }
+        catch (System.Text.Json.JsonException ex)
+        {
+            throw new InvalidDataException("The planner returned malformed response JSON.", ex);
+        }
+        var calls = parsed?["choices"]?[0]?["message"]?["tool_calls"] as JsonArray;
+        var call = calls?.OfType<JsonObject>().SingleOrDefault(item =>
+            item["function"]?["name"] is JsonValue name
+            && name.TryGetValue<string>(out var value)
+            && value == "submit_operation_plan")
+            ?? throw new InvalidDataException("The planner did not submit exactly one operation plan.");
+        var raw = call["function"]?["arguments"] is JsonValue argumentValue
+                  && argumentValue.TryGetValue<string>(out var rawArguments)
+            ? rawArguments
+            : throw new InvalidDataException(
+                "The planner returned no string operation-plan arguments.");
+        JsonObject plan;
+        try
+        {
+            plan = JsonNode.Parse(raw) as JsonObject
+                ?? throw new InvalidDataException(
+                    "The planner returned malformed operation-plan arguments.");
+        }
+        catch (System.Text.Json.JsonException ex)
+        {
+            throw new InvalidDataException(
+                "The planner returned malformed operation-plan JSON.", ex);
+        }
+        var operations = plan["operations"] as JsonArray
+            ?? throw new InvalidDataException("The planner returned no operation list.");
+        var synthesis = false;
+        if (plan["synthesis"] is JsonValue synthesisValue
+            && !synthesisValue.TryGetValue<bool>(out synthesis))
+            throw new InvalidDataException("The synthesis flag must be boolean.");
+        return OperationPlan.FromPlannerOutput(requestId, locale, operations, synthesis);
+    }
+
     // Truncate oversized tool results without ever producing invalid JSON: shrink the largest
     // string fields (law text) first, then fall back to a wrapped preview.
     private static string TruncateResult(JsonNode node)
@@ -472,7 +716,7 @@ public sealed class AskService(McpCore core)
         // rather than silently degrading to a wall of prose.
         if (clarification is null && merged.IsEmpty && trace.Count > 0)
             merged = new UiEffect(Gap: new GapView(
-                Status: "no_result",
+                Status: McpStatus.NoResult,
                 Work: null, Date: null,
                 Explanation: "Lex found nothing matching that in what it holds. This is a limit of the corpus, not a hedge. See coverage for exactly what is and is not held.",
                 Available: []));
@@ -505,7 +749,7 @@ public sealed class AskService(McpCore core)
             && grounded.Status == AgentAnswerStatus.Refusal
             && parts.All(part => part.Gap is null))
         {
-            if (view.Diff is { Status: "profiles_differ" })
+            if (view.Diff is { Status: McpStatus.ProfilesDiffer })
                 return "Lex cannot produce a reliable comparison for those dates because the two versions use incompatible extraction profiles. The reason and both verified publisher versions are open below.";
             if (view.Diff is not null)
                 return "The requested comparison is open below.";
@@ -710,7 +954,601 @@ public sealed class AskService(McpCore core)
     /// </summary>
     public sealed record Step(string Kind, string Text, string? Work = null, string? Date = null, string? Anchor = null);
 
-    public async Task<(int Status, JsonObject Body)> AskAsync(JsonArray history, string ip, string host,
+    public async Task<(int Status, JsonObject Body)> AskAsync(
+        JsonArray history,
+        string ip,
+        string host,
+        CancellationToken ct,
+        Action<Step>? onStep = null)
+    {
+        if (!Enabled)
+            return (503, new JsonObject
+            {
+                ["error"] = "The playground is not enabled on this deployment. Connect your own AI instead: /ai.",
+            });
+        if (history.Count is 0 or > MaxHistory)
+            return (400, new JsonObject { ["error"] = $"Send 1 to {MaxHistory} messages." });
+
+        var userQueries = new List<string>();
+        foreach (var message in history)
+        {
+            var role = message?["role"]?.GetValue<string>();
+            var content = message?["content"]?.GetValue<string>() ?? "";
+            if (role is not ("user" or "assistant"))
+                return (400, new JsonObject { ["error"] = "Roles must be user/assistant." });
+            var limit = role == "user" ? MaxUserMessageChars : MaxAssistantMessageChars;
+            if (content.Length is 0 || content.Length > limit)
+                return (400, new JsonObject
+                {
+                    ["error"] = role == "user"
+                        ? "Questions are capped at 1,000 characters."
+                        : "Assistant history messages are capped at 4,000 characters.",
+                });
+            if (role == "user") userQueries.Add(content);
+        }
+        if (userQueries.Count == 0)
+            return (400, new JsonObject { ["error"] = "The last message must be from the user." });
+        var rawUserQuery = userQueries[^1];
+        if (history[^1]?["role"]?.GetValue<string>() != "user")
+            return (400, new JsonObject { ["error"] = "The last message must be from the user." });
+        if (WorkResolutionGuard.IsExplicitNonSelection(rawUserQuery))
+            return (200, Body(
+                "No instrument was selected. Add an official title or identifier when you want to try again.",
+                [], []));
+        if (!TryCount(ip, out var reason))
+            return (429, new JsonObject { ["error"] = reason });
+        if (!await _gate.WaitAsync(TimeSpan.Zero, ct))
+            return (429, new JsonObject { ["error"] = "The shared playground is busy. Try again shortly." });
+
+        OperationRun? run = null;
+        var requestId = Guid.NewGuid().ToString("N");
+        var requestLocale = RequestLocale(rawUserQuery);
+        try
+        {
+            var plan = await PlanOperationsAsync(
+                history, host, requestId, requestLocale, ct);
+            run = OperationRun.Start(plan);
+            return await ExecutePlanAsync(
+                plan, run, userQueries, rawUserQuery, onStep, ct);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            run?.CompletePending(TransportOutcome.Cancelled);
+            return (499, new JsonObject { ["error"] = "Request cancelled." });
+        }
+        catch (TaskCanceledException)
+        {
+            run?.CompletePending(TransportOutcome.TimedOut);
+            return (504, new JsonObject { ["error"] = "The operation timed out. Try a narrower question." });
+        }
+        catch (HttpRequestException ex)
+        {
+            run?.CompletePending(TransportOutcome.UpstreamFailed);
+            Console.Error.WriteLine($"[ask] planning upstream unreachable: {ex.Message}");
+            return (502, new JsonObject { ["error"] = "The planning service is unavailable right now." });
+        }
+        catch (InvalidDataException ex)
+        {
+            run?.CompletePendingLegal(LegalOutcome.InvalidRequest);
+            Console.Error.WriteLine($"[ask] invalid operation plan: {ex.Message}");
+            var explanation = requestLocale == "fr"
+                ? "Cette demande ne correspond pas à une opération juridique valide."
+                : "This request does not map to a valid legal operation.";
+            var effect = new UiEffect(Gap: new GapView(
+                "invalid_request", null, null, explanation, []));
+            var body = Body(explanation,
+                new JsonArray(new JsonObject
+                {
+                    ["phase"] = "operation_plan",
+                    ["request_id"] = requestId,
+                    ["status"] = "invalid_request",
+                }),
+                [effect]);
+            body["operations"] = new JsonArray(new JsonObject
+            {
+                ["operation_id"] = $"{requestId}:invalid",
+                ["order"] = 0,
+                ["result_class"] = null,
+                ["disposition"] = "gap",
+                ["legal_outcome"] = "invalid_request",
+                ["transport_outcome"] = "completed",
+                ["effects"] = new JsonArray("gap"),
+                ["ui"] = JsonNode.Parse(
+                    System.Text.Json.JsonSerializer.Serialize(effect, UiJson)),
+            });
+            return (200, body);
+        }
+        catch (Exception ex)
+        {
+            run?.CompletePending(TransportOutcome.UpstreamFailed);
+            Console.Error.WriteLine($"[ask] {ex}");
+            return (500, new JsonObject { ["error"] = "Unexpected error in the playground." });
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    internal static string RequestLocale(string query)
+    {
+        var value = $" {query.ToLowerInvariant()} ";
+        var distinctive = new[]
+        {
+            " quel ", " quelle ", " quels ", " quelles ", " loi ", " lois ",
+            " vigueur ", " modifié ", " modifie ", " changements ",
+            " affiche ", " affichez ", " montrer ", " montrez ", " couverture ",
+            " dois ", " dois-je ", " puis-je ", " respecter ", " comparez ",
+            " trouvez ", " recherche ", " chronologie ", " instrument ",
+        };
+        var common = new[]
+        {
+            " le ", " la ", " les ", " un ", " une ", " des ", " du ", " de ",
+            " entre ", " article ", " articles ",
+        };
+        return distinctive.Any(marker => value.Contains(marker, StringComparison.Ordinal))
+               || common.Count(marker => value.Contains(marker, StringComparison.Ordinal)) >= 2
+               || query.Any(character => "àâçéèêëîïôùûüÿœ".Contains(char.ToLowerInvariant(character)))
+            ? "fr"
+            : "en";
+    }
+
+    private async Task<(int Status, JsonObject Body)> ExecutePlanAsync(
+        OperationPlan plan,
+        OperationRun run,
+        IReadOnlyList<string> userQueries,
+        string rawUserQuery,
+        Action<Step>? onStep,
+        CancellationToken ct)
+    {
+        var trace = new JsonArray
+        {
+            new JsonObject
+            {
+                ["phase"] = "operation_plan",
+                ["request_id"] = plan.RequestId,
+                ["locale"] = plan.Locale,
+                ["operations"] = new JsonArray(plan.Operations.Select(operation =>
+                    (JsonNode)new JsonObject
+                    {
+                        ["operation_id"] = operation.OperationId,
+                        ["order"] = operation.UserOrder,
+                        ["tool"] = operation.Tool,
+                        ["result_class"] = operation.ResultClass is { } resultClass
+                            ? ContractName(resultClass) : null,
+                        ["disposition"] = operation.Disposition is { } disposition
+                            ? ContractName(disposition) : null,
+                        ["arguments"] = JsonNode.Parse(operation.Arguments.GetRawText()),
+                    }).ToArray()),
+            },
+        };
+        var effects = Enumerable.Range(0, plan.Operations.Length)
+            .Select(_ => new UiEffect()).ToList();
+        var executedArguments = Enumerable.Range(0, plan.Operations.Length)
+            .Select(_ => (JsonObject?)null).ToList();
+        WorkResolutionGuard.GuardClarification? clarification = null;
+        AgentClarification? applicationClarification = null;
+
+        foreach (var execution in run.Executions.OrderBy(item => item.Request.UserOrder))
+        {
+            if (ct.IsCancellationRequested)
+            {
+                foreach (var cancelled in run.CompletePending(TransportOutcome.Cancelled))
+                    effects[cancelled.UserOrder] = TransportGap(plan.Locale, cancelled.TransportOutcome);
+                break;
+            }
+            var operation = execution.Request;
+            var arguments = JsonNode.Parse(operation.Arguments.GetRawText())?.AsObject()
+                ?? throw new InvalidDataException("Planned arguments are not an object.");
+            try
+            {
+                if (operation.Disposition is { } disposition)
+                {
+                    executedArguments[operation.UserOrder] = arguments.DeepClone().AsObject();
+                    if (disposition == ApplicationDisposition.LegalBoundary)
+                    {
+                        execution.CompleteLegal(LegalOutcome.LegalBoundary);
+                        effects[operation.UserOrder] = new UiEffect(Gap: new GapView(
+                            "legal_boundary", null, null,
+                            plan.Locale == "fr"
+                                ? "Lex peut restituer des textes vérifiés, mais ne peut pas donner d'avis juridique, conclure à la conformité ni appliquer le droit à vos faits."
+                                : "Lex can retrieve verified legal text, but it cannot give legal advice, decide compliance, or apply law to your facts.",
+                            []));
+                    }
+                    else if (disposition == ApplicationDisposition.Clarification)
+                    {
+                        var question = String(arguments, "question")
+                            ?? throw new InvalidDataException("A clarification requires a question.");
+                        var options = arguments["options"]?.AsArray()
+                            .Select(item => item?.GetValue<string>() ?? "").ToArray()
+                            ?? throw new InvalidDataException("A clarification requires options.");
+                        applicationClarification = AgentAnswerContract.Validate(
+                            new AgentAnswerDraft(
+                                AgentAnswerStatus.Clarify, question, [], [], null,
+                                new AgentClarification(question, options)), []).Clarification;
+                        execution.CompleteLegal(LegalOutcome.NeedsClarification);
+                        effects[operation.UserOrder] = new UiEffect(Gap: new GapView(
+                            "needs_clarification", null, null, question, options));
+                    }
+                    else
+                    {
+                        execution.CompleteLegal(LegalOutcome.InvalidRequest);
+                        effects[operation.UserOrder] = new UiEffect(Gap: new GapView(
+                            "invalid_request", null, null,
+                            plan.Locale == "fr"
+                                ? "Cette demande ne correspond pas à une opération juridique valide."
+                                : "This request does not map to a valid legal operation.",
+                            []));
+                    }
+                    continue;
+                }
+                if (operation.RequiresWorkResolution)
+                {
+                    var prepared = ResolveWorkOperation(
+                        run, operation, arguments, userQueries, plan.Locale, trace);
+                    if (prepared.Arguments is null)
+                    {
+                        execution.CompleteLegal(LegalOutcome.NeedsClarification);
+                        clarification ??= prepared.Clarification;
+                        effects[operation.UserOrder] = new UiEffect(Gap: new GapView(
+                            "needs_clarification", null, null,
+                            plan.Locale == "fr"
+                                ? "Lex a besoin d'un instrument précis avant de poursuivre cette opération."
+                                : "Lex needs a specific instrument before it can continue this operation.",
+                            prepared.Clarification?.Choices.Select(choice => choice.Value).ToArray()
+                                ?? []));
+                        continue;
+                    }
+                    arguments = prepared.Arguments;
+                }
+
+                JsonNode result;
+                string status;
+                executedArguments[operation.UserOrder] = arguments.DeepClone().AsObject();
+                if (operation.Tool == "navigate")
+                {
+                    result = new JsonObject { ["status"] = McpStatus.Ok };
+                    status = McpStatus.Ok;
+                }
+                else
+                {
+                    using var span = Activity.StartActivity("legal-operation");
+                    span?.SetTag("lex.operation.id", operation.OperationId);
+                    span?.SetTag("gen_ai.tool.name", operation.Tool);
+                    result = core.CallTool(operation.Tool, arguments);
+                    status = LegalOperationPolicy.StatusForResult(result);
+                    span?.SetTag("lex.status", status);
+                }
+
+                var effect = UiMapper.From(operation, arguments, result, plan.Locale);
+                effects[operation.UserOrder] = effect;
+                if (operation.Tool == "navigate")
+                    execution.CompleteLegal(LegalOutcome.Succeeded, result.AsObject());
+                else
+                    execution.Complete(status, result);
+                var (summaryStatus, docs) = Summarize(result);
+                trace.Add(new JsonObject
+                {
+                    ["phase"] = "primary",
+                    ["operation_id"] = operation.OperationId,
+                    ["tool"] = operation.Tool,
+                    ["args"] = arguments.DeepClone(),
+                    ["status"] = summaryStatus ?? LegalOperationPolicy.StatusForResult(result),
+                    ["docs"] = docs,
+                });
+                onStep?.Invoke(Describe(operation.Tool, arguments, effect, docs));
+            }
+            catch (InvalidDataException ex)
+            {
+                if (execution.State != OperationExecutionState.Pending) throw;
+                execution.CompleteLegal(LegalOutcome.InvalidRequest);
+                effects[operation.UserOrder] = new UiEffect(Gap: new GapView(
+                    "invalid_request", null, null,
+                    plan.Locale == "fr"
+                        ? "Les paramètres de cette opération juridique ne sont pas valides."
+                        : "The parameters for this legal operation are invalid.",
+                    []));
+                trace.Add(new JsonObject
+                {
+                    ["phase"] = "primary",
+                    ["operation_id"] = operation.OperationId,
+                    ["tool"] = operation.Tool,
+                    ["status"] = "invalid_request",
+                    ["detail"] = ex.Message,
+                });
+            }
+        }
+
+        if (clarification is not null)
+            run.CompletePendingLegal(LegalOutcome.NeedsClarification);
+        var results = run.Executions.Select(item => item.Result
+            ?? throw new InvalidDataException(
+                $"Operation '{item.Request.OperationId}' did not reach a terminal result."))
+            .OrderBy(item => item.UserOrder).ToArray();
+        var displayedClarification = clarification?.Display ?? applicationClarification;
+        var deterministicReply = displayedClarification?.Question
+            ?? OperationAnswerPolicy.Render(plan.Locale, results, effects);
+        var reply = deterministicReply;
+        if (plan.SynthesisRequested && displayedClarification is null)
+        {
+            var evidence = new AgentEvidenceLedger();
+            foreach (var result in results.Where(item => item.Payload is not null))
+            {
+                var operation = plan.Operations[result.UserOrder];
+                if (operation.Disposition is not null) continue;
+                var payload = JsonNode.Parse(result.Payload!.Value.GetRawText());
+                if (payload is null) continue;
+                var (status, docs) = Summarize(payload);
+                evidence.Observe(operation.Tool,
+                    status ?? LegalOperationPolicy.StatusForResult(payload),
+                    docs, payload, executedArguments[result.UserOrder]);
+            }
+            try
+            {
+                AgentFinalization finalized;
+                if (_synthesizer is not null)
+                    finalized = await _synthesizer.SynthesizeAsync(
+                        rawUserQuery, deterministicReply, evidence.Evidence, ct);
+                else if (!string.IsNullOrWhiteSpace(_endpoint))
+                    finalized = await Finalizer().FinalizeAsync(
+                        rawUserQuery, deterministicReply, evidence.Evidence, ct);
+                else
+                    throw new InvalidOperationException(
+                        "No synthesis service is configured.");
+                reply = ReplyFor(finalized.Draft, effects, finalized.SynthesisFailed);
+            }
+            catch (Exception ex) when (ex is OperationCanceledException
+                                       or HttpRequestException
+                                       or InvalidDataException
+                                       or InvalidOperationException)
+            {
+                Console.Error.WriteLine($"[ask] optional synthesis unavailable: {ex.Message}");
+                reply = deterministicReply + (plan.Locale == "fr"
+                    ? " La synthèse descriptive facultative n'est pas disponible; les résultats vérifiés restent affichés."
+                    : " The optional descriptive synthesis is unavailable; the verified results remain open.");
+            }
+        }
+        var body = Body(reply, trace, effects,
+            displayedClarification, clarification?.Choices);
+        body["operations"] = new JsonArray(results.Select(result =>
+        {
+            var effect = effects[result.UserOrder];
+            return (JsonNode)new JsonObject
+            {
+                ["operation_id"] = result.OperationId,
+                ["order"] = result.UserOrder,
+                ["result_class"] = result.ResultClass is { } resultClass
+                    ? ContractName(resultClass) : null,
+                ["disposition"] = result.Disposition is { } disposition
+                    ? ContractName(disposition) : null,
+                ["legal_outcome"] = ContractName(result.LegalOutcome),
+                ["transport_outcome"] = ContractName(result.TransportOutcome),
+                ["effects"] = new JsonArray(result.Effects.Select(item =>
+                    (JsonNode)ContractName(item)).ToArray()),
+                ["ui"] = effect.IsEmpty ? null : JsonNode.Parse(
+                    System.Text.Json.JsonSerializer.Serialize(effect, UiJson)),
+            };
+        }).ToArray());
+        return (200, body);
+    }
+
+    private static UiEffect TransportGap(string locale, TransportOutcome outcome) =>
+        new(Gap: new GapView(
+            ContractName(outcome), null, null,
+            (locale, outcome) switch
+            {
+                ("fr", TransportOutcome.Cancelled) => "Cette opération a été annulée avant son évaluation juridique.",
+                ("fr", TransportOutcome.TimedOut) => "Cette opération a dépassé le délai avant son évaluation juridique.",
+                ("fr", TransportOutcome.UpstreamFailed) => "Le service nécessaire à cette opération est indisponible.",
+                ("fr", TransportOutcome.OverQuota) => "Le quota ne permet pas d'exécuter cette opération.",
+                (_, TransportOutcome.Cancelled) => "This operation was cancelled before legal evaluation.",
+                (_, TransportOutcome.TimedOut) => "This operation timed out before legal evaluation.",
+                (_, TransportOutcome.UpstreamFailed) => "The service required for this operation is unavailable.",
+                (_, TransportOutcome.OverQuota) => "The quota does not allow this operation to run.",
+                _ => "This operation was not evaluated.",
+            },
+            []));
+
+    private sealed record PreparedOperation(
+        JsonObject? Arguments,
+        WorkResolutionGuard.GuardClarification? Clarification);
+
+    private PreparedOperation ResolveWorkOperation(
+        OperationRun run,
+        RequestedOperation operation,
+        JsonObject plannedArguments,
+        IReadOnlyList<string> userQueries,
+        string locale,
+        JsonArray trace)
+    {
+        var rawUserQuery = userQueries[^1];
+        var guard = new WorkResolutionGuard();
+        guard.ObserveUserConfirmation(rawUserQuery);
+        var workQuery = String(plannedArguments, "work_query")
+            ?? String(plannedArguments, operation.Tool == "provenance" ? "lex_id" : "work")
+            ?? rawUserQuery;
+        var article = String(plannedArguments, "article_number");
+        JsonNode Search(string query, string phase, Action<JsonNode> observe)
+        {
+            var searchArguments = new JsonObject
+            {
+                ["query"] = query,
+                ["retrieval_mode"] = "keyword",
+                ["fuzzy"] = "auto",
+                ["limit"] = 8,
+            };
+            Copy(plannedArguments, searchArguments,
+                "publisher", "jurisdiction", "source_class", "hierarchy", "domain", "language");
+            var result = core.CallTool("search", searchArguments);
+            var resultStatus = LegalOperationPolicy.StatusForResult(result);
+            run.ObserveSupportingCall(operation.OperationId, SupportingCallRole.WorkResolution,
+                "search", searchArguments, resultStatus, result);
+            observe(result);
+            var (status, docs) = Summarize(result);
+            trace.Add(new JsonObject
+            {
+                ["phase"] = phase,
+                ["operation_id"] = operation.OperationId,
+                ["tool"] = "search",
+                ["args"] = searchArguments.DeepClone(),
+                ["status"] = status ?? resultStatus,
+                ["docs"] = docs,
+            });
+            return result;
+        }
+
+        var priorWorks = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var priorQuery in userQueries.SkipLast(1).Reverse().Take(MaxContextResolutionQueries))
+        {
+            var priorGuard = new WorkResolutionGuard();
+            Search(priorQuery, "prior_work_resolution", priorGuard.ObservePriorUserSearch);
+            if (priorGuard.ResolvedWorks.Count == 0) continue;
+            priorWorks.UnionWith(priorGuard.ResolvedWorks);
+            break;
+        }
+        guard.AuthorizePriorWorks(priorWorks);
+        var carriesPriorSubject = priorWorks.Count > 0 && IsAnaphoricWorkReference(rawUserQuery);
+        var resolution = Search(rawUserQuery, "work_resolution",
+            result => guard.ObserveCurrentUserSearch(result, hasPriorContext: carriesPriorSubject));
+        JsonNode? focused = null;
+        var resolutionQuery = article is null ? workQuery : $"{workQuery} Article {article}";
+        if (guard.CurrentResolvedWorks.Count != 1
+            && !string.Equals(resolutionQuery, rawUserQuery, StringComparison.OrdinalIgnoreCase))
+            focused = Search(resolutionQuery, "focused_work_resolution",
+                result => guard.ObserveFocusedSearch(result, hasPriorContext: carriesPriorSubject));
+        var plannedWork = String(plannedArguments,
+            operation.Tool == "provenance" ? "lex_id" : "work");
+        var focusedCandidates = CandidateWorks(focused).Distinct().ToArray();
+        var focusedCurrent = focusedCandidates.Where(guard.CurrentResolvedWorks.Contains).ToArray();
+        var focusedPrior = focusedCandidates.Where(priorWorks.Contains).ToArray();
+        var focusedDirect = focusedCandidates
+            .Where(guard.ResolvedWorks.Contains)
+            .Where(work => !priorWorks.Contains(work))
+            .ToArray();
+        var selected = guard.CurrentResolvedWorks.Count == 1
+            ? guard.CurrentResolvedWorks.Single()
+            : focusedCurrent is [var currentWork] ? currentWork
+            : guard.CurrentResolvedWorks.Count > 1 ? null
+            : focusedDirect is [var directWork] ? directWork
+            : !carriesPriorSubject ? null
+            : focusedPrior is [var priorWork] ? priorWork
+            : priorWorks.Count == 1 ? priorWorks.Single()
+            : plannedWork is not null
+              && guard.ResolvedWorks.Contains(WorkResolutionGuard.WorkKey(plannedWork))
+                ? WorkResolutionGuard.WorkKey(plannedWork)
+            : focusedCandidates.Where(guard.ResolvedWorks.Contains).ToArray()
+                is [var focusedWork] ? focusedWork
+            : guard.ResolvedWorks.Count == 1 ? guard.ResolvedWorks.Single()
+            : null;
+        if (selected is null)
+        {
+            var candidate = guard.ClarificationFor(plannedWork, locale);
+            if (candidate is not null) return new PreparedOperation(null, candidate);
+            var display = AgentAnswerContract.Validate(new AgentAnswerDraft(
+                AgentAnswerStatus.Clarify,
+                locale == "fr"
+                    ? "Indiquez le titre officiel ou l'identifiant de l'instrument."
+                    : "Provide the official title or identifier of the instrument.",
+                [], [], null,
+                new AgentClarification(
+                    locale == "fr"
+                        ? "Quel instrument Lex doit-il utiliser ?"
+                        : "Which instrument should Lex use?",
+                    [])), []).Clarification!;
+            return new PreparedOperation(null,
+                new WorkResolutionGuard.GuardClarification(display, []));
+        }
+
+        var actual = plannedArguments.DeepClone().AsObject();
+        actual.Remove("work_query");
+        actual.Remove("article_number");
+        if (operation.Tool == "provenance")
+            actual["lex_id"] = plannedWork is not null
+                && WorkResolutionGuard.WorkKey(plannedWork) == selected ? plannedWork : selected;
+        else
+            actual["work"] = selected;
+        if (article is not null)
+        {
+            var anchor = ArticleAnchor(focused ?? resolution, selected, article)
+                ?? "art_" + new string(article.ToLowerInvariant()
+                    .Where(character => char.IsLetterOrDigit(character) || character == '-').ToArray());
+            if (operation.Tool == "as_of")
+            {
+                actual["mode"] = "select";
+                actual["anchors"] = anchor;
+            }
+            else
+                actual["anchor"] = anchor;
+        }
+        return new PreparedOperation(actual, null);
+    }
+
+    private static bool IsAnaphoricWorkReference(string query)
+    {
+        var value = $" {query.ToLowerInvariant()} ";
+        return new[]
+        {
+            " it ", " its ", " that law ", " that act ", " that one ",
+            " this law ", " this act ", " this one ", " the same law ",
+            " celui-ci ", " celle-ci ", " cette loi ", " cet acte ",
+            " ce texte ", " le même ", " la même ",
+        }.Any(marker => value.Contains(marker, StringComparison.Ordinal));
+    }
+
+    private static IEnumerable<string> CandidateWorks(JsonNode? result)
+    {
+        if (result is null) yield break;
+        foreach (var response in result is JsonArray array
+                     ? array.OfType<JsonObject>()
+                     : result is JsonObject item ? [item] : [])
+        {
+            foreach (var resolution in response["query_plan"]?["global_work_resolutions"]?.AsArray()
+                         .OfType<JsonObject>() ?? [])
+                foreach (var candidate in resolution["candidates"]?.AsArray() ?? [])
+                    if (candidate?.GetValue<string>() is { } work)
+                        yield return WorkResolutionGuard.WorkKey(work);
+            foreach (var hit in response["hits"]?.AsArray().OfType<JsonObject>() ?? [])
+                if (hit["lex_id"]?.GetValue<string>() is { } lexId)
+                    yield return WorkResolutionGuard.WorkKey(lexId);
+        }
+    }
+
+    private static string? ArticleAnchor(JsonNode result, string work, string article)
+    {
+        var normalized = new string(article.Where(char.IsLetterOrDigit).ToArray());
+        foreach (var response in result is JsonArray array
+                     ? array.OfType<JsonObject>()
+                     : result is JsonObject item ? [item] : [])
+            foreach (var hit in response["hits"]?.AsArray().OfType<JsonObject>() ?? [])
+            {
+                var lexId = hit["lex_id"]?.GetValue<string>();
+                if (lexId is null || WorkResolutionGuard.WorkKey(lexId) != work) continue;
+                var candidate = hit["anchor"]?.GetValue<string>();
+                var number = hit["provision_num"]?.GetValue<string>() ?? candidate;
+                var comparable = new string((number ?? "").Where(char.IsLetterOrDigit).ToArray());
+                if (candidate is { Length: > 0 }
+                    && comparable.Contains(normalized, StringComparison.OrdinalIgnoreCase))
+                    return candidate;
+            }
+        return null;
+    }
+
+    private static string? String(JsonObject arguments, string name) =>
+        arguments[name] is JsonValue value && value.TryGetValue<string>(out var text)
+            ? text.Trim()
+            : null;
+
+    private static void Copy(JsonObject source, JsonObject target, params string[] names)
+    {
+        foreach (var name in names)
+            if (source[name] is { } value)
+                target[name] = value.DeepClone();
+    }
+
+    private static string ContractName<T>(T value) where T : struct, Enum =>
+        System.Text.Json.JsonNamingPolicy.SnakeCaseLower.ConvertName(value.ToString());
+
+    private async Task<(int Status, JsonObject Body)> LegacyAskAsync(JsonArray history, string ip, string host,
         CancellationToken ct, Action<Step>? onStep = null)
     {
         if (!Enabled)
@@ -1006,7 +1844,7 @@ public sealed class AskService(McpCore core)
                             evidence.Observe(name, st, docs, node, args);
                             if (name is "as_of" or "timeline" or "diff" or "article_history" or "in_force_on")
                                 textToolUsed = true;
-                            toolSpan?.SetTag("lex.status", st ?? "ok");
+                            toolSpan?.SetTag("lex.status", st ?? McpStatus.Ok);
                             toolSpan?.SetTag("lex.docs", docs.Count);
                             entry["status"] = st;
                             entry["docs"] = docs;

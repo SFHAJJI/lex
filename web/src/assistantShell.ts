@@ -44,6 +44,15 @@ export function assistantWorkspaceState(ui?: UiEffect): Partial<State> | undefin
     sourceClass: undefined, actForm: undefined, bindingStatus: undefined,
     language: legalSubject.language,
   };
+  if (ui.workspace?.work) return {
+    space: "law", q: undefined, asOf: undefined,
+    work: ui.workspace.work, date: ui.workspace.date, to: undefined,
+    anchor: ui.workspace.anchor, mode: "read",
+    from: undefined, until: undefined, order: undefined, retrieval: undefined,
+    jurisdiction: undefined, hierarchy: undefined, domain: undefined,
+    sourceClass: undefined, actForm: undefined, bindingStatus: undefined,
+    language: ui.workspace.language,
+  };
   if (!ui.ranking && !ui.in_force && !ui.workspace) return undefined;
   const ranking = ui.ranking;
   const workspace = ui.workspace;
