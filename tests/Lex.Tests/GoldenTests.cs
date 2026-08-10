@@ -70,7 +70,8 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
     {
         var res = await _site.Client.GetAsync(path);
         var body = await res.Content.ReadAsStringAsync();
-        Golden.Assert($"page-{name}", $"HTTP {(int)res.StatusCode}\n{Golden.Normalise(body)}");
+        var renderedBody = body.Length == 0 ? "" : Golden.Normalise(body);
+        Golden.Assert($"page-{name}", $"HTTP {(int)res.StatusCode}\n{renderedBody}");
     }
 
     [Fact]
