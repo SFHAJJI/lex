@@ -59,20 +59,20 @@ Status: accepted and in progress
 
 ## Increment 3: make the product legible
 
-- [ ] Pin Playwright, axe-core and Lighthouse harnesses and budgets.
-- [ ] Add endpoint-to-route-ledger fitness test and fail-closed golden discipline.
-- [ ] Add failing tests for desktop complementary and mobile modal assistant semantics.
-- [ ] Correct assistant landmark/dialog markup and launcher collision spacing.
-- [ ] Add an accessible `Check the work` disclosure to desktop and mobile navigation.
-- [ ] Link the homepage engineering path to `/built` and its evidence routes.
-- [ ] Make `/developers` canonical and redirect `/ai`.
-- [ ] Preserve `/about`, `/stories`, `/find`, `/changed` and no-JavaScript navigation.
-- [ ] Preserve the editorial visual language and flat catalogue source classes.
-- [ ] Clarify record-only gaps, provisional evidence and publisher timeline semantics.
-- [ ] Test all ledger routes at desktop, 1,099/1,100 and 320 px widths in Chrome.
-- [ ] Check keyboard, touch, zoom, forced colors, light/dark, overflow, console, network and history.
-- [ ] Complete accessibility and code-quality reviews with no unresolved P0/P1 finding.
-- [ ] Commit behavior, golden families and public copy separately.
+- [x] Pin Playwright, axe-core and Lighthouse harnesses and budgets.
+- [x] Add endpoint-to-route-ledger fitness test and fail-closed golden discipline.
+- [x] Add failing tests for desktop complementary and mobile modal assistant semantics.
+- [x] Correct assistant landmark/dialog markup and launcher collision spacing.
+- [x] Add an accessible `Check the work` disclosure to desktop and mobile navigation.
+- [x] Link the homepage engineering path to `/built` and its evidence routes.
+- [x] Make `/developers` canonical and redirect `/ai`.
+- [x] Preserve `/about`, `/stories`, `/find`, `/changed` and no-JavaScript navigation.
+- [x] Preserve the editorial visual language and flat catalogue source classes.
+- [x] Clarify record-only gaps, provisional evidence and publisher timeline semantics.
+- [x] Test all ledger routes at desktop, 1,099/1,100 and 320 px widths in Chrome.
+- [x] Check keyboard, touch, zoom, forced colors, light/dark, overflow, console, network and history.
+- [x] Complete accessibility and code-quality reviews with no unresolved P0/P1 finding.
+- [x] Commit behavior, golden families and public copy separately.
 
 ## Increment 4: prove ingestion and behavior
 
