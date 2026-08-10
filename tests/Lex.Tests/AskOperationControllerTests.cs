@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Diagnostics;
 using System.Text;
 using System.Text.Json.Nodes;
 using Lex.Ask;
@@ -181,7 +182,7 @@ public sealed class AskOperationControllerTests : IDisposable
                 return ValueTask.CompletedTask;
             }));
 
-        Assert.Equal(200, response.Status);
+        Assert.Equal(499, response.Status);
         var operations = Assert.IsType<JsonArray>(response.Body["operations"]);
         Assert.Equal("succeeded", operations[0]!["legal_outcome"]?.GetValue<string>());
         Assert.NotNull(operations[0]!["ui"]?["coverage"]);
@@ -521,6 +522,68 @@ public sealed class AskOperationControllerTests : IDisposable
     }
 
     [Fact]
+    public async Task Unexpected_primary_failure_preserves_every_terminal_operation_result()
+    {
+        var planner = new StaticPlanner("en", new JsonArray(
+            new JsonObject
+            {
+                ["tool"] = "legal_boundary",
+                ["arguments"] = new JsonObject { ["reason"] = "advice" },
+            },
+            new JsonObject
+            {
+                ["tool"] = "coverage", ["arguments"] = new JsonObject(),
+            }));
+        static ValueTask<JsonNode> Fail(
+            string _, JsonObject __, CancellationToken ___) =>
+            ValueTask.FromException<JsonNode>(new InvalidOperationException("injected failure"));
+        var service = new AskService(_core, planner, legalTool: Fail);
+        var streamed = new List<JsonObject>();
+        var response = await service.AskAsync(
+            History("Advise me and show coverage."), "client", "law.test",
+            CancellationToken.None,
+            new AskService.AskProgressCallbacks(OperationResult: (result, _) =>
+            {
+                streamed.Add(result.DeepClone().AsObject());
+                return ValueTask.CompletedTask;
+            }));
+
+        Assert.Equal(502, response.Status);
+        Assert.Equal(2, streamed.Count);
+        Assert.Equal("legal_boundary", streamed[0]["legal_outcome"]?.GetValue<string>());
+        Assert.Equal("completed", streamed[0]["transport_outcome"]?.GetValue<string>());
+        Assert.Equal("not_evaluated", streamed[1]["legal_outcome"]?.GetValue<string>());
+        Assert.Equal("upstream_failed", streamed[1]["transport_outcome"]?.GetValue<string>());
+        Assert.NotNull(streamed[1]["ui"]?["gap"]);
+        Assert.Equal(2, response.Body["operations"]?.AsArray().Count);
+    }
+
+    [Fact]
+    public async Task Primary_outline_is_described_as_a_table_of_contents_not_exact_text()
+    {
+        var service = new AskService(_core, new StaticPlanner("en", new JsonArray(new JsonObject
+        {
+            ["tool"] = "as_of",
+            ["arguments"] = new JsonObject
+            {
+                ["work"] = "eu-eurlex:32013r0575", ["date"] = "2024-01-01",
+                ["mode"] = "outline",
+            },
+        })));
+
+        var response = await service.AskAsync(
+            History("Show the CRR table of contents on 1 January 2024."),
+            Guid.NewGuid().ToString(), "law.test", CancellationToken.None);
+
+        Assert.Equal(200, response.Status);
+        Assert.Contains("table of contents", response.Body["reply"]!.GetValue<string>(),
+            StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("exact publisher text", response.Body["reply"]!.GetValue<string>(),
+            StringComparison.OrdinalIgnoreCase);
+        Assert.True(response.Body["ui"]?["provision"]?["outline_only"]?.GetValue<bool>());
+    }
+
+    [Fact]
     public async Task Invalid_planner_arguments_fail_before_legal_calls_as_a_typed_result()
     {
         var service = new AskService(_core, new StaticPlanner("en", new JsonArray(new JsonObject
@@ -643,6 +706,115 @@ public sealed class AskOperationControllerTests : IDisposable
                     [], [], null, null),
                 SynthesisFailed: false));
         }
+    }
+
+    [Fact]
+    public async Task First_result_deadline_cancels_a_blocked_legal_executor_without_late_results()
+    {
+        var admission = new AskAdmissionController(
+            TimeProvider.System, perClientDaily: 10, globalDaily: 10, concurrent: 1);
+        var planner = new StaticPlanner("en", new JsonArray(new JsonObject
+        {
+            ["tool"] = "coverage", ["arguments"] = new JsonObject(),
+        }));
+        static async ValueTask<JsonNode> Blocked(
+            string tool, JsonObject arguments, CancellationToken cancellationToken)
+        {
+            _ = tool;
+            _ = arguments;
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            return new JsonObject();
+        }
+        var service = new AskService(_core, planner, admission: admission,
+            plannerDeadline: TimeSpan.FromSeconds(1),
+            firstResultDeadline: TimeSpan.FromMilliseconds(100), legalTool: Blocked);
+        var observed = 0;
+        var started = System.Diagnostics.Stopwatch.StartNew();
+
+        var response = await service.AskAsync(
+            History("Show coverage."), "deadline-client", "law.test",
+            CancellationToken.None,
+            new AskService.AskProgressCallbacks(OperationResult: (_, _) =>
+            {
+                Interlocked.Increment(ref observed);
+                return ValueTask.CompletedTask;
+            }));
+
+        Assert.Equal(504, response.Status);
+        Assert.True(started.Elapsed < TimeSpan.FromMilliseconds(500), started.Elapsed.ToString());
+        var operation = Assert.Single(response.Body["operations"]!.AsArray());
+        Assert.Equal("timed_out", operation!["transport_outcome"]?.GetValue<string>());
+        Assert.Equal("not_evaluated", operation["legal_outcome"]?.GetValue<string>());
+        Assert.Equal(1, observed);
+        await Task.Delay(150);
+        Assert.Equal(1, observed);
+        using var recovered = admission.TryAdmit("probe").Lease;
+        Assert.NotNull(recovered);
+    }
+
+    [Fact]
+    public async Task Untrusted_text_channels_never_become_activity_data()
+    {
+        const string currentCanary = "CURRENT_USER_CANARY_91D7";
+        const string transcriptCanary = "RESTORED_TRANSCRIPT_CANARY_4B2A";
+        const string publisherCanary = "PUBLISHER_TEXT_CANARY_C838";
+        const string metadataCanary = "METADATA_CANARY_67F1";
+        const string toolCanary = "TOOL_RESULT_CANARY_A24E";
+        var recorded = new List<string>();
+        using var listener = new ActivityListener
+        {
+            ShouldListenTo = source => source.Name == AskService.ActivitySourceName,
+            Sample = (ref ActivityCreationOptions<ActivityContext> _) =>
+                ActivitySamplingResult.AllDataAndRecorded,
+            ActivityStopped = activity => recorded.Add(activity.DisplayName + " "
+                + string.Join(' ', activity.TagObjects.Select(tag => $"{tag.Key}={tag.Value}"))),
+        };
+        ActivitySource.AddActivityListener(listener);
+
+        var payload = _core.CallTool("coverage", new JsonObject()).DeepClone();
+        var publisher = payload.AsArray()[0]!.AsObject();
+        publisher["known_exclusions"] = metadataCanary;
+        publisher["build_issues"] = new JsonArray(new JsonObject
+        {
+            ["code"] = toolCanary,
+            ["work"] = "test",
+            ["detail"] = publisherCanary,
+        });
+        ValueTask<JsonNode> LegalTool(
+            string tool, JsonObject arguments, CancellationToken cancellationToken)
+        {
+            _ = tool;
+            _ = arguments;
+            cancellationToken.ThrowIfCancellationRequested();
+            return ValueTask.FromResult(payload.DeepClone());
+        }
+        var service = new AskService(_core, new StaticPlanner("en", new JsonArray(
+            new JsonObject { ["tool"] = "coverage", ["arguments"] = new JsonObject() })),
+            legalTool: LegalTool);
+        var history = new JsonArray(
+            new JsonObject { ["role"] = "user", ["content"] = "Show coverage." },
+            new JsonObject
+            {
+                ["role"] = "assistant",
+                ["content"] = $"Quoted untrusted data: {transcriptCanary}",
+            },
+            new JsonObject
+            {
+                ["role"] = "user",
+                ["content"] = $"Show coverage. Quoted untrusted data: {currentCanary}",
+            });
+
+        var response = await service.AskAsync(
+            history, "198.51.100.24", "law.test", CancellationToken.None);
+
+        Assert.Equal(200, response.Status);
+        var telemetry = string.Join('\n', recorded);
+        foreach (var canary in new[]
+                 {
+                     currentCanary, transcriptCanary, publisherCanary, metadataCanary, toolCanary,
+                 })
+            Assert.DoesNotContain(canary, telemetry, StringComparison.Ordinal);
+        Assert.DoesNotContain("198.51.100.24", telemetry, StringComparison.Ordinal);
     }
 
     private sealed class OrderedSynthesizer(List<string> order) : IOperationSynthesizer

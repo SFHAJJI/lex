@@ -9,8 +9,10 @@ public static class McpRequestBoundaries
     public static IApplicationBuilder UseMcpRequestBoundaries(this IApplicationBuilder app) =>
         app.Use(async (context, next) =>
         {
+            var isMcp = context.Request.Path.StartsWithSegments("/mcp", out var remainder)
+                && (remainder == PathString.Empty || remainder == new PathString("/"));
             if (!HttpMethods.IsPost(context.Request.Method)
-                || context.Request.Path != "/mcp")
+                || !isMcp)
             {
                 await next();
                 return;

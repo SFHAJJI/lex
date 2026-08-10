@@ -5,6 +5,7 @@ namespace Lex.Mcp;
 
 internal static class McpInputPolicy
 {
+    internal const int MaximumAnchorLength = 512;
     private sealed record Rule(
         string[] Fields,
         string[] Required,
@@ -64,7 +65,7 @@ internal static class McpInputPolicy
                 throw new ArgumentException($"{name} must be a string.", name);
             var maximum = name is "language" ? 16
                 : name is "date" or "as_of" or "from_date" or "to_date" ? 10
-                : name is "anchor" ? 128
+                : name is "anchor" ? MaximumAnchorLength
                 : name is "publisher" or "jurisdiction" or "mode" or "retrieval_mode"
                     or "time_scope" or "fuzzy" or "order" ? 64
                 : 1000;
@@ -99,7 +100,8 @@ internal static class McpInputPolicy
             && String(arguments, "time_scope") == "as_of"
             && String(arguments, "as_of") is null)
             throw new ArgumentException("as_of is required when time_scope=as_of.", "as_of");
-        CountList(arguments, "anchors", 50);
+        RequirePublisherAuthority(arguments, tool == "provenance" ? "lex_id" : "work");
+        CountList(arguments, "anchors", 50, MaximumAnchorLength);
         CountList(arguments, "works", 50);
     }
 
@@ -127,15 +129,33 @@ internal static class McpInputPolicy
             throw new ArgumentException($"{name} must be one of: {string.Join(", ", allowed)}.", name);
     }
 
-    private static void CountList(JsonObject arguments, string name, int maximum)
+    private static void CountList(
+        JsonObject arguments,
+        string name,
+        int maximum,
+        int maximumItemLength = 1000)
     {
         var value = String(arguments, name);
         if (value is null) return;
-        var count = value.Split(',', StringSplitOptions.RemoveEmptyEntries
-            | StringSplitOptions.TrimEntries).Length;
-        if (count == 0)
+        var items = value.Split(',', StringSplitOptions.RemoveEmptyEntries
+            | StringSplitOptions.TrimEntries);
+        if (items.Length == 0)
             throw new ArgumentException($"{name} must contain at least one value.", name);
-        if (count > maximum)
+        if (items.Length > maximum)
             throw new ArgumentException($"{name} accepts at most {maximum} values.", name);
+        if (items.Any(item => item.Length > maximumItemLength))
+            throw new ArgumentException(
+                $"Every {name} value must contain at most {maximumItemLength} characters.", name);
+    }
+
+    private static void RequirePublisherAuthority(JsonObject arguments, string name)
+    {
+        var work = String(arguments, name);
+        if (work is null || arguments.ContainsKey("publisher")) return;
+        if (work.Contains(':') && !work.Contains("://", StringComparison.Ordinal)) return;
+
+        throw new ArgumentException(
+            $"publisher is required when {name} is not a publisher-qualified lex_id.",
+            "publisher");
     }
 }

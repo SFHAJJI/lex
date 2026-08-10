@@ -1,5 +1,9 @@
 using System.Reflection;
 using System.Text.RegularExpressions;
+using System.Text.Json;
+using Lex.Mcp;
+using Lex.Web;
+using System.Diagnostics;
 
 namespace Lex.Tests;
 
@@ -21,6 +25,42 @@ public class FitnessTests
     private static IEnumerable<string> Sources(string project) =>
         Directory.EnumerateFiles(Path.Combine(RepoRoot(), "src", project), "*.cs", SearchOption.AllDirectories)
             .Where(p => !p.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}"));
+
+    [Fact]
+    public void Every_published_MCP_surface_and_migration_note_match_version_2()
+    {
+        using var server = JsonDocument.Parse(File.ReadAllText(
+            Path.Combine(RepoRoot(), "server.json")));
+        Assert.Equal(McpSdkBridge.ServerVersion,
+            server.RootElement.GetProperty("version").GetString());
+
+        var migration = File.ReadAllText(
+            Path.Combine(RepoRoot(), "docs", "mcp-2-migration.md"));
+        foreach (var required in new[]
+                 {
+                     "65,536", "2,000", "250,000", "citation rows", "500 states",
+                     "1,000 events", "eight publisher", "busy", "rate_limited",
+                     "100,000", "unknown fields",
+                 })
+            Assert.Contains(required, migration, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Telemetry_processor_removes_query_text_and_ingress_addresses()
+    {
+        using var activity = new Activity("privacy-test").Start();
+        activity.SetTag("url.query", "?q=TRACE_CANARY");
+        activity.SetTag("url.full", "https://law.soufien.lu/?q=TRACE_CANARY");
+        activity.SetTag("http.url", "https://law.soufien.lu/?q=TRACE_CANARY");
+        activity.SetTag("client.address", "203.0.113.42");
+
+        new PrivacyActivityProcessor().OnEnd(activity);
+        var exported = string.Join('\n', activity.TagObjects.Select(item => $"{item.Key}={item.Value}"));
+
+        Assert.DoesNotContain("TRACE_CANARY", exported, StringComparison.Ordinal);
+        Assert.DoesNotContain("203.0.113.42", exported, StringComparison.Ordinal);
+        Assert.Contains("https://law.soufien.lu/", exported, StringComparison.Ordinal);
+    }
 
     private static readonly string[] PublisherWords = ["jolux", "cdm:", "legilux", "eurlex", "cellar", "cssf"];
 

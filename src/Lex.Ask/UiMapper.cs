@@ -370,7 +370,8 @@ public static class UiMapper
             Permalink: S(doc, "permalink"),
             TotalProvisions: o["total_provisions"]?.GetValue<int?>(),
             Truncated: o["truncated"]?.GetValue<bool>() ?? false,
-            TextTruncated: o["text_truncated"]?.GetValue<bool>() ?? false));
+            TextTruncated: o["text_truncated"]?.GetValue<bool>() ?? false,
+            OutlineOnly: S(args, "mode") == "outline"));
     }
 
     private static UiEffect History(JsonObject o, JsonObject args)

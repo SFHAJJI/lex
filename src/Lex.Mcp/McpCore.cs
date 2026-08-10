@@ -8,15 +8,59 @@ namespace Lex.Mcp;
 /// public HTTP endpoint both dispatch through this class. Retrieves, filters, diffs,
 /// reports — never summarises or advises (F10).
 /// </summary>
-public sealed class McpCore(
-    IReadOnlyDictionary<string, LexIndexReader> readers,
-    string? artifactManifestIdentity = null)
+public sealed class McpCore
 {
+    private readonly IReadOnlyDictionary<string, LexIndexReader> readers;
+    private readonly string? artifactManifestIdentity;
+    private readonly bool _corpusMounted;
+    private readonly IReadOnlyDictionary<string, SemaphoreSlim> _readerExecutions;
+    private readonly Action<string>? _sessionOpened;
+    private readonly int? _publisherSelectionTotal;
+    private readonly string? _publicBase;
     private const int MaximumProvisionRows = 2000;
     private const int MaximumHistoryRows = 500;
     private const int MaximumProvenanceRows = 1000;
     private const int MaximumLegalTextChars = 250_000;
     private const int MaximumCitationRows = 100;
+    private const int MaximumPublisherRows = 8;
+    private const int MaximumCoverageFacetRows = 100;
+    private const int MaximumBuildIssueRows = 100;
+
+    public McpCore(
+        IReadOnlyDictionary<string, LexIndexReader> readers,
+        string? artifactManifestIdentity = null,
+        string? publicBase = null)
+        : this(readers, artifactManifestIdentity, readers.Count > 0, null, null,
+            (publicBase ?? Environment.GetEnvironmentVariable("LEX_PUBLIC_BASE_URL"))?.TrimEnd('/'))
+    {
+    }
+
+    internal McpCore(
+        IReadOnlyDictionary<string, LexIndexReader> readers,
+        Action<string> sessionOpened)
+        : this(readers, null, readers.Count > 0, sessionOpened, null,
+            Environment.GetEnvironmentVariable("LEX_PUBLIC_BASE_URL")?.TrimEnd('/'))
+    {
+    }
+
+    private McpCore(
+        IReadOnlyDictionary<string, LexIndexReader> readers,
+        string? artifactManifestIdentity,
+        bool corpusMounted,
+        Action<string>? sessionOpened,
+        int? publisherSelectionTotal,
+        string? publicBase)
+    {
+        this.readers = readers;
+        this.artifactManifestIdentity = artifactManifestIdentity;
+        _corpusMounted = corpusMounted;
+        _sessionOpened = sessionOpened;
+        _publisherSelectionTotal = publisherSelectionTotal;
+        _publicBase = publicBase;
+        _readerExecutions = readers.ToDictionary(
+            item => item.Key, _ => new SemaphoreSlim(1, 1), StringComparer.Ordinal);
+    }
+
     public JsonArray ToolDefs()
     {
         JsonObject Tool(string name, string desc, JsonObject props, string[] required) => new()
@@ -59,14 +103,14 @@ public sealed class McpCore(
             return value;
         }
 
-        var workDesc = "Work-level lex_id (publisher:workkey), version-level lex_id (version segment ignored), or verbatim publisher identifier. Unknown document -> call search first.";
+        var workDesc = "Work-level lex_id (publisher:workkey), version-level lex_id (version segment ignored), or verbatim publisher identifier with publisher supplied. Unknown document -> call search first.";
         return
         [
             Tool("as_of", "The state of one document as it stood on one date. Pure lookup, no ranking. mode=outline lists provisions without text and may be narrowed with anchors; mode=select returns only the named anchors' text; mode=full (default) returns the whole text. Every provision carries its own permalink and hash.",
                 new JsonObject
                 {
                     ["work"] = S(workDesc), ["date"] = D("ISO date YYYY-MM-DD"),
-                    ["publisher"] = S("optional publisher id when work is not publisher-qualified", 64),
+                    ["publisher"] = S("publisher id; required when work is not publisher-qualified", 64),
                     ["language"] = S("optional language code, e.g. fr", 16),
                     ["mode"] = E("full | outline | select (default full)", "full", "outline", "select"),
                     ["anchors"] = S("optional comma-separated provision anchors for mode=outline; required for mode=select, e.g. art_1er,art_33"),
@@ -75,7 +119,7 @@ public sealed class McpCore(
                 new JsonObject
                 {
                     ["work"] = S(workDesc),
-                    ["publisher"] = S("optional publisher id when work is not publisher-qualified", 64),
+                    ["publisher"] = S("publisher id; required when work is not publisher-qualified", 64),
                     ["limit"] = I("max versions (default 100)", 1, 200),
                     ["offset"] = I("pagination offset", 0, 100000),
                 }, ["work"]),
@@ -98,8 +142,8 @@ public sealed class McpCore(
                 {
                     ["work"] = S(workDesc), ["from_date"] = D("ISO date"),
                     ["to_date"] = D("ISO date"), ["language"] = S("language code", 16),
-                    ["publisher"] = S("optional publisher id when work is not publisher-qualified", 64),
-                    ["anchor"] = S("optional held provision anchor returned by search, e.g. art_92", 128),
+                    ["publisher"] = S("publisher id; required when work is not publisher-qualified", 64),
+                    ["anchor"] = S("optional held provision anchor returned by search, e.g. art_92", McpInputPolicy.MaximumAnchorLength),
                 }, ["work", "from_date", "to_date"]),
             Tool("search", "Filtered legal search. keyword is deterministic FTS5/BM25; hybrid adds the pinned local encoder and fixed RRF when verified vectors are mounted. No generative model participates. The response query_plan separates resolved work constraints, article and role intent, and residual provision terms. Returns hits WITHOUT body text; full state via as_of.",
                 new JsonObject
@@ -124,8 +168,8 @@ public sealed class McpCore(
                 new JsonObject
                 {
                     ["work"] = S(workDesc),
-                    ["publisher"] = S("optional publisher id when work is not publisher-qualified", 64),
-                    ["anchor"] = S("provision anchor, e.g. art_1er (find it via search or as_of mode=outline)", 128),
+                    ["publisher"] = S("publisher id; required when work is not publisher-qualified", 64),
+                    ["anchor"] = S("provision anchor, e.g. art_1er (find it via search or as_of mode=outline)", McpInputPolicy.MaximumAnchorLength),
                     ["language"] = S("optional language code; defaults to the work's primary derived language", 16),
                 }, ["work", "anchor"]),
             Tool("provenance", "Proof chain for one lex_id: source URI, retrieval time, record/body hashes, event chain, corpus commit, index build, stamp signature.",
@@ -206,9 +250,6 @@ public sealed class McpCore(
     // Base URL for permalinks is deployment config only (never derived from or stored in
     // signed content); the field is omitted entirely when unconfigured so air-gapped
     // deployments do not emit unreachable URLs.
-    private readonly string? _publicBase =
-        Environment.GetEnvironmentVariable("LEX_PUBLIC_BASE_URL")?.TrimEnd('/');
-
     private JsonObject DocJson(DocRow d, bool withText)
     {
         var o = new JsonObject
@@ -257,17 +298,23 @@ public sealed class McpCore(
     private JsonObject ProvisionJson(DocRow d, ProvisionRow p, bool withText)
     {
         var remainingTextCharacters = MaximumLegalTextChars;
-        return ProvisionJson(d, p, withText, ref remainingTextCharacters);
+        var remainingCitationRows = MaximumCitationRows;
+        var citationsTruncated = false;
+        return ProvisionJson(d, p, withText, ref remainingTextCharacters,
+            ref remainingCitationRows, ref citationsTruncated);
     }
 
     private JsonObject ProvisionJson(
         DocRow d,
         ProvisionRow p,
         bool withText,
-        ref int remainingTextCharacters)
+        ref int remainingTextCharacters,
+        ref int remainingCitationRows,
+        ref bool citationsTruncated)
     {
-        var textLength = p.TextMd?.Length ?? 0;
-        var includeText = withText && textLength <= remainingTextCharacters;
+        var textLength = p.TextLoaded ? p.TextMd.Length : p.StoredTextCharacters;
+        var includeText = withText && p.TextLoaded
+            && p.TextMd.Length <= remainingTextCharacters;
         var o = new JsonObject
         {
             ["anchor"] = p.Anchor,
@@ -281,23 +328,33 @@ public sealed class McpCore(
             ["text"] = includeText ? p.TextMd : null,
         };
         if (includeText)
-            remainingTextCharacters -= textLength;
-        else if (withText && p.TextMd is not null)
+            remainingTextCharacters -= p.TextMd.Length;
+        else if (withText)
         {
             o["text_omitted"] = true;
-            o["text_characters"] = textLength;
+            if (textLength is not null) o["text_characters"] = textLength.Value;
+            if (p.StoredTextBytes is not null) o["text_bytes"] = p.StoredTextBytes.Value;
             o["text_omitted_reason"] = "legal text exceeds the remaining bounded MCP response text budget; use permalink or source_uri";
         }
         // The publisher's own cross-references, captured at derive time. Only with the text, since
         // an outline is a table of contents and these belong to the words.
         if (withText)
         {
-            var cits = readers.GetValueOrDefault(d.Collection)?.CitationsOf($"{d.Key}|{d.Language}|{d.ValidFrom}", p.Anchor);
+            var cits = readers.GetValueOrDefault(d.Collection)?.CitationsOf(
+                $"{d.Key}|{d.Language}|{d.ValidFrom}", p.Anchor,
+                Math.Max(1, remainingCitationRows + 1));
             if (cits is { Count: > 0 })
             {
-                o["citations_truncated"] = cits.Count > MaximumCitationRows;
-                o["citations"] = new JsonArray(cits.Take(MaximumCitationRows).Select(c => (JsonNode)new JsonObject
+                var returned = Math.Min(remainingCitationRows, cits.Count);
+                if (returned > 0)
+                    o["citations"] = new JsonArray(cits.Take(returned).Select(c => (JsonNode)new JsonObject
                 { ["work"] = $"{d.Collection}:{c.Slug}", ["href"] = c.Href, ["text"] = c.Label }).ToArray());
+                remainingCitationRows -= returned;
+                if (cits.Count > returned)
+                {
+                    o["citations_truncated"] = true;
+                    citationsTruncated = true;
+                }
             }
         }
         if (_publicBase is not null)
@@ -312,7 +369,7 @@ public sealed class McpCore(
             // Named, not gestured at. "Flagship acts" tells a reader nothing about whether the act
             // they care about is here, and the front page used to promise "EU law" over the top
             // of it.
-            "eu-eurlex" => $"{r.Coverage().Groups:n0} EU works from the reviewed scope are currently mounted; the wider acquis is not yet ingested, see coverage",
+            "eu-eurlex" => $"{r.Coverage(1).Groups:n0} EU works from the reviewed scope are currently mounted; the wider acquis is not yet ingested, see coverage",
             _ => "see the coverage tool for this publisher's known gaps",
         };
 
@@ -356,21 +413,44 @@ public sealed class McpCore(
         return hit.Count > 0 ? hit : family.Take(6).Select(p => p.Anchor).ToList();
     }
 
+    private static IReadOnlyList<ProvisionRow> SelectionPool(
+        LexIndexReader reader,
+        string rid,
+        IReadOnlyList<string> wanted,
+        bool withText)
+    {
+        if (wanted.Count > 50)
+            throw new ArgumentException("anchors accepts at most 50 comma-separated values");
+        var selected = withText
+            ? reader.ProvisionsByAnchorsForMcp(rid, wanted, MaximumLegalTextChars)
+            : reader.ProvisionOutlinesByAnchors(rid, wanted);
+        return selected
+            .Concat(reader.ProvisionOutlines(rid, 100))
+            .GroupBy(provision => provision.Anchor, StringComparer.Ordinal)
+            .Select(group => group.First())
+            .ToArray();
+    }
+
     private void AddSelectedProvisions(JsonObject output, DocRow document,
-        IReadOnlyList<ProvisionRow> all, IReadOnlyList<string> wanted, bool withText)
+        IReadOnlyList<ProvisionRow> all, IReadOnlyList<string> wanted, bool withText,
+        int? totalProvisions = null)
     {
         var found = new JsonArray();
         var missing = new JsonArray();
         var remainingTextCharacters = MaximumLegalTextChars;
+        var remainingCitationRows = MaximumCitationRows;
+        var citationsTruncated = false;
         foreach (var anchorName in wanted)
         {
             var provision = all.FirstOrDefault(x => x.Anchor == anchorName);
             if (provision is null) missing.Add((JsonNode)anchorName);
             else found.Add((JsonNode)ProvisionJson(
-                document, provision, withText, ref remainingTextCharacters));
+                document, provision, withText, ref remainingTextCharacters,
+                ref remainingCitationRows, ref citationsTruncated));
         }
 
         output["provisions"] = found;
+        MarkBoundedCitations(output, remainingCitationRows, citationsTruncated);
         if (missing.Count == 0) return;
 
         output["anchors_not_in_version"] = missing;
@@ -378,26 +458,78 @@ public sealed class McpCore(
         var near = NearestAnchors(wanted, all);
         if (near.Count > 0)
             output["nearest_anchors"] = new JsonArray(near.Select(x => (JsonNode)x).ToArray());
-        output["anchors_in_version"] = all.Count;
+        output["anchors_in_version"] = totalProvisions ?? all.Count;
         output["anchor_note"] = near.Count > 0
             ? "This work numbers its provisions in its own scheme. nearest_anchors are anchors it actually has; call as_of mode=select with one of those, or mode=outline without anchors for the full list. Do NOT fall back to full-text search for a provision of a known work."
             : $"This version holds {all.Count} provisions under other anchors. Call as_of mode=outline without anchors to list them, then select from that list. Do NOT fall back to full-text search for a provision of a known work.";
     }
 
-    private static void MarkBoundedText(JsonObject output)
+    private static void MarkBoundedText(JsonObject output, bool rowsOmitted = false)
     {
         var documentTextOmitted = output["document"] is JsonObject document
             && document["text_omitted"]?.GetValue<bool>() == true;
         var provisionTextOmitted = output["provisions"] is JsonArray provisions
             && provisions.OfType<JsonObject>()
                 .Any(provision => provision["text_omitted"]?.GetValue<bool>() == true);
-        if (!documentTextOmitted && !provisionTextOmitted) return;
+        if (!rowsOmitted && !documentTextOmitted && !provisionTextOmitted) return;
 
         // This is a response-size fact, not a statement about corpus coverage. Keep the legal
         // status `ok`: the publisher text is held and the returned hashes/coordinates remain
         // authoritative, but callers must know that this bounded response is not the whole text.
         output["text_truncated"] = true;
         output["truncated"] = true;
+    }
+
+    private static void MarkBoundedCitations(
+        JsonObject output,
+        int remainingCitationRows,
+        bool citationsTruncated)
+    {
+        output["citations_returned"] = MaximumCitationRows - remainingCitationRows;
+        output["citations_truncated"] = citationsTruncated;
+        if (citationsTruncated) output["truncated"] = true;
+    }
+
+    private (IReadOnlyList<LexIndexReader> Readers, int Total) SelectReaders(
+        string? publisher,
+        string? jurisdiction = null)
+    {
+        var selected = readers.Values.Where(reader =>
+                (publisher is null || reader.Collection == publisher)
+                && (jurisdiction is null || string.Equals(
+                    reader.Stamp.GetValueOrDefault("jurisdiction"), jurisdiction,
+                    StringComparison.OrdinalIgnoreCase)))
+            .OrderBy(reader => reader.Collection, StringComparer.Ordinal)
+            .ToArray();
+        return (selected.Take(MaximumPublisherRows).ToArray(),
+            _publisherSelectionTotal ?? selected.Length);
+    }
+
+    private static void MarkPublisherSet(JsonArray output, int total)
+    {
+        foreach (var item in output.OfType<JsonObject>())
+            item["publisher_result_set"] = new JsonObject
+            {
+                ["total"] = total,
+                ["returned"] = Math.Min(total, MaximumPublisherRows),
+                ["maximum"] = MaximumPublisherRows,
+                ["truncated"] = total > MaximumPublisherRows,
+            };
+    }
+
+    private static void MarkResponseRows(
+        JsonArray output,
+        int maximum,
+        int returned,
+        bool truncated)
+    {
+        foreach (var item in output.OfType<JsonObject>())
+            item["response_row_set"] = new JsonObject
+            {
+                ["maximum"] = maximum,
+                ["returned"] = returned,
+                ["truncated"] = truncated,
+            };
     }
 
     private (LexIndexReader r, string norm)? Resolve(string work, string? publisher)
@@ -413,9 +545,105 @@ public sealed class McpCore(
         return null;
     }
 
-    public JsonNode CallTool(string name, JsonObject a)
+    public JsonNode CallTool(string name, JsonObject a) =>
+        CallToolAsync(name, a, CancellationToken.None).AsTask().GetAwaiter().GetResult();
+
+    public async ValueTask<JsonNode> CallToolAsync(
+        string name,
+        JsonObject a,
+        CancellationToken cancellationToken)
     {
+        // Reject malformed work before waiting on any publisher or allocating an execution
+        // session. Invalid public input must not queue behind a valid long-running search.
         McpInputPolicy.Validate(name, a);
+        var selection = ReadersFor(a);
+        var selected = selection.Readers;
+        var held = new List<SemaphoreSlim>(selected.Count);
+        try
+        {
+            foreach (var (_, semaphore, _) in selected)
+            {
+                await semaphore.WaitAsync(cancellationToken);
+                held.Add(semaphore);
+            }
+        }
+        catch
+        {
+            foreach (var semaphore in held) semaphore.Release();
+            throw;
+        }
+        var execution = Task.Run(() =>
+        {
+            var sessions = new Dictionary<string, LexIndexReader>(StringComparer.Ordinal);
+            CancellationTokenRegistration[] registrations = [];
+            try
+            {
+                foreach (var item in selected)
+                {
+                    sessions.Add(item.Publisher, item.Reader.CreateIsolatedSession());
+                    _sessionOpened?.Invoke(item.Publisher);
+                }
+                registrations = sessions.Values
+                    .Select(reader => cancellationToken.Register(reader.Interrupt)).ToArray();
+                cancellationToken.ThrowIfCancellationRequested();
+                var result = new McpCore(
+                    sessions, artifactManifestIdentity, _corpusMounted, null,
+                    selection.Total, _publicBase).CallToolCore(name, a);
+                cancellationToken.ThrowIfCancellationRequested();
+                return result;
+            }
+            catch (Exception) when (cancellationToken.IsCancellationRequested)
+            {
+                throw new OperationCanceledException(cancellationToken);
+            }
+            finally
+            {
+                foreach (var registration in registrations) registration.Dispose();
+                foreach (var session in sessions.Values) session.Dispose();
+                foreach (var semaphore in held) semaphore.Release();
+            }
+        }, CancellationToken.None);
+
+        // SQLite is interrupted cooperatively. An encoder cannot be pre-empted safely, so the
+        // timed-out caller leaves that one bounded worker holding its selected-reader semaphores
+        // until it exits. No request keeps waiting for it and no second call can touch the same
+        // reader concurrently; calls pinned to different publishers can still run in parallel.
+        return await execution.WaitAsync(cancellationToken);
+    }
+
+    private (
+        IReadOnlyList<(string Publisher, SemaphoreSlim Semaphore, LexIndexReader Reader)> Readers,
+        int Total)
+        ReadersFor(JsonObject arguments)
+    {
+        static string? Text(JsonNode? node) => node is JsonValue value
+            && value.TryGetValue<string>(out var text) ? text : null;
+        var publisher = Text(arguments["publisher"]);
+        var work = Text(arguments["work"]) ?? Text(arguments["lex_id"]);
+        if (publisher is null)
+        {
+            if (work is not null && work.Contains(':') && !work.Contains("://"))
+                publisher = work.Split(':', 2)[0];
+            else if (work is not null)
+                throw new ArgumentException(
+                    "publisher is required when work is not a publisher-qualified lex_id.",
+                    "publisher");
+        }
+        var jurisdiction = Text(arguments["jurisdiction"]);
+        var eligible = readers
+            .Where(item => (publisher is null || item.Key == publisher)
+                && (jurisdiction is null || string.Equals(
+                    item.Value.Stamp.GetValueOrDefault("jurisdiction"), jurisdiction,
+                    StringComparison.OrdinalIgnoreCase)))
+            .OrderBy(item => item.Key, StringComparer.Ordinal)
+            .ToArray();
+        return (eligible.Take(MaximumPublisherRows)
+            .Select(item => (item.Key, _readerExecutions[item.Key], item.Value))
+            .ToArray(), eligible.Length);
+    }
+
+    private JsonNode CallToolCore(string name, JsonObject a)
+    {
         // A build with no corpus must say so, once, in every answer.
         //
         // Source builds and incorrectly assembled releases can start without verified artifacts.
@@ -427,7 +655,7 @@ public sealed class McpCore(
         // coverage exists specifically "to say what we do NOT have" (F10). Saying it here
         // costs one dictionary lookup per call and turns a broken-looking server into one
         // that explains itself and names where the data actually is.
-        if (readers.Count == 0)
+        if (!_corpusMounted)
             return new JsonObject
             {
                 ["status"] = McpStatus.NoCorpusMounted,
@@ -497,18 +725,20 @@ public sealed class McpCore(
                     case "outline":
                     {
                         o["document"] = DocJson(doc, withText: false);
-                        var all = r.Provisions(rid);
+                        var total = r.ProvisionCount(rid);
                         var wanted = (Str("anchors") ?? "").Split(',',
                             StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
                         if (wanted.Length == 0)
                         {
-                            o["total_provisions"] = all.Count;
-                            o["truncated"] = all.Count > MaximumProvisionRows;
-                            o["provisions"] = new JsonArray(all.Take(MaximumProvisionRows)
+                            var page = r.ProvisionOutlines(rid, MaximumProvisionRows);
+                            o["total_provisions"] = total;
+                            o["truncated"] = total > MaximumProvisionRows;
+                            o["provisions"] = new JsonArray(page
                                 .Select(p => (JsonNode)ProvisionJson(doc, p, withText: false)).ToArray());
                         }
                         else
-                            AddSelectedProvisions(o, doc, all, wanted, withText: false);
+                            AddSelectedProvisions(o, doc, SelectionPool(r, rid, wanted, withText: false), wanted,
+                                withText: false, total);
                         break;
                     }
                     case "select":
@@ -516,10 +746,11 @@ public sealed class McpCore(
                         var wanted = (Str("anchors") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
                         if (wanted.Length == 0) throw new ArgumentException("mode=select requires anchors");
                         o["document"] = DocJson(doc, withText: false);
-                        var all = r.Provisions(rid);
+                        var total = r.ProvisionCount(rid);
                         // Keep refusal metadata identical in outline and select so a client can
                         // narrow a comparison without losing the honest next step.
-                        AddSelectedProvisions(o, doc, all, wanted, withText: doc.TextPublic);
+                        AddSelectedProvisions(o, doc, SelectionPool(r, rid, wanted, withText: doc.TextPublic), wanted,
+                            withText: doc.TextPublic, total);
                         break;
                     }
                     default:
@@ -535,18 +766,24 @@ public sealed class McpCore(
                         // The text is returned exactly once, in the most structured form
                         // available: as provisions when the version is split into them, and as
                         // document.text when it is not.
-                        var all = r.Provisions(rid);
-                        if (all.Count > 0)
+                        var total = r.ProvisionCount(rid);
+                        if (total > 0)
                         {
+                            var page = r.ProvisionsForMcp(
+                                rid, MaximumProvisionRows, MaximumLegalTextChars);
                             o["document"] = DocJson(doc, withText: false);
-                            o["total_provisions"] = all.Count;
-                            o["truncated"] = all.Count > MaximumProvisionRows;
+                            o["total_provisions"] = total;
+                            o["truncated"] = total > MaximumProvisionRows;
                             var provisions = new JsonArray();
                             var remainingTextCharacters = MaximumLegalTextChars;
-                            foreach (var provision in all.Take(MaximumProvisionRows))
+                            var remainingCitationRows = MaximumCitationRows;
+                            var citationsTruncated = false;
+                            foreach (var provision in page)
                                 provisions.Add(ProvisionJson(doc, provision,
-                                    withText: doc.TextPublic, ref remainingTextCharacters));
+                                    withText: doc.TextPublic, ref remainingTextCharacters,
+                                    ref remainingCitationRows, ref citationsTruncated));
                             o["provisions"] = provisions;
+                            MarkBoundedCitations(o, remainingCitationRows, citationsTruncated);
                         }
                         else
                         {
@@ -565,7 +802,8 @@ public sealed class McpCore(
                     o["text_withheld_reason"] = "publisher text gate pending; read the official text at source_uri";
                 else if (status == McpStatus.TextNotAvailable)
                     o["text_unavailable_reason"] = "publisher record held; no safely derived provision text is available; read source_uri";
-                MarkBoundedText(o);
+                MarkBoundedText(o, mode == "full"
+                    && o["total_provisions"]?.GetValue<int>() > MaximumProvisionRows);
                 return o;
             }
             case "timeline":
@@ -574,18 +812,18 @@ public sealed class McpCore(
                 var res = Resolve(work, Str("publisher"));
                 if (res is null) return new JsonObject { ["status"] = McpStatus.UnknownWork, ["work"] = work };
                 var (r, w) = res.Value;
-                var rows = r.Timeline(w);
-                if (rows.Count == 0) return new JsonObject { ["envelope"] = Envelope(r, McpStatus.UnknownWork), ["work"] = w };
                 var limit = Int("limit", 100); var offset = Int("offset", 0);
+                var (rows, total) = r.Timeline(w, limit, offset);
+                if (total == 0) return new JsonObject { ["envelope"] = Envelope(r, McpStatus.UnknownWork), ["work"] = w };
                 var provisional = rows.Any(row => DateOnly.TryParse(row.ValidFrom, out var validFrom)
                     && ProvisionalFor(r, validFrom));
                 return new JsonObject
                 {
                     ["envelope"] = Envelope(r, McpStatus.Ok, provisional),
                     ["work"] = w,
-                    ["total_count"] = rows.Count,
-                    ["truncated"] = rows.Count > offset + limit,
-                    ["versions"] = new JsonArray(rows.Skip(offset).Take(limit).Select(v => (JsonNode)DocJson(v, false)).ToArray()),
+                    ["total_count"] = total,
+                    ["truncated"] = total > offset + limit,
+                    ["versions"] = new JsonArray(rows.Select(v => (JsonNode)DocJson(v, false)).ToArray()),
                 };
             }
             case "in_force_on":
@@ -595,17 +833,23 @@ public sealed class McpCore(
                 var pub = Str("publisher");
                 var jurisdiction = Str("jurisdiction");
                 var outp = new JsonArray();
-                foreach (var r in readers.Values.Where(x =>
-                             (pub is null || x.Collection == pub)
-                             && (jurisdiction is null || string.Equals(
-                                 x.Stamp.GetValueOrDefault("jurisdiction"),
-                                 jurisdiction,
-                                 StringComparison.OrdinalIgnoreCase))))
+                var selectedReaders = SelectReaders(pub, jurisdiction);
+                var remainingOffset = offset;
+                var remainingLimit = limit;
+                var totalAcrossPublishers = 0;
+                foreach (var r in selectedReaders.Readers)
                 {
                     var filter = new FilterSet(null, null, Str("source_class") ?? Str("document_type"),
                         Str("language"), null, Str("hierarchy"), Str("act_form"),
                         Str("binding_status"), Str("domain"));
-                    var (rows, total) = r.InForceOn(date, filter, limit, offset);
+                    var localOffset = remainingOffset;
+                    var (queriedRows, total) = r.InForceOn(
+                        date, filter, Math.Max(1, remainingLimit), localOffset);
+                    totalAcrossPublishers += total;
+                    var skipped = Math.Min(remainingOffset, total);
+                    remainingOffset -= skipped;
+                    var rows = remainingLimit == 0 ? [] : queriedRows.Take(remainingLimit).ToList();
+                    remainingLimit -= rows.Count;
                     outp.Add(new JsonObject
                     {
                         ["envelope"] = Envelope(r, total == 0 ? McpStatus.NoResult : McpStatus.Ok,
@@ -613,14 +857,18 @@ public sealed class McpCore(
                         ["population"] = new JsonObject
                         {
                             ["basis"] = "versioned works only",
-                            ["works_covered"] = r.Coverage().Groups,
+                            ["works_covered"] = r.Coverage(1).Groups,
                             ["known_exclusions"] = KnownExclusions(r),
                         },
                         ["total_works_in_force"] = total,
-                        ["truncated"] = total > offset + limit,
+                        ["offset"] = localOffset,
+                        ["truncated"] = total > localOffset + rows.Count,
                         ["works"] = new JsonArray(rows.Select(v => (JsonNode)DocJson(v, false)).ToArray()),
                     });
                 }
+                MarkPublisherSet(outp, selectedReaders.Total);
+                MarkResponseRows(outp, limit, limit - remainingLimit,
+                    totalAcrossPublishers > offset + (limit - remainingLimit));
                 return outp;
             }
             case "diff":
@@ -637,21 +885,24 @@ public sealed class McpCore(
                 if (a1 is null || b1 is null)
                     return new JsonObject { ["envelope"] = Envelope(r, McpStatus.NoVersionForDate), ["from_resolved"] = a1 is not null, ["to_resolved"] = b1 is not null };
                 var anchor = Str("anchor")?.Trim().ToLowerInvariant();
-                if (anchor is { Length: > 0 } && (anchor.Length > 128
+                if (anchor is { Length: > 0 } && (anchor.Length > McpInputPolicy.MaximumAnchorLength
                     || !System.Text.RegularExpressions.Regex.IsMatch(anchor,
                         "^[a-z0-9][a-z0-9_.-]*$",
                         System.Text.RegularExpressions.RegexOptions.CultureInvariant)))
                     throw new ArgumentException("anchor must be a provision anchor returned by search, e.g. art_92");
                 if (anchor is { Length: > 0 })
                 {
-                    var anchors = r.Provisions(LexIndexReader.RidOf(a1))
-                        .Concat(r.Provisions(LexIndexReader.RidOf(b1)))
-                        .Select(provision => provision.Anchor)
+                    var fromRid = LexIndexReader.RidOf(a1);
+                    var toRid = LexIndexReader.RidOf(b1);
+                    var exists = r.Provision(fromRid, anchor) is not null
+                        || r.Provision(toRid, anchor) is not null;
+                    var anchors = r.ProvisionAnchors(fromRid, 100)
+                        .Concat(r.ProvisionAnchors(toRid, 100))
                         .Where(value => !string.IsNullOrWhiteSpace(value))
                         .Distinct(StringComparer.Ordinal)
                         .Order(StringComparer.Ordinal)
                         .ToArray();
-                    if (!anchors.Contains(anchor, StringComparer.Ordinal))
+                    if (!exists)
                         return new JsonObject
                         {
                             ["envelope"] = Envelope(r, McpStatus.UnknownAnchor),
@@ -731,12 +982,8 @@ public sealed class McpCore(
                 var filter = new FilterSet(asOf, null, Str("source_class") ?? Str("document_type"),
                     Str("language"), works, Str("hierarchy"), Str("act_form"),
                     Str("binding_status"), Str("domain"));
-                var executions = readers.Values.Where(x =>
-                        (pub is null || x.Collection == pub)
-                        && (jurisdiction is null || string.Equals(
-                            x.Stamp.GetValueOrDefault("jurisdiction"),
-                            jurisdiction,
-                            StringComparison.OrdinalIgnoreCase)))
+                var selectedReaders = SelectReaders(pub, jurisdiction);
+                var executions = selectedReaders.Readers
                     .Select(reader => (Reader: reader, Execution: requestedMode == "hybrid"
                         ? reader.SearchHybrid(q, filter, limit * 6, fuzzy == "auto")
                         : reader.SearchKeyword(q, filter, limit * 6, fuzzy == "auto")))
@@ -766,16 +1013,21 @@ public sealed class McpCore(
                     : globalResolutions.Any(item => item.Status == "resolved") ? "resolved"
                     : executions.Any(item => item.Execution.QueryPlan?.WorkCatalogAvailable == false)
                         ? "unavailable" : "not_requested";
+                var remainingResults = limit;
+                var responseRowsTruncated = false;
                 foreach (var (r, execution) in executions)
                 {
+                    var localLimit = remainingResults;
                     // provision-level hits: the retrieval unit is the article; at most two
                     // provisions per work so one huge code cannot monopolize the result set
                     var suppressUnresolvedPublisher = hasGlobalStrongWorkMatch
                                                       && execution.QueryPlan?.HasStrongWorkMatch != true;
-                    var hits = (suppressUnresolvedPublisher ? [] : execution.Hits)
+                    var eligibleHits = (suppressUnresolvedPublisher ? [] : execution.Hits)
                         .GroupBy(h => (h.Doc.GroupKey, h.Provision.Anchor)).Select(g => g.First())
                         .GroupBy(h => h.Doc.GroupKey).SelectMany(g => g.Take(2))
-                        .Take(limit).ToList();
+                        .ToList();
+                    responseRowsTruncated |= eligibleHits.Count > localLimit;
+                    var hits = eligibleHits.Take(localLimit).ToList();
                     var hitsArr = new JsonArray(hits.Select(h =>
                     {
                         var d = DocJson(h.Doc, false);
@@ -794,7 +1046,7 @@ public sealed class McpCore(
                     // Identifier/title fallback: works holding no per-article text are invisible
                     // to the provision FTS, and no indexed text contains a work's own identifier
                     // (a CELEX number lives in the slug) — both must still be findable.
-                    if (!suppressUnresolvedPublisher && hits.Count < limit)
+                    if (!suppressUnresolvedPublisher && hits.Count < localLimit)
                     {
                         var seen = hits.Select(h => h.Doc.GroupKey).ToHashSet(StringComparer.Ordinal);
                         var fallbackFilter = execution.QueryPlan?.HasStrongWorkMatch == true
@@ -804,12 +1056,14 @@ public sealed class McpCore(
                         // its subject and got few article hits was handed unrelated works to fill
                         // the quota — the documented scope silently ignored on exactly the path a
                         // scoped search is most likely to take.
-                        foreach (var doc in r.SearchWorksByIdentifierOrTitle(q,
+                        var fallbackCandidates = r.SearchWorksByIdentifierOrTitle(q,
                                      fallbackFilter, limit * 4)
                                  .GroupBy(x => x.GroupKey)
                                  .Select(g => g.OrderByDescending(x => x.ValidFrom, StringComparer.Ordinal).First())
                                  .Where(x => !seen.Contains(x.GroupKey))
-                                 .Take(limit - hits.Count))
+                                 .ToList();
+                        responseRowsTruncated |= fallbackCandidates.Count > localLimit - hits.Count;
+                        foreach (var doc in fallbackCandidates.Take(localLimit - hits.Count))
                         {
                             var d = DocJson(doc, false);
                             d["match"] = "work_identifier_or_title";
@@ -823,6 +1077,7 @@ public sealed class McpCore(
                             hitsArr.Add(d);
                         }
                     }
+                    remainingResults -= hitsArr.Count;
 
                     outp.Add(new JsonObject
                     {
@@ -863,6 +1118,9 @@ public sealed class McpCore(
                         ["hits"] = hitsArr,
                     });
                 }
+                MarkPublisherSet(outp, selectedReaders.Total);
+                MarkResponseRows(outp, limit, limit - remainingResults,
+                    responseRowsTruncated);
                 return outp;
             }
             case "article_history":
@@ -874,9 +1132,11 @@ public sealed class McpCore(
                 var (r, w) = res.Value;
                 if (!r.WorkExists(w)) return new JsonObject { ["envelope"] = Envelope(r, McpStatus.UnknownWork), ["work"] = w };
                 var requestedLanguage = Str("language");
-                var states = r.ProvisionStates(w, anchor, requestedLanguage);
-                var evs = r.AnchorEvents(w, anchor, requestedLanguage);
-                if (states.Count == 0 && evs.Count == 0)
+                var stateCount = r.ProvisionStateCount(w, anchor, requestedLanguage);
+                var eventCount = r.AnchorEventCount(w, anchor, requestedLanguage);
+                var states = r.ProvisionStates(w, anchor, requestedLanguage, MaximumHistoryRows);
+                var evs = r.AnchorEvents(w, anchor, requestedLanguage, MaximumHistoryRows);
+                if (stateCount == 0 && eventCount == 0)
                     return new JsonObject
                     {
                         ["envelope"] = Envelope(r, r.HasProvisionHistory(w) ? McpStatus.UnknownAnchor : McpStatus.NoProvisionHistory),
@@ -917,10 +1177,10 @@ public sealed class McpCore(
                     ["work"] = w,
                     ["anchor"] = anchor,
                     ["language"] = states.FirstOrDefault()?.Language ?? evs.FirstOrDefault()?.Language ?? requestedLanguage,
-                    ["distinct_texts"] = states.Count,
-                    ["truncated"] = states.Count > MaximumHistoryRows || evs.Count > MaximumHistoryRows,
+                    ["distinct_texts"] = stateCount,
+                    ["truncated"] = stateCount > MaximumHistoryRows || eventCount > MaximumHistoryRows,
                     ["states"] = statesArr,
-                    ["anchor_events"] = new JsonArray(evs.Take(MaximumHistoryRows).Select(e => (JsonNode)new JsonObject
+                        ["anchor_events"] = new JsonArray(evs.Select(e => (JsonNode)new JsonObject
                     {
                         ["type"] = e.EType,
                         ["language"] = e.Language,
@@ -934,12 +1194,16 @@ public sealed class McpCore(
             case "provenance":
             {
                 var key = Str("lex_id") ?? throw new ArgumentException("lex_id required");
-                foreach (var r in readers.Values)
+                var publisher = key.Contains(':')
+                    ? key[..key.IndexOf(':')]
+                    : null;
+                foreach (var r in SelectReaders(publisher).Readers)
                 {
                     var d = r.ByKey(key);
                     if (d is null) continue;
-                    var events = r.Events(key);
-                    var observations = r.Observations(key, Str("language"));
+                    var events = r.Events(key, MaximumProvenanceRows + 1);
+                    var observations = r.Observations(
+                        key, Str("language"), MaximumProvenanceRows + 1);
                     return new JsonObject
                     {
                         ["envelope"] = Envelope(r, McpStatus.Ok),
@@ -972,9 +1236,15 @@ public sealed class McpCore(
                 var slug = w.Contains(':') ? w[(w.IndexOf(':') + 1)..] : w;
                 var lim = Int("limit", 50);
                 var outp = new JsonArray();
-                foreach (var r in readers.Values)
+                var selectedReaders = SelectReaders(publisher: null);
+                var remaining = lim;
+                var responseTruncated = false;
+                foreach (var r in selectedReaders.Readers)
                 {
-                    var hits = r.CitedBy(slug, lim);
+                    var candidates = r.CitedBy(slug, Math.Max(1, remaining + 1));
+                    var hits = remaining == 0 ? [] : candidates.Take(remaining).ToList();
+                    responseTruncated |= candidates.Count > hits.Count;
+                    remaining -= hits.Count;
                     outp.Add(new JsonObject
                     {
                         ["envelope"] = Envelope(r, hits.Count == 0 ? McpStatus.NoResult : McpStatus.Ok),
@@ -992,6 +1262,8 @@ public sealed class McpCore(
                         }).ToArray()),
                     });
                 }
+                MarkPublisherSet(outp, selectedReaders.Total);
+                MarkResponseRows(outp, lim, lim - remaining, responseTruncated);
                 return outp.Count == 1 ? outp[0]!.DeepClone() : outp;
             }
 
@@ -1013,15 +1285,20 @@ public sealed class McpCore(
                 var limit = Int("limit", 20);
                 var offset = Int("offset", 0);
                 var outp = new JsonArray();
-                foreach (var r in readers.Values.Where(x =>
-                             (pub is null || x.Collection == pub)
-                             && (jurisdiction is null || string.Equals(
-                                 x.Stamp.GetValueOrDefault("jurisdiction"),
-                                 jurisdiction,
-                                 StringComparison.OrdinalIgnoreCase))))
+                var selectedReaders = SelectReaders(pub, jurisdiction);
+                var remainingOffset = offset;
+                var remainingLimit = limit;
+                var totalAcrossPublishers = 0;
+                foreach (var r in selectedReaders.Readers)
                 {
                     var (works, versions) = r.ChangeTotals(from, to, kinds, filter);
-                    var rows = r.ChangesInPeriod(from, to, kinds, byChurn, limit, offset, filter);
+                    totalAcrossPublishers += works;
+                    var localOffset = Math.Min(remainingOffset, works);
+                    remainingOffset -= localOffset;
+                    var localLimit = Math.Min(remainingLimit, Math.Max(0, works - localOffset));
+                    var rows = localLimit == 0 ? [] : r.ChangesInPeriod(
+                        from, to, kinds, byChurn, localLimit, localOffset, filter);
+                    remainingLimit -= rows.Count;
                     outp.Add(new JsonObject
                     {
                         ["envelope"] = Envelope(r,
@@ -1035,11 +1312,11 @@ public sealed class McpCore(
                         {
                             ["basis"] = "distinct non-withdrawn works in the selected publisher and legal metadata scope",
                             ["works_in_scope"] = r.PopulationTotal(kinds, filter),
-                            ["expected_works"] = r.Coverage().ExpectedWorks,
+                            ["expected_works"] = r.Coverage(1).ExpectedWorks,
                             ["known_exclusions"] = KnownExclusions(r),
                         },
                         ["shown"] = rows.Count,
-                        ["offset"] = offset,
+                        ["offset"] = localOffset,
                         ["changes"] = new JsonArray(rows.Select(c =>
                         {
                             var o = new JsonObject
@@ -1089,15 +1366,28 @@ public sealed class McpCore(
                         ["note"] = "a row records publisher version dates inside the window; it does not by itself assert a wording change, legal effect, or entry into force; use diff or as_of to inspect text",
                     });
                 }
+                MarkPublisherSet(outp, selectedReaders.Total);
+                MarkResponseRows(outp, limit, limit - remainingLimit,
+                    totalAcrossPublishers > offset + (limit - remainingLimit));
                 return outp;
             }
             case "coverage":
             {
                 var pub = Str("publisher");
                 var outp = new JsonArray();
-                foreach (var r in readers.Values.Where(x => pub is null || x.Collection == pub))
+                var selectedReaders = SelectReaders(pub);
+                var remainingKinds = MaximumCoverageFacetRows;
+                var remainingLanguages = MaximumCoverageFacetRows;
+                var remainingBuildIssues = MaximumBuildIssueRows;
+                foreach (var r in selectedReaders.Readers)
                 {
-                    var c = r.Coverage();
+                    var c = r.Coverage(Math.Max(1, Math.Max(remainingKinds, remainingLanguages)));
+                    var kinds = c.Kinds.Take(remainingKinds).ToArray();
+                    var languages = c.Languages.Take(remainingLanguages).ToArray();
+                    var buildIssues = (c.BuildIssues ?? []).Take(remainingBuildIssues).ToArray();
+                    remainingKinds -= kinds.Length;
+                    remainingLanguages -= languages.Length;
+                    remainingBuildIssues -= buildIssues.Length;
                     outp.Add(new JsonObject
                     {
                         ["envelope"] = Envelope(r, McpStatus.Ok),
@@ -1110,25 +1400,32 @@ public sealed class McpCore(
                                 ? "complete" : "incomplete",
                         ["build_complete"] = c.ExpectedWorks is null ? null
                             : c.Groups == c.ExpectedWorks && (c.BuildIssues?.Count ?? 0) == 0,
-                        ["build_issues"] = new JsonArray((c.BuildIssues ?? [])
+                        ["build_issues"] = new JsonArray(buildIssues
                             .Select(issue => (JsonNode)new JsonObject
                             {
                                 ["code"] = issue.Code,
                                 ["work"] = issue.Work,
                                 ["detail"] = issue.Detail,
                             }).ToArray()),
+                        ["build_issues_total"] = c.BuildIssues?.Count ?? 0,
+                        ["build_issues_truncated"] = (c.BuildIssues?.Count ?? 0) > buildIssues.Length,
                         ["versions"] = c.Rows,
                         ["valid_from_earliest"] = c.EarliestValidFrom,
                         ["valid_from_latest"] = c.LatestValidFrom,
-                        ["document_types"] = new JsonArray(c.Kinds.Select(k => (JsonNode)new JsonObject
+                        ["document_types"] = new JsonArray(kinds.Select(k => (JsonNode)new JsonObject
                         { ["code"] = k.Kind, ["versions"] = k.Versions, ["versions_with_text"] = k.WithText }).ToArray()),
+                        ["document_types_total"] = c.TotalKinds,
                         // Which languages this corpus is in, and how rarely the same law exists
                         // in more than one. A caller planning a language filter needs to know
                         // that picking one here does not narrow a translation, it removes a
                         // publisher: Luxembourg publishes in French, the EU acts held here are
                         // English, and almost no work carries both.
-                        ["languages"] = new JsonArray(c.Languages.Select(l => (JsonNode)new JsonObject
+                        ["languages"] = new JsonArray(languages.Select(l => (JsonNode)new JsonObject
                         { ["code"] = l.Language, ["works"] = l.Works, ["versions"] = l.Versions }).ToArray()),
+                        ["languages_total"] = c.TotalLanguages,
+                        ["facets_truncated"] = c.TotalKinds > kinds.Length
+                            || c.TotalLanguages > languages.Length
+                            || c.TotalProfiles > c.Profiles.Count,
                         ["multilingual_works"] = c.MultilingualWorks,
                         ["text"] = new JsonObject
                         {
@@ -1143,6 +1440,7 @@ public sealed class McpCore(
                                 : "coverage follows the publisher's consolidation practice; future-dated versions are provisional"),
                     });
                 }
+                MarkPublisherSet(outp, selectedReaders.Total);
                 return outp;
             }
             default:

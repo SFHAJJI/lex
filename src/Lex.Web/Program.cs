@@ -26,7 +26,7 @@ var builder = WebApplication.CreateBuilder(args);
 // calls with inline defaults, so a typo in a container produced a service that started cleanly
 // and then behaved oddly: the index directory silently fell back to a path that did not exist,
 // and the public base URL silently fell back to the production host.
-var options = LexOptionsSetup.FromEnvironment(builder.Environment);
+var options = LexOptionsSetup.FromConfiguration(builder.Environment, builder.Configuration);
 
 // ---- services --------------------------------------------------------------------------
 builder.Services.AddSingleton(Microsoft.Extensions.Options.Options.Create(options));
@@ -35,7 +35,7 @@ builder.Services.AddSingleton<IndexRegistry>();
 builder.Services.AddSingleton(sp =>
 {
     var registry = sp.GetRequiredService<IndexRegistry>();
-    return new McpCore(registry.All, registry.VerifiedManifestSetId);
+    return new McpCore(registry.All, registry.VerifiedManifestSetId, options.PublicBaseUrl);
 });
 builder.Services.AddSingleton(sp => new AskService(sp.GetRequiredService<McpCore>()));
 builder.Services.AddSingleton(sp => new AskRequestRegistry(
@@ -52,9 +52,18 @@ builder.Services.AddResponseCompression(options => options.EnableForHttps = true
 // project can attach to. Enabled only when configured; the app is fully functional without it.
 if (!string.IsNullOrWhiteSpace(options.AppInsightsConnectionString))
 {
-    builder.Services.AddOpenTelemetry().UseAzureMonitor();
-    builder.Services.ConfigureOpenTelemetryTracerProvider(
-        (_, b) => b.AddSource(AskService.ActivitySourceName));
+    // The Azure Monitor distro collects URL queries unless these switches are explicitly false.
+    // Search terms are user text, so redact both inbound and outbound queries before the
+    // instrumentation is constructed, then scrub address attributes again at the export edge.
+    Environment.SetEnvironmentVariable(
+        "OTEL_DOTNET_EXPERIMENTAL_ASPNETCORE_DISABLE_URL_QUERY_REDACTION", "false");
+    Environment.SetEnvironmentVariable(
+        "OTEL_DOTNET_EXPERIMENTAL_HTTPCLIENT_DISABLE_URL_QUERY_REDACTION", "false");
+    builder.Services.AddOpenTelemetry()
+        .WithTracing(b => b
+            .AddSource(AskService.ActivitySourceName)
+            .AddProcessor(new PrivacyActivityProcessor()))
+        .UseAzureMonitor();
 }
 
 var app = builder.Build();

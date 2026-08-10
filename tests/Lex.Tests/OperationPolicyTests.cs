@@ -8,6 +8,45 @@ namespace Lex.Tests;
 
 public sealed class OperationPolicyTests
 {
+    [Fact]
+    public void Assistant_operation_bounds_are_a_subset_of_the_public_mcp_contract()
+    {
+        var fifty = string.Join(',', Enumerable.Range(1, 50).Select(index => $"a{index}"));
+        var cases = new Dictionary<string, JsonObject>
+        {
+            ["search"] = new() { ["query"] = new string('q', 1_000), ["publisher"] = new string('p', 64), ["jurisdiction"] = new string('j', 64), ["language"] = new string('l', 16), ["works"] = fifty, ["limit"] = 50 },
+            ["as_of"] = new() { ["work"] = "eu-eurlex:work", ["date"] = "2026-01-01", ["mode"] = "select", ["anchors"] = fifty, ["language"] = new string('l', 16) },
+            ["timeline"] = new() { ["work"] = "eu-eurlex:work", ["limit"] = 200, ["offset"] = 100_000 },
+            ["in_force_on"] = new() { ["date"] = "2026-01-01", ["limit"] = 100, ["offset"] = 100_000, ["publisher"] = new string('p', 64) },
+            ["diff"] = new() { ["work"] = "eu-eurlex:work", ["from_date"] = "2025-01-01", ["to_date"] = "2026-01-01", ["anchor"] = new string('a', 512) },
+            ["article_history"] = new() { ["work"] = "eu-eurlex:work", ["anchor"] = new string('a', 512) },
+            ["provenance"] = new() { ["lex_id"] = "eu-eurlex:work:2026-01-01" },
+            ["coverage"] = new() { ["publisher"] = new string('p', 64) },
+            ["cited_by"] = new() { ["work"] = "eu-eurlex:work", ["limit"] = 100 },
+            ["changes_in_period"] = new() { ["from_date"] = "2025-01-01", ["to_date"] = "2026-01-01", ["limit"] = 100, ["offset"] = 100_000 },
+        };
+
+        foreach (var (tool, proposed) in cases)
+            McpInputPolicy.Validate(tool, OperationArguments.Normalize(tool, proposed));
+    }
+
+    [Fact]
+    public void Assistant_rejects_values_one_past_mcp_bounds_before_execution()
+    {
+        var cases = new (string Tool, JsonObject Arguments)[]
+        {
+            ("coverage", new JsonObject { ["publisher"] = new string('p', 65) }),
+            ("as_of", new JsonObject { ["work"] = "eu-eurlex:work", ["date"] = "2026-01-01", ["language"] = new string('l', 17) }),
+            ("diff", new JsonObject { ["work"] = "eu-eurlex:work", ["from_date"] = "2025-01-01", ["to_date"] = "2026-01-01", ["anchor"] = new string('a', 513) }),
+            ("as_of", new JsonObject { ["work"] = "eu-eurlex:work", ["date"] = "2026-01-01", ["mode"] = "select", ["anchors"] = string.Join(',', Enumerable.Range(1, 51).Select(index => $"a{index}")) }),
+            ("in_force_on", new JsonObject { ["date"] = "2026-01-01", ["limit"] = 101 }),
+            ("timeline", new JsonObject { ["work"] = "eu-eurlex:work", ["offset"] = 100_001 }),
+        };
+
+        foreach (var (tool, arguments) in cases)
+            Assert.Throws<InvalidDataException>(() => OperationArguments.Normalize(tool, arguments));
+    }
+
     public static TheoryData<string, LegalOutcome> StatusCases => new()
     {
         { McpStatus.Ok, LegalOutcome.Succeeded },

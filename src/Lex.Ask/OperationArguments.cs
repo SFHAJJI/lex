@@ -12,6 +12,7 @@ internal static class OperationArguments
     private const int MaximumStringLength = 1_000;
     private const int MaximumWorkQueryLength = 900;
     private const int MaximumArticleNumberLength = 64;
+    private const int MaximumAnchorLength = 512;
     private static readonly IReadOnlyDictionary<string, HashSet<string>> Allowed =
         new Dictionary<string, HashSet<string>>(StringComparer.Ordinal)
         {
@@ -82,6 +83,11 @@ internal static class OperationArguments
             {
                 "work_query" => MaximumWorkQueryLength,
                 "article_number" => MaximumArticleNumberLength,
+                "language" => 16,
+                "date" or "as_of" or "from_date" or "to_date" => 10,
+                "anchor" => MaximumAnchorLength,
+                "publisher" or "jurisdiction" or "mode" or "retrieval_mode"
+                    or "time_scope" or "fuzzy" or "order" => 64,
                 _ => MaximumStringLength,
             };
             if (text.Length == 0 || text.Length > maximum)
@@ -172,8 +178,17 @@ internal static class OperationArguments
             && Text(arguments, "article_number") is null)
             throw new InvalidDataException("as_of mode=select requires anchors.");
 
-        Bound(arguments, "limit", 1, action == "search" ? 50 : 200);
-        Bound(arguments, "offset", 0, 1_000_000);
+        CountList(arguments, "anchors", 50, MaximumAnchorLength);
+        CountList(arguments, "works", 50);
+
+        var maximumLimit = action switch
+        {
+            "search" => 50,
+            "in_force_on" or "cited_by" or "changes_in_period" => 100,
+            _ => 200,
+        };
+        Bound(arguments, "limit", 1, maximumLimit);
+        Bound(arguments, "offset", 0, 100_000);
     }
 
     private static HashSet<string> Set(params string[] values) =>
@@ -213,5 +228,22 @@ internal static class OperationArguments
         if (number < minimum || number > maximum)
             throw new InvalidDataException(
                 $"Argument '{name}' must be between {minimum} and {maximum}.");
+    }
+
+    private static void CountList(
+        JsonObject arguments,
+        string name,
+        int maximum,
+        int maximumItemLength = MaximumStringLength)
+    {
+        if (Text(arguments, name) is not { } value) return;
+        var items = value.Split(',', StringSplitOptions.RemoveEmptyEntries
+            | StringSplitOptions.TrimEntries);
+        if (items.Length is 0 || items.Length > maximum)
+            throw new InvalidDataException(
+                $"Argument '{name}' must contain 1 to {maximum} values.");
+        if (items.Any(item => item.Length > maximumItemLength))
+            throw new InvalidDataException(
+                $"Every '{name}' value must contain at most {maximumItemLength} characters.");
     }
 }

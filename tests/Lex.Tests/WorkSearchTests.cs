@@ -1289,6 +1289,65 @@ public sealed class WorkSearchTests : IDisposable
     }
 
     [Fact]
+    public void Public_metadata_bounds_admit_observed_official_title_and_anchor_lengths()
+    {
+        var db = TempDb();
+        var title = new string('t', 5_315);
+        var anchor = "art_" + new string('a', 301);
+        var doc = Doc("eu:target:2020-01-01", "target", title);
+
+        IndexBuilder.Build(db, Stamp(), [doc], [Provision(doc, "Held text.", anchor)],
+            [], [], null);
+
+        using var reader = LexIndexReader.Open(db);
+        var held = Assert.Single(reader.Provisions(LexIndexReader.RidOf(doc)));
+        Assert.Equal(title, held.WorkTitle);
+        Assert.Equal(anchor, held.Anchor);
+    }
+
+    [Fact]
+    public void Oversized_stamp_metadata_is_rejected_before_mount()
+    {
+        var db = TempDb();
+        var doc = Doc("eu:target:2020-01-01", "target", "Held title");
+        IndexBuilder.Build(db, Stamp(), [doc], [], [], [], null);
+        using (var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={db}"))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = "INSERT INTO stamp(k,v) VALUES ('oversized_notice',$value)";
+            command.Parameters.AddWithValue("$value", new string('x', 4_097));
+            command.ExecuteNonQuery();
+        }
+
+        var error = Assert.Throws<InvalidDataException>(() => LexIndexReader.Open(db));
+        Assert.Contains("oversized stamp metadata", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Isolated_query_session_has_its_own_connection_and_does_not_own_shared_vectors()
+    {
+        var db = TempDb();
+        var vectors = TempFile(".vectors");
+        var doc = Doc("eu:target:2020-01-01", "target", "Personal data rules");
+        using var encoder = new TestEncoder();
+        IndexBuilder.Build(db, Stamp(), [doc], [Provision(doc, "Personal data protection.")],
+            [], [], null,
+            semantic: new SemanticBuildOptions(
+                encoder, vectors, "model-sha", "tokenizer-sha"));
+
+        using var reader = LexIndexReader.Open(db, encoder, vectors);
+        using (var session = reader.CreateIsolatedSession())
+        {
+            Assert.Equal(reader.Collection, session.Collection);
+            Assert.NotEmpty(session.SearchKeyword(
+                "personal data", FilterSet.All, 5, fuzzyAuto: false).Hits);
+        }
+
+        Assert.NotEmpty(reader.SearchHybrid("personal data", FilterSet.All, 5).Hits);
+    }
+
+    [Fact]
     public void Work_vector_batches_use_fixed_padding_and_split_at_the_token_budget()
     {
         var db = TempDb();

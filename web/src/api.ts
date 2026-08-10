@@ -182,7 +182,8 @@ export interface ProvisionItem { anchor: string; num?: string; heading?: string;
                                  text_omitted_reason?: string; permalink?: string }
 export interface UiEffect {
   provision?: { subject: Subject; valid_from: string; valid_to?: string; provisions: ProvisionItem[]; permalink?: string;
-                evidence?: EvidenceContext[]; total_provisions?: number; truncated?: boolean; text_truncated?: boolean };
+                evidence?: EvidenceContext[]; total_provisions?: number; truncated?: boolean;
+                text_truncated?: boolean; outline_only?: boolean };
   diff?: { subject: Subject; from_date: string; to_date: string; note?: string; status?: string; evidence?: EvidenceContext[] };
   history?: { subject: Subject; anchor: string; distinct_texts: number; states: { valid_from: string; valid_to?: string; sha?: string; permalink?: string }[]; evidence?: EvidenceContext[] };
   timeline?: { subject: Subject; evidence?: EvidenceContext[] };
@@ -247,13 +248,13 @@ export async function askStreaming(
   messages: AskMessage[],
   handlers: AskStreamHandlers,
   signal?: AbortSignal,
-  requestId: string = crypto.randomUUID(),
+  idempotencyKey: string = crypto.randomUUID(),
 ): Promise<AskReply> {
   const r = await fetch("/api/ask/stream", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Idempotency-Key": requestId,
+      "Idempotency-Key": idempotencyKey,
       "X-Lex-Stream-Version": "1",
     },
     body: JSON.stringify({ messages }),
@@ -261,6 +262,9 @@ export async function askStreaming(
   });
   if (!r.ok) throw new Error(`Assistant request failed (${r.status}).`);
   if (!r.body) throw new Error("Assistant stream returned no body.");
+  const requestId = r.headers.get("X-Lex-Request-Id");
+  if (!requestId || !/^[a-f0-9]{32}$/.test(requestId))
+    throw new Error("Assistant stream returned no valid request identity.");
 
   const reader = r.body.getReader();
   const decoder = new TextDecoder();

@@ -47,8 +47,13 @@ Status: accepted and in progress
 - [x] Reject overlong current questions rather than silently truncating them.
 - [x] Fix quota admission order and pin production to one replica.
 - [x] Enforce streamed request bytes and bounded MCP inputs/outputs.
-- [x] Enforce and load-test MCP execution, queue, hybrid and rolling-rate ceilings.
-- [x] Add truthful data-flow disclosure, logging allowlist and prompt-injection tests.
+- [x] Enforce MCP execution, queue, hybrid and rolling-rate ceilings and add the executable
+  production-equivalent burst and sustained-rate gate.
+- [ ] Record the candidate gate result across two rolling windows, including p95, working set,
+  replica count, bounded overload and recovery.
+- [x] Add truthful data-flow disclosure, logging allowlist, multi-channel prompt-injection tests
+  and an Azure-export canary gate.
+- [ ] Record the candidate injection and Azure-export results before public promotion.
 - [x] Run focused tests, full .NET tests, web tests and build.
 - [x] Commit server and browser stream changes separately.
 

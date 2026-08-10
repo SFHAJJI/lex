@@ -18,23 +18,41 @@ public sealed class AskService
     private readonly IOperationPlanner? _planner;
     private readonly IOperationSynthesizer? _synthesizer;
     private readonly AskAdmissionController _admission;
+    private readonly TimeSpan _plannerDeadline;
+    private readonly TimeSpan _firstResultDeadline;
+    private readonly Func<string, JsonObject, CancellationToken, ValueTask<JsonNode>> _legalTool;
+
+    internal static readonly TimeSpan DefaultPlannerDeadline = TimeSpan.FromSeconds(12);
+    internal static readonly TimeSpan DefaultFirstResultDeadline = TimeSpan.FromSeconds(25);
 
     public AskService(McpCore core)
     {
         this.core = core;
         _admission = DefaultAdmission();
+        _plannerDeadline = DefaultPlannerDeadline;
+        _firstResultDeadline = DefaultFirstResultDeadline;
+        _legalTool = core.CallToolAsync;
     }
 
     internal AskService(
         McpCore core,
         IOperationPlanner planner,
         IOperationSynthesizer? synthesizer = null,
-        AskAdmissionController? admission = null)
+        AskAdmissionController? admission = null,
+        TimeSpan? plannerDeadline = null,
+        TimeSpan? firstResultDeadline = null,
+        Func<string, JsonObject, CancellationToken, ValueTask<JsonNode>>? legalTool = null)
     {
         this.core = core;
         _planner = planner;
         _synthesizer = synthesizer;
         _admission = admission ?? DefaultAdmission();
+        _plannerDeadline = plannerDeadline ?? DefaultPlannerDeadline;
+        _firstResultDeadline = firstResultDeadline ?? DefaultFirstResultDeadline;
+        _legalTool = legalTool ?? core.CallToolAsync;
+        if (_plannerDeadline <= TimeSpan.Zero || _firstResultDeadline <= TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(
+                nameof(plannerDeadline), "Assistant deadlines must be positive.");
     }
 
     internal sealed class WorkResolutionGuard
@@ -972,6 +990,12 @@ public sealed class AskService
         Func<JsonObject, CancellationToken, ValueTask>? OperationResult = null,
         Func<string, CancellationToken, ValueTask>? Synthesis = null);
 
+    public sealed record AskOutcome(int Status, JsonObject Body, bool RetainForReplay)
+    {
+        public void Deconstruct(out int status, out JsonObject body)
+            => (status, body) = (Status, Body);
+    }
+
     private static async ValueTask NotifyProgress(Func<ValueTask> callback)
     {
         try { await callback(); }
@@ -980,7 +1004,7 @@ public sealed class AskService
         catch (ObjectDisposedException) { Diagnostic("progress_transport_disconnected"); }
     }
 
-    public async Task<(int Status, JsonObject Body)> AskAsync(
+    public async Task<AskOutcome> AskAsync(
         JsonArray history,
         string ip,
         string host,
@@ -989,42 +1013,55 @@ public sealed class AskService
         string? requestId = null)
     {
         if (!Enabled)
-            return (503, new JsonObject
+            return new AskOutcome(503, new JsonObject
             {
                 ["error"] = "The playground is not enabled on this deployment. Connect your own AI instead: /ai.",
-            });
+            }, false);
         if (history.Count is 0 or > MaxHistory)
-            return (400, new JsonObject { ["error"] = $"Send 1 to {MaxHistory} messages." });
+            return new AskOutcome(400,
+                new JsonObject { ["error"] = $"Send 1 to {MaxHistory} messages." }, false);
 
         var userQueries = new List<string>();
+        string? lastRole = null;
         foreach (var message in history)
         {
-            var role = message?["role"]?.GetValue<string>();
-            var content = message?["content"]?.GetValue<string>() ?? "";
+            if (message is not JsonObject item
+                || item["role"] is not JsonValue roleValue
+                || !roleValue.TryGetValue<string>(out var role)
+                || item["content"] is not JsonValue contentValue
+                || !contentValue.TryGetValue<string>(out var content))
+                return new AskOutcome(400,
+                    new JsonObject { ["error"] = "Every message requires string role and content fields." },
+                    false);
+            lastRole = role;
             if (role is not ("user" or "assistant"))
-                return (400, new JsonObject { ["error"] = "Roles must be user/assistant." });
+                return new AskOutcome(400,
+                    new JsonObject { ["error"] = "Roles must be user/assistant." }, false);
             var limit = role == "user" ? MaxUserMessageChars : MaxAssistantMessageChars;
             if (content.Length is 0 || content.Length > limit)
-                return (400, new JsonObject
+                return new AskOutcome(400, new JsonObject
                 {
                     ["error"] = role == "user"
                         ? "Questions are capped at 1,000 characters."
                         : "Assistant history messages are capped at 4,000 characters.",
-                });
+                }, false);
             if (role == "user") userQueries.Add(content);
         }
         if (userQueries.Count == 0)
-            return (400, new JsonObject { ["error"] = "The last message must be from the user." });
+            return new AskOutcome(400,
+                new JsonObject { ["error"] = "The last message must be from the user." }, false);
         var rawUserQuery = userQueries[^1];
-        if (history[^1]?["role"]?.GetValue<string>() != "user")
-            return (400, new JsonObject { ["error"] = "The last message must be from the user." });
+        if (lastRole != "user")
+            return new AskOutcome(400,
+                new JsonObject { ["error"] = "The last message must be from the user." }, false);
         if (WorkResolutionGuard.IsExplicitNonSelection(rawUserQuery))
-            return (200, Body(
+            return new AskOutcome(200, Body(
                 "No instrument was selected. Add an official title or identifier when you want to try again.",
-                [], []));
+                [], []), false);
         var admission = _admission.TryAdmit(ip);
         if (!admission.Accepted)
-            return (429, new JsonObject { ["error"] = AdmissionReason(admission.Failure) });
+            return new AskOutcome(429,
+                new JsonObject { ["error"] = AdmissionReason(admission.Failure) }, false);
         using var admissionLease = admission.Lease!;
 
         OperationRun? run = null;
@@ -1032,27 +1069,44 @@ public sealed class AskService
         var requestLocale = RequestLocale(rawUserQuery);
         try
         {
+            using var firstResult = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            firstResult.CancelAfter(_firstResultDeadline);
+            using var planner = CancellationTokenSource.CreateLinkedTokenSource(firstResult.Token);
+            planner.CancelAfter(_plannerDeadline);
             var plan = await PlanOperationsAsync(
-                history, host, requestId, requestLocale, ct);
+                history, host, requestId, requestLocale, planner.Token);
             run = OperationRun.Start(plan);
-            return await ExecutePlanAsync(
-                plan, run, userQueries, rawUserQuery, progress, ct);
+            var (status, body) = await ExecutePlanAsync(
+                plan, run, userQueries, rawUserQuery, progress, firstResult.Token,
+                () => firstResult.CancelAfter(Timeout.InfiniteTimeSpan),
+                () => ct.IsCancellationRequested
+                    ? TransportOutcome.Cancelled : TransportOutcome.TimedOut);
+            return new AskOutcome(status, body, true);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
             run?.CompletePending(TransportOutcome.Cancelled);
-            return (499, new JsonObject { ["error"] = "Request cancelled." });
+            return new AskOutcome(499,
+                new JsonObject { ["error"] = "Request cancelled." }, true);
         }
         catch (TaskCanceledException)
         {
             run?.CompletePending(TransportOutcome.TimedOut);
-            return (504, new JsonObject { ["error"] = "The operation timed out. Try a narrower question." });
+            return new AskOutcome(504,
+                new JsonObject { ["error"] = "The operation timed out. Try a narrower question." }, true);
+        }
+        catch (OperationCanceledException)
+        {
+            run?.CompletePending(TransportOutcome.TimedOut);
+            return new AskOutcome(504,
+                new JsonObject { ["error"] = "The operation timed out. Try a narrower question." }, true);
         }
         catch (HttpRequestException)
         {
             run?.CompletePending(TransportOutcome.UpstreamFailed);
             Diagnostic("planning_upstream_unreachable");
-            return (502, new JsonObject { ["error"] = "The planning service is unavailable right now." });
+            return new AskOutcome(502,
+                new JsonObject { ["error"] = "The planning service is unavailable right now." }, true);
         }
         catch (InvalidDataException)
         {
@@ -1083,13 +1137,14 @@ public sealed class AskService
                 ["ui"] = JsonNode.Parse(
                     System.Text.Json.JsonSerializer.Serialize(effect, UiJson)),
             });
-            return (200, body);
+            return new AskOutcome(200, body, true);
         }
         catch (Exception)
         {
             run?.CompletePending(TransportOutcome.UpstreamFailed);
             Diagnostic("unexpected_failure");
-            return (500, new JsonObject { ["error"] = "Unexpected error in the playground." });
+            return new AskOutcome(500,
+                new JsonObject { ["error"] = "Unexpected error in the playground." }, true);
         }
     }
 
@@ -1122,7 +1177,9 @@ public sealed class AskService
         IReadOnlyList<string> userQueries,
         string rawUserQuery,
         AskProgressCallbacks? progress,
-        CancellationToken ct)
+        CancellationToken ct,
+        Action firstResultObserved,
+        Func<TransportOutcome> cancellationOutcome)
     {
         var trace = new JsonArray
         {
@@ -1151,9 +1208,11 @@ public sealed class AskService
             .Select(_ => (JsonObject?)null).ToList();
         WorkResolutionGuard.GuardClarification? clarification = null;
         AgentClarification? applicationClarification = null;
+        int? terminalTransportStatus = null;
 
         async ValueTask Report(OperationExecution execution)
         {
+            firstResultObserved();
             if (progress?.OperationResult is null) return;
             var result = execution.Result ?? throw new InvalidDataException(
                 $"Operation '{execution.Request.OperationId}' did not reach a terminal result.");
@@ -1165,8 +1224,13 @@ public sealed class AskService
         {
             if (ct.IsCancellationRequested)
             {
-                foreach (var cancelled in run.CompletePending(TransportOutcome.Cancelled))
+                var outcome = cancellationOutcome();
+                foreach (var cancelled in run.CompletePending(outcome))
+                {
                     effects[cancelled.UserOrder] = TransportGap(plan.Locale, cancelled.TransportOutcome);
+                    await Report(run.Executions[cancelled.UserOrder]);
+                }
+                terminalTransportStatus = outcome == TransportOutcome.Cancelled ? 499 : 504;
                 break;
             }
             var operation = execution.Request;
@@ -1217,8 +1281,8 @@ public sealed class AskService
                 }
                 if (operation.RequiresWorkResolution)
                 {
-                    var prepared = ResolveWorkOperation(
-                        run, operation, arguments, userQueries, plan.Locale, trace);
+                    var prepared = await ResolveWorkOperationAsync(
+                        run, operation, arguments, userQueries, plan.Locale, trace, ct);
                     if (prepared.Arguments is null)
                     {
                         execution.CompleteLegal(LegalOutcome.NeedsClarification);
@@ -1249,7 +1313,7 @@ public sealed class AskService
                     using var span = Activity.StartActivity("legal-operation");
                     span?.SetTag("lex.operation.id", operation.OperationId);
                     span?.SetTag("gen_ai.tool.name", operation.Tool);
-                    result = core.CallTool(operation.Tool, arguments);
+                    result = await _legalTool(operation.Tool, arguments, ct);
                     status = LegalOperationPolicy.StatusForResult(result);
                     span?.SetTag("lex.status", status);
                 }
@@ -1295,6 +1359,33 @@ public sealed class AskService
                 });
                 await Report(execution);
             }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                var outcome = cancellationOutcome();
+                foreach (var cancelled in run.CompletePending(outcome))
+                {
+                    effects[cancelled.UserOrder] = TransportGap(plan.Locale, cancelled.TransportOutcome);
+                    await Report(run.Executions[cancelled.UserOrder]);
+                }
+                terminalTransportStatus = outcome == TransportOutcome.Cancelled ? 499 : 504;
+                break;
+            }
+            catch (Exception)
+            {
+                if (execution.State == OperationExecutionState.Pending)
+                    execution.CompleteTransport(TransportOutcome.UpstreamFailed);
+                effects[operation.UserOrder] = TransportGap(
+                    plan.Locale, TransportOutcome.UpstreamFailed);
+                trace.Add(new JsonObject
+                {
+                    ["phase"] = "primary",
+                    ["operation_id"] = operation.OperationId,
+                    ["tool"] = operation.Tool,
+                    ["status"] = "upstream_failed",
+                });
+                await Report(execution);
+                terminalTransportStatus ??= 502;
+            }
         }
 
         if (clarification is not null)
@@ -1307,7 +1398,8 @@ public sealed class AskService
         var deterministicReply = displayedClarification?.Question
             ?? OperationAnswerPolicy.Render(plan.Locale, results, effects);
         var reply = deterministicReply;
-        if (plan.SynthesisRequested && displayedClarification is null)
+        if (plan.SynthesisRequested && displayedClarification is null
+            && terminalTransportStatus is null)
         {
             if (progress?.Synthesis is not null)
                 await NotifyProgress(() => progress.Synthesis("started", ct));
@@ -1360,7 +1452,14 @@ public sealed class AskService
             var effect = effects[result.UserOrder];
             return (JsonNode)OperationReply(result, effect);
         }).ToArray());
-        return (200, body);
+        if (terminalTransportStatus is { } failedStatus)
+            body["error"] = failedStatus switch
+            {
+                499 => "The assistant request was cancelled.",
+                504 => "The operation timed out. Try a narrower question.",
+                _ => "A legal operation failed upstream.",
+            };
+        return (terminalTransportStatus ?? 200, body);
     }
 
     private static JsonObject OperationReply(OperationResult result, UiEffect effect) => new()
@@ -1400,13 +1499,14 @@ public sealed class AskService
         JsonObject? Arguments,
         WorkResolutionGuard.GuardClarification? Clarification);
 
-    private PreparedOperation ResolveWorkOperation(
+    private async Task<PreparedOperation> ResolveWorkOperationAsync(
         OperationRun run,
         RequestedOperation operation,
         JsonObject plannedArguments,
         IReadOnlyList<string> userQueries,
         string locale,
-        JsonArray trace)
+        JsonArray trace,
+        CancellationToken cancellationToken)
     {
         var rawUserQuery = userQueries[^1];
         var guard = new WorkResolutionGuard();
@@ -1415,7 +1515,7 @@ public sealed class AskService
             ?? String(plannedArguments, operation.Tool == "provenance" ? "lex_id" : "work")
             ?? rawUserQuery;
         var article = String(plannedArguments, "article_number");
-        JsonNode Search(string query, string phase, Action<JsonNode> observe)
+        async Task<JsonNode> Search(string query, string phase, Action<JsonNode> observe)
         {
             var searchArguments = new JsonObject
             {
@@ -1426,7 +1526,7 @@ public sealed class AskService
             };
             Copy(plannedArguments, searchArguments,
                 "publisher", "jurisdiction", "source_class", "hierarchy", "domain", "language");
-            var result = core.CallTool("search", searchArguments);
+            var result = await _legalTool("search", searchArguments, cancellationToken);
             var resultStatus = LegalOperationPolicy.StatusForResult(result);
             run.ObserveSupportingCall(operation.OperationId, SupportingCallRole.WorkResolution,
                 "search", searchArguments, resultStatus, result);
@@ -1448,20 +1548,20 @@ public sealed class AskService
         foreach (var priorQuery in userQueries.SkipLast(1).Reverse().Take(MaxContextResolutionQueries))
         {
             var priorGuard = new WorkResolutionGuard();
-            Search(priorQuery, "prior_work_resolution", priorGuard.ObservePriorUserSearch);
+            await Search(priorQuery, "prior_work_resolution", priorGuard.ObservePriorUserSearch);
             if (priorGuard.ResolvedWorks.Count == 0) continue;
             priorWorks.UnionWith(priorGuard.ResolvedWorks);
             break;
         }
         guard.AuthorizePriorWorks(priorWorks);
         var carriesPriorSubject = priorWorks.Count > 0 && IsAnaphoricWorkReference(rawUserQuery);
-        var resolution = Search(rawUserQuery, "work_resolution",
+        var resolution = await Search(rawUserQuery, "work_resolution",
             result => guard.ObserveCurrentUserSearch(result, hasPriorContext: carriesPriorSubject));
         JsonNode? focused = null;
         var resolutionQuery = article is null ? workQuery : $"{workQuery} Article {article}";
         if (guard.CurrentResolvedWorks.Count != 1
             && !string.Equals(resolutionQuery, rawUserQuery, StringComparison.OrdinalIgnoreCase))
-            focused = Search(resolutionQuery, "focused_work_resolution",
+            focused = await Search(resolutionQuery, "focused_work_resolution",
                 result => guard.ObserveFocusedSearch(result, hasPriorContext: carriesPriorSubject));
         var plannedWork = String(plannedArguments,
             operation.Tool == "provenance" ? "lex_id" : "work");

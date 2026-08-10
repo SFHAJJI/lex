@@ -21,16 +21,19 @@ test("invalid signatures are distinct from unavailable verification", () => {
 test("the versioned stream ignores stale events and exposes typed operation results", async () => {
   const originalFetch = globalThis.fetch;
   const operations: string[] = [];
+  const serverRequestId = "0123456789abcdef0123456789abcdef";
   try {
     globalThis.fetch = async (_input, init) => {
       const headers = new Headers(init?.headers);
       assert.equal(headers.get("Idempotency-Key"), "request-a");
       return new Response([
         'event: step\ndata: {"version":"1","request_id":"stale","sequence":1,"payload":{"kind":"search","text":"stale"}}',
-        'event: operation_result\ndata: {"version":"1","request_id":"request-a","sequence":2,"payload":{"operation_id":"op-1","order":0,"legal_outcome":"succeeded","transport_outcome":"completed","effects":["coverage"],"ui":{"coverage":{"publishers":[]}}}}',
-        'event: operation_result\ndata: {"version":"1","request_id":"request-a","sequence":2,"payload":{"operation_id":"duplicate"}}',
-        'event: done\ndata: {"version":"1","request_id":"request-a","sequence":3,"payload":{"reply":"done"}}',
-      ].join("\n\n") + "\n\n", { headers: { "Content-Type": "text/event-stream" } });
+        `event: operation_result\ndata: {"version":"1","request_id":"${serverRequestId}","sequence":2,"payload":{"operation_id":"op-1","order":0,"legal_outcome":"succeeded","transport_outcome":"completed","effects":["coverage"],"ui":{"coverage":{"publishers":[]}}}}`,
+        `event: operation_result\ndata: {"version":"1","request_id":"${serverRequestId}","sequence":2,"payload":{"operation_id":"duplicate"}}`,
+        `event: done\ndata: {"version":"1","request_id":"${serverRequestId}","sequence":3,"payload":{"reply":"done"}}`,
+      ].join("\n\n") + "\n\n", { headers: {
+        "Content-Type": "text/event-stream", "X-Lex-Request-Id": serverRequestId,
+      } });
     };
 
     const reply = await askStreaming(

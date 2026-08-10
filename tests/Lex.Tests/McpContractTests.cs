@@ -3,6 +3,8 @@ using System.Text.Json.Nodes;
 using Lex.Ask;
 using Lex.Index;
 using Lex.Mcp;
+using ModelContextProtocol;
+using ModelContextProtocol.Protocol;
 using Xunit;
 
 namespace Lex.Tests;
@@ -122,7 +124,7 @@ public class McpContractTests : IDisposable
                 <= 250_000);
             Assert.Contains(returned.OfType<JsonObject>(), item =>
                 item["text_omitted"]?.GetValue<bool>() == true
-                && item["text_characters"]?.GetValue<int>() == 100_000);
+                && item["text_bytes"]?.GetValue<int>() == 100_000);
             Assert.True(result["text_truncated"]!.GetValue<bool>());
             Assert.True(result["truncated"]!.GetValue<bool>());
         }
@@ -130,6 +132,222 @@ public class McpContractTests : IDisposable
         {
             try { File.Delete(db); } catch { }
         }
+    }
+
+    [Theory]
+    [InlineData("title")]
+    [InlineData("heading")]
+    [InlineData("path")]
+    [InlineData("source_uri")]
+    [InlineData("citation")]
+    public void Oversized_publisher_metadata_is_rejected_before_mount(string field)
+    {
+        var db = Path.Combine(Path.GetTempPath(), $"lex-mcp-metadata-{Guid.NewGuid():N}.db");
+        try
+        {
+            var huge = new string('m', 1_000_000);
+            var document = new DocRow(
+                "metadata:work:2024-01-01", "metadata", "work", "urn:work", "REG", "en",
+                "2024-01-01", null, "publisher", "2026-08-01T00:00:00Z", false,
+                true, true, "record", "body",
+                field == "source_uri" ? huge : "https://example.test/work",
+                field == "title" ? huge : "Metadata work", "Metadata work", null,
+                "2024-01-01", null);
+            const string text = "bounded legal text";
+            var provision = new ProvisionRow(
+                $"{document.Key}|en|2024-01-01", 1, "art_1",
+                $"{document.Key}#art_1", "article", "Article 1",
+                field == "heading" ? huge : "Scope",
+                field == "path" ? huge : "Part I", null, document.Title, text,
+                Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(
+                    System.Text.Encoding.UTF8.GetBytes(text))),
+                field == "citation"
+                    ? new JsonArray(new JsonObject
+                    {
+                        ["href"] = "https://example.test/eli/etat/leg/loi/2024/01/01/a1/jo?" + huge,
+                        ["text"] = huge,
+                    }).ToJsonString()
+                    : null);
+            IndexBuilder.Build(db, new Dictionary<string, string>
+            {
+                ["collection"] = "metadata", ["tier"] = "A",
+                ["history_begins"] = "publisher", ["built_at"] = "2026-08-01T00:00:00Z",
+                ["corpus_commit"] = "test",
+            }, [document], [provision], [], [], StampSigner.CreateKeyPem());
+
+            var error = Assert.Throws<InvalidDataException>(() => LexIndexReader.Open(db));
+            Assert.Contains("metadata", error.Message, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            try { File.Delete(db); } catch { }
+        }
+    }
+
+    [Fact]
+    public void Full_response_bounds_rows_and_citations_before_serialization()
+    {
+        var db = Path.Combine(Path.GetTempPath(), $"lex-mcp-row-budget-{Guid.NewGuid():N}.db");
+        try
+        {
+            var document = new DocRow(
+                "bounded:work:2024-01-01", "bounded", "work", "urn:work", "REG", "en",
+                "2024-01-01", null, "publisher", "2026-08-01T00:00:00Z", false,
+                true, true, "record", "body", "https://example.test/work",
+                "Bounded work", "Bounded work", null, "2024-01-01", null);
+            const string citations =
+                "[{\"href\":\"https://example.test/eli/etat/leg/loi/2024/01/01/a1/jo\",\"text\":\"citation\"}]";
+            var sha = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(
+                System.Text.Encoding.UTF8.GetBytes("x")));
+            var provisions = Enumerable.Range(1, 2_001).Select(index => new ProvisionRow(
+                $"{document.Key}|en|2024-01-01", index, $"art_{index}",
+                $"{document.Key}#art_{index}", "article", index.ToString(), null,
+                null, null, document.Title, "x", sha, citations)).ToArray();
+            IndexBuilder.Build(db, new Dictionary<string, string>
+            {
+                ["collection"] = "bounded", ["tier"] = "A",
+                ["history_begins"] = "publisher", ["built_at"] = "2026-08-01T00:00:00Z",
+                ["corpus_commit"] = "test",
+            }, [document], provisions, [], [], StampSigner.CreateKeyPem());
+            using var reader = LexIndexReader.Open(db);
+            var core = new McpCore(new Dictionary<string, LexIndexReader> { ["bounded"] = reader });
+
+            var result = Assert.IsType<JsonObject>(core.CallTool("as_of", new JsonObject
+            {
+                ["work"] = "bounded:work", ["date"] = "2024-06-01", ["mode"] = "full",
+            }));
+            var returned = Assert.IsType<JsonArray>(result["provisions"]);
+            var nestedCitations = returned.OfType<JsonObject>()
+                .Sum(item => item["citations"]?.AsArray().Count ?? 0);
+
+            Assert.Equal(2_000, returned.Count);
+            Assert.Equal(2_001, result["total_provisions"]!.GetValue<int>());
+            Assert.True(result["truncated"]!.GetValue<bool>());
+            Assert.True(result["text_truncated"]!.GetValue<bool>());
+            Assert.Equal(100, nestedCitations);
+            Assert.Equal(100, result["citations_returned"]!.GetValue<int>());
+            Assert.True(result["citations_truncated"]!.GetValue<bool>());
+            Assert.Equal(3, reader.Provisions(LexIndexReader.RidOf(document), 3).Count);
+            Assert.Single(reader.CitationsOf(
+                LexIndexReader.RidOf(document), "art_1", 1));
+        }
+        finally
+        {
+            try { File.Delete(db); } catch { }
+        }
+    }
+
+    [Fact]
+    public void Mcp_bridge_distinguishes_bounded_tool_errors_from_sanitized_protocol_errors()
+    {
+        var known = new HashSet<string>(["search"], StringComparer.Ordinal);
+        var invalid = McpSdkBridge.Invoke("search", new JsonObject(), known,
+            (_, _) => throw new ArgumentOutOfRangeException("secret-field"));
+
+        Assert.True(invalid.IsError);
+        Assert.Equal(
+            "Invalid tool arguments. Use the advertised schema and documented bounds.",
+            Assert.IsType<TextContentBlock>(Assert.Single(invalid.Content)).Text);
+
+        var unknown = Assert.Throws<McpProtocolException>(() => McpSdkBridge.Invoke(
+            "attacker-tool", new JsonObject(), known, (_, _) => new JsonObject()));
+        Assert.Equal(McpErrorCode.InvalidParams, unknown.ErrorCode);
+        Assert.DoesNotContain("attacker-tool", unknown.ToString(), StringComparison.Ordinal);
+
+        const string canary = "C:\\internal\\secret-token";
+        var failure = Assert.Throws<McpProtocolException>(() => McpSdkBridge.Invoke(
+            "search", new JsonObject(), known,
+            (_, _) => throw new InvalidOperationException(canary)));
+        Assert.Equal(McpErrorCode.InternalError, failure.ErrorCode);
+        Assert.DoesNotContain(canary, failure.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Mcp_bridge_propagates_transport_cancellation_to_the_legal_executor()
+    {
+        var known = new HashSet<string>(["search"], StringComparer.Ordinal);
+        using var cancellation = new CancellationTokenSource();
+        var observed = CancellationToken.None;
+        static async ValueTask<JsonNode> Block(
+            string _, JsonObject __, CancellationToken cancellationToken)
+        {
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            return new JsonObject();
+        }
+
+        async ValueTask<JsonNode> Observe(
+            string tool, JsonObject arguments, CancellationToken cancellationToken)
+        {
+            observed = cancellationToken;
+            return await Block(tool, arguments, cancellationToken);
+        }
+
+        var invocation = McpSdkBridge.InvokeAsync(
+            "search", new JsonObject(), known, Observe, cancellation.Token).AsTask();
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => invocation);
+        Assert.True(observed.IsCancellationRequested);
+    }
+
+    [Fact]
+    public async Task Invalid_mcp_input_fails_before_cancellation_or_reader_scheduling()
+    {
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        var error = await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
+            _core.CallToolAsync("search", new JsonObject
+            {
+                ["query"] = "privacy",
+                ["limit"] = 51,
+            }, cancellation.Token).AsTask());
+
+        Assert.Equal("limit", error.ParamName);
+    }
+
+    [Fact]
+    public async Task Isolated_sessions_are_bounded_to_the_selected_public_publisher_set()
+    {
+        var readers = Enumerable.Range(0, 100).ToDictionary(
+            index => $"publisher-{index:D3}", _ => _reader, StringComparer.Ordinal);
+        var opened = new List<string>();
+        var core = new McpCore(readers, publisher => opened.Add(publisher));
+
+        await core.CallToolAsync("coverage", new JsonObject
+        {
+            ["publisher"] = "publisher-042",
+        }, CancellationToken.None);
+        Assert.Equal(["publisher-042"], opened);
+
+        opened.Clear();
+        var coverage = await core.CallToolAsync(
+            "coverage", new JsonObject(), CancellationToken.None);
+        Assert.Equal(8, opened.Count);
+        Assert.Equal(opened.Order(StringComparer.Ordinal), opened);
+        Assert.All(coverage.AsArray().OfType<JsonObject>(), item =>
+        {
+            Assert.Equal(100, item["publisher_result_set"]?["total"]?.GetValue<int>());
+            Assert.Equal(8, item["publisher_result_set"]?["returned"]?.GetValue<int>());
+            Assert.True(item["publisher_result_set"]?["truncated"]?.GetValue<bool>());
+        });
+
+        opened.Clear();
+        var missingAuthority = await Assert.ThrowsAsync<ArgumentException>(() =>
+            core.CallToolAsync("timeline", new JsonObject
+            {
+                ["work"] = "w1",
+            }, CancellationToken.None).AsTask());
+        Assert.Equal("publisher", missingAuthority.ParamName);
+        Assert.Empty(opened);
+
+        var timeline = await core.CallToolAsync("timeline", new JsonObject
+        {
+            ["work"] = "w1",
+            ["publisher"] = "publisher-042",
+        }, CancellationToken.None);
+        Assert.Equal(["publisher-042"], opened);
+        Assert.Equal("ok", timeline["envelope"]?["status"]?.GetValue<string>());
     }
 
     public void Dispose()

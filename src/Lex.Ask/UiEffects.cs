@@ -140,7 +140,8 @@ public sealed record ProvisionView(Subject Subject, string ValidFrom, string? Va
     IReadOnlyList<EvidenceContext>? Evidence = null,
     int? TotalProvisions = null,
     bool Truncated = false,
-    bool TextTruncated = false);
+    bool TextTruncated = false,
+    bool OutlineOnly = false);
 
 public sealed record ProvisionItem(string Anchor, string? Num, string? Heading, string Text, string? Sha,
     bool TextOmitted = false, string? TextOmittedReason = null, string? Permalink = null);

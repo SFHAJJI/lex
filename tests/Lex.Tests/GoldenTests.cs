@@ -565,8 +565,6 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
             // and immutable cache policy from a clean checkout.
             File.WriteAllText(Path.Combine(appDir, "workspace.js"), "/* golden fixture */\n");
             BuildFixtureIndex(Path.Combine(_dir, "index-t-pub.db"));
-            Environment.SetEnvironmentVariable("LEX_INDEX_DIR", _dir);
-            Environment.SetEnvironmentVariable("LEX_PUBLIC_BASE_URL", "https://golden.test");
             Client = CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
             Client.DefaultRequestHeaders.Accept.ParseAdd("application/json");
             Client.DefaultRequestHeaders.Accept.ParseAdd("text/event-stream");
@@ -574,6 +572,8 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
 
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
+            builder.UseSetting("LEX_INDEX_DIR", _dir);
+            builder.UseSetting("LEX_PUBLIC_BASE_URL", "https://golden.test");
             builder.UseWebRoot(Path.Combine(_dir, "wwwroot"));
             builder.ConfigureServices(services =>
             {

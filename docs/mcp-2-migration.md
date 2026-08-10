@@ -1,9 +1,8 @@
 # MCP 2.0 migration
 
-Lex MCP 2.0 makes the legal result contract explicit. Normal request shapes remain compatible.
-Successful envelopes now include a bounded `artifact` object, and `changes_in_period` includes
-the exact selected population. HTTP and stdio advertise the same version from
-`McpSdkBridge.ServerVersion`.
+Lex MCP 2.0 makes the legal result contract explicit and closes every tool input. Requests that
+sent unknown fields, strings or lists beyond the limits below, non-integer pagination, or invalid
+enum values in 1.x are rejected in 2.0. HTTP, stdio and `server.json` all advertise `2.0.0`.
 
 ## What changed
 
@@ -22,6 +21,52 @@ the exact selected population. HTTP and stdio advertise the same version from
 - The application freezes a complete, server-normalized operation plan before state calls. This
   internal contract does not add fields to MCP requests.
 
+## Input limits
+
+Every request body is at most 65,536 bytes. Every tool rejects unknown fields and non-scalar
+arguments. Dates are exact `YYYY-MM-DD` strings. General strings are 1 to 1,000 characters;
+publisher, jurisdiction and enum strings are at most 64; language is at most 16; an anchor is at
+most 512. Comma-separated `anchors` and `works` contain at most 50 values; each anchor remains
+subject to the 512-character ceiling.
+
+Work-specific calls require a publisher-qualified `work`/`lex_id` such as
+`eu-eurlex:32013r0575`, or an explicit `publisher` alongside a verbatim publisher identifier.
+This prevents ambiguous cross-publisher lookup and keeps request-time database work bounded.
+
+| Tool | Pagination and closed values |
+|---|---|
+| `as_of` | `mode`: `full`, `outline`, `select`; `select` requires anchors; anchors are valid only for `outline` or `select`. |
+| `timeline` | limit 1..200, default 100; offset 0..100,000. |
+| `in_force_on` | limit 1..100, default 50; offset 0..100,000. |
+| `diff` | optional anchor is at most 512 characters. |
+| `search` | limit 1..50, default 10; retrieval mode `keyword` or `hybrid`; time scope `all_versions` or `as_of`; fuzzy `auto` or `off`; `as_of` is required for the matching time scope. |
+| `article_history` | no client pagination; output is bounded as described below. |
+| `provenance` | no client pagination; output is bounded as described below. |
+| `coverage` | optional publisher only. |
+| `cited_by` | limit 1..100, default 50. |
+| `changes_in_period` | limit 1..100, default 20; offset 0..100,000; order `by_date` or `by_churn`. |
+
+Limits on collection-wide tools are response-wide across publishers, not repeated per mounted
+index. At most eight publisher result envelopes are returned.
+
+## Bounded output and overloads
+
+- `as_of full` returns at most 2,000 provision rows, 250,000 UTF-8 legal-text bytes and 100
+  citation rows across the response. `text_omitted`, `text_bytes`, `text_truncated`,
+  `citations_truncated`, totals and permalinks make every omission explicit.
+- `article_history` returns at most 500 states and 500 anchor events. `provenance` returns at most
+  1,000 events and 1,000 observations. Coverage returns at most 100 document types, 100 languages
+  and 100 build issues across publishers. `truncated` and the corresponding total fields identify
+  a partial response.
+- The public endpoint admits eight MCP executions, queues sixteen for at most two seconds, and
+  admits two hybrid searches. Rolling limits are 120 calls per client and 600 globally per minute.
+  Saturation returns HTTP 503 with JSON-RPC code `-32001` and `data.status=busy`; rolling-limit
+  exhaustion returns HTTP 429 with code `-32002` and `data.status=rate_limited`. Neither condition
+  is a tool result or a legal no-result status. Retry after load or the rolling window clears.
+- Invalid arguments are bounded `isError` tool results. Unknown tools are JSON-RPC invalid-params
+  errors; unexpected server failures are sanitized JSON-RPC internal errors. Exception messages
+  and internal paths are never returned.
+
 ## Status mapping
 
 | MCP status | Meaning |
@@ -35,4 +80,5 @@ the exact selected population. HTTP and stdio advertise the same version from
 | `no_corpus_mounted` | The server has no verified legal index mounted. |
 
 Unknown status values must fail closed. They must not be treated as empty success or transport
-errors. Existing clients may ignore the new additive envelope and population fields.
+errors. Clients must inspect truncation fields before claiming that returned text or rows are
+complete.

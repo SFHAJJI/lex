@@ -35,7 +35,10 @@ public sealed record CoverageInfo(
     IReadOnlyList<CoverageLanguage> Languages,
     int MultilingualWorks,
     int? ExpectedWorks = null,
-    IReadOnlyList<CoverageBuildIssue>? BuildIssues = null);
+    IReadOnlyList<CoverageBuildIssue>? BuildIssues = null,
+    int TotalKinds = 0,
+    int TotalProfiles = 0,
+    int TotalLanguages = 0);
 
 /// Values that the mounted index can actually accept as public search filters. Keeping this
 /// inventory beside the data means adding a reviewed domain or jurisdiction does not require a
@@ -53,6 +56,12 @@ public sealed record SearchFacetInfo(
 /// </summary>
 public sealed class LexIndexReader : IDisposable
 {
+    private const int MaximumPublicTitleLength = 8_192;
+    private const int MaximumPublicAnchorLength = 512;
+    private const int MaximumStampRows = 128;
+    private const int MaximumStampKeyLength = 128;
+    private const int MaximumStampValueLength = 4_096;
+    private const int MaximumBuildIssuesJsonLength = 2_750_000;
     private readonly SqliteConnection _conn;
     private readonly string _schema;
     private readonly ITextEncoder? _encoder;
@@ -62,15 +71,19 @@ public sealed class LexIndexReader : IDisposable
     private readonly long _provisionVectorCount;
     private readonly IReadOnlyList<CoverageBuildIssue> _buildIssues;
     private readonly int? _expectedWorks;
+    private readonly bool _ownsVectors;
     public IReadOnlyDictionary<string, string> Stamp { get; }
     public string Collection => Stamp.GetValueOrDefault("collection", "?");
     public bool SignatureValid { get; }
     public bool HybridReady => _encoder is not null && _vectors is not null;
 
+    public void Interrupt() => SQLitePCL.raw.sqlite3_interrupt(_conn.Handle);
+
     private LexIndexReader(SqliteConnection conn, Dictionary<string, string> stamp, string schema,
                            ITextEncoder? encoder, SemanticVectorReader? vectors, bool hasWorkSearch,
                            int workCatalogVersion, long provisionVectorCount,
-                           IReadOnlyList<CoverageBuildIssue> buildIssues, int? expectedWorks)
+                           IReadOnlyList<CoverageBuildIssue> buildIssues, int? expectedWorks,
+                           bool ownsVectors)
     {
         _conn = conn;
         Stamp = stamp;
@@ -82,6 +95,7 @@ public sealed class LexIndexReader : IDisposable
         _provisionVectorCount = provisionVectorCount;
         _buildIssues = buildIssues;
         _expectedWorks = expectedWorks;
+        _ownsVectors = ownsVectors;
         SignatureValid = stamp.ContainsKey("signature") && StampSigner.Verify(stamp);
     }
 
@@ -91,6 +105,7 @@ public sealed class LexIndexReader : IDisposable
     {
         var conn = new SqliteConnection($"Data Source={dbPath};Mode=ReadOnly");
         conn.Open();
+        ValidateStampBounds(conn, dbPath);
         var stamp = new Dictionary<string, string>(StringComparer.Ordinal);
         using (var cmd = conn.CreateCommand())
         {
@@ -101,6 +116,9 @@ public sealed class LexIndexReader : IDisposable
         var buildIssuesJson = stamp.GetValueOrDefault("build_issues_json");
         var buildIssuesDigest = stamp.GetValueOrDefault("build_issues_digest");
         var expectedWorksValue = stamp.GetValueOrDefault("scope_expected_works");
+        if (stamp.GetValueOrDefault("known_exclusions") is { Length: > 2000 })
+            throw new InvalidDataException(
+                $"Index {dbPath} has known-exclusions metadata longer than 2000 characters.");
         if (expectedWorksValue is not null
             && (buildIssuesJson is null || buildIssuesDigest is null))
             throw new InvalidDataException(
@@ -277,6 +295,8 @@ public sealed class LexIndexReader : IDisposable
                 throw new InvalidDataException($"Index {dbPath} has an invalid work vector layout claim.");
         }
 
+        ValidateBoundedPublicMetadata(conn, dbPath, schema, hasWorkSearch);
+
         SemanticVectorReader? vectors = null;
         long provisionVectorCount = 0;
         if (encoder is not null || vectorPath is not null)
@@ -359,7 +379,57 @@ public sealed class LexIndexReader : IDisposable
         }
         return new LexIndexReader(
             conn, stamp, schema!, encoder, vectors, hasWorkSearch, workCatalogVersion,
-            provisionVectorCount, buildIssues, expectedWorks);
+            provisionVectorCount, buildIssues, expectedWorks, ownsVectors: true);
+    }
+
+    /// <summary>
+    /// Creates a lightweight read-only session over the already verified immutable artifact.
+    /// Cancellable MCP work owns this SQLite connection, so interrupting it cannot affect the
+    /// singleton reader used by catalogue and document requests. Encoder and vector bytes remain
+    /// shared and are serialized by the caller's per-publisher execution gate.
+    /// </summary>
+    internal LexIndexReader CreateIsolatedSession()
+    {
+        var connection = new SqliteConnection(_conn.ConnectionString);
+        connection.Open();
+        return new LexIndexReader(
+            connection,
+            new Dictionary<string, string>(Stamp, StringComparer.Ordinal),
+            _schema,
+            _encoder,
+            _vectors,
+            _hasWorkSearch,
+            _workCatalogVersion,
+            _provisionVectorCount,
+            _buildIssues,
+            _expectedWorks,
+            ownsVectors: false);
+    }
+
+    private static void ValidateStampBounds(SqliteConnection connection, string dbPath)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = $"""
+            SELECT CASE
+              WHEN COUNT(*) > {MaximumStampRows} THEN 1
+              WHEN COUNT(*) <> COUNT(DISTINCT k) THEN 1
+              WHEN EXISTS (
+                SELECT 1 FROM stamp
+                WHERE typeof(k) <> 'text' OR typeof(v) <> 'text'
+                   OR length(k) = 0 OR length(k) > {MaximumStampKeyLength}
+                   OR length(v) > CASE k
+                     WHEN 'build_issues_json' THEN {MaximumBuildIssuesJsonLength}
+                     WHEN 'known_exclusions' THEN 2000
+                     ELSE {MaximumStampValueLength}
+                   END
+              ) THEN 1
+              ELSE 0
+            END
+            FROM stamp
+            """;
+        if (Convert.ToInt32(command.ExecuteScalar()) != 0)
+            throw new InvalidDataException(
+                $"Index {dbPath} has duplicate, malformed, or oversized stamp metadata.");
     }
 
     private static IReadOnlyList<CoverageBuildIssue> ValidateBuildIssues(
@@ -510,6 +580,84 @@ public sealed class LexIndexReader : IDisposable
         return ReadAll(cmd);
     }
 
+    private static void ValidateBoundedPublicMetadata(
+        SqliteConnection connection,
+        string dbPath,
+        string schema,
+        bool hasWorkSearch)
+    {
+        void Reject(string table, string predicate, string label)
+        {
+            using var existence = connection.CreateCommand();
+            existence.CommandText =
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name=$table";
+            existence.Parameters.AddWithValue("$table", table);
+            if (existence.ExecuteScalar() is null) return;
+            using var command = connection.CreateCommand();
+            command.CommandText = $"SELECT 1 FROM {table} WHERE {predicate} LIMIT 1";
+            if (command.ExecuteScalar() is not null)
+                throw new InvalidDataException(
+                    $"Index {dbPath} contains {label} longer than the public metadata contract permits.");
+        }
+
+        Reject("docs", "length(key)>512 OR length(collection)>128 OR length(group_key)>512 "
+            + "OR length(group_identifier)>1000 OR length(kind)>128 OR length(language)>16 "
+            + "OR length(valid_time_source)>128 OR length(source_uri)>4096 "
+            + $"OR length(title)>{MaximumPublicTitleLength} "
+            + $"OR length(title_short)>{MaximumPublicTitleLength} OR length(status_note)>4096 "
+            + "OR length(profile)>128", "document metadata");
+        if (schema == IndexBuilder.SchemaVersion)
+            Reject("docs", "length(hierarchy)>512 OR length(domains)>4096 "
+                + "OR length(act_form)>512 OR length(binding_status)>512 "
+                + "OR length(consolidation_status)>512", "document legal metadata");
+        Reject("provisions", $"length(anchor)>{MaximumPublicAnchorLength} OR length(provision_id)>1000 "
+            + "OR length(ptype)>128 OR length(num)>512 OR length(heading)>4096 "
+            + $"OR length(path)>4096 OR length(work_title)>{MaximumPublicTitleLength}",
+            "provision metadata");
+        Reject("citations", "length(cited_slug)>512 OR length(href)>4096 OR length(label)>4096",
+            "citation metadata");
+        Reject("events", "length(event)>128 OR length(scope)>128 OR length(detail)>4096",
+            "provenance metadata");
+        if (hasWorkSearch)
+        {
+            Reject("work_records", "length(group_key)>512 OR length(group_identifier)>1000 "
+                + $"OR length(title)>{MaximumPublicTitleLength} "
+                + $"OR length(title_short)>{MaximumPublicTitleLength}", "work metadata");
+            Reject("work_names", $"length(value)>{MaximumPublicTitleLength} "
+                + $"OR length(normalized)>{MaximumPublicTitleLength}",
+                "work-name metadata");
+            Reject("work_discovery", "length(value)>4096 OR length(normalized)>4096",
+                "work-discovery metadata");
+            using var extended = connection.CreateCommand();
+            extended.CommandText =
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='work_publisher_metadata'";
+            if (extended.ExecuteScalar() is not null)
+                Reject("work_publisher_metadata", "length(identifier)>1000 OR length(value)>4096 "
+                    + "OR length(normalized)>4096 OR length(source_uri)>4096",
+                    "publisher work metadata");
+        }
+    }
+
+    /// <summary>A bounded timeline page plus its exact row count.</summary>
+    public (List<DocRow> Rows, int Total) Timeline(string work, int limit, int offset)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(limit);
+        ArgumentOutOfRangeException.ThrowIfNegative(offset);
+        var normalized = NormalizeWork(work);
+        using var count = Cmd(
+            "SELECT COUNT(*) FROM docs WHERE group_key=$w OR group_identifier=$w", []);
+        count.Parameters.AddWithValue("$w", normalized);
+        var total = Convert.ToInt32(count.ExecuteScalar());
+        using var page = Cmd($"""
+            SELECT {SelectDocCols()} FROM docs WHERE group_key=$w OR group_identifier=$w
+            ORDER BY valid_from, language LIMIT $lim OFFSET $off
+            """, []);
+        page.Parameters.AddWithValue("$w", normalized);
+        page.Parameters.AddWithValue("$lim", limit);
+        page.Parameters.AddWithValue("$off", offset);
+        return (ReadAll(page), total);
+    }
+
     /// <summary>
     /// Every distinct version address this index can serve, for the sitemap.
     ///
@@ -583,7 +731,7 @@ public sealed class LexIndexReader : IDisposable
         using var cmd = Cmd($"""
             SELECT {SelectDocCols("d")},
                    p.rid, p.seq, p.anchor, p.provision_id, p.ptype, p.num, p.heading, p.path,
-                   p.article_valid_from, p.work_title, p.text_md, p.text_sha,
+                   p.article_valid_from, p.work_title, p.text_sha,
                    snippet(fts, 3, '«', '»', ' … ', 14) AS snip
             FROM fts
             JOIN provisions p ON p.rowid = fts.rowid
@@ -605,8 +753,8 @@ public sealed class LexIndexReader : IDisposable
                 Heading: r.IsDBNull(33) ? null : r.GetString(33), Path: r.IsDBNull(34) ? null : r.GetString(34),
                 ArticleValidFrom: r.IsDBNull(35) ? null : r.GetString(35),
                 WorkTitle: r.IsDBNull(36) ? null : r.GetString(36),
-                TextMd: r.GetString(37), TextSha: r.GetString(38));
-            result.Add((ReadDoc(r), prov, r.IsDBNull(39) ? "" : r.GetString(39)));
+                TextMd: "", TextSha: r.GetString(37), TextLoaded: false);
+            result.Add((ReadDoc(r), prov, r.IsDBNull(38) ? "" : r.GetString(38)));
         }
         return result;
     }
@@ -616,12 +764,14 @@ public sealed class LexIndexReader : IDisposable
         var (where, ps) = WithFilters("1=1", filters, excludeAsOf: false, alias: "d");
         using var cmd = Cmd($"""
             WITH matched AS (
-              SELECT rowid AS state_id, bm25(fts, 10.0, 4.0, 6.0, 1.0) AS score
+              SELECT rowid AS state_id,
+                     bm25(fts, 10.0, 4.0, 6.0, 1.0) AS score,
+                     snippet(fts, 3, '«', '»', ' ... ', 14) AS snip
               FROM fts WHERE fts MATCH $q
             ), eligible AS (
               SELECT m.score, p.rid, p.seq, p.anchor, p.provision_id, p.ptype, p.num,
                      p.heading, p.path, p.article_valid_from, p.work_title, p.text_sha,
-                     d.key AS doc_key,
+                     d.key AS doc_key, m.snip,
                      ROW_NUMBER() OVER (PARTITION BY m.state_id ORDER BY d.valid_from DESC, p.rid) AS occurrence_rank
               FROM matched m
               JOIN provisions p ON p.state_id = m.state_id
@@ -630,11 +780,9 @@ public sealed class LexIndexReader : IDisposable
             )
             SELECT {SelectDocCols("d")},
                    e.rid, e.seq, e.anchor, e.provision_id, e.ptype, e.num, e.heading, e.path,
-                   e.article_valid_from, e.work_title, e.text_sha,
-                   b.encoding, b.original_size, b.payload
+                   e.article_valid_from, e.work_title, e.text_sha, e.snip
             FROM eligible e
             JOIN docs d ON d.key = e.doc_key AND d.rid = e.rid
-            JOIN text_blobs b ON b.text_sha = e.text_sha
             WHERE e.occurrence_rank = 1
             ORDER BY e.score, d.valid_from DESC
             LIMIT $lim
@@ -645,13 +793,12 @@ public sealed class LexIndexReader : IDisposable
         using var r = cmd.ExecuteReader();
         while (r.Read())
         {
-            var text = DecodeAndVerify(r.GetString(38), r.GetInt32(39), (byte[])r.GetValue(40), r.GetString(37));
             var prov = new ProvisionRow(
                 r.GetString(27), r.GetInt32(28), r.GetString(29), r.GetString(30), r.GetString(31),
                 r.IsDBNull(32) ? null : r.GetString(32), r.IsDBNull(33) ? null : r.GetString(33),
                 r.IsDBNull(34) ? null : r.GetString(34), r.IsDBNull(35) ? null : r.GetString(35),
-                r.IsDBNull(36) ? null : r.GetString(36), text, r.GetString(37));
-            result.Add((ReadDoc(r), prov, MakeSnippet(text, query)));
+                r.IsDBNull(36) ? null : r.GetString(36), "", r.GetString(37), TextLoaded: false);
+            result.Add((ReadDoc(r), prov, r.IsDBNull(38) ? "" : r.GetString(38)));
         }
         return result;
     }
@@ -1097,11 +1244,9 @@ public sealed class LexIndexReader : IDisposable
             )
             SELECT {SelectDocCols("d")},
                    e.rid,e.seq,e.anchor,e.provision_id,e.ptype,e.num,e.heading,e.path,
-                   e.article_valid_from,e.work_title,e.text_sha,
-                   b.encoding,b.original_size,b.payload
+                   e.article_valid_from,e.work_title,e.text_sha
             FROM eligible e
             JOIN docs d ON d.key=e.doc_key AND d.rid=e.rid
-            JOIN text_blobs b ON b.text_sha=e.text_sha
             WHERE e.occurrence_rank=1
             ORDER BY e.score,d.valid_from DESC,e.seq,e.rid
             LIMIT $limit
@@ -1114,16 +1259,15 @@ public sealed class LexIndexReader : IDisposable
         using var rows = command.ExecuteReader();
         while (rows.Read())
         {
-            var text = DecodeAndVerify(
-                rows.GetString(38), rows.GetInt32(39), (byte[])rows.GetValue(40), rows.GetString(37));
             var provision = new ProvisionRow(
                 rows.GetString(27), rows.GetInt32(28), rows.GetString(29), rows.GetString(30),
                 rows.GetString(31), rows.IsDBNull(32) ? null : rows.GetString(32),
                 rows.IsDBNull(33) ? null : rows.GetString(33),
                 rows.IsDBNull(34) ? null : rows.GetString(34),
                 rows.IsDBNull(35) ? null : rows.GetString(35),
-                rows.IsDBNull(36) ? null : rows.GetString(36), text, rows.GetString(37));
-            result.Add((ReadDoc(rows), provision, MakeSnippet(text, articleNumber)));
+                rows.IsDBNull(36) ? null : rows.GetString(36), "", rows.GetString(37), TextLoaded: false);
+            result.Add((ReadDoc(rows), provision,
+                provision.Heading ?? provision.Num ?? provision.Anchor));
         }
         return result;
     }
@@ -1307,9 +1451,10 @@ public sealed class LexIndexReader : IDisposable
         foreach (var candidate in reranked)
         {
             var doc = DocByRid(candidate.Rid);
-            var provision = Provision(candidate.Rid, candidate.Anchor);
+            var provision = ProvisionOutline(candidate.Rid, candidate.Anchor);
             if (doc is null || provision is null) continue;
-            hits.Add(new RetrievalHit(doc, provision, MakeSnippet(provision.TextMd, query),
+            hits.Add(new RetrievalHit(doc, provision,
+                provision.Heading ?? provision.Num ?? provision.WorkTitle ?? provision.Anchor,
                 candidate.Dot / (127d * 127d), ["semantic"]));
         }
         return hits;
@@ -1583,10 +1728,14 @@ public sealed class LexIndexReader : IDisposable
             System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(sb.ToString())));
     }
 
-    public List<EventRow> Events(string key)
+    public List<EventRow> Events(string key) => Events(key, int.MaxValue);
+
+    public List<EventRow> Events(string key, int limit)
     {
-        using var cmd = Cmd("SELECT key, scope, event, observed_from, detail FROM events WHERE key=$k ORDER BY observed_from", []);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(limit);
+        using var cmd = Cmd("SELECT key, scope, event, observed_from, detail FROM events WHERE key=$k ORDER BY observed_from LIMIT $lim", []);
         cmd.Parameters.AddWithValue("$k", key);
+        cmd.Parameters.AddWithValue("$lim", limit);
         var list = new List<EventRow>();
         using var r = cmd.ExecuteReader();
         while (r.Read()) list.Add(new EventRow(r.GetString(0), r.GetString(1), r.GetString(2), r.GetString(3), r.IsDBNull(4) ? null : r.GetString(4)));
@@ -1594,14 +1743,19 @@ public sealed class LexIndexReader : IDisposable
     }
 
     public List<ObservationRow> Observations(string key, string? language)
+        => Observations(key, language, int.MaxValue);
+
+    public List<ObservationRow> Observations(string key, string? language, int limit)
     {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(limit);
         using var cmd = Cmd("""
             SELECT key, language, expr_valid_from, sha256, source_uri, observed_from, observed_to
             FROM obs_history WHERE key=$k AND ($l IS NULL OR language=$l)
-            ORDER BY language, expr_valid_from, observed_from
+            ORDER BY language, expr_valid_from, observed_from LIMIT $lim
             """, []);
         cmd.Parameters.AddWithValue("$k", key);
         cmd.Parameters.AddWithValue("$l", (object?)language ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$lim", limit);
         var list = new List<ObservationRow>();
         using var r = cmd.ExecuteReader();
         while (r.Read()) list.Add(new ObservationRow(r.GetString(0), r.GetString(1), r.GetString(2),
@@ -1735,11 +1889,16 @@ public sealed class LexIndexReader : IDisposable
     }
 
     /// <summary>Cross-references a provision makes, in document order.</summary>
-    public List<(string Slug, string Href, string? Label)> CitationsOf(string rid, string anchor)
+    public List<(string Slug, string Href, string? Label)> CitationsOf(
+        string rid,
+        string anchor,
+        int limit)
     {
-        using var cmd = Cmd("SELECT cited_slug, href, label FROM citations WHERE rid=$r AND anchor=$a", []);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(limit);
+        using var cmd = Cmd("SELECT cited_slug, href, label FROM citations WHERE rid=$r AND anchor=$a ORDER BY rowid LIMIT $lim", []);
         cmd.Parameters.AddWithValue("$r", rid);
         cmd.Parameters.AddWithValue("$a", anchor);
+        cmd.Parameters.AddWithValue("$lim", limit);
         var list = new List<(string, string, string?)>();
         using var r = cmd.ExecuteReader();
         while (r.Read()) list.Add((r.GetString(0), r.GetString(1), r.IsDBNull(2) ? null : r.GetString(2)));
@@ -1774,17 +1933,38 @@ public sealed class LexIndexReader : IDisposable
         return list;
     }
 
-    public CoverageInfo Coverage()
+    public CoverageInfo Coverage(int maximumFacetRows = int.MaxValue)
     {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumFacetRows);
+        int CountGroups(string column)
+        {
+            using var command = Cmd(
+                $"SELECT COUNT(*) FROM (SELECT {column} FROM docs WHERE withdrawn=0 GROUP BY {column})",
+                []);
+            return Convert.ToInt32(command.ExecuteScalar());
+        }
+        var totalKinds = CountGroups("kind");
+        int CountProfiles()
+        {
+            using var command = Cmd(
+                "SELECT COUNT(*) FROM (SELECT profile FROM docs WHERE withdrawn=0 AND profile IS NOT NULL GROUP BY profile)",
+                []);
+            return Convert.ToInt32(command.ExecuteScalar());
+        }
+        var totalProfiles = CountProfiles();
+        var totalLanguages = CountGroups("language");
         var kinds = new List<CoverageKind>();
         using (var cmd = Cmd("""
             SELECT kind, COUNT(*), SUM(CASE WHEN text_public=1 THEN 1 ELSE 0 END)
-            FROM docs WHERE withdrawn=0 GROUP BY kind ORDER BY COUNT(*) DESC
+            FROM docs WHERE withdrawn=0 GROUP BY kind ORDER BY COUNT(*) DESC LIMIT $lim
             """, []))
-        using (var r = cmd.ExecuteReader())
+        {
+            cmd.Parameters.AddWithValue("$lim", maximumFacetRows);
+            using var r = cmd.ExecuteReader();
             while (r.Read())
                 kinds.Add(new CoverageKind(r.IsDBNull(0) ? null : r.GetString(0),
-                                           r.GetInt32(1), r.IsDBNull(2) ? 0 : r.GetInt32(2)));
+                    r.GetInt32(1), r.IsDBNull(2) ? 0 : r.GetInt32(2)));
+        }
 
         // lex-index/2: text_public is set only when a derived (provision-bearing) version exists
         using var agg = Cmd("""
@@ -1797,10 +1977,13 @@ public sealed class LexIndexReader : IDisposable
         var profiles = new List<CoverageProfile>();
         using (var pc = Cmd("""
             SELECT profile, COUNT(*) FROM docs WHERE profile IS NOT NULL AND withdrawn=0
-            GROUP BY profile ORDER BY COUNT(*) DESC
+            GROUP BY profile ORDER BY COUNT(*) DESC LIMIT $lim
             """, []))
-        using (var pr = pc.ExecuteReader())
+        {
+            pc.Parameters.AddWithValue("$lim", maximumFacetRows);
+            using var pr = pc.ExecuteReader();
             while (pr.Read()) profiles.Add(new CoverageProfile(pr.GetString(0), pr.GetInt32(1)));
+        }
 
         // Which languages the corpus is actually in. This decides a real design question and was
         // being answered by guesswork: a site-wide language picker only makes sense if the same
@@ -1810,10 +1993,13 @@ public sealed class LexIndexReader : IDisposable
         var languages = new List<CoverageLanguage>();
         using (var lc = Cmd("""
             SELECT language, COUNT(DISTINCT group_key), COUNT(*) FROM docs WHERE withdrawn=0
-            GROUP BY language ORDER BY COUNT(*) DESC
+            GROUP BY language ORDER BY COUNT(*) DESC LIMIT $lim
             """, []))
-        using (var lr = lc.ExecuteReader())
+        {
+            lc.Parameters.AddWithValue("$lim", maximumFacetRows);
+            using var lr = lc.ExecuteReader();
             while (lr.Read()) languages.Add(new CoverageLanguage(lr.GetString(0), lr.GetInt32(1), lr.GetInt32(2)));
+        }
 
         int multilingual;
         using (var mc = Cmd("""
@@ -1826,7 +2012,7 @@ public sealed class LexIndexReader : IDisposable
         return new CoverageInfo(Collection, ar.GetInt32(0), ar.GetInt32(1),
             ar.IsDBNull(2) ? null : ar.GetString(2), ar.IsDBNull(3) ? null : ar.GetString(3), kinds, Stamp,
             ar.IsDBNull(4) ? 0 : ar.GetInt32(4), profiles, languages, multilingual,
-            _expectedWorks, _buildIssues);
+            _expectedWorks, _buildIssues, totalKinds, totalProfiles, totalLanguages);
     }
 
     private static string NormalizeWork(string work)
@@ -1944,15 +2130,151 @@ public sealed class LexIndexReader : IDisposable
     public static string RidOf(DocRow d) => $"{d.Key}|{d.Language}|{d.ValidFrom}";
 
     /// <summary>All provisions of one document version, in document order.</summary>
-    public List<ProvisionRow> Provisions(string rid)
+    public List<ProvisionRow> Provisions(string rid) => ProvisionsCore(rid, null);
+
+    /// <summary>At most <paramref name="limit"/> provisions, in document order.</summary>
+    public List<ProvisionRow> Provisions(string rid, int limit)
     {
-        if (IsV3) return ProvisionsV3(rid);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(limit);
+        return ProvisionsCore(rid, limit);
+    }
+
+    public int ProvisionCount(string rid)
+    {
+        using var cmd = Cmd("SELECT COUNT(*) FROM provisions WHERE rid=$rid", []);
+        cmd.Parameters.AddWithValue("$rid", rid);
+        return Convert.ToInt32(cmd.ExecuteScalar());
+    }
+
+    public List<ProvisionRow> ProvisionOutlines(string rid, int limit)
+        => ProvisionMetadata(rid, limit, null);
+
+    public ProvisionRow? ProvisionOutline(string rid, string anchor)
+        => ProvisionMetadata(rid, 1, [anchor]).FirstOrDefault();
+
+    public List<ProvisionRow> ProvisionOutlinesByAnchors(
+        string rid,
+        IReadOnlyCollection<string> anchors)
+    {
+        if (anchors.Count == 0) return [];
+        if (anchors.Count > 50)
+            throw new ArgumentOutOfRangeException(nameof(anchors), "At most 50 anchors are allowed.");
+        return ProvisionMetadata(rid, anchors.Count, anchors);
+    }
+
+    public List<ProvisionRow> ProvisionsForMcp(
+        string rid,
+        int limit,
+        int maximumTextBytes)
+        => LoadBoundedProvisionText(ProvisionMetadata(rid, limit, null), maximumTextBytes);
+
+    public List<ProvisionRow> ProvisionsByAnchorsForMcp(
+        string rid,
+        IReadOnlyCollection<string> anchors,
+        int maximumTextBytes)
+    {
+        if (anchors.Count > 50)
+            throw new ArgumentOutOfRangeException(nameof(anchors), "At most 50 anchors are allowed.");
+        return LoadBoundedProvisionText(
+            ProvisionMetadata(rid, Math.Max(1, anchors.Count), anchors), maximumTextBytes);
+    }
+
+    private List<ProvisionRow> ProvisionMetadata(
+        string rid,
+        int limit,
+        IReadOnlyCollection<string>? anchors)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(limit);
+        var names = anchors?.Select((_, index) => $"$a{index}").ToArray() ?? [];
+        var anchorWhere = names.Length == 0 ? "" : $" AND p.anchor IN ({string.Join(',', names)})";
+        using var cmd = Cmd(IsV3 ? $"""
+            SELECT p.rid,p.seq,p.anchor,p.provision_id,p.ptype,p.num,p.heading,p.path,
+                   p.article_valid_from,p.work_title,p.text_sha,b.original_size,NULL
+            FROM provisions p JOIN text_blobs b ON b.text_sha=p.text_sha
+            WHERE p.rid=$rid{anchorWhere} ORDER BY p.seq LIMIT $lim
+            """ : $"""
+            SELECT p.rid,p.seq,p.anchor,p.provision_id,p.ptype,p.num,p.heading,p.path,
+                   p.article_valid_from,p.work_title,p.text_sha,
+                   length(CAST(p.text_md AS BLOB)),length(p.text_md)
+            FROM provisions p WHERE p.rid=$rid{anchorWhere} ORDER BY p.seq LIMIT $lim
+            """, []);
+        cmd.Parameters.AddWithValue("$rid", rid);
+        cmd.Parameters.AddWithValue("$lim", limit);
+        if (anchors is not null)
+        {
+            var index = 0;
+            foreach (var anchor in anchors)
+                cmd.Parameters.AddWithValue(names[index++], anchor);
+        }
+        var rows = new List<ProvisionRow>(Math.Min(limit, anchors?.Count ?? limit));
+        using var reader = cmd.ExecuteReader();
+        while (reader.Read())
+            rows.Add(new ProvisionRow(
+                reader.GetString(0), reader.GetInt32(1), reader.GetString(2), reader.GetString(3),
+                reader.GetString(4), reader.IsDBNull(5) ? null : reader.GetString(5),
+                reader.IsDBNull(6) ? null : reader.GetString(6),
+                reader.IsDBNull(7) ? null : reader.GetString(7),
+                reader.IsDBNull(8) ? null : reader.GetString(8),
+                reader.IsDBNull(9) ? null : reader.GetString(9), "", reader.GetString(10),
+                StoredTextBytes: reader.GetInt32(11),
+                StoredTextCharacters: reader.IsDBNull(12) ? null : reader.GetInt32(12),
+                TextLoaded: false));
+        return rows;
+    }
+
+    private List<ProvisionRow> LoadBoundedProvisionText(
+        List<ProvisionRow> rows,
+        int maximumTextBytes)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(maximumTextBytes);
+        var remaining = maximumTextBytes;
+        for (var index = 0; index < rows.Count; index++)
+        {
+            var row = rows[index];
+            var size = row.StoredTextBytes ?? int.MaxValue;
+            if (size > remaining) continue;
+            string text;
+            if (IsV3)
+            {
+                using var command = Cmd(
+                    "SELECT encoding,original_size,payload FROM text_blobs WHERE text_sha=$sha LIMIT 1", []);
+                command.Parameters.AddWithValue("$sha", row.TextSha);
+                using var reader = command.ExecuteReader();
+                if (!reader.Read())
+                    throw new InvalidDataException($"Missing text blob '{row.TextSha}'.");
+                text = DecodeAndVerify(reader.GetString(0), reader.GetInt32(1),
+                    (byte[])reader.GetValue(2), row.TextSha);
+            }
+            else
+            {
+                using var command = Cmd(
+                    "SELECT text_md FROM provisions WHERE rid=$rid AND anchor=$anchor LIMIT 1", []);
+                command.Parameters.AddWithValue("$rid", row.Rid);
+                command.Parameters.AddWithValue("$anchor", row.Anchor);
+                text = command.ExecuteScalar() as string
+                    ?? throw new InvalidDataException($"Missing provision text '{row.ProvisionId}'.");
+            }
+            remaining -= size;
+            rows[index] = row with
+            {
+                TextMd = text,
+                StoredTextCharacters = text.Length,
+                TextLoaded = true,
+            };
+        }
+        return rows;
+    }
+
+    private List<ProvisionRow> ProvisionsCore(string rid, int? limit)
+    {
+        if (IsV3) return ProvisionsV3(rid, limit);
         using var cmd = Cmd("""
             SELECT rid, seq, anchor, provision_id, ptype, num, heading, path, article_valid_from,
                    work_title, text_md, text_sha
-            FROM provisions WHERE rid=$rid ORDER BY seq
+            FROM provisions WHERE rid=$rid ORDER BY seq LIMIT $lim
             """, []);
         cmd.Parameters.AddWithValue("$rid", rid);
+        cmd.Parameters.AddWithValue("$lim", limit ?? int.MaxValue);
         var list = new List<ProvisionRow>();
         using var r = cmd.ExecuteReader();
         while (r.Read()) list.Add(new ProvisionRow(
@@ -1965,16 +2287,17 @@ public sealed class LexIndexReader : IDisposable
         return list;
     }
 
-    private List<ProvisionRow> ProvisionsV3(string rid)
+    private List<ProvisionRow> ProvisionsV3(string rid, int? limit)
     {
         using var cmd = Cmd("""
             SELECT p.rid, p.seq, p.anchor, p.provision_id, p.ptype, p.num, p.heading, p.path,
                    p.article_valid_from, p.work_title, p.text_sha,
                    b.encoding, b.original_size, b.payload
             FROM provisions p JOIN text_blobs b ON b.text_sha=p.text_sha
-            WHERE p.rid=$rid ORDER BY p.seq
+            WHERE p.rid=$rid ORDER BY p.seq LIMIT $lim
             """, []);
         cmd.Parameters.AddWithValue("$rid", rid);
+        cmd.Parameters.AddWithValue("$lim", limit ?? int.MaxValue);
         var list = new List<ProvisionRow>();
         using var r = cmd.ExecuteReader();
         while (r.Read())
@@ -2020,11 +2343,86 @@ public sealed class LexIndexReader : IDisposable
 
     /// <summary>One provision of one document version, by anchor.</summary>
     public ProvisionRow? Provision(string rid, string anchor)
-        => Provisions(rid).FirstOrDefault(p => p.Anchor == anchor);
+    {
+        var rows = ProvisionsByAnchors(rid, [anchor]);
+        return rows.Count == 0 ? null : rows[0];
+    }
+
+    public List<ProvisionRow> ProvisionsByAnchors(
+        string rid,
+        IReadOnlyCollection<string> anchors)
+    {
+        if (anchors.Count == 0) return [];
+        if (anchors.Count > 50)
+            throw new ArgumentOutOfRangeException(nameof(anchors), "At most 50 anchors are allowed.");
+        var names = anchors.Select((_, index) => $"$a{index}").ToArray();
+        using var cmd = Cmd(IsV3 ? $"""
+            SELECT p.rid, p.seq, p.anchor, p.provision_id, p.ptype, p.num, p.heading, p.path,
+                   p.article_valid_from, p.work_title, p.text_sha,
+                   b.encoding, b.original_size, b.payload
+            FROM provisions p JOIN text_blobs b ON b.text_sha=p.text_sha
+            WHERE p.rid=$rid AND p.anchor IN ({string.Join(',', names)}) ORDER BY p.seq
+            """ : $"""
+            SELECT rid, seq, anchor, provision_id, ptype, num, heading, path, article_valid_from,
+                   work_title, text_md, text_sha
+            FROM provisions WHERE rid=$rid AND anchor IN ({string.Join(',', names)}) ORDER BY seq
+            """, []);
+        cmd.Parameters.AddWithValue("$rid", rid);
+        var index = 0;
+        foreach (var anchor in anchors)
+            cmd.Parameters.AddWithValue(names[index++], anchor);
+        var list = new List<ProvisionRow>(anchors.Count);
+        using var reader = cmd.ExecuteReader();
+        while (reader.Read())
+        {
+            if (IsV3)
+            {
+                var text = DecodeAndVerify(reader.GetString(11), reader.GetInt32(12),
+                    (byte[])reader.GetValue(13), reader.GetString(10));
+                list.Add(new ProvisionRow(
+                    reader.GetString(0), reader.GetInt32(1), reader.GetString(2), reader.GetString(3),
+                    reader.GetString(4), reader.IsDBNull(5) ? null : reader.GetString(5),
+                    reader.IsDBNull(6) ? null : reader.GetString(6),
+                    reader.IsDBNull(7) ? null : reader.GetString(7),
+                    reader.IsDBNull(8) ? null : reader.GetString(8),
+                    reader.IsDBNull(9) ? null : reader.GetString(9), text, reader.GetString(10)));
+            }
+            else
+            {
+                list.Add(new ProvisionRow(
+                    reader.GetString(0), reader.GetInt32(1), reader.GetString(2), reader.GetString(3),
+                    reader.GetString(4), reader.IsDBNull(5) ? null : reader.GetString(5),
+                    reader.IsDBNull(6) ? null : reader.GetString(6),
+                    reader.IsDBNull(7) ? null : reader.GetString(7),
+                    reader.IsDBNull(8) ? null : reader.GetString(8),
+                    reader.IsDBNull(9) ? null : reader.GetString(9), reader.GetString(10),
+                    reader.GetString(11)));
+            }
+        }
+        return list;
+    }
+
+    public List<string> ProvisionAnchors(string rid, int limit)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(limit);
+        using var cmd = Cmd(
+            "SELECT anchor FROM provisions WHERE rid=$rid ORDER BY seq LIMIT $lim", []);
+        cmd.Parameters.AddWithValue("$rid", rid);
+        cmd.Parameters.AddWithValue("$lim", limit);
+        var anchors = new List<string>(limit);
+        using var reader = cmd.ExecuteReader();
+        while (reader.Read()) anchors.Add(reader.GetString(0));
+        return anchors;
+    }
 
     /// <summary>Every distinct text a provision has had, as validity intervals (the time axis).</summary>
-    public List<ProvisionStateRow> ProvisionStates(string work, string anchor, string? language = null)
+    public List<ProvisionStateRow> ProvisionStates(
+        string work,
+        string anchor,
+        string? language = null,
+        int limit = int.MaxValue)
     {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(limit);
         var normalizedWork = NormalizeWork(work);
         if (IsV3) language ??= PreferredHistoryLanguage(normalizedWork, anchor);
         using var cmd = Cmd(IsV3 ? """
@@ -2032,15 +2430,16 @@ public sealed class LexIndexReader : IDisposable
                    article_valid_from, validity_conflict
             FROM provision_states
             WHERE group_key=$w AND anchor=$a AND language=$lang
-            ORDER BY valid_from
+            ORDER BY valid_from LIMIT $lim
             """ : """
             SELECT group_key, anchor, valid_from, valid_to, text_sha, in_version,
                    article_valid_from, validity_conflict
-            FROM provision_states WHERE group_key=$w AND anchor=$a ORDER BY valid_from
+            FROM provision_states WHERE group_key=$w AND anchor=$a ORDER BY valid_from LIMIT $lim
             """, []);
         cmd.Parameters.AddWithValue("$w", normalizedWork);
         cmd.Parameters.AddWithValue("$a", anchor);
         if (IsV3) cmd.Parameters.AddWithValue("$lang", language ?? "und");
+        cmd.Parameters.AddWithValue("$lim", limit);
         var list = new List<ProvisionStateRow>();
         using var r = cmd.ExecuteReader();
         while (r.Read())
@@ -2057,25 +2456,44 @@ public sealed class LexIndexReader : IDisposable
         return list;
     }
 
-    /// <summary>Anchor lifecycle events for a work; optionally only those touching one anchor.</summary>
-    public List<AnchorEventRow> AnchorEvents(string work, string? anchor = null, string? language = null)
+    public int ProvisionStateCount(string work, string anchor, string? language = null)
     {
+        var normalizedWork = NormalizeWork(work);
+        if (IsV3) language ??= PreferredHistoryLanguage(normalizedWork, anchor);
+        using var cmd = Cmd(IsV3
+            ? "SELECT COUNT(*) FROM provision_states WHERE group_key=$w AND anchor=$a AND language=$lang"
+            : "SELECT COUNT(*) FROM provision_states WHERE group_key=$w AND anchor=$a", []);
+        cmd.Parameters.AddWithValue("$w", normalizedWork);
+        cmd.Parameters.AddWithValue("$a", anchor);
+        if (IsV3) cmd.Parameters.AddWithValue("$lang", language ?? "und");
+        return Convert.ToInt32(cmd.ExecuteScalar());
+    }
+
+    /// <summary>Anchor lifecycle events for a work; optionally only those touching one anchor.</summary>
+    public List<AnchorEventRow> AnchorEvents(
+        string work,
+        string? anchor = null,
+        string? language = null,
+        int limit = int.MaxValue)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(limit);
         var normalizedWork = NormalizeWork(work);
         if (IsV3) language ??= PreferredHistoryLanguage(normalizedWork, anchor);
         using var cmd = Cmd(IsV3 ? """
             SELECT group_key, language, is_primary_language, etype, from_anchor, to_anchor, anchor, text_sha, at_version
             FROM anchor_events WHERE group_key=$w AND language=$lang
               AND ($a IS NULL OR from_anchor=$a OR to_anchor=$a OR anchor=$a)
-            ORDER BY at_version
+            ORDER BY at_version LIMIT $lim
             """ : """
             SELECT group_key, etype, from_anchor, to_anchor, anchor, text_sha, at_version
             FROM anchor_events WHERE group_key=$w
               AND ($a IS NULL OR from_anchor=$a OR to_anchor=$a OR anchor=$a)
-            ORDER BY at_version
+            ORDER BY at_version LIMIT $lim
             """, []);
         cmd.Parameters.AddWithValue("$w", normalizedWork);
         cmd.Parameters.AddWithValue("$a", (object?)anchor ?? DBNull.Value);
         if (IsV3) cmd.Parameters.AddWithValue("$lang", language ?? "und");
+        cmd.Parameters.AddWithValue("$lim", limit);
         var list = new List<AnchorEventRow>();
         using var r = cmd.ExecuteReader();
         while (r.Read())
@@ -2091,6 +2509,23 @@ public sealed class LexIndexReader : IDisposable
                 r.IsDBNull(6 + offset) ? null : r.GetString(6 + offset)));
         }
         return list;
+    }
+
+    public int AnchorEventCount(string work, string? anchor = null, string? language = null)
+    {
+        var normalizedWork = NormalizeWork(work);
+        if (IsV3) language ??= PreferredHistoryLanguage(normalizedWork, anchor);
+        using var cmd = Cmd(IsV3 ? """
+            SELECT COUNT(*) FROM anchor_events WHERE group_key=$w AND language=$lang
+              AND ($a IS NULL OR from_anchor=$a OR to_anchor=$a OR anchor=$a)
+            """ : """
+            SELECT COUNT(*) FROM anchor_events WHERE group_key=$w
+              AND ($a IS NULL OR from_anchor=$a OR to_anchor=$a OR anchor=$a)
+            """, []);
+        cmd.Parameters.AddWithValue("$w", normalizedWork);
+        cmd.Parameters.AddWithValue("$a", (object?)anchor ?? DBNull.Value);
+        if (IsV3) cmd.Parameters.AddWithValue("$lang", language ?? "und");
+        return Convert.ToInt32(cmd.ExecuteScalar());
     }
 
     private string? PreferredHistoryLanguage(string work, string? anchor)
@@ -2151,7 +2586,7 @@ public sealed class LexIndexReader : IDisposable
 
     public void Dispose()
     {
-        _vectors?.Dispose();
+        if (_ownsVectors) _vectors?.Dispose();
         _conn.Dispose();
     }
 }

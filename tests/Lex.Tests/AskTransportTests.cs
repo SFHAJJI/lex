@@ -3,6 +3,7 @@ using System.Text.Json.Nodes;
 using Lex.Ask;
 using Lex.Mcp;
 using Lex.Web;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
@@ -32,14 +33,15 @@ public sealed class AskTransportTests
     {
         var registry = new AskRequestRegistry(TimeProvider.System, maximumEntries: 8);
         var owner = registry.Claim("client", "request", Hash("same"));
-        var duplicate = registry.Claim("client", "request", Hash("same"));
-        var conflict = registry.Claim("client", "request", Hash("different"));
+        var duplicate = registry.Claim("client-on-another-network", "request", Hash("same"));
+        var conflict = registry.Claim("third-network", "request", Hash("different"));
 
         Assert.Equal(AskRequestClaimKind.Owner, owner.Kind);
         Assert.Equal(AskRequestClaimKind.Duplicate, duplicate.Kind);
         Assert.Equal(AskRequestClaimKind.Conflict, conflict.Kind);
+        Assert.Equal(owner.RequestId, duplicate.RequestId);
 
-        owner.Complete(200, "{\"reply\":\"one execution\"}");
+        owner.Complete(200, "{\"reply\":\"one execution\"}", retainForReplay: true);
         var response = await duplicate.Completion;
         Assert.Equal(200, response.Status);
         Assert.Contains("one execution", response.Body);
@@ -54,6 +56,58 @@ public sealed class AskTransportTests
             registry.Claim("client", "one", Hash("one")).Kind);
         Assert.Equal(AskRequestClaimKind.Busy,
             registry.Claim("client", "two", Hash("two")).Kind);
+    }
+
+    [Fact]
+    public async Task Nonexecuted_requests_wake_duplicates_without_filling_the_replay_registry()
+    {
+        var registry = new AskRequestRegistry(TimeProvider.System, maximumEntries: 1);
+        var owner = registry.Claim("attacker", "bad-one", Hash("bad"));
+        var duplicate = registry.Claim("attacker", "bad-one", Hash("bad"));
+
+        owner.Complete(200, "{\"reply\":\"No instrument was selected.\"}",
+            retainForReplay: false);
+
+        Assert.Equal(200, (await duplicate.Completion).Status);
+        Assert.Equal(AskRequestClaimKind.Owner,
+            registry.Claim("other-client", "valid", Hash("valid")).Kind);
+    }
+
+    [Fact]
+    public async Task Replay_registry_evicts_completed_responses_to_stay_within_its_memory_budget()
+    {
+        var registry = new AskRequestRegistry(
+            TimeProvider.System, maximumEntries: 8, maximumRetainedBytes: 32);
+        var first = registry.Claim("a", "one", Hash("one"));
+        var firstWaiter = registry.Claim("b", "one", Hash("one"));
+        first.Complete(200, new string('a', 12), retainForReplay: true);
+        Assert.Equal(new string('a', 12), (await firstWaiter.Completion).Body);
+
+        var second = registry.Claim("a", "two", Hash("two"));
+        second.Complete(200, new string('b', 12), retainForReplay: true);
+
+        Assert.True(registry.RetainedBytes <= 32);
+        Assert.Equal(AskRequestClaimKind.ReplayUnavailable,
+            registry.Claim("a", "one", Hash("one")).Kind);
+        Assert.Equal(AskRequestClaimKind.Duplicate,
+            registry.Claim("a", "two", Hash("two")).Kind);
+    }
+
+    [Fact]
+    public void Duplicate_stream_subscribers_are_bounded_and_disconnect_releases_capacity()
+    {
+        var registry = new AskRequestRegistry(TimeProvider.System,
+            maximumEntries: 4, maximumSubscribersPerEntry: 1, maximumSubscribers: 1);
+        _ = registry.Claim("owner", "same", Hash("body"));
+        var subscriber = registry.Claim("one", "same", Hash("body"));
+
+        Assert.Equal(AskRequestClaimKind.Duplicate, subscriber.Kind);
+        Assert.Equal(AskRequestClaimKind.Busy,
+            registry.Claim("two", "same", Hash("body")).Kind);
+
+        subscriber.Unsubscribe();
+        Assert.Equal(AskRequestClaimKind.Duplicate,
+            registry.Claim("three", "same", Hash("body")).Kind);
     }
 
     [Fact]
@@ -91,15 +145,24 @@ public sealed class AskTransportTests
         Assert.Equal(200, (int)firstResponse.StatusCode);
         Assert.Equal(200, (int)duplicateResponse.StatusCode);
         Assert.Equal(1, site.Planner.Calls);
+        var serverRequestId = firstResponse.Headers.GetValues("X-Lex-Request-Id").Single();
+        Assert.Matches("^[a-f0-9]{32}$", serverRequestId);
+        Assert.NotEqual("stream-request", serverRequestId);
+        Assert.Equal(serverRequestId,
+            duplicateResponse.Headers.GetValues("X-Lex-Request-Id").Single());
         var frames = Frames(firstWire);
         Assert.Equal(["operation_result", "done"], frames.Select(frame => frame.Event));
         Assert.All(frames, frame =>
         {
             Assert.Equal("1", frame.Data["version"]?.GetValue<string>());
-            Assert.Equal("stream-request", frame.Data["request_id"]?.GetValue<string>());
+            Assert.Equal(serverRequestId, frame.Data["request_id"]?.GetValue<string>());
         });
         Assert.Equal([1, 2], frames.Select(frame => frame.Data["sequence"]?.GetValue<int>()));
-        Assert.Equal(["done"], Frames(duplicateWire).Select(frame => frame.Event));
+        Assert.Equal(["operation_result", "done"],
+            Frames(duplicateWire).Select(frame => frame.Event));
+        Assert.All(frames.Where(frame => frame.Event == "operation_result"), frame =>
+            Assert.DoesNotContain("stream-request",
+                frame.Data["payload"]?["operation_id"]?.GetValue<string>() ?? ""));
     }
 
     [Fact]
@@ -115,6 +178,34 @@ public sealed class AskTransportTests
 
         Assert.Equal(400, (int)response.StatusCode);
         Assert.Equal(0, site.Planner.Calls);
+    }
+
+    [Fact]
+    public async Task Idempotency_key_boundaries_are_checked_before_planning_and_stay_out_of_request_ids()
+    {
+        await using var site = new StreamingSite();
+        const string body = "{\"messages\":[{\"role\":\"user\",\"content\":\"Show coverage.\"}]}";
+        using var missing = Request(body, "placeholder");
+        missing.Headers.Remove("Idempotency-Key");
+        using var maximum = Request(body, new string('a', 128));
+        using var over = Request(body, new string('b', 129));
+
+        var missingResponse = await site.Client.SendAsync(missing);
+        var maximumResponse = await site.Client.SendAsync(maximum);
+        var overResponse = await site.Client.SendAsync(over);
+
+        Assert.Equal(200, (int)missingResponse.StatusCode);
+        Assert.Equal(200, (int)maximumResponse.StatusCode);
+        Assert.Equal(400, (int)overResponse.StatusCode);
+        Assert.Equal(2, site.Planner.Calls);
+        var serverRequestId = maximumResponse.Headers
+            .GetValues("X-Lex-Request-Id").Single();
+        Assert.Matches("^[a-f0-9]{32}$", serverRequestId);
+        Assert.DoesNotContain(new string('a', 128),
+            await maximumResponse.Content.ReadAsStringAsync());
+
+        var headers = new HeaderDictionary { ["Idempotency-Key"] = "" };
+        Assert.False(ApiEndpoints.TryIdempotencyKey(headers, out _));
     }
 
     [Fact]
@@ -161,7 +252,7 @@ public sealed class AskTransportTests
             ["role"] = "user", ["content"] = "Can Lex advise and interpret this?",
         }), "client", "law.test", cancellation.Token, progress, "cancel-after-one");
 
-        Assert.Equal(200, status);
+        Assert.Equal(499, status);
         var operations = Assert.IsType<JsonArray>(body["operations"]);
         Assert.Equal(2, operations.Count);
         Assert.Equal("legal_boundary", operations[0]?["legal_outcome"]?.GetValue<string>());
@@ -170,6 +261,59 @@ public sealed class AskTransportTests
         Assert.Equal("cancelled", operations[1]?["transport_outcome"]?.GetValue<string>());
         Assert.NotNull(operations[0]?["ui"]?["gap"]);
         Assert.NotNull(operations[1]?["ui"]?["gap"]);
+        Assert.Equal(2, observed);
+    }
+
+    [Fact]
+    public async Task Malformed_history_is_rejected_before_admission_and_is_not_replay_cached()
+    {
+        var planner = new BoundaryPlanner();
+        var service = new AskService(
+            new McpCore(new Dictionary<string, Lex.Index.LexIndexReader>()), planner);
+
+        foreach (var history in new[]
+                 {
+                     new JsonArray(JsonValue.Create("not-an-object")),
+                     new JsonArray(new JsonObject { ["role"] = 1, ["content"] = "question" }),
+                     new JsonArray(new JsonObject { ["role"] = "user", ["content"] = 1 }),
+                 })
+        {
+            var outcome = await service.AskAsync(
+                history, "client", "law.test", CancellationToken.None);
+            Assert.Equal(400, outcome.Status);
+            Assert.False(outcome.RetainForReplay);
+        }
+        Assert.Equal(0, planner.Calls);
+    }
+
+    [Fact]
+    public async Task Planner_deadline_is_bounded_and_releases_the_execution_lease()
+    {
+        var planner = new WaitingPlanner();
+        var service = new AskService(
+            new McpCore(new Dictionary<string, Lex.Index.LexIndexReader>()), planner,
+            admission: new AskAdmissionController(
+                TimeProvider.System, perClientDaily: 10, globalDaily: 10, concurrent: 1),
+            plannerDeadline: TimeSpan.FromMilliseconds(50),
+            firstResultDeadline: TimeSpan.FromMilliseconds(100));
+        var history = new JsonArray(new JsonObject
+        {
+            ["role"] = "user", ["content"] = "Show coverage.",
+        });
+
+        var started = System.Diagnostics.Stopwatch.StartNew();
+        var first = await service.AskAsync(
+            history, "first-client", "law.test", CancellationToken.None);
+        var second = await service.AskAsync(
+            history, "second-client", "law.test", CancellationToken.None);
+
+        Assert.Equal(504, first.Status);
+        Assert.Equal(504, second.Status);
+        Assert.True(first.RetainForReplay);
+        Assert.Equal(2, planner.Calls);
+        Assert.True(started.Elapsed < TimeSpan.FromMilliseconds(500));
+        Assert.Equal(TimeSpan.FromSeconds(12), AskService.DefaultPlannerDeadline);
+        Assert.Equal(TimeSpan.FromSeconds(25), AskService.DefaultFirstResultDeadline);
     }
 
     [Fact]
@@ -218,7 +362,14 @@ public sealed class AskTransportTests
 
         var burst = Enumerable.Range(0, 40)
             .Select(index => admission.EnterAsync(
-                $"client-{index}", hybrid: index % 2 == 0, CancellationToken.None).AsTask())
+                    $"client-{index}", hybrid: index % 2 == 0, CancellationToken.None).AsTask()
+                .ContinueWith(task =>
+                {
+                    var result = task.GetAwaiter().GetResult();
+                    result.Lease?.Dispose();
+                    return result;
+                }, CancellationToken.None,
+                TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default))
             .ToList();
         await Task.Delay(50);
 
@@ -227,13 +378,9 @@ public sealed class AskTransportTests
         Assert.Equal(4, burst.Count(task => !task.IsCompleted));
 
         running.Lease!.Dispose();
-        while (burst.Any(task => !task.IsCompleted))
-        {
-            var completed = await Task.WhenAny(burst.Where(task => !task.IsCompleted));
-            var admitted = await completed;
-            Assert.True(admitted.Accepted, admitted.Failure.ToString());
-            admitted.Lease!.Dispose();
-        }
+        var outcomes = await Task.WhenAll(burst);
+        Assert.Equal(4, outcomes.Count(result => result.Accepted));
+        Assert.Equal(36, outcomes.Count(result => result.Failure == McpAdmissionFailure.Busy));
 
         var recovered = await admission.EnterAsync(
             "recovered", hybrid: true, CancellationToken.None);
@@ -293,11 +440,14 @@ public sealed class AskTransportTests
         Assert.Equal(1, admission.TrackedClients);
     }
 
-    [Fact]
-    public async Task Malformed_mcp_shape_reaches_the_normal_bounded_protocol_error_not_a_500()
+    [Theory]
+    [InlineData("/mcp")]
+    [InlineData("/mcp/")]
+    public async Task Malformed_mcp_shape_reaches_the_normal_bounded_protocol_error_not_a_500(
+        string path)
     {
         await using var site = new StreamingSite();
-        using var request = new HttpRequestMessage(HttpMethod.Post, "/mcp")
+        using var request = new HttpRequestMessage(HttpMethod.Post, path)
         {
             Content = new StringContent(
                 "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":42}",
@@ -307,6 +457,40 @@ public sealed class AskTransportTests
         var response = await site.Client.SendAsync(request);
 
         Assert.NotEqual(500, (int)response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("/mcp")]
+    [InlineData("/mcp/")]
+    public async Task Every_mcp_route_shape_enforces_body_and_rate_boundaries(string path)
+    {
+        var admission = new McpAdmissionController(
+            TimeProvider.System, executing: 1, queued: 0, queueDeadline: TimeSpan.Zero,
+            perClientPerMinute: 1, globalPerMinute: 1, hybridExecuting: 1);
+        await using var site = new StreamingSite(admission);
+        using var oversized = new HttpRequestMessage(HttpMethod.Post, path)
+        {
+            Content = new ByteArrayContent(new byte[65_537]),
+        };
+        oversized.Content.Headers.ContentType =
+            new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+
+        var tooLarge = await site.Client.SendAsync(oversized);
+        Assert.Equal(413, (int)tooLarge.StatusCode);
+        Assert.Equal("request_too_large",
+            JsonNode.Parse(await tooLarge.Content.ReadAsStringAsync())?
+                ["error"]?["data"]?["status"]?.GetValue<string>());
+
+        const string body = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\"}";
+        var first = await site.Client.PostAsync(
+            path, new StringContent(body, Encoding.UTF8, "application/json"));
+        Assert.NotEqual(429, (int)first.StatusCode);
+        var limited = await site.Client.PostAsync(
+            path, new StringContent(body, Encoding.UTF8, "application/json"));
+        Assert.Equal(429, (int)limited.StatusCode);
+        Assert.Equal("rate_limited",
+            JsonNode.Parse(await limited.Content.ReadAsStringAsync())?
+                ["error"]?["data"]?["status"]?.GetValue<string>());
     }
 
     private static HttpRequestMessage Request(string body, string key)
@@ -338,11 +522,10 @@ public sealed class AskTransportTests
         private readonly string _indexDir = Path.Combine(
             Path.GetTempPath(), $"lex-stream-{Guid.NewGuid():N}");
 
-        public StreamingSite()
+        public StreamingSite(McpAdmissionController? mcpAdmission = null)
         {
             Directory.CreateDirectory(_indexDir);
-            Environment.SetEnvironmentVariable("LEX_INDEX_DIR", _indexDir);
-            Environment.SetEnvironmentVariable("LEX_PUBLIC_BASE_URL", "https://stream.test");
+            McpAdmission = mcpAdmission;
             Planner = new BoundaryPlanner();
             Client = CreateClient(new WebApplicationFactoryClientOptions
             {
@@ -352,14 +535,22 @@ public sealed class AskTransportTests
 
         public BoundaryPlanner Planner { get; }
         public HttpClient Client { get; }
+        public McpAdmissionController? McpAdmission { get; }
 
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
+            builder.UseSetting("LEX_INDEX_DIR", _indexDir);
+            builder.UseSetting("LEX_PUBLIC_BASE_URL", "https://stream.test");
             builder.ConfigureServices(services =>
             {
                 services.RemoveAll<AskService>();
                 services.AddSingleton(_ => new AskService(
                     new McpCore(new Dictionary<string, Lex.Index.LexIndexReader>()), Planner));
+                if (McpAdmission is not null)
+                {
+                    services.RemoveAll<McpAdmissionController>();
+                    services.AddSingleton(McpAdmission);
+                }
             });
         }
 
@@ -409,6 +600,22 @@ public sealed class AskTransportTests
                         ["tool"] = "legal_boundary",
                         ["arguments"] = new JsonObject { ["reason"] = "interpretation" },
                     }), synthesisRequested: false));
+    }
+
+    private sealed class WaitingPlanner : IOperationPlanner
+    {
+        public int Calls;
+
+        public async Task<OperationPlan> PlanAsync(
+            JsonArray history,
+            string host,
+            string requestId,
+            CancellationToken cancellationToken)
+        {
+            Interlocked.Increment(ref Calls);
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            throw new InvalidOperationException("unreachable");
+        }
     }
 
     private sealed class ManualTimeProvider(DateTimeOffset now) : TimeProvider

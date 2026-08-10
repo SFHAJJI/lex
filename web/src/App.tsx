@@ -338,7 +338,10 @@ export default function App() {
         // page used to print the prose and leave the table behind the space it belonged to.
         if (subj?.work) {
           setTitle(subj.title);
-          if (r.ui!.provision) setLoaded({ items: r.ui!.provision.provisions, from: r.ui!.provision.valid_from, to: r.ui!.provision.valid_to });
+          if (r.ui!.provision && !r.ui!.provision.text_truncated
+              && !r.ui!.provision.outline_only)
+            setLoaded({ items: r.ui!.provision.provisions,
+              from: r.ui!.provision.valid_from, to: r.ui!.provision.valid_to });
           go(assistantWorkspaceState(r.ui)!);
           navigated = true;
         } else if (r.ui!.ranking || r.ui!.in_force) {
@@ -423,7 +426,9 @@ export default function App() {
       return <button className="operation-open" onClick={() => view.diff
         ? openDiff(subject.work, view.diff.from_date, view.diff.to_date)
         : openLaw(subject.work, from)}>
-        Open {view.diff ? "comparison" : view.history ? "article history" : view.timeline ? "timeline" : "publisher text"}
+        Open {view.diff ? "comparison" : view.history ? "article history"
+          : view.timeline ? "timeline" : view.provision?.outline_only
+            ? "table of contents" : "publisher text"}
       </button>;
     }
     if (view.workspace) return <p className="sub">The matching search workspace is open.</p>;

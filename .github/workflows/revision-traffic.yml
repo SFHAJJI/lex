@@ -18,6 +18,10 @@ on:
         description: Exact revision expected to receive traffic before the switch
         required: true
         type: string
+      rollback_revision:
+        description: Exact pinned revision restored if the traffic switch fails
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -61,14 +65,19 @@ jobs:
           OPERATION: ${{ inputs.operation }}
           TARGET_REVISION: ${{ inputs.revision }}
           EXPECTED_CURRENT_REVISION: ${{ inputs.expected_current_revision }}
+          ROLLBACK_REVISION: ${{ inputs.rollback_revision }}
         run: |
           set -Eeuo pipefail
           [[ "$TARGET_REVISION" =~ ^ca-lex-web--[a-z0-9-]+$ ]] \
             || { echo "::error::invalid target revision"; exit 2; }
           [[ "$EXPECTED_CURRENT_REVISION" =~ ^ca-lex-web--[a-z0-9-]+$ ]] \
             || { echo "::error::invalid expected current revision"; exit 2; }
+          [[ "$ROLLBACK_REVISION" =~ ^ca-lex-web--[a-z0-9-]+$ ]] \
+            || { echo "::error::invalid rollback revision"; exit 2; }
           [ "$TARGET_REVISION" != "$EXPECTED_CURRENT_REVISION" ] \
             || { echo "::error::target already matches expected current revision"; exit 2; }
+          [ "$TARGET_REVISION" != "$ROLLBACK_REVISION" ] \
+            || { echo "::error::target and rollback revisions must differ"; exit 2; }
 
           current=$(az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
             --query "[?properties.trafficWeight > \`0\`].name" -o tsv)
@@ -79,16 +88,68 @@ jobs:
 
           target=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
             --revision "$TARGET_REVISION" \
-            --query '{state:properties.runningState,active:properties.active,fqdn:properties.fqdn,image:properties.template.containers[0].image}' \
+            --query '{state:properties.runningState,active:properties.active,fqdn:properties.fqdn,image:properties.template.containers[0].image,min:properties.template.scale.minReplicas,max:properties.template.scale.maxReplicas}' \
             -o json)
-          state=$(printf '%s' "$target" | jq -r .state)
-          active=$(printf '%s' "$target" | jq -r .active)
           TARGET_FQDN=$(printf '%s' "$target" | jq -r .fqdn)
           image=$(printf '%s' "$target" | jq -r .image)
-          [ "$active" = "true" ] && { [ "$state" = "Running" ] || [ "$state" = "ScaledToZero" ]; } \
-            || { echo "::error::target revision is not an active healthy candidate"; exit 1; }
+          min_replicas=$(printf '%s' "$target" | jq -r .min)
+          max_replicas=$(printf '%s' "$target" | jq -r .max)
           [ -n "$TARGET_FQDN" ] && [ -n "$image" ] \
             || { echo "::error::target revision identity is incomplete"; exit 1; }
+          [ "$min_replicas" = "1" ] && [ "$max_replicas" = "1" ] \
+            || { echo "::error::target must have exactly one pinned replica"; exit 1; }
+          rollback=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+            --revision "$ROLLBACK_REVISION" \
+            --query '{fqdn:properties.fqdn,image:properties.template.containers[0].image,min:properties.template.scale.minReplicas,max:properties.template.scale.maxReplicas}' \
+            -o json)
+          rollback_fqdn=$(printf '%s' "$rollback" | jq -r .fqdn)
+          rollback_image=$(printf '%s' "$rollback" | jq -r .image)
+          rollback_min=$(printf '%s' "$rollback" | jq -r .min)
+          rollback_max=$(printf '%s' "$rollback" | jq -r .max)
+          [ -n "$rollback_fqdn" ] && [ -n "$rollback_image" ] \
+            || { echo "::error::rollback revision identity is incomplete"; exit 1; }
+          [ "$rollback_min" = "1" ] && [ "$rollback_max" = "1" ] \
+            || { echo "::error::rollback must have exactly one pinned replica"; exit 1; }
+
+          # Persist recovery identities before the first activation. The job-level always/failure
+          # step must be able to reconcile Azure even when readiness smoke fails before traffic.
+          echo "previous=$ROLLBACK_REVISION" >> "$GITHUB_OUTPUT"
+          echo "target=$TARGET_REVISION" >> "$GITHUB_OUTPUT"
+
+          cleanup_target() {
+            original_status=$?
+            [ "$original_status" -ne 0 ] || original_status=1
+            trap - ERR TERM INT
+            set +e
+            for attempt in $(seq 1 5); do
+              az containerapp revision deactivate -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+                --revision "$TARGET_REVISION" --only-show-errors || true
+              target_active=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+                --revision "$TARGET_REVISION" --query properties.active -o tsv 2>/dev/null || true)
+              active=$(az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+                --query "[?properties.active].name" -o tsv 2>/dev/null || true)
+              if [ "$target_active" != "true" ] && [ "$active" = "$EXPECTED_CURRENT_REVISION" ]; then
+                exit "$original_status"
+              fi
+              sleep $((attempt * 2))
+            done
+            echo "::error::failed to deactivate and verify the target revision" >&2
+            exit 1
+          }
+          trap cleanup_target ERR TERM INT
+
+          az containerapp revision activate -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+            --revision "$TARGET_REVISION" --only-show-errors
+          for attempt in $(seq 1 30); do
+            target_state=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+              --revision "$TARGET_REVISION" --query properties.runningState -o tsv)
+            [ "$target_state" = "Running" ] && break
+            [ "$target_state" = "Failed" ] \
+              && { echo "::error::target revision failed to start"; exit 1; }
+            sleep 2
+          done
+          [ "$target_state" = "Running" ] \
+            || { echo "::error::target revision did not become ready"; exit 1; }
 
           curl --fail --show-error --silent --retry 5 --retry-delay 5 \
             "https://$TARGET_FQDN/healthz" >/dev/null
@@ -111,13 +172,23 @@ jobs:
             trap - ERR TERM INT
             set +e
             for attempt in $(seq 1 5); do
+              az containerapp revision activate -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+                --revision "$ROLLBACK_REVISION" --only-show-errors || true
               az containerapp ingress traffic set -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
-                --revision-weight "$EXPECTED_CURRENT_REVISION=100" "$TARGET_REVISION=0" \
+                --revision-weight "$ROLLBACK_REVISION=100" "$TARGET_REVISION=0" \
                 --only-show-errors
               routed=$(az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
                 --query "[?properties.trafficWeight > \`0\`].name" -o tsv 2>/dev/null)
-              if [ "$routed" = "$EXPECTED_CURRENT_REVISION" ]; then
-                echo "restored_previous=$EXPECTED_CURRENT_REVISION"
+              if [ "$routed" = "$ROLLBACK_REVISION" ]; then
+                for revision in $(az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+                    --query "[?name != '$ROLLBACK_REVISION' && properties.active].name" -o tsv); do
+                  az containerapp revision deactivate -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+                    --revision "$revision" --only-show-errors || true
+                done
+                active=$(az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+                  --query "[?properties.active].name" -o tsv 2>/dev/null)
+                [ "$active" = "$ROLLBACK_REVISION" ] || continue
+                echo "restored_previous=$ROLLBACK_REVISION"
                 exit "$original_status"
               fi
               sleep $((attempt * 2))
@@ -125,8 +196,6 @@ jobs:
             echo "::error::failed to restore and verify the previous revision" >&2
             exit 1
           }
-          echo "previous=$EXPECTED_CURRENT_REVISION" >> "$GITHUB_OUTPUT"
-          echo "target=$TARGET_REVISION" >> "$GITHUB_OUTPUT"
           trap restore_previous ERR TERM INT
 
           az containerapp ingress traffic set -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
@@ -149,6 +218,16 @@ jobs:
           [ "$served_image" = "$image" ] \
             || { echo "::error::public endpoint did not serve the target image"; false; }
 
+          for revision in $(az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+              --query "[?name != '$TARGET_REVISION' && properties.active].name" -o tsv); do
+            az containerapp revision deactivate -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+              --revision "$revision" --only-show-errors
+          done
+          active=$(az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+            --query "[?properties.active].name" -o tsv)
+          [ "$active" = "$TARGET_REVISION" ] \
+            || { echo "::error::expected exactly one active public quota authority"; false; }
+
           echo "image=$image" >> "$GITHUB_OUTPUT"
           trap - ERR TERM INT
 
@@ -163,12 +242,23 @@ jobs:
           [ -n "${PREVIOUS_REVISION:-}" ] && [ -n "${TARGET_REVISION:-}" ] \
             || { echo "traffic was not attempted; no restoration required"; exit 0; }
           for attempt in $(seq 1 5); do
+            az containerapp revision activate -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+              --revision "$PREVIOUS_REVISION" --only-show-errors || true
             az containerapp ingress traffic set -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
               --revision-weight "$PREVIOUS_REVISION=100" "$TARGET_REVISION=0" \
               --only-show-errors || true
             routed=$(az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
               --query "[?properties.trafficWeight > \`0\`].name" -o tsv 2>/dev/null || true)
-            [ "$routed" = "$PREVIOUS_REVISION" ] && exit 0
+            if [ "$routed" = "$PREVIOUS_REVISION" ]; then
+              for revision in $(az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+                  --query "[?name != '$PREVIOUS_REVISION' && properties.active].name" -o tsv 2>/dev/null); do
+                az containerapp revision deactivate -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+                  --revision "$revision" --only-show-errors || true
+              done
+              active=$(az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+                --query "[?properties.active].name" -o tsv 2>/dev/null || true)
+              [ "$active" = "$PREVIOUS_REVISION" ] && exit 0
+            fi
             sleep $((attempt * 2))
           done
           echo "::error::failed to restore and verify the previous revision" >&2
@@ -182,6 +272,7 @@ jobs:
             echo
             echo "- operation: \`${{ inputs.operation }}\`"
             echo "- previous revision: \`${{ inputs.expected_current_revision }}\`"
+            echo "- pinned rollback revision: \`${{ inputs.rollback_revision }}\`"
             echo "- active revision: \`${{ inputs.revision }}\`"
             echo "- active image: \`${{ steps.traffic.outputs.image }}\`"
             echo "- health and required-publisher MCP coverage smoke: passed"

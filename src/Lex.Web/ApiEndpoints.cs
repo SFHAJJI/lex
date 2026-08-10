@@ -21,20 +21,6 @@ public static class ApiEndpoints
         static string ClientAddress(HttpRequest request) =>
             request.Headers["X-Forwarded-For"].FirstOrDefault()?.Split(',')[^1].Trim()
             ?? request.HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-        static bool TryRequestId(HttpRequest request, out string requestId)
-        {
-            var supplied = request.Headers["Idempotency-Key"].FirstOrDefault();
-            if (supplied is { Length: > 0 }
-                && (supplied.Length > 128
-                    || supplied.Any(character =>
-                        !(char.IsAsciiLetterOrDigit(character) || character is '-' or '_' or '.'))))
-            {
-                requestId = "";
-                return false;
-            }
-            requestId = supplied ?? Guid.NewGuid().ToString("N");
-            return true;
-        }
         static string Fingerprint(byte[] body) =>
             Convert.ToHexStringLower(SHA256.HashData(body));
         string Page(string title, string body, string? subtitle = null, string nav = "",
@@ -114,7 +100,7 @@ public static class ApiEndpoints
         // ---- /ask playground: chat over the MCP tools, grounded and capped ----
         app.MapGet("/ask", () => Results.Redirect("/"));
 
-        app.MapPost("/api/ask", async (HttpRequest req) =>
+        app.MapPost("/api/ask", async (HttpRequest req, HttpResponse res) =>
         {
             if (req.ContentLength is > 65536) return Results.Json(new { error = "Request too large." }, statusCode: 413);
             var body = await BoundedRequestBody.ReadAsync(req.Body, 65536, req.HttpContext.RequestAborted);
@@ -124,12 +110,14 @@ public static class ApiEndpoints
             catch { return Results.Json(new { error = "Bad JSON." }, statusCode: 400); }
             if (parsed?["messages"] is not JsonArray history)
                 return Results.Json(new { error = "Body must be {\"messages\": [...]}." }, statusCode: 400);
-            if (!TryRequestId(req, out var requestId))
+            if (!TryIdempotencyKey(req.Headers, out var idempotencyKey))
                 return Results.Json(new { error = "Invalid Idempotency-Key." }, statusCode: 400);
             // Last X-Forwarded-For element: appended by our ingress, not spoofable by the client
             // (the first element is client-controlled and would reset the per-IP cap).
             var ip = ClientAddress(req);
-            var claim = askRequests.Claim(ip, requestId, Fingerprint(body));
+            var claim = askRequests.Claim(ip, idempotencyKey, Fingerprint(body));
+            var requestId = claim.RequestId;
+            res.Headers["X-Lex-Request-Id"] = requestId;
             if (claim.Kind != AskRequestClaimKind.Owner)
             {
                 var replay = await claim.Completion.WaitAsync(req.HttpContext.RequestAborted);
@@ -137,17 +125,18 @@ public static class ApiEndpoints
             }
             try
             {
-                var (status, bodyJson) = await askService.AskAsync(history, ip,
+                var outcome = await askService.AskAsync(history, ip,
                     req.Host.Value ?? "law.soufien.lu", req.HttpContext.RequestAborted,
                     requestId: requestId);
+                var (status, bodyJson) = outcome;
                 var json = bodyJson.ToJsonString();
-                claim.Complete(status, json);
+                claim.Complete(status, json, outcome.RetainForReplay);
                 return Results.Content(json, "application/json", statusCode: status);
             }
             catch
             {
                 const string failure = "{\"error\":\"Unexpected error in the playground.\"}";
-                claim.Complete(500, failure);
+                claim.Complete(500, failure, retainForReplay: true);
                 return Results.Content(failure, "application/json", statusCode: 500);
             }
         });
@@ -169,14 +158,16 @@ public static class ApiEndpoints
             if (req.ContentLength is > 65536) { res.StatusCode = 413; return; }
             var body = await BoundedRequestBody.ReadAsync(req.Body, 65536, req.HttpContext.RequestAborted);
             if (body is null) { res.StatusCode = 413; return; }
-            if (!TryRequestId(req, out var requestId)) { res.StatusCode = 400; return; }
+            if (!TryIdempotencyKey(req.Headers, out var idempotencyKey)) { res.StatusCode = 400; return; }
             JsonNode? parsed;
             try { parsed = JsonNode.Parse(body); }
             catch { res.StatusCode = 400; return; }
             if (parsed?["messages"] is not JsonArray history) { res.StatusCode = 400; return; }
             var ip = ClientAddress(req);
-            var claim = askRequests.Claim(ip, requestId, Fingerprint(body));
-            if (claim.Kind is AskRequestClaimKind.Conflict or AskRequestClaimKind.Busy)
+            var claim = askRequests.Claim(ip, idempotencyKey, Fingerprint(body));
+            var requestId = claim.RequestId;
+            if (claim.Kind is AskRequestClaimKind.Conflict or AskRequestClaimKind.Busy
+                or AskRequestClaimKind.ReplayUnavailable)
             {
                 var rejected = await claim.Completion;
                 res.StatusCode = rejected.Status;
@@ -222,16 +213,38 @@ public static class ApiEndpoints
 
             if (claim.Kind == AskRequestClaimKind.Duplicate)
             {
-                var replay = await claim.Completion.WaitAsync(req.HttpContext.RequestAborted);
-                if (replay.Status == 200)
-                    await Send("done", JsonNode.Parse(replay.Body) ?? new JsonObject());
-                else
-                    await Send("transport_error", new JsonObject
+                try
+                {
+                    var operationCount = 0;
+                    await foreach (var operation in claim.OperationResults.ReadAllAsync(
+                                       req.HttpContext.RequestAborted))
                     {
-                        ["status"] = replay.Status,
-                        ["error"] = JsonNode.Parse(replay.Body)?["error"]?.GetValue<string>()
-                            ?? "The assistant request did not complete.",
-                    });
+                        if (JsonNode.Parse(operation) is { } parsedOperation)
+                        {
+                            await Send("operation_result", parsedOperation);
+                            operationCount++;
+                        }
+                    }
+                    var replay = await claim.Completion.WaitAsync(req.HttpContext.RequestAborted);
+                    var replayBody = JsonNode.Parse(replay.Body);
+                    if (operationCount == 0 && replayBody?["operations"] is JsonArray operations)
+                        foreach (var operation in operations)
+                            if (operation is not null)
+                                await Send("operation_result", operation.DeepClone());
+                    if (replay.Status == 200)
+                        await Send("done", replayBody ?? new JsonObject());
+                    else
+                        await Send("transport_error", new JsonObject
+                        {
+                            ["status"] = replay.Status,
+                            ["error"] = replayBody?["error"]?.GetValue<string>()
+                                ?? "The assistant request did not complete.",
+                        });
+                }
+                finally
+                {
+                    claim.Unsubscribe();
+                }
                 return;
             }
 
@@ -246,13 +259,16 @@ public static class ApiEndpoints
                         ["work"] = step.Work, ["date"] = step.Date, ["anchor"] = step.Anchor,
                     }));
                 },
-                OperationResult: (operation, _) =>
-                    new ValueTask(Send("operation_result", operation)),
+                OperationResult: async (operation, _) =>
+                {
+                    claim.ReportOperation(operation.ToJsonString());
+                    await Send("operation_result", operation);
+                },
                 Synthesis: (status, _) => new ValueTask(Send("synthesis", new JsonObject
                 {
                     ["status"] = status,
                 })));
-            (int status, JsonObject bodyJson) outcome;
+            AskService.AskOutcome outcome;
             try
             {
                 outcome = await askService.AskAsync(history, ip,
@@ -262,13 +278,13 @@ public static class ApiEndpoints
             catch (OperationCanceledException) when (req.HttpContext.RequestAborted.IsCancellationRequested)
             {
                 const string cancelled = "{\"error\":\"The assistant request was cancelled.\"}";
-                claim.Complete(499, cancelled);
+                claim.Complete(499, cancelled, retainForReplay: true);
                 return;
             }
             catch
             {
                 const string failure = "{\"error\":\"Unexpected error in the playground.\"}";
-                claim.Complete(500, failure);
+                claim.Complete(500, failure, retainForReplay: true);
                 await Send("transport_error", new JsonObject
                 {
                     ["status"] = 500,
@@ -282,7 +298,7 @@ public static class ApiEndpoints
             // in a poor answer scored below delivering that same answer instantly. A refusal therefore
             // keeps its steps out of the transcript.
             bodyJson["narrated"] = status == 200 && bodyJson["ui"]?["gap"] is null && steps > 0;
-            claim.Complete(status, bodyJson.ToJsonString());
+            claim.Complete(status, bodyJson.ToJsonString(), outcome.RetainForReplay);
             if (status == 200)
                 await Send("done", bodyJson);
             else
@@ -334,5 +350,25 @@ public static class ApiEndpoints
         });
 
         return app;
+    }
+
+    internal static bool TryIdempotencyKey(IHeaderDictionary headers, out string key)
+    {
+        if (!headers.TryGetValue("Idempotency-Key", out var values))
+        {
+            key = Guid.NewGuid().ToString("N");
+            return true;
+        }
+        var supplied = values.Count == 1 ? values[0] : null;
+        if (string.IsNullOrEmpty(supplied)
+            || supplied.Length > 128
+            || supplied.Any(character =>
+                !(char.IsAsciiLetterOrDigit(character) || character is '-' or '_' or '.')))
+        {
+            key = "";
+            return false;
+        }
+        key = supplied;
+        return true;
     }
 }
