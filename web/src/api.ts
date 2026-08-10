@@ -67,6 +67,19 @@ export function signatureStatusLabel(value: boolean | undefined): string {
     : "signature unavailable";
 }
 
+export function safeHttpsUrl(...candidates: (string | undefined)[]): string | undefined {
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    try {
+      const parsed = new URL(candidate);
+      if (parsed.protocol === "https:") return parsed.href;
+    } catch { /* Relative and malformed values are not external links. */ }
+  }
+  return undefined;
+}
+
+export class AssistantResponseError extends Error {}
+
 export function populationScopeLabel(value: number | undefined): string | undefined {
   return value === undefined ? undefined : `${value.toLocaleString()} works in selected scope`;
 }
@@ -260,7 +273,17 @@ export async function askStreaming(
     body: JSON.stringify({ messages }),
     signal,
   });
-  if (!r.ok) throw new Error(`Assistant request failed (${r.status}).`);
+  if (!r.ok) {
+    const fallback = `Assistant request failed (${r.status}).`;
+    try {
+      const body = await r.json() as { error?: unknown };
+      const error = typeof body.error === "string" ? body.error.trim() : "";
+      throw new AssistantResponseError(error.length > 0 && error.length <= 200 ? error : fallback);
+    } catch (cause) {
+      if (cause instanceof AssistantResponseError) throw cause;
+      throw new AssistantResponseError(fallback);
+    }
+  }
   if (!r.body) throw new Error("Assistant stream returned no body.");
   const requestId = r.headers.get("X-Lex-Request-Id");
   if (!requestId || !/^[a-f0-9]{32}$/.test(requestId))

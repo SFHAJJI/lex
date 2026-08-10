@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   actionableClarificationChoices,
+  AssistantResponseError,
   askQuestionError,
   askStreaming,
   boundedAskHistory,
@@ -127,8 +128,9 @@ export default function AssistantController({
       if (reply.narrated === false) setSteps([]);
       if (standalone) setResultUrl(assistantWorkspaceUrl(reply.ui));
       onReply?.(reply);
-    } catch {
-      if (!controller.signal.aborted) setSaid("The request failed, try again.");
+    } catch (error) {
+      if (!controller.signal.aborted) setSaid(error instanceof AssistantResponseError
+        ? error.message : "The request failed, try again.");
     } finally {
       if (abort.current === controller) setBusy(false);
     }

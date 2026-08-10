@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
-  populationScopeLabel, signatureStatusLabel, type ProvisionItem, type RankingRow, type UiEffect,
+  populationScopeLabel, safeHttpsUrl, signatureStatusLabel, type ProvisionItem, type RankingRow, type UiEffect,
 } from "./api";
 import { facetLabel, jurisdictionLabel } from "./facets";
 import { publisherOf, workSlug } from "./state";
@@ -41,6 +41,7 @@ export function Provision({ items, toc, validFrom, validTo, work, title, languag
   // act inside a whole official-gazette issue. Classify by immutable profile family so a new,
   // narrower profile version cannot accidentally lose the disclosure in the reader.
   const disclosure = extractionDisclosure(profile);
+  const officialSource = safeHttpsUrl(source);
   const fromPdf = disclosure === "publisher-pdf";
   const fromGazette = disclosure === "gazette";
   const outlineOnly = items.length > 0 && items.every((p) => !p.text && !p.text_omitted);
@@ -102,9 +103,9 @@ export function Provision({ items, toc, validFrom, validTo, work, title, languag
             document permits it, dividing that section into articles are ours. Those boundaries are
             inferred from layout, so treat this as a reading aid and confirm anything that matters.
           </p>
-          {source ? (
+          {officialSource ? (
             <p>
-              <a href={source} target="_blank" rel="noopener noreferrer">
+              <a href={officialSource} target="_blank" rel="noopener noreferrer">
                 Read the official gazette at Legilux ↗
               </a>
             </p>
@@ -123,7 +124,9 @@ export function Provision({ items, toc, validFrom, validTo, work, title, languag
             </button>
           ) : null}
         </div>
-      ) : items.map((p) => (
+      ) : items.map((p) => {
+        const exactTextUrl = safeHttpsUrl(p.permalink, officialSource);
+        return (
         <article key={p.anchor} className="art" id={p.anchor}>
           <h4>
             <a href={permalink(work, validFrom, p.anchor)}>{p.num ?? p.anchor}</a>
@@ -134,9 +137,9 @@ export function Provision({ items, toc, validFrom, validTo, work, title, languag
           {p.text_omitted ? (
             <div className="pdfnote">
               <p>This publisher text is held, but it exceeded the bounded API response.</p>
-              <p><a href={p.permalink ?? source} target="_blank" rel="noopener noreferrer">
+              {exactTextUrl ? <p><a href={exactTextUrl} target="_blank" rel="noopener noreferrer">
                 Open the exact publisher text ↗
-              </a></p>
+              </a></p> : null}
             </div>
           ) : (
             <div className="lawtxt"><Markdown remarkPlugins={[remarkGfm, remarkLegalText]}>{p.text}</Markdown></div>
@@ -156,7 +159,8 @@ export function Provision({ items, toc, validFrom, validTo, work, title, languag
           ) : null}
           {p.text_sha256 ? <div className="sha">sha256 {p.text_sha256.slice(0, 16)}…</div> : null}
         </article>
-      ))}
+        );
+      })}
     </div>
   );
   if (!nav) return body;
@@ -620,7 +624,7 @@ export function CoveragePanel({ view }: { view: NonNullable<UiEffect["coverage"]
 }
 
 export function VerificationPanel({ view }: { view: NonNullable<UiEffect["verification"]> }) {
-  const source = view.source_uri?.startsWith("https://") ? view.source_uri : undefined;
+  const source = safeHttpsUrl(view.source_uri);
   return (
     <section className="evidence-panel" aria-labelledby="verification-result-title">
       <div className="cnt">

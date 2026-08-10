@@ -8,6 +8,7 @@ import {
   clarificationFollowUp,
   compoundOperationViews,
   populationScopeLabel,
+  safeHttpsUrl,
   shouldOfferContextualFollowUps,
   signatureStatusLabel,
 } from "./api.ts";
@@ -16,6 +17,12 @@ test("invalid signatures are distinct from unavailable verification", () => {
   assert.equal(signatureStatusLabel(true), "signature verified");
   assert.equal(signatureStatusLabel(false), "signature verification failed");
   assert.equal(signatureStatusLabel(undefined), "signature unavailable");
+});
+
+test("external evidence links are rendered only from absolute HTTPS URLs", () => {
+  assert.equal(safeHttpsUrl(undefined, "http://attacker.test", "https://law.soufien.lu/a"),
+    "https://law.soufien.lu/a");
+  assert.equal(safeHttpsUrl("javascript:alert(1)", "/relative"), undefined);
 });
 
 test("the versioned stream ignores stale events and exposes typed operation results", async () => {
@@ -64,7 +71,7 @@ test("a failed streaming POST is never retried as a second request", async () =>
       [{ role: "user", content: "coverage" }],
       { onStep: () => undefined, onOperation: () => undefined },
       undefined,
-      "request-b"));
+      "request-b"), { message: "busy" });
     assert.equal(calls, 1);
   } finally {
     globalThis.fetch = originalFetch;
