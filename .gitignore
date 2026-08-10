@@ -18,4 +18,6 @@ crash.log
 .vs/
 evals/out/
 web/node_modules/
+web/playwright-report/
+web/test-results/
 src/Lex.Web/wwwroot/app/
