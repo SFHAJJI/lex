@@ -6,6 +6,8 @@ using System.Text.RegularExpressions;
 using Lex.Index;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http.Metadata;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -123,6 +125,48 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
         Assert.Equal("/developers#assistant", redirect.Headers.Location?.OriginalString);
         var developers = await _site.Client.GetStringAsync("/developers");
         Assert.Contains("id=\"assistant\"", developers);
+
+        using var askRedirect = await _site.Client.GetAsync("/ask");
+        Assert.Equal(HttpStatusCode.MovedPermanently, askRedirect.StatusCode);
+        Assert.Equal("/", askRedirect.Headers.Location?.OriginalString);
+    }
+
+    [Fact]
+    public void Public_route_ledger_matches_the_mounted_product_endpoints()
+    {
+        var ledgerPath = Path.Combine(Golden.RepositoryRoot(), "docs", "public-route-ledger.md");
+        var ledger = File.ReadLines(ledgerPath)
+            .Select(line => Regex.Match(line, @"^\| (GET|POST|SDK-owned) \| `([^`]+)` \|"))
+            .Where(match => match.Success)
+            .Select(match => $"{match.Groups[1].Value} {match.Groups[2].Value}")
+            .ToHashSet(StringComparer.Ordinal);
+
+        static string PublicPattern(string raw)
+        {
+            if (raw.StartsWith("/mcp", StringComparison.Ordinal)) return "/mcp";
+            var segments = raw.Split('/');
+            if (segments.Length > 1 && segments[1].StartsWith("{publisher:", StringComparison.Ordinal))
+                segments[1] = "{publisher}";
+            return string.Join('/', segments);
+        }
+
+        var mounted = _site.Services.GetRequiredService<EndpointDataSource>().Endpoints
+            .OfType<RouteEndpoint>()
+            .SelectMany(endpoint =>
+            {
+                var raw = endpoint.RoutePattern.RawText ?? "";
+                if (raw.StartsWith("/mcp", StringComparison.Ordinal))
+                    return ["SDK-owned /mcp"];
+                var methods = endpoint.Metadata.GetMetadata<IHttpMethodMetadata>()?.HttpMethods ?? [];
+                return methods
+                    .Where(method => method is "GET" or "POST")
+                    .Select(method => $"{method} {PublicPattern(raw)}");
+            })
+            .Where(route => route != "GET /site.js" && !route.StartsWith("GET /app/", StringComparison.Ordinal)
+                         && !route.StartsWith("GET /fonts/", StringComparison.Ordinal))
+            .ToHashSet(StringComparer.Ordinal);
+
+        Assert.Equal(ledger.Order(), mounted.Order());
     }
 
     [Fact]
@@ -659,9 +703,9 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
 /// <summary>Snapshot comparison, and the normalisation that makes it meaningful.</summary>
 internal static class Golden
 {
-    private static readonly string Dir = Path.Combine(RepoRoot(), "tests", "Lex.Tests", "golden");
+    private static readonly string Dir = Path.Combine(RepositoryRoot(), "tests", "Lex.Tests", "golden");
 
-    private static string RepoRoot()
+    public static string RepositoryRoot()
     {
         var d = AppContext.BaseDirectory;
         while (d is not null && !File.Exists(Path.Combine(d, "Lex.slnx"))) d = Path.GetDirectoryName(d);
