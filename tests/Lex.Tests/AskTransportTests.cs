@@ -181,6 +181,36 @@ public sealed class AskTransportTests
     }
 
     [Fact]
+    public async Task Http_stream_rejections_return_bounded_actionable_json_before_planning()
+    {
+        await using var site = new StreamingSite();
+        using var invalidKey = Request(
+            "{\"messages\":[{\"role\":\"user\",\"content\":\"coverage\"}]}",
+            new string('x', 129));
+        using var badJson = Request("{", "bad-json");
+        using var missingMessages = Request("{}", "missing-messages");
+        using var oversized = Request("", "oversized");
+        oversized.Content = new ByteArrayContent(new byte[65_537]);
+
+        var cases = new[]
+        {
+            (await site.Client.SendAsync(invalidKey), 400, "Invalid Idempotency-Key."),
+            (await site.Client.SendAsync(badJson), 400, "Bad JSON."),
+            (await site.Client.SendAsync(missingMessages), 400, "Body must be {\"messages\": [...]}."),
+            (await site.Client.SendAsync(oversized), 413, "Request too large."),
+        };
+
+        foreach (var (response, status, error) in cases)
+        {
+            Assert.Equal(status, (int)response.StatusCode);
+            Assert.Equal("application/json", response.Content.Headers.ContentType?.MediaType);
+            Assert.Equal(error, JsonNode.Parse(await response.Content.ReadAsStringAsync())?
+                ["error"]?.GetValue<string>());
+        }
+        Assert.Equal(0, site.Planner.Calls);
+    }
+
+    [Fact]
     public async Task Idempotency_key_boundaries_are_checked_before_planning_and_stay_out_of_request_ids()
     {
         await using var site = new StreamingSite();

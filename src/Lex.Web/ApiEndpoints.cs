@@ -148,21 +148,33 @@ public static class ApiEndpoints
         // doing: "Code du travail — 3 articles as in force on 2019-03-01", not "searching…".
         app.MapPost("/api/ask/stream", async (HttpRequest req, HttpResponse res) =>
         {
+            async Task Reject(int status, string error)
+            {
+                res.StatusCode = status;
+                await res.WriteAsJsonAsync(new { error }, req.HttpContext.RequestAborted);
+            }
+
             if (req.Headers["X-Lex-Stream-Version"].FirstOrDefault() != "1")
             {
-                res.StatusCode = 400;
-                await res.WriteAsJsonAsync(new { error = "Unsupported assistant stream version." },
-                    req.HttpContext.RequestAborted);
+                await Reject(400, "Unsupported assistant stream version.");
                 return;
             }
-            if (req.ContentLength is > 65536) { res.StatusCode = 413; return; }
+            if (req.ContentLength is > 65536) { await Reject(413, "Request too large."); return; }
             var body = await BoundedRequestBody.ReadAsync(req.Body, 65536, req.HttpContext.RequestAborted);
-            if (body is null) { res.StatusCode = 413; return; }
-            if (!TryIdempotencyKey(req.Headers, out var idempotencyKey)) { res.StatusCode = 400; return; }
+            if (body is null) { await Reject(413, "Request too large."); return; }
+            if (!TryIdempotencyKey(req.Headers, out var idempotencyKey))
+            {
+                await Reject(400, "Invalid Idempotency-Key.");
+                return;
+            }
             JsonNode? parsed;
             try { parsed = JsonNode.Parse(body); }
-            catch { res.StatusCode = 400; return; }
-            if (parsed?["messages"] is not JsonArray history) { res.StatusCode = 400; return; }
+            catch { await Reject(400, "Bad JSON."); return; }
+            if (parsed?["messages"] is not JsonArray history)
+            {
+                await Reject(400, "Body must be {\"messages\": [...]}.");
+                return;
+            }
             var ip = ClientAddress(req);
             var claim = askRequests.Claim(ip, idempotencyKey, Fingerprint(body));
             var requestId = claim.RequestId;

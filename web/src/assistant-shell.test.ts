@@ -28,6 +28,9 @@ test("navigating from an assistant reply never retains stale publisher text", ()
   assert.equal(assistantProvisionLoad({ provision: {
     ...full.provision, outline_only: true,
   } }), undefined);
+  assert.equal(assistantProvisionLoad({ provision: {
+    ...full.provision, truncated: true,
+  } }), undefined);
   assert.equal(assistantProvisionLoad({ diff: {
     subject: { work: "eu-eurlex:32013r0575" },
     from_date: "2020-01-01", to_date: "2024-12-31",
