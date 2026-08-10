@@ -119,6 +119,8 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
             Assert.Contains($"href=\"{path}\"", home);
         Assert.Contains("href=\"/built\"><b>I want to inspect the engineering</b>", home);
         Assert.DoesNotContain("href=\"/about\"><b>I want to know who built this</b>", home);
+        Assert.Contains("href=\"/developers#assistant\">Connect your own AI</a>", home);
+        Assert.DoesNotContain("href=\"/ai\"", home);
 
         using var redirect = await _site.Client.GetAsync("/ai");
         Assert.Equal(HttpStatusCode.MovedPermanently, redirect.StatusCode);
@@ -197,8 +199,11 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
 
         Assert.Contains(".filters .n { opacity:1;", browse);
         Assert.Contains("<details class=\"facetgroup\">", browse);
+        Assert.Contains("<b>Record only:</b> identity and timeline held; no searchable provision text.", browse);
+        Assert.Contains(">full text</span>", browse);
+        Assert.Contains(">record only</span>", browse);
         Assert.Contains("Law <span class=\"mono raw\">LOI</span>", scopedBrowse);
-        Assert.Contains("all 2 readable", scopedBrowse);
+        Assert.Contains(">full text</span>", scopedBrowse);
         Assert.Contains("href=\"/browse?publisher=t-pub\"", scopedBrowse);
         Assert.DoesNotContain("publisher=t-pub&amp;type=LOI\">Test Publisher", scopedBrowse);
         Assert.Contains("<select name=\"kind\" aria-label=\"Source class\">", inForce);
@@ -553,7 +558,7 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
         })
         {
             var html = await _site.Client.GetStringAsync(path);
-            Assert.DoesNotContain("assistant-enabled", html);
+            Assert.DoesNotContain("class=\"assistant-enabled\"", html);
             Assert.DoesNotContain("assistant-root", html);
             Assert.DoesNotContain("/app/workspace.js", html);
         }

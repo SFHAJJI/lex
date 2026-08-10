@@ -1,5 +1,24 @@
 // The proof navigation is a native disclosure first. This small enhancement adds the desktop
 // hover path and consistent dismissal without turning a list of links into an application menu.
+const activateWorkspace = () => requestAnimationFrame(() => {
+  const moduleHost = document.querySelector("[data-workspace-module]");
+  const moduleUrl = moduleHost?.getAttribute("data-workspace-module");
+  const styleUrl = moduleHost?.getAttribute("data-workspace-style");
+  if (!moduleUrl || !styleUrl) return;
+
+  // The legal shell is independently complete and gets the first network/paint budget. Only
+  // after load do we fetch the interactive layer; wait for its small stylesheet before mounting
+  // so the launcher/workspace never flashes unstyled.
+  const link = document.createElement("link");
+  link.rel = "stylesheet";
+  link.href = styleUrl;
+  link.addEventListener("load", () => import(moduleUrl));
+  link.addEventListener("error", () => console.error("Workspace styles failed to load."));
+  document.head.append(link);
+});
+if (document.readyState === "complete") activateWorkspace();
+else addEventListener("load", activateWorkspace, { once: true });
+
 document.querySelectorAll("details.proofnav").forEach((details) => {
   const summary = details.querySelector("summary");
   if (!summary) return;

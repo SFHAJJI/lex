@@ -94,10 +94,9 @@ public static class CatalogueEndpoints
 
             var sb = new StringBuilder();
             sb.Append($"""
-                <p class="sub" style="margin-top:0">Every legal work and publisher collection Lex holds, with
-                its dated records and readable-text coverage. A work is one legal instrument or one official
-                thematic collection; a dated version is one state supplied by its publisher.
-                <b>{total:n0}</b> works match.</p>
+                <p class="sub" style="margin:0 0 2px"><b>{total:n0}</b> works match.
+                <a href="/coverage">What counts as a work and a dated version?</a><br>
+                <b>Record only:</b> identity and timeline held; no searchable provision text.</p>
                 """);
 
             // Filters are links, not a form: no JavaScript, and every state of this page is a URL that a
@@ -123,7 +122,7 @@ public static class CatalogueEndpoints
             }
             if (pub is null)
             {
-                sb.Append("""<div class="facetgroups" aria-label="Source classes by jurisdiction">""");
+                sb.Append("""<div class="facetgroups" role="group" aria-label="Source classes by jurisdiction">""");
                 foreach (var r in readers.Values.OrderBy(r => r.Collection, StringComparer.Ordinal))
                 {
                     var kinds = r.CatalogueKinds(null).OrderByDescending(x => x.Works)
@@ -175,12 +174,14 @@ public static class CatalogueEndpoints
                         .GetValueOrDefault("jurisdiction", w.Collection) ?? w.Collection;
                     var classLabel = SourceClassLabel(w.Kind);
                     var coverage = w.TextVersions == w.Versions
-                        ? $"all {w.Versions:n0} readable"
+                        ? "full text"
                         : w.TextVersions > 0
-                            ? $"{w.TextVersions:n0} of {w.Versions:n0} readable"
-                            : IsThematicCollection(w.Kind) ? "collection metadata" : "metadata only";
-                    var coverageTitle = w.TextVersions > 0
-                        ? "Publisher text is held for these dated versions."
+                            ? $"partial text, {w.TextVersions:n0} of {w.Versions:n0} versions"
+                            : IsThematicCollection(w.Kind) ? "collection metadata" : "record only";
+                    var coverageTitle = w.TextVersions == w.Versions
+                        ? $"Full publisher text is held for all {w.Versions:n0} dated versions."
+                        : w.TextVersions > 0
+                            ? $"Publisher text is held for {w.TextVersions:n0} of {w.Versions:n0} dated versions."
                         : IsThematicCollection(w.Kind)
                             ? "This is an official thematic collection; its compilation is not treated as one legal instrument."
                             : "Lex holds the publisher record, but no safely derived provision text for its dated versions.";

@@ -93,9 +93,8 @@ public static class HomeEndpoints
             // promotional cards, where the visitors most likely to bounce never reached it — while
             // the sentence above the fold merely announced that the site answers questions.
             var body = $"""
-                <p class="lede">Research Luxembourg and EU law as it stood on a chosen date. Read and compare
-                exact official wording, with clear date semantics, sources and explicit gaps. Coverage always
-                comes from the verified indexes mounted now.</p>
+                <p class="lede">Research Luxembourg and EU law on a chosen date. Read and compare exact official
+                wording, with sources, explicit gaps and the verified coverage mounted now.</p>
                 """
                 + $"""
                 <!-- Read synchronously by the workspace on mount, so the doors never flash in or need a
@@ -113,7 +112,7 @@ public static class HomeEndpoints
                      law. They live inside the noscript on purpose. A reader with JavaScript gets
                      the workspace's own richer version a moment later, and rendering both put the
                      same three names on the page twice. -->
-                <div id="workspace"><noscript><p class="sub">The interactive workspace needs JavaScript.
+                <div id="workspace" data-workspace-module="/app/workspace.js?v={assetVersion}" data-workspace-style="/app/workspace.css?v={assetVersion}"><noscript><p class="sub">The interactive workspace needs JavaScript.
                   Everything is also reachable as plain pages: <a href="/find">find a law</a>,
                   <a href="/changed">what changed</a>, <a href="/stories">stories</a>.</p>
                   {(liveDoors.Count == 0 ? "" : $"""
@@ -130,7 +129,7 @@ public static class HomeEndpoints
                 <span class="badge">{cov.Sum(c => c.TextServed):n0} with full text</span>
                 <span class="badge">{H(cov.Select(c => c.EarliestValidFrom).Min())} → {H(cov.Select(c => c.LatestValidFrom).Max())}</span>
                 <span class="badge ok" title="SHA-256 hashes and signed release manifests">source integrity verified</span></p>
-                <p class="sub">Free assistant, daily limit. <a href="/ai">Connect your own AI</a>
+                <p class="sub">Free assistant, daily limit. <a href="/developers#assistant">Connect your own AI</a>
                 through the separately bounded public MCP endpoint.</p>
 
                 <!-- A fork, not a menu. Three readers arrive here and they want different things; the
@@ -159,10 +158,14 @@ public static class HomeEndpoints
                   body[data-workspace="active"] .lede,
                   body[data-workspace="active"] main > h1 { display:none }
                   .workspace-loading #workspace { min-height:430px }
-                  @media (max-width:640px) { .workspace-loading #workspace { min-height:650px } }
+                  @media (max-width:640px) {
+                    /* At the smallest supported viewport the introduction and finder are one
+                       continuous first task. A tighter reading measure keeps its Search control
+                       clear of the persistent assistant launcher without hiding either control. */
+                    .lede { font-size:17px; line-height:1.5; margin-bottom:8px }
+                    .workspace-loading #workspace { min-height:650px }
+                  }
                 </style>
-                <link rel="stylesheet" href="/app/workspace.css?v={{assetVersion}}">
-                <script type="module" src="/app/workspace.js?v={{assetVersion}}"></script>
                 """;
             // WebSite, so a crawler has an unambiguous name and publisher for the whole site.
             // Built as a JsonObject rather than written out as a string: JSON is mostly quotes and

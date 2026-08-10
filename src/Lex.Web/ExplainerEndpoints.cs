@@ -1122,9 +1122,8 @@ public static class ExplainerEndpoints
         {
             var sb = new StringBuilder();
             sb.Append("""
-                <p>Point-in-time retrieval sounds abstract until you watch a law move. These are real
-                histories held by Lex, every number below is computed from the signed indexes as this
-                page renders, and every link lands on the evidence.</p>
+                <p>These are real histories held by Lex. Counts come from the signed indexes as this page
+                renders; every link lands on the evidence.</p>
                 """);
 
             void Story(string publisher, string work, string headline, string lede, string askQuestion)
@@ -1238,7 +1237,7 @@ public static class ExplainerEndpoints
                   with a reason code, instead of inventing a plausible text , 
                   <a href="/coverage">here is exactly what it holds and what it lacks</a>.</div>
                 """);
-            return Results.Content(Page("Stories, watch the law move", sb.ToString(),
+            return Results.Content(Page("Watch the law move", sb.ToString(),
                 "real histories from the Luxembourg and reviewed EU corpora, computed live", "find",
                 canonicalPath: "/stories", assistant: true), "text/html");
         });
