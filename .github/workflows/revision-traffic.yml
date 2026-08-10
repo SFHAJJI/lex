@@ -1,0 +1,188 @@
+name: revision-traffic
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Audited traffic operation
+        required: true
+        type: choice
+        options:
+          - promote
+          - rollback
+      revision:
+        description: Exact healthy revision that will receive 100 percent traffic
+        required: true
+        type: string
+      expected_current_revision:
+        description: Exact revision expected to receive traffic before the switch
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: lex-production
+  cancel-in-progress: false
+
+jobs:
+  switch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production
+    env:
+      AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      RESOURCE_GROUP: rg-platform
+      CONTAINER_APP: ca-lex-web
+    steps:
+      - name: Require OIDC configuration
+        shell: bash
+        run: |
+          set -eu
+          for value in AZURE_CLIENT_ID AZURE_TENANT_ID AZURE_SUBSCRIPTION_ID; do
+            [ -n "${!value:-}" ] || { echo "::error::$value is not configured in the production environment"; exit 1; }
+          done
+
+      - name: Azure login
+        uses: azure/login@f5d393ae46f8fde4be8b75f32e3fc50e654ad0ca # v3
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Switch exact revision traffic
+        id: traffic
+        shell: bash
+        env:
+          OPERATION: ${{ inputs.operation }}
+          TARGET_REVISION: ${{ inputs.revision }}
+          EXPECTED_CURRENT_REVISION: ${{ inputs.expected_current_revision }}
+        run: |
+          set -Eeuo pipefail
+          [[ "$TARGET_REVISION" =~ ^ca-lex-web--[a-z0-9-]+$ ]] \
+            || { echo "::error::invalid target revision"; exit 2; }
+          [[ "$EXPECTED_CURRENT_REVISION" =~ ^ca-lex-web--[a-z0-9-]+$ ]] \
+            || { echo "::error::invalid expected current revision"; exit 2; }
+          [ "$TARGET_REVISION" != "$EXPECTED_CURRENT_REVISION" ] \
+            || { echo "::error::target already matches expected current revision"; exit 2; }
+
+          current=$(az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+            --query "[?properties.trafficWeight > \`0\`].name" -o tsv)
+          [ "$(printf '%s\n' "$current" | sed '/^$/d' | wc -l)" -eq 1 ] \
+            || { echo "::error::expected exactly one traffic-bearing revision"; exit 1; }
+          [ "$current" = "$EXPECTED_CURRENT_REVISION" ] \
+            || { echo "::error::current revision changed; refusing stale traffic operation"; exit 1; }
+
+          target=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+            --revision "$TARGET_REVISION" \
+            --query '{state:properties.runningState,active:properties.active,fqdn:properties.fqdn,image:properties.template.containers[0].image}' \
+            -o json)
+          state=$(printf '%s' "$target" | jq -r .state)
+          active=$(printf '%s' "$target" | jq -r .active)
+          TARGET_FQDN=$(printf '%s' "$target" | jq -r .fqdn)
+          image=$(printf '%s' "$target" | jq -r .image)
+          [ "$active" = "true" ] && { [ "$state" = "Running" ] || [ "$state" = "ScaledToZero" ]; } \
+            || { echo "::error::target revision is not an active healthy candidate"; exit 1; }
+          [ -n "$TARGET_FQDN" ] && [ -n "$image" ] \
+            || { echo "::error::target revision identity is incomplete"; exit 1; }
+
+          curl --fail --show-error --silent --retry 5 --retry-delay 5 \
+            "https://$TARGET_FQDN/healthz" >/dev/null
+          response=$(curl --fail --show-error --silent --retry 3 --retry-delay 5 \
+            -H 'Content-Type: application/json' \
+            -H 'Accept: application/json, text/event-stream' \
+            -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"coverage","arguments":{}}}' \
+            "https://$TARGET_FQDN/mcp")
+          payload=$(printf '%s\n' "$response" | sed -n 's/^data: //p' | tail -n 1)
+          [ -n "$payload" ] || payload=$response
+          printf '%s' "$payload" | jq -er \
+            '.result.content | map(select(.type == "text")) | .[0].text' \
+            | jq -e 'type == "array"
+                     and any(.[]; .envelope.publisher == "lu-legilux")
+                     and any(.[]; .envelope.publisher == "eu-eurlex")' >/dev/null
+
+          restore_previous() {
+            original_status=$?
+            [ "$original_status" -ne 0 ] || original_status=1
+            trap - ERR TERM INT
+            set +e
+            for attempt in $(seq 1 5); do
+              az containerapp ingress traffic set -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+                --revision-weight "$EXPECTED_CURRENT_REVISION=100" "$TARGET_REVISION=0" \
+                --only-show-errors
+              routed=$(az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+                --query "[?properties.trafficWeight > \`0\`].name" -o tsv 2>/dev/null)
+              if [ "$routed" = "$EXPECTED_CURRENT_REVISION" ]; then
+                echo "restored_previous=$EXPECTED_CURRENT_REVISION"
+                exit "$original_status"
+              fi
+              sleep $((attempt * 2))
+            done
+            echo "::error::failed to restore and verify the previous revision" >&2
+            exit 1
+          }
+          echo "previous=$EXPECTED_CURRENT_REVISION" >> "$GITHUB_OUTPUT"
+          echo "target=$TARGET_REVISION" >> "$GITHUB_OUTPUT"
+          trap restore_previous ERR TERM INT
+
+          az containerapp ingress traffic set -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+            --revision-weight "$EXPECTED_CURRENT_REVISION=0" "$TARGET_REVISION=100" \
+            --only-show-errors
+
+          routed=$(az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+            --query "[?properties.trafficWeight > \`0\`].name" -o tsv)
+          [ "$routed" = "$TARGET_REVISION" ] \
+            || { echo "::error::Azure did not route exclusively to the target revision"; false; }
+
+          served_image=''
+          for attempt in $(seq 1 12); do
+            served_image=$(curl --fail --show-error --silent \
+              https://law.soufien.lu/attestation.json 2>/dev/null \
+              | jq -r '.deployment.image // empty' || true)
+            [ "$served_image" = "$image" ] && break
+            sleep 5
+          done
+          [ "$served_image" = "$image" ] \
+            || { echo "::error::public endpoint did not serve the target image"; false; }
+
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+          trap - ERR TERM INT
+
+      - name: Restore previous revision after an interrupted or failed switch
+        if: ${{ failure() || cancelled() }}
+        shell: bash
+        env:
+          PREVIOUS_REVISION: ${{ steps.traffic.outputs.previous }}
+          TARGET_REVISION: ${{ steps.traffic.outputs.target }}
+        run: |
+          set -u
+          [ -n "${PREVIOUS_REVISION:-}" ] && [ -n "${TARGET_REVISION:-}" ] \
+            || { echo "traffic was not attempted; no restoration required"; exit 0; }
+          for attempt in $(seq 1 5); do
+            az containerapp ingress traffic set -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+              --revision-weight "$PREVIOUS_REVISION=100" "$TARGET_REVISION=0" \
+              --only-show-errors || true
+            routed=$(az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+              --query "[?properties.trafficWeight > \`0\`].name" -o tsv 2>/dev/null || true)
+            [ "$routed" = "$PREVIOUS_REVISION" ] && exit 0
+            sleep $((attempt * 2))
+          done
+          echo "::error::failed to restore and verify the previous revision" >&2
+          exit 1
+
+      - name: Traffic operation summary
+        shell: bash
+        run: |
+          {
+            echo "## Lex production traffic operation"
+            echo
+            echo "- operation: \`${{ inputs.operation }}\`"
+            echo "- previous revision: \`${{ inputs.expected_current_revision }}\`"
+            echo "- active revision: \`${{ inputs.revision }}\`"
+            echo "- active image: \`${{ steps.traffic.outputs.image }}\`"
+            echo "- health and required-publisher MCP coverage smoke: passed"
+          } >> "$GITHUB_STEP_SUMMARY"

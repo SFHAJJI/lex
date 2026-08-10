@@ -8,6 +8,11 @@ on:
         required: true
         type: boolean
         default: false
+      promote:
+        description: Must remain false; use revision-traffic after candidate review
+        required: true
+        type: boolean
+        default: false
   repository_dispatch:
     types: [verified_artifact_release]
 
@@ -33,17 +38,24 @@ jobs:
       CONTAINER_APP: ca-lex-web
       RUNTIME_IDENTITY: uami-lex-runtime
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       - name: Require OIDC configuration
         shell: bash
+        env:
+          MANUAL_PROMOTE: ${{ inputs.promote }}
+          DISPATCH_PROMOTE: ${{ github.event.client_payload.promote }}
         run: |
           set -eu
           for value in AZURE_CLIENT_ID AZURE_TENANT_ID AZURE_SUBSCRIPTION_ID; do
             [ -n "${!value:-}" ] || { echo "::error::$value is not configured in the production environment"; exit 1; }
           done
+          for requested in "${MANUAL_PROMOTE:-false}" "${DISPATCH_PROMOTE:-false}"; do
+            [ "$requested" != "true" ] \
+              || { echo "::error::Promote only with revision-traffic.yml"; exit 2; }
+          done
 
-      - uses: azure/login@v3
+      - uses: azure/login@f5d393ae46f8fde4be8b75f32e3fc50e654ad0ca # v3
         with:
           client-id: ${{ env.AZURE_CLIENT_ID }}
           tenant-id: ${{ env.AZURE_TENANT_ID }}
@@ -214,22 +226,6 @@ jobs:
           echo "previous=$previous" >> "$GITHUB_OUTPUT"
           echo "candidate=$candidate" >> "$GITHUB_OUTPUT"
 
-      - name: Promote candidate
-        shell: bash
-        env:
-          PREVIOUS: ${{ steps.candidate.outputs.previous }}
-          CANDIDATE: ${{ steps.candidate.outputs.candidate }}
-        run: |
-          set -eu
-          if [ -n "$PREVIOUS" ] && [ "$PREVIOUS" != "$CANDIDATE" ]; then
-            az containerapp ingress traffic set -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
-              --revision-weight "$PREVIOUS=0" "$CANDIDATE=100" --only-show-errors
-          else
-            az containerapp ingress traffic set -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
-              --revision-weight "$CANDIDATE=100" --only-show-errors
-          fi
-          curl --fail --show-error --silent --retry 5 --retry-delay 5 https://law.soufien.lu/healthz
-
       - name: Deployment summary
         shell: bash
         env:
@@ -243,6 +239,7 @@ jobs:
             echo "- image: \`$IMAGE\`"
             echo "- revision: \`$CANDIDATE\`"
             echo "- artifact manifest set: \`$MANIFEST_SET\`"
+            echo "- traffic promoted by this run: \`false\`"
             echo "- authentication: GitHub OIDC, managed ACR pull and managed Azure OpenAI access"
             echo "- rollback revision retained: \`${{ steps.candidate.outputs.previous }}\`"
             echo "- legacy secrets retained while the rollback revision exists; removal is a separate verified cleanup"

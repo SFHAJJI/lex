@@ -14,8 +14,17 @@ public static class IndexFromCorpus
 {
     public static void Build(string corpusRoot, string? articlesRoot, string dbPath, string? signingKeyPem,
                              DateTimeOffset now, SemanticBuildOptions? semantic = null,
-                             string? workEnrichmentPath = null, string? codeCommit = null)
+                             string? workEnrichmentPath = null, string? codeCommit = null,
+                             string? articlesCommit = null, string? corpusCommit = null)
     {
+        if ((articlesRoot is null) != (articlesCommit is null))
+            throw new InvalidDataException(
+                "The derived articles path and its full Git commit must be supplied together.");
+        var stampedCorpusCommit = corpusCommit is null
+            ? GitCommit(corpusRoot)
+            : RequireCleanGitCheckout(corpusRoot, corpusCommit, "corpus");
+        var stampedArticlesCommit = articlesRoot is null ? null
+            : RequireCleanGitCheckout(articlesRoot, articlesCommit!, "derived articles");
         var manifest = JsonSerializer.Deserialize<ManifestDoc>(
             File.ReadAllText(Path.Combine(corpusRoot, "manifest.json")), CorpusJson.Options)!;
         var publisherId = manifest.Publisher["id"];
@@ -171,7 +180,7 @@ public static class IndexFromCorpus
             ["source_terms_url"] = manifest.SourceTermsUrl ?? "",
             ["modifications"] = manifest.Modifications ?? "",
             ["notice"] = ReadIfExists(Path.Combine(corpusRoot, "NOTICE")),
-            ["corpus_commit"] = GitCommit(corpusRoot),
+            ["corpus_commit"] = stampedCorpusCommit,
             ["code_commit"] = NormalizeCodeCommit(codeCommit),
             ["built_at"] = now.UtcDateTime.ToString("yyyy-MM-ddTHH:mm:ssZ"),
             ["ingester_version"] = manifest.IngesterVersion,
@@ -181,6 +190,8 @@ public static class IndexFromCorpus
             ["build_issues_digest"] = Convert.ToHexStringLower(
                 SHA256.HashData(Encoding.UTF8.GetBytes(buildIssuesJson))),
         };
+        if (stampedArticlesCommit is not null)
+            stamp["articles_commit"] = stampedArticlesCommit;
         if (manifest.ScopeExpectedWorks is { } scopeExpectedWorks)
             stamp["scope_expected_works"] = scopeExpectedWorks.ToString();
 
@@ -267,12 +278,9 @@ public static class IndexFromCorpus
     {
         try
         {
-            var psi = new ProcessStartInfo("git", "rev-parse HEAD")
-            { WorkingDirectory = dir, RedirectStandardOutput = true, RedirectStandardError = true };
-            using var p = Process.Start(psi)!;
-            var output = p.StandardOutput.ReadToEnd().Trim();
-            p.WaitForExit(10_000);
-            return p.ExitCode == 0 && output.Length == 40 && output.All(Uri.IsHexDigit)
+            var result = RunGit(dir, "rev-parse", "HEAD");
+            var output = result.Output.Trim();
+            return result.ExitCode == 0 && output.Length == 40 && output.All(Uri.IsHexDigit)
                 ? output.ToLowerInvariant()
                 : "uncommitted";
         }
@@ -284,7 +292,51 @@ public static class IndexFromCorpus
         if (value is null) return "uncommitted";
         var normalized = value.ToLowerInvariant();
         if (normalized.Length != 40 || normalized.Any(c => !Uri.IsHexDigit(c)))
-            throw new InvalidDataException("The build code commit must be a full 40-character Git SHA.");
+            throw new InvalidDataException("The commit must be a full 40-character Git SHA.");
         return normalized;
+    }
+
+    private static string RequireCleanGitCheckout(string directory, string expectedCommit, string label)
+    {
+        var expected = NormalizeCodeCommit(expectedCommit);
+        var actual = GitCommit(directory);
+        if (!string.Equals(actual, expected, StringComparison.Ordinal))
+            throw new InvalidDataException(
+                $"The {label} checkout is at {actual}, expected {expected}.");
+
+        var result = RunGit(directory, "status", "--porcelain", "--untracked-files=all");
+        if (result.ExitCode != 0)
+            throw new InvalidDataException(
+                $"Could not verify the {label} checkout: {result.Error.Trim()}");
+        if (!string.IsNullOrWhiteSpace(result.Output))
+            throw new InvalidDataException($"The {label} checkout has uncommitted changes.");
+        return expected;
+    }
+
+    private static (int ExitCode, string Output, string Error) RunGit(
+        string directory, params string[] arguments)
+    {
+        var start = new ProcessStartInfo("git")
+        {
+            WorkingDirectory = directory,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        };
+        foreach (var argument in arguments) start.ArgumentList.Add(argument);
+        using var process = Process.Start(start)!;
+        var output = process.StandardOutput.ReadToEndAsync();
+        var error = process.StandardError.ReadToEndAsync();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        try
+        {
+            process.WaitForExitAsync(timeout.Token).GetAwaiter().GetResult();
+        }
+        catch (OperationCanceledException)
+        {
+            try { process.Kill(entireProcessTree: true); } catch { }
+            throw new InvalidDataException("Git verification timed out.");
+        }
+        Task.WhenAll(output, error).GetAwaiter().GetResult();
+        return (process.ExitCode, output.Result, error.Result);
     }
 }

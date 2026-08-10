@@ -7,12 +7,14 @@ public sealed record IndexStampVerification(
     string Collection,
     string? CorpusCommit,
     string? CodeCommit,
+    string? ArticlesCommit,
     bool SignatureValid,
     bool ContentDigestPresent,
     bool ContentDigestMatches,
     bool CollectionMatches,
     bool CorpusCommitMatches,
     bool CodeCommitMatches,
+    bool ArticlesCommitMatches,
     bool EnrichmentDigestMatches,
     bool Strict)
 {
@@ -21,11 +23,12 @@ public sealed record IndexStampVerification(
                            && CollectionMatches
                            && CorpusCommitMatches
                            && CodeCommitMatches
+                           && ArticlesCommitMatches
                            && EnrichmentDigestMatches;
 
     public int ExitCode => !SignatureValid ? 3
         : !ContentDigestMatches && (Strict || ContentDigestPresent) ? 4
-        : CollectionMatches && CorpusCommitMatches && CodeCommitMatches
+        : CollectionMatches && CorpusCommitMatches && CodeCommitMatches && ArticlesCommitMatches
           && EnrichmentDigestMatches ? 0 : 5;
 }
 
@@ -36,7 +39,8 @@ public static class IndexStampVerifier
         string? expectedCollection = null,
         string? expectedCorpusCommit = null,
         string? workEnrichmentPath = null,
-        string? expectedCodeCommit = null)
+        string? expectedCodeCommit = null,
+        string? expectedArticlesCommit = null)
     {
         using var reader = LexIndexReader.Open(dbPath);
         var claimedContent = reader.Stamp.GetValueOrDefault("content_digest") ?? "";
@@ -46,12 +50,15 @@ public static class IndexStampVerifier
         var actualEnrichment = reader.Stamp.GetValueOrDefault("enrichment_digest");
         var corpusCommit = reader.Stamp.GetValueOrDefault("corpus_commit");
         var codeCommit = reader.Stamp.GetValueOrDefault("code_commit");
+        var articlesCommit = reader.Stamp.GetValueOrDefault("articles_commit");
         var strict = expectedCollection is not null || expectedCorpusCommit is not null
-                     || expectedEnrichment is not null || expectedCodeCommit is not null;
+                     || expectedEnrichment is not null || expectedCodeCommit is not null
+                     || expectedArticlesCommit is not null;
         return new IndexStampVerification(
             reader.Collection,
             corpusCommit,
             codeCommit,
+            articlesCommit,
             reader.SignatureValid,
             claimedContent.Length > 0,
             claimedContent.Length > 0
@@ -62,6 +69,8 @@ public static class IndexStampVerifier
             || string.Equals(expectedCorpusCommit, corpusCommit, StringComparison.Ordinal),
             expectedCodeCommit is null
             || string.Equals(expectedCodeCommit, codeCommit, StringComparison.Ordinal),
+            expectedArticlesCommit is null
+            || string.Equals(expectedArticlesCommit, articlesCommit, StringComparison.Ordinal),
             expectedEnrichment is null
             || string.Equals(expectedEnrichment, actualEnrichment,
                 StringComparison.OrdinalIgnoreCase),
