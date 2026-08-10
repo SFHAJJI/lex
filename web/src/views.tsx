@@ -126,11 +126,15 @@ export function Provision({ items, toc, validFrom, validTo, work, title, languag
         </div>
       ) : items.map((p) => {
         const exactTextUrl = safeHttpsUrl(p.permalink);
+        const hasAnchor = p.anchor.length > 0;
         return (
-        <article key={p.anchor} className="art" id={p.anchor}>
+        <article key={p.anchor || p.permalink || "document-text"} className="art"
+                 id={hasAnchor ? p.anchor : undefined}>
           <h4>
-            <a href={permalink(work, validFrom, p.anchor)}>{p.num ?? p.anchor}</a>
-            {p.heading ? <span className="sub">, {plain(p.heading)}</span> : null}
+            {hasAnchor
+              ? <a href={permalink(work, validFrom, p.anchor)}>{p.num ?? p.anchor}</a>
+              : <span>Document text</span>}
+            {p.heading ? <span className="sub">{hasAnchor ? ", " : " — "}{plain(p.heading)}</span> : null}
           </h4>
           {/* Publisher text never becomes executable markup: react-markdown creates React nodes
               and ignores raw HTML by default. Export and comparison keep the untouched string. */}

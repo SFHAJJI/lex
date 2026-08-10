@@ -201,7 +201,7 @@ public static class ApiEndpoints
             var sequence = 0;
             async Task Send(string ev, JsonNode data)
             {
-                await writes.WaitAsync();
+                await writes.WaitAsync(req.HttpContext.RequestAborted);
                 try
                 {
                     var envelope = new JsonObject

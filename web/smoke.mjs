@@ -170,6 +170,27 @@ if (controlsWithoutIdentity(law).length > 0) {
   process.exit(1);
 }
 
+const omittedLaw = await mount(
+  "https://law.soufien.lu/?space=law&work=eu-eurlex%3A32016R0679&date=2018-05-25",
+  (name, args) => {
+    if (name === "timeline") return { versions: [{ ...document("2018-05-25"), text_available: true }] };
+    if (name === "as_of" && args.mode === "outline")
+      return { document: document(String(args.date)), provisions: [provision(null)] };
+    if (name === "as_of") return {
+      document: { ...document(String(args.date)), text_omitted: true,
+        text_omitted_reason: "bounded response" },
+      provisions: [],
+    };
+    return {};
+  },
+);
+if (!/Document text/.test(omittedLaw)
+    || /<article[^>]*id=""/.test(omittedLaw)
+    || /<a[^>]*><\/a>/.test(omittedLaw)) {
+  console.error("FAIL (document text) - an omitted document rendered an empty article anchor");
+  process.exit(1);
+}
+
 const compareAnswer = (name, args) => {
   if (name === "timeline") return {
     versions: ["2020-01-01", "2021-01-01"].map((date) => ({ ...document(date), text_available: true })),
