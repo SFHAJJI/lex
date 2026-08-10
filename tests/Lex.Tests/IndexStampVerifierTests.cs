@@ -11,6 +11,7 @@ namespace Lex.Tests;
 public sealed class IndexStampVerifierTests : IDisposable
 {
     private readonly List<string> _files = [];
+    private readonly List<string> _directories = [];
 
     [Fact]
     public void Corpus_stamp_uses_the_full_git_commit_required_by_strict_promotion()
@@ -56,6 +57,42 @@ public sealed class IndexStampVerifierTests : IDisposable
     }
 
     [Fact]
+    public void Release_input_commit_must_match_a_clean_checkout()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"lex-input-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+        _directories.Add(directory);
+        RunGit(directory, "init");
+        RunGit(directory, "config", "user.name", "Lex Test");
+        RunGit(directory, "config", "user.email", "lex@example.invalid");
+        var input = Path.Combine(directory, "input.json");
+        File.WriteAllText(input, "one", new UTF8Encoding(false));
+        RunGit(directory, "add", "input.json");
+        RunGit(directory, "commit", "-m", "one");
+        var first = RunGit(directory, "rev-parse", "HEAD");
+
+        File.WriteAllText(input, "two", new UTF8Encoding(false));
+        RunGit(directory, "commit", "-am", "two");
+        var second = RunGit(directory, "rev-parse", "HEAD");
+        var method = typeof(IndexFromCorpus).GetMethod(
+            "RequireCleanGitCheckout", BindingFlags.NonPublic | BindingFlags.Static);
+        Assert.NotNull(method);
+
+        var wrong = Assert.Throws<TargetInvocationException>(() =>
+            method.Invoke(null, [directory, first, "derived articles"]));
+        Assert.IsType<InvalidDataException>(wrong.InnerException);
+
+        RunGit(directory, "checkout", "--detach", first);
+        Assert.Equal(first, method.Invoke(null, [directory, first, "derived articles"]));
+
+        File.WriteAllText(input, "dirty", new UTF8Encoding(false));
+        var dirty = Assert.Throws<TargetInvocationException>(() =>
+            method.Invoke(null, [directory, first, "derived articles"]));
+        Assert.IsType<InvalidDataException>(dirty.InnerException);
+        Assert.NotEqual(first, second);
+    }
+
+    [Fact]
     public void Strict_promotion_binds_collection_corpus_code_content_and_enrichment()
     {
         var enrichment = TempFile(".json");
@@ -65,7 +102,8 @@ public sealed class IndexStampVerifierTests : IDisposable
         var db = Build(key, digest);
 
         var valid = IndexStampVerifier.Verify(
-            db, "eu-eurlex", new string('c', 40), enrichment, new string('a', 40));
+            db, "eu-eurlex", new string('c', 40), enrichment, new string('a', 40),
+            new string('d', 40));
         Assert.True(valid.IsValid);
         Assert.Equal(0, valid.ExitCode);
         Assert.False(IndexStampVerifier.Verify(
@@ -76,6 +114,11 @@ public sealed class IndexStampVerifierTests : IDisposable
             db, "eu-eurlex", new string('c', 40), enrichment, new string('b', 40));
         Assert.False(wrongCode.CodeCommitMatches);
         Assert.Equal(5, wrongCode.ExitCode);
+        var wrongArticles = IndexStampVerifier.Verify(
+            db, "eu-eurlex", new string('c', 40), enrichment, new string('a', 40),
+            new string('e', 40));
+        Assert.False(wrongArticles.ArticlesCommitMatches);
+        Assert.Equal(5, wrongArticles.ExitCode);
 
         var other = TempFile(".json");
         File.WriteAllText(other, "different enrichment", new UTF8Encoding(false));
@@ -154,6 +197,7 @@ public sealed class IndexStampVerifierTests : IDisposable
             ["collection"] = "eu-eurlex",
             ["corpus_commit"] = new string('c', 40),
             ["code_commit"] = new string('a', 40),
+            ["articles_commit"] = new string('d', 40),
             ["built_at"] = "2026-08-09T00:00:00Z",
         }, [doc], [provision], [], [], key,
             workSearch: new WorkSearchBuildOptions([], [], enrichmentDigest));
@@ -188,10 +232,39 @@ public sealed class IndexStampVerifierTests : IDisposable
         return path;
     }
 
+    private static string RunGit(string directory, params string[] arguments)
+    {
+        var start = new ProcessStartInfo("git")
+        {
+            WorkingDirectory = directory,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        };
+        foreach (var argument in arguments) start.ArgumentList.Add(argument);
+        using var process = Process.Start(start)!;
+        var output = process.StandardOutput.ReadToEndAsync();
+        var error = process.StandardError.ReadToEndAsync();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        try
+        {
+            process.WaitForExitAsync(timeout.Token).GetAwaiter().GetResult();
+        }
+        catch (OperationCanceledException)
+        {
+            try { process.Kill(entireProcessTree: true); } catch { }
+            Assert.Fail("Git test process timed out.");
+        }
+        Task.WhenAll(output, error).GetAwaiter().GetResult();
+        Assert.True(process.ExitCode == 0, error.Result);
+        return output.Result.Trim().ToLowerInvariant();
+    }
+
     public void Dispose()
     {
         SqliteConnection.ClearAllPools();
         foreach (var file in _files)
             try { File.Delete(file); } catch { }
+        foreach (var directory in _directories)
+            try { Directory.Delete(directory, true); } catch { }
     }
 }

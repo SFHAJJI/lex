@@ -53,11 +53,11 @@ resource "azurerm_federated_identity_credential" "deploy_github" {
 }
 
 resource "azurerm_federated_identity_credential" "publisher_github" {
-  name                      = "github-lex-ops-main"
+  name                      = "github-lex-ops-production"
   user_assigned_identity_id = azurerm_user_assigned_identity.publisher.id
   audience                  = ["api://AzureADTokenExchange"]
   issuer                    = "https://token.actions.githubusercontent.com"
-  subject                   = "repo:SFHAJJI@26882784/lex-ops@1319033296:ref:refs/heads/main"
+  subject                   = "repo:SFHAJJI@26882784/lex-ops@1319033296:environment:production"
 }
 
 resource "azurerm_role_assignment" "runtime_acr_pull" {

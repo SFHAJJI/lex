@@ -8,8 +8,8 @@ Terraform does not recreate or silently import them.
 The runtime identity pulls from ACR and calls Azure OpenAI. The deployment identity receives a
 GitHub OIDC token for the `production` environment and can build an ACR image, assign the runtime
 identity and update only `ca-lex-web`. The publisher identity receives a GitHub OIDC token only
-from `lex-ops` main and can sign or verify with the Key Vault key. No private signing key leaves
-Key Vault.
+after approval in the main-only `lex-ops` production environment and can sign or verify with the
+Key Vault key. No private signing key leaves Key Vault.
 
 Initialize the remote state backend with explicit values:
 

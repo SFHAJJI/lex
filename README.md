@@ -188,6 +188,9 @@ history to hold. The fallback ladder for XML-less versions is spec D49.
 
 ```
 LEX_CODE_COMMIT=$(git rev-parse HEAD)
+LEX_ARTICLES_COMMIT=$(git -C ../lex-articles rev-parse HEAD)
+LEX_LU_CORPUS_COMMIT=$(git -C ../lex-corpus-lu-legilux rev-parse HEAD)
+LEX_EU_CORPUS_COMMIT=$(git -C ../lex-corpus-eu-eurlex rev-parse HEAD)
 
 # ingest (paced, sequential; official open-data channels only)
 dotnet run --project src/Lex.Ingest -- ingest --publisher lu-legilux --corpus ../lex-corpus-lu-legilux
@@ -196,7 +199,8 @@ dotnet run --project src/Lex.Ingest -- ingest --publisher lu-legilux --corpus ..
 dotnet run --project src/Lex.Ingest -- derive --publisher lu-legilux --corpus ../lex-corpus-lu-legilux --out ../lex-articles
 dotnet run --project src/Lex.Ingest -- index --corpus ../lex-corpus-lu-legilux --articles ../lex-articles \
     --out indexes/index-lu-legilux.db --keyfile signing-key.pem \
-    --code-commit "$LEX_CODE_COMMIT"
+    --code-commit "$LEX_CODE_COMMIT" --articles-commit "$LEX_ARTICLES_COMMIT" \
+    --corpus-commit "$LEX_LU_CORPUS_COMMIT"
 
 # resumable large semantic backfill on a reviewed Windows DirectML adapter
 dotnet build src/Lex.Ingest -c Release -p:UseDirectML=true
@@ -207,7 +211,8 @@ src/Lex.Ingest/bin/Release/net10.0/Lex.Ingest index \
     --embedding-directml-device 1 --embedding-batch-size 256 \
     --embedding-max-batch-tokens 32768 \
     --embedding-cache build-cache/eu-eurlex-embeddings.db \
-    --code-commit "$LEX_CODE_COMMIT"
+    --code-commit "$LEX_CODE_COMMIT" --articles-commit "$LEX_ARTICLES_COMMIT" \
+    --corpus-commit "$LEX_EU_CORPUS_COMMIT"
 
 # The chunker fixes legal-text boundaries before the GPU groups immutable chunks
 # into 32/64/128/256/512-token inference buckets. A fixed padded-token budget reduces

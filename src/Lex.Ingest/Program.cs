@@ -211,8 +211,15 @@ switch (args0[0])
             EmbeddingCachePath: Get("--embedding-cache"));
         var codeCommit = Get("--code-commit")
             ?? throw new ArgumentException("--code-commit required");
+        var articlesCommitInput = Get("--articles-commit");
+        if (articles is null && articlesCommitInput is not null)
+            throw new ArgumentException("--articles-commit requires --articles");
+        var articlesCommit = articles is null ? null : articlesCommitInput
+            ?? throw new ArgumentException("--articles-commit required when --articles is supplied");
+        var corpusCommit = Get("--corpus-commit")
+            ?? throw new ArgumentException("--corpus-commit required");
         IndexFromCorpus.Build(corpus, articles, outDb, keyPem, now, semantic,
-            Get("--work-enrichment"), codeCommit);
+            Get("--work-enrichment"), codeCommit, articlesCommit, corpusCommit);
         return 0;
     }
     case "derive":
@@ -252,12 +259,13 @@ switch (args0[0])
                 var expectedCollection = Get("--expected-collection");
                 var expectedCorpusCommit = Get("--expected-corpus-commit");
                 var expectedCodeCommit = Get("--expected-code-commit");
+                var expectedArticlesCommit = Get("--expected-articles-commit");
                 if (expectedCollection is not null || expectedCorpusCommit is not null
-                    || expectedCodeCommit is not null)
+                    || expectedCodeCommit is not null || expectedArticlesCommit is not null)
                 {
                     var strict = IndexStampVerifier.Verify(
                         db, expectedCollection, expectedCorpusCommit, enrichment,
-                        expectedCodeCommit);
+                        expectedCodeCommit, expectedArticlesCommit);
                     Console.WriteLine($"collection={strict.Collection} " +
                         $"corpus_commit={strict.CorpusCommit} " +
                         $"signature_valid={strict.SignatureValid} " +
@@ -267,6 +275,8 @@ switch (args0[0])
                         $"corpus_commit_matches={strict.CorpusCommitMatches} " +
                         $"code_commit={strict.CodeCommit ?? "absent"} " +
                         $"code_commit_matches={strict.CodeCommitMatches} " +
+                        $"articles_commit={strict.ArticlesCommit ?? "absent"} " +
+                        $"articles_commit_matches={strict.ArticlesCommitMatches} " +
                         $"enrichment_digest={(enrichment is null ? "not_checked"
                             : strict.EnrichmentDigestMatches ? "matches" : "MISMATCH")}");
                     return strict.ExitCode;
@@ -330,7 +340,7 @@ switch (args0[0])
                 finally { try { Directory.Delete(tmp, true); } catch { } }
             }
             default:
-                Console.Error.WriteLine("usage: lex verify corpus --corpus X | lex verify stamp --db X [--expected-collection ID] [--expected-corpus-commit SHA] [--expected-code-commit SHA] [--work-enrichment FILE] | lex verify derive --publisher P --corpus X --articles Y [--work slug]");
+                Console.Error.WriteLine("usage: lex verify corpus --corpus X | lex verify stamp --db X [--expected-collection ID] [--expected-corpus-commit SHA] [--expected-code-commit SHA] [--expected-articles-commit SHA] [--work-enrichment FILE] | lex verify derive --publisher P --corpus X --articles Y [--work slug]");
                 return 1;
         }
     }
@@ -485,9 +495,10 @@ static void Usage() => Console.Error.WriteLine("""
       lex scope-preview [--publisher ID] [--scope FILE] [--previous-scope FILE] [--wave 1..4]
       lex ingest --publisher ID --corpus PATH [--scope FILE] [--wave 1..4] [--now ISO]
       lex work-enrichment-build --input REVIEWED.json --out CANONICAL.json --collection ID
-      lex index  --corpus PATH [--articles PATH] --out FILE.db [--keyfile KEY.pem] [--now ISO]
+      lex index  --corpus PATH [--articles PATH --articles-commit FULL_SHA] --out FILE.db [--keyfile KEY.pem] [--now ISO]
                  [--embedding-model PATH] [--vectors FILE] [--embedding-batch-size N]
-                 [--time-budget-minutes N] [--work-enrichment FILE.json] --code-commit FULL_SHA
+                 [--time-budget-minutes N] [--work-enrichment FILE.json]
+                 --corpus-commit FULL_SHA --code-commit FULL_SHA
       lex derive --publisher lu-legilux --corpus PATH --out PATH [--code-version SHA]
       lex verify corpus --corpus PATH
       lex repair checkout-line-endings --corpus PATH
