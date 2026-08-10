@@ -66,6 +66,13 @@ public static class PageShell
         "Point-in-time Luxembourg and reviewed EU law, with grounded AI answers, "
         + "per-article history, and verifiable provenance.";
 
+    private static bool ProofCurrent(string? path) => path is
+        "/how-it-works" or "/coverage" or "/architecture" or "/architecture/next"
+        or "/decisions" or "/benchmarks" or "/verify" or "/built" or "/about";
+
+    private static string ProofLink(string path, string label, string? currentPath) =>
+        $"<a href=\"{path}\"{(currentPath == path ? " aria-current=\"page\"" : "")}>{label}</a>";
+
     // `title` is what search engines and social cards get; `h1` is what a reader sees, when the
     // two want to be different sentences.
     //
@@ -95,6 +102,7 @@ public static class PageShell
         <meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
         <meta name="twitter:card" content="summary_large_image">{{Extras(publicBase, canonicalPath, jsonLd)}}{{AssistantHead(canonicalPath, assetVersion, assistant)}}
         <meta name="twitter:image" content="{{publicBase}}/og.png">
+        <script src="/site.js?v={{Uri.EscapeDataString(assetVersion ?? "dev")}}" defer></script>
         <link rel="preload" href="/fonts/IBMPlexSans-latin.woff2" as="font" type="font/woff2" crossorigin>
         <link rel="preload" href="/fonts/SourceSerif4-latin.woff2" as="font" type="font/woff2" crossorigin>
         <!-- The interval mark: a rule, two terminals, and a notch at the date being read.
@@ -162,6 +170,21 @@ public static class PageShell
           header .brand { font-family:var(--serif); font-weight:700; font-size:21px; color:var(--fg); letter-spacing:-.01em }
           header a.navlink { color:var(--muted); font-size:14.5px }
           header a.navlink.on { color:var(--fg); font-weight:600; box-shadow:inset 0 -2px 0 var(--fg) }
+          header .navspacer { flex:1 }
+          .proofnav { position:relative; color:var(--muted); font-size:14.5px }
+          .proofnav summary { cursor:pointer; list-style:none; display:flex; align-items:center; gap:6px }
+          .proofnav summary::-webkit-details-marker { display:none }
+          .proofnav summary::after { content:'+'; font-family:var(--mono); font-size:12px }
+          .proofnav[open] summary::after { content:'−' }
+          .proofnav.on summary { color:var(--fg); font-weight:600 }
+          .proofnav > nav { position:absolute; z-index:50; top:calc(100% + 10px); left:-12px;
+            width:min(310px,calc(100vw - 28px)); padding:8px; display:grid; grid-template-columns:1fr 1fr;
+            gap:2px; background:var(--card); border:1px solid var(--line); border-radius:10px;
+            box-shadow:0 16px 38px rgba(0,0,0,.18) }
+          .proofnav:not([open]) > nav { display:none }
+          .proofnav > nav a { padding:7px 9px; border-radius:6px; color:var(--muted); text-decoration:none }
+          .proofnav > nav a:hover,.proofnav > nav a:focus-visible,.proofnav > nav a[aria-current=page] {
+            color:var(--fg); background:var(--bg) }
           main { max-width:960px; margin:0 auto; padding:26px 20px 60px }
           h1 { font-family:var(--serif); font-size:29px; line-height:1.15; letter-spacing:-.015em; margin:0 0 6px; text-wrap:balance }
           h2 { font-family:var(--serif); font-size:20px; margin:28px 0 8px }
@@ -251,6 +274,8 @@ public static class PageShell
             table { display:block; overflow-x:auto }
             pre { overflow-x:auto }
             header { gap:12px; padding:12px 14px }
+            header .navspacer { display:none }
+            .proofnav > nav { left:auto; right:0; grid-template-columns:1fr }
             h1 { font-size:25px }
             .rail .yr { font-size:10px }
             .filters i { width:100%; margin:3px 0 1px }
@@ -278,8 +303,20 @@ public static class PageShell
                everything. They stay reachable from the footer and from the noscript line. -->
           <a class="brand" href="/">Lex</a>
           <a class="navlink{{(nav == "browse" ? " on" : "")}}" href="/browse">Browse everything</a>
-          <a class="navlink{{(nav == "how" ? " on" : "")}}" href="/how-it-works">How it works</a>
-          <span style="flex:1"></span>
+          <details class="proofnav{{(ProofCurrent(canonicalPath) ? " on" : "")}}">
+            <summary aria-expanded="false">Check the work</summary>
+            <nav aria-label="Check the work">
+              {{ProofLink("/how-it-works", "How it works", canonicalPath)}}
+              {{ProofLink("/coverage", "Coverage", canonicalPath)}}
+              {{ProofLink("/architecture", "Architecture", canonicalPath)}}
+              {{ProofLink("/decisions", "Decisions", canonicalPath)}}
+              {{ProofLink("/benchmarks", "Benchmarks", canonicalPath)}}
+              {{ProofLink("/verify", "Verify the artifacts", canonicalPath)}}
+              {{ProofLink("/built", "How I built it", canonicalPath)}}
+              {{ProofLink("/about", "About", canonicalPath)}}
+            </nav>
+          </details>
+          <span class="navspacer"></span>
           <a class="navlink{{(nav == "dev" || nav == "built" ? " on" : "")}}" href="/developers">For developers</a>
         </header>
         <main>
@@ -297,15 +334,15 @@ public static class PageShell
           <div><b>Check the work</b>
             <a href="/how-it-works">How it works</a><a href="/coverage">What Lex holds, and lacks</a>
             <a href="/decisions">Decisions, and what they cost</a>
-            <a href="/verify">Verify it yourself</a><a href="/architecture">Architecture</a>
-            <a href="/about">Who built this</a></div>
+            <a href="/benchmarks">Benchmarks</a><a href="/verify">Verify it yourself</a>
+            <a href="/architecture">Architecture</a><a href="/built">How I built it</a>
+            <a href="/about">About</a></div>
           <!-- The datasets, not the engine. This group used to end at "Source on GitHub" pointing at
                the engine repo, which is the wrong thing to lead with for a reader who wants to USE
                this law rather than read the code that serves it. The corpora are the part that is
                reusable on its own, and they were reachable only from /developers. -->
           <div><b>Build on it</b>
-            <a href="/developers">Developers &amp; API</a><a href="/ai">Connect your own AI</a>
-            <a href="/built">How it was built</a>
+            <a href="/developers">Developers &amp; API</a>
             <a href="https://github.com/SFHAJJI/lex-articles" rel="noopener">Dataset: law by article (CC-BY)</a>
             <a href="https://github.com/SFHAJJI/lex-corpus-lu-legilux" rel="noopener">Corpus: Luxembourg, verbatim</a>
             <a href="https://github.com/SFHAJJI/lex-corpus-eu-eurlex" rel="noopener">Corpus: EU, verbatim</a></div>

@@ -103,6 +103,28 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
     }
 
     [Fact]
+    public async Task Navigation_groups_engineering_evidence_and_keeps_one_canonical_developer_page()
+    {
+        var home = await _site.Client.GetStringAsync("/");
+        Assert.Contains("<details class=\"proofnav\"", home);
+        Assert.Contains("<summary aria-expanded=\"false\">Check the work</summary>", home);
+        foreach (var path in new[]
+                 {
+                     "/how-it-works", "/coverage", "/architecture", "/decisions",
+                     "/benchmarks", "/verify", "/built", "/about",
+                 })
+            Assert.Contains($"href=\"{path}\"", home);
+        Assert.Contains("href=\"/built\"><b>I want to inspect the engineering</b>", home);
+        Assert.DoesNotContain("href=\"/about\"><b>I want to know who built this</b>", home);
+
+        using var redirect = await _site.Client.GetAsync("/ai");
+        Assert.Equal(HttpStatusCode.MovedPermanently, redirect.StatusCode);
+        Assert.Equal("/developers#assistant", redirect.Headers.Location?.OriginalString);
+        var developers = await _site.Client.GetStringAsync("/developers");
+        Assert.Contains("id=\"assistant\"", developers);
+    }
+
+    [Fact]
     public async Task Static_search_controls_keep_accessible_names_and_mobile_bounds()
     {
         var changed = await _site.Client.GetStringAsync("/changed?from=2019-01-01&to=2023-01-01");
@@ -482,7 +504,7 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
         foreach (var path in new[]
         {
             "/about", "/architecture", "/architecture/next", "/decisions", "/verify",
-            "/developers", "/ai", "/built", "/how-it-works", "/coverage", "/benchmarks",
+            "/developers", "/built", "/how-it-works", "/coverage", "/benchmarks",
         })
         {
             var html = await _site.Client.GetStringAsync(path);

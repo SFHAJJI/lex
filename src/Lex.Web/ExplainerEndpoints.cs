@@ -47,57 +47,7 @@ public static class ExplainerEndpoints
         static string StatusBadge(string status) =>
             $"<span class=\"badge{(status == "shipped" ? " ok" : status == "gated" ? " warn" : "")}\">{H(status)}</span>";
 
-        app.MapGet("/ai", (HttpRequest req) =>
-        {
-            var baseUrl = BaseUrl(req);
-            // Counted, not written. See /developers for why.
-            var tools = mcpCore.ToolDefs().OfType<JsonObject>()
-                               .Select(t => t["name"]!.GetValue<string>()).ToList();
-            var body = $$"""
-                <p>Lex is <b>MCP-native</b>: you bring your AI, Lex brings the evidence. Your model asks the
-                {{tools.Count}} Lex tools for the law as it stood on a date, and composes its answer from
-                returned text, dates and hashes, Lex itself never interprets anything.</p>
-
-                <h2>Connect in one line</h2>
-                <div class="card"><b>Claude Code</b><pre class="mono" style="white-space:pre-wrap">claude mcp add --transport http lex {{baseUrl}}/mcp</pre></div>
-                <div class="card"><b>VS Code, Cursor, or another client with remote HTTP support</b>:
-                <pre class="mono" style="white-space:pre-wrap">{ "servers": { "lex": { "type": "http", "url": "{{baseUrl}}/mcp" } } }</pre></div>
-                <div class="card"><b>Legacy stdio-only client</b>, use the pinned third-party bridge
-                (Node.js 18+; Lex remains hosted):
-                <pre class="mono" style="white-space:pre-wrap">{ "mcpServers": { "lex": { "command": "npx", "args": ["-y", "mcp-remote@0.1.38", "{{baseUrl}}/mcp"] } } }</pre></div>
-
-                <h2>What a conversation looks like</h2>
-                <div class="card"><pre style="white-space:pre-wrap;font-size:14px;margin:0">
-                    You     What did Luxembourg data-protection law require about breach
-                            notification in March 2019?
-
-                    AI  →   search("notification violation données", as_of: 2019-03-15)
-                        ←   loi du 1er août 2018 (lex_id lu-legilux:loi-2018-08-01-a686…), recueil protection des données
-                    AI  →   as_of("lu-legilux:recueil-protection_donnees", "2019-03-15")
-                        ←   the exact text valid that day + interval + sha256 + signed stamp
-
-                    AI      "As of 15 March 2019, the applicable framework was … [quotes the
-                            retrieved text; cites the publisher timeline interval 2018-08-20 → 2019-… ; links provenance]"
-                </pre></div>
-
-                <h2>The {{tools.Count}} tools</h2>
-                <p class="sub">{{string.Join(" · ", tools)}} , 
-                read-only, deterministic, every response carries its dates, its hash, and an honest refusal
-                (<span class="mono">no_version_for_date</span>, <span class="mono">text_not_available</span>,
-                <span class="mono">text_withheld</span>) when Lex cannot know.</p>
-
-                <h2>Azure AI Foundry agents</h2>
-                <div class="card">Foundry's Agent Service speaks remote MCP natively, point an agent at this
-                endpoint and it gets all {{tools.Count}} tools (no key needed; leave approvals on for writes-free comfort):
-                <pre class="mono" style="white-space:pre-wrap">{ "type": "mcp", "server_label": "lex", "server_url": "{{baseUrl}}/mcp", "require_approval": "never" }</pre></div>
-
-                <p>Want to try it without installing anything? The capped <a href="/ask">built-in playground</a>
-                runs the same tools. Prefer no AI at all? Everything is also a <a href="/">permalink</a>.</p>
-                """;
-            return Results.Content(Page("Use Lex with your AI", body,
-                "your model + our evidence, MCP endpoint, one line to connect",
-                canonicalPath: "/ai"), "text/html");
-        });
+        app.MapGet("/ai", () => Results.Redirect("/developers#assistant", permanent: true));
 
         app.MapGet("/architecture", () =>
         {
@@ -924,7 +874,7 @@ public static class ExplainerEndpoints
             var tools = mcpCore.ToolDefs().OfType<JsonObject>()
                                .Select(t => t["name"]!.GetValue<string>()).ToList();
             var body = $$"""
-                <p class="lede">Lex is MCP-native: you bring the model, Lex brings the evidence.
+                <p class="lede" id="assistant">Lex is MCP-native: you bring the model, Lex brings the evidence.
                 {{tools.Count}} read-only tools over signed indexes, with no key or account required.
                 The public endpoint is deliberately bounded and advertises MCP {{McpSdkBridge.ServerVersion}}.</p>
 
