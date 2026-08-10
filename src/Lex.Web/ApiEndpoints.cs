@@ -98,7 +98,7 @@ public static class ApiEndpoints
         });
 
         // ---- /ask playground: chat over the MCP tools, grounded and capped ----
-        app.MapGet("/ask", () => Results.Redirect("/"));
+        app.MapGet("/ask", () => Results.Redirect("/", permanent: true));
 
         app.MapPost("/api/ask", async (HttpRequest req, HttpResponse res) =>
         {

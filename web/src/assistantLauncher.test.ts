@@ -25,7 +25,19 @@ test("the launcher is one compact control without a promotional hint bubble", ()
 });
 
 test("narrow screens use an explicit modal backdrop and preserve reduced motion", () => {
-  assert.match(css, /@media\s*\(max-width:\s*1099px\)/);
+  assert.match(css, /@media\s*\(width\s*<\s*1100px\)/);
   assert.match(css, /\.askbackdrop\s*\{/);
   assert.match(css, /@media\s*\(prefers-reduced-motion:\s*reduce\)/);
+});
+
+test("the mobile surface is a portalled modal while desktop remains complementary", () => {
+  assert.match(panel, /createPortal/,
+    "the modal must sit outside the main region it makes inert");
+  assert.match(panel, /body > header, body > main, body > footer/,
+    "all page landmarks behind the mobile modal must become inert");
+  assert.match(panel, /\.inert\s*=\s*true/);
+  assert.doesNotMatch(panel, /<aside[^>]*role="dialog"/s,
+    "a complementary desktop surface is not also a dialog");
+  assert.match(panel, /<div[^>]*role="dialog"/s,
+    "only the portalled mobile surface has modal-dialog semantics");
 });

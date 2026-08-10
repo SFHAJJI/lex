@@ -6,6 +6,8 @@ using System.Text.RegularExpressions;
 using Lex.Index;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http.Metadata;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -70,7 +72,8 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
     {
         var res = await _site.Client.GetAsync(path);
         var body = await res.Content.ReadAsStringAsync();
-        Golden.Assert($"page-{name}", $"HTTP {(int)res.StatusCode}\n{Golden.Normalise(body)}");
+        var renderedBody = body.Length == 0 ? "" : Golden.Normalise(body);
+        Golden.Assert($"page-{name}", $"HTTP {(int)res.StatusCode}\n{renderedBody}");
     }
 
     [Fact]
@@ -103,6 +106,72 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
     }
 
     [Fact]
+    public async Task Navigation_groups_engineering_evidence_and_keeps_one_canonical_developer_page()
+    {
+        var home = await _site.Client.GetStringAsync("/");
+        Assert.Contains("<details class=\"proofnav\"", home);
+        Assert.Contains("<summary aria-expanded=\"false\">Check the work</summary>", home);
+        foreach (var path in new[]
+                 {
+                     "/how-it-works", "/coverage", "/architecture", "/decisions",
+                     "/benchmarks", "/verify", "/built", "/about",
+                 })
+            Assert.Contains($"href=\"{path}\"", home);
+        Assert.Contains("href=\"/built\"><b>I want to inspect the engineering</b>", home);
+        Assert.DoesNotContain("href=\"/about\"><b>I want to know who built this</b>", home);
+        Assert.Contains("href=\"/developers#assistant\">Connect your own AI</a>", home);
+        Assert.DoesNotContain("href=\"/ai\"", home);
+
+        using var redirect = await _site.Client.GetAsync("/ai");
+        Assert.Equal(HttpStatusCode.MovedPermanently, redirect.StatusCode);
+        Assert.Equal("/developers#assistant", redirect.Headers.Location?.OriginalString);
+        var developers = await _site.Client.GetStringAsync("/developers");
+        Assert.Contains("id=\"assistant\"", developers);
+
+        using var askRedirect = await _site.Client.GetAsync("/ask");
+        Assert.Equal(HttpStatusCode.MovedPermanently, askRedirect.StatusCode);
+        Assert.Equal("/", askRedirect.Headers.Location?.OriginalString);
+    }
+
+    [Fact]
+    public void Public_route_ledger_matches_the_mounted_product_endpoints()
+    {
+        var ledgerPath = Path.Combine(Golden.RepositoryRoot(), "docs", "public-route-ledger.md");
+        var ledger = File.ReadLines(ledgerPath)
+            .Select(line => Regex.Match(line, @"^\| (GET|POST|SDK-owned) \| `([^`]+)` \|"))
+            .Where(match => match.Success)
+            .Select(match => $"{match.Groups[1].Value} {match.Groups[2].Value}")
+            .ToHashSet(StringComparer.Ordinal);
+
+        static string PublicPattern(string raw)
+        {
+            if (raw.StartsWith("/mcp", StringComparison.Ordinal)) return "/mcp";
+            var segments = raw.Split('/');
+            if (segments.Length > 1 && segments[1].StartsWith("{publisher:", StringComparison.Ordinal))
+                segments[1] = "{publisher}";
+            return string.Join('/', segments);
+        }
+
+        var mounted = _site.Services.GetRequiredService<EndpointDataSource>().Endpoints
+            .OfType<RouteEndpoint>()
+            .SelectMany(endpoint =>
+            {
+                var raw = endpoint.RoutePattern.RawText ?? "";
+                if (raw.StartsWith("/mcp", StringComparison.Ordinal))
+                    return ["SDK-owned /mcp"];
+                var methods = endpoint.Metadata.GetMetadata<IHttpMethodMetadata>()?.HttpMethods ?? [];
+                return methods
+                    .Where(method => method is "GET" or "POST")
+                    .Select(method => $"{method} {PublicPattern(raw)}");
+            })
+            .Where(route => route != "GET /site.js" && !route.StartsWith("GET /app/", StringComparison.Ordinal)
+                         && !route.StartsWith("GET /fonts/", StringComparison.Ordinal))
+            .ToHashSet(StringComparer.Ordinal);
+
+        Assert.Equal(ledger.Order(), mounted.Order());
+    }
+
+    [Fact]
     public async Task Static_search_controls_keep_accessible_names_and_mobile_bounds()
     {
         var changed = await _site.Client.GetStringAsync("/changed?from=2019-01-01&to=2023-01-01");
@@ -130,8 +199,11 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
 
         Assert.Contains(".filters .n { opacity:1;", browse);
         Assert.Contains("<details class=\"facetgroup\">", browse);
+        Assert.Contains("<b>Record only:</b> identity and timeline held; no searchable provision text.", browse);
+        Assert.Contains(">full text</span>", browse);
+        Assert.Contains(">record only</span>", browse);
         Assert.Contains("Law <span class=\"mono raw\">LOI</span>", scopedBrowse);
-        Assert.Contains("all 2 readable", scopedBrowse);
+        Assert.Contains(">full text</span>", scopedBrowse);
         Assert.Contains("href=\"/browse?publisher=t-pub\"", scopedBrowse);
         Assert.DoesNotContain("publisher=t-pub&amp;type=LOI\">Test Publisher", scopedBrowse);
         Assert.Contains("<select name=\"kind\" aria-label=\"Source class\">", inForce);
@@ -206,6 +278,14 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
         var benchmarks = await _site.Client.GetStringAsync("/benchmarks");
         Assert.Contains("Not measured yet", benchmarks);
         Assert.Contains("engineer-reviewed retrieval judgments", benchmarks);
+    }
+
+    [Fact]
+    public async Task Architecture_delivery_page_marks_its_primary_navigation_parent_current()
+    {
+        var html = await _site.Client.GetStringAsync("/architecture/next");
+
+        Assert.Contains("<a href=\"/architecture\" aria-current=\"page\">Architecture</a>", html);
     }
 
     [Fact]
@@ -482,11 +562,11 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
         foreach (var path in new[]
         {
             "/about", "/architecture", "/architecture/next", "/decisions", "/verify",
-            "/developers", "/ai", "/built", "/how-it-works", "/coverage", "/benchmarks",
+            "/developers", "/built", "/how-it-works", "/coverage", "/benchmarks",
         })
         {
             var html = await _site.Client.GetStringAsync(path);
-            Assert.DoesNotContain("assistant-enabled", html);
+            Assert.DoesNotContain("class=\"assistant-enabled\"", html);
             Assert.DoesNotContain("assistant-root", html);
             Assert.DoesNotContain("/app/workspace.js", html);
         }
@@ -636,9 +716,9 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
 /// <summary>Snapshot comparison, and the normalisation that makes it meaningful.</summary>
 internal static class Golden
 {
-    private static readonly string Dir = Path.Combine(RepoRoot(), "tests", "Lex.Tests", "golden");
+    private static readonly string Dir = Path.Combine(RepositoryRoot(), "tests", "Lex.Tests", "golden");
 
-    private static string RepoRoot()
+    public static string RepositoryRoot()
     {
         var d = AppContext.BaseDirectory;
         while (d is not null && !File.Exists(Path.Combine(d, "Lex.slnx"))) d = Path.GetDirectoryName(d);

@@ -16,10 +16,8 @@ HTTP 200
 <meta name="twitter:card" content="summary_large_image">
 <link rel="canonical" href="https://golden.test/browse">
 <script type="application/ld+json">{"@context":"https://schema.org","@type":"Dataset","name":"Lex: point-in-time Luxembourg and reviewed-scope EU law","description":"Official dated Luxembourg expressions and reviewed-scope EU law, including every available official consolidation in the mounted scope, with explicit publisher timeline semantics, per-article history, explicit coverage gaps, and a SHA-256 chain to the publisher\u0027s own bytes.","url":"https://golden.test/browse","license":"https://creativecommons.org/licenses/by/4.0/","isAccessibleForFree":true,"creator":{"@type":"Person","name":"Soufien Hajji","url":"https://soufien.lu"},"keywords":["legislation","Luxembourg","European Union","consolidated law","point-in-time","legal data","open data"],"temporalCoverage":"2019-06-01/2022-01-01","spatialCoverage":[{"@type":"Country","name":"Luxembourg"},{"@type":"Place","name":"European Union"}],"distribution":[{"@type":"DataDownload","encodingFormat":"application/json","contentUrl":"https://github.com/SFHAJJI/lex-articles","description":"Per-article JSON, JSONL and parquet, CC-BY."},{"@type":"DataDownload","encodingFormat":"application/json","contentUrl":"https://golden.test/mcp","description":"Public MCP endpoint, ten read-only tools, no key."}]}</script>
-<link rel="stylesheet" href="/app/workspace.css?v=dev">
 <meta name="twitter:image" content="https://golden.test/og.png">
-<link rel="preload" href="/fonts/IBMPlexSans-latin.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="preload" href="/fonts/SourceSerif4-latin.woff2" as="font" type="font/woff2" crossorigin>
+<script src="/site.js?v=dev" defer></script>
 <!-- The interval mark: a rule, two terminals, and a notch at the date being read.
      The same shape is the version rail at full width. An emoji was a different
      picture on every platform and read as a generic legal site on all of them. -->
@@ -70,6 +68,11 @@ HTTP 200
             --card:#131920; --ok:#4ec78f; --warn:#e0b070; --on-accent:#0d1117; } }
   * { box-sizing:border-box }
   body { margin:0; font:16px/1.6 var(--sans); background:var(--bg); color:var(--fg); }
+  /* Reserve the persistent assistant's clearance in the server shell. The interactive
+     stylesheet is intentionally loaded after the legal page, so these two layout rules
+     must be present at first paint rather than moving the page when that CSS arrives. */
+  body.assistant-enabled { padding-bottom:84px }
+  body.assistant-enabled main { min-height:calc(100dvh - 94px) }
   /* Digits line up in columns all over this product: dates, version counts, article
      numbers, hashes. Proportional figures make those columns ragged. */
   table, .mono, .badge, time, .kv { font-variant-numeric:tabular-nums }
@@ -85,6 +88,21 @@ HTTP 200
   header .brand { font-family:var(--serif); font-weight:700; font-size:21px; color:var(--fg); letter-spacing:-.01em }
   header a.navlink { color:var(--muted); font-size:14.5px }
   header a.navlink.on { color:var(--fg); font-weight:600; box-shadow:inset 0 -2px 0 var(--fg) }
+  header .navspacer { flex:1 }
+  .proofnav { position:relative; color:var(--muted); font-size:14.5px }
+  .proofnav summary { cursor:pointer; list-style:none; display:flex; align-items:center; gap:6px }
+  .proofnav summary::-webkit-details-marker { display:none }
+  .proofnav summary::after { content:'+'; font-family:var(--mono); font-size:12px }
+  .proofnav[open] summary::after { content:'−' }
+  .proofnav.on summary { color:var(--fg); font-weight:600 }
+  .proofnav > nav { position:absolute; z-index:50; top:calc(100% + 10px); left:-12px;
+    width:min(310px,calc(100vw - 28px)); padding:8px; display:grid; grid-template-columns:1fr 1fr;
+    gap:2px; background:var(--card); border:1px solid var(--line); border-radius:10px;
+    box-shadow:0 16px 38px rgba(0,0,0,.18) }
+  .proofnav:not([open]) > nav { display:none }
+  .proofnav > nav a { padding:7px 9px; border-radius:6px; color:var(--muted); text-decoration:none }
+  .proofnav > nav a:hover,.proofnav > nav a:focus-visible,.proofnav > nav a[aria-current=page] {
+    color:var(--fg); background:var(--bg) }
   main { max-width:960px; margin:0 auto; padding:26px 20px 60px }
   h1 { font-family:var(--serif); font-size:29px; line-height:1.15; letter-spacing:-.015em; margin:0 0 6px; text-wrap:balance }
   h2 { font-family:var(--serif); font-size:20px; margin:28px 0 8px }
@@ -170,13 +188,20 @@ HTTP 200
                             color:var(--link); font-size:13px }
   }
   @media (max-width:640px) {
+    body.assistant-enabled { padding-bottom:76px }
     main { padding:20px 14px 48px }
     table { display:block; overflow-x:auto }
     pre { overflow-x:auto }
     header { gap:12px; padding:12px 14px }
+    header .navspacer { display:none }
+    .proofnav > nav { left:auto; right:0; grid-template-columns:1fr }
     h1 { font-size:25px }
     .rail .yr { font-size:10px }
-    .filters i { width:100%; margin:3px 0 1px }
+    .filters { gap:5px; margin-top:10px }
+    /* Keep the facet name beside its choices. Stacking every label on a separate row
+       made the first four filter groups taller than the entire 320px viewport and put
+       the persistent assistant over a live sort choice. */
+    .filters i { width:68px; margin:3px 0 1px }
     .filters > .facetgroups { margin-left:0; grid-template-columns:1fr }
     .sourceclasses { margin-left:0 }
     .catcard { overflow:visible; padding:4px 14px }
@@ -201,17 +226,28 @@ HTTP 200
        everything. They stay reachable from the footer and from the noscript line. -->
   <a class="brand" href="/">Lex</a>
   <a class="navlink on" href="/browse">Browse everything</a>
-  <a class="navlink" href="/how-it-works">How it works</a>
-  <span style="flex:1"></span>
+  <details class="proofnav">
+    <summary aria-expanded="false">Check the work</summary>
+    <nav aria-label="Check the work">
+      <a href="/how-it-works">How it works</a>
+      <a href="/coverage">Coverage</a>
+      <a href="/architecture">Architecture</a>
+      <a href="/decisions">Decisions</a>
+      <a href="/benchmarks">Benchmarks</a>
+      <a href="/verify">Verify the artifacts</a>
+      <a href="/built">How I built it</a>
+      <a href="/about">About</a>
+    </nav>
+  </details>
+  <span class="navspacer"></span>
   <a class="navlink" href="/developers">For developers</a>
 </header>
 <main>
 <h1>The catalogue</h1>
 <p class="sub">Every legal work and publisher collection, with source class, dated versions and exact text coverage.</p>
-<p class="sub" style="margin-top:0">Every legal work and publisher collection Lex holds, with
-its dated records and readable-text coverage. A work is one legal instrument or one official
-thematic collection; a dated version is one state supplied by its publisher.
-<b>0</b> works match.</p><nav class="filters" aria-label="Narrow the catalogue"><div><i>publisher</i><a class="f on" href="/browse">all</a><a class="f" href="/browse?publisher=t-pub">Test Publisher</a></div><div class="type-filter"><i>source class</i><a class="f" href="/browse">all</a></div><div class="facetgroups" aria-label="Source classes by jurisdiction"><details class="facetgroup"><summary>t-pub · Test Publisher <span>2 classes</span></summary><div><a class="f" href="/browse?publisher=t-pub&amp;type=LOI" title="LOI">Law <span class="mono raw">LOI</span> <span class="n">1</span></a><a class="f" href="/browse?publisher=t-pub&amp;type=RGD" title="RGD">Grand-ducal regulation <span class="mono raw">RGD</span> <span class="n">1</span></a></div></details></div><div><i>text</i>
+<p class="sub" style="margin:0 0 2px"><b>0</b> works match.
+<a href="/coverage">What counts as a work and a dated version?</a><br>
+<b>Record only:</b> identity and timeline held; no searchable provision text.</p><nav class="filters" aria-label="Narrow the catalogue"><div><i>publisher</i><a class="f on" href="/browse">all</a><a class="f" href="/browse?publisher=t-pub">Test Publisher</a></div><div class="type-filter"><i>source class</i><a class="f" href="/browse">all</a></div><div class="facetgroups" role="group" aria-label="Source classes by jurisdiction"><details class="facetgroup"><summary>t-pub · Test Publisher <span>2 classes</span></summary><div><a class="f" href="/browse?publisher=t-pub&amp;type=LOI" title="LOI">Law <span class="mono raw">LOI</span> <span class="n">1</span></a><a class="f" href="/browse?publisher=t-pub&amp;type=RGD" title="RGD">Grand-ducal regulation <span class="mono raw">RGD</span> <span class="n">1</span></a></div></details></div><div><i>text</i>
 <a class="f on" href="/browse?type=NOSUCHTYPE">any coverage</a>
 <a class="f" href="/browse?type=NOSUCHTYPE&amp;text=yes">some text held</a>
 <a class="f" href="/browse?type=NOSUCHTYPE&amp;text=no">no text held</a></div>
@@ -259,15 +295,15 @@ thematic collection; a dated version is one state supplied by its publisher.
   <div><b>Check the work</b>
     <a href="/how-it-works">How it works</a><a href="/coverage">What Lex holds, and lacks</a>
     <a href="/decisions">Decisions, and what they cost</a>
-    <a href="/verify">Verify it yourself</a><a href="/architecture">Architecture</a>
-    <a href="/about">Who built this</a></div>
+    <a href="/benchmarks">Benchmarks</a><a href="/verify">Verify it yourself</a>
+    <a href="/architecture">Architecture</a><a href="/built">How I built it</a>
+    <a href="/about">About</a></div>
   <!-- The datasets, not the engine. This group used to end at "Source on GitHub" pointing at
        the engine repo, which is the wrong thing to lead with for a reader who wants to USE
        this law rather than read the code that serves it. The corpora are the part that is
        reusable on its own, and they were reachable only from /developers. -->
   <div><b>Build on it</b>
-    <a href="/developers">Developers &amp; API</a><a href="/ai">Connect your own AI</a>
-    <a href="/built">How it was built</a>
+    <a href="/developers">Developers &amp; API</a>
     <a href="https://github.com/SFHAJJI/lex-articles" rel="noopener">Dataset: law by article (CC-BY)</a>
     <a href="https://github.com/SFHAJJI/lex-corpus-lu-legilux" rel="noopener">Corpus: Luxembourg, verbatim</a>
     <a href="https://github.com/SFHAJJI/lex-corpus-eu-eurlex" rel="noopener">Corpus: EU, verbatim</a></div>
@@ -280,6 +316,5 @@ thematic collection; a dated version is one state supplied by its publisher.
   <b>consolidated texts have no legal effect</b>, only acts published in the Official Journal are authentic.
   · <a href="https://github.com/SFHAJJI/lex">source</a>
 </footer>
-<div id="assistant-root"></div>
-<script type="module" src="/app/workspace.js?v=dev"></script>
+<div id="assistant-root" data-workspace-module="/app/workspace.js?v=dev" data-workspace-style="/app/workspace.css?v=dev"></div>
 </body></html>

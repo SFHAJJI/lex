@@ -283,9 +283,8 @@ button.pick { cursor: pointer; }
 .fin-body form.sel button[type=submit]{border-radius:9px;padding:11px 20px}
 
 /* ================= the assistant, present without sitting on the law =================
-   The closed launcher stays reachable through long legal texts. The server reserves the small
-   footer clearance; an opened desktop panel then docks by shrinking the document column. */
-.assistant-enabled{padding-bottom:84px}
+   The closed launcher stays reachable through long legal texts. PageShell reserves its layout
+   clearance at first paint; an opened desktop panel then docks by shrinking the document column. */
 .askslot{display:contents}
 .asklaunch{position:fixed;right:18px;bottom:18px;z-index:38;display:flex;align-items:center;gap:8px;
   background:var(--fg);color:var(--bg);border:1px solid var(--fg);border-radius:10px;padding:9px 13px;
@@ -342,7 +341,7 @@ main,footer{transition:margin-right .18s ease}
 .backhome{background:none;border:0;padding:0;font:inherit;color:var(--muted);cursor:pointer;margin-right:4px}
 .backhome:hover{color:var(--fg)}
 
-@media(max-width:1099px){
+@media(width < 1100px){
   body.assistant-modal{overflow:hidden}
   body.assistant-open main,body.assistant-open footer{margin-right:0}
   .askbackdrop{display:block;position:fixed;inset:0;z-index:39;background:rgba(7,12,17,.54)}
@@ -351,8 +350,7 @@ main,footer{transition:margin-right .18s ease}
   .askpanel.min{right:12px;left:auto;bottom:12px;width:230px;border:1px solid var(--line);border-radius:12px}
 }
 @media(max-width:640px){
-  .assistant-enabled{padding-bottom:76px}
-  .asklaunch{right:12px;bottom:12px;padding:9px 12px}
+  .asklaunch{right:12px;bottom:calc(12px + env(safe-area-inset-bottom));padding:9px 12px}
   .fin-hint{font-size:12px}
 }
 @media(prefers-reduced-motion:reduce){
@@ -520,8 +518,15 @@ main,footer{transition:margin-right .18s ease}
 .res-passages .rowbtn { padding-top: 7px; padding-bottom: 7px; }
 
 @media (max-width: 640px) {
-  .one { display: grid; grid-template-columns: minmax(0, 1fr); }
-  .onebox, .asof, .one button[type=submit] { width: 100%; min-width: 0; }
+  /* Native date fields use different intrinsic widths across browser/font stacks. The plain
+     finder therefore uses deliberate rows instead of allowing its action to wrap beneath the
+     persistent assistant launcher. This rule arrives with that launcher, so the SSR-only page
+     remains useful before the workspace bundle loads. */
+  form.plainsearch { flex-direction: column; align-items: flex-start; }
+  form.plainsearch input[name="q"] { width: 100%; min-width: 0 !important; box-sizing: border-box; }
+  .one { display: grid; grid-template-columns: minmax(0, 1fr) auto; }
+  .onebox { grid-column: 1 / -1; width: 100%; min-width: 0; }
+  .asof, .one button[type=submit] { width: auto; min-width: 0; }
   .asof { padding: 0 10px; min-height: 44px; overflow: hidden; }
   .asof input { flex: 1 1 0; min-width: 0; max-width: 100%; }
   .one button[type=submit] { padding: 9px 18px; min-height: 44px; }

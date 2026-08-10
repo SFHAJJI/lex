@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { AskMessage, Step } from "./api";
 import { STARTER_PROMPTS, parseAssistantPanelState } from "./assistantShell";
 
@@ -17,7 +18,7 @@ export interface AskPanelProps {
 }
 
 const PANEL_KEY = "lex.ask.panel.v1";
-const MODAL_QUERY = "(max-width: 1099px)";
+const MODAL_QUERY = "(width < 1100px)";
 const modalViewport = () => typeof matchMedia === "function" && matchMedia(MODAL_QUERY).matches;
 
 function initialPanelState() {
@@ -31,7 +32,7 @@ export default function AskPanel(p: AskPanelProps) {
   const [minimized, setMinimized] = useState(initial.minimized);
   const [modal, setModal] = useState(modalViewport);
   const body = useRef<HTMLDivElement>(null);
-  const panel = useRef<HTMLElement>(null);
+  const panel = useRef<HTMLElement | null>(null);
   const input = useRef<HTMLInputElement>(null);
   const launcher = useRef<HTMLButtonElement>(null);
   const started = p.conversation.length > 0 || !!p.activeQuestion
@@ -51,6 +52,16 @@ export default function AskPanel(p: AskPanelProps) {
     document.body.classList.toggle("assistant-open", open && !minimized && !modal);
     document.body.classList.toggle("assistant-modal", open && !minimized && modal);
     return () => document.body.classList.remove("assistant-open", "assistant-modal");
+  }, [open, minimized, modal]);
+
+  useEffect(() => {
+    if (!open || minimized || !modal) return;
+    const background = [...document.querySelectorAll<HTMLElement>(
+      "body > header, body > main, body > footer",
+    )];
+    const previous = background.map((element) => element.inert);
+    background.forEach((element) => { element.inert = true; });
+    return () => background.forEach((element, index) => { element.inert = previous[index]; });
   }, [open, minimized, modal]);
 
   // Never let an answer arrive behind a closed panel.
@@ -98,6 +109,8 @@ export default function AskPanel(p: AskPanelProps) {
     requestAnimationFrame(() => launcher.current?.focus());
   };
 
+  const rememberPanel = (element: HTMLElement | null) => { panel.current = element; };
+
   if (!open) return (
     <div className="askslot">
       <button ref={launcher} className="asklaunch" onClick={show}
@@ -108,11 +121,7 @@ export default function AskPanel(p: AskPanelProps) {
     </div>
   );
 
-  return (
-    <div className="askslot">
-      {!minimized && modal ? <div className="askbackdrop" aria-hidden="true" onMouseDown={close} /> : null}
-      <aside ref={panel} className={`askpanel${minimized ? " min" : ""}`} role="dialog"
-             aria-modal={!minimized && modal ? "true" : undefined} aria-label="Lex legal research assistant">
+  const panelContent = <>
         <div className="ap-head">
           <span className="ap-title"><span className="al-ic" aria-hidden="true">✦</span> Ask Lex</span>
           {started ? <button className="ap-reset" onClick={p.onReset}
@@ -179,6 +188,24 @@ export default function AskPanel(p: AskPanelProps) {
             <button type="submit" disabled={p.busy}>{p.busy ? "…" : "Ask"}</button>
           </form>
         </> : null}
+  </>;
+
+  if (!minimized && modal) return createPortal(
+    <div className="askslot">
+      <div className="askbackdrop" aria-hidden="true" onMouseDown={close} />
+      <div ref={rememberPanel} className="askpanel" role="dialog" aria-modal="true"
+           aria-label="Lex legal research assistant">
+        {panelContent}
+      </div>
+    </div>,
+    document.body,
+  );
+
+  return (
+    <div className="askslot">
+      <aside ref={rememberPanel} className={`askpanel${minimized ? " min" : ""}`}
+             aria-label="Lex legal research assistant">
+        {panelContent}
       </aside>
     </div>
   );
