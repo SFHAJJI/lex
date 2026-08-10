@@ -116,7 +116,7 @@ export default function AskPanel(p: AskPanelProps) {
         <div className="ap-head">
           <span className="ap-title"><span className="al-ic" aria-hidden="true">✦</span> Ask Lex</span>
           {started ? <button className="ap-reset" onClick={p.onReset}
-            aria-label="Start a new conversation">New</button> : null}
+            aria-label="New conversation">New</button> : null}
           <button className="ap-x ap-min" onClick={() => setMinimized(!minimized)}
                   aria-label={minimized ? "Expand assistant" : "Minimise assistant"}>
             {minimized ? "▴" : "▾"}
@@ -128,7 +128,9 @@ export default function AskPanel(p: AskPanelProps) {
           <p className="ap-notice">
             You are talking to an <b>AI assistant</b>. It answers only from the laws Lex holds,
             with the date and source for every claim, or it declines. It can still be wrong and
-            it is not legal advice. This conversation stays in this browser tab.
+            it is not legal advice. Up to six turns stay in this browser tab; submitted text is
+            processed by this server and Azure OpenAI. Do not submit confidential client facts.
+            <a href="/developers#assistant-data">Data handling</a>.
           </p>
 
           <div className="ap-body" ref={body}>

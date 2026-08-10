@@ -83,6 +83,35 @@ export interface AskClarification {
   choices?: { label: string; value: string }[];
 }
 
+export interface AskStreamHandlers {
+  onStep: (step: Step) => void;
+  onOperation: (operation: OperationReply) => void;
+  onSynthesis?: (status: string) => void;
+}
+
+interface AskStreamEnvelope<T = unknown> {
+  version: "1";
+  request_id: string;
+  sequence: number;
+  payload: T;
+}
+
+function acceptedStreamEnvelope<T>(
+  value: unknown,
+  requestId: string,
+  lastSequence: number,
+): AskStreamEnvelope<T> | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const envelope = value as Partial<AskStreamEnvelope<T>>;
+  return envelope.version === "1"
+    && envelope.request_id === requestId
+    && Number.isSafeInteger(envelope.sequence)
+    && (envelope.sequence ?? 0) > lastSequence
+    && "payload" in envelope
+    ? envelope as AskStreamEnvelope<T>
+    : undefined;
+}
+
 const MAX_ASK_HISTORY = 12;
 const MAX_ASK_QUESTION_CHARS = 1000;
 const MAX_ASK_ASSISTANT_CHARS = 4000;
@@ -149,9 +178,11 @@ export interface EvidenceContext {
 }
 export interface Citation { work: string; href: string; text?: string }
 export interface ProvisionItem { anchor: string; num?: string; heading?: string; text?: string; text_sha256?: string; path?: string;
-                                 citations?: Citation[] }
+                                 citations?: Citation[]; text_omitted?: boolean;
+                                 text_omitted_reason?: string; permalink?: string }
 export interface UiEffect {
-  provision?: { subject: Subject; valid_from: string; valid_to?: string; provisions: ProvisionItem[]; permalink?: string; evidence?: EvidenceContext[] };
+  provision?: { subject: Subject; valid_from: string; valid_to?: string; provisions: ProvisionItem[]; permalink?: string;
+                evidence?: EvidenceContext[]; total_provisions?: number; truncated?: boolean; text_truncated?: boolean };
   diff?: { subject: Subject; from_date: string; to_date: string; note?: string; status?: string; evidence?: EvidenceContext[] };
   history?: { subject: Subject; anchor: string; distinct_texts: number; states: { valid_from: string; valid_to?: string; sha?: string; permalink?: string }[]; evidence?: EvidenceContext[] };
   timeline?: { subject: Subject; evidence?: EvidenceContext[] };
@@ -209,26 +240,34 @@ export interface Step { kind: string; text: string; work?: string; date?: string
 /**
  * Streams the answer. The 30-70s wait is filled with what the agent FOUND — named laws,
  * dates and articles — because content-bearing updates measurably beat a spinner on
- * perceived speed and trust, and the gap widens the longer the wait. Falls back to the
- * plain endpoint if the stream is unavailable.
+ * perceived speed and trust, and the gap widens the longer the wait. A failed POST is
+ * never repeated automatically: callers may retry only with the same idempotency key.
  */
 export async function askStreaming(
   messages: AskMessage[],
-  onStep: (s: Step) => void,
+  handlers: AskStreamHandlers,
   signal?: AbortSignal,
+  requestId: string = crypto.randomUUID(),
 ): Promise<AskReply> {
   const r = await fetch("/api/ask/stream", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "Idempotency-Key": requestId,
+      "X-Lex-Stream-Version": "1",
+    },
     body: JSON.stringify({ messages }),
     signal,
   });
-  if (!r.ok || !r.body) return ask(messages, signal);
+  if (!r.ok) throw new Error(`Assistant request failed (${r.status}).`);
+  if (!r.body) throw new Error("Assistant stream returned no body.");
 
   const reader = r.body.getReader();
   const decoder = new TextDecoder();
   let buf = "";
   let done: AskReply | undefined;
+  let transportError: string | undefined;
+  let lastSequence = 0;
 
   for (;;) {
     const { value, done: finished } = await reader.read();
@@ -242,13 +281,25 @@ export async function askStreaming(
       const raw = /^data: (.*)$/m.exec(frame)?.[1];
       if (!ev || !raw) continue;
       try {
-        const data = JSON.parse(raw);
-        if (ev === "step") onStep(data as Step);
-        else if (ev === "done") done = data as AskReply;
+        const envelope = acceptedStreamEnvelope<unknown>(
+          JSON.parse(raw), requestId, lastSequence);
+        if (!envelope) continue;
+        lastSequence = envelope.sequence;
+        if (ev === "step") handlers.onStep(envelope.payload as Step);
+        else if (ev === "operation_result")
+          handlers.onOperation(envelope.payload as OperationReply);
+        else if (ev === "synthesis")
+          handlers.onSynthesis?.(String((envelope.payload as { status?: unknown })?.status ?? ""));
+        else if (ev === "done") done = envelope.payload as AskReply;
+        else if (ev === "transport_error")
+          transportError = String((envelope.payload as { error?: unknown })?.error
+            ?? "Assistant transport failed.");
       } catch { /* a malformed frame must not kill the stream */ }
     }
   }
-  return done ?? { reply: "The answer stream ended early. Try again." };
+  if (transportError) throw new Error(transportError);
+  if (!done) throw new Error("The answer stream ended before a terminal result.");
+  return done;
 }
 
 export async function ask(messages: AskMessage[], signal?: AbortSignal): Promise<AskReply> {

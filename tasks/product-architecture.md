@@ -50,7 +50,7 @@ Status: accepted and in progress
 - [x] Enforce and load-test MCP execution, queue, hybrid and rolling-rate ceilings.
 - [x] Add truthful data-flow disclosure, logging allowlist and prompt-injection tests.
 - [x] Run focused tests, full .NET tests, web tests and build.
-- [ ] Commit server and browser stream changes separately.
+- [x] Commit server and browser stream changes separately.
 
 ## Increment 3: make the product legible
 

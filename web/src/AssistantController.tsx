@@ -80,6 +80,8 @@ export default function AssistantController({
     abort.current?.abort();
     const controller = new AbortController();
     abort.current = controller;
+    const requestId = crypto.randomUUID();
+    const streamedOperations = new Map<string, NonNullable<AskReply["operations"]>[number]>();
     try {
       const messages = boundedAskHistory([
         ...history.current,
@@ -87,11 +89,21 @@ export default function AssistantController({
       ]);
       const reply = await askStreaming(
         messages,
-        (step) => {
-          if (abort.current === controller)
-            setSteps((previous) => [...previous, step]);
+        {
+          onStep: (step) => {
+            if (abort.current === controller)
+              setSteps((previous) => [...previous, step]);
+          },
+          onOperation: (operation) => {
+            if (abort.current !== controller) return;
+            streamedOperations.set(operation.operation_id, operation);
+            const operations = [...streamedOperations.values()]
+              .sort((left, right) => left.order - right.order);
+            onReply?.({ reply: "", operations, ui: operation.ui });
+          },
         },
         controller.signal,
+        requestId,
       );
       if (abort.current !== controller) return;
       const visibleReply = reply.clarification?.question ?? reply.reply;

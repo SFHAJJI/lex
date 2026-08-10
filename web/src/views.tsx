@@ -43,7 +43,8 @@ export function Provision({ items, toc, validFrom, validTo, work, title, languag
   const disclosure = extractionDisclosure(profile);
   const fromPdf = disclosure === "publisher-pdf";
   const fromGazette = disclosure === "gazette";
-  const outlineOnly = items.length > 0 && items.every((p) => !p.text);
+  const outlineOnly = items.length > 0 && items.every((p) => !p.text && !p.text_omitted);
+  const boundedText = items.some((p) => p.text_omitted);
   const nav = toc.length >= 6 || outlineOnly;
   const pageUrl = typeof window === "undefined" ? "" : window.location.href;
   const evidence = () => ({
@@ -72,6 +73,7 @@ export function Provision({ items, toc, validFrom, validTo, work, title, languag
         )}
         {fromPdf ? <span className="tag warn">read from the publisher's PDF</span> : null}
         {fromGazette ? <span className="tag warn">cut from a gazette issue</span> : null}
+        {boundedText ? <span className="tag warn">text shortened for this response</span> : null}
         {!outlineOnly && items.length > 0 ? (
           <EvidenceActions citation={citationText(evidence())} markdown={() => lawEvidenceMarkdown(evidence())}
                            filename={evidenceFilename(work, anchor ?? validFrom)} />
@@ -129,7 +131,16 @@ export function Provision({ items, toc, validFrom, validTo, work, title, languag
           </h4>
           {/* Publisher text never becomes executable markup: react-markdown creates React nodes
               and ignores raw HTML by default. Export and comparison keep the untouched string. */}
-          <div className="lawtxt"><Markdown remarkPlugins={[remarkGfm, remarkLegalText]}>{p.text}</Markdown></div>
+          {p.text_omitted ? (
+            <div className="pdfnote">
+              <p>This publisher text is held, but it exceeded the bounded API response.</p>
+              <p><a href={p.permalink ?? source} target="_blank" rel="noopener noreferrer">
+                Open the exact publisher text ↗
+              </a></p>
+            </div>
+          ) : (
+            <div className="lawtxt"><Markdown remarkPlugins={[remarkGfm, remarkLegalText]}>{p.text}</Markdown></div>
+          )}
           {/* The acts this article points at. The publisher writes them into the text and the
               derive step captures them with their ELI target, so they can be followed rather
               than merely read. This is the shape legal research actually has: one rule leads to

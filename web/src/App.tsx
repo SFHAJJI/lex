@@ -176,6 +176,11 @@ export default function App() {
         const doc = one?.document ?? one;
         setTitle(shorten(doc?.title));
         const items = (one?.provisions ?? []) as ProvisionItem[];
+        if (items.length === 0 && doc?.text_omitted) items.push({
+          anchor: "", heading: doc?.title, text: "", text_omitted: true,
+          text_omitted_reason: doc?.text_omitted_reason,
+          permalink: doc?.permalink ?? doc?.source_uri,
+        });
         // Only claim a validity interval when a version actually resolved. `?? date` filled the
         // gap with the date that was ASKED for, so opening the Code penal at 1200-01-01 answered
         // "no version covers that date" in the body while the header above it said, in a green

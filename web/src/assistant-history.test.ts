@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   actionableClarificationChoices,
+  askStreaming,
   askQuestionError,
   boundedAskHistory,
   clarificationFollowUp,
@@ -15,6 +16,56 @@ test("invalid signatures are distinct from unavailable verification", () => {
   assert.equal(signatureStatusLabel(true), "signature verified");
   assert.equal(signatureStatusLabel(false), "signature verification failed");
   assert.equal(signatureStatusLabel(undefined), "signature unavailable");
+});
+
+test("the versioned stream ignores stale events and exposes typed operation results", async () => {
+  const originalFetch = globalThis.fetch;
+  const operations: string[] = [];
+  try {
+    globalThis.fetch = async (_input, init) => {
+      const headers = new Headers(init?.headers);
+      assert.equal(headers.get("Idempotency-Key"), "request-a");
+      return new Response([
+        'event: step\ndata: {"version":"1","request_id":"stale","sequence":1,"payload":{"kind":"search","text":"stale"}}',
+        'event: operation_result\ndata: {"version":"1","request_id":"request-a","sequence":2,"payload":{"operation_id":"op-1","order":0,"legal_outcome":"succeeded","transport_outcome":"completed","effects":["coverage"],"ui":{"coverage":{"publishers":[]}}}}',
+        'event: operation_result\ndata: {"version":"1","request_id":"request-a","sequence":2,"payload":{"operation_id":"duplicate"}}',
+        'event: done\ndata: {"version":"1","request_id":"request-a","sequence":3,"payload":{"reply":"done"}}',
+      ].join("\n\n") + "\n\n", { headers: { "Content-Type": "text/event-stream" } });
+    };
+
+    const reply = await askStreaming(
+      [{ role: "user", content: "coverage" }],
+      { onStep: () => assert.fail("stale step was accepted"),
+        onOperation: (operation) => operations.push(operation.operation_id) },
+      undefined,
+      "request-a");
+
+    assert.deepEqual(operations, ["op-1"]);
+    assert.equal(reply.reply, "done");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("a failed streaming POST is never retried as a second request", async () => {
+  const originalFetch = globalThis.fetch;
+  let calls = 0;
+  try {
+    globalThis.fetch = async () => {
+      calls++;
+      return new Response('{"error":"busy"}', { status: 429,
+        headers: { "Content-Type": "application/json" } });
+    };
+
+    await assert.rejects(() => askStreaming(
+      [{ role: "user", content: "coverage" }],
+      { onStep: () => undefined, onOperation: () => undefined },
+      undefined,
+      "request-b"));
+    assert.equal(calls, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test("an empty selected population keeps its zero denominator visible", () => {
