@@ -62,8 +62,15 @@ public static class PageShell
         "/how-it-works" or "/coverage" or "/architecture" or "/architecture/next"
         or "/decisions" or "/benchmarks" or "/verify" or "/built" or "/about";
 
-    private static string ProofLink(string path, string label, string? currentPath) =>
-        $"<a href=\"{path}\"{(currentPath == path ? " aria-current=\"page\"" : "")}>{label}</a>";
+    private static string ProofLink(string path, string label, string? currentPath)
+    {
+        // Architecture's delivery ledger is a child page, not a competing primary destination.
+        // Marking the parent link current gives visual and assistive-technology users the same
+        // route-family context that the open disclosure already communicates.
+        var current = currentPath == path
+            || (path == "/architecture" && currentPath == "/architecture/next");
+        return $"<a href=\"{path}\"{(current ? " aria-current=\"page\"" : "")}>{label}</a>";
+    }
 
     // `title` is what search engines and social cards get; `h1` is what a reader sees, when the
     // two want to be different sentences.

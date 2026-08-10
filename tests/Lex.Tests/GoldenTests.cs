@@ -281,6 +281,14 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
     }
 
     [Fact]
+    public async Task Architecture_delivery_page_marks_its_primary_navigation_parent_current()
+    {
+        var html = await _site.Client.GetStringAsync("/architecture/next");
+
+        Assert.Contains("<a href=\"/architecture\" aria-current=\"page\">Architecture</a>", html);
+    }
+
+    [Fact]
     public async Task Attestation_distinguishes_manifest_trust_from_embedded_stamp_provenance()
     {
         var json = await _site.Client.GetStringAsync("/attestation.json");

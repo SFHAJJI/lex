@@ -230,7 +230,7 @@ HTTP 200
     <nav aria-label="Check the work">
       <a href="/how-it-works">How it works</a>
       <a href="/coverage">Coverage</a>
-      <a href="/architecture">Architecture</a>
+      <a href="/architecture" aria-current="page">Architecture</a>
       <a href="/decisions">Decisions</a>
       <a href="/benchmarks">Benchmarks</a>
       <a href="/verify">Verify the artifacts</a>
