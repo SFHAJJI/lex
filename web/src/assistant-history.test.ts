@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   actionableClarificationChoices,
+  AssistantResponseError,
   askStreaming,
   askQuestionError,
   boundedAskHistory,
@@ -73,6 +74,27 @@ test("a failed streaming POST is never retried as a second request", async () =>
       undefined,
       "request-b"), { message: "busy" });
     assert.equal(calls, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("a streamed transport failure preserves the bounded server explanation", async () => {
+  const originalFetch = globalThis.fetch;
+  const serverRequestId = "0123456789abcdef0123456789abcdef";
+  try {
+    globalThis.fetch = async () => new Response(
+      `event: transport_error\ndata: {"version":"1","request_id":"${serverRequestId}","sequence":1,"payload":{"status":504,"error":"The first legal result timed out."}}\n\n`,
+      { headers: {
+        "Content-Type": "text/event-stream", "X-Lex-Request-Id": serverRequestId,
+      } });
+
+    await assert.rejects(() => askStreaming(
+      [{ role: "user", content: "coverage" }],
+      { onStep: () => undefined, onOperation: () => undefined },
+      undefined,
+      "request-c"), (error: unknown) => error instanceof AssistantResponseError
+        && error.message === "The first legal result timed out.");
   } finally {
     globalThis.fetch = originalFetch;
   }

@@ -125,7 +125,7 @@ export function Provision({ items, toc, validFrom, validTo, work, title, languag
           ) : null}
         </div>
       ) : items.map((p) => {
-        const exactTextUrl = safeHttpsUrl(p.permalink, officialSource);
+        const exactTextUrl = safeHttpsUrl(p.permalink);
         return (
         <article key={p.anchor} className="art" id={p.anchor}>
           <h4>

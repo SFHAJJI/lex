@@ -80,6 +80,11 @@ export function safeHttpsUrl(...candidates: (string | undefined)[]): string | un
 
 export class AssistantResponseError extends Error {}
 
+function boundedAssistantError(value: unknown, fallback: string): string {
+  const error = typeof value === "string" ? value.trim() : "";
+  return error.length > 0 && error.length <= 200 ? error : fallback;
+}
+
 export function populationScopeLabel(value: number | undefined): string | undefined {
   return value === undefined ? undefined : `${value.toLocaleString()} works in selected scope`;
 }
@@ -277,8 +282,7 @@ export async function askStreaming(
     const fallback = `Assistant request failed (${r.status}).`;
     try {
       const body = await r.json() as { error?: unknown };
-      const error = typeof body.error === "string" ? body.error.trim() : "";
-      throw new AssistantResponseError(error.length > 0 && error.length <= 200 ? error : fallback);
+      throw new AssistantResponseError(boundedAssistantError(body.error, fallback));
     } catch (cause) {
       if (cause instanceof AssistantResponseError) throw cause;
       throw new AssistantResponseError(fallback);
@@ -319,12 +323,13 @@ export async function askStreaming(
           handlers.onSynthesis?.(String((envelope.payload as { status?: unknown })?.status ?? ""));
         else if (ev === "done") done = envelope.payload as AskReply;
         else if (ev === "transport_error")
-          transportError = String((envelope.payload as { error?: unknown })?.error
-            ?? "Assistant transport failed.");
+          transportError = boundedAssistantError(
+            (envelope.payload as { error?: unknown })?.error,
+            "Assistant transport failed.");
       } catch { /* a malformed frame must not kill the stream */ }
     }
   }
-  if (transportError) throw new Error(transportError);
+  if (transportError) throw new AssistantResponseError(transportError);
   if (!done) throw new Error("The answer stream ended before a terminal result.");
   return done;
 }
