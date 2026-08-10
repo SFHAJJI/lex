@@ -2,11 +2,14 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   actionableClarificationChoices,
+  AssistantResponseError,
+  askStreaming,
   askQuestionError,
   boundedAskHistory,
   clarificationFollowUp,
   compoundOperationViews,
   populationScopeLabel,
+  safeHttpsUrl,
   shouldOfferContextualFollowUps,
   signatureStatusLabel,
 } from "./api.ts";
@@ -15,6 +18,86 @@ test("invalid signatures are distinct from unavailable verification", () => {
   assert.equal(signatureStatusLabel(true), "signature verified");
   assert.equal(signatureStatusLabel(false), "signature verification failed");
   assert.equal(signatureStatusLabel(undefined), "signature unavailable");
+});
+
+test("external evidence links are rendered only from absolute HTTPS URLs", () => {
+  assert.equal(safeHttpsUrl(undefined, "http://attacker.test", "https://law.soufien.lu/a"),
+    "https://law.soufien.lu/a");
+  assert.equal(safeHttpsUrl("javascript:alert(1)", "/relative"), undefined);
+});
+
+test("the versioned stream ignores stale events and exposes typed operation results", async () => {
+  const originalFetch = globalThis.fetch;
+  const operations: string[] = [];
+  const serverRequestId = "0123456789abcdef0123456789abcdef";
+  try {
+    globalThis.fetch = async (_input, init) => {
+      const headers = new Headers(init?.headers);
+      assert.equal(headers.get("Idempotency-Key"), "request-a");
+      return new Response([
+        'event: step\ndata: {"version":"1","request_id":"stale","sequence":1,"payload":{"kind":"search","text":"stale"}}',
+        `event: operation_result\ndata: {"version":"1","request_id":"${serverRequestId}","sequence":2,"payload":{"operation_id":"op-1","order":0,"legal_outcome":"succeeded","transport_outcome":"completed","effects":["coverage"],"ui":{"coverage":{"publishers":[]}}}}`,
+        `event: operation_result\ndata: {"version":"1","request_id":"${serverRequestId}","sequence":2,"payload":{"operation_id":"duplicate"}}`,
+        `event: done\ndata: {"version":"1","request_id":"${serverRequestId}","sequence":3,"payload":{"reply":"done"}}`,
+      ].join("\n\n") + "\n\n", { headers: {
+        "Content-Type": "text/event-stream", "X-Lex-Request-Id": serverRequestId,
+      } });
+    };
+
+    const reply = await askStreaming(
+      [{ role: "user", content: "coverage" }],
+      { onStep: () => assert.fail("stale step was accepted"),
+        onOperation: (operation) => operations.push(operation.operation_id) },
+      undefined,
+      "request-a");
+
+    assert.deepEqual(operations, ["op-1"]);
+    assert.equal(reply.reply, "done");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("a failed streaming POST is never retried as a second request", async () => {
+  const originalFetch = globalThis.fetch;
+  let calls = 0;
+  try {
+    globalThis.fetch = async () => {
+      calls++;
+      return new Response('{"error":"busy"}', { status: 429,
+        headers: { "Content-Type": "application/json" } });
+    };
+
+    await assert.rejects(() => askStreaming(
+      [{ role: "user", content: "coverage" }],
+      { onStep: () => undefined, onOperation: () => undefined },
+      undefined,
+      "request-b"), { message: "busy" });
+    assert.equal(calls, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("a streamed transport failure preserves the bounded server explanation", async () => {
+  const originalFetch = globalThis.fetch;
+  const serverRequestId = "0123456789abcdef0123456789abcdef";
+  try {
+    globalThis.fetch = async () => new Response(
+      `event: transport_error\ndata: {"version":"1","request_id":"${serverRequestId}","sequence":1,"payload":{"status":504,"error":"The first legal result timed out."}}\n\n`,
+      { headers: {
+        "Content-Type": "text/event-stream", "X-Lex-Request-Id": serverRequestId,
+      } });
+
+    await assert.rejects(() => askStreaming(
+      [{ role: "user", content: "coverage" }],
+      { onStep: () => undefined, onOperation: () => undefined },
+      undefined,
+      "request-c"), (error: unknown) => error instanceof AssistantResponseError
+        && error.message === "The first legal result timed out.");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test("an empty selected population keeps its zero denominator visible", () => {

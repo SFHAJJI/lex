@@ -7,7 +7,7 @@ import { CitedBy, CoveragePanel, Empty, EvidenceCoordinates, Gap, InForce, Provi
 import { Compare } from "./Compare";
 import { LawPicker, shorten } from "./pickers";
 import AssistantController from "./AssistantController";
-import { assistantWorkspaceState } from "./assistantShell";
+import { assistantProvisionLoad, assistantWorkspaceState } from "./assistantShell";
 import Search from "./Search";
 import Period from "./Period";
 import Coach, { COACH_KEY } from "./Coach";
@@ -176,6 +176,11 @@ export default function App() {
         const doc = one?.document ?? one;
         setTitle(shorten(doc?.title));
         const items = (one?.provisions ?? []) as ProvisionItem[];
+        if (items.length === 0 && doc?.text_omitted) items.push({
+          anchor: "", heading: doc?.title, text: "", text_omitted: true,
+          text_omitted_reason: doc?.text_omitted_reason,
+          permalink: doc?.permalink ?? doc?.source_uri,
+        });
         // Only claim a validity interval when a version actually resolved. `?? date` filled the
         // gap with the date that was ASKED for, so opening the Code penal at 1200-01-01 answered
         // "no version covers that date" in the body while the header above it said, in a green
@@ -333,7 +338,9 @@ export default function App() {
         // page used to print the prose and leave the table behind the space it belonged to.
         if (subj?.work) {
           setTitle(subj.title);
-          if (r.ui!.provision) setLoaded({ items: r.ui!.provision.provisions, from: r.ui!.provision.valid_from, to: r.ui!.provision.valid_to });
+          // Navigation and cached publisher text are one state transition. An outline,
+          // truncated response, timeline or diff must never inherit the previous law's body.
+          setLoaded(assistantProvisionLoad(r.ui));
           go(assistantWorkspaceState(r.ui)!);
           navigated = true;
         } else if (r.ui!.ranking || r.ui!.in_force) {
@@ -418,7 +425,9 @@ export default function App() {
       return <button className="operation-open" onClick={() => view.diff
         ? openDiff(subject.work, view.diff.from_date, view.diff.to_date)
         : openLaw(subject.work, from)}>
-        Open {view.diff ? "comparison" : view.history ? "article history" : view.timeline ? "timeline" : "publisher text"}
+        Open {view.diff ? "comparison" : view.history ? "article history"
+          : view.timeline ? "timeline" : view.provision?.outline_only
+            ? "table of contents" : "publisher text"}
       </button>;
     }
     if (view.workspace) return <p className="sub">The matching search workspace is open.</p>;

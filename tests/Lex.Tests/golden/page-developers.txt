@@ -207,8 +207,33 @@ HTTP 200
 <h1>For developers</h1>
 
 <p class="lede">Lex is MCP-native: you bring the model, Lex brings the evidence.
-10 read-only tools over signed indexes, no key, no account, no rate limit on
-the endpoint. The server advertises MCP 2.0.0.</p>
+10 read-only tools over signed indexes, with no key or account required.
+The public endpoint is deliberately bounded and advertises MCP 2.0.0.</p>
+
+<h2 id="assistant-data">Assistant data and public limits</h2>
+<div class="card">
+<p>The browser retains at most six conversation turns in this tab's
+<span class="mono">sessionStorage</span>. A submitted bounded transcript is sent to this
+server and to Azure OpenAI when planning or optional synthesis is required. Starting a new
+conversation clears that transcript but leaves the legal workspace in place. Do not submit
+confidential client facts.</p>
+<p>The application is server-stateless for conversation content. It keeps short-lived,
+in-memory request identities for ten minutes. Completed responses are replayed while held
+inside a 64 MiB cache; an evicted identity remains a tombstone and cannot execute again. Daily
+assistant counters and rolling MCP counters use an ingress-derived client address in process
+memory; raw addresses and raw user text are not written to application logs, traces, metrics
+or error bodies. URL queries and address attributes are redacted before export. OpenTelemetry
+records an allowlist of model deployment, opaque operation ID, tool, status and document count.
+The deployed Application Insights request, dependency and trace tables retain that bounded
+telemetry for 90 days; deployment fails if those table policies differ. This deployment uses
+Azure OpenAI's standard abuse-monitoring posture, under which Microsoft may retain prompts and
+completions for up to 30 days. They are not used to train foundation models.</p>
+<p>Public MCP admits at most 8 executing and 16 queued calls, with a 2 second queue deadline;
+hybrid search admits 2 at once. Rolling limits are 120 calls per trusted client and 600 calls
+globally per minute. These are best-effort abuse controls: people behind one NAT can share an
+address, and IPv6 addresses can rotate. Requests, strings, pagination and returned collections
+are bounded before tool execution.</p>
+</div>
 
 <h2>Connect</h2>
 <div class="card"><b>Claude Code</b>

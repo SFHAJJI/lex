@@ -241,13 +241,14 @@ Legilux · EUR-Lex/Cellar     ────────────────�
   CANDIDATE REVISION (zero traffic)
         │  health + MCP + LU/EU search smoke tests
         ▼
-  MCP server · this site (Container Apps, scale-to-zero)</pre></div>
+  MCP server · this site (Container Apps, one pinned replica)</pre></div>
 <p class="sub">Azure: Container Apps behind a managed certificate, Container Registry, Key Vault
 signing, Application Insights via OpenTelemetry, and Azure DNS. Managed identity pulls the image
 and authenticates the optional Azure OpenAI assistant. Retrieval itself is local and deterministic:
 FTS5/BM25, ONNX embeddings, fixed reranking and fusion, with no generative model in the search path.
 The web app uses 1 vCPU and 2 GiB for the mounted lexical and semantic artifacts,
-and <b>scales to zero</b>.</p>
+and runs as <b>one always-on replica</b>. The single process makes the public
+request and concurrency ledgers authoritative while keeping retrieval latency predictable.</p>
 
 <h2>Decisions worth defending</h2>
 <div class="card"><table>

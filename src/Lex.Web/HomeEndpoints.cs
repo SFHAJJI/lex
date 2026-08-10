@@ -130,8 +130,8 @@ public static class HomeEndpoints
                 <span class="badge">{cov.Sum(c => c.TextServed):n0} with full text</span>
                 <span class="badge">{H(cov.Select(c => c.EarliestValidFrom).Min())} → {H(cov.Select(c => c.LatestValidFrom).Max())}</span>
                 <span class="badge ok" title="SHA-256 hashes and signed release manifests">source integrity verified</span></p>
-                <p class="sub">Free assistant, daily limit. <a href="/ai">Connect your own AI</a> for
-                unlimited use.</p>
+                <p class="sub">Free assistant, daily limit. <a href="/ai">Connect your own AI</a>
+                through the separately bounded public MCP endpoint.</p>
 
                 <!-- A fork, not a menu. Three readers arrive here and they want different things; the
                      third one is the differentiator and was a footer link. A project that invites you to

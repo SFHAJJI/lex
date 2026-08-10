@@ -560,13 +560,14 @@ public static class ExplainerEndpoints
                   CANDIDATE REVISION (zero traffic)
                         │  health + MCP + LU/EU search smoke tests
                         ▼
-                  MCP server · this site (Container Apps, scale-to-zero)</pre></div>
+                  MCP server · this site (Container Apps, one pinned replica)</pre></div>
                 <p class="sub">Azure: Container Apps behind a managed certificate, Container Registry, Key Vault
                 signing, Application Insights via OpenTelemetry, and Azure DNS. Managed identity pulls the image
                 and authenticates the optional Azure OpenAI assistant. Retrieval itself is local and deterministic:
                 FTS5/BM25, ONNX embeddings, fixed reranking and fusion, with no generative model in the search path.
                 The web app uses 1 vCPU and 2 GiB for the mounted lexical and semantic artifacts,
-                and <b>scales to zero</b>.</p>
+                and runs as <b>one always-on replica</b>. The single process makes the public
+                request and concurrency ledgers authoritative while keeping retrieval latency predictable.</p>
 
                 <h2>Decisions worth defending</h2>
                 <div class="card"><table>
@@ -924,8 +925,33 @@ public static class ExplainerEndpoints
                                .Select(t => t["name"]!.GetValue<string>()).ToList();
             var body = $$"""
                 <p class="lede">Lex is MCP-native: you bring the model, Lex brings the evidence.
-                {{tools.Count}} read-only tools over signed indexes, no key, no account, no rate limit on
-                the endpoint. The server advertises MCP {{McpSdkBridge.ServerVersion}}.</p>
+                {{tools.Count}} read-only tools over signed indexes, with no key or account required.
+                The public endpoint is deliberately bounded and advertises MCP {{McpSdkBridge.ServerVersion}}.</p>
+
+                <h2 id="assistant-data">Assistant data and public limits</h2>
+                <div class="card">
+                <p>The browser retains at most six conversation turns in this tab's
+                <span class="mono">sessionStorage</span>. A submitted bounded transcript is sent to this
+                server and to Azure OpenAI when planning or optional synthesis is required. Starting a new
+                conversation clears that transcript but leaves the legal workspace in place. Do not submit
+                confidential client facts.</p>
+                <p>The application is server-stateless for conversation content. It keeps short-lived,
+                in-memory request identities for ten minutes. Completed responses are replayed while held
+                inside a 64 MiB cache; an evicted identity remains a tombstone and cannot execute again. Daily
+                assistant counters and rolling MCP counters use an ingress-derived client address in process
+                memory; raw addresses and raw user text are not written to application logs, traces, metrics
+                or error bodies. URL queries and address attributes are redacted before export. OpenTelemetry
+                records an allowlist of model deployment, opaque operation ID, tool, status and document count.
+                The deployed Application Insights request, dependency and trace tables retain that bounded
+                telemetry for 90 days; deployment fails if those table policies differ. This deployment uses
+                Azure OpenAI's standard abuse-monitoring posture, under which Microsoft may retain prompts and
+                completions for up to 30 days. They are not used to train foundation models.</p>
+                <p>Public MCP admits at most 8 executing and 16 queued calls, with a 2 second queue deadline;
+                hybrid search admits 2 at once. Rolling limits are 120 calls per trusted client and 600 calls
+                globally per minute. These are best-effort abuse controls: people behind one NAT can share an
+                address, and IPv6 addresses can rotate. Requests, strings, pagination and returned collections
+                are bounded before tool execution.</p>
+                </div>
 
                 <h2>Connect</h2>
                 <div class="card"><b>Claude Code</b>

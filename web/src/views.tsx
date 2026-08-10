@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
-  populationScopeLabel, signatureStatusLabel, type ProvisionItem, type RankingRow, type UiEffect,
+  populationScopeLabel, safeHttpsUrl, signatureStatusLabel, type ProvisionItem, type RankingRow, type UiEffect,
 } from "./api";
 import { facetLabel, jurisdictionLabel } from "./facets";
 import { publisherOf, workSlug } from "./state";
@@ -41,9 +41,11 @@ export function Provision({ items, toc, validFrom, validTo, work, title, languag
   // act inside a whole official-gazette issue. Classify by immutable profile family so a new,
   // narrower profile version cannot accidentally lose the disclosure in the reader.
   const disclosure = extractionDisclosure(profile);
+  const officialSource = safeHttpsUrl(source);
   const fromPdf = disclosure === "publisher-pdf";
   const fromGazette = disclosure === "gazette";
-  const outlineOnly = items.length > 0 && items.every((p) => !p.text);
+  const outlineOnly = items.length > 0 && items.every((p) => !p.text && !p.text_omitted);
+  const boundedText = items.some((p) => p.text_omitted);
   const nav = toc.length >= 6 || outlineOnly;
   const pageUrl = typeof window === "undefined" ? "" : window.location.href;
   const evidence = () => ({
@@ -72,6 +74,7 @@ export function Provision({ items, toc, validFrom, validTo, work, title, languag
         )}
         {fromPdf ? <span className="tag warn">read from the publisher's PDF</span> : null}
         {fromGazette ? <span className="tag warn">cut from a gazette issue</span> : null}
+        {boundedText ? <span className="tag warn">text shortened for this response</span> : null}
         {!outlineOnly && items.length > 0 ? (
           <EvidenceActions citation={citationText(evidence())} markdown={() => lawEvidenceMarkdown(evidence())}
                            filename={evidenceFilename(work, anchor ?? validFrom)} />
@@ -100,9 +103,9 @@ export function Provision({ items, toc, validFrom, validTo, work, title, languag
             document permits it, dividing that section into articles are ours. Those boundaries are
             inferred from layout, so treat this as a reading aid and confirm anything that matters.
           </p>
-          {source ? (
+          {officialSource ? (
             <p>
-              <a href={source} target="_blank" rel="noopener noreferrer">
+              <a href={officialSource} target="_blank" rel="noopener noreferrer">
                 Read the official gazette at Legilux ↗
               </a>
             </p>
@@ -121,15 +124,30 @@ export function Provision({ items, toc, validFrom, validTo, work, title, languag
             </button>
           ) : null}
         </div>
-      ) : items.map((p) => (
-        <article key={p.anchor} className="art" id={p.anchor}>
+      ) : items.map((p) => {
+        const exactTextUrl = safeHttpsUrl(p.permalink);
+        const hasAnchor = p.anchor.length > 0;
+        return (
+        <article key={p.anchor || p.permalink || "document-text"} className="art"
+                 id={hasAnchor ? p.anchor : undefined}>
           <h4>
-            <a href={permalink(work, validFrom, p.anchor)}>{p.num ?? p.anchor}</a>
-            {p.heading ? <span className="sub">, {plain(p.heading)}</span> : null}
+            {hasAnchor
+              ? <a href={permalink(work, validFrom, p.anchor)}>{p.num ?? p.anchor}</a>
+              : <span>Document text</span>}
+            {p.heading ? <span className="sub">{hasAnchor ? ", " : " — "}{plain(p.heading)}</span> : null}
           </h4>
           {/* Publisher text never becomes executable markup: react-markdown creates React nodes
               and ignores raw HTML by default. Export and comparison keep the untouched string. */}
-          <div className="lawtxt"><Markdown remarkPlugins={[remarkGfm, remarkLegalText]}>{p.text}</Markdown></div>
+          {p.text_omitted ? (
+            <div className="pdfnote">
+              <p>This publisher text is held, but it exceeded the bounded API response.</p>
+              {exactTextUrl ? <p><a href={exactTextUrl} target="_blank" rel="noopener noreferrer">
+                Open the exact publisher text ↗
+              </a></p> : null}
+            </div>
+          ) : (
+            <div className="lawtxt"><Markdown remarkPlugins={[remarkGfm, remarkLegalText]}>{p.text}</Markdown></div>
+          )}
           {/* The acts this article points at. The publisher writes them into the text and the
               derive step captures them with their ELI target, so they can be followed rather
               than merely read. This is the shape legal research actually has: one rule leads to
@@ -145,7 +163,8 @@ export function Provision({ items, toc, validFrom, validTo, work, title, languag
           ) : null}
           {p.text_sha256 ? <div className="sha">sha256 {p.text_sha256.slice(0, 16)}…</div> : null}
         </article>
-      ))}
+        );
+      })}
     </div>
   );
   if (!nav) return body;
@@ -609,7 +628,7 @@ export function CoveragePanel({ view }: { view: NonNullable<UiEffect["coverage"]
 }
 
 export function VerificationPanel({ view }: { view: NonNullable<UiEffect["verification"]> }) {
-  const source = view.source_uri?.startsWith("https://") ? view.source_uri : undefined;
+  const source = safeHttpsUrl(view.source_uri);
   return (
     <section className="evidence-panel" aria-labelledby="verification-result-title">
       <div className="cnt">

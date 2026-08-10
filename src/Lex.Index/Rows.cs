@@ -63,7 +63,10 @@ public sealed record ProvisionRow(
     // Cross-references the publisher wrote into the text ("modifie par la loi du 4 juin 2020"),
     // captured at derive time with their ELI target. Serialised as JSON because a provision has
     // few of them and they are always read whole, never queried field by field.
-    string? CitationsJson = null);
+    string? CitationsJson = null,
+    int? StoredTextBytes = null,
+    int? StoredTextCharacters = null,
+    bool TextLoaded = true);
 
 public sealed record RetrievalHit(
     DocRow Doc,

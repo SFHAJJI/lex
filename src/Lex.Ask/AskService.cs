@@ -17,20 +17,42 @@ public sealed class AskService
     private readonly McpCore core;
     private readonly IOperationPlanner? _planner;
     private readonly IOperationSynthesizer? _synthesizer;
+    private readonly AskAdmissionController _admission;
+    private readonly TimeSpan _plannerDeadline;
+    private readonly TimeSpan _firstResultDeadline;
+    private readonly Func<string, JsonObject, CancellationToken, ValueTask<JsonNode>> _legalTool;
+
+    internal static readonly TimeSpan DefaultPlannerDeadline = TimeSpan.FromSeconds(12);
+    internal static readonly TimeSpan DefaultFirstResultDeadline = TimeSpan.FromSeconds(25);
 
     public AskService(McpCore core)
     {
         this.core = core;
+        _admission = DefaultAdmission();
+        _plannerDeadline = DefaultPlannerDeadline;
+        _firstResultDeadline = DefaultFirstResultDeadline;
+        _legalTool = core.CallToolAsync;
     }
 
     internal AskService(
         McpCore core,
         IOperationPlanner planner,
-        IOperationSynthesizer? synthesizer = null)
+        IOperationSynthesizer? synthesizer = null,
+        AskAdmissionController? admission = null,
+        TimeSpan? plannerDeadline = null,
+        TimeSpan? firstResultDeadline = null,
+        Func<string, JsonObject, CancellationToken, ValueTask<JsonNode>>? legalTool = null)
     {
         this.core = core;
         _planner = planner;
         _synthesizer = synthesizer;
+        _admission = admission ?? DefaultAdmission();
+        _plannerDeadline = plannerDeadline ?? DefaultPlannerDeadline;
+        _firstResultDeadline = firstResultDeadline ?? DefaultFirstResultDeadline;
+        _legalTool = legalTool ?? core.CallToolAsync;
+        if (_plannerDeadline <= TimeSpan.Zero || _firstResultDeadline <= TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(
+                nameof(plannerDeadline), "Assistant deadlines must be positive.");
     }
 
     internal sealed class WorkResolutionGuard
@@ -253,10 +275,6 @@ public sealed class AskService
         Environment.GetEnvironmentVariable("AOAI_USE_MANAGED_IDENTITY") == "1";
     private readonly TokenCredential _credential = new DefaultAzureCredential();
     private readonly string _deployment = Environment.GetEnvironmentVariable("AOAI_CHAT_DEPLOYMENT") ?? "gpt-5-mini";
-    private readonly int _perIpDaily = EnvInt("ASK_PER_IP_DAILY", 25);
-    private readonly int _globalDaily = EnvInt("ASK_GLOBAL_DAILY", 400);
-    private readonly ConcurrentDictionary<string, int> _counters = new();
-    private readonly SemaphoreSlim _gate = new(4);
     private AgentAnswerFinalizer? _answerFinalizer;
 
     public bool Enabled => _planner is not null || (!string.IsNullOrEmpty(_endpoint)
@@ -264,6 +282,22 @@ public sealed class AskService
 
     private static int EnvInt(string name, int dflt)
         => int.TryParse(Environment.GetEnvironmentVariable(name), out var v) && v > 0 ? v : dflt;
+
+    private static AskAdmissionController DefaultAdmission() => new(
+        TimeProvider.System,
+        EnvInt("ASK_PER_IP_DAILY", 25),
+        EnvInt("ASK_GLOBAL_DAILY", 400),
+        EnvInt("ASK_CONCURRENT", 4));
+
+    private static void Diagnostic(string code)
+    {
+        var safe = code.Length <= 80
+                   && code.All(character => char.IsAsciiLetterOrDigit(character)
+                       || character == '_')
+            ? code
+            : "invalid_diagnostic_code";
+        Console.Error.WriteLine($"[ask] {safe}");
+    }
 
     private const int MaxHistory = 24;
     private const int MaxUserMessageChars = 1000;
@@ -396,19 +430,16 @@ public sealed class AskService
            date or topic at all).
         """;
 
-    private bool TryCount(string ip, out string reason)
+    private static string AdmissionReason(AskAdmissionFailure failure) => failure switch
     {
-        var day = DateTime.UtcNow.ToString("yyyyMMdd");
-        if (_counters.Count > 5000)
-            foreach (var k in _counters.Keys.Where(k => !k.StartsWith(day, StringComparison.Ordinal)).ToArray())
-                _counters.TryRemove(k, out _);
-        var g = _counters.AddOrUpdate($"{day}|_global", 1, (_, v) => v + 1);
-        var p = _counters.AddOrUpdate($"{day}|{ip}", 1, (_, v) => v + 1);
-        reason = g > _globalDaily ? "The shared daily budget for this public playground is used up. Come back tomorrow, or connect your own AI via /ai (the MCP endpoint has no cap)."
-               : p > _perIpDaily ? "Daily question limit reached for your address. Come back tomorrow, or connect your own AI via /ai."
-               : "";
-        return reason.Length == 0;
-    }
+        AskAdmissionFailure.PerClientQuota =>
+            "Daily question limit reached for your address. Come back tomorrow, or use the separately bounded MCP endpoint.",
+        AskAdmissionFailure.GlobalQuota =>
+            "The shared daily budget for this public playground is used up. Come back tomorrow, or use the separately bounded MCP endpoint.",
+        AskAdmissionFailure.Busy =>
+            "The shared playground is busy. Try again shortly.",
+        _ => "The request could not be admitted.",
+    };
 
     /// <summary>
     /// The tools, minus any the turn has finished with.
@@ -954,83 +985,133 @@ public sealed class AskService
     /// </summary>
     public sealed record Step(string Kind, string Text, string? Work = null, string? Date = null, string? Anchor = null);
 
-    public async Task<(int Status, JsonObject Body)> AskAsync(
+    public sealed record AskProgressCallbacks(
+        Func<Step, CancellationToken, ValueTask>? Step = null,
+        Func<JsonObject, CancellationToken, ValueTask>? OperationResult = null,
+        Func<string, CancellationToken, ValueTask>? Synthesis = null);
+
+    public sealed record AskOutcome(int Status, JsonObject Body, bool RetainForReplay)
+    {
+        public void Deconstruct(out int status, out JsonObject body)
+            => (status, body) = (Status, Body);
+    }
+
+    private static async ValueTask NotifyProgress(Func<ValueTask> callback)
+    {
+        try { await callback(); }
+        catch (OperationCanceledException) { Diagnostic("progress_transport_disconnected"); }
+        catch (IOException) { Diagnostic("progress_transport_disconnected"); }
+        catch (ObjectDisposedException) { Diagnostic("progress_transport_disconnected"); }
+    }
+
+    public async Task<AskOutcome> AskAsync(
         JsonArray history,
         string ip,
         string host,
         CancellationToken ct,
-        Action<Step>? onStep = null)
+        AskProgressCallbacks? progress = null,
+        string? requestId = null)
     {
         if (!Enabled)
-            return (503, new JsonObject
+            return new AskOutcome(503, new JsonObject
             {
                 ["error"] = "The playground is not enabled on this deployment. Connect your own AI instead: /ai.",
-            });
+            }, false);
         if (history.Count is 0 or > MaxHistory)
-            return (400, new JsonObject { ["error"] = $"Send 1 to {MaxHistory} messages." });
+            return new AskOutcome(400,
+                new JsonObject { ["error"] = $"Send 1 to {MaxHistory} messages." }, false);
 
         var userQueries = new List<string>();
+        string? lastRole = null;
         foreach (var message in history)
         {
-            var role = message?["role"]?.GetValue<string>();
-            var content = message?["content"]?.GetValue<string>() ?? "";
+            if (message is not JsonObject item
+                || item["role"] is not JsonValue roleValue
+                || !roleValue.TryGetValue<string>(out var role)
+                || item["content"] is not JsonValue contentValue
+                || !contentValue.TryGetValue<string>(out var content))
+                return new AskOutcome(400,
+                    new JsonObject { ["error"] = "Every message requires string role and content fields." },
+                    false);
+            lastRole = role;
             if (role is not ("user" or "assistant"))
-                return (400, new JsonObject { ["error"] = "Roles must be user/assistant." });
+                return new AskOutcome(400,
+                    new JsonObject { ["error"] = "Roles must be user/assistant." }, false);
             var limit = role == "user" ? MaxUserMessageChars : MaxAssistantMessageChars;
             if (content.Length is 0 || content.Length > limit)
-                return (400, new JsonObject
+                return new AskOutcome(400, new JsonObject
                 {
                     ["error"] = role == "user"
                         ? "Questions are capped at 1,000 characters."
                         : "Assistant history messages are capped at 4,000 characters.",
-                });
+                }, false);
             if (role == "user") userQueries.Add(content);
         }
         if (userQueries.Count == 0)
-            return (400, new JsonObject { ["error"] = "The last message must be from the user." });
+            return new AskOutcome(400,
+                new JsonObject { ["error"] = "The last message must be from the user." }, false);
         var rawUserQuery = userQueries[^1];
-        if (history[^1]?["role"]?.GetValue<string>() != "user")
-            return (400, new JsonObject { ["error"] = "The last message must be from the user." });
+        if (lastRole != "user")
+            return new AskOutcome(400,
+                new JsonObject { ["error"] = "The last message must be from the user." }, false);
         if (WorkResolutionGuard.IsExplicitNonSelection(rawUserQuery))
-            return (200, Body(
+            return new AskOutcome(200, Body(
                 "No instrument was selected. Add an official title or identifier when you want to try again.",
-                [], []));
-        if (!TryCount(ip, out var reason))
-            return (429, new JsonObject { ["error"] = reason });
-        if (!await _gate.WaitAsync(TimeSpan.Zero, ct))
-            return (429, new JsonObject { ["error"] = "The shared playground is busy. Try again shortly." });
+                [], []), false);
+        var admission = _admission.TryAdmit(ip);
+        if (!admission.Accepted)
+            return new AskOutcome(429,
+                new JsonObject { ["error"] = AdmissionReason(admission.Failure) }, false);
+        using var admissionLease = admission.Lease!;
 
         OperationRun? run = null;
-        var requestId = Guid.NewGuid().ToString("N");
+        requestId ??= Guid.NewGuid().ToString("N");
         var requestLocale = RequestLocale(rawUserQuery);
         try
         {
+            using var firstResult = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            firstResult.CancelAfter(_firstResultDeadline);
+            using var planner = CancellationTokenSource.CreateLinkedTokenSource(firstResult.Token);
+            planner.CancelAfter(_plannerDeadline);
             var plan = await PlanOperationsAsync(
-                history, host, requestId, requestLocale, ct);
+                history, host, requestId, requestLocale, planner.Token);
             run = OperationRun.Start(plan);
-            return await ExecutePlanAsync(
-                plan, run, userQueries, rawUserQuery, onStep, ct);
+            var (status, body) = await ExecutePlanAsync(
+                plan, run, userQueries, rawUserQuery, progress, firstResult.Token,
+                () => firstResult.CancelAfter(Timeout.InfiniteTimeSpan),
+                () => ct.IsCancellationRequested
+                    ? TransportOutcome.Cancelled : TransportOutcome.TimedOut);
+            return new AskOutcome(status, body, true);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
             run?.CompletePending(TransportOutcome.Cancelled);
-            return (499, new JsonObject { ["error"] = "Request cancelled." });
+            return new AskOutcome(499,
+                new JsonObject { ["error"] = "Request cancelled." }, true);
         }
         catch (TaskCanceledException)
         {
             run?.CompletePending(TransportOutcome.TimedOut);
-            return (504, new JsonObject { ["error"] = "The operation timed out. Try a narrower question." });
+            return new AskOutcome(504,
+                new JsonObject { ["error"] = "The operation timed out. Try a narrower question." }, true);
         }
-        catch (HttpRequestException ex)
+        catch (OperationCanceledException)
+        {
+            run?.CompletePending(TransportOutcome.TimedOut);
+            return new AskOutcome(504,
+                new JsonObject { ["error"] = "The operation timed out. Try a narrower question." }, true);
+        }
+        catch (HttpRequestException)
         {
             run?.CompletePending(TransportOutcome.UpstreamFailed);
-            Console.Error.WriteLine($"[ask] planning upstream unreachable: {ex.Message}");
-            return (502, new JsonObject { ["error"] = "The planning service is unavailable right now." });
+            Diagnostic("planning_upstream_unreachable");
+            return new AskOutcome(502,
+                new JsonObject { ["error"] = "The planning service is unavailable right now." }, true);
         }
-        catch (InvalidDataException ex)
+        catch (InvalidDataException)
         {
             run?.CompletePendingLegal(LegalOutcome.InvalidRequest);
-            Console.Error.WriteLine($"[ask] invalid operation plan: {ex.Message}");
+            Diagnostic("invalid_operation_plan");
             var explanation = requestLocale == "fr"
                 ? "Cette demande ne correspond pas à une opération juridique valide."
                 : "This request does not map to a valid legal operation.";
@@ -1056,17 +1137,14 @@ public sealed class AskService
                 ["ui"] = JsonNode.Parse(
                     System.Text.Json.JsonSerializer.Serialize(effect, UiJson)),
             });
-            return (200, body);
+            return new AskOutcome(200, body, true);
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             run?.CompletePending(TransportOutcome.UpstreamFailed);
-            Console.Error.WriteLine($"[ask] {ex}");
-            return (500, new JsonObject { ["error"] = "Unexpected error in the playground." });
-        }
-        finally
-        {
-            _gate.Release();
+            Diagnostic("unexpected_failure");
+            return new AskOutcome(500,
+                new JsonObject { ["error"] = "Unexpected error in the playground." }, true);
         }
     }
 
@@ -1098,8 +1176,10 @@ public sealed class AskService
         OperationRun run,
         IReadOnlyList<string> userQueries,
         string rawUserQuery,
-        Action<Step>? onStep,
-        CancellationToken ct)
+        AskProgressCallbacks? progress,
+        CancellationToken ct,
+        Action firstResultObserved,
+        Func<TransportOutcome> cancellationOutcome)
     {
         var trace = new JsonArray
         {
@@ -1128,13 +1208,29 @@ public sealed class AskService
             .Select(_ => (JsonObject?)null).ToList();
         WorkResolutionGuard.GuardClarification? clarification = null;
         AgentClarification? applicationClarification = null;
+        int? terminalTransportStatus = null;
+
+        async ValueTask Report(OperationExecution execution)
+        {
+            firstResultObserved();
+            if (progress?.OperationResult is null) return;
+            var result = execution.Result ?? throw new InvalidDataException(
+                $"Operation '{execution.Request.OperationId}' did not reach a terminal result.");
+            await NotifyProgress(() => progress.OperationResult(
+                OperationReply(result, effects[result.UserOrder]), ct));
+        }
 
         foreach (var execution in run.Executions.OrderBy(item => item.Request.UserOrder))
         {
             if (ct.IsCancellationRequested)
             {
-                foreach (var cancelled in run.CompletePending(TransportOutcome.Cancelled))
+                var outcome = cancellationOutcome();
+                foreach (var cancelled in run.CompletePending(outcome))
+                {
                     effects[cancelled.UserOrder] = TransportGap(plan.Locale, cancelled.TransportOutcome);
+                    await Report(run.Executions[cancelled.UserOrder]);
+                }
+                terminalTransportStatus = outcome == TransportOutcome.Cancelled ? 499 : 504;
                 break;
             }
             var operation = execution.Request;
@@ -1180,12 +1276,13 @@ public sealed class AskService
                                 : "This request does not map to a valid legal operation.",
                             []));
                     }
+                    await Report(execution);
                     continue;
                 }
                 if (operation.RequiresWorkResolution)
                 {
-                    var prepared = ResolveWorkOperation(
-                        run, operation, arguments, userQueries, plan.Locale, trace);
+                    var prepared = await ResolveWorkOperationAsync(
+                        run, operation, arguments, userQueries, plan.Locale, trace, ct);
                     if (prepared.Arguments is null)
                     {
                         execution.CompleteLegal(LegalOutcome.NeedsClarification);
@@ -1197,6 +1294,7 @@ public sealed class AskService
                                 : "Lex needs a specific instrument before it can continue this operation.",
                             prepared.Clarification?.Choices.Select(choice => choice.Value).ToArray()
                                 ?? []));
+                        await Report(execution);
                         continue;
                     }
                     arguments = prepared.Arguments;
@@ -1215,7 +1313,7 @@ public sealed class AskService
                     using var span = Activity.StartActivity("legal-operation");
                     span?.SetTag("lex.operation.id", operation.OperationId);
                     span?.SetTag("gen_ai.tool.name", operation.Tool);
-                    result = core.CallTool(operation.Tool, arguments);
+                    result = await _legalTool(operation.Tool, arguments, ct);
                     status = LegalOperationPolicy.StatusForResult(result);
                     span?.SetTag("lex.status", status);
                 }
@@ -1236,9 +1334,12 @@ public sealed class AskService
                     ["status"] = summaryStatus ?? LegalOperationPolicy.StatusForResult(result),
                     ["docs"] = docs,
                 });
-                onStep?.Invoke(Describe(operation.Tool, arguments, effect, docs));
+                await Report(execution);
+                if (progress?.Step is not null)
+                    await NotifyProgress(() => progress.Step(
+                        Describe(operation.Tool, arguments, effect, docs), ct));
             }
-            catch (InvalidDataException ex)
+            catch (InvalidDataException)
             {
                 if (execution.State != OperationExecutionState.Pending) throw;
                 execution.CompleteLegal(LegalOutcome.InvalidRequest);
@@ -1254,8 +1355,36 @@ public sealed class AskService
                     ["operation_id"] = operation.OperationId,
                     ["tool"] = operation.Tool,
                     ["status"] = "invalid_request",
-                    ["detail"] = ex.Message,
+                    ["detail"] = "operation_arguments_invalid",
                 });
+                await Report(execution);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                var outcome = cancellationOutcome();
+                foreach (var cancelled in run.CompletePending(outcome))
+                {
+                    effects[cancelled.UserOrder] = TransportGap(plan.Locale, cancelled.TransportOutcome);
+                    await Report(run.Executions[cancelled.UserOrder]);
+                }
+                terminalTransportStatus = outcome == TransportOutcome.Cancelled ? 499 : 504;
+                break;
+            }
+            catch (Exception)
+            {
+                if (execution.State == OperationExecutionState.Pending)
+                    execution.CompleteTransport(TransportOutcome.UpstreamFailed);
+                effects[operation.UserOrder] = TransportGap(
+                    plan.Locale, TransportOutcome.UpstreamFailed);
+                trace.Add(new JsonObject
+                {
+                    ["phase"] = "primary",
+                    ["operation_id"] = operation.OperationId,
+                    ["tool"] = operation.Tool,
+                    ["status"] = "upstream_failed",
+                });
+                await Report(execution);
+                terminalTransportStatus ??= 502;
             }
         }
 
@@ -1269,8 +1398,11 @@ public sealed class AskService
         var deterministicReply = displayedClarification?.Question
             ?? OperationAnswerPolicy.Render(plan.Locale, results, effects);
         var reply = deterministicReply;
-        if (plan.SynthesisRequested && displayedClarification is null)
+        if (plan.SynthesisRequested && displayedClarification is null
+            && terminalTransportStatus is null)
         {
+            if (progress?.Synthesis is not null)
+                await NotifyProgress(() => progress.Synthesis("started", ct));
             var evidence = new AgentEvidenceLedger();
             foreach (var result in results.Where(item => item.Payload is not null))
             {
@@ -1296,16 +1428,21 @@ public sealed class AskService
                     throw new InvalidOperationException(
                         "No synthesis service is configured.");
                 reply = ReplyFor(finalized.Draft, effects, finalized.SynthesisFailed);
+                if (progress?.Synthesis is not null)
+                    await NotifyProgress(() => progress.Synthesis("completed", ct));
             }
             catch (Exception ex) when (ex is OperationCanceledException
                                        or HttpRequestException
                                        or InvalidDataException
                                        or InvalidOperationException)
             {
-                Console.Error.WriteLine($"[ask] optional synthesis unavailable: {ex.Message}");
+                Diagnostic("optional_synthesis_unavailable");
                 reply = deterministicReply + (plan.Locale == "fr"
                     ? " La synthèse descriptive facultative n'est pas disponible; les résultats vérifiés restent affichés."
                     : " The optional descriptive synthesis is unavailable; the verified results remain open.");
+                if (progress?.Synthesis is not null)
+                    await NotifyProgress(() => progress.Synthesis(
+                        "unavailable", CancellationToken.None));
             }
         }
         var body = Body(reply, trace, effects,
@@ -1313,24 +1450,33 @@ public sealed class AskService
         body["operations"] = new JsonArray(results.Select(result =>
         {
             var effect = effects[result.UserOrder];
-            return (JsonNode)new JsonObject
-            {
-                ["operation_id"] = result.OperationId,
-                ["order"] = result.UserOrder,
-                ["result_class"] = result.ResultClass is { } resultClass
-                    ? ContractName(resultClass) : null,
-                ["disposition"] = result.Disposition is { } disposition
-                    ? ContractName(disposition) : null,
-                ["legal_outcome"] = ContractName(result.LegalOutcome),
-                ["transport_outcome"] = ContractName(result.TransportOutcome),
-                ["effects"] = new JsonArray(result.Effects.Select(item =>
-                    (JsonNode)ContractName(item)).ToArray()),
-                ["ui"] = effect.IsEmpty ? null : JsonNode.Parse(
-                    System.Text.Json.JsonSerializer.Serialize(effect, UiJson)),
-            };
+            return (JsonNode)OperationReply(result, effect);
         }).ToArray());
-        return (200, body);
+        if (terminalTransportStatus is { } failedStatus)
+            body["error"] = failedStatus switch
+            {
+                499 => "The assistant request was cancelled.",
+                504 => "The operation timed out. Try a narrower question.",
+                _ => "A legal operation failed upstream.",
+            };
+        return (terminalTransportStatus ?? 200, body);
     }
+
+    private static JsonObject OperationReply(OperationResult result, UiEffect effect) => new()
+    {
+        ["operation_id"] = result.OperationId,
+        ["order"] = result.UserOrder,
+        ["result_class"] = result.ResultClass is { } resultClass
+            ? ContractName(resultClass) : null,
+        ["disposition"] = result.Disposition is { } disposition
+            ? ContractName(disposition) : null,
+        ["legal_outcome"] = ContractName(result.LegalOutcome),
+        ["transport_outcome"] = ContractName(result.TransportOutcome),
+        ["effects"] = new JsonArray(result.Effects.Select(item =>
+            (JsonNode)ContractName(item)).ToArray()),
+        ["ui"] = effect.IsEmpty ? null : JsonNode.Parse(
+            System.Text.Json.JsonSerializer.Serialize(effect, UiJson)),
+    };
 
     private static UiEffect TransportGap(string locale, TransportOutcome outcome) =>
         new(Gap: new GapView(
@@ -1353,13 +1499,14 @@ public sealed class AskService
         JsonObject? Arguments,
         WorkResolutionGuard.GuardClarification? Clarification);
 
-    private PreparedOperation ResolveWorkOperation(
+    private async Task<PreparedOperation> ResolveWorkOperationAsync(
         OperationRun run,
         RequestedOperation operation,
         JsonObject plannedArguments,
         IReadOnlyList<string> userQueries,
         string locale,
-        JsonArray trace)
+        JsonArray trace,
+        CancellationToken cancellationToken)
     {
         var rawUserQuery = userQueries[^1];
         var guard = new WorkResolutionGuard();
@@ -1368,7 +1515,7 @@ public sealed class AskService
             ?? String(plannedArguments, operation.Tool == "provenance" ? "lex_id" : "work")
             ?? rawUserQuery;
         var article = String(plannedArguments, "article_number");
-        JsonNode Search(string query, string phase, Action<JsonNode> observe)
+        async Task<JsonNode> Search(string query, string phase, Action<JsonNode> observe)
         {
             var searchArguments = new JsonObject
             {
@@ -1379,7 +1526,7 @@ public sealed class AskService
             };
             Copy(plannedArguments, searchArguments,
                 "publisher", "jurisdiction", "source_class", "hierarchy", "domain", "language");
-            var result = core.CallTool("search", searchArguments);
+            var result = await _legalTool("search", searchArguments, cancellationToken);
             var resultStatus = LegalOperationPolicy.StatusForResult(result);
             run.ObserveSupportingCall(operation.OperationId, SupportingCallRole.WorkResolution,
                 "search", searchArguments, resultStatus, result);
@@ -1401,20 +1548,20 @@ public sealed class AskService
         foreach (var priorQuery in userQueries.SkipLast(1).Reverse().Take(MaxContextResolutionQueries))
         {
             var priorGuard = new WorkResolutionGuard();
-            Search(priorQuery, "prior_work_resolution", priorGuard.ObservePriorUserSearch);
+            await Search(priorQuery, "prior_work_resolution", priorGuard.ObservePriorUserSearch);
             if (priorGuard.ResolvedWorks.Count == 0) continue;
             priorWorks.UnionWith(priorGuard.ResolvedWorks);
             break;
         }
         guard.AuthorizePriorWorks(priorWorks);
         var carriesPriorSubject = priorWorks.Count > 0 && IsAnaphoricWorkReference(rawUserQuery);
-        var resolution = Search(rawUserQuery, "work_resolution",
+        var resolution = await Search(rawUserQuery, "work_resolution",
             result => guard.ObserveCurrentUserSearch(result, hasPriorContext: carriesPriorSubject));
         JsonNode? focused = null;
         var resolutionQuery = article is null ? workQuery : $"{workQuery} Article {article}";
         if (guard.CurrentResolvedWorks.Count != 1
             && !string.Equals(resolutionQuery, rawUserQuery, StringComparison.OrdinalIgnoreCase))
-            focused = Search(resolutionQuery, "focused_work_resolution",
+            focused = await Search(resolutionQuery, "focused_work_resolution",
                 result => guard.ObserveFocusedSearch(result, hasPriorContext: carriesPriorSubject));
         var plannedWork = String(plannedArguments,
             operation.Tool == "provenance" ? "lex_id" : "work");
@@ -1586,10 +1733,10 @@ public sealed class AskService
                 "Please add another identifying detail, such as the topic, jurisdiction, official title, or identifier.",
                 [], []));
 
-        if (!TryCount(ip, out var why)) return (429, new JsonObject { ["error"] = why });
-
-        if (!await _gate.WaitAsync(TimeSpan.FromSeconds(20)))
-            return (503, new JsonObject { ["error"] = "The playground is busy. Try again in a moment." });
+        var admission = _admission.TryAdmit(ip);
+        if (!admission.Accepted)
+            return (429, new JsonObject { ["error"] = AdmissionReason(admission.Failure) });
+        using var admissionLease = admission.Lease!;
         try
         {
             using var askSpan = Activity.StartActivity("ask");
@@ -1621,11 +1768,11 @@ public sealed class AskService
                         ["limit"] = 8,
                     });
                 }
-                catch (Exception ex)
+                catch (Exception)
                 {
                     // Conversation context is optional. A stale earlier query must never
                     // prevent the current, independently valid question from running.
-                    Console.Error.WriteLine($"[ask] prior user resolution skipped: {ex.Message}");
+                    Diagnostic("prior_resolution_skipped");
                     return null;
                 }
             });
@@ -1748,12 +1895,12 @@ public sealed class AskService
                 var respText = await resp.Content.ReadAsStringAsync(ct);
                 if (!resp.IsSuccessStatusCode)
                 {
-                    Console.Error.WriteLine($"[ask] upstream {(int)resp.StatusCode}: {respText[..Math.Min(500, respText.Length)]}");
+                    Diagnostic($"upstream_status_{(int)resp.StatusCode}");
                     return (502, new JsonObject { ["error"] = "The model upstream returned an error. Try again shortly." });
                 }
                 var parsed = JsonNode.Parse(respText);
                 if (parsed?["usage"]?["total_tokens"] is { } tt)
-                    Console.Error.WriteLine($"[ask] ip={ip} round={round} tokens={tt}");
+                    Diagnostic($"round_{round}_tokens_{tt}");
                 var choice = parsed?["choices"]?[0];
                 var msg = choice?["message"];
                 var toolCalls = msg?["tool_calls"] as JsonArray;
@@ -1883,10 +2030,13 @@ public sealed class AskService
                             }
                             result = TruncateResult(node);
                         }
-                        catch (Exception ex)
+                        catch (Exception)
                         {
                             entry["status"] = "error";
-                            result = new JsonObject { ["error"] = ex.Message }.ToJsonString();
+                            result = new JsonObject
+                            {
+                                ["error"] = "The legal operation failed without exposing internal details.",
+                            }.ToJsonString();
                         }
                         trace.Add(entry);
                         messages.Add(new JsonObject { ["role"] = "tool", ["tool_call_id"] = id, ["content"] = result });
@@ -1901,7 +2051,7 @@ public sealed class AskService
                 if (reply.Length == 0 && !retried)
                 {
                     // Nothing written. Same evidence, one more attempt with room to think.
-                    Console.Error.WriteLine("[ask] empty reply — retrying at medium effort");
+                    Diagnostic("empty_reply_retry");
                     retried = true;
                     continue;
                 }
@@ -1924,24 +2074,20 @@ public sealed class AskService
         {
             return (504, new JsonObject { ["error"] = "The model took too long. Try a narrower question." });
         }
-        catch (HttpRequestException ex)
+        catch (HttpRequestException)
         {
-            Console.Error.WriteLine($"[ask] upstream unreachable: {ex.Message}");
+            Diagnostic("upstream_unreachable");
             return (502, new JsonObject { ["error"] = "The model upstream is unreachable right now. Try again shortly." });
         }
         catch (System.ClientModel.ClientResultException ex)
         {
-            Console.Error.WriteLine($"[ask] agent upstream failed: {ex.Status}");
+            Diagnostic($"agent_upstream_status_{ex.Status}");
             return (502, new JsonObject { ["error"] = "The model upstream returned an error. Try again shortly." });
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            Console.Error.WriteLine($"[ask] {ex}");
+            Diagnostic("legacy_unexpected_failure");
             return (500, new JsonObject { ["error"] = "Unexpected error in the playground." });
-        }
-        finally
-        {
-            _gate.Release();
         }
     }
 

@@ -10,6 +10,18 @@ export const STARTER_PROMPTS = [
 
 export interface AssistantPanelState { open: boolean; minimized: boolean }
 
+/** Only a complete provision effect may seed the reader without a follow-up fetch. */
+export function assistantProvisionLoad(ui?: UiEffect) {
+  const provision = ui?.provision;
+  if (!provision || provision.truncated || provision.text_truncated || provision.outline_only)
+    return undefined;
+  return {
+    items: provision.provisions,
+    from: provision.valid_from,
+    to: provision.valid_to,
+  };
+}
+
 export function parseAssistantPanelState(raw: string | null): AssistantPanelState {
   if (!raw) return { open: false, minimized: false };
   try {

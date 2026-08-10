@@ -99,24 +99,24 @@ public static class LexOptionsSetup
     }
 
     /// <summary>Reads the historical flat environment variables into the typed shape.</summary>
-    public static LexOptions FromEnvironment(IHostEnvironment env) => new()
+    public static LexOptions FromConfiguration(IHostEnvironment env, IConfiguration configuration) => new()
     {
-        IndexDir = Environment.GetEnvironmentVariable("LEX_INDEX_DIR")
+        IndexDir = configuration["LEX_INDEX_DIR"]
                    ?? Path.Combine(env.ContentRootPath, "indexes"),
-        EmbeddingModelDir = Environment.GetEnvironmentVariable("LEX_EMBEDDING_MODEL_DIR"),
-        PublicBaseUrl = Environment.GetEnvironmentVariable("LEX_PUBLIC_BASE_URL")
+        EmbeddingModelDir = configuration["LEX_EMBEDDING_MODEL_DIR"],
+        PublicBaseUrl = configuration["LEX_PUBLIC_BASE_URL"]
                         ?? "https://law.soufien.lu",
-        AzureOpenAiEndpoint = Environment.GetEnvironmentVariable("AOAI_ENDPOINT"),
-        AzureOpenAiKey = Environment.GetEnvironmentVariable("AOAI_KEY"),
-        AzureOpenAiDeployment = Environment.GetEnvironmentVariable("AOAI_CHAT_DEPLOYMENT"),
+        AzureOpenAiEndpoint = configuration["AOAI_ENDPOINT"],
+        AzureOpenAiKey = configuration["AOAI_KEY"],
+        AzureOpenAiDeployment = configuration["AOAI_CHAT_DEPLOYMENT"],
         AzureOpenAiUseManagedIdentity =
-            Environment.GetEnvironmentVariable("AOAI_USE_MANAGED_IDENTITY") == "1",
+            configuration["AOAI_USE_MANAGED_IDENTITY"] == "1",
         AppInsightsConnectionString =
-            Environment.GetEnvironmentVariable("APPLICATIONINSIGHTS_CONNECTION_STRING"),
-        RequireArtifactManifest = Environment.GetEnvironmentVariable("LEX_REQUIRE_ARTIFACT_MANIFEST") == "1",
-        RequiredPublishers = Environment.GetEnvironmentVariable("LEX_REQUIRED_PUBLISHERS") ?? "",
-        CodeCommit = Environment.GetEnvironmentVariable("LEX_CODE_COMMIT"),
-        ArtifactManifestId = Environment.GetEnvironmentVariable("LEX_ARTIFACT_MANIFEST_ID"),
-        DeployImage = Environment.GetEnvironmentVariable("LEX_DEPLOY_IMAGE"),
+            configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"],
+        RequireArtifactManifest = configuration["LEX_REQUIRE_ARTIFACT_MANIFEST"] == "1",
+        RequiredPublishers = configuration["LEX_REQUIRED_PUBLISHERS"] ?? "",
+        CodeCommit = configuration["LEX_CODE_COMMIT"],
+        ArtifactManifestId = configuration["LEX_ARTIFACT_MANIFEST_ID"],
+        DeployImage = configuration["LEX_DEPLOY_IMAGE"],
     };
 }

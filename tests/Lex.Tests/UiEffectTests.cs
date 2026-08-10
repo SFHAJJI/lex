@@ -303,6 +303,43 @@ public class UiEffectTests
     }
 
     [Fact]
+    public void A_bounded_as_of_response_is_not_reported_as_missing_publisher_text()
+    {
+        var eff = UiMapper.From("as_of",
+            Args(("work", "eu-eurlex:32013r0575"), ("date", "2024-12-31")),
+            new JsonObject
+            {
+                ["envelope"] = new JsonObject { ["status"] = McpStatus.Ok },
+                ["document"] = new JsonObject
+                {
+                    ["work"] = "eu-eurlex:32013r0575",
+                    ["title"] = "Capital Requirements Regulation",
+                    ["valid_from"] = "2024-07-09",
+                    ["source_uri"] = "https://example.test/crr",
+                },
+                ["total_provisions"] = 500,
+                ["truncated"] = true,
+                ["text_truncated"] = true,
+                ["provisions"] = new JsonArray(new JsonObject
+                {
+                    ["anchor"] = "art_500",
+                    ["num"] = "Article 500",
+                    ["text"] = null,
+                    ["text_omitted"] = true,
+                    ["text_omitted_reason"] = "bounded response",
+                    ["permalink"] = "https://example.test/crr#art_500",
+                }),
+            });
+
+        var provision = Assert.IsType<ProvisionView>(eff.Provision);
+        Assert.True(provision.TextTruncated);
+        Assert.True(provision.Truncated);
+        Assert.Equal(500, provision.TotalProvisions);
+        Assert.True(Assert.Single(provision.Provisions).TextOmitted);
+        Assert.Null(eff.Gap);
+    }
+
+    [Fact]
     public void A_half_resolved_diff_still_maps()
     {
         // A diff whose second side did not resolve used to throw inside the mapper, which loses
