@@ -518,6 +518,12 @@ main,footer{transition:margin-right .18s ease}
 .res-passages .rowbtn { padding-top: 7px; padding-bottom: 7px; }
 
 @media (max-width: 640px) {
+  /* Native date fields use different intrinsic widths across browser/font stacks. The plain
+     finder therefore uses deliberate rows instead of allowing its action to wrap beneath the
+     persistent assistant launcher. This rule arrives with that launcher, so the SSR-only page
+     remains useful before the workspace bundle loads. */
+  form.plainsearch { flex-direction: column; align-items: flex-start; }
+  form.plainsearch input[name="q"] { width: 100%; min-width: 0 !important; box-sizing: border-box; }
   .one { display: grid; grid-template-columns: minmax(0, 1fr) auto; }
   .onebox { grid-column: 1 / -1; width: 100%; min-width: 0; }
   .asof, .one button[type=submit] { width: auto; min-width: 0; }

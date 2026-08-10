@@ -624,7 +624,7 @@ public static class CatalogueEndpoints
 
                 <div class="card"><h2 style="margin-top:0">Search by words</h2>
                 <p class="sub">Finds the individual article, not just the law, search runs over every provision.</p>
-                <form class="inline" action="/search" method="get">
+                <form class="inline plainsearch" action="/search" method="get">
                   <input name="q" aria-label="Words to search for in the text" style="flex:1;min-width:240px" placeholder="e.g. congé parental, breach notification, own funds">
                   <input type="date" name="as_of" aria-label="Only publisher states covering this date">
                   <button type="submit">Search</button>
