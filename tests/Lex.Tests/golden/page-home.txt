@@ -19,8 +19,6 @@ HTTP 200
 <script type="application/ld+json">{"@context":"https://schema.org","@type":"WebSite","name":"Lex","url":"https://golden.test","description":"Point-in-time retrieval of Luxembourg and reviewed-scope EU law, with per-article history and verifiable provenance.","inLanguage":"en","publisher":{"@type":"Person","name":"Soufien Hajji","url":"https://soufien.lu"}}</script>
 <meta name="twitter:image" content="https://golden.test/og.png">
 <script src="/site.js?v=dev" defer></script>
-<link rel="preload" href="/fonts/IBMPlexSans-latin.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="preload" href="/fonts/SourceSerif4-latin.woff2" as="font" type="font/woff2" crossorigin>
 <!-- The interval mark: a rule, two terminals, and a notch at the date being read.
      The same shape is the version rail at full width. An emoji was a different
      picture on every platform and read as a generic legal site on all of them. -->
@@ -71,6 +69,11 @@ HTTP 200
             --card:#131920; --ok:#4ec78f; --warn:#e0b070; --on-accent:#0d1117; } }
   * { box-sizing:border-box }
   body { margin:0; font:16px/1.6 var(--sans); background:var(--bg); color:var(--fg); }
+  /* Reserve the persistent assistant's clearance in the server shell. The interactive
+     stylesheet is intentionally loaded after the legal page, so these two layout rules
+     must be present at first paint rather than moving the page when that CSS arrives. */
+  body.assistant-enabled { padding-bottom:84px }
+  body.assistant-enabled main { min-height:calc(100dvh - 94px) }
   /* Digits line up in columns all over this product: dates, version counts, article
      numbers, hashes. Proportional figures make those columns ragged. */
   table, .mono, .badge, time, .kv { font-variant-numeric:tabular-nums }
@@ -186,6 +189,7 @@ HTTP 200
                             color:var(--link); font-size:13px }
   }
   @media (max-width:640px) {
+    body.assistant-enabled { padding-bottom:76px }
     main { padding:20px 14px 48px }
     table { display:block; overflow-x:auto }
     pre { overflow-x:auto }
@@ -194,7 +198,11 @@ HTTP 200
     .proofnav > nav { left:auto; right:0; grid-template-columns:1fr }
     h1 { font-size:25px }
     .rail .yr { font-size:10px }
-    .filters i { width:100%; margin:3px 0 1px }
+    .filters { gap:5px; margin-top:10px }
+    /* Keep the facet name beside its choices. Stacking every label on a separate row
+       made the first four filter groups taller than the entire 320px viewport and put
+       the persistent assistant over a live sort choice. */
+    .filters i { width:68px; margin:3px 0 1px }
     .filters > .facetgroups { margin-left:0; grid-template-columns:1fr }
     .sourceclasses { margin-left:0 }
     .catcard { overflow:visible; padding:4px 14px }
@@ -238,9 +246,8 @@ HTTP 200
 <main>
 <h1>A law is not one document.</h1>
 
-<p class="lede">Research Luxembourg and EU law as it stood on a chosen date. Read and compare
-exact official wording, with clear date semantics, sources and explicit gaps. Coverage always
-comes from the verified indexes mounted now.</p><!-- Read synchronously by the workspace on mount, so the doors never flash in or need a
+<p class="lede">Research Luxembourg and EU law on a chosen date. Read and compare exact official
+wording, with sources, explicit gaps and the verified coverage mounted now.</p><!-- Read synchronously by the workspace on mount, so the doors never flash in or need a
      round trip of their own. -->
 <script type="application/json" id="doors">[]</script>
 <script type="application/json" id="search-facets">{"jurisdictions":[],"hierarchies":[],"domains":[],"source_classes":["LOI","RGD"],"act_forms":[],"binding_statuses":[],"languages":["fr"]}</script>
@@ -252,7 +259,7 @@ comes from the verified indexes mounted now.</p><!-- Read synchronously by the w
      law. They live inside the noscript on purpose. A reader with JavaScript gets
      the workspace's own richer version a moment later, and rendering both put the
      same three names on the page twice. -->
-<div id="workspace"><noscript><p class="sub">The interactive workspace needs JavaScript.
+<div id="workspace" data-workspace-module="/app/workspace.js?v=dev" data-workspace-style="/app/workspace.css?v=dev"><noscript><p class="sub">The interactive workspace needs JavaScript.
   Everything is also reachable as plain pages: <a href="/find">find a law</a>,
   <a href="/changed">what changed</a>, <a href="/stories">stories</a>.</p>
   </noscript></div><div class="frontdoor">
@@ -262,7 +269,7 @@ comes from the verified indexes mounted now.</p><!-- Read synchronously by the w
 <span class="badge">2 with full text</span>
 <span class="badge">2019-06-01 → 2022-01-01</span>
 <span class="badge ok" title="SHA-256 hashes and signed release manifests">source integrity verified</span></p>
-<p class="sub">Free assistant, daily limit. <a href="/ai">Connect your own AI</a>
+<p class="sub">Free assistant, daily limit. <a href="/developers#assistant">Connect your own AI</a>
 through the separately bounded public MCP endpoint.</p>
 
 <!-- A fork, not a menu. Three readers arrive here and they want different things; the
@@ -288,10 +295,14 @@ through the separately bounded public MCP endpoint.</p>
   body[data-workspace="active"] .lede,
   body[data-workspace="active"] main > h1 { display:none }
   .workspace-loading #workspace { min-height:430px }
-  @media (max-width:640px) { .workspace-loading #workspace { min-height:650px } }
+  @media (max-width:640px) {
+    /* At the smallest supported viewport the introduction and finder are one
+       continuous first task. A tighter reading measure keeps its Search control
+       clear of the persistent assistant launcher without hiding either control. */
+    .lede { font-size:17px; line-height:1.5; margin-bottom:8px }
+    .workspace-loading #workspace { min-height:650px }
+  }
 </style>
-<link rel="stylesheet" href="/app/workspace.css?v=dev">
-<script type="module" src="/app/workspace.js?v=dev"></script>
 </main>
 <footer>
 <!-- Fourteen links in one undifferentiated run answered no question a reader had. Three

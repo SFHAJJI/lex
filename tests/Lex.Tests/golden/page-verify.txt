@@ -17,8 +17,6 @@ HTTP 200
 <link rel="canonical" href="https://golden.test/verify">
 <meta name="twitter:image" content="https://golden.test/og.png">
 <script src="/site.js?v=dev" defer></script>
-<link rel="preload" href="/fonts/IBMPlexSans-latin.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="preload" href="/fonts/SourceSerif4-latin.woff2" as="font" type="font/woff2" crossorigin>
 <!-- The interval mark: a rule, two terminals, and a notch at the date being read.
      The same shape is the version rail at full width. An emoji was a different
      picture on every platform and read as a generic legal site on all of them. -->
@@ -69,6 +67,11 @@ HTTP 200
             --card:#131920; --ok:#4ec78f; --warn:#e0b070; --on-accent:#0d1117; } }
   * { box-sizing:border-box }
   body { margin:0; font:16px/1.6 var(--sans); background:var(--bg); color:var(--fg); }
+  /* Reserve the persistent assistant's clearance in the server shell. The interactive
+     stylesheet is intentionally loaded after the legal page, so these two layout rules
+     must be present at first paint rather than moving the page when that CSS arrives. */
+  body.assistant-enabled { padding-bottom:84px }
+  body.assistant-enabled main { min-height:calc(100dvh - 94px) }
   /* Digits line up in columns all over this product: dates, version counts, article
      numbers, hashes. Proportional figures make those columns ragged. */
   table, .mono, .badge, time, .kv { font-variant-numeric:tabular-nums }
@@ -184,6 +187,7 @@ HTTP 200
                             color:var(--link); font-size:13px }
   }
   @media (max-width:640px) {
+    body.assistant-enabled { padding-bottom:76px }
     main { padding:20px 14px 48px }
     table { display:block; overflow-x:auto }
     pre { overflow-x:auto }
@@ -192,7 +196,11 @@ HTTP 200
     .proofnav > nav { left:auto; right:0; grid-template-columns:1fr }
     h1 { font-size:25px }
     .rail .yr { font-size:10px }
-    .filters i { width:100%; margin:3px 0 1px }
+    .filters { gap:5px; margin-top:10px }
+    /* Keep the facet name beside its choices. Stacking every label on a separate row
+       made the first four filter groups taller than the entire 320px viewport and put
+       the persistent assistant over a live sort choice. */
+    .filters i { width:68px; margin:3px 0 1px }
     .filters > .facetgroups { margin-left:0; grid-template-columns:1fr }
     .sourceclasses { margin-left:0 }
     .catcard { overflow:visible; padding:4px 14px }
