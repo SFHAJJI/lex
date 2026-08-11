@@ -33,7 +33,10 @@ public sealed class ReleaseWorkflowTests
         Assert.Contains("evals/run-mcp-load.mjs", workflow);
         Assert.Contains("candidate exceeded the 75 percent memory budget", workflow);
         Assert.Contains("candidate load used more than one replica", workflow);
-        Assert.Equal(4, Regex.Matches(workflow, "RunningAtMaxScale").Count);
+        Assert.Equal(2, Regex.Matches(workflow, Regex.Escape(
+            "{ [ \"$rollback_state\" = \"Running\" ] || [ \"$rollback_state\" = \"RunningAtMaxScale\" ]; }")).Count);
+        Assert.Equal(2, Regex.Matches(workflow, Regex.Escape(
+            "{ [ \"$state\" = \"Running\" ] || [ \"$state\" = \"RunningAtMaxScale\" ]; }")).Count);
         Assert.Contains("current-user injection canary reached the reply", workflow);
         Assert.Contains("restored-transcript injection canary reached the reply", workflow);
         Assert.Contains("revision deactivate", workflow);
@@ -57,7 +60,10 @@ public sealed class ReleaseWorkflowTests
         Assert.Contains("expected_current_revision", workflow);
         Assert.Contains("rollback_revision", workflow);
         Assert.Contains("target revision did not become ready", workflow);
-        Assert.Equal(3, Regex.Matches(workflow, "RunningAtMaxScale").Count);
+        Assert.Single(Regex.Matches(workflow, Regex.Escape(
+            "{ [ \"$state\" = \"Running\" ] || [ \"$state\" = \"RunningAtMaxScale\" ]; }")));
+        Assert.Equal(2, Regex.Matches(workflow, Regex.Escape(
+            "{ [ \"$target_state\" = \"Running\" ] || [ \"$target_state\" = \"RunningAtMaxScale\" ]; }")).Count);
         Assert.Contains("Activate the exact candidate for bounded verification", workflow);
         Assert.Contains("assistant-browser-evidence.json", workflow);
         Assert.Contains("properties.fqdn", workflow);
