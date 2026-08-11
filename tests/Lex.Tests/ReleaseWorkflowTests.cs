@@ -5,6 +5,30 @@ namespace Lex.Tests;
 public sealed class ReleaseWorkflowTests
 {
     [Fact]
+    public void Deployment_requires_exact_ci_success_and_an_immutable_image_digest()
+    {
+        var workflow = File.ReadAllText(Path.Combine(RepoRoot(), ".github", "workflows", "deploy.yml"));
+
+        Assert.Contains("checks: read", workflow);
+        Assert.Contains("Require successful CI for this exact commit", workflow);
+        Assert.Contains("scripts/deploy/require_ci.py", workflow);
+        Assert.True(workflow.IndexOf("Require successful CI for this exact commit", StringComparison.Ordinal)
+                    < workflow.IndexOf("azure/login@", StringComparison.Ordinal));
+        Assert.Contains("az acr repository show", workflow);
+        Assert.Contains("--query digest", workflow);
+        Assert.Contains("image=\"$ACR_SERVER/lex-web@$digest\"", workflow);
+        Assert.Contains("[[ \"$digest\" =~ ^sha256:[0-9a-f]{64}$ ]]", workflow);
+        Assert.DoesNotContain("image=\"$ACR_SERVER/lex-web:$tag\"", workflow);
+        Assert.Contains("timeout-minutes: 45", workflow);
+        Assert.Contains("mapfile -t traffic_bearers", workflow);
+        Assert.Contains("expected exactly one traffic-bearing revision before candidate creation", workflow);
+        Assert.Contains("--connect-timeout 5 --max-time 60", workflow);
+        Assert.Contains(".verifiedManifestSet == $manifest", workflow);
+        Assert.Contains("requestRows=countif(itemType == 'request')", workflow);
+        Assert.Contains("[ \"$request_rows\" -gt 0 ] && break", workflow);
+    }
+
+    [Fact]
     public void Production_deployment_requires_the_complete_signed_manifest_set()
     {
         var workflow = File.ReadAllText(Path.Combine(RepoRoot(), ".github", "workflows", "deploy.yml"));
