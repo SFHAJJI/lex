@@ -221,12 +221,12 @@ jobs:
             for attempt in $(seq 1 30); do
               rollback_state=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
                 --revision "$rollback" --query properties.runningState -o tsv 2>/dev/null || true)
-              [ "$rollback_state" = "Running" ] && break
+              { [ "$rollback_state" = "Running" ] || [ "$rollback_state" = "RunningAtMaxScale" ]; } && break
               [ "$rollback_state" = "Failed" ] \
                 && { echo "::error::pinned rollback revision failed"; exit 1; }
               sleep 10
             done
-            [ "$rollback_state" = "Running" ] \
+            { [ "$rollback_state" = "Running" ] || [ "$rollback_state" = "RunningAtMaxScale" ]; } \
               || { echo "::error::pinned rollback revision did not become ready"; exit 1; }
             rollback_image=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
               --revision "$rollback" --query properties.template.containers[0].image -o tsv)
@@ -280,11 +280,12 @@ jobs:
           for attempt in $(seq 1 30); do
             state=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
               --revision "$candidate" --query properties.runningState -o tsv 2>/dev/null || true)
-            [ "$state" = "Running" ] && break
+            { [ "$state" = "Running" ] || [ "$state" = "RunningAtMaxScale" ]; } && break
             [ "$state" = "Failed" ] && { echo "::error::candidate revision failed"; exit 1; }
             sleep 10
           done
-          [ "$state" = "Running" ] || { echo "::error::candidate revision did not become ready"; exit 1; }
+          { [ "$state" = "Running" ] || [ "$state" = "RunningAtMaxScale" ]; } \
+            || { echo "::error::candidate revision did not become ready"; exit 1; }
           az containerapp show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" -o json \
             | jq -e '.properties.template.scale.minReplicas == 1
                      and .properties.template.scale.maxReplicas == 1' >/dev/null \

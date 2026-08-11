@@ -69,7 +69,7 @@ try {
         $running = Invoke-AzureText @(
             "containerapp", "revision", "show", "-g", $resourceGroup, "-n", $containerApp,
             "--revision", $CandidateRevision, "--query", "properties.runningState", "-o", "tsv")
-        if ($running -eq "Running") { $ready = $true; break }
+        if ($running -in @("Running", "RunningAtMaxScale")) { $ready = $true; break }
         Start-Sleep -Seconds 3
     }
     if (-not $ready) { throw "The candidate revision did not become ready." }

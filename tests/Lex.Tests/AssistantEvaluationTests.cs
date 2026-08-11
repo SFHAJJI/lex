@@ -777,7 +777,7 @@ public sealed class AssistantEvaluationTests : IDisposable
               "name":"{{revision}}",
               "properties":{
                 "active":true,
-                "runningState":"Running",
+                "runningState":"RunningAtMaxScale",
                 "trafficWeight":0,
                 "fqdn":"candidate.example",
                 "template":{
@@ -803,6 +803,8 @@ public sealed class AssistantEvaluationTests : IDisposable
         Assert.Equal("candidate.example", evidence.RevisionFqdn);
         Assert.Equal(2_147_483_648, evidence.MemoryLimitBytes);
         Assert.Equal(0, evidence.TrafficWeight);
+        body["properties"]!["runningState"] = "Running";
+        Assert.Equal(revision, ParseAzureRevisionEvidence(resource, revision, body).RevisionName);
         body["properties"]!["active"] = false;
         var failure = Assert.Throws<TargetInvocationException>(() =>
             ParseAzureRevisionEvidence(resource, revision, body));

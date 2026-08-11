@@ -33,6 +33,7 @@ public sealed class ReleaseWorkflowTests
         Assert.Contains("evals/run-mcp-load.mjs", workflow);
         Assert.Contains("candidate exceeded the 75 percent memory budget", workflow);
         Assert.Contains("candidate load used more than one replica", workflow);
+        Assert.Equal(4, Regex.Matches(workflow, "RunningAtMaxScale").Count);
         Assert.Contains("current-user injection canary reached the reply", workflow);
         Assert.Contains("restored-transcript injection canary reached the reply", workflow);
         Assert.Contains("revision deactivate", workflow);
@@ -56,6 +57,7 @@ public sealed class ReleaseWorkflowTests
         Assert.Contains("expected_current_revision", workflow);
         Assert.Contains("rollback_revision", workflow);
         Assert.Contains("target revision did not become ready", workflow);
+        Assert.Equal(3, Regex.Matches(workflow, "RunningAtMaxScale").Count);
         Assert.Contains("Activate the exact candidate for bounded verification", workflow);
         Assert.Contains("assistant-browser-evidence.json", workflow);
         Assert.Contains("properties.fqdn", workflow);
@@ -91,6 +93,14 @@ public sealed class ReleaseWorkflowTests
         Assert.Contains("previous promotion receipt is not successful", workflow);
         Assert.Contains("--allow-older-previously-promoted-evidence", workflow);
         Assert.Contains("Record successful promotion receipt", workflow);
+    }
+
+    [Fact]
+    public void Evaluation_lifecycle_accepts_Azures_healthy_max_scale_state()
+    {
+        var script = File.ReadAllText(Path.Combine(RepoRoot(), "evals", "run-assistant-eval.ps1"));
+
+        Assert.Contains("$running -in @(\"Running\", \"RunningAtMaxScale\")", script);
     }
 
     [Fact]

@@ -117,7 +117,7 @@ jobs:
           for attempt in $(seq 1 30); do
             state=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
               --revision "$TARGET_REVISION" --query properties.runningState -o tsv)
-            [ "$state" = "Running" ] && exit 0
+            { [ "$state" = "Running" ] || [ "$state" = "RunningAtMaxScale" ]; } && exit 0
             [ "$state" = "Failed" ] \
               && { echo "::error::candidate failed to start"; exit 1; }
             sleep 2
@@ -272,12 +272,12 @@ jobs:
           for attempt in $(seq 1 30); do
             target_state=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
               --revision "$TARGET_REVISION" --query properties.runningState -o tsv)
-            [ "$target_state" = "Running" ] && break
+            { [ "$target_state" = "Running" ] || [ "$target_state" = "RunningAtMaxScale" ]; } && break
             [ "$target_state" = "Failed" ] \
               && { echo "::error::target revision failed to start"; exit 1; }
             sleep 2
           done
-          [ "$target_state" = "Running" ] \
+          { [ "$target_state" = "Running" ] || [ "$target_state" = "RunningAtMaxScale" ]; } \
             || { echo "::error::target revision did not become ready"; exit 1; }
 
           curl --fail --show-error --silent --retry 5 --retry-delay 5 \
