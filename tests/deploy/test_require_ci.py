@@ -39,6 +39,20 @@ class RequireCiTests(unittest.TestCase):
         ])
         self.assertEqual(0, completed.returncode, completed.stderr)
 
+    def test_reports_an_empty_payload_as_empty(self):
+        with tempfile.TemporaryDirectory(dir=ROOT) as temporary:
+            payload = Path(temporary) / "checks.json"
+            payload.write_bytes(b"")
+            completed = subprocess.run(
+                [sys.executable, str(SCRIPT), str(payload), SHA, "dotnet", "web"],
+                cwd=ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+        self.assertNotEqual(0, completed.returncode)
+        self.assertIn("payload is empty", completed.stderr)
+
     @staticmethod
     def check(name, conclusion="SUCCESS", started_at="2026-08-11T18:00:00Z",
               status="COMPLETED", head_sha=SHA):

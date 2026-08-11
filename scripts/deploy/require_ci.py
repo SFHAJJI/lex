@@ -13,7 +13,9 @@ def require_checks(payload_path, expected_sha, required_names):
     if not FULL_SHA.fullmatch(expected_sha):
         raise ValueError("deployment commit is not a full lowercase SHA")
     payload_bytes = payload_path.read_bytes()
-    if not 0 < len(payload_bytes) <= MAXIMUM_PAYLOAD_BYTES:
+    if not payload_bytes:
+        raise ValueError("GitHub check-runs payload is empty")
+    if len(payload_bytes) > MAXIMUM_PAYLOAD_BYTES:
         raise ValueError("GitHub check-runs payload exceeds its byte limit")
     try:
         payload = json.loads(payload_bytes)
