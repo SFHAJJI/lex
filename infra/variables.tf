@@ -50,8 +50,9 @@ variable "azure_openai_name" {
 }
 
 variable "application_insights_name" {
-  type    = string
-  default = "ai-lex-web"
+  description = "Existing production component; must match APPLICATION_INSIGHTS_NAME in deploy.yml."
+  type        = string
+  default     = "ai-lex-web"
 }
 
 variable "assistant_grader_openai_resource_group" {

@@ -37,6 +37,7 @@ jobs:
       RESOURCE_GROUP: rg-platform
       CONTAINER_APP: ca-lex-web
       RUNTIME_IDENTITY: uami-lex-runtime
+      APPLICATION_INSIGHTS_NAME: ai-lex-web
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
@@ -65,7 +66,8 @@ jobs:
         shell: bash
         run: |
           set -eu
-          workspace=$(az monitor app-insights component show -g rg-platform -a ai-lex-web \
+          workspace=$(az monitor app-insights component show -g "$RESOURCE_GROUP" \
+            -a "$APPLICATION_INSIGHTS_NAME" \
             --query workspaceResourceId -o tsv)
           [ -n "$workspace" ] || { echo "::error::Application Insights has no workspace"; exit 1; }
           workspace_group=$(printf '%s' "$workspace" | cut -d/ -f5)
