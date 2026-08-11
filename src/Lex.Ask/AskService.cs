@@ -619,7 +619,8 @@ public sealed class AskService
                 ["function"] = new JsonObject { ["name"] = "submit_operation_plan" },
             },
             ["max_completion_tokens"] = 4000,
-            ["reasoning_effort"] = "medium",
+            // This call routes into a closed schema; synthesis keeps the higher effort.
+            ["reasoning_effort"] = "low",
         };
         using var httpReq = new HttpRequestMessage(
             HttpMethod.Post, $"{_endpoint}/openai/v1/chat/completions")

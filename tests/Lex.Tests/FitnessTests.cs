@@ -87,6 +87,20 @@ public class FitnessTests
     }
 
     [Fact]
+    public void Operation_planner_uses_low_reasoning_for_bounded_routing_latency()
+    {
+        var source = File.ReadAllText(
+            Path.Combine(RepoRoot(), "src", "Lex.Ask", "AskService.cs"));
+        var start = source.IndexOf("PlanOperationsAsync(", StringComparison.Ordinal);
+        var end = source.IndexOf("using var httpReq", start, StringComparison.Ordinal);
+        Assert.True(start >= 0 && end > start);
+        var request = source[start..end];
+
+        Assert.Contains("[\"reasoning_effort\"] = \"low\"", request, StringComparison.Ordinal);
+        Assert.DoesNotContain("[\"reasoning_effort\"] = \"medium\"", request, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void EurLex_professional_names_live_in_reviewed_data_not_adapter_code()
     {
         var source = File.ReadAllText(
