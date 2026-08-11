@@ -178,6 +178,19 @@ jobs:
             echo "::error::failed to deactivate non-authoritative revision $revision"
             return 1
           }
+          revision_get() {
+            local url="$1"
+            local body
+            for attempt in $(seq 1 24); do
+              if body=$(curl --fail --silent --show-error --connect-timeout 5 --max-time 10 "$url"); then
+                printf '%s' "$body"
+                return 0
+              fi
+              sleep 5
+            done
+            echo "::error::revision endpoint did not return a successful response: $url" >&2
+            return 1
+          }
           cleanup_candidates() {
             cleanup_failed=0
             if [ -n "$candidate" ]; then
@@ -234,10 +247,8 @@ jobs:
               || { echo "::error::pinned rollback image differs from current production"; exit 1; }
             rollback_fqdn=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
               --revision "$rollback" --query properties.fqdn -o tsv)
-            curl --fail --show-error --silent --retry 5 --retry-delay 5 \
-              "https://$rollback_fqdn/healthz" >/dev/null
-            curl --fail --show-error --silent --retry 5 --retry-delay 5 \
-              "https://$rollback_fqdn/readyz" | jq -e '.ready == true' >/dev/null
+            revision_get "https://$rollback_fqdn/healthz" >/dev/null
+            revision_get "https://$rollback_fqdn/readyz" | jq -e '.ready == true' >/dev/null
           fi
           # A revision is immutable and its inputs are code plus the complete artifact set.
           # Include the run identity as well so an exact deployment can be retried safely.
@@ -294,8 +305,8 @@ jobs:
             --revision-weight "$previous=100" "$candidate=0" --only-show-errors
           fqdn=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
             --revision "$candidate" --query properties.fqdn -o tsv)
-          curl --fail --show-error --silent --retry 5 --retry-delay 5 "https://$fqdn/healthz"
-          curl --fail --show-error --silent --retry 5 --retry-delay 5 "https://$fqdn/readyz" \
+          revision_get "https://$fqdn/healthz"
+          revision_get "https://$fqdn/readyz" \
             | jq -e '.ready == true
               and .required_publishers == ["eu-eurlex", "lu-legilux"]
               and .mounted_publishers == ["eu-eurlex", "lu-legilux"]' >/dev/null
