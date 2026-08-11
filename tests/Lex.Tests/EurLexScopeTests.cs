@@ -214,7 +214,8 @@ public sealed class EurLexScopeTests : IDisposable
 
         var result = await new EurLexAdapter().FetchAltManifestation(version, expression, default);
 
-        Assert.Null(result);
+        Assert.Equal(SourceBodyStatus.PublisherMetadataOnly, result.Status);
+        Assert.Null(result.Value);
     }
 
     public void Dispose()

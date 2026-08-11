@@ -554,8 +554,14 @@ a separately reserved quota and do not consume the public allowance.
 
 Budgets, route selection, Lighthouse version, throttling profile, invocation, and raw results live
 in a committed budget artifact. A decision-register entry is required to weaken a threshold.
-The signed report records submit-to-result latency and its planner, MCP, server-to-client, and paint
-segments separately, so a slow planning phase cannot pass behind a fast paint measurement.
+The signed assistant report consumes the versioned event stream and records submit-to-first-result,
+terminal, planner, MCP, optional-synthesis, and transport/queue-residual durations separately. The
+residual is the client-observed first-result duration minus the server's monotonic emission duration;
+it is deliberately not labelled network latency. Browser presentation is measured by the exact-code
+Playwright gate as `operation_result` received-to-presented after the next animation frame. Five
+independent operations run without route mocks against the exact zero-traffic revision FQDN. An HTTP
+runner cannot truthfully claim compositor paint, so the browser evidence is a required file in the
+same signed code/revision release rather than a fabricated field in the assistant report.
 
 ## 9. Security and operational consistency
 

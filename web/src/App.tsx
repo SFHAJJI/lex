@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { compoundOperationViews, first, tool, type AskReply, type OperationReply,
   type ProvisionItem, type UiEffect } from "./api";
 import { publisherOf, useWorkspace, workSlug, type Space, type State } from "./state";
@@ -24,6 +24,9 @@ const NAMES: Record<string, string> = {
 
 /** Rows per page in the period view. Enough to scan, small enough to arrive quickly. */
 const PAGE = 25;
+const PRESENTATION_FRAME_ATTEMPTS = 8;
+const presentationMark = (operationId: string) =>
+  `lex-operation-result-received:${operationId}`;
 /** Follow-ups derived from the view on screen — always valid, and free. */
 function chipsFor(s: State, ui?: UiEffect, hasText = true): { label: string; go: Partial<State> }[] {
   // Offering a window the reader is already looking at is noise, so the twelve-month chip only
@@ -48,6 +51,9 @@ export default function App() {
   const [s, go] = useWorkspace();
   const [ui, setUi] = useState<UiEffect>();
   const [operationViews, setOperationViews] = useState<OperationReply[]>([]);
+  const [assistantPresentationId, setAssistantPresentationId] = useState<string>();
+  const pendingPresentations = useRef(new Set<string>());
+  const measuredPresentations = useRef(new Set<string>());
   const [loaded, setLoaded] = useState<{ items: ProvisionItem[]; from: string; to?: string; profile?: string; source?: string }>();
   const [toc, setToc] = useState<ProvisionItem[]>([]);
   const [title, setTitle] = useState<string>();
@@ -75,6 +81,52 @@ export default function App() {
   // committed. Without JavaScript the server's class-adding script never runs, so the plain
   // noscript path receives no artificial empty space.
   useEffect(() => { document.documentElement.classList.remove("workspace-loading"); }, []);
+
+  // This measurement belongs to the browser, not the HTTP evaluator. It fires only after React
+  // committed a non-empty typed result and the next animation frame made its box paint-ready.
+  useLayoutEffect(() => {
+    if (!assistantPresentationId || typeof performance === "undefined") return;
+    const mark = presentationMark(assistantPresentationId);
+    let attempt = 0;
+    let frame = 0;
+    let cancelled = false;
+    const inspect = () => {
+      if (cancelled) return;
+      const result = [...document.querySelectorAll<HTMLElement>(
+        "[data-lex-operation-result-id]")].find((element) =>
+          element.dataset.lexOperationResultId === assistantPresentationId);
+      const received = performance.getEntriesByName(mark).at(-1);
+      if (!result || !received || result.getBoundingClientRect().height <= 0) {
+        attempt += 1;
+        if (attempt < PRESENTATION_FRAME_ATTEMPTS) frame = requestAnimationFrame(inspect);
+        else {
+          pendingPresentations.current.delete(assistantPresentationId);
+          performance.clearMarks(mark);
+          setAssistantPresentationId((current) =>
+            current === assistantPresentationId ? undefined : current);
+        }
+        return;
+      }
+      const duration = Math.max(0, performance.now() - received.startTime);
+      performance.measure("lex-operation-result-received-to-presented", {
+        start: received.startTime,
+        duration,
+      });
+      window.dispatchEvent(new CustomEvent("lex:operation-result-presented", {
+        detail: { duration_ms: duration, operation_id: assistantPresentationId },
+      }));
+      pendingPresentations.current.delete(assistantPresentationId);
+      measuredPresentations.current.add(assistantPresentationId);
+      performance.clearMarks(mark);
+    };
+    frame = requestAnimationFrame(inspect);
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(frame);
+      pendingPresentations.current.delete(assistantPresentationId);
+      performance.clearMarks(mark);
+    };
+  }, [assistantPresentationId]);
 
   // The marketing below the fold belongs to a first-time visitor, not to someone reading a
   // law. One flag on <body> lets the server-rendered page get out of the way.
@@ -309,6 +361,17 @@ export default function App() {
 
   const applyAssistantReply = useCallback((r: AskReply) => {
       setOperationViews(compoundOperationViews(r));
+      const presentation = r.operations?.find((operation) => hasView(operation.ui));
+      if (presentation
+          && typeof performance !== "undefined"
+          && !pendingPresentations.current.has(presentation.operation_id)
+          && !measuredPresentations.current.has(presentation.operation_id)) {
+        const mark = presentationMark(presentation.operation_id);
+        performance.clearMarks(mark);
+        performance.mark(mark);
+        pendingPresentations.current.add(presentation.operation_id);
+        setAssistantPresentationId(presentation.operation_id);
+      }
       // Controls the assistant set on the way to its answer. Applied before the view, so
       // jurisdiction and legal metadata already agree with the rows that land under them.
       let refinement: Partial<State> = {};
@@ -359,6 +422,8 @@ export default function App() {
   const clearAssistantView = useCallback(() => {
     setUi(undefined);
     setOperationViews([]);
+    pendingPresentations.current.clear();
+    setAssistantPresentationId(undefined);
   }, []);
 
   // Open on the text in force TODAY, never on the oldest version — the oldest is the one most
@@ -542,11 +607,15 @@ export default function App() {
                      onClear={() => { clearAssistantView(); go({ to: undefined, mode: "read" }); }} />
       ) : null}
 
-      <div className="work">
+      <div className="work"
+           data-lex-operation-result-id={operationViews.length <= 1 && hasView(ui)
+             ? assistantPresentationId : undefined}>
         {operationViews.length > 1 ? (
           <div className="operation-results" aria-label="Requested operation results">
             {operationViews.map((operation) => (
               <section className="operation-result" key={operation.operation_id}
+                       data-lex-operation-result-id={hasView(operation.ui)
+                         ? operation.operation_id : undefined}
                        aria-label={`Result ${operation.order + 1}`}>
                 <p className="operation-label">Result {operation.order + 1}</p>
                 {renderOperation(operation)}

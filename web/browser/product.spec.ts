@@ -134,6 +134,175 @@ test("the assistant crosses from complementary dock to a true modal at the froze
   await expect(page.getByRole("button", { name: "Open Ask Lex legal research assistant" })).toBeFocused();
 });
 
+test("a typed assistant operation is presented within the local browser budget", async ({ page }, testInfo) => {
+  const requestId = "0123456789abcdef0123456789abcdef";
+  const operation = {
+    operation_id: `${requestId}:op-1`, order: 0, tool: "legal_boundary",
+    result_class: null, disposition: "legal_boundary", legal_outcome: "legal_boundary",
+    transport_outcome: "completed", effects: ["gap"],
+    ui: { gap: { status: "legal_boundary", explanation: "Verified text only.", available: [] } },
+  };
+  await page.addInitScript(({ requestId, operation }) => {
+    const originalFetch = window.fetch.bind(window);
+    window.fetch = (input, init) => {
+      const url = typeof input === "string" ? input : input instanceof URL
+        ? input.href : input.url;
+      if (!url.endsWith("/api/ask/stream")) return originalFetch(input, init);
+      const encoder = new TextEncoder();
+      const envelope = (sequence: number, payload: unknown) => JSON.stringify({
+        version: "1", request_id: requestId, sequence, server_elapsed_ms: 10, payload,
+      });
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(encoder.encode(
+            `event: operation_result\ndata: ${envelope(1, operation)}\n\n`));
+          setTimeout(() => {
+            controller.enqueue(encoder.encode(`event: done\ndata: ${envelope(2, {
+              reply: "Verified text only.", operations: [operation], ui: operation.ui,
+            })}\n\n`));
+            controller.close();
+          }, 650);
+        },
+      });
+      return Promise.resolve(new Response(stream, {
+        status: 200,
+        headers: {
+          "Content-Type": "text/event-stream",
+          "X-Lex-Request-Id": requestId,
+        },
+      }));
+    };
+  }, { requestId, operation });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Open Ask Lex legal research assistant" }).click();
+  await page.getByRole("textbox", { name: "Ask Lex" }).fill("Can Lex advise me?");
+  await page.getByRole("button", { name: "Ask", exact: true }).click();
+
+  await page.waitForFunction(() =>
+    performance.getEntriesByName("lex-operation-result-received-to-presented").length === 1);
+  await expect(page.getByText("Verified text only.", { exact: true })).toBeVisible();
+  const duration = await page.evaluate(() =>
+    performance.getEntriesByName("lex-operation-result-received-to-presented")[0].duration);
+  await testInfo.attach("assistant-operation-presented.json", {
+    body: JSON.stringify({ duration_ms: duration, maximum_ms: 500 }),
+    contentType: "application/json",
+  });
+  expect(duration).toBeLessThanOrEqual(500);
+  expect(await page.evaluate(() =>
+    performance.getEntriesByName("lex-operation-result-received-to-presented").length)).toBe(1);
+  await expect(page.locator("[data-lex-operation-result-id]")).toHaveCount(1);
+});
+
+test("an operation without a typed view is never counted as presented", async ({ page }) => {
+  const requestId = "1123456789abcdef0123456789abcdef";
+  const operation = {
+    operation_id: `${requestId}:op-1`, order: 0, tool: "legal_boundary",
+    legal_outcome: "legal_boundary", transport_outcome: "completed", effects: ["gap"],
+  };
+  await page.addInitScript(({ requestId, operation }) => {
+    const originalFetch = window.fetch.bind(window);
+    window.fetch = (input, init) => {
+      const url = typeof input === "string" ? input : input instanceof URL
+        ? input.href : input.url;
+      if (!url.endsWith("/api/ask/stream")) return originalFetch(input, init);
+      const envelope = (sequence: number, payload: unknown) => JSON.stringify({
+        version: "1", request_id: requestId, sequence, server_elapsed_ms: 10, payload,
+      });
+      const body = `event: operation_result\ndata: ${envelope(1, operation)}\n\n`
+        + `event: done\ndata: ${envelope(2, {
+          reply: "No typed result was available.", operations: [operation],
+        })}\n\n`;
+      return Promise.resolve(new Response(body, {
+        status: 200,
+        headers: {
+          "Content-Type": "text/event-stream",
+          "X-Lex-Request-Id": requestId,
+        },
+      }));
+    };
+  }, { requestId, operation });
+
+  await page.goto("/");
+  await page.getByRole("button", { name: "Open Ask Lex legal research assistant" }).click();
+  await page.getByRole("textbox", { name: "Ask Lex" }).fill("Can Lex advise me?");
+  await page.getByRole("button", { name: "Ask", exact: true }).click();
+  await expect(page.locator(".said")).toContainText("No typed result was available.");
+
+  expect(await page.evaluate(() =>
+    performance.getEntriesByName("lex-operation-result-received-to-presented").length)).toBe(0);
+  await expect(page.locator("[data-lex-operation-result-id]")).toHaveCount(0);
+});
+
+test("the first renderable operation is measured after bounded layout retries", async ({ page }) => {
+  const requestId = "2123456789abcdef0123456789abcdef";
+  const hidden = {
+    operation_id: `${requestId}:op-1`, order: 0, tool: "search",
+    legal_outcome: "succeeded", transport_outcome: "completed", effects: [],
+  };
+  const visible = {
+    operation_id: `${requestId}:op-2`, order: 1, tool: "legal_boundary",
+    legal_outcome: "legal_boundary", transport_outcome: "completed", effects: ["gap"],
+    ui: { gap: { status: "legal_boundary", explanation: "Visible typed result.", available: [] } },
+  };
+  await page.addInitScript(({ requestId, hidden, visible }) => {
+    const host = window as typeof window & {
+      __lexPresentedOperation?: string;
+      __lexPresentationRectReads?: number;
+    };
+    window.addEventListener("lex:operation-result-presented", (event) => {
+      host.__lexPresentedOperation = (event as CustomEvent<{ operation_id: string }>).detail.operation_id;
+    });
+    const originalRect = HTMLElement.prototype.getBoundingClientRect;
+    HTMLElement.prototype.getBoundingClientRect = function () {
+      if (this.dataset.lexOperationResultId === `${requestId}:op-2`) {
+        host.__lexPresentationRectReads = (host.__lexPresentationRectReads ?? 0) + 1;
+        if (host.__lexPresentationRectReads <= 2) {
+          const actual = originalRect.call(this);
+          return DOMRect.fromRect({ x: actual.x, y: actual.y, width: actual.width, height: 0 });
+        }
+      }
+      return originalRect.call(this);
+    };
+    const originalFetch = window.fetch.bind(window);
+    window.fetch = (input, init) => {
+      const url = typeof input === "string" ? input : input instanceof URL
+        ? input.href : input.url;
+      if (!url.endsWith("/api/ask/stream")) return originalFetch(input, init);
+      const envelope = (sequence: number, payload: unknown) => JSON.stringify({
+        version: "1", request_id: requestId, sequence, server_elapsed_ms: 10, payload,
+      });
+      const body = `event: operation_result\ndata: ${envelope(1, hidden)}\n\n`
+        + `event: operation_result\ndata: ${envelope(2, visible)}\n\n`
+        + `event: done\ndata: ${envelope(3, {
+          reply: "Visible typed result.", operations: [hidden, visible], ui: visible.ui,
+        })}\n\n`;
+      return Promise.resolve(new Response(body, {
+        status: 200,
+        headers: {
+          "Content-Type": "text/event-stream",
+          "X-Lex-Request-Id": requestId,
+        },
+      }));
+    };
+  }, { requestId, hidden, visible });
+
+  await page.goto("/");
+  await page.getByRole("button", { name: "Open Ask Lex legal research assistant" }).click();
+  await page.getByRole("textbox", { name: "Ask Lex" }).fill("Can Lex advise me?");
+  await page.getByRole("button", { name: "Ask", exact: true }).click();
+
+  await page.waitForFunction((expected) => {
+    const host = window as typeof window & { __lexPresentedOperation?: string };
+    return host.__lexPresentedOperation === expected;
+  }, visible.operation_id);
+  expect(await page.evaluate(() => performance
+    .getEntriesByName("lex-operation-result-received-to-presented").length)).toBe(1);
+  expect(await page.evaluate(() => (window as typeof window & {
+    __lexPresentationRectReads?: number;
+  }).__lexPresentationRectReads)).toBeGreaterThanOrEqual(3);
+  await expect(page.locator("[data-lex-operation-result-id]")).toHaveCount(1);
+});
+
 test("the launcher clears interactive content at the smallest supported viewport", async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 568 });
   const collisions: string[] = [];

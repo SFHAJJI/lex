@@ -268,6 +268,9 @@ export async function askStreaming(
   signal?: AbortSignal,
   idempotencyKey: string = crypto.randomUUID(),
 ): Promise<AskReply> {
+  if (typeof performance !== "undefined") {
+    performance.clearMeasures("lex-operation-result-received-to-presented");
+  }
   const r = await fetch("/api/ask/stream", {
     method: "POST",
     headers: {

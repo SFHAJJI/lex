@@ -27,6 +27,7 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory
     private const int FormexArchiveCapBytes = 32 * 1024 * 1024;
     private const long FormexMemberCapBytes = 64 * 1024 * 1024;
     private const long FormexExpandedCapBytes = 128 * 1024 * 1024;
+    private static readonly SourceRetryPolicy RetryPolicy = new(MaximumAttempts: 4);
 
     private static readonly HttpClient Http = CreateClient();
     private DateTimeOffset _lastRequest = DateTimeOffset.MinValue;
@@ -50,7 +51,8 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory
 
     private static HttpClient CreateClient()
     {
-        var c = new HttpClient { Timeout = TimeSpan.FromSeconds(180) };
+        var c = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false })
+            { Timeout = TimeSpan.FromSeconds(180) };
         c.DefaultRequestHeaders.UserAgent.ParseAdd("Lex/0.1");
         c.DefaultRequestHeaders.UserAgent.ParseAdd("(+https://github.com/SFHAJJI/lex)");
         return c;
@@ -73,7 +75,8 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory
 
     public SourceBuildInventory GetBuildInventory() =>
         new(_expectedWorks, _buildIssues.OrderBy(issue => issue.Work, StringComparer.Ordinal)
-            .ThenBy(issue => issue.Code, StringComparer.Ordinal).ToArray());
+            .ThenBy(issue => issue.Code, StringComparer.Ordinal).ToArray(),
+            RetryMaximumAttempts: RetryPolicy.MaximumAttempts);
 
     public async IAsyncEnumerable<WorkRef> EnumerateWorks([EnumeratorCancellation] CancellationToken ct)
     {
@@ -88,10 +91,11 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory
         return _byWork.TryGetValue(work.Id.Value, out var v) ? v : [];
     }
 
-    public async Task<string?> FetchBody(VersionRecord version, ExpressionRecord expression, CancellationToken ct)
+    public async Task<SourceBodyFetch> FetchBody(VersionRecord version, ExpressionRecord expression, CancellationToken ct)
     {
         var celex = version.Raw.GetValueOrDefault("celex");
-        if (celex is null) return null;
+        if (celex is null)
+            return new(SourceBodyStatus.ParserFailure, Detail: "The version has no CELEX identifier.");
 
         // Cellar is canonical, but a small number of language-specific corrigenda return 404
         // there while the official EUR-Lex expression URI serves the XHTML. Retry that URI only
@@ -102,23 +106,50 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory
             urls.Add(expressionUri);
 
         FetchResult? last = null;
+        var totalAttempts = 0;
         for (var attempt = 0; attempt < urls.Count; attempt++)
         {
             await PaceAsync(ct);
             last = await FetchBytes(urls[attempt], expression.Language,
                 "application/xhtml+xml, text/html", BodyCapBytes, ct);
+            totalAttempts += last.Attempts;
             if (last.Bytes is null) continue;
 
             var fallback = attempt == 0 ? "" : " (official EUR-Lex fallback)";
             Console.Error.WriteLine($"  [eurlex] {celex}: body {last.Bytes.Length / 1024} KB{fallback}");
-            return System.Text.Encoding.UTF8.GetString(last.Bytes);
+            return SourceBodyFetch.Retrieved(System.Text.Encoding.UTF8.GetString(last.Bytes), totalAttempts);
         }
 
         if (last?.LimitExceeded == true)
             Console.Error.WriteLine($"  [eurlex] {celex}: official body exceeds {BodyCapBytes / 1024 / 1024} MB cap — metadata only");
         else
             Console.Error.WriteLine($"  [eurlex] {celex}: official body unavailable after {urls.Count} endpoint(s) (last status {(int?)last?.StatusCode})");
-        return null;
+        if (last?.LimitExceeded == true)
+            return new(SourceBodyStatus.Oversized,
+                Detail: $"Official body exceeded the {BodyCapBytes}-byte acquisition limit.",
+                Attempts: totalAttempts);
+        if (last?.RetryExhausted == true)
+            return new(SourceBodyStatus.RetryExhausted,
+                Detail: last.FailureDetail ?? "The official endpoint exhausted the retry policy.",
+                Attempts: totalAttempts);
+        return last?.StatusCode switch
+        {
+            System.Net.HttpStatusCode.NotFound => new(SourceBodyStatus.PermanentNotFound,
+                Detail: "Every bounded official endpoint returned HTTP 404.", Attempts: totalAttempts),
+            System.Net.HttpStatusCode.Gone => new(SourceBodyStatus.Gone,
+                Detail: "The official endpoint returned HTTP 410.", Attempts: totalAttempts),
+            System.Net.HttpStatusCode.RequestTimeout
+                or System.Net.HttpStatusCode.TooManyRequests
+                or System.Net.HttpStatusCode.InternalServerError
+                or System.Net.HttpStatusCode.BadGateway
+                or System.Net.HttpStatusCode.ServiceUnavailable
+                or System.Net.HttpStatusCode.GatewayTimeout => new(SourceBodyStatus.RetryExhausted,
+                    Detail: $"Retryable publisher response {(int?)last.StatusCode} exhausted the acquisition policy.",
+                    Attempts: totalAttempts),
+            _ => new(SourceBodyStatus.ParserFailure,
+                Detail: $"Official body acquisition failed with HTTP {(int?)last?.StatusCode}.",
+                Attempts: totalAttempts),
+        };
     }
 
     private static async Task<FetchResult> FetchBytes(
@@ -130,13 +161,27 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory
     {
         var url = initialUrl;
         HttpResponseMessage? resp = null;
+        var attempts = 0;
+        var retryExhausted = false;
+        string? failureDetail = null;
         for (var hop = 0; hop < 6; hop++)
         {
-            using var req = new HttpRequestMessage(HttpMethod.Get, url);
-            req.Headers.TryAddWithoutValidation("Accept", accept);
-            req.Headers.AcceptLanguage.ParseAdd(language);
             resp?.Dispose();
-            resp = await Http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
+            var currentUrl = url;
+            var sent = await SourceHttp.SendAsync(Http, () =>
+            {
+                var req = new HttpRequestMessage(HttpMethod.Get, currentUrl);
+                req.Headers.TryAddWithoutValidation("Accept", accept);
+                req.Headers.AcceptLanguage.ParseAdd(language);
+                return req;
+            }, RetryPolicy, ct);
+            attempts += sent.Attempts;
+            retryExhausted = sent.RetryExhausted;
+            failureDetail = sent.FailureDetail;
+            resp = sent.Response;
+            if (resp is null)
+                return new FetchResult(null, null, false, url, Attempts: attempts,
+                    RetryExhausted: true, FailureDetail: failureDetail);
             if ((int)resp.StatusCode is >= 300 and < 400 && resp.Headers.Location is { } loc)
             {
                 var next = loc.IsAbsoluteUri ? loc.ToString() : new Uri(new Uri(url), loc).ToString();
@@ -144,7 +189,8 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory
                 if (OfficialEuUri(url) is null)
                 {
                     resp.Dispose();
-                    return new FetchResult(null, null, false, url);
+                    return new FetchResult(null, null, false, url, Attempts: attempts,
+                        FailureDetail: "The publisher redirected outside the official EU host allowlist.");
                 }
                 continue;
             }
@@ -154,16 +200,17 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory
         {
             var status = resp?.StatusCode;
             resp?.Dispose();
-            return new FetchResult(null, status, false, url);
+            return new FetchResult(null, status, false, url, Attempts: attempts,
+                RetryExhausted: retryExhausted, FailureDetail: failureDetail);
         }
         using var _ = resp;
         if (resp.Content.Headers.ContentLength is { } contentLength && contentLength > capBytes)
-            return new FetchResult(null, resp.StatusCode, true, url);
+            return new FetchResult(null, resp.StatusCode, true, url, Attempts: attempts);
 
         await using var stream = await resp.Content.ReadAsStreamAsync(ct);
         var bounded = await ReadBounded(stream, capBytes, ct);
         return new FetchResult(bounded.Bytes, resp.StatusCode, bounded.LimitExceeded, url,
-            resp.Content.Headers.ContentType?.MediaType);
+            resp.Content.Headers.ContentType?.MediaType, attempts);
     }
 
     internal static async Task<BoundedRead> ReadBounded(Stream stream, int capBytes, CancellationToken ct)
@@ -187,16 +234,19 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory
     /// Identity guard: INFO.CONSLEG START.DATE must equal the requested version's valid_from
     /// (CONSLEG.DATE is the production date and may be later — e.g. GDPR corrigenda 2018).
     /// </summary>
-    public async Task<ManifestationFetch?> FetchAltManifestation(VersionRecord version, ExpressionRecord expression, CancellationToken ct)
+    public async Task<SourceManifestationFetch> FetchAltManifestation(
+        VersionRecord version, ExpressionRecord expression, CancellationToken ct)
     {
         // Formex identity checks require an official consolidated CONSLEG expression.
         // Original and unconsolidated acts do not contain INFO.CONSLEG, so requesting
         // their optional Formex representation can never produce an accepted result.
         if (version.Raw.TryGetValue("consolidation_status", out var status) && status != "published")
-            return null;
+            return new(SourceBodyStatus.PublisherMetadataOnly,
+                Detail: "Formex is not defined for an unconsolidated expression.");
 
         var celex = version.Raw.GetValueOrDefault("celex");
-        if (celex is null) return null;
+        if (celex is null)
+            return new(SourceBodyStatus.ParserFailure, Detail: "The version has no CELEX identifier.");
         await PaceAsync(ct);
         // Cellar's negotiation parser requires the exact spaceless mtype parameter.
         var fetched = await FetchBytes(CellarResourceUrl(celex), expression.Language,
@@ -205,7 +255,20 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory
         {
             if (fetched.LimitExceeded)
                 Console.Error.WriteLine($"  [eurlex] {celex}: optional fmx4 exceeds {FormexArchiveCapBytes / 1024 / 1024} MB archive cap — skipped");
-            return null;
+            if (fetched.LimitExceeded)
+                return new(SourceBodyStatus.Oversized,
+                    Detail: $"Optional Formex archive exceeded {FormexArchiveCapBytes} bytes.",
+                    Attempts: fetched.Attempts);
+            if (fetched.RetryExhausted)
+                return new(SourceBodyStatus.RetryExhausted, Detail: fetched.FailureDetail,
+                    Attempts: fetched.Attempts);
+            if (fetched.StatusCode == System.Net.HttpStatusCode.NotFound)
+                return new(SourceBodyStatus.PermanentNotFound,
+                    Detail: "The optional official Formex manifestation returned HTTP 404.",
+                    Attempts: fetched.Attempts);
+            return new(SourceBodyStatus.ParserFailure,
+                Detail: "The optional official manifestation was not a Formex ZIP archive.",
+                Attempts: fetched.Attempts);
         }
 
         using var ms = new MemoryStream(fetched.Bytes, writable: false);
@@ -223,7 +286,9 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory
                     expandedBytes + entry.Length > FormexExpandedCapBytes)
                 {
                     Console.Error.WriteLine($"  [eurlex] {celex}: optional fmx4 exceeds safe expanded-data limit — skipped");
-                    return null;
+                    return new(SourceBodyStatus.Oversized,
+                        Detail: "The expanded Formex archive exceeded its bounded member budget.",
+                        Attempts: fetched.Attempts);
                 }
                 await using var es = entry.Open();
                 var member = await ReadBounded(es, checked((int)Math.Min(FormexMemberCapBytes,
@@ -231,18 +296,22 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory
                 if (member.Bytes is null)
                 {
                     Console.Error.WriteLine($"  [eurlex] {celex}: optional fmx4 member exceeds safe limit — skipped");
-                    return null;
+                    return new(SourceBodyStatus.Oversized,
+                        Detail: "A Formex member exceeded its bounded expansion budget.",
+                        Attempts: fetched.Attempts);
                 }
                 expandedBytes += member.Bytes.LongLength;
                 members.Add(new ManifestationMember(name, member.Bytes));
             }
         }
-        catch (InvalidDataException)
+        catch (InvalidDataException ex)
         {
             Console.Error.WriteLine($"  [eurlex] {celex}: fmx4 response is not a readable zip — skipped");
-            return null;
+            return new(SourceBodyStatus.ParserFailure, Detail: ex.Message, Attempts: fetched.Attempts);
         }
-        if (members.Count == 0) return null;
+        if (members.Count == 0)
+            return new(SourceBodyStatus.ParserFailure,
+                Detail: "The Formex archive contained no usable members.", Attempts: fetched.Attempts);
 
         // Identity guard on the main member (the body carries INFO.CONSLEG).
         var wantDate = version.ValidFrom.ToString("yyyyMMdd", System.Globalization.CultureInfo.InvariantCulture);
@@ -254,11 +323,14 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory
         if (main is null || !m1.Success || m1.Groups[1].Value != wantDate)
         {
             Console.Error.WriteLine($"  [eurlex] {celex}: fmx4 identity check failed (START.DATE {(m1.Success ? m1.Groups[1].Value : "absent")} vs {wantDate}) — not stored");
-            return null;
+            return new(SourceBodyStatus.ParserFailure,
+                Detail: $"Formex identity did not match requested date {wantDate}.",
+                Attempts: fetched.Attempts);
         }
 
         Console.Error.WriteLine($"  [eurlex] {celex}: fmx4 {members.Count} member(s), {members.Sum(x => x.Bytes.LongLength) / 1024} KB");
-        return new ManifestationFetch("fmx4", members, fetched.SourceUri);
+        return SourceManifestationFetch.Retrieved(
+            new ManifestationFetch("fmx4", members, fetched.SourceUri), fetched.Attempts);
     }
 
     internal static string? OfficialEuUri(string? value)
@@ -277,7 +349,10 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory
         System.Net.HttpStatusCode? StatusCode,
         bool LimitExceeded,
         string SourceUri,
-        string? MediaType = null);
+        string? MediaType = null,
+        int Attempts = 1,
+        bool RetryExhausted = false,
+        string? FailureDetail = null);
 
     private async Task PaceAsync(CancellationToken ct)
     {
@@ -801,20 +876,40 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory
     private async Task<List<Dictionary<string, string>>> SelectAsync(string query, CancellationToken ct)
     {
         await PaceAsync(ct);
-        using var content = new FormUrlEncodedContent([new KeyValuePair<string, string>("query", query)]);
-        using var req = new HttpRequestMessage(HttpMethod.Post, Sparql) { Content = content };
-        req.Headers.Accept.ParseAdd("application/sparql-results+json");
-        using var resp = await Http.SendAsync(req, ct);
-        resp.EnsureSuccessStatusCode();
-        await using var stream = await resp.Content.ReadAsStreamAsync(ct);
-        using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: ct);
-        var rows = new List<Dictionary<string, string>>();
-        foreach (var b in doc.RootElement.GetProperty("results").GetProperty("bindings").EnumerateArray())
+        var sent = await SourceHttp.SendAsync(Http, () =>
         {
-            var row = new Dictionary<string, string>(StringComparer.Ordinal);
-            foreach (var p in b.EnumerateObject()) row[p.Name] = p.Value.GetProperty("value").GetString() ?? "";
-            rows.Add(row);
+            var req = new HttpRequestMessage(HttpMethod.Post, Sparql)
+            {
+                Content = new FormUrlEncodedContent([new KeyValuePair<string, string>("query", query)]),
+            };
+            req.Headers.Accept.ParseAdd("application/sparql-results+json");
+            return req;
+        }, RetryPolicy, ct, completion: HttpCompletionOption.ResponseContentRead);
+        using var resp = sent.Response;
+        if (resp is null || sent.RetryExhausted || !resp.IsSuccessStatusCode)
+            throw new SourceAcquisitionException(new SourceBuildIssue(
+                sent.RetryExhausted ? "enumeration_retry_exhausted" : "enumeration_http_failure",
+                "eu-eurlex",
+                sent.FailureDetail ?? $"The official SPARQL endpoint returned HTTP {(int?)resp?.StatusCode}."),
+                sent.Attempts);
+        try
+        {
+            await using var stream = await resp.Content.ReadAsStreamAsync(ct);
+            using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: ct);
+            var rows = new List<Dictionary<string, string>>();
+            foreach (var b in doc.RootElement.GetProperty("results").GetProperty("bindings").EnumerateArray())
+            {
+                var row = new Dictionary<string, string>(StringComparer.Ordinal);
+                foreach (var p in b.EnumerateObject())
+                    row[p.Name] = p.Value.GetProperty("value").GetString() ?? "";
+                rows.Add(row);
+            }
+            return rows;
         }
-        return rows;
+        catch (Exception ex) when (ex is JsonException or InvalidOperationException or KeyNotFoundException)
+        {
+            throw new SourceAcquisitionException(new SourceBuildIssue(
+                "enumeration_parser_failure", "eu-eurlex", ex.Message), sent.Attempts);
+        }
     }
 }

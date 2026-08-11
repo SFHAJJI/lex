@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text;
 using System.Text.Json.Nodes;
 using System.Security.Cryptography;
@@ -148,6 +149,7 @@ public static class ApiEndpoints
         // doing: "Code du travail — 3 articles as in force on 2019-03-01", not "searching…".
         app.MapPost("/api/ask/stream", async (HttpRequest req, HttpResponse res) =>
         {
+            var streamWatch = Stopwatch.StartNew();
             async Task Reject(int status, string error)
             {
                 res.StatusCode = status;
@@ -209,6 +211,7 @@ public static class ApiEndpoints
                         ["version"] = "1",
                         ["request_id"] = requestId,
                         ["sequence"] = ++sequence,
+                        ["server_elapsed_ms"] = streamWatch.Elapsed.TotalMilliseconds,
                         ["payload"] = data,
                     };
                     await res.WriteAsync($"event: {ev}\ndata: {envelope.ToJsonString()}\n\n", req.HttpContext.RequestAborted);
@@ -261,18 +264,23 @@ public static class ApiEndpoints
             }
 
             var steps = 0;
+            double? firstOperationEmittedMilliseconds = null;
             var progress = new AskService.AskProgressCallbacks(
                 Step: (step, _) =>
                 {
                     Interlocked.Increment(ref steps);
                     return new ValueTask(Send("step", new JsonObject
                     {
-                        ["kind"] = step.Kind, ["text"] = step.Text,
-                        ["work"] = step.Work, ["date"] = step.Date, ["anchor"] = step.Anchor,
+                        ["kind"] = step.Kind,
+                        ["text"] = step.Text,
+                        ["work"] = step.Work,
+                        ["date"] = step.Date,
+                        ["anchor"] = step.Anchor,
                     }));
                 },
                 OperationResult: async (operation, _) =>
                 {
+                    firstOperationEmittedMilliseconds ??= streamWatch.Elapsed.TotalMilliseconds;
                     claim.ReportOperation(operation.ToJsonString());
                     await Send("operation_result", operation);
                 },
@@ -310,6 +318,8 @@ public static class ApiEndpoints
             // in a poor answer scored below delivering that same answer instantly. A refusal therefore
             // keeps its steps out of the transcript.
             bodyJson["narrated"] = status == 200 && bodyJson["ui"]?["gap"] is null && steps > 0;
+            if (bodyJson["timing"] is JsonObject timing)
+                timing["operation_result_emitted_ms"] = firstOperationEmittedMilliseconds;
             claim.Complete(status, bodyJson.ToJsonString(), outcome.RetainForReplay);
             if (status == 200)
                 await Send("done", bodyJson);

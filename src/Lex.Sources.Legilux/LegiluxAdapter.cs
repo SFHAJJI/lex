@@ -12,7 +12,7 @@ namespace Lex.Sources.Legilux;
 /// Probe results 2026-08-01: Work = jolux:isMemberOf target; DocumentType = the
 /// consolidation's own jolux:typeDocument; compilations (CODE/RECUEIL) are Works like any other.
 /// </summary>
-public sealed class LegiluxAdapter : ISourceAdapter
+public sealed class LegiluxAdapter : ISourceAdapter, ISourceBuildInventory
 {
     private const string Endpoint = "https://data.legilux.public.lu/sparqlendpoint";
     private const string J = "PREFIX jolux: <http://data.legilux.public.lu/resource/ontology/jolux#>\n";
@@ -65,13 +65,18 @@ public sealed class LegiluxAdapter : ISourceAdapter
     // this clears it with headroom and still stops a runaway.
     private const int BodyCapBytes = 32 * 1024 * 1024;
     private static readonly HttpClient BodyHttp = CreateBodyClient();
+    private static readonly SourceRetryPolicy RetryPolicy = new(MaximumAttempts: 4);
     private DateTimeOffset _lastBodyFetch = DateTimeOffset.MinValue;
     private Dictionary<string, string>? _xmlFiles;   // "<consolidationUri>|<lang>" -> official file URL
     private Dictionary<string, string>? _pdfFiles;   // same key, the PDF the publisher also lists (D49)
 
+    public SourceBuildInventory GetBuildInventory() =>
+        new(_works?.Count ?? 0, [], RetryMaximumAttempts: RetryPolicy.MaximumAttempts);
+
     private static HttpClient CreateBodyClient()
     {
-        var c = new HttpClient { Timeout = TimeSpan.FromSeconds(180) };
+        var c = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false })
+            { Timeout = TimeSpan.FromSeconds(180) };
         c.DefaultRequestHeaders.UserAgent.ParseAdd("Lex/0.1");
         c.DefaultRequestHeaders.UserAgent.ParseAdd("(+https://github.com/SFHAJJI/lex)");
         return c;
@@ -82,22 +87,46 @@ public sealed class LegiluxAdapter : ISourceAdapter
     /// publisher's own CC-BY dataset enumerates, served from the robots-permitted main host.
     /// Sequential, paced (D14).
     /// </summary>
-    public async Task<string?> FetchBody(VersionRecord version, ExpressionRecord expression, CancellationToken ct)
+    public async Task<SourceBodyFetch> FetchBody(VersionRecord version, ExpressionRecord expression, CancellationToken ct)
     {
         await EnsureLoadedAsync(ct);
         if (_xmlFiles is null || !_xmlFiles.TryGetValue($"{version.Id.Value}|{expression.Language}", out var url))
-            return null;
+            return new(SourceBodyStatus.PublisherMetadataOnly,
+                Detail: "The publisher did not enumerate an XML manifestation for this expression.");
 
         var since = DateTimeOffset.UtcNow - _lastBodyFetch;
         var pause = TimeSpan.FromMilliseconds(1500);
         if (since < pause) await Task.Delay(pause - since, ct);
         _lastBodyFetch = DateTimeOffset.UtcNow;
 
-        using var resp = await BodyHttp.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
+        var sent = await SourceHttp.SendAsync(BodyHttp,
+            () => new HttpRequestMessage(HttpMethod.Get, url), RetryPolicy, ct);
+        using var resp = sent.Response;
+        if (resp is null || sent.RetryExhausted)
+            return new(SourceBodyStatus.RetryExhausted,
+                Detail: sent.FailureDetail ?? "The official XML endpoint exhausted the retry policy.",
+                Attempts: sent.Attempts);
         if (!resp.IsSuccessStatusCode)
         {
             Console.Error.WriteLine($"  [legilux] body fetch failed ({(int)resp.StatusCode}): {url}");
-            return null;
+            return resp.StatusCode switch
+            {
+                System.Net.HttpStatusCode.NotFound => new(SourceBodyStatus.PermanentNotFound,
+                    Detail: "The official XML manifestation returned HTTP 404.", Attempts: sent.Attempts),
+                System.Net.HttpStatusCode.Gone => new(SourceBodyStatus.Gone,
+                    Detail: "The official XML manifestation returned HTTP 410.", Attempts: sent.Attempts),
+                System.Net.HttpStatusCode.RequestTimeout
+                    or System.Net.HttpStatusCode.TooManyRequests
+                    or System.Net.HttpStatusCode.InternalServerError
+                    or System.Net.HttpStatusCode.BadGateway
+                    or System.Net.HttpStatusCode.ServiceUnavailable
+                    or System.Net.HttpStatusCode.GatewayTimeout => new(SourceBodyStatus.RetryExhausted,
+                        Detail: $"Retryable publisher response {(int)resp.StatusCode} exhausted the acquisition policy.",
+                        Attempts: sent.Attempts),
+                _ => new(SourceBodyStatus.ParserFailure,
+                    Detail: $"Official XML acquisition failed with HTTP {(int)resp.StatusCode}.",
+                    Attempts: sent.Attempts),
+            };
         }
         await using var stream = await resp.Content.ReadAsStreamAsync(ct);
         using var ms = new MemoryStream();
@@ -109,10 +138,12 @@ public sealed class LegiluxAdapter : ISourceAdapter
             if (ms.Length > BodyCapBytes)
             {
                 Console.Error.WriteLine($"  [legilux] body exceeds {BodyCapBytes / 1024 / 1024} MB cap: {url}");
-                return null;
+                return new(SourceBodyStatus.Oversized,
+                    Detail: $"Official XML exceeded the {BodyCapBytes}-byte acquisition limit.",
+                    Attempts: sent.Attempts);
             }
         }
-        return System.Text.Encoding.UTF8.GetString(ms.ToArray());
+        return SourceBodyFetch.Retrieved(System.Text.Encoding.UTF8.GetString(ms.ToArray()), sent.Attempts);
     }
 
     private async Task EnsureLoadedAsync(CancellationToken ct)
@@ -297,12 +328,17 @@ public sealed class LegiluxAdapter : ISourceAdapter
     /// and is a different profile at a different confidence; feeding it to pdf-lu/1 would produce
     /// confident, wrong articles.
     /// </summary>
-    public async Task<ManifestationFetch?> FetchAltManifestation(VersionRecord version, ExpressionRecord expression, CancellationToken ct)
+    public async Task<SourceManifestationFetch> FetchAltManifestation(
+        VersionRecord version, ExpressionRecord expression, CancellationToken ct)
     {
         await EnsureLoadedAsync(ct);
         var key = $"{version.Id.Value}|{expression.Language}";
-        if (_xmlFiles is not null && _xmlFiles.ContainsKey(key)) return null;
-        if (_pdfFiles is null || !_pdfFiles.TryGetValue(key, out var url)) return null;
+        if (_xmlFiles is not null && _xmlFiles.ContainsKey(key))
+            return new(SourceBodyStatus.PublisherMetadataOnly,
+                Detail: "The primary XML manifestation already owns this expression.");
+        if (_pdfFiles is null || !_pdfFiles.TryGetValue(key, out var url))
+            return new(SourceBodyStatus.PublisherMetadataOnly,
+                Detail: "The publisher did not enumerate an alternative PDF manifestation.");
 
         // Thematic collections are excluded here, and this is not a nicety. A RECUEIL or
         // CODE_RECUEIL is a shelf, not an instrument: its PDF concatenates every act on the shelf,
@@ -312,7 +348,8 @@ public sealed class LegiluxAdapter : ISourceAdapter
         if (version.TypeCode is "RECUEIL" or "CODE_RECUEIL")
         {
             Console.Error.WriteLine($"  [legilux] pdf belongs to a thematic collection, not an act; skipped: {version.Id.Value}");
-            return null;
+            return new(SourceBodyStatus.PublisherMetadataOnly,
+                Detail: "The publisher PDF is a thematic collection rather than one legal act.");
         }
         // A gazette issue is fetched, but declared as its own format so the derive step sends it
         // to pdf-memorial-lu/1 rather than to pdf-lu/1. The two are not interchangeable: one reads
@@ -326,11 +363,26 @@ public sealed class LegiluxAdapter : ISourceAdapter
         if (since < pause) await Task.Delay(pause - since, ct);
         _lastBodyFetch = DateTimeOffset.UtcNow;
 
-        using var resp = await BodyHttp.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
+        var sent = await SourceHttp.SendAsync(BodyHttp,
+            () => new HttpRequestMessage(HttpMethod.Get, url), RetryPolicy, ct);
+        using var resp = sent.Response;
+        if (resp is null || sent.RetryExhausted)
+            return new(SourceBodyStatus.RetryExhausted,
+                Detail: sent.FailureDetail ?? "The official PDF endpoint exhausted the retry policy.",
+                Attempts: sent.Attempts);
         if (!resp.IsSuccessStatusCode)
         {
             Console.Error.WriteLine($"  [legilux] pdf fetch failed ({(int)resp.StatusCode}): {url}");
-            return null;
+            return resp.StatusCode switch
+            {
+                System.Net.HttpStatusCode.NotFound => new(SourceBodyStatus.PermanentNotFound,
+                    Detail: "The official PDF manifestation returned HTTP 404.", Attempts: sent.Attempts),
+                System.Net.HttpStatusCode.Gone => new(SourceBodyStatus.Gone,
+                    Detail: "The official PDF manifestation returned HTTP 410.", Attempts: sent.Attempts),
+                _ => new(SourceBodyStatus.ParserFailure,
+                    Detail: $"Official PDF acquisition failed with HTTP {(int)resp.StatusCode}.",
+                    Attempts: sent.Attempts),
+            };
         }
         // A consolidated act is a few MB at most; the whole 1,197-article Code du travail is 2.3.
         // Anything far past that is a compilation the type field failed to mark, and downloading
@@ -339,7 +391,9 @@ public sealed class LegiluxAdapter : ISourceAdapter
         if (resp.Content.Headers.ContentLength is > CapBytes)
         {
             Console.Error.WriteLine($"  [legilux] pdf exceeds {CapBytes / 1024 / 1024} MB, not a single act; skipped: {url}");
-            return null;
+            return new(SourceBodyStatus.Oversized,
+                Detail: $"Official PDF exceeded the {CapBytes}-byte acquisition limit.",
+                Attempts: sent.Attempts);
         }
         using var ms = new MemoryStream();
         await (await resp.Content.ReadAsStreamAsync(ct)).CopyToAsync(ms, ct);
@@ -347,15 +401,20 @@ public sealed class LegiluxAdapter : ISourceAdapter
         if (bytes.LongLength > CapBytes)
         {
             Console.Error.WriteLine($"  [legilux] pdf exceeds the cap once read; skipped: {url}");
-            return null;
+            return new(SourceBodyStatus.Oversized,
+                Detail: $"Official PDF exceeded the {CapBytes}-byte acquisition limit.",
+                Attempts: sent.Attempts);
         }
         if (bytes.Length < 5 || bytes[0] != 0x25 || bytes[1] != 0x50 || bytes[2] != 0x44 || bytes[3] != 0x46)
         {
             Console.Error.WriteLine($"  [legilux] response is not a PDF; discarded: {url}");
-            return null;
+            return new(SourceBodyStatus.ParserFailure,
+                Detail: "The official PDF response did not have a PDF signature.",
+                Attempts: sent.Attempts);
         }
-        return new ManifestationFetch(gazette ? "pdf-memorial" : "pdf",
-                                      [new ManifestationMember(url.Split('/')[^1], bytes)], PublicUrl(url));
+        return SourceManifestationFetch.Retrieved(
+            new ManifestationFetch(gazette ? "pdf-memorial" : "pdf",
+                [new ManifestationMember(url.Split('/')[^1], bytes)], PublicUrl(url)), sent.Attempts);
     }
 
     private static string Slug(string workUri)

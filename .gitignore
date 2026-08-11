@@ -5,7 +5,9 @@ obj/
 # script must be tracked or a clean clone cannot build the image.
 deploy/*
 !deploy/fetch-indexes.sh
+!deploy/publish-assistant-evaluation.ps1
 !deploy/trusted-artifact-roots.json
+!deploy/trusted-evaluation-review-roots.json
 !deploy/embedding-model/
 !deploy/embedding-model/model-manifest.json
 *.db
