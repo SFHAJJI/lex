@@ -44,7 +44,9 @@ public sealed class ReleaseWorkflowTests
         Assert.Contains("metric_window_start_epoch=$((load_started_epoch / 60 * 60))", workflow);
         Assert.Contains("metric_window_end_epoch=$(((load_finished_epoch + 59) / 60 * 60))", workflow);
         Assert.Contains("metric_required_timestamp_epoch=$(((load_finished_epoch - 1) / 60 * 60))", workflow);
-        Assert.Contains("metric_query_end_epoch=$(((metric_now_epoch + 59) / 60 * 60))", workflow);
+        Assert.Contains("[ \"$metric_now_epoch\" -lt \"$metric_window_end_epoch\" ]", workflow);
+        Assert.Contains("metric_query_end_epoch=\"$metric_now_epoch\"", workflow);
+        Assert.DoesNotContain("metric_now_epoch + 59", workflow);
         Assert.Contains("timespan=$metric_window_start/$metric_query_end", workflow);
         Assert.Contains("--arg required \"$metric_required_timestamp\"", workflow);
         Assert.Contains("select(.timeStamp >= $start and .timeStamp <= $required)", workflow);

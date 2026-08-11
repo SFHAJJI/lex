@@ -418,14 +418,15 @@ jobs:
           metrics='{"value":[]}'
           # Container Apps platform metrics can arrive several minutes after the measured window.
           for attempt in $(seq 1 36); do
-            # Keep the measured start fixed, but advance the aligned query end while
-            # Azure publishes the closed load buckets. This avoids reusing an early
-            # empty response and the required timestamp proves the final load bucket
-            # is present before its maximum is accepted.
+            # Keep the measured start fixed and never send Azure Monitor a future
+            # timespan end. Wait until the measured window has closed, then advance
+            # the end to the current instant while the required bucket is published.
             metric_now_epoch=$(date -u +%s)
-            metric_query_end_epoch=$(((metric_now_epoch + 59) / 60 * 60))
-            [ "$metric_query_end_epoch" -ge "$metric_window_end_epoch" ] \
-              || metric_query_end_epoch="$metric_window_end_epoch"
+            if [ "$metric_now_epoch" -lt "$metric_window_end_epoch" ]; then
+              sleep 10
+              continue
+            fi
+            metric_query_end_epoch="$metric_now_epoch"
             metric_query_end=$(date -u -d "@$metric_query_end_epoch" +%Y-%m-%dT%H:%M:%SZ)
             metrics=$(az rest --method get \
               --url "$app_id/providers/Microsoft.Insights/metrics" \
