@@ -29,6 +29,9 @@ class CandidateGateTests(unittest.TestCase):
         ]
         self.assert_passes("coverage", coverage)
         self.assert_fails("coverage", coverage[:1])
+        missing = self.run_gate("coverage", {"status": "no_corpus_mounted"})
+        self.assertNotEqual(0, missing.returncode)
+        self.assertIn("without a usable corpus", missing.stderr)
 
         exact = [{
             "retrieval_mode": "keyword",
@@ -68,6 +71,10 @@ class CandidateGateTests(unittest.TestCase):
             "trace": [{"phase": "operation_plan", "status": "invalid_request"}],
         }
         self.assert_passes("injection", safe_refusal)
+        silent_refusal = {
+            "trace": [{"phase": "operation_plan", "status": "invalid_request"}],
+        }
+        self.assert_fails("injection", silent_refusal)
 
         switched = self.coverage_response()
         switched["trace"][0]["operations"] = [{"tool": "timeline"}]
