@@ -86,10 +86,17 @@ public sealed class ReleaseWorkflowTests
         Assert.Contains("metric_window_end_epoch=$(((load_finished_epoch + 59) / 60 * 60))", workflow);
         Assert.Contains("metric_window_end=$(date -u -d \"@$metric_window_end_epoch\" +%Y-%m-%dT%H:%M:%SZ)", workflow);
         Assert.Contains("metric_required_timestamp_epoch=$(((load_finished_epoch - 1) / 60 * 60))", workflow);
+        // Locate the poll loop from the start of the metric section so the check
+        // compares the wait against the loop itself, not a line inside its body,
+        // and does not pin the attempt count.
+        var metricSection = candidateBlock.IndexOf("metric_evidence=''", StringComparison.Ordinal);
+        Assert.True(metricSection >= 0);
         var metricWait = candidateBlock.IndexOf(
-            "metric_ready_after_epoch=$((metric_window_end_epoch + 60))", StringComparison.Ordinal);
-        var metricPoll = candidateBlock.IndexOf("metric_source=exact", StringComparison.Ordinal);
-        Assert.True(metricWait >= 0 && metricWait < metricPoll);
+            "metric_ready_after_epoch=$((metric_window_end_epoch + 60))", metricSection,
+            StringComparison.Ordinal);
+        var metricPoll = candidateBlock.IndexOf(
+            "for attempt in $(seq 1 ", metricSection, StringComparison.Ordinal);
+        Assert.True(metricWait >= 0 && metricPoll > metricWait);
         Assert.Contains("[ \"$metric_wait_seconds\" -gt 0 ] && sleep \"$metric_wait_seconds\"", workflow);
         Assert.Contains("timespan=$metric_window_start/$metric_window_end", workflow);
         Assert.Contains("scripts/deploy/metric_evidence.py", workflow);
