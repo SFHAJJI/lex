@@ -98,7 +98,7 @@ jobs:
           done
           index_manifest_count=$(find "$release_dir" -name 'index-*.manifest.json' | wc -l)
           [ "$index_manifest_count" -eq 2 ] \
-            || { echo "::error::expected exactly two signed publisher index manifests"; exit 1; }
+            || { echo "::error::expected exactly two publisher index manifest files"; exit 1; }
           manifest_set=$(for manifest in "$release_dir"/*.manifest.json; do
             printf '%s  %s\n' "$(sha256sum "$manifest" | cut -d' ' -f1)" "$(basename "$manifest")"
           done | sort -k2 | sha256sum | cut -d' ' -f1)
