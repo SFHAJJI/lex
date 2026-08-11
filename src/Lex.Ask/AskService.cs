@@ -290,14 +290,23 @@ public sealed class AskService
         EnvInt("ASK_GLOBAL_DAILY", 400),
         EnvInt("ASK_CONCURRENT", 4));
 
-    private static void Diagnostic(string code)
+    private static void Diagnostic(string code, string? detail = null)
     {
         var safe = code.Length <= 80
                    && code.All(character => char.IsAsciiLetterOrDigit(character)
                        || character == '_')
             ? code
             : "invalid_diagnostic_code";
-        Console.Error.WriteLine($"[ask] {safe}");
+        // detail carries contract violations only; the filter bounds it and keeps any other text,
+        // punctuation or newline out of the log line.
+        var note = detail is null
+            ? string.Empty
+            : " " + new string(detail.Take(200).Select(character =>
+                char.IsAsciiLetterOrDigit(character)
+                || character is ' ' or '_' or '\'' or '.' or ',' or '-'
+                    ? character
+                    : '?').ToArray());
+        Console.Error.WriteLine($"[ask] {safe}{note}");
     }
 
     private const int MaxHistory = 24;
@@ -507,7 +516,13 @@ public sealed class AskService
         from_date=2020-01-01 and to_date=2024-12-31.
         """;
 
-    private static JsonArray PlannerTools() =>
+    internal static readonly string[] PlannerToolNames =
+    [
+        "search", "as_of", "diff", "timeline", "article_history", "changes_in_period",
+        "in_force_on", "coverage", "cited_by", "provenance", "legal_boundary", "clarification",
+    ];
+
+    internal static JsonArray PlannerTools() =>
     [
         new JsonObject
         {
@@ -526,23 +541,13 @@ public sealed class AskService
                             ["type"] = "array",
                             ["minItems"] = 1,
                             ["maxItems"] = OperationPlan.MaximumOperations,
+                            // One branch per tool: a shared argument schema would invite arguments
+                            // OperationArguments rejects, and one rejection aborts the whole plan.
                             ["items"] = new JsonObject
                             {
-                                ["type"] = "object",
-                                ["properties"] = new JsonObject
-                                {
-                                    ["tool"] = new JsonObject
-                                    {
-                                        ["type"] = "string",
-                                        ["enum"] = new JsonArray(
-                                            "search", "as_of", "diff", "timeline",
-                                            "article_history", "changes_in_period", "in_force_on",
-                                            "coverage", "cited_by", "provenance",
-                                            "legal_boundary", "clarification"),
-                                    },
-                                    ["arguments"] = PlannerArgumentSchema(),
-                                },
-                                ["required"] = new JsonArray("tool", "arguments"),
+                                ["oneOf"] = new JsonArray(PlannerToolNames
+                                    .Select(PlannerOperationSchema)
+                                    .ToArray<JsonNode?>()),
                             },
                         },
                         ["synthesis"] = new JsonObject
@@ -557,29 +562,39 @@ public sealed class AskService
         },
     ];
 
-    private static JsonObject PlannerArgumentSchema()
+    private static JsonObject PlannerOperationSchema(string tool) => new()
+    {
+        ["type"] = "object",
+        ["properties"] = new JsonObject
+        {
+            ["tool"] = new JsonObject
+            {
+                ["type"] = "string",
+                ["enum"] = new JsonArray(tool),
+            },
+            ["arguments"] = PlannerArgumentSchema(tool),
+        },
+        ["required"] = new JsonArray("tool", "arguments"),
+    };
+
+    internal static JsonObject PlannerArgumentSchema(string tool)
     {
         JsonObject S() => new() { ["type"] = "string" };
-        JsonObject I() => new() { ["type"] = "integer" };
         var properties = new JsonObject();
-        foreach (var name in new[]
-                 {
-                     "query", "publisher", "jurisdiction", "document_type", "source_class",
-                     "hierarchy", "act_form", "binding_status", "domain", "language",
-                     "retrieval_mode", "time_scope", "as_of", "fuzzy", "works", "work",
-                     "work_query", "article_number", "date", "mode", "anchors", "from_date",
-                     "to_date", "anchor", "lex_id", "order", "reason", "question",
-                 })
-            properties[name] = S();
-        properties["limit"] = I();
-        properties["offset"] = I();
-        properties["options"] = new JsonObject
-        {
-            ["type"] = "array",
-            ["minItems"] = 2,
-            ["maxItems"] = 4,
-            ["items"] = S(),
-        };
+        // Ordinal order keeps the emitted schema byte-identical between processes.
+        foreach (var name in OperationArguments.AllowedFor(tool).Order(StringComparer.Ordinal))
+            properties[name] = name switch
+            {
+                "limit" or "offset" => new JsonObject { ["type"] = "integer" },
+                "options" => new JsonObject
+                {
+                    ["type"] = "array",
+                    ["minItems"] = 2,
+                    ["maxItems"] = 4,
+                    ["items"] = S(),
+                },
+                _ => S(),
+            };
         return new JsonObject
         {
             ["type"] = "object",
@@ -1117,10 +1132,12 @@ public sealed class AskService
             return new AskOutcome(502,
                 new JsonObject { ["error"] = "The planning service is unavailable right now." }, true);
         }
-        catch (InvalidDataException)
+        catch (InvalidDataException invalid)
         {
             run?.CompletePendingLegal(LegalOutcome.InvalidRequest);
-            Diagnostic("invalid_operation_plan");
+            // The violation names the tool and argument, never user text; operators need it to
+            // see which contract the planner broke.
+            Diagnostic("invalid_operation_plan", invalid.Message);
             var explanation = requestLocale == "fr"
                 ? "Cette demande ne correspond pas à une opération juridique valide."
                 : "This request does not map to a valid legal operation.";

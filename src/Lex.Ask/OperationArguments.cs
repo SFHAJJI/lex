@@ -40,6 +40,16 @@ internal static class OperationArguments
             ["gap"] = Set("reason"),
         };
 
+    /// <summary>Every action this boundary accepts; the planner schema is generated from it.</summary>
+    public static IEnumerable<string> Actions => Allowed.Keys;
+
+    /// <summary>The exact argument names <see cref="Normalize"/> accepts for one action.</summary>
+    public static IReadOnlyCollection<string> AllowedFor(string action) =>
+        Allowed.TryGetValue(action, out var allowed)
+            ? allowed
+            : throw new InvalidDataException(
+                $"Unknown legal operation or application action '{action}'.");
+
     public static JsonObject Normalize(string action, JsonObject proposed)
     {
         ArgumentNullException.ThrowIfNull(proposed);

@@ -47,6 +47,82 @@ public sealed class OperationPolicyTests
             Assert.Throws<InvalidDataException>(() => OperationArguments.Normalize(tool, arguments));
     }
 
+    // The planner schema and the argument allowlist are one contract in two places. When they
+    // drift the model emits arguments Normalize rejects, and one rejection aborts the whole plan.
+    [Fact]
+    public void Every_planner_tool_offers_exactly_the_arguments_its_operation_allows()
+    {
+        var branches = AskService.PlannerTools()[0]!["function"]!["parameters"]!["properties"]!
+            ["operations"]!["items"]!["oneOf"]!.AsArray();
+
+        var tools = new List<string>();
+        foreach (var node in branches)
+        {
+            var branch = node!.AsObject();
+            Assert.Equal(["tool", "arguments"],
+                branch["required"]!.AsArray().Select(item => item!.GetValue<string>()));
+            var tool = Assert.Single(branch["properties"]!["tool"]!["enum"]!.AsArray()
+                .Select(item => item!.GetValue<string>()));
+            tools.Add(tool);
+
+            var schema = branch["properties"]!["arguments"]!.AsObject();
+            Assert.False(schema["additionalProperties"]!.GetValue<bool>());
+            var properties = schema["properties"]!.AsObject();
+            Assert.Equal(
+                OperationArguments.AllowedFor(tool).Order(StringComparer.Ordinal),
+                properties.Select(item => item.Key).Order(StringComparer.Ordinal));
+            foreach (var (name, value) in properties)
+                Assert.Equal(
+                    name switch
+                    {
+                        "limit" or "offset" => "integer",
+                        "options" => "array",
+                        _ => "string",
+                    },
+                    value!["type"]!.GetValue<string>());
+        }
+
+        Assert.Equal([
+            "search", "as_of", "diff", "timeline", "article_history", "changes_in_period",
+            "in_force_on", "coverage", "cited_by", "provenance", "legal_boundary",
+            "clarification",
+        ], tools);
+        // navigate and gap are application-internal actions and stay off the planner surface.
+        Assert.Equal(["gap", "navigate"],
+            OperationArguments.Actions.Except(tools, StringComparer.Ordinal)
+                .Order(StringComparer.Ordinal));
+    }
+
+    public static TheoryData<string, string> ShippedPlannerOperations => new()
+    {
+        { "search", """{"tool":"search","arguments":{"query":"renewable energy","limit":10}}""" },
+        { "as_of", """{"tool":"as_of","arguments":{"work_query":"GDPR","article_number":"6","date":"2021-01-01"}}""" },
+        { "diff", """{"tool":"diff","arguments":{"work_query":"CRR","article_number":"92","from_date":"2020-01-01","to_date":"2024-12-31"}}""" },
+        { "article_history", """{"tool":"article_history","arguments":{"work_query":"CRR","article_number":"92"}}""" },
+        { "changes_in_period", """{"tool":"changes_in_period","arguments":{"from_date":"2024-01-01","to_date":"2024-12-31","order":"by_churn"}}""" },
+    };
+
+    [Theory]
+    [MemberData(nameof(ShippedPlannerOperations))]
+    public void Shipped_planner_output_shapes_freeze_into_a_plan(string tool, string operation)
+    {
+        var plan = OperationPlan.FromPlannerOutput(
+            "req-1", "en", new JsonArray(JsonNode.Parse(operation)));
+
+        Assert.Equal(tool, Assert.Single(plan.Operations).Tool);
+    }
+
+    [Fact]
+    public void A_planner_argument_outside_the_allowlist_still_aborts_the_plan()
+    {
+        var rejected = Assert.Throws<InvalidDataException>(() => OperationPlan.FromPlannerOutput(
+            "req-1", "en", new JsonArray(JsonNode.Parse(
+                """{"tool":"search","arguments":{"query":"renewable energy","order":"by_churn"}}"""))));
+
+        Assert.Contains("'search'", rejected.Message, StringComparison.Ordinal);
+        Assert.Contains("'order'", rejected.Message, StringComparison.Ordinal);
+    }
+
     public static TheoryData<string, LegalOutcome> StatusCases => new()
     {
         { McpStatus.Ok, LegalOutcome.Succeeded },
