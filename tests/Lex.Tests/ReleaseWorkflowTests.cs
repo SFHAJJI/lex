@@ -10,10 +10,11 @@ public sealed class ReleaseWorkflowTests
         var workflow = File.ReadAllText(Path.Combine(RepoRoot(), ".github", "workflows", "deploy.yml"));
         var candidateStart = workflow.IndexOf(
             "\n      - name: Create and smoke-test candidate revision", StringComparison.Ordinal);
+        Assert.True(candidateStart >= 0);
         var candidateEnd = workflow.IndexOf(
             "\n      - name: Enforce one active public quota authority", candidateStart,
             StringComparison.Ordinal);
-        Assert.True(candidateStart >= 0 && candidateEnd > candidateStart);
+        Assert.True(candidateEnd > candidateStart);
         var candidateBlock = workflow[candidateStart..candidateEnd];
 
         var promoteStart = workflow.IndexOf("\n      promote:", StringComparison.Ordinal);
@@ -41,7 +42,7 @@ public sealed class ReleaseWorkflowTests
         Assert.Contains("candidate exceeded the 75 percent memory budget", workflow);
         Assert.Contains("candidate load used more than one replica", workflow);
         Assert.Contains("metric_window_start_epoch=$((load_started_epoch / 60 * 60))", workflow);
-        Assert.Contains("metric_window_end_epoch=$(((load_finished_epoch / 60 + 1) * 60))", workflow);
+        Assert.Contains("metric_window_end_epoch=$(((load_finished_epoch + 59) / 60 * 60))", workflow);
         Assert.Contains("timespan=$metric_window_start/$metric_window_end", workflow);
         Assert.DoesNotContain("timespan=$load_started/$load_finished", workflow);
         Assert.Contains("metric response shape", workflow);
