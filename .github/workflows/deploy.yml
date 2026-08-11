@@ -381,55 +381,64 @@ jobs:
           metric_required_timestamp_epoch=$(((load_finished_epoch - 1) / 60 * 60))
           metric_window_start=$(date -u -d "@$metric_window_start_epoch" +%Y-%m-%dT%H:%M:%SZ)
           metric_required_timestamp=$(date -u -d "@$metric_required_timestamp_epoch" +%Y-%m-%dT%H:%M:%SZ)
-          memory_max=0
-          replicas_max=0
-          memory_required=0
-          replicas_required=0
+          metric_evidence=''
+          metric_confirmation=''
+          metric_source=''
           metrics='{"value":[]}'
-          # Finish the sub-minute boundary wait before consuming the ingestion
-          # retry budget. The load has already ended, so this is at most 59 seconds.
+          # Query only a completed, past bucket. Azure documents platform metrics as
+          # normally available within a minute; the bounded poll below covers lag.
           metric_now_epoch=$(date -u +%s)
-          metric_wait_seconds=$((metric_window_end_epoch - metric_now_epoch))
+          metric_ready_after_epoch=$((metric_window_end_epoch + 60))
+          metric_wait_seconds=$((metric_ready_after_epoch - metric_now_epoch))
           [ "$metric_wait_seconds" -gt 0 ] && sleep "$metric_wait_seconds"
-          # Container Apps platform metrics can arrive several minutes after the measured window.
-          for attempt in $(seq 1 36); do
-            # Keep the measured start fixed and never send Azure Monitor a future
-            # timespan end. Advance it to the current instant while the required
-            # closed bucket is published.
-            metric_now_epoch=$(date -u +%s)
-            metric_query_end_epoch="$metric_now_epoch"
-            metric_query_end=$(date -u -d "@$metric_query_end_epoch" +%Y-%m-%dT%H:%M:%SZ)
-            metrics=$(az rest --method get \
+          metric_query() {
+            local filter="$1"
+            az rest --method get \
               --url "$app_id/providers/Microsoft.Insights/metrics" \
               --url-parameters \
                 "api-version=2023-10-01" \
                 "metricnames=WorkingSetBytes,Replicas" \
-                "timespan=$metric_window_start/$metric_query_end" \
+                "timespan=$metric_window_start/$metric_window_end" \
                 "interval=PT1M" \
                 "aggregation=Maximum" \
-                "\$filter=revisionName eq '$candidate'" \
-              -o json)
-            memory_max=$(printf '%s' "$metrics" | jq \
-              --arg start "$metric_window_start" --arg required "$metric_required_timestamp" \
-              '[.value[] | select(.name.value == "WorkingSetBytes")
-                | .timeseries[].data[]
-                | select(.timeStamp >= $start and .timeStamp <= $required)
-                | .maximum // empty] | max // 0 | floor')
-            replicas_max=$(printf '%s' "$metrics" | jq \
-              --arg start "$metric_window_start" --arg required "$metric_required_timestamp" \
-              '[.value[] | select(.name.value == "Replicas")
-                | .timeseries[].data[]
-                | select(.timeStamp >= $start and .timeStamp <= $required)
-                | .maximum // empty] | max // 0 | floor')
-            memory_required=$(printf '%s' "$metrics" | jq --arg required "$metric_required_timestamp" \
-              '[.value[] | select(.name.value == "WorkingSetBytes")
-                | .timeseries[].data[]
-                | select(.timeStamp == $required and .maximum != null)] | length')
-            replicas_required=$(printf '%s' "$metrics" | jq --arg required "$metric_required_timestamp" \
-              '[.value[] | select(.name.value == "Replicas")
-                | .timeseries[].data[]
-                | select(.timeStamp == $required and .maximum != null)] | length')
-            [ "$memory_required" -gt 0 ] && [ "$replicas_required" -gt 0 ] && break
+                "\$filter=$filter" \
+                "top=200" \
+              -o json
+          }
+          metric_extract() {
+            python3 scripts/deploy/metric_evidence.py \
+              "$candidate" "$metric_window_start" "$metric_required_timestamp"
+          }
+          # Exact dimension filters for a newly created revision have occasionally
+          # appeared later than the split-by-dimension response. The wildcard form is
+          # the documented way to obtain one time series per dimension value; select
+          # the exact candidate locally and keep the query bounded.
+          for attempt in $(seq 1 36); do
+            metric_filter="revisionName eq '$candidate'"
+            metric_source=exact
+            metrics=$(metric_query "$metric_filter" 2>/dev/null || printf '{"value":[]}')
+            metric_evidence=$(printf '%s' "$metrics" | metric_extract 2>/dev/null || true)
+            if [ -z "$metric_evidence" ]; then
+              metric_filter="revisionName eq '*'"
+              metric_source=split
+              metrics=$(metric_query "$metric_filter" 2>/dev/null || printf '{"value":[]}')
+              metric_evidence=$(printf '%s' "$metrics" | metric_extract 2>/dev/null || true)
+            fi
+            if [ -n "$metric_evidence" ]; then
+              sleep 5
+              confirmation_metrics=$(metric_query "$metric_filter" 2>/dev/null \
+                || printf '{"value":[]}')
+              metric_confirmation=$(printf '%s' "$confirmation_metrics" \
+                | metric_extract 2>/dev/null || true)
+              if [ -n "$metric_confirmation" ] \
+                  && [ "$(printf '%s' "$metric_evidence" | jq -r '.memory_required')" \
+                       = "$(printf '%s' "$metric_confirmation" | jq -r '.memory_required')" ] \
+                  && [ "$(printf '%s' "$metric_evidence" | jq -r '.replicas_required')" \
+                       = "$(printf '%s' "$metric_confirmation" | jq -r '.replicas_required')" ]; then
+                break
+              fi
+              metric_evidence=''
+            fi
             sleep 10
           done
           metric_shape=$(printf '%s' "$metrics" | jq -c '
@@ -438,10 +447,12 @@ jobs:
               points: ([.timeseries[]?.data[]? | select(.maximum != null)] | length),
               latest: ([.timeseries[]?.data[]? | select(.maximum != null) | .timeStamp] | max)
             }]}')
-          [ "$memory_required" -gt 0 ] \
-            || { echo "::error::candidate memory metric did not cover required load bucket $metric_required_timestamp in $metric_window_start/$metric_query_end; metric response shape: $metric_shape"; exit 1; }
-          [ "$replicas_required" -gt 0 ] \
-            || { echo "::error::candidate replica metric did not cover required load bucket $metric_required_timestamp in $metric_window_start/$metric_query_end; metric response shape: $metric_shape"; exit 1; }
+          [ -n "$metric_evidence" ] && [ -n "$metric_confirmation" ] \
+            || { echo "::error::candidate metrics were not independently confirmed for $metric_required_timestamp in $metric_window_start/$metric_window_end; metric response shape: $metric_shape"; exit 1; }
+          memory_max=$(printf '%s\n%s' "$metric_evidence" "$metric_confirmation" \
+            | jq -s 'map(.memory_max) | max')
+          replicas_max=$(printf '%s\n%s' "$metric_evidence" "$metric_confirmation" \
+            | jq -s 'map(.replicas_max) | max')
           [ "$memory_max" -le 1610612736 ] \
             || { echo "::error::candidate exceeded the 75 percent memory budget: $memory_max"; exit 1; }
           [ "$replicas_max" -eq 1 ] \
@@ -452,6 +463,7 @@ jobs:
             echo "- one 1 vCPU / 2 GiB candidate replica"
             echo "- maximum working set: $memory_max bytes"
             echo "- measured replica maximum: $replicas_max"
+            echo "- Azure Monitor evidence source: $metric_source (confirmed twice)"
             echo '```json'
             jq '.outcome' mcp-load-report.json
             echo '```'
