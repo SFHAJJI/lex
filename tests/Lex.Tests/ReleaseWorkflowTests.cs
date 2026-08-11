@@ -170,8 +170,9 @@ public sealed class ReleaseWorkflowTests
             .Select(match => match.Groups[1].Value)
             .ToArray();
         Assert.Equal(new[] { "Microsoft.OperationalInsights/workspaces/tables/read" }, actionEntries);
-        Assert.Contains("scope       = local.log_analytics_resource_group_id", role);
-        Assert.Contains("assignable_scopes = [local.log_analytics_resource_group_id]", role);
+        Assert.Contains("scope       = \"/subscriptions/${var.subscription_id}\"", role);
+        Assert.Contains("assignable_scopes = [\"/subscriptions/${var.subscription_id}\"]", role);
+        Assert.DoesNotContain("log_analytics_resource_group_id", terraform);
         Assert.Contains("scope              = data.azurerm_application_insights.web.workspace_id", terraform[end..]);
     }
 

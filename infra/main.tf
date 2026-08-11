@@ -25,9 +25,8 @@ data "azurerm_application_insights" "web" {
 }
 
 locals {
-  container_app_id                = "${data.azurerm_resource_group.platform.id}/providers/Microsoft.App/containerApps/${var.container_app_name}"
-  container_app_environment_id    = "${data.azurerm_resource_group.platform.id}/providers/Microsoft.App/managedEnvironments/${var.container_app_environment_name}"
-  log_analytics_resource_group_id = join("/", slice(split("/", data.azurerm_application_insights.web.workspace_id), 0, 5))
+  container_app_id             = "${data.azurerm_resource_group.platform.id}/providers/Microsoft.App/containerApps/${var.container_app_name}"
+  container_app_environment_id = "${data.azurerm_resource_group.platform.id}/providers/Microsoft.App/managedEnvironments/${var.container_app_environment_name}"
   tags = {
     app       = "lex"
     managedBy = "terraform"
@@ -139,14 +138,17 @@ resource "azurerm_role_assignment" "deploy_application_insights_reader" {
 
 resource "azurerm_role_definition" "deploy_log_analytics_table_policy_reader" {
   name        = "Lex Log Analytics Table Policy Reader"
-  scope       = local.log_analytics_resource_group_id
+  scope       = "/subscriptions/${var.subscription_id}"
   description = "Lets the Lex deployment identity verify only the published Log Analytics table-retention policy."
 
   permissions {
     actions = ["Microsoft.OperationalInsights/workspaces/tables/read"]
   }
 
-  assignable_scopes = [local.log_analytics_resource_group_id]
+  # Azure denies custom role-definition writes inside Application Insights'
+  # managed workspace resource group. The role is therefore defined at the
+  # nearest permitted ancestor, but assigned only to the exact workspace below.
+  assignable_scopes = ["/subscriptions/${var.subscription_id}"]
 }
 
 resource "azurerm_role_assignment" "deploy_log_analytics_table_reader" {
