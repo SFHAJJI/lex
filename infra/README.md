@@ -10,7 +10,9 @@ The runtime identity pulls from ACR and calls Azure OpenAI. The deployment ident
 GitHub OIDC token for the `production` environment and can build an ACR image, assign the runtime
 identity and update only `ca-lex-web`. Two exact-resource assignments additionally let it read the
 `ai-lex-web` component and its Log Analytics table policies so deployment can prove the published
-90-day retention; the custom role contains no telemetry-record query or write action. The publisher
+90-day retention; the custom roles contain no telemetry-record query or write action. Azure blocks
+custom role definitions inside the managed Log Analytics resource group, so the one-action table-policy
+role is defined at subscription scope but remains assigned only to that exact workspace. The publisher
 identity receives a GitHub OIDC token only
 after approval in the main-only `lex-ops` production environment, can read the exact Container App
 revision and candidate/grader model identities, and can sign or verify with the Key Vault key. Its
