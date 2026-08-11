@@ -91,13 +91,15 @@ public class FitnessTests
     {
         var source = File.ReadAllText(
             Path.Combine(RepoRoot(), "src", "Lex.Ask", "AskService.cs"));
-        var start = source.IndexOf("PlanOperationsAsync(", StringComparison.Ordinal);
-        var end = source.IndexOf("using var httpReq", start, StringComparison.Ordinal);
-        Assert.True(start >= 0 && end > start);
-        var request = source[start..end];
+        var start = source.IndexOf(
+            "private async Task<(OperationPlan Plan, ModelTokenUsage Usage)> PlanOperationsAsync(",
+            StringComparison.Ordinal);
+        Assert.True(start >= 0);
+        var effort = Regex.Match(source[start..],
+            "\\[\"reasoning_effort\"\\]\\s*=\\s*\"(?<value>[^\"]+)\"");
 
-        Assert.Contains("[\"reasoning_effort\"] = \"low\"", request, StringComparison.Ordinal);
-        Assert.DoesNotContain("[\"reasoning_effort\"] = \"medium\"", request, StringComparison.Ordinal);
+        Assert.True(effort.Success);
+        Assert.Equal("low", effort.Groups["value"].Value);
     }
 
     [Fact]
