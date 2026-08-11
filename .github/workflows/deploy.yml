@@ -402,7 +402,7 @@ jobs:
             "https://$fqdn/?q=$trace_canary" >/dev/null
           telemetry=''
           for attempt in $(seq 1 18); do
-            telemetry=$(az monitor app-insights query -g rg-platform --app ai-lex-web \
+            telemetry=$(az monitor app-insights query -g "$RESOURCE_GROUP" --app "$APPLICATION_INSIGHTS_NAME" \
               --analytics-query "union isfuzzy=true AppRequests, AppDependencies, AppTraces
                 | where TimeGenerated > ago(15m) and OperationId == '$trace_id'
                 | extend record=tostring(pack_all()), address=tostring(column_ifexists('ClientIP', ''))

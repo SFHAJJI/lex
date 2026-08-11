@@ -20,6 +20,8 @@ public sealed class ReleaseWorkflowTests
         Assert.Contains("AppRequests AppDependencies AppTraces", workflow);
         Assert.Contains("APPLICATION_INSIGHTS_NAME: ai-lex-web", workflow);
         Assert.Contains("-a \"$APPLICATION_INSIGHTS_NAME\"", workflow);
+        Assert.Contains("--app \"$APPLICATION_INSIGHTS_NAME\"", workflow);
+        Assert.DoesNotContain("--app ai-lex-web", workflow);
         Assert.Contains("retention is not the published 90 days", workflow);
         Assert.Contains("LEXTRACE${GITHUB_RUN_ID}${GITHUB_RUN_ATTEMPT}", workflow);
         Assert.Contains("candidate request telemetry was not exported", workflow);
@@ -142,10 +144,10 @@ public sealed class ReleaseWorkflowTests
         var actionsEnd = role.IndexOf(']', actionsStart);
         Assert.True(actionsEnd > actionsStart, "Telemetry-retention role actions are incomplete.");
         var actions = role[actionsStart..actionsEnd];
-        Assert.Contains("Microsoft.Insights/components/read", actions);
-        Assert.Single(Regex.Matches(actions, "\"Microsoft\\.").Cast<Match>());
-        Assert.DoesNotContain("/*", actions);
-        Assert.DoesNotContain("\"*\"", actions);
+        var actionEntries = Regex.Matches(actions, "\"([^\"]+)\"")
+            .Select(match => match.Groups[1].Value)
+            .ToArray();
+        Assert.Equal(new[] { "Microsoft.Insights/components/read" }, actionEntries);
         Assert.Contains("scope       = data.azurerm_resource_group.platform.id", role);
         Assert.Contains("assignable_scopes = [data.azurerm_resource_group.platform.id]", role);
         Assert.Contains("scope              = data.azurerm_application_insights.web.id", terraform[end..]);
@@ -164,10 +166,10 @@ public sealed class ReleaseWorkflowTests
         actionsEnd = role.IndexOf(']', actionsStart);
         Assert.True(actionsEnd > actionsStart, "Log Analytics role actions are incomplete.");
         actions = role[actionsStart..actionsEnd];
-        Assert.Contains("Microsoft.OperationalInsights/workspaces/tables/read", actions);
-        Assert.Single(Regex.Matches(actions, "\"Microsoft\\.").Cast<Match>());
-        Assert.DoesNotContain("/*", actions);
-        Assert.DoesNotContain("\"*\"", actions);
+        actionEntries = Regex.Matches(actions, "\"([^\"]+)\"")
+            .Select(match => match.Groups[1].Value)
+            .ToArray();
+        Assert.Equal(new[] { "Microsoft.OperationalInsights/workspaces/tables/read" }, actionEntries);
         Assert.Contains("scope       = local.log_analytics_resource_group_id", role);
         Assert.Contains("assignable_scopes = [local.log_analytics_resource_group_id]", role);
         Assert.Contains("scope              = data.azurerm_application_insights.web.workspace_id", terraform[end..]);
