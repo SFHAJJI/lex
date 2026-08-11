@@ -39,6 +39,8 @@ public sealed class ReleaseWorkflowTests
         Assert.Contains("revision endpoint did not return a successful response", workflow);
         Assert.Single(Regex.Matches(workflow, Regex.Escape(
             "revision_get \"https://$rollback_fqdn/")));
+        Assert.Contains("revision_get \"https://$rollback_fqdn/healthz\"", workflow);
+        Assert.DoesNotContain("revision_get \"https://$rollback_fqdn/readyz\"", workflow);
         Assert.Equal(2, Regex.Matches(workflow, Regex.Escape(
             "revision_get \"https://$fqdn/")).Count);
         Assert.Equal(2, Regex.Matches(workflow, Regex.Escape(
