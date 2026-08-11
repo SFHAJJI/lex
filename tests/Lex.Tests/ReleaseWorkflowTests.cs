@@ -48,6 +48,8 @@ public sealed class ReleaseWorkflowTests
         Assert.Contains("expected_current_revision", workflow);
         Assert.Contains("rollback_revision", workflow);
         Assert.Contains("target revision did not become ready", workflow);
+        Assert.Contains("Activate the exact candidate for bounded verification", workflow);
+        Assert.Contains("assistant-browser-evidence.json", workflow);
         Assert.Contains("properties.fqdn", workflow);
         Assert.Contains("TARGET_FQDN", workflow);
         Assert.Contains("target must have exactly one pinned replica", workflow);
@@ -58,6 +60,13 @@ public sealed class ReleaseWorkflowTests
                     < workflow.IndexOf("revision activate", StringComparison.Ordinal));
         Assert.True(workflow.IndexOf("echo \"target=$TARGET_REVISION\"", StringComparison.Ordinal)
                     < workflow.IndexOf("revision activate", StringComparison.Ordinal));
+        Assert.True(workflow.IndexOf("current revision changed before verification", StringComparison.Ordinal)
+                    < workflow.IndexOf("echo \"target=$TARGET_REVISION\"", StringComparison.Ordinal));
+        Assert.Contains("PREVIOUS_REVISION: ${{ steps.traffic.outputs.previous }}", workflow);
+        Assert.Contains("steps.traffic.outputs.target || steps.candidate.outputs.target", workflow);
+        Assert.Contains("failed to deactivate the candidate without changing traffic", workflow);
+        Assert.DoesNotContain("steps.candidate.outputs.previous", workflow);
+        Assert.Contains("refusing recovery with identical revisions", workflow);
         Assert.Contains("expected exactly one active public quota authority", workflow);
         Assert.Contains("name != '$ROLLBACK_REVISION' && properties.active", workflow);
         Assert.Contains("revision-weight", workflow);
@@ -67,6 +76,13 @@ public sealed class ReleaseWorkflowTests
         Assert.Contains("failed to deactivate and verify the target revision", workflow);
         Assert.Contains("target_active", workflow);
         Assert.Contains("failed to restore and verify the previous revision", workflow);
+        Assert.Contains("prior_promotion_deployment", workflow);
+        Assert.Contains("lex-revision-promotion", workflow);
+        Assert.Contains("previous promotion receipt does not bind the target revision", workflow);
+        Assert.Contains("previous promotion receipt does not bind the evaluation release", workflow);
+        Assert.Contains("previous promotion receipt is not successful", workflow);
+        Assert.Contains("--allow-older-previously-promoted-evidence", workflow);
+        Assert.Contains("Record successful promotion receipt", workflow);
     }
 
     [Fact]
@@ -82,6 +98,27 @@ public sealed class ReleaseWorkflowTests
             .ToArray();
 
         Assert.Empty(unpinned);
+    }
+
+    [Fact]
+    public void Publisher_can_only_toggle_candidate_revision_lifecycle_not_runtime_configuration()
+    {
+        var terraform = File.ReadAllText(Path.Combine(RepoRoot(), "infra", "main.tf"));
+        var start = terraform.IndexOf(
+            "resource \"azurerm_role_definition\" \"publisher_revision_lifecycle\"",
+            StringComparison.Ordinal);
+        var end = terraform.IndexOf(
+            "resource \"azurerm_role_assignment\" \"publisher_revision_lifecycle\"",
+            start, StringComparison.Ordinal);
+
+        Assert.True(start >= 0 && end > start);
+        var role = terraform[start..end];
+        Assert.Contains("Microsoft.App/containerApps/revisions/activate/action", role);
+        Assert.Contains("Microsoft.App/containerApps/revisions/deactivate/action", role);
+        Assert.DoesNotContain("Microsoft.App/containerApps/write", role);
+        Assert.DoesNotContain("Microsoft.App/containerApps/*", role);
+        Assert.DoesNotContain("Microsoft.App/*", role);
+        Assert.Contains("scope              = local.container_app_id", terraform[end..]);
     }
 
     private static string RepoRoot()

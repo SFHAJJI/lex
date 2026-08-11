@@ -156,6 +156,7 @@ public sealed class AskTransportTests
         {
             Assert.Equal("1", frame.Data["version"]?.GetValue<string>());
             Assert.Equal(serverRequestId, frame.Data["request_id"]?.GetValue<string>());
+            Assert.True(frame.Data["server_elapsed_ms"]?.GetValue<double>() >= 0);
         });
         Assert.Equal([1, 2], frames.Select(frame => frame.Data["sequence"]?.GetValue<int>()));
         Assert.Equal(["operation_result", "done"],
@@ -163,6 +164,12 @@ public sealed class AskTransportTests
         Assert.All(frames.Where(frame => frame.Event == "operation_result"), frame =>
             Assert.DoesNotContain("stream-request",
                 frame.Data["payload"]?["operation_id"]?.GetValue<string>() ?? ""));
+        var timing = frames.Single(frame => frame.Event == "done")
+            .Data["payload"]?["timing"];
+        Assert.True(timing?["planner_ms"]?.GetValue<double>() >= 0);
+        Assert.True(timing?["mcp_ms"]?.GetValue<double>() >= 0);
+        Assert.Null(timing?["synthesis_ms"]);
+        Assert.True(timing?["operation_result_emitted_ms"]?.GetValue<double>() >= 0);
     }
 
     [Fact]
@@ -249,7 +256,8 @@ public sealed class AskTransportTests
 
         var (status, body) = await service.AskAsync(new JsonArray(new JsonObject
         {
-            ["role"] = "user", ["content"] = "Can Lex advise me?",
+            ["role"] = "user",
+            ["content"] = "Can Lex advise me?",
         }), "client", "law.test", CancellationToken.None, progress, "disconnect-request");
 
         Assert.Equal(200, status);
@@ -279,7 +287,8 @@ public sealed class AskTransportTests
 
         var (status, body) = await service.AskAsync(new JsonArray(new JsonObject
         {
-            ["role"] = "user", ["content"] = "Can Lex advise and interpret this?",
+            ["role"] = "user",
+            ["content"] = "Can Lex advise and interpret this?",
         }), "client", "law.test", cancellation.Token, progress, "cancel-after-one");
 
         Assert.Equal(499, status);
@@ -328,7 +337,8 @@ public sealed class AskTransportTests
             firstResultDeadline: TimeSpan.FromMilliseconds(100));
         var history = new JsonArray(new JsonObject
         {
-            ["role"] = "user", ["content"] = "Show coverage.",
+            ["role"] = "user",
+            ["content"] = "Show coverage.",
         });
 
         var started = System.Diagnostics.Stopwatch.StartNew();

@@ -268,6 +268,10 @@ export async function askStreaming(
   signal?: AbortSignal,
   idempotencyKey: string = crypto.randomUUID(),
 ): Promise<AskReply> {
+  if (typeof performance !== "undefined") {
+    performance.clearMarks("lex-operation-result-received");
+    performance.clearMeasures("lex-operation-result-received-to-presented");
+  }
   const r = await fetch("/api/ask/stream", {
     method: "POST",
     headers: {
@@ -299,6 +303,7 @@ export async function askStreaming(
   let done: AskReply | undefined;
   let transportError: string | undefined;
   let lastSequence = 0;
+  let firstOperationObserved = false;
 
   for (;;) {
     const { value, done: finished } = await reader.read();
@@ -317,8 +322,13 @@ export async function askStreaming(
         if (!envelope) continue;
         lastSequence = envelope.sequence;
         if (ev === "step") handlers.onStep(envelope.payload as Step);
-        else if (ev === "operation_result")
+        else if (ev === "operation_result") {
+          if (!firstOperationObserved && typeof performance !== "undefined") {
+            performance.mark("lex-operation-result-received");
+            firstOperationObserved = true;
+          }
           handlers.onOperation(envelope.payload as OperationReply);
+        }
         else if (ev === "synthesis")
           handlers.onSynthesis?.(String((envelope.payload as { status?: unknown })?.status ?? ""));
         else if (ev === "done") done = envelope.payload as AskReply;

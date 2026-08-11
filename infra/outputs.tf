@@ -19,6 +19,15 @@ output "artifact_signing_public_key_pem" {
   value       = azurerm_key_vault_key.artifact_signing.public_key_pem
 }
 
+output "evaluation_review_key_id" {
+  value = azurerm_key_vault_key.evaluation_review.id
+}
+
+output "evaluation_review_public_key_pem" {
+  description = "Independent review public material embedded in the release evaluator."
+  value       = azurerm_key_vault_key.evaluation_review.public_key_pem
+}
+
 output "tenant_id" {
   value = var.tenant_id
 }

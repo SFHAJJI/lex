@@ -49,10 +49,25 @@ variable "azure_openai_name" {
   default = "oai-soufien-dev"
 }
 
+variable "assistant_grader_openai_resource_group" {
+  type    = string
+  default = "rg-enercop-dev"
+}
+
+variable "assistant_grader_openai_name" {
+  type    = string
+  default = "aoai-enercop-dev"
+}
+
 variable "key_vault_name" {
   description = "Globally unique Key Vault name for the non-exportable artifact signing key."
   type        = string
   default     = "kv-lex-soufien"
+}
+
+variable "evaluation_reviewer_object_id" {
+  description = "Microsoft Entra object id of the human authority allowed to sign assistant-evaluation approvals."
+  type        = string
 }
 
 variable "index_storage_account_name" {

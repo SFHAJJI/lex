@@ -1,7 +1,8 @@
 import { defineConfig } from "@playwright/test";
 import path from "node:path";
 
-const baseURL = "http://127.0.0.1:5138";
+const releaseBaseURL = process.env.LEX_BROWSER_BASE_URL?.replace(/\/$/, "");
+const baseURL = releaseBaseURL ?? "http://127.0.0.1:5138";
 
 export default defineConfig({
   testDir: "browser",
@@ -19,7 +20,7 @@ export default defineConfig({
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
   },
-  webServer: {
+  webServer: releaseBaseURL ? undefined : {
     command: "dotnet run --project src/Lex.Web/Lex.Web.csproj --configuration Release --no-build --no-launch-profile -- --urls http://127.0.0.1:5138",
     cwd: "..",
     env: {

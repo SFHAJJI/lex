@@ -1,3 +1,4 @@
 subscription_id = "00000000-0000-0000-0000-000000000000"
 tenant_id       = "00000000-0000-0000-0000-000000000000"
 key_vault_name  = "kv-lex-unique-name"
+evaluation_reviewer_object_id = "00000000-0000-0000-0000-000000000000"

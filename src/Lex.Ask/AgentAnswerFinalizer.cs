@@ -8,7 +8,10 @@ using System.ClientModel;
 
 namespace Lex.Ask;
 
-internal sealed record AgentFinalization(AgentAnswerDraft Draft, bool SynthesisFailed);
+internal sealed record AgentFinalization(
+    AgentAnswerDraft Draft,
+    bool SynthesisFailed,
+    ModelTokenUsage Usage = default);
 
 internal sealed class AgentAnswerFinalizer
 {
@@ -75,6 +78,7 @@ internal sealed class AgentAnswerFinalizer
     {
         var prompt = $"Question:\n{userQuestion}\n\nCandidate draft:\n{draftText}\n\nTyped evidence:\n{EvidencePrompt(evidence)}";
         AgentAnswerDraft? draft = null;
+        var usage = default(ModelTokenUsage);
         var session = await _composer.CreateSessionAsync(cancellationToken);
         for (var attempt = 0; attempt < 2 && draft is null; attempt++)
         {
@@ -84,6 +88,9 @@ internal sealed class AgentAnswerFinalizer
                 session,
                 JsonOptions,
                 cancellationToken: cancellationToken);
+            usage = usage.Add(new ModelTokenUsage(
+                response.Usage?.InputTokenCount ?? 0,
+                response.Usage?.OutputTokenCount ?? 0));
             try
             {
                 draft = AgentAnswerContract.Validate(response.Result, evidence);
@@ -93,9 +100,9 @@ internal sealed class AgentAnswerFinalizer
                 // One correction is allowed. The second failure falls through to a refusal.
             }
         }
-        if (draft is null) return new(Refusal(), SynthesisFailed: true);
+        if (draft is null) return new(Refusal(), SynthesisFailed: true, usage);
         if (!RequiresJudge(draft))
-            return new(draft, SynthesisFailed: false);
+            return new(draft, SynthesisFailed: false, usage);
 
         var judgeSession = await _judge.CreateSessionAsync(cancellationToken);
         var judgmentResponse = await _judge.RunAsync<AgentGroundingJudgment>(
@@ -104,6 +111,9 @@ internal sealed class AgentAnswerFinalizer
             judgeSession,
             JsonOptions,
             cancellationToken: cancellationToken);
+        usage = usage.Add(new ModelTokenUsage(
+            judgmentResponse.Usage?.InputTokenCount ?? 0,
+            judgmentResponse.Usage?.OutputTokenCount ?? 0));
         try
         {
             var judgment = AgentGroundingJudgmentContract.Validate(
@@ -115,11 +125,12 @@ internal sealed class AgentAnswerFinalizer
                 _ => Refusal(),
             };
             return new(finalized,
-                SynthesisFailed: judgment.Disposition == AgentJudgmentDisposition.Refuse);
+                SynthesisFailed: judgment.Disposition == AgentJudgmentDisposition.Refuse,
+                usage);
         }
         catch (InvalidDataException)
         {
-            return new(Refusal(), SynthesisFailed: true);
+            return new(Refusal(), SynthesisFailed: true, usage);
         }
     }
 

@@ -143,6 +143,7 @@ public sealed class AskOperationControllerTests : IDisposable
         Assert.Equal(1, planner.Calls);
         var operation = Assert.IsType<JsonObject>(Assert.Single(
             Assert.IsType<JsonArray>(response.Body["operations"])));
+        Assert.Equal(tool, operation["tool"]?.GetValue<string>());
         Assert.Equal(expectedResultClass, operation["result_class"]?.GetValue<string>());
         Assert.Equal(expectedOutcome, operation["legal_outcome"]?.GetValue<string>());
         Assert.Contains(Assert.IsType<JsonArray>(operation["effects"]).OfType<JsonValue>(),
@@ -554,7 +555,8 @@ public sealed class AskOperationControllerTests : IDisposable
     {
         var coverage = new AskService(_core, new StaticPlanner("en", new JsonArray(new JsonObject
         {
-            ["tool"] = "coverage", ["arguments"] = new JsonObject(),
+            ["tool"] = "coverage",
+            ["arguments"] = new JsonObject(),
         })));
         var boundary = new AskService(_core, new StaticPlanner("en", new JsonArray(new JsonObject
         {
@@ -635,6 +637,9 @@ public sealed class AskOperationControllerTests : IDisposable
         Assert.NotEmpty(synthesizer.Evidence);
         Assert.Contains("descriptive synthesis", response.Body["reply"]?.GetValue<string>());
         Assert.NotNull(response.Body["ui"]?["diff"]);
+        Assert.Equal(120, response.Body["model_usage"]?["input_tokens"]?.GetValue<long>());
+        Assert.Equal(30, response.Body["model_usage"]?["output_tokens"]?.GetValue<long>());
+        Assert.Equal(150, response.Body["model_usage"]?["total_tokens"]?.GetValue<long>());
     }
 
     [Fact]
@@ -684,7 +689,8 @@ public sealed class AskOperationControllerTests : IDisposable
             },
             new JsonObject
             {
-                ["tool"] = "coverage", ["arguments"] = new JsonObject(),
+                ["tool"] = "coverage",
+                ["arguments"] = new JsonObject(),
             }));
         static ValueTask<JsonNode> Fail(
             string _, JsonObject __, CancellationToken ___) =>
@@ -718,7 +724,8 @@ public sealed class AskOperationControllerTests : IDisposable
             ["tool"] = "as_of",
             ["arguments"] = new JsonObject
             {
-                ["work"] = "eu-eurlex:32013r0575", ["date"] = "2024-01-01",
+                ["work"] = "eu-eurlex:32013r0575",
+                ["date"] = "2024-01-01",
                 ["mode"] = "outline",
             },
         })));
@@ -861,7 +868,8 @@ public sealed class AskOperationControllerTests : IDisposable
                     AgentAnswerStatus.Answer,
                     "A grounded descriptive synthesis is available from the verified comparison.",
                     [], [], null, null),
-                SynthesisFailed: false));
+                SynthesisFailed: false,
+                new ModelTokenUsage(120, 30)));
         }
     }
 
@@ -872,7 +880,8 @@ public sealed class AskOperationControllerTests : IDisposable
             TimeProvider.System, perClientDaily: 10, globalDaily: 10, concurrent: 1);
         var planner = new StaticPlanner("en", new JsonArray(new JsonObject
         {
-            ["tool"] = "coverage", ["arguments"] = new JsonObject(),
+            ["tool"] = "coverage",
+            ["arguments"] = new JsonObject(),
         }));
         static async ValueTask<JsonNode> Blocked(
             string tool, JsonObject arguments, CancellationToken cancellationToken)

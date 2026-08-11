@@ -14,6 +14,11 @@ data "azurerm_cognitive_account" "openai" {
   resource_group_name = var.azure_openai_resource_group
 }
 
+data "azurerm_cognitive_account" "assistant_grader" {
+  name                = var.assistant_grader_openai_name
+  resource_group_name = var.assistant_grader_openai_resource_group
+}
+
 locals {
   container_app_id             = "${data.azurerm_resource_group.platform.id}/providers/Microsoft.App/containerApps/${var.container_app_name}"
   container_app_environment_id = "${data.azurerm_resource_group.platform.id}/providers/Microsoft.App/managedEnvironments/${var.container_app_environment_name}"
@@ -140,6 +145,80 @@ resource "azurerm_key_vault_key" "artifact_signing" {
   key_type     = "EC"
   curve        = "P-256"
   key_opts     = ["sign", "verify"]
+
+  rotation_policy {
+    automatic {
+      time_before_expiry = "P30D"
+    }
+    expire_after         = "P365D"
+    notify_before_expiry = "P60D"
+  }
+}
+
+resource "azurerm_role_assignment" "publisher_container_app_reader" {
+  scope                = local.container_app_id
+  role_definition_name = "Reader"
+  principal_id         = azurerm_user_assigned_identity.publisher.principal_id
+}
+
+resource "azurerm_role_definition" "publisher_revision_lifecycle" {
+  name        = "Lex Evaluation Candidate Revision Lifecycle"
+  scope       = data.azurerm_resource_group.platform.id
+  description = "Lets the Lex evidence publisher activate and deactivate only Container App revisions for bounded zero-traffic evaluation."
+
+  permissions {
+    actions = [
+      "Microsoft.App/containerApps/revisions/activate/action",
+      "Microsoft.App/containerApps/revisions/deactivate/action",
+    ]
+  }
+
+  assignable_scopes = [data.azurerm_resource_group.platform.id]
+}
+
+resource "azurerm_role_assignment" "publisher_revision_lifecycle" {
+  scope              = local.container_app_id
+  role_definition_id = azurerm_role_definition.publisher_revision_lifecycle.role_definition_resource_id
+  principal_id       = azurerm_user_assigned_identity.publisher.principal_id
+}
+
+resource "azurerm_role_assignment" "publisher_candidate_model_reader" {
+  scope                = data.azurerm_cognitive_account.openai.id
+  role_definition_name = "Reader"
+  principal_id         = azurerm_user_assigned_identity.publisher.principal_id
+}
+
+resource "azurerm_role_assignment" "publisher_grader_model_reader" {
+  scope                = data.azurerm_cognitive_account.assistant_grader.id
+  role_definition_name = "Reader"
+  principal_id         = azurerm_user_assigned_identity.publisher.principal_id
+}
+
+resource "azurerm_key_vault" "evaluation_review" {
+  name                       = "kv-lex-eval-review"
+  location                   = var.location
+  resource_group_name        = data.azurerm_resource_group.platform.name
+  tenant_id                  = var.tenant_id
+  sku_name                   = "standard"
+  rbac_authorization_enabled = true
+  purge_protection_enabled   = true
+  soft_delete_retention_days = 90
+  tags                       = local.tags
+}
+
+resource "azurerm_role_assignment" "evaluation_reviewer" {
+  scope                = azurerm_key_vault.evaluation_review.id
+  role_definition_name = "Key Vault Crypto Officer"
+  principal_id         = var.evaluation_reviewer_object_id
+}
+
+resource "azurerm_key_vault_key" "evaluation_review" {
+  name         = "lex-evaluation-review-v1"
+  key_vault_id = azurerm_key_vault.evaluation_review.id
+  key_type     = "EC"
+  curve        = "P-256"
+  key_opts     = ["sign", "verify"]
+  depends_on   = [azurerm_role_assignment.evaluation_reviewer]
 
   rotation_policy {
     automatic {

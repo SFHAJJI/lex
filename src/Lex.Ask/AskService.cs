@@ -1,4 +1,5 @@
 ﻿using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Text;
 using System.Text.Json.Nodes;
 using Azure.Core;
@@ -587,7 +588,7 @@ public sealed class AskService
         };
     }
 
-    private async Task<OperationPlan> PlanOperationsAsync(
+    private async Task<(OperationPlan Plan, ModelTokenUsage Usage)> PlanOperationsAsync(
         JsonArray history,
         string host,
         string requestId,
@@ -597,8 +598,8 @@ public sealed class AskService
         if (_planner is not null)
         {
             var proposed = await _planner.PlanAsync(history, host, requestId, ct);
-            return OperationPlan.Create(
-                requestId, locale, proposed.Operations, proposed.SynthesisRequested);
+            return (OperationPlan.Create(
+                requestId, locale, proposed.Operations, proposed.SynthesisRequested), default);
         }
 
         var messages = new JsonArray
@@ -678,7 +679,10 @@ public sealed class AskService
         if (plan["synthesis"] is JsonValue synthesisValue
             && !synthesisValue.TryGetValue<bool>(out synthesis))
             throw new InvalidDataException("The synthesis flag must be boolean.");
-        return OperationPlan.FromPlannerOutput(requestId, locale, operations, synthesis);
+        var usage = new ModelTokenUsage(
+            parsed?["usage"]?["prompt_tokens"]?.GetValue<long>() ?? 0,
+            parsed?["usage"]?["completion_tokens"]?.GetValue<long>() ?? 0);
+        return (OperationPlan.FromPlannerOutput(requestId, locale, operations, synthesis), usage);
     }
 
     // Truncate oversized tool results without ever producing invalid JSON: shrink the largest
@@ -1073,11 +1077,14 @@ public sealed class AskService
             firstResult.CancelAfter(_firstResultDeadline);
             using var planner = CancellationTokenSource.CreateLinkedTokenSource(firstResult.Token);
             planner.CancelAfter(_plannerDeadline);
-            var plan = await PlanOperationsAsync(
+            var planningWatch = Stopwatch.StartNew();
+            var (plan, planningUsage) = await PlanOperationsAsync(
                 history, host, requestId, requestLocale, planner.Token);
+            planningWatch.Stop();
             run = OperationRun.Start(plan);
             var (status, body) = await ExecutePlanAsync(
-                plan, run, userQueries, rawUserQuery, progress, firstResult.Token,
+                plan, run, userQueries, rawUserQuery, planningUsage,
+                planningWatch.Elapsed.TotalMilliseconds, progress, firstResult.Token,
                 () => firstResult.CancelAfter(Timeout.InfiniteTimeSpan),
                 () => ct.IsCancellationRequested
                     ? TransportOutcome.Cancelled : TransportOutcome.TimedOut);
@@ -1176,6 +1183,8 @@ public sealed class AskService
         OperationRun run,
         IReadOnlyList<string> userQueries,
         string rawUserQuery,
+        ModelTokenUsage modelUsage,
+        double planningMilliseconds,
         AskProgressCallbacks? progress,
         CancellationToken ct,
         Action firstResultObserved,
@@ -1188,6 +1197,7 @@ public sealed class AskService
                 ["phase"] = "operation_plan",
                 ["request_id"] = plan.RequestId,
                 ["locale"] = plan.Locale,
+                ["duration_ms"] = planningMilliseconds,
                 ["operations"] = new JsonArray(plan.Operations.Select(operation =>
                     (JsonNode)new JsonObject
                     {
@@ -1209,6 +1219,7 @@ public sealed class AskService
         WorkResolutionGuard.GuardClarification? clarification = null;
         AgentClarification? applicationClarification = null;
         int? terminalTransportStatus = null;
+        var mcpMilliseconds = 0d;
 
         async ValueTask Report(OperationExecution execution)
         {
@@ -1217,7 +1228,7 @@ public sealed class AskService
             var result = execution.Result ?? throw new InvalidDataException(
                 $"Operation '{execution.Request.OperationId}' did not reach a terminal result.");
             await NotifyProgress(() => progress.OperationResult(
-                OperationReply(result, effects[result.UserOrder]), ct));
+                OperationReply(execution.Request, result, effects[result.UserOrder]), ct));
         }
 
         foreach (var execution in run.Executions.OrderBy(item => item.Request.UserOrder))
@@ -1282,7 +1293,8 @@ public sealed class AskService
                 if (operation.RequiresWorkResolution)
                 {
                     var prepared = await ResolveWorkOperationAsync(
-                        run, operation, arguments, userQueries, plan.Locale, trace, ct);
+                        run, operation, arguments, userQueries, plan.Locale, trace,
+                        elapsed => mcpMilliseconds += elapsed, ct);
                     if (prepared.Arguments is null)
                     {
                         execution.CompleteLegal(LegalOutcome.NeedsClarification);
@@ -1313,7 +1325,10 @@ public sealed class AskService
                     using var span = Activity.StartActivity("legal-operation");
                     span?.SetTag("lex.operation.id", operation.OperationId);
                     span?.SetTag("gen_ai.tool.name", operation.Tool);
+                    var mcpWatch = Stopwatch.StartNew();
                     result = await _legalTool(operation.Tool, arguments, ct);
+                    mcpWatch.Stop();
+                    mcpMilliseconds += mcpWatch.Elapsed.TotalMilliseconds;
                     status = LegalOperationPolicy.StatusForResult(result);
                     span?.SetTag("lex.status", status);
                 }
@@ -1398,9 +1413,11 @@ public sealed class AskService
         var deterministicReply = displayedClarification?.Question
             ?? OperationAnswerPolicy.Render(plan.Locale, results, effects);
         var reply = deterministicReply;
+        double? synthesisMilliseconds = null;
         if (plan.SynthesisRequested && displayedClarification is null
             && terminalTransportStatus is null)
         {
+            var synthesisWatch = Stopwatch.StartNew();
             if (progress?.Synthesis is not null)
                 await NotifyProgress(() => progress.Synthesis("started", ct));
             var evidence = new AgentEvidenceLedger();
@@ -1428,6 +1445,7 @@ public sealed class AskService
                     throw new InvalidOperationException(
                         "No synthesis service is configured.");
                 reply = ReplyFor(finalized.Draft, effects, finalized.SynthesisFailed);
+                modelUsage = modelUsage.Add(finalized.Usage);
                 if (progress?.Synthesis is not null)
                     await NotifyProgress(() => progress.Synthesis("completed", ct));
             }
@@ -1444,13 +1462,34 @@ public sealed class AskService
                     await NotifyProgress(() => progress.Synthesis(
                         "unavailable", CancellationToken.None));
             }
+            synthesisWatch.Stop();
+            synthesisMilliseconds = synthesisWatch.Elapsed.TotalMilliseconds;
         }
         var body = Body(reply, trace, effects,
             displayedClarification, clarification?.Choices);
+        body["model_usage"] = new JsonObject
+        {
+            ["input_tokens"] = modelUsage.InputTokens,
+            ["output_tokens"] = modelUsage.OutputTokens,
+            ["total_tokens"] = modelUsage.TotalTokens,
+        };
+        body["model_identity"] = new JsonObject
+        {
+            ["resource_host"] = Uri.TryCreate(_endpoint, UriKind.Absolute, out var modelEndpoint)
+                ? modelEndpoint.IdnHost : "unconfigured",
+            ["deployment"] = _deployment,
+        };
+        body["timing"] = new JsonObject
+        {
+            ["planner_ms"] = planningMilliseconds,
+            ["mcp_ms"] = mcpMilliseconds,
+            ["synthesis_ms"] = synthesisMilliseconds,
+        };
         body["operations"] = new JsonArray(results.Select(result =>
         {
             var effect = effects[result.UserOrder];
-            return (JsonNode)OperationReply(result, effect);
+            return (JsonNode)OperationReply(
+                plan.Operations[result.UserOrder], result, effect);
         }).ToArray());
         if (terminalTransportStatus is { } failedStatus)
             body["error"] = failedStatus switch
@@ -1462,21 +1501,25 @@ public sealed class AskService
         return (terminalTransportStatus ?? 200, body);
     }
 
-    private static JsonObject OperationReply(OperationResult result, UiEffect effect) => new()
-    {
-        ["operation_id"] = result.OperationId,
-        ["order"] = result.UserOrder,
-        ["result_class"] = result.ResultClass is { } resultClass
+    private static JsonObject OperationReply(
+        RequestedOperation request,
+        OperationResult result,
+        UiEffect effect) => new()
+        {
+            ["operation_id"] = result.OperationId,
+            ["order"] = result.UserOrder,
+            ["tool"] = request.Tool,
+            ["result_class"] = result.ResultClass is { } resultClass
             ? ContractName(resultClass) : null,
-        ["disposition"] = result.Disposition is { } disposition
+            ["disposition"] = result.Disposition is { } disposition
             ? ContractName(disposition) : null,
-        ["legal_outcome"] = ContractName(result.LegalOutcome),
-        ["transport_outcome"] = ContractName(result.TransportOutcome),
-        ["effects"] = new JsonArray(result.Effects.Select(item =>
-            (JsonNode)ContractName(item)).ToArray()),
-        ["ui"] = effect.IsEmpty ? null : JsonNode.Parse(
+            ["legal_outcome"] = ContractName(result.LegalOutcome),
+            ["transport_outcome"] = ContractName(result.TransportOutcome),
+            ["effects"] = new JsonArray(result.Effects.Select(item =>
+                (JsonNode)ContractName(item)).ToArray()),
+            ["ui"] = effect.IsEmpty ? null : JsonNode.Parse(
             System.Text.Json.JsonSerializer.Serialize(effect, UiJson)),
-    };
+        };
 
     private static UiEffect TransportGap(string locale, TransportOutcome outcome) =>
         new(Gap: new GapView(
@@ -1506,6 +1549,7 @@ public sealed class AskService
         IReadOnlyList<string> userQueries,
         string locale,
         JsonArray trace,
+        Action<double> recordMcpMilliseconds,
         CancellationToken cancellationToken)
     {
         var rawUserQuery = userQueries[^1];
@@ -1526,7 +1570,10 @@ public sealed class AskService
             };
             Copy(plannedArguments, searchArguments,
                 "publisher", "jurisdiction", "source_class", "hierarchy", "domain", "language");
+            var mcpWatch = Stopwatch.StartNew();
             var result = await _legalTool("search", searchArguments, cancellationToken);
+            mcpWatch.Stop();
+            recordMcpMilliseconds(mcpWatch.Elapsed.TotalMilliseconds);
             var resultStatus = LegalOperationPolicy.StatusForResult(result);
             run.ObserveSupportingCall(operation.OperationId, SupportingCallRole.WorkResolution,
                 "search", searchArguments, resultStatus, result);
@@ -1943,7 +1990,9 @@ public sealed class AskService
                                         .Select(w => (JsonNode)new JsonObject { ["work"] = w.Key, ["title"] = w.Value }).ToArray());
                                 messages.Add(new JsonObject
                                 {
-                                    ["role"] = "tool", ["tool_call_id"] = id, ["content"] = err.ToJsonString(),
+                                    ["role"] = "tool",
+                                    ["tool_call_id"] = id,
+                                    ["content"] = err.ToJsonString(),
                                 });
                                 continue;
                             }
@@ -1953,7 +2002,8 @@ public sealed class AskService
                                 trace.Add(entry);
                                 messages.Add(new JsonObject
                                 {
-                                    ["role"] = "tool", ["tool_call_id"] = id,
+                                    ["role"] = "tool",
+                                    ["tool_call_id"] = id,
                                     ["content"] = new JsonObject
                                     {
                                         ["already_rendered"] = true,
@@ -1974,7 +2024,8 @@ public sealed class AskService
                                         clarification.Display, clarification.Choices));
                                 messages.Add(new JsonObject
                                 {
-                                    ["role"] = "tool", ["tool_call_id"] = id,
+                                    ["role"] = "tool",
+                                    ["tool_call_id"] = id,
                                     ["content"] = new JsonObject
                                     {
                                         ["error"] = "work resolution is ambiguous, unresolved, or unavailable",

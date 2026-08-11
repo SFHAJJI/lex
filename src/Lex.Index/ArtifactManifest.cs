@@ -97,26 +97,7 @@ public static class ArtifactManifests
     {
         var manifestBytes = File.ReadAllBytes(manifestPath);
         var manifest = Parse(manifestBytes);
-        var trust = trustRoots.SingleOrDefault(r => r.KeyId == manifest.KeyId)
-            ?? throw new CryptographicException($"Artifact key '{manifest.KeyId}' is not trusted by this release.");
-
-        using var key = ECDsa.Create();
-        key.ImportFromPem(trust.PublicKeyPem);
-        var actualFingerprint = Convert.ToHexStringLower(SHA256.HashData(key.ExportSubjectPublicKeyInfo()));
-        if (!CryptographicOperations.FixedTimeEquals(
-                Encoding.ASCII.GetBytes(actualFingerprint),
-                Encoding.ASCII.GetBytes(trust.FingerprintSha256.ToLowerInvariant())))
-            throw new CryptographicException($"Pinned fingerprint for artifact key '{manifest.KeyId}' does not match its public key.");
-
-        byte[] signature;
-        try { signature = DecodeBase64Signature(File.ReadAllText(signaturePath).Trim()); }
-        catch (FormatException ex) { throw new CryptographicException("Artifact signature is not valid base64 or base64url.", ex); }
-        if (!key.VerifyData(
-                manifestBytes,
-                signature,
-                HashAlgorithmName.SHA256,
-                DSASignatureFormat.IeeeP1363FixedFieldConcatenation))
-            throw new CryptographicException("Artifact manifest signature is invalid.");
+        VerifySignature(manifestBytes, File.ReadAllText(signaturePath), manifest.KeyId, trustRoots);
 
         var verified = new HashSet<string>(StringComparer.Ordinal);
         foreach (var file in manifest.Files)
@@ -136,6 +117,39 @@ public static class ArtifactManifests
                 throw new CryptographicException($"Artifact '{normalized}' failed its SHA-256 check.");
         }
         return verified;
+    }
+
+    public static void VerifySignature(
+        ReadOnlySpan<byte> signedBytes,
+        string signatureText,
+        string keyId,
+        IEnumerable<ArtifactTrustRoot> trustRoots)
+    {
+        var trust = trustRoots.SingleOrDefault(root => root.KeyId == keyId)
+            ?? throw new CryptographicException(
+                $"Artifact key '{keyId}' is not trusted by this release.");
+        using var key = ECDsa.Create();
+        key.ImportFromPem(trust.PublicKeyPem);
+        var actualFingerprint = Convert.ToHexStringLower(
+            SHA256.HashData(key.ExportSubjectPublicKeyInfo()));
+        if (!CryptographicOperations.FixedTimeEquals(
+                Encoding.ASCII.GetBytes(actualFingerprint),
+                Encoding.ASCII.GetBytes(trust.FingerprintSha256.ToLowerInvariant())))
+            throw new CryptographicException(
+                $"Pinned fingerprint for artifact key '{keyId}' does not match its public key.");
+        byte[] signature;
+        try { signature = DecodeBase64Signature(signatureText.Trim()); }
+        catch (FormatException exception)
+        {
+            throw new CryptographicException(
+                "Artifact signature is not valid base64 or base64url.", exception);
+        }
+        if (!key.VerifyData(
+                signedBytes,
+                signature,
+                HashAlgorithmName.SHA256,
+                DSASignatureFormat.IeeeP1363FixedFieldConcatenation))
+            throw new CryptographicException("Artifact signature is invalid.");
     }
 
     public static IReadOnlyList<ArtifactTrustRoot> ParseTrustRoots(ReadOnlySpan<byte> bytes)

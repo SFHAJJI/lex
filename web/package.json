@@ -7,6 +7,7 @@
     "test": "node --test src/*.test.ts",
     "build": "tsc --noEmit && npm test && vite build && node smoke.mjs",
     "test:browser": "playwright test",
+    "test:browser-release": "playwright test browser/assistant-release.spec.ts",
     "test:lighthouse": "playwright test browser/lighthouse.spec.ts"
   },
   "dependencies": {

@@ -261,8 +261,10 @@ Issues and PRs welcome, the highest-leverage areas:
 - **A new publisher adapter** (`ISourceAdapter`, ~200 lines): any jurisdiction
   with an official machine-readable channel. The seam is publisher-pure by
   fitness test; adapters never touch files or git.
-- **Eval cases** ([evals/cases.json](evals/cases.json)): questions where the AI
-  should construct better tool calls, or refuse better.
+- **Assistant release cases** ([evals/assistant-cases-v3.json](evals/assistant-cases-v3.json)):
+  frozen typed-operation judgments, independently digest-attested and run with the strict
+  [release evaluator](docs/assistant-evaluation.md). The gate has no keyword or grader fallback;
+  cases specify the exact operation contract or refusal boundary expected from a natural question.
 - **Extraction improvements**: profiles are immutable; improvements ship as a
   *new* profile beside the old (see `fmx4-eu/1` beside `xhtml-eu/1`).
 

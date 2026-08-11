@@ -22,9 +22,19 @@ on:
         description: Exact pinned revision restored if the traffic switch fails
         required: true
         type: string
+      assistant_evaluation_release:
+        description: Signed lex-ops assistant-evaluation release tag for the exact target
+        required: true
+        type: string
+      prior_promotion_deployment:
+        description: Successful lex-revision-promotion deployment id; required only for rollback
+        required: false
+        default: ""
+        type: string
 
 permissions:
   contents: read
+  deployments: write
   id-token: write
 
 concurrency:
@@ -57,6 +67,130 @@ jobs:
           client-id: ${{ env.AZURE_CLIENT_ID }}
           tenant-id: ${{ env.AZURE_TENANT_ID }}
           subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Activate the exact candidate for bounded verification
+        id: candidate
+        shell: bash
+        env:
+          TARGET_REVISION: ${{ inputs.revision }}
+          EXPECTED_CURRENT_REVISION: ${{ inputs.expected_current_revision }}
+          ROLLBACK_REVISION: ${{ inputs.rollback_revision }}
+        run: |
+          set -Eeuo pipefail
+          [[ "$TARGET_REVISION" =~ ^ca-lex-web--[a-z0-9-]+$ ]] \
+            || { echo "::error::invalid target revision"; exit 2; }
+          [[ "$EXPECTED_CURRENT_REVISION" =~ ^ca-lex-web--[a-z0-9-]+$ ]] \
+            || { echo "::error::invalid expected current revision"; exit 2; }
+          [[ "$ROLLBACK_REVISION" =~ ^ca-lex-web--[a-z0-9-]+$ ]] \
+            || { echo "::error::invalid rollback revision"; exit 2; }
+          [ "$TARGET_REVISION" != "$EXPECTED_CURRENT_REVISION" ] \
+            || { echo "::error::target already matches expected current revision"; exit 2; }
+          [ "$TARGET_REVISION" != "$ROLLBACK_REVISION" ] \
+            || { echo "::error::target and rollback revisions must differ"; exit 2; }
+          current=$(az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+            --query "[?properties.trafficWeight > \`0\`].name" -o tsv)
+          [ "$current" = "$EXPECTED_CURRENT_REVISION" ] \
+            || { echo "::error::current revision changed before verification"; exit 1; }
+          target=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+            --revision "$TARGET_REVISION" \
+            --query '{active:properties.active,traffic:properties.trafficWeight,min:properties.template.scale.minReplicas,max:properties.template.scale.maxReplicas}' \
+            -o json)
+          [ "$(printf '%s' "$target" | jq -r .active)" = "false" ] \
+            || { echo "::error::promotion must own activation of an inactive target"; exit 1; }
+          [ "$(printf '%s' "$target" | jq -r .traffic)" = "0" ] \
+            || { echo "::error::candidate already receives traffic"; exit 1; }
+          [ "$(printf '%s' "$target" | jq -r .min)" = "1" ] \
+            && [ "$(printf '%s' "$target" | jq -r .max)" = "1" ] \
+            || { echo "::error::target must have exactly one pinned replica"; exit 1; }
+          # Recovery identity becomes authoritative only after every non-mutating guard passed,
+          # immediately before this workflow performs its first Azure state change.
+          echo "previous=$EXPECTED_CURRENT_REVISION" >> "$GITHUB_OUTPUT"
+          echo "target=$TARGET_REVISION" >> "$GITHUB_OUTPUT"
+          az containerapp revision activate -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+            --revision "$TARGET_REVISION" --only-show-errors
+          for attempt in $(seq 1 30); do
+            state=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+              --revision "$TARGET_REVISION" --query properties.runningState -o tsv)
+            [ "$state" = "Running" ] && exit 0
+            [ "$state" = "Failed" ] \
+              && { echo "::error::candidate failed to start"; exit 1; }
+            sleep 2
+          done
+          echo "::error::candidate did not become ready"
+          exit 1
+
+      - name: Verify signed assistant evaluation against the exact target
+        shell: bash
+        env:
+          EVALUATION_RELEASE: ${{ inputs.assistant_evaluation_release }}
+          TARGET_REVISION: ${{ inputs.revision }}
+          OPERATION: ${{ inputs.operation }}
+          PRIOR_PROMOTION_DEPLOYMENT: ${{ inputs.prior_promotion_deployment }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          [[ "$EVALUATION_RELEASE" =~ ^assistant-eval-[0-9a-f]{12}-[0-9a-f]{12}$ ]] \
+            || { echo "::error::a canonical signed assistant evaluation release is required"; exit 2; }
+          [[ "$TARGET_REVISION" =~ ^ca-lex-web--[a-z0-9-]+$ ]] \
+            || { echo "::error::invalid target revision"; exit 2; }
+          freshness_args=()
+          if [ "$OPERATION" = "rollback" ]; then
+            [[ "$PRIOR_PROMOTION_DEPLOYMENT" =~ ^[1-9][0-9]*$ ]] \
+              || { echo "::error::rollback requires a prior promotion deployment id"; exit 2; }
+            receipt=$(gh api \
+              "repos/$GITHUB_REPOSITORY/deployments/$PRIOR_PROMOTION_DEPLOYMENT")
+            [ "$(printf '%s' "$receipt" | jq -r '.task // empty')" = "lex-revision-promotion" ] \
+              || { echo "::error::deployment is not a Lex promotion receipt"; exit 2; }
+            [ "$(printf '%s' "$receipt" | jq -r '.payload.target_revision // empty')" = "$TARGET_REVISION" ] \
+              || { echo "::error::previous promotion receipt does not bind the target revision"; exit 2; }
+            [ "$(printf '%s' "$receipt" | jq -r '.payload.assistant_evaluation_release // empty')" = "$EVALUATION_RELEASE" ] \
+              || { echo "::error::previous promotion receipt does not bind the evaluation release"; exit 2; }
+            receipt_status=$(gh api \
+              "repos/$GITHUB_REPOSITORY/deployments/$PRIOR_PROMOTION_DEPLOYMENT/statuses?per_page=1" \
+              --jq '.[0].state // empty')
+            [ "$receipt_status" = "success" ] \
+              || { echo "::error::previous promotion receipt is not successful"; exit 2; }
+            freshness_args+=(--allow-older-previously-promoted-evidence)
+          elif [ -n "$PRIOR_PROMOTION_DEPLOYMENT" ]; then
+            echo "::error::prior promotion deployment is valid only for rollback"
+            exit 2
+          fi
+          app_id=$(az containerapp show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+            --query id -o tsv)
+          target_fqdn=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+            --revision "$TARGET_REVISION" --query properties.fqdn -o tsv)
+          [ -n "$app_id" ] && [ -n "$target_fqdn" ] \
+            || { echo "::error::target revision identity is incomplete"; exit 1; }
+          evidence_dir=$(mktemp -d)
+          trap 'rm -rf "$evidence_dir"' EXIT
+          for asset in \
+              assistant-eval-report.json \
+              assistant-cases-v3.json \
+              assistant-cases-v3.review.json \
+              assistant-cases-v3.review.sig \
+              assistant-browser-evidence.json \
+              assistant-eval.manifest.json \
+              assistant-eval.manifest.sig; do
+            curl --fail --show-error --silent --location --retry 3 \
+              "https://github.com/SFHAJJI/lex-ops/releases/download/$EVALUATION_RELEASE/$asset" \
+              -o "$evidence_dir/$asset"
+          done
+          dotnet run --project src/Lex.Ingest/Lex.Ingest.csproj -c Release -- \
+            assistant-eval verify-release \
+            --root "$evidence_dir" \
+            --manifest "$evidence_dir/assistant-eval.manifest.json" \
+            --signature "$evidence_dir/assistant-eval.manifest.sig" \
+            --trust-roots deploy/trusted-artifact-roots.json \
+            --base-url "https://$target_fqdn" \
+            --candidate-container-app-resource-id "$app_id" \
+            --candidate-revision "$TARGET_REVISION" \
+            "${freshness_args[@]}"
 
       - name: Switch exact revision traffic
         id: traffic
@@ -110,11 +244,6 @@ jobs:
             || { echo "::error::rollback revision identity is incomplete"; exit 1; }
           [ "$rollback_min" = "1" ] && [ "$rollback_max" = "1" ] \
             || { echo "::error::rollback must have exactly one pinned replica"; exit 1; }
-
-          # Persist recovery identities before the first activation. The job-level always/failure
-          # step must be able to reconcile Azure even when readiness smoke fails before traffic.
-          echo "previous=$ROLLBACK_REVISION" >> "$GITHUB_OUTPUT"
-          echo "target=$TARGET_REVISION" >> "$GITHUB_OUTPUT"
 
           cleanup_target() {
             original_status=$?
@@ -198,6 +327,10 @@ jobs:
           }
           trap restore_previous ERR TERM INT
 
+          # Only this point authorizes traffic recovery. Earlier failures merely deactivate the
+          # candidate and must not overwrite a concurrent operator's traffic decision.
+          echo "previous=$ROLLBACK_REVISION" >> "$GITHUB_OUTPUT"
+          echo "target=$TARGET_REVISION" >> "$GITHUB_OUTPUT"
           az containerapp ingress traffic set -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
             --revision-weight "$EXPECTED_CURRENT_REVISION=0" "$TARGET_REVISION=100" \
             --only-show-errors
@@ -231,16 +364,77 @@ jobs:
           echo "image=$image" >> "$GITHUB_OUTPUT"
           trap - ERR TERM INT
 
+      - name: Record successful promotion receipt
+        id: promotion_receipt
+        if: ${{ inputs.operation == 'promote' }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_REVISION: ${{ inputs.revision }}
+          EVALUATION_RELEASE: ${{ inputs.assistant_evaluation_release }}
+        run: |
+          set -Eeuo pipefail
+          receipt=$(jq -n \
+            --arg ref "$GITHUB_SHA" \
+            --arg revision "$TARGET_REVISION" \
+            --arg evaluation "$EVALUATION_RELEASE" \
+            '{
+              ref: $ref,
+              task: "lex-revision-promotion",
+              auto_merge: false,
+              required_contexts: [],
+              environment: "production",
+              description: "Audited Lex revision promotion",
+              payload: {
+                target_revision: $revision,
+                assistant_evaluation_release: $evaluation
+              },
+              production_environment: true,
+              transient_environment: false
+            }' | gh api --method POST "repos/$GITHUB_REPOSITORY/deployments" --input -)
+          deployment_id=$(printf '%s' "$receipt" | jq -er '.id')
+          jq -n \
+            --arg state success \
+            --arg environment production \
+            --arg environment_url "https://law.soufien.lu" \
+            --arg log_url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            '{state:$state,environment:$environment,environment_url:$environment_url,log_url:$log_url,description:"Traffic and release gates passed"}' \
+            | gh api --method POST \
+                "repos/$GITHUB_REPOSITORY/deployments/$deployment_id/statuses" --input - >/dev/null
+          echo "deployment_id=$deployment_id" >> "$GITHUB_OUTPUT"
+
       - name: Restore previous revision after an interrupted or failed switch
         if: ${{ failure() || cancelled() }}
         shell: bash
         env:
           PREVIOUS_REVISION: ${{ steps.traffic.outputs.previous }}
-          TARGET_REVISION: ${{ steps.traffic.outputs.target }}
+          TARGET_REVISION: ${{ steps.traffic.outputs.target || steps.candidate.outputs.target }}
         run: |
           set -u
-          [ -n "${PREVIOUS_REVISION:-}" ] && [ -n "${TARGET_REVISION:-}" ] \
-            || { echo "traffic was not attempted; no restoration required"; exit 0; }
+          [ -n "${TARGET_REVISION:-}" ] \
+            || { echo "candidate activation was not attempted; no restoration required"; exit 0; }
+          if [ -z "${PREVIOUS_REVISION:-}" ]; then
+            for attempt in $(seq 1 5); do
+              az containerapp revision deactivate -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+                --revision "$TARGET_REVISION" --only-show-errors || true
+              target_active=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+                --revision "$TARGET_REVISION" --query properties.active -o tsv 2>/dev/null || true)
+              routed=$(az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+                --query "[?properties.trafficWeight > \`0\`].name" -o tsv 2>/dev/null || true)
+              active=$(az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+                --query "[?properties.active].name" -o tsv 2>/dev/null || true)
+              if [ "$target_active" != "true" ] \
+                  && [ "$(printf '%s\n' "$routed" | sed '/^$/d' | wc -l)" -eq 1 ] \
+                  && [ "$active" = "$routed" ]; then
+                exit 0
+              fi
+              sleep $((attempt * 2))
+            done
+            echo "::error::failed to deactivate the candidate without changing traffic" >&2
+            exit 1
+          fi
+          [ "$PREVIOUS_REVISION" != "$TARGET_REVISION" ] \
+            || { echo "::error::refusing recovery with identical revisions"; exit 1; }
           for attempt in $(seq 1 5); do
             az containerapp revision activate -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
               --revision "$PREVIOUS_REVISION" --only-show-errors || true
@@ -275,5 +469,7 @@ jobs:
             echo "- pinned rollback revision: \`${{ inputs.rollback_revision }}\`"
             echo "- active revision: \`${{ inputs.revision }}\`"
             echo "- active image: \`${{ steps.traffic.outputs.image }}\`"
+            echo "- signed assistant evaluation: \`${{ inputs.assistant_evaluation_release }}\`"
+            echo "- promotion receipt: \`${{ steps.promotion_receipt.outputs.deployment_id || inputs.prior_promotion_deployment }}\`"
             echo "- health and required-publisher MCP coverage smoke: passed"
           } >> "$GITHUB_STEP_SUMMARY"

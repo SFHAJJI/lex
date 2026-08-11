@@ -110,6 +110,216 @@ switch (args0[0])
         Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(report));
         return report.ActivationGatePassed ? 0 : 5;
     }
+    case "assistant-eval":
+    {
+        if (args0.Length > 1 && args0[1] == "verify-cases")
+        {
+            var verifiedCases = AssistantEvaluationCatalog.Load(
+                Get("--cases") ?? throw new ArgumentException("--cases required"),
+                Get("--review-attestation")
+                    ?? throw new ArgumentException("--review-attestation required"),
+                Get("--review-signature")
+                    ?? throw new ArgumentException("--review-signature required"));
+            verifiedCases.EnsureReleaseReady();
+            Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(new
+            {
+                status = "approved",
+                cases_sha256 = verifiedCases.Sha256,
+                frozen_at = verifiedCases.Catalog.FrozenAt,
+                reviewer_id = verifiedCases.Review!.ReviewerId,
+                cases = verifiedCases.Catalog.Cases.Count,
+            }));
+            return 0;
+        }
+        if (args0.Length > 1 && args0[1] == "verify-report")
+        {
+            var verifiedCaseSet = AssistantEvaluationCatalog.Load(
+                Get("--cases") ?? throw new ArgumentException("--cases required"),
+                Get("--review-attestation")
+                    ?? throw new ArgumentException("--review-attestation required"),
+                Get("--review-signature")
+                    ?? throw new ArgumentException("--review-signature required"));
+            using var verificationHttp = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+            var verificationResolver = new AzureModelDeploymentResolver(verificationHttp);
+            var verifiedTarget = await verificationResolver.ResolveContainerAppRevisionAsync(
+                Get("--candidate-container-app-resource-id")
+                    ?? throw new ArgumentException(
+                        "--candidate-container-app-resource-id required"),
+                Get("--candidate-revision")
+                    ?? throw new ArgumentException("--candidate-revision required"),
+                CancellationToken.None);
+            using var attestationHttp = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+            var verificationTarget = new AssistantEvaluationHttpTarget(
+                attestationHttp,
+                Get("--base-url") ?? throw new ArgumentException("--base-url required"));
+            var verifiedAttestation = await verificationTarget.ReadAttestationAsync(
+                verifiedTarget, CancellationToken.None);
+            var verifiedReport = AssistantEvaluationReleaseVerifier.VerifyReport(
+                Get("--report") ?? throw new ArgumentException("--report required"),
+                verifiedCaseSet, verifiedTarget, verifiedAttestation, now);
+            await AssistantEvaluationReleaseVerifier.VerifyModelDeploymentsAsync(
+                verificationResolver, verifiedReport, CancellationToken.None);
+            Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(new
+            {
+                status = "passed",
+                revision = verifiedTarget.RevisionName,
+                report_run_at = verifiedReport.RunAt,
+                cases = verifiedReport.Results.Count,
+            }));
+            return 0;
+        }
+        if (args0.Length > 1 && args0[1] == "verify-release")
+        {
+            var root = Path.GetFullPath(
+                Get("--root") ?? throw new ArgumentException("--root required"));
+            var manifestPath = Get("--manifest")
+                ?? throw new ArgumentException("--manifest required");
+            var signaturePath = Get("--signature")
+                ?? throw new ArgumentException("--signature required");
+            var trustRootPath = Get("--trust-roots")
+                ?? throw new ArgumentException("--trust-roots required");
+            var artifactRoots = ArtifactManifests.ParseTrustRoots(
+                File.ReadAllBytes(trustRootPath));
+            var verifiedFiles = ArtifactManifests.VerifyDirectory(
+                root, manifestPath, signaturePath, artifactRoots);
+            if (verifiedFiles.Count != AssistantEvaluationReleaseVerifier.RequiredFiles.Count
+                || AssistantEvaluationReleaseVerifier.RequiredFiles.Any(
+                    file => !verifiedFiles.Contains(file)))
+                throw new InvalidDataException(
+                    "Signed assistant evaluation artifact set is incomplete or contains unexpected files.");
+            string EvidencePath(string relative) => Path.Combine(
+                root, relative.Replace('/', Path.DirectorySeparatorChar));
+            var verifiedCaseSet = AssistantEvaluationCatalog.Load(
+                EvidencePath(AssistantEvaluationReleaseVerifier.CasesFile),
+                EvidencePath(AssistantEvaluationReleaseVerifier.ReviewFile),
+                EvidencePath(AssistantEvaluationReleaseVerifier.ReviewSignatureFile));
+            using var verificationHttp = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+            var verificationResolver = new AzureModelDeploymentResolver(verificationHttp);
+            var verifiedTarget = await verificationResolver.ResolveContainerAppRevisionAsync(
+                Get("--candidate-container-app-resource-id")
+                    ?? throw new ArgumentException(
+                        "--candidate-container-app-resource-id required"),
+                Get("--candidate-revision")
+                    ?? throw new ArgumentException("--candidate-revision required"),
+                CancellationToken.None);
+            using var attestationHttp = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+            var verificationTarget = new AssistantEvaluationHttpTarget(
+                attestationHttp,
+                Get("--base-url") ?? throw new ArgumentException("--base-url required"));
+            var verifiedAttestation = await verificationTarget.ReadAttestationAsync(
+                verifiedTarget, CancellationToken.None);
+            var verifiedReport = AssistantEvaluationReleaseVerifier.VerifyReport(
+                EvidencePath(AssistantEvaluationReleaseVerifier.ReportFile),
+                verifiedCaseSet, verifiedTarget, verifiedAttestation, now,
+                allowOlderPreviouslyPromotedEvidence:
+                    Array.IndexOf(args0, "--allow-older-previously-promoted-evidence") >= 0);
+            var verifiedBrowserEvidence =
+                AssistantEvaluationReleaseVerifier.VerifyBrowserEvidence(
+                    EvidencePath(AssistantEvaluationReleaseVerifier.BrowserEvidenceFile),
+                    verifiedTarget, verifiedReport, now);
+            await AssistantEvaluationReleaseVerifier.VerifyModelDeploymentsAsync(
+                verificationResolver, verifiedReport, CancellationToken.None);
+            var verifiedManifest = AssistantEvaluationReleaseVerifier.VerifyArtifactSet(
+                root, manifestPath, signaturePath, artifactRoots,
+                verifiedTarget, verifiedReport, verifiedBrowserEvidence);
+            Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(new
+            {
+                status = "passed",
+                revision = verifiedTarget.RevisionName,
+                image = verifiedTarget.Image,
+                report_run_at = verifiedReport.RunAt,
+                manifest_key_id = verifiedManifest.KeyId,
+                cases = verifiedReport.Results.Count,
+            }));
+            return 0;
+        }
+        var output = Get("--out") ?? throw new ArgumentException("--out required");
+        var caseSet = AssistantEvaluationCatalog.Load(
+            Get("--cases") ?? Path.Combine(AppContext.BaseDirectory, "assistant-cases-v3.json"),
+            Get("--review-attestation")
+                ?? throw new ArgumentException("--review-attestation required"),
+            Get("--review-signature")
+                ?? throw new ArgumentException("--review-signature required"));
+        using var managementHttp = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+        var resolver = new AzureModelDeploymentResolver(managementHttp);
+        var candidateContainerAppResourceId = Get("--candidate-container-app-resource-id")
+            ?? throw new ArgumentException("--candidate-container-app-resource-id required");
+        var candidateRevision = Get("--candidate-revision")
+            ?? throw new ArgumentException("--candidate-revision required");
+        var targetEvidence = await resolver.ResolveContainerAppRevisionAsync(
+            candidateContainerAppResourceId,
+            candidateRevision,
+            CancellationToken.None);
+        var candidateModel = await resolver.ResolveAsync(
+            Get("--candidate-model-resource-id")
+                ?? throw new ArgumentException("--candidate-model-resource-id required"),
+            Get("--candidate-deployment")
+                ?? throw new ArgumentException("--candidate-deployment required"),
+            CancellationToken.None);
+        var graderModel = await resolver.ResolveAsync(
+            Get("--grader-model-resource-id")
+                ?? throw new ArgumentException("--grader-model-resource-id required"),
+            Get("--grader-deployment")
+                ?? throw new ArgumentException("--grader-deployment required"),
+            CancellationToken.None);
+        using var targetHttp = new HttpClient { Timeout = TimeSpan.FromSeconds(90) };
+        var target = new AssistantEvaluationHttpTarget(targetHttp,
+            Get("--base-url") ?? throw new ArgumentException("--base-url required"));
+        var targetAttestation = await target.ReadAttestationAsync(
+            targetEvidence, CancellationToken.None);
+        var identity = new AssistantEvaluationIdentity(
+            targetEvidence, targetAttestation.IndexManifestIds,
+            candidateModel, graderModel);
+        AssistantEvaluationHttpGrader? grader = null;
+        HttpClient? graderHttp = null;
+        try
+        {
+            if (caseSet.Catalog.Cases.Any(item => item.Grading.Mode == "llm"))
+            {
+                var keyEnvironment = Get("--grader-key-env") ?? "AOAI_GRADER_KEY";
+                var graderKey = Environment.GetEnvironmentVariable(keyEnvironment)
+                    ?? throw new InvalidDataException(
+                        $"Required grader credential environment '{keyEnvironment}' is absent.");
+                graderHttp = new HttpClient { Timeout = TimeSpan.FromSeconds(90) };
+                grader = new AssistantEvaluationHttpGrader(
+                    graderHttp,
+                    graderModel.Endpoint,
+                    graderKey,
+                    graderModel.Deployment);
+            }
+            var report = await AssistantEvaluationRunner.RunAsync(
+                caseSet, target, grader, identity,
+                caseSet.Catalog.Pricing,
+                now, CancellationToken.None);
+            var postRunTarget = await resolver.ResolveContainerAppRevisionAsync(
+                candidateContainerAppResourceId, candidateRevision, CancellationToken.None);
+            AssistantEvaluationRunner.EnsureStableTarget(targetEvidence, postRunTarget);
+            var bytes = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(report,
+                new System.Text.Json.JsonSerializerOptions
+                {
+                    PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.SnakeCaseLower,
+                    WriteIndented = true,
+                });
+            var absoluteOutput = Path.GetFullPath(output);
+            Directory.CreateDirectory(Path.GetDirectoryName(absoluteOutput)!);
+            var temporary = absoluteOutput + $".{Guid.NewGuid():N}.tmp";
+            try
+            {
+                File.WriteAllBytes(temporary, bytes);
+                File.Move(temporary, absoluteOutput, overwrite: true);
+            }
+            finally
+            {
+                try { File.Delete(temporary); } catch { }
+            }
+            Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(report));
+            return report.ActivationGatePassed ? 0 : 5;
+        }
+        finally
+        {
+            graderHttp?.Dispose();
+        }
+    }
     case "scope-preview":
     {
         var publisher = Get("--publisher") ?? "eu-eurlex";
@@ -504,6 +714,10 @@ static void Usage() => Console.Error.WriteLine("""
       lex verify corpus --corpus PATH
       lex repair checkout-line-endings --corpus PATH
       lex artifact manifest --root DIR --file RELATIVE [--file RELATIVE] --manifest FILE --signature FILE --keyfile KEY.pem --key-id ID --code-commit SHA [--source KEY=VALUE]
+      lex assistant-eval --base-url REVISION_URL --candidate-container-app-resource-id AZURE_ID --candidate-revision NAME --cases FILE --review-attestation FILE --review-signature FILE --out FILE --candidate-model-resource-id AZURE_ID --candidate-deployment ID --grader-model-resource-id AZURE_ID --grader-deployment ID [--grader-key-env NAME]
+      lex assistant-eval verify-cases --cases FILE --review-attestation FILE --review-signature FILE
+      lex assistant-eval verify-report --report FILE --cases FILE --review-attestation FILE --review-signature FILE --base-url REVISION_URL --candidate-container-app-resource-id AZURE_ID --candidate-revision NAME
+      lex assistant-eval verify-release --root DIR --manifest FILE --signature FILE --trust-roots FILE --base-url REVISION_URL --candidate-container-app-resource-id AZURE_ID --candidate-revision NAME
       lex artifact verify --root DIR --manifest FILE --signature FILE --trust-roots FILE
       lex artifact trust-root --keyfile KEY.pem --key-id ID
     """);

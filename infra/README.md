@@ -1,15 +1,27 @@
 # Lex Azure infrastructure
 
-This configuration owns Lex identities, role assignments, the non-exportable artifact signing key
-and the optional local-index VM path. The existing shared registry, Azure OpenAI account, storage
+This configuration owns Lex identities, role assignments, the non-exportable artifact signing key,
+the independently authorized assistant-evaluation review key and the optional local-index VM path.
+The existing shared registry, Azure OpenAI account, storage
 account, DNS zone, resource group and Container App are data or explicit role-assignment scopes.
 Terraform does not recreate or silently import them.
 
 The runtime identity pulls from ACR and calls Azure OpenAI. The deployment identity receives a
 GitHub OIDC token for the `production` environment and can build an ACR image, assign the runtime
 identity and update only `ca-lex-web`. The publisher identity receives a GitHub OIDC token only
-after approval in the main-only `lex-ops` production environment and can sign or verify with the
-Key Vault key. No private signing key leaves Key Vault.
+after approval in the main-only `lex-ops` production environment, can read the exact Container App
+revision and candidate/grader model identities, and can sign or verify with the Key Vault key. Its
+only runtime mutation rights are the two Container Apps revision activate/deactivate actions used
+to evaluate an inactive zero-traffic candidate and return it to the inactive state. It cannot update
+the app, configuration, image, replica settings or traffic weights. No private signing key leaves
+Key Vault.
+
+Assistant-evaluation approval uses a second RBAC-enabled Key Vault. Only the explicitly configured
+human `evaluation_reviewer_object_id` receives Crypto Officer rights there; the publisher identity
+has no access. Its public P-256 root is pinned into the evaluator release, so the process publishing
+an artifact cannot manufacture the independent approval required to run the release gate. The
+human reviewer can manage the review key but has no artifact-sign operation; the OIDC publisher
+can sign artifacts but has no access to the review vault.
 
 Initialize the remote state backend with explicit values:
 

@@ -13,10 +13,10 @@ contribution is judged against that.
    git, and never leak publisher names into lower layers (a fitness test
    enforces this). The Legilux adapter is the reference: SPARQL + paced,
    sequential fetches from robots-permitted endpoints only.
-2. **Eval cases**, [evals/cases.json](evals/cases.json). A good case is a
-   natural question where the AI should construct a better tool call, or
-   refuse better. Cases assert tool-argument construction and grounding, not
-   phrasing.
+2. **Assistant eval cases**, [evals/assistant-cases-v3.json](evals/assistant-cases-v3.json).
+   A good case is a
+   natural question with one reviewable operation contract or refusal boundary. Cases assert
+   canonical arguments, typed outcomes, grounding and measured budgets rather than preferred prose.
 3. **Extraction improvements**, published profiles (`akn-lu/1`,
    `xhtml-eu/1`, `fmx4-eu/1`) are immutable: improvements ship as a **new**
    profile beside the old, with a frozen-fingerprint test. See
