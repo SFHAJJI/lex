@@ -8,6 +8,14 @@ public sealed class ReleaseWorkflowTests
     public void Candidate_deployment_is_zero_traffic_unless_promotion_is_explicit()
     {
         var workflow = File.ReadAllText(Path.Combine(RepoRoot(), ".github", "workflows", "deploy.yml"));
+        var candidateStart = workflow.IndexOf(
+            "\n      - name: Create and smoke-test candidate revision", StringComparison.Ordinal);
+        Assert.True(candidateStart >= 0);
+        var candidateEnd = workflow.IndexOf(
+            "\n      - name: Enforce one active public quota authority", candidateStart,
+            StringComparison.Ordinal);
+        Assert.True(candidateEnd > candidateStart);
+        var candidateBlock = workflow[candidateStart..candidateEnd];
 
         var promoteStart = workflow.IndexOf("\n      promote:", StringComparison.Ordinal);
         var promoteEnd = workflow.IndexOf("\n  repository_dispatch:", promoteStart,
@@ -33,6 +41,17 @@ public sealed class ReleaseWorkflowTests
         Assert.Contains("evals/run-mcp-load.mjs", workflow);
         Assert.Contains("candidate exceeded the 75 percent memory budget", workflow);
         Assert.Contains("candidate load used more than one replica", workflow);
+        Assert.Contains("metric_window_start_epoch=$((load_started_epoch / 60 * 60))", workflow);
+        Assert.Contains("metric_window_end_epoch=$(((load_finished_epoch + 59) / 60 * 60))", workflow);
+        Assert.Contains("timespan=$metric_window_start/$metric_window_end", workflow);
+        Assert.DoesNotContain("timespan=$load_started/$load_finished", workflow);
+        Assert.Contains("metric response shape", workflow);
+        Assert.Contains("union isfuzzy=true requests, dependencies, traces", candidateBlock);
+        Assert.Contains("timestamp > ago(15m) and operation_Id == '$trace_id'", candidateBlock);
+        Assert.Contains("column_ifexists('client_IP', '')", candidateBlock);
+        Assert.DoesNotContain("AppRequests", candidateBlock);
+        Assert.DoesNotContain("AppDependencies", candidateBlock);
+        Assert.DoesNotContain("AppTraces", candidateBlock);
         Assert.Contains("revision_get() {", workflow);
         Assert.Contains("for attempt in $(seq 1 24)", workflow);
         Assert.Contains("--silent --show-error --connect-timeout 5 --max-time 10 \"$url\"", workflow);

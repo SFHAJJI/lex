@@ -387,8 +387,18 @@ jobs:
             --rate-per-minute=60 \
             --maximum-p95-ms=1500
           load_finished=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          # Azure publishes these metrics in UTC-aligned one-minute buckets. Query the
+          # complete buckets that overlap the measured load instead of a second-level
+          # interval whose boundary buckets may not be returned consistently.
+          load_started_epoch=$(date -u -d "$load_started" +%s)
+          load_finished_epoch=$(date -u -d "$load_finished" +%s)
+          metric_window_start_epoch=$((load_started_epoch / 60 * 60))
+          metric_window_end_epoch=$(((load_finished_epoch + 59) / 60 * 60))
+          metric_window_start=$(date -u -d "@$metric_window_start_epoch" +%Y-%m-%dT%H:%M:%SZ)
+          metric_window_end=$(date -u -d "@$metric_window_end_epoch" +%Y-%m-%dT%H:%M:%SZ)
           memory_max=0
           replicas_max=0
+          metrics='{"value":[]}'
           # Container Apps platform metrics can arrive several minutes after the measured window.
           for attempt in $(seq 1 36); do
             metrics=$(az rest --method get \
@@ -396,7 +406,7 @@ jobs:
               --url-parameters \
                 "api-version=2023-10-01" \
                 "metricnames=WorkingSetBytes,Replicas" \
-                "timespan=$load_started/$load_finished" \
+                "timespan=$metric_window_start/$metric_window_end" \
                 "interval=PT1M" \
                 "aggregation=Maximum" \
                 "\$filter=revisionName eq '$candidate'" \
@@ -410,10 +420,15 @@ jobs:
             [ "$memory_max" -gt 0 ] && [ "$replicas_max" -gt 0 ] && break
             sleep 10
           done
+          metric_shape=$(printf '%s' "$metrics" | jq -c '
+            {metrics: [.value[]? | {
+              name: .name.value,
+              points: ([.timeseries[]?.data[]? | select(.maximum != null)] | length)
+            }]}')
           [ "$memory_max" -gt 0 ] \
-            || { echo "::error::candidate memory metric was not exported within the evidence window"; exit 1; }
+            || { echo "::error::candidate memory metric was not exported for $metric_window_start/$metric_window_end; metric response shape: $metric_shape"; exit 1; }
           [ "$replicas_max" -gt 0 ] \
-            || { echo "::error::candidate replica metric was not exported within the evidence window"; exit 1; }
+            || { echo "::error::candidate replica metric was not exported for $metric_window_start/$metric_window_end; metric response shape: $metric_shape"; exit 1; }
           [ "$memory_max" -le 1610612736 ] \
             || { echo "::error::candidate exceeded the 75 percent memory budget: $memory_max"; exit 1; }
           [ "$replicas_max" -eq 1 ] \
@@ -437,9 +452,9 @@ jobs:
           telemetry=''
           for attempt in $(seq 1 18); do
             telemetry=$(az monitor app-insights query -g "$RESOURCE_GROUP" --app "$APPLICATION_INSIGHTS_NAME" \
-              --analytics-query "union isfuzzy=true AppRequests, AppDependencies, AppTraces
-                | where TimeGenerated > ago(15m) and OperationId == '$trace_id'
-                | extend record=tostring(pack_all()), address=tostring(column_ifexists('ClientIP', ''))
+            --analytics-query "union isfuzzy=true requests, dependencies, traces
+              | where timestamp > ago(15m) and operation_Id == '$trace_id'
+              | extend record=tostring(pack_all()), address=tostring(column_ifexists('client_IP', ''))
                 | summarize rows=count(), leaks=countif(record contains '$trace_canary'),
                     addresses=countif(isnotempty(address) and address != '0.0.0.0')" -o json)
             rows=$(printf '%s' "$telemetry" | jq -r '.tables[0].rows[0][0] // 0')

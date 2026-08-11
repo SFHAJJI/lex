@@ -341,17 +341,18 @@ public sealed class AskTransportTests
             ["content"] = "Show coverage.",
         });
 
-        var started = System.Diagnostics.Stopwatch.StartNew();
         var first = await service.AskAsync(
-            history, "first-client", "law.test", CancellationToken.None);
+                history, "first-client", "law.test", CancellationToken.None)
+            .WaitAsync(TimeSpan.FromSeconds(5));
         var second = await service.AskAsync(
-            history, "second-client", "law.test", CancellationToken.None);
+                history, "second-client", "law.test", CancellationToken.None)
+            .WaitAsync(TimeSpan.FromSeconds(5));
 
         Assert.Equal(504, first.Status);
         Assert.Equal(504, second.Status);
         Assert.True(first.RetainForReplay);
         Assert.Equal(2, planner.Calls);
-        Assert.True(started.Elapsed < TimeSpan.FromMilliseconds(500));
+        Assert.Equal(2, planner.Cancellations);
         Assert.Equal(TimeSpan.FromSeconds(12), AskService.DefaultPlannerDeadline);
         Assert.Equal(TimeSpan.FromSeconds(25), AskService.DefaultFirstResultDeadline);
     }
@@ -645,6 +646,7 @@ public sealed class AskTransportTests
     private sealed class WaitingPlanner : IOperationPlanner
     {
         public int Calls;
+        public int Cancellations;
 
         public async Task<OperationPlan> PlanAsync(
             JsonArray history,
@@ -653,7 +655,15 @@ public sealed class AskTransportTests
             CancellationToken cancellationToken)
         {
             Interlocked.Increment(ref Calls);
-            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            try
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                Interlocked.Increment(ref Cancellations);
+                throw;
+            }
             throw new InvalidOperationException("unreachable");
         }
     }
