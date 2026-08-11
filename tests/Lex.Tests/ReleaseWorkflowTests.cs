@@ -47,6 +47,7 @@ public sealed class ReleaseWorkflowTests
         Assert.Contains("metric_query_end_epoch=$(((metric_now_epoch + 59) / 60 * 60))", workflow);
         Assert.Contains("timespan=$metric_window_start/$metric_query_end", workflow);
         Assert.Contains("--arg required \"$metric_required_timestamp\"", workflow);
+        Assert.Contains("select(.timeStamp >= $start and .timeStamp <= $required)", workflow);
         Assert.Contains("select(.timeStamp == $required and .maximum != null)", workflow);
         Assert.Contains("[ \"$memory_required\" -gt 0 ] && [ \"$replicas_required\" -gt 0 ] && break", workflow);
         Assert.DoesNotContain("timespan=$load_started/$load_finished", workflow);

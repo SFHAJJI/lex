@@ -424,11 +424,17 @@ jobs:
                 "\$filter=revisionName eq '$candidate'" \
               -o json)
             memory_max=$(printf '%s' "$metrics" | jq \
+              --arg start "$metric_window_start" --arg required "$metric_required_timestamp" \
               '[.value[] | select(.name.value == "WorkingSetBytes")
-                | .timeseries[].data[].maximum // empty] | max // 0 | floor')
+                | .timeseries[].data[]
+                | select(.timeStamp >= $start and .timeStamp <= $required)
+                | .maximum // empty] | max // 0 | floor')
             replicas_max=$(printf '%s' "$metrics" | jq \
+              --arg start "$metric_window_start" --arg required "$metric_required_timestamp" \
               '[.value[] | select(.name.value == "Replicas")
-                | .timeseries[].data[].maximum // empty] | max // 0 | floor')
+                | .timeseries[].data[]
+                | select(.timeStamp >= $start and .timeStamp <= $required)
+                | .maximum // empty] | max // 0 | floor')
             memory_required=$(printf '%s' "$metrics" | jq --arg required "$metric_required_timestamp" \
               '[.value[] | select(.name.value == "WorkingSetBytes")
                 | .timeseries[].data[]
