@@ -37,6 +37,7 @@ jobs:
       RESOURCE_GROUP: rg-platform
       CONTAINER_APP: ca-lex-web
       RUNTIME_IDENTITY: uami-lex-runtime
+      APPLICATION_INSIGHTS_NAME: ai-lex-web
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
@@ -65,7 +66,8 @@ jobs:
         shell: bash
         run: |
           set -eu
-          workspace=$(az monitor app-insights component show -g rg-platform -a ai-lex-web \
+          workspace=$(az monitor app-insights component show -g "$RESOURCE_GROUP" \
+            -a "$APPLICATION_INSIGHTS_NAME" \
             --query workspaceResourceId -o tsv)
           [ -n "$workspace" ] || { echo "::error::Application Insights has no workspace"; exit 1; }
           workspace_group=$(printf '%s' "$workspace" | cut -d/ -f5)
@@ -400,7 +402,7 @@ jobs:
             "https://$fqdn/?q=$trace_canary" >/dev/null
           telemetry=''
           for attempt in $(seq 1 18); do
-            telemetry=$(az monitor app-insights query -g rg-platform --app ai-lex-web \
+            telemetry=$(az monitor app-insights query -g "$RESOURCE_GROUP" --app "$APPLICATION_INSIGHTS_NAME" \
               --analytics-query "union isfuzzy=true AppRequests, AppDependencies, AppTraces
                 | where TimeGenerated > ago(15m) and OperationId == '$trace_id'
                 | extend record=tostring(pack_all()), address=tostring(column_ifexists('ClientIP', ''))

@@ -19,9 +19,15 @@ data "azurerm_cognitive_account" "assistant_grader" {
   resource_group_name = var.assistant_grader_openai_resource_group
 }
 
+data "azurerm_application_insights" "web" {
+  name                = var.application_insights_name
+  resource_group_name = data.azurerm_resource_group.platform.name
+}
+
 locals {
-  container_app_id             = "${data.azurerm_resource_group.platform.id}/providers/Microsoft.App/containerApps/${var.container_app_name}"
-  container_app_environment_id = "${data.azurerm_resource_group.platform.id}/providers/Microsoft.App/managedEnvironments/${var.container_app_environment_name}"
+  container_app_id                = "${data.azurerm_resource_group.platform.id}/providers/Microsoft.App/containerApps/${var.container_app_name}"
+  container_app_environment_id    = "${data.azurerm_resource_group.platform.id}/providers/Microsoft.App/managedEnvironments/${var.container_app_environment_name}"
+  log_analytics_resource_group_id = join("/", slice(split("/", data.azurerm_application_insights.web.workspace_id), 0, 5))
   tags = {
     app       = "lex"
     managedBy = "terraform"
@@ -111,6 +117,42 @@ resource "azurerm_role_assignment" "deploy_runtime_identity" {
   scope                = azurerm_user_assigned_identity.runtime.id
   role_definition_name = "Managed Identity Operator"
   principal_id         = azurerm_user_assigned_identity.deploy.principal_id
+}
+
+resource "azurerm_role_definition" "deploy_application_insights_metadata_reader" {
+  name        = "Lex Application Insights Metadata Reader"
+  scope       = data.azurerm_resource_group.platform.id
+  description = "Lets the Lex deployment identity resolve only the published Application Insights component."
+
+  permissions {
+    actions = ["Microsoft.Insights/components/read"]
+  }
+
+  assignable_scopes = [data.azurerm_resource_group.platform.id]
+}
+
+resource "azurerm_role_assignment" "deploy_application_insights_reader" {
+  scope              = data.azurerm_application_insights.web.id
+  role_definition_id = azurerm_role_definition.deploy_application_insights_metadata_reader.role_definition_resource_id
+  principal_id       = azurerm_user_assigned_identity.deploy.principal_id
+}
+
+resource "azurerm_role_definition" "deploy_log_analytics_table_policy_reader" {
+  name        = "Lex Log Analytics Table Policy Reader"
+  scope       = local.log_analytics_resource_group_id
+  description = "Lets the Lex deployment identity verify only the published Log Analytics table-retention policy."
+
+  permissions {
+    actions = ["Microsoft.OperationalInsights/workspaces/tables/read"]
+  }
+
+  assignable_scopes = [local.log_analytics_resource_group_id]
+}
+
+resource "azurerm_role_assignment" "deploy_log_analytics_table_reader" {
+  scope              = data.azurerm_application_insights.web.workspace_id
+  role_definition_id = azurerm_role_definition.deploy_log_analytics_table_policy_reader.role_definition_resource_id
+  principal_id       = azurerm_user_assigned_identity.deploy.principal_id
 }
 
 resource "azurerm_key_vault" "signing" {

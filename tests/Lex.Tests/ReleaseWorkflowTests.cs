@@ -18,6 +18,10 @@ public sealed class ReleaseWorkflowTests
         Assert.DoesNotContain("- name: Promote candidate", workflow);
         Assert.Contains("$candidate=0", workflow);
         Assert.Contains("AppRequests AppDependencies AppTraces", workflow);
+        Assert.Contains("APPLICATION_INSIGHTS_NAME: ai-lex-web", workflow);
+        Assert.Contains("-a \"$APPLICATION_INSIGHTS_NAME\"", workflow);
+        Assert.Contains("--app \"$APPLICATION_INSIGHTS_NAME\"", workflow);
+        Assert.DoesNotContain("--app ai-lex-web", workflow);
         Assert.Contains("retention is not the published 90 days", workflow);
         Assert.Contains("LEXTRACE${GITHUB_RUN_ID}${GITHUB_RUN_ATTEMPT}", workflow);
         Assert.Contains("candidate request telemetry was not exported", workflow);
@@ -119,6 +123,56 @@ public sealed class ReleaseWorkflowTests
         Assert.DoesNotContain("Microsoft.App/containerApps/*", role);
         Assert.DoesNotContain("Microsoft.App/*", role);
         Assert.Contains("scope              = local.container_app_id", terraform[end..]);
+    }
+
+    [Fact]
+    public void Deployment_can_verify_retention_without_broad_telemetry_access()
+    {
+        var terraform = File.ReadAllText(Path.Combine(RepoRoot(), "infra", "main.tf"));
+        var start = terraform.IndexOf(
+            "resource \"azurerm_role_definition\" \"deploy_application_insights_metadata_reader\"",
+            StringComparison.Ordinal);
+        Assert.True(start >= 0, "Application Insights metadata role is missing.");
+        var end = terraform.IndexOf(
+            "resource \"azurerm_role_assignment\" \"deploy_application_insights_reader\"",
+            start, StringComparison.Ordinal);
+
+        Assert.True(end > start, "Application Insights metadata assignment is missing.");
+        var role = terraform[start..end];
+        var actionsStart = role.IndexOf("actions = [", StringComparison.Ordinal);
+        Assert.True(actionsStart >= 0, "Telemetry-retention role actions are missing.");
+        var actionsEnd = role.IndexOf(']', actionsStart);
+        Assert.True(actionsEnd > actionsStart, "Telemetry-retention role actions are incomplete.");
+        var actions = role[actionsStart..actionsEnd];
+        var actionEntries = Regex.Matches(actions, "\"([^\"]+)\"")
+            .Select(match => match.Groups[1].Value)
+            .ToArray();
+        Assert.Equal(new[] { "Microsoft.Insights/components/read" }, actionEntries);
+        Assert.Contains("scope       = data.azurerm_resource_group.platform.id", role);
+        Assert.Contains("assignable_scopes = [data.azurerm_resource_group.platform.id]", role);
+        Assert.Contains("scope              = data.azurerm_application_insights.web.id", terraform[end..]);
+
+        start = terraform.IndexOf(
+            "resource \"azurerm_role_definition\" \"deploy_log_analytics_table_policy_reader\"",
+            StringComparison.Ordinal);
+        Assert.True(start >= 0, "Log Analytics table-policy role is missing.");
+        end = terraform.IndexOf(
+            "resource \"azurerm_role_assignment\" \"deploy_log_analytics_table_reader\"",
+            start, StringComparison.Ordinal);
+        Assert.True(end > start, "Log Analytics table-policy assignment is missing.");
+        role = terraform[start..end];
+        actionsStart = role.IndexOf("actions = [", StringComparison.Ordinal);
+        Assert.True(actionsStart >= 0, "Log Analytics role actions are missing.");
+        actionsEnd = role.IndexOf(']', actionsStart);
+        Assert.True(actionsEnd > actionsStart, "Log Analytics role actions are incomplete.");
+        actions = role[actionsStart..actionsEnd];
+        actionEntries = Regex.Matches(actions, "\"([^\"]+)\"")
+            .Select(match => match.Groups[1].Value)
+            .ToArray();
+        Assert.Equal(new[] { "Microsoft.OperationalInsights/workspaces/tables/read" }, actionEntries);
+        Assert.Contains("scope       = local.log_analytics_resource_group_id", role);
+        Assert.Contains("assignable_scopes = [local.log_analytics_resource_group_id]", role);
+        Assert.Contains("scope              = data.azurerm_application_insights.web.workspace_id", terraform[end..]);
     }
 
     private static string RepoRoot()
