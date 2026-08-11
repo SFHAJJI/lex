@@ -3,11 +3,6 @@ name: deploy
 on:
   workflow_dispatch:
     inputs:
-      require_manifest:
-        description: Fail the image build and runtime when signed manifests are absent
-        required: true
-        type: boolean
-        default: false
       promote:
         description: Must remain false; use revision-traffic after candidate review
         required: true
@@ -85,13 +80,8 @@ jobs:
       - name: Build immutable image in ACR
         id: image
         shell: bash
-        env:
-          MANIFEST_INPUT: ${{ inputs.require_manifest }}
-          DISPATCH_MANIFEST: ${{ github.event.client_payload.require_manifest }}
         run: |
           set -eu
-          require="${MANIFEST_INPUT:-${DISPATCH_MANIFEST:-false}}"
-          [ "$require" = "true" ] && require=1 || require=0
           release_dir=$(mktemp -d)
           trap 'rm -rf "$release_dir"' EXIT
           for item in \
@@ -101,30 +91,24 @@ jobs:
             lex-corpus-eu-eurlex:retrieval-benchmark-eu-eurlex.manifest.json; do
             repo="${item%%:*}"
             manifest="${item#*:}"
-            if ! curl --fail --silent --show-error --location \
-                 -o "$release_dir/$manifest" \
-                 "https://github.com/SFHAJJI/$repo/releases/latest/download/$manifest"; then
-              [ "$require" = "0" ] || { echo "::error::$repo has no required manifest"; exit 1; }
-              rm -f "$release_dir/$manifest"
-            fi
+            curl --fail --silent --show-error --location \
+              -o "$release_dir/$manifest" \
+              "https://github.com/SFHAJJI/$repo/releases/latest/download/$manifest" \
+              || { echo "::error::$repo release is missing $manifest"; exit 1; }
           done
           index_manifest_count=$(find "$release_dir" -name 'index-*.manifest.json' | wc -l)
-          if [ "$index_manifest_count" -eq 2 ]; then
-            manifest_set=$(for manifest in "$release_dir"/*.manifest.json; do
-              printf '%s  %s\n' "$(sha256sum "$manifest" | cut -d' ' -f1)" "$(basename "$manifest")"
-            done | sort -k2 | sha256sum | cut -d' ' -f1)
-          else
-            echo "::warning::only $index_manifest_count of 2 publisher index manifests are available; treating this as a legacy artifact set"
-            manifest_set=legacy
-          fi
+          [ "$index_manifest_count" -eq 2 ] \
+            || { echo "::error::expected exactly two publisher index manifest files"; exit 1; }
+          manifest_set=$(for manifest in "$release_dir"/*.manifest.json; do
+            printf '%s  %s\n' "$(sha256sum "$manifest" | cut -d' ' -f1)" "$(basename "$manifest")"
+          done | sort -k2 | sha256sum | cut -d' ' -f1)
           tag="sha-${GITHUB_SHA:0:12}-art-${manifest_set:0:12}"
           image="$ACR_SERVER/lex-web:$tag"
           az acr build --registry "$ACR_NAME" --image "lex-web:$tag" \
-            --build-arg "LEX_REQUIRE_ARTIFACT_MANIFEST=$require" \
+            --build-arg "LEX_REQUIRE_ARTIFACT_MANIFEST=1" \
             --build-arg "LEX_EXPECTED_MANIFEST_SET=$manifest_set" \
             --file Dockerfile . --no-logs
           echo "image=$image" >> "$GITHUB_OUTPUT"
-          echo "require_manifest=$require" >> "$GITHUB_OUTPUT"
           echo "manifest_set=$manifest_set" >> "$GITHUB_OUTPUT"
 
       - name: Configure identity-backed pulls and assistant access
@@ -145,7 +129,6 @@ jobs:
         shell: bash
         env:
           IMAGE: ${{ steps.image.outputs.image }}
-          REQUIRE_MANIFEST: ${{ steps.image.outputs.require_manifest }}
           MANIFEST_SET: ${{ steps.image.outputs.manifest_set }}
           RUNTIME_CLIENT: ${{ steps.identity.outputs.runtime_client }}
         run: |
@@ -258,7 +241,7 @@ jobs:
           candidate="$CONTAINER_APP--$suffix"
           az containerapp show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" -o json \
             | jq --arg previous "$previous" --arg candidate "$candidate" --arg suffix "$suffix" \
-                 --arg image "$IMAGE" --arg require "$REQUIRE_MANIFEST" --arg manifest "$MANIFEST_SET" \
+                 --arg image "$IMAGE" --arg manifest "$MANIFEST_SET" \
                  --arg requiredPublishers "lu-legilux,eu-eurlex" \
                  --arg code "$GITHUB_SHA" --arg runtimeClient "$RUNTIME_CLIENT" '
               .properties.template
@@ -275,7 +258,7 @@ jobs:
                   + [
                       {name:"AZURE_CLIENT_ID",value:$runtimeClient},
                       {name:"AOAI_USE_MANAGED_IDENTITY",value:"1"},
-                      {name:"LEX_REQUIRE_ARTIFACT_MANIFEST",value:$require},
+                      {name:"LEX_REQUIRE_ARTIFACT_MANIFEST",value:"1"},
                       {name:"LEX_ARTIFACT_MANIFEST_ID",value:$manifest},
                       {name:"LEX_REQUIRED_PUBLISHERS",value:$requiredPublishers},
                       {name:"LEX_CODE_COMMIT",value:$code},
@@ -345,12 +328,9 @@ jobs:
              and .[0].hits[0].work == "32016r0679"
              and (.[0].hits[0].match_reasons | index("exact_identifier")) != null' >/dev/null \
             || { echo "::error::exact EU identifier did not rank the base act first"; exit 1; }
-          if [ "$REQUIRE_MANIFEST" = "1" ]; then
-            [ "$MANIFEST_SET" != "legacy" ] || { echo "::error::signed deployment resolved to legacy artifacts"; exit 1; }
-            printf '%s' "$eu_exact" | jq -e --arg manifest "$MANIFEST_SET" \
-              '.[0].artifact_manifest_id == $manifest' >/dev/null \
-              || { echo "::error::candidate search result was not bound to the signed manifest"; exit 1; }
-          fi
+          printf '%s' "$eu_exact" | jq -e --arg manifest "$MANIFEST_SET" \
+            '.[0].artifact_manifest_id == $manifest' >/dev/null \
+            || { echo "::error::candidate search result was not bound to the signed manifest"; exit 1; }
           lu_temporal=$(mcp_text '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"as_of","arguments":{"work":"loi-1879-06-18-n1","publisher":"lu-legilux","date":"2026-08-06","mode":"outline"}}}')
           printf '%s' "$lu_temporal" | jq -e \
             '.document.work == "loi-1879-06-18-n1" and (.provisions | length) > 0' >/dev/null \
