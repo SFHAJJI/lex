@@ -35,11 +35,19 @@ $signaturePath = [IO.Path]::GetFullPath($OutputSignature)
 $digestAlgorithm = New-Object Security.Cryptography.SHA256Managed
 try { $digestBytes = $digestAlgorithm.ComputeHash($reviewBytes) }
 finally { $digestAlgorithm.Dispose() }
-$signature = az keyvault key sign --vault-name $Vault --name $Key --version $KeyVersion `
+$signatureJson = az keyvault key sign --vault-name $Vault --name $Key --version $KeyVersion `
     --algorithm ES256 --digest ([Convert]::ToBase64String($digestBytes)) `
-    --query signature -o tsv --only-show-errors
-if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($signature)) {
+    -o json --only-show-errors
+if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($signatureJson)) {
     throw "Key Vault did not sign the assistant evaluation review."
+}
+$signatureResult = $signatureJson | ConvertFrom-Json
+$signature = if ($signatureResult -is [string]) { $signatureResult }
+elseif ($signatureResult.signature) { $signatureResult.signature }
+elseif ($signatureResult.value) { $signatureResult.value }
+else { $signatureResult.result }
+if ([string]::IsNullOrWhiteSpace($signature)) {
+    throw "Key Vault returned no assistant evaluation review signature."
 }
 [IO.File]::WriteAllText(
     $signaturePath, $signature.Trim() + "`n", [Text.UTF8Encoding]::new($false))
