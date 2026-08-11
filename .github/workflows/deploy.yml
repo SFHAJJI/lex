@@ -131,14 +131,18 @@ jobs:
             printf '%s  %s\n' "$(sha256sum "$manifest" | cut -d' ' -f1)" "$(basename "$manifest")"
           done | sort -k2 | sha256sum | cut -d' ' -f1)
           tag="sha-${GITHUB_SHA:0:12}-art-${manifest_set:0:12}"
-          az acr build --registry "$ACR_NAME" --image "lex-web:$tag" \
+          # Take the digest from the build result itself. Reading it back with
+          # 'az acr repository show' is a registry data-plane call the deployment
+          # identity cannot make, and it would resolve a mutable tag that a
+          # concurrent build could already have moved.
+          build=$(az acr build --registry "$ACR_NAME" --image "lex-web:$tag" \
             --build-arg "LEX_REQUIRE_ARTIFACT_MANIFEST=1" \
             --build-arg "LEX_EXPECTED_MANIFEST_SET=$manifest_set" \
-            --file Dockerfile . --no-logs
-          digest=$(az acr repository show --name "$ACR_NAME" \
-            --image "lex-web:$tag" --query digest -o tsv)
-          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] \
-            || { echo "::error::ACR did not return an immutable image digest"; exit 1; }
+            --file Dockerfile . --no-logs -o json)
+          printf '%s' "$build" \
+            | python3 scripts/deploy/build_image.py "lex-web" "$tag" > build-image.txt \
+            || { echo "::error::ACR build did not report one immutable image for lex-web:$tag"; exit 1; }
+          digest=$(cat build-image.txt)
           image="$ACR_SERVER/lex-web@$digest"
           echo "image=$image" >> "$GITHUB_OUTPUT"
           echo "manifest_set=$manifest_set" >> "$GITHUB_OUTPUT"
