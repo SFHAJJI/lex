@@ -42,10 +42,13 @@ semantics, such as CJEU judgments, requires adapter and schema implementation pl
 The scope file is copied into every EU index release and covered by the signed artifact manifest.
 This makes the selection rules independently identifiable beside the index they produced.
 
-Wave 2 was approved after the engineer-reviewed preview on 2026-08-06. It selects 1,633 works,
-of which 1,155 currently expose loadable official metadata, and 3,882 French and English
-expressions. The planning estimate is 1,017,643,008 download bytes and 381,616,128 lexical index
-bytes. These estimates are replaced by measured artifact sizes after the first completed build.
+Wave 2 was approved after the engineer-reviewed preview on 2026-08-06. The refreshed preview on
+2026-08-11 selects 1,248 works, all with loadable official metadata, and 4,728 French and English
+expressions. Relationship closure is language-aware: 385 related corrigenda observed in that
+preview existed only in other official EU languages, so they are outside this bilingual corpus
+rather than failed EN/FR acquisitions. The planning estimate is 1,239,416,832 download bytes and
+464,781,312 lexical index bytes. These estimates are replaced by measured artifact sizes after the
+first completed build.
 
 The wave uses reviewed cornerstone CELEX seeds in each practice domain instead of top-level
 directory codes. Relationship closure supplies their bounded legal context. Reverse legal-basis

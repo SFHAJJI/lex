@@ -24,6 +24,7 @@ public sealed class EurLexScopeTests : IDisposable
         Assert.Equal(2, scope.ActiveDomains(1).Count());
         Assert.Contains(scope.Domains, d => d.Id == "financial-services" && d.Wave == 2);
         Assert.Contains(scope.Exclusions, e => e.Kind == "citation");
+        Assert.Contains(scope.Exclusions, e => e.Kind == "out_of_scope_language");
     }
 
     [Fact]
@@ -168,6 +169,21 @@ public sealed class EurLexScopeTests : IDisposable
     {
         Assert.Equal("http://publications.europa.eu/resource/celex/12012E%2FTXT",
             EurLexAdapter.CelexAliasUri("12012E/TXT"));
+    }
+
+    [Fact]
+    public void Relationship_closure_requires_an_expression_in_the_reviewed_languages()
+    {
+        var query = EurLexAdapter.RelationshipClosureQuery(
+            ["32016R0679"],
+            ["resource_legal_corrects_resource_legal"],
+            ["en", "fr"]);
+
+        Assert.Contains("cdm:expression_belongs_to_work ?related", query);
+        Assert.Contains("cdm:expression_uses_language ?relatedLanguage", query);
+        Assert.Contains("/language/ENG>", query);
+        Assert.Contains("/language/FRA>", query);
+        Assert.DoesNotContain("/language/DEU>", query);
     }
 
     [Fact]

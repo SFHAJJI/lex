@@ -138,6 +138,7 @@
   ],
   "exclusions": [
     {"kind": "citation", "reason": "Loose citations do not recursively expand legal scope."},
+    {"kind": "out_of_scope_language", "reason": "A related act or corrigendum without an official English or French expression is outside this bilingual corpus."},
     {"kind": "proposal", "reason": "Non-binding proposals are not legislation in the binding-act waves."},
     {"kind": "synthetic_consolidation", "reason": "Lex never manufactures merged legal wording."},
     {"kind": "case_law_before_wave_4", "reason": "Judgments require case-law-specific date semantics before ingestion."}

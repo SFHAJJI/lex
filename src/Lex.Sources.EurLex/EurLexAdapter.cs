@@ -697,29 +697,8 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory
             var before = selected.Count;
             foreach (var chunk in frontier.Chunk(50))
             {
-                var values = string.Join(' ', chunk.Select(c =>
-                    $"(\"{c}\" <{CelexAliasUri(c)}>)"));
-                var predicateValues = string.Join(' ', predicates.Select(p => $"cdm:{p}"));
-                var rows = await SelectAsync(Cdm + Owl + $$"""
-                    SELECT DISTINCT ?seedCelex ?relatedCelex ?predicate WHERE {
-                      VALUES (?seedCelex ?seedAlias) { {{values}} }
-                      VALUES ?predicate { {{predicateValues}} }
-                      ?seed owl:sameAs ?seedAlias .
-                      {
-                        ?seed ?predicate ?related .
-                        BIND("outbound" AS ?direction)
-                      } UNION {
-                        ?related ?predicate ?seed .
-                        BIND("inbound" AS ?direction)
-                      }
-                      ?related cdm:resource_legal_id_celex ?relatedCelex .
-                      FILTER(
-                        ?predicate != cdm:resource_legal_based_on_resource_legal
-                        || ?direction = "outbound"
-                        || (!STRSTARTS(STR(?seedCelex), "1")
-                            && REGEX(STR(?relatedCelex), "^3[0-9]{4}[RL]")))
-                    }
-                    """, ct);
+                var rows = await SelectAsync(RelationshipClosureQuery(
+                    chunk, predicates, _scope.Languages), ct);
                 foreach (var group in rows.GroupBy(r => r["seedCelex"], StringComparer.Ordinal))
                     if (group.Select(r => r["relatedCelex"]).Distinct(StringComparer.Ordinal).Count()
                         > _scope.RelationshipClosure.MaxRelatedPerSeed)
@@ -740,6 +719,45 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory
             if (selected.Count == before) break;
         }
         return selected;
+    }
+
+    internal static string RelationshipClosureQuery(
+        IReadOnlyList<string> seedCelex,
+        IReadOnlyList<string> predicates,
+        IReadOnlyList<string> languages)
+    {
+        var values = string.Join(' ', seedCelex.Select(c =>
+            $"(\"{c}\" <{CelexAliasUri(c)}>)"));
+        var predicateValues = string.Join(' ', predicates.Select(p => $"cdm:{p}"));
+        var languageValues = string.Join(' ', languages.Select(language => language switch
+        {
+            "en" => "<http://publications.europa.eu/resource/authority/language/ENG>",
+            "fr" => "<http://publications.europa.eu/resource/authority/language/FRA>",
+            _ => throw new InvalidDataException($"Unsupported EU scope language '{language}'."),
+        }));
+        return Cdm + Owl + $$"""
+            SELECT DISTINCT ?seedCelex ?relatedCelex ?predicate WHERE {
+              VALUES (?seedCelex ?seedAlias) { {{values}} }
+              VALUES ?predicate { {{predicateValues}} }
+              ?seed owl:sameAs ?seedAlias .
+              {
+                ?seed ?predicate ?related .
+                BIND("outbound" AS ?direction)
+              } UNION {
+                ?related ?predicate ?seed .
+                BIND("inbound" AS ?direction)
+              }
+              ?related cdm:resource_legal_id_celex ?relatedCelex .
+              ?relatedExpression cdm:expression_belongs_to_work ?related ;
+                                 cdm:expression_uses_language ?relatedLanguage .
+              VALUES ?relatedLanguage { {{languageValues}} }
+              FILTER(
+                ?predicate != cdm:resource_legal_based_on_resource_legal
+                || ?direction = "outbound"
+                || (!STRSTARTS(STR(?seedCelex), "1")
+                    && REGEX(STR(?relatedCelex), "^3[0-9]{4}[RL]")))
+            }
+            """;
     }
 
     private bool IsAllowedCelex(string celex, int wave)
