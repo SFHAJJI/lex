@@ -9,6 +9,10 @@ using Azure.Core;
 
 namespace Lex.Tests;
 
+[CollectionDefinition("Assistant evaluation timing", DisableParallelization = true)]
+public sealed class AssistantEvaluationTimingCollection;
+
+[Collection("Assistant evaluation timing")]
 public sealed class AssistantEvaluationTests : IDisposable
 {
     private readonly string _dir = Path.Combine(
