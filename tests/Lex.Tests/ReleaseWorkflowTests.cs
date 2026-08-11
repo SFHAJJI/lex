@@ -121,6 +121,26 @@ public sealed class ReleaseWorkflowTests
         Assert.Contains("scope              = local.container_app_id", terraform[end..]);
     }
 
+    [Fact]
+    public void Deployment_can_verify_retention_without_broad_telemetry_access()
+    {
+        var terraform = File.ReadAllText(Path.Combine(RepoRoot(), "infra", "main.tf"));
+        var start = terraform.IndexOf(
+            "resource \"azurerm_role_definition\" \"deploy_telemetry_retention_reader\"",
+            StringComparison.Ordinal);
+        var end = terraform.IndexOf(
+            "resource \"azurerm_role_assignment\" \"deploy_application_insights_reader\"",
+            start, StringComparison.Ordinal);
+
+        Assert.True(start >= 0 && end > start);
+        var role = terraform[start..end];
+        Assert.Contains("Microsoft.Insights/components/read", role);
+        Assert.Contains("Microsoft.OperationalInsights/workspaces/tables/read", role);
+        Assert.DoesNotContain("*", role);
+        Assert.Contains("scope              = data.azurerm_application_insights.web.id", terraform[end..]);
+        Assert.Contains("scope              = data.azurerm_application_insights.web.workspace_id", terraform[end..]);
+    }
+
     private static string RepoRoot()
     {
         var directory = AppContext.BaseDirectory;

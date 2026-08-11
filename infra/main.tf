@@ -1,5 +1,7 @@
 data "azurerm_client_config" "current" {}
 
+data "azurerm_subscription" "current" {}
+
 data "azurerm_resource_group" "platform" {
   name = var.platform_resource_group
 }
@@ -17,6 +19,11 @@ data "azurerm_cognitive_account" "openai" {
 data "azurerm_cognitive_account" "assistant_grader" {
   name                = var.assistant_grader_openai_name
   resource_group_name = var.assistant_grader_openai_resource_group
+}
+
+data "azurerm_application_insights" "web" {
+  name                = "ai-lex-web"
+  resource_group_name = data.azurerm_resource_group.platform.name
 }
 
 locals {
@@ -111,6 +118,33 @@ resource "azurerm_role_assignment" "deploy_runtime_identity" {
   scope                = azurerm_user_assigned_identity.runtime.id
   role_definition_name = "Managed Identity Operator"
   principal_id         = azurerm_user_assigned_identity.deploy.principal_id
+}
+
+resource "azurerm_role_definition" "deploy_telemetry_retention_reader" {
+  name        = "Lex Telemetry Retention Reader"
+  scope       = data.azurerm_subscription.current.id
+  description = "Lets the Lex deployment identity verify only the published App Insights and table-retention policy."
+
+  permissions {
+    actions = [
+      "Microsoft.Insights/components/read",
+      "Microsoft.OperationalInsights/workspaces/tables/read",
+    ]
+  }
+
+  assignable_scopes = [data.azurerm_subscription.current.id]
+}
+
+resource "azurerm_role_assignment" "deploy_application_insights_reader" {
+  scope              = data.azurerm_application_insights.web.id
+  role_definition_id = azurerm_role_definition.deploy_telemetry_retention_reader.role_definition_resource_id
+  principal_id       = azurerm_user_assigned_identity.deploy.principal_id
+}
+
+resource "azurerm_role_assignment" "deploy_log_analytics_table_reader" {
+  scope              = data.azurerm_application_insights.web.workspace_id
+  role_definition_id = azurerm_role_definition.deploy_telemetry_retention_reader.role_definition_resource_id
+  principal_id       = azurerm_user_assigned_identity.deploy.principal_id
 }
 
 resource "azurerm_key_vault" "signing" {
