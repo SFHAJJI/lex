@@ -42,6 +42,28 @@ public static class CorpusIntegrity
         if (manifest.Schema != "lex-corpus/3")
             errors.Add($"manifest schema is '{manifest.Schema}', expected 'lex-corpus/3'");
 
+        if (manifest.AcquisitionRetryMaximumAttempts is < 1 or > 10)
+            errors.Add("manifest acquisition_retry_maximum_attempts must be between 1 and 10");
+        if (manifest.BuildIssues is null)
+            errors.Add("manifest build_issues must be an array");
+        else if (manifest.BuildIssues.Count > 1000)
+            errors.Add("manifest build_issues must contain at most 1000 entries");
+        for (var index = 0; index < (manifest.BuildIssues?.Count ?? 0); index++)
+        {
+            var issue = manifest.BuildIssues![index];
+            if (issue is null)
+            {
+                errors.Add($"manifest build issue {index + 1} is null");
+                continue;
+            }
+            if (string.IsNullOrWhiteSpace(issue.Code) || issue.Code.Length > 128)
+                errors.Add($"manifest build issue {index + 1} has an invalid code");
+            if (string.IsNullOrWhiteSpace(issue.Work) || issue.Work.Length > 512)
+                errors.Add($"manifest build issue {index + 1} has an invalid work");
+            if (issue.Detail?.Length > 2000)
+                errors.Add($"manifest build issue {index + 1} has an oversized detail");
+        }
+
         var worksRoot = Path.Combine(corpusRoot, "works");
         if (!Directory.Exists(worksRoot))
             return new(manifest.Schema, manifest.Works, 0, manifest.Versions, 0, 0, 0, 0,

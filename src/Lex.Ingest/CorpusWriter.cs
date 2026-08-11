@@ -20,12 +20,15 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now, TextWrit
     public int Created { get; private set; }
     public int Updated { get; private set; }
     public int Unchanged { get; private set; }
+    public bool Committed { get; private set; }
+    public IReadOnlyList<SourceBuildIssue> BuildIssues { get; private set; } = [];
 
-    public async Task WriteAsync(ISourceAdapter adapter, CancellationToken ct)
+    public async Task WriteAsync(
+        ISourceAdapter adapter, CancellationToken ct, bool requireComplete = false)
     {
         var desc = adapter.Describe();
         var pub = desc.Publisher;
-        Directory.CreateDirectory(Path.Combine(corpusRoot, "works"));
+        using var candidate = new CorpusCandidate(corpusRoot);
 
         var kinds = new Dictionary<string, int>(StringComparer.Ordinal);
         var langs = new HashSet<string>(StringComparer.Ordinal);
@@ -52,10 +55,13 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now, TextWrit
         }
         var sourceInventory = (adapter as ISourceBuildInventory)?.GetBuildInventory();
         var expectedWorks = Math.Max(enumeratedWorks, sourceInventory?.ExpectedWorks ?? 0);
-        var buildIssues = localBuildIssues.Concat(sourceInventory?.Issues ?? [])
-            .Distinct().OrderBy(issue => issue.Work, StringComparer.Ordinal)
-            .ThenBy(issue => issue.Code, StringComparer.Ordinal)
-            .ThenBy(issue => issue.Detail, StringComparer.Ordinal).ToList();
+        var retryMaximumAttempts = sourceInventory?.RetryMaximumAttempts ?? 1;
+        if (retryMaximumAttempts is < 1 or > 10)
+            throw new InvalidDataException("The source retry maximum must be between 1 and 10 attempts.");
+        if (sourceInventory?.EnumerationComplete == false || enumeratedWorks < expectedWorks)
+            throw new SourceEnumerationIncompleteException(new SourceBuildIssue(
+                "incomplete_enumeration", pub.Id,
+                $"Publisher enumeration returned {enumeratedWorks} of {expectedWorks} expected works; the prior corpus remains unchanged."));
         var totalExpressions = plan.Sum(item => item.Versions.Sum(version => (long)version.Expressions.Count));
         long processedExpressions = 0;
         var lastReportedPercent = -1;
@@ -68,8 +74,6 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now, TextWrit
             works++;
 
             var workDir = Path.Combine(corpusRoot, "works", work.Slug);
-            Directory.CreateDirectory(workDir);
-
             var workMeta = new WorkMeta
             {
                 LexWorkId = $"{pub.Id}:{work.Slug}",
@@ -80,7 +84,7 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now, TextWrit
                 Title = work.TitleHint,
                 SourceUri = versionsOfWork[^1].Expressions.FirstOrDefault()?.SourceUri,
             };
-            WriteIfChanged(Path.Combine(workDir, "meta.json"), JsonSerializer.Serialize(workMeta, CorpusJson.Options));
+            candidate.WriteIfChanged(Path.Combine(workDir, "meta.json"), JsonSerializer.Serialize(workMeta, CorpusJson.Options));
 
             var usedVersionKeys = new HashSet<string>(StringComparer.Ordinal);
             foreach (var v in versionsOfWork.OrderBy(v => v.ValidFrom))
@@ -97,7 +101,6 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now, TextWrit
                 latest = Max(latest, vfrom);
 
                 var versionDir = Path.Combine(workDir, "versions", vkey);
-                Directory.CreateDirectory(versionDir);
                 var metaPath = Path.Combine(versionDir, "meta.json");
                 seenVersionMetadata.Add(Path.GetFullPath(metaPath));
 
@@ -258,19 +261,27 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now, TextWrit
                 // append-only — F12: an existing body file is never opened for writing).
                 // Runs for new AND existing records so a failed night backfills later.
                 var bodyAdded = false;
+                var bodyFailures = new Dictionary<string, SourceBodyFetch>(StringComparer.Ordinal);
                 if (desc.TextIncluded)
                 {
                     foreach (var exprRec in v.Expressions)
                     {
                         var exprMeta = meta.Expressions.Single(e => e.Language == exprRec.Language);
                         if (exprMeta.Observations.Count > 0) continue;   // already observed
-                        var body = await adapter.FetchBody(v, exprRec, ct);
-                        if (body is null) continue;
-                        var bytes = Encoding.UTF8.GetBytes(body);
-                        var ext = body.TrimStart().StartsWith("<?xml", StringComparison.Ordinal) ? "xml" : "html";
+                        var fetched = await adapter.FetchBody(v, exprRec, ct);
+                        ValidateBodyFetch(fetched);
+                        retryMaximumAttempts = Math.Max(retryMaximumAttempts, fetched.Attempts);
+                        if (fetched.Status != SourceBodyStatus.Retrieved || fetched.Text is null)
+                        {
+                            bodyFailures[exprRec.Language] = fetched;
+                            exprMeta.Text.Reason = fetched.IssueCode;
+                            continue;
+                        }
+                        var bytes = Encoding.UTF8.GetBytes(fetched.Text);
+                        var ext = fetched.Text.TrimStart().StartsWith("<?xml", StringComparison.Ordinal) ? "xml" : "html";
                         var file = $"{exprMeta.Language}.{ext}";          // §3.3 rule 3, initial expression
                         var bodyPath = Path.Combine(versionDir, file);
-                        if (!File.Exists(bodyPath)) await File.WriteAllBytesAsync(bodyPath, bytes, ct);
+                        if (!candidate.Exists(bodyPath)) await candidate.WriteBytesAsync(bodyPath, bytes, ct);
                         exprMeta.Observations.Add(new ObservationEntry
                         {
                             File = file,
@@ -292,16 +303,20 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now, TextWrit
                         var hasAlt = exprMeta.Observations.Any(o => o.Format is not null);
                         if (!hasAlt)
                         {
-                            var alt = await adapter.FetchAltManifestation(v, exprRec, ct);
+                            var altResult = await adapter.FetchAltManifestation(v, exprRec, ct);
+                            ValidateManifestationFetch(altResult);
+                            retryMaximumAttempts = Math.Max(retryMaximumAttempts, altResult.Attempts);
+                            var alt = altResult.Status == SourceBodyStatus.Retrieved
+                                ? altResult.Value : null;
                             if (alt is not null)
                             {
                                 var altDirName = $"{exprMeta.Language}.{alt.Format}";
                                 var altDir = Path.Combine(versionDir, altDirName);
-                                Directory.CreateDirectory(altDir);
                                 foreach (var member in alt.Members)
                                 {
                                     var memberPath = Path.Combine(altDir, member.Name);
-                                    if (!File.Exists(memberPath)) await File.WriteAllBytesAsync(memberPath, member.Bytes, ct);
+                                    if (!candidate.Exists(memberPath))
+                                        await candidate.WriteBytesAsync(memberPath, member.Bytes, ct);
                                     exprMeta.Observations.Add(new ObservationEntry
                                     {
                                         File = $"{altDirName}/{member.Name}",
@@ -315,6 +330,13 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now, TextWrit
                                 hasAlt = true;
                                 bodyAdded = true;
                             }
+                            else if (bodyFailures.ContainsKey(exprRec.Language)
+                                     && altResult.Status != SourceBodyStatus.PublisherMetadataOnly)
+                            {
+                                bodyFailures[exprRec.Language] = new SourceBodyFetch(
+                                    altResult.Status, Detail: altResult.Detail, Attempts: altResult.Attempts);
+                                exprMeta.Text.Reason = bodyFailures[exprRec.Language].IssueCode;
+                            }
                         }
                         // an alt manifestation IS observed text: versions whose primary body was
                         // never fetchable (size cap, 404) become text-available through it
@@ -323,6 +345,20 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now, TextWrit
                             exprMeta.Text = new TextInfo { Available = true, Url = exprMeta.Text.Url ?? exprRec.SourceUri };
                             bodyAdded = true;
                         }
+                        if (hasAlt) bodyFailures.Remove(exprRec.Language);
+                    }
+
+                    foreach (var (language, failure) in bodyFailures.OrderBy(item => item.Key, StringComparer.Ordinal))
+                        localBuildIssues.Add(new SourceBuildIssue(failure.IssueCode, work.Slug,
+                            $"version={vkey}; language={language}; attempts={failure.Attempts}; {failure.Detail}"));
+                }
+                else
+                {
+                    foreach (var expression in meta.Expressions)
+                    {
+                        expression.Text.Reason = "publisher_metadata_only";
+                        localBuildIssues.Add(new SourceBuildIssue("publisher_metadata_only", work.Slug,
+                            $"version={vkey}; language={expression.Language}; the source is declared metadata-only."));
                     }
                 }
 
@@ -347,12 +383,23 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now, TextWrit
                 if (existing) Updated++; else Created++;
 
                 meta.RecordSha256 = canonicalRecordSha;
-                await File.WriteAllTextAsync(metaPath, JsonSerializer.Serialize(meta, CorpusJson.Options) + "\n", ct);
+                await candidate.WriteTextAsync(metaPath,
+                    JsonSerializer.Serialize(meta, CorpusJson.Options) + "\n", ct);
             }
         }
 
-        TombstoneMissingVersions(seenVersionMetadata);
+        TombstoneMissingVersions(seenVersionMetadata, candidate);
 
+        sourceInventory = (adapter as ISourceBuildInventory)?.GetBuildInventory();
+        retryMaximumAttempts = Math.Max(
+            retryMaximumAttempts, sourceInventory?.RetryMaximumAttempts ?? 1);
+        if (retryMaximumAttempts is < 1 or > 10)
+            throw new InvalidDataException("The observed source retry maximum must be between 1 and 10 attempts.");
+        var buildIssues = localBuildIssues.Concat(sourceInventory?.Issues ?? [])
+            .Distinct().OrderBy(issue => issue.Work, StringComparer.Ordinal)
+            .ThenBy(issue => issue.Code, StringComparer.Ordinal)
+            .ThenBy(issue => issue.Detail, StringComparer.Ordinal).ToList();
+        BuildIssues = buildIssues;
         var manifest = new ManifestDoc
         {
             Publisher = new Dictionary<string, string>
@@ -380,6 +427,7 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now, TextWrit
             ExpressionsWithText = expressionsWithText,
             ExpressionsWithoutText = expressions - expressionsWithText,
             ScopeExpectedWorks = expectedWorks,
+            AcquisitionRetryMaximumAttempts = retryMaximumAttempts,
             BuildIssues = buildIssues,
             ValidFromEarliest = earliest,
             ValidToLatest = latest,
@@ -387,17 +435,22 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now, TextWrit
             IngesterVersion = "0.1.0",
             PublisherDiscoverySchema = ManifestDoc.CurrentPublisherDiscoverySchema,
         };
-        WriteIfChanged(Path.Combine(corpusRoot, "manifest.json"), JsonSerializer.Serialize(manifest, CorpusJson.Options));
-        WriteIfChanged(Path.Combine(corpusRoot, "NOTICE"), Notice(pub, desc.TextIncluded));
+        candidate.WriteIfChanged(Path.Combine(corpusRoot, "manifest.json"), JsonSerializer.Serialize(manifest, CorpusJson.Options));
+        candidate.WriteIfChanged(Path.Combine(corpusRoot, "NOTICE"), Notice(pub, desc.TextIncluded));
+        if (requireComplete && buildIssues.Count > 0)
+        {
+            foreach (var issue in buildIssues)
+                Console.Error.WriteLine(
+                    $"  [corpus-issue] code={issue.Code} work={issue.Work} detail={issue.Detail}");
+            Console.Error.WriteLine(
+                $"  [corpus] candidate rejected with {buildIssues.Count} typed acquisition issue(s); prior corpus retained");
+            return;
+        }
+        candidate.Commit();
+        Committed = true;
         Console.Error.WriteLine($"  [corpus] works={works} versions={versions} expressions={expressions} " +
             $"with_text={expressionsWithText} without_text={expressions - expressionsWithText} " +
             $"created={Created} updated={Updated} unchanged={Unchanged}");
-    }
-
-    private void WriteIfChanged(string path, string content)
-    {
-        if (File.Exists(path) && File.ReadAllText(path).TrimEnd('\n') == content.TrimEnd('\n')) return;
-        File.WriteAllText(path, content.TrimEnd('\n') + "\n");
     }
 
     private static ExpressionMeta CreateExpressionMeta(ExpressionRecord expression, bool textIncluded) => new()
@@ -427,7 +480,26 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now, TextWrit
         .ThenBy(value => value.SourceUri, StringComparer.Ordinal)
         .ToList();
 
-    private void TombstoneMissingVersions(IReadOnlySet<string> seenVersionMetadata)
+    private static void ValidateBodyFetch(SourceBodyFetch result)
+    {
+        if (result.Attempts is < 1 or > 10)
+            throw new InvalidDataException("A source body outcome reported an invalid attempt count.");
+        if ((result.Status == SourceBodyStatus.Retrieved) != (result.Text is not null))
+            throw new InvalidDataException(
+                "A source body outcome must contain text exactly when its status is Retrieved.");
+    }
+
+    private static void ValidateManifestationFetch(SourceManifestationFetch result)
+    {
+        if (result.Attempts is < 1 or > 10)
+            throw new InvalidDataException("A source manifestation outcome reported an invalid attempt count.");
+        if ((result.Status == SourceBodyStatus.Retrieved) != (result.Value is not null))
+            throw new InvalidDataException(
+                "A source manifestation outcome must contain a value exactly when its status is Retrieved.");
+    }
+
+    private void TombstoneMissingVersions(
+        IReadOnlySet<string> seenVersionMetadata, CorpusCandidate candidate)
     {
         var worksRoot = Path.Combine(corpusRoot, "works");
         if (!Directory.Exists(worksRoot)) return;
@@ -454,7 +526,7 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now, TextWrit
                 Detail = "publisher record absent from the current enumeration",
             });
             meta.RecordSha256 = CorpusHashes.RecordSha256(meta);
-            File.WriteAllText(metaPath, JsonSerializer.Serialize(meta, CorpusJson.Options) + "\n");
+            candidate.WriteIfChanged(metaPath, JsonSerializer.Serialize(meta, CorpusJson.Options));
             Updated++;
         }
     }

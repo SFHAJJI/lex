@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Lex.Law;
 
 namespace Lex.Sources.Legilux;
 
@@ -9,12 +10,14 @@ namespace Lex.Sources.Legilux;
 public sealed class SparqlClient(string endpoint, TimeSpan? pause = null)
 {
     private static readonly HttpClient Http = CreateClient();
+    private static readonly SourceRetryPolicy RetryPolicy = new(MaximumAttempts: 4);
     private readonly TimeSpan _pause = pause ?? TimeSpan.FromMilliseconds(1500);
     private DateTimeOffset _lastRequest = DateTimeOffset.MinValue;
 
     private static HttpClient CreateClient()
     {
-        var c = new HttpClient { Timeout = TimeSpan.FromSeconds(120) };
+        var c = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false })
+            { Timeout = TimeSpan.FromSeconds(120) };
         c.DefaultRequestHeaders.UserAgent.ParseAdd("Lex/0.1");
         c.DefaultRequestHeaders.UserAgent.ParseAdd("(+https://github.com/SFHAJJI/lex)");
         c.DefaultRequestHeaders.Accept.ParseAdd("application/sparql-results+json");
@@ -27,22 +30,39 @@ public sealed class SparqlClient(string endpoint, TimeSpan? pause = null)
         var sinceLast = DateTimeOffset.UtcNow - _lastRequest;
         if (sinceLast < _pause) await Task.Delay(_pause - sinceLast, ct);
 
-        using var content = new FormUrlEncodedContent(new[] { new KeyValuePair<string, string>("query", query) });
-        using var resp = await Http.PostAsync(endpoint, content, ct);
-        _lastRequest = DateTimeOffset.UtcNow;
-        resp.EnsureSuccessStatusCode();
-
-        await using var stream = await resp.Content.ReadAsStreamAsync(ct);
-        using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: ct);
-        var rows = new List<Dictionary<string, string>>();
-        foreach (var binding in doc.RootElement.GetProperty("results").GetProperty("bindings").EnumerateArray())
+        var sent = await SourceHttp.SendAsync(Http, () => new HttpRequestMessage(HttpMethod.Post, endpoint)
         {
-            var row = new Dictionary<string, string>(StringComparer.Ordinal);
-            foreach (var prop in binding.EnumerateObject())
-                row[prop.Name] = prop.Value.GetProperty("value").GetString() ?? "";
-            rows.Add(row);
+            Content = new FormUrlEncodedContent(
+                new[] { new KeyValuePair<string, string>("query", query) }),
+        }, RetryPolicy, ct, completion: HttpCompletionOption.ResponseContentRead);
+        _lastRequest = DateTimeOffset.UtcNow;
+        using var resp = sent.Response;
+        if (resp is null || sent.RetryExhausted || !resp.IsSuccessStatusCode)
+            throw new SourceAcquisitionException(new SourceBuildIssue(
+                sent.RetryExhausted ? "enumeration_retry_exhausted" : "enumeration_http_failure",
+                "lu-legilux",
+                sent.FailureDetail ?? $"The official SPARQL endpoint returned HTTP {(int?)resp?.StatusCode}."),
+                sent.Attempts);
+
+        try
+        {
+            await using var stream = await resp.Content.ReadAsStreamAsync(ct);
+            using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: ct);
+            var rows = new List<Dictionary<string, string>>();
+            foreach (var binding in doc.RootElement.GetProperty("results").GetProperty("bindings").EnumerateArray())
+            {
+                var row = new Dictionary<string, string>(StringComparer.Ordinal);
+                foreach (var prop in binding.EnumerateObject())
+                    row[prop.Name] = prop.Value.GetProperty("value").GetString() ?? "";
+                rows.Add(row);
+            }
+            return rows;
         }
-        return rows;
+        catch (Exception ex) when (ex is JsonException or InvalidOperationException or KeyNotFoundException)
+        {
+            throw new SourceAcquisitionException(new SourceBuildIssue(
+                "enumeration_parser_failure", "lu-legilux", ex.Message), sent.Attempts);
+        }
     }
 
     /// <summary>Runs a paged query; <paramref name="pagedQuery"/> receives (limit, offset).</summary>

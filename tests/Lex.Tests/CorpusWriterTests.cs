@@ -142,6 +142,76 @@ public sealed class CorpusWriterTests : IDisposable
     }
 
     [Fact]
+    public async Task Incomplete_enumeration_preserves_the_prior_clean_corpus_without_tombstones()
+    {
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-01T00:00:00Z"))
+            .WriteAsync(new OneVersionAdapter("in_force", "finance"), default);
+        var before = Snapshot();
+
+        var failure = await Assert.ThrowsAsync<SourceEnumerationIncompleteException>(() =>
+            new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-08T00:00:00Z"))
+                .WriteAsync(new IncompleteAdapter(), default));
+
+        Assert.Equal("incomplete_enumeration", failure.Issue.Code);
+        Assert.Equal(before, Snapshot());
+        var meta = await ReadVersionMeta();
+        Assert.DoesNotContain(meta.Events, item => item.Event == "withdrawn_from_source");
+    }
+
+    [Fact]
+    public async Task Failed_body_acquisition_rolls_back_every_candidate_file()
+    {
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-01T00:00:00Z"))
+            .WriteAsync(new OneVersionAdapter("in_force", "finance",
+                bodyFetch: SourceBodyFetch.Retrieved("<html>publisher text</html>")), default);
+        var before = Snapshot();
+
+        await Assert.ThrowsAsync<HttpRequestException>(() =>
+            new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-08T00:00:00Z"))
+                .WriteAsync(new OneVersionAdapter("in_force", "finance", ["en", "fr"],
+                    titleHint: "Candidate title", bodyException: new HttpRequestException("network")), default));
+
+        Assert.Equal(before, Snapshot());
+    }
+
+    [Fact]
+    public async Task Typed_metadata_only_outcome_is_signed_into_the_build_inventory()
+    {
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-08T00:00:00Z"))
+            .WriteAsync(new OneVersionAdapter("in_force", "finance",
+                bodyFetch: new SourceBodyFetch(SourceBodyStatus.PermanentNotFound,
+                    Detail: "publisher returned 404", Attempts: 4)), default);
+
+        var manifest = JsonSerializer.Deserialize<ManifestDoc>(
+            await File.ReadAllTextAsync(Path.Combine(_dir, "manifest.json")), CorpusJson.Options)!;
+        var issue = Assert.Single(manifest.BuildIssues);
+        Assert.Equal("body_not_found", issue.Code);
+        Assert.Contains("attempts=4", issue.Detail);
+        Assert.Equal(4, manifest.AcquisitionRetryMaximumAttempts);
+        Assert.Equal("body_not_found", Assert.Single((await ReadVersionMeta()).Expressions).Text.Reason);
+    }
+
+    [Fact]
+    public async Task Production_candidate_with_a_typed_issue_keeps_the_prior_corpus_selected()
+    {
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-01T00:00:00Z"))
+            .WriteAsync(new OneVersionAdapter("in_force", "finance",
+                bodyFetch: SourceBodyFetch.Retrieved("<html>publisher text</html>")), default);
+        var before = Snapshot();
+
+        var candidate = new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-08T00:00:00Z"));
+        await candidate.WriteAsync(new OneVersionAdapter("in_force", "finance", ["en", "fr"],
+            titleHint: "Candidate title",
+            bodyFetch: new SourceBodyFetch(SourceBodyStatus.PermanentNotFound,
+                Detail: "publisher returned 404", Attempts: 4)), default,
+            requireComplete: true);
+
+        Assert.False(candidate.Committed);
+        Assert.Equal("body_not_found", Assert.Single(candidate.BuildIssues).Code);
+        Assert.Equal(before, Snapshot());
+    }
+
+    [Fact]
     public void Legacy_manifest_without_expected_scope_keeps_inventory_unavailable()
     {
         var manifest = JsonSerializer.Deserialize<ManifestDoc>("""
@@ -159,6 +229,15 @@ public sealed class CorpusWriterTests : IDisposable
         Assert.Null(manifest.ScopeExpectedWorks);
     }
 
+    private async Task<VersionMeta> ReadVersionMeta() => JsonSerializer.Deserialize<VersionMeta>(
+        await File.ReadAllTextAsync(Path.Combine(
+            _dir, "works", "w1", "versions", "2024-01-01", "meta.json")), CorpusJson.Options)!;
+
+    private Dictionary<string, string> Snapshot() => Directory.EnumerateFiles(_dir, "*", SearchOption.AllDirectories)
+        .ToDictionary(path => Path.GetRelativePath(_dir, path).Replace('\\', '/'),
+            path => Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(path))),
+            StringComparer.Ordinal);
+
     public void Dispose()
     {
         try { Directory.Delete(_dir, true); } catch { }
@@ -171,13 +250,17 @@ public sealed class CorpusWriterTests : IDisposable
         string titleShort = "Work one",
         IReadOnlyList<PublisherMetadataRecord>? publisherMetadata = null,
         IReadOnlyList<string>? documentRoles = null,
-        bool hasVersions = true) : ISourceAdapter
+        bool hasVersions = true,
+        SourceBodyFetch? bodyFetch = null,
+        string titleHint = "Work one",
+        Exception? bodyException = null) : ISourceAdapter
     {
-        private readonly WorkRef _work = new(new Identifier("official:w1"), "w1", "REG", "Work one");
+        private readonly WorkRef _work = new(new Identifier("official:w1"), "w1", "REG", titleHint);
 
         public PublisherDescriptor Describe() => new(
             new Publisher("test", "Test", "EU", "https://example.test", Tier.A, "test", null),
-            [], languages ?? ["en"], TextIncluded: false, TextPublic: false, HistoryBegins: "publisher");
+            [], languages ?? ["en"], TextIncluded: bodyFetch is not null || bodyException is not null,
+            TextPublic: bodyFetch is not null || bodyException is not null, HistoryBegins: "publisher");
 
         public async IAsyncEnumerable<WorkRef> EnumerateWorks(
             [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
@@ -207,8 +290,35 @@ public sealed class CorpusWriterTests : IDisposable
             return Task.FromResult(versions);
         }
 
-        public Task<string?> FetchBody(VersionRecord version, ExpressionRecord expression, CancellationToken ct)
-            => Task.FromResult<string?>(null);
+        public Task<SourceBodyFetch> FetchBody(VersionRecord version, ExpressionRecord expression, CancellationToken ct)
+        {
+            if (bodyException is not null) throw bodyException;
+            return Task.FromResult(bodyFetch
+                ?? new SourceBodyFetch(SourceBodyStatus.PublisherMetadataOnly));
+        }
+    }
+
+    private sealed class IncompleteAdapter : ISourceAdapter, ISourceBuildInventory
+    {
+        public PublisherDescriptor Describe() => new(
+            new Publisher("test", "Test", "EU", "https://example.test", Tier.A, "test", null),
+            [], ["en"], TextIncluded: true, TextPublic: true, HistoryBegins: "publisher");
+
+        public SourceBuildInventory GetBuildInventory() => new(1, [], EnumerationComplete: false, RetryMaximumAttempts: 4);
+
+        public async IAsyncEnumerable<WorkRef> EnumerateWorks(
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+            await Task.CompletedTask;
+            yield break;
+        }
+
+        public Task<IReadOnlyList<VersionRecord>> FetchVersions(WorkRef work, CancellationToken ct) =>
+            Task.FromResult<IReadOnlyList<VersionRecord>>([]);
+
+        public Task<SourceBodyFetch> FetchBody(VersionRecord version, ExpressionRecord expression, CancellationToken ct) =>
+            throw new InvalidOperationException("No work may be fetched after an incomplete enumeration.");
     }
 
     private sealed class EmptyAdapter : ISourceAdapter
@@ -228,7 +338,7 @@ public sealed class CorpusWriterTests : IDisposable
         public Task<IReadOnlyList<VersionRecord>> FetchVersions(WorkRef work, CancellationToken ct) =>
             Task.FromResult<IReadOnlyList<VersionRecord>>([]);
 
-        public Task<string?> FetchBody(VersionRecord version, ExpressionRecord expression, CancellationToken ct) =>
-            Task.FromResult<string?>(null);
+        public Task<SourceBodyFetch> FetchBody(VersionRecord version, ExpressionRecord expression, CancellationToken ct) =>
+            Task.FromResult(new SourceBodyFetch(SourceBodyStatus.PublisherMetadataOnly));
     }
 }

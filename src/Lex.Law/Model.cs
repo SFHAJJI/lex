@@ -85,13 +85,60 @@ public sealed record PublisherDescriptor(
 
 public sealed record SourceBuildIssue(string Code, string Work, string? Detail = null);
 
+public sealed class SourceAcquisitionException(SourceBuildIssue issue, int attempts = 1)
+    : Exception($"{issue.Code}: {issue.Work}: {issue.Detail}")
+{
+    public SourceBuildIssue Issue { get; } = issue;
+    public int Attempts { get; } = attempts;
+}
+
 public sealed record SourceBuildInventory(
     int ExpectedWorks,
-    IReadOnlyList<SourceBuildIssue> Issues);
+    IReadOnlyList<SourceBuildIssue> Issues,
+    bool EnumerationComplete = true,
+    int RetryMaximumAttempts = 1);
 
 public interface ISourceBuildInventory
 {
     SourceBuildInventory GetBuildInventory();
+}
+
+/// <summary>
+/// The observable outcome of attempting to acquire one publisher expression. Absence is data,
+/// never an overloaded null: the corpus build must be able to distinguish a declared
+/// metadata-only record from transport exhaustion, a permanent publisher response, an
+/// oversized body, or content that could not be parsed safely.
+/// </summary>
+public enum SourceBodyStatus
+{
+    Retrieved,
+    PublisherMetadataOnly,
+    PermanentNotFound,
+    Gone,
+    Oversized,
+    ParserFailure,
+    RetryExhausted,
+}
+
+public sealed record SourceBodyFetch(
+    SourceBodyStatus Status,
+    string? Text = null,
+    string? Detail = null,
+    int Attempts = 1)
+{
+    public static SourceBodyFetch Retrieved(string text, int attempts = 1) =>
+        new(SourceBodyStatus.Retrieved, text, Attempts: attempts);
+
+    public string IssueCode => Status switch
+    {
+        SourceBodyStatus.PublisherMetadataOnly => "publisher_metadata_only",
+        SourceBodyStatus.PermanentNotFound => "body_not_found",
+        SourceBodyStatus.Gone => "body_gone",
+        SourceBodyStatus.Oversized => "body_oversized",
+        SourceBodyStatus.ParserFailure => "body_parser_failure",
+        SourceBodyStatus.RetryExhausted => "body_retry_exhausted",
+        _ => throw new InvalidOperationException("A retrieved body is not a build issue."),
+    };
 }
 
 /// <summary>One file inside an alternative manifestation (an archive member). Bytes are publisher-verbatim.</summary>
@@ -104,6 +151,16 @@ public sealed record ManifestationMember(string Name, byte[] Bytes);
 /// </summary>
 public sealed record ManifestationFetch(string Format, IReadOnlyList<ManifestationMember> Members, string SourceUri);
 
+public sealed record SourceManifestationFetch(
+    SourceBodyStatus Status,
+    ManifestationFetch? Value = null,
+    string? Detail = null,
+    int Attempts = 1)
+{
+    public static SourceManifestationFetch Retrieved(ManifestationFetch value, int attempts = 1) =>
+        new(SourceBodyStatus.Retrieved, value, Attempts: attempts);
+}
+
 /// <summary>
 /// C4 — the adapter seam. An adapter never writes files, never touches git, never knows the corpus layout (F8).
 /// A Tier A/B adapter whose body channel is gated runs in declared metadata-only mode: FetchBody is not called.
@@ -113,7 +170,7 @@ public interface ISourceAdapter
     PublisherDescriptor Describe();
     IAsyncEnumerable<WorkRef> EnumerateWorks(CancellationToken ct);
     Task<IReadOnlyList<VersionRecord>> FetchVersions(WorkRef work, CancellationToken ct);
-    Task<string?> FetchBody(VersionRecord version, ExpressionRecord expression, CancellationToken ct);
+    Task<SourceBodyFetch> FetchBody(VersionRecord version, ExpressionRecord expression, CancellationToken ct);
 
     /// <summary>
     /// D48: fetch an alternative structural manifestation for an expression, or null when the
@@ -121,6 +178,7 @@ public interface ISourceAdapter
     /// the returned content identifies as the REQUESTED version — a manifestation that cannot
     /// be identity-checked is not evidence and must be dropped.
     /// </summary>
-    Task<ManifestationFetch?> FetchAltManifestation(VersionRecord version, ExpressionRecord expression, CancellationToken ct)
-        => Task.FromResult<ManifestationFetch?>(null);
+    Task<SourceManifestationFetch> FetchAltManifestation(
+        VersionRecord version, ExpressionRecord expression, CancellationToken ct) =>
+        Task.FromResult(new SourceManifestationFetch(SourceBodyStatus.PublisherMetadataOnly));
 }

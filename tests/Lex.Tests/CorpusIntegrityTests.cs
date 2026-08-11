@@ -2,6 +2,7 @@ using Lex.Ingest;
 using Lex.Law;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace Lex.Tests;
 
@@ -102,6 +103,37 @@ public sealed class CorpusIntegrityTests : IDisposable
             meta.RecordSha256);
     }
 
+    [Fact]
+    public async Task Acquisition_contract_fields_must_be_bounded_and_complete()
+    {
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-06T00:00:00Z"))
+            .WriteAsync(new TextAdapter(), default);
+
+        var manifestPath = Path.Combine(_dir, "manifest.json");
+        var manifest = JsonSerializer.Deserialize<ManifestDoc>(
+            await File.ReadAllTextAsync(manifestPath), CorpusJson.Options)!;
+
+        manifest.AcquisitionRetryMaximumAttempts = 0;
+        manifest.BuildIssues = [new SourceBuildIssue("", "w1", new string('x', 2001))];
+        await File.WriteAllTextAsync(manifestPath,
+            JsonSerializer.Serialize(manifest, CorpusJson.Options) + "\n");
+
+        var invalid = CorpusIntegrity.Verify(_dir);
+        Assert.Contains(invalid.Errors, error => error.Contains(
+            "acquisition_retry_maximum_attempts", StringComparison.Ordinal));
+        Assert.Contains(invalid.Errors, error => error.Contains(
+            "build issue 1 has an invalid code", StringComparison.Ordinal));
+        Assert.Contains(invalid.Errors, error => error.Contains(
+            "build issue 1 has an oversized detail", StringComparison.Ordinal));
+
+        manifest.AcquisitionRetryMaximumAttempts = 1;
+        var explicitNull = JsonNode.Parse(JsonSerializer.Serialize(manifest, CorpusJson.Options))!;
+        explicitNull["build_issues"] = null;
+        await File.WriteAllTextAsync(manifestPath, explicitNull.ToJsonString() + "\n");
+        Assert.Contains(CorpusIntegrity.Verify(_dir).Errors,
+            error => error == "manifest build_issues must be an array");
+    }
+
     public void Dispose()
     {
         try { Directory.Delete(_dir, true); } catch { }
@@ -140,10 +172,10 @@ public sealed class CorpusIntegrityTests : IDisposable
             return Task.FromResult(versions);
         }
 
-        public Task<string?> FetchBody(
+        public Task<SourceBodyFetch> FetchBody(
             VersionRecord version, ExpressionRecord expression, CancellationToken ct) =>
-            Task.FromResult<string?>(multiline
+            Task.FromResult(SourceBodyFetch.Retrieved(multiline
                 ? $"<html lang=\"{expression.Language}\">\nofficial\n</html>"
-                : $"<html lang=\"{expression.Language}\">official</html>");
+                : $"<html lang=\"{expression.Language}\">official</html>"));
     }
 }

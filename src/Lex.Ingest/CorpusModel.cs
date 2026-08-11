@@ -108,10 +108,17 @@ public sealed class ManifestDoc
     public int ExpressionsWithText { get; set; }
     public int ExpressionsWithoutText { get; set; }
     public int? ScopeExpectedWorks { get; set; }
+    public int AcquisitionRetryMaximumAttempts { get; set; } = 1;
     public List<SourceBuildIssue> BuildIssues { get; set; } = [];
     public string? ValidFromEarliest { get; set; }
     public string? ValidToLatest { get; set; }
     public required string HistoryBegins { get; set; }
     public required string IngesterVersion { get; set; }
     public string? PublisherDiscoverySchema { get; set; }
+}
+
+public sealed class SourceEnumerationIncompleteException(SourceBuildIssue issue)
+    : Exception($"{issue.Code}: {issue.Work}: {issue.Detail}")
+{
+    public SourceBuildIssue Issue { get; } = issue;
 }

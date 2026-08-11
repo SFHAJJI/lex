@@ -51,8 +51,8 @@ public class SourceAdapterRegistryTests
         public Task<IReadOnlyList<VersionRecord>> FetchVersions(WorkRef work, CancellationToken ct)
             => Task.FromResult<IReadOnlyList<VersionRecord>>([]);
 
-        public Task<string?> FetchBody(
+        public Task<SourceBodyFetch> FetchBody(
             VersionRecord version, ExpressionRecord expression, CancellationToken ct)
-            => Task.FromResult<string?>(null);
+            => Task.FromResult(new SourceBodyFetch(SourceBodyStatus.PublisherMetadataOnly));
     }
 }

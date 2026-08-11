@@ -130,8 +130,9 @@ switch (args0[0])
         var corpus = Get("--corpus") ?? throw new ArgumentException("--corpus required");
         var adapter = sourceAdapters.Resolve(publisher, Get);
         Console.Error.WriteLine($"[lex] ingest {publisher} -> {corpus}");
-        await new CorpusWriter(corpus, now).WriteAsync(adapter, CancellationToken.None);
-        return 0;
+        var writer = new CorpusWriter(corpus, now);
+        await writer.WriteAsync(adapter, CancellationToken.None, requireComplete: true);
+        return writer.Committed ? 0 : 4;
     }
     case "work-enrichment-build":
     {
