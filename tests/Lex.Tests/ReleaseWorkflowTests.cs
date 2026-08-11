@@ -84,21 +84,19 @@ public sealed class ReleaseWorkflowTests
         Assert.Contains("candidate load used more than one replica", workflow);
         Assert.Contains("metric_window_start_epoch=$((load_started_epoch / 60 * 60))", workflow);
         Assert.Contains("metric_window_end_epoch=$(((load_finished_epoch + 59) / 60 * 60))", workflow);
+        Assert.Contains("metric_window_end=$(date -u -d \"@$metric_window_end_epoch\" +%Y-%m-%dT%H:%M:%SZ)", workflow);
         Assert.Contains("metric_required_timestamp_epoch=$(((load_finished_epoch - 1) / 60 * 60))", workflow);
         var metricWait = candidateBlock.IndexOf(
-            "metric_wait_seconds=$((metric_window_end_epoch - metric_now_epoch))", StringComparison.Ordinal);
+            "metric_ready_after_epoch=$((metric_window_end_epoch + 60))", StringComparison.Ordinal);
         var metricPoll = candidateBlock.IndexOf("for attempt in $(seq 1 36)", StringComparison.Ordinal);
         Assert.True(metricWait >= 0 && metricWait < metricPoll);
         Assert.Contains("[ \"$metric_wait_seconds\" -gt 0 ] && sleep \"$metric_wait_seconds\"", workflow);
-        Assert.Contains("metric_query_end_epoch=\"$metric_now_epoch\"", workflow);
-        Assert.DoesNotContain("metric_now_epoch + 59", workflow);
-        Assert.Contains("timespan=$metric_window_start/$metric_query_end", workflow);
-        Assert.Contains("--arg required \"$metric_required_timestamp\"", workflow);
-        Assert.Contains("select(.timeStamp >= $start and .timeStamp <= $required)", workflow);
-        Assert.Contains("select(.timeStamp == $required and .maximum != null)", workflow);
-        Assert.Contains("[ \"$memory_required\" -gt 0 ] && [ \"$replicas_required\" -gt 0 ] && break", workflow);
-        Assert.DoesNotContain("timespan=$load_started/$load_finished", workflow);
-        Assert.DoesNotContain("timespan=$metric_window_start/$metric_window_end", workflow);
+        Assert.Contains("timespan=$metric_window_start/$metric_window_end", workflow);
+        Assert.Contains("scripts/deploy/metric_evidence.py", workflow);
+        Assert.Contains("revisionName eq '$candidate'", workflow);
+        Assert.Contains("revisionName eq '*'", workflow);
+        Assert.Contains("top=200", workflow);
+        Assert.Contains("metric_confirmation", workflow);
         Assert.Contains("metric response shape", workflow);
         Assert.Contains("union isfuzzy=true requests, dependencies, traces", candidateBlock);
         Assert.Contains("timestamp > ago(15m) and operation_Id == '$trace_id'", candidateBlock);
@@ -215,10 +213,10 @@ public sealed class ReleaseWorkflowTests
     public void Candidate_metric_evidence_allows_for_Azure_Monitor_ingestion_lag()
     {
         var workflow = File.ReadAllText(Path.Combine(RepoRoot(), ".github", "workflows", "deploy.yml"));
-        var metricsStart = workflow.IndexOf("memory_max=0", StringComparison.Ordinal);
+        var metricsStart = workflow.IndexOf("metric_evidence=''", StringComparison.Ordinal);
         Assert.True(metricsStart >= 0);
 
-        var metricsEnd = workflow.IndexOf("[ \"$memory_required\" -gt 0 ]", metricsStart,
+        var metricsEnd = workflow.IndexOf("[ \"$memory_max\" -le 1610612736 ]", metricsStart,
             StringComparison.Ordinal);
 
         Assert.True(metricsEnd > metricsStart);
@@ -228,8 +226,14 @@ public sealed class ReleaseWorkflowTests
         Assert.Contains("api-version=2023-10-01", metricsBlock);
         Assert.Contains("metricnames=WorkingSetBytes,Replicas", metricsBlock);
         Assert.DoesNotContain("az monitor metrics list", metricsBlock);
-        Assert.Contains("candidate memory metric did not cover required load bucket", workflow);
-        Assert.Contains("candidate replica metric did not cover required load bucket", workflow);
+        Assert.Contains("scripts/deploy/metric_evidence.py", metricsBlock);
+        Assert.Contains("revisionName eq '$candidate'", metricsBlock);
+        Assert.Contains("revisionName eq '*'", metricsBlock);
+        Assert.Contains("top=200", metricsBlock);
+        Assert.Contains("metric_confirmation", metricsBlock);
+        Assert.Equal(3, Regex.Matches(metricsBlock, Regex.Escape(
+            "|| printf '{\"value\":[]}'")).Count);
+        Assert.Contains("metrics were not independently confirmed", metricsBlock);
     }
 
     [Fact]
