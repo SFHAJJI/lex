@@ -126,14 +126,14 @@ public sealed class ReleaseWorkflowTests
     {
         var terraform = File.ReadAllText(Path.Combine(RepoRoot(), "infra", "main.tf"));
         var start = terraform.IndexOf(
-            "resource \"azurerm_role_definition\" \"deploy_telemetry_retention_reader\"",
+            "resource \"azurerm_role_definition\" \"deploy_application_insights_metadata_reader\"",
             StringComparison.Ordinal);
-        Assert.True(start >= 0, "Telemetry-retention role definition is missing.");
+        Assert.True(start >= 0, "Application Insights metadata role is missing.");
         var end = terraform.IndexOf(
             "resource \"azurerm_role_assignment\" \"deploy_application_insights_reader\"",
             start, StringComparison.Ordinal);
 
-        Assert.True(end > start, "Telemetry-retention role assignment is missing.");
+        Assert.True(end > start, "Application Insights metadata assignment is missing.");
         var role = terraform[start..end];
         var actionsStart = role.IndexOf("actions = [", StringComparison.Ordinal);
         Assert.True(actionsStart >= 0, "Telemetry-retention role actions are missing.");
@@ -141,11 +141,33 @@ public sealed class ReleaseWorkflowTests
         Assert.True(actionsEnd > actionsStart, "Telemetry-retention role actions are incomplete.");
         var actions = role[actionsStart..actionsEnd];
         Assert.Contains("Microsoft.Insights/components/read", role);
-        Assert.Contains("Microsoft.OperationalInsights/workspaces/tables/read", role);
-        Assert.Equal(2, Regex.Matches(actions, "\"Microsoft\\.").Count);
+        Assert.Single(Regex.Matches(actions, "\"Microsoft\\.").Cast<Match>());
         Assert.DoesNotContain("/*", actions);
         Assert.DoesNotContain("\"*\"", actions);
+        Assert.Contains("scope       = data.azurerm_resource_group.platform.id", role);
+        Assert.Contains("assignable_scopes = [data.azurerm_resource_group.platform.id]", role);
         Assert.Contains("scope              = data.azurerm_application_insights.web.id", terraform[end..]);
+
+        start = terraform.IndexOf(
+            "resource \"azurerm_role_definition\" \"deploy_log_analytics_table_policy_reader\"",
+            StringComparison.Ordinal);
+        Assert.True(start >= 0, "Log Analytics table-policy role is missing.");
+        end = terraform.IndexOf(
+            "resource \"azurerm_role_assignment\" \"deploy_log_analytics_table_reader\"",
+            start, StringComparison.Ordinal);
+        Assert.True(end > start, "Log Analytics table-policy assignment is missing.");
+        role = terraform[start..end];
+        actionsStart = role.IndexOf("actions = [", StringComparison.Ordinal);
+        Assert.True(actionsStart >= 0, "Log Analytics role actions are missing.");
+        actionsEnd = role.IndexOf(']', actionsStart);
+        Assert.True(actionsEnd > actionsStart, "Log Analytics role actions are incomplete.");
+        actions = role[actionsStart..actionsEnd];
+        Assert.Contains("Microsoft.OperationalInsights/workspaces/tables/read", role);
+        Assert.Single(Regex.Matches(actions, "\"Microsoft\\.").Cast<Match>());
+        Assert.DoesNotContain("/*", actions);
+        Assert.DoesNotContain("\"*\"", actions);
+        Assert.Contains("scope       = local.log_analytics_resource_group_id", role);
+        Assert.Contains("assignable_scopes = [local.log_analytics_resource_group_id]", role);
         Assert.Contains("scope              = data.azurerm_application_insights.web.workspace_id", terraform[end..]);
     }
 

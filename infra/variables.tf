@@ -49,6 +49,11 @@ variable "azure_openai_name" {
   default = "oai-soufien-dev"
 }
 
+variable "application_insights_name" {
+  type    = string
+  default = "ai-lex-web"
+}
+
 variable "assistant_grader_openai_resource_group" {
   type    = string
   default = "rg-enercop-dev"
