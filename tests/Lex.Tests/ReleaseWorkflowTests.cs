@@ -23,7 +23,7 @@ public sealed class ReleaseWorkflowTests
         Assert.Contains("mapfile -t traffic_bearers", workflow);
         Assert.Contains("expected exactly one traffic-bearing revision before candidate creation", workflow);
         Assert.Contains("--connect-timeout 5 --max-time 60", workflow);
-        Assert.Contains(".verifiedManifestSet == $manifest", workflow);
+        Assert.Contains("scripts/deploy/candidate_gates.py readyz \"$MANIFEST_SET\"", workflow);
         Assert.Contains("requestRows=countif(itemType == 'request')", workflow);
         Assert.Contains("[ \"$request_rows\" -gt 0 ] && break", workflow);
     }
@@ -42,7 +42,7 @@ public sealed class ReleaseWorkflowTests
         Assert.Contains("echo \"::error::$repo release is missing $manifest\"", workflow);
         Assert.Contains("--build-arg \"LEX_REQUIRE_ARTIFACT_MANIFEST=1\"", workflow);
         Assert.Contains("{name:\"LEX_REQUIRE_ARTIFACT_MANIFEST\",value:\"1\"}", workflow);
-        Assert.Contains(".[0].artifact_manifest_id == $manifest", workflow);
+        Assert.Contains("scripts/deploy/candidate_gates.py eu-exact \"$MANIFEST_SET\"", workflow);
     }
 
     [Fact]
@@ -116,37 +116,28 @@ public sealed class ReleaseWorkflowTests
         Assert.DoesNotContain("revision_get \"https://$rollback_fqdn/readyz\"", workflow);
         Assert.Equal(2, Regex.Matches(workflow, Regex.Escape(
             "revision_get \"https://$fqdn/")).Count);
-        Assert.Contains(".requiredPublishers == [\"eu-eurlex\", \"lu-legilux\"]", workflow);
-        Assert.Contains(".mountedPublishers == [\"eu-eurlex\", \"lu-legilux\"]", workflow);
-        Assert.DoesNotContain(".required_publishers", workflow);
-        Assert.DoesNotContain(".mounted_publishers", workflow);
+        Assert.Contains("scripts/deploy/candidate_gates.py readyz \"$MANIFEST_SET\"", workflow);
+        Assert.Contains("scripts/deploy/candidate_gates.py coverage", workflow);
+        Assert.Contains("scripts/deploy/candidate_gates.py eu-exact \"$MANIFEST_SET\"", workflow);
+        Assert.Contains("scripts/deploy/candidate_gates.py lu-temporal", workflow);
+        Assert.Contains("scripts/deploy/candidate_gates.py eu-hybrid", workflow);
         Assert.Equal(2, Regex.Matches(workflow, Regex.Escape(
             "{ [ \"$rollback_state\" = \"Running\" ] || [ \"$rollback_state\" = \"RunningAtMaxScale\" ]; }")).Count);
         Assert.Equal(2, Regex.Matches(workflow, Regex.Escape(
             "{ [ \"$state\" = \"Running\" ] || [ \"$state\" = \"RunningAtMaxScale\" ]; }")).Count);
-        Assert.Contains("current-user injection canary reached the reply", workflow);
-        Assert.Contains("restored-transcript injection canary reached the reply", workflow);
         Assert.Contains("assistant_smoke=$(curl", workflow);
         Assert.Contains("Show coverage.", workflow);
-        Assert.Equal(3, Regex.Matches(workflow, Regex.Escape(
-            ".trace[0].operations as $operations")).Count);
-        Assert.Equal(3, Regex.Matches(workflow, Regex.Escape(
-            "($operations | length) == 1")).Count);
-        Assert.Equal(3, Regex.Matches(workflow, Regex.Escape(
-            "$operations[0].tool == \"coverage\"")).Count);
-        Assert.DoesNotContain(".trace[0].operations | length == 1", workflow);
-        Assert.DoesNotContain("and .[0].tool == \"coverage\"", workflow);
-        Assert.Contains("any(.trace[]; .phase == \"primary\"", workflow);
-        Assert.Contains("and .tool == \"coverage\" and .status == \"ok\")", workflow);
+        Assert.Contains("scripts/deploy/candidate_gates.py assistant", workflow);
+        Assert.Equal(2, Regex.Matches(workflow, Regex.Escape(
+            "scripts/deploy/candidate_gates.py injection")).Count);
         Assert.Contains("assistant smoke did not execute the coverage operation", workflow);
         Assert.Contains("candidate readiness contract failed", workflow);
         Assert.Contains("coverage smoke did not expose both required publishers", workflow);
-        Assert.Contains("exact EU identifier did not rank the base act first", workflow);
-        Assert.Contains("candidate search result was not bound to the signed manifest", workflow);
+        Assert.Contains("exact EU identifier contract failed", workflow);
         Assert.Contains("Luxembourg temporal smoke returned no provisions", workflow);
         Assert.Contains("EU hybrid retrieval smoke returned no hits", workflow);
-        Assert.Contains("current-user injection changed the authorized operation", workflow);
-        Assert.Contains("restored-transcript injection changed the authorized operation", workflow);
+        Assert.Contains("current-user injection escaped its authorized boundary", workflow);
+        Assert.Contains("restored-transcript injection escaped its authorized boundary", workflow);
         Assert.Contains("set -euo pipefail", candidateBlock);
         Assert.Contains("candidate MCP response did not contain a text result", workflow);
         Assert.Contains("--revision \"$candidate\" --query properties.template.scale", workflow);

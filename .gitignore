@@ -23,3 +23,5 @@ web/node_modules/
 web/playwright-report/
 web/test-results/
 src/Lex.Web/wwwroot/app/
+__pycache__/
+*.pyc
