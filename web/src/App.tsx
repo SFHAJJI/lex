@@ -24,6 +24,9 @@ const NAMES: Record<string, string> = {
 
 /** Rows per page in the period view. Enough to scan, small enough to arrive quickly. */
 const PAGE = 25;
+const PRESENTATION_FRAME_ATTEMPTS = 8;
+const presentationMark = (operationId: string) =>
+  `lex-operation-result-received:${operationId}`;
 /** Follow-ups derived from the view on screen — always valid, and free. */
 function chipsFor(s: State, ui?: UiEffect, hasText = true): { label: string; go: Partial<State> }[] {
   // Offering a window the reader is already looking at is noise, so the twelve-month chip only
@@ -83,12 +86,27 @@ export default function App() {
   // committed a non-empty typed result and the next animation frame made its box paint-ready.
   useLayoutEffect(() => {
     if (!assistantPresentationId || typeof performance === "undefined") return;
-    const frame = requestAnimationFrame(() => {
+    const mark = presentationMark(assistantPresentationId);
+    let attempt = 0;
+    let frame = 0;
+    let cancelled = false;
+    const inspect = () => {
+      if (cancelled) return;
       const result = [...document.querySelectorAll<HTMLElement>(
         "[data-lex-operation-result-id]")].find((element) =>
           element.dataset.lexOperationResultId === assistantPresentationId);
-      const received = performance.getEntriesByName("lex-operation-result-received").at(-1);
-      if (!result || !received || result.getBoundingClientRect().height <= 0) return;
+      const received = performance.getEntriesByName(mark).at(-1);
+      if (!result || !received || result.getBoundingClientRect().height <= 0) {
+        attempt += 1;
+        if (attempt < PRESENTATION_FRAME_ATTEMPTS) frame = requestAnimationFrame(inspect);
+        else {
+          pendingPresentations.current.delete(assistantPresentationId);
+          performance.clearMarks(mark);
+          setAssistantPresentationId((current) =>
+            current === assistantPresentationId ? undefined : current);
+        }
+        return;
+      }
       const duration = Math.max(0, performance.now() - received.startTime);
       performance.measure("lex-operation-result-received-to-presented", {
         start: received.startTime,
@@ -99,8 +117,15 @@ export default function App() {
       }));
       pendingPresentations.current.delete(assistantPresentationId);
       measuredPresentations.current.add(assistantPresentationId);
-    });
-    return () => cancelAnimationFrame(frame);
+      performance.clearMarks(mark);
+    };
+    frame = requestAnimationFrame(inspect);
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(frame);
+      pendingPresentations.current.delete(assistantPresentationId);
+      performance.clearMarks(mark);
+    };
   }, [assistantPresentationId]);
 
   // The marketing below the fold belongs to a first-time visitor, not to someone reading a
@@ -338,8 +363,12 @@ export default function App() {
       setOperationViews(compoundOperationViews(r));
       const presentation = r.operations?.find((operation) => hasView(operation.ui));
       if (presentation
+          && typeof performance !== "undefined"
           && !pendingPresentations.current.has(presentation.operation_id)
           && !measuredPresentations.current.has(presentation.operation_id)) {
+        const mark = presentationMark(presentation.operation_id);
+        performance.clearMarks(mark);
+        performance.mark(mark);
         pendingPresentations.current.add(presentation.operation_id);
         setAssistantPresentationId(presentation.operation_id);
       }
