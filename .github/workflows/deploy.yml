@@ -247,8 +247,10 @@ jobs:
               || { echo "::error::pinned rollback image differs from current production"; exit 1; }
             rollback_fqdn=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
               --revision "$rollback" --query properties.fqdn -o tsv)
+            # The immutable production image may predate /readyz. Its exact image and
+            # legacy health contract are sufficient here; the new candidate must pass
+            # both /healthz and /readyz below.
             revision_get "https://$rollback_fqdn/healthz" >/dev/null
-            revision_get "https://$rollback_fqdn/readyz" | jq -e '.ready == true' >/dev/null
           fi
           # A revision is immutable and its inputs are code plus the complete artifact set.
           # Include the run identity as well so an exact deployment can be retried safely.
