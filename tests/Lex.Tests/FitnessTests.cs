@@ -96,8 +96,9 @@ public class FitnessTests
             StringComparison.Ordinal);
         Assert.True(start >= 0);
         var requestStart = source.IndexOf("var req = new JsonObject", start, StringComparison.Ordinal);
+        Assert.True(requestStart > start);
         var requestEnd = source.IndexOf("using var httpReq", requestStart, StringComparison.Ordinal);
-        Assert.True(requestStart > start && requestEnd > requestStart);
+        Assert.True(requestEnd > requestStart);
         var efforts = Regex.Matches(source[requestStart..requestEnd],
             "\\[\"reasoning_effort\"\\]\\s*=\\s*\"(?<value>[^\"]+)\"");
 
