@@ -382,7 +382,8 @@ jobs:
           load_finished=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           memory_max=0
           replicas_max=0
-          for attempt in $(seq 1 18); do
+          # Container Apps platform metrics can arrive several minutes after the measured window.
+          for attempt in $(seq 1 36); do
             memory=$(az monitor metrics list --resource "$app_id" --metric WorkingSetBytes \
               --filter "revisionName eq '$candidate'" --interval PT1M --aggregation Maximum \
               --start-time "$load_started" --end-time "$load_finished" -o json)
@@ -396,7 +397,11 @@ jobs:
             [ "$memory_max" -gt 0 ] && [ "$replicas_max" -gt 0 ] && break
             sleep 10
           done
-          [ "$memory_max" -gt 0 ] && [ "$memory_max" -le 1610612736 ] \
+          [ "$memory_max" -gt 0 ] \
+            || { echo "::error::candidate memory metric was not exported within the evidence window"; exit 1; }
+          [ "$replicas_max" -gt 0 ] \
+            || { echo "::error::candidate replica metric was not exported within the evidence window"; exit 1; }
+          [ "$memory_max" -le 1610612736 ] \
             || { echo "::error::candidate exceeded the 75 percent memory budget: $memory_max"; exit 1; }
           [ "$replicas_max" -eq 1 ] \
             || { echo "::error::candidate load used more than one replica: $replicas_max"; exit 1; }
