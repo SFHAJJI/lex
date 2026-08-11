@@ -96,7 +96,7 @@ public sealed class ReleaseWorkflowTests
     }
 
     [Fact]
-    public void Evaluation_lifecycle_accepts_Azures_healthy_max_scale_state()
+    public void Evaluation_lifecycle_accepts_Azure_healthy_max_scale_state()
     {
         var script = File.ReadAllText(Path.Combine(RepoRoot(), "evals", "run-assistant-eval.ps1"));
 
