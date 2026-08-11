@@ -394,41 +394,68 @@ jobs:
           load_finished_epoch=$(date -u -d "$load_finished" +%s)
           metric_window_start_epoch=$((load_started_epoch / 60 * 60))
           metric_window_end_epoch=$(((load_finished_epoch + 59) / 60 * 60))
+          metric_required_timestamp_epoch=$(((load_finished_epoch - 1) / 60 * 60))
           metric_window_start=$(date -u -d "@$metric_window_start_epoch" +%Y-%m-%dT%H:%M:%SZ)
-          metric_window_end=$(date -u -d "@$metric_window_end_epoch" +%Y-%m-%dT%H:%M:%SZ)
+          metric_required_timestamp=$(date -u -d "@$metric_required_timestamp_epoch" +%Y-%m-%dT%H:%M:%SZ)
           memory_max=0
           replicas_max=0
+          memory_required=0
+          replicas_required=0
           metrics='{"value":[]}'
           # Container Apps platform metrics can arrive several minutes after the measured window.
           for attempt in $(seq 1 36); do
+            # Keep the measured start fixed, but advance the aligned query end while
+            # Azure publishes the closed load buckets. This avoids reusing an early
+            # empty response and the required timestamp proves the final load bucket
+            # is present before its maximum is accepted.
+            metric_now_epoch=$(date -u +%s)
+            metric_query_end_epoch=$(((metric_now_epoch + 59) / 60 * 60))
+            [ "$metric_query_end_epoch" -ge "$metric_window_end_epoch" ] \
+              || metric_query_end_epoch="$metric_window_end_epoch"
+            metric_query_end=$(date -u -d "@$metric_query_end_epoch" +%Y-%m-%dT%H:%M:%SZ)
             metrics=$(az rest --method get \
               --url "$app_id/providers/Microsoft.Insights/metrics" \
               --url-parameters \
                 "api-version=2023-10-01" \
                 "metricnames=WorkingSetBytes,Replicas" \
-                "timespan=$metric_window_start/$metric_window_end" \
+                "timespan=$metric_window_start/$metric_query_end" \
                 "interval=PT1M" \
                 "aggregation=Maximum" \
                 "\$filter=revisionName eq '$candidate'" \
               -o json)
             memory_max=$(printf '%s' "$metrics" | jq \
+              --arg start "$metric_window_start" --arg required "$metric_required_timestamp" \
               '[.value[] | select(.name.value == "WorkingSetBytes")
-                | .timeseries[].data[].maximum // empty] | max // 0 | floor')
+                | .timeseries[].data[]
+                | select(.timeStamp >= $start and .timeStamp <= $required)
+                | .maximum // empty] | max // 0 | floor')
             replicas_max=$(printf '%s' "$metrics" | jq \
+              --arg start "$metric_window_start" --arg required "$metric_required_timestamp" \
               '[.value[] | select(.name.value == "Replicas")
-                | .timeseries[].data[].maximum // empty] | max // 0 | floor')
-            [ "$memory_max" -gt 0 ] && [ "$replicas_max" -gt 0 ] && break
+                | .timeseries[].data[]
+                | select(.timeStamp >= $start and .timeStamp <= $required)
+                | .maximum // empty] | max // 0 | floor')
+            memory_required=$(printf '%s' "$metrics" | jq --arg required "$metric_required_timestamp" \
+              '[.value[] | select(.name.value == "WorkingSetBytes")
+                | .timeseries[].data[]
+                | select(.timeStamp == $required and .maximum != null)] | length')
+            replicas_required=$(printf '%s' "$metrics" | jq --arg required "$metric_required_timestamp" \
+              '[.value[] | select(.name.value == "Replicas")
+                | .timeseries[].data[]
+                | select(.timeStamp == $required and .maximum != null)] | length')
+            [ "$memory_required" -gt 0 ] && [ "$replicas_required" -gt 0 ] && break
             sleep 10
           done
           metric_shape=$(printf '%s' "$metrics" | jq -c '
             {metrics: [.value[]? | {
               name: .name.value,
-              points: ([.timeseries[]?.data[]? | select(.maximum != null)] | length)
+              points: ([.timeseries[]?.data[]? | select(.maximum != null)] | length),
+              latest: ([.timeseries[]?.data[]? | select(.maximum != null) | .timeStamp] | max)
             }]}')
-          [ "$memory_max" -gt 0 ] \
-            || { echo "::error::candidate memory metric was not exported for $metric_window_start/$metric_window_end; metric response shape: $metric_shape"; exit 1; }
-          [ "$replicas_max" -gt 0 ] \
-            || { echo "::error::candidate replica metric was not exported for $metric_window_start/$metric_window_end; metric response shape: $metric_shape"; exit 1; }
+          [ "$memory_required" -gt 0 ] \
+            || { echo "::error::candidate memory metric did not cover required load bucket $metric_required_timestamp in $metric_window_start/$metric_query_end; metric response shape: $metric_shape"; exit 1; }
+          [ "$replicas_required" -gt 0 ] \
+            || { echo "::error::candidate replica metric did not cover required load bucket $metric_required_timestamp in $metric_window_start/$metric_query_end; metric response shape: $metric_shape"; exit 1; }
           [ "$memory_max" -le 1610612736 ] \
             || { echo "::error::candidate exceeded the 75 percent memory budget: $memory_max"; exit 1; }
           [ "$replicas_max" -eq 1 ] \

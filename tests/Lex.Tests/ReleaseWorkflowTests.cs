@@ -43,8 +43,15 @@ public sealed class ReleaseWorkflowTests
         Assert.Contains("candidate load used more than one replica", workflow);
         Assert.Contains("metric_window_start_epoch=$((load_started_epoch / 60 * 60))", workflow);
         Assert.Contains("metric_window_end_epoch=$(((load_finished_epoch + 59) / 60 * 60))", workflow);
-        Assert.Contains("timespan=$metric_window_start/$metric_window_end", workflow);
+        Assert.Contains("metric_required_timestamp_epoch=$(((load_finished_epoch - 1) / 60 * 60))", workflow);
+        Assert.Contains("metric_query_end_epoch=$(((metric_now_epoch + 59) / 60 * 60))", workflow);
+        Assert.Contains("timespan=$metric_window_start/$metric_query_end", workflow);
+        Assert.Contains("--arg required \"$metric_required_timestamp\"", workflow);
+        Assert.Contains("select(.timeStamp >= $start and .timeStamp <= $required)", workflow);
+        Assert.Contains("select(.timeStamp == $required and .maximum != null)", workflow);
+        Assert.Contains("[ \"$memory_required\" -gt 0 ] && [ \"$replicas_required\" -gt 0 ] && break", workflow);
         Assert.DoesNotContain("timespan=$load_started/$load_finished", workflow);
+        Assert.DoesNotContain("timespan=$metric_window_start/$metric_window_end", workflow);
         Assert.Contains("metric response shape", workflow);
         Assert.Contains("union isfuzzy=true requests, dependencies, traces", candidateBlock);
         Assert.Contains("timestamp > ago(15m) and operation_Id == '$trace_id'", candidateBlock);
@@ -156,7 +163,7 @@ public sealed class ReleaseWorkflowTests
         var metricsStart = workflow.IndexOf("memory_max=0", StringComparison.Ordinal);
         Assert.True(metricsStart >= 0);
 
-        var metricsEnd = workflow.IndexOf("[ \"$memory_max\" -gt 0 ]", metricsStart,
+        var metricsEnd = workflow.IndexOf("[ \"$memory_required\" -gt 0 ]", metricsStart,
             StringComparison.Ordinal);
 
         Assert.True(metricsEnd > metricsStart);
@@ -166,8 +173,8 @@ public sealed class ReleaseWorkflowTests
         Assert.Contains("api-version=2023-10-01", metricsBlock);
         Assert.Contains("metricnames=WorkingSetBytes,Replicas", metricsBlock);
         Assert.DoesNotContain("az monitor metrics list", metricsBlock);
-        Assert.Contains("candidate memory metric was not exported", workflow);
-        Assert.Contains("candidate replica metric was not exported", workflow);
+        Assert.Contains("candidate memory metric did not cover required load bucket", workflow);
+        Assert.Contains("candidate replica metric did not cover required load bucket", workflow);
     }
 
     [Fact]
