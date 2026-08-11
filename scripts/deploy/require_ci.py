@@ -45,7 +45,7 @@ def require_checks(payload_path, expected_sha, required_names):
             raise ValueError(f"required CI check has an unexpected producer: {name}")
         if latest.get("status") != "COMPLETED":
             raise CiPending(
-                f"required CI check is still running for this commit: {name} "
+                f"required CI check has not completed for this commit: {name} "
                 f"({latest.get('status')})")
         if latest.get("conclusion") != "SUCCESS":
             raise ValueError(
