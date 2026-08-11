@@ -43,6 +43,10 @@ public sealed class ReleaseWorkflowTests
         Assert.DoesNotContain("revision_get \"https://$rollback_fqdn/readyz\"", workflow);
         Assert.Equal(2, Regex.Matches(workflow, Regex.Escape(
             "revision_get \"https://$fqdn/")).Count);
+        Assert.Contains(".requiredPublishers == [\"eu-eurlex\", \"lu-legilux\"]", workflow);
+        Assert.Contains(".mountedPublishers == [\"eu-eurlex\", \"lu-legilux\"]", workflow);
+        Assert.DoesNotContain(".required_publishers", workflow);
+        Assert.DoesNotContain(".mounted_publishers", workflow);
         Assert.Equal(2, Regex.Matches(workflow, Regex.Escape(
             "{ [ \"$rollback_state\" = \"Running\" ] || [ \"$rollback_state\" = \"RunningAtMaxScale\" ]; }")).Count);
         Assert.Equal(2, Regex.Matches(workflow, Regex.Escape(

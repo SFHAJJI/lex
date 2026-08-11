@@ -310,8 +310,8 @@ jobs:
           revision_get "https://$fqdn/healthz"
           revision_get "https://$fqdn/readyz" \
             | jq -e '.ready == true
-              and .required_publishers == ["eu-eurlex", "lu-legilux"]
-              and .mounted_publishers == ["eu-eurlex", "lu-legilux"]' >/dev/null
+              and .requiredPublishers == ["eu-eurlex", "lu-legilux"]
+              and .mountedPublishers == ["eu-eurlex", "lu-legilux"]' >/dev/null
           mcp_text() {
             response=$(curl --fail --show-error --silent --retry 3 --retry-delay 5 \
               -H 'Content-Type: application/json' \
