@@ -123,6 +123,22 @@ public sealed class ReleaseWorkflowTests
     }
 
     [Fact]
+    public void Candidate_metric_evidence_allows_for_Azure_Monitor_ingestion_lag()
+    {
+        var workflow = File.ReadAllText(Path.Combine(RepoRoot(), ".github", "workflows", "deploy.yml"));
+        var metricsStart = workflow.IndexOf("memory_max=0", StringComparison.Ordinal);
+        Assert.True(metricsStart >= 0);
+
+        var metricsEnd = workflow.IndexOf("[ \"$memory_max\" -gt 0 ]", metricsStart,
+            StringComparison.Ordinal);
+
+        Assert.True(metricsEnd > metricsStart);
+        Assert.Contains("for attempt in $(seq 1 36)", workflow[metricsStart..metricsEnd]);
+        Assert.Contains("candidate memory metric was not exported", workflow);
+        Assert.Contains("candidate replica metric was not exported", workflow);
+    }
+
+    [Fact]
     public void Evaluation_lifecycle_accepts_Azure_healthy_max_scale_state()
     {
         var script = File.ReadAllText(Path.Combine(RepoRoot(), "evals", "run-assistant-eval.ps1"));
