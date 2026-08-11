@@ -73,11 +73,13 @@ jobs:
           workspace_group=$(printf '%s' "$workspace" | cut -d/ -f5)
           workspace_name=$(printf '%s' "$workspace" | cut -d/ -f9)
           for table in AppRequests AppDependencies AppTraces; do
-            retention=$(az monitor log-analytics workspace table show \
+            mapfile -t retention < <(az monitor log-analytics workspace table show \
               -g "$workspace_group" --workspace-name "$workspace_name" -n "$table" \
               --query '[retentionInDays,totalRetentionInDays]' -o tsv)
-            [ "$retention" = $'90\t90' ] \
-              || { echo "::error::$table retention is not the published 90 days: $retention"; exit 1; }
+            [ "${#retention[@]}" -eq 2 ] \
+              && [ "${retention[0]}" = 90 ] \
+              && [ "${retention[1]}" = 90 ] \
+              || { echo "::error::$table retention is not the published 90 days: ${retention[*]:-missing}"; exit 1; }
           done
 
       - name: Build immutable image in ACR

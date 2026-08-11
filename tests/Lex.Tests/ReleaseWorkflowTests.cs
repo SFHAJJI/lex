@@ -22,6 +22,10 @@ public sealed class ReleaseWorkflowTests
         Assert.Contains("-a \"$APPLICATION_INSIGHTS_NAME\"", workflow);
         Assert.Contains("--app \"$APPLICATION_INSIGHTS_NAME\"", workflow);
         Assert.DoesNotContain("--app ai-lex-web", workflow);
+        Assert.Contains("mapfile -t retention", workflow);
+        Assert.Contains("${retention[0]}", workflow);
+        Assert.Contains("${retention[1]}", workflow);
+        Assert.DoesNotContain("$'90\\t90'", workflow);
         Assert.Contains("retention is not the published 90 days", workflow);
         Assert.Contains("LEXTRACE${GITHUB_RUN_ID}${GITHUB_RUN_ATTEMPT}", workflow);
         Assert.Contains("candidate request telemetry was not exported", workflow);
