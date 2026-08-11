@@ -46,10 +46,22 @@ jobs:
           set -euo pipefail
           checks=$(mktemp)
           trap 'rm -f "$checks"' EXIT
-          gh api -H 'Accept: application/vnd.github+json' \
-            "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/check-runs?filter=latest&per_page=100" \
-            > "$checks"
-          python3 scripts/deploy/require_ci.py "$checks" "$GITHUB_SHA" dotnet web
+          ci_status=75
+          for attempt in $(seq 1 90); do
+            gh api -H 'Accept: application/vnd.github+json' \
+              "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/check-runs?filter=latest&per_page=100" \
+              > "$checks"
+            if python3 scripts/deploy/require_ci.py "$checks" "$GITHUB_SHA" dotnet web; then
+              ci_status=0
+              break
+            else
+              ci_status=$?
+            fi
+            [ "$ci_status" -eq 75 ] || exit "$ci_status"
+            sleep 10
+          done
+          [ "$ci_status" -eq 0 ] \
+            || { echo "::error::exact-commit CI did not complete within fifteen minutes"; exit 1; }
 
       - name: Require OIDC configuration
         shell: bash

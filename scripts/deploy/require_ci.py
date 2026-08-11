@@ -9,6 +9,10 @@ MAXIMUM_PAYLOAD_BYTES = 2 * 1024 * 1024
 FULL_SHA = re.compile(r"^[0-9a-f]{40}$")
 
 
+class CiPending(ValueError):
+    pass
+
+
 def require_checks(payload_path, expected_sha, required_names):
     if not FULL_SHA.fullmatch(expected_sha):
         raise ValueError("deployment commit is not a full lowercase SHA")
@@ -34,12 +38,16 @@ def require_checks(payload_path, expected_sha, required_names):
             and isinstance(item.get("started_at"), str)
         ]
         if not matches:
-            raise ValueError(f"required CI check is missing for this commit: {name}")
+            raise CiPending(f"required CI check is not available yet for this commit: {name}")
         latest = max(matches, key=lambda item: item["started_at"])
         app = latest.get("app")
         if not isinstance(app, dict) or app.get("slug") != "github-actions":
             raise ValueError(f"required CI check has an unexpected producer: {name}")
-        if latest.get("status") != "COMPLETED" or latest.get("conclusion") != "SUCCESS":
+        if latest.get("status") != "COMPLETED":
+            raise CiPending(
+                f"required CI check has not completed for this commit: {name} "
+                f"({latest.get('status')})")
+        if latest.get("conclusion") != "SUCCESS":
             raise ValueError(
                 f"required CI check did not succeed for this commit: {name} "
                 f"({latest.get('status')}/{latest.get('conclusion')})")
@@ -51,6 +59,9 @@ def main():
         return 2
     try:
         require_checks(Path(sys.argv[1]), sys.argv[2], sys.argv[3:])
+    except CiPending as error:
+        print(str(error), file=sys.stderr)
+        return 75
     except (OSError, ValueError) as error:
         print(str(error), file=sys.stderr)
         return 1
