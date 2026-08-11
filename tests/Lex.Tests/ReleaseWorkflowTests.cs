@@ -128,15 +128,23 @@ public sealed class ReleaseWorkflowTests
         var start = terraform.IndexOf(
             "resource \"azurerm_role_definition\" \"deploy_telemetry_retention_reader\"",
             StringComparison.Ordinal);
+        Assert.True(start >= 0, "Telemetry-retention role definition is missing.");
         var end = terraform.IndexOf(
             "resource \"azurerm_role_assignment\" \"deploy_application_insights_reader\"",
             start, StringComparison.Ordinal);
 
-        Assert.True(start >= 0 && end > start);
+        Assert.True(end > start, "Telemetry-retention role assignment is missing.");
         var role = terraform[start..end];
+        var actionsStart = role.IndexOf("actions = [", StringComparison.Ordinal);
+        Assert.True(actionsStart >= 0, "Telemetry-retention role actions are missing.");
+        var actionsEnd = role.IndexOf(']', actionsStart);
+        Assert.True(actionsEnd > actionsStart, "Telemetry-retention role actions are incomplete.");
+        var actions = role[actionsStart..actionsEnd];
         Assert.Contains("Microsoft.Insights/components/read", role);
         Assert.Contains("Microsoft.OperationalInsights/workspaces/tables/read", role);
-        Assert.DoesNotContain("*", role);
+        Assert.Equal(2, Regex.Matches(actions, "\"Microsoft\\.").Count);
+        Assert.DoesNotContain("/*", actions);
+        Assert.DoesNotContain("\"*\"", actions);
         Assert.Contains("scope              = data.azurerm_application_insights.web.id", terraform[end..]);
         Assert.Contains("scope              = data.azurerm_application_insights.web.workspace_id", terraform[end..]);
     }
