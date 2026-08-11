@@ -12,6 +12,9 @@ public sealed class ReleaseWorkflowTests
         Assert.Contains("checks: read", workflow);
         Assert.Contains("Require successful CI for this exact commit", workflow);
         Assert.Contains("scripts/deploy/require_ci.py", workflow);
+        Assert.Contains("for attempt in $(seq 1 90)", workflow);
+        Assert.Contains("[ \"$ci_status\" -eq 75 ]", workflow);
+        Assert.Contains("exact-commit CI did not complete within fifteen minutes", workflow);
         Assert.True(workflow.IndexOf("Require successful CI for this exact commit", StringComparison.Ordinal)
                     < workflow.IndexOf("azure/login@", StringComparison.Ordinal));
         Assert.Contains("az acr repository show", workflow);

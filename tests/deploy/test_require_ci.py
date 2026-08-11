@@ -19,17 +19,22 @@ class RequireCiTests(unittest.TestCase):
         ])
         self.assertEqual(0, completed.returncode, completed.stderr)
 
-    def test_rejects_missing_pending_failed_or_wrong_sha_checks(self):
+    def test_reports_missing_or_in_progress_checks_as_retryable(self):
         cases = [
             [self.check("dotnet"), self.check("web", status="IN_PROGRESS")],
-            [self.check("dotnet"), self.check("web", conclusion="FAILURE")],
             [self.check("dotnet")],
             [self.check("dotnet"), self.check("web", head_sha="b" * 40)],
         ]
         for checks in cases:
             with self.subTest(checks=checks):
                 completed = self.run_script(checks)
-                self.assertNotEqual(0, completed.returncode)
+                self.assertEqual(75, completed.returncode, completed.stderr)
+
+    def test_rejects_a_completed_failure_without_retrying(self):
+        completed = self.run_script([
+            self.check("dotnet"), self.check("web", conclusion="FAILURE"),
+        ])
+        self.assertEqual(1, completed.returncode)
 
     def test_uses_the_most_recent_check_with_each_name(self):
         completed = self.run_script([
