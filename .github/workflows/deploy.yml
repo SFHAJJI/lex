@@ -188,7 +188,7 @@ jobs:
               fi
               sleep 5
             done
-            echo "::error::revision endpoint did not become reachable: $url" >&2
+            echo "::error::revision endpoint did not return a successful response: $url" >&2
             return 1
           }
           cleanup_candidates() {

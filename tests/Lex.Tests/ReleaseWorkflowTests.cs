@@ -36,6 +36,7 @@ public sealed class ReleaseWorkflowTests
         Assert.Contains("revision_get() {", workflow);
         Assert.Contains("for attempt in $(seq 1 24)", workflow);
         Assert.Contains("--connect-timeout 5 --max-time 10 \"$url\"", workflow);
+        Assert.Contains("revision endpoint did not return a successful response", workflow);
         Assert.Equal(2, Regex.Matches(workflow, Regex.Escape(
             "revision_get \"https://$rollback_fqdn/")).Count);
         Assert.Equal(2, Regex.Matches(workflow, Regex.Escape(
