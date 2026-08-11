@@ -253,6 +253,11 @@ public sealed class RetrievalAgentContractTests
         Assert.Equal("The requested comparison is open below.",
             AskService.ReplyFor(fallback, [text, comparison], synthesisFailed: true));
 
+        var ranking = new UiEffect(Ranking: new RankingView(
+            "2024-01-01", "2024-12-31", "by_churn", 371, 430, []));
+        Assert.Equal("The requested change ranking is open below.",
+            AskService.ReplyFor(fallback, [ranking], synthesisFailed: true));
+
         var gap = new UiEffect(Gap: new GapView(
             "text_not_available", "eu-eurlex:32016r0679", "2021-01-01",
             "The requested text is not held.", []));
