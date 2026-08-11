@@ -84,6 +84,7 @@ public sealed class ReleaseWorkflowTests
         Assert.Contains("candidate load used more than one replica", workflow);
         Assert.Contains("metric_window_start_epoch=$((load_started_epoch / 60 * 60))", workflow);
         Assert.Contains("metric_window_end_epoch=$(((load_finished_epoch + 59) / 60 * 60))", workflow);
+        Assert.Contains("metric_window_end=$(date -u -d \"@$metric_window_end_epoch\" +%Y-%m-%dT%H:%M:%SZ)", workflow);
         Assert.Contains("metric_required_timestamp_epoch=$(((load_finished_epoch - 1) / 60 * 60))", workflow);
         var metricWait = candidateBlock.IndexOf(
             "metric_ready_after_epoch=$((metric_window_end_epoch + 60))", StringComparison.Ordinal);

@@ -380,6 +380,7 @@ jobs:
           metric_window_end_epoch=$(((load_finished_epoch + 59) / 60 * 60))
           metric_required_timestamp_epoch=$(((load_finished_epoch - 1) / 60 * 60))
           metric_window_start=$(date -u -d "@$metric_window_start_epoch" +%Y-%m-%dT%H:%M:%SZ)
+          metric_window_end=$(date -u -d "@$metric_window_end_epoch" +%Y-%m-%dT%H:%M:%SZ)
           metric_required_timestamp=$(date -u -d "@$metric_required_timestamp_epoch" +%Y-%m-%dT%H:%M:%SZ)
           metric_evidence=''
           metric_confirmation=''
