@@ -182,7 +182,7 @@ jobs:
             local url="$1"
             local body
             for attempt in $(seq 1 24); do
-              if body=$(curl --fail --silent --connect-timeout 5 --max-time 10 "$url" 2>/dev/null); then
+              if body=$(curl --fail --silent --show-error --connect-timeout 5 --max-time 10 "$url"); then
                 printf '%s' "$body"
                 return 0
               fi
