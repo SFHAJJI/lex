@@ -138,7 +138,7 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
     {
         var ledgerPath = Path.Combine(Golden.RepositoryRoot(), "docs", "public-route-ledger.md");
         var ledger = File.ReadLines(ledgerPath)
-            .Select(line => Regex.Match(line, @"^\| (GET|POST|SDK-owned) \| `([^`]+)` \|"))
+            .Select(line => Regex.Match(line, @"^\| (GET|POST) \| `([^`]+)` \|"))
             .Where(match => match.Success)
             .Select(match => $"{match.Groups[1].Value} {match.Groups[2].Value}")
             .ToHashSet(StringComparer.Ordinal);
@@ -158,7 +158,7 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
             {
                 var raw = endpoint.RoutePattern.RawText ?? "";
                 if (raw.StartsWith("/mcp", StringComparison.Ordinal))
-                    return ["SDK-owned /mcp"];
+                    return ["POST /mcp"];
                 var methods = endpoint.Metadata.GetMetadata<IHttpMethodMetadata>()?.HttpMethods ?? [];
                 return methods
                     .Where(method => method is "GET" or "POST")

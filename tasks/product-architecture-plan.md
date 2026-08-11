@@ -88,7 +88,7 @@ web client tests pass.
 4. Preserve and expose about, stories, find, changed and no-JavaScript routes.
 5. Clarify flat legal classes, record-only gaps, publisher timeline axes and provisional text.
 
-Checkpoint: the complete viewport, keyboard, touch, zoom, forced-color, route, console, network and
+Checkpoint: the complete viewport, keyboard, touch, zoom, forced colors, route, console, network and
 back-forward matrix passes against the fixture container.
 
 ### 4. Ingestion and measured evidence
@@ -96,7 +96,7 @@ back-forward matrix passes against the fixture container.
 1. Enforce typed retry, metadata-only, incomplete-enumeration and prior-clean-artifact policies.
 2. Make assistant evaluation fail closed with frozen clock, complete grading, signed identity and
    numeric call/token/cost/latency bounds.
-3. Blind-author retrieval benchmark v3 with non-vacuous collection strata while preserving v2
+3. Blind-authored retrieval benchmark v3 with non-vacuous collection strata while preserving v2
    failed-candidate evidence and keyword default.
 4. Update every public engineering and scope claim only from measured served facts.
 

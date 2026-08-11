@@ -771,16 +771,6 @@ public sealed class AskService
             .Where(view => view is { Provisions.Count: > 0 })
             .ToList();
         var view = UiEffect.Merge(parts);
-        // A standalone catalogue ranking is already rendered with a source on every row. Keep
-        // the answer and any coverage disclosure in the user's language, but do not duplicate
-        // the workspace as a second list of raw URLs in the chat.
-        if (view is
-            {
-                Ranking: not null,
-                Provision: null, Diff: null, History: null, Timeline: null,
-                InForce: null, CitedBy: null, Gap: null,
-            })
-            return AgentAnswerFinalizer.Render(grounded with { Permalinks = [] });
         if (synthesisFailed
             && grounded.Status == AgentAnswerStatus.Refusal
             && parts.All(part => part.Gap is null))
@@ -808,6 +798,17 @@ public sealed class AskService
             if (view.Workspace is not null)
                 return "The matching catalogue results are open below.";
         }
+        // A standalone catalogue ranking is already rendered with a source on every row. Keep
+        // the answer and any coverage disclosure in the user's language, but do not duplicate
+        // the workspace as a second list of raw URLs in the chat. A deterministic typed fallback
+        // above takes precedence when synthesis itself failed.
+        if (view is
+            {
+                Ranking: not null,
+                Provision: null, Diff: null, History: null, Timeline: null,
+                InForce: null, CitedBy: null, Gap: null,
+            })
+            return AgentAnswerFinalizer.Render(grounded with { Permalinks = [] });
         if (grounded.Status == AgentAnswerStatus.Refusal
             && outlines.Count > 0
             && outlines.SelectMany(view => view!.Provisions)
