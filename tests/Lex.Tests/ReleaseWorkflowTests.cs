@@ -5,6 +5,22 @@ namespace Lex.Tests;
 public sealed class ReleaseWorkflowTests
 {
     [Fact]
+    public void Production_deployment_requires_the_complete_signed_manifest_set()
+    {
+        var workflow = File.ReadAllText(Path.Combine(RepoRoot(), ".github", "workflows", "deploy.yml"));
+
+        Assert.DoesNotContain("require_manifest:", workflow);
+        Assert.DoesNotContain("MANIFEST_INPUT", workflow);
+        Assert.DoesNotContain("DISPATCH_MANIFEST", workflow);
+        Assert.DoesNotContain("manifest_set=legacy", workflow);
+        Assert.DoesNotContain("legacy artifacts", workflow);
+        Assert.Contains("[ \"$index_manifest_count\" -eq 2 ]", workflow);
+        Assert.Contains("--build-arg \"LEX_REQUIRE_ARTIFACT_MANIFEST=1\"", workflow);
+        Assert.Contains("{name:\"LEX_REQUIRE_ARTIFACT_MANIFEST\",value:\"1\"}", workflow);
+        Assert.Contains(".[0].artifact_manifest_id == $manifest", workflow);
+    }
+
+    [Fact]
     public void Candidate_deployment_is_zero_traffic_unless_promotion_is_explicit()
     {
         var workflow = File.ReadAllText(Path.Combine(RepoRoot(), ".github", "workflows", "deploy.yml"));

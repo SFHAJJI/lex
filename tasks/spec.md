@@ -21,7 +21,7 @@ dotnet build -c Release --nologo
 dotnet test -c Release --nologo --logger "console;verbosity=normal"
 Push-Location web; npm ci --no-audit --no-fund; npm run build; Pop-Location
 dotnet run --project src/Lex.Ingest -- index --help
-gh workflow run deploy.yml -f require_manifest=true --repo SFHAJJI/lex
+gh workflow run deploy.yml -f promote=false --repo SFHAJJI/lex
 ```
 
 Corpus and production artifact commands must be taken from the current corpus and `lex-ops`

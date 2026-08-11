@@ -52,7 +52,7 @@ the fixture and must be verified against the live site instead.
 ## Deploying, and why exit codes are not proof
 
 ```bash
-gh workflow run deploy.yml -f require_manifest=true
+gh workflow run deploy.yml -f promote=false
 gh run watch --repo SFHAJJI/lex
 ```
 
