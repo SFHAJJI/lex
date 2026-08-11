@@ -402,8 +402,12 @@ jobs:
           metric_confirmation=''
           metric_source=''
           metrics='{"value":[]}'
-          # Query only a completed, past bucket. Azure documents platform metrics as
-          # normally available within a minute; the bounded poll below covers lag.
+          # Query only a completed, past bucket. A revision name is a new metric
+          # dimension value, and Azure publishes those later than the documented
+          # steady-state lag: run 31537457831 measured a 21:32-21:36 window still
+          # empty 7m50s after it closed and complete 10m14s after it closed, and
+          # run 31519379718 behaved the same way. The poll below therefore runs to
+          # twenty minutes, which is twice the longest publication delay measured.
           metric_now_epoch=$(date -u +%s)
           metric_ready_after_epoch=$((metric_window_end_epoch + 60))
           metric_wait_seconds=$((metric_ready_after_epoch - metric_now_epoch))
@@ -430,7 +434,7 @@ jobs:
           # appeared later than the split-by-dimension response. The wildcard form is
           # the documented way to obtain one time series per dimension value; select
           # the exact candidate locally and keep the query bounded.
-          for attempt in $(seq 1 36); do
+          for attempt in $(seq 1 40); do
             metric_filter="revisionName eq '$candidate'"
             metric_source=exact
             metrics=$(metric_query "$metric_filter" 2>/dev/null || printf '{"value":[]}')
@@ -456,7 +460,7 @@ jobs:
               fi
               metric_evidence=''
             fi
-            sleep 10
+            sleep 30
           done
           metric_shape=$(printf '%s' "$metrics" | jq -c '
             {metrics: [.value[]? | {

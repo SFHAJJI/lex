@@ -88,7 +88,7 @@ public sealed class ReleaseWorkflowTests
         Assert.Contains("metric_required_timestamp_epoch=$(((load_finished_epoch - 1) / 60 * 60))", workflow);
         var metricWait = candidateBlock.IndexOf(
             "metric_ready_after_epoch=$((metric_window_end_epoch + 60))", StringComparison.Ordinal);
-        var metricPoll = candidateBlock.IndexOf("for attempt in $(seq 1 36)", StringComparison.Ordinal);
+        var metricPoll = candidateBlock.IndexOf("metric_source=exact", StringComparison.Ordinal);
         Assert.True(metricWait >= 0 && metricWait < metricPoll);
         Assert.Contains("[ \"$metric_wait_seconds\" -gt 0 ] && sleep \"$metric_wait_seconds\"", workflow);
         Assert.Contains("timespan=$metric_window_start/$metric_window_end", workflow);
@@ -221,7 +221,6 @@ public sealed class ReleaseWorkflowTests
 
         Assert.True(metricsEnd > metricsStart);
         var metricsBlock = workflow[metricsStart..metricsEnd];
-        Assert.Contains("for attempt in $(seq 1 36)", metricsBlock);
         Assert.Contains("providers/Microsoft.Insights/metrics", metricsBlock);
         Assert.Contains("api-version=2023-10-01", metricsBlock);
         Assert.Contains("metricnames=WorkingSetBytes,Replicas", metricsBlock);
