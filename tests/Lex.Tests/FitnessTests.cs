@@ -95,10 +95,13 @@ public class FitnessTests
             "private async Task<(OperationPlan Plan, ModelTokenUsage Usage)> PlanOperationsAsync(",
             StringComparison.Ordinal);
         Assert.True(start >= 0);
-        var effort = Regex.Match(source[start..],
+        var requestStart = source.IndexOf("var req = new JsonObject", start, StringComparison.Ordinal);
+        var requestEnd = source.IndexOf("using var httpReq", requestStart, StringComparison.Ordinal);
+        Assert.True(requestStart > start && requestEnd > requestStart);
+        var efforts = Regex.Matches(source[requestStart..requestEnd],
             "\\[\"reasoning_effort\"\\]\\s*=\\s*\"(?<value>[^\"]+)\"");
 
-        Assert.True(effort.Success);
+        var effort = Assert.Single(efforts.Cast<Match>());
         Assert.Equal("low", effort.Groups["value"].Value);
     }
 

@@ -619,7 +619,7 @@ public sealed class AskService
                 ["function"] = new JsonObject { ["name"] = "submit_operation_plan" },
             },
             ["max_completion_tokens"] = 4000,
-            // This call routes into a closed schema; synthesis keeps the higher effort.
+            // This call only routes into a closed schema; answer-writing rounds can use medium effort.
             ["reasoning_effort"] = "low",
         };
         using var httpReq = new HttpRequestMessage(
