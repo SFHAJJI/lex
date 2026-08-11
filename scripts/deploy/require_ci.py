@@ -13,6 +13,12 @@ class CiPending(ValueError):
     pass
 
 
+def normalised(value):
+    # The REST check-runs API reports lowercase status and conclusion values;
+    # the GraphQL API reports the same states uppercase.
+    return value.lower() if isinstance(value, str) else value
+
+
 def require_checks(payload_path, expected_sha, required_names):
     if not FULL_SHA.fullmatch(expected_sha):
         raise ValueError("deployment commit is not a full lowercase SHA")
@@ -43,11 +49,11 @@ def require_checks(payload_path, expected_sha, required_names):
         app = latest.get("app")
         if not isinstance(app, dict) or app.get("slug") != "github-actions":
             raise ValueError(f"required CI check has an unexpected producer: {name}")
-        if latest.get("status") != "COMPLETED":
+        if normalised(latest.get("status")) != "completed":
             raise CiPending(
                 f"required CI check has not completed for this commit: {name} "
                 f"({latest.get('status')})")
-        if latest.get("conclusion") != "SUCCESS":
+        if normalised(latest.get("conclusion")) != "success":
             raise ValueError(
                 f"required CI check did not succeed for this commit: {name} "
                 f"({latest.get('status')}/{latest.get('conclusion')})")
