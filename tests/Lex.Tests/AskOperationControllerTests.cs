@@ -19,6 +19,8 @@ public sealed class AskOperationControllerTests : IDisposable
     {
         var first = Doc("2020-01-01", "2023-12-31", "old capital requirement");
         var second = Doc("2024-01-01", null, "new capital requirement");
+        var gdpr = Doc("32016r0679", "2018-05-25", null,
+            "lawful processing of personal data");
         var dora = Doc("32022r2554", "2024-01-01", null,
             "operational resilience requirements zebrafalcon");
         var whole = Doc("32024r0001", "2024-01-01", null,
@@ -31,10 +33,11 @@ public sealed class AskOperationControllerTests : IDisposable
             ["history_begins"] = "publisher",
             ["built_at"] = "2023-06-01T00:00:00Z",
             ["corpus_commit"] = "test",
-        }, [first, second, dora, whole],
+        }, [first, second, gdpr, dora, whole],
         [
             Provision(first, "old capital requirement"),
             Provision(second, "new capital requirement"),
+            Provision(gdpr, "lawful processing of personal data", "art_6", "Article 6"),
             Provision(dora, "operational resilience requirements zebrafalcon"),
         ], [], [], StampSigner.CreateKeyPem(),
         provisionStates:
@@ -49,6 +52,7 @@ public sealed class AskOperationControllerTests : IDisposable
         workSearch: new WorkSearchBuildOptions(
             [
                 new ReviewedWorkAliasRow("32013r0575", "en", "CRR", "test"),
+                new ReviewedWorkAliasRow("32016r0679", "en", "GDPR", "test"),
                 new ReviewedWorkAliasRow("32022r2554", "en", "DORA", "test"),
                 new ReviewedWorkAliasRow("32024r0001", "en", "WHOLE", "test"),
             ],
@@ -58,6 +62,106 @@ public sealed class AskOperationControllerTests : IDisposable
         {
             ["eu-eurlex"] = _reader,
         });
+    }
+
+    public static TheoryData<string, string, string, string, string, string, string> OperationCases =>
+        new()
+        {
+            {
+                "search", "Find capital requirement provisions.",
+                """{"query":"capital requirement","publisher":"eu-eurlex","limit":3}""",
+                "navigate", "succeeded", "workspace", "workspace"
+            },
+            {
+                "navigate", "Open CRR as it stood on 1 January 2021.",
+                """{"work_query":"CRR","date":"2021-01-01"}""",
+                "navigate", "succeeded", "workspace", "workspace"
+            },
+            {
+                "as_of", "Show Article 6 of the GDPR as it stood on 1 January 2021.",
+                """{"work_query":"GDPR","article_number":"6","date":"2021-01-01","mode":"full"}""",
+                "exact_text", "succeeded", "provision", "provision"
+            },
+            {
+                "timeline", "Show the CRR timeline.",
+                """{"work_query":"CRR"}""",
+                "timeline", "succeeded", "timeline", "timeline"
+            },
+            {
+                "article_history", "When did Article 92 of CRR change?",
+                """{"work_query":"CRR","article_number":"92"}""",
+                "timeline", "succeeded", "history", "history"
+            },
+            {
+                "changes_in_period", "Which EU laws changed most during 2024?",
+                """{"from_date":"2024-01-01","to_date":"2024-12-31","order":"by_churn"}""",
+                "ranking", "succeeded", "ranking", "ranking"
+            },
+            {
+                "in_force_on", "Which EU laws were in force on 1 June 2024?",
+                """{"date":"2024-06-01","publisher":"eu-eurlex"}""",
+                "inventory", "succeeded", "in_force", "in_force"
+            },
+            {
+                "coverage", "Show mounted legal coverage.", "{}",
+                "inventory", "succeeded", "coverage", "coverage"
+            },
+            {
+                "cited_by", "Which provisions cite CRR?", """{"work_query":"CRR"}""",
+                "inventory", "succeeded_empty", "cited_by", "cited_by"
+            },
+            {
+                "provenance", "Verify eu-eurlex:32013r0575:2020-01-01.",
+                """{"lex_id":"eu-eurlex:32013r0575:2020-01-01"}""",
+                "verification", "succeeded", "verification", "verification"
+            },
+        };
+
+    [Theory]
+    [MemberData(nameof(OperationCases))]
+    public async Task Every_legal_operation_has_one_canonical_typed_result(
+        string tool,
+        string question,
+        string argumentsJson,
+        string expectedResultClass,
+        string expectedOutcome,
+        string expectedEffect,
+        string expectedView)
+    {
+        var arguments = JsonNode.Parse(argumentsJson)!.AsObject();
+        var planner = new StaticPlanner("en", new JsonArray(new JsonObject
+        {
+            ["tool"] = tool,
+            ["arguments"] = arguments,
+        }));
+        var service = new AskService(_core, planner);
+
+        var response = await service.AskAsync(History(question), Guid.NewGuid().ToString(),
+            "law.test", CancellationToken.None);
+
+        Assert.Equal(200, response.Status);
+        Assert.Equal(1, planner.Calls);
+        var operation = Assert.IsType<JsonObject>(Assert.Single(
+            Assert.IsType<JsonArray>(response.Body["operations"])));
+        Assert.Equal(expectedResultClass, operation["result_class"]?.GetValue<string>());
+        Assert.Equal(expectedOutcome, operation["legal_outcome"]?.GetValue<string>());
+        Assert.Contains(Assert.IsType<JsonArray>(operation["effects"]).OfType<JsonValue>(),
+            effect => effect.GetValue<string>() == expectedEffect);
+        Assert.NotNull(operation["ui"]?[expectedView]);
+        Assert.False(string.IsNullOrWhiteSpace(response.Body["reply"]?.GetValue<string>()));
+
+        var primary = Assert.Single(Assert.IsType<JsonArray>(response.Body["trace"])
+            .OfType<JsonObject>(), item => item["phase"]?.GetValue<string>() == "primary");
+        Assert.Equal(tool, primary["tool"]?.GetValue<string>());
+        Assert.Null(primary["args"]?["work_query"]);
+        if (LegalOperationPolicy.RequiresWorkResolution(tool))
+        {
+            var authority = tool == "provenance"
+                ? primary["args"]?["lex_id"]?.GetValue<string>()
+                : primary["args"]?["work"]?.GetValue<string>();
+            Assert.StartsWith(tool == "as_of"
+                ? "eu-eurlex:32016r0679" : "eu-eurlex:32013r0575", authority);
+        }
     }
 
     [Fact]
@@ -132,6 +236,54 @@ public sealed class AskOperationControllerTests : IDisposable
             Assert.NotNull(item["record_sha256"]);
             Assert.NotNull(item["source_uri"]);
         });
+    }
+
+    [Fact]
+    public async Task Incomparable_profiles_remain_a_typed_comparison_gap()
+    {
+        var planner = new StaticPlanner("en", new JsonArray(new JsonObject
+        {
+            ["tool"] = "diff",
+            ["arguments"] = new JsonObject
+            {
+                ["work_query"] = "CRR",
+                ["article_number"] = "92",
+                ["from_date"] = "2020-01-01",
+                ["to_date"] = "2024-12-31",
+            },
+        }));
+        async ValueTask<JsonNode> LegalTool(
+            string tool, JsonObject arguments, CancellationToken cancellationToken)
+        {
+            if (tool != "diff")
+                return await _core.CallToolAsync(tool, arguments, cancellationToken);
+            return new JsonObject
+            {
+                ["envelope"] = new JsonObject { ["status"] = McpStatus.ProfilesDiffer },
+                ["anchor"] = "art_92",
+                ["from"] = new JsonObject
+                {
+                    ["valid_from"] = "2020-01-01",
+                    ["title"] = "Regulation (EU) No 575/2013",
+                },
+                ["to"] = new JsonObject { ["valid_from"] = "2024-01-01" },
+            };
+        }
+        var service = new AskService(_core, planner, legalTool: LegalTool);
+
+        var response = await service.AskAsync(
+            History("Compare Article 92 of CRR between 2020 and 2024."),
+            Guid.NewGuid().ToString(), "law.test", CancellationToken.None);
+
+        Assert.Equal(200, response.Status);
+        var operation = Assert.IsType<JsonObject>(response.Body["operations"]?[0]);
+        Assert.Equal("not_comparable", operation["legal_outcome"]?.GetValue<string>());
+        Assert.Equal(McpStatus.ProfilesDiffer,
+            operation["ui"]?["gap"]?["status"]?.GetValue<string>());
+        Assert.NotNull(operation["ui"]?["diff"]);
+        Assert.Contains("do not support a reliable provision comparison",
+            response.Body["reply"]?.GetValue<string>(),
+            StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -649,19 +801,22 @@ public sealed class AskOperationControllerTests : IDisposable
         work switch
         {
             "32013r0575" => "Regulation (EU) No 575/2013",
+            "32016r0679" => "Regulation (EU) 2016/679",
             "32022r2554" => "Digital Operational Resilience Act",
             _ => "Whole Text Regulation",
         },
         work switch
         {
             "32013r0575" => "Capital Requirements Regulation",
+            "32016r0679" => "General Data Protection Regulation",
             "32022r2554" => "DORA",
             _ => "Whole Text Act",
         }, null, from, null);
 
-    private static ProvisionRow Provision(DocRow document, string text) => new(
-        $"{document.Key}|{document.Language}|{document.ValidFrom}", 0, "art_92",
-        $"{document.Key}#art_92", "article", "Article 92", null, null, null,
+    private static ProvisionRow Provision(
+        DocRow document, string text, string anchor = "art_92", string num = "Article 92") => new(
+        $"{document.Key}|{document.Language}|{document.ValidFrom}", 0, anchor,
+        $"{document.Key}#{anchor}", "article", num, null, null, null,
         document.Title, text, Hash(text));
 
     private static string Hash(string value) =>
@@ -673,6 +828,7 @@ public sealed class AskOperationControllerTests : IDisposable
         bool synthesis = false) : IOperationPlanner
     {
         public bool Completed { get; private set; }
+        public int Calls { get; private set; }
 
         public Task<OperationPlan> PlanAsync(
             JsonArray history,
@@ -681,6 +837,7 @@ public sealed class AskOperationControllerTests : IDisposable
             CancellationToken cancellationToken)
         {
             Completed = true;
+            Calls++;
             return Task.FromResult(OperationPlan.FromPlannerOutput(
                 requestId, locale, operations.DeepClone().AsArray(), synthesis));
         }
