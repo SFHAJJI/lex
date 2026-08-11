@@ -384,16 +384,22 @@ jobs:
           replicas_max=0
           # Container Apps platform metrics can arrive several minutes after the measured window.
           for attempt in $(seq 1 36); do
-            memory=$(az monitor metrics list --resource "$app_id" --metric WorkingSetBytes \
-              --filter "revisionName eq '$candidate'" --interval PT1M --aggregation Maximum \
-              --start-time "$load_started" --end-time "$load_finished" -o json)
-            replicas=$(az monitor metrics list --resource "$app_id" --metric Replicas \
-              --filter "revisionName eq '$candidate'" --interval PT1M --aggregation Maximum \
-              --start-time "$load_started" --end-time "$load_finished" -o json)
-            memory_max=$(printf '%s' "$memory" \
-              | jq '[.value[].timeseries[].data[].maximum // empty] | max // 0 | floor')
-            replicas_max=$(printf '%s' "$replicas" \
-              | jq '[.value[].timeseries[].data[].maximum // empty] | max // 0 | floor')
+            metrics=$(az rest --method get \
+              --url "$app_id/providers/Microsoft.Insights/metrics" \
+              --url-parameters \
+                "api-version=2023-10-01" \
+                "metricnames=WorkingSetBytes,Replicas" \
+                "timespan=$load_started/$load_finished" \
+                "interval=PT1M" \
+                "aggregation=Maximum" \
+                "\$filter=revisionName eq '$candidate'" \
+              -o json)
+            memory_max=$(printf '%s' "$metrics" | jq \
+              '[.value[] | select(.name.value == "WorkingSetBytes")
+                | .timeseries[].data[].maximum // empty] | max // 0 | floor')
+            replicas_max=$(printf '%s' "$metrics" | jq \
+              '[.value[] | select(.name.value == "Replicas")
+                | .timeseries[].data[].maximum // empty] | max // 0 | floor')
             [ "$memory_max" -gt 0 ] && [ "$replicas_max" -gt 0 ] && break
             sleep 10
           done

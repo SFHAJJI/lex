@@ -133,7 +133,12 @@ public sealed class ReleaseWorkflowTests
             StringComparison.Ordinal);
 
         Assert.True(metricsEnd > metricsStart);
-        Assert.Contains("for attempt in $(seq 1 36)", workflow[metricsStart..metricsEnd]);
+        var metricsBlock = workflow[metricsStart..metricsEnd];
+        Assert.Contains("for attempt in $(seq 1 36)", metricsBlock);
+        Assert.Contains("providers/Microsoft.Insights/metrics", metricsBlock);
+        Assert.Contains("api-version=2023-10-01", metricsBlock);
+        Assert.Contains("metricnames=WorkingSetBytes,Replicas", metricsBlock);
+        Assert.DoesNotContain("az monitor metrics list", metricsBlock);
         Assert.Contains("candidate memory metric was not exported", workflow);
         Assert.Contains("candidate replica metric was not exported", workflow);
     }
