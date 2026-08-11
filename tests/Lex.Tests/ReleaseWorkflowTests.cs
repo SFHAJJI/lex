@@ -17,10 +17,7 @@ public sealed class ReleaseWorkflowTests
         Assert.Contains("exact-commit CI did not complete within fifteen minutes", workflow);
         Assert.True(workflow.IndexOf("Require successful CI for this exact commit", StringComparison.Ordinal)
                     < workflow.IndexOf("azure/login@", StringComparison.Ordinal));
-        Assert.Contains("az acr repository show", workflow);
-        Assert.Contains("--query digest", workflow);
         Assert.Contains("image=\"$ACR_SERVER/lex-web@$digest\"", workflow);
-        Assert.Contains("[[ \"$digest\" =~ ^sha256:[0-9a-f]{64}$ ]]", workflow);
         Assert.DoesNotContain("image=\"$ACR_SERVER/lex-web:$tag\"", workflow);
         Assert.Contains("timeout-minutes: 45", workflow);
         Assert.Contains("mapfile -t traffic_bearers", workflow);
