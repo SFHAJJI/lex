@@ -15,6 +15,7 @@ public sealed class ReleaseWorkflowTests
         Assert.DoesNotContain("manifest_set=legacy", workflow);
         Assert.DoesNotContain("legacy artifacts", workflow);
         Assert.Contains("[ \"$index_manifest_count\" -eq 2 ]", workflow);
+        Assert.Contains("echo \"::error::$repo release is missing $manifest\"", workflow);
         Assert.Contains("--build-arg \"LEX_REQUIRE_ARTIFACT_MANIFEST=1\"", workflow);
         Assert.Contains("{name:\"LEX_REQUIRE_ARTIFACT_MANIFEST\",value:\"1\"}", workflow);
         Assert.Contains(".[0].artifact_manifest_id == $manifest", workflow);

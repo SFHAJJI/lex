@@ -94,7 +94,7 @@ jobs:
             curl --fail --silent --show-error --location \
               -o "$release_dir/$manifest" \
               "https://github.com/SFHAJJI/$repo/releases/latest/download/$manifest" \
-              || { echo "::error::$repo has no required manifest"; exit 1; }
+              || { echo "::error::$repo release is missing $manifest"; exit 1; }
           done
           index_manifest_count=$(find "$release_dir" -name 'index-*.manifest.json' | wc -l)
           [ "$index_manifest_count" -eq 2 ] \
