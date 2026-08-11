@@ -46,7 +46,7 @@ internal static class OperationArguments
     /// <summary>The exact argument names <see cref="Normalize"/> accepts for one action.</summary>
     public static IReadOnlyCollection<string> AllowedFor(string action) =>
         Allowed.TryGetValue(action, out var allowed)
-            ? allowed
+            ? allowed.ToArray()
             : throw new InvalidDataException(
                 $"Unknown legal operation or application action '{action}'.");
 

@@ -297,8 +297,9 @@ public sealed class AskService
                        || character == '_')
             ? code
             : "invalid_diagnostic_code";
-        // detail carries contract violations only; the filter bounds it and keeps any other text,
-        // punctuation or newline out of the log line.
+        // detail carries contract violations only. The filter bounds the length and keeps the
+        // line single: it allows the punctuation those messages quote names with and replaces
+        // everything else, including any newline, with '?'.
         var note = detail is null
             ? string.Empty
             : " " + new string(detail.Take(200).Select(character =>
