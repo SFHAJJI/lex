@@ -123,13 +123,16 @@ public sealed class AzureModelDeploymentResolver
                 StringComparison.Ordinal)
             || properties is null
             || properties["active"]?.GetValue<bool>() != true
-            || !string.Equals(properties["runningState"]?.GetValue<string>(),
-                "Running", StringComparison.OrdinalIgnoreCase))
+            || !IsReadyRunningState(properties["runningState"]?.GetValue<string>()))
             throw new InvalidDataException(
                 "Azure Container App revision evidence is not the requested running revision.");
         return ParseCandidateTemplate(resourceId, revisionName,
             properties["fqdn"]?.GetValue<string>() ?? "", properties);
     }
+
+    private static bool IsReadyRunningState(string? state) =>
+        string.Equals(state, "Running", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(state, "RunningAtMaxScale", StringComparison.OrdinalIgnoreCase);
 
     private static AssistantCandidateRuntimeEvidence ParseCandidateTemplate(
         string resourceId,
