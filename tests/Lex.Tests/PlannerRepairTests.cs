@@ -377,12 +377,25 @@ public sealed class PlannerRepairTests
                 {
                     ["message"] = new JsonObject { ["content"] = "no plan" },
                 }),
+                // A real completion always bills for what it wrote, including the one that came
+                // back unusable, so the fault path has usage to carry. Written as long literals
+                // because a JsonValue built from an int does not answer TryGetValue<long>.
+                ["usage"] = new JsonObject
+                {
+                    ["prompt_tokens"] = 4000L,
+                    ["completion_tokens"] = 120L,
+                },
             };
         var send = new RecordingSend(broken, Envelope(ValidCoverage));
 
-        await Assert.ThrowsAsync<InvalidDataException>(() => PlanAsync(send));
+        var refused = await Assert.ThrowsAsync<InvalidDataException>(() => PlanAsync(send));
 
         Assert.Single(send.Requests);
+        // The attempt was billed even though the envelope was unusable, and model_usage is never
+        // written on the refusal path, so the exception is the only place that accounting can
+        // leave. Without this the token cost of a malformed planner response is invisible.
+        Assert.Equal("input_tokens 4000 output_tokens 120 attempts 1",
+            refused.Data[AskService.PlanningUsageKey]);
     }
 
     // A 401, 429 or 5xx is not a contract violation, and the planner deadline forbids the backoff
