@@ -32,13 +32,23 @@ az_reauth() {
 
   # --allow-no-subscriptions is deliberately absent: a login that silently lands without the
   # subscription would turn every later call into a confusing "resource not found".
-  az login --service-principal \
-    --username "$AZURE_CLIENT_ID" \
-    --tenant "$AZURE_TENANT_ID" \
-    --federated-token "$_azr_assertion" \
-    --output none || { echo "::error::re-authentication failed" >&2; return 1; }
-  az account set --subscription "$AZURE_SUBSCRIPTION_ID" --output none
+  #
+  # The assertion is cleared on BOTH paths and before anything else can run. Unsetting it only
+  # after a successful login would leave a live federated token in the shell for the remainder
+  # of the step on exactly the failure path where the step is least likely to end quickly.
+  if az login --service-principal \
+      --username "$AZURE_CLIENT_ID" \
+      --tenant "$AZURE_TENANT_ID" \
+      --federated-token "$_azr_assertion" \
+      --output none; then
+    unset _azr_assertion
+  else
+    unset _azr_assertion
+    echo "::error::re-authentication failed" >&2
+    return 1
+  fi
 
-  unset _azr_assertion
-  echo "re-authenticated with a fresh OIDC assertion"
+  az account set --subscription "$AZURE_SUBSCRIPTION_ID" --output none
+  # stderr, not stdout: this helper must stay safe to call inside a command substitution.
+  echo "re-authenticated with a fresh OIDC assertion" >&2
 }
