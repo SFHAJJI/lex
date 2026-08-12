@@ -87,6 +87,18 @@ public sealed class DateIntentGuardTests
             "What did Article 92 of the CRR require in December 2024?", "2024-12-31"));
     }
 
+    // The date parser runs on whatever the user typed, so a four-digit year the calendar has no
+    // room for must be discarded rather than handed to DaysInMonth, which throws below year 1.
+    [Theory]
+    [InlineData("Article 92 as it stood on 0000-01-01, and in 2024", "2024-12-31", 2024)]
+    [InlineData("Article 92 on 32/13/2024 in 2024", "2024-12-31", 2024)]
+    [InlineData("Article 92 on 31 February 2024 in 2024", "2024-12-31", 2024)]
+    public void An_impossible_date_is_discarded_rather_than_thrown(
+        string turn, string date, int expected)
+    {
+        Assert.Equal(expected, DateIntentGuard.DerivedYear(turn, date));
+    }
+
     [Fact]
     public void A_year_the_turn_never_wrote_is_not_a_derived_year()
     {

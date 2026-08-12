@@ -44,7 +44,7 @@ internal static class DateIntentGuard
     private static readonly Dictionary<string, int> Months = new(StringComparer.OrdinalIgnoreCase)
     {
         ["janvier"] = 1, ["january"] = 1,
-        ["fevrier"] = 2, ["février"] = 2, ["fébrier"] = 2, ["february"] = 2,
+        ["fevrier"] = 2, ["février"] = 2, ["february"] = 2,
         ["mars"] = 3, ["march"] = 3,
         ["avril"] = 4, ["april"] = 4,
         ["mai"] = 5, ["may"] = 5,
@@ -75,7 +75,11 @@ internal static class DateIntentGuard
             }
             else if (!int.TryParse(match.Groups["m"].Value, CultureInfo.InvariantCulture, out month))
                 continue;
-            if (month is < 1 or > 12 || day < 1 || day > DateTime.DaysInMonth(year, month)) continue;
+            // The year bound comes first and is not cosmetic: the regex accepts any four digits,
+            // so a turn containing 0000-01-01 would otherwise reach DaysInMonth(0, 1), which
+            // throws, and take the whole authorization path down on user-supplied text.
+            if (year is < 1 or > 9999 || month is < 1 or > 12) continue;
+            if (day < 1 || day > DateTime.DaysInMonth(year, month)) continue;
             stated.Add(new DateOnly(year, month, day));
         }
         return stated;
