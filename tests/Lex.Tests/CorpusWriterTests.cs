@@ -293,6 +293,64 @@ public sealed class CorpusWriterTests : IDisposable
         Assert.Null(manifest.ScopeExpectedWorks);
     }
 
+    [Fact]
+    public async Task Manifest_counts_a_fetched_body_as_an_expression_with_text()
+    {
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-08T00:00:00Z"))
+            .WriteAsync(new OneVersionAdapter("in_force", "finance",
+                bodyFetch: SourceBodyFetch.Retrieved("<html>publisher text</html>")), default);
+
+        var manifest = JsonSerializer.Deserialize<ManifestDoc>(
+            await File.ReadAllTextAsync(Path.Combine(_dir, "manifest.json")), CorpusJson.Options)!;
+        Assert.Equal(1, manifest.Expressions);
+        Assert.Equal(1, manifest.ExpressionsWithText);
+        Assert.Equal(0, manifest.ExpressionsWithoutText);
+        Assert.True(File.Exists(Path.Combine(_dir, "works", "w1", "versions", "2024-01-01", "en.html")));
+    }
+
+    [Fact]
+    public async Task Empty_retrieved_body_is_a_typed_issue_not_stored_text()
+    {
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-08T00:00:00Z"))
+            .WriteAsync(new OneVersionAdapter("in_force", "finance",
+                bodyFetch: SourceBodyFetch.Retrieved("   ")), default);
+
+        var manifest = JsonSerializer.Deserialize<ManifestDoc>(
+            await File.ReadAllTextAsync(Path.Combine(_dir, "manifest.json")), CorpusJson.Options)!;
+        Assert.Equal(0, manifest.ExpressionsWithText);
+        Assert.Equal(1, manifest.ExpressionsWithoutText);
+        var issue = Assert.Single(manifest.BuildIssues);
+        Assert.Equal("body_empty", issue.Code);
+
+        var expr = Assert.Single((await ReadVersionMeta()).Expressions);
+        Assert.False(expr.Text.Available);
+        Assert.Equal("body_empty", expr.Text.Reason);
+        Assert.Empty(expr.Observations);
+        Assert.False(File.Exists(Path.Combine(_dir, "works", "w1", "versions", "2024-01-01", "en.html")));
+    }
+
+    [Fact]
+    public async Task Alt_manifestation_does_not_block_primary_body_backfill()
+    {
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-01T00:00:00Z"))
+            .WriteAsync(new AltThenPrimaryAdapter(new SourceBodyFetch(
+                SourceBodyStatus.RetryExhausted, Detail: "network", Attempts: 2)), default);
+
+        var versionDir = Path.Combine(_dir, "works", "w1", "versions", "2024-01-01");
+        Assert.False(File.Exists(Path.Combine(versionDir, "en.html")));
+        var first = Assert.Single((await ReadVersionMeta()).Expressions);
+        Assert.True(first.Text.Available);                       // an alt manifestation IS observed text
+        Assert.All(first.Observations, o => Assert.NotNull(o.Format));
+
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-02T00:00:00Z"))
+            .WriteAsync(new AltThenPrimaryAdapter(
+                SourceBodyFetch.Retrieved("<html>primary text</html>")), default);
+
+        Assert.True(File.Exists(Path.Combine(versionDir, "en.html")));
+        var second = Assert.Single((await ReadVersionMeta()).Expressions);
+        Assert.Contains(second.Observations, o => o.Format is null);
+    }
+
     private async Task<VersionMeta> ReadVersionMeta() => JsonSerializer.Deserialize<VersionMeta>(
         await File.ReadAllTextAsync(Path.Combine(
             _dir, "works", "w1", "versions", "2024-01-01", "meta.json")), CorpusJson.Options)!;
@@ -396,6 +454,46 @@ public sealed class CorpusWriterTests : IDisposable
 
         public Task<SourceBodyFetch> FetchBody(VersionRecord version, ExpressionRecord expression, CancellationToken ct) =>
             throw new InvalidOperationException("No work may be fetched after an incomplete enumeration.");
+    }
+
+    private sealed class AltThenPrimaryAdapter(SourceBodyFetch bodyFetch) : ISourceAdapter
+    {
+        private readonly WorkRef _work = new(new Identifier("official:w1"), "w1", "REG", "Work one");
+
+        public PublisherDescriptor Describe() => new(
+            new Publisher("test", "Test", "EU", "https://example.test", Tier.A, "test", null),
+            [], ["en"], TextIncluded: true, TextPublic: true, HistoryBegins: "publisher");
+
+        public async IAsyncEnumerable<WorkRef> EnumerateWorks(
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+            yield return _work;
+            await Task.CompletedTask;
+        }
+
+        public Task<IReadOnlyList<VersionRecord>> FetchVersions(WorkRef work, CancellationToken ct)
+        {
+            IReadOnlyList<VersionRecord> versions =
+            [
+                new(
+                    new Identifier("official:v1"), _work.Id, "REG", new DateOnly(2024, 1, 1), null,
+                    "publisher", "true", new DateOnly(2024, 1, 1),
+                    [new ExpressionRecord("en", new DateOnly(2024, 1, 1), null, "publisher",
+                        "Work one", "Work one", "https://example.test/v1/en")],
+                    [], new Dictionary<string, string>(), null, null)
+            ];
+            return Task.FromResult(versions);
+        }
+
+        public Task<SourceBodyFetch> FetchBody(VersionRecord version, ExpressionRecord expression, CancellationToken ct) =>
+            Task.FromResult(bodyFetch);
+
+        public Task<SourceManifestationFetch> FetchAltManifestation(
+            VersionRecord version, ExpressionRecord expression, CancellationToken ct) =>
+            Task.FromResult(SourceManifestationFetch.Retrieved(new ManifestationFetch(
+                "fmx4", [new ManifestationMember("main.xml", "<xml/>"u8.ToArray())],
+                "https://example.test/v1/en/fmx4")));
     }
 
     private sealed class EmptyAdapter : ISourceAdapter

@@ -267,14 +267,27 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now, TextWrit
                     foreach (var exprRec in v.Expressions)
                     {
                         var exprMeta = meta.Expressions.Single(e => e.Language == exprRec.Language);
-                        if (exprMeta.Observations.Count > 0) continue;   // already observed
+                        // Only a PRIMARY observation (Format == null) settles this loop. Alt
+                        // manifestation members are observations too, and counting them here let
+                        // one successful Formex night disable the promised primary backfill
+                        // permanently for an expression whose primary fetch failed that night.
+                        if (exprMeta.Observations.Any(o => o.Format is null)) continue;
                         var fetched = await adapter.FetchBody(v, exprRec, ct);
                         ValidateBodyFetch(fetched);
                         retryMaximumAttempts = Math.Max(retryMaximumAttempts, fetched.Attempts);
+                        if (fetched.Status == SourceBodyStatus.Retrieved
+                            && string.IsNullOrWhiteSpace(fetched.Text))
+                        {
+                            // A 2xx whose body is empty is a failed fetch, not text. Storing it
+                            // would mint a permanent zero-byte observation that counts as covered
+                            // and, being an observation, would never be refetched.
+                            fetched = new SourceBodyFetch(SourceBodyStatus.EmptyBody,
+                                Detail: "publisher returned an empty body", Attempts: fetched.Attempts);
+                        }
                         if (fetched.Status != SourceBodyStatus.Retrieved || fetched.Text is null)
                         {
                             bodyFailures[exprRec.Language] = fetched;
-                            exprMeta.Text.Reason = fetched.IssueCode;
+                            if (!exprMeta.Text.Available) exprMeta.Text.Reason = fetched.IssueCode;
                             continue;
                         }
                         var bytes = Encoding.UTF8.GetBytes(fetched.Text);
@@ -452,22 +465,25 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now, TextWrit
             .Where(issue => !string.Equals(issue.Code, "publisher_metadata_only", StringComparison.Ordinal))
             .ToArray();
         if (buildIssues.Count > blocking.Length)
-            Console.Error.WriteLine(
+            _progress.WriteLine(
                 $"  [corpus] {buildIssues.Count - blocking.Length} expression(s) are metadata-only at "
                 + "the publisher; recorded as coverage, not treated as acquisition failures");
         if (requireComplete && blocking.Length > 0)
         {
+            // Only the blocking issues are listed. The metadata-only ones were already summarised
+            // above as coverage, and repeating them under "rejected with" would read as though
+            // they had contributed to the rejection.
             foreach (var issue in blocking)
-                Console.Error.WriteLine(
+                _progress.WriteLine(
                     $"  [corpus-issue] code={issue.Code} work={issue.Work} detail={issue.Detail}");
-            Console.Error.WriteLine(
+            _progress.WriteLine(
                 $"  [corpus] candidate rejected with {blocking.Length} typed acquisition issue(s); prior corpus retained");
             return;
         }
         candidate.Commit();
         Committed = true;
-        Console.Error.WriteLine($"  [corpus] works={works} versions={versions} expressions={expressions} " +
-            $"with_text={expressionsWithText} without_text={expressions - expressionsWithText} " +
+        _progress.WriteLine($"  [corpus] works={works} versions={versions} expressions={expressions} " +
+            $"with_text={expressionsWithText} without_text={manifest.ExpressionsWithoutText} " +
             $"created={Created} updated={Updated} unchanged={Unchanged}");
     }
 
