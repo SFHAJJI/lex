@@ -356,7 +356,8 @@ internal static class OperationArguments
                 foreach (var item in options)
                 {
                     if (item is not JsonValue option || !option.TryGetValue<string>(out var label))
-                        throw new InvalidDataException("Every clarification option must be a string.");
+                        throw new InvalidDataException(
+                            $"Every clarification option must be a string. Received {Kind(item)}.");
                     label = RequiredString(label, "clarification option", MaximumOptionLength);
                     bounded.Add(label);
                 }
@@ -385,7 +386,8 @@ internal static class OperationArguments
                 continue;
             }
             if (value is not JsonValue textValue || !textValue.TryGetValue<string>(out var text))
-                throw new InvalidDataException($"Argument '{name}' must be a string.");
+                throw new InvalidDataException(
+                    $"Argument '{name}' must be a string. Received {Kind(value)}.");
             text = text.Trim();
             // An empty or whitespace-only value carries no intent, so erasing the key preserves
             // every bit of information the model actually sent; the defaults and the gates below
@@ -444,7 +446,8 @@ internal static class OperationArguments
                     // the slot to the date default and answer a 2019 question with today's law,
                     // which is the one outcome this alias exists to prevent, so it is refused
                     // exactly as the same shape is refused under the argument's own name.
-                    throw new InvalidDataException($"Argument '{name}' must be a string.");
+                    throw new InvalidDataException(
+                        $"Argument '{name}' must be a string. Received {Kind(value)}.");
                 if (carried is not { Length: > 0 })
                 {
                     repaired.Add(Repair(action, name, "dropped"));
@@ -653,6 +656,19 @@ internal static class OperationArguments
 
     private static string Require(JsonObject arguments, string name) =>
         Text(arguments, name) ?? throw new InvalidDataException($"Argument '{name}' is required.");
+
+    /// <summary>The JSON shape a rejected value actually arrived as, for the type-mismatch
+    /// messages. It is one of eight compile-time constants chosen by the shape of the JSON and
+    /// never by its content, so it carries no user data and no planner-chosen text.
+    ///
+    /// <para>Two sentences rather than one with a colon or a semicolon, and this is not cosmetic:
+    /// these messages are echoed by <c>AskService.Diagnostic</c>, whose filter passes ASCII letters
+    /// and digits plus space, underscore, apostrophe, full stop, comma and hyphen, and replaces
+    /// every other character with '?'. "must be a string? received Array" reads like the log itself
+    /// is unsure. Every character of "must be a string. Received Array." survives the filter
+    /// unmodified.</para></summary>
+    private static string Kind(JsonNode? value) =>
+        value?.GetValueKind().ToString() ?? "Null";
 
     private static string? Text(JsonObject arguments, string name) =>
         arguments[name] is JsonValue value && value.TryGetValue<string>(out var text)
