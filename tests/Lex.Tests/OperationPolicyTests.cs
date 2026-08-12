@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -40,12 +41,20 @@ public sealed class OperationPolicyTests
             ("as_of", new JsonObject { ["work"] = "eu-eurlex:work", ["date"] = "2026-01-01", ["language"] = new string('l', 17) }),
             ("diff", new JsonObject { ["work"] = "eu-eurlex:work", ["from_date"] = "2025-01-01", ["to_date"] = "2026-01-01", ["anchor"] = new string('a', 513) }),
             ("as_of", new JsonObject { ["work"] = "eu-eurlex:work", ["date"] = "2026-01-01", ["mode"] = "select", ["anchors"] = string.Join(',', Enumerable.Range(1, 51).Select(index => $"a{index}")) }),
-            ("in_force_on", new JsonObject { ["date"] = "2026-01-01", ["limit"] = 101 }),
-            ("timeline", new JsonObject { ["work"] = "eu-eurlex:work", ["offset"] = 100_001 }),
         };
 
         foreach (var (tool, arguments) in cases)
             Assert.Throws<InvalidDataException>(() => OperationArguments.Normalize(tool, arguments));
+
+        // A page bound one past the range is recovered rather than refused, but the arguments
+        // that leave here must still pass the public contract unchanged. That is the line the
+        // recovery policy may never cross: this gate got more forgiving, MCP did not.
+        foreach (var (tool, arguments) in new (string, JsonObject)[]
+                 {
+                     ("in_force_on", new JsonObject { ["date"] = "2026-01-01", ["limit"] = 101 }),
+                     ("timeline", new JsonObject { ["work"] = "eu-eurlex:work", ["offset"] = 100_001 }),
+                 })
+            McpInputPolicy.Validate(tool, OperationArguments.Normalize(tool, arguments));
     }
 
     // The planner schema and the argument allowlist are one contract in two places. When they
@@ -53,8 +62,13 @@ public sealed class OperationPolicyTests
     [Fact]
     public void Every_planner_tool_offers_exactly_the_arguments_its_operation_allows()
     {
-        var branches = AskService.PlannerTools()[0]!["function"]!["parameters"]!["properties"]!
-            ["operations"]!["items"]!["oneOf"]!.AsArray();
+        var parameters = AskService.PlannerTools()[0]!["function"]!["parameters"]!.AsObject();
+        // anyOf, not oneOf: oneOf is outside the keyword set a strict schema may use, and the
+        // rewrite is only sound because every branch pins tool to its own distinct const, so at
+        // most one branch can ever match. That distinctness is asserted below, and the closed
+        // object at each level is asserted here.
+        Assert.False(parameters["additionalProperties"]!.GetValue<bool>());
+        var branches = parameters["properties"]!["operations"]!["items"]!["anyOf"]!.AsArray();
 
         var tools = new List<string>();
         foreach (var node in branches)
@@ -62,8 +76,9 @@ public sealed class OperationPolicyTests
             var branch = node!.AsObject();
             Assert.Equal(["tool", "arguments"],
                 branch["required"]!.AsArray().Select(item => item!.GetValue<string>()));
-            var tool = Assert.Single(branch["properties"]!["tool"]!["enum"]!.AsArray()
-                .Select(item => item!.GetValue<string>()));
+            Assert.False(branch["additionalProperties"]!.GetValue<bool>());
+            Assert.Null(branch["properties"]!["tool"]!["enum"]);
+            var tool = branch["properties"]!["tool"]!["const"]!.GetValue<string>();
             tools.Add(tool);
 
             var schema = branch["properties"]!["arguments"]!.AsObject();
@@ -88,6 +103,8 @@ public sealed class OperationPolicyTests
             "in_force_on", "coverage", "cited_by", "provenance", "legal_boundary",
             "clarification",
         ], tools);
+        // The property that makes anyOf equivalent to oneOf here.
+        Assert.Equal(tools.Count, tools.Distinct(StringComparer.Ordinal).Count());
         // navigate and gap are application-internal actions and stay off the planner surface.
         Assert.Equal(["gap", "navigate"],
             OperationArguments.Actions.Except(tools, StringComparer.Ordinal)
@@ -218,19 +235,82 @@ public sealed class OperationPolicyTests
             if (OperationArguments.IsDate(name)) continue;
             var minimum = OperationArguments.MinimumStringLength;
             var maximum = OperationArguments.MaximumLengthFor(name);
-            var expected =
-                $"Argument '{name}' must contain {minimum} to {maximum} characters.";
 
             OperationArguments.Normalize(action, With(action, name, LengthProbe(name, minimum)));
             OperationArguments.Normalize(action, With(action, name, LengthProbe(name, maximum)));
 
-            foreach (var outside in new[] { minimum - 1, maximum + 1 })
-                Assert.Equal(expected, Assert.Throws<InvalidDataException>(() =>
+            // Over-length stays fatal: truncating a work_query or an article_number looks up a
+            // different law. Under-length is the other half of the bound and is a recovery, not a
+            // refusal; it is proved in the empty-value test below.
+            Assert.Equal($"Argument '{name}' must contain {minimum} to {maximum} characters.",
+                Assert.Throws<InvalidDataException>(() =>
                     OperationArguments.Normalize(
-                        action, With(action, name, LengthProbe(name, outside)))).Message);
+                        action, With(action, name, LengthProbe(name, maximum + 1)))).Message);
         }
     }
 
+    // D5. The schema still says minLength 1, so the gate is the looser of the two here, which is
+    // the safe direction: an empty string is not a value the model chose, it is a slot it left
+    // blank, and erasing the key preserves every bit of intent the model actually expressed. The
+    // gates below then treat it as the absence it is, which is why some of these still refuse.
+    [Theory]
+    [MemberData(nameof(EveryOperation))]
+    public void An_empty_or_whitespace_argument_is_absence_rather_than_a_refusal(string action)
+    {
+        var today = new DateOnly(2026, 3, 4);
+        foreach (var name in OperationArguments.AllowedFor(action).Order(StringComparer.Ordinal))
+        {
+            if (OperationArguments.IsInteger(name) || name == "options") continue;
+            foreach (var blank in new[] { "", "   ", "\t" })
+            {
+                var absent = With(action, name, blank);
+                absent.Remove(name);
+
+                // The whole claim, stated once: a blank value is indistinguishable from a key
+                // that was never sent. Where absence is itself a refusal the refusal survives,
+                // with the message for a missing argument rather than one about characters.
+                Assert.Equal(
+                    Outcome(action, absent, today),
+                    Outcome(action, With(action, name, blank), today));
+            }
+        }
+    }
+
+    private static string Outcome(string action, JsonObject arguments, DateOnly today)
+    {
+        try
+        {
+            return OperationArguments.Normalize(action, arguments, today: today).ToJsonString();
+        }
+        catch (InvalidDataException refused)
+        {
+            Assert.DoesNotContain("characters", refused.Message, StringComparison.Ordinal);
+            return $"refused: {refused.Message}";
+        }
+    }
+
+    // ",,," is empty-shaped too: it names no anchor and no work. Dropping it lets mode fall back
+    // to full rather than refusing, which shows the reader more law rather than none.
+    [Fact]
+    public void A_list_argument_that_names_nothing_is_absence_rather_than_a_refusal()
+    {
+        var normalized = OperationArguments.Normalize("as_of", new JsonObject
+        {
+            ["work"] = "eu-eurlex:32013r0575",
+            ["date"] = "2024-01-01",
+            ["mode"] = "select",
+            ["anchors"] = " , , ",
+        });
+
+        Assert.Null(normalized["anchors"]);
+        Assert.Equal("full", normalized["mode"]!.GetValue<string>());
+    }
+
+    // D6. A page bound carries no legal meaning and truncation is visible to the reader, because
+    // the in-force and ranking views report the full count beside the rows they show. So an
+    // unusable one falls back to the action's canonical value instead of destroying the plan. What
+    // may never happen is a bound outside the range reaching MCP, which is what the last
+    // assertion in each loop is for.
     [Theory]
     [MemberData(nameof(EveryOperation))]
     public void The_gate_accepts_exactly_the_integer_range_the_schema_promises(string action)
@@ -239,29 +319,55 @@ public sealed class OperationPolicyTests
                      .Where(OperationArguments.IsInteger).Order(StringComparer.Ordinal))
         {
             var (minimum, maximum) = OperationArguments.IntegerBoundsFor(action, name);
+            Assert.Equal(minimum, OperationArguments
+                .Normalize(action, With(action, name, minimum))[name]!.GetValue<int>());
+            Assert.Equal(maximum, OperationArguments
+                .Normalize(action, With(action, name, maximum))[name]!.GetValue<int>());
+            var canonical = OperationArguments.Normalize(action, MinimalArguments(action))[name]
+                ?.GetValue<int>();
 
-            OperationArguments.Normalize(action, With(action, name, minimum));
-            OperationArguments.Normalize(action, With(action, name, maximum));
+            // A number the model quoted is the one unusable shape that is not a mistake about the
+            // page, so it is read rather than discarded.
+            Assert.Equal(maximum, OperationArguments.Normalize(
+                action, With(action, name, maximum.ToString(CultureInfo.InvariantCulture)))[name]!
+                .GetValue<int>());
+            foreach (var unusable in new JsonNode[]
+                     {
+                         minimum - 1, maximum + 1, "all", 1.5, new JsonObject(), true,
+                     })
+            {
+                var recovered = OperationArguments.Normalize(
+                    action, With(action, name, unusable))[name]?.GetValue<int>();
 
-            foreach (var outside in new[] { minimum - 1, maximum + 1 })
-                Assert.Equal(
-                    $"Argument '{name}' must be between {minimum} and {maximum}.",
-                    Assert.Throws<InvalidDataException>(() =>
-                        OperationArguments.Normalize(action, With(action, name, outside))).Message);
+                Assert.Equal(canonical, recovered);
+                if (recovered is { } value)
+                    Assert.InRange(value, minimum, maximum);
+            }
         }
     }
 
-    // "required" and the anyOf choices are new to the schema; they are only worth emitting if
-    // they are exactly what the gate demands. Completeness is proved by normalizing an object
-    // holding nothing else, soundness by removing each declared demand in turn.
+    // "required" and the anyOf choices are only worth emitting if they are exactly what the gate
+    // does with a missing argument. Two things can happen and the schema asks for both: the plan
+    // is refused, or the point in time is completed to today. Nothing else may be silently filled
+    // in, which is what the last loop asserts by removing each declared demand in turn.
     [Theory]
     [MemberData(nameof(EveryOperation))]
     public void The_gate_demands_exactly_the_arguments_the_schema_declares_required(string action)
     {
+        var today = new DateOnly(2026, 3, 4);
         var allowed = OperationArguments.AllowedFor(action);
         var required = OperationArguments.RequiredFor(action);
+        var defaulted = OperationArguments.DefaultedDatesFor(action);
         var choices = OperationArguments.RequiredChoicesFor(action);
         Assert.All(required, name => Assert.Contains(name, allowed));
+        Assert.All(defaulted, name =>
+        {
+            Assert.Contains(name, allowed);
+            // Every completed argument is a single point in time. A comparison bound is never
+            // completed: today is not a window, and inventing one answers a different question.
+            Assert.True(OperationArguments.IsDate(name));
+            Assert.DoesNotContain(name, new[] { "from_date", "to_date" });
+        });
         Assert.All(choices, choice =>
         {
             Assert.NotEmpty(choice.Names);
@@ -270,7 +376,15 @@ public sealed class OperationPolicyTests
 
         OperationArguments.Normalize(action, MinimalArguments(action));
 
-        foreach (var name in required)
+        foreach (var name in defaulted)
+        {
+            var arguments = MinimalArguments(action);
+            arguments.Remove(name);
+
+            Assert.Equal("2026-03-04", OperationArguments
+                .Normalize(action, arguments, today: today)[name]!.GetValue<string>());
+        }
+        foreach (var name in required.Except(defaulted, StringComparer.Ordinal))
         {
             var arguments = MinimalArguments(action);
             arguments.Remove(name);
@@ -314,15 +428,23 @@ public sealed class OperationPolicyTests
             "2026-02-30", OperationArguments.IsoDateFormat, out _));
     }
 
+    // M2, and the sharpest line in the recovery policy. An absent date is completed; a date that
+    // is PRESENT and does not parse is refused, because "2024" could mean 2024-01-01 or
+    // 2024-12-31 and either choice silently selects a different version of the law. Every date
+    // argument the action accepts is probed, not only the ones it requires, so a bad
+    // navigate.date or search.as_of cannot slip past on the way to MCP.
     [Theory]
     [MemberData(nameof(EveryOperation))]
     public void The_gate_refuses_every_date_the_schema_pattern_refuses(string action)
     {
-        foreach (var name in OperationArguments.RequiredFor(action)
-                     .Where(OperationArguments.IsDate))
-            foreach (var malformed in new[] { "2024", "2024-1-1", "01-01-2024", "2024/01/01" })
+        foreach (var name in OperationArguments.AllowedFor(action)
+                     .Where(OperationArguments.IsDate).Order(StringComparer.Ordinal))
+            foreach (var malformed in new[]
+                     {
+                         "2024", "2024-1-1", "01-01-2024", "2024/01/01", "12/03/2021", "2021-3-1",
+                         "yesterday", "2026-02-30",
+                     })
             {
-                Assert.DoesNotMatch(OperationArguments.IsoDatePattern, malformed);
                 Assert.Equal($"Argument '{name}' must be an ISO date.",
                     Assert.Throws<InvalidDataException>(() =>
                         OperationArguments.Normalize(
@@ -386,6 +508,402 @@ public sealed class OperationPolicyTests
 
             Assert.Equal(message, rejected.Message);
         }
+    }
+
+    // D1, the whole of the date recovery, against the two operations that carry a single point in
+    // time. Thirteen of the sixteen refusals the audit measured were this: the model omitted a
+    // date and the plan died reporting a format error about a value nobody sent.
+    [Theory]
+    [InlineData("as_of", """{"work_query":"GDPR","article_number":"6"}""")]
+    [InlineData("in_force_on", "{}")]
+    [InlineData("navigate", """{"work":"eu-eurlex:32013r0575"}""")]
+    public void An_operation_with_no_date_is_answered_as_the_law_stands_today(
+        string tool, string argumentsJson)
+    {
+        var today = new DateOnly(2026, 3, 4);
+
+        var normalized = OperationArguments.Normalize(
+            tool, JsonNode.Parse(argumentsJson)!.AsObject(), out var repairs, today: today);
+
+        Assert.Equal("2026-03-04", normalized["date"]!.GetValue<string>());
+        Assert.Contains($"{tool}.date defaulted", repairs);
+        // The date is not merely accepted, it is the one MCP is handed, and MCP demands one.
+        if (tool != "navigate") McpInputPolicy.Validate(tool, Executable(tool, normalized));
+    }
+
+    [Fact]
+    public void A_dateless_operation_freezes_into_a_plan_and_reaches_execution()
+    {
+        var plan = OperationPlan.FromPlannerOutput("req-1", "en", new JsonArray(
+                new JsonObject
+                {
+                    ["tool"] = "as_of",
+                    ["arguments"] = new JsonObject { ["work_query"] = "GDPR" },
+                },
+                new JsonObject
+                {
+                    ["tool"] = "in_force_on",
+                    ["arguments"] = new JsonObject(),
+                }),
+            today: new DateOnly(2026, 3, 4));
+
+        Assert.Equal(["as_of", "in_force_on"], plan.Operations.Select(item => item.Tool));
+        Assert.All(plan.Operations, operation =>
+            Assert.Equal("2026-03-04", operation.Arguments.GetProperty("date").GetString()));
+        // With no article to narrow it, the whole text is what the reader gets. mode=select with
+        // nothing selected showed them none of it.
+        Assert.Equal("full", plan.Operations[0].Arguments.GetProperty("mode").GetString());
+    }
+
+    // Left uninjected, the substituted instant is today in UTC, which is the same date the
+    // planner prompt promises the model. The two are one value per request.
+    [Fact]
+    public void The_substituted_instant_is_today_in_utc()
+    {
+        var before = DateOnly.FromDateTime(DateTime.UtcNow);
+
+        var normalized = OperationArguments.Normalize(
+            "as_of", new JsonObject { ["work_query"] = "GDPR" });
+
+        Assert.Contains(normalized["date"]!.GetValue<string>(),
+            new[] { before, DateOnly.FromDateTime(DateTime.UtcNow) }
+                .Select(day => day.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)));
+    }
+
+    // Dr2. The archetype from the audit: as_of fetches exactly one work, its identity is carried
+    // by work_query, and the plan that results is byte-identical to the plan written without the
+    // stray. Byte-identical is the assertion, because it is also the proof that no default
+    // quietly filled the slot the stray occupied.
+    [Fact]
+    public void A_stray_argument_from_another_operation_is_dropped_and_recorded()
+    {
+        var today = new DateOnly(2026, 3, 4);
+        var clean = OperationArguments.Normalize("as_of", new JsonObject
+        {
+            ["work_query"] = "GDPR",
+            ["date"] = "2019-01-01",
+        }, today: today);
+
+        var recovered = OperationArguments.Normalize("as_of", new JsonObject
+        {
+            ["work_query"] = "GDPR",
+            ["date"] = "2019-01-01",
+            ["publisher"] = "eu-eurlex",
+        }, out var repairs, today: today);
+
+        Assert.Equal(clean.ToJsonString(), recovered.ToJsonString());
+        Assert.Equal(["as_of.publisher dropped"], repairs);
+    }
+
+    // Dr0, and the one interaction in this design that could silently change the law: as_of
+    // carrying search's spelling of the same concept. Dropping that key would hand the slot to
+    // the date default and answer a 2019 question with today's law, labelled today. It is
+    // renamed instead, so the instant the model supplied is the instant that is answered.
+    [Fact]
+    public void The_other_spelling_of_the_point_in_time_is_renamed_rather_than_dropped()
+    {
+        var normalized = OperationArguments.Normalize("as_of", new JsonObject
+        {
+            ["work_query"] = "GDPR",
+            ["as_of"] = "2019-01-01",
+        }, out var repairs, today: new DateOnly(2026, 3, 4));
+
+        Assert.Equal("2019-01-01", normalized["date"]!.GetValue<string>());
+        Assert.Null(normalized["as_of"]);
+        Assert.Equal(["as_of.as_of aliased"], repairs.ToArray());
+
+        // A blank date is absence here as it is everywhere else, so the alias still wins rather
+        // than colliding with an empty string and letting the default take the slot.
+        Assert.Equal("2019-01-01", OperationArguments.Normalize("as_of", new JsonObject
+        {
+            ["work_query"] = "GDPR",
+            ["date"] = "  ",
+            ["as_of"] = "2019-01-01",
+        }, today: new DateOnly(2026, 3, 4))["date"]!.GetValue<string>());
+    }
+
+    // The same instant under either spelling, refused for the same reason. "as_of": 2019 is a
+    // present value naming a point in time, not a slot the model left blank, so it may not become
+    // today's law: a non-string is refused under the alias exactly as it is under date, and only
+    // JSON null and a blank string are read as absence.
+    [Theory]
+    [InlineData("as_of")]
+    [InlineData("date")]
+    public void An_instant_the_planner_did_not_write_as_a_string_aborts_the_plan(string name)
+    {
+        foreach (var value in new JsonNode[] { 2019, true, new JsonArray("2019-01-01"), new JsonObject() })
+            Assert.Equal($"Argument '{name}' must be a string.",
+                Assert.Throws<InvalidDataException>(() =>
+                    OperationArguments.Normalize("as_of", new JsonObject
+                    {
+                        ["work_query"] = "GDPR",
+                        [name] = value,
+                    }, today: new DateOnly(2026, 3, 4))).Message);
+
+        // JSON null is the absence it looks like, under either spelling.
+        Assert.Equal("2026-03-04", OperationArguments.Normalize("as_of", new JsonObject
+        {
+            ["work_query"] = "GDPR",
+            [name] = null,
+        }, today: new DateOnly(2026, 3, 4))["date"]!.GetValue<string>());
+    }
+
+    // A dropped stray is the one repair whose name the planner chose rather than the gate, and a
+    // model can be talked into naming a key after the question it was asked. These lines go to
+    // stderr and into the reply trace, so a name no operation declares is reported as a
+    // placeholder: the count survives, the user's words do not reach the log.
+    [Fact]
+    public void A_repair_line_never_carries_a_name_the_planner_invented()
+    {
+        OperationArguments.Normalize("coverage", new JsonObject
+        {
+            ["publisher"] = "lu-legilux",
+            ["note about the client Jean Dupont"] = "x",
+            ["another invented key"] = "y",
+        }, out var repairs, today: new DateOnly(2026, 3, 4));
+
+        Assert.Equal(["coverage.unrecognized dropped", "coverage.unrecognized dropped"],
+            repairs.ToArray());
+
+        // A name another operation does declare is still named, because that is the drift signal
+        // the line exists to carry.
+        OperationArguments.Normalize("coverage", new JsonObject
+        {
+            ["publisher"] = "lu-legilux",
+            ["language"] = "fr",
+        }, out var named, today: new DateOnly(2026, 3, 4));
+
+        Assert.Equal(["coverage.language dropped"], named.ToArray());
+    }
+
+    // The conditional half of D1: time_scope=as_of is the only shape that gives search a point in
+    // time, and it used to abort the plan when the model named the scope but not the instant.
+    [Fact]
+    public void A_point_in_time_search_with_no_instant_searches_the_law_as_it_stands_today()
+    {
+        var normalized = OperationArguments.Normalize("search", new JsonObject
+        {
+            ["query"] = "data protection",
+            ["time_scope"] = "as_of",
+        }, out var repairs, today: new DateOnly(2026, 3, 4));
+
+        McpInputPolicy.Validate("search", normalized);
+        Assert.Equal("2026-03-04", normalized["as_of"]!.GetValue<string>());
+        Assert.Equal(["search.as_of defaulted"], repairs.ToArray());
+
+        // An all_versions search is left open: an instant it never asked for would narrow it.
+        Assert.Null(OperationArguments.Normalize("search", new JsonObject
+        {
+            ["query"] = "data protection",
+        }, today: new DateOnly(2026, 3, 4))["as_of"]);
+    }
+
+    [Fact]
+    public void Two_different_instants_on_one_operation_abort_the_plan()
+    {
+        var rejected = Assert.Throws<InvalidDataException>(() =>
+            OperationArguments.Normalize("as_of", new JsonObject
+            {
+                ["work_query"] = "GDPR",
+                ["date"] = "2019-01-01",
+                ["as_of"] = "2024-06-30",
+            }));
+
+        Assert.Equal("Operation 'as_of' contains unsupported argument 'as_of'.",
+            rejected.Message);
+
+        // The same instant written twice is not a contradiction and does not need one.
+        Assert.Equal("2019-01-01", OperationArguments.Normalize("as_of", new JsonObject
+        {
+            ["work_query"] = "GDPR",
+            ["date"] = "2019-01-01",
+            ["as_of"] = "2019-01-01",
+        })["date"]!.GetValue<string>());
+    }
+
+    // M3. A comparison window has no default. Today is not a window, and inventing one answers a
+    // question the reader did not ask; nor is the pair swapped when it is reversed, because that
+    // exchanges the before and the after and inverts every added and removed clause in the diff.
+    [Theory]
+    [InlineData("diff", """{"work_query":"CRR","to_date":"2024-12-31"}""")]
+    [InlineData("diff", """{"work_query":"CRR","from_date":"2020-01-01"}""")]
+    [InlineData("diff", """{"work_query":"CRR"}""")]
+    [InlineData("diff", """{"work_query":"CRR","from_date":"","to_date":"2024-12-31"}""")]
+    [InlineData("changes_in_period", """{"to_date":"2024-12-31"}""")]
+    [InlineData("changes_in_period", """{"from_date":"2024-01-01"}""")]
+    public void A_comparison_window_is_never_completed_for_the_reader(
+        string tool, string argumentsJson)
+    {
+        Assert.Throws<InvalidDataException>(() => OperationArguments.Normalize(
+            tool, JsonNode.Parse(argumentsJson)!.AsObject(), today: new DateOnly(2026, 3, 4)));
+
+        Assert.Equal("diff from_date must not follow to_date.",
+            Assert.Throws<InvalidDataException>(() => OperationArguments.Normalize(
+                "diff", new JsonObject
+                {
+                    ["work_query"] = "CRR",
+                    ["from_date"] = "2024-12-31",
+                    ["to_date"] = "2020-01-01",
+                })).Message);
+    }
+
+    // The blast radius the recovery policy exists to remove: one stray key on the last operation
+    // used to destroy the four valid operations before it.
+    [Fact]
+    public void One_repairable_operation_no_longer_destroys_the_rest_of_the_plan()
+    {
+        var plan = OperationPlan.FromPlannerOutput("req-1", "en", new JsonArray(
+                JsonNode.Parse("""{"tool":"coverage","arguments":{}}"""),
+                JsonNode.Parse("""{"tool":"search","arguments":{"query":"data protection"}}"""),
+                JsonNode.Parse(
+                    """{"tool":"as_of","arguments":{"work_query":"GDPR","publisher":"eu-eurlex","language":"en"}}""")),
+            today: new DateOnly(2026, 3, 4));
+
+        Assert.Equal(["coverage", "search", "as_of"], plan.Operations.Select(item => item.Tool));
+        Assert.Equal(["as_of.publisher dropped", "as_of.date defaulted"],
+            plan.Operations[2].Repairs.ToArray());
+        Assert.All(plan.Operations.Take(2), operation => Assert.Empty(operation.Repairs));
+    }
+
+    // The standing invariant behind the never-dropped set: a value may never be dropped if a
+    // default would then fill the same slot. Proved structurally rather than by example, because
+    // the next widening of the droppable set is where it would be broken.
+    [Theory]
+    [MemberData(nameof(EveryOperation))]
+    public void No_argument_a_default_fills_can_be_dropped_as_a_stray(string action)
+    {
+        var allowed = OperationArguments.AllowedFor(action);
+        var minimal = MinimalArguments(action);
+        var today = new DateOnly(2026, 3, 4);
+        var filled = OperationArguments.Normalize(
+            action, MinimalArguments(action), out var baseline, today: today);
+
+        // Everything a default fills is an argument this action accepts, so it can only ever
+        // arrive as a value, never as a droppable stray.
+        foreach (var name in filled.Select(item => item.Key).Except(
+                     minimal.Select(item => item.Key), StringComparer.Ordinal))
+            Assert.Contains(name, allowed);
+
+        // And every stray this action does drop leaves the frozen arguments untouched.
+        foreach (var stray in new[] { "publisher", "language", "order", "limit", "reason" })
+        {
+            if (allowed.Contains(stray)) continue;
+            var arguments = MinimalArguments(action);
+            arguments[stray] = stray == "limit" ? 7 : "eu-eurlex";
+
+            var recovered = OperationArguments.Normalize(
+                action, arguments, out var repairs, today: today);
+
+            Assert.Equal(filled.ToJsonString(), recovered.ToJsonString());
+            Assert.Equal([$"{action}.{stray} dropped", .. baseline], repairs.ToArray());
+        }
+    }
+
+    // A repair is a fact about the plan, not a debug aid: it has to survive into the frozen
+    // operation so AskService can count it, and it may never carry a value or user text.
+    [Fact]
+    public void Every_repair_is_recorded_on_the_frozen_operation_without_a_value()
+    {
+        var plan = OperationPlan.FromPlannerOutput("req-1", "en", new JsonArray(new JsonObject
+        {
+            ["tool"] = "search",
+            ["arguments"] = new JsonObject
+            {
+                ["query"] = "renewable energy",
+                ["retrieval_mode"] = "semantic",
+                ["limit"] = "not a number",
+                ["mode"] = "full",
+            },
+        }));
+
+        var operation = Assert.Single(plan.Operations);
+        // Name recovery runs first, then per-value recovery, then the closed sets, because a
+        // bad value has to be gone before a default can refill it.
+        Assert.Equal(
+            ["search.mode dropped", "search.limit dropped", "search.retrieval_mode dropped"],
+            operation.Repairs.ToArray());
+        Assert.All(operation.Repairs, repair =>
+        {
+            Assert.DoesNotContain("semantic", repair, StringComparison.Ordinal);
+            Assert.DoesNotContain("renewable", repair, StringComparison.Ordinal);
+        });
+        Assert.Equal("keyword", operation.Arguments.GetProperty("retrieval_mode").GetString());
+        Assert.Equal(10, operation.Arguments.GetProperty("limit").GetInt32());
+    }
+
+    // The arguments that leave this gate are handed to a legal operation, so a repaired plan has
+    // to satisfy the public contract exactly as an unrepaired one does.
+    [Fact]
+    public void A_fully_repaired_operation_still_satisfies_the_public_mcp_contract()
+    {
+        var normalized = OperationArguments.Normalize("in_force_on", new JsonObject
+        {
+            ["date"] = "   ",
+            ["limit"] = "9000",
+            ["offset"] = -3,
+            ["publisher"] = "lu-legilux",
+        }, out var repairs, today: new DateOnly(2026, 3, 4));
+
+        McpInputPolicy.Validate("in_force_on", normalized);
+        Assert.Equal("2026-03-04", normalized["date"]!.GetValue<string>());
+        Assert.Equal(50, normalized["limit"]!.GetValue<int>());
+        Assert.Equal(0, normalized["offset"]!.GetValue<int>());
+        Assert.Equal(
+            ["in_force_on.date dropped", "in_force_on.limit dropped", "in_force_on.offset dropped",
+                "in_force_on.date defaulted"],
+            repairs);
+    }
+
+    // Keeping a quoted number is still a repair. Counting it separately is what distinguishes a
+    // planner writing the wrong JSON shape from a planner asking for a page nobody can serve.
+    [Fact]
+    public void A_page_bound_the_planner_quoted_is_kept_and_counted_as_its_own_repair()
+    {
+        var normalized = OperationArguments.Normalize("search", new JsonObject
+        {
+            ["query"] = "renewable energy",
+            ["limit"] = "25",
+        }, out var repairs);
+
+        Assert.Equal(25, normalized["limit"]!.GetValue<int>());
+        Assert.Equal(["search.limit coerced"], repairs);
+    }
+
+    [Fact]
+    public void A_page_bound_the_planner_wrote_correctly_is_not_a_repair()
+    {
+        OperationArguments.Normalize("search", new JsonObject
+        {
+            ["query"] = "renewable energy",
+            ["limit"] = 25,
+        }, out var repairs);
+
+        Assert.Empty(repairs);
+    }
+
+    // A quoted number outside the action's bounds is the page nobody can serve, so it is dropped
+    // rather than coerced, and it is counted under the verb that says so.
+    [Fact]
+    public void A_quoted_page_bound_outside_its_range_is_dropped_rather_than_coerced()
+    {
+        var normalized = OperationArguments.Normalize("search", new JsonObject
+        {
+            ["query"] = "renewable energy",
+            ["limit"] = "9000",
+        }, out var repairs);
+
+        Assert.Equal(10, normalized["limit"]!.GetValue<int>());
+        Assert.Equal(["search.limit dropped"], repairs);
+    }
+
+    // work_query is resolved to a work before execution; MCP is never shown it.
+    private static JsonObject Executable(string tool, JsonObject normalized)
+    {
+        var arguments = normalized.DeepClone().AsObject();
+        if (arguments.Remove("work_query")) arguments["work"] = "eu-eurlex:32016r0679";
+        if (tool == "as_of" && arguments.Remove("article_number"))
+            arguments["anchors"] = "art_6";
+        return arguments;
     }
 
     private static JsonObject MinimalArguments(string action)
@@ -469,32 +987,55 @@ public sealed class OperationPolicyTests
         Assert.Equal(tool, Assert.Single(plan.Operations).Tool);
     }
 
-    // The gate itself must keep failing closed. The schema only stops the model proposing an
-    // off-set value; it is guidance, not a decoding constraint, and must never become a coercion.
+    // D7. Each of these governs how the corpus is searched or how much of one document is
+    // rendered, never which law or which instant, so an invented value falls back to the default
+    // rather than destroying the plan. time_scope belongs here because its default widens the
+    // version set, and a wider search can add a hit but never hide one.
     [Theory]
-    [InlineData("search", "time_scope", "current")]
-    [InlineData("search", "retrieval_mode", "semantic")]
-    [InlineData("search", "fuzzy", "true")]
-    [InlineData("as_of", "mode", "text")]
-    [InlineData("changes_in_period", "order", "churn")]
-    public void An_argument_value_outside_the_closed_set_still_aborts_the_plan(
-        string tool, string argument, string value)
+    [InlineData("search", "time_scope", "current", null)]
+    [InlineData("search", "retrieval_mode", "semantic", "keyword")]
+    [InlineData("search", "fuzzy", "true", "auto")]
+    [InlineData("as_of", "mode", "text", "full")]
+    public void A_tuning_value_outside_the_closed_set_falls_back_to_its_default(
+        string tool, string argument, string value, string? expected)
     {
-        var arguments = tool switch
-        {
-            "search" => new JsonObject { ["query"] = "renewable energy" },
-            "as_of" => new JsonObject { ["work_query"] = "GDPR", ["date"] = "2021-01-01" },
-            _ => new JsonObject { ["from_date"] = "2024-01-01", ["to_date"] = "2024-12-31" },
-        };
+        var arguments = ShippedArguments(tool);
         arguments[argument] = value;
+
+        var plan = OperationPlan.FromPlannerOutput("req-1", "en", new JsonArray(
+            new JsonObject { ["tool"] = tool, ["arguments"] = arguments }));
+
+        var operation = Assert.Single(plan.Operations);
+        Assert.Equal(expected, operation.Arguments.TryGetProperty(argument, out var frozen)
+            ? frozen.GetString() : null);
+        Assert.Contains($"{tool}.{argument} dropped", operation.Repairs);
+    }
+
+    // order is the one closed set that does not qualify, and the reason is worth keeping: it
+    // interacts with limit. Dropping it yields by_date, so a top-20 by recency goes to a reader
+    // who asked which laws changed most, with the rows they asked for silently outside the
+    // window. That is a plausible-looking answer to a different question. The prompt names
+    // order=by_churn explicitly, so a bad value here means the model misread the request.
+    [Fact]
+    public void An_order_outside_the_closed_set_still_aborts_the_plan()
+    {
+        var arguments = ShippedArguments("changes_in_period");
+        arguments["order"] = "churn";
 
         var rejected = Assert.Throws<InvalidDataException>(() =>
             OperationPlan.FromPlannerOutput("req-1", "en", new JsonArray(
-                new JsonObject { ["tool"] = tool, ["arguments"] = arguments })));
+                new JsonObject { ["tool"] = "changes_in_period", ["arguments"] = arguments })));
 
         Assert.Contains("has an unsupported value", rejected.Message, StringComparison.Ordinal);
-        Assert.Contains($"'{argument}'", rejected.Message, StringComparison.Ordinal);
+        Assert.Contains("'order'", rejected.Message, StringComparison.Ordinal);
     }
+
+    private static JsonObject ShippedArguments(string tool) => tool switch
+    {
+        "search" => new JsonObject { ["query"] = "renewable energy" },
+        "as_of" => new JsonObject { ["work_query"] = "GDPR", ["date"] = "2021-01-01" },
+        _ => new JsonObject { ["from_date"] = "2024-01-01", ["to_date"] = "2024-12-31" },
+    };
 
     // Four copies of these literals exist. This is the net for the next edit to any of them.
     [Fact]
@@ -600,9 +1141,9 @@ public sealed class OperationPolicyTests
     private static IEnumerable<KeyValuePair<string, JsonObject>> PlannerBranches(
         CorpusVocabulary vocabulary) =>
         AskService.PlannerTools(vocabulary)[0]!["function"]!["parameters"]!["properties"]!
-            ["operations"]!["items"]!["oneOf"]!.AsArray()
+            ["operations"]!["items"]!["anyOf"]!.AsArray()
             .Select(node => new KeyValuePair<string, JsonObject>(
-                node!["properties"]!["tool"]!["enum"]![0]!.GetValue<string>(), node.AsObject()));
+                node!["properties"]!["tool"]!["const"]!.GetValue<string>(), node.AsObject()));
 
     public static TheoryData<string, string> ShippedPlannerOperations => new()
     {
@@ -623,15 +1164,48 @@ public sealed class OperationPolicyTests
         Assert.Equal(tool, Assert.Single(plan.Operations).Tool);
     }
 
+    // M4. A stray whose name is a date, a work identity, an article number, an anchor or works
+    // still aborts, because none of them can be dropped without answering a different question.
     [Fact]
     public void A_planner_argument_outside_the_allowlist_still_aborts_the_plan()
     {
         var rejected = Assert.Throws<InvalidDataException>(() => OperationPlan.FromPlannerOutput(
             "req-1", "en", new JsonArray(JsonNode.Parse(
-                """{"tool":"search","arguments":{"query":"renewable energy","order":"by_churn"}}"""))));
+                """{"tool":"search","arguments":{"query":"renewable energy","article_number":"92"}}"""))));
 
         Assert.Contains("'search'", rejected.Message, StringComparison.Ordinal);
-        Assert.Contains("'order'", rejected.Message, StringComparison.Ordinal);
+        Assert.Contains("'article_number'", rejected.Message, StringComparison.Ordinal);
+    }
+
+    public static TheoryData<string> NeverDroppedStrayNames
+    {
+        get
+        {
+            var data = new TheoryData<string>();
+            foreach (var name in new[]
+                     {
+                         "date", "as_of", "from_date", "to_date", "work", "work_query", "lex_id",
+                         "article_number", "anchor", "anchors", "works",
+                     })
+                data.Add(name);
+            return data;
+        }
+    }
+
+    // coverage accepts publisher and nothing else, so every one of these is a stray there. Each
+    // names the instant, the law or the provision: dropping a date lets the default substitute
+    // today for an instant the model supplied, dropping a work identity resolves a different law,
+    // dropping an anchor or an article number returns a different provision, and dropping works
+    // widens a scan the user restricted to named laws.
+    [Theory]
+    [MemberData(nameof(NeverDroppedStrayNames))]
+    public void A_stray_naming_the_law_the_provision_or_the_instant_is_never_dropped(string name)
+    {
+        var rejected = Assert.Throws<InvalidDataException>(() => OperationArguments.Normalize(
+            "coverage", new JsonObject { [name] = "2019-01-01" }));
+
+        Assert.Equal($"Operation 'coverage' contains unsupported argument '{name}'.",
+            rejected.Message);
     }
 
     public static TheoryData<string, LegalOutcome> StatusCases => new()

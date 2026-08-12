@@ -226,6 +226,12 @@ public sealed record RequestedOperation
     public ImmutableArray<SupportingCallRole> SupportingCalls { get; private init; }
     public ImmutableArray<OperationEffect> Effects { get; private init; }
 
+    /// <summary>What the argument gate had to repair to freeze this operation, as
+    /// "action.argument outcome" lines carrying no user text. Empty for a plan the planner got
+    /// right. A repair that nobody counts is drift nobody notices, so these are logged and traced
+    /// rather than discarded.</summary>
+    public ImmutableArray<string> Repairs { get; private init; } = [];
+
     public static RequestedOperation Create(
         string operationId,
         int userOrder,
@@ -287,7 +293,8 @@ public sealed record RequestedOperation
         string operationId,
         int userOrder,
         ApplicationDisposition disposition,
-        JsonObject arguments)
+        JsonObject arguments,
+        DateOnly? today = null)
     {
         if (disposition is not (ApplicationDisposition.Clarification
                 or ApplicationDisposition.Gap or ApplicationDisposition.LegalBoundary))
@@ -301,7 +308,8 @@ public sealed record RequestedOperation
             ApplicationDisposition.LegalBoundary => "legal_boundary",
             _ => "gap",
         };
-        var normalized = OperationArguments.Normalize(action, arguments);
+        var normalized = OperationArguments.Normalize(
+            action, arguments, out var repairs, null, today);
         var argumentBytes = JsonSerializer.SerializeToUtf8Bytes(normalized);
         if (argumentBytes.Length > MaximumArgumentBytes)
             throw new InvalidDataException(
@@ -317,6 +325,7 @@ public sealed record RequestedOperation
             RequiresWorkResolution = false,
             SupportingCalls = [],
             Effects = [OperationEffect.Gap],
+            Repairs = [.. repairs],
         };
     }
 
@@ -325,10 +334,12 @@ public sealed record RequestedOperation
         int userOrder,
         string tool,
         JsonObject arguments,
-        CorpusVocabulary? vocabulary = null)
+        CorpusVocabulary? vocabulary = null,
+        DateOnly? today = null)
     {
         ArgumentNullException.ThrowIfNull(arguments);
-        var normalized = OperationArguments.Normalize(tool, arguments, vocabulary);
+        var normalized = OperationArguments.Normalize(
+            tool, arguments, out var repairs, vocabulary, today);
         var requiresResolution = LegalOperationPolicy.RequiresWorkResolution(tool);
         var supporting = requiresResolution
             ? new List<SupportingCallRole> { SupportingCallRole.WorkResolution }
@@ -345,7 +356,7 @@ public sealed record RequestedOperation
         if (tool is "changes_in_period" or "in_force_on")
             effects.Add(OperationEffect.Workspace);
         return Create(operationId, userOrder, tool, normalized, requiresResolution,
-            supporting, effects);
+            supporting, effects) with { Repairs = [.. repairs] };
     }
 }
 
@@ -425,7 +436,8 @@ public sealed class OperationPlan
         string locale,
         JsonArray operations,
         bool synthesisRequested = false,
-        CorpusVocabulary? vocabulary = null)
+        CorpusVocabulary? vocabulary = null,
+        DateOnly? today = null)
     {
         ArgumentNullException.ThrowIfNull(operations);
         if (operations.Count is 0 or > MaximumOperations)
@@ -443,13 +455,13 @@ public sealed class OperationPlan
             if (tool == "legal_boundary")
                 return RequestedOperation.CreateApplication(
                     $"{requestId}:op-{index + 1}", index,
-                    ApplicationDisposition.LegalBoundary, arguments);
+                    ApplicationDisposition.LegalBoundary, arguments, today);
             if (tool == "clarification")
                 return RequestedOperation.CreateApplication(
                     $"{requestId}:op-{index + 1}", index,
-                    ApplicationDisposition.Clarification, arguments);
+                    ApplicationDisposition.Clarification, arguments, today);
             return RequestedOperation.CreatePlanned($"{requestId}:op-{index + 1}", index,
-                tool, arguments, vocabulary);
+                tool, arguments, vocabulary, today);
         }).ToArray();
         return Create(requestId, locale, requested, synthesisRequested);
     }
