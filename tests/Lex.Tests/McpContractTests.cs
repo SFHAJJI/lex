@@ -974,6 +974,83 @@ public class McpContractTests : IDisposable
         Assert.False(string.IsNullOrWhiteSpace(miss["anchor_note"]?.GetValue<string>()));
     }
 
+    // Readers run in collection order and shared one global row budget, so on any query the first
+    // publisher matched it drained the whole limit and every later publisher returned an empty
+    // hits array. A national corpus was not outranked, it was structurally excluded.
+    [Fact]
+    public void One_publisher_cannot_drain_the_whole_row_budget()
+    {
+        var first = Path.Combine(Path.GetTempPath(), $"lex-mcp-floor-a-{Guid.NewGuid():N}.db");
+        var second = Path.Combine(Path.GetTempPath(), $"lex-mcp-floor-z-{Guid.NewGuid():N}.db");
+        try
+        {
+            BuildBudgetIndex(first, "a-pub", "Alpha");
+            BuildBudgetIndex(second, "z-pub", "Zeta");
+            using var alpha = LexIndexReader.Open(first);
+            using var zeta = LexIndexReader.Open(second);
+            var core = new McpCore(new Dictionary<string, LexIndexReader>
+            {
+                ["a-pub"] = alpha,
+                ["z-pub"] = zeta,
+            });
+
+            var shared = Assert.IsType<JsonArray>(core.CallTool("search", new JsonObject
+            {
+                ["query"] = "resilience obligations",
+                ["limit"] = 8,
+            }));
+            var counts = shared.OfType<JsonObject>().ToDictionary(
+                item => item["envelope"]!["publisher"]!.GetValue<string>(),
+                item => item["hits"]!.AsArray().Count);
+
+            Assert.Equal(2, counts.Count);
+            Assert.All(counts, entry => Assert.InRange(entry.Value, 4, 8));
+            Assert.True(counts.Values.Sum() <= 8, $"returned {counts.Values.Sum()} rows");
+            Assert.All(shared.OfType<JsonObject>(), item => Assert.True(
+                item["response_row_set"]!["returned"]!.GetValue<int>() <= 8));
+
+            // Unchanged: once one publisher resolves the named work, the other is still
+            // suppressed outright rather than filling its floor with unrelated law.
+            var named = Assert.IsType<JsonArray>(core.CallTool("search", new JsonObject
+            {
+                ["query"] = "What does the Zeta Resilience Act 0002 require?",
+                ["limit"] = 8,
+            }));
+            var namedCounts = named.OfType<JsonObject>().ToDictionary(
+                item => item["envelope"]!["publisher"]!.GetValue<string>(),
+                item => item["hits"]!.AsArray().Count);
+
+            Assert.Equal(0, namedCounts["a-pub"]);
+            Assert.True(namedCounts["z-pub"] > 0);
+        }
+        finally
+        {
+            try { File.Delete(first); } catch { }
+            try { File.Delete(second); } catch { }
+        }
+    }
+
+    private static void BuildBudgetIndex(string db, string collection, string name)
+    {
+        const string text = "resilience obligations apply here";
+        var sha = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(
+            System.Text.Encoding.UTF8.GetBytes(text)));
+        var docs = Enumerable.Range(1, 6).Select(index => new DocRow(
+            $"{collection}:work-{index:D4}:2024-01-01", collection, $"work-{index:D4}",
+            $"urn:{collection}:{index:D4}", "REG", "en", "2024-01-01", null, "publisher",
+            "2026-08-01T00:00:00Z", false, true, true, "record", "body",
+            "https://example.test/work", $"{name} Resilience Act {index:D4}",
+            $"{name} Resilience Act {index:D4}", null, "2024-01-01", null)).ToArray();
+        var provisions = docs.Select(doc => new ProvisionRow(
+            $"{doc.Key}|en|2024-01-01", 0, "art_1", $"{doc.Key}#art_1", "article", "1",
+            null, null, null, doc.Title, text, sha)).ToArray();
+        IndexBuilder.Build(db, new Dictionary<string, string>
+        {
+            ["collection"] = collection, ["tier"] = "A", ["history_begins"] = "publisher",
+            ["built_at"] = "2026-08-01T00:00:00Z", ["corpus_commit"] = "test",
+        }, docs, provisions, [], [], StampSigner.CreateKeyPem());
+    }
+
     [Fact]
     public void A_scoped_search_stays_inside_its_scope()
     {

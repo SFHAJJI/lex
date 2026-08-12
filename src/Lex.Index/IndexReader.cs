@@ -1089,7 +1089,20 @@ public sealed class LexIndexReader : IDisposable
                      .Where(value => !string.IsNullOrWhiteSpace(value))
                      .Distinct(StringComparer.Ordinal)
                      .OrderByDescending(value => value!.Length))
-            residual = residual.Replace(" " + name + " ", " ", StringComparison.Ordinal);
+        {
+            var padded = " " + name + " ";
+            if (residual.Contains(padded, StringComparison.Ordinal))
+            {
+                residual = residual.Replace(padded, " ", StringComparison.Ordinal);
+                continue;
+            }
+            // The name resolved through the citation form ("loi modifiée du 12 novembre 2004"
+            // against a title that omits the qualifier). Strip the form that actually matched, so
+            // the inserted qualifier does not leak into the provision query as a stray token.
+            var citation = " " + WorkSearch.NormalizeCitation(residual.Trim()) + " ";
+            if (citation.Contains(padded, StringComparison.Ordinal))
+                residual = citation.Replace(padded, " ", StringComparison.Ordinal);
+        }
         residual = RemoveArticleIntent(residual.Trim(), basic.ArticleNumber);
         residual = RemoveRoleIntent(residual, role);
         residual = RemoveConversationalReferences(residual);
@@ -1118,13 +1131,31 @@ public sealed class LexIndexReader : IDisposable
     /// same digit requirement WorkSearch.Find already imposes on a contained official identifier.
     /// Dropping contained_title entirely was the bug: the user's own words named the instrument
     /// and the search reported work_resolution_status=not_requested anyway.
+    ///
+    /// A digit is not the only proof of a designation. National Codes carry no date in their name
+    /// (Code du travail, Code civil, the Constitution), so the digit rule alone made the
+    /// most-cited instruments of a whole jurisdiction unnameable inside a sentence. A name opening
+    /// on an act form is a designation, not prose: a descriptive heading ("Reporting obligations")
+    /// and a recueil label ("Cours et Tribunaux") stay weak, and every EU title carries a number
+    /// anyway.
     private static bool IsWorkIdentity(WorkSearchHit hit) => hit.Reason switch
     {
         "exact_identifier" or "exact_alias" or "exact_title" => true,
         "contained_identifier" or "contained_alias" => true,
-        "contained_title" => hit.MatchedValue?.Any(char.IsDigit) == true,
+        "contained_title" => hit.MatchedValue is { } value
+            && (value.Any(char.IsDigit) || IsActFormDesignation(value)),
         _ => false,
     };
+
+    private static readonly HashSet<string> ActFormDesignations = new(StringComparer.Ordinal)
+    {
+        "loi", "reglement", "arrete", "code", "constitution", "convention",
+        "ordonnance", "decret", "directive", "regulation", "traite",
+    };
+
+    private static bool IsActFormDesignation(string value) =>
+        WorkSearch.Normalize(value).Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            is [var first, ..] && ActFormDesignations.Contains(first);
 
     private static IReadOnlyList<WorkResolution> BuildWorkResolutions(
         string query, IReadOnlyList<WorkSearchHit> identityMatches)

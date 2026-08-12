@@ -470,6 +470,157 @@ public sealed class AskOperationControllerTests : IDisposable
         Assert.Null(response.Body["clarification"]);
     }
 
+    // The official title the user quoted names a second instrument inside itself. Both mentions
+    // resolve, so both are authorized by the user's own words; only the GDPR carries the
+    // requested article, and that is what settles which one the operation runs against.
+    [Fact]
+    public async Task A_quoted_title_naming_a_repealed_instrument_selects_the_anchored_work()
+    {
+        const string question = "Under Regulation (EU) 2016/679 on the protection of natural "
+            + "persons and repealing Directive 95/46/EC, what does Article 17 require?";
+        var resolutions = new[]
+        {
+            ("directive 95 46 ec", "resolved", new[] { "eu-eurlex:31995l0046" }),
+            ("regulation eu 2016 679", "resolved", new[] { "eu-eurlex:32016r0679" }),
+        };
+        var service = new AskService(_core, new StaticPlanner("en", new JsonArray(new JsonObject
+        {
+            ["tool"] = "as_of",
+            ["arguments"] = new JsonObject
+            {
+                ["work_query"] = "Regulation (EU) 2016/679 repealing Directive 95/46/EC",
+                ["article_number"] = "17",
+                ["date"] = "2021-01-01",
+            },
+        })), legalTool: SearchStub(question,
+            Envelope(resolutions,
+                Hit("eu-eurlex:32016r0679:2018-05-25", null, "contained_title"),
+                Hit("eu-eurlex:31995l0046:1995-10-24", null, "contained_title")),
+            Envelope(resolutions,
+                Hit("eu-eurlex:32016r0679:2018-05-25", "art_17", "article_intent"))));
+
+        var response = await service.AskAsync(History(question), Guid.NewGuid().ToString(),
+            "law.test", CancellationToken.None);
+
+        var primary = Assert.Single(
+            Assert.IsType<JsonArray>(response.Body["trace"]).OfType<JsonObject>(),
+            item => item["phase"]?.GetValue<string>() == "primary");
+        Assert.Equal("eu-eurlex:32016r0679", primary["args"]?["work"]?.GetValue<string>());
+        Assert.Equal("select", primary["args"]?["mode"]?.GetValue<string>());
+        Assert.Equal("art_17", primary["args"]?["anchors"]?.GetValue<string>());
+        Assert.Null(response.Body["clarification"]);
+    }
+
+    // Same two-mention title, but the article exists in both works. The focused response is
+    // scoped by the planner's own work_query, so its top hit breaks the tie.
+    [Fact]
+    public async Task Two_named_works_with_the_same_article_fall_back_to_focused_hit_rank()
+    {
+        const string question = "Under Regulation (EU) No 596/2014 on market abuse and repealing "
+            + "Directive 2003/6/EC, what does Article 7 say?";
+        var resolutions = new[]
+        {
+            ("directive 2003 6 ec", "resolved", new[] { "eu-eurlex:32003l0006" }),
+            ("regulation eu 596 2014", "resolved", new[] { "eu-eurlex:32014r0596" }),
+        };
+        var service = new AskService(_core, new StaticPlanner("en", new JsonArray(new JsonObject
+        {
+            ["tool"] = "as_of",
+            ["arguments"] = new JsonObject
+            {
+                ["work_query"] = "Regulation (EU) No 596/2014 repealing Directive 2003/6/EC",
+                ["article_number"] = "7",
+                ["date"] = "2021-01-01",
+            },
+        })), legalTool: SearchStub(question,
+            Envelope(resolutions,
+                Hit("eu-eurlex:32014r0596:2016-07-03", null, "contained_title"),
+                Hit("eu-eurlex:32003l0006:2003-04-12", null, "contained_title")),
+            Envelope(resolutions,
+                Hit("eu-eurlex:32014r0596:2016-07-03", "art_7", "article_intent"),
+                Hit("eu-eurlex:32003l0006:2003-04-12", "art_7", "article_intent"))));
+
+        var response = await service.AskAsync(History(question), Guid.NewGuid().ToString(),
+            "law.test", CancellationToken.None);
+
+        var primary = Assert.Single(
+            Assert.IsType<JsonArray>(response.Body["trace"]).OfType<JsonObject>(),
+            item => item["phase"]?.GetValue<string>() == "primary");
+        Assert.Equal("eu-eurlex:32014r0596", primary["args"]?["work"]?.GetValue<string>());
+        Assert.Null(response.Body["clarification"]);
+    }
+
+    // The tiebreak ranks inside the set the user's own words authorized. A work that only the
+    // model's reformulation resolved is not in that set and cannot enter it through the ranking.
+    [Fact]
+    public async Task The_focused_tiebreak_cannot_smuggle_in_a_work_the_user_never_named()
+    {
+        const string question = "What are the notification duties after an incident?";
+        var service = new AskService(_core, new StaticPlanner("en", new JsonArray(new JsonObject
+        {
+            ["tool"] = "timeline",
+            ["arguments"] = new JsonObject { ["work_query"] = "incident notification duties" },
+        })), legalTool: SearchStub(question,
+            Envelope([],
+                Hit("eu-eurlex:32016r0679:2018-05-25", null, "work_metadata"),
+                Hit("eu-eurlex:32022r2554:2024-01-01", null, "work_metadata")),
+            Envelope(
+                [
+                    ("dora", "resolved", ["eu-eurlex:32022r2554"]),
+                    ("nis2", "resolved", ["eu-eurlex:32022l2555"]),
+                ],
+                Hit("eu-eurlex:32022r2554:2024-01-01", null, "contained_title"),
+                Hit("eu-eurlex:32022l2555:2023-01-16", null, "contained_title"))));
+
+        var response = await service.AskAsync(History(question), Guid.NewGuid().ToString(),
+            "law.test", CancellationToken.None);
+
+        Assert.DoesNotContain(Assert.IsType<JsonArray>(response.Body["trace"]).OfType<JsonObject>(),
+            item => item["phase"]?.GetValue<string>() == "primary");
+        Assert.Equal("needs_clarification",
+            response.Body["operations"]?[0]?["legal_outcome"]?.GetValue<string>());
+        Assert.NotEmpty(Assert.IsType<JsonArray>(
+            response.Body["clarification"]?["options"]));
+    }
+
+    private Func<string, JsonObject, CancellationToken, ValueTask<JsonNode>> SearchStub(
+        string rawQuery, JsonNode raw, JsonNode focused) =>
+        async (tool, arguments, cancellationToken) => tool == "search"
+            ? (arguments["query"]?.GetValue<string>() == rawQuery ? raw : focused).DeepClone()
+            : await _core.CallToolAsync(tool, arguments, cancellationToken);
+
+    private static JsonArray Envelope(
+        (string Mention, string Status, string[] Candidates)[] resolutions,
+        params JsonObject[] hits) =>
+    [
+        new JsonObject
+        {
+            ["query_plan"] = new JsonObject
+            {
+                ["global_work_resolution_status"] =
+                    resolutions.Length == 0 ? "not_requested" : "resolved",
+                ["global_work_resolutions"] = new JsonArray(resolutions.Select(item =>
+                    (JsonNode)new JsonObject
+                    {
+                        ["mention"] = item.Mention,
+                        ["status"] = item.Status,
+                        ["candidates"] = new JsonArray(item.Candidates
+                            .Select(candidate => (JsonNode)candidate).ToArray()),
+                    }).ToArray()),
+            },
+            ["hits"] = new JsonArray(hits.Select(hit => (JsonNode)hit).ToArray()),
+        },
+    ];
+
+    private static JsonObject Hit(string lexId, string? anchor, params string[] reasons) => new()
+    {
+        ["lex_id"] = lexId,
+        ["title"] = lexId,
+        ["anchor"] = anchor,
+        ["provision_num"] = anchor,
+        ["match_reasons"] = new JsonArray(reasons.Select(reason => (JsonNode)reason).ToArray()),
+    };
+
     [Fact]
     public async Task Whole_document_text_and_empty_aggregate_are_terminal_typed_results()
     {
@@ -602,6 +753,111 @@ public sealed class AskOperationControllerTests : IDisposable
         Assert.StartsWith("Lex monte", coverageResponse.Body["reply"]?.GetValue<string>());
         Assert.Equal("fr", boundaryResponse.Body["trace"]?[0]?["locale"]?.GetValue<string>());
         Assert.StartsWith("Lex peut", boundaryResponse.Body["reply"]?.GetValue<string>());
+    }
+
+    // The old detector read a single accent, the word "loi" or the word "instrument" as proof of
+    // French, so an English question quoting a French statutory title was answered in French copy.
+    // The frame words below belong to the asker's own sentence and never to a cited title.
+    public static TheoryData<string, string> LocaleCases() => new()
+    {
+        {
+            "en", "Under the loi modifiée du 10 août 1915 concernant les sociétés commerciales, "
+                + "what is the minimum share capital required to incorporate a société anonyme?"
+        },
+        {
+            "en", "As the law stood on 1 January 2020, what customer due diligence did the loi "
+                + "modifiée du 12 novembre 2004 relative à la lutte contre le blanchiment "
+                + "require of professionals?"
+        },
+        { "en", "Which instrument and provisions impose breach notification duties on a controller?" },
+        { "fr", "Citez l'article 7 du règlement abus de marché." },
+        { "fr", "Que prévoyait la loi du 21 septembre 2006 sur le bail à usage d'habitation ?" },
+        { "fr", "Quel est le delai de preavis applicable ?" },
+        // The ligature œ sits above Latin-1 Supplement. A hand-listed letter range split "œuvre"
+        // into a fragment that belongs to no vocabulary, and "œil" into the French pronoun "il",
+        // so the tokenizer both lost real evidence and invented some. Both readings are pinned.
+        { "fr", "Quelle est la mise en œuvre de cette obligation ?" },
+        { "en", "Which provision governs the mise en œuvre of that obligation?" },
+    };
+
+    private const string FrenchCopy =
+        @"Lex a besoin|Lex a trouvé|Quel instrument|Cette demande ne correspond|Lex peut restituer|Lex monte|Les résultats correspondants|Indiquez le titre|Les preuves renvoyées|Aucun de ceux-ci|Lex n'a rien trouvé";
+
+    private const string EnglishCopy =
+        @"Lex needs|Lex found|Which instrument|This request does not map|Lex can retrieve|Lex mounts|The matching results|Provide the official title|The returned evidence is not sufficient|None of these";
+
+    [Theory]
+    [MemberData(nameof(LocaleCases))]
+    public void Request_locale_follows_the_asker_not_the_cited_title(string expected, string question)
+        => Assert.Equal(expected, AskService.RequestLocale([question]));
+
+    [Theory]
+    [MemberData(nameof(LocaleCases))]
+    public async Task An_answer_never_mixes_the_two_locales(string expected, string question)
+    {
+        var service = new AskService(_core, new StaticPlanner("en", new JsonArray(new JsonObject
+        {
+            ["tool"] = "as_of",
+            ["arguments"] = new JsonObject
+            {
+                ["work_query"] = question,
+                ["date"] = "2024-01-01",
+                ["article_number"] = "92",
+            },
+        })));
+
+        var response = await service.AskAsync(History(question),
+            Guid.NewGuid().ToString(), "law.test", CancellationToken.None);
+
+        Assert.Equal(expected, response.Body["trace"]?[0]?["locale"]?.GetValue<string>());
+        var text = response.Body["reply"]!.GetValue<string>() + " "
+            + (response.Body["ui"]?["gap"]?["explanation"]?.GetValue<string>() ?? "");
+        Assert.DoesNotMatch(expected == "en" ? FrenchCopy : EnglishCopy, text);
+    }
+
+    // The clarification picker sends the bare work id, which carries no language at all. Scoring
+    // that turn on its own flipped a French conversation to English copy on the confirmation.
+    [Fact]
+    public void A_clarification_pick_inherits_the_conversation_locale()
+        => Assert.Equal("fr", AskService.RequestLocale(
+            ["Que prévoyait la loi du 21 septembre 2006 sur le bail à usage d'habitation ?",
+             "lu-legilux:loi_2006_09_21"]));
+
+    [Fact]
+    public async Task A_french_asker_gets_a_french_refusal_from_the_synthesizer()
+    {
+        var synthesizer = new LocaleRecordingSynthesizer();
+        var service = new AskService(_core, new StaticPlanner("en", new JsonArray(new JsonObject
+        {
+            ["tool"] = "coverage",
+            ["arguments"] = new JsonObject(),
+        }), synthesis: true), synthesizer);
+
+        var response = await service.AskAsync(
+            History("Que couvre exactement le corpus que vous détenez ?"),
+            Guid.NewGuid().ToString(), "law.test", CancellationToken.None);
+
+        Assert.Equal("fr", response.Body["trace"]?[0]?["locale"]?.GetValue<string>());
+        Assert.Equal("fr", synthesizer.Locale);
+        Assert.Contains("Les preuves renvoyées ne suffisent pas",
+            response.Body["reply"]!.GetValue<string>(), StringComparison.Ordinal);
+    }
+
+    private sealed class LocaleRecordingSynthesizer : IOperationSynthesizer
+    {
+        public string? Locale { get; private set; }
+
+        public Task<AgentFinalization> SynthesizeAsync(
+            string question,
+            string deterministicDraft,
+            IReadOnlyList<AgentEvidence> evidence,
+            string locale,
+            CancellationToken cancellationToken)
+        {
+            Locale = locale;
+            return Task.FromResult(new AgentFinalization(
+                AgentAnswerFinalizer.Refusal(locale), SynthesisFailed: true));
+        }
     }
 
     [Fact]
@@ -888,6 +1144,7 @@ public sealed class AskOperationControllerTests : IDisposable
             string question,
             string deterministicDraft,
             IReadOnlyList<AgentEvidence> evidence,
+            string locale,
             CancellationToken cancellationToken)
         {
             Calls++;
@@ -1018,6 +1275,7 @@ public sealed class AskOperationControllerTests : IDisposable
             string question,
             string deterministicDraft,
             IReadOnlyList<AgentEvidence> evidence,
+            string locale,
             CancellationToken cancellationToken)
         {
             order.Add("synthesizer");

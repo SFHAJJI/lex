@@ -207,13 +207,24 @@ public sealed class AskService
 
         public void ObserveWorkIndependentAnswer() => _workIndependentAnswerObserved = true;
 
+        // "An authority was observed somewhere" is not the same claim as "exactly one authority
+        // is available". One quoted official title can name two works ("...repealing Directive
+        // 95/46/EC"), and a focused model query can supply direct provision evidence for several
+        // works at once. Treating either as settled authority suppressed the clarification while
+        // the selector refused to pick, and the turn dead-ended with an empty option list.
+        private bool HasSingleAuthority =>
+            _currentAuthorityObserved && (_current.Count == 1 || _resolved.Count == 1);
+
         public GuardClarification? ClarificationFor(string? attemptedWork, string locale = "en")
         {
-            if (_workIndependentAnswerObserved || _currentAuthorityObserved || _priorContextUsed
-                || _candidates.Count == 0)
+            if (_workIndependentAnswerObserved || HasSingleAuthority || _priorContextUsed)
                 return null;
+            // When the user's own words named more than one work, those are the choices worth
+            // offering; the weaker discovery candidates describe a different question.
+            var source = _current.Count > 1 ? CurrentAsCandidates() : _candidates;
+            if (source.Count == 0) return null;
             var attempted = attemptedWork is null ? null : WorkKey(attemptedWork);
-            var ordered = _candidates
+            var ordered = source
                 .OrderByDescending(candidate => candidate.Work == attempted)
                 .Take(3)
                 .ToList();
@@ -234,6 +245,18 @@ public sealed class AskService
                 AgentAnswerStatus.Clarify, clarification.Question, [], [], null, clarification), []).Clarification!;
             return new GuardClarification(display, choices);
         }
+
+        // Ordered by the position the work took in the observed hits, so the offered choices keep
+        // the retrieval order rather than the hash order of the authority set.
+        private List<(string Work, string Title)> CurrentAsCandidates() => _current
+            .Where(IsCandidateWork)
+            .Select(work => (
+                Work: work,
+                Index: _candidates.FindIndex(candidate => candidate.Work == work)))
+            .OrderBy(item => item.Index < 0 ? int.MaxValue : item.Index)
+            .ThenBy(item => item.Work, StringComparer.Ordinal)
+            .Select(item => (item.Work, Title: item.Index < 0 ? "" : _candidates[item.Index].Title))
+            .ToList();
 
         private static void AddCandidate(
             List<(string Work, string Title)> candidates, string work, string title)
@@ -775,6 +798,7 @@ public sealed class AskService
     /// <summary>The reply body: prose, the raw trace, and the merged rendering directive.</summary>
     private static JsonObject Body(
         string reply,
+        string locale,
         JsonArray trace,
         List<UiEffect> effects,
         AgentClarification? clarification = null,
@@ -802,7 +826,9 @@ public sealed class AskService
             merged = new UiEffect(Gap: new GapView(
                 Status: McpStatus.NoResult,
                 Work: null, Date: null,
-                Explanation: "Lex found nothing matching that in what it holds. This is a limit of the corpus, not a hedge. See coverage for exactly what is and is not held.",
+                Explanation: locale == "fr"
+                    ? "Lex n'a rien trouvé de correspondant dans ce qu'il détient. C'est une limite du corpus, pas une réserve de prudence. Consultez la couverture pour savoir exactement ce qui est détenu."
+                    : "Lex found nothing matching that in what it holds. This is a limit of the corpus, not a hedge. See coverage for exactly what is and is not held.",
                 Available: []));
         if (!merged.IsEmpty)
             body["ui"] = JsonNode.Parse(System.Text.Json.JsonSerializer.Serialize(merged, UiJson));
@@ -812,8 +838,10 @@ public sealed class AskService
     internal static string ReplyFor(
         AgentAnswerDraft grounded,
         IEnumerable<UiEffect> effects,
+        string locale,
         bool synthesisFailed = false)
     {
+        var french = locale == "fr";
         var parts = effects.ToList();
         var outlines = parts.Select(part => part.Provision)
             .Where(view => view is { Provisions.Count: > 0 })
@@ -824,27 +852,47 @@ public sealed class AskService
             && parts.All(part => part.Gap is null))
         {
             if (view.Diff is { Status: McpStatus.ProfilesDiffer })
-                return "Lex cannot produce a reliable comparison for those dates because the two versions use incompatible extraction profiles. The reason and both verified publisher versions are open below.";
+                return french
+                    ? "Lex ne peut pas produire de comparaison fiable pour ces dates, car les deux versions utilisent des profils d'extraction incompatibles. Le motif et les deux versions vérifiées de l'éditeur sont ouverts ci-dessous."
+                    : "Lex cannot produce a reliable comparison for those dates because the two versions use incompatible extraction profiles. The reason and both verified publisher versions are open below.";
             if (view.Diff is not null)
-                return "The requested comparison is open below.";
+                return french
+                    ? "La comparaison demandée est ouverte ci-dessous."
+                    : "The requested comparison is open below.";
             if (view.History is not null)
-                return "The selected article's history is open below.";
+                return french
+                    ? "L'historique de l'article sélectionné est ouvert ci-dessous."
+                    : "The selected article's history is open below.";
             if (view.Timeline is not null)
-                return "The selected law's version timeline is open below.";
+                return french
+                    ? "La chronologie des versions de la loi sélectionnée est ouverte ci-dessous."
+                    : "The selected law's version timeline is open below.";
             if (view.Ranking is not null)
-                return "The requested change ranking is open below.";
+                return french
+                    ? "Le classement des changements demandé est ouvert ci-dessous."
+                    : "The requested change ranking is open below.";
             if (view.InForce is not null)
-                return "The publisher states covering the requested date are open below.";
+                return french
+                    ? "Les états de l'éditeur couvrant la date demandée sont ouverts ci-dessous."
+                    : "The publisher states covering the requested date are open below.";
             if (view.CitedBy is not null)
-                return "The citing provisions are open below.";
+                return french
+                    ? "Les dispositions citantes sont ouvertes ci-dessous."
+                    : "The citing provisions are open below.";
             var textView = outlines.FirstOrDefault(item => item!.Provisions
                 .Any(provision => !string.IsNullOrEmpty(provision.Text)));
             if (textView is not null)
                 return textView.Subject.Anchor is { Length: > 0 }
-                    ? "The exact publisher text for the selected article and date is open below."
-                    : "The exact publisher text for the selected law and date is open below.";
+                    ? french
+                        ? "Le texte exact de l'éditeur pour l'article et la date sélectionnés est ouvert ci-dessous."
+                        : "The exact publisher text for the selected article and date is open below."
+                    : french
+                        ? "Le texte exact de l'éditeur pour la loi et la date sélectionnées est ouvert ci-dessous."
+                        : "The exact publisher text for the selected law and date is open below.";
             if (view.Workspace is not null)
-                return "The matching catalogue results are open below.";
+                return french
+                    ? "Les résultats correspondants du catalogue sont ouverts ci-dessous."
+                    : "The matching catalogue results are open below.";
         }
         // A standalone catalogue ranking is already rendered with a source on every row. Keep
         // the answer and any coverage disclosure in the user's language, but do not duplicate
@@ -856,14 +904,16 @@ public sealed class AskService
                 Provision: null, Diff: null, History: null, Timeline: null,
                 InForce: null, CitedBy: null, Gap: null,
             })
-            return AgentAnswerFinalizer.Render(grounded with { Permalinks = [] });
+            return AgentAnswerFinalizer.Render(grounded with { Permalinks = [] }, locale);
         if (grounded.Status == AgentAnswerStatus.Refusal
             && outlines.Count > 0
             && outlines.SelectMany(view => view!.Provisions)
                 .All(item => string.IsNullOrEmpty(item.Text))
             && parts.All(part => part.Gap is null))
-            return "The selected instrument is open below. Choose a provision to inspect its exact text.";
-        return AgentAnswerFinalizer.Render(grounded);
+            return french
+                ? "L'instrument sélectionné est ouvert ci-dessous. Choisissez une disposition pour en consulter le texte exact."
+                : "The selected instrument is open below. Choose a provision to inspect its exact text.";
+        return AgentAnswerFinalizer.Render(grounded, locale);
     }
 
     /// <summary>
@@ -1105,13 +1155,16 @@ public sealed class AskService
             return new AskOutcome(400,
                 new JsonObject { ["error"] = "The last message must be from the user." }, false);
         var rawUserQuery = userQueries[^1];
+        var requestLocale = RequestLocale(userQueries);
         if (lastRole != "user")
             return new AskOutcome(400,
                 new JsonObject { ["error"] = "The last message must be from the user." }, false);
         if (WorkResolutionGuard.IsExplicitNonSelection(rawUserQuery))
             return new AskOutcome(200, Body(
-                "No instrument was selected. Add an official title or identifier when you want to try again.",
-                [], []), false);
+                requestLocale == "fr"
+                    ? "Aucun instrument n'a été sélectionné. Ajoutez un titre officiel ou un identifiant lorsque vous voudrez réessayer."
+                    : "No instrument was selected. Add an official title or identifier when you want to try again.",
+                requestLocale, [], []), false);
         var admission = _admission.TryAdmit(ip);
         if (!admission.Accepted)
             return new AskOutcome(429,
@@ -1120,7 +1173,6 @@ public sealed class AskService
 
         OperationRun? run = null;
         requestId ??= Guid.NewGuid().ToString("N");
-        var requestLocale = RequestLocale(rawUserQuery);
         try
         {
             using var firstResult = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -1176,7 +1228,7 @@ public sealed class AskService
                 : "This request does not map to a valid legal operation.";
             var effect = new UiEffect(Gap: new GapView(
                 "invalid_request", null, null, explanation, []));
-            var body = Body(explanation,
+            var body = Body(explanation, requestLocale,
                 new JsonArray(new JsonObject
                 {
                     ["phase"] = "operation_plan",
@@ -1207,27 +1259,74 @@ public sealed class AskService
         }
     }
 
-    internal static string RequestLocale(string query)
+    // Any Unicode letter, not a hand-listed Latin-1 range. The ligatures French actually writes
+    // (œ in "œuvre", "sœur"; æ) sit above Latin-1 Supplement, so a range split those words into
+    // fragments belonging to no vocabulary and dropped the evidence they carry.
+    private static readonly System.Text.RegularExpressions.Regex WordToken = new(
+        @"\p{L}+",
+        System.Text.RegularExpressions.RegexOptions.CultureInvariant
+        | System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    // Tier 1: interrogative and verbal FRAME words. They belong to the asker's own sentence and
+    // never occur inside a cited statutory title. Deliberately absent from the French sets:
+    // loi, instrument, article(s), modifiée, concernant, relative, portant. Those are the
+    // vocabulary of quoted titles, and reading them as evidence of French answered an English
+    // question about a Luxembourg law in French. Accents carry no weight either way, so an
+    // accent-stripped French question and an accented English citation both land correctly.
+    private static readonly HashSet<string> FrenchFrame = new(StringComparer.Ordinal)
     {
-        var value = $" {query.ToLowerInvariant()} ";
-        var distinctive = new[]
-        {
-            " quel ", " quelle ", " quels ", " quelles ", " loi ", " lois ",
-            " vigueur ", " modifié ", " modifie ", " changements ",
-            " affiche ", " affichez ", " montrer ", " montrez ", " couverture ",
-            " dois ", " dois-je ", " puis-je ", " respecter ", " comparez ",
-            " trouvez ", " recherche ", " chronologie ", " instrument ",
-        };
-        var common = new[]
-        {
-            " le ", " la ", " les ", " un ", " une ", " des ", " du ", " de ",
-            " entre ", " article ", " articles ",
-        };
-        return distinctive.Any(marker => value.Contains(marker, StringComparison.Ordinal))
-               || common.Count(marker => value.Contains(marker, StringComparison.Ordinal)) >= 2
-               || query.Any(character => "àâçéèêëîïôùûüÿœ".Contains(char.ToLowerInvariant(character)))
-            ? "fr"
-            : "en";
+        "quel", "quelle", "quels", "quelles", "quoi", "pourquoi", "comment", "combien",
+        "quand", "ou", "où", "qu", "comparez", "montrez", "montre", "affichez", "affiche",
+        "donnez", "donne", "citez", "cite", "trouvez", "trouve", "expliquez", "explique",
+        "dites", "dois", "doit", "doivent", "puis", "peut", "peuvent", "faut", "prevoit",
+        "prévoit", "prevoyait", "prévoyait", "figure", "figurent", "sont", "etait", "était",
+        "contient", "je", "nous", "vous", "mon", "ma", "mes", "votre", "vos",
+    };
+
+    private static readonly HashSet<string> EnglishFrame = new(StringComparer.Ordinal)
+    {
+        "what", "which", "who", "whom", "when", "where", "how", "why", "show", "tell",
+        "give", "list", "find", "quote", "compare", "explain", "does", "do", "did", "is",
+        "are", "was", "were", "must", "should", "shall", "can", "could", "will", "would",
+        "need", "i", "my", "me", "you", "your", "under", "between", "whether",
+    };
+
+    private static readonly HashSet<string> FrenchFunction = new(StringComparer.Ordinal)
+    {
+        "le", "la", "les", "un", "une", "des", "du", "au", "aux", "dans", "de", "et", "ce",
+        "cet", "cette", "ces", "qui", "que", "pour", "par", "sur", "avec", "sans", "entre",
+        "vers", "depuis", "mais", "donc", "ne", "pas", "plus", "tres", "très", "il", "elle",
+        "ils", "elles", "son", "sa", "ses", "leur", "leurs",
+    };
+
+    private static readonly HashSet<string> EnglishFunction = new(StringComparer.Ordinal)
+    {
+        "the", "a", "an", "of", "to", "in", "for", "with", "from", "by", "at", "and", "or",
+        "but", "this", "that", "these", "those", "its", "it", "has", "have", "had", "be",
+        "been", "not", "only", "also", "there", "their", "than", "then",
+    };
+
+    internal static string RequestLocale(IReadOnlyList<string> userQueries)
+    {
+        // Newest turn first; a turn with no language evidence (the bare work id the clarification
+        // picker sends) inherits the language the conversation was asked in, instead of flipping
+        // a French conversation to English copy on the confirmation turn.
+        foreach (var query in userQueries.Reverse())
+            if (LocaleOf(query) is { } decided) return decided;
+        return "en";
+    }
+
+    private static string? LocaleOf(string query)
+    {
+        var tokens = WordToken.Matches(query)
+            .Select(match => match.Value.ToLowerInvariant()).ToArray();
+        var french = tokens.Count(FrenchFrame.Contains);
+        var english = tokens.Count(EnglishFrame.Contains);
+        if (french != english) return french > english ? "fr" : "en";
+        // Tier 2: function words, consulted only to break a tier-1 tie.
+        french = tokens.Count(FrenchFunction.Contains);
+        english = tokens.Count(EnglishFunction.Contains);
+        return french == english ? null : french > english ? "fr" : "en";
     }
 
     private async Task<(int Status, JsonObject Body)> ExecutePlanAsync(
@@ -1489,14 +1588,14 @@ public sealed class AskService
                 AgentFinalization finalized;
                 if (_synthesizer is not null)
                     finalized = await _synthesizer.SynthesizeAsync(
-                        rawUserQuery, deterministicReply, evidence.Evidence, ct);
+                        rawUserQuery, deterministicReply, evidence.Evidence, plan.Locale, ct);
                 else if (!string.IsNullOrWhiteSpace(_endpoint))
                     finalized = await Finalizer().FinalizeAsync(
-                        rawUserQuery, deterministicReply, evidence.Evidence, ct);
+                        rawUserQuery, deterministicReply, evidence.Evidence, plan.Locale, ct);
                 else
                     throw new InvalidOperationException(
                         "No synthesis service is configured.");
-                reply = ReplyFor(finalized.Draft, effects, finalized.SynthesisFailed);
+                reply = ReplyFor(finalized.Draft, effects, plan.Locale, finalized.SynthesisFailed);
                 modelUsage = modelUsage.Add(finalized.Usage);
                 if (progress?.Synthesis is not null)
                     await NotifyProgress(() => progress.Synthesis("completed", ct));
@@ -1517,7 +1616,7 @@ public sealed class AskService
             synthesisWatch.Stop();
             synthesisMilliseconds = synthesisWatch.Elapsed.TotalMilliseconds;
         }
-        var body = Body(reply, trace, effects,
+        var body = Body(reply, plan.Locale, trace, effects,
             displayedClarification, clarification?.Choices);
         body["model_usage"] = new JsonObject
         {
@@ -1671,9 +1770,26 @@ public sealed class AskService
             .Where(guard.ResolvedWorks.Contains)
             .Where(work => !priorWorks.Contains(work))
             .ToArray();
+
+        // One quoted official title can name more than one work ("...repealing Directive
+        // 95/46/EC"). Each is authorized by the user's own words; the operation still needs
+        // exactly one. Narrow inside the authorized set only, never add to it.
+        string? NarrowCurrent()
+        {
+            var current = guard.CurrentResolvedWorks;
+            if (current.Count < 2) return null;
+            if (article is not null
+                && current.Where(work => ArticleAnchor(focused ?? resolution, work, article) is not null)
+                    .ToArray() is [var anchoredWork])
+                return anchoredWork;
+            return HitWorks(focused).Concat(HitWorks(resolution))
+                .Where(current.Contains).FirstOrDefault();
+        }
+
         var selected = guard.CurrentResolvedWorks.Count == 1
             ? guard.CurrentResolvedWorks.Single()
             : focusedCurrent is [var currentWork] ? currentWork
+            : NarrowCurrent() is { } narrowed ? narrowed
             : guard.CurrentResolvedWorks.Count > 1 ? null
             : focusedDirect is [var directWork] ? directWork
             : !carriesPriorSubject ? null
@@ -1759,6 +1875,20 @@ public sealed class AskService
         }
     }
 
+    // Hit order only. CandidateWorks yields the resolver's mention-ordered candidates first, which
+    // is alphabetical rather than ranked, so it cannot be reused to break a tie between two works
+    // named by the same quoted title.
+    private static IEnumerable<string> HitWorks(JsonNode? result)
+    {
+        if (result is null) yield break;
+        foreach (var response in result is JsonArray array
+                     ? array.OfType<JsonObject>()
+                     : result is JsonObject item ? [item] : [])
+            foreach (var hit in response["hits"]?.AsArray().OfType<JsonObject>() ?? [])
+                if (hit["lex_id"]?.GetValue<string>() is { } lexId)
+                    yield return WorkResolutionGuard.WorkKey(lexId);
+    }
+
     private static string? ArticleAnchor(JsonNode result, string work, string article)
     {
         var normalized = new string(article.Where(char.IsLetterOrDigit).ToArray());
@@ -1827,10 +1957,13 @@ public sealed class AskService
         }
         if (string.IsNullOrWhiteSpace(rawUserQuery))
             return (400, new JsonObject { ["error"] = "At least one user message is required." });
+        var locale = RequestLocale(userQueries);
         if (WorkResolutionGuard.IsExplicitNonSelection(rawUserQuery))
             return (200, Body(
-                "Please add another identifying detail, such as the topic, jurisdiction, official title, or identifier.",
-                [], []));
+                locale == "fr"
+                    ? "Ajoutez un élément d'identification supplémentaire, par exemple le sujet, la juridiction, le titre officiel ou l'identifiant."
+                    : "Please add another identifying detail, such as the topic, jurisdiction, official title, or identifier.",
+                locale, [], []));
 
         var admission = _admission.TryAdmit(ip);
         if (!admission.Accepted)
@@ -1927,8 +2060,8 @@ public sealed class AskService
             // many instruments contain that article. Do not spend a model round rediscovering
             // the same boundary or turn it into a generic evidence refusal.
             if (HasUnscopedArticleIntent(rawResult)
-                && resolutionGuard.ClarificationFor(null) is { } articleClarification)
-                return (200, Body(articleClarification.Display.Question, trace, [],
+                && resolutionGuard.ClarificationFor(null, locale) is { } articleClarification)
+                return (200, Body(articleClarification.Display.Question, locale, trace, [],
                     articleClarification.Display, articleClarification.Choices));
             messages.Insert(1, new JsonObject
             {
@@ -2071,8 +2204,9 @@ public sealed class AskService
                                 var attemptedWork = name == "provenance"
                                     ? args["lex_id"]?.GetValue<string>()
                                     : args["work"]?.GetValue<string>();
-                                if (resolutionGuard.ClarificationFor(attemptedWork) is { } clarification)
-                                    return (200, Body(clarification.Display.Question, trace, [],
+                                if (resolutionGuard.ClarificationFor(attemptedWork, locale)
+                                    is { } clarification)
+                                    return (200, Body(clarification.Display.Question, locale, trace, [],
                                         clarification.Display, clarification.Choices));
                                 messages.Add(new JsonObject
                                 {
@@ -2098,7 +2232,7 @@ public sealed class AskService
                             toolSpan?.SetTag("lex.docs", docs.Count);
                             entry["status"] = st;
                             entry["docs"] = docs;
-                            var eff = UiMapper.From(name, args, node);
+                            var eff = UiMapper.From(name, args, node, locale);
                             if (!eff.IsEmpty) effects.Add(eff);
                             if (eff.Ranking is not null || eff.InForce is not null)
                                 resolutionGuard.ObserveWorkIndependentAnswer();
@@ -2148,8 +2282,8 @@ public sealed class AskService
                 }
 
                 var reply = msg?["content"]?.GetValue<string>() ?? "";
-                if (resolutionGuard.ClarificationFor(null) is { } pendingClarification)
-                    return (200, Body(pendingClarification.Display.Question, trace, [],
+                if (resolutionGuard.ClarificationFor(null, locale) is { } pendingClarification)
+                    return (200, Body(pendingClarification.Display.Question, locale, trace, [],
                         pendingClarification.Display, pendingClarification.Choices));
                 if (reply.Length == 0 && !retried)
                 {
@@ -2163,11 +2297,12 @@ public sealed class AskService
                         ? "I retrieved the evidence below but could not compose an answer. Try asking for a narrower slice (a single law, or a shorter period)."
                         : "I could not produce an answer. Try rephrasing.";
                 var finalization = await Finalizer().FinalizeAsync(
-                    rawUserQuery, reply, evidence.Evidence, ct);
-                reply = ReplyFor(finalization.Draft, effects, finalization.SynthesisFailed);
-                return (200, Body(reply, trace, effects, finalization.Draft.Clarification));
+                    rawUserQuery, reply, evidence.Evidence, locale, ct);
+                reply = ReplyFor(finalization.Draft, effects, locale, finalization.SynthesisFailed);
+                return (200, Body(reply, locale, trace, effects, finalization.Draft.Clarification));
             }
-            return (200, Body("Tool budget for one question exhausted. Try a narrower question.", trace, effects));
+            return (200, Body("Tool budget for one question exhausted. Try a narrower question.",
+                locale, trace, effects));
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {

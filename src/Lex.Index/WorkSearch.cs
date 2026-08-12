@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Microsoft.Data.Sqlite;
 
 namespace Lex.Index;
@@ -66,6 +67,39 @@ public static class WorkSearch
         "and", "avec", "aux", "dans", "des", "du", "elle", "est", "et", "for", "les",
         "leur", "leurs", "par", "pour", "que", "qui", "sur", "the", "une", "vers",
     };
+
+    // Some publishers title a consolidated manifestation with a banner in front of the work's own
+    // name: "Version consolidée applicable au 31/10/2002 : Loi du 5 avril 1993 relative au secteur
+    // financier". The name is the part after the colon; no citation a lawyer writes carries the
+    // banner, so without the stripped form the statute has no findable name at all.
+    private static readonly Regex ConsolidationBanner = new(
+        @"^\s*version\s+\p{L}+\s+applicable\s+au\s+\d{2}/\d{2}/\d{4}\s*:\s*(?<name>.+)$",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    private static readonly string[] CitationQualifiers =
+        ["modifiee", "modifiees", "modifie", "modifies", "coordonnee", "coordonnees"];
+
+    private static readonly Regex CitationQualifier = new(
+        @"\b(loi|lois|reglement|reglements|arrete|arretes|code|constitution)\s+(?:"
+        + string.Join('|', CitationQualifiers) + @")\b",
+        RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    /// <summary>
+    /// The names a work is catalogued under. Additive: the publisher's own string is always kept,
+    /// and a consolidation banner adds the bare title beside it rather than replacing it.
+    /// </summary>
+    internal static IEnumerable<string> NameForms(string title) =>
+        ConsolidationBanner.Match(title) is { Success: true } banner
+            ? [title, banner.Groups["name"].Value.Trim()]
+            : [title];
+
+    /// <summary>
+    /// A French citation names an amended act as "loi modifiée du 12 novembre 2004 ..."; the
+    /// official title reads "Loi du 12 novembre 2004 ...". One inserted token defeats a contiguous
+    /// contained match, so the standard way of citing a French-language statute never resolved.
+    /// </summary>
+    internal static string NormalizeCitation(string normalized) =>
+        CitationQualifier.Replace(normalized, "$1");
 
     public static string Normalize(string value)
     {
@@ -155,7 +189,9 @@ public static class WorkSearch
 
             foreach (var identifier in source.Identifiers.Append(source.Work).Distinct(StringComparer.Ordinal))
                 InsertName(connection, workId, "official_identifier", identifier, null);
-            foreach (var title in source.Titles.Concat(source.ShortTitles).Distinct(StringComparer.Ordinal))
+            foreach (var title in source.Titles.Concat(source.ShortTitles)
+                         .SelectMany(NameForms).Where(NotBlank)
+                         .Distinct(StringComparer.Ordinal))
                 InsertName(connection, workId, "official_title", title, null);
             foreach (var alias in workAliases)
                 InsertName(connection, workId, "reviewed_alias", alias.Value, alias.ReviewedBy);
@@ -182,7 +218,8 @@ public static class WorkSearch
             Add(fts, "$language", source.Language);
             Add(fts, "$identifiers", string.Join(' ', source.Identifiers.Append(source.Work)));
             Add(fts, "$aliases", string.Join(' ', workAliases.Select(alias => alias.Value)));
-            Add(fts, "$titles", string.Join(' ', source.Titles.Concat(source.ShortTitles)));
+            Add(fts, "$titles", string.Join(' ', source.Titles.Concat(source.ShortTitles)
+                .SelectMany(NameForms).Distinct(StringComparer.Ordinal)));
             Add(fts, "$facets", string.Join(' ', new[]
                 { source.Latest.Hierarchy, source.Latest.Domains, source.Latest.ActForm }
                 .Where(NotBlank).Concat(roles)));
@@ -197,7 +234,8 @@ public static class WorkSearch
                 + "\nnames: " + string.Join(' ', workAliases.Select(alias => alias.Value)
                     .Concat([source.Latest.Title, source.Latest.TitleShort])
                     .Concat(source.Titles).Concat(source.ShortTitles)
-                    .Where(NotBlank).Distinct(StringComparer.Ordinal))));
+                    .Where(NotBlank).SelectMany(name => NameForms(name!))
+                    .Distinct(StringComparer.Ordinal))));
             vectorInputs.AddRange(workDiscovery.Select(item =>
                 (workId, item.Kind, (string?)item.Value, $"legal {item.Kind}: {item.Value}")));
         }
@@ -217,49 +255,12 @@ public static class WorkSearch
         var seen = new HashSet<long>();
         var seenIdentities = new HashSet<(long WorkId, string Value)>();
 
-        using (var exact = connection.CreateCommand())
-        {
-            exact.CommandText = """
-                SELECT n.work_id,n.kind,n.normalized
-                FROM work_names n
-                JOIN work_records r ON r.work_id=n.work_id
-                WHERE n.normalized=$normalized AND ($language IS NULL OR r.language=$language)
-                ORDER BY CASE n.kind
-                  WHEN 'official_identifier' THEN 0
-                  WHEN 'reviewed_alias' THEN 1
-                  ELSE 2 END,n.work_id
-                """;
-            Add(exact, "$normalized", normalized);
-            Add(exact, "$language", language);
-            using var rows = exact.ExecuteReader();
-            while (rows.Read() && hits.Count < limit)
-                AddExact(rows.GetInt64(0), rows.GetString(1), rows.GetString(2), "exact");
-        }
-
-        using (var contained = connection.CreateCommand())
-        {
-            contained.CommandText = """
-                SELECT n.work_id,n.kind,n.normalized,length(n.normalized) AS name_length
-                FROM work_names n
-                JOIN work_records r ON r.work_id=n.work_id
-                WHERE instr(' ' || $normalized || ' ',' ' || n.normalized || ' ') > 0
-                  AND ((n.kind='reviewed_alias' AND length(n.normalized) >= 3)
-                       OR (n.kind='official_identifier' AND length(n.normalized) >= 4
-                           AND n.normalized GLOB '*[0-9]*')
-                       OR (n.kind='official_title' AND length(n.normalized) >= 12
-                           AND instr(n.normalized,' ') > 0))
-                  AND ($language IS NULL OR r.language=$language)
-                ORDER BY CASE n.kind
-                  WHEN 'official_identifier' THEN 0
-                  WHEN 'reviewed_alias' THEN 1
-                  ELSE 2 END,name_length DESC,n.work_id
-                """;
-            Add(contained, "$normalized", normalized);
-            Add(contained, "$language", language);
-            using var rows = contained.ExecuteReader();
-            while (rows.Read() && hits.Count < limit)
-                AddExact(rows.GetInt64(0), rows.GetString(1), rows.GetString(2), "contained");
-        }
+        Identity(normalized);
+        // Second pass, never a destructive strip: "Loi modifiée du 7 juillet 1971 ..." is itself a
+        // genuine stored title, so the citation form is offered beside the raw query rather than
+        // replacing it. Nothing that matched before can stop matching.
+        var citation = NormalizeCitation(normalized);
+        if (!string.Equals(citation, normalized, StringComparison.Ordinal)) Identity(citation);
 
         var tokens = normalized.Split(' ', StringSplitOptions.RemoveEmptyEntries)
             .Where(token => (token.Length >= 3 || token.All(char.IsDigit)) && !StopWords.Contains(token))
@@ -273,6 +274,53 @@ public static class WorkSearch
         if (includeWeakDiscovery)
             AddFtsMatches("discovery : (" + tokenQuery + ")", "work_discovery");
         return hits;
+
+        void Identity(string value)
+        {
+            using (var exact = connection.CreateCommand())
+            {
+                exact.CommandText = """
+                    SELECT n.work_id,n.kind,n.normalized
+                    FROM work_names n
+                    JOIN work_records r ON r.work_id=n.work_id
+                    WHERE n.normalized=$normalized AND ($language IS NULL OR r.language=$language)
+                    ORDER BY CASE n.kind
+                      WHEN 'official_identifier' THEN 0
+                      WHEN 'reviewed_alias' THEN 1
+                      ELSE 2 END,n.work_id
+                    """;
+                Add(exact, "$normalized", value);
+                Add(exact, "$language", language);
+                using var rows = exact.ExecuteReader();
+                while (rows.Read() && hits.Count < limit)
+                    AddExact(rows.GetInt64(0), rows.GetString(1), rows.GetString(2), "exact");
+            }
+
+            using (var contained = connection.CreateCommand())
+            {
+                contained.CommandText = """
+                    SELECT n.work_id,n.kind,n.normalized,length(n.normalized) AS name_length
+                    FROM work_names n
+                    JOIN work_records r ON r.work_id=n.work_id
+                    WHERE instr(' ' || $normalized || ' ',' ' || n.normalized || ' ') > 0
+                      AND ((n.kind='reviewed_alias' AND length(n.normalized) >= 3)
+                           OR (n.kind='official_identifier' AND length(n.normalized) >= 4
+                               AND n.normalized GLOB '*[0-9]*')
+                           OR (n.kind='official_title' AND length(n.normalized) >= 12
+                               AND instr(n.normalized,' ') > 0))
+                      AND ($language IS NULL OR r.language=$language)
+                    ORDER BY CASE n.kind
+                      WHEN 'official_identifier' THEN 0
+                      WHEN 'reviewed_alias' THEN 1
+                      ELSE 2 END,name_length DESC,n.work_id
+                    """;
+                Add(contained, "$normalized", value);
+                Add(contained, "$language", language);
+                using var rows = contained.ExecuteReader();
+                while (rows.Read() && hits.Count < limit)
+                    AddExact(rows.GetInt64(0), rows.GetString(1), rows.GetString(2), "contained");
+            }
+        }
 
         void AddFtsMatches(string ftsQuery, string reason)
         {

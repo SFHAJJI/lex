@@ -71,6 +71,69 @@ public sealed class AskResolutionGuardTests
         Assert.Null(guard.ClarificationFor("eu-eurlex:32016r0679"));
     }
 
+    // A quoted official title can name a second instrument inside itself ("...and repealing
+    // Directive 95/46/EC"). Both mentions resolve from the user's own words, so both are real
+    // authority; the turn must not behave as if nothing resolved.
+    [Fact]
+    public void One_quoted_title_naming_two_works_resolves_both_as_current_authority()
+    {
+        var guard = new AskService.WorkResolutionGuard();
+        guard.ObserveCurrentUserSearch(SearchResult("resolved",
+                ("directive 95 46 ec", "resolved", new[] { "eu-eurlex:31995l0046" }),
+                ("regulation eu 2016 679", "resolved", new[] { "eu-eurlex:32016r0679" })),
+            hasPriorContext: false);
+
+        Assert.Equal(
+            ["eu-eurlex:31995l0046", "eu-eurlex:32016r0679"],
+            guard.CurrentResolvedWorks.OrderBy(work => work, StringComparer.Ordinal));
+        Assert.True(guard.Allows("as_of",
+            new JsonObject { ["work"] = "eu-eurlex:32016r0679" }));
+        Assert.True(guard.Allows("as_of",
+            new JsonObject { ["work"] = "eu-eurlex:31995l0046" }));
+    }
+
+    // Two authorities is not one authority. When nothing can discriminate between them the user
+    // gets the choice, never an option-less refusal.
+    [Fact]
+    public void Two_authorized_works_still_produce_a_populated_clarification()
+    {
+        var guard = new AskService.WorkResolutionGuard();
+        guard.ObserveCurrentUserSearch(SearchResult("resolved",
+                ("directive 95 46 ec", "resolved", new[] { "eu-eurlex:31995l0046" }),
+                ("regulation eu 2016 679", "resolved", new[] { "eu-eurlex:32016r0679" })),
+            hasPriorContext: false);
+
+        var clarification = guard.ClarificationFor(null);
+
+        Assert.NotNull(clarification);
+        Assert.NotEmpty(clarification.Display.Options);
+        Assert.Equal(
+            ["eu-eurlex:31995l0046", "eu-eurlex:32016r0679"],
+            clarification.Choices.SkipLast(1).Select(choice => choice.Value)
+                .OrderBy(work => work, StringComparer.Ordinal));
+        Assert.True(AskService.WorkResolutionGuard.IsExplicitNonSelection(
+            clarification.Choices[^1].Value));
+    }
+
+    // The resolution can arrive in any publisher's envelope. Once one publisher resolves the work
+    // the user named, that is authority, and there is nothing left to clarify.
+    [Fact]
+    public void A_resolution_in_a_second_publisher_envelope_is_still_authority()
+    {
+        var guard = new AskService.WorkResolutionGuard();
+        var response = SearchResult("not_requested");
+        response.Add(SearchResult("resolved",
+            ("loi du 12 novembre 2004 relative a la lutte contre le blanchiment", "resolved",
+                new[] { "lu-legilux:loi-2004-11-12-n1" }))[0]!.DeepClone());
+
+        guard.ObserveCurrentUserSearch(response, hasPriorContext: false);
+
+        Assert.Equal(["lu-legilux:loi-2004-11-12-n1"], guard.CurrentResolvedWorks);
+        Assert.True(guard.Allows("as_of",
+            new JsonObject { ["work"] = "lu-legilux:loi-2004-11-12-n1" }));
+        Assert.Null(guard.ClarificationFor(null));
+    }
+
     [Fact]
     public void Weak_discovery_without_a_provision_cannot_authorize_a_follow_up()
     {
