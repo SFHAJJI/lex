@@ -48,6 +48,45 @@ public sealed class DateIntentGuardTests
     // A year the turn does not contain is not the year the plan was derived from. Nothing here
     // may fire on a plan whose date has no relation to any year the user wrote, because rewriting
     // that plan would replace one unexplained instant with a different unexplained window.
+    // The hole the design review found in the first version of this guard, and the reason the two
+    // confidently-wrong classes composed. The stand-down used to fire on ANY day-and-month in the
+    // turn, but legal citations carry dates that name an INSTRUMENT rather than an instant: the
+    // CRR's official title ends "of 26 June 2013", and Luxembourg statutes are cited by their
+    // opening clause. So the exact citation forms most likely to confuse the work resolver were
+    // also the ones that disarmed this guard, and 2024-12-31 bound silently behind them.
+    [Theory]
+    [InlineData(
+        "What did Article 92 of Regulation (EU) No 575/2013 of the European Parliament and of "
+        + "the Council of 26 June 2013 on prudential requirements for credit institutions "
+        + "require in 2024?", "2024-12-31", 2024)]
+    [InlineData(
+        "Que prevoyait l'article 92 de la loi du 12 novembre 2004 en 2024 ?", "2024-12-31", 2024)]
+    [InlineData(
+        "Article 26 of the CRR of 26 June 2013, as it stood in 2020", "2020-01-01", 2020)]
+    public void A_date_inside_a_citation_cannot_authorize_a_different_date(
+        string turn, string date, int expected)
+    {
+        Assert.Equal(expected, DateIntentGuard.DerivedYear(turn, date));
+    }
+
+    // The other half of the same rule: the citation's own date still authorizes ITSELF, so a
+    // question genuinely asking about 26 June 2013 is untouched by the scoping above.
+    [Fact]
+    public void A_citation_date_still_authorizes_that_very_instant()
+    {
+        Assert.Null(DateIntentGuard.DerivedYear(
+            "Article 92 of the CRR of 26 June 2013 as adopted", "2013-06-26"));
+    }
+
+    // A month and a year with no day is not a stated day either: picking the 31st out of
+    // "December 2024" chooses a version of the law exactly as picking it out of "2024" does.
+    [Fact]
+    public void A_month_without_a_day_does_not_authorize_a_day()
+    {
+        Assert.Equal(2024, DateIntentGuard.DerivedYear(
+            "What did Article 92 of the CRR require in December 2024?", "2024-12-31"));
+    }
+
     [Fact]
     public void A_year_the_turn_never_wrote_is_not_a_derived_year()
     {

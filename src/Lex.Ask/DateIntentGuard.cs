@@ -31,26 +31,75 @@ internal static class DateIntentGuard
     private static readonly Regex BareYear = new(
         @"(?<!\d)(1[89]|20)\d{2}(?!\d)", RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
-    /// <summary>Any expression that names a DAY, in any of the forms this product actually
-    /// receives. Its presence means the user reached for a specific instant somewhere in the turn,
-    /// and the guard stands down: the user's own words authorize that instant, exactly as the work
-    /// resolver only authorizes works the user's own words named.</summary>
-    private static readonly Regex DayAndMonth = new(
-        @"(?<!\d)\d{4}-\d{2}-\d{2}(?!\d)"
-        + @"|(?<!\d)\d{1,2}[/.]\d{1,2}[/.]\d{2,4}(?!\d)"
-        + @"|(?<!\w)\d{1,2}(er|st|nd|rd|th)?\s+(janvier|f[ée]vrier|mars|avril|mai|juin|juillet|ao[ûu]t|septembre|octobre|novembre|d[ée]cembre|january|february|march|april|may|june|july|august|september|october|november|december)(?!\w)"
-        + @"|(?<!\w)(janvier|f[ée]vrier|mars|avril|mai|juin|juillet|ao[ûu]t|septembre|octobre|novembre|d[ée]cembre|january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2}(er|st|nd|rd|th)?(?!\d)",
+    /// <summary>Every shape in which this product actually receives a full calendar day. Each
+    /// alternative captures the day, the month and the year, because the guard needs the DATE a
+    /// phrase denotes and not merely the fact that some date was written.</summary>
+    private static readonly Regex StatedDay = new(
+        @"(?<!\d)(?<y>\d{4})-(?<m>\d{2})-(?<d>\d{2})(?!\d)"
+        + @"|(?<!\d)(?<d>\d{1,2})[/.](?<m>\d{1,2})[/.](?<y>\d{4})(?!\d)"
+        + @"|(?<!\w)(?<d>\d{1,2})(er|st|nd|rd|th)?\s+(?<mon>janvier|f[ée]vrier|mars|avril|mai|juin|juillet|ao[ûu]t|septembre|octobre|novembre|d[ée]cembre|january|february|march|april|may|june|july|august|september|october|november|december)\s+(?<y>\d{4})(?!\d)"
+        + @"|(?<!\w)(?<mon>janvier|f[ée]vrier|mars|avril|mai|juin|juillet|ao[ûu]t|septembre|octobre|novembre|d[ée]cembre|january|february|march|april|may|june|july|august|september|october|november|december)\s+(?<d>\d{1,2})(er|st|nd|rd|th)?,?\s+(?<y>\d{4})(?!\d)",
         RegexOptions.CultureInvariant | RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    private static readonly Dictionary<string, int> Months = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["janvier"] = 1, ["january"] = 1,
+        ["fevrier"] = 2, ["février"] = 2, ["fébrier"] = 2, ["february"] = 2,
+        ["mars"] = 3, ["march"] = 3,
+        ["avril"] = 4, ["april"] = 4,
+        ["mai"] = 5, ["may"] = 5,
+        ["juin"] = 6, ["june"] = 6,
+        ["juillet"] = 7, ["july"] = 7,
+        ["aout"] = 8, ["août"] = 8, ["august"] = 8,
+        ["septembre"] = 9, ["september"] = 9,
+        ["octobre"] = 10, ["october"] = 10,
+        ["novembre"] = 11, ["november"] = 11,
+        ["decembre"] = 12, ["décembre"] = 12, ["december"] = 12,
+    };
+
+    /// <summary>Every full day the turn actually states, as dates rather than as evidence that
+    /// some date was written somewhere.</summary>
+    private static HashSet<DateOnly> StatedDays(string turn)
+    {
+        var stated = new HashSet<DateOnly>();
+        foreach (Match match in StatedDay.Matches(turn))
+        {
+            if (!int.TryParse(match.Groups["y"].Value, CultureInfo.InvariantCulture, out var year))
+                continue;
+            if (!int.TryParse(match.Groups["d"].Value, CultureInfo.InvariantCulture, out var day))
+                continue;
+            int month;
+            if (match.Groups["mon"].Success)
+            {
+                if (!Months.TryGetValue(match.Groups["mon"].Value, out month)) continue;
+            }
+            else if (!int.TryParse(match.Groups["m"].Value, CultureInfo.InvariantCulture, out month))
+                continue;
+            if (month is < 1 or > 12 || day < 1 || day > DateTime.DaysInMonth(year, month)) continue;
+            stated.Add(new DateOnly(year, month, day));
+        }
+        return stated;
+    }
 
     /// <summary>
     /// The year a planned point-in-time date was derived from rather than stated, or null when the
     /// plan is authorized.
     ///
-    /// <para>Three conditions, all required. The turn carries a bare year. The turn carries no
-    /// day-and-month expression anywhere. And the planned date falls inside that year while its
-    /// literal text is absent from the turn. That last clause is what keeps "on 31 December 2024"
-    /// working, and it is the same principle as the work resolver's: a value may bind only when
-    /// the user's own words produced it.</para>
+    /// <para>Two conditions. The planned date is not one the turn states. And the turn carries a
+    /// bare year equal to the planned year. A value may bind only when the user's own words
+    /// produced it, which is the same principle the work resolver applies to instruments.</para>
+    ///
+    /// <para>The stand-down is deliberately keyed to the planned date and not to the presence of
+    /// any date at all. It used to return early whenever a day-and-month appeared ANYWHERE in the
+    /// turn, on the reasoning that the user had reached for a specific instant. Legal citations
+    /// break that reasoning, because they carry dates that name an instrument rather than an
+    /// instant: the CRR's official title contains "of 26 June 2013", and a Luxembourg statute is
+    /// normally cited as "loi du 12 novembre 2004". Asking "what did Article 92 of [full CRR
+    /// title] require in 2024" therefore disarmed the guard and let 2024-12-31 bind silently, so
+    /// the citation forms most likely to confuse the resolver were also the ones that removed this
+    /// protection. Requiring the stated day to BE the planned date closes that: a date belonging
+    /// to a citation can never authorize a different date, while "on 31 December 2024" still
+    /// authorizes 2024-12-31 exactly as before.</para>
     /// </summary>
     internal static int? DerivedYear(string turn, string? date)
     {
@@ -58,8 +107,7 @@ internal static class DateIntentGuard
         if (!DateOnly.TryParseExact(date, OperationArguments.IsoDateFormat,
                 CultureInfo.InvariantCulture, DateTimeStyles.None, out var planned))
             return null;
-        if (turn.Contains(date, StringComparison.Ordinal)) return null;
-        if (DayAndMonth.IsMatch(turn)) return null;
+        if (StatedDays(turn).Contains(planned)) return null;
         foreach (Match match in BareYear.Matches(turn))
             if (int.TryParse(match.Value, CultureInfo.InvariantCulture, out var year)
                 && year == planned.Year)
