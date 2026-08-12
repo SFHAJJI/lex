@@ -258,7 +258,8 @@ public static class IndexFromCorpus
         var heldWorks = docs.Select(doc => (doc.GroupKey, doc.Language)).ToHashSet();
         var workSearch = workEnrichmentPath is null
             ? null
-            : WorkEnrichmentFile.Load(workEnrichmentPath, publisherId, heldWorks);
+            : WorkEnrichmentFile.Load(workEnrichmentPath, publisherId, heldWorks,
+                Console.Error.WriteLine);
         IndexBuilder.Build(dbPath, stamp, docs, provisions, events, observations, signingKeyPem,
             provisionStates, anchorEventRows, semantic, workSearch);
         Console.Error.WriteLine($"  [index] {dbPath}: {docs.Count} rows, {provisions.Count} provisions, {provisionStates.Count} states, {anchorEventRows.Count} anchor events, signed={(signingKeyPem is not null)}");

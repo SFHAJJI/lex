@@ -27,10 +27,21 @@ public sealed class WorkEnrichmentFileTests : IDisposable
     {
         var options = WorkEnrichmentFile.Load(ProductionArtifact(), "eu-eurlex");
 
-        Assert.Equal(31, options.ReviewedAliases.Count);
+        Assert.Equal(50, options.ReviewedAliases.Count);
         Assert.Empty(options.Discovery);
         Assert.Contains(options.ReviewedAliases, alias =>
             alias.Work == "32016r0679" && alias.Language == "fr" && alias.Value == "RGPD");
+        // The two the audit actually needed. Production held both works and neither resolved:
+        // "market abuse regulation" returned MiCA and a delegated regulation, and "EMIR" reached
+        // 648/2012 only by keyword luck, with has_strong_work_match false.
+        Assert.Contains(options.ReviewedAliases, alias =>
+            alias.Work == "32012r0648" && alias.Language == "en" && alias.Value == "EMIR");
+        Assert.Contains(options.ReviewedAliases, alias =>
+            alias.Work == "32014r0596" && alias.Language == "fr" && alias.Value == "MAR");
+        // Nothing is claimed for a work the index does not hold: UCITS, PRIIPs and CSRD were
+        // checked against production on 2026-08-13 and are absent, so they are absent here too.
+        Assert.DoesNotContain(options.ReviewedAliases, alias =>
+            alias.Work is "32009l0065" or "32014r1286" or "32022l2464");
         Assert.All(options.ReviewedAliases,
             alias => Assert.StartsWith("repository-review:", alias.ReviewedBy, StringComparison.Ordinal));
     }
@@ -78,6 +89,44 @@ public sealed class WorkEnrichmentFileTests : IDisposable
         Assert.Equal("en", alias.Language);
         Assert.Equal("GDPR", alias.Value);
         Assert.Empty(options.Discovery);
+    }
+
+    // Filtering to the held scope is correct, because WorkSearch.Validate refuses an alias whose
+    // work-language record is absent. Doing it in silence is not: a name a human reviewed and
+    // expected to be live just disappears, which is how the catalogue came to carry entries for
+    // works the index does not hold without anyone noticing.
+    [Fact]
+    public void An_alias_dropped_for_an_unheld_work_is_reported_rather_than_vanishing()
+    {
+        var held = new HashSet<(string Work, string Language)> { ("32016r0679", "en") };
+        var reported = new List<string>();
+
+        var options = WorkEnrichmentFile.Load(
+            ProductionArtifact(), "eu-eurlex", held, reported.Add);
+
+        Assert.Single(options.ReviewedAliases);
+        Assert.NotEmpty(reported);
+        // One line per work, naming the values and languages that were dropped.
+        Assert.All(reported, line => Assert.Contains("is not held", line, StringComparison.Ordinal));
+        Assert.Contains(reported, line => line.Contains("'CRR'", StringComparison.Ordinal));
+        Assert.Contains(reported, line => line.Contains("'EMIR'", StringComparison.Ordinal));
+        // The alias that IS held is never reported as dropped.
+        Assert.DoesNotContain(reported, line => line.Contains("'GDPR' (en)", StringComparison.Ordinal));
+    }
+
+    // Silence stays silence when nothing is filtered, so the signal means something.
+    [Fact]
+    public void Nothing_is_reported_when_every_reviewed_alias_is_held()
+    {
+        var everything = WorkEnrichmentFile.Load(ProductionArtifact(), "eu-eurlex");
+        var held = everything.ReviewedAliases
+            .Select(alias => (alias.Work, alias.Language)).ToHashSet();
+        var reported = new List<string>();
+
+        var options = WorkEnrichmentFile.Load(ProductionArtifact(), "eu-eurlex", held, reported.Add);
+
+        Assert.Equal(everything.ReviewedAliases.Count, options.ReviewedAliases.Count);
+        Assert.Empty(reported);
     }
 
     [Fact]

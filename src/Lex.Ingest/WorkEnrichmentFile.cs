@@ -16,10 +16,22 @@ public static class WorkEnrichmentFile
         UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
     };
 
+    /// <summary>
+    /// Reads the reviewed catalogue, keeping only entries whose work and language the corpus
+    /// actually holds.
+    ///
+    /// <para><paramref name="report"/> receives one line per reviewed alias that was dropped for
+    /// that reason. Filtering is correct, because WorkSearch.Validate refuses an alias whose
+    /// work-language record is absent, so an unfiltered catalogue would fail the build outright.
+    /// But dropping silently is not: an alias a human reviewed and expected to be live simply
+    /// disappears, and nothing anywhere says so. That is how the EU catalogue came to carry
+    /// entries for works the index does not hold without anyone noticing.</para>
+    /// </summary>
     public static WorkSearchBuildOptions Load(
         string path,
         string collection,
-        IReadOnlySet<(string Work, string Language)>? heldWorks = null)
+        IReadOnlySet<(string Work, string Language)>? heldWorks = null,
+        Action<string>? report = null)
     {
         var bytes = File.ReadAllBytes(path);
         Contract contract;
@@ -36,12 +48,22 @@ public static class WorkEnrichmentFile
         if (contract.Schema != Schema)
             throw new InvalidDataException(
                 $"Work enrichment schema '{contract.Schema}' is unsupported; expected '{Schema}'.");
-        var aliases = (contract.Aliases
+        var scoped = (contract.Aliases
                 ?? throw new InvalidDataException("Work enrichment aliases are required."))
             .Select(ToAlias).Where(item => item.Collection == collection)
-            .Where(item => heldWorks is null
-                           || heldWorks.Contains((item.Value.Work, item.Value.Language)))
             .Select(item => item.Value).ToArray();
+        var aliases = scoped
+            .Where(alias => heldWorks is null || heldWorks.Contains((alias.Work, alias.Language)))
+            .ToArray();
+        if (report is not null && heldWorks is not null)
+            foreach (var dropped in scoped.Except(aliases)
+                         .GroupBy(alias => alias.Work, StringComparer.Ordinal)
+                         .OrderBy(group => group.Key, StringComparer.Ordinal))
+                report($"  [enrichment] {collection}: reviewed alias "
+                    + string.Join(", ", dropped
+                        .OrderBy(alias => alias.Language, StringComparer.Ordinal)
+                        .Select(alias => $"'{alias.Value}' ({alias.Language})"))
+                    + $" dropped, {dropped.Key} is not held");
         var discovery = (contract.Discovery
                 ?? throw new InvalidDataException("Work enrichment discovery is required."))
             .Select(ToDiscovery).Where(item => item.Collection == collection)
