@@ -411,9 +411,10 @@ jobs:
           # window even once the buckets exist: run 31540777978 polled
           # 22:14-22:18 for twenty minutes and got {"metrics":[]} every time,
           # while the same metric, revision filter and aggregation over a
-          # 45-minute timespan returned every minute of that same window. So ask
-          # for a wide timespan and let metric_evidence.py select the window that
-          # is actually measured; the poll then only needs a few minutes.
+          # materially wider timespan returned every minute of that same window.
+          # So query wider than the window being measured on both sides, from
+          # before it opens to now, and let metric_evidence.py select the buckets
+          # that are actually measured; the poll then only needs a few minutes.
           metric_query_start=$(date -u -d "@$((metric_window_start_epoch - 900))" \
             +%Y-%m-%dT%H:%M:%SZ)
           metric_query() {
@@ -470,13 +471,19 @@ jobs:
           done
           # The queried timespan is wider than the measured window, so report both
           # counts: a healthy total with an empty window is a different failure
-          # from an empty response.
+          # from an empty response. The window count applies the same canonical
+          # UTC shape test as metric_evidence.py, so a bucket the gate had to drop
+          # as incomparable is never reported here as one the gate could use.
           metric_shape=$(printf '%s' "$metrics" | jq -c \
             --arg start "$metric_window_start" --arg required "$metric_required_timestamp" '
+            def measurable:
+              select(.maximum != null)
+              | select(.timeStamp | type == "string"
+                  and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"));
             {metrics: [.value[]? | {
               name: .name.value,
               points: ([.timeseries[]?.data[]? | select(.maximum != null)] | length),
-              window: ([.timeseries[]?.data[]? | select(.maximum != null)
+              window: ([.timeseries[]?.data[]? | measurable
                 | select(.timeStamp >= $start and .timeStamp <= $required)] | length),
               latest: ([.timeseries[]?.data[]? | select(.maximum != null) | .timeStamp] | max)
             }]}')
