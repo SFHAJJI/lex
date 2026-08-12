@@ -948,10 +948,12 @@ public sealed class AskService
             // deadline expiry must never be caught and converted into the refusal.
             var parsed = await send(request, ct);
             var spent = watch.Elapsed - started;
-            var (call, raw) = ExtractPlanCall(parsed, attempt);
             usage = usage.Add(PlanningUsage(parsed));
+            JsonObject? call = null;
             try
             {
+                string raw;
+                (call, raw) = ExtractPlanCall(parsed, attempt);
                 var plan = BuildPlan(raw, requestId, locale, vocabulary, today);
                 if (attempt > 0)
                     Diagnostic("invalid_operation_plan_recovered", repairedClass);
@@ -961,6 +963,12 @@ public sealed class AskService
             {
                 if (attempt == MaximumPlannerAttempts - 1)
                 {
+                    CarryPlanningUsage(violation, usage, attempt + 1);
+                    throw;
+                }
+                if (call is null)
+                {
+                    if (attempt > 0) Diagnostic("invalid_operation_plan_retry_skipped", "envelope");
                     CarryPlanningUsage(violation, usage, attempt + 1);
                     throw;
                 }
