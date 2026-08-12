@@ -482,20 +482,21 @@ public sealed class AskOperationControllerTests : IDisposable
                 ["date"] = "2024-06-01",
             },
         })));
+        // A mounted jurisdiction with nothing in the window: a real, empty legal population.
         var empty = new AskService(_core, new StaticPlanner("en", new JsonArray(new JsonObject
         {
             ["tool"] = "changes_in_period",
             ["arguments"] = new JsonObject
             {
-                ["from_date"] = "2024-01-01",
-                ["to_date"] = "2024-12-31",
-                ["jurisdiction"] = "ZZ",
+                ["from_date"] = "2015-01-01",
+                ["to_date"] = "2015-12-31",
+                ["jurisdiction"] = "EU",
             },
         })));
 
         var exactResponse = await exact.AskAsync(History("Show WHOLE on 1 June 2024."),
             Guid.NewGuid().ToString(), "law.test", CancellationToken.None);
-        var emptyResponse = await empty.AskAsync(History("What changed in ZZ during 2024?"),
+        var emptyResponse = await empty.AskAsync(History("What changed in the EU during 2015?"),
             Guid.NewGuid().ToString(), "law.test", CancellationToken.None);
 
         Assert.Equal(200, exactResponse.Status);
@@ -508,6 +509,34 @@ public sealed class AskOperationControllerTests : IDisposable
             ?.GetValue<string>());
         Assert.Equal(0, emptyResponse.Body["operations"]?[0]?["ui"]?["ranking"]?["works_changed"]
             ?.GetValue<int>());
+    }
+
+    // An unmounted jurisdiction is a fact about the request, never an empty legal population.
+    // Reported as succeeded_empty it renders as "0 works changed in a population of 0": a
+    // confident zero about a corpus that was never consulted.
+    [Fact]
+    public async Task An_unmounted_jurisdiction_filter_is_a_gap_not_an_empty_population()
+    {
+        var service = new AskService(_core, new StaticPlanner("en", new JsonArray(new JsonObject
+        {
+            ["tool"] = "changes_in_period",
+            ["arguments"] = new JsonObject
+            {
+                ["from_date"] = "2024-01-01",
+                ["to_date"] = "2024-12-31",
+                ["jurisdiction"] = "ZZ",
+            },
+        })));
+
+        var response = await service.AskAsync(History("What changed in ZZ during 2024?"),
+            Guid.NewGuid().ToString(), "law.test", CancellationToken.None);
+
+        Assert.Equal(200, response.Status);
+        Assert.Equal("not_found",
+            response.Body["operations"]?[0]?["legal_outcome"]?.GetValue<string>());
+        Assert.Equal("unknown_publisher",
+            response.Body["operations"]?[0]?["ui"]?["gap"]?["status"]?.GetValue<string>());
+        Assert.Null(response.Body["operations"]?[0]?["ui"]?["ranking"]);
     }
 
     [Fact]

@@ -607,11 +607,16 @@ public class McpContractTests : IDisposable
         }));
         Assert.Single(matching);
 
-        var absent = Assert.IsType<JsonArray>(_core.CallTool("search", new JsonObject
+        // A jurisdiction nobody mounts is not "we hold nothing here"; it is "that filter names
+        // nothing". Returning [] made the two indistinguishable.
+        var absent = Assert.IsType<JsonObject>(_core.CallTool("search", new JsonObject
         {
             ["query"] = "thing", ["jurisdiction"] = "YY",
         }));
-        Assert.Empty(absent);
+        Assert.Equal(McpStatus.UnknownPublisher, absent["status"]!.GetValue<string>());
+        Assert.Equal("YY", absent["requested_value"]!.GetValue<string>());
+        Assert.Contains("XX", absent["mounted_jurisdictions"]!.AsArray()
+            .Select(item => item!.GetValue<string>()));
     }
 
     [Theory]
@@ -715,7 +720,63 @@ public class McpContractTests : IDisposable
         Assert.Single(Assert.IsType<JsonArray>(_core.CallTool(tool, common)));
 
         common["jurisdiction"] = "YY";
-        Assert.Empty(Assert.IsType<JsonArray>(_core.CallTool(tool, common)));
+        var absent = Assert.IsType<JsonObject>(_core.CallTool(tool, common));
+        Assert.Equal(McpStatus.UnknownPublisher, absent["status"]!.GetValue<string>());
+        Assert.Equal(tool, absent["tool_called"]!.GetValue<string>());
+    }
+
+    // Every tool used to answer an unmatched publisher with the same bare `[]` that a genuinely
+    // empty corpus produces, so nothing distinguished "this filter names nothing" from "Lex holds
+    // nothing". Coverage most of all: its whole purpose is saying what is NOT held.
+    [Theory]
+    [InlineData("coverage")]
+    [InlineData("search")]
+    [InlineData("in_force_on")]
+    [InlineData("changes_in_period")]
+    public void An_unmounted_publisher_is_named_rather_than_answered_with_an_empty_set(string tool)
+    {
+        var arguments = tool switch
+        {
+            "search" => new JsonObject { ["query"] = "thing" },
+            "in_force_on" => new JsonObject { ["date"] = "2022-06-01" },
+            "changes_in_period" => new JsonObject
+            {
+                ["from_date"] = "2019-01-01", ["to_date"] = "2026-01-01",
+            },
+            _ => new JsonObject(),
+        };
+        arguments["publisher"] = "Luxembourg";
+
+        var result = Assert.IsType<JsonObject>(_core.CallTool(tool, arguments));
+
+        Assert.Equal(McpStatus.UnknownPublisher, result["status"]!.GetValue<string>());
+        Assert.Equal("publisher", result["requested_filter"]!.GetValue<string>());
+        Assert.Equal("Luxembourg", result["requested_value"]!.GetValue<string>());
+        Assert.NotEmpty(result["mounted_publishers"]!.AsArray());
+        Assert.Equal(LegalOutcome.NotFound,
+            LegalOperationPolicy.OutcomeForStatus(
+                LegalOperationPolicy.StatusForResult(result)));
+    }
+
+    // A publisher this server mounts, spelled with different case, names a mounted publisher.
+    // Reader selection compares ordinally, so without canonicalising here the caller would be
+    // told "T-PUB" is unmounted while the very reader it names answers every other call.
+    [Fact]
+    public void A_mounted_publisher_spelled_with_different_case_still_selects_its_reader()
+    {
+        var result = _core.CallTool("search", new JsonObject
+        {
+            ["query"] = "thing", ["publisher"] = "T-PUB",
+        });
+
+        var hits = Assert.IsType<JsonArray>(result);
+        Assert.NotEmpty(hits);
+        Assert.Equal(
+            Assert.IsType<JsonArray>(_core.CallTool("search", new JsonObject
+            {
+                ["query"] = "thing", ["publisher"] = "t-pub",
+            })).Count,
+            hits.Count);
     }
 
     [Fact]

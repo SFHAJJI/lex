@@ -235,7 +235,13 @@ public static class UiMapper
         var rows = result is JsonArray array
             ? array.OfType<JsonObject>().ToList()
             : result is JsonObject item ? [item] : [];
-        if (rows.Count == 0) return new UiEffect(Coverage: new CoverageView([]));
+        // Zero coverage rows can never be drawn as an inventory. CoverageView([]) is summed into
+        // "Lex mounts 0 works and 0 verified versions", a false statement about the product's own
+        // holdings, and coverage is the one tool whose job is to say what is NOT held. Whatever
+        // emptied the payload — an unmatched filter, a stripped result — it is a gap, not a zero.
+        if (rows.Count == 0)
+            return new UiEffect(Gap: new GapView(
+                McpStatus.NoResult, null, null, Explain(McpStatus.NoResult, locale), []));
         var status = LegalOperationPolicy.StatusForResult(result);
         var outcome = LegalOperationPolicy.OutcomeForStatus(status);
         if (outcome is LegalOutcome.NotAvailable or LegalOutcome.NotFound)
@@ -551,12 +557,16 @@ public static class UiMapper
                 McpStatus.NoCorpusMounted => "Lex ne dispose d'aucun index juridique vérifié, donc aucune opération juridique n'est disponible.",
                 McpStatus.NoVersionForDate => "Lex détient cet instrument, mais aucune version de l'éditeur ne couvre cette date.",
                 McpStatus.UnknownWork => "Lex ne détient pas cet instrument.",
+                McpStatus.UnknownPublisher => "Aucun éditeur portant cet identifiant n'est monté ici. Reposez la question sans filtre d'éditeur pour voir tout ce que Lex détient.",
                 McpStatus.UnknownAnchor => "Cet identifiant d'article n'existe pas dans cet instrument.",
                 McpStatus.AnchorNotInVersion => "Cet article n'existait pas dans la version de l'éditeur sélectionnée pour cette date.",
                 McpStatus.TextWithheld => "Lex détient cette version et son texte, mais une règle de publication empêche d'en servir le libellé.",
                 McpStatus.TextNotAvailable => "Lex détient la notice et les dates de l'éditeur, mais aucun texte de disposition ne peut être servi de manière fiable.",
                 McpStatus.NoProvisionHistory => "Lex détient cet instrument sans historique par article, donc un article isolé ne peut pas être suivi dans le temps.",
                 McpStatus.ProfilesDiffer => "Lex détient les deux versions, mais leurs profils d'extraction ne permettent pas une comparaison fiable.",
+                // Reached only by the zero-row coverage guard: an empty payload describes the
+                // request, never the holdings.
+                McpStatus.NoResult => "Cette demande n'a renvoyé aucune ligne de couverture, donc Lex ne peut rien affirmer sur ce périmètre. Reposez la question sans filtre pour voir tout ce qu'il détient.",
                 _ => "Lex ne peut pas répondre à partir de ce qu'il détient.",
             };
         return status switch
@@ -564,12 +574,14 @@ public static class UiMapper
             McpStatus.NoCorpusMounted => "Lex has no verified legal index mounted, so no legal operation is available.",
             McpStatus.NoVersionForDate => "Lex holds this law, but no publisher version covers that date.",
             McpStatus.UnknownWork => "Lex does not hold this work at all.",
+            McpStatus.UnknownPublisher => "No publisher with that id is mounted here. Ask again without a publisher filter to see everything Lex holds.",
             McpStatus.UnknownAnchor => "That article identifier does not exist in this law.",
             McpStatus.AnchorNotInVersion => "That article did not exist in the publisher version selected for that date.",
             McpStatus.TextWithheld => "Lex holds this version and its text, but a publication gate prevents serving the wording.",
             McpStatus.TextNotAvailable => "Lex holds this publisher record and dates, but no safely derived provision text is available.",
             McpStatus.NoProvisionHistory => "Lex holds this work without per-article history, so single articles cannot be traced through time.",
             McpStatus.ProfilesDiffer => "Lex holds both versions, but their extraction profiles do not support a reliable provision comparison.",
+            McpStatus.NoResult => "This request returned no coverage rows, so Lex cannot state anything about that scope. Ask again without a filter to see everything it holds.",
             _ => "Lex cannot answer this from what it holds.",
         };
     }

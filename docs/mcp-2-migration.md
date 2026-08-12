@@ -77,7 +77,13 @@ index. At most eight publisher result envelopes are returned.
 | `unknown_work`, `unknown_anchor` | The requested work or provision identifier is not held. |
 | `no_version_for_date`, `anchor_not_in_version`, `no_provision_history` | The requested legal state is not available in the held publisher history. |
 | `text_not_available`, `text_withheld` | The record is held, but provision text cannot be served. |
+| `unknown_publisher` | The `publisher` or `jurisdiction` filter names nothing this server mounts. The payload carries `requested_filter`, `requested_value`, `mounted_publishers` and `mounted_jurisdictions`. |
 | `no_corpus_mounted` | The server has no verified legal index mounted. |
+
+Behaviour change with `unknown_publisher`: `coverage`, `search`, `in_force_on` and
+`changes_in_period` filtered by a publisher or jurisdiction this server does not mount used to
+return a bare `[]`, which no client could distinguish from an empty corpus. They now return the
+status object above. Callers that treated `[]` as "nothing is held" must read the status instead.
 
 Unknown status values must fail closed. They must not be treated as empty success or transport
 errors. Clients must inspect truncation fields before claiming that returned text or rows are

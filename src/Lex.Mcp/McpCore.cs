@@ -59,7 +59,19 @@ public sealed class McpCore
         _publicBase = publicBase;
         _readerExecutions = readers.ToDictionary(
             item => item.Key, _ => new SemaphoreSlim(1, 1), StringComparer.Ordinal);
+        MountedPublishers = readers.Keys.Order(StringComparer.Ordinal).ToArray();
+        MountedJurisdictions = readers.Values
+            .Select(reader => reader.Stamp.GetValueOrDefault("jurisdiction"))
+            .OfType<string>().Where(item => item.Length > 0)
+            .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
     }
+
+    /// <summary>The publisher ids this server actually mounts, ordinal-sorted so a schema
+    /// generated from them is byte-identical between processes.</summary>
+    public IReadOnlyList<string> MountedPublishers { get; }
+
+    /// <summary>The jurisdiction codes this server actually mounts, ordinal-sorted.</summary>
+    public IReadOnlyList<string> MountedJurisdictions { get; }
 
     public JsonArray ToolDefs()
     {
@@ -490,6 +502,59 @@ public sealed class McpCore
         if (citationsTruncated) output["truncated"] = true;
     }
 
+    /// <summary>
+    /// Restores the mounted spelling of a corpus filter and reports one that names nothing this
+    /// server mounts, or null when both filters select something.
+    ///
+    /// Both reader selectors match an unrecognised value against nothing and hand the caller an
+    /// empty set, which every tool then reports as a bare `[]`. That is precisely the
+    /// indistinguishable emptiness the no-corpus guard in CallToolCore was written to eliminate:
+    /// a model reading `[]` concludes the law does not exist, or that the corpus is empty, and
+    /// tells its user so. An unmatched filter is a fact about the request, and must say so.
+    ///
+    /// Case is not that fact. Publisher selection compares ordinally, so "T-Pub" would select no
+    /// reader and be reported unmounted although this server holds it; the mounted spelling is
+    /// restored here instead, which is the same canonicalisation CorpusVocabulary applies on the
+    /// assistant path. Jurisdiction already matches case-insensitively in SelectReaders.
+    /// </summary>
+    private (string Name, string Value)? UnmountedFilter(JsonObject arguments)
+    {
+        // A build with no verified index has no mounted set to check against, and its own guard
+        // must keep answering first.
+        if (!_corpusMounted) return null;
+        static string? Text(JsonNode? node) => node is JsonValue value
+            && value.TryGetValue<string>(out var text) ? text : null;
+        if (Text(arguments["publisher"]) is { } publisher)
+        {
+            var mounted = MountedPublishers.FirstOrDefault(item =>
+                string.Equals(item, publisher, StringComparison.OrdinalIgnoreCase));
+            if (mounted is null) return ("publisher", publisher);
+            if (!string.Equals(mounted, publisher, StringComparison.Ordinal))
+                arguments["publisher"] = mounted;
+        }
+        if (Text(arguments["jurisdiction"]) is { } jurisdiction
+            && !MountedJurisdictions.Contains(jurisdiction, StringComparer.OrdinalIgnoreCase))
+            return ("jurisdiction", jurisdiction);
+        return null;
+    }
+
+    private JsonObject UnmountedFilterResult(string tool, (string Name, string Value) filter) => new()
+    {
+        ["status"] = McpStatus.UnknownPublisher,
+        ["tool_called"] = tool,
+        ["requested_filter"] = filter.Name,
+        ["requested_value"] = filter.Value,
+        ["mounted_publishers"] = new JsonArray(
+            MountedPublishers.Select(item => (JsonNode)item).ToArray()),
+        ["mounted_jurisdictions"] = new JsonArray(
+            MountedJurisdictions.Select(item => (JsonNode)item).ToArray()),
+        ["detail"] = $"No mounted {filter.Name} matches '{filter.Value}', so this call selected "
+                   + "nothing to read from and returned no rows about the corpus. This is not a "
+                   + "statement that the corpus is empty. Use one of the mounted values, or omit "
+                   + "the filter to span everything held. Call coverage with no arguments for "
+                   + "live counts.",
+    };
+
     private (IReadOnlyList<LexIndexReader> Readers, int Total) SelectReaders(
         string? publisher,
         string? jurisdiction = null)
@@ -556,6 +621,7 @@ public sealed class McpCore
         // Reject malformed work before waiting on any publisher or allocating an execution
         // session. Invalid public input must not queue behind a valid long-running search.
         McpInputPolicy.Validate(name, a);
+        if (UnmountedFilter(a) is { } unmounted) return UnmountedFilterResult(name, unmounted);
         var selection = ReadersFor(a);
         var selected = selection.Readers;
         var held = new List<SemaphoreSlim>(selected.Count);

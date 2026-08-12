@@ -22,6 +22,7 @@ public sealed class AskService
     private readonly TimeSpan _plannerDeadline;
     private readonly TimeSpan _firstResultDeadline;
     private readonly Func<string, JsonObject, CancellationToken, ValueTask<JsonNode>> _legalTool;
+    private readonly CorpusVocabulary _vocabulary;
 
     internal static readonly TimeSpan DefaultPlannerDeadline = TimeSpan.FromSeconds(12);
     internal static readonly TimeSpan DefaultFirstResultDeadline = TimeSpan.FromSeconds(25);
@@ -29,6 +30,7 @@ public sealed class AskService
     public AskService(McpCore core)
     {
         this.core = core;
+        _vocabulary = VocabularyOf(core);
         _admission = DefaultAdmission();
         _plannerDeadline = DefaultPlannerDeadline;
         _firstResultDeadline = DefaultFirstResultDeadline;
@@ -45,6 +47,7 @@ public sealed class AskService
         Func<string, JsonObject, CancellationToken, ValueTask<JsonNode>>? legalTool = null)
     {
         this.core = core;
+        _vocabulary = VocabularyOf(core);
         _planner = planner;
         _synthesizer = synthesizer;
         _admission = admission ?? DefaultAdmission();
@@ -54,6 +57,12 @@ public sealed class AskService
         if (_plannerDeadline <= TimeSpan.Zero || _firstResultDeadline <= TimeSpan.Zero)
             throw new ArgumentOutOfRangeException(
                 nameof(plannerDeadline), "Assistant deadlines must be positive.");
+    }
+
+    private static CorpusVocabulary VocabularyOf(McpCore core)
+    {
+        ArgumentNullException.ThrowIfNull(core);
+        return new CorpusVocabulary(core.MountedPublishers, core.MountedJurisdictions);
     }
 
     internal sealed class WorkResolutionGuard
@@ -496,7 +505,9 @@ public sealed class AskService
         - changes_in_period: corpus-wide laws changed during a window. Use order=by_churn for
           "changed most". This operation is work-independent and must never be replaced by search.
         - in_force_on: publisher states covering a date.
-        - coverage: what Lex holds and lacks.
+        - coverage: what Lex holds and lacks. Omit publisher unless the user names one of the
+          mounted publisher ids offered by the schema; a question about total holdings, or about
+          a jurisdiction, is coverage with no arguments.
         - cited_by: provisions that refer to one law.
         - provenance: proof chain for one law or version.
         - legal_boundary: the user asks for legal advice, a compliance conclusion, application
@@ -523,7 +534,7 @@ public sealed class AskService
         "in_force_on", "coverage", "cited_by", "provenance", "legal_boundary", "clarification",
     ];
 
-    internal static JsonArray PlannerTools() =>
+    internal static JsonArray PlannerTools(CorpusVocabulary? vocabulary = null) =>
     [
         new JsonObject
         {
@@ -547,7 +558,7 @@ public sealed class AskService
                             ["items"] = new JsonObject
                             {
                                 ["oneOf"] = new JsonArray(PlannerToolNames
-                                    .Select(PlannerOperationSchema)
+                                    .Select(tool => PlannerOperationSchema(tool, vocabulary))
                                     .ToArray<JsonNode?>()),
                             },
                         },
@@ -563,7 +574,8 @@ public sealed class AskService
         },
     ];
 
-    private static JsonObject PlannerOperationSchema(string tool) => new()
+    private static JsonObject PlannerOperationSchema(
+        string tool, CorpusVocabulary? vocabulary) => new()
     {
         ["type"] = "object",
         ["properties"] = new JsonObject
@@ -573,14 +585,27 @@ public sealed class AskService
                 ["type"] = "string",
                 ["enum"] = new JsonArray(tool),
             },
-            ["arguments"] = PlannerArgumentSchema(tool),
+            ["arguments"] = PlannerArgumentSchema(tool, vocabulary),
         },
         ["required"] = new JsonArray("tool", "arguments"),
     };
 
-    internal static JsonObject PlannerArgumentSchema(string tool)
+    internal static JsonObject PlannerArgumentSchema(
+        string tool, CorpusVocabulary? vocabulary = null)
     {
+        var corpus = vocabulary ?? CorpusVocabulary.Unconstrained;
         JsonObject S() => new() { ["type"] = "string" };
+        // Every closed set the model is held to is declared, in declaration order so the emitted
+        // schema stays byte-identical between processes. An open string here is how the model
+        // came to propose "semantic", "current" or publisher "EU": names were generated from the
+        // allowlist, values were not, and one rejected literal aborts the whole plan.
+        JsonObject Choice(IReadOnlyList<string> values, string? guidance)
+        {
+            var value = S();
+            value["enum"] = new JsonArray(values.Select(item => (JsonNode)item).ToArray());
+            if (guidance is not null) value["description"] = guidance;
+            return value;
+        }
         var properties = new JsonObject();
         // Ordinal order keeps the emitted schema byte-identical between processes.
         foreach (var name in OperationArguments.AllowedFor(tool).Order(StringComparer.Ordinal))
@@ -594,7 +619,13 @@ public sealed class AskService
                     ["maxItems"] = 4,
                     ["items"] = S(),
                 },
-                _ => S(),
+                _ => OperationArguments.AllowedValuesFor(name) is { } closed
+                        ? Choice(closed, OperationArguments.GuidanceFor(name))
+                    : corpus.AllowedValuesFor(name) is { } mounted
+                        ? Choice(mounted, name == "publisher"
+                            ? "mounted publisher id; OMIT for the whole corpus"
+                            : "mounted jurisdiction code; OMIT for the whole corpus")
+                    : S(),
             };
         return new JsonObject
         {
@@ -628,7 +659,7 @@ public sealed class AskService
         {
             ["model"] = _deployment,
             ["messages"] = messages,
-            ["tools"] = PlannerTools(),
+            ["tools"] = PlannerTools(_vocabulary),
             ["tool_choice"] = new JsonObject
             {
                 ["type"] = "function",
@@ -699,7 +730,8 @@ public sealed class AskService
         var usage = new ModelTokenUsage(
             parsed?["usage"]?["prompt_tokens"]?.GetValue<long>() ?? 0,
             parsed?["usage"]?["completion_tokens"]?.GetValue<long>() ?? 0);
-        return (OperationPlan.FromPlannerOutput(requestId, locale, operations, synthesis), usage);
+        return (OperationPlan.FromPlannerOutput(
+            requestId, locale, operations, synthesis, _vocabulary), usage);
     }
 
     // Truncate oversized tool results without ever producing invalid JSON: shrink the largest

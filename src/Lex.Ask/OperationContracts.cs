@@ -79,7 +79,8 @@ public static class LegalOperationPolicy
         McpStatus.Ok => LegalOutcome.Succeeded,
         McpStatus.NoResult or McpStatus.NoChangesInPeriod => LegalOutcome.SucceededEmpty,
         McpStatus.ProfilesDiffer => LegalOutcome.NotComparable,
-        McpStatus.UnknownWork or McpStatus.UnknownAnchor => LegalOutcome.NotFound,
+        McpStatus.UnknownWork or McpStatus.UnknownAnchor
+            or McpStatus.UnknownPublisher => LegalOutcome.NotFound,
         McpStatus.NoVersionForDate or McpStatus.AnchorNotInVersion
             or McpStatus.NoProvisionHistory or McpStatus.TextNotAvailable
             or McpStatus.TextWithheld or McpStatus.NoCorpusMounted => LegalOutcome.NotAvailable,
@@ -323,10 +324,11 @@ public sealed record RequestedOperation
         string operationId,
         int userOrder,
         string tool,
-        JsonObject arguments)
+        JsonObject arguments,
+        CorpusVocabulary? vocabulary = null)
     {
         ArgumentNullException.ThrowIfNull(arguments);
-        var normalized = OperationArguments.Normalize(tool, arguments);
+        var normalized = OperationArguments.Normalize(tool, arguments, vocabulary);
         var requiresResolution = LegalOperationPolicy.RequiresWorkResolution(tool);
         var supporting = requiresResolution
             ? new List<SupportingCallRole> { SupportingCallRole.WorkResolution }
@@ -422,7 +424,8 @@ public sealed class OperationPlan
         string requestId,
         string locale,
         JsonArray operations,
-        bool synthesisRequested = false)
+        bool synthesisRequested = false,
+        CorpusVocabulary? vocabulary = null)
     {
         ArgumentNullException.ThrowIfNull(operations);
         if (operations.Count is 0 or > MaximumOperations)
@@ -446,7 +449,7 @@ public sealed class OperationPlan
                     $"{requestId}:op-{index + 1}", index,
                     ApplicationDisposition.Clarification, arguments);
             return RequestedOperation.CreatePlanned($"{requestId}:op-{index + 1}", index,
-                tool, arguments);
+                tool, arguments, vocabulary);
         }).ToArray();
         return Create(requestId, locale, requested, synthesisRequested);
     }
