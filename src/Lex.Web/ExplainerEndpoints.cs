@@ -641,8 +641,8 @@ public static class ExplainerEndpoints
                      author reads as a portfolio, and stops being trusted as a source. Two sentences. -->
                 <h2>Who built this</h2>
                 <div class="card">
-                <p>Lex is built and run by <b><a href="/about">Soufien Hajji</a></b>, a senior .NET, Azure
-                and AI engineer in Luxembourg. It is a personal project, unaffiliated with any publisher or
+                <p>Lex is built and run by <b><a href="/about">Soufien Hajji</a></b>, a Lead Software &amp; AI
+                Engineer specialising in Azure, based near Luxembourg. It is a personal project, unaffiliated with any publisher or
                 public body, built the way I build professionally: the pipeline is deterministic, the claims
                 are testable, and the parts that cannot be verified say so rather than guessing.</p>
                 <p class="sub"><a href="/about"><b>About, and the other two systems built the same way →</b></a></p>
@@ -674,7 +674,7 @@ public static class ExplainerEndpoints
                 platforms where an answer has to carry its source, its date, and a way to check it.</p>
 
                 <div class="card">
-                <p><b>Soufien Hajji</b>, senior .NET, Azure and AI engineer, based in Luxembourg. Nine
+                <p><b>Soufien Hajji</b>, Lead Software &amp; AI Engineer specialising in Azure, based near Luxembourg. Nine
                 years across telecoms, rail, investment banking and asset management, most of it on
                 systems where being wrong is expensive: front-office trading platforms, regulatory-capital
                 reporting, and the agentic AI layer on top of it.</p>
@@ -684,7 +684,7 @@ public static class ExplainerEndpoints
                 instead of guessing.</p>
                 <p><a class="pick main" href="https://api.soufien.lu/cv/en/download" rel="noopener">CV, English (PDF)</a>
                 &nbsp; <a class="pick" href="https://api.soufien.lu/cv/fr/download" rel="noopener">CV, français (PDF)</a>
-                &nbsp; <a class="pick" href="https://www.linkedin.com/in/soufien-hajji" rel="noopener">LinkedIn ↗</a></p>
+                &nbsp; <a class="pick" href="https://www.linkedin.com/in/hajji-soufien" rel="noopener">LinkedIn ↗</a></p>
                 </div>
 
                 <h2>Three things, built the same way</h2>
@@ -692,7 +692,7 @@ public static class ExplainerEndpoints
                 <div class="card">
                 <b><a href="https://law.soufien.lu">law.soufien.lu</a></b> &middot; this one
                 <p class="sub">Point-in-time Luxembourg and reviewed-scope EU law: {{works:n0}} works as
-                {{versions:n0}} dated versions, a public MCP endpoint, open datasets, and a signed index
+                {{versions:n0}} dated versions, a public MCP server, open datasets, and a signed index
                 whose stamp commits to a digest of its own content. The hard part was never the AI; it was
                 that a law has no single text, only a text per date.
                 <a href="/decisions">The decision that shaped it, and what it cost →</a></p>
@@ -725,7 +725,7 @@ public static class ExplainerEndpoints
                 <a href="https://github.com/SFHAJJI" rel="noopener"><b>GitHub →</b></a></p>
                 """;
             return Results.Content(Page("About", body,
-                "Senior .NET, Azure and AI engineer in Luxembourg. Lex is one of three systems built the same way.",
+                "Lead Software and AI Engineer specialising in Azure. Lex is one of three systems built the same way.",
                 "about", canonicalPath: "/about"), "text/html");
         });
 
