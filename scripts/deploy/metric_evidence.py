@@ -57,7 +57,15 @@ def values_for(payload, metric_name, revision, start, required):
                     continue
                 timestamp = point.get("timeStamp")
                 maximum = point.get("maximum")
-                if not isinstance(timestamp, str) or not start <= timestamp <= required:
+                # The workflow asks Azure for a wider timespan than the measured
+                # window, so the payload carries buckets that must not reach the
+                # maximum. Bounds and buckets are all fixed-width UTC stamps, for
+                # which lexicographic order is chronological order; anything in
+                # another shape is not comparable and is dropped, which can only
+                # fail the required-bucket check below, never pass it.
+                if not isinstance(timestamp, str) or not TIMESTAMP.fullmatch(timestamp):
+                    continue
+                if not start <= timestamp <= required:
                     continue
                 if isinstance(maximum, bool) or not isinstance(maximum, (int, float)):
                     continue
@@ -71,6 +79,8 @@ def values_for(payload, metric_name, revision, start, required):
 
 def evidence(payload, revision, start, required):
     require(isinstance(payload, dict), "metric response must be an object")
+    require(bool(TIMESTAMP.fullmatch(start)) and bool(TIMESTAMP.fullmatch(required))
+            and start <= required, "measured window bounds are not a UTC range")
     memory_max, memory_required = values_for(
         payload, "WorkingSetBytes", revision, start, required)
     replicas_max, replicas_required = values_for(

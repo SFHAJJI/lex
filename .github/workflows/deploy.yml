@@ -402,24 +402,30 @@ jobs:
           metric_confirmation=''
           metric_source=''
           metrics='{"value":[]}'
-          # Query only a completed, past bucket. A revision name is a new metric
-          # dimension value, and Azure publishes those later than the documented
-          # steady-state lag: run 31537457831 measured a 21:32-21:36 window still
-          # empty 7m50s after it closed and complete 10m14s after it closed, and
-          # run 31519379718 behaved the same way. The poll below therefore runs to
-          # twenty minutes, which is twice the longest publication delay measured.
+          # Query only a completed, past bucket.
           metric_now_epoch=$(date -u +%s)
           metric_ready_after_epoch=$((metric_window_end_epoch + 60))
           metric_wait_seconds=$((metric_ready_after_epoch - metric_now_epoch))
           [ "$metric_wait_seconds" -gt 0 ] && sleep "$metric_wait_seconds"
+          # Azure returns an empty series for a timespan as narrow as this load
+          # window even once the buckets exist: run 31540777978 polled
+          # 22:14-22:18 for twenty minutes and got {"metrics":[]} every time,
+          # while the same metric, revision filter and aggregation over a
+          # 45-minute timespan returned every minute of that same window. So ask
+          # for a wide timespan and let metric_evidence.py select the window that
+          # is actually measured; the poll then only needs a few minutes.
+          metric_query_start=$(date -u -d "@$((metric_window_start_epoch - 900))" \
+            +%Y-%m-%dT%H:%M:%SZ)
           metric_query() {
             local filter="$1"
+            local query_end
+            query_end=$(date -u +%Y-%m-%dT%H:%M:%SZ)
             az rest --method get \
               --url "$app_id/providers/Microsoft.Insights/metrics" \
               --url-parameters \
                 "api-version=2023-10-01" \
                 "metricnames=WorkingSetBytes,Replicas" \
-                "timespan=$metric_window_start/$metric_window_end" \
+                "timespan=$metric_query_start/$query_end" \
                 "interval=PT1M" \
                 "aggregation=Maximum" \
                 "\$filter=$filter" \
@@ -434,7 +440,7 @@ jobs:
           # appeared later than the split-by-dimension response. The wildcard form is
           # the documented way to obtain one time series per dimension value; select
           # the exact candidate locally and keep the query bounded.
-          for attempt in $(seq 1 40); do
+          for attempt in $(seq 1 12); do
             metric_filter="revisionName eq '$candidate'"
             metric_source=exact
             metrics=$(metric_query "$metric_filter" 2>/dev/null || printf '{"value":[]}')
@@ -460,12 +466,18 @@ jobs:
               fi
               metric_evidence=''
             fi
-            sleep 30
+            sleep 15
           done
-          metric_shape=$(printf '%s' "$metrics" | jq -c '
+          # The queried timespan is wider than the measured window, so report both
+          # counts: a healthy total with an empty window is a different failure
+          # from an empty response.
+          metric_shape=$(printf '%s' "$metrics" | jq -c \
+            --arg start "$metric_window_start" --arg required "$metric_required_timestamp" '
             {metrics: [.value[]? | {
               name: .name.value,
               points: ([.timeseries[]?.data[]? | select(.maximum != null)] | length),
+              window: ([.timeseries[]?.data[]? | select(.maximum != null)
+                | select(.timeStamp >= $start and .timeStamp <= $required)] | length),
               latest: ([.timeseries[]?.data[]? | select(.maximum != null) | .timeStamp] | max)
             }]}')
           [ -n "$metric_evidence" ] && [ -n "$metric_confirmation" ] \
