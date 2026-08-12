@@ -173,6 +173,7 @@ jobs:
         run: |
           set -euo pipefail
           . scripts/deploy/az-retry.sh
+          . scripts/deploy/az-reauth.sh
           az_write az containerapp revision set-mode -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" --mode multiple --only-show-errors
           mapfile -t traffic_bearers < <(az containerapp revision list \
             -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
@@ -409,6 +410,12 @@ jobs:
           metric_confirmation=''
           metric_source=''
           metrics='{"value":[]}'
+          # The load generator has just spent minutes here, and the twelve-minute metric poll is
+          # still ahead. The assertion azure/login exchanged is only valid for five minutes, so
+          # the next Azure call would be rejected with AADSTS700024 exactly as it was in run
+          # 31646994558, discarding a candidate that had already passed every gate. Take a fresh
+          # assertion before the long tail rather than after it fails.
+          az_reauth
           # Query only a completed, past bucket.
           metric_now_epoch=$(date -u +%s)
           metric_ready_after_epoch=$((metric_window_end_epoch + 60))
@@ -528,6 +535,10 @@ jobs:
             jq '.outcome' mcp-load-report.json
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+          # The metric poll above can hold this step for twelve minutes on its own, so take a
+          # fresh assertion again before the telemetry probe rather than discover a stale one
+          # after the candidate has already proven itself.
+          az_reauth
           trace_id=$(openssl rand -hex 16)
           span_id=$(openssl rand -hex 8)
           trace_canary="LEXTRACE${GITHUB_RUN_ID}${GITHUB_RUN_ATTEMPT}"

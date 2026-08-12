@@ -216,6 +216,52 @@ public sealed class ReleaseWorkflowTests
     }
 
     [Fact]
+    // Run 31646994558 passed every gate and a clean load test, then lost the deploy to
+    // AADSTS700024: the assertion azure/login exchanged is valid for five minutes and the step
+    // runs far longer, so the first Azure call after the load generator was rejected. The
+    // placement is the whole fix, and a helper that drifts below the long poll restores the bug
+    // silently, so the order is pinned here rather than left to review.
+    public void A_fresh_assertion_is_taken_before_every_stretch_that_outruns_the_old_one()
+    {
+        // Line endings are normalised because the checkout may carry either, and this test is
+        // about ORDER, not about how the file happens to be stored on disk.
+        var workflow = File.ReadAllText(Path.Combine(RepoRoot(), ".github", "workflows", "deploy.yml"))
+            .Replace("\r\n", "\n", StringComparison.Ordinal);
+        var helper = File.ReadAllText(Path.Combine(RepoRoot(), "scripts", "deploy", "az-reauth.sh"))
+            .Replace("\r\n", "\n", StringComparison.Ordinal);
+
+        Assert.Contains(". scripts/deploy/az-reauth.sh", workflow);
+        var calls = Regex.Matches(workflow, @"(?m)^\s*az_reauth\s*$").Count;
+        Assert.Equal(2, calls);
+
+        // Before the metric poll, and before the telemetry probe that sits beyond it.
+        var firstReauth = workflow.IndexOf("\n          az_reauth\n", StringComparison.Ordinal);
+        var pollStart = workflow.IndexOf("metric_now_epoch=$(date -u +%s)", StringComparison.Ordinal);
+        var telemetry = workflow.IndexOf("trace_id=$(openssl rand -hex 16)", StringComparison.Ordinal);
+        Assert.True(firstReauth >= 0, $"no reauth call found (firstReauth={firstReauth})");
+        Assert.True(pollStart > firstReauth,
+            $"reauth must precede the metric poll (reauth={firstReauth}, poll={pollStart})");
+        var secondReauth = workflow.IndexOf("az_reauth", pollStart, StringComparison.Ordinal);
+        Assert.True(secondReauth > pollStart && secondReauth < telemetry,
+            $"second reauth must sit between the poll and the telemetry probe "
+            + $"(second={secondReauth}, poll={pollStart}, telemetry={telemetry})");
+
+        // The federated token must not outlive the login attempt on either path, and the helper
+        // must stay safe inside a command substitution. Comment lines are stripped first,
+        // because the helper explains in prose why some of these flags are absent and prose
+        // must not be able to fail, or pass, a check about what the script executes.
+        var commands = string.Join('\n', helper.Split('\n')
+            .Where(line => !line.TrimStart().StartsWith('#')));
+
+        Assert.Equal(2, Regex.Matches(commands, @"unset _azr_assertion").Count);
+        Assert.DoesNotContain("--allow-no-subscriptions", commands);
+        Assert.Contains("\"re-authenticated with a fresh OIDC assertion\" >&2", commands);
+        // Neither the assertion nor the request token is ever echoed.
+        Assert.DoesNotContain("echo \"$_azr_assertion", commands);
+        Assert.DoesNotContain("echo \"$ACTIONS_ID_TOKEN_REQUEST_TOKEN", commands);
+    }
+
+    [Fact]
     public void Candidate_metric_evidence_queries_wider_than_the_window_it_measures()
     {
         var workflow = File.ReadAllText(Path.Combine(RepoRoot(), ".github", "workflows", "deploy.yml"));
