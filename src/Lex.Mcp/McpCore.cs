@@ -503,13 +503,19 @@ public sealed class McpCore
     }
 
     /// <summary>
-    /// A publisher or jurisdiction filter naming nothing this server mounts, or null.
+    /// Restores the mounted spelling of a corpus filter and reports one that names nothing this
+    /// server mounts, or null when both filters select something.
     ///
     /// Both reader selectors match an unrecognised value against nothing and hand the caller an
     /// empty set, which every tool then reports as a bare `[]`. That is precisely the
     /// indistinguishable emptiness the no-corpus guard in CallToolCore was written to eliminate:
     /// a model reading `[]` concludes the law does not exist, or that the corpus is empty, and
     /// tells its user so. An unmatched filter is a fact about the request, and must say so.
+    ///
+    /// Case is not that fact. Publisher selection compares ordinally, so "T-Pub" would select no
+    /// reader and be reported unmounted although this server holds it; the mounted spelling is
+    /// restored here instead, which is the same canonicalisation CorpusVocabulary applies on the
+    /// assistant path. Jurisdiction already matches case-insensitively in SelectReaders.
     /// </summary>
     private (string Name, string Value)? UnmountedFilter(JsonObject arguments)
     {
@@ -518,8 +524,14 @@ public sealed class McpCore
         if (!_corpusMounted) return null;
         static string? Text(JsonNode? node) => node is JsonValue value
             && value.TryGetValue<string>(out var text) ? text : null;
-        if (Text(arguments["publisher"]) is { } publisher && !readers.ContainsKey(publisher))
-            return ("publisher", publisher);
+        if (Text(arguments["publisher"]) is { } publisher)
+        {
+            var mounted = MountedPublishers.FirstOrDefault(item =>
+                string.Equals(item, publisher, StringComparison.OrdinalIgnoreCase));
+            if (mounted is null) return ("publisher", publisher);
+            if (!string.Equals(mounted, publisher, StringComparison.Ordinal))
+                arguments["publisher"] = mounted;
+        }
         if (Text(arguments["jurisdiction"]) is { } jurisdiction
             && !MountedJurisdictions.Contains(jurisdiction, StringComparer.OrdinalIgnoreCase))
             return ("jurisdiction", jurisdiction);
@@ -537,9 +549,10 @@ public sealed class McpCore
         ["mounted_jurisdictions"] = new JsonArray(
             MountedJurisdictions.Select(item => (JsonNode)item).ToArray()),
         ["detail"] = $"No mounted {filter.Name} matches '{filter.Value}', so this call selected "
-                   + "no publisher and returned no rows about the corpus. This is not a statement "
-                   + "that the corpus is empty. Use one of the mounted values, or omit the filter "
-                   + "to span everything held. Call coverage with no arguments for live counts.",
+                   + "nothing to read from and returned no rows about the corpus. This is not a "
+                   + "statement that the corpus is empty. Use one of the mounted values, or omit "
+                   + "the filter to span everything held. Call coverage with no arguments for "
+                   + "live counts.",
     };
 
     private (IReadOnlyList<LexIndexReader> Readers, int Total) SelectReaders(

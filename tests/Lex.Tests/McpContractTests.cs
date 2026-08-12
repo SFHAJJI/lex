@@ -758,6 +758,27 @@ public class McpContractTests : IDisposable
                 LegalOperationPolicy.StatusForResult(result)));
     }
 
+    // A publisher this server mounts, spelled with different case, names a mounted publisher.
+    // Reader selection compares ordinally, so without canonicalising here the caller would be
+    // told "T-PUB" is unmounted while the very reader it names answers every other call.
+    [Fact]
+    public void A_mounted_publisher_spelled_with_different_case_still_selects_its_reader()
+    {
+        var result = _core.CallTool("search", new JsonObject
+        {
+            ["query"] = "thing", ["publisher"] = "T-PUB",
+        });
+
+        var hits = Assert.IsType<JsonArray>(result);
+        Assert.NotEmpty(hits);
+        Assert.Equal(
+            Assert.IsType<JsonArray>(_core.CallTool("search", new JsonObject
+            {
+                ["query"] = "thing", ["publisher"] = "t-pub",
+            })).Count,
+            hits.Count);
+    }
+
     [Fact]
     public void Changes_in_period_applies_hierarchy_domain_and_form_before_counting()
     {
