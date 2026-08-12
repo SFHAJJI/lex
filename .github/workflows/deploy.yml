@@ -424,6 +424,13 @@ jobs:
           # that are actually measured; the poll then only needs a few minutes.
           metric_query_start=$(date -u -d "@$((metric_window_start_epoch - 900))" \
             +%Y-%m-%dT%H:%M:%SZ)
+          # Keep the query's own failure. Sending stderr to /dev/null and substituting
+          # an empty result made every failure mode look identical: run 31639411904
+          # reported "not independently confirmed ... {\"metrics\":[]}" with no way to
+          # tell an empty series from a rejected call. No EXIT trap for this temp file:
+          # this step already installs finish_cleanup on EXIT to roll the candidate
+          # back, and a second trap would silently replace it. The runner is ephemeral.
+          metric_error=$(mktemp)
           metric_query() {
             local filter="$1"
             local query_end
@@ -438,7 +445,7 @@ jobs:
                 "aggregation=Maximum" \
                 "\$filter=$filter" \
                 "top=200" \
-              -o json
+              -o json 2>>"$metric_error"
           }
           metric_extract() {
             python3 scripts/deploy/metric_evidence.py \
@@ -448,20 +455,23 @@ jobs:
           # appeared later than the split-by-dimension response. The wildcard form is
           # the documented way to obtain one time series per dimension value; select
           # the exact candidate locally and keep the query bounded.
-          for attempt in $(seq 1 12); do
+          # Container Apps metric ingestion regularly runs past the three minutes the
+          # previous loop allowed, and a revision created moments earlier is the slowest
+          # case. Poll for twelve.
+          for attempt in $(seq 1 36); do
             metric_filter="revisionName eq '$candidate'"
             metric_source=exact
-            metrics=$(metric_query "$metric_filter" 2>/dev/null || printf '{"value":[]}')
+            metrics=$(metric_query "$metric_filter" || printf '{"value":[]}')
             metric_evidence=$(printf '%s' "$metrics" | metric_extract 2>/dev/null || true)
             if [ -z "$metric_evidence" ]; then
               metric_filter="revisionName eq '*'"
               metric_source=split
-              metrics=$(metric_query "$metric_filter" 2>/dev/null || printf '{"value":[]}')
+              metrics=$(metric_query "$metric_filter" || printf '{"value":[]}')
               metric_evidence=$(printf '%s' "$metrics" | metric_extract 2>/dev/null || true)
             fi
             if [ -n "$metric_evidence" ]; then
               sleep 5
-              confirmation_metrics=$(metric_query "$metric_filter" 2>/dev/null \
+              confirmation_metrics=$(metric_query "$metric_filter" \
                 || printf '{"value":[]}')
               metric_confirmation=$(printf '%s' "$confirmation_metrics" \
                 | metric_extract 2>/dev/null || true)
@@ -495,7 +505,10 @@ jobs:
               latest: ([.timeseries[]?.data[]? | select(.maximum != null) | .timeStamp] | max)
             }]}')
           [ -n "$metric_evidence" ] && [ -n "$metric_confirmation" ] \
-            || { echo "::error::candidate metrics were not independently confirmed for $metric_required_timestamp in $metric_window_start/$metric_window_end; metric response shape: $metric_shape"; exit 1; }
+            || { echo "::error::candidate metrics were not independently confirmed for $metric_required_timestamp in $metric_window_start/$metric_window_end; metric response shape: $metric_shape";
+                 [ -s "$metric_error" ] \
+                   && echo "::error::the metrics query last reported: $(tr '\n' ' ' < "$metric_error" | tail -c 800)";
+                 exit 1; }
           memory_max=$(printf '%s\n%s' "$metric_evidence" "$metric_confirmation" \
             | jq -s 'map(.memory_max) | max')
           replicas_max=$(printf '%s\n%s' "$metric_evidence" "$metric_confirmation" \
