@@ -19,6 +19,32 @@ OUT="${1:-/indexes}"
 REQUIRE_MANIFEST="${LEX_REQUIRE_ARTIFACT_MANIFEST:-0}"
 mkdir -p "$OUT"
 
+# The indexes are hundreds of megabytes and the connection does drop mid-transfer:
+# ACR run dd65 failed the whole deploy with "curl: (56) Connection died, tried 5 times"
+# while fetching index-lu-legilux.db. Plain --retry made that worse than it looks,
+# because it restarts the transfer from byte zero rather than resuming, so a drop near
+# the end throws away everything and the next attempt is just as likely to die.
+#
+# --continue-at resumes where the last attempt stopped, --retry-all-errors covers the
+# transport failures (56 among them) that --retry ignores by default, and the speed
+# floor abandons a socket that has stalled instead of holding the build until curl's
+# own timeout. The size and SQLite-header checks below still catch a truncated result,
+# so resuming can fail the build but cannot silently ship half an index.
+fetch() {
+  curl -fsSL \
+    --retry 8 --retry-delay 5 --retry-all-errors \
+    --continue-at - \
+    --speed-limit 1024 --speed-time 60 \
+    -o "$1" "$2"
+}
+
+# The optional artifacts are small and their absence is a valid answer, so they get a
+# short retry: waiting out eight attempts to learn that a manifest was never published
+# would add minutes to every build of a publisher that has none.
+fetch_optional() {
+  curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors -o "$1" "$2"
+}
+
 # publisher repo : asset name
 SETS="lex-corpus-lu-legilux:index-lu-legilux.db
 lex-corpus-eu-eurlex:index-eu-eurlex.db"
@@ -27,7 +53,7 @@ echo "$SETS" | while IFS=: read -r repo asset; do
   [ -n "$repo" ] || continue
   url="https://github.com/SFHAJJI/$repo/releases/latest/download/$asset"
   echo "fetching $asset from $repo"
-  curl -fsSL --retry 3 --retry-delay 5 -o "$OUT/$asset" "$url"
+  fetch "$OUT/$asset" "$url"
 
   # A truncated or rate-limited download would otherwise produce a container that starts
   # happily and answers every question with no_corpus_mounted. Fail the build instead.
@@ -43,9 +69,9 @@ echo "$SETS" | while IFS=: read -r repo asset; do
   stem="${asset%.db}"
   manifest="$stem.manifest.json"
   signature="$stem.manifest.sig"
-  if curl -fsSL --retry 3 --retry-delay 5 -o "$OUT/$manifest" \
+  if fetch_optional "$OUT/$manifest" \
        "https://github.com/SFHAJJI/$repo/releases/latest/download/$manifest"; then
-    curl -fsSL --retry 3 --retry-delay 5 -o "$OUT/$signature" \
+    fetch_optional "$OUT/$signature" \
       "https://github.com/SFHAJJI/$repo/releases/latest/download/$signature"
     jq -r '.files[].path' "$OUT/$manifest" | while IFS= read -r companion; do
       [ "$companion" = "$asset" ] && continue
@@ -53,7 +79,7 @@ echo "$SETS" | while IFS=: read -r repo asset; do
         ""|/*|*\\*|..|../*|*/..|*/../*) echo "ERROR: unsafe release artifact path: $companion" >&2; exit 1 ;;
       esac
       mkdir -p "$(dirname "$OUT/$companion")"
-      curl -fsSL --retry 3 --retry-delay 5 -o "$OUT/$companion" \
+      fetch "$OUT/$companion" \
         "https://github.com/SFHAJJI/$repo/releases/latest/download/$companion"
     done
     echo "  fetched signed manifest: $manifest"
@@ -68,11 +94,11 @@ echo "$SETS" | while IFS=: read -r repo asset; do
   benchmark="retrieval-benchmark-$collection.json"
   benchmark_manifest="retrieval-benchmark-$collection.manifest.json"
   benchmark_signature="retrieval-benchmark-$collection.manifest.sig"
-  if curl -fsSL --retry 3 --retry-delay 5 -o "$OUT/$benchmark" \
+  if fetch_optional "$OUT/$benchmark" \
        "https://github.com/SFHAJJI/$repo/releases/latest/download/$benchmark" \
-    && curl -fsSL --retry 3 --retry-delay 5 -o "$OUT/$benchmark_manifest" \
+    && fetch_optional "$OUT/$benchmark_manifest" \
        "https://github.com/SFHAJJI/$repo/releases/latest/download/$benchmark_manifest" \
-    && curl -fsSL --retry 3 --retry-delay 5 -o "$OUT/$benchmark_signature" \
+    && fetch_optional "$OUT/$benchmark_signature" \
        "https://github.com/SFHAJJI/$repo/releases/latest/download/$benchmark_signature"; then
     echo "  fetched signed public retrieval benchmark: $benchmark"
   else
