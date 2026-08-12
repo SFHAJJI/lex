@@ -961,14 +961,14 @@ public sealed class AskService
             }
             catch (InvalidDataException violation)
             {
-                if (attempt == MaximumPlannerAttempts - 1)
-                {
-                    CarryPlanningUsage(violation, usage, attempt + 1);
-                    throw;
-                }
                 if (call is null)
                 {
                     if (attempt > 0) Diagnostic("invalid_operation_plan_retry_skipped", "envelope");
+                    CarryPlanningUsage(violation, usage, attempt + 1);
+                    throw;
+                }
+                if (attempt == MaximumPlannerAttempts - 1)
+                {
                     CarryPlanningUsage(violation, usage, attempt + 1);
                     throw;
                 }
