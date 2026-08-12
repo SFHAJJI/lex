@@ -131,7 +131,7 @@ public sealed class PlannerRepairTests
     [Fact]
     public async Task A_rejected_plan_is_corrected_once_and_the_corrected_plan_is_accepted()
     {
-        var send = new RecordingSend(Envelope(ReversedWindow), Envelope(ValidCoverage));
+        var send = new RecordingSend(Envelope(ArrayWorkQuery), Envelope(ValidCoverage));
 
         var (plan, repaired) = await PlanAsync(send);
 
@@ -209,8 +209,8 @@ public sealed class PlannerRepairTests
     [Fact]
     public async Task The_corrective_turn_carries_the_violation_and_the_original_request()
     {
-        const string question = "Compare Article 92 of CRR between 2024 and 2020.";
-        var send = new RecordingSend(Envelope(ReversedWindow), Envelope(ValidCoverage));
+        const string question = "Compare Article 92 of CRR between 2020 and 2024.";
+        var send = new RecordingSend(Envelope(MissingComparisonBound), Envelope(ValidCoverage));
 
         await PlanAsync(send, request: PlannerRequest(question));
 
@@ -240,7 +240,7 @@ public sealed class PlannerRepairTests
         Assert.Equal("call_plan_1", correction["tool_call_id"]!.GetValue<string>());
         var content = JsonNode.Parse(correction["content"]!.GetValue<string>())!.AsObject();
         Assert.Equal("invalid_operation_plan", content["error"]!.GetValue<string>());
-        Assert.Equal("diff from_date must not follow to_date.",
+        Assert.Equal("Argument 'to_date' must be an ISO date.",
             content["violation"]!.GetValue<string>());
         var instruction = content["instruction"]!.GetValue<string>();
         // The two load-bearing clauses: the escape hatches stay visible, and satisfying the
@@ -257,18 +257,16 @@ public sealed class PlannerRepairTests
     // message coming out of attempt two is character-identical to the one attempt one produced.
     // This fails the moment anyone threads an "is retry" flag through the argument gate.
     //
-    // Driven over every class that decides which law, which provision or which instant is
-    // answered, because "the second plan is validated identically" is a claim about all of them
-    // and one example cannot carry it: a work identity of the wrong shape, a work identity that is
-    // absent entirely, a date that is present and does not parse, a comparison carrying one of its
-    // two bounds, and a comparison whose bounds are reversed. Each is refused on attempt one, sent
-    // back for correction, repeated by the planner, and refused again in the same words.
+    // Driven over every RETRYABLE class that decides which law or which provision is answered,
+    // because "the second plan is validated identically" is a claim about all of them and one
+    // example cannot carry it: a work identity of the wrong shape, a work identity that is absent
+    // entirely, and a comparison carrying only one of its two bounds. Each is refused on attempt
+    // one, sent back for correction, repeated by the planner, and refused again in the same words.
+    // The two classes that are never retried are covered by the test below this one instead.
     [Theory]
     [InlineData(ArrayWorkQuery, "Argument 'work_query' must be a string. Received Array.")]
     [InlineData(NoWorkIdentity, "Operation 'as_of' requires a work identity.")]
-    [InlineData(MalformedDate, "Argument 'date' must be an ISO date.")]
     [InlineData(MissingComparisonBound, "Argument 'to_date' must be an ISO date.")]
-    [InlineData(ReversedWindow, "diff from_date must not follow to_date.")]
     public async Task The_repair_attempt_is_validated_exactly_as_the_first_attempt_was(
         string invalidPlan, string expected)
     {
@@ -289,6 +287,50 @@ public sealed class PlannerRepairTests
         // never written on the refusal path.
         Assert.Equal("input_tokens 8000 output_tokens 240 attempts 2",
             twice.Data[AskService.PlanningUsageKey]);
+    }
+
+    // The counterpart, and the reason the repair turn is safe to ship at all. For these two the
+    // validator's own message hands the model a mechanical fix that changes the answer rather than
+    // correcting it. A bare "2024" for an instant is refused because 2024-01-01 and 2024-12-31 are
+    // different versions of the law; told only "must be an ISO date", the cheapest satisfying move
+    // is to invent one, and the invented date then validates and is served with nothing in the
+    // reply to say a date was chosen for the reader. Swapping reversed bounds satisfies the
+    // constraint and inverts every added and removed clause of the diff.
+    //
+    // So they are refused on attempt one and never sent back. This converts the repair turn from
+    // something that can produce a confidently wrong answer about which law applied into something
+    // that can only ever recover a plan whose correct form was already fixed by the user's words.
+    [Theory]
+    [InlineData(MalformedDate, "Argument 'date' must be an ISO date.")]
+    [InlineData(ReversedWindow, "diff from_date must not follow to_date.")]
+    public async Task A_violation_whose_repair_would_choose_the_answer_is_not_retried(
+        string invalidPlan, string expected)
+    {
+        var send = new RecordingSend(Envelope(invalidPlan), Envelope(ValidCoverage));
+
+        var refused = await Assert.ThrowsAsync<InvalidDataException>(() => PlanAsync(send));
+
+        // One send. The valid second envelope was available and deliberately never asked for.
+        Assert.Single(send.Requests);
+        Assert.Equal(expected, refused.Message);
+        Assert.Equal("input_tokens 4000 output_tokens 120 attempts 1",
+            refused.Data[AskService.PlanningUsageKey]);
+    }
+
+    // The skip is narrow on purpose. An absent range bound reads the same to the validator
+    // ("must be an ISO date") but is recoverable from the user's own words, so it must still be
+    // retried; only the instant is withheld. Without the split these would share one class and
+    // this recovery would have been lost with it.
+    [Fact]
+    public async Task An_absent_range_bound_is_still_repaired_although_it_reads_as_a_date_violation()
+    {
+        var send = new RecordingSend(Envelope(MissingComparisonBound), Envelope(ValidCoverage));
+
+        var (plan, repaired) = await PlanAsync(send);
+
+        Assert.True(repaired);
+        Assert.Equal(2, send.Requests.Count);
+        Assert.Equal("coverage", Assert.Single(plan.Operations).Tool);
     }
 
     // A truncated completion ran out of room to write the plan; the corrective prompt is strictly
@@ -405,7 +447,12 @@ public sealed class PlannerRepairTests
     [Theory]
     [InlineData("diff from_date must not follow to_date.", "reversed_window")]
     [InlineData("Argument 'date' must be a string. Received Number.", "wrong_type")]
-    [InlineData("Argument 'date' must be an ISO date.", "unparsable_date")]
+    // The instant and a range bound are different classes because only one of them can be
+    // repaired without choosing the answer on the reader's behalf.
+    [InlineData("Argument 'date' must be an ISO date.", "unparsable_instant")]
+    [InlineData("Argument 'as_of' must be an ISO date.", "unparsable_instant")]
+    [InlineData("Argument 'to_date' must be an ISO date.", "unparsable_date")]
+    [InlineData("Argument 'from_date' must be an ISO date.", "unparsable_date")]
     [InlineData("Operation 'as_of' requires a work identity.", "missing_work_identity")]
     [InlineData("Operation 'as_of' contains unsupported argument 'from_date'.", "unsupported_argument")]
     [InlineData("Argument 'order' has an unsupported value.", "unsupported_value")]

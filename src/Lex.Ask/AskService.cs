@@ -384,6 +384,15 @@ public sealed class AskService
             => "reversed_window",
         _ when message.Contains("must be a string.", StringComparison.Ordinal)
             => "wrong_type",
+        // Split before the general date class, and deliberately narrow. A point-in-time instant is
+        // always defaulted when it is absent (DefaultedDates covers as_of, in_force_on and
+        // navigate), so this message can only mean a value the model supplied and the gate could
+        // not parse. A range bound reaching the general class below is a different matter: an
+        // absent to_date is recoverable from the user's own words, and a bare year in from_date or
+        // to_date has one correct expansion to the calendar boundary, so both stay retryable.
+        _ when message.Contains("Argument 'date' must be an ISO date", StringComparison.Ordinal)
+            || message.Contains("Argument 'as_of' must be an ISO date", StringComparison.Ordinal)
+            => "unparsable_instant",
         _ when message.Contains("must be an ISO date", StringComparison.Ordinal)
             => "unparsable_date",
         _ when message.Contains("requires a work identity", StringComparison.Ordinal)
@@ -972,7 +981,8 @@ public sealed class AskService
                     CarryPlanningUsage(violation, usage, attempt + 1);
                     throw;
                 }
-                if (RetrySkipReason(parsed, call, spent, plannerDeadline) is { } skipped)
+                if (RetrySkipReason(parsed, call, violation.Message, spent, plannerDeadline)
+                    is { } skipped)
                 {
                     Diagnostic("invalid_operation_plan_retry_skipped", skipped);
                     CarryPlanningUsage(violation, usage, attempt + 1);
@@ -1013,7 +1023,8 @@ public sealed class AskService
     /// <summary>Why this response cannot be repaired, from a closed vocabulary, or null when it
     /// can. A non-firing loop has to be as visible as a firing one.</summary>
     private static string? RetrySkipReason(
-        JsonNode? parsed, JsonObject call, TimeSpan attemptElapsed, TimeSpan plannerDeadline)
+        JsonNode? parsed, JsonObject call, string violation,
+        TimeSpan attemptElapsed, TimeSpan plannerDeadline)
     {
         // A correction is a tool message answering one tool_call_id. Without an id there is no
         // protocol-legal shape to send, exactly as for the envelope faults above.
@@ -1021,6 +1032,19 @@ public sealed class AskService
             || !id.TryGetValue<string>(out var callId)
             || string.IsNullOrWhiteSpace(callId))
             return "envelope";
+        // Two classes must not be repaired by asking again, because for them satisfying the
+        // validator and answering the asked question are different acts. The gate refuses a bare
+        // "2024" for an instant precisely because 2024-01-01 and 2024-12-31 select different
+        // versions of the law; handing that same undecidable choice back as "must be an ISO date"
+        // makes the cheapest satisfying move an invented date, which then validates and is served
+        // with nothing in the reply to tell the reader a date was chosen for them. Reversed
+        // comparison bounds have the same shape: swapping them satisfies the constraint and
+        // inverts every added and removed clause of the diff. For both, the refusal is the honest
+        // answer until the instant is re-derived from the user's own words the way the work
+        // identity already is. Everything else stays retryable, including an absent range bound.
+        var violationClass = ViolationClass(violation);
+        if (violationClass is "unparsable_instant" or "reversed_window")
+            return violationClass;
         if (parsed?["choices"]?[0]?["finish_reason"] is JsonValue finish
             && finish.TryGetValue<string>(out var reason)
             && reason == "length")
