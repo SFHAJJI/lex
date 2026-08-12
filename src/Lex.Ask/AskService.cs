@@ -2508,12 +2508,12 @@ public sealed class AskService
             var display = AgentAnswerContract.Validate(new AgentAnswerDraft(
                 AgentAnswerStatus.Clarify,
                 locale == "fr"
-                    ? "Donnez l'identifiant officiel ou le numero CELEX, ou indiquez l'editeur (Legilux ou EUR-Lex)."
+                    ? "Donnez l'identifiant officiel ou le numéro CELEX, ou indiquez l'éditeur (Legilux ou EUR-Lex)."
                     : "Give the official identifier or CELEX number, or name the publisher (Legilux or EUR-Lex).",
                 [], [], null,
                 new AgentClarification(
                     locale == "fr"
-                        ? "Lex n'a pas pu rattacher un nom de votre question a un instrument qu'il detient. Il a cherche par titre officiel, identifiant et alias dans son catalogue."
+                        ? "Lex n'a pas pu rattacher un nom de votre question à un instrument qu'il détient. Il a cherché par titre officiel, identifiant et alias dans son catalogue."
                         : "Lex could not match a name in your question to an instrument it holds. It searched its catalogue by official title, identifier and alias.",
                     [])), []).Clarification!;
             return new PreparedOperation(null,

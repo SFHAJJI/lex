@@ -72,7 +72,7 @@ internal static class OperationAnswerPolicy
             var name = disclosure.RunnerUpTitle is { Length: > 0 } title
                 ? $"{title} ({runnerUp})" : runnerUp;
             text += fr
-                ? $" Votre formulation nommait plusieurs instruments; Lex a retenu celui qui fait l'objet de la citation plutot que {name}."
+                ? $" Votre formulation nommait plusieurs instruments; Lex a retenu celui qui fait l'objet de la citation plutôt que {name}."
                 : $" Your wording named more than one instrument; Lex used the one the citation is about rather than {name}.";
         }
         text += disclosure.Instant switch
