@@ -46,6 +46,35 @@ class MetricEvidenceTests(unittest.TestCase):
         self.assertNotEqual(0, completed.returncode)
         self.assertIn("required load bucket", completed.stderr)
 
+    def test_measures_only_the_window_inside_a_wide_response(self):
+        completed = self.run_script(self.wide_response(CANDIDATE))
+        self.assertEqual(0, completed.returncode, completed.stderr)
+        evidence = json.loads(completed.stdout)
+        self.assertEqual(507_674_624, evidence["memory_max"])
+        self.assertEqual(507_674_624, evidence["memory_required"])
+        self.assertEqual(1, evidence["replicas_max"])
+        self.assertEqual(1, evidence["replicas_required"])
+
+    def test_rejects_a_wide_response_without_the_required_bucket(self):
+        response = self.wide_response(CANDIDATE)
+        for metric in response["value"]:
+            metric["timeseries"][0]["data"] = [
+                point for point in metric["timeseries"][0]["data"]
+                if point["timeStamp"] != REQUIRED
+            ]
+        completed = self.run_script(response)
+        self.assertNotEqual(0, completed.returncode)
+        self.assertIn("required load bucket", completed.stderr)
+
+    def test_ignores_buckets_whose_timestamp_is_not_a_utc_bucket(self):
+        response = self.response(CANDIDATE)
+        for metric in response["value"]:
+            metric["timeseries"][0]["data"].append(
+                {"timeStamp": "2026-08-11T16:19:00.0000000Z", "maximum": 1_900_000_000})
+        completed = self.run_script(response)
+        self.assertEqual(0, completed.returncode, completed.stderr)
+        self.assertEqual(507_674_624, json.loads(completed.stdout)["memory_max"])
+
     def test_rejects_malformed_or_oversized_payloads(self):
         malformed = subprocess.run(
             [sys.executable, str(SCRIPT), CANDIDATE, START, REQUIRED],
@@ -80,6 +109,27 @@ class MetricEvidenceTests(unittest.TestCase):
                 MetricEvidenceTests.metric("Replicas", revision, replicas),
             ]
         }
+
+    @staticmethod
+    def wide_response(revision):
+        # The workflow queries a timespan far wider than the measured window, so
+        # the payload carries heavier buckets on both sides of it. None of them
+        # may reach memory_max or replicas_max.
+        outside = [
+            {"timeStamp": "2026-08-11T16:05:00Z", "maximum": 1_900_000_000},
+            {"timeStamp": "2026-08-11T16:17:00Z", "maximum": 1_800_000_000},
+            {"timeStamp": "2026-08-11T16:22:00Z", "maximum": 1_700_000_000},
+            {"timeStamp": "2026-08-11T16:40:00Z", "maximum": 2_000_000_000},
+        ]
+        response = MetricEvidenceTests.response(revision)
+        for metric in response["value"]:
+            replicas = metric["name"]["value"] == "Replicas"
+            data = metric["timeseries"][0]["data"]
+            data.extend(
+                {"timeStamp": point["timeStamp"], "maximum": 4 if replicas else point["maximum"]}
+                for point in outside)
+            data.sort(key=lambda point: point["timeStamp"])
+        return response
 
     @staticmethod
     def metric(name, revision, points):
