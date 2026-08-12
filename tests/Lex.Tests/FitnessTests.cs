@@ -75,9 +75,14 @@ public class FitnessTests
             .Order(StringComparer.Ordinal)
             .ToArray();
 
+        // gen_ai.request.model and lex.docs used to appear here, but only LegacyAskAsync ever
+        // emitted them, so the served path never carried either one and this list was pinning
+        // telemetry that no request could produce. Deleting the dead agent removed both. Worth
+        // noting for the observability work rather than fixing here: the live planner records
+        // no model tag at all, so the deployment that chose a plan is not recoverable from a
+        // span. That is a pre-existing gap this deletion exposed, not one it created.
         Assert.Equal([
-            "gen_ai.request.model", "gen_ai.tool.name", "lex.docs",
-            "lex.operation.id", "lex.status",
+            "gen_ai.tool.name", "lex.operation.id", "lex.status",
         ], tags);
         Assert.DoesNotContain("ex.Message", askSource, StringComparison.Ordinal);
         Assert.DoesNotContain("respText[..", askSource, StringComparison.Ordinal);
