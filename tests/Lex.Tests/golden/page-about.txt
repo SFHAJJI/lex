@@ -243,13 +243,14 @@ HTTP 200
 </header>
 <main>
 <h1>About</h1>
-<p class="sub">Lead Software and AI Engineer specialising in Azure. Lex is one of three systems built the same way.</p>
+<p class="sub">Lead Software and AI Engineer taking enterprise AI copilots from prototype to production on Azure.</p>
 <p class="lede">I build systems that have to be right rather than plausible: regulated
 platforms where an answer has to carry its source, its date, and a way to check it.</p>
 
 <div class="card">
-<p><b>Soufien Hajji</b>, Lead Software &amp; AI Engineer specialising in Azure, based near Luxembourg. Nine
-years across telecoms, rail, investment banking and asset management, most of it on
+<p><b>Soufien Hajji</b>, Lead Software &amp; AI Engineer specialising in taking enterprise AI
+copilots from prototype to production on Azure, based near Luxembourg. Nine years across
+telecoms, rail, investment banking and asset management, most of it on
 systems where being wrong is expensive: front-office trading platforms, regulatory-capital
 reporting, and the agentic AI layer on top of it.</p>
 <p class="sub">Lex is a personal project, unaffiliated with any publisher or public body.

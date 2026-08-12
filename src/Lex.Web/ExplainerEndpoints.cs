@@ -642,7 +642,8 @@ public static class ExplainerEndpoints
                 <h2>Who built this</h2>
                 <div class="card">
                 <p>Lex is built and run by <b><a href="/about">Soufien Hajji</a></b>, a Lead Software &amp; AI
-                Engineer specialising in Azure, based near Luxembourg. It is a personal project, unaffiliated with any publisher or
+                Engineer specialising in taking enterprise AI copilots from prototype to production on Azure,
+                based near Luxembourg. It is a personal project, unaffiliated with any publisher or
                 public body, built the way I build professionally: the pipeline is deterministic, the claims
                 are testable, and the parts that cannot be verified say so rather than guessing.</p>
                 <p class="sub"><a href="/about"><b>About, and the other two systems built the same way →</b></a></p>
@@ -674,8 +675,9 @@ public static class ExplainerEndpoints
                 platforms where an answer has to carry its source, its date, and a way to check it.</p>
 
                 <div class="card">
-                <p><b>Soufien Hajji</b>, Lead Software &amp; AI Engineer specialising in Azure, based near Luxembourg. Nine
-                years across telecoms, rail, investment banking and asset management, most of it on
+                <p><b>Soufien Hajji</b>, Lead Software &amp; AI Engineer specialising in taking enterprise AI
+                copilots from prototype to production on Azure, based near Luxembourg. Nine years across
+                telecoms, rail, investment banking and asset management, most of it on
                 systems where being wrong is expensive: front-office trading platforms, regulatory-capital
                 reporting, and the agentic AI layer on top of it.</p>
                 <p class="sub">Lex is a personal project, unaffiliated with any publisher or public body.
@@ -725,7 +727,7 @@ public static class ExplainerEndpoints
                 <a href="https://github.com/SFHAJJI" rel="noopener"><b>GitHub →</b></a></p>
                 """;
             return Results.Content(Page("About", body,
-                "Lead Software and AI Engineer specialising in Azure. Lex is one of three systems built the same way.",
+                "Lead Software and AI Engineer taking enterprise AI copilots from prototype to production on Azure.",
                 "about", canonicalPath: "/about"), "text/html");
         });
 
