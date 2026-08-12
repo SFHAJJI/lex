@@ -513,7 +513,10 @@ public sealed class AskService
         return arr;
     }
 
-    private static string PlannerPrompt(string host) => $"""
+    // today is passed in rather than read here, so the date the prompt promises the model and the
+    // date the argument gate substitutes for an omitted one are the same instant, not two reads of
+    // the wall clock that can straddle UTC midnight.
+    private static string PlannerPrompt(string host, DateOnly today) => $"""
         You plan operations for Lex, a read-only point-in-time legal retrieval product at https://{host}.
         Return one complete ordered operation for every legal operation the user requested. The
         application freezes and validates the entire list before any legal tool runs. Do not answer
@@ -541,7 +544,7 @@ public sealed class AskService
         For a named law, put the user's exact name, acronym or identifier in work_query. Never invent
         a canonical work id. The application resolves it deterministically. Put a mentioned article
         number in article_number. Dates are ISO YYYY-MM-DD. Expand a bare year to its full inclusive
-        calendar boundary. For as_of with no date use {DateTime.UtcNow:yyyy-MM-dd}. Preserve the
+        calendar boundary. For as_of with no date use {today:yyyy-MM-dd}. Preserve the
         user's operation order. Set synthesis=true only when the user explicitly asks you to
         summarize or describe the accepted results; ordinary lookup and comparison use deterministic
         application replies. A compound request must remain multiple operations.
@@ -578,9 +581,14 @@ public sealed class AskService
                             ["maxItems"] = OperationPlan.MaximumOperations,
                             // One branch per tool: a shared argument schema would invite arguments
                             // OperationArguments rejects, and one rejection aborts the whole plan.
+                            // anyOf rather than oneOf: oneOf is outside the keyword set a strict
+                            // schema may use, and "exactly one branch" is already structurally
+                            // guaranteed here because every branch pins tool to a distinct const.
+                            // A fitness test asserts that distinctness, which is what makes the
+                            // two spellings equivalent.
                             ["items"] = new JsonObject
                             {
-                                ["oneOf"] = new JsonArray(PlannerToolNames
+                                ["anyOf"] = new JsonArray(PlannerToolNames
                                     .Select(tool => PlannerOperationSchema(tool, vocabulary))
                                     .ToArray<JsonNode?>()),
                             },
@@ -592,11 +600,29 @@ public sealed class AskService
                         },
                     },
                     ["required"] = new JsonArray("operations"),
+                    ["additionalProperties"] = false,
                 },
             },
         },
     ];
 
+    // Strict structured output is deliberately NOT enabled here, and this is the note for whoever
+    // reaches for it next. It would make additionalProperties and the enums binding rather than
+    // advisory, which by construction removes the three argument-name rejections the audit saw.
+    // What it costs is larger: strict requires every declared property to be required, so all
+    // seventy-five optional arguments become mandatory-and-nullable, "required": ["date"] stops
+    // meaning anything (present-as-null is absence), and the recovery policy in
+    // OperationArguments, not strict mode, remains the fix for the thirteen omitted dates. Worse,
+    // allOf is unsupported and each anyOf branch must itself be a complete strict object, so a
+    // bare {"required":["work"]} is invalid and nullable types cannot say "this one must not be
+    // null": the work-identity gate on navigate/as_of/diff/timeline/cited_by/provenance and the
+    // anchor-or-article_number gate on article_history would disappear from the schema entirely.
+    // And a schema strict mode refuses is a 400 on every planning call, which is a planner outage
+    // rather than a degradation. If it is wanted later, put it behind a flag, catch the 400 and
+    // retry non-strict on the same request, keep every runtime refusal exactly as it is, and A/B
+    // the rejection rate before making it the default.
+    // The two parts of that analysis that were free of it are applied: anyOf above, and
+    // additionalProperties:false on the root parameters object and on each branch here.
     private static JsonObject PlannerOperationSchema(
         string tool, CorpusVocabulary? vocabulary) => new()
     {
@@ -606,11 +632,12 @@ public sealed class AskService
             ["tool"] = new JsonObject
             {
                 ["type"] = "string",
-                ["enum"] = new JsonArray(tool),
+                ["const"] = tool,
             },
             ["arguments"] = PlannerArgumentSchema(tool, vocabulary),
         },
         ["required"] = new JsonArray("tool", "arguments"),
+        ["additionalProperties"] = false,
     };
 
     internal static JsonObject PlannerArgumentSchema(
@@ -724,9 +751,10 @@ public sealed class AskService
                 requestId, locale, proposed.Operations, proposed.SynthesisRequested), default);
         }
 
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
         var messages = new JsonArray
         {
-            new JsonObject { ["role"] = "system", ["content"] = PlannerPrompt(host) },
+            new JsonObject { ["role"] = "system", ["content"] = PlannerPrompt(host, today) },
         };
         foreach (var message in history)
             messages.Add(message?.DeepClone());
@@ -806,7 +834,7 @@ public sealed class AskService
             parsed?["usage"]?["prompt_tokens"]?.GetValue<long>() ?? 0,
             parsed?["usage"]?["completion_tokens"]?.GetValue<long>() ?? 0);
         return (OperationPlan.FromPlannerOutput(
-            requestId, locale, operations, synthesis, _vocabulary), usage);
+            requestId, locale, operations, synthesis, _vocabulary, today), usage);
     }
 
     // Truncate oversized tool results without ever producing invalid JSON: shrink the largest
@@ -1393,6 +1421,14 @@ public sealed class AskService
         Action firstResultObserved,
         Func<TransportOutcome> cancellationOutcome)
     {
+        // One line per repair the argument gate made to freeze this plan. The gate is forgiving so
+        // that one stray key stops destroying seven valid operations, but a repair rate nobody
+        // watches is drift nobody notices, so every one of them is counted here. The detail is
+        // argument names and verbs only: never a value, never user text.
+        foreach (var operation in plan.Operations)
+            foreach (var repair in operation.Repairs)
+                Diagnostic("planner_argument_repaired", $"op{operation.UserOrder} {repair}");
+
         var trace = new JsonArray
         {
             new JsonObject
@@ -1412,6 +1448,8 @@ public sealed class AskService
                         ["disposition"] = operation.Disposition is { } disposition
                             ? ContractName(disposition) : null,
                         ["arguments"] = JsonNode.Parse(operation.Arguments.GetRawText()),
+                        ["repairs"] = new JsonArray(
+                            operation.Repairs.Select(item => (JsonNode)item!).ToArray()),
                     }).ToArray()),
             },
         };
