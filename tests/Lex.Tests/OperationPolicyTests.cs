@@ -626,13 +626,26 @@ public sealed class OperationPolicyTests
     // present value naming a point in time, not a slot the model left blank, so it may not become
     // today's law: a non-string is refused under the alias exactly as it is under date, and only
     // JSON null and a blank string are read as absence.
+    //
+    // The message names the JSON kind that actually arrived. Without it two different defects
+    // ("as_of" written as a number, work_query written as an array) are one indistinguishable log
+    // line, which is how a pre-existing branch was read as a new violation class. A JsonValueKind
+    // name is one of eight compile-time constants chosen by the shape of the JSON, never by its
+    // content, so it carries no user data onto the diagnostic line.
     [Theory]
     [InlineData("as_of")]
     [InlineData("date")]
     public void An_instant_the_planner_did_not_write_as_a_string_aborts_the_plan(string name)
     {
-        foreach (var value in new JsonNode[] { 2019, true, new JsonArray("2019-01-01"), new JsonObject() })
-            Assert.Equal($"Argument '{name}' must be a string.",
+        foreach (var (value, kind) in new (JsonNode Value, string Kind)[]
+                 {
+                     (2019, "Number"),
+                     (true, "True"),
+                     (false, "False"),
+                     (new JsonArray("2019-01-01"), "Array"),
+                     (new JsonObject(), "Object"),
+                 })
+            Assert.Equal($"Argument '{name}' must be a string. Received {kind}.",
                 Assert.Throws<InvalidDataException>(() =>
                     OperationArguments.Normalize("as_of", new JsonObject
                     {

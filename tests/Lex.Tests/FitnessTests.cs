@@ -91,9 +91,9 @@ public class FitnessTests
     {
         var source = File.ReadAllText(
             Path.Combine(RepoRoot(), "src", "Lex.Ask", "AskService.cs"));
-        var start = source.IndexOf(
-            "private async Task<(OperationPlan Plan, ModelTokenUsage Usage)> PlanOperationsAsync(",
-            StringComparison.Ordinal);
+        // Anchored on the method name rather than its full signature: the return type gained the
+        // repair flag, and the property under test is the routing effort, not the tuple shape.
+        var start = source.IndexOf("PlanOperationsAsync(", StringComparison.Ordinal);
         Assert.True(start >= 0);
         var requestStart = source.IndexOf("var req = new JsonObject", start, StringComparison.Ordinal);
         Assert.True(requestStart > start);

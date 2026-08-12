@@ -22,6 +22,10 @@ public sealed class AskService
     private readonly TimeSpan _plannerDeadline;
     private readonly TimeSpan _firstResultDeadline;
     private readonly Func<string, JsonObject, CancellationToken, ValueTask<JsonNode>> _legalTool;
+    // The planner transport, seamed exactly as _legalTool is. The raw-HTTP planning branch was
+    // unreachable from the suite while every test injected a finished OperationPlan, which is the
+    // one branch the repair turn lives in.
+    private readonly Func<JsonObject, CancellationToken, Task<JsonNode?>>? _plannerSend;
     private readonly CorpusVocabulary _vocabulary;
 
     internal static readonly TimeSpan DefaultPlannerDeadline = TimeSpan.FromSeconds(12);
@@ -39,16 +43,18 @@ public sealed class AskService
 
     internal AskService(
         McpCore core,
-        IOperationPlanner planner,
+        IOperationPlanner? planner,
         IOperationSynthesizer? synthesizer = null,
         AskAdmissionController? admission = null,
         TimeSpan? plannerDeadline = null,
         TimeSpan? firstResultDeadline = null,
-        Func<string, JsonObject, CancellationToken, ValueTask<JsonNode>>? legalTool = null)
+        Func<string, JsonObject, CancellationToken, ValueTask<JsonNode>>? legalTool = null,
+        Func<JsonObject, CancellationToken, Task<JsonNode?>>? plannerSend = null)
     {
         this.core = core;
         _vocabulary = VocabularyOf(core);
         _planner = planner;
+        _plannerSend = plannerSend;
         _synthesizer = synthesizer;
         _admission = admission ?? DefaultAdmission();
         _plannerDeadline = plannerDeadline ?? DefaultPlannerDeadline;
@@ -310,8 +316,9 @@ public sealed class AskService
     private readonly string _deployment = Environment.GetEnvironmentVariable("AOAI_CHAT_DEPLOYMENT") ?? "gpt-5-mini";
     private AgentAnswerFinalizer? _answerFinalizer;
 
-    public bool Enabled => _planner is not null || (!string.IsNullOrEmpty(_endpoint)
-                           && (_useManagedIdentity || !string.IsNullOrEmpty(_key)));
+    public bool Enabled => _planner is not null || _plannerSend is not null
+                           || (!string.IsNullOrEmpty(_endpoint)
+                               && (_useManagedIdentity || !string.IsNullOrEmpty(_key)));
 
     private static int EnvInt(string name, int dflt)
         => int.TryParse(Environment.GetEnvironmentVariable(name), out var v) && v > 0 ? v : dflt;
@@ -332,15 +339,74 @@ public sealed class AskService
         // detail carries contract violations only. The filter bounds the length and keeps the
         // line single: it allows the punctuation those messages quote names with and replaces
         // everything else, including any newline, with '?'.
-        var note = detail is null
-            ? string.Empty
-            : " " + new string(detail.Take(200).Select(character =>
-                char.IsAsciiLetterOrDigit(character)
-                || character is ' ' or '_' or '\'' or '.' or ',' or '-'
-                    ? character
-                    : '?').ToArray());
+        var note = detail is null ? string.Empty : " " + SanitizeDetail(detail);
         Console.Error.WriteLine($"[ask] {safe}{note}");
     }
+
+    /// <summary>The detail filter, named so the corrective planner turn can reuse the exact same
+    /// one. A contract violation is echoed in two places now, stderr and the tool message the
+    /// repair turn carries, and both have to bound it identically.</summary>
+    internal static string SanitizeDetail(string detail) =>
+        new(detail.Take(200).Select(character =>
+            char.IsAsciiLetterOrDigit(character)
+            || character is ' ' or '_' or '\'' or '.' or ',' or '-'
+                ? character
+                : '?').ToArray());
+
+    /// <summary>
+    /// A validation message, bounded for echoing back to the model and to stderr.
+    ///
+    /// <para>Every message <c>OperationArguments</c> throws interpolates argument names drawn from
+    /// a closed set and never an argument <em>value</em>: the date, enum and list checks report the
+    /// name or a count, and a planner-invented key name is already replaced with "unrecognized"
+    /// before it reaches a repair line. The one exception is the action itself, which
+    /// <c>OperationContracts</c> reads as unbounded free text, so the unknown-operation class
+    /// quotes a string the planner wrote. Since strict structured output is deliberately off, a
+    /// prompt-injected question can steer the model into writing its payload there. That one class
+    /// is replaced with a template listing the operations that do exist, so the rejected string
+    /// never appears in the correction's framing.</para>
+    /// </summary>
+    internal static string PlannerViolation(string message) =>
+        message.StartsWith("Unknown legal operation", StringComparison.Ordinal)
+            ? "The tool named by that operation is not one of the allowed operations. "
+              + "Choose one of " + string.Join(", ", PlannerToolNames) + "."
+            : SanitizeDetail(message);
+
+    /// <summary>The violation classes, as a closed vocabulary safe to count in a log line. The
+    /// recovered rate per class is what decides whether the repair turn keeps earning its place,
+    /// and reversed_window is called out by name because it is the only violation whose message
+    /// hands the model a mechanical fix that changes the meaning of the answer.</summary>
+    internal static string ViolationClass(string message) => message switch
+    {
+        _ when message.StartsWith("Unknown legal operation", StringComparison.Ordinal)
+            => "unknown_operation",
+        _ when message.Contains("must not follow to_date", StringComparison.Ordinal)
+            => "reversed_window",
+        _ when message.Contains("must be a string.", StringComparison.Ordinal)
+            => "wrong_type",
+        // Split before the general date class, and deliberately narrow. A point-in-time instant is
+        // always defaulted when it is absent (DefaultedDates covers as_of, in_force_on and
+        // navigate), so this message can only mean a value the model supplied and the gate could
+        // not parse. A range bound reaching the general class below is a different matter: an
+        // absent to_date is recoverable from the user's own words, and a bare year in from_date or
+        // to_date has one correct expansion to the calendar boundary, so both stay retryable.
+        _ when message.Contains("Argument 'date' must be an ISO date", StringComparison.Ordinal)
+            || message.Contains("Argument 'as_of' must be an ISO date", StringComparison.Ordinal)
+            => "unparsable_instant",
+        _ when message.Contains("must be an ISO date", StringComparison.Ordinal)
+            => "unparsable_date",
+        _ when message.Contains("requires a work identity", StringComparison.Ordinal)
+            => "missing_work_identity",
+        _ when message.Contains("unsupported argument", StringComparison.Ordinal)
+            => "unsupported_argument",
+        _ when message.Contains("has an unsupported value", StringComparison.Ordinal)
+            => "unsupported_value",
+        _ when message.Contains("is required.", StringComparison.Ordinal)
+            => "missing_required",
+        _ when message.Contains("characters.", StringComparison.Ordinal)
+            => "out_of_bounds",
+        _ => "other",
+    };
 
     private const int MaxHistory = 24;
     private const int MaxUserMessageChars = 1000;
@@ -737,7 +803,35 @@ public sealed class AskService
         return schema;
     }
 
-    private async Task<(OperationPlan Plan, ModelTokenUsage Usage)> PlanOperationsAsync(
+    /// <summary>The output cap on the planning call. Read by the request and by the truncation
+    /// guard, so a raised cap cannot leave the guard measuring the old one.</summary>
+    private const int PlannerCompletionTokens = 4000;
+
+    /// <summary>Attempt one, plus at most one corrective turn. Not a search loop against the
+    /// validator: an adversary gets exactly the two draws they would get by asking twice.</summary>
+    internal const int MaximumPlannerAttempts = 2;
+
+    /// <summary>A completion this close to the cap ran out of room to write the plan at all. The
+    /// corrective turn is strictly longer under the same cap, so it is worse off than the attempt
+    /// that just failed; raising the cap, not retrying at it, is the fix if this class is ever
+    /// worth recovering.</summary>
+    private const long PlannerTruncationFloor = (long)(0.9 * PlannerCompletionTokens);
+
+    /// <summary>The corrective tool message. It adds no law, no date, no article and no operation
+    /// that was not already in the conversation: it names the constraint that was broken and
+    /// forbids satisfying it by mutation. That second clause is load-bearing for the reversed
+    /// comparison window, where the cheapest way to satisfy "from_date must not follow to_date" is
+    /// to swap the two dates, and the gate refuses to swap them itself precisely because swapping
+    /// inverts every added and removed clause in the diff.</summary>
+    private const string PlannerCorrection =
+        "The plan was rejected before any legal tool ran. Re-read the user's question and submit "
+        + "one corrected complete plan through submit_operation_plan. Derive every value from the "
+        + "user's own words. Do not reorder, truncate, invent or delete a date, a work identity, "
+        + "an article number or an anchor in order to satisfy the constraint. If the user asked "
+        + "for advice rather than retrieval, use legal_boundary. If the request names no "
+        + "identifiable law, date, topic or operation, use clarification.";
+
+    private async Task<(OperationPlan Plan, ModelTokenUsage Usage, bool Repaired)> PlanOperationsAsync(
         JsonArray history,
         string host,
         string requestId,
@@ -748,7 +842,8 @@ public sealed class AskService
         {
             var proposed = await _planner.PlanAsync(history, host, requestId, ct);
             return (OperationPlan.Create(
-                requestId, locale, proposed.Operations, proposed.SynthesisRequested), default);
+                requestId, locale, proposed.Operations, proposed.SynthesisRequested),
+                default, false);
         }
 
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
@@ -758,6 +853,10 @@ public sealed class AskService
         };
         foreach (var message in history)
             messages.Add(message?.DeepClone());
+        // One request-construction site, mutated in place by the corrective turn rather than
+        // rebuilt: the whole point is that attempt two is byte-identical in the system prompt, the
+        // tool schema, the forced tool_choice, the cap and the routing effort, and differs only by
+        // two appended messages.
         var req = new JsonObject
         {
             ["model"] = _deployment,
@@ -768,50 +867,235 @@ public sealed class AskService
                 ["type"] = "function",
                 ["function"] = new JsonObject { ["name"] = "submit_operation_plan" },
             },
-            ["max_completion_tokens"] = 4000,
+            ["max_completion_tokens"] = PlannerCompletionTokens,
             // This call only routes into a closed schema; answer-writing rounds can use medium effort.
             ["reasoning_effort"] = "low",
         };
-        using var httpReq = new HttpRequestMessage(
-            HttpMethod.Post, $"{_endpoint}/openai/v1/chat/completions")
-        {
-            Content = new StringContent(req.ToJsonString(), Encoding.UTF8, "application/json"),
-        };
-        if (_useManagedIdentity)
-        {
-            var token = await _credential.GetTokenAsync(
-                new TokenRequestContext(["https://cognitiveservices.azure.com/.default"]), ct);
-            httpReq.Headers.Authorization =
-                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token.Token);
-        }
-        else
-            httpReq.Headers.Add("api-key", _key);
 
-        using var response = await _http.SendAsync(httpReq, ct);
-        var responseText = await response.Content.ReadAsStringAsync(ct);
-        if (!response.IsSuccessStatusCode)
-            throw new HttpRequestException(
-                $"Planning upstream returned HTTP {(int)response.StatusCode}.");
-        JsonNode? parsed;
-        try
+        async Task<JsonNode?> Post(JsonObject request, CancellationToken token)
         {
-            parsed = JsonNode.Parse(responseText);
+            using var httpReq = new HttpRequestMessage(
+                HttpMethod.Post, $"{_endpoint}/openai/v1/chat/completions")
+            {
+                Content = new StringContent(
+                    request.ToJsonString(), Encoding.UTF8, "application/json"),
+            };
+            if (_useManagedIdentity)
+            {
+                var credentialToken = await _credential.GetTokenAsync(
+                    new TokenRequestContext(["https://cognitiveservices.azure.com/.default"]), token);
+                httpReq.Headers.Authorization =
+                    new System.Net.Http.Headers.AuthenticationHeaderValue(
+                        "Bearer", credentialToken.Token);
+            }
+            else
+                httpReq.Headers.Add("api-key", _key);
+
+            using var response = await _http.SendAsync(httpReq, token);
+            var responseText = await response.Content.ReadAsStringAsync(token);
+            if (!response.IsSuccessStatusCode)
+            {
+                // Not a contract violation, so no corrective turn exists for it: a 401, 429 or 5xx
+                // is unchanged by anything the model could be told, and the 12s planner deadline
+                // forbids the backoff a real transport retry would need.
+                Diagnostic("invalid_operation_plan_retry_skipped", "transport");
+                throw new HttpRequestException(
+                    $"Planning upstream returned HTTP {(int)response.StatusCode}.");
+            }
+            try
+            {
+                return JsonNode.Parse(responseText);
+            }
+            catch (System.Text.Json.JsonException ex)
+            {
+                throw new InvalidDataException("The planner returned malformed response JSON.", ex);
+            }
         }
-        catch (System.Text.Json.JsonException ex)
+
+        return await PlanWithOneRepairAsync(
+            req, _plannerSend ?? Post, _plannerDeadline, requestId, locale, _vocabulary, today, ct);
+    }
+
+    /// <summary>
+    /// The planning call and, when the planner's own output contract is broken, exactly one
+    /// corrective turn through the same validation.
+    ///
+    /// <para>Placed here rather than around the refusal in <c>AskAsync</c> for one decisive reason:
+    /// that catch also receives every <see cref="InvalidDataException"/> thrown long after planning
+    /// (a run that reached no terminal result, a clarification of the wrong shape), so a retry
+    /// there would turn execution-time faults into planner retries. Scoping it to the method that
+    /// builds the plan bounds the retry to the planner's own contract by construction, with no
+    /// predicate to get wrong.</para>
+    ///
+    /// <para>Nothing is relaxed on the second attempt: the same
+    /// <see cref="OperationPlan.FromPlannerOutput"/>, the same vocabulary, the same today, and
+    /// <c>OperationArguments.Normalize</c> takes no mode flag, no leniency parameter and no attempt
+    /// counter, so there is nothing to relax even by accident. Nothing needs unwinding either:
+    /// <c>OperationRun.Start</c> has not run, no MCP tool has been called and nothing has been
+    /// rendered, so both attempts are pure planning against the same immutable inputs.</para>
+    /// </summary>
+    internal static async Task<(OperationPlan Plan, ModelTokenUsage Usage, bool Repaired)>
+        PlanWithOneRepairAsync(
+            JsonObject request,
+            Func<JsonObject, CancellationToken, Task<JsonNode?>> send,
+            TimeSpan plannerDeadline,
+            string requestId,
+            string locale,
+            CorpusVocabulary vocabulary,
+            DateOnly today,
+            CancellationToken ct)
+    {
+        var messages = request["messages"] as JsonArray
+            ?? throw new InvalidOperationException("A planner request must carry a message array.");
+        var usage = default(ModelTokenUsage);
+        var watch = Stopwatch.StartNew();
+        var repairedClass = "other";
+        for (var attempt = 0; attempt < MaximumPlannerAttempts; attempt++)
         {
-            throw new InvalidDataException("The planner returned malformed response JSON.", ex);
+            var started = watch.Elapsed;
+            // Transport faults and cancellation leave here untouched. In particular a planner
+            // deadline expiry must never be caught and converted into the refusal.
+            var parsed = await send(request, ct);
+            var spent = watch.Elapsed - started;
+            usage = usage.Add(PlanningUsage(parsed));
+            JsonObject? call = null;
+            try
+            {
+                string raw;
+                (call, raw) = ExtractPlanCall(parsed, attempt);
+                var plan = BuildPlan(raw, requestId, locale, vocabulary, today);
+                if (attempt > 0)
+                    Diagnostic("invalid_operation_plan_recovered", repairedClass);
+                return (plan, usage, attempt > 0);
+            }
+            catch (InvalidDataException violation)
+            {
+                if (call is null)
+                {
+                    if (attempt > 0) Diagnostic("invalid_operation_plan_retry_skipped", "envelope");
+                    CarryPlanningUsage(violation, usage, attempt + 1);
+                    throw;
+                }
+                if (attempt == MaximumPlannerAttempts - 1)
+                {
+                    CarryPlanningUsage(violation, usage, attempt + 1);
+                    throw;
+                }
+                if (RetrySkipReason(parsed, call, violation.Message, spent, plannerDeadline)
+                    is { } skipped)
+                {
+                    Diagnostic("invalid_operation_plan_retry_skipped", skipped);
+                    CarryPlanningUsage(violation, usage, attempt + 1);
+                    throw;
+                }
+                repairedClass = ViolationClass(violation.Message);
+                Diagnostic("invalid_operation_plan_retried", PlannerViolation(violation.Message));
+                AppendCorrection(messages, call, violation.Message);
+            }
         }
+        throw new UnreachableException();
+    }
+
+    /// <summary>The assistant tool_call and the tool message answering it. Chat completions
+    /// requires an assistant message carrying tool_calls to be answered by one tool message per
+    /// tool_call_id, so a user turn here is a 400; it is also already this codebase's idiom for
+    /// corrective feedback mid-loop, and it keeps the correction data rather than instruction.</summary>
+    private static void AppendCorrection(JsonArray messages, JsonObject call, string violation)
+    {
+        messages.Add(new JsonObject
+        {
+            ["role"] = "assistant",
+            ["tool_calls"] = new JsonArray(call.DeepClone()),
+        });
+        messages.Add(new JsonObject
+        {
+            ["role"] = "tool",
+            ["tool_call_id"] = call["id"]!.DeepClone(),
+            ["content"] = new JsonObject
+            {
+                ["error"] = "invalid_operation_plan",
+                ["violation"] = PlannerViolation(violation),
+                ["instruction"] = PlannerCorrection,
+            }.ToJsonString(),
+        });
+    }
+
+    /// <summary>Why this response cannot be repaired, from a closed vocabulary, or null when it
+    /// can. A non-firing loop has to be as visible as a firing one.</summary>
+    private static string? RetrySkipReason(
+        JsonNode? parsed, JsonObject call, string violation,
+        TimeSpan attemptElapsed, TimeSpan plannerDeadline)
+    {
+        // A correction is a tool message answering one tool_call_id. Without an id there is no
+        // protocol-legal shape to send, exactly as for the envelope faults above.
+        if (call["id"] is not JsonValue id
+            || !id.TryGetValue<string>(out var callId)
+            || string.IsNullOrWhiteSpace(callId))
+            return "envelope";
+        // Two classes must not be repaired by asking again, because for them satisfying the
+        // validator and answering the asked question are different acts. The gate refuses a bare
+        // "2024" for an instant precisely because 2024-01-01 and 2024-12-31 select different
+        // versions of the law; handing that same undecidable choice back as "must be an ISO date"
+        // makes the cheapest satisfying move an invented date, which then validates and is served
+        // with nothing in the reply to tell the reader a date was chosen for them. Reversed
+        // comparison bounds have the same shape: swapping them satisfies the constraint and
+        // inverts every added and removed clause of the diff. For both, the refusal is the honest
+        // answer until the instant is re-derived from the user's own words the way the work
+        // identity already is. Everything else stays retryable, including an absent range bound.
+        var violationClass = ViolationClass(violation);
+        if (violationClass is "unparsable_instant" or "reversed_window")
+            return violationClass;
+        if (parsed?["choices"]?[0]?["finish_reason"] is JsonValue finish
+            && finish.TryGetValue<string>(out var reason)
+            && reason == "length")
+            return "truncated";
+        if (parsed?["usage"]?["completion_tokens"] is JsonValue completion
+            && completion.TryGetValue<long>(out var written)
+            && written >= PlannerTruncationFloor)
+            return "truncated";
+        // The corrective attempt carries everything attempt one carried plus the failed call, so it
+        // costs at least as much. Without that much headroom left the repair converts a graceful
+        // 200 gap into a 504, which is strictly worse than the refusal it was built to replace.
+        if (plannerDeadline - attemptElapsed <= attemptElapsed + TimeSpan.FromSeconds(1))
+            return "deadline";
+        return null;
+    }
+
+    /// <summary>The planner's tool_call and its raw argument string. Both failures here are
+    /// envelope faults: there is no tool_call_id to answer, so no corrective turn exists.</summary>
+    private static (JsonObject Call, string Arguments) ExtractPlanCall(JsonNode? parsed, int attempt)
+    {
         var calls = parsed?["choices"]?[0]?["message"]?["tool_calls"] as JsonArray;
-        var call = calls?.OfType<JsonObject>().SingleOrDefault(item =>
+        var submitted = calls?.OfType<JsonObject>().Where(item =>
             item["function"]?["name"] is JsonValue name
             && name.TryGetValue<string>(out var value)
-            && value == "submit_operation_plan")
-            ?? throw new InvalidDataException("The planner did not submit exactly one operation plan.");
-        var raw = call["function"]?["arguments"] is JsonValue argumentValue
-                  && argumentValue.TryGetValue<string>(out var rawArguments)
-            ? rawArguments
-            : throw new InvalidDataException(
+            && value == "submit_operation_plan").ToArray() ?? [];
+        // Counted rather than SingleOrDefault'd. Parallel tool calls are not disabled on this
+        // request, so two submitted plans are reachable, and two plans are two different answers
+        // with no ground for preferring either. SingleOrDefault raised an InvalidOperationException
+        // for that case, which AskAsync reports as an unexpected failure with HTTP 500 instead of
+        // the invalid-plan gap this very message names.
+        var call = submitted.Length == 1 ? submitted[0] : null;
+        if (call is null)
+        {
+            if (attempt == 0) Diagnostic("invalid_operation_plan_retry_skipped", "envelope");
+            throw new InvalidDataException("The planner did not submit exactly one operation plan.");
+        }
+        if (call["function"]?["arguments"] is not JsonValue argumentValue
+            || !argumentValue.TryGetValue<string>(out var raw))
+        {
+            if (attempt == 0) Diagnostic("invalid_operation_plan_retry_skipped", "envelope");
+            throw new InvalidDataException(
                 "The planner returned no string operation-plan arguments.");
+        }
+        return (call, raw);
+    }
+
+    /// <summary>The one construction route from planner output to a frozen plan. Both attempts call
+    /// it with the same vocabulary and the same today; it takes no attempt counter on purpose.</summary>
+    private static OperationPlan BuildPlan(
+        string raw, string requestId, string locale, CorpusVocabulary vocabulary, DateOnly today)
+    {
         JsonObject plan;
         try
         {
@@ -830,12 +1114,25 @@ public sealed class AskService
         if (plan["synthesis"] is JsonValue synthesisValue
             && !synthesisValue.TryGetValue<bool>(out synthesis))
             throw new InvalidDataException("The synthesis flag must be boolean.");
-        var usage = new ModelTokenUsage(
-            parsed?["usage"]?["prompt_tokens"]?.GetValue<long>() ?? 0,
-            parsed?["usage"]?["completion_tokens"]?.GetValue<long>() ?? 0);
-        return (OperationPlan.FromPlannerOutput(
-            requestId, locale, operations, synthesis, _vocabulary, today), usage);
+        return OperationPlan.FromPlannerOutput(
+            requestId, locale, operations, synthesis, vocabulary, today);
     }
+
+    private static ModelTokenUsage PlanningUsage(JsonNode? parsed) => new(
+        parsed?["usage"]?["prompt_tokens"] is JsonValue input
+        && input.TryGetValue<long>(out var prompt) ? prompt : 0,
+        parsed?["usage"]?["completion_tokens"] is JsonValue output
+        && output.TryGetValue<long>(out var completion) ? completion : 0);
+
+    /// <summary>The key the planning token counts travel out on when planning ends in a refusal.
+    /// model_usage is only written inside ExecutePlanAsync, which never runs on that path, so
+    /// without this the loop's cost is invisible in exactly the requests that cost the most.</summary>
+    internal const string PlanningUsageKey = "lex.planning_usage";
+
+    private static void CarryPlanningUsage(Exception violation, ModelTokenUsage usage, int attempts)
+        => violation.Data[PlanningUsageKey] =
+            $"input_tokens {usage.InputTokens} output_tokens {usage.OutputTokens} "
+            + $"attempts {attempts}";
 
     // Truncate oversized tool results without ever producing invalid JSON: shrink the largest
     // string fields (law text) first, then fall back to a wrapped preview.
@@ -1260,13 +1557,13 @@ public sealed class AskService
             using var planner = CancellationTokenSource.CreateLinkedTokenSource(firstResult.Token);
             planner.CancelAfter(_plannerDeadline);
             var planningWatch = Stopwatch.StartNew();
-            var (plan, planningUsage) = await PlanOperationsAsync(
+            var (plan, planningUsage, plannerRepaired) = await PlanOperationsAsync(
                 history, host, requestId, requestLocale, planner.Token);
             planningWatch.Stop();
             run = OperationRun.Start(plan);
             var (status, body) = await ExecutePlanAsync(
                 plan, run, userQueries, rawUserQuery, planningUsage,
-                planningWatch.Elapsed.TotalMilliseconds, progress, firstResult.Token,
+                planningWatch.Elapsed.TotalMilliseconds, plannerRepaired, progress, firstResult.Token,
                 () => firstResult.CancelAfter(Timeout.InfiniteTimeSpan),
                 () => ct.IsCancellationRequested
                     ? TransportOutcome.Cancelled : TransportOutcome.TimedOut);
@@ -1301,8 +1598,15 @@ public sealed class AskService
         {
             run?.CompletePendingLegal(LegalOutcome.InvalidRequest);
             // The violation names the tool and argument, never user text; operators need it to
-            // see which contract the planner broke.
-            Diagnostic("invalid_operation_plan", invalid.Message);
+            // see which contract the planner broke. The code is unchanged so existing log queries
+            // keep working; the detail now goes through the same bound the corrective turn uses,
+            // because the unknown-operation class is the one message that quotes a string the
+            // planner wrote rather than a name from a closed set.
+            Diagnostic("invalid_operation_plan", PlannerViolation(invalid.Message));
+            // Planning tokens are otherwise discarded on this path: model_usage is only written
+            // inside ExecutePlanAsync, which never runs here.
+            if (invalid.Data[PlanningUsageKey] is string planningSpend)
+                Diagnostic("invalid_operation_plan_tokens", planningSpend);
             var explanation = requestLocale == "fr"
                 ? "Cette demande ne correspond pas à une opération juridique valide."
                 : "This request does not map to a valid legal operation.";
@@ -1416,6 +1720,7 @@ public sealed class AskService
         string rawUserQuery,
         ModelTokenUsage modelUsage,
         double planningMilliseconds,
+        bool plannerRepaired,
         AskProgressCallbacks? progress,
         CancellationToken ct,
         Action firstResultObserved,
@@ -1431,30 +1736,31 @@ public sealed class AskService
             foreach (var repair in operation.Repairs)
                 Diagnostic("planner_argument_repaired", $"op{operation.UserOrder + 1} {repair}");
 
-        var trace = new JsonArray
+        var planPhase = new JsonObject
         {
-            new JsonObject
-            {
-                ["phase"] = "operation_plan",
-                ["request_id"] = plan.RequestId,
-                ["locale"] = plan.Locale,
-                ["duration_ms"] = planningMilliseconds,
-                ["operations"] = new JsonArray(plan.Operations.Select(operation =>
-                    (JsonNode)new JsonObject
-                    {
-                        ["operation_id"] = operation.OperationId,
-                        ["order"] = operation.UserOrder,
-                        ["tool"] = operation.Tool,
-                        ["result_class"] = operation.ResultClass is { } resultClass
-                            ? ContractName(resultClass) : null,
-                        ["disposition"] = operation.Disposition is { } disposition
-                            ? ContractName(disposition) : null,
-                        ["arguments"] = JsonNode.Parse(operation.Arguments.GetRawText()),
-                        ["repairs"] = new JsonArray(
-                            operation.Repairs.Select(item => (JsonNode)item!).ToArray()),
-                    }).ToArray()),
-            },
+            ["phase"] = "operation_plan",
+            ["request_id"] = plan.RequestId,
+            ["locale"] = plan.Locale,
+            ["duration_ms"] = planningMilliseconds,
+            ["operations"] = new JsonArray(plan.Operations.Select(operation =>
+                (JsonNode)new JsonObject
+                {
+                    ["operation_id"] = operation.OperationId,
+                    ["order"] = operation.UserOrder,
+                    ["tool"] = operation.Tool,
+                    ["result_class"] = operation.ResultClass is { } resultClass
+                        ? ContractName(resultClass) : null,
+                    ["disposition"] = operation.Disposition is { } disposition
+                        ? ContractName(disposition) : null,
+                    ["arguments"] = JsonNode.Parse(operation.Arguments.GetRawText()),
+                    ["repairs"] = new JsonArray(
+                        operation.Repairs.Select(item => (JsonNode)item!).ToArray()),
+                }).ToArray()),
         };
+        // Metadata, not content, and absent unless it happened: a plan the planner got right on the
+        // first attempt carries no key, so no existing snapshot moves.
+        if (plannerRepaired) planPhase["planner_retry"] = true;
+        var trace = new JsonArray { planPhase };
         var effects = Enumerable.Range(0, plan.Operations.Length)
             .Select(_ => new UiEffect()).ToList();
         var executedArguments = Enumerable.Range(0, plan.Operations.Length)
