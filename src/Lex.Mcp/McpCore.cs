@@ -1081,13 +1081,24 @@ public sealed class McpCore
                         ? "unavailable" : "not_requested";
                 var remainingResults = limit;
                 var responseRowsTruncated = false;
-                foreach (var (r, execution) in executions)
+                // Readers run in collection order, so a single global budget let the first
+                // publisher drain it: on any query with EU matches, lu-legilux was handed a limit
+                // of zero and returned an empty hits array. Each publisher that is not suppressed
+                // keeps a floor of the budget reserved until it has been visited.
+                var suppressed = executions.Select(item => hasGlobalStrongWorkMatch
+                    && item.Execution.QueryPlan?.HasStrongWorkMatch != true).ToArray();
+                var contributing = suppressed.Count(value => !value);
+                var floor = contributing == 0 ? 0 : Math.Max(1, limit / contributing);
+                for (var index = 0; index < executions.Count; index++)
                 {
-                    var localLimit = remainingResults;
+                    var (r, execution) = executions[index];
+                    var suppressUnresolvedPublisher = suppressed[index];
+                    var reserved = floor * suppressed.Skip(index + 1).Count(value => !value);
+                    var localLimit = suppressUnresolvedPublisher
+                        ? 0
+                        : Math.Min(remainingResults, Math.Max(floor, remainingResults - reserved));
                     // provision-level hits: the retrieval unit is the article; at most two
                     // provisions per work so one huge code cannot monopolize the result set
-                    var suppressUnresolvedPublisher = hasGlobalStrongWorkMatch
-                                                      && execution.QueryPlan?.HasStrongWorkMatch != true;
                     var eligibleHits = (suppressUnresolvedPublisher ? [] : execution.Hits)
                         .GroupBy(h => (h.Doc.GroupKey, h.Provision.Anchor)).Select(g => g.First())
                         .GroupBy(h => h.Doc.GroupKey).SelectMany(g => g.Take(2))

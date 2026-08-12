@@ -203,7 +203,7 @@ public sealed class RetrievalAgentContractTests
             "2026-01-01", null,
             [new ProvisionItem("art_1", "1", "Scope", "", "abc")], null));
 
-        var reply = AskService.ReplyFor(refusal, [outline]);
+        var reply = AskService.ReplyFor(refusal, [outline], "en");
 
         Assert.Contains("open below", reply, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Choose a provision", reply, StringComparison.Ordinal);
@@ -219,13 +219,13 @@ public sealed class RetrievalAgentContractTests
             "2026-01-01", null,
             [new ProvisionItem("art_1", "1", "Scope", "Held legal text", "abc")], null));
 
-        Assert.Equal("Insufficient evidence.", AskService.ReplyFor(refusal, [text]));
+        Assert.Equal("Insufficient evidence.", AskService.ReplyFor(refusal, [text], "en"));
         var outline = new UiEffect(Provision: text.Provision! with
         {
             Provisions = [new ProvisionItem("art_2", "2", "Other", "", "def")],
         });
-        Assert.Equal("Insufficient evidence.", AskService.ReplyFor(refusal, [outline, text]));
-        Assert.Equal("Insufficient evidence.", AskService.ReplyFor(refusal, [text, outline]));
+        Assert.Equal("Insufficient evidence.", AskService.ReplyFor(refusal, [outline, text], "en"));
+        Assert.Equal("Insufficient evidence.", AskService.ReplyFor(refusal, [text, outline], "en"));
     }
 
     [Fact]
@@ -239,30 +239,30 @@ public sealed class RetrievalAgentContractTests
             [new ProvisionItem("art_6", "6", "Lawfulness", "Held legal text", "abc")], null));
 
         Assert.Equal("The exact publisher text for the selected article and date is open below.",
-            AskService.ReplyFor(fallback, [text], synthesisFailed: true));
+            AskService.ReplyFor(fallback, [text], "en", synthesisFailed: true));
         var wholeLaw = new UiEffect(Provision: text.Provision! with
         {
             Subject = text.Provision.Subject with { Anchor = null },
         });
         Assert.Equal("The exact publisher text for the selected law and date is open below.",
-            AskService.ReplyFor(fallback, [wholeLaw], synthesisFailed: true));
+            AskService.ReplyFor(fallback, [wholeLaw], "en", synthesisFailed: true));
 
         var comparison = new UiEffect(Diff: new DiffView(
             new Subject("eu-eurlex:32013r0575", "CRR", "2020-01-01", "art_92"),
             "2020-01-01", "2024-12-31", null, null, null));
         Assert.Equal("The requested comparison is open below.",
-            AskService.ReplyFor(fallback, [text, comparison], synthesisFailed: true));
+            AskService.ReplyFor(fallback, [text, comparison], "en", synthesisFailed: true));
 
         var ranking = new UiEffect(Ranking: new RankingView(
             "2024-01-01", "2024-12-31", "by_churn", 371, 430, []));
         Assert.Equal("The requested change ranking is open below.",
-            AskService.ReplyFor(fallback, [ranking], synthesisFailed: true));
+            AskService.ReplyFor(fallback, [ranking], "en", synthesisFailed: true));
 
         var gap = new UiEffect(Gap: new GapView(
             "text_not_available", "eu-eurlex:32016r0679", "2021-01-01",
             "The requested text is not held.", []));
         Assert.Equal("Internal evidence fallback.",
-            AskService.ReplyFor(fallback, [text, gap], synthesisFailed: true));
+            AskService.ReplyFor(fallback, [text, gap], "en", synthesisFailed: true));
     }
 
     [Fact]
@@ -276,18 +276,18 @@ public sealed class RetrievalAgentContractTests
             "the two versions were extracted by different profiles",
             Status: "profiles_differ"));
 
-        var reply = AskService.ReplyFor(draft, [comparison], synthesisFailed: true);
+        var reply = AskService.ReplyFor(draft, [comparison], "en", synthesisFailed: true);
 
         Assert.DoesNotContain("comparison is open", reply, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("cannot produce a reliable comparison", reply, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("verified publisher versions", reply, StringComparison.OrdinalIgnoreCase);
-        Assert.Equal(draft.Answer, AskService.ReplyFor(draft, [comparison]));
+        Assert.Equal(draft.Answer, AskService.ReplyFor(draft, [comparison], "en"));
 
         var gap = new UiEffect(Gap: new GapView(
             "text_not_available", "eu-eurlex:32013r0575", "2020-01-01",
             "The requested publisher text is not available.", []));
         Assert.Equal(draft.Answer,
-            AskService.ReplyFor(draft, [comparison, gap], synthesisFailed: true));
+            AskService.ReplyFor(draft, [comparison, gap], "en", synthesisFailed: true));
     }
 
     [Fact]
@@ -305,7 +305,7 @@ public sealed class RetrievalAgentContractTests
         var ranking = new UiEffect(Ranking: new RankingView(
             "2024-01-01", "2024-12-31", "by_churn", 371, 430, []));
 
-        var reply = AskService.ReplyFor(verbose, [ranking]);
+        var reply = AskService.ReplyFor(verbose, [ranking], "en");
 
         Assert.Equal(verbose.Answer, reply);
         Assert.DoesNotContain("https://", reply, StringComparison.OrdinalIgnoreCase);
@@ -313,8 +313,8 @@ public sealed class RetrievalAgentContractTests
         var comparison = new UiEffect(Diff: new DiffView(
             new Subject("eu-eurlex:32013r0575", "CRR", "2024-01-01", "art_92"),
             "2024-01-01", "2024-12-31", null, null, null));
-        Assert.Equal(AgentAnswerFinalizer.Render(verbose),
-            AskService.ReplyFor(verbose, [ranking, comparison]));
+        Assert.Equal(AgentAnswerFinalizer.Render(verbose, "en"),
+            AskService.ReplyFor(verbose, [ranking, comparison], "en"));
     }
 
     [Fact]
@@ -350,7 +350,7 @@ public sealed class RetrievalAgentContractTests
         var gap = new UiEffect(Gap: new GapView(
             "unknown_anchor", "lu-legilux:code", "2026-01-01", "Unknown article", []));
 
-        Assert.Equal("Insufficient evidence.", AskService.ReplyFor(refusal, [outline, gap]));
+        Assert.Equal("Insufficient evidence.", AskService.ReplyFor(refusal, [outline, gap], "en"));
     }
 
     [Fact]

@@ -74,6 +74,7 @@ internal sealed class AgentAnswerFinalizer
         string userQuestion,
         string draftText,
         IReadOnlyList<AgentEvidence> evidence,
+        string locale,
         CancellationToken cancellationToken)
     {
         var prompt = $"Question:\n{userQuestion}\n\nCandidate draft:\n{draftText}\n\nTyped evidence:\n{EvidencePrompt(evidence)}";
@@ -100,7 +101,7 @@ internal sealed class AgentAnswerFinalizer
                 // One correction is allowed. The second failure falls through to a refusal.
             }
         }
-        if (draft is null) return new(Refusal(), SynthesisFailed: true, usage);
+        if (draft is null) return new(Refusal(locale), SynthesisFailed: true, usage);
         if (!RequiresJudge(draft))
             return new(draft, SynthesisFailed: false, usage);
 
@@ -122,7 +123,7 @@ internal sealed class AgentAnswerFinalizer
             {
                 AgentJudgmentDisposition.Pass => draft,
                 AgentJudgmentDisposition.Repair => judgment.Replacement!,
-                _ => Refusal(),
+                _ => Refusal(locale),
             };
             return new(finalized,
                 SynthesisFailed: judgment.Disposition == AgentJudgmentDisposition.Refuse,
@@ -130,7 +131,7 @@ internal sealed class AgentAnswerFinalizer
         }
         catch (InvalidDataException)
         {
-            return new(Refusal(), SynthesisFailed: true, usage);
+            return new(Refusal(locale), SynthesisFailed: true, usage);
         }
     }
 
@@ -141,19 +142,24 @@ internal sealed class AgentAnswerFinalizer
         draft.Status is AgentAnswerStatus.Answer or AgentAnswerStatus.Gap
         && draft.Claims.Count > 0;
 
-    internal static string Render(AgentAnswerDraft draft)
+    internal static string Render(AgentAnswerDraft draft, string locale)
     {
         var parts = new List<string> { draft.Answer };
         if (draft.CoverageDisclosure is { Length: > 0 } disclosure
             && !draft.Answer.Contains(disclosure, StringComparison.Ordinal))
             parts.Add(disclosure);
         if (draft.Permalinks.Count > 0)
-            parts.Add("Sources:\n" + string.Join('\n', draft.Permalinks.Select(link => $"- {link}")));
+            parts.Add((locale == "fr" ? "Sources :\n" : "Sources:\n")
+                + string.Join('\n', draft.Permalinks.Select(link => $"- {link}")));
         return string.Join("\n\n", parts);
     }
 
-    private static AgentAnswerDraft Refusal() => new(
+    // The refusal is the most characteristic thing this product says. Emitting it in English to
+    // a French asker made a correct, deliberate refusal read as a broken assistant.
+    internal static AgentAnswerDraft Refusal(string locale) => new(
         AgentAnswerStatus.Refusal,
-        "The returned evidence is not sufficient to produce a grounded answer. Try a narrower law, article, or date.",
+        locale == "fr"
+            ? "Les preuves renvoyées ne suffisent pas à produire une réponse sourcée. Essayez une loi, un article ou une date plus précis."
+            : "The returned evidence is not sufficient to produce a grounded answer. Try a narrower law, article, or date.",
         [], [], null, null);
 }

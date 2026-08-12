@@ -477,6 +477,172 @@ public sealed class WorkSearchTests : IDisposable
         Assert.Empty(result.QueryExpansions);
     }
 
+    // A publisher that prefixes a consolidation banner onto the title leaves the work with no
+    // name anyone would ever cite: the stored string is longer than any citation, and the
+    // contained pass needs the stored name to sit inside the query.
+    [Fact]
+    public void A_consolidation_banner_does_not_hide_the_work_its_own_name()
+    {
+        var db = TempDb();
+        const string title = "Version consolidée applicable au 31/10/2002 : "
+            + "Loi du 5 avril 1993 relative au secteur financier";
+        var work = Doc("lu:loi-1993-04-05-n1:2024-01-01", "loi-1993-04-05-n1", title);
+        IndexBuilder.Build(db, Stamp(), [work],
+            [Provision(work, "Les professionnels du secteur financier.")], [], [], null);
+
+        using var reader = LexIndexReader.Open(db);
+        var exact = reader.SearchKeyword(
+            "Loi du 5 avril 1993 relative au secteur financier", FilterSet.All, 10, false);
+        var inSentence = reader.SearchKeyword(
+            "Que dit la Loi du 5 avril 1993 relative au secteur financier sur les PSF ?",
+            FilterSet.All, 10, false);
+        var bannered = reader.SearchKeyword(title, FilterSet.All, 10, false);
+
+        Assert.Equal(["loi-1993-04-05-n1"], exact.QueryPlan!.WorkConstraints);
+        Assert.Contains(exact.Hits, hit => hit.MatchReasons.Contains("exact_title"));
+        Assert.Equal(["loi-1993-04-05-n1"], inSentence.QueryPlan!.WorkConstraints);
+        Assert.Contains(inSentence.Hits, hit => hit.MatchReasons.Contains("contained_title"));
+        Assert.Equal(["loi-1993-04-05-n1"], bannered.QueryPlan!.WorkConstraints);
+
+        using var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={db}");
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT count(*) FROM work_names WHERE kind='official_title'";
+        Assert.Equal(2L, Convert.ToInt64(command.ExecuteScalar()));
+    }
+
+    [Theory]
+    [InlineData("Version consolidée applicable au 31/10/2002 : Loi du 5 avril 1993 relative au secteur financier", true)]
+    [InlineData("Version rectifiée applicable au 18/03/1979 : Loi du 5 avril 1993 relative au secteur financier", true)]
+    // A colon is not a banner. This title carries an enumerated subdivision, not a publisher
+    // prefix, and splitting it would invent a name the publisher never used.
+    [InlineData("Loi du 4 mars 1982: a) portant création d'un fonds spécial", false)]
+    [InlineData("Loi du 5 avril 1993 relative au secteur financier", false)]
+    public void Only_a_dated_consolidation_banner_adds_a_second_official_title(
+        string title, bool split)
+    {
+        var db = TempDb();
+        IndexBuilder.Build(db, Stamp(),
+            [Doc("lu:work:2024-01-01", "work", title)], [], [], [], null);
+
+        using var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={db}");
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT count(*) FROM work_names WHERE kind='official_title'";
+
+        Assert.Equal(split ? 2L : 1L, Convert.ToInt64(command.ExecuteScalar()));
+    }
+
+    // The citation convention inserts "modifiée" into a title the publisher writes without it.
+    // One token defeated the contiguous contained match and identity resolution collapsed.
+    [Fact]
+    public void An_amendment_qualifier_in_a_citation_still_resolves_the_named_work()
+    {
+        var db = TempDb();
+        const string title = "Loi du 12 novembre 2004 relative à la lutte contre le blanchiment "
+            + "et contre le financement du terrorisme";
+        var work = Doc("lu:loi-2004-11-12-n1:2024-01-01", "loi-2004-11-12-n1", title);
+        IndexBuilder.Build(db, Stamp(), [work],
+            [Provision(work, "Obligations de vigilance des professionnels.")], [], [], null);
+
+        using var reader = LexIndexReader.Open(db);
+        var official = reader.SearchKeyword(title, FilterSet.All, 10, false);
+        var cited = reader.SearchKeyword(
+            "loi modifiée du 12 novembre 2004 relative à la lutte contre le blanchiment "
+            + "et contre le financement du terrorisme", FilterSet.All, 10, false);
+        var inSentence = reader.SearchKeyword(
+            "Que doivent faire les professionnels sous la loi modifiée du 12 novembre 2004 "
+            + "relative à la lutte contre le blanchiment et contre le financement du terrorisme "
+            + "en 2020 ?", FilterSet.All, 10, false);
+
+        Assert.Equal(["loi-2004-11-12-n1"], official.QueryPlan!.WorkConstraints);
+        Assert.Equal(["loi-2004-11-12-n1"], cited.QueryPlan!.WorkConstraints);
+        Assert.Equal(["loi-2004-11-12-n1"], inSentence.QueryPlan!.WorkConstraints);
+        Assert.DoesNotContain("modifiee", inSentence.QueryPlan.ProvisionQuery,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain("blanchiment", inSentence.QueryPlan.ProvisionQuery,
+            StringComparison.Ordinal);
+    }
+
+    // The second pass is additive on purpose: a genuine stored title can itself carry the
+    // qualifier, and a destructive strip would make that work unfindable by its own name.
+    [Fact]
+    public void A_stored_title_that_carries_the_qualifier_keeps_resolving_from_its_own_name()
+    {
+        var db = TempDb();
+        const string qualified = "Loi modifiée du 7 juillet 1971 portant, en matière répressive "
+            + "et administrative, extension de la compétence";
+        var withQualifier = Doc("lu:loi-1971-07-07-n1:2024-01-01", "loi-1971-07-07-n1", qualified);
+        var other = Doc("lu:loi-1971-07-08-n1:2024-01-01", "loi-1971-07-08-n1",
+            "Loi du 8 juillet 1971 portant approbation d'une convention");
+        IndexBuilder.Build(db, Stamp(), [withQualifier, other], [], [], [], null);
+
+        using var reader = LexIndexReader.Open(db);
+        var exact = reader.SearchKeyword(qualified, FilterSet.All, 10, false);
+        var stripped = reader.SearchKeyword(
+            "Loi du 7 juillet 1971 portant, en matière répressive et administrative, "
+            + "extension de la compétence", FilterSet.All, 10, false);
+
+        Assert.Equal(["loi-1971-07-07-n1"], exact.QueryPlan!.WorkConstraints);
+        Assert.DoesNotContain("loi-1971-07-08-n1", stripped.QueryPlan!.WorkConstraints);
+    }
+
+    // "modifiant" and "modificatif" announce an amending act, not an amended one. Only the fixed
+    // qualifier forms a citation inserts may be dropped, and never outside an act-form slot.
+    [Theory]
+    [InlineData("loi modifiee du 12 novembre 2004", "loi du 12 novembre 2004")]
+    [InlineData("loi coordonnee du 5 avril 1993", "loi du 5 avril 1993")]
+    [InlineData("loi modifiant la loi du 12 novembre 2004", "loi modifiant la loi du 12 novembre 2004")]
+    [InlineData("reglement modificatif du 12 novembre 2004", "reglement modificatif du 12 novembre 2004")]
+    [InlineData("directive modifiee 2015 849", "directive modifiee 2015 849")]
+    [InlineData("amending directive 2015 849", "amending directive 2015 849")]
+    public void The_citation_form_drops_only_an_amendment_qualifier(string query, string expected)
+        => Assert.Equal(expected, WorkSearch.NormalizeCitation(query));
+
+    [Theory]
+    [InlineData("loi modifiant du 12 novembre 2004 relative à la lutte contre le blanchiment et contre le financement du terrorisme")]
+    [InlineData("règlement modificatif du 12 novembre 2004 relative à la lutte contre le blanchiment et contre le financement du terrorisme")]
+    [InlineData("amending Directive 2015/849 on the prevention of money laundering")]
+    public void The_citation_pass_does_not_invent_a_resolution(string query)
+    {
+        var db = TempDb();
+        var work = Doc("lu:loi-2004-11-12-n1:2024-01-01", "loi-2004-11-12-n1",
+            "Loi du 12 novembre 2004 relative à la lutte contre le blanchiment "
+            + "et contre le financement du terrorisme");
+        IndexBuilder.Build(db, Stamp(), [work],
+            [Provision(work, "Obligations de vigilance des professionnels.")], [], [], null);
+
+        using var reader = LexIndexReader.Open(db);
+        var result = reader.SearchKeyword(query, FilterSet.All, 10, false);
+
+        Assert.Empty(result.QueryPlan!.WorkConstraints);
+    }
+
+    // A code carries no date in its name, so the digit rule made the most-cited national
+    // instruments unnameable inside a sentence while prose headings must stay weak.
+    [Theory]
+    [InlineData("Code du travail", "Quels délais de préavis le Code du travail impose-t-il ?", true)]
+    [InlineData("Constitution du Grand-Duché de Luxembourg",
+        "Que prévoit la Constitution du Grand-Duché de Luxembourg sur la liberté de la presse ?", true)]
+    [InlineData("Reporting obligations",
+        "Which reporting obligations apply to a controller?", false)]
+    [InlineData("Cours et Tribunaux", "Que publient les Cours et Tribunaux ?", false)]
+    [InlineData("Regulation (EU) 2016/679",
+        "What does Regulation (EU) 2016/679 require?", true)]
+    public void An_act_form_name_is_an_identity_inside_a_sentence_but_prose_is_not(
+        string title, string query, bool resolves)
+    {
+        var db = TempDb();
+        var work = Doc("lu:work:2024-01-01", "work", title);
+        IndexBuilder.Build(db, Stamp(), [work], [Provision(work, "Texte de la disposition.")],
+            [], [], null);
+
+        using var reader = LexIndexReader.Open(db);
+        var result = reader.SearchKeyword(query, FilterSet.All, 10, false);
+
+        Assert.Equal(resolves ? ["work"] : (string[])[], result.QueryPlan!.WorkConstraints);
+    }
+
     [Fact]
     public void Duplicate_official_titles_are_reported_as_ambiguous_not_auto_selected()
     {

@@ -26,5 +26,6 @@ internal interface IOperationSynthesizer
         string question,
         string deterministicDraft,
         IReadOnlyList<AgentEvidence> evidence,
+        string locale,
         CancellationToken cancellationToken);
 }
