@@ -81,10 +81,17 @@ public sealed record SearchExecution(
     IReadOnlyList<string> QueryExpansions,
     SearchQueryPlan? QueryPlan = null);
 
+/// <param name="Kind">Which stored name form the mention matched: <c>title</c>,
+/// <c>identifier</c> or <c>alias</c>, or null when the mention resolved to nothing. The resolver
+/// has always known this and used to drop it on the floor, and it is the difference between the
+/// two instruments a full official citation names: a title quoted in full matches as a title,
+/// while the amending tail at the end of it names only a number and matches as an identifier.
+/// </param>
 public sealed record WorkResolution(
     string Mention,
     string Status,
-    IReadOnlyList<string> Candidates);
+    IReadOnlyList<string> Candidates,
+    string? Kind = null);
 
 public sealed record SearchQueryPlan(
     string RawQuery,

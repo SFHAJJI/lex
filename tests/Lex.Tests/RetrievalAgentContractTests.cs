@@ -228,9 +228,17 @@ public sealed class RetrievalAgentContractTests
         Assert.Equal("Insufficient evidence.", AskService.ReplyFor(refusal, [text, outline], "en"));
     }
 
+    // A synthesis failure may not hide a successful typed operation, and it may not serve it
+    // anonymously either. This branch fires only when the composer or the grounding judge REFUSED,
+    // which is the moment a selection error is most likely and least visible, so the refusal is
+    // PREFIXED to the named line rather than substituted for it. Every one of these asserts the
+    // instrument, its lex_id and the effective date are in the sentence a reader sees: "the
+    // selected law and date" named nothing anyone could check.
     [Fact]
-    public void A_synthesis_failure_cannot_hide_a_successful_typed_operation()
+    public void A_synthesis_failure_names_the_instrument_it_served()
     {
+        const string refused = "The returned evidence is not sufficient to produce a grounded "
+            + "answer. Try a narrower law, article, or date.";
         var fallback = new AgentAnswerDraft(
             AgentAnswerStatus.Refusal, "Internal evidence fallback.", [], [], null, null);
         var text = new UiEffect(Provision: new ProvisionView(
@@ -238,24 +246,31 @@ public sealed class RetrievalAgentContractTests
             "2016-05-04", null,
             [new ProvisionItem("art_6", "6", "Lawfulness", "Held legal text", "abc")], null));
 
-        Assert.Equal("The exact publisher text for the selected article and date is open below.",
+        Assert.Equal(
+            refused + " The exact publisher text for GDPR (eu-eurlex:32016r0679) at 2016-05-04 is "
+            + "open below. You asked about 2021-01-01; this is the state in force from 2016-05-04.",
             AskService.ReplyFor(fallback, [text], "en", synthesisFailed: true));
-        var wholeLaw = new UiEffect(Provision: text.Provision! with
-        {
-            Subject = text.Provision.Subject with { Anchor = null },
-        });
-        Assert.Equal("The exact publisher text for the selected law and date is open below.",
-            AskService.ReplyFor(fallback, [wholeLaw], "en", synthesisFailed: true));
 
         var comparison = new UiEffect(Diff: new DiffView(
             new Subject("eu-eurlex:32013r0575", "CRR", "2020-01-01", "art_92"),
             "2020-01-01", "2024-12-31", null, null, null));
-        Assert.Equal("The requested comparison is open below.",
-            AskService.ReplyFor(fallback, [text, comparison], "en", synthesisFailed: true));
+        var diffReply = AskService.ReplyFor(
+            fallback, [comparison], "en", synthesisFailed: true);
+        Assert.StartsWith(refused, diffReply, StringComparison.Ordinal);
+        Assert.Contains("CRR (eu-eurlex:32013r0575) between 2020-01-01 and 2024-12-31",
+            diffReply, StringComparison.Ordinal);
+
+        // The caller's own deterministic line wins when it is supplied, because it carries one
+        // named sentence per operation instead of one for the merged view.
+        Assert.Equal(refused + " Two named lines.", AskService.ReplyFor(
+            fallback, [text, comparison], "en", true, "Two named lines."));
 
         var ranking = new UiEffect(Ranking: new RankingView(
             "2024-01-01", "2024-12-31", "by_churn", 371, 430, []));
-        Assert.Equal("The requested change ranking is open below.",
+        Assert.Equal(
+            refused + " Within a selected population of 0 works, Lex found 371 instruments with "
+            + "430 publisher version dates between 2024-01-01 and 2024-12-31. The verified ranking "
+            + "is open below.",
             AskService.ReplyFor(fallback, [ranking], "en", synthesisFailed: true));
 
         var gap = new UiEffect(Gap: new GapView(
@@ -263,6 +278,24 @@ public sealed class RetrievalAgentContractTests
             "The requested text is not held.", []));
         Assert.Equal("Internal evidence fallback.",
             AskService.ReplyFor(fallback, [text, gap], "en", synthesisFailed: true));
+    }
+
+    // The French half of the same rule. Both languages name the instrument.
+    [Fact]
+    public void A_french_synthesis_failure_names_the_instrument_it_served()
+    {
+        var fallback = new AgentAnswerDraft(
+            AgentAnswerStatus.Refusal, "Repli interne.", [], [], null, null);
+        var text = new UiEffect(Provision: new ProvisionView(
+            new Subject("eu-eurlex:32016r0679", "RGPD", "2021-01-01", "art_6"),
+            "2016-05-04", null,
+            [new ProvisionItem("art_6", "6", "Licéité", "Texte détenu", "abc")], null));
+
+        var reply = AskService.ReplyFor(fallback, [text], "fr", synthesisFailed: true);
+
+        Assert.Contains("RGPD (eu-eurlex:32016r0679)", reply, StringComparison.Ordinal);
+        Assert.Contains("2016-05-04", reply, StringComparison.Ordinal);
+        Assert.Contains("Vous avez demandé le 2021-01-01", reply, StringComparison.Ordinal);
     }
 
     [Fact]

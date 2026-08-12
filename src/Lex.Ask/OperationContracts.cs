@@ -232,6 +232,14 @@ public sealed record RequestedOperation
     /// rather than discarded.</summary>
     public ImmutableArray<string> Repairs { get; private init; } = [];
 
+    /// <summary>Records one more repair on a frozen operation. The argument gate is not the only
+    /// thing that may rewrite a plan: an argument the model supplied has to be re-derivable from
+    /// the user's own words, and the check that re-derives the INSTANT needs the user's question,
+    /// which the gate deliberately never receives. Its rewrites are counted on the same line as
+    /// every other repair rather than in a second, invisible channel.</summary>
+    public RequestedOperation WithRepair(string repair) =>
+        string.IsNullOrWhiteSpace(repair) ? this : this with { Repairs = Repairs.Add(repair) };
+
     public static RequestedOperation Create(
         string operationId,
         int userOrder,

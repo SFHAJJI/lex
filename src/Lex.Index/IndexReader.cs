@@ -1163,27 +1163,48 @@ public sealed class LexIndexReader : IDisposable
         var matches = identityMatches
             .Where(match => !string.IsNullOrWhiteSpace(match.MatchedValue))
             .GroupBy(match => WorkSearch.Normalize(match.MatchedValue!), StringComparer.Ordinal)
-            .ToDictionary(group => group.Key, group => group.Select(match => match.Doc.GroupKey)
-                .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray(),
+            .ToDictionary(group => group.Key, group => (
+                    Candidates: group.Select(match => match.Doc.GroupKey)
+                        .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray(),
+                    Kind: MatchKind(group.Select(match => match.Reason))),
                 StringComparer.Ordinal);
         var result = new List<WorkResolution>();
         var consumed = new HashSet<string>(StringComparer.Ordinal);
         foreach (var identifier in LegalIdentifierTokens(query))
         {
             var normalized = WorkSearch.Normalize(identifier);
-            var candidates = matches.GetValueOrDefault(normalized) ?? [];
+            var match = matches.GetValueOrDefault(normalized);
+            var candidates = match.Candidates ?? [];
             consumed.Add(normalized);
             result.Add(new WorkResolution(identifier, candidates.Length switch
             {
                 0 => "unresolved",
                 1 => "resolved",
                 _ => "ambiguous",
-            }, candidates));
+            }, candidates, match.Kind));
         }
-        foreach (var (mention, candidates) in matches.Where(item => !consumed.Contains(item.Key)))
+        foreach (var (mention, match) in matches.Where(item => !consumed.Contains(item.Key)))
             result.Add(new WorkResolution(mention,
-                candidates.Length == 1 ? "resolved" : "ambiguous", candidates));
+                match.Candidates.Length == 1 ? "resolved" : "ambiguous",
+                match.Candidates, match.Kind));
         return result.OrderBy(item => WorkSearch.Normalize(item.Mention), StringComparer.Ordinal).ToArray();
+    }
+
+    /// <summary>Which stored name form a mention matched, reduced from the per-hit reasons
+    /// (<c>exact_title</c>, <c>contained_identifier</c>, ...) that carried it all along. One
+    /// mention normally has one form; when a stored title and a stored alias happen to normalize
+    /// to the same string, the title is the stronger claim about identity and wins.</summary>
+    private static string? MatchKind(IEnumerable<string> reasons)
+    {
+        string? kind = null;
+        foreach (var reason in reasons)
+        {
+            if (reason.EndsWith("_title", StringComparison.Ordinal)) return "title";
+            if (reason.EndsWith("_alias", StringComparison.Ordinal)) kind = "alias";
+            else if (reason.EndsWith("_identifier", StringComparison.Ordinal))
+                kind ??= "identifier";
+        }
+        return kind;
     }
 
     private static string ResolutionStatus(IReadOnlyList<WorkResolution> resolutions) =>

@@ -28,7 +28,13 @@ internal static class McpInputPolicy
                  "hierarchy", "act_form", "binding_status", "domain", "language",
                  "retrieval_mode", "time_scope", "as_of", "fuzzy", "works", "limit"],
                 ["query"], ("limit", 1, 50)),
-            ["article_history"] = R(["work", "publisher", "anchor", "language"], ["work", "anchor"]),
+            // from_date/to_date are an optional FILTER over the states this tool already returns,
+            // never a new question and never required. They exist because "what did Article 92
+            // require in 2024" is a window question with no single answer, and a point-in-time
+            // tool cannot be handed a year without choosing a day inside it for the reader.
+            ["article_history"] = R(
+                ["work", "publisher", "anchor", "language", "from_date", "to_date"],
+                ["work", "anchor"]),
             ["provenance"] = R(["lex_id", "language"], ["lex_id"]),
             ["coverage"] = R(["publisher"], []),
             ["cited_by"] = R(["work", "limit"], ["work"], ("limit", 1, 100)),
