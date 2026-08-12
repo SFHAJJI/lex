@@ -85,13 +85,33 @@ public sealed class AskService
         private readonly HashSet<string> _prior = new(StringComparer.Ordinal);
         private readonly HashSet<string> _current = new(StringComparer.Ordinal);
         private readonly List<(string Work, string Title)> _candidates = [];
+        private readonly List<WorkMention> _mentions = [];
+        // Every title the turn saw, for every work, whatever the row's match strength. The
+        // clarification menu is the one surface that must name a work it did not select, and it
+        // was drawing titles only from the weak-candidate list, so a work authorized by an exact
+        // title match was offered as the bare string "Instrument".
+        private readonly Dictionary<string, string> _titles = new(StringComparer.Ordinal);
+        // The works that WERE an identity match on the user's own words, just not a unique one.
+        private readonly HashSet<string> _identityMatched = new(StringComparer.Ordinal);
+        private readonly string _identityAttempt;
         private bool _searchObserved;
         private bool _workIndependentAnswerObserved;
         private bool _currentAuthorityObserved;
         private bool _priorContextUsed;
 
+        public WorkResolutionGuard(string? identityAttempt = null) =>
+            _identityAttempt = Lex.Index.WorkSearch.Normalize(identityAttempt ?? "");
+
         public IReadOnlyCollection<string> ResolvedWorks => _resolved;
         public IReadOnlyCollection<string> CurrentResolvedWorks => _current;
+
+        /// <summary>The stored names the resolver matched inside the CURRENT user turn, each with
+        /// the works it named. This is the evidence the subject rule runs on, and it was on the
+        /// wire as <c>mention</c> from the beginning while nothing in this layer read it.</summary>
+        public IReadOnlyList<WorkMention> CurrentMentions => _mentions;
+
+        public string? TitleFor(string work) =>
+            _titles.TryGetValue(work, out var title) && title.Length > 0 ? title : null;
 
         public void ObserveSearch(JsonNode result, bool isRawUserQuery = true)
             => ObserveSearch(result, isRawUserQuery, allowDirectProvisionAuthority: true,
@@ -131,13 +151,24 @@ public sealed class AskService
                 if (isRawUserQuery && resolutions is not null)
                     foreach (var resolution in resolutions.OfType<JsonObject>()
                                  .Where(item => item["status"]?.GetValue<string>() == "resolved"))
+                    {
+                        var named = new List<string>();
                         foreach (var candidate in resolution["candidates"]?.AsArray() ?? [])
                             if (candidate?.GetValue<string>() is { } work)
                             {
                                 _resolved.Add(WorkKey(work));
                                 if (markCurrent) _current.Add(WorkKey(work));
                                 _currentAuthorityObserved = true;
+                                named.Add(WorkKey(work));
                             }
+                        // Only the current turn's mentions. A prior-turn resolution names works in
+                        // words the user is not writing now, and a span in this turn's query is
+                        // the only thing the subject rule is allowed to reason about.
+                        if (markCurrent && named.Count > 0
+                            && resolution["mention"]?.GetValue<string>() is { Length: > 0 } mention)
+                            _mentions.Add(new WorkMention(
+                                mention, named, resolution["kind"]?.GetValue<string>()));
+                    }
                 // A problem description with no named law may select a work only from an actual
                 // provision hit. Standalone work discovery has no anchor and stays a candidate
                 // until the user confirms it.
@@ -151,15 +182,27 @@ public sealed class AskService
                             if (markCurrent) _current.Add(WorkKey(lexId));
                             _currentAuthorityObserved = true;
                         }
+                foreach (var hit in response["hits"]?.AsArray().OfType<JsonObject>() ?? [])
+                    if (hit["lex_id"]?.GetValue<string>() is { } titled
+                        && hit["title"]?.GetValue<string>() is { Length: > 0 } title
+                        && !title.Contains("://", StringComparison.OrdinalIgnoreCase))
+                        _titles.TryAdd(WorkKey(titled), title.Trim());
                 if (collectCandidates && response["hits"] is JsonArray candidateHits)
                     foreach (var hit in candidateHits.OfType<JsonObject>()
                                  // A bare article intent may return real article rows from many
                                  // works. They are useful clarification candidates, but without
                                  // direct lexical/semantic evidence they cannot authorize a work.
-                                 .Where(item => !HasDirectProvisionEvidence(item)))
+                                 .Where(item => !HasDirectProvisionEvidence(item))
+                                 .Where(IsIdentityRelated))
                         if (hit["lex_id"]?.GetValue<string>() is { } lexId)
+                        {
+                            if ((hit["match_reasons"] as JsonArray)?.Any(reason =>
+                                    reason?.GetValue<string>()?.StartsWith(
+                                        "ambiguous_", StringComparison.Ordinal) == true) == true)
+                                _identityMatched.Add(WorkKey(lexId));
                             AddCandidate(latestCandidates, WorkKey(lexId),
                                 hit["title"]?.GetValue<string>() ?? "");
+                        }
             }
             foreach (var candidate in latestCandidates.AsEnumerable().Reverse())
             {
@@ -221,13 +264,21 @@ public sealed class AskService
         private bool HasSingleAuthority =>
             _currentAuthorityObserved && (_current.Count == 1 || _resolved.Count == 1);
 
-        public GuardClarification? ClarificationFor(string? attemptedWork, string locale = "en")
+        /// <param name="preferredOrder">The order the caller's own evidence puts the authorized
+        /// works in, leftmost mention first. Start position is allowed to ORDER a menu and never
+        /// to select, which is the whole reason it arrives here rather than at the selector.</param>
+        public GuardClarification? ClarificationFor(
+            string? attemptedWork,
+            string locale = "en",
+            IReadOnlyList<string>? preferredOrder = null)
         {
             if (_workIndependentAnswerObserved || HasSingleAuthority || _priorContextUsed)
                 return null;
             // When the user's own words named more than one work, those are the choices worth
             // offering; the weaker discovery candidates describe a different question.
-            var source = _current.Count > 1 ? CurrentAsCandidates() : _candidates;
+            var source = _current.Count > 1
+                ? CurrentAsCandidates(preferredOrder)
+                : ByIdentityStrength(_candidates);
             if (source.Count == 0) return null;
             var attempted = attemptedWork is null ? null : WorkKey(attemptedWork);
             var ordered = source
@@ -252,17 +303,45 @@ public sealed class AskService
             return new GuardClarification(display, choices);
         }
 
-        // Ordered by the position the work took in the observed hits, so the offered choices keep
-        // the retrieval order rather than the hash order of the authority set.
-        private List<(string Work, string Title)> CurrentAsCandidates() => _current
-            .Where(IsCandidateWork)
-            .Select(work => (
-                Work: work,
-                Index: _candidates.FindIndex(candidate => candidate.Work == work)))
-            .OrderBy(item => item.Index < 0 ? int.MaxValue : item.Index)
-            .ThenBy(item => item.Work, StringComparer.Ordinal)
-            .Select(item => (item.Work, Title: item.Index < 0 ? "" : _candidates[item.Index].Title))
-            .ToList();
+        // Leftmost mention first when the caller located the mentions, then any authorized work no
+        // mention could be located for. Never by hit rank: bm25 over the residual provision query
+        // is what chose EMIR for a CRR question, and it is no better at ordering a menu than it
+        // was at selecting.
+        private List<(string Work, string Title)> CurrentAsCandidates(
+            IReadOnlyList<string>? preferredOrder)
+        {
+            var position = (preferredOrder ?? [])
+                .Select((work, index) => (Work: WorkKey(work), Index: index))
+                .GroupBy(item => item.Work, StringComparer.Ordinal)
+                .ToDictionary(group => group.Key, group => group.First().Index,
+                    StringComparer.Ordinal);
+            return _current
+                .Where(IsCandidateWork)
+                .OrderBy(work => position.TryGetValue(work, out var index) ? index : int.MaxValue)
+                .ThenBy(work => work, StringComparer.Ordinal)
+                .Select(work => (Work: work, Title: TitleFor(work) ?? ""))
+                .ToList();
+        }
+
+        // Identity strength first: a row that WAS an identity match, just not a unique one, is a
+        // better answer to "which instrument did you mean" than a row that shares one word with
+        // the question. Then by how much of the identity the user attempted the row actually
+        // reproduces, and only then by the order the rows arrived in.
+        private List<(string Work, string Title)> ByIdentityStrength(
+            List<(string Work, string Title)> candidates)
+        {
+            var attempted = Distinctive(_identityAttempt);
+            return candidates
+                .Select((candidate, index) => (candidate, index))
+                .OrderByDescending(item => _identityMatched.Contains(item.candidate.Work))
+                .ThenByDescending(item => attempted.Count == 0
+                    ? 0
+                    : Distinctive(Lex.Index.WorkSearch.Normalize(item.candidate.Title))
+                        .Count(attempted.Contains))
+                .ThenBy(item => item.index)
+                .Select(item => item.candidate)
+                .ToList();
+        }
 
         private static void AddCandidate(
             List<(string Work, string Title)> candidates, string work, string title)
@@ -279,6 +358,84 @@ public sealed class AskService
                 "keyword" or "fuzzy" or "semantic") == true;
         }
 
+        /// <summary>
+        /// Whether a row may be offered as a choice of instrument.
+        ///
+        /// <para>The menu was, by construction, the residue of the search: every row that did not
+        /// qualify as provision evidence became an option, and nothing required an option to bear
+        /// any relation to the name the user wrote. Three populations arrived that way. A quota
+        /// filler (<c>work_identifier_or_title</c>) exists to keep a held work visible in a result
+        /// list, not to answer "which instrument did you mean". An <c>article_intent</c> row is
+        /// about the article NUMBER, which is why an "Article 14" question offered three unrelated
+        /// Luxembourg instruments. And a bm25 row can enter on a single shared token, including a
+        /// bare year: "du 5 avril 1993" put Council Directive 93/13/EEC in the menu for a question
+        /// about the 1993 Luxembourg financial sector law.</para>
+        ///
+        /// <para>The last of the three is stated as a prohibition rather than as a requirement,
+        /// and the difference matters. Requiring every row to share a DISTINCTIVE token with the
+        /// turn also empties the menu for a turn that names no instrument at all: "what are the
+        /// notification duties after an incident" shares no token with the title of the regulation
+        /// that answers it, and that menu is a relevance menu rather than a disambiguation. So a
+        /// row is dropped only when its overlap with the turn is demonstrably worthless: it shares
+        /// something, and everything it shares is a bare year, a bare number, a month, an act form
+        /// or a stopword. A row that shares nothing lexically matched on evidence the title does
+        /// not show (work metadata, semantic neighbourhood), which is evidence all the same.</para>
+        /// </summary>
+        private bool IsIdentityRelated(JsonObject hit)
+        {
+            var reasons = (hit["match_reasons"] as JsonArray)?
+                .Select(reason => reason?.GetValue<string>() ?? "").ToArray() ?? [];
+            // It WAS an identity match, just not a unique one. Always relevant.
+            if (reasons.Any(reason => reason.StartsWith("ambiguous_", StringComparison.Ordinal)))
+                return true;
+            if (hit["match"]?.GetValue<string>() == "work_identifier_or_title") return false;
+            if (reasons.Contains("article_intent", StringComparer.Ordinal)) return false;
+            // Relatedness is judged on the row's own name against the user's own words. With no
+            // title there is nothing to judge, and a row is never excluded on missing data: the
+            // gate exists to drop rows that demonstrably do not match the attempted identity, not
+            // to drop rows nothing is known about.
+            if (_identityAttempt.Length == 0
+                || hit["title"]?.GetValue<string>() is not { Length: > 0 } title)
+                return true;
+            var offered = Tokens(Lex.Index.WorkSearch.Normalize(
+                title + " " + (hit["lex_id"]?.GetValue<string>() ?? "")));
+            offered.IntersectWith(Tokens(_identityAttempt));
+            return offered.Count == 0 || offered.Any(IsDistinctive);
+        }
+
+        /// <summary>The tokens that cannot carry an identity claim. A bare number cannot: it is
+        /// admitted as a search token at any length precisely so that "2016/679" works, and the
+        /// same admission is what lets a year alone qualify a work whose title merely contains
+        /// that year. Nor can a month name or a bare act form, for the same reason one step up:
+        /// "du 5 avril 1993" is shared by every French-language instrument published that month,
+        /// and "regulation" is shared by all of them. Stopwords are here because the shared-token
+        /// set is taken before any filtering, so "of" would otherwise rescue every EU title.
+        /// </summary>
+        private static readonly HashSet<string> Indistinct = new(StringComparer.Ordinal)
+        {
+            "janvier", "fevrier", "mars", "avril", "mai", "juin", "juillet", "aout",
+            "septembre", "octobre", "novembre", "decembre",
+            "january", "february", "march", "april", "may", "june", "july", "august",
+            "september", "october", "november", "december",
+            "loi", "lois", "reglement", "reglements", "arrete", "arretes", "code", "decret",
+            "ordonnance", "traite", "convention", "constitution", "directive", "directives",
+            "regulation", "regulations", "act", "law", "laws", "grand", "ducal", "european",
+            "union", "eur", "lex", "eurlex", "legilux", "council", "commission", "parliament",
+            "the", "and", "for", "with", "that", "this", "from", "into", "under", "les", "des",
+            "aux", "par", "pour", "dans", "sur", "que", "qui", "une", "sont", "est", "relative",
+            "relatif", "concernant", "modifiee", "modifie", "portant",
+        };
+
+        private static HashSet<string> Tokens(string normalized) =>
+            normalized.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                .ToHashSet(StringComparer.Ordinal);
+
+        private static bool IsDistinctive(string token) =>
+            token.Length >= 3 && !token.All(char.IsDigit) && !Indistinct.Contains(token);
+
+        private static HashSet<string> Distinctive(string normalized) =>
+            Tokens(normalized).Where(IsDistinctive).ToHashSet(StringComparer.Ordinal);
+
         private static bool IsCandidateWork(string work) =>
             work.Length is > 0 and <= 1_000
             && !work.Contains("://", StringComparison.OrdinalIgnoreCase)
@@ -286,15 +443,37 @@ public sealed class AskService
                 || work.StartsWith("lu-legilux:", StringComparison.Ordinal))
             && work.Count(character => character == ':') == 1;
 
+        /// <summary>
+        /// One recognizable choice. A Legilux official title cut mid-word at 70 characters is not
+        /// a choice, and the lex_id is what the reader can actually verify against the permalink,
+        /// so it is always shown.
+        ///
+        /// <para>An official title opens with the act form and the date and then continues into
+        /// its subject clause, so the leading clause is the part a lawyer recognises. It is
+        /// preferred whenever it survives the budget; otherwise the title is cut on a word
+        /// boundary and marked as cut, rather than truncated mid-word into something that looks
+        /// like a different instrument.</para>
+        /// </summary>
         private static string CandidateOption(string title, string work, int ordinal)
         {
             if (title.Contains("://", StringComparison.OrdinalIgnoreCase)) title = "";
             var shortWork = work.Length <= 28 ? work : work[..25] + "...";
             var suffix = $" [{ordinal}: {shortWork}]";
-            if (string.IsNullOrWhiteSpace(title)) return $"Instrument{suffix}";
-            var boundedTitle = title[..Math.Min(title.Length, 100 - suffix.Length)].TrimEnd();
-            return boundedTitle + suffix;
+            var budget = MaximumOptionLength - suffix.Length;
+            title = title.Trim();
+            if (title.Length == 0 || budget < 12) return $"Instrument{suffix}";
+            if (title.Length <= budget) return title + suffix;
+            var clause = title.IndexOfAny([',', ';']);
+            if (clause >= 12 && clause <= budget) return title[..clause].TrimEnd() + suffix;
+            var cut = title[..(budget - 3)];
+            var boundary = cut.LastIndexOf(' ');
+            return (boundary >= 12 ? cut[..boundary] : cut).TrimEnd(' ', ',', ';', '.')
+                   + "..." + suffix;
         }
+
+        /// <summary>The bound <see cref="AgentAnswerContract"/> enforces on every option. Held
+        /// here so the label is built to the same number the validator rejects at.</summary>
+        private const int MaximumOptionLength = 100;
 
         internal static string WorkKey(string value)
         {
@@ -491,7 +670,13 @@ public sealed class AskService
            discovery as candidates rather than claiming a missing law. Do not replace resolved
            works with a law name you generated. If article_number is present
            but no hit carries article_intent, do not substitute another article; report that the
-           requested provision was not found in the selected scope.
+           requested provision was not found in the selected scope. The same rule binds one level
+           up, and it binds harder: never substitute another WORK. When a citation names more than
+           one instrument (an official title that ends "repealing Directive 95/46/EC" names two),
+           the subject is the instrument the citation is ABOUT, and the one named inside its title
+           is not a substitute for it. If the requested article is held only in the other work,
+           say the provision was not found in the instrument the user named; do not serve the
+           other instrument's article of the same number.
            Retry ONCE with the official name or a synonym (e.g. "DORA" -> "digital
            operational resilience", acronyms -> full titles, or the CELEX number like 32022r2554
            for EU acts), then move to the right tool or answer honestly that Lex has no match.
@@ -582,7 +767,7 @@ public sealed class AskService
     // today is passed in rather than read here, so the date the prompt promises the model and the
     // date the argument gate substitutes for an omitted one are the same instant, not two reads of
     // the wall clock that can straddle UTC midnight.
-    private static string PlannerPrompt(string host, DateOnly today) => $"""
+    internal static string PlannerPrompt(string host, DateOnly today) => $"""
         You plan operations for Lex, a read-only point-in-time legal retrieval product at https://{host}.
         Return one complete ordered operation for every legal operation the user requested. The
         application freezes and validates the entire list before any legal tool runs. Do not answer
@@ -609,15 +794,28 @@ public sealed class AskService
 
         For a named law, put the user's exact name, acronym or identifier in work_query. Never invent
         a canonical work id. The application resolves it deterministically. Put a mentioned article
-        number in article_number. Dates are ISO YYYY-MM-DD. Expand a bare year to its full inclusive
-        calendar boundary. For as_of with no date use {today:yyyy-MM-dd}. Preserve the
-        user's operation order. Set synthesis=true only when the user explicitly asks you to
-        summarize or describe the accepted results; ordinary lookup and comparison use deterministic
-        application replies. A compound request must remain multiple operations.
+        number in article_number. Dates are ISO YYYY-MM-DD.
+
+        Bare years, by argument ROLE. A year is a window, and which rule applies depends on whether
+        the slot holds a window bound or a single instant:
+        - from_date / to_date: expand a bare year to 1 January and 31 December of that year.
+        - date (as_of, in_force_on, navigate): NEVER derive a single date from a bare year, a bare
+          month, a season or a decade. Choosing a day inside a year answers a different question
+          from the one asked, and it silently selects a version of the law. When the user gives a
+          year with no day for a point-in-time question, plan the WINDOW form instead:
+          article_history when they named an article, timeline when they did not, with from_date
+          and to_date set to that year. Only a date the user actually stated belongs in date.
+        - For as_of with no date at all, use {today:yyyy-MM-dd}.
+
+        Preserve the user's operation order. Set synthesis=true only when the user explicitly asks
+        you to summarize or describe the accepted results; ordinary lookup and comparison use
+        deterministic application replies. A compound request must remain multiple operations.
         "Which Luxembourg and EU laws changed most in 2024" is one changes_in_period operation with
         from_date=2024-01-01, to_date=2024-12-31 and order=by_churn. "Compare Article 92 of CRR
         between 2020 and 2024" is one diff with work_query=CRR, article_number=92,
-        from_date=2020-01-01 and to_date=2024-12-31.
+        from_date=2020-01-01 and to_date=2024-12-31. "What did Article 92 of the CRR require in
+        2024" is one article_history with work_query=CRR, article_number=92,
+        from_date=2024-01-01 and to_date=2024-12-31, never an as_of with a single 2024 date.
         """;
 
     internal static readonly string[] PlannerToolNames =
@@ -1212,11 +1410,28 @@ public sealed class AskService
         return body;
     }
 
+    /// <summary>
+    /// The reply, once the optional descriptive synthesis has had its turn.
+    ///
+    /// <para>The anonymous fallbacks that used to live here are gone rather than reworded. They
+    /// fired on exactly one condition, <c>synthesisFailed &amp;&amp; Status == Refusal</c>: the
+    /// composer or the grounding judge REFUSED because the evidence did not answer the question.
+    /// In the audited turn the judge was right and this branch converted the strongest available
+    /// signal that selection had gone wrong into a confident "here it is", under copy ("the
+    /// selected law") that named nothing a reader could check. A synthesis refusal is now
+    /// PREFIXED to the named deterministic line, never substituted for it, and the naming comes
+    /// from <see cref="OperationAnswerPolicy"/>, which had the instrument and the date all
+    /// along.</para>
+    /// </summary>
+    /// <param name="deterministicReply">The named line the caller already computed from
+    /// <see cref="OperationAnswerPolicy.Render"/>. Recomputed per effect when absent, so a direct
+    /// caller cannot obtain an anonymous reply by omitting it.</param>
     internal static string ReplyFor(
         AgentAnswerDraft grounded,
         IEnumerable<UiEffect> effects,
         string locale,
-        bool synthesisFailed = false)
+        bool synthesisFailed = false,
+        string? deterministicReply = null)
     {
         var french = locale == "fr";
         var parts = effects.ToList();
@@ -1224,52 +1439,20 @@ public sealed class AskService
             .Where(view => view is { Provisions.Count: > 0 })
             .ToList();
         var view = UiEffect.Merge(parts);
+        var named = string.IsNullOrWhiteSpace(deterministicReply)
+            ? OperationAnswerPolicy.Describe(locale, view)
+            : deterministicReply;
         if (synthesisFailed
             && grounded.Status == AgentAnswerStatus.Refusal
-            && parts.All(part => part.Gap is null))
+            && parts.All(part => part.Gap is null)
+            && named is { Length: > 0 })
         {
-            if (view.Diff is { Status: McpStatus.ProfilesDiffer })
-                return french
-                    ? "Lex ne peut pas produire de comparaison fiable pour ces dates, car les deux versions utilisent des profils d'extraction incompatibles. Le motif et les deux versions vérifiées de l'éditeur sont ouverts ci-dessous."
-                    : "Lex cannot produce a reliable comparison for those dates because the two versions use incompatible extraction profiles. The reason and both verified publisher versions are open below.";
-            if (view.Diff is not null)
-                return french
-                    ? "La comparaison demandée est ouverte ci-dessous."
-                    : "The requested comparison is open below.";
-            if (view.History is not null)
-                return french
-                    ? "L'historique de l'article sélectionné est ouvert ci-dessous."
-                    : "The selected article's history is open below.";
-            if (view.Timeline is not null)
-                return french
-                    ? "La chronologie des versions de la loi sélectionnée est ouverte ci-dessous."
-                    : "The selected law's version timeline is open below.";
-            if (view.Ranking is not null)
-                return french
-                    ? "Le classement des changements demandé est ouvert ci-dessous."
-                    : "The requested change ranking is open below.";
-            if (view.InForce is not null)
-                return french
-                    ? "Les états de l'éditeur couvrant la date demandée sont ouverts ci-dessous."
-                    : "The publisher states covering the requested date are open below.";
-            if (view.CitedBy is not null)
-                return french
-                    ? "Les dispositions citantes sont ouvertes ci-dessous."
-                    : "The citing provisions are open below.";
-            var textView = outlines.FirstOrDefault(item => item!.Provisions
-                .Any(provision => !string.IsNullOrEmpty(provision.Text)));
-            if (textView is not null)
-                return textView.Subject.Anchor is { Length: > 0 }
-                    ? french
-                        ? "Le texte exact de l'éditeur pour l'article et la date sélectionnés est ouvert ci-dessous."
-                        : "The exact publisher text for the selected article and date is open below."
-                    : french
-                        ? "Le texte exact de l'éditeur pour la loi et la date sélectionnées est ouvert ci-dessous."
-                        : "The exact publisher text for the selected law and date is open below.";
-            if (view.Workspace is not null)
-                return french
-                    ? "Les résultats correspondants du catalogue sont ouverts ci-dessous."
-                    : "The matching catalogue results are open below.";
+            // The canonical refusal rather than the draft's own answer text. A draft that reached
+            // here failed the grounding judge, so its prose is exactly the text that must not be
+            // trusted: the audited fixture's refusal literally reads "The requested comparison is
+            // open below" over a comparison the extraction profiles made impossible.
+            return AgentAnswerFinalizer.Render(
+                AgentAnswerFinalizer.Refusal(locale), locale) + " " + named;
         }
         // A standalone catalogue ranking is already rendered with a source on every row. Keep
         // the answer and any coverage disclosure in the user's language, but do not duplicate
@@ -1286,10 +1469,11 @@ public sealed class AskService
             && outlines.Count > 0
             && outlines.SelectMany(view => view!.Provisions)
                 .All(item => string.IsNullOrEmpty(item.Text))
-            && parts.All(part => part.Gap is null))
-            return french
-                ? "L'instrument sélectionné est ouvert ci-dessous. Choisissez une disposition pour en consulter le texte exact."
-                : "The selected instrument is open below. Choose a provision to inspect its exact text.";
+            && parts.All(part => part.Gap is null)
+            && named is { Length: > 0 })
+            return named + (french
+                ? " Choisissez une disposition pour en consulter le texte exact."
+                : " Choose a provision to inspect its exact text.");
         return AgentAnswerFinalizer.Render(grounded, locale);
     }
 
@@ -1560,6 +1744,7 @@ public sealed class AskService
             var (plan, planningUsage, plannerRepaired) = await PlanOperationsAsync(
                 history, host, requestId, requestLocale, planner.Token);
             planningWatch.Stop();
+            plan = AuthorizeInstants(plan, rawUserQuery, requestLocale);
             run = OperationRun.Start(plan);
             var (status, body) = await ExecutePlanAsync(
                 plan, run, userQueries, rawUserQuery, planningUsage,
@@ -1713,6 +1898,98 @@ public sealed class AskService
         return french == english ? null : french > english ? "fr" : "en";
     }
 
+    /// <summary>The operations whose <c>date</c> names a single instant rather than a window
+    /// bound. Only these can turn a year into a day.</summary>
+    private static readonly string[] PointInTimeOperations = ["as_of", "navigate", "in_force_on"];
+
+    /// <summary>The repair line a widened operation carries. It rides in <c>Repairs</c> so it
+    /// reaches the plan trace and the reply disclosure on the same path every other argument
+    /// repair already takes.</summary>
+    internal const string YearWindowRepair = "date widened_to_year_window";
+
+    /// <summary>
+    /// The deterministic half of the bare-year rule: every planned point-in-time date is re-derived
+    /// from the user's own words before it can bind, and the ones that cannot be are rewritten to
+    /// the window they came from or turned into a question.
+    ///
+    /// <para>Comparison across the year, not refusal and not clarification. Refusal claims a
+    /// coverage gap Lex does not have. Clarification asks the lawyer to supply the date, when the
+    /// change dates are precisely what they do not know yet and what Lex holds; that is asking the
+    /// user to produce the answer. The window never picks a day, so it cannot serve the wrong
+    /// text, and it collapses correctly: one state throughout the year is "one text applied all
+    /// year, here it is", and two or three dated states ARE the answer to a question that has no
+    /// single one.</para>
+    ///
+    /// <para><c>in_force_on</c> is the exception and cannot be widened: a corpus-wide snapshot is
+    /// not a window question, so a bare year there is the clarification case with the two year
+    /// boundaries as the options. A clarification must be the only operation in a plan, so it
+    /// replaces the plan; serving a snapshot of the wrong day beside other operations would put
+    /// the invented instant back exactly where this guard removed it.</para>
+    /// </summary>
+    private static OperationPlan AuthorizeInstants(
+        OperationPlan plan, string rawUserQuery, string locale)
+    {
+        var rewritten = new List<RequestedOperation>();
+        var changed = false;
+        foreach (var operation in plan.Operations)
+        {
+            if (operation.Disposition is not null
+                || !PointInTimeOperations.Contains(operation.Tool, StringComparer.Ordinal)
+                || JsonNode.Parse(operation.Arguments.GetRawText()) is not JsonObject arguments
+                || DateIntentGuard.DerivedYear(rawUserQuery, String(arguments, "date"))
+                    is not { } year)
+            {
+                rewritten.Add(operation);
+                continue;
+            }
+            Diagnostic("planner_date_invented",
+                $"op{operation.UserOrder + 1} {operation.Tool} {year}");
+            if (operation.Tool == "in_force_on")
+                return OperationPlan.Create(plan.RequestId, plan.Locale,
+                    [RequestedOperation.CreateApplication(
+                        $"{plan.RequestId}:op-1", 0, ApplicationDisposition.Clarification,
+                        new JsonObject
+                        {
+                            ["question"] = locale == "fr"
+                                ? $"Un instantané du corpus porte sur un jour, pas sur une année. Quelle date de {year} Lex doit-il utiliser ?"
+                                : $"A corpus-wide snapshot is about one day, not a year. Which date in {year} should Lex use?",
+                            ["options"] = new JsonArray(
+                                DateIntentGuard.FirstDayOf(year),
+                                DateIntentGuard.LastDayOf(year)),
+                        })],
+                    synthesisRequested: false);
+            var article = String(arguments, "article_number")
+                          ?? String(arguments, "anchors")?.Split(',')[0].Trim()
+                          ?? String(arguments, "anchor");
+            var widened = new JsonObject();
+            Copy(arguments, widened, "work", "work_query", "language");
+            var tool = article is { Length: > 0 } ? "article_history" : "timeline";
+            if (tool == "article_history")
+            {
+                if (String(arguments, "article_number") is { Length: > 0 } number)
+                    widened["article_number"] = number;
+                else
+                    widened["anchor"] = article;
+                widened["from_date"] = DateIntentGuard.FirstDayOf(year);
+                widened["to_date"] = DateIntentGuard.LastDayOf(year);
+            }
+            else
+                // timeline takes no window and no language, so the whole version list is served
+                // and the year is not narrowed to. That is a superset of the question rather than
+                // a different one: a version list cannot serve the wrong text, only more of the
+                // right rows. Narrowing it would mean giving timeline a window too, which is a
+                // separate change to a tool whose whole contract is "every state this work was in".
+                widened.Remove("language");
+            rewritten.Add(RequestedOperation
+                .CreatePlanned(operation.OperationId, operation.UserOrder, tool, widened)
+                .WithRepair($"{operation.Tool}.{YearWindowRepair}"));
+            changed = true;
+        }
+        return changed
+            ? OperationPlan.Create(plan.RequestId, plan.Locale, rewritten, plan.SynthesisRequested)
+            : plan;
+    }
+
     private async Task<(int Status, JsonObject Body)> ExecutePlanAsync(
         OperationPlan plan,
         OperationRun run,
@@ -1765,6 +2042,19 @@ public sealed class AskService
             .Select(_ => new UiEffect()).ToList();
         var executedArguments = Enumerable.Range(0, plan.Operations.Length)
             .Select(_ => (JsonObject?)null).ToList();
+        // What each operation must disclose about how it got its work and its instant. The
+        // defaulted-instant half is read straight off the argument gate's own repair lines, which
+        // were already logged and traced and never reached the prose a reader sees.
+        var disclosures = plan.Operations
+            .Select(operation => operation.Repairs.Any(repair =>
+                    repair.EndsWith(YearWindowRepair, StringComparison.Ordinal))
+                ? new AnswerDisclosure(Instant: InstantSource.WidenedFromYear)
+                : operation.Repairs.Any(repair =>
+                    repair.EndsWith(".date defaulted", StringComparison.Ordinal)
+                    || repair.EndsWith(".as_of defaulted", StringComparison.Ordinal))
+                ? new AnswerDisclosure(Instant: InstantSource.DefaultedToToday)
+                : null)
+            .ToList();
         WorkResolutionGuard.GuardClarification? clarification = null;
         AgentClarification? applicationClarification = null;
         int? terminalTransportStatus = null;
@@ -1859,6 +2149,13 @@ public sealed class AskService
                         continue;
                     }
                     arguments = prepared.Arguments;
+                    if (prepared.Disclosure is { } selection)
+                        disclosures[operation.UserOrder] =
+                            (disclosures[operation.UserOrder] ?? new AnswerDisclosure()) with
+                            {
+                                RunnerUpWork = selection.RunnerUpWork,
+                                RunnerUpTitle = selection.RunnerUpTitle,
+                            };
                 }
 
                 JsonNode result;
@@ -1960,7 +2257,7 @@ public sealed class AskService
             .OrderBy(item => item.UserOrder).ToArray();
         var displayedClarification = clarification?.Display ?? applicationClarification;
         var deterministicReply = displayedClarification?.Question
-            ?? OperationAnswerPolicy.Render(plan.Locale, results, effects);
+            ?? OperationAnswerPolicy.Render(plan.Locale, results, effects, disclosures);
         var reply = deterministicReply;
         double? synthesisMilliseconds = null;
         if (plan.SynthesisRequested && displayedClarification is null
@@ -1993,7 +2290,8 @@ public sealed class AskService
                 else
                     throw new InvalidOperationException(
                         "No synthesis service is configured.");
-                reply = ReplyFor(finalized.Draft, effects, plan.Locale, finalized.SynthesisFailed);
+                reply = ReplyFor(finalized.Draft, effects, plan.Locale, finalized.SynthesisFailed,
+                    deterministicReply);
                 modelUsage = modelUsage.Add(finalized.Usage);
                 if (progress?.Synthesis is not null)
                     await NotifyProgress(() => progress.Synthesis("completed", ct));
@@ -2089,7 +2387,8 @@ public sealed class AskService
 
     private sealed record PreparedOperation(
         JsonObject? Arguments,
-        WorkResolutionGuard.GuardClarification? Clarification);
+        WorkResolutionGuard.GuardClarification? Clarification,
+        AnswerDisclosure? Disclosure = null);
 
     private async Task<PreparedOperation> ResolveWorkOperationAsync(
         OperationRun run,
@@ -2102,7 +2401,7 @@ public sealed class AskService
         CancellationToken cancellationToken)
     {
         var rawUserQuery = userQueries[^1];
-        var guard = new WorkResolutionGuard();
+        var guard = new WorkResolutionGuard(rawUserQuery);
         guard.ObserveUserConfirmation(rawUserQuery);
         var workQuery = String(plannedArguments, "work_query")
             ?? String(plannedArguments, operation.Tool == "provenance" ? "lex_id" : "work")
@@ -2162,33 +2461,32 @@ public sealed class AskService
         var plannedWork = String(plannedArguments,
             operation.Tool == "provenance" ? "lex_id" : "work");
         var focusedCandidates = CandidateWorks(focused).Distinct().ToArray();
-        var focusedCurrent = focusedCandidates.Where(guard.CurrentResolvedWorks.Contains).ToArray();
         var focusedPrior = focusedCandidates.Where(priorWorks.Contains).ToArray();
         var focusedDirect = focusedCandidates
             .Where(guard.ResolvedWorks.Contains)
             .Where(work => !priorWorks.Contains(work))
             .ToArray();
 
-        // One quoted official title can name more than one work ("...repealing Directive
-        // 95/46/EC"). Each is authorized by the user's own words; the operation still needs
-        // exactly one. Narrow inside the authorized set only, never add to it.
-        string? NarrowCurrent()
-        {
-            var current = guard.CurrentResolvedWorks;
-            if (current.Count < 2) return null;
-            if (article is not null
-                && current.Where(work => ArticleAnchor(focused ?? resolution, work, article) is not null)
-                    .ToArray() is [var anchoredWork])
-                return anchoredWork;
-            return HitWorks(focused).Concat(HitWorks(resolution))
-                .Where(current.Contains).FirstOrDefault();
-        }
+        // One quoted official title can name more than one work: the CRR's own title ends
+        // "...and amending Regulation (EU) No 648/2012", so quoting it names both the CRR and
+        // EMIR. Each is authorized by the user's own words; the operation still needs exactly
+        // one. The rule narrows inside that authorized set and returns WHY, so a caller cannot
+        // mistake a fall-through for a decision the way the previous `string?` allowed.
+        WorkSubject? subject = guard.CurrentResolvedWorks.Count > 1
+            ? WorkSubjectRule.Select(
+                rawUserQuery,
+                guard.CurrentMentions,
+                guard.CurrentResolvedWorks,
+                article is not null,
+                work => ArticleAnchor(focused ?? resolution, work, article!) is not null,
+                work => HoldsProvisionText(resolution, work)
+                        || HoldsProvisionText(focused, work))
+            : null;
 
         var selected = guard.CurrentResolvedWorks.Count == 1
             ? guard.CurrentResolvedWorks.Single()
-            : focusedCurrent is [var currentWork] ? currentWork
-            : NarrowCurrent() is { } narrowed ? narrowed
-            : guard.CurrentResolvedWorks.Count > 1 ? null
+            : subject is not null
+                ? (subject as WorkSubject.Decided)?.Work
             : focusedDirect is [var directWork] ? directWork
             : !carriesPriorSubject ? null
             : focusedPrior is [var priorWork] ? priorWork
@@ -2202,22 +2500,34 @@ public sealed class AskService
             : null;
         if (selected is null)
         {
-            var candidate = guard.ClarificationFor(plannedWork, locale);
+            var order = (subject as WorkSubject.Undecided)?.Ordered;
+            var candidate = guard.ClarificationFor(plannedWork, locale, order);
             if (candidate is not null) return new PreparedOperation(null, candidate);
+            // An empty option list reads as a broken product. Say what could not be matched, say
+            // what was searched, and name the two moves that actually work.
             var display = AgentAnswerContract.Validate(new AgentAnswerDraft(
                 AgentAnswerStatus.Clarify,
                 locale == "fr"
-                    ? "Indiquez le titre officiel ou l'identifiant de l'instrument."
-                    : "Provide the official title or identifier of the instrument.",
+                    ? "Donnez l'identifiant officiel ou le numero CELEX, ou indiquez l'editeur (Legilux ou EUR-Lex)."
+                    : "Give the official identifier or CELEX number, or name the publisher (Legilux or EUR-Lex).",
                 [], [], null,
                 new AgentClarification(
                     locale == "fr"
-                        ? "Quel instrument Lex doit-il utiliser ?"
-                        : "Which instrument should Lex use?",
+                        ? "Lex n'a pas pu rattacher un nom de votre question a un instrument qu'il detient. Il a cherche par titre officiel, identifiant et alias dans son catalogue."
+                        : "Lex could not match a name in your question to an instrument it holds. It searched its catalogue by official title, identifier and alias.",
                     [])), []).Clarification!;
             return new PreparedOperation(null,
                 new WorkResolutionGuard.GuardClarification(display, []));
         }
+
+        // The reader is told which work was served and, when the user's own words authorized more
+        // than one, that a choice was made and what lost. An error nobody can see is an error
+        // nobody corrects.
+        var disclosure = subject is WorkSubject.Decided decided
+                         && decided.RunnerUp is { Length: > 0 } runnerUp
+            ? new AnswerDisclosure(RunnerUpWork: runnerUp,
+                RunnerUpTitle: guard.TitleFor(runnerUp))
+            : null;
 
         var actual = plannedArguments.DeepClone().AsObject();
         actual.Remove("work_query");
@@ -2240,7 +2550,32 @@ public sealed class AskService
             else
                 actual["anchor"] = anchor;
         }
-        return new PreparedOperation(actual, null);
+        return new PreparedOperation(actual, null, disclosure);
+    }
+
+    /// <summary>
+    /// Whether the search result shows Lex holding provision-level text for this work.
+    ///
+    /// <para>This is the precondition on the article-anchor tie-break. "Only work W has an art_26
+    /// row" is evidence about the law when Lex holds articles for both works and an artefact of
+    /// coverage when it does not, and the two are indistinguishable from the anchor alone. A work
+    /// held without derived text reaches the response as an identifier/title fallback row, which
+    /// carries a match_note and no anchor at all, so an anchored row on a row that is not that
+    /// fallback is the observable form of "articles were derived for this work".</para>
+    /// </summary>
+    private static bool HoldsProvisionText(JsonNode? result, string work)
+    {
+        if (result is null) return false;
+        foreach (var response in result is JsonArray array
+                     ? array.OfType<JsonObject>()
+                     : result is JsonObject item ? [item] : [])
+            foreach (var hit in response["hits"]?.AsArray().OfType<JsonObject>() ?? [])
+                if (hit["lex_id"]?.GetValue<string>() is { } lexId
+                    && WorkResolutionGuard.WorkKey(lexId) == work
+                    && hit["match"]?.GetValue<string>() != "work_identifier_or_title"
+                    && hit["anchor"]?.GetValue<string>() is { Length: > 0 })
+                    return true;
+        return false;
     }
 
     private static bool IsAnaphoricWorkReference(string query)
@@ -2273,19 +2608,13 @@ public sealed class AskService
         }
     }
 
-    // Hit order only. CandidateWorks yields the resolver's mention-ordered candidates first, which
-    // is alphabetical rather than ranked, so it cannot be reused to break a tie between two works
-    // named by the same quoted title.
-    private static IEnumerable<string> HitWorks(JsonNode? result)
-    {
-        if (result is null) yield break;
-        foreach (var response in result is JsonArray array
-                     ? array.OfType<JsonObject>()
-                     : result is JsonObject item ? [item] : [])
-            foreach (var hit in response["hits"]?.AsArray().OfType<JsonObject>() ?? [])
-                if (hit["lex_id"]?.GetValue<string>() is { } lexId)
-                    yield return WorkResolutionGuard.WorkKey(lexId);
-    }
+    // HitWorks is deliberately gone. It ranked the authorized works by bm25 of the RESIDUAL
+    // provision query over article text, which answers "which article best matches the leftover
+    // words" and says nothing about which instrument the citation is about. For a quoted official
+    // title the residual is whatever the title-stripping failed to remove, so the order was close
+    // to random, and it is what served EMIR Article 26 for a CRR Article 26 question. The right
+    // conclusion from "the resolver's own order is alphabetical" was "there is no tie-break here",
+    // not "use the other ordering". WorkSubjectRule replaces it.
 
     private static string? ArticleAnchor(JsonNode result, string work, string article)
     {
@@ -2374,7 +2703,7 @@ public sealed class AskService
             var trace = new JsonArray();
             var searchCalls = 0;
             var worksFound = new Dictionary<string, string>(StringComparer.Ordinal);
-            var resolutionGuard = new WorkResolutionGuard();
+            var resolutionGuard = new WorkResolutionGuard(rawUserQuery);
             var evidence = new AgentEvidenceLedger();
             var textToolUsed = false;
             // D31 shape: effects are collected across every tool call in the turn and merged

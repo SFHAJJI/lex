@@ -386,9 +386,121 @@ public sealed class AskResolutionGuardTests
 
         Assert.False(guard.Allows("as_of",
             new JsonObject { ["work"] = "lu-legilux:unrelated" }));
+        // Nor is it a menu option. An article_intent row is about the article NUMBER, and every
+        // instrument has an Article 7; offering three of them as "which instrument did you mean"
+        // is what answered a bare "Article 14" question with three unrelated Luxembourg statutes.
+        // With no option worth offering the turn falls to the honest no-option clarification,
+        // which names what was searched instead of presenting an empty picker.
+        Assert.Null(guard.ClarificationFor(null));
+    }
+
+    // The other half of the same rule: a row that WAS an identity match on the user's own words,
+    // just not a unique one, is exactly what the menu is for. It survives, and it is offered
+    // FIRST, because identity strength orders the menu and bm25 residue never does.
+    [Fact]
+    public void An_ambiguous_identity_match_leads_the_clarification_menu()
+    {
+        var guard = new AskService.WorkResolutionGuard("the market abuse regulation");
+        var result = SearchResult("not_requested");
+        result[0]!["hits"] = new JsonArray
+        {
+            new JsonObject
+            {
+                ["lex_id"] = "eu-eurlex:32014r0596:2016-07-03",
+                ["title"] = "Regulation on market abuse",
+                ["match_reasons"] = new JsonArray("ambiguous_contained_title"),
+            },
+            new JsonObject
+            {
+                ["lex_id"] = "lu-legilux:unrelated:2026-01-01",
+                ["title"] = "Loi du 5 avril 1993 relative au secteur financier",
+                ["match_reasons"] = new JsonArray("work_metadata"),
+            },
+        };
+
+        guard.ObserveSearch(result);
+
         var clarification = Assert.IsType<AskService.WorkResolutionGuard.GuardClarification>(
             guard.ClarificationFor(null));
-        Assert.Equal("lu-legilux:unrelated", clarification.Choices[0].Value);
+        Assert.Equal("eu-eurlex:32014r0596", clarification.Choices[0].Value);
+        // And the option is a recognizable choice rather than a title cut mid-word: it carries
+        // the lex_id the reader verifies against the permalink.
+        Assert.Contains("eu-eurlex:32014r0596", clarification.Choices[0].Label,
+            StringComparison.Ordinal);
+    }
+
+    // The relatedness gate drops a row whose ONLY overlap with the turn is worthless. It must not
+    // drop a row that overlaps with the turn nowhere at all: a question that names no instrument
+    // ("what are the notification duties after an incident") shares no token with the title of the
+    // regulation that answers it, and that menu is a relevance menu rather than a disambiguation.
+    // Requiring a shared distinctive token would empty it and turn discovery into a dead end.
+    [Fact]
+    public void A_row_sharing_no_token_with_the_turn_is_still_a_discovery_candidate()
+    {
+        var guard = new AskService.WorkResolutionGuard(
+            "What are the notification duties after an incident?");
+        var result = SearchResult("not_requested");
+        result[0]!["hits"] = new JsonArray
+        {
+            new JsonObject
+            {
+                ["lex_id"] = "eu-eurlex:32022r2554:2024-01-01",
+                ["title"] = "Regulation (EU) 2022/2554 on digital operational resilience",
+                ["match_reasons"] = new JsonArray("work_metadata"),
+            },
+        };
+
+        guard.ObserveSearch(result);
+
+        var clarification = Assert.IsType<AskService.WorkResolutionGuard.GuardClarification>(
+            guard.ClarificationFor(null));
+        Assert.Equal("eu-eurlex:32022r2554", clarification.Choices[0].Value);
+    }
+
+    // A bare four-digit year is admitted as a search token at any length, so a work whose title
+    // merely contains that year enters the pool on it alone. It must not become a menu option.
+    [Fact]
+    public void A_shared_year_alone_does_not_qualify_a_clarification_candidate()
+    {
+        var guard = new AskService.WorkResolutionGuard(
+            "la loi du 5 avril 1993 relative au secteur financier");
+        var result = SearchResult("not_requested");
+        result[0]!["hits"] = new JsonArray
+        {
+            new JsonObject
+            {
+                ["lex_id"] = "eu-eurlex:31993l0013:1993-04-05",
+                ["title"] = "Directive 93/13/CEE du Conseil concernant les clauses abusives",
+                ["match_reasons"] = new JsonArray("work_metadata"),
+            },
+        };
+
+        guard.ObserveSearch(result);
+
+        Assert.Null(guard.ClarificationFor(null));
+    }
+
+    // A quota filler exists to keep a held work visible in a result list. It is not an answer to
+    // "which instrument did you mean", and it carries no match_reasons at all, so the previous
+    // rule promoted every one of them to a disambiguation option by construction.
+    [Fact]
+    public void An_identifier_or_title_quota_filler_is_not_a_clarification_candidate()
+    {
+        var guard = new AskService.WorkResolutionGuard("secteur financier");
+        var result = SearchResult("not_requested");
+        result[0]!["hits"] = new JsonArray
+        {
+            new JsonObject
+            {
+                ["lex_id"] = "lu-legilux:filler:2026-01-01",
+                ["title"] = "Loi relative au secteur financier",
+                ["match"] = "work_identifier_or_title",
+            },
+        };
+
+        guard.ObserveSearch(result);
+
+        Assert.Null(guard.ClarificationFor(null));
     }
 
     [Fact]

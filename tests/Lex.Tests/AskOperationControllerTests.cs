@@ -1,4 +1,4 @@
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using System.Diagnostics;
 using System.Text;
 using System.Text.Json.Nodes;
@@ -163,6 +163,143 @@ public sealed class AskOperationControllerTests : IDisposable
             Assert.StartsWith(tool == "as_of"
                 ? "eu-eurlex:32016r0679" : "eu-eurlex:32013r0575", authority);
         }
+    }
+
+    // The audited bare-year failure, end to end. "in 2024" is a window; the planner turned it into
+    // an as_of on one day inside that window and the December consolidation was served as though
+    // it answered the year. The guard re-derives the instant from the user's own words before any
+    // legal tool runs and finds the planned day is not in them, so the operation becomes the
+    // window it came from. The comparison never picks a day, so it cannot serve the wrong text:
+    // when the article moved during the year the dated states ARE the answer, and when it did not
+    // the window collapses to one text that applied throughout.
+    [Fact]
+    public async Task A_bare_year_never_becomes_one_silently_chosen_day()
+    {
+        const string question = "What did Article 92 of the CRR require in 2024?";
+        var planner = new StaticPlanner("en", new JsonArray(new JsonObject
+        {
+            ["tool"] = "as_of",
+            ["arguments"] = new JsonObject
+            {
+                ["work_query"] = "CRR",
+                ["article_number"] = "92",
+                ["date"] = "2024-12-31",
+            },
+        }));
+        var service = new AskService(_core, planner);
+
+        var response = await service.AskAsync(History(question), Guid.NewGuid().ToString(),
+            "law.test", CancellationToken.None);
+
+        Assert.Equal(200, response.Status);
+        var operation = Assert.IsType<JsonObject>(Assert.Single(
+            Assert.IsType<JsonArray>(response.Body["operations"])));
+        Assert.Equal("article_history", operation["tool"]?.GetValue<string>());
+        var primary = Assert.Single(Assert.IsType<JsonArray>(response.Body["trace"])
+            .OfType<JsonObject>(), item => item["phase"]?.GetValue<string>() == "primary");
+        Assert.Equal("2024-01-01", primary["args"]?["from_date"]?.GetValue<string>());
+        Assert.Equal("2024-12-31", primary["args"]?["to_date"]?.GetValue<string>());
+        // No point-in-time date survives anywhere in the executed arguments.
+        Assert.Null(primary["args"]?["date"]);
+        // The rewrite is counted on the same line as every other argument repair rather than in a
+        // second, invisible channel, so the plan trace carries it.
+        var plan = Assert.Single(Assert.IsType<JsonArray>(response.Body["trace"])
+            .OfType<JsonObject>(), item => item["phase"]?.GetValue<string>() == "operation_plan");
+        Assert.Contains(
+            Assert.IsType<JsonArray>(plan["operations"]?[0]?["repairs"]).OfType<JsonValue>(),
+            repair => repair.GetValue<string>() == "as_of.date widened_to_year_window");
+        // And the reader is told which reading was used, in the reply rather than in a trace.
+        Assert.Contains("whole year", response.Body["reply"]!.GetValue<string>(),
+            StringComparison.Ordinal);
+    }
+
+    // The same turn with the day the user actually wrote. The literal text of the planned date is
+    // in the question, so the user's own words authorize that instant and nothing is rewritten.
+    // This is the property that keeps the guard from being a refusal of precision.
+    [Fact]
+    public async Task A_stated_day_is_served_as_the_instant_the_user_asked_for()
+    {
+        var planner = new StaticPlanner("en", new JsonArray(new JsonObject
+        {
+            ["tool"] = "as_of",
+            ["arguments"] = new JsonObject
+            {
+                ["work_query"] = "CRR",
+                ["article_number"] = "92",
+                ["date"] = "2024-12-31",
+            },
+        }));
+        var service = new AskService(_core, planner);
+
+        var response = await service.AskAsync(
+            History("What did Article 92 of the CRR require on 31 December 2024?"),
+            Guid.NewGuid().ToString(), "law.test", CancellationToken.None);
+
+        var operation = Assert.IsType<JsonObject>(Assert.Single(
+            Assert.IsType<JsonArray>(response.Body["operations"])));
+        Assert.Equal("as_of", operation["tool"]?.GetValue<string>());
+        var primary = Assert.Single(Assert.IsType<JsonArray>(response.Body["trace"])
+            .OfType<JsonObject>(), item => item["phase"]?.GetValue<string>() == "primary");
+        Assert.Equal("2024-12-31", primary["args"]?["date"]?.GetValue<string>());
+    }
+
+    // The other instant nobody stated. The argument gate completes an omitted date to today and
+    // records "as_of.date defaulted" in Repairs, which is logged and traced and never reached the
+    // prose a reader sees, so a reply announced a date the user never named. Whenever the served
+    // instant was defaulted or derived rather than stated, the reply says so in one clause.
+    [Fact]
+    public async Task An_omitted_date_is_disclosed_as_the_reading_it_produced()
+    {
+        var planner = new StaticPlanner("en", new JsonArray(new JsonObject
+        {
+            ["tool"] = "as_of",
+            ["arguments"] = new JsonObject
+            {
+                ["work_query"] = "GDPR",
+                ["article_number"] = "6",
+            },
+        }));
+        var service = new AskService(_core, planner);
+
+        var response = await service.AskAsync(
+            History("What does Article 6 of the GDPR say?"), Guid.NewGuid().ToString(),
+            "law.test", CancellationToken.None);
+
+        Assert.Equal(200, response.Status);
+        var reply = response.Body["reply"]!.GetValue<string>();
+        Assert.Contains("You gave no date", reply, StringComparison.Ordinal);
+        // And the named line is still there in full: the instrument, its lex_id and the effective
+        // date of the version actually served.
+        Assert.Contains("eu-eurlex:32016r0679", reply, StringComparison.Ordinal);
+        Assert.Contains("2018-05-25", reply, StringComparison.Ordinal);
+    }
+
+    // in_force_on cannot be widened: a corpus-wide snapshot is a question about one day, and there
+    // is no window form of it. So a bare year there is the one date case that genuinely has to ask,
+    // and it asks with the two boundaries as the options rather than with an empty picker.
+    [Fact]
+    public async Task A_bare_year_on_a_corpus_snapshot_asks_which_day()
+    {
+        var planner = new StaticPlanner("en", new JsonArray(new JsonObject
+        {
+            ["tool"] = "in_force_on",
+            ["arguments"] = new JsonObject
+            {
+                ["date"] = "2024-12-31",
+                ["publisher"] = "eu-eurlex",
+            },
+        }));
+        var service = new AskService(_core, planner);
+
+        var response = await service.AskAsync(
+            History("Which EU laws were in force in 2024?"), Guid.NewGuid().ToString(),
+            "law.test", CancellationToken.None);
+
+        Assert.DoesNotContain(Assert.IsType<JsonArray>(response.Body["trace"]).OfType<JsonObject>(),
+            item => item["phase"]?.GetValue<string>() == "primary");
+        var options = Assert.IsType<JsonArray>(response.Body["clarification"]?["options"])
+            .Select(option => option?.GetValue<string>() ?? "").ToArray();
+        Assert.Equal(["2024-01-01", "2024-12-31"], options);
     }
 
     [Fact]
@@ -511,17 +648,23 @@ public sealed class AskOperationControllerTests : IDisposable
         Assert.Null(response.Body["clarification"]);
     }
 
-    // Same two-mention title, but the article exists in both works. The focused response is
-    // scoped by the planner's own work_query, so its top hit breaks the tie.
+    // Same two-mention shape, but the article exists in BOTH works, so the anchor settles nothing.
+    // The quoted official title names the repealed directive inside itself, so its span strictly
+    // contains the directive's span, and that is a fact about what the user wrote rather than a
+    // ranking: the containing mention is the subject, the contained one is named inside it. This
+    // case previously fell back to the focused response's hit order, which is bm25 over the
+    // residual provision query and is not a signal about identity at all.
     [Fact]
-    public async Task Two_named_works_with_the_same_article_fall_back_to_focused_hit_rank()
+    public async Task Two_named_works_with_the_same_article_select_the_containing_mention()
     {
-        const string question = "Under Regulation (EU) No 596/2014 on market abuse and repealing "
-            + "Directive 2003/6/EC, what does Article 7 say?";
+        const string title = "Regulation (EU) No 596/2014 of the European Parliament and of the "
+            + "Council of 16 April 2014 on market abuse and repealing Directive 2003/6/EC of the "
+            + "European Parliament and of the Council";
+        const string question = "Under " + title + ", what does Article 7 say?";
         var resolutions = new[]
         {
-            ("directive 2003 6 ec", "resolved", new[] { "eu-eurlex:32003l0006" }),
-            ("regulation eu 596 2014", "resolved", new[] { "eu-eurlex:32014r0596" }),
+            ("Directive 2003/6/EC", "resolved", new[] { "eu-eurlex:32003l0006" }),
+            (title, "resolved", new[] { "eu-eurlex:32014r0596" }),
         };
         var service = new AskService(_core, new StaticPlanner("en", new JsonArray(new JsonObject
         {
@@ -548,6 +691,98 @@ public sealed class AskOperationControllerTests : IDisposable
             item => item["phase"]?.GetValue<string>() == "primary");
         Assert.Equal("eu-eurlex:32014r0596", primary["args"]?["work"]?.GetValue<string>());
         Assert.Null(response.Body["clarification"]);
+    }
+
+    // The audited failure, verbatim. The CRR's own official title ends "...and amending Regulation
+    // (EU) No 648/2012", so a lawyer quoting it in full has named EMIR too and both are authorized.
+    // Here ONLY EMIR carries a held art_26 and both works have derived provision text, so the
+    // anchor test would fire and would select EMIR. Containment wins over the anchor, always:
+    // containment is a fact about the user's words, the anchor is a fact about what Lex holds. The
+    // correct behaviour is to serve the CRR and report the provision as not found in it.
+    [Fact]
+    public async Task A_quoted_title_naming_an_amended_instrument_never_serves_the_amended_one()
+    {
+        const string title = "Regulation (EU) No 575/2013 of the European Parliament and of the "
+            + "Council of 26 June 2013 on prudential requirements for credit institutions and "
+            + "investment firms and amending Regulation (EU) No 648/2012";
+        const string question = "Under " + title + ", what does Article 26 require?";
+        var resolutions = new[]
+        {
+            ("Regulation (EU) No 648/2012", "resolved", new[] { "eu-eurlex:32012r0648" }),
+            (title, "resolved", new[] { "eu-eurlex:32013r0575" }),
+        };
+        var service = new AskService(_core, new StaticPlanner("en", new JsonArray(new JsonObject
+        {
+            ["tool"] = "as_of",
+            ["arguments"] = new JsonObject
+            {
+                ["work_query"] = title,
+                ["article_number"] = "26",
+                ["date"] = "2021-01-01",
+            },
+        })), legalTool: SearchStub(question,
+            Envelope(resolutions,
+                Hit("eu-eurlex:32013r0575:2021-01-01", "art_25", "keyword"),
+                Hit("eu-eurlex:32012r0648:2019-06-17", "art_26", "keyword")),
+            Envelope(resolutions,
+                Hit("eu-eurlex:32012r0648:2019-06-17", "art_26", "article_intent"),
+                Hit("eu-eurlex:32013r0575:2021-01-01", "art_25", "article_intent"))));
+
+        var response = await service.AskAsync(History(question), Guid.NewGuid().ToString(),
+            "law.test", CancellationToken.None);
+
+        var primary = Assert.Single(
+            Assert.IsType<JsonArray>(response.Body["trace"]).OfType<JsonObject>(),
+            item => item["phase"]?.GetValue<string>() == "primary");
+        Assert.Equal("eu-eurlex:32013r0575", primary["args"]?["work"]?.GetValue<string>());
+        Assert.Null(response.Body["clarification"]);
+        // And the reply says a choice was made and names the instrument that lost it, so the
+        // error is correctable in one turn instead of invisible.
+        var reply = response.Body["reply"]!.GetValue<string>();
+        Assert.Contains("named more than one instrument", reply, StringComparison.Ordinal);
+        Assert.Contains("eu-eurlex:32012r0648", reply, StringComparison.Ordinal);
+    }
+
+    // The same two instruments, cited side by side rather than one inside the other's title, and
+    // with no trailing-clause verb to demote either. Containment cannot hold, demotion has nothing
+    // to demote, and only one of the two has a held art_26, which is the case the anchor test is
+    // over-trusted in. No signal is decisive, so the answer is a question listing both, leftmost
+    // mention first, and never a pick.
+    [Fact]
+    public async Task Two_named_works_with_no_decisive_signal_ask_which_instrument()
+    {
+        const string question = "Under Regulation (EU) No 575/2013 and Regulation (EU) "
+            + "No 648/2012, what does Article 26 require?";
+        var resolutions = new[]
+        {
+            ("Regulation (EU) No 575/2013", "resolved", new[] { "eu-eurlex:32013r0575" }),
+            ("Regulation (EU) No 648/2012", "resolved", new[] { "eu-eurlex:32012r0648" }),
+        };
+        var service = new AskService(_core, new StaticPlanner("en", new JsonArray(new JsonObject
+        {
+            ["tool"] = "as_of",
+            ["arguments"] = new JsonObject
+            {
+                ["work_query"] = "Regulation (EU) No 575/2013",
+                ["article_number"] = "26",
+                ["date"] = "2021-01-01",
+            },
+        })), legalTool: SearchStub(question,
+            Envelope(resolutions,
+                Hit("eu-eurlex:32012r0648:2019-06-17", "art_26", "keyword"),
+                Hit("eu-eurlex:32013r0575:2021-01-01", null, "contained_identifier")),
+            Envelope(resolutions,
+                Hit("eu-eurlex:32012r0648:2019-06-17", "art_26", "article_intent"))));
+
+        var response = await service.AskAsync(History(question), Guid.NewGuid().ToString(),
+            "law.test", CancellationToken.None);
+
+        Assert.DoesNotContain(Assert.IsType<JsonArray>(response.Body["trace"]).OfType<JsonObject>(),
+            item => item["phase"]?.GetValue<string>() == "primary");
+        var choices = Assert.IsType<JsonArray>(response.Body["clarification"]?["choices"])
+            .Select(choice => choice?["value"]?.GetValue<string>() ?? "").ToArray();
+        Assert.Equal(
+            ["eu-eurlex:32013r0575", "eu-eurlex:32012r0648", "none of these"], choices);
     }
 
     // The tiebreak ranks inside the set the user's own words authorized. A work that only the

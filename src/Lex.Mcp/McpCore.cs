@@ -1,4 +1,4 @@
-using System.Text.Json.Nodes;
+﻿using System.Text.Json.Nodes;
 using Lex.Index;
 
 namespace Lex.Mcp;
@@ -183,6 +183,12 @@ public sealed class McpCore
                     ["publisher"] = S("publisher id; required when work is not publisher-qualified", 64),
                     ["anchor"] = S("provision anchor, e.g. art_1er (find it via search or as_of mode=outline)", McpInputPolicy.MaximumAnchorLength),
                     ["language"] = S("optional language code; defaults to the work's primary derived language", 16),
+                    // A window, not a point. "What did Article 92 require in 2024" has no single
+                    // answer when the article moved that year, and choosing a day inside the year
+                    // silently answers a different question; the dated states covering the window
+                    // ARE the answer, and collapse to one state when the article did not move.
+                    ["from_date"] = D("optional ISO date: keep only the states in force at or after it"),
+                    ["to_date"] = D("optional ISO date: keep only the states that began on or before it"),
                 }, ["work", "anchor"]),
             Tool("provenance", "Proof chain for one lex_id: source URI, retrieval time, record/body hashes, event chain, corpus commit, index build, stamp signature.",
                 new JsonObject { ["lex_id"] = S("full lex_id"), ["language"] = S("optional", 16) }, ["lex_id"]),
@@ -1061,6 +1067,7 @@ public sealed class McpCore
                         {
                             resolution.Mention,
                             resolution.Status,
+                            resolution.Kind,
                             Candidates = resolution.Candidates
                                 .Select(candidate => $"{item.Reader.Collection}:{candidate}"),
                         }))
@@ -1071,7 +1078,18 @@ public sealed class McpCore
                             .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
                         var status = group.Any(item => item.Status == "ambiguous") || candidates.Length > 1
                             ? "ambiguous" : candidates.Length == 1 ? "resolved" : "unresolved";
-                        return new { Mention = group.Key, Status = status, Candidates = candidates };
+                        // Across publishers the same mention may match a title in one catalogue
+                        // and an identifier in another. The stronger claim is the one reported,
+                        // in the same order the per-catalogue reducer uses.
+                        var kind = group.Select(item => item.Kind).Contains("title") ? "title"
+                            : group.Select(item => item.Kind).Contains("alias") ? "alias"
+                            : group.Select(item => item.Kind).Contains("identifier") ? "identifier"
+                            : null;
+                        return new
+                        {
+                            Mention = group.Key, Status = status, Kind = kind,
+                            Candidates = candidates,
+                        };
                     }).OrderBy(item => item.Mention, StringComparer.Ordinal).ToArray();
                 var globalResolutionStatus = globalResolutions.Any(item => item.Status == "ambiguous")
                     ? "ambiguous"
@@ -1178,6 +1196,11 @@ public sealed class McpCore
                                 {
                                     ["mention"] = resolution.Mention,
                                     ["status"] = resolution.Status,
+                                    // Which stored name form matched. A caller choosing among the
+                                    // works one citation named needs it: a title quoted in full
+                                    // matches as a title, while the amending tail at the end of
+                                    // that same title names only a number.
+                                    ["kind"] = resolution.Kind,
                                     ["candidates"] = new JsonArray(resolution.Candidates
                                         .Select(candidate => (JsonNode)candidate).ToArray()),
                                 }).ToArray()),
@@ -1186,6 +1209,11 @@ public sealed class McpCore
                                 {
                                     ["mention"] = resolution.Mention,
                                     ["status"] = resolution.Status,
+                                    // Which stored name form matched. A caller choosing among the
+                                    // works one citation named needs it: a title quoted in full
+                                    // matches as a title, while the amending tail at the end of
+                                    // that same title names only a number.
+                                    ["kind"] = resolution.Kind,
                                     ["candidates"] = new JsonArray(resolution.Candidates
                                         .Select(candidate => (JsonNode)candidate).ToArray()),
                                 }).ToArray()),
@@ -1213,6 +1241,25 @@ public sealed class McpCore
                 var eventCount = r.AnchorEventCount(w, anchor, requestedLanguage);
                 var states = r.ProvisionStates(w, anchor, requestedLanguage, MaximumHistoryRows);
                 var evs = r.AnchorEvents(w, anchor, requestedLanguage, MaximumHistoryRows);
+                // The optional window. A state OVERLAPS the window when it began on or before
+                // to_date and had not yet ended at from_date; that is deliberately not "began
+                // inside the window", because the state a reader most needs for "in 2024" is
+                // usually the one that took effect in 2019 and was still in force throughout.
+                var windowFrom = Str("from_date");
+                var windowTo = Str("to_date");
+                if (windowFrom is not null || windowTo is not null)
+                {
+                    var filtered = states.Where(state =>
+                        (windowTo is null
+                         || string.CompareOrdinal(state.ValidFrom, windowTo) <= 0)
+                        && (windowFrom is null || state.ValidTo is null
+                            || string.CompareOrdinal(state.ValidTo, windowFrom) >= 0)).ToList();
+                    // A window that excludes everything is a real, reportable answer: Lex holds
+                    // this article and holds no state of it covering those dates. Reporting the
+                    // unfiltered history instead would answer a different question silently.
+                    states = filtered;
+                    stateCount = filtered.Count;
+                }
                 if (stateCount == 0 && eventCount == 0)
                     return new JsonObject
                     {

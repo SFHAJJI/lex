@@ -69,7 +69,12 @@ internal static class OperationArguments
                 "language", "limit", "offset"),
             ["diff"] = Set("work", "work_query", "article_number", "from_date", "to_date",
                 "language", "anchor"),
-            ["article_history"] = Set("work", "work_query", "article_number", "anchor", "language"),
+            // from_date/to_date are a FILTER over the states this operation already returns, never
+            // a new question. They exist because the planner is told never to turn a bare year
+            // into a single day for a point-in-time question and to plan the window form instead;
+            // a rule that tells the model to emit arguments the gate refuses is not a rule.
+            ["article_history"] = Set("work", "work_query", "article_number", "anchor", "language",
+                "from_date", "to_date"),
             ["provenance"] = Set("lex_id", "work_query", "language"),
             ["coverage"] = Set("publisher"),
             ["cited_by"] = Set("work", "work_query", "limit"),
@@ -580,7 +585,9 @@ internal static class OperationArguments
         // the action accepts rather than only the ones it requires.
         foreach (var name in Allowed[action])
             if (IsDate(name) && arguments[name] is not null) Date(arguments, name);
-        if (action is "diff" or "changes_in_period")
+        if (action is "diff" or "changes_in_period"
+            || (action == "article_history"
+                && arguments["from_date"] is not null && arguments["to_date"] is not null))
         {
             var from = Date(arguments, "from_date");
             var to = Date(arguments, "to_date");
