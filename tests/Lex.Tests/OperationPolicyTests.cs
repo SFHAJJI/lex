@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Lex.Ask;
@@ -121,6 +122,306 @@ public sealed class OperationPolicyTests
         Assert.Equal(
             ["fuzzy", "mode", "order", "retrieval_mode", "time_scope"],
             closed.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal));
+    }
+
+    public static TheoryData<string> EveryPlannerTool
+    {
+        get
+        {
+            var data = new TheoryData<string>();
+            foreach (var tool in AskService.PlannerToolNames) data.Add(tool);
+            return data;
+        }
+    }
+
+    public static TheoryData<string> EveryOperation
+    {
+        get
+        {
+            var data = new TheoryData<string>();
+            foreach (var action in OperationArguments.Actions) data.Add(action);
+            return data;
+        }
+    }
+
+    // The length half of the same contract, and the round that cost the most: names and values
+    // were generated from the gate, bounds were not, so the model saw a bare {"type":"string"}
+    // where Normalize enforces a maximum, an ISO format and a required name. Every constraint the
+    // gate enforces that JSON Schema can assert must be emitted, read from the gate's accessors.
+    [Theory]
+    [MemberData(nameof(EveryPlannerTool))]
+    public void The_planner_schema_asserts_every_bound_the_gate_can_express(string tool)
+    {
+        var schema = AskService.PlannerArgumentSchema(tool);
+
+        foreach (var (name, property) in schema["properties"]!.AsObject())
+        {
+            if (OperationArguments.IsInteger(name))
+            {
+                var (minimum, maximum) = OperationArguments.IntegerBoundsFor(tool, name);
+                Assert.Equal("integer", property!["type"]!.GetValue<string>());
+                Assert.Equal(minimum, property["minimum"]!.GetValue<int>());
+                Assert.Equal(maximum, property["maximum"]!.GetValue<int>());
+                continue;
+            }
+            if (name == "options")
+            {
+                Assert.Equal("array", property!["type"]!.GetValue<string>());
+                Assert.Equal(OperationArguments.MinimumOptionCount,
+                    property["minItems"]!.GetValue<int>());
+                Assert.Equal(OperationArguments.MaximumOptionCount,
+                    property["maxItems"]!.GetValue<int>());
+                Assert.Equal(OperationArguments.MinimumStringLength,
+                    property["items"]!["minLength"]!.GetValue<int>());
+                Assert.Equal(OperationArguments.MaximumOptionLength,
+                    property["items"]!["maxLength"]!.GetValue<int>());
+                continue;
+            }
+            Assert.Equal("string", property!["type"]!.GetValue<string>());
+            Assert.Equal(OperationArguments.MinimumStringLength,
+                property["minLength"]!.GetValue<int>());
+            Assert.Equal(OperationArguments.MaximumLengthFor(name),
+                property["maxLength"]!.GetValue<int>());
+            Assert.Equal(
+                OperationArguments.IsDate(name) ? OperationArguments.IsoDatePattern : null,
+                property["pattern"]?.GetValue<string>());
+        }
+
+        Assert.Equal(
+            OperationArguments.RequiredFor(tool),
+            schema["required"]?.AsArray().Select(item => item!.GetValue<string>()).ToArray() ?? []);
+
+        // One anyOf per "at least one of" gate, AND-ed under allOf when a tool has two of them.
+        var emitted = new List<JsonArray>();
+        if (schema["allOf"] is JsonArray all)
+            emitted.AddRange(all.Select(item => item!["anyOf"]!.AsArray()));
+        else if (schema["anyOf"] is JsonArray any) emitted.Add(any);
+        var choices = OperationArguments.RequiredChoicesFor(tool);
+        Assert.Equal(choices.Count, emitted.Count);
+        for (var index = 0; index < choices.Count; index++)
+            Assert.Equal(choices[index].Names, emitted[index].Select(item =>
+                Assert.Single(item!["required"]!.AsArray())!.GetValue<string>()));
+    }
+
+    // The other direction: a bound the schema promises must be the bound the gate actually
+    // enforces. This fails the moment someone tightens a length in Normalize without the schema
+    // following, because MaximumLengthFor is what both of them read.
+    [Theory]
+    [MemberData(nameof(EveryOperation))]
+    public void The_gate_accepts_exactly_the_string_lengths_the_schema_promises(string action)
+    {
+        foreach (var name in OperationArguments.AllowedFor(action).Order(StringComparer.Ordinal))
+        {
+            if (OperationArguments.IsInteger(name) || name == "options") continue;
+            // A closed value set is the tighter constraint; a date is probed by its pattern.
+            if (OperationArguments.AllowedValuesFor(name) is not null) continue;
+            if (OperationArguments.IsDate(name)) continue;
+            var maximum = OperationArguments.MaximumLengthFor(name);
+            var expected = $"Argument '{name}' must contain 1 to {maximum} characters.";
+
+            OperationArguments.Normalize(action, With(action, name, LengthProbe(name, maximum)));
+
+            Assert.Equal(expected, Assert.Throws<InvalidDataException>(() =>
+                OperationArguments.Normalize(
+                    action, With(action, name, LengthProbe(name, maximum + 1)))).Message);
+            Assert.Equal(expected, Assert.Throws<InvalidDataException>(() =>
+                OperationArguments.Normalize(action, With(action, name, ""))).Message);
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(EveryOperation))]
+    public void The_gate_accepts_exactly_the_integer_range_the_schema_promises(string action)
+    {
+        foreach (var name in OperationArguments.AllowedFor(action)
+                     .Where(OperationArguments.IsInteger).Order(StringComparer.Ordinal))
+        {
+            var (minimum, maximum) = OperationArguments.IntegerBoundsFor(action, name);
+
+            OperationArguments.Normalize(action, With(action, name, minimum));
+            OperationArguments.Normalize(action, With(action, name, maximum));
+
+            foreach (var outside in new[] { minimum - 1, maximum + 1 })
+                Assert.Equal(
+                    $"Argument '{name}' must be between {minimum} and {maximum}.",
+                    Assert.Throws<InvalidDataException>(() =>
+                        OperationArguments.Normalize(action, With(action, name, outside))).Message);
+        }
+    }
+
+    // "required" and the anyOf choices are new to the schema; they are only worth emitting if
+    // they are exactly what the gate demands. Completeness is proved by normalizing an object
+    // holding nothing else, soundness by removing each declared demand in turn.
+    [Theory]
+    [MemberData(nameof(EveryOperation))]
+    public void The_gate_demands_exactly_the_arguments_the_schema_declares_required(string action)
+    {
+        var allowed = OperationArguments.AllowedFor(action);
+        var required = OperationArguments.RequiredFor(action);
+        var choices = OperationArguments.RequiredChoicesFor(action);
+        Assert.All(required, name => Assert.Contains(name, allowed));
+        Assert.All(choices, choice =>
+        {
+            Assert.NotEmpty(choice.Names);
+            Assert.All(choice.Names, name => Assert.Contains(name, allowed));
+        });
+
+        OperationArguments.Normalize(action, MinimalArguments(action));
+
+        foreach (var name in required)
+        {
+            var arguments = MinimalArguments(action);
+            arguments.Remove(name);
+            Assert.Throws<InvalidDataException>(() =>
+                OperationArguments.Normalize(action, arguments));
+        }
+        foreach (var choice in choices)
+        {
+            var arguments = MinimalArguments(action);
+            foreach (var name in choice.Names) arguments.Remove(name);
+            Assert.Equal(choice.Message, Assert.Throws<InvalidDataException>(() =>
+                OperationArguments.Normalize(action, arguments)).Message);
+        }
+    }
+
+    // The pattern is the assertion the planner actually honours; "format": "date" is an
+    // annotation. It must agree with DateOnly.TryParseExact on every axis a regex can reach.
+    [Fact]
+    public void The_iso_date_pattern_matches_the_gate_on_every_structural_axis()
+    {
+        foreach (var value in new[] { "2024-01-01", "2024-12-31", "2000-02-29", "0001-01-01" })
+        {
+            Assert.Matches(OperationArguments.IsoDatePattern, value);
+            Assert.True(DateOnly.TryParseExact(
+                value, OperationArguments.IsoDateFormat, out _));
+        }
+        foreach (var value in new[]
+                 {
+                     "2024", "2024-1-1", "2024-13-01", "2024-00-01", "2024-01-32", "2024-01-00",
+                     "01-01-2024", "2024/01/01", " 2024-01-01", "2024-01-01 ", "24-01-01",
+                 })
+        {
+            Assert.DoesNotMatch(OperationArguments.IsoDatePattern, value);
+            Assert.False(DateOnly.TryParseExact(
+                value, OperationArguments.IsoDateFormat, out _));
+        }
+
+        // The one axis no regex reaches. The gate stays the only authority on the calendar.
+        Assert.Matches(OperationArguments.IsoDatePattern, "2026-02-30");
+        Assert.False(DateOnly.TryParseExact(
+            "2026-02-30", OperationArguments.IsoDateFormat, out _));
+    }
+
+    [Theory]
+    [MemberData(nameof(EveryOperation))]
+    public void The_gate_refuses_every_date_the_schema_pattern_refuses(string action)
+    {
+        foreach (var name in OperationArguments.RequiredFor(action)
+                     .Where(OperationArguments.IsDate))
+            foreach (var malformed in new[] { "2024", "2024-1-1", "01-01-2024", "2024/01/01" })
+            {
+                Assert.DoesNotMatch(OperationArguments.IsoDatePattern, malformed);
+                Assert.Equal($"Argument '{name}' must be an ISO date.",
+                    Assert.Throws<InvalidDataException>(() =>
+                        OperationArguments.Normalize(
+                            action, With(action, name, malformed))).Message);
+            }
+    }
+
+    [Fact]
+    public void The_gate_bounds_clarification_options_exactly_as_the_schema_declares()
+    {
+        var accepted = MinimalArguments("clarification");
+        accepted["options"] = new JsonArray(
+            new string('x', OperationArguments.MaximumOptionLength), "second");
+
+        OperationArguments.Normalize("clarification", accepted);
+
+        foreach (var options in new[]
+                 {
+                     new JsonArray(new string('x', OperationArguments.MaximumOptionLength + 1), "b"),
+                     new JsonArray("only one"),
+                     new JsonArray("a", "b", "c", "d", "e"),
+                 })
+        {
+            var rejected = MinimalArguments("clarification");
+            rejected["options"] = options;
+            Assert.Throws<InvalidDataException>(() =>
+                OperationArguments.Normalize("clarification", rejected));
+        }
+    }
+
+    // The three shapes seen in production. The schema now stops the model proposing them; the
+    // gate must keep refusing them, with the same messages, if it ever does.
+    [Fact]
+    public void A_malformed_date_and_an_over_length_work_identity_still_abort_the_plan()
+    {
+        var cases = new (string Tool, JsonObject Arguments, string Message)[]
+        {
+            ("diff", new JsonObject
+            {
+                ["work_query"] = "CRR",
+                ["from_date"] = "2020",
+                ["to_date"] = "2024-12-31",
+            }, "Argument 'from_date' must be an ISO date."),
+            ("as_of", new JsonObject
+            {
+                ["work"] = new string('w', 1_001),
+                ["date"] = "2024-01-01",
+            }, "Argument 'work' must contain 1 to 1000 characters."),
+            ("as_of", new JsonObject
+            {
+                ["work_query"] = new string('w', 901),
+                ["date"] = "2024-01-01",
+            }, "Argument 'work_query' must contain 1 to 900 characters."),
+        };
+
+        foreach (var (tool, arguments, message) in cases)
+        {
+            var rejected = Assert.Throws<InvalidDataException>(() =>
+                OperationPlan.FromPlannerOutput("req-1", "en", new JsonArray(
+                    new JsonObject { ["tool"] = tool, ["arguments"] = arguments })));
+
+            Assert.Equal(message, rejected.Message);
+        }
+    }
+
+    private static JsonObject MinimalArguments(string action)
+    {
+        var arguments = new JsonObject();
+        foreach (var name in OperationArguments.RequiredFor(action))
+            arguments[name] = SampleValue(name);
+        foreach (var choice in OperationArguments.RequiredChoicesFor(action))
+            arguments[choice.Names[0]] = SampleValue(choice.Names[0]);
+        return arguments;
+    }
+
+    private static JsonObject With(string action, string name, JsonNode value)
+    {
+        var arguments = MinimalArguments(action);
+        arguments[name] = value;
+        return arguments;
+    }
+
+    private static JsonNode SampleValue(string name) => name switch
+    {
+        "options" => new JsonArray("first", "second"),
+        _ when OperationArguments.IsInteger(name) => 1,
+        _ when OperationArguments.IsDate(name) => "2024-01-01",
+        _ when OperationArguments.AllowedValuesFor(name) is { } values => values[0],
+        "article_number" => "92",
+        _ => "eu-eurlex:32013r0575",
+    };
+
+    // anchors and works are comma-separated lists inside one string, and the gate caps each item
+    // as well as the whole value, so a probe of the whole-value maximum has to be chunked. That
+    // split is the constraint JSON Schema cannot express and it stays validator-only.
+    private static string LengthProbe(string name, int length)
+    {
+        var probe = new StringBuilder(new string('x', length));
+        if (name is not ("anchors" or "works")) return probe.ToString();
+        for (var index = 400; index < probe.Length; index += 401) probe[index] = ',';
+        return probe.ToString();
     }
 
     public static TheoryData<string, string, string> AdvertisedPlannerValues

@@ -617,45 +617,97 @@ public sealed class AskService
         string tool, CorpusVocabulary? vocabulary = null)
     {
         var corpus = vocabulary ?? CorpusVocabulary.Unconstrained;
-        JsonObject S() => new() { ["type"] = "string" };
+        // Every constraint OperationArguments enforces that JSON Schema can assert is emitted
+        // here, read from that gate's own accessors rather than restated. A bare
+        // {"type":"string"} was how an over-length work and a non-ISO date reached the gate and
+        // aborted the whole plan: the names were generated from the allowlist, the bounds were
+        // not. Adding a bound there now widens this automatically.
+        JsonObject S(string name)
+        {
+            var value = new JsonObject
+            {
+                ["type"] = "string",
+                ["minLength"] = OperationArguments.MinimumStringLength,
+                ["maxLength"] = OperationArguments.MaximumLengthFor(name),
+            };
+            // "format" is an annotation, not an assertion, and planners ignore it; the pattern
+            // carries the rule. Calendar validity stays with the gate, no regex expresses it.
+            if (OperationArguments.IsDate(name))
+            {
+                value["pattern"] = OperationArguments.IsoDatePattern;
+                value["format"] = "date";
+            }
+            return value;
+        }
         // Every closed set the model is held to is declared, in declaration order so the emitted
         // schema stays byte-identical between processes. An open string here is how the model
         // came to propose "semantic", "current" or publisher "EU": names were generated from the
         // allowlist, values were not, and one rejected literal aborts the whole plan.
-        JsonObject Choice(IReadOnlyList<string> values, string? guidance)
+        JsonObject Choice(string name, IReadOnlyList<string> values, string? guidance)
         {
-            var value = S();
+            var value = S(name);
             value["enum"] = new JsonArray(values.Select(item => (JsonNode)item).ToArray());
             if (guidance is not null) value["description"] = guidance;
             return value;
+        }
+        JsonObject Integer(string name)
+        {
+            var (minimum, maximum) = OperationArguments.IntegerBoundsFor(tool, name);
+            return new JsonObject
+            {
+                ["type"] = "integer",
+                ["minimum"] = minimum,
+                ["maximum"] = maximum,
+            };
         }
         var properties = new JsonObject();
         // Ordinal order keeps the emitted schema byte-identical between processes.
         foreach (var name in OperationArguments.AllowedFor(tool).Order(StringComparer.Ordinal))
             properties[name] = name switch
             {
-                "limit" or "offset" => new JsonObject { ["type"] = "integer" },
+                "limit" or "offset" => Integer(name),
                 "options" => new JsonObject
                 {
                     ["type"] = "array",
-                    ["minItems"] = 2,
-                    ["maxItems"] = 4,
-                    ["items"] = S(),
+                    ["minItems"] = OperationArguments.MinimumOptionCount,
+                    ["maxItems"] = OperationArguments.MaximumOptionCount,
+                    ["items"] = new JsonObject
+                    {
+                        ["type"] = "string",
+                        ["minLength"] = OperationArguments.MinimumStringLength,
+                        ["maxLength"] = OperationArguments.MaximumOptionLength,
+                    },
                 },
                 _ => OperationArguments.AllowedValuesFor(name) is { } closed
-                        ? Choice(closed, OperationArguments.GuidanceFor(name))
+                        ? Choice(name, closed, OperationArguments.GuidanceFor(name))
                     : corpus.AllowedValuesFor(name) is { } mounted
-                        ? Choice(mounted, name == "publisher"
+                        ? Choice(name, mounted, name == "publisher"
                             ? "mounted publisher id; OMIT for the whole corpus"
                             : "mounted jurisdiction code; OMIT for the whole corpus")
-                    : S(),
+                    : S(name),
             };
-        return new JsonObject
+        var schema = new JsonObject
         {
             ["type"] = "object",
             ["properties"] = properties,
             ["additionalProperties"] = false,
         };
+        var required = OperationArguments.RequiredFor(tool);
+        if (required.Count > 0)
+            schema["required"] = new JsonArray(required.Select(item => (JsonNode)item).ToArray());
+        // The "at least one of" gates. They are per-tool literals rather than if/then because
+        // this schema is generated per tool: the work identity is work or work_query here,
+        // lex_id or work_query for provenance, and article_history AND-s a second choice on top.
+        JsonArray AnyOf(IReadOnlyList<string> names) => new(names
+            .Select(name => (JsonNode)new JsonObject { ["required"] = new JsonArray(name) })
+            .ToArray());
+        var choices = OperationArguments.RequiredChoicesFor(tool);
+        if (choices.Count == 1) schema["anyOf"] = AnyOf(choices[0].Names);
+        else if (choices.Count > 1)
+            schema["allOf"] = new JsonArray(choices
+                .Select(choice => (JsonNode)new JsonObject { ["anyOf"] = AnyOf(choice.Names) })
+                .ToArray());
+        return schema;
     }
 
     private async Task<(OperationPlan Plan, ModelTokenUsage Usage)> PlanOperationsAsync(
