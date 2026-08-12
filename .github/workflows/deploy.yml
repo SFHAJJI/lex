@@ -194,7 +194,10 @@ jobs:
           deactivate_revision() {
             revision="$1"
             for attempt in $(seq 1 5); do
-              az_write az containerapp revision deactivate -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+              # Not az_write: the loop around this call already retries and then reads
+              # properties.active back, which is a stronger check than a return code, and a
+              # nested exponential backoff would turn a five second race into minutes.
+              az containerapp revision deactivate -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
                 --revision "$revision" --only-show-errors >/dev/null 2>&1 || true
               active=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
                 --revision "$revision" --query properties.active -o tsv 2>/dev/null || true)
@@ -554,7 +557,6 @@ jobs:
         shell: bash
         run: |
           set -u
-          . scripts/deploy/az-retry.sh
           current=$(az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
             --query "[?properties.trafficWeight > \`0\`].name" -o tsv)
           [ "$(printf '%s\n' "$current" | sed '/^$/d' | wc -l)" -eq 1 ] \
@@ -563,7 +565,10 @@ jobs:
               --query "[?properties.active && name != '$current'].name" -o tsv); do
             deactivated=false
             for attempt in $(seq 1 5); do
-              az_write az containerapp revision deactivate -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+              # Not az_write: the loop around this call already retries and then reads
+              # properties.active back, which is a stronger check than a return code, and a
+              # nested exponential backoff would turn a five second race into minutes.
+              az containerapp revision deactivate -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
                 --revision "$revision" --only-show-errors >/dev/null 2>&1 || true
               active=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
                 --revision "$revision" --query properties.active -o tsv 2>/dev/null || true)
