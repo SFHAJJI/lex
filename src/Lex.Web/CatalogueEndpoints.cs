@@ -235,7 +235,7 @@ public static class CatalogueEndpoints
                     <b>{H(r.Stamp.GetValueOrDefault("publisher_name"))}</b>
                     <span class="badge">tier {H(c.Stamp.GetValueOrDefault("tier"))}</span>
                     <span class="badge">{c.Groups:n0} works</span>
-                    <span class="badge">{c.Rows:n0} versions</span>
+                    <span class="badge">{c.Versions:n0} versions</span>
                     <span class="badge">{H(c.EarliestValidFrom)} &rarr; {H(c.LatestValidFrom)}</span>
                     <span class="badge {(r.SignatureValid ? "ok" : "warn")}">{(r.SignatureValid ? "signed index" : "unsigned")}</span>
                     <div class="sub" style="margin-top:6px">Mounted coverage: {H(c.EarliestValidFrom)} to {H(c.LatestValidFrom)}. Scope and known gaps are stated on the <a href="/coverage">coverage page</a>.</div>
@@ -403,9 +403,9 @@ public static class CatalogueEndpoints
                     : "";
                 sb.Append($"""
                     <div class="notice"><b>What we hold, and what we honestly don't.</b>
-                    {c.Groups:n0} publisher works and collections in {c.Rows:n0} dated snapshots.{luGap}
-                    Of those snapshots, <b>{c.TextServed:n0}</b> carry the full official text and
-                    <b>{c.Rows - c.TextServed:n0}</b> are a dated entry with its source and hash but no wording.
+                    {c.Groups:n0} publisher works and collections in {c.Versions:n0} dated snapshots.{luGap}
+                    Of those snapshots, <b>{c.VersionsWithText:n0}</b> carry the full official text and
+                    <b>{c.Versions - c.VersionsWithText:n0}</b> are a dated entry with its source and hash but no wording.
                     {gapWhy}
                     Those answer with <span class="mono">text_not_available</span> rather than pretending.
                     History can never go deeper than what the publisher itself digitised.</div>

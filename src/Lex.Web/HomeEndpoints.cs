@@ -125,8 +125,8 @@ public static class HomeEndpoints
                 <div class="frontdoor">
                 <p class="sub">
                 <span class="badge">{cov.Sum(c => c.Groups):n0} legal works</span>
-                <span class="badge">{cov.Sum(c => c.Rows):n0} dated versions</span>
-                <span class="badge">{cov.Sum(c => c.TextServed):n0} with full text</span>
+                <span class="badge">{cov.Sum(c => c.Versions):n0} dated versions</span>
+                <span class="badge">{cov.Sum(c => c.VersionsWithText):n0} with full text</span>
                 <span class="badge">{H(cov.Select(c => c.EarliestValidFrom).Min())} → {H(cov.Select(c => c.LatestValidFrom).Max())}</span>
                 <span class="badge ok" title="SHA-256 hashes and signed release manifests">source integrity verified</span></p>
                 <p class="sub">Free assistant, daily limit. <a href="/developers#assistant">Connect your own AI</a>
