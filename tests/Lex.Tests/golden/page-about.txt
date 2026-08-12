@@ -243,12 +243,12 @@ HTTP 200
 </header>
 <main>
 <h1>About</h1>
-<p class="sub">Senior .NET, Azure and AI engineer in Luxembourg. Lex is one of three systems built the same way.</p>
+<p class="sub">Lead Software and AI Engineer specialising in Azure. Lex is one of three systems built the same way.</p>
 <p class="lede">I build systems that have to be right rather than plausible: regulated
 platforms where an answer has to carry its source, its date, and a way to check it.</p>
 
 <div class="card">
-<p><b>Soufien Hajji</b>, senior .NET, Azure and AI engineer, based in Luxembourg. Nine
+<p><b>Soufien Hajji</b>, Lead Software &amp; AI Engineer specialising in Azure, based near Luxembourg. Nine
 years across telecoms, rail, investment banking and asset management, most of it on
 systems where being wrong is expensive: front-office trading platforms, regulatory-capital
 reporting, and the agentic AI layer on top of it.</p>
@@ -258,7 +258,7 @@ deterministic, the claims are testable, and the parts that cannot be verified sa
 instead of guessing.</p>
 <p><a class="pick main" href="https://api.soufien.lu/cv/en/download" rel="noopener">CV, English (PDF)</a>
 &nbsp; <a class="pick" href="https://api.soufien.lu/cv/fr/download" rel="noopener">CV, français (PDF)</a>
-&nbsp; <a class="pick" href="https://www.linkedin.com/in/soufien-hajji" rel="noopener">LinkedIn ↗</a></p>
+&nbsp; <a class="pick" href="https://www.linkedin.com/in/hajji-soufien" rel="noopener">LinkedIn ↗</a></p>
 </div>
 
 <h2>Three things, built the same way</h2>
@@ -266,7 +266,7 @@ instead of guessing.</p>
 <div class="card">
 <b><a href="https://law.soufien.lu">law.soufien.lu</a></b> &middot; this one
 <p class="sub">Point-in-time Luxembourg and reviewed-scope EU law: 2 works as
-3 dated versions, a public MCP endpoint, open datasets, and a signed index
+3 dated versions, a public MCP server, open datasets, and a signed index
 whose stamp commits to a digest of its own content. The hard part was never the AI; it was
 that a law has no single text, only a text per date.
 <a href="/decisions">The decision that shaped it, and what it cost →</a></p>
