@@ -152,11 +152,14 @@ jobs:
         shell: bash
         run: |
           set -eu
+          . scripts/deploy/az-retry.sh
           runtime_id=$(az identity show -g "$RESOURCE_GROUP" -n "$RUNTIME_IDENTITY" --query id -o tsv)
           runtime_client=$(az identity show -g "$RESOURCE_GROUP" -n "$RUNTIME_IDENTITY" --query clientId -o tsv)
-          az containerapp identity assign -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+          # These two writes land on the same container app microseconds apart, and the second
+          # is the one Azure rejected in run 31633793807 while the first was still propagating.
+          az_write az containerapp identity assign -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
             --user-assigned "$runtime_id" --only-show-errors
-          az containerapp registry set -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+          az_write az containerapp registry set -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
             --server "$ACR_SERVER" --identity "$runtime_id" --only-show-errors
           echo "runtime_client=$runtime_client" >> "$GITHUB_OUTPUT"
 
@@ -169,7 +172,8 @@ jobs:
           RUNTIME_CLIENT: ${{ steps.identity.outputs.runtime_client }}
         run: |
           set -euo pipefail
-          az containerapp revision set-mode -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" --mode multiple --only-show-errors
+          . scripts/deploy/az-retry.sh
+          az_write az containerapp revision set-mode -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" --mode multiple --only-show-errors
           mapfile -t traffic_bearers < <(az containerapp revision list \
             -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
             --query "[?properties.trafficWeight > \`0\`].name" -o tsv)
@@ -190,7 +194,7 @@ jobs:
           deactivate_revision() {
             revision="$1"
             for attempt in $(seq 1 5); do
-              az containerapp revision deactivate -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+              az_write az containerapp revision deactivate -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
                 --revision "$revision" --only-show-errors >/dev/null 2>&1 || true
               active=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
                 --revision "$revision" --query properties.active -o tsv 2>/dev/null || true)
@@ -251,7 +255,7 @@ jobs:
                     template:.
                   }}' > rollback.json
             created_rollback=true
-            az rest --method patch --uri "$app_id?api-version=2025-01-01" \
+            az_write az rest --method patch --uri "$app_id?api-version=2025-01-01" \
               --headers 'Content-Type=application/json' --body @rollback.json --output none
             for attempt in $(seq 1 30); do
               rollback_state=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
@@ -311,7 +315,7 @@ jobs:
                   ]}},
                   template:.
                 }}' > candidate.json
-          az rest --method patch --uri "$app_id?api-version=2025-01-01" \
+          az_write az rest --method patch --uri "$app_id?api-version=2025-01-01" \
             --headers 'Content-Type=application/json' --body @candidate.json --output none
           for attempt in $(seq 1 30); do
             state=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
@@ -326,7 +330,7 @@ jobs:
             --revision "$candidate" --query properties.template.scale -o json \
             | jq -e '.minReplicas == 1 and .maxReplicas == 1' >/dev/null \
             || { echo "::error::public assistant must run on exactly one application replica"; exit 1; }
-          az containerapp ingress traffic set -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+          az_write az containerapp ingress traffic set -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
             --revision-weight "$previous=100" "$candidate=0" --only-show-errors
           fqdn=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
             --revision "$candidate" --query properties.fqdn -o tsv)
@@ -550,6 +554,7 @@ jobs:
         shell: bash
         run: |
           set -u
+          . scripts/deploy/az-retry.sh
           current=$(az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
             --query "[?properties.trafficWeight > \`0\`].name" -o tsv)
           [ "$(printf '%s\n' "$current" | sed '/^$/d' | wc -l)" -eq 1 ] \
@@ -558,7 +563,7 @@ jobs:
               --query "[?properties.active && name != '$current'].name" -o tsv); do
             deactivated=false
             for attempt in $(seq 1 5); do
-              az containerapp revision deactivate -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+              az_write az containerapp revision deactivate -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
                 --revision "$revision" --only-show-errors >/dev/null 2>&1 || true
               active=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
                 --revision "$revision" --query properties.active -o tsv 2>/dev/null || true)
