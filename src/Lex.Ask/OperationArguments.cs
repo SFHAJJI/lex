@@ -371,11 +371,16 @@ internal static class OperationArguments
                 // instead of aborting the plan: a numeric string is coerced, and anything else
                 // ("all", a float, an object, 5000 where the action caps at 50) is dropped.
                 var (minimum, maximum) = IntegerBoundsFor(action, name);
-                if (!TryInteger(value, out var integer) || integer < minimum || integer > maximum)
+                if (!TryInteger(value, out var integer, out var coerced)
+                    || integer < minimum || integer > maximum)
                 {
                     repaired.Add(Repair(action, name, "dropped"));
                     continue;
                 }
+                // A quoted number is kept rather than dropped, but it is still the planner writing
+                // the wrong JSON shape, so it is counted under its own verb: a rising coerced rate
+                // is a prompt or schema problem, a rising dropped rate is a different one.
+                if (coerced) repaired.Add(Repair(action, name, "coerced"));
                 normalized[name] = integer;
                 continue;
             }
@@ -611,15 +616,20 @@ internal static class OperationArguments
     private static string Repair(string action, string name, string outcome) =>
         $"{action}.{(KnownArguments.Contains(name) ? name : "unrecognized")} {outcome}";
 
-    /// <summary>A JSON integer, or a numeric string the model quoted by mistake.</summary>
-    private static bool TryInteger(JsonNode value, out int integer)
+    /// <summary>A JSON integer, or a numeric string the model quoted by mistake.
+    /// <paramref name="coerced"/> distinguishes the two, because the quoted spelling is a planner
+    /// mistake this gate repairs silently otherwise, and an uncounted repair is the drift the
+    /// repair lines exist to make visible.</summary>
+    private static bool TryInteger(JsonNode value, out int integer, out bool coerced)
     {
         integer = 0;
+        coerced = false;
         if (value is not JsonValue number) return false;
         if (number.TryGetValue<int>(out integer)) return true;
-        return number.TryGetValue<string>(out var text)
+        coerced = number.TryGetValue<string>(out var text)
             && int.TryParse(text.Trim(), NumberStyles.None, CultureInfo.InvariantCulture,
                 out integer);
+        return coerced;
     }
 
     private static string[] Items(string value) => value.Split(

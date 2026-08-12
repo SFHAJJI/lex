@@ -1424,10 +1424,12 @@ public sealed class AskService
         // One line per repair the argument gate made to freeze this plan. The gate is forgiving so
         // that one stray key stops destroying seven valid operations, but a repair rate nobody
         // watches is drift nobody notices, so every one of them is counted here. The detail is
-        // argument names and verbs only: never a value, never user text.
+        // argument names and verbs only: never a value, never user text. UserOrder is zero-based;
+        // the operation id beside it in the trace is one-based ("...:op-1"), so the line counts the
+        // one-based way rather than asking whoever correlates the two to adjust by one.
         foreach (var operation in plan.Operations)
             foreach (var repair in operation.Repairs)
-                Diagnostic("planner_argument_repaired", $"op{operation.UserOrder} {repair}");
+                Diagnostic("planner_argument_repaired", $"op{operation.UserOrder + 1} {repair}");
 
         var trace = new JsonArray
         {

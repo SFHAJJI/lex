@@ -854,6 +854,48 @@ public sealed class OperationPolicyTests
             repairs);
     }
 
+    // Keeping a quoted number is still a repair. Counting it separately is what distinguishes a
+    // planner writing the wrong JSON shape from a planner asking for a page nobody can serve.
+    [Fact]
+    public void A_page_bound_the_planner_quoted_is_kept_and_counted_as_its_own_repair()
+    {
+        var normalized = OperationArguments.Normalize("search", new JsonObject
+        {
+            ["query"] = "renewable energy",
+            ["limit"] = "25",
+        }, out var repairs);
+
+        Assert.Equal(25, normalized["limit"]!.GetValue<int>());
+        Assert.Equal(["search.limit coerced"], repairs);
+    }
+
+    [Fact]
+    public void A_page_bound_the_planner_wrote_correctly_is_not_a_repair()
+    {
+        OperationArguments.Normalize("search", new JsonObject
+        {
+            ["query"] = "renewable energy",
+            ["limit"] = 25,
+        }, out var repairs);
+
+        Assert.Empty(repairs);
+    }
+
+    // A quoted number outside the action's bounds is the page nobody can serve, so it is dropped
+    // rather than coerced, and it is counted under the verb that says so.
+    [Fact]
+    public void A_quoted_page_bound_outside_its_range_is_dropped_rather_than_coerced()
+    {
+        var normalized = OperationArguments.Normalize("search", new JsonObject
+        {
+            ["query"] = "renewable energy",
+            ["limit"] = "9000",
+        }, out var repairs);
+
+        Assert.Equal(10, normalized["limit"]!.GetValue<int>());
+        Assert.Equal(["search.limit dropped"], repairs);
+    }
+
     // work_query is resolved to a work before execution; MCP is never shown it.
     private static JsonObject Executable(string tool, JsonObject normalized)
     {
