@@ -687,6 +687,51 @@ public sealed class WorkSearchTests : IDisposable
     }
 
     [Fact]
+    public void A_numbered_official_title_inside_a_long_question_resolves_the_work()
+    {
+        var db = TempDb();
+        var gdpr = Doc("eu:32016r0679:2016-05-04", "32016r0679", "Regulation (EU) 2016/679");
+        var other = Doc("eu:32024r0607:2024-02-15", "32024r0607", "Regulation (EU) 2024/607");
+        IndexBuilder.Build(db, Stamp(), [gdpr, other],
+            [Provision(gdpr, "Le traitement n'est licite que si ...", "art_6", "6"),
+             Provision(other, "Champ d'application.", "art_6", "6")], [], [], null);
+
+        using var reader = LexIndexReader.Open(db);
+        var result = reader.SearchKeyword(
+            "What does Article 6 of Regulation (EU) 2016/679 say?", FilterSet.All, 10,
+            fuzzyAuto: false);
+
+        Assert.Equal("resolved", result.QueryPlan!.WorkResolutionStatus);
+        Assert.True(result.QueryPlan.HasStrongWorkMatch);
+        Assert.Equal(["32016r0679"], result.QueryPlan.WorkConstraints);
+        Assert.Equal("6", result.QueryPlan.ArticleNumber);
+        Assert.Contains(result.Hits, hit => hit.Doc.GroupKey == "32016r0679"
+            && hit.Provision.Anchor == "art_6");
+        Assert.DoesNotContain(result.Hits, hit => hit.Doc.GroupKey == "32024r0607");
+    }
+
+    // The safety boundary of the rule above, stated separately so it cannot be loosened by
+    // accident: without its own number a contained title is prose, not a designation.
+    [Fact]
+    public void A_contained_title_without_its_own_number_still_never_scopes_a_topical_question()
+    {
+        var db = TempDb();
+        var titleOnly = Doc("eu:title:2020-01-01", "title", "Reporting obligations");
+        var direct = Doc("eu:direct:2020-01-01", "direct", "Companies Act");
+        IndexBuilder.Build(db, Stamp(), [titleOnly, direct],
+            [Provision(titleOnly, "Unrelated administrative wording."),
+             Provision(direct, "Companies have reporting obligations.")], [], [], null);
+
+        using var reader = LexIndexReader.Open(db);
+        var result = reader.SearchKeyword(
+            "what are reporting obligations for companies", FilterSet.All, 10, fuzzyAuto: false);
+
+        Assert.Equal("not_requested", result.QueryPlan!.WorkResolutionStatus);
+        Assert.False(result.QueryPlan.HasStrongWorkMatch);
+        Assert.Empty(result.QueryPlan.WorkConstraints);
+    }
+
+    [Fact]
     public void A_contained_generic_official_title_does_not_become_an_authoritative_scope()
     {
         var db = TempDb();

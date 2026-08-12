@@ -910,10 +910,7 @@ public sealed class LexIndexReader : IDisposable
             _workCatalogVersion >= 2);
         var identityFilters = filters with { DocumentRole = null };
         var workMatches = ResolveWorkMatches(catalogMatches, identityFilters);
-        var identityMatches = workMatches.Where(hit => hit.Reason is
-                "exact_identifier" or "exact_alias" or "contained_identifier" or "contained_alias"
-                or "exact_title")
-            .ToList();
+        var identityMatches = workMatches.Where(IsWorkIdentity).ToList();
         var resolutions = BuildWorkResolutions(query, identityMatches);
         var resolvedMentions = resolutions.Where(item => item.Status == "resolved")
             .Select(item => WorkSearch.Normalize(item.Mention)).ToHashSet(StringComparer.Ordinal);
@@ -1110,6 +1107,24 @@ public sealed class LexIndexReader : IDisposable
             WorkResolutions = resolutions,
         };
     }
+
+    /// <summary>
+    /// Whether a catalog match names a work rather than merely mentioning words it contains.
+    /// Only these matches may resolve a mention, scope the query, or become a work constraint.
+    /// </summary>
+    /// A title quoted inside a longer question names the work only when the title is a
+    /// designation carrying its own number ("Regulation (EU) 2016/679"). A descriptive title
+    /// ("Reporting obligations") is reproduced by ordinary prose and stays weak, which is the
+    /// same digit requirement WorkSearch.Find already imposes on a contained official identifier.
+    /// Dropping contained_title entirely was the bug: the user's own words named the instrument
+    /// and the search reported work_resolution_status=not_requested anyway.
+    private static bool IsWorkIdentity(WorkSearchHit hit) => hit.Reason switch
+    {
+        "exact_identifier" or "exact_alias" or "exact_title" => true,
+        "contained_identifier" or "contained_alias" => true,
+        "contained_title" => hit.MatchedValue?.Any(char.IsDigit) == true,
+        _ => false,
+    };
 
     private static IReadOnlyList<WorkResolution> BuildWorkResolutions(
         string query, IReadOnlyList<WorkSearchHit> identityMatches)

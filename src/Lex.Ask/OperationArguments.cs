@@ -40,8 +40,49 @@ internal static class OperationArguments
             ["gap"] = Set("reason"),
         };
 
+    /// <summary>
+    /// Arguments validated against a closed value set; the planner schema is generated from it,
+    /// exactly as the argument names are generated from <see cref="Allowed"/>. Shown an open
+    /// string, the model picks a plausible synonym ("current", "semantic", "churn") and the whole
+    /// plan aborts on the first one.
+    ///
+    /// Global by name: each of these names belongs to exactly one operation (retrieval_mode,
+    /// time_scope and fuzzy to search, mode to as_of, order to changes_in_period), which is why
+    /// <see cref="Validate"/> may apply the whole table unconditionally. If a future operation
+    /// reuses a name with different values, key this by (action, name) and make Validate switch
+    /// on action in the same change.
+    /// </summary>
+    private static readonly IReadOnlyDictionary<string, string[]> AllowedValues =
+        new Dictionary<string, string[]>(StringComparer.Ordinal)
+        {
+            ["retrieval_mode"] = ["keyword", "hybrid"],
+            ["time_scope"] = ["all_versions", "as_of"],
+            ["fuzzy"] = ["auto", "off"],
+            ["mode"] = ["full", "outline", "select"],
+            ["order"] = ["by_date", "by_churn"],
+        };
+
+    /// <summary>Conditional couplings the value set alone cannot express. Advertising a value
+    /// makes the model likelier to pick it, and these two fail a second gate when picked
+    /// alone.</summary>
+    private static readonly IReadOnlyDictionary<string, string> ValueGuidance =
+        new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["time_scope"] = "all_versions (default) or as_of; as_of requires as_of=YYYY-MM-DD",
+            ["mode"] = "full (default), outline or select; select requires anchors or article_number",
+        };
+
     /// <summary>Every action this boundary accepts; the planner schema is generated from it.</summary>
     public static IEnumerable<string> Actions => Allowed.Keys;
+
+    /// <summary>The exact values <see cref="Normalize"/> accepts for one argument, or null when
+    /// the argument is not value-closed at this boundary.</summary>
+    public static IReadOnlyList<string>? AllowedValuesFor(string name) =>
+        AllowedValues.TryGetValue(name, out var values) ? values : null;
+
+    /// <summary>Guidance the planner schema attaches to a value-closed argument, or null.</summary>
+    public static string? GuidanceFor(string name) =>
+        ValueGuidance.TryGetValue(name, out var guidance) ? guidance : null;
 
     /// <summary>The exact argument names <see cref="Normalize"/> accepts for one action.</summary>
     public static IReadOnlyCollection<string> AllowedFor(string action) =>
@@ -50,9 +91,11 @@ internal static class OperationArguments
             : throw new InvalidDataException(
                 $"Unknown legal operation or application action '{action}'.");
 
-    public static JsonObject Normalize(string action, JsonObject proposed)
+    public static JsonObject Normalize(
+        string action, JsonObject proposed, CorpusVocabulary? vocabulary = null)
     {
         ArgumentNullException.ThrowIfNull(proposed);
+        vocabulary ??= CorpusVocabulary.Unconstrained;
         if (!Allowed.TryGetValue(action, out var allowed))
             throw new InvalidDataException($"Unknown legal operation or application action '{action}'.");
         var unexpected = proposed.Select(item => item.Key).Where(key => !allowed.Contains(key)).ToArray();
@@ -103,7 +146,10 @@ internal static class OperationArguments
             if (text.Length == 0 || text.Length > maximum)
                 throw new InvalidDataException(
                     $"Argument '{name}' must contain 1 to {maximum} characters.");
-            normalized[name] = text;
+            // "LU-Legilux" and "lu" name mounted things; the selectors behind MCP match publisher
+            // ordinally, so the mounted spelling is restored before the plan is frozen. A value
+            // nothing mounted matches is left alone on purpose (see CorpusVocabulary.Canonical).
+            normalized[name] = vocabulary.Canonical(name, text) ?? text;
         }
 
         ApplyDefaults(action, normalized);
@@ -177,11 +223,7 @@ internal static class OperationArguments
                 throw new InvalidDataException("clarification requires bounded options.");
         }
 
-        Enum(arguments, "retrieval_mode", "keyword", "hybrid");
-        Enum(arguments, "fuzzy", "auto", "off");
-        Enum(arguments, "time_scope", "all_versions", "as_of");
-        Enum(arguments, "mode", "full", "outline", "select");
-        Enum(arguments, "order", "by_date", "by_churn");
+        foreach (var (name, values) in AllowedValues) Enum(arguments, name, values);
         if (Text(arguments, "time_scope") == "as_of") Date(arguments, "as_of");
         if (Text(arguments, "mode") == "select"
             && Text(arguments, "anchors") is null

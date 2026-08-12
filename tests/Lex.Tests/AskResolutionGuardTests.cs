@@ -54,6 +54,23 @@ public sealed class AskResolutionGuardTests
             new JsonObject { ["work"] = "eu-eurlex:32022r2554" }));
     }
 
+    // The end of the chain the index fix feeds: once the raw user query's own words resolve a
+    // work, the guard authorizes it on work-level evidence alone. Anchored provision evidence is
+    // the fallback for an unresolved query, never a precondition for a named instrument.
+    [Fact]
+    public void A_named_work_resolved_from_the_users_own_words_needs_no_anchored_evidence()
+    {
+        var guard = new AskService.WorkResolutionGuard();
+        guard.ObserveCurrentUserSearch(SearchResult("resolved",
+                ("regulation eu 2016 679", "resolved", new[] { "eu-eurlex:32016r0679" })),
+            hasPriorContext: false);
+
+        Assert.Equal(["eu-eurlex:32016r0679"], guard.CurrentResolvedWorks);
+        Assert.True(guard.Allows("as_of",
+            new JsonObject { ["work"] = "eu-eurlex:32016r0679" }));
+        Assert.Null(guard.ClarificationFor("eu-eurlex:32016r0679"));
+    }
+
     [Fact]
     public void Weak_discovery_without_a_provision_cannot_authorize_a_follow_up()
     {

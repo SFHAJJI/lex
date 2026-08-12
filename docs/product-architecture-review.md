@@ -207,7 +207,7 @@ it with `not_evaluated`.
 | `no_result`, `no_changes_in_period` | `succeeded_empty` |
 | unresolved or ambiguous required work/parameter | `needs_clarification` |
 | `profiles_differ` | `not_comparable` |
-| `unknown_work`, `unknown_anchor` | `not_found` |
+| `unknown_work`, `unknown_anchor`, `unknown_publisher` | `not_found` |
 | `no_version_for_date`, `anchor_not_in_version`, `no_provision_history`, `text_not_available`, `text_withheld` | `not_available` |
 | `no_corpus_mounted` or a missing required publisher | `not_available` and readiness failure |
 | validation exception or invalid tool arguments | `invalid_request` as a typed result, with no internal exception text |

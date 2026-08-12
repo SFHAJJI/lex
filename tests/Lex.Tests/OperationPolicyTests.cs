@@ -93,6 +93,214 @@ public sealed class OperationPolicyTests
                 .Order(StringComparer.Ordinal));
     }
 
+    // The value half of the same contract. Names were generated from the allowlist; values were
+    // not, so the model was shown an open string where Normalize accepts two or three literals,
+    // picked "semantic" or "current", and one rejection aborted the whole plan.
+    [Fact]
+    public void Every_planner_argument_offers_exactly_the_values_its_validator_accepts()
+    {
+        var closed = new List<string>();
+        foreach (var branch in PlannerBranches(CorpusVocabulary.Unconstrained))
+        {
+            var properties = branch.Value["properties"]!["arguments"]!["properties"]!.AsObject();
+            foreach (var (name, value) in properties)
+            {
+                var expected = OperationArguments.AllowedValuesFor(name);
+                if (expected is null)
+                {
+                    Assert.Null(value!["enum"]);
+                    continue;
+                }
+                closed.Add(name);
+                Assert.Equal(expected, value!["enum"]!.AsArray()
+                    .Select(item => item!.GetValue<string>()));
+                Assert.Equal("string", value["type"]!.GetValue<string>());
+            }
+        }
+
+        Assert.Equal(
+            ["fuzzy", "mode", "order", "retrieval_mode", "time_scope"],
+            closed.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal));
+    }
+
+    public static TheoryData<string, string, string> AdvertisedPlannerValues
+    {
+        get
+        {
+            var data = new TheoryData<string, string, string>();
+            foreach (var (tool, argument) in new[]
+                     {
+                         ("search", "retrieval_mode"), ("search", "time_scope"),
+                         ("search", "fuzzy"), ("as_of", "mode"),
+                         ("changes_in_period", "order"),
+                     })
+                foreach (var value in OperationArguments.AllowedValuesFor(argument)!)
+                    data.Add(tool, argument, value);
+            return data;
+        }
+    }
+
+    // A schema may never advertise a value the gate rejects. Both conditionally coupled values
+    // are supplied with the argument the second gate requires, which is what the property
+    // descriptions on time_scope and mode tell the model to do.
+    [Theory]
+    [MemberData(nameof(AdvertisedPlannerValues))]
+    public void Every_value_the_planner_schema_advertises_freezes_into_a_plan(
+        string tool, string argument, string value)
+    {
+        var arguments = tool switch
+        {
+            "search" => new JsonObject { ["query"] = "renewable energy" },
+            "as_of" => new JsonObject
+            {
+                ["work_query"] = "GDPR", ["date"] = "2021-01-01", ["article_number"] = "6",
+            },
+            _ => new JsonObject { ["from_date"] = "2024-01-01", ["to_date"] = "2024-12-31" },
+        };
+        arguments[argument] = value;
+        if (value == "as_of") arguments["as_of"] = "2024-01-01";
+
+        var plan = OperationPlan.FromPlannerOutput("req-1", "en", new JsonArray(
+            new JsonObject { ["tool"] = tool, ["arguments"] = arguments }));
+
+        Assert.Equal(tool, Assert.Single(plan.Operations).Tool);
+    }
+
+    // The gate itself must keep failing closed. The schema only stops the model proposing an
+    // off-set value; it is guidance, not a decoding constraint, and must never become a coercion.
+    [Theory]
+    [InlineData("search", "time_scope", "current")]
+    [InlineData("search", "retrieval_mode", "semantic")]
+    [InlineData("search", "fuzzy", "true")]
+    [InlineData("as_of", "mode", "text")]
+    [InlineData("changes_in_period", "order", "churn")]
+    public void An_argument_value_outside_the_closed_set_still_aborts_the_plan(
+        string tool, string argument, string value)
+    {
+        var arguments = tool switch
+        {
+            "search" => new JsonObject { ["query"] = "renewable energy" },
+            "as_of" => new JsonObject { ["work_query"] = "GDPR", ["date"] = "2021-01-01" },
+            _ => new JsonObject { ["from_date"] = "2024-01-01", ["to_date"] = "2024-12-31" },
+        };
+        arguments[argument] = value;
+
+        var rejected = Assert.Throws<InvalidDataException>(() =>
+            OperationPlan.FromPlannerOutput("req-1", "en", new JsonArray(
+                new JsonObject { ["tool"] = tool, ["arguments"] = arguments })));
+
+        Assert.Contains("has an unsupported value", rejected.Message, StringComparison.Ordinal);
+        Assert.Contains($"'{argument}'", rejected.Message, StringComparison.Ordinal);
+    }
+
+    // Four copies of these literals exist. This is the net for the next edit to any of them.
+    [Fact]
+    public void The_public_mcp_schema_and_the_assistant_value_sets_cannot_drift()
+    {
+        var tools = new McpCore(new Dictionary<string, LexIndexReader>()).ToolDefs()
+            .OfType<JsonObject>().ToArray();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var tool in tools)
+            foreach (var (name, schema) in tool["inputSchema"]!["properties"]!.AsObject())
+            {
+                if (schema!["enum"] is not JsonArray values) continue;
+                seen.Add(name);
+                Assert.Equal(OperationArguments.AllowedValuesFor(name),
+                    values.Select(item => item!.GetValue<string>()));
+            }
+
+        Assert.Equal(["fuzzy", "mode", "order", "retrieval_mode", "time_scope"],
+            seen.Order(StringComparer.Ordinal));
+    }
+
+    // Layer one of the hallucinated-publisher defect: the planner was handed publisher as a bare
+    // string, emitted "EU" or "Luxembourg", and every layer below read the resulting zero-reader
+    // selection as an empty corpus.
+    [Fact]
+    public void The_planner_sees_only_the_publishers_and_jurisdictions_actually_mounted()
+    {
+        var vocabulary = new CorpusVocabulary(
+            ["lu-legilux", "eu-eurlex"], ["LU", "EU"]);
+        var corpusScoped = 0;
+
+        foreach (var branch in PlannerBranches(vocabulary))
+            foreach (var (name, schema) in
+                     branch.Value["properties"]!["arguments"]!["properties"]!.AsObject())
+            {
+                if (name is not ("publisher" or "jurisdiction")) continue;
+                corpusScoped++;
+                // Ordinal order, so the emitted schema is byte-identical between processes.
+                Assert.Equal(
+                    name == "publisher"
+                        ? new[] { "eu-eurlex", "lu-legilux" }
+                        : ["EU", "LU"],
+                    schema!["enum"]!.AsArray().Select(item => item!.GetValue<string>()));
+                Assert.Contains("OMIT", schema["description"]!.GetValue<string>(),
+                    StringComparison.Ordinal);
+            }
+
+        // search, changes_in_period and in_force_on carry both; coverage carries publisher alone.
+        Assert.Equal(7, corpusScoped);
+    }
+
+    // A zero-index build mounts nothing, and `"enum": []` is invalid JSON Schema that some model
+    // APIs reject outright: planning would break entirely on exactly the build that can least
+    // afford it. No mounted set means no constraint.
+    [Fact]
+    public void An_unmounted_build_constrains_no_corpus_filter_rather_than_emitting_an_empty_enum()
+    {
+        var schema = AskService.PlannerArgumentSchema("coverage",
+            new CorpusVocabulary([], []));
+
+        Assert.Null(schema["properties"]!["publisher"]!["enum"]);
+        Assert.Equal("string", schema["properties"]!["publisher"]!["type"]!.GetValue<string>());
+    }
+
+    // Layer two: the schema is a request, not a guarantee. A mounted id spelled with different
+    // case is restored before the plan is frozen; a value nothing mounts is neither rewritten nor
+    // thrown, because throwing here aborts every other operation in the same plan.
+    [Fact]
+    public void A_corpus_filter_is_canonicalised_against_the_mounted_set_before_the_plan_freezes()
+    {
+        var vocabulary = new CorpusVocabulary(["lu-legilux", "eu-eurlex"], ["LU", "EU"]);
+
+        Assert.Equal("lu-legilux", OperationArguments.Normalize(
+            "coverage", new JsonObject { ["publisher"] = "LU-Legilux" },
+            vocabulary)["publisher"]!.GetValue<string>());
+        Assert.Equal("LU", OperationArguments.Normalize(
+            "search", new JsonObject { ["query"] = "travail", ["jurisdiction"] = "lu" },
+            vocabulary)["jurisdiction"]!.GetValue<string>());
+
+        var unmatched = OperationArguments.Normalize(
+            "coverage", new JsonObject { ["publisher"] = "Luxembourg" }, vocabulary);
+        Assert.Equal("Luxembourg", unmatched["publisher"]!.GetValue<string>());
+    }
+
+    // Layer three's standalone safety net: whatever emptied a coverage payload, an inventory of
+    // nothing is a gap. CoverageView([]) is summed into "Lex mounts 0 works and 0 verified
+    // versions", a false statement about the product's own holdings.
+    [Fact]
+    public void An_empty_coverage_payload_is_never_rendered_as_a_count_of_the_holdings()
+    {
+        foreach (var payload in new[] { "[]", """{"status":"unknown_publisher"}""" })
+        {
+            var effect = UiMapper.From(
+                "coverage", new JsonObject(), JsonNode.Parse(payload)!, "en");
+
+            Assert.Null(effect.Coverage);
+            Assert.NotNull(effect.Gap);
+            Assert.NotEmpty(effect.Gap!.Explanation);
+        }
+    }
+
+    private static IEnumerable<KeyValuePair<string, JsonObject>> PlannerBranches(
+        CorpusVocabulary vocabulary) =>
+        AskService.PlannerTools(vocabulary)[0]!["function"]!["parameters"]!["properties"]!
+            ["operations"]!["items"]!["oneOf"]!.AsArray()
+            .Select(node => new KeyValuePair<string, JsonObject>(
+                node!["properties"]!["tool"]!["enum"]![0]!.GetValue<string>(), node.AsObject()));
+
     public static TheoryData<string, string> ShippedPlannerOperations => new()
     {
         { "search", """{"tool":"search","arguments":{"query":"renewable energy","limit":10}}""" },
@@ -131,6 +339,7 @@ public sealed class OperationPolicyTests
         { McpStatus.ProfilesDiffer, LegalOutcome.NotComparable },
         { McpStatus.UnknownWork, LegalOutcome.NotFound },
         { McpStatus.UnknownAnchor, LegalOutcome.NotFound },
+        { McpStatus.UnknownPublisher, LegalOutcome.NotFound },
         { McpStatus.NoVersionForDate, LegalOutcome.NotAvailable },
         { McpStatus.AnchorNotInVersion, LegalOutcome.NotAvailable },
         { McpStatus.NoProvisionHistory, LegalOutcome.NotAvailable },
