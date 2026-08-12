@@ -1259,9 +1259,12 @@ public sealed class AskService
         }
     }
 
+    // Any Unicode letter, not a hand-listed Latin-1 range. The ligatures French actually writes
+    // (œ in "œuvre", "sœur"; æ) sit above Latin-1 Supplement, so a range split those words into
+    // fragments belonging to no vocabulary and dropped the evidence they carry.
     private static readonly System.Text.RegularExpressions.Regex WordToken = new(
-        @"[a-zà-öø-ÿ]+",
-        System.Text.RegularExpressions.RegexOptions.IgnoreCase
+        @"\p{L}+",
+        System.Text.RegularExpressions.RegexOptions.CultureInvariant
         | System.Text.RegularExpressions.RegexOptions.Compiled);
 
     // Tier 1: interrogative and verbal FRAME words. They belong to the asker's own sentence and

@@ -773,6 +773,11 @@ public sealed class AskOperationControllerTests : IDisposable
         { "fr", "Citez l'article 7 du règlement abus de marché." },
         { "fr", "Que prévoyait la loi du 21 septembre 2006 sur le bail à usage d'habitation ?" },
         { "fr", "Quel est le delai de preavis applicable ?" },
+        // The ligature œ sits above Latin-1 Supplement. A hand-listed letter range split "œuvre"
+        // into a fragment that belongs to no vocabulary, and "œil" into the French pronoun "il",
+        // so the tokenizer both lost real evidence and invented some. Both readings are pinned.
+        { "fr", "Quelle est la mise en œuvre de cette obligation ?" },
+        { "en", "Which provision governs the mise en œuvre of that obligation?" },
     };
 
     private const string FrenchCopy =
