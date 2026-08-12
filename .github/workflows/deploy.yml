@@ -507,7 +507,7 @@ jobs:
           [ -n "$metric_evidence" ] && [ -n "$metric_confirmation" ] \
             || { echo "::error::candidate metrics were not independently confirmed for $metric_required_timestamp in $metric_window_start/$metric_window_end; metric response shape: $metric_shape";
                  [ -s "$metric_error" ] \
-                   && echo "::error::the metrics query itself reported: $(tr '\n' ' ' < "$metric_error" | cut -c1-800)";
+                   && echo "::error::the metrics query last reported: $(tr '\n' ' ' < "$metric_error" | tail -c 800)";
                  exit 1; }
           memory_max=$(printf '%s\n%s' "$metric_evidence" "$metric_confirmation" \
             | jq -s 'map(.memory_max) | max')
