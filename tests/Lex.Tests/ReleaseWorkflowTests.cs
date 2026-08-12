@@ -98,7 +98,6 @@ public sealed class ReleaseWorkflowTests
             "for attempt in $(seq 1 ", metricSection, StringComparison.Ordinal);
         Assert.True(metricWait >= 0 && metricPoll > metricWait);
         Assert.Contains("[ \"$metric_wait_seconds\" -gt 0 ] && sleep \"$metric_wait_seconds\"", workflow);
-        Assert.Contains("timespan=$metric_window_start/$metric_window_end", workflow);
         Assert.Contains("scripts/deploy/metric_evidence.py", workflow);
         Assert.Contains("revisionName eq '$candidate'", workflow);
         Assert.Contains("revisionName eq '*'", workflow);
@@ -217,7 +216,7 @@ public sealed class ReleaseWorkflowTests
     }
 
     [Fact]
-    public void Candidate_metric_evidence_allows_for_Azure_Monitor_ingestion_lag()
+    public void Candidate_metric_evidence_queries_wider_than_the_window_it_measures()
     {
         var workflow = File.ReadAllText(Path.Combine(RepoRoot(), ".github", "workflows", "deploy.yml"));
         var metricsStart = workflow.IndexOf("metric_evidence=''", StringComparison.Ordinal);
@@ -232,6 +231,19 @@ public sealed class ReleaseWorkflowTests
         Assert.Contains("api-version=2023-10-01", metricsBlock);
         Assert.Contains("metricnames=WorkingSetBytes,Replicas", metricsBlock);
         Assert.DoesNotContain("az monitor metrics list", metricsBlock);
+        // Run 31540777978 proved a timespan equal to the load window returns no
+        // buckets while a wide one returns every minute of that same window, so
+        // the query must start before the window and end at the current instant.
+        // The window itself stays the contract handed to metric_evidence.py.
+        Assert.DoesNotContain("timespan=$metric_window_start/$metric_window_end", metricsBlock);
+        Assert.Contains("metric_query_start=$(date -u -d \"@$((metric_window_start_epoch - ",
+            metricsBlock);
+        Assert.Contains("query_end=$(date -u +%Y-%m-%dT%H:%M:%SZ)", metricsBlock);
+        Assert.Contains("timespan=$metric_query_start/$query_end", metricsBlock);
+        Assert.Contains("interval=PT1M", metricsBlock);
+        Assert.Contains("aggregation=Maximum", metricsBlock);
+        Assert.Contains("\"$candidate\" \"$metric_window_start\" \"$metric_required_timestamp\"",
+            metricsBlock);
         Assert.Contains("scripts/deploy/metric_evidence.py", metricsBlock);
         Assert.Contains("revisionName eq '$candidate'", metricsBlock);
         Assert.Contains("revisionName eq '*'", metricsBlock);
