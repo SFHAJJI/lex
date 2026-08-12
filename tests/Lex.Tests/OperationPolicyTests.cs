@@ -216,16 +216,18 @@ public sealed class OperationPolicyTests
             // A closed value set is the tighter constraint; a date is probed by its pattern.
             if (OperationArguments.AllowedValuesFor(name) is not null) continue;
             if (OperationArguments.IsDate(name)) continue;
+            var minimum = OperationArguments.MinimumStringLength;
             var maximum = OperationArguments.MaximumLengthFor(name);
-            var expected = $"Argument '{name}' must contain 1 to {maximum} characters.";
+            var expected =
+                $"Argument '{name}' must contain {minimum} to {maximum} characters.";
 
+            OperationArguments.Normalize(action, With(action, name, LengthProbe(name, minimum)));
             OperationArguments.Normalize(action, With(action, name, LengthProbe(name, maximum)));
 
-            Assert.Equal(expected, Assert.Throws<InvalidDataException>(() =>
-                OperationArguments.Normalize(
-                    action, With(action, name, LengthProbe(name, maximum + 1)))).Message);
-            Assert.Equal(expected, Assert.Throws<InvalidDataException>(() =>
-                OperationArguments.Normalize(action, With(action, name, ""))).Message);
+            foreach (var outside in new[] { minimum - 1, maximum + 1 })
+                Assert.Equal(expected, Assert.Throws<InvalidDataException>(() =>
+                    OperationArguments.Normalize(
+                        action, With(action, name, LengthProbe(name, outside)))).Message);
         }
     }
 
