@@ -742,6 +742,68 @@ public sealed class AskOperationControllerTests : IDisposable
         Assert.Contains("eu-eurlex:32012r0648", reply, StringComparison.Ordinal);
     }
 
+    // The same turn with synthesis on, which is how it reaches a reader who asked for prose. The
+    // composer is told to rewrite the draft and nothing obliges it to keep a clause about how
+    // selection resolved, so the sentence that makes a wrong instrument correctable in one turn
+    // used to survive only by the model's goodwill. It is enforced now, exactly as a coverage
+    // disclosure is, and this asserts it at the served reply rather than on the helper.
+    [Fact]
+    public async Task Synthesis_cannot_drop_the_clause_naming_the_instrument_that_lost()
+    {
+        const string title = "Regulation (EU) No 575/2013 of the European Parliament and of the "
+            + "Council of 26 June 2013 on prudential requirements for credit institutions and "
+            + "investment firms and amending Regulation (EU) No 648/2012";
+        const string question = "Under " + title + ", what does Article 26 require?";
+        var resolutions = new[]
+        {
+            ("Regulation (EU) No 648/2012", "resolved", new[] { "eu-eurlex:32012r0648" }),
+            (title, "resolved", new[] { "eu-eurlex:32013r0575" }),
+        };
+        var service = new AskService(_core, new StaticPlanner("en", new JsonArray(new JsonObject
+        {
+            ["tool"] = "as_of",
+            ["arguments"] = new JsonObject
+            {
+                ["work_query"] = title,
+                ["article_number"] = "26",
+                ["date"] = "2021-01-01",
+            },
+        }), synthesis: true), new SilentSynthesizer(), legalTool: SearchStub(question,
+            Envelope(resolutions,
+                Hit("eu-eurlex:32013r0575:2021-01-01", "art_25", "keyword"),
+                Hit("eu-eurlex:32012r0648:2019-06-17", "art_26", "keyword")),
+            Envelope(resolutions,
+                Hit("eu-eurlex:32012r0648:2019-06-17", "art_26", "article_intent"),
+                Hit("eu-eurlex:32013r0575:2021-01-01", "art_25", "article_intent"))));
+
+        var response = await service.AskAsync(History(question), Guid.NewGuid().ToString(),
+            "law.test", CancellationToken.None);
+
+        var reply = response.Body["reply"]!.GetValue<string>();
+        // The composer's own prose is served,
+        Assert.Contains("Common Equity Tier 1", reply, StringComparison.Ordinal);
+        // and the disclosure it never wrote is there anyway.
+        Assert.Contains("named more than one instrument", reply, StringComparison.Ordinal);
+        Assert.Contains("eu-eurlex:32012r0648", reply, StringComparison.Ordinal);
+    }
+
+    /// <summary>Answers well, says nothing about how the instrument was chosen.</summary>
+    private sealed class SilentSynthesizer : IOperationSynthesizer
+    {
+        public Task<AgentFinalization> SynthesizeAsync(
+            string question,
+            string deterministicDraft,
+            IReadOnlyList<AgentEvidence> evidence,
+            string locale,
+            CancellationToken cancellationToken) =>
+            Task.FromResult(new AgentFinalization(
+                new AgentAnswerDraft(
+                    AgentAnswerStatus.Answer,
+                    "Article 26 sets out the composition of Common Equity Tier 1.",
+                    [], [], null, null),
+                SynthesisFailed: false));
+    }
+
     // The same two instruments, cited side by side rather than one inside the other's title, and
     // with no trailing-clause verb to demote either. Containment cannot hold, demotion has nothing
     // to demote, and only one of the two has a held art_26, which is the case the anchor test is
