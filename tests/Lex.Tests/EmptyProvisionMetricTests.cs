@@ -74,6 +74,55 @@ public sealed class EmptyProvisionMetricTests
         }
     }
 
+    // The distinction the flag exists to make. One empty article out of four is a gap in a document;
+    // three out of four is a profile that did not work on it, and only the second is worth a name.
+    // Both report the same provision-level count, so a corpus rate cannot tell them apart.
+    [Fact]
+    public void A_version_that_is_mostly_empty_is_named_while_a_scattered_gap_is_not()
+    {
+        var scattered = Path.Combine(Path.GetTempPath(), $"lex-empty-prov-{Guid.NewGuid():N}");
+        var failed = Path.Combine(Path.GetTempPath(), $"lex-empty-prov-{Guid.NewGuid():N}");
+        try
+        {
+            // One of four empty: 25 percent, below the threshold.
+            var scatteredStats = DeriveFixture(scattered, """
+                <html><body>
+                <p class="title-article-norm">Article 1</p><p>Wording one.</p>
+                <p class="title-article-norm">Article 2</p><p>Wording two.</p>
+                <p class="title-article-norm">Article 3</p><p>Wording three.</p>
+                <p class="title-article-norm">Article 4</p>
+                </body></html>
+                """);
+            Assert.Equal(1, scatteredStats.EmptyProvisions);
+            Assert.Empty(scatteredStats.MostlyEmpty ?? []);
+
+            // Three of four empty: 75 percent, at or above the threshold.
+            var failedStats = DeriveFixture(failed, """
+                <html><body>
+                <p class="title-article-norm">Article 1</p><p>Wording one.</p>
+                <p class="title-article-norm">Article 2</p>
+                <p class="title-article-norm">Article 3</p>
+                <p class="title-article-norm">Article 4</p>
+                </body></html>
+                """);
+            Assert.Equal(3, failedStats.EmptyProvisions);
+            var named = Assert.Single(failedStats.MostlyEmpty ?? []);
+            Assert.Contains("3 of 4", named);
+            Assert.Contains("32000r0001", named);
+
+            // Flagged, never rejected: the provisions that did extract are still published, the
+            // version is not skipped, and the run does not fail.
+            Assert.Equal(4, failedStats.Provisions);
+            Assert.Equal(0, failedStats.Skipped);
+            Assert.Empty(failedStats.Errors);
+        }
+        finally
+        {
+            foreach (var root in new[] { scattered, failed })
+                if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+        }
+    }
+
     private static DeriveWriter.Stats DeriveFixture(string root, string html)
     {
         var corpus = Path.Combine(root, "corpus");

@@ -440,7 +440,11 @@ switch (args0[0])
         var outRoot = Get("--out") ?? throw new ArgumentException("--out required");
         Console.Error.WriteLine($"[lex] derive {publisher} {corpus} -> {outRoot}");
         var stats = Lex.Derive.DeriveWriter.Derive(corpus, outRoot, publisher);
-        Console.Error.WriteLine($"  [derive] works={stats.Works} versions={stats.Versions} provisions={stats.Provisions} empty_provisions={stats.EmptyProvisions} skipped={stats.Skipped} errors={stats.Errors.Count}");
+        Console.Error.WriteLine($"  [derive] works={stats.Works} versions={stats.Versions} provisions={stats.Provisions} empty_provisions={stats.EmptyProvisions} mostly_empty_versions={stats.MostlyEmpty?.Count ?? 0} skipped={stats.Skipped} errors={stats.Errors.Count}");
+        // Listed rather than summarised: each line names one document whose profile failed on it,
+        // which is the unit someone can go and fix. A corpus percentage names nothing.
+        foreach (var version in stats.MostlyEmpty?.Take(20) ?? [])
+            Console.Error.WriteLine($"  [derive] MOSTLY EMPTY {version}");
         foreach (var e in stats.Errors.Take(20)) Console.Error.WriteLine($"  [derive] ERROR {e}");
         return stats.Errors.Count == 0 ? 0 : 2;
     }

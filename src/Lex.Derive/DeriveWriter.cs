@@ -26,8 +26,17 @@ public static class DeriveWriter
     /// string, so it counts as coverage and any later real text reads as an amendment that never
     /// happened. Counted rather than rejected, because the existing backlog would abort every run
     /// before it could be measured.</param>
+    /// <param name="MostlyEmpty">Versions where at least <see cref="MostlyEmptyPercent"/> of the
+    /// provisions extracted with no text. Distinct from a scattered gap: it means the profile did
+    /// not work on that document. Reported rather than rejected, because rejecting would discard
+    /// the provisions that did extract and would abort the run over a pre-existing backlog.</param>
     public sealed record Stats(int Works, int Versions, int Provisions, int Skipped, List<string> Errors,
-        int EmptyProvisions = 0);
+        int EmptyProvisions = 0, IReadOnlyList<string>? MostlyEmpty = null);
+
+    /// <summary>The share of empty provisions at which a version stops being a document with gaps
+    /// and becomes a failed extraction. Half is deliberately far above the 1.2 percent corpus rate,
+    /// so the flag names documents to fix rather than restating the backlog.</summary>
+    public const int MostlyEmptyPercent = 50;
 
     public static Stats Derive(string corpusRoot, string outRoot, string publisher)
     {
@@ -43,6 +52,7 @@ public static class DeriveWriter
 
         int works = 0, versions = 0, provisionCount = 0, skipped = 0, emptyProvisions = 0;
         var errors = new List<string>();
+        var mostlyEmpty = new List<string>();
 
         foreach (var workDir in Directory.EnumerateDirectories(worksDir).OrderBy(d => d, StringComparer.Ordinal))
         {
@@ -273,6 +283,27 @@ public static class DeriveWriter
                             // thing worth knowing. It also matches the "skipped" line above.
                             Console.Error.WriteLine("  [derive] empty provisions: "
                                 + $"{emptyHere}/{extraction.Provisions.Count} {slug}/{validFrom}/{unit.ObsFile}");
+
+                            // A scattered empty provision is a gap in one article. A version that is
+                            // mostly empty is a profile that did not work on this document, which is
+                            // a materially different fact: it publishes a version whose text_sha
+                            // values are hashes of the empty string, so real wording arriving later
+                            // reads as an amendment that never happened. Named separately so it can
+                            // be counted and fixed, instead of being averaged into a corpus rate
+                            // that looks tolerable. 1.2 percent of provisions are empty overall,
+                            // while the 2003 financial-sector law is 105 of 145.
+                            //
+                            // Flagged, not refused. Refusing would discard the provisions that did
+                            // extract, and derive aborts the entire run on a non-empty error list,
+                            // so a refusal here would stop the nightly for a pre-existing backlog.
+                            if (emptyHere * 100 >= extraction.Provisions.Count * MostlyEmptyPercent)
+                            {
+                                mostlyEmpty.Add($"{slug}/{validFrom}/{unit.ObsFile}: {emptyHere} of "
+                                    + $"{extraction.Provisions.Count} provisions extracted empty");
+                                Console.Error.WriteLine("  [derive] MOSTLY EMPTY: "
+                                    + $"{emptyHere}/{extraction.Provisions.Count} "
+                                    + $"{slug}/{validFrom}/{unit.ObsFile}");
+                            }
                         }
                     }
                     catch (Exception ex)
@@ -282,7 +313,7 @@ public static class DeriveWriter
                 }
             }
         }
-        return new Stats(works, versions, provisionCount, skipped, errors, emptyProvisions);
+        return new Stats(works, versions, provisionCount, skipped, errors, emptyProvisions, mostlyEmpty);
     }
 
     /// <summary>
