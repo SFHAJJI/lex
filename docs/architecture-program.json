@@ -315,13 +315,22 @@
       "cost": "Every MCP status that changes what can be shown must cross the typed UI contract and needs an operation-to-workspace regression."
     },
     {
-      "id": "D79",
+      "id": "D83",
       "title": "Take Luxembourg subject facets from the publisher, not from us",
       "status": "planned",
       "choice": "Ingest the jolux:subjectLevel1 and jolux:subjectLevel2 assertions Legilux already publishes, storing each authority URI alongside its skos:prefLabel, and expose them as a Luxembourg facet the way document type and hierarchy already are.",
       "alternative": "Generate a Luxembourg subject vocabulary the way EU domains were enriched, or leave Luxembourg with no subject facet at all.",
       "reason": "Legilux classifies its own acts against a SKOS authority scheme of legal subjects, and its own search offers those subjects as narrowing suggestions before a query is even submitted. Citing the publisher's classification keeps subject metadata inside the rule that authority is cited data and never our opinion, which a vocabulary we invented could not satisfy. It also makes the facet comparable with the publisher's interface rather than an approximation of it.",
       "cost": "A second authority vocabulary to mirror, version and re-verify on every ingest. Labels are French only, so an English interface must show a French subject or none. Nothing equivalent exists on the EU side, so the two publishers' subject facets are not interchangeable and must not be merged into one list."
+    },
+    {
+      "id": "D84",
+      "title": "Report how many articles matched, and let a caller page through them",
+      "status": "planned",
+      "choice": "Publish a labelled count of matching articles per publisher, then add cursor paging to search using a sort key stable across fusion, dedupe and the per-work cap.",
+      "alternative": "Keep returning an unlabelled top-N with a truncated flag, or add a SQL OFFSET to the underlying query.",
+      "reason": "A researcher needs the size of the answer set and a way to work through it; the publisher's own search reports 228 results and pages them while search reports ten rows and a boolean. A SQL OFFSET is not the fix: dedupe by text state, rank fusion, the two-provisions-per-work cap and the cross-publisher budget all run after the query, so an offset over pre-dedupe rows would repeat and skip rows between pages.",
+      "cost": "C6 freezes the tool surface and names pagination explicitly, so this is a contract amendment: a spec change, reviewed golden updates for tools-list and tool-search, and a count that must be labelled as matching articles before grouping, since the post-grouping number is not what SQL can cheaply count. Publishing the unlabelled number would add one more figure that disagrees with another."
     }
   ],
   "baseline": {
