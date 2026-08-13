@@ -41,6 +41,14 @@ public static class DeriveWriter
     private static int WithText(Extraction extraction) =>
         extraction.Provisions.Count(provision => !string.IsNullOrWhiteSpace(provision.TextMd));
 
+    /// <summary>ONE predicate for "this version's extraction failed", shared by the mostly-empty
+    /// report and the second-profile fallback. They started as two inequalities, a >= on the empty
+    /// count and a strict &lt; on the with-text count, and at exactly the threshold a version was
+    /// flagged as failed yet never offered to the second profile. Flagged but unfixable, on the
+    /// boundary, is precisely the drift a single predicate exists to prevent.</summary>
+    internal static bool MostlyEmpty(int emptyCount, int totalCount) =>
+        totalCount > 0 && emptyCount * 100 >= totalCount * MostlyEmptyPercent;
+
     /// <summary>Whether a Memorial extraction is poor enough to be worth a second profile.
     ///
     /// <para>The fallback used to ask whether the first profile found any provisions at all. That
@@ -50,14 +58,18 @@ public static class DeriveWriter
     /// was never given the document.</para></summary>
     internal static bool RecoveredLittleText(Extraction extraction) =>
         extraction.Provisions.Count == 0
-        || WithText(extraction) * 100 < extraction.Provisions.Count * MostlyEmptyPercent;
+        || MostlyEmpty(extraction.Provisions.Count - WithText(extraction), extraction.Provisions.Count);
 
     /// <summary>Whether the second profile earned the document. Strictly more wording wins; equal
     /// wording keeps the first, unless the first found no structure either, which is the case the
     /// original fallback existed for.</summary>
-    internal static bool RecoversMoreText(Extraction candidate, Extraction current) =>
-        WithText(candidate) > WithText(current)
-        || (WithText(candidate) == WithText(current) && current.Provisions.Count == 0);
+    internal static bool RecoversMoreText(Extraction candidate, Extraction current)
+    {
+        var candidateWithText = WithText(candidate);
+        var currentWithText = WithText(current);
+        return candidateWithText > currentWithText
+            || (candidateWithText == currentWithText && current.Provisions.Count == 0);
+    }
 
     public static Stats Derive(string corpusRoot, string outRoot, string publisher)
     {
@@ -325,7 +337,7 @@ public static class DeriveWriter
                             // Collected, not printed. The list is returned and the caller decides
                             // how much of it to show. Printing here as well duplicated every line
                             // and made the caller's own bound meaningless.
-                            if (emptyHere * 100 >= extraction.Provisions.Count * MostlyEmptyPercent)
+                            if (MostlyEmpty(emptyHere, extraction.Provisions.Count))
                                 mostlyEmpty.Add($"{slug}/{validFrom}/{unit.ObsFile}: {emptyHere} of "
                                     + $"{extraction.Provisions.Count} provisions extracted empty");
                         }

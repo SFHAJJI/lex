@@ -47,6 +47,22 @@ public sealed class MemorialFallbackTests
         Assert.False(DeriveWriter.RecoveredLittleText(WithCounts(145, 120)));
     }
 
+    // The exact threshold. The flag and the fallback started as two inequalities, >= on the empty
+    // count and a strict < on the with-text count, and a version at exactly the boundary was
+    // flagged as a failed extraction yet never offered to the second profile: named as broken,
+    // ineligible for the fix. Both now share one predicate, and this pins that a version the flag
+    // names is a version the fallback considers.
+    [Fact]
+    public void A_version_exactly_at_the_threshold_is_both_flagged_and_eligible()
+    {
+        Assert.True(DeriveWriter.MostlyEmpty(2, 4));
+        Assert.True(DeriveWriter.RecoveredLittleText(WithCounts(4, 2)));
+
+        // One provision below the boundary: neither flagged nor eligible.
+        Assert.False(DeriveWriter.MostlyEmpty(1, 4));
+        Assert.False(DeriveWriter.RecoveredLittleText(WithCounts(4, 3)));
+    }
+
     // The second profile has to earn the document by recovering strictly more wording. If it does
     // worse or only equals the first, the first stands: switching profiles re-keys every
     // text_sha, and that must never happen without a text gain to show for it.
