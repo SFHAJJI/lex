@@ -38,6 +38,27 @@ public static class DeriveWriter
     /// so the flag names documents to fix rather than restating the backlog.</summary>
     public const int MostlyEmptyPercent = 50;
 
+    private static int WithText(Extraction extraction) =>
+        extraction.Provisions.Count(provision => !string.IsNullOrWhiteSpace(provision.TextMd));
+
+    /// <summary>Whether a Memorial extraction is poor enough to be worth a second profile.
+    ///
+    /// <para>The fallback used to ask whether the first profile found any provisions at all. That
+    /// is a question about structure, not about wording: the 2003 consolidation of the financial
+    /// sector law produced 145 provisions and text for 40 of them, sailed past a zero check, and
+    /// published 105 provisions whose text_sha is the hash of the empty string. The second profile
+    /// was never given the document.</para></summary>
+    internal static bool RecoveredLittleText(Extraction extraction) =>
+        extraction.Provisions.Count == 0
+        || WithText(extraction) * 100 < extraction.Provisions.Count * MostlyEmptyPercent;
+
+    /// <summary>Whether the second profile earned the document. Strictly more wording wins; equal
+    /// wording keeps the first, unless the first found no structure either, which is the case the
+    /// original fallback existed for.</summary>
+    internal static bool RecoversMoreText(Extraction candidate, Extraction current) =>
+        WithText(candidate) > WithText(current)
+        || (WithText(candidate) == WithText(current) && current.Provisions.Count == 0);
+
     public static Stats Derive(string corpusRoot, string outRoot, string publisher)
     {
         var worksDir = Path.Combine(corpusRoot, "works");
@@ -164,11 +185,15 @@ public static class DeriveWriter
                                 var memorialBytes = File.ReadAllBytes(unit.FilePath);
                                 extraction = PdfMemorialLuProfile.Extract(memorialBytes, lexId);
                                 profileId = PdfMemorialLuProfile.ProfileId;
-                                if (extraction.Provisions.Count == 0)
+                                if (RecoveredLittleText(extraction))
                                 {
-                                    extraction = PdfMemorialLuProfileV2.Extract(
+                                    var second = PdfMemorialLuProfileV2.Extract(
                                         memorialBytes, lexId, workTitle);
-                                    profileId = PdfMemorialLuProfileV2.ProfileId;
+                                    if (RecoversMoreText(second, extraction))
+                                    {
+                                        extraction = second;
+                                        profileId = PdfMemorialLuProfileV2.ProfileId;
+                                    }
                                 }
                                 break;
                             case "fmx4":
