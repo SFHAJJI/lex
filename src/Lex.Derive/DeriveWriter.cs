@@ -296,14 +296,13 @@ public static class DeriveWriter
                             // Flagged, not refused. Refusing would discard the provisions that did
                             // extract, and derive aborts the entire run on a non-empty error list,
                             // so a refusal here would stop the nightly for a pre-existing backlog.
+                            //
+                            // Collected, not printed. The list is returned and the caller decides
+                            // how much of it to show. Printing here as well duplicated every line
+                            // and made the caller's own bound meaningless.
                             if (emptyHere * 100 >= extraction.Provisions.Count * MostlyEmptyPercent)
-                            {
                                 mostlyEmpty.Add($"{slug}/{validFrom}/{unit.ObsFile}: {emptyHere} of "
                                     + $"{extraction.Provisions.Count} provisions extracted empty");
-                                Console.Error.WriteLine("  [derive] MOSTLY EMPTY: "
-                                    + $"{emptyHere}/{extraction.Provisions.Count} "
-                                    + $"{slug}/{validFrom}/{unit.ObsFile}");
-                            }
                         }
                     }
                     catch (Exception ex)
