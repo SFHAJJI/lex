@@ -315,7 +315,7 @@
       "cost": "Every MCP status that changes what can be shown must cross the typed UI contract and needs an operation-to-workspace regression."
     },
     {
-      "id": "D79",
+      "id": "D83",
       "title": "Take Luxembourg subject facets from the publisher, not from us",
       "status": "planned",
       "choice": "Ingest the jolux:subjectLevel1 and jolux:subjectLevel2 assertions Legilux already publishes, storing each authority URI alongside its skos:prefLabel, and expose them as a Luxembourg facet the way document type and hierarchy already are.",
@@ -324,7 +324,7 @@
       "cost": "A second authority vocabulary to mirror, version and re-verify on every ingest. Labels are French only, so an English interface must show a French subject or none. Nothing equivalent exists on the EU side, so the two publishers' subject facets are not interchangeable and must not be merged into one list."
     },
     {
-      "id": "D80",
+      "id": "D84",
       "title": "Report how many articles matched, and let a caller page through them",
       "status": "planned",
       "choice": "Publish a labelled count of matching articles per publisher, then add cursor paging to search using a sort key stable across fusion, dedupe and the per-work cap.",
