@@ -308,6 +308,40 @@ tuning. Found by asking the running candidate the catalog's own questions before
 Fix: the case expects what the assistant does; reviewed arguments are the load-bearing subset.
 Lesson: release evidence must be rehearsed against the running system before it is sworn to.
 
+### 8.8 The deploy gate that distrusted the exit code
+Every deploy failed at the final gate for two days, roughly forty minutes per attempt, while the
+deployed revision was in fact healthy. The gate exists because an exit code proves the script
+ran, and only the monitoring plane proves the revision serves: it asks Azure Monitor for the
+candidate's own metrics before the pipeline may report success.
+
+Why it survived so long: each run surfaced exactly one cause, and fixing one per forty-minute
+cycle hid the next behind another cycle. The way out was to stop iterating and audit the whole
+pipeline in one pass, which found seven distinct causes and fixed them as a batch:
+
+1. The gate read a metric window immediately after revision start, and metric ingestion lags
+   minutes behind reality, so an empty series read as a dead revision. Fixed with a bounded
+   poll that waits up to twelve minutes for the evidence to arrive ("Wait for the metrics that
+   were always going to arrive", #163).
+2. Concurrent Azure writes lost management-plane races; a typed retry now wraps the six
+   mutating calls and retries only `ConflictingConcurrentWriteNotAllowed` (#162).
+3. The GitHub OIDC token expired during the long waits; the run now refreshes its assertion
+   mid-flight instead of failing on the next Azure call (#166).
+4. Multi-hundred-megabyte index downloads flaked; the fetch became resumable with a low-speed
+   abort so a stall fails fast and a retry continues where it stopped (#160).
+5. The az CLI crashed printing a U+2713 under a cp1252 console, truncating the very diagnostics
+   needed to debug the rest; logs are fetched over REST instead.
+6. The container registry lived in a different resource group than the workflow assumed.
+7. Carriage returns in a generated path list made a cleanup loop silently match nothing.
+
+Guard added: the gate stayed, unchanged in intent. Removing it was the tempting fix and the
+wrong one, because a revision that starts and emits nothing is exactly what it exists to catch.
+
+Lesson, and it is the same lesson twice. Operationally: when a pipeline fails serially, audit it
+whole rather than paying a full cycle per cause. Architecturally: "evidence that exists but has
+not yet arrived" is a recurring shape in this system. A metric emitted but not yet ingested is
+the same situation as a consolidation announced but not yet published (§3.3). In both places the
+honest design is a bounded wait plus a truthful status, never removing the check, never guessing.
+
 ## 9. How correctness is proven
 
 - **1,017 tests**, including golden snapshots of every public page and tool response (they caught
