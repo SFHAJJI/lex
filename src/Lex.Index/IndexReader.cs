@@ -1168,6 +1168,7 @@ public sealed class LexIndexReader : IDisposable
                         .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray(),
                     Kind: MatchKind(group.Select(match => match.Reason))),
                 StringComparer.Ordinal);
+        matches = DemoteAmendingClauseMentions(query, matches);
         var result = new List<WorkResolution>();
         var consumed = new HashSet<string>(StringComparer.Ordinal);
         foreach (var identifier in LegalIdentifierTokens(query))
@@ -1189,6 +1190,39 @@ public sealed class LexIndexReader : IDisposable
                 match.Candidates, match.Kind));
         return result.OrderBy(item => WorkSearch.Normalize(item.Mention), StringComparer.Ordinal).ToArray();
     }
+
+    /// <summary>
+    /// Drops mentions the user's own sentence put inside an amending or repealing clause, when
+    /// the sentence also named a work outside one.
+    ///
+    /// <para>An official EU title routinely ends by naming another instrument: the CRR's ends
+    /// "and amending Regulation (EU) No 648/2012". A lawyer quoting it in full therefore names
+    /// two works, both match as identity, both resolve to a single candidate, and nothing
+    /// downstream looks ambiguous. That is the conflation that served EMIR Article 26 for a CRR
+    /// question, and it is created here, so it is corrected here rather than only being survived
+    /// later by <c>WorkSubjectRule</c>.</para>
+    ///
+    /// <para>Strictly a demotion over the already-identified set, never a selector. A question
+    /// whose ONLY named work sits in such a clause is asking about that work ("what repealed
+    /// Directive 95/46/EC?"), so when nothing survives the filter, nothing is dropped.</para>
+    /// </summary>
+    private static Dictionary<string, (string[] Candidates, string? Kind)>
+        DemoteAmendingClauseMentions(
+            string query, Dictionary<string, (string[] Candidates, string? Kind)> matches)
+    {
+        if (matches.Count < 2) return matches;
+        var normalized = WorkSearch.Normalize(query);
+        var kept = matches
+            .Where(item => !WorkSearch.FollowsAmendingClause(
+                normalized, IndexOfMention(normalized, item.Key)))
+            .ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        return kept.Count == 0 || kept.Count == matches.Count ? matches : kept;
+    }
+
+    /// <summary>The mention's own start on a word boundary. The pattern begins with a space, so
+    /// the index it returns is already the unpadded one.</summary>
+    private static int IndexOfMention(string normalizedQuery, string mention) =>
+        (" " + normalizedQuery + " ").IndexOf(" " + mention + " ", StringComparison.Ordinal);
 
     /// <summary>Which stored name form a mention matched, reduced from the per-hit reasons
     /// (<c>exact_title</c>, <c>contained_identifier</c>, ...) that carried it all along. One
