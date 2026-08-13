@@ -106,8 +106,13 @@ public sealed class WorkEnrichmentFileTests : IDisposable
 
         Assert.Single(options.ReviewedAliases);
         Assert.NotEmpty(reported);
-        // One line per work, naming the values and languages that were dropped.
-        Assert.All(reported, line => Assert.Contains("is not held", line, StringComparison.Ordinal));
+        // One line per work, naming each dropped value with its language. The languages matter:
+        // the filter is keyed on
+        // (work, language), so a work held in one language can still lose another's alias.
+        Assert.All(reported, line => Assert.Contains("holds no", line, StringComparison.Ordinal));
+        Assert.Contains(reported, line =>
+            line.Contains("'CRR' (en), 'CRR' (fr)", StringComparison.Ordinal)
+            && line.EndsWith("en, fr", StringComparison.Ordinal));
         Assert.Contains(reported, line => line.Contains("'CRR'", StringComparison.Ordinal));
         Assert.Contains(reported, line => line.Contains("'EMIR'", StringComparison.Ordinal));
         // The alias that IS held is never reported as dropped.

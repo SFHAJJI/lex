@@ -20,8 +20,11 @@ public static class WorkEnrichmentFile
     /// Reads the reviewed catalogue, keeping only entries whose work and language the corpus
     /// actually holds.
     ///
-    /// <para><paramref name="report"/> receives one line per reviewed alias that was dropped for
-    /// that reason. Filtering is correct, because WorkSearch.Validate refuses an alias whose
+    /// <para><paramref name="report"/> receives one line per WORK that lost reviewed aliases,
+    /// listing each dropped value with the language it was dropped for. Grouping by work rather
+    /// than by alias keeps a bilingual entry to a single line, and the filter is keyed on
+    /// (work, language), so a work held in one language can still lose the alias for another.
+    /// Filtering itself is correct, because WorkSearch.Validate refuses an alias whose
     /// work-language record is absent, so an unfiltered catalogue would fail the build outright.
     /// But dropping silently is not: an alias a human reviewed and expected to be live simply
     /// disappears, and nothing anywhere says so. That is how the EU catalogue came to carry
@@ -63,7 +66,12 @@ public static class WorkEnrichmentFile
                     + string.Join(", ", dropped
                         .OrderBy(alias => alias.Language, StringComparer.Ordinal)
                         .Select(alias => $"'{alias.Value}' ({alias.Language})"))
-                    + $" dropped, {dropped.Key} is not held");
+                    // Named by language, because the filter is keyed on (work, language): saying
+                    // only "the work is not held" would be wrong for a work the corpus does hold
+                    // in some other language.
+                    + $" dropped, the corpus holds no {dropped.Key} record in "
+                    + string.Join(", ", dropped.Select(alias => alias.Language)
+                        .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal)));
         var discovery = (contract.Discovery
                 ?? throw new InvalidDataException("Work enrichment discovery is required."))
             .Select(ToDiscovery).Where(item => item.Collection == collection)
