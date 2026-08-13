@@ -1,4 +1,5 @@
 using Microsoft.Data.Sqlite;
+using System.Globalization;
 using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
@@ -2447,6 +2448,90 @@ public sealed class LexIndexReader : IDisposable
                 r.IsDBNull(9) ? null : r.GetString(9), text, r.GetString(10)));
         }
         return list;
+    }
+
+    /// <summary>
+    /// A text window around the first matched term, cut in application code.
+    ///
+    /// <para>The provision index is <c>fts5(..., content='')</c>. A contentless FTS5 table stores no
+    /// text to cut from, so SQLite's <c>snippet()</c> returns NULL on every row: every hit this
+    /// server has ever returned carried an empty snippet, for both publishers, whatever their text
+    /// coverage. External content is not an option either, because the wording is stored once,
+    /// content-addressed and Brotli-encoded in <c>text_blobs</c> (D53), which FTS5 cannot read.</para>
+    ///
+    /// <para>Terms are located on a diacritics-folded copy that carries a map back to the original
+    /// offsets, so the window is cut from the publisher's bytes rather than from the folded form,
+    /// and a reader searching "etablissements" still gets a snippet from text spelling it
+    /// "établissements". Returns null when the provision holds no text, which is the honest answer
+    /// for the versions whose extraction produced nothing.</para>
+    ///
+    /// <para>Cost, measured on a 9 KB provision: 2.2 ms per call, 88 ms for a full 40-row page,
+    /// dominated by the Brotli decode. Callers must therefore ask only for the rows they actually
+    /// return, never for the oversampled candidate set, which is six times larger. The default
+    /// limit of 10 costs about 22 ms against a 456 ms p95 and a 15 s release gate.</para>
+    /// </summary>
+    public string? SnippetFor(string textSha, string query, int window = 240)
+    {
+        string text;
+        try
+        {
+            using var cmd = Cmd(
+                "SELECT encoding, original_size, payload FROM text_blobs WHERE text_sha=$sha LIMIT 1", []);
+            cmd.Parameters.AddWithValue("$sha", textSha);
+            using var reader = cmd.ExecuteReader();
+            if (!reader.Read()) return null;
+            text = DecodeAndVerify(
+                reader.GetString(0), reader.GetInt32(1), (byte[])reader.GetValue(2), textSha);
+        }
+        catch (InvalidDataException) { return null; }
+        if (string.IsNullOrWhiteSpace(text)) return null;
+
+        // Fold in step with the original so a match position can be mapped back.
+        var folded = new StringBuilder(text.Length);
+        var origin = new List<int>(text.Length);
+        for (var i = 0; i < text.Length; i++)
+        {
+            foreach (var ch in text[i].ToString().Normalize(NormalizationForm.FormD))
+            {
+                if (CharUnicodeInfo.GetUnicodeCategory(ch) == UnicodeCategory.NonSpacingMark) continue;
+                folded.Append(char.IsLetterOrDigit(ch) ? char.ToLowerInvariant(ch) : ' ');
+                origin.Add(i);
+            }
+        }
+        var hay = folded.ToString();
+
+        var terms = WorkSearch.Normalize(query)
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Where(term => term.Length >= 3)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        var at = -1;
+        foreach (var term in terms)
+        {
+            var from = 0;
+            while (from <= hay.Length - term.Length)
+            {
+                var found = hay.IndexOf(term, from, StringComparison.Ordinal);
+                if (found < 0) break;
+                var startsWord = found == 0 || hay[found - 1] == ' ';
+                if (startsWord && (at < 0 || found < at)) { at = found; break; }
+                from = found + 1;
+            }
+        }
+
+        // No term in the body: the match came from the title, number or heading, which the caller
+        // already shows. Open with the provision's own first words rather than inventing relevance.
+        var centre = at < 0 ? 0 : origin[at];
+        var start = Math.Max(0, centre - window / 3);
+        var end = Math.Min(text.Length, start + window);
+        while (start > 0 && !char.IsWhiteSpace(text[start - 1])) start--;
+        while (end < text.Length && !char.IsWhiteSpace(text[end])) end++;
+
+        var cut = string.Join(' ', text[start..end]
+            .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+        if (cut.Length == 0) return null;
+        return (start > 0 ? "... " : "") + cut + (end < text.Length ? " ..." : "");
     }
 
     private static string DecodeAndVerify(string encoding, int originalSize, byte[] payload, string expectedSha)
