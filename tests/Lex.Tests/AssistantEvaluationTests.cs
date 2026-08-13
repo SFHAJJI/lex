@@ -53,9 +53,13 @@ public sealed class AssistantEvaluationTests : IDisposable
             set.Catalog.Pricing.SourceUri);
         Assert.Equal("gpt-5-mini", set.Catalog.Pricing.Candidate.ModelName);
         Assert.Equal("gpt-5-nano", set.Catalog.Pricing.Grader.ModelName);
+        // No navigate: the assistant no longer produces one. The planner is not offered the name
+        // and the plan gate rejects names the planner was not offered, so the navigation-intent
+        // case now expects the search operation the assistant actually performs, verified against
+        // the running candidate before the catalog was corrected.
         Assert.Equal(
             ["article_history", "as_of", "changes_in_period", "cited_by", "coverage",
-                "diff", "in_force_on", "legal_boundary", "navigate", "provenance", "search", "timeline"],
+                "diff", "in_force_on", "legal_boundary", "provenance", "search", "timeline"],
             set.Catalog.Cases.Select(item => item.Expected.Tool).Distinct().Order().ToArray());
         Assert.Contains(set.Catalog.Cases, item => item.Expected.LegalOutcome == "needs_clarification");
         Assert.All(set.Catalog.Cases, item => Assert.Equal("llm", item.Grading.Mode));
