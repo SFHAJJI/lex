@@ -211,6 +211,70 @@ public sealed class CorpusWriterTests : IDisposable
         Assert.Equal(before, Snapshot());
     }
 
+    // The distinction that stopped the nightly. A publisher offering no XML for an expression is
+    // not a failed acquisition, it is the publisher saying there is nothing to acquire in that
+    // format, and the corpus already records that as Text.Reason with Available=false. Legilux
+    // announces future-dated consolidations before their XML exists, so counting these as
+    // acquisition failures discarded the whole candidate every night, for both publishers, with a
+    // count that could only grow.
+    [Fact]
+    public async Task A_metadata_only_expression_does_not_discard_the_candidate()
+    {
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-01T00:00:00Z"))
+            .WriteAsync(new OneVersionAdapter("in_force", "finance",
+                bodyFetch: SourceBodyFetch.Retrieved("<html>publisher text</html>")), default);
+
+        var candidate = new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-08T00:00:00Z"));
+        await candidate.WriteAsync(new OneVersionAdapter("in_force", "finance", ["en", "fr"],
+            titleHint: "Candidate title",
+            bodyFetch: new SourceBodyFetch(SourceBodyStatus.PublisherMetadataOnly,
+                Detail: "The publisher did not enumerate an XML manifestation for this expression.")),
+            default, requireComplete: true);
+
+        Assert.True(candidate.Committed);
+        // Still recorded, so coverage stays honest: reported, not silently accepted.
+        Assert.NotEmpty(candidate.BuildIssues);
+        Assert.All(candidate.BuildIssues,
+            issue => Assert.Equal("publisher_metadata_only", issue.Code));
+        // The language the publisher offered nothing for carries the reason, and carries no
+        // text: committing the candidate must not invent coverage it does not have.
+        var expressions = (await ReadVersionMeta()).Expressions;
+        var metadataOnly = Assert.Single(expressions,
+            expression => expression.Text.Reason == "publisher_metadata_only");
+        Assert.False(metadataOnly.Text.Available);
+    }
+
+    // The other half, and the case that decides whether the narrowed gate is still a gate: one
+    // expression the publisher offers nothing for, and one that genuinely failed to fetch. The
+    // metadata-only issue must not rescue the candidate.
+    [Fact]
+    public async Task A_real_failure_beside_a_metadata_only_one_still_discards_the_candidate()
+    {
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-01T00:00:00Z"))
+            .WriteAsync(new OneVersionAdapter("in_force", "finance",
+                bodyFetch: SourceBodyFetch.Retrieved("<html>publisher text</html>")), default);
+        var before = Snapshot();
+
+        var candidate = new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-08T00:00:00Z"));
+        // fr and de, not en: the first write already observed en, and an expression with an
+        // observation is skipped rather than refetched, so scripting en would never be reached.
+        await candidate.WriteAsync(new OneVersionAdapter("in_force", "finance", ["en", "fr", "de"],
+            titleHint: "Candidate title",
+            bodyFetchByLanguage: new Dictionary<string, SourceBodyFetch>(StringComparer.Ordinal)
+            {
+                ["fr"] = new(SourceBodyStatus.PublisherMetadataOnly,
+                    Detail: "The publisher did not enumerate an XML manifestation for this expression."),
+                ["de"] = new(SourceBodyStatus.RetryExhausted,
+                    Detail: "publisher timed out", Attempts: 4),
+            }), default, requireComplete: true);
+
+        Assert.False(candidate.Committed);
+        Assert.Equal(before, Snapshot());
+        // Both were recorded; only the real failure decided the outcome.
+        Assert.Contains(candidate.BuildIssues, issue => issue.Code == "publisher_metadata_only");
+        Assert.Contains(candidate.BuildIssues, issue => issue.Code == "body_retry_exhausted");
+    }
+
     [Fact]
     public void Legacy_manifest_without_expected_scope_keeps_inventory_unavailable()
     {
@@ -253,14 +317,22 @@ public sealed class CorpusWriterTests : IDisposable
         bool hasVersions = true,
         SourceBodyFetch? bodyFetch = null,
         string titleHint = "Work one",
-        Exception? bodyException = null) : ISourceAdapter
+        Exception? bodyException = null,
+        IReadOnlyDictionary<string, SourceBodyFetch>? bodyFetchByLanguage = null) : ISourceAdapter
     {
         private readonly WorkRef _work = new(new Identifier("official:w1"), "w1", "REG", titleHint);
 
         public PublisherDescriptor Describe() => new(
             new Publisher("test", "Test", "EU", "https://example.test", Tier.A, "test", null),
-            [], languages ?? ["en"], TextIncluded: bodyFetch is not null || bodyException is not null,
-            TextPublic: bodyFetch is not null || bodyException is not null, HistoryBegins: "publisher");
+            // A per-language script declares text inclusion just as a single fetch does. Without
+            // this the whole version takes the metadata-only branch and a scripted real failure
+            // is never reached, which is what made the mixed test pass for the wrong reason.
+            [], languages ?? ["en"],
+            TextIncluded: bodyFetch is not null || bodyException is not null
+                          || bodyFetchByLanguage is not null,
+            TextPublic: bodyFetch is not null || bodyException is not null
+                        || bodyFetchByLanguage is not null,
+            HistoryBegins: "publisher");
 
         public async IAsyncEnumerable<WorkRef> EnumerateWorks(
             [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
@@ -293,6 +365,11 @@ public sealed class CorpusWriterTests : IDisposable
         public Task<SourceBodyFetch> FetchBody(VersionRecord version, ExpressionRecord expression, CancellationToken ct)
         {
             if (bodyException is not null) throw bodyException;
+            // Per-language override so one candidate can carry a real failure and a metadata-only
+            // expression at once, which is the case that decides whether the narrowed gate is
+            // still a gate.
+            if (bodyFetchByLanguage?.TryGetValue(expression.Language, out var perLanguage) == true)
+                return Task.FromResult(perLanguage);
             return Task.FromResult(bodyFetch
                 ?? new SourceBodyFetch(SourceBodyStatus.PublisherMetadataOnly));
         }
