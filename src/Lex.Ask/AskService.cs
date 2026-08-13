@@ -32,8 +32,9 @@ public sealed class AskService
     internal static readonly TimeSpan DefaultPlannerDeadline = TimeSpan.FromSeconds(12);
     internal static readonly TimeSpan DefaultFirstResultDeadline = TimeSpan.FromSeconds(25);
     /// <summary>The optional descriptive layer's own budget. Longer than the first-result
-    /// deadline because a compose retry and a judge are two model calls, and shorter than any
-    /// human's patience: the verified answer is already rendered behind it.</summary>
+    /// deadline because synthesis is up to three model calls, a compose, its one correction and
+    /// the judge, and shorter than any human's patience: the verified answer is already rendered
+    /// behind it.</summary>
     internal static readonly TimeSpan DefaultSynthesisDeadline = TimeSpan.FromSeconds(45);
 
     public AskService(McpCore core)
@@ -68,10 +69,17 @@ public sealed class AskService
         _firstResultDeadline = firstResultDeadline ?? DefaultFirstResultDeadline;
         _synthesisDeadline = synthesisDeadline ?? DefaultSynthesisDeadline;
         _legalTool = legalTool ?? core.CallToolAsync;
-        if (_plannerDeadline <= TimeSpan.Zero || _firstResultDeadline <= TimeSpan.Zero
-            || _synthesisDeadline <= TimeSpan.Zero)
+        // Name the deadline that is actually wrong. Reporting plannerDeadline for every one of
+        // the three sends whoever misconfigured a service to the wrong line.
+        if (_plannerDeadline <= TimeSpan.Zero)
             throw new ArgumentOutOfRangeException(
                 nameof(plannerDeadline), "Assistant deadlines must be positive.");
+        if (_firstResultDeadline <= TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(
+                nameof(firstResultDeadline), "Assistant deadlines must be positive.");
+        if (_synthesisDeadline <= TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(
+                nameof(synthesisDeadline), "Assistant deadlines must be positive.");
     }
 
     private static CorpusVocabulary VocabularyOf(McpCore core)

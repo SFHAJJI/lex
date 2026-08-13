@@ -67,11 +67,20 @@ public sealed class SynthesisDeadlineTests : IDisposable
         Assert.Equal(499, response.Status);
     }
 
+    // Each deadline names itself when rejected. One shared message pointing at plannerDeadline
+    // sends whoever misconfigured a service to the wrong line.
     [Fact]
-    public void The_deadline_must_be_positive()
+    public void A_rejected_deadline_names_itself()
     {
-        Assert.Throws<ArgumentOutOfRangeException>(() => new AskService(
-            _core, new DeadlinePlanner(), synthesisDeadline: TimeSpan.Zero));
+        Assert.Equal("plannerDeadline", Assert.Throws<ArgumentOutOfRangeException>(() =>
+            new AskService(_core, new DeadlinePlanner(),
+                plannerDeadline: TimeSpan.Zero)).ParamName);
+        Assert.Equal("firstResultDeadline", Assert.Throws<ArgumentOutOfRangeException>(() =>
+            new AskService(_core, new DeadlinePlanner(),
+                firstResultDeadline: TimeSpan.Zero)).ParamName);
+        Assert.Equal("synthesisDeadline", Assert.Throws<ArgumentOutOfRangeException>(() =>
+            new AskService(_core, new DeadlinePlanner(),
+                synthesisDeadline: TimeSpan.Zero)).ParamName);
     }
 
     private static JsonArray History(string question) =>
