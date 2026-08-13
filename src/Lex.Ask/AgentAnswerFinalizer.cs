@@ -50,6 +50,23 @@ internal sealed class AgentAnswerFinalizer
     private readonly AIAgent _composer;
     private readonly AIAgent _judge;
 
+    /// <summary>
+    /// The seam that makes <see cref="FinalizeAsync"/> testable at all.
+    ///
+    /// <para>The public constructor builds both agents from Azure OpenAI, so until now every test
+    /// could reach only the static helpers and the compose-retry, the judge disposition mapping
+    /// and the refusal paths ran unexercised in the one class that decides whether model prose
+    /// reaches a lawyer. Injecting the agents changes nothing about how production builds them:
+    /// the public constructor still owns that, and this overload only lets a test supply agents
+    /// that return recorded model output so the real deserialization, the real evidence contract
+    /// and the real judge mapping still run.</para>
+    /// </summary>
+    internal AgentAnswerFinalizer(AIAgent composer, AIAgent judge)
+    {
+        _composer = composer;
+        _judge = judge;
+    }
+
     public AgentAnswerFinalizer(
         string endpoint,
         string deployment,
@@ -83,22 +100,31 @@ internal sealed class AgentAnswerFinalizer
         var session = await _composer.CreateSessionAsync(cancellationToken);
         for (var attempt = 0; attempt < 2 && draft is null; attempt++)
         {
-            var response = await _composer.RunAsync<AgentAnswerDraft>(
-                attempt == 0 ? prompt : "The prior output violated the deterministic evidence contract. "
-                    + "Return one complete corrected object using only the same question and evidence.",
-                session,
-                JsonOptions,
-                cancellationToken: cancellationToken);
-            usage = usage.Add(new ModelTokenUsage(
-                response.Usage?.InputTokenCount ?? 0,
-                response.Usage?.OutputTokenCount ?? 0));
             try
             {
+                var response = await _composer.RunAsync<AgentAnswerDraft>(
+                    attempt == 0 ? prompt : "The prior output violated the deterministic evidence contract. "
+                        + "Return one complete corrected object using only the same question and evidence.",
+                    session,
+                    JsonOptions,
+                    cancellationToken: cancellationToken);
+                usage = usage.Add(new ModelTokenUsage(
+                    response.Usage?.InputTokenCount ?? 0,
+                    response.Usage?.OutputTokenCount ?? 0));
                 draft = AgentAnswerContract.Validate(response.Result, evidence);
             }
             catch (InvalidDataException)
             {
                 // One correction is allowed. The second failure falls through to a refusal.
+            }
+            catch (JsonException)
+            {
+                // Output that is not the shape at all, rather than output that is the shape and
+                // breaks the evidence contract. Structured output makes this unlikely, not
+                // impossible, and the difference matters: deserialization happens inside
+                // RunAsync, so this used to escape FinalizeAsync entirely and fail the request
+                // instead of refusing. A model that returns nonsense is exactly the case this
+                // component exists to absorb.
             }
         }
         if (draft is null) return new(Refusal(locale), SynthesisFailed: true, usage);
@@ -106,17 +132,17 @@ internal sealed class AgentAnswerFinalizer
             return new(draft, SynthesisFailed: false, usage);
 
         var judgeSession = await _judge.CreateSessionAsync(cancellationToken);
-        var judgmentResponse = await _judge.RunAsync<AgentGroundingJudgment>(
-            $"Question:\n{userQuestion}\n\nTyped evidence:\n{EvidencePrompt(evidence)}"
-            + $"\n\nDraft:\n{JsonSerializer.Serialize(draft, JsonOptions)}",
-            judgeSession,
-            JsonOptions,
-            cancellationToken: cancellationToken);
-        usage = usage.Add(new ModelTokenUsage(
-            judgmentResponse.Usage?.InputTokenCount ?? 0,
-            judgmentResponse.Usage?.OutputTokenCount ?? 0));
         try
         {
+            var judgmentResponse = await _judge.RunAsync<AgentGroundingJudgment>(
+                $"Question:\n{userQuestion}\n\nTyped evidence:\n{EvidencePrompt(evidence)}"
+                + $"\n\nDraft:\n{JsonSerializer.Serialize(draft, JsonOptions)}",
+                judgeSession,
+                JsonOptions,
+                cancellationToken: cancellationToken);
+            usage = usage.Add(new ModelTokenUsage(
+                judgmentResponse.Usage?.InputTokenCount ?? 0,
+                judgmentResponse.Usage?.OutputTokenCount ?? 0));
             var judgment = AgentGroundingJudgmentContract.Validate(
                 judgmentResponse.Result, draft, evidence);
             var finalized = judgment.Disposition switch
@@ -131,6 +157,12 @@ internal sealed class AgentAnswerFinalizer
         }
         catch (InvalidDataException)
         {
+            return new(Refusal(locale), SynthesisFailed: true, usage);
+        }
+        catch (JsonException)
+        {
+            // Same reasoning as the composer: a judgment that is not even the right shape must
+            // refuse, not escape. An unreadable judge is not a passing judge.
             return new(Refusal(locale), SynthesisFailed: true, usage);
         }
     }
