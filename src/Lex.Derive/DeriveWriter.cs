@@ -268,8 +268,11 @@ public static class DeriveWriter
                         if (emptyHere > 0)
                         {
                             emptyProvisions += emptyHere;
+                            // ObsFile, not lang: a version can derive from html, fmx4, pdf or a
+                            // gazette cut, and which artifact produced the empty text is the first
+                            // thing worth knowing. It also matches the "skipped" line above.
                             Console.Error.WriteLine("  [derive] empty provisions: "
-                                + $"{emptyHere}/{extraction.Provisions.Count} {slug}/{validFrom}/{lang}");
+                                + $"{emptyHere}/{extraction.Provisions.Count} {slug}/{validFrom}/{unit.ObsFile}");
                         }
                     }
                     catch (Exception ex)
