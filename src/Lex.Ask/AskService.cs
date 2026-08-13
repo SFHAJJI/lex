@@ -21,6 +21,7 @@ public sealed class AskService
     private readonly AskAdmissionController _admission;
     private readonly TimeSpan _plannerDeadline;
     private readonly TimeSpan _firstResultDeadline;
+    private readonly TimeSpan _synthesisDeadline;
     private readonly Func<string, JsonObject, CancellationToken, ValueTask<JsonNode>> _legalTool;
     // The planner transport, seamed exactly as _legalTool is. The raw-HTTP planning branch was
     // unreachable from the suite while every test injected a finished OperationPlan, which is the
@@ -30,6 +31,11 @@ public sealed class AskService
 
     internal static readonly TimeSpan DefaultPlannerDeadline = TimeSpan.FromSeconds(12);
     internal static readonly TimeSpan DefaultFirstResultDeadline = TimeSpan.FromSeconds(25);
+    /// <summary>The optional descriptive layer's own budget. Longer than the first-result
+    /// deadline because synthesis is up to three model calls, a compose, its one correction and
+    /// the judge, and shorter than any human's patience: the verified answer is already rendered
+    /// behind it.</summary>
+    internal static readonly TimeSpan DefaultSynthesisDeadline = TimeSpan.FromSeconds(45);
 
     public AskService(McpCore core)
     {
@@ -38,6 +44,7 @@ public sealed class AskService
         _admission = DefaultAdmission();
         _plannerDeadline = DefaultPlannerDeadline;
         _firstResultDeadline = DefaultFirstResultDeadline;
+        _synthesisDeadline = DefaultSynthesisDeadline;
         _legalTool = core.CallToolAsync;
     }
 
@@ -48,6 +55,7 @@ public sealed class AskService
         AskAdmissionController? admission = null,
         TimeSpan? plannerDeadline = null,
         TimeSpan? firstResultDeadline = null,
+        TimeSpan? synthesisDeadline = null,
         Func<string, JsonObject, CancellationToken, ValueTask<JsonNode>>? legalTool = null,
         Func<JsonObject, CancellationToken, Task<JsonNode?>>? plannerSend = null)
     {
@@ -59,10 +67,19 @@ public sealed class AskService
         _admission = admission ?? DefaultAdmission();
         _plannerDeadline = plannerDeadline ?? DefaultPlannerDeadline;
         _firstResultDeadline = firstResultDeadline ?? DefaultFirstResultDeadline;
+        _synthesisDeadline = synthesisDeadline ?? DefaultSynthesisDeadline;
         _legalTool = legalTool ?? core.CallToolAsync;
-        if (_plannerDeadline <= TimeSpan.Zero || _firstResultDeadline <= TimeSpan.Zero)
+        // Name the deadline that is actually wrong. Reporting plannerDeadline for every one of
+        // the three sends whoever misconfigured a service to the wrong line.
+        if (_plannerDeadline <= TimeSpan.Zero)
             throw new ArgumentOutOfRangeException(
                 nameof(plannerDeadline), "Assistant deadlines must be positive.");
+        if (_firstResultDeadline <= TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(
+                nameof(firstResultDeadline), "Assistant deadlines must be positive.");
+        if (_synthesisDeadline <= TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(
+                nameof(synthesisDeadline), "Assistant deadlines must be positive.");
     }
 
     private static CorpusVocabulary VocabularyOf(McpCore core)
@@ -2176,15 +2193,26 @@ public sealed class AskService
                     status ?? LegalOperationPolicy.StatusForResult(payload),
                     docs, payload, executedArguments[result.UserOrder]);
             }
+            // Synthesis gets a deadline of its own, because the one it inherited is gone by the
+            // time it runs. The first-result deadline is disarmed the moment an operation
+            // reports, so from here the token cancels only when the client disconnects: a
+            // composer that retries and then a judge, both on a hung upstream, would hold the
+            // request open indefinitely while the verified answer sat ready to serve. This is
+            // the optional descriptive layer, so exceeding its budget must cost the prose and
+            // nothing else.
+            using var synthesis = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            synthesis.CancelAfter(_synthesisDeadline);
             try
             {
                 AgentFinalization finalized;
                 if (_synthesizer is not null)
                     finalized = await _synthesizer.SynthesizeAsync(
-                        rawUserQuery, deterministicReply, evidence.Evidence, plan.Locale, ct);
+                        rawUserQuery, deterministicReply, evidence.Evidence, plan.Locale,
+                        synthesis.Token);
                 else if (!string.IsNullOrWhiteSpace(_endpoint))
                     finalized = await Finalizer().FinalizeAsync(
-                        rawUserQuery, deterministicReply, evidence.Evidence, plan.Locale, ct);
+                        rawUserQuery, deterministicReply, evidence.Evidence, plan.Locale,
+                        synthesis.Token);
                 else
                     throw new InvalidOperationException(
                         "No synthesis service is configured.");
@@ -2201,12 +2229,21 @@ public sealed class AskService
                 if (progress?.Synthesis is not null)
                     await NotifyProgress(() => progress.Synthesis("completed", ct));
             }
+            // A client that disconnected is not a synthesis failure and must not be answered
+            // with a reply nobody is waiting for: only the synthesis deadline degrades to the
+            // verified results, the caller's own cancellation still propagates.
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
             catch (Exception ex) when (ex is OperationCanceledException
                                        or HttpRequestException
                                        or InvalidDataException
                                        or InvalidOperationException)
             {
-                Diagnostic("optional_synthesis_unavailable");
+                Diagnostic(ex is OperationCanceledException
+                    ? "optional_synthesis_deadline"
+                    : "optional_synthesis_unavailable");
                 reply = deterministicReply + (plan.Locale == "fr"
                     ? " La synthèse descriptive facultative n'est pas disponible; les résultats vérifiés restent affichés."
                     : " The optional descriptive synthesis is unavailable; the verified results remain open.");
