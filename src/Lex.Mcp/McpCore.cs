@@ -1123,7 +1123,11 @@ public sealed class McpCore
                     // scoped to named works there is nothing left to protect it from, and the cap
                     // was answering "search inside this law" with two articles however many
                     // matched: one work at a limit of 40 returned exactly 2.
-                    var perWorkCap = works is { Length: > 0 } ? int.MaxValue : 2;
+                    //
+                    // localLimit + 1 rather than no cap: one more row than can be returned is
+                    // exactly what responseRowsTruncated needs, and it states the bound here
+                    // instead of leaving the reader's oversample as the only thing holding it.
+                    var perWorkCap = works is { Length: > 0 } ? localLimit + 1 : 2;
                     var eligibleHits = (suppressUnresolvedPublisher ? [] : execution.Hits)
                         .GroupBy(h => (h.Doc.GroupKey, h.Provision.Anchor)).Select(g => g.First())
                         .GroupBy(h => h.Doc.GroupKey).SelectMany(g => g.Take(perWorkCap))
