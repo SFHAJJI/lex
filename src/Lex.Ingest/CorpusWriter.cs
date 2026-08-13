@@ -413,6 +413,25 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now, TextWrit
             .ThenBy(issue => issue.Code, StringComparer.Ordinal)
             .ThenBy(issue => issue.Detail, StringComparer.Ordinal).ToList();
         BuildIssues = buildIssues;
+        // A publisher offering no XML for an expression is not a failed acquisition. It is the
+        // publisher telling us there is nothing to acquire in that format, and the corpus already
+        // records it as Text.Reason with Available=false and counts it in expressions_without_text.
+        // Every other code here IS a failure, and requireComplete exists so a partial upstream
+        // response cannot write history.
+        //
+        // Counting the two together stopped the nightly outright. Legilux announces future-dated
+        // consolidations before their XML exists, so 1,492 expressions were flagged
+        // publisher_metadata_only and the whole candidate was discarded: no corpus commit, no
+        // derive, no index refresh, for both publishers, every night since 2026-08-10. The count
+        // can only grow as more future dates are announced, so this would never have recovered on
+        // its own. Coverage the publisher does not offer must not block coverage it does.
+        var blocking = buildIssues
+            .Where(issue => !string.Equals(issue.Code, "publisher_metadata_only", StringComparison.Ordinal))
+            .ToArray();
+        if (buildIssues.Count > blocking.Length)
+            _progress.WriteLine(
+                $"  [corpus] {buildIssues.Count - blocking.Length} expression(s) are metadata-only at "
+                + "the publisher; recorded as coverage, not treated as acquisition failures");
         var manifest = new ManifestDoc
         {
             Publisher = new Dictionary<string, string>
@@ -441,7 +460,9 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now, TextWrit
             ExpressionsWithoutText = expressions - expressionsWithText,
             ScopeExpectedWorks = expectedWorks,
             AcquisitionRetryMaximumAttempts = retryMaximumAttempts,
-            BuildIssues = buildIssues,
+            // The persisted list is the acquisition-failure record, and it is bounded. Coverage the
+            // publisher does not offer belongs to the expression that lacks it, not here.
+            BuildIssues = blocking.ToList(),
             ValidFromEarliest = earliest,
             ValidToLatest = latest,
             HistoryBegins = desc.HistoryBegins,
@@ -450,24 +471,6 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now, TextWrit
         };
         candidate.WriteIfChanged(Path.Combine(corpusRoot, "manifest.json"), JsonSerializer.Serialize(manifest, CorpusJson.Options));
         candidate.WriteIfChanged(Path.Combine(corpusRoot, "NOTICE"), Notice(pub, desc.TextIncluded));
-        // A publisher offering no XML for an expression is not a failed acquisition. It is the
-        // publisher telling us there is nothing to acquire in that format, and the corpus already
-        // records it as Text.Reason with Available=false. Every other code here IS a failure, and
-        // requireComplete exists so a partial upstream response cannot write history.
-        //
-        // Counting the two together stopped the nightly outright. Legilux announces future-dated
-        // consolidations before their XML exists, so 1,492 expressions were flagged
-        // publisher_metadata_only and the whole candidate was discarded: no corpus commit, no
-        // derive, no index refresh, for both publishers, every night since 2026-08-10. The count
-        // can only grow as more future dates are announced, so this would never have recovered on
-        // its own. Coverage the publisher does not offer must not block coverage it does.
-        var blocking = buildIssues
-            .Where(issue => !string.Equals(issue.Code, "publisher_metadata_only", StringComparison.Ordinal))
-            .ToArray();
-        if (buildIssues.Count > blocking.Length)
-            _progress.WriteLine(
-                $"  [corpus] {buildIssues.Count - blocking.Length} expression(s) are metadata-only at "
-                + "the publisher; recorded as coverage, not treated as acquisition failures");
         if (requireComplete && blocking.Length > 0)
         {
             // Only the blocking issues are listed. The metadata-only ones were already summarised

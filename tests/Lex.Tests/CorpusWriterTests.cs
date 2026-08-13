@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Lex.Ingest;
 using Lex.Law;
 
@@ -242,6 +243,38 @@ public sealed class CorpusWriterTests : IDisposable
         var metadataOnly = Assert.Single(expressions,
             expression => expression.Text.Reason == "publisher_metadata_only");
         Assert.False(metadataOnly.Text.Available);
+    }
+
+    // The manifest's build_issues is the acquisition-failure record, and CorpusIntegrity bounds it
+    // at 1000 entries. Writing coverage facts into it committed the corpus and then failed
+    // integrity on the manifest, so the publish still produced nothing: 1,492 metadata-only
+    // expressions against a limit of 1,000. Narrowing what blocks the gate was not enough,
+    // because the gate was never what rejected the manifest.
+    [Fact]
+    public async Task Metadata_only_is_recorded_as_coverage_and_not_as_a_manifest_build_issue()
+    {
+        var candidate = new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-08T00:00:00Z"));
+        await candidate.WriteAsync(new OneVersionAdapter("in_force", "finance", ["en", "fr"],
+            bodyFetch: new SourceBodyFetch(SourceBodyStatus.PublisherMetadataOnly,
+                Detail: "The publisher did not enumerate an XML manifestation for this expression.")),
+            default, requireComplete: true);
+
+        Assert.True(candidate.Committed);
+
+        var manifest = JsonNode.Parse(
+            await File.ReadAllTextAsync(Path.Combine(_dir, "manifest.json")))!;
+        var persisted = manifest["build_issues"]!.AsArray()
+            .Select(issue => issue!["code"]!.GetValue<string>()).ToArray();
+        Assert.DoesNotContain("publisher_metadata_only", persisted);
+
+        // The fact is not lost, it is recorded where it belongs: on the expressions that carry no
+        // text, and in the count the manifest publishes.
+        Assert.Equal(2, manifest["expressions_without_text"]!.GetValue<int>());
+        Assert.All((await ReadVersionMeta()).Expressions, expression =>
+        {
+            Assert.False(expression.Text.Available);
+            Assert.Equal("publisher_metadata_only", expression.Text.Reason);
+        });
     }
 
     // The other half, and the case that decides whether the narrowed gate is still a gate: one
