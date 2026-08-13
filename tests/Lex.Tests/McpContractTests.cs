@@ -1064,6 +1064,58 @@ public class McpContractTests : IDisposable
             .Select(h => h!["work"]?.GetValue<string>() ?? ""));
     }
 
+    // The per-work cap keeps one Code with thousands of articles from filling a corpus-wide result
+    // set. Once the caller has named the works, there is nothing left to protect: the cap was
+    // answering "search inside this law" with two articles regardless of how many matched, so a
+    // scoped search for a term appearing in every article of a work returned 2 of them.
+    [Fact]
+    public void A_scoped_search_is_not_capped_at_two_articles_per_work()
+    {
+        var db = Path.Combine(Path.GetTempPath(), $"lex-mcp-scoped-{Guid.NewGuid():N}.db");
+        try
+        {
+            var document = new DocRow(
+                "scoped:code:2024-01-01", "scoped", "code", "urn:code", "REG", "en",
+                "2024-01-01", null, "publisher", "2026-08-01T00:00:00Z", false,
+                true, true, "record", "body", "https://example.test/code",
+                "A code", "A code", null, "2024-01-01", null);
+            // Six articles, each carrying the search term, so the cap is the only thing that could
+            // reduce the answer below six.
+            var provisions = Enumerable.Range(1, 6).Select(index =>
+            {
+                var text = $"Article {index} concerns surveillance of the sector.";
+                return new ProvisionRow(
+                    $"{document.Key}|en|2024-01-01", index, $"art_{index}",
+                    $"{document.Key}#art_{index}", "article", $"Article {index}", null,
+                    null, null, document.Title, text,
+                    Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(
+                        System.Text.Encoding.UTF8.GetBytes(text))));
+            }).ToArray();
+            IndexBuilder.Build(db, new Dictionary<string, string>
+            {
+                ["collection"] = "scoped", ["tier"] = "A",
+                ["history_begins"] = "publisher", ["built_at"] = "2026-08-01T00:00:00Z",
+                ["corpus_commit"] = "test",
+            }, [document], provisions, [], [], StampSigner.CreateKeyPem());
+            using var reader = LexIndexReader.Open(db);
+            var core = new McpCore(new Dictionary<string, LexIndexReader> { ["scoped"] = reader });
+
+            var scoped = core.CallTool("search", new JsonObject
+            {
+                ["query"] = "surveillance", ["limit"] = 40, ["works"] = "scoped:code",
+            })!.AsArray()[0]!.AsObject();
+            Assert.Equal(6, scoped["hits"]!.AsArray().Count);
+
+            // The cap still applies when no scope was given, which is the case it exists for.
+            var unscoped = core.CallTool("search", new JsonObject
+            {
+                ["query"] = "surveillance", ["limit"] = 40,
+            })!.AsArray()[0]!.AsObject();
+            Assert.Equal(2, unscoped["hits"]!.AsArray().Count);
+        }
+        finally { try { File.Delete(db); } catch (IOException) { } }
+    }
+
     [Fact]
     public void Every_envelope_carries_freshness_and_signature_state()
     {

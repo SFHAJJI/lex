@@ -1116,10 +1116,21 @@ public sealed class McpCore
                         ? 0
                         : Math.Min(remainingResults, Math.Max(floor, remainingResults - reserved));
                     // provision-level hits: the retrieval unit is the article; at most two
-                    // provisions per work so one huge code cannot monopolize the result set
+                    // provisions per work so one huge code cannot monopolize the result set.
+                    //
+                    // Unless the caller named the works. The cap protects a corpus-wide result set
+                    // from a single Code carrying thousands of articles. Once the question is
+                    // scoped to named works there is nothing left to protect it from, and the cap
+                    // was answering "search inside this law" with two articles however many
+                    // matched: one work at a limit of 40 returned exactly 2.
+                    //
+                    // localLimit + 1 rather than no cap: one more row than can be returned is
+                    // exactly what responseRowsTruncated needs, and it states the bound here
+                    // instead of leaving the reader's oversample as the only thing holding it.
+                    var perWorkCap = works is { Length: > 0 } ? localLimit + 1 : 2;
                     var eligibleHits = (suppressUnresolvedPublisher ? [] : execution.Hits)
                         .GroupBy(h => (h.Doc.GroupKey, h.Provision.Anchor)).Select(g => g.First())
-                        .GroupBy(h => h.Doc.GroupKey).SelectMany(g => g.Take(2))
+                        .GroupBy(h => h.Doc.GroupKey).SelectMany(g => g.Take(perWorkCap))
                         .ToList();
                     responseRowsTruncated |= eligibleHits.Count > localLimit;
                     var hits = eligibleHits.Take(localLimit).ToList();
