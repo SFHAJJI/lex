@@ -1303,6 +1303,27 @@ public sealed class AskService
     /// <param name="deterministicReply">The named line the caller already computed from
     /// <see cref="OperationAnswerPolicy.Render"/>. Recomputed per effect when absent, so a direct
     /// caller cannot obtain an anonymous reply by omitting it.</param>
+    /// <summary>
+    /// Every disclosure the turn earned, present in the served text whatever synthesis did to it.
+    ///
+    /// <para>Appended only when absent, so a composer that kept the clause is not made to repeat
+    /// it, and identical clauses from several operations appear once. This is the same discipline
+    /// the finalizer applies to a coverage disclosure: a statement about how Lex chose is part of
+    /// the answer's correctness, not decoration the model may edit away.</para>
+    /// </summary>
+    internal static string WithDisclosures(
+        string reply, string locale, IReadOnlyList<AnswerDisclosure?> disclosures)
+    {
+        var text = reply;
+        foreach (var sentence in disclosures
+                     .Select(disclosure => OperationAnswerPolicy.Disclose(locale, disclosure))
+                     .Where(sentence => sentence.Length > 0)
+                     .Distinct(StringComparer.Ordinal))
+            if (!text.Contains(sentence.Trim(), StringComparison.Ordinal))
+                text += sentence;
+        return text;
+    }
+
     internal static string ReplyFor(
         AgentAnswerDraft grounded,
         IEnumerable<UiEffect> effects,
@@ -2169,6 +2190,13 @@ public sealed class AskService
                         "No synthesis service is configured.");
                 reply = ReplyFor(finalized.Draft, effects, plan.Locale, finalized.SynthesisFailed,
                     deterministicReply);
+                // Synthesis rewrites the answer freely, and the composer is under no obligation
+                // to keep a clause the deterministic line happened to carry. CoverageDisclosure
+                // is force-appended by the finalizer for exactly that reason; the selection and
+                // instant disclosures were only advisory, so a synthesized reply could silently
+                // drop the one sentence that makes a wrong instrument or a derived date
+                // correctable in a single turn. Enforced here rather than trusted to the model.
+                reply = WithDisclosures(reply, plan.Locale, disclosures);
                 modelUsage = modelUsage.Add(finalized.Usage);
                 if (progress?.Synthesis is not null)
                     await NotifyProgress(() => progress.Synthesis("completed", ct));
