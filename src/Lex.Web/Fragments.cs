@@ -69,11 +69,18 @@ public static class Fragments
                 <a href="{H(d.SourceUri)}" rel="noopener">{H(d.SourceUri)}</a>.</div>
                 """;
 
+        // Deliberately not a link. Publishers announce a consolidation before releasing any
+        // document for it, so this address is frequently the publisher's own not-found page.
+        // Offering it as "read the official record" invited the reader to conclude Lex had
+        // built a wrong URL, when the accurate reading is that nothing has been published yet.
         return $"""
             <div class="notice"><b>Provision text not available.</b> Lex holds the publisher record and timeline, but no
             safely derived provision text for this version (status <span class="mono">text_not_available</span>).
-            It will not manufacture article boundaries or wording. Read the official record at
-            <a href="{H(d.SourceUri)}" rel="noopener">{H(d.SourceUri)}</a>.</div>
+            It will not manufacture article boundaries or wording.
+            <p class="sub" style="margin:8px 0 0">The address the publisher reserves for this version is
+            <span class="mono">{H(d.SourceUri)}</span>. Publishers announce a consolidation before releasing a
+            document for it, so that address may return a not-found page until the text exists. Lex records the
+            announcement rather than hiding the version, and does not present the address as readable until it is.</p></div>
             """;
     }
 

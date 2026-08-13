@@ -247,8 +247,11 @@ HTTP 200
 <div class="notice" style="border-left-color:var(--ok)"><b>Point-in-time view as at 2020-01-01.</b>
 This is the latest state the publisher has consolidated, valid 2019-06-01 → open.</div><div class="notice"><b>Provision text not available.</b> Lex holds the publisher record and timeline, but no
 safely derived provision text for this version (status <span class="mono">text_not_available</span>).
-It will not manufacture article boundaries or wording. Read the official record at
-<a href="https://example.org/w2/2019-06-01" rel="noopener">https://example.org/w2/2019-06-01</a>.</div><div class="card"><table class="kv">
+It will not manufacture article boundaries or wording.
+<p class="sub" style="margin:8px 0 0">The address the publisher reserves for this version is
+<span class="mono">https://example.org/w2/2019-06-01</span>. Publishers announce a consolidation before releasing a
+document for it, so that address may return a not-found page until the text exists. Lex records the
+announcement rather than hiding the version, and does not present the address as readable until it is.</p></div><div class="card"><table class="kv">
 <tr><td>as of</td><td><b>2020-01-01</b> → this version applied</td></tr>
 <tr><td>valid</td><td class="mono">in force 2019-06-01 → open <span class="badge">publisher-asserted</span></td></tr>
 <tr><td>type</td><td><span class="badge">RGD</span> Reglement sans texte</td></tr>
