@@ -322,8 +322,15 @@ public sealed class CorpusWriterTests : IDisposable
 
         public PublisherDescriptor Describe() => new(
             new Publisher("test", "Test", "EU", "https://example.test", Tier.A, "test", null),
-            [], languages ?? ["en"], TextIncluded: bodyFetch is not null || bodyException is not null,
-            TextPublic: bodyFetch is not null || bodyException is not null, HistoryBegins: "publisher");
+            // A per-language script declares text inclusion just as a single fetch does. Without
+            // this the whole version takes the metadata-only branch and a scripted real failure
+            // is never reached, which is what made the mixed test pass for the wrong reason.
+            [], languages ?? ["en"],
+            TextIncluded: bodyFetch is not null || bodyException is not null
+                          || bodyFetchByLanguage is not null,
+            TextPublic: bodyFetch is not null || bodyException is not null
+                        || bodyFetchByLanguage is not null,
+            HistoryBegins: "publisher");
 
         public async IAsyncEnumerable<WorkRef> EnumerateWorks(
             [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
