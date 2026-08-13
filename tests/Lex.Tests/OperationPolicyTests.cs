@@ -111,6 +111,82 @@ public sealed class OperationPolicyTests
                 .Order(StringComparer.Ordinal));
     }
 
+    // The test above states the intent; until now nothing enforced it. A planner tool name went
+    // straight to CreatePlanned, which validates against the ARGUMENT gate's action set, and that
+    // set is deliberately wider than the planner surface. "navigate" is the consequence: the
+    // schema never offers it, but the gate accepts it and execution answers it synthetically with
+    // status ok, no legal call and no evidence, so a response naming it would have produced a
+    // successful operation backed by nothing. The schema restricting the model's choice is not
+    // the same thing as the plan refusing everything else, and only the second is an invariant.
+    [Theory]
+    [InlineData("navigate")]
+    [InlineData("gap")]
+    [InlineData("as_of_v2")]
+    [InlineData("")]
+    public void A_plan_may_only_name_a_tool_the_planner_was_offered(string tool)
+    {
+        var operations = new JsonArray(new JsonObject
+        {
+            ["tool"] = tool,
+            ["arguments"] = new JsonObject { ["work"] = "eu-eurlex:32013r0575" },
+        });
+
+        var error = Assert.Throws<InvalidDataException>(() =>
+            OperationPlan.FromPlannerOutput("req-1", "en", operations));
+        Assert.Contains("was not offered", error.Message, StringComparison.Ordinal);
+    }
+
+    // And every name the planner IS offered still builds, so the check bounds the surface
+    // without narrowing it.
+    [Fact]
+    public void Every_offered_tool_still_builds_a_plan()
+    {
+        foreach (var tool in AskService.PlannerToolNames)
+        {
+            // Minimal valid arguments per tool, taken from OperationArguments.Allowed and
+            // Choices rather than assumed: search takes a query, not a work.
+            var arguments = tool switch
+            {
+                "clarification" => new JsonObject
+                {
+                    ["question"] = "Which instrument?",
+                    // two to four labels, per the clarification contract
+                    ["options"] = new JsonArray("eu-eurlex:32013r0575", "eu-eurlex:32012r0648"),
+                },
+                "legal_boundary" => new JsonObject { ["reason"] = "advice" },
+                "coverage" => new JsonObject(),
+                "search" => new JsonObject { ["query"] = "capital requirements" },
+                "in_force_on" => new JsonObject { ["date"] = "2024-01-01" },
+                "changes_in_period" => new JsonObject
+                {
+                    ["from_date"] = "2024-01-01",
+                    ["to_date"] = "2024-12-31",
+                },
+                "provenance" => new JsonObject { ["work_query"] = "CRR" },
+                "diff" => new JsonObject
+                {
+                    ["work"] = "eu-eurlex:32013r0575",
+                    ["from_date"] = "2020-01-01",
+                    ["to_date"] = "2024-12-31",
+                },
+                "article_history" => new JsonObject
+                {
+                    ["work"] = "eu-eurlex:32013r0575",
+                    ["article_number"] = "92",
+                },
+                _ => new JsonObject { ["work"] = "eu-eurlex:32013r0575" },
+            };
+            var operations = new JsonArray(new JsonObject
+            {
+                ["tool"] = tool,
+                ["arguments"] = arguments,
+            });
+
+            var plan = OperationPlan.FromPlannerOutput("req-1", "en", operations);
+            Assert.Single(plan.Operations);
+        }
+    }
+
     // The value half of the same contract. Names were generated from the allowlist; values were
     // not, so the model was shown an open string where Normalize accepts two or three literals,
     // picked "semantic" or "current", and one rejection aborted the whole plan.

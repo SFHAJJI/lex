@@ -72,11 +72,10 @@ public sealed class AskOperationControllerTests : IDisposable
                 """{"query":"capital requirement","publisher":"eu-eurlex","limit":3}""",
                 "navigate", "succeeded", "workspace", "workspace"
             },
-            {
-                "navigate", "Open CRR as it stood on 1 January 2021.",
-                """{"work_query":"CRR","date":"2021-01-01"}""",
-                "navigate", "succeeded", "workspace", "workspace"
-            },
+            // "navigate" used to sit here as a planned operation. It cannot be one: it is absent
+            // from PlannerToolNames, so the schema never offers it, and execution answers it
+            // synthetically with status ok, no legal call and no evidence. A plan naming it is
+            // now refused, which A_plan_may_only_name_a_tool_the_planner_was_offered pins.
             {
                 "as_of", "Show Article 6 of the GDPR as it stood on 1 January 2021.",
                 """{"work_query":"GDPR","article_number":"6","date":"2021-01-01","mode":"full"}""",

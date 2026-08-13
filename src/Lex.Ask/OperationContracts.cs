@@ -458,6 +458,18 @@ public sealed class OperationPlan
                        && toolValue.TryGetValue<string>(out var parsedTool)
                 ? parsedTool
                 : throw new InvalidDataException("Every planned operation must name a string tool or action.");
+            // Only a tool the planner was offered may enter a plan. Until now the name went
+            // straight to CreatePlanned, which validates against the ARGUMENT gate's tool set,
+            // and that set is wider than what the planner is allowed to choose. "navigate" is
+            // the gap: it is absent from PlannerToolNames, so the schema never offers it, but
+            // the gate accepts it and execution answers it synthetically with status ok, no
+            // legal call and no evidence. A planner response naming it, whether the structured
+            // output degraded or the text was crafted, would have produced a successful
+            // operation backed by nothing. The schema restricting the choice is not the same
+            // as the plan refusing anything else, and only the second one is an invariant.
+            if (!AskService.PlannerToolNames.Contains(tool, StringComparer.Ordinal))
+                throw new InvalidDataException(
+                    $"A planned operation named '{tool}', which the planner was not offered.");
             var arguments = item["arguments"] as JsonObject
                 ?? throw new InvalidDataException("Every planned operation must contain object arguments.");
             if (tool == "legal_boundary")
