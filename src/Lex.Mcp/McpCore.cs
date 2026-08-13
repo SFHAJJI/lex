@@ -1130,7 +1130,14 @@ public sealed class McpCore
                         d["provision_id"] = h.Provision.ProvisionId;
                         d["provision_num"] = h.Provision.Num;
                         d["provision_heading"] = h.Provision.Heading;
-                        d["snippet"] = h.Snippet;
+                        // SQLite returns no snippet: the provision index is contentless, so the
+                        // window has to be cut from the content-addressed text instead. Matched on
+                        // the provision query rather than the raw one, because the work name in a
+                        // question is matched against titles, not against the article's wording.
+                        d["snippet"] = string.IsNullOrEmpty(h.Snippet)
+                            ? r.SnippetFor(h.Provision.TextSha,
+                                execution.QueryPlan?.ProvisionQuery is { Length: > 0 } pq ? pq : q)
+                            : h.Snippet;
                         d["match_reasons"] = new JsonArray(h.MatchReasons.Select(x => (JsonNode)x).ToArray());
                         if (_publicBase is not null)
                             d["permalink"] = $"{_publicBase}/{h.Doc.Collection}/{h.Doc.GroupKey}/{h.Doc.ValidFrom}"
