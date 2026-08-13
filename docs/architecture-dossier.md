@@ -450,6 +450,25 @@ were designed around: the nightly commits nothing and the site keeps serving yes
 The one asset that is neither public nor signed is the local embedding cache; losing it costs a
 full re-embed under the D69/D70 batch discipline, compute rather than data.
 
+### 10.8 Capacity triggers, and the plan when one fires
+
+None of this is built. Each row is a threshold that is already observable with what the system
+records today, the change that threshold authorises, and the cost that change admits. The
+thresholds are targets, not measurements; the figures in brackets are measured. Writing them
+down is the point: the next architecture move is decided by a number rather than by a feeling,
+and a move made before its trigger fires is a move made without evidence.
+
+| trigger | what it means | the move | what it costs |
+|---|---|---|---|
+| MCP queue-deadline rejections appear at all (admission is 8 executing, 16 queued, 2 s deadline) | concurrency is bounded by the per-publisher execution gate rather than by CPU: a tool call with no publisher argument holds every publisher's semaphore for its whole execution | narrow the gate to the encoder and vector sections, where the non-preemptable work actually is; keyword search, `as_of` and `diff` already run on isolated SQLite sessions | one contained change plus a contract test, no new infrastructure |
+| more than 50 assistant users a day, or the global daily cap reached three days running, or Azure OpenAI answering 429 | demand exceeds the model budget rather than the machine | raise the Azure OpenAI TPM quota and the daily cap together, in that order; consider provisioned throughput only after measuring sustained utilisation | pay-as-you-go rises linearly, provisioned throughput is a fixed monthly floor that is cheaper only above a measured utilisation |
+| served p95 above 800 ms sustained (deploy gate is 1,500 ms; measured 456 ms at 60 rpm) | the single replica is saturating | move the quota ledger and the idempotency registry to a shared store, then add replicas | the ledgers stop being authoritative in process memory; the index needs no change, because the artifact is immutable, signed and content-addressed, so every replica serves identical bytes |
+| peak working set above 1.2 GB (gate is 1.5 GiB, measured peak 498 MB) | the memory-mapped index no longer fits beside the runtime | D55's next rung: the release moves from the image onto a VM-managed local disk | a second verified deployment path and OS patching, which is why D55 gates it rather than assuming it |
+| a third publisher is admitted | the required-publisher set is stated in four places and MCP fans out per publisher under an 8-publisher budget | unify the publisher set to one source, then re-measure fan-out latency before admitting a fourth | one refactor; the fan-out cost is real and is the reason the budget exists |
+
+What no trigger authorises: a rewrite, a framework, or splitting the process. The measured
+bottlenecks are a lock scope and two in-process ledgers, and both are contained changes.
+
 ## 11. Known limits
 
 The full record with effects, fixes, gains and why-not-now lives in `docs/known-defects.md`.
