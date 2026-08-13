@@ -211,6 +211,70 @@ public sealed class CorpusWriterTests : IDisposable
         Assert.Equal(before, Snapshot());
     }
 
+    // The distinction that stopped the nightly. A publisher offering no XML for an expression is
+    // not a failed acquisition, it is the publisher saying there is nothing to acquire in that
+    // format, and the corpus already records that as Text.Reason with Available=false. Legilux
+    // announces future-dated consolidations before their XML exists, so counting these as
+    // acquisition failures discarded the whole candidate every night, for both publishers, with a
+    // count that could only grow.
+    [Fact]
+    public async Task A_metadata_only_expression_does_not_discard_the_candidate()
+    {
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-01T00:00:00Z"))
+            .WriteAsync(new OneVersionAdapter("in_force", "finance",
+                bodyFetch: SourceBodyFetch.Retrieved("<html>publisher text</html>")), default);
+
+        var candidate = new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-08T00:00:00Z"));
+        await candidate.WriteAsync(new OneVersionAdapter("in_force", "finance", ["en", "fr"],
+            titleHint: "Candidate title",
+            bodyFetch: new SourceBodyFetch(SourceBodyStatus.PublisherMetadataOnly,
+                Detail: "The publisher did not enumerate an XML manifestation for this expression.")),
+            default, requireComplete: true);
+
+        Assert.True(candidate.Committed);
+        // Still recorded, so coverage stays honest: reported, not silently accepted.
+        Assert.NotEmpty(candidate.BuildIssues);
+        Assert.All(candidate.BuildIssues,
+            issue => Assert.Equal("publisher_metadata_only", issue.Code));
+        // The language the publisher offered nothing for carries the reason, and carries no
+        // text: committing the candidate must not invent coverage it does not have.
+        var expressions = (await ReadVersionMeta()).Expressions;
+        var metadataOnly = Assert.Single(expressions,
+            expression => expression.Text.Reason == "publisher_metadata_only");
+        Assert.False(metadataOnly.Text.Available);
+    }
+
+    // The other half, and the case that decides whether the narrowed gate is still a gate: one
+    // expression the publisher offers nothing for, and one that genuinely failed to fetch. The
+    // metadata-only issue must not rescue the candidate.
+    [Fact]
+    public async Task A_real_failure_beside_a_metadata_only_one_still_discards_the_candidate()
+    {
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-01T00:00:00Z"))
+            .WriteAsync(new OneVersionAdapter("in_force", "finance",
+                bodyFetch: SourceBodyFetch.Retrieved("<html>publisher text</html>")), default);
+        var before = Snapshot();
+
+        var candidate = new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-08T00:00:00Z"));
+        // fr and de, not en: the first write already observed en, and an expression with an
+        // observation is skipped rather than refetched, so scripting en would never be reached.
+        await candidate.WriteAsync(new OneVersionAdapter("in_force", "finance", ["en", "fr", "de"],
+            titleHint: "Candidate title",
+            bodyFetchByLanguage: new Dictionary<string, SourceBodyFetch>(StringComparer.Ordinal)
+            {
+                ["fr"] = new(SourceBodyStatus.PublisherMetadataOnly,
+                    Detail: "The publisher did not enumerate an XML manifestation for this expression."),
+                ["de"] = new(SourceBodyStatus.RetryExhausted,
+                    Detail: "publisher timed out", Attempts: 4),
+            }), default, requireComplete: true);
+
+        Assert.False(candidate.Committed);
+        Assert.Equal(before, Snapshot());
+        // Both were recorded; only the real failure decided the outcome.
+        Assert.Contains(candidate.BuildIssues, issue => issue.Code == "publisher_metadata_only");
+        Assert.Contains(candidate.BuildIssues, issue => issue.Code == "body_retry_exhausted");
+    }
+
     [Fact]
     public void Legacy_manifest_without_expected_scope_keeps_inventory_unavailable()
     {
@@ -227,6 +291,64 @@ public sealed class CorpusWriterTests : IDisposable
             """, CorpusJson.Options)!;
 
         Assert.Null(manifest.ScopeExpectedWorks);
+    }
+
+    [Fact]
+    public async Task Manifest_counts_a_fetched_body_as_an_expression_with_text()
+    {
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-08T00:00:00Z"))
+            .WriteAsync(new OneVersionAdapter("in_force", "finance",
+                bodyFetch: SourceBodyFetch.Retrieved("<html>publisher text</html>")), default);
+
+        var manifest = JsonSerializer.Deserialize<ManifestDoc>(
+            await File.ReadAllTextAsync(Path.Combine(_dir, "manifest.json")), CorpusJson.Options)!;
+        Assert.Equal(1, manifest.Expressions);
+        Assert.Equal(1, manifest.ExpressionsWithText);
+        Assert.Equal(0, manifest.ExpressionsWithoutText);
+        Assert.True(File.Exists(Path.Combine(_dir, "works", "w1", "versions", "2024-01-01", "en.html")));
+    }
+
+    [Fact]
+    public async Task Empty_retrieved_body_is_a_typed_issue_not_stored_text()
+    {
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-08T00:00:00Z"))
+            .WriteAsync(new OneVersionAdapter("in_force", "finance",
+                bodyFetch: SourceBodyFetch.Retrieved("   ")), default);
+
+        var manifest = JsonSerializer.Deserialize<ManifestDoc>(
+            await File.ReadAllTextAsync(Path.Combine(_dir, "manifest.json")), CorpusJson.Options)!;
+        Assert.Equal(0, manifest.ExpressionsWithText);
+        Assert.Equal(1, manifest.ExpressionsWithoutText);
+        var issue = Assert.Single(manifest.BuildIssues);
+        Assert.Equal("body_empty", issue.Code);
+
+        var expr = Assert.Single((await ReadVersionMeta()).Expressions);
+        Assert.False(expr.Text.Available);
+        Assert.Equal("body_empty", expr.Text.Reason);
+        Assert.Empty(expr.Observations);
+        Assert.False(File.Exists(Path.Combine(_dir, "works", "w1", "versions", "2024-01-01", "en.html")));
+    }
+
+    [Fact]
+    public async Task Alt_manifestation_does_not_block_primary_body_backfill()
+    {
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-01T00:00:00Z"))
+            .WriteAsync(new AltThenPrimaryAdapter(new SourceBodyFetch(
+                SourceBodyStatus.RetryExhausted, Detail: "network", Attempts: 2)), default);
+
+        var versionDir = Path.Combine(_dir, "works", "w1", "versions", "2024-01-01");
+        Assert.False(File.Exists(Path.Combine(versionDir, "en.html")));
+        var first = Assert.Single((await ReadVersionMeta()).Expressions);
+        Assert.True(first.Text.Available);                       // an alt manifestation IS observed text
+        Assert.All(first.Observations, o => Assert.NotNull(o.Format));
+
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-02T00:00:00Z"))
+            .WriteAsync(new AltThenPrimaryAdapter(
+                SourceBodyFetch.Retrieved("<html>primary text</html>")), default);
+
+        Assert.True(File.Exists(Path.Combine(versionDir, "en.html")));
+        var second = Assert.Single((await ReadVersionMeta()).Expressions);
+        Assert.Contains(second.Observations, o => o.Format is null);
     }
 
     private async Task<VersionMeta> ReadVersionMeta() => JsonSerializer.Deserialize<VersionMeta>(
@@ -253,14 +375,22 @@ public sealed class CorpusWriterTests : IDisposable
         bool hasVersions = true,
         SourceBodyFetch? bodyFetch = null,
         string titleHint = "Work one",
-        Exception? bodyException = null) : ISourceAdapter
+        Exception? bodyException = null,
+        IReadOnlyDictionary<string, SourceBodyFetch>? bodyFetchByLanguage = null) : ISourceAdapter
     {
         private readonly WorkRef _work = new(new Identifier("official:w1"), "w1", "REG", titleHint);
 
         public PublisherDescriptor Describe() => new(
             new Publisher("test", "Test", "EU", "https://example.test", Tier.A, "test", null),
-            [], languages ?? ["en"], TextIncluded: bodyFetch is not null || bodyException is not null,
-            TextPublic: bodyFetch is not null || bodyException is not null, HistoryBegins: "publisher");
+            // A per-language script declares text inclusion just as a single fetch does. Without
+            // this the whole version takes the metadata-only branch and a scripted real failure
+            // is never reached, which is what made the mixed test pass for the wrong reason.
+            [], languages ?? ["en"],
+            TextIncluded: bodyFetch is not null || bodyException is not null
+                          || bodyFetchByLanguage is not null,
+            TextPublic: bodyFetch is not null || bodyException is not null
+                        || bodyFetchByLanguage is not null,
+            HistoryBegins: "publisher");
 
         public async IAsyncEnumerable<WorkRef> EnumerateWorks(
             [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
@@ -293,6 +423,11 @@ public sealed class CorpusWriterTests : IDisposable
         public Task<SourceBodyFetch> FetchBody(VersionRecord version, ExpressionRecord expression, CancellationToken ct)
         {
             if (bodyException is not null) throw bodyException;
+            // Per-language override so one candidate can carry a real failure and a metadata-only
+            // expression at once, which is the case that decides whether the narrowed gate is
+            // still a gate.
+            if (bodyFetchByLanguage?.TryGetValue(expression.Language, out var perLanguage) == true)
+                return Task.FromResult(perLanguage);
             return Task.FromResult(bodyFetch
                 ?? new SourceBodyFetch(SourceBodyStatus.PublisherMetadataOnly));
         }
@@ -319,6 +454,46 @@ public sealed class CorpusWriterTests : IDisposable
 
         public Task<SourceBodyFetch> FetchBody(VersionRecord version, ExpressionRecord expression, CancellationToken ct) =>
             throw new InvalidOperationException("No work may be fetched after an incomplete enumeration.");
+    }
+
+    private sealed class AltThenPrimaryAdapter(SourceBodyFetch bodyFetch) : ISourceAdapter
+    {
+        private readonly WorkRef _work = new(new Identifier("official:w1"), "w1", "REG", "Work one");
+
+        public PublisherDescriptor Describe() => new(
+            new Publisher("test", "Test", "EU", "https://example.test", Tier.A, "test", null),
+            [], ["en"], TextIncluded: true, TextPublic: true, HistoryBegins: "publisher");
+
+        public async IAsyncEnumerable<WorkRef> EnumerateWorks(
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+            yield return _work;
+            await Task.CompletedTask;
+        }
+
+        public Task<IReadOnlyList<VersionRecord>> FetchVersions(WorkRef work, CancellationToken ct)
+        {
+            IReadOnlyList<VersionRecord> versions =
+            [
+                new(
+                    new Identifier("official:v1"), _work.Id, "REG", new DateOnly(2024, 1, 1), null,
+                    "publisher", "true", new DateOnly(2024, 1, 1),
+                    [new ExpressionRecord("en", new DateOnly(2024, 1, 1), null, "publisher",
+                        "Work one", "Work one", "https://example.test/v1/en")],
+                    [], new Dictionary<string, string>(), null, null)
+            ];
+            return Task.FromResult(versions);
+        }
+
+        public Task<SourceBodyFetch> FetchBody(VersionRecord version, ExpressionRecord expression, CancellationToken ct) =>
+            Task.FromResult(bodyFetch);
+
+        public Task<SourceManifestationFetch> FetchAltManifestation(
+            VersionRecord version, ExpressionRecord expression, CancellationToken ct) =>
+            Task.FromResult(SourceManifestationFetch.Retrieved(new ManifestationFetch(
+                "fmx4", [new ManifestationMember("main.xml", "<xml/>"u8.ToArray())],
+                "https://example.test/v1/en/fmx4")));
     }
 
     private sealed class EmptyAdapter : ISourceAdapter

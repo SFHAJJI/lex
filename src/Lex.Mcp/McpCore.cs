@@ -1533,7 +1533,8 @@ public sealed class McpCore
                             }).ToArray()),
                         ["build_issues_total"] = c.BuildIssues?.Count ?? 0,
                         ["build_issues_truncated"] = (c.BuildIssues?.Count ?? 0) > buildIssues.Length,
-                        ["versions"] = c.Rows,
+                        ["versions"] = c.Versions,
+                        ["expressions"] = c.Rows,
                         ["valid_from_earliest"] = c.EarliestValidFrom,
                         ["valid_from_latest"] = c.LatestValidFrom,
                         ["document_types"] = new JsonArray(kinds.Select(k => (JsonNode)new JsonObject
@@ -1553,9 +1554,10 @@ public sealed class McpCore
                         ["multilingual_works"] = c.MultilingualWorks,
                         ["text"] = new JsonObject
                         {
-                            ["versions_with_text_served"] = c.TextServed,
-                            ["versions_without_text"] = c.Rows - c.TextServed,
-                            ["note"] = "text availability is per version (text_available/text_public on each document); versions without text carry the official source link",
+                            ["versions_with_text_served"] = c.VersionsWithText,
+                            ["versions_without_text"] = c.Versions - c.VersionsWithText,
+                            ["expressions_with_text_served"] = c.TextServed,
+                            ["note"] = "versions count dated consolidations and a multilingual version counts once; expressions count its language texts separately. text availability is recorded per language expression (text_available/text_public on each document); versions without text carry the official source link",
                         },
                         ["known_gaps"] = new JsonArray(
                             KnownExclusions(r),

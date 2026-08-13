@@ -6,9 +6,11 @@ using System.Text.Json;
 
 namespace Lex.Index;
 
-/// Per document type: how many versions are held, and how many of them carry text. The second
-/// number is the honest one. A source may serve a version only in a format that has no article
-/// structure; such a version is held as a complete dated record with no wording (D49).
+/// Per document type: how many dated versions are held, and how many of them carry text. The
+/// second number is the honest one. A source may serve a version only in a format that has no
+/// article structure; such a version is held as a complete dated record with no wording (D49).
+/// Counts are per version (distinct key), not per docs row: docs holds one row per language
+/// expression, and a bilingual version must not count twice under a label that says "versions".
 public sealed record CoverageKind(string? Kind, int Versions, int WithText);
 
 /// How many versions each extraction profile produced text for. Publishes the confidence mix
@@ -38,7 +40,13 @@ public sealed record CoverageInfo(
     IReadOnlyList<CoverageBuildIssue>? BuildIssues = null,
     int TotalKinds = 0,
     int TotalProfiles = 0,
-    int TotalLanguages = 0);
+    int TotalLanguages = 0,
+    // Rows is one per language expression (the docs table's grain); Versions is the true count
+    // of dated versions (distinct version-level key, which carries no language component). The
+    // site's public "dated versions" claims must use Versions: labelling the expression count
+    // as versions overstated the EU corpus by exactly its language fan-out.
+    int Versions = 0,
+    int VersionsWithText = 0);
 
 /// Values that the mounted index can actually accept as public search filters. Keeping this
 /// inventory beside the data means adding a reviewed domain or jurisdiction does not require a
@@ -1684,12 +1692,12 @@ public sealed class LexIndexReader : IDisposable
             : "MAX(d.kind), NULL, NULL, NULL, NULL, MAX(d.language)";
         using var cmd = Cmd($"""
             SELECT d.group_key,
-                   COUNT(DISTINCT d.valid_from) AS versions,
+                   COUNT(DISTINCT d.key) AS versions,
                    MIN(d.valid_from) AS first_change,
                    MAX(d.valid_from) AS last_change,
                    (SELECT COALESCE(t.title_short, t.title) FROM docs t WHERE t.group_key = d.group_key
                      ORDER BY t.valid_from DESC LIMIT 1) AS title,
-                   (SELECT COUNT(DISTINCT t2.valid_from) FROM docs t2 WHERE t2.group_key = d.group_key) AS versions_total,
+                   (SELECT COUNT(DISTINCT t2.key) FROM docs t2 WHERE t2.group_key = d.group_key) AS versions_total,
                    -- The state this law was in before the window touched it: the newest version
                    -- strictly older than the window's first change. This is what "what changed"
                    -- has to compare against; comparing first_change with last_change is a
@@ -1791,7 +1799,10 @@ public sealed class LexIndexReader : IDisposable
         };
         var (where, parameters) = WithFilters(
             "valid_from >= $from AND valid_from <= $to", scoped, excludeAsOf: true);
-        using var cmd = Cmd($"SELECT COUNT(DISTINCT group_key), COUNT(DISTINCT group_key || valid_from) FROM docs WHERE {where}", parameters);
+        // key, not group_key || valid_from: two versions of one work can share a valid_from
+        // (the corpus disambiguates them with a key suffix), and a concatenation key collapses
+        // exactly those pairs while also gluing "2024-1-1" ambiguities into false matches.
+        using var cmd = Cmd($"SELECT COUNT(DISTINCT group_key), COUNT(DISTINCT key) FROM docs WHERE {where}", parameters);
         cmd.Parameters.AddWithValue("$from", from);
         cmd.Parameters.AddWithValue("$to", to);
         using var r = cmd.ExecuteReader();
@@ -1930,8 +1941,9 @@ public sealed class LexIndexReader : IDisposable
         // field from the newest row made one absent title erase a title held on all prior states.
         var ctes = $"""
             WITH f AS (SELECT * FROM docs WHERE {where}),
-                 agg AS (SELECT group_key, COUNT(*) AS versions, MIN(valid_from) AS first_from,
-                                MAX(valid_from) AS last_from, SUM(text_public) AS text_versions,
+                 agg AS (SELECT group_key, COUNT(DISTINCT key) AS versions, MIN(valid_from) AS first_from,
+                                MAX(valid_from) AS last_from,
+                                COUNT(DISTINCT CASE WHEN text_public=1 THEN key END) AS text_versions,
                                 MAX(text_public) AS has_text,
                                 -- When we last SAW a change for this work. valid_from is when a
                                 -- law takes effect, which is legitimately in the future for a
@@ -2074,8 +2086,9 @@ public sealed class LexIndexReader : IDisposable
         var totalLanguages = CountGroups("language");
         var kinds = new List<CoverageKind>();
         using (var cmd = Cmd("""
-            SELECT kind, COUNT(*), SUM(CASE WHEN text_public=1 THEN 1 ELSE 0 END)
-            FROM docs WHERE withdrawn=0 GROUP BY kind ORDER BY COUNT(*) DESC LIMIT $lim
+            SELECT kind, COUNT(DISTINCT key),
+                   COUNT(DISTINCT CASE WHEN text_public=1 THEN key END)
+            FROM docs WHERE withdrawn=0 GROUP BY kind ORDER BY COUNT(DISTINCT key) DESC LIMIT $lim
             """, []))
         {
             cmd.Parameters.AddWithValue("$lim", maximumFacetRows);
@@ -2085,18 +2098,22 @@ public sealed class LexIndexReader : IDisposable
                     r.GetInt32(1), r.IsDBNull(2) ? 0 : r.GetInt32(2)));
         }
 
-        // lex-index/2: text_public is set only when a derived (provision-bearing) version exists
+        // lex-index/2: text_public is set only when a derived (provision-bearing) version exists.
+        // key is the version-level lex_id in both supported schemas, so COUNT(DISTINCT key) is
+        // the true dated-version count; COUNT(*) stays the expression-row count.
         using var agg = Cmd("""
             SELECT COUNT(DISTINCT group_key), COUNT(*), MIN(valid_from), MAX(valid_from),
-                   SUM(CASE WHEN text_public=1 THEN 1 ELSE 0 END)
+                   SUM(CASE WHEN text_public=1 THEN 1 ELSE 0 END),
+                   COUNT(DISTINCT key),
+                   COUNT(DISTINCT CASE WHEN text_public=1 THEN key END)
             FROM docs WHERE withdrawn=0
             """, []);
         using var ar = agg.ExecuteReader();
         ar.Read();
         var profiles = new List<CoverageProfile>();
         using (var pc = Cmd("""
-            SELECT profile, COUNT(*) FROM docs WHERE profile IS NOT NULL AND withdrawn=0
-            GROUP BY profile ORDER BY COUNT(*) DESC LIMIT $lim
+            SELECT profile, COUNT(DISTINCT key) FROM docs WHERE profile IS NOT NULL AND withdrawn=0
+            GROUP BY profile ORDER BY COUNT(DISTINCT key) DESC LIMIT $lim
             """, []))
         {
             pc.Parameters.AddWithValue("$lim", maximumFacetRows);
@@ -2131,7 +2148,8 @@ public sealed class LexIndexReader : IDisposable
         return new CoverageInfo(Collection, ar.GetInt32(0), ar.GetInt32(1),
             ar.IsDBNull(2) ? null : ar.GetString(2), ar.IsDBNull(3) ? null : ar.GetString(3), kinds, Stamp,
             ar.IsDBNull(4) ? 0 : ar.GetInt32(4), profiles, languages, multilingual,
-            _expectedWorks, _buildIssues, totalKinds, totalProfiles, totalLanguages);
+            _expectedWorks, _buildIssues, totalKinds, totalProfiles, totalLanguages,
+            ar.GetInt32(5), ar.GetInt32(6));
     }
 
     private static string NormalizeWork(string work)

@@ -62,7 +62,7 @@ public static class ExplainerEndpoints
                 : $"keyword default; local hybrid preview available (gated) on {string.Join(", ", hybridCollections)}";
             var coverageRows = string.Join("", cov.Select(c => $"""
                 <tr><td>{H(c.Collection)}</td><td class="mono">{c.Groups:n0}</td>
-                <td class="mono">{c.Rows:n0}</td><td class="mono">{H(c.Stamp.GetValueOrDefault("schema"))}</td>
+                <td class="mono">{c.Versions:n0}</td><td class="mono">{H(c.Stamp.GetValueOrDefault("schema"))}</td>
                 <td class="mono">{H(c.Stamp.GetValueOrDefault("corpus_commit"))}</td></tr>
                 """));
             var body = ArchitectureTabs("current") + $"""
@@ -623,7 +623,7 @@ public static class ExplainerEndpoints
 
                 <h2>Scale</h2>
                 <p><span class="badge">{cov.Sum(c => c.Groups):n0} works</span>
-                <span class="badge">{cov.Sum(c => c.Rows):n0} dated versions</span>
+                <span class="badge">{cov.Sum(c => c.Versions):n0} dated versions</span>
                 <span class="badge">lex-index/2 + lex-index/3 readers</span>
                 <span class="badge">3 official XML/HTML dialects</span>
                 <span class="badge">nightly, unattended</span></p>
@@ -669,7 +669,7 @@ public static class ExplainerEndpoints
         {
             var cov = ctx.Registry.Values.Select(r => r.Coverage()).ToList();
             var works = cov.Sum(c => c.Groups);
-            var versions = cov.Sum(c => c.Rows);
+            var versions = cov.Sum(c => c.Versions);
             var body = $$"""
                 <p class="lede">I build systems that have to be right rather than plausible: regulated
                 platforms where an answer has to carry its source, its date, and a way to check it.</p>
@@ -974,7 +974,7 @@ public static class ExplainerEndpoints
 
                 <h2>Or skip the API, take the data</h2>
                 <p>Every provision of every version, one row each, licence and attribution inline.
-                {{cov.Sum(c => c.TextServed):n0}} versions carry full text.</p>
+                {{cov.Sum(c => c.VersionsWithText):n0}} versions carry full text.</p>
                 <div class="card"><b>DuckDB, one line, no download:</b>
                 <pre class="mono" style="white-space:pre-wrap;margin:6px 0 0">SELECT * FROM read_parquet('https://github.com/SFHAJJI/lex-articles/releases/latest/download/eu-eurlex-provisions.parquet');</pre>
                 <p class="sub" style="margin:8px 0 0">Also published as <span class="mono">.jsonl.gz</span>.
@@ -1094,8 +1094,8 @@ public static class ExplainerEndpoints
 
                 <h2>What it holds today</h2>
                 <p><span class="badge">{cov.Sum(c => c.Groups):n0} works</span>
-                <span class="badge">{cov.Sum(c => c.Rows):n0} dated versions</span>
-                <span class="badge">{cov.Sum(c => c.TextServed):n0} with full text</span>
+                <span class="badge">{cov.Sum(c => c.Versions):n0} dated versions</span>
+                <span class="badge">{cov.Sum(c => c.VersionsWithText):n0} with full text</span>
                 <span class="badge">refreshed nightly</span></p>
                 <p>Lex holds every current record in Legilux's consolidation catalogue, plus the selected
                 temporal EU regulatory scope shown by the mounted index. Legilux also exposes a much broader
