@@ -118,6 +118,9 @@ public enum SourceBodyStatus
     Oversized,
     ParserFailure,
     RetryExhausted,
+    // A 2xx response whose body is empty or whitespace. Distinct from PermanentNotFound because
+    // the URL resolves; distinct from Retrieved because there is no text to store.
+    EmptyBody,
 }
 
 public sealed record SourceBodyFetch(
@@ -137,6 +140,7 @@ public sealed record SourceBodyFetch(
         SourceBodyStatus.Oversized => "body_oversized",
         SourceBodyStatus.ParserFailure => "body_parser_failure",
         SourceBodyStatus.RetryExhausted => "body_retry_exhausted",
+        SourceBodyStatus.EmptyBody => "body_empty",
         _ => throw new InvalidOperationException("A retrieved body is not a build issue."),
     };
 }

@@ -84,7 +84,7 @@ public static class DocumentEndpoints
             var t = DocTitle(rows[^1]);
             var publisherVersionDates = UsesPublisherVersionDates(r);
             var sb = new StringBuilder();
-            sb.Append($"<p><span class=\"badge\">{H(rows[^1].Kind)}</span> <span class=\"badge\">{rows.Count} version(s)</span> <a class=\"badge\" href=\"{H(rows[^1].SourceUri)}\">official text ↗</a></p>");
+            sb.Append($"<p><span class=\"badge\">{H(rows[^1].Kind)}</span> <span class=\"badge\">{rows.Select(v => v.Key).Distinct().Count()} version(s)</span> <a class=\"badge\" href=\"{H(rows[^1].SourceUri)}\">official text ↗</a></p>");
             sb.Append(VersionRail(publisher, work, rows, null));
             var todayVersion = r.AsOf(work, ctx.Today, FilterSet.All);
             var readDate = todayVersion is null ? rows[^1].ValidFrom : ctx.Today.ToString("yyyy-MM-dd");
@@ -160,7 +160,10 @@ public static class DocumentEndpoints
 
             // "version(s)" is fine in a table header a reader is already looking at. In a search
             // result it is the one string on the page written by a machine for a machine.
-            var n = rows.Count == 1 ? "1 version" : $"{rows.Count} versions";
+            // Count distinct version keys, not timeline rows: a multilingual version is one
+            // version with several language rows.
+            var versionCount = rows.Select(v => v.Key).Distinct().Count();
+            var n = versionCount == 1 ? "1 version" : $"{versionCount} versions";
             var span = publisherVersionDates
                 ? $"{n} dated {rows[0].ValidFrom} to {rows[^1].ValidFrom}"
                 : rows[^1].ValidTo is null ? $"{n} from {rows[0].ValidFrom} to today"
