@@ -256,13 +256,15 @@ public sealed class CorpusWriterTests : IDisposable
         var before = Snapshot();
 
         var candidate = new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-08T00:00:00Z"));
-        await candidate.WriteAsync(new OneVersionAdapter("in_force", "finance", ["en", "fr"],
+        // fr and de, not en: the first write already observed en, and an expression with an
+        // observation is skipped rather than refetched, so scripting en would never be reached.
+        await candidate.WriteAsync(new OneVersionAdapter("in_force", "finance", ["en", "fr", "de"],
             titleHint: "Candidate title",
             bodyFetchByLanguage: new Dictionary<string, SourceBodyFetch>(StringComparer.Ordinal)
             {
-                ["en"] = new(SourceBodyStatus.PublisherMetadataOnly,
+                ["fr"] = new(SourceBodyStatus.PublisherMetadataOnly,
                     Detail: "The publisher did not enumerate an XML manifestation for this expression."),
-                ["fr"] = new(SourceBodyStatus.RetryExhausted,
+                ["de"] = new(SourceBodyStatus.RetryExhausted,
                     Detail: "publisher timed out", Attempts: 4),
             }), default, requireComplete: true);
 
