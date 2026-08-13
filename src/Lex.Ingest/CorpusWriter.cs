@@ -437,13 +437,31 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now, TextWrit
         };
         candidate.WriteIfChanged(Path.Combine(corpusRoot, "manifest.json"), JsonSerializer.Serialize(manifest, CorpusJson.Options));
         candidate.WriteIfChanged(Path.Combine(corpusRoot, "NOTICE"), Notice(pub, desc.TextIncluded));
-        if (requireComplete && buildIssues.Count > 0)
+        // A publisher offering no XML for an expression is not a failed acquisition. It is the
+        // publisher telling us there is nothing to acquire in that format, and the corpus already
+        // records it as Text.Reason with Available=false. Every other code here IS a failure, and
+        // requireComplete exists so a partial upstream response cannot write history.
+        //
+        // Counting the two together stopped the nightly outright. Legilux announces future-dated
+        // consolidations before their XML exists, so 1,492 expressions were flagged
+        // publisher_metadata_only and the whole candidate was discarded: no corpus commit, no
+        // derive, no index refresh, for both publishers, every night since 2026-08-10. The count
+        // can only grow as more future dates are announced, so this would never have recovered on
+        // its own. Coverage the publisher does not offer must not block coverage it does.
+        var blocking = buildIssues
+            .Where(issue => !string.Equals(issue.Code, "publisher_metadata_only", StringComparison.Ordinal))
+            .ToArray();
+        if (buildIssues.Count > blocking.Length)
+            Console.Error.WriteLine(
+                $"  [corpus] {buildIssues.Count - blocking.Length} expression(s) are metadata-only at "
+                + "the publisher; recorded as coverage, not treated as acquisition failures");
+        if (requireComplete && blocking.Length > 0)
         {
-            foreach (var issue in buildIssues)
+            foreach (var issue in blocking)
                 Console.Error.WriteLine(
                     $"  [corpus-issue] code={issue.Code} work={issue.Work} detail={issue.Detail}");
             Console.Error.WriteLine(
-                $"  [corpus] candidate rejected with {buildIssues.Count} typed acquisition issue(s); prior corpus retained");
+                $"  [corpus] candidate rejected with {blocking.Length} typed acquisition issue(s); prior corpus retained");
             return;
         }
         candidate.Commit();

@@ -211,6 +211,59 @@ public sealed class CorpusWriterTests : IDisposable
         Assert.Equal(before, Snapshot());
     }
 
+    // The distinction that stopped the nightly. A publisher offering no XML for an expression is
+    // not a failed acquisition, it is the publisher saying there is nothing to acquire in that
+    // format, and the corpus already records that as Text.Reason with Available=false. Legilux
+    // announces future-dated consolidations before their XML exists, so counting these as
+    // acquisition failures discarded the whole candidate every night, for both publishers, with a
+    // count that could only grow.
+    [Fact]
+    public async Task A_metadata_only_expression_does_not_discard_the_candidate()
+    {
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-01T00:00:00Z"))
+            .WriteAsync(new OneVersionAdapter("in_force", "finance",
+                bodyFetch: SourceBodyFetch.Retrieved("<html>publisher text</html>")), default);
+
+        var candidate = new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-08T00:00:00Z"));
+        await candidate.WriteAsync(new OneVersionAdapter("in_force", "finance", ["en", "fr"],
+            titleHint: "Candidate title",
+            bodyFetch: new SourceBodyFetch(SourceBodyStatus.PublisherMetadataOnly,
+                Detail: "The publisher did not enumerate an XML manifestation for this expression.")),
+            default, requireComplete: true);
+
+        Assert.True(candidate.Committed);
+        // Still recorded, so coverage stays honest: reported, not silently accepted.
+        Assert.NotEmpty(candidate.BuildIssues);
+        Assert.All(candidate.BuildIssues,
+            issue => Assert.Equal("publisher_metadata_only", issue.Code));
+        // The language the publisher offered nothing for carries the reason, and carries no
+        // text: committing the candidate must not invent coverage it does not have.
+        var expressions = (await ReadVersionMeta()).Expressions;
+        var metadataOnly = Assert.Single(expressions,
+            expression => expression.Text.Reason == "publisher_metadata_only");
+        Assert.False(metadataOnly.Text.Available);
+    }
+
+    // The other half: a real acquisition failure alongside a metadata-only one still rejects, so
+    // this narrows what blocks rather than removing the gate.
+    [Fact]
+    public async Task A_real_failure_still_discards_the_candidate()
+    {
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-01T00:00:00Z"))
+            .WriteAsync(new OneVersionAdapter("in_force", "finance",
+                bodyFetch: SourceBodyFetch.Retrieved("<html>publisher text</html>")), default);
+        var before = Snapshot();
+
+        var candidate = new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-08T00:00:00Z"));
+        await candidate.WriteAsync(new OneVersionAdapter("in_force", "finance", ["en", "fr"],
+            titleHint: "Candidate title",
+            bodyFetch: new SourceBodyFetch(SourceBodyStatus.RetryExhausted,
+                Detail: "publisher timed out", Attempts: 4)), default, requireComplete: true);
+
+        Assert.False(candidate.Committed);
+        Assert.Equal(before, Snapshot());
+    }
+
     [Fact]
     public void Legacy_manifest_without_expected_scope_keeps_inventory_unavailable()
     {
