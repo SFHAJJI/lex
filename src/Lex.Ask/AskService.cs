@@ -1288,22 +1288,6 @@ public sealed class AskService
     }
 
     /// <summary>
-    /// The reply, once the optional descriptive synthesis has had its turn.
-    ///
-    /// <para>The anonymous fallbacks that used to live here are gone rather than reworded. They
-    /// fired on exactly one condition, <c>synthesisFailed &amp;&amp; Status == Refusal</c>: the
-    /// composer or the grounding judge REFUSED because the evidence did not answer the question.
-    /// In the audited turn the judge was right and this branch converted the strongest available
-    /// signal that selection had gone wrong into a confident "here it is", under copy ("the
-    /// selected law") that named nothing a reader could check. A synthesis refusal is now
-    /// PREFIXED to the named deterministic line, never substituted for it, and the naming comes
-    /// from <see cref="OperationAnswerPolicy"/>, which had the instrument and the date all
-    /// along.</para>
-    /// </summary>
-    /// <param name="deterministicReply">The named line the caller already computed from
-    /// <see cref="OperationAnswerPolicy.Render"/>. Recomputed per effect when absent, so a direct
-    /// caller cannot obtain an anonymous reply by omitting it.</param>
-    /// <summary>
     /// Every disclosure the turn earned, present in the served text whatever synthesis did to it.
     ///
     /// <para>Appended only when absent, so a composer that kept the clause is not made to repeat
@@ -1324,6 +1308,22 @@ public sealed class AskService
         return text;
     }
 
+    /// <summary>
+    /// The reply, once the optional descriptive synthesis has had its turn.
+    ///
+    /// <para>The anonymous fallbacks that used to live here are gone rather than reworded. They
+    /// fired on exactly one condition, <c>synthesisFailed &amp;&amp; Status == Refusal</c>: the
+    /// composer or the grounding judge REFUSED because the evidence did not answer the question.
+    /// In the audited turn the judge was right and this branch converted the strongest available
+    /// signal that selection had gone wrong into a confident "here it is", under copy ("the
+    /// selected law") that named nothing a reader could check. A synthesis refusal is now
+    /// PREFIXED to the named deterministic line, never substituted for it, and the naming comes
+    /// from <see cref="OperationAnswerPolicy"/>, which had the instrument and the date all
+    /// along.</para>
+    /// </summary>
+    /// <param name="deterministicReply">The named line the caller already computed from
+    /// <see cref="OperationAnswerPolicy.Render"/>. Recomputed per effect when absent, so a direct
+    /// caller cannot obtain an anonymous reply by omitting it.</param>
     internal static string ReplyFor(
         AgentAnswerDraft grounded,
         IEnumerable<UiEffect> effects,
