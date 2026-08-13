@@ -244,10 +244,11 @@ public sealed class CorpusWriterTests : IDisposable
         Assert.False(metadataOnly.Text.Available);
     }
 
-    // The other half: a real acquisition failure alongside a metadata-only one still rejects, so
-    // this narrows what blocks rather than removing the gate.
+    // The other half, and the case that decides whether the narrowed gate is still a gate: one
+    // expression the publisher offers nothing for, and one that genuinely failed to fetch. The
+    // metadata-only issue must not rescue the candidate.
     [Fact]
-    public async Task A_real_failure_still_discards_the_candidate()
+    public async Task A_real_failure_beside_a_metadata_only_one_still_discards_the_candidate()
     {
         await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-01T00:00:00Z"))
             .WriteAsync(new OneVersionAdapter("in_force", "finance",
@@ -257,11 +258,19 @@ public sealed class CorpusWriterTests : IDisposable
         var candidate = new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-08T00:00:00Z"));
         await candidate.WriteAsync(new OneVersionAdapter("in_force", "finance", ["en", "fr"],
             titleHint: "Candidate title",
-            bodyFetch: new SourceBodyFetch(SourceBodyStatus.RetryExhausted,
-                Detail: "publisher timed out", Attempts: 4)), default, requireComplete: true);
+            bodyFetchByLanguage: new Dictionary<string, SourceBodyFetch>(StringComparer.Ordinal)
+            {
+                ["en"] = new(SourceBodyStatus.PublisherMetadataOnly,
+                    Detail: "The publisher did not enumerate an XML manifestation for this expression."),
+                ["fr"] = new(SourceBodyStatus.RetryExhausted,
+                    Detail: "publisher timed out", Attempts: 4),
+            }), default, requireComplete: true);
 
         Assert.False(candidate.Committed);
         Assert.Equal(before, Snapshot());
+        // Both were recorded; only the real failure decided the outcome.
+        Assert.Contains(candidate.BuildIssues, issue => issue.Code == "publisher_metadata_only");
+        Assert.Contains(candidate.BuildIssues, issue => issue.Code == "body_retry_exhausted");
     }
 
     [Fact]
@@ -306,7 +315,8 @@ public sealed class CorpusWriterTests : IDisposable
         bool hasVersions = true,
         SourceBodyFetch? bodyFetch = null,
         string titleHint = "Work one",
-        Exception? bodyException = null) : ISourceAdapter
+        Exception? bodyException = null,
+        IReadOnlyDictionary<string, SourceBodyFetch>? bodyFetchByLanguage = null) : ISourceAdapter
     {
         private readonly WorkRef _work = new(new Identifier("official:w1"), "w1", "REG", titleHint);
 
@@ -346,6 +356,11 @@ public sealed class CorpusWriterTests : IDisposable
         public Task<SourceBodyFetch> FetchBody(VersionRecord version, ExpressionRecord expression, CancellationToken ct)
         {
             if (bodyException is not null) throw bodyException;
+            // Per-language override so one candidate can carry a real failure and a metadata-only
+            // expression at once, which is the case that decides whether the narrowed gate is
+            // still a gate.
+            if (bodyFetchByLanguage?.TryGetValue(expression.Language, out var perLanguage) == true)
+                return Task.FromResult(perLanguage);
             return Task.FromResult(bodyFetch
                 ?? new SourceBodyFetch(SourceBodyStatus.PublisherMetadataOnly));
         }
