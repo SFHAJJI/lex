@@ -65,6 +65,21 @@ public sealed class AmendingClauseResolutionTests : IDisposable
         Assert.Equal(["32012r0648"], plan.WorkConstraints);
     }
 
+    // A work can appear twice: once inside the citation's trailing clause and again as the thing
+    // the question is about. Judging by the first position alone would demote the very work being
+    // asked about, so one mention outside a clause keeps it.
+    [Fact]
+    public void A_work_named_again_outside_the_clause_survives()
+    {
+        using var reader = Build();
+
+        var plan = reader.SearchKeyword(
+            $"Under {CrrTitle}, what does {EmirTitle} itself require?",
+            FilterSet.All, 10, fuzzyAuto: false).QueryPlan!;
+
+        Assert.Contains("32012r0648", plan.WorkConstraints);
+    }
+
     [Fact]
     public void A_lone_work_inside_an_amending_clause_is_not_dropped()
     {

@@ -1213,16 +1213,34 @@ public sealed class LexIndexReader : IDisposable
         if (matches.Count < 2) return matches;
         var normalized = WorkSearch.Normalize(query);
         var kept = matches
-            .Where(item => !WorkSearch.FollowsAmendingClause(
-                normalized, IndexOfMention(normalized, item.Key)))
+            .Where(item => !OnlyEverInAnAmendingClause(normalized, item.Key))
             .ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
         return kept.Count == 0 || kept.Count == matches.Count ? matches : kept;
     }
 
-    /// <summary>The mention's own start on a word boundary. The pattern begins with a space, so
-    /// the index it returns is already the unpadded one.</summary>
-    private static int IndexOfMention(string normalizedQuery, string mention) =>
-        (" " + normalizedQuery + " ").IndexOf(" " + mention + " ", StringComparison.Ordinal);
+    /// <summary>
+    /// Whether EVERY place the sentence names this work sits after an amending participle.
+    ///
+    /// <para>One occurrence is not enough to judge by. A sentence may cite an instrument in a
+    /// trailing clause and then ask about that same instrument directly, and taking only the
+    /// first position would demote the work the question is actually about. A single mention
+    /// outside a clause is therefore enough to keep it.</para>
+    /// </summary>
+    private static bool OnlyEverInAnAmendingClause(string normalizedQuery, string mention)
+    {
+        var padded = " " + normalizedQuery + " ";
+        var needle = " " + mention + " ";
+        var found = false;
+        for (var at = padded.IndexOf(needle, StringComparison.Ordinal); at >= 0;
+             at = padded.IndexOf(needle, at + 1, StringComparison.Ordinal))
+        {
+            found = true;
+            // The needle opens with a space, so its index in the padded string is already the
+            // mention's own start in the unpadded one.
+            if (!WorkSearch.FollowsAmendingClause(normalizedQuery, at)) return false;
+        }
+        return found;
+    }
 
     /// <summary>Which stored name form a mention matched, reduced from the per-hit reasons
     /// (<c>exact_title</c>, <c>contained_identifier</c>, ...) that carried it all along. One
