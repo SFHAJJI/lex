@@ -5,7 +5,9 @@ artifact, never estimated. Where something is broken or unbuilt, it says so and 
 This is the source document for the public `/built` page; the page is a rendering of it.
 
 Reading paths: §0 alone is a sixty-second summary. §1-§4 are the ten-minute story. Everything
-else is reference depth, written so that one person could rebuild the system from it.
+else is reference depth, written so that one person could rebuild the system from it. A reader
+arriving from the RAG literature can start at §13 instead: the four-brick mapping, and the
+retrieval failure mode that frame lacks.
 
 ---
 
@@ -235,6 +237,13 @@ keyword MRR 0.631 / nDCG@10 0.656; hybrid MRR 0.499 / nDCG@10 0.560. Hybrid wins
 so `retrieval_mode` defaults to keyword and no generative or embedding model participates in an
 ordinary search.
 
+Why it loses, not only that it loses: the holdout is dominated by the question shapes lawyers
+actually ask, identifiers, quoted titles and dated lookups, which BM25 under a title weight of 10
+answers almost perfectly, while the small multilingual encoder's one win is recall on conceptual
+phrasing (0.757 against 0.730). The numbers therefore point at a per-category opening of the
+gate, conceptual and bilingual first with keyword everywhere else, rather than a global flip. Any
+such opening faces the same holdout discipline, and until it clears, the default stays keyword.
+
 ### 7.2 Identity before ranking
 
 Work resolution decides whether the question names a law, before any ranking. Mention is not
@@ -395,6 +404,18 @@ Public repositories on free standard runners; heavy builds on the owner's machin
 hash-pinned ticket (the reason "prebuilt" exists); a EUR 10 eval ceiling priced from Microsoft's
 retail meters with no override flag; one always-on replica as the paid runtime.
 
+### 10.7 What survives losing what
+
+Continuity is a property of the layout, not a promise. Code, spec and both corpora are public
+git: losing any single machine, the build machine included, loses no evidence and no history.
+The image is immutable and rebuildable from a signed release manifest; the previous revision
+stays deployable throughout. The signing key is non-exportable in Key Vault, so a lost key is
+not a leaked key; recovery is the explicit dual-trust rotation D58 describes, published as a
+release rather than performed quietly. A GitHub outage degrades to the failure mode the gates
+were designed around: the nightly commits nothing and the site keeps serving yesterday's law.
+The one asset that is neither public nor signed is the local embedding cache; losing it costs a
+full re-embed under the D69/D70 batch discipline, compute rather than data.
+
 ## 11. Known limits
 
 The full record with effects, fixes, gains and why-not-now lives in `docs/known-defects.md`.
@@ -429,6 +450,9 @@ The short honest list:
 - No cross-publisher joins: LU and EU identity spaces are disjoint; saying so beats approximating.
 - No bi-temporal query surface yet: the audit axis is stored and provable via `provenance`;
   "as we knew it on T" waits for a real user.
+- No UI-layer machine translation of provisions: an English rendering of a French statute would
+  be the one model-generated text a reader could mistake for law. Orientation stays in the
+  interface language; wording stays the publisher's.
 
 ## 13. Mapping to the common RAG decomposition
 
