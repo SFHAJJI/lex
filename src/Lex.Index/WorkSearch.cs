@@ -101,6 +101,40 @@ public static class WorkSearch
     internal static string NormalizeCitation(string normalized) =>
         CitationQualifier.Replace(normalized, "$1");
 
+    /// <summary>The participles that turn what follows them into the OBJECT of an amendment
+    /// rather than the subject of the question. An official EU title routinely ends by naming
+    /// another instrument this way, which is how a quoted CRR title also names EMIR.</summary>
+    private static readonly HashSet<string> AmendingClauseVerbs = new(StringComparer.Ordinal)
+    {
+        "repealing", "amending", "replacing", "supplementing",
+        "abrogeant", "modifiant", "remplacant", "completant",
+    };
+
+    /// <summary>How far back from a mention the clause verb is looked for. Three tokens covers
+    /// "and amending Regulation" and "modifiant le reglement" without reaching into an unrelated
+    /// earlier phrase.</summary>
+    private const int AmendingClauseWindow = 3;
+
+    /// <summary>
+    /// Whether the mention beginning at <paramref name="start"/> in a NORMALIZED query sits
+    /// immediately after an amending or repealing participle.
+    ///
+    /// <para>Defined here, in the layer that produces the conflation, so the search side and
+    /// <c>WorkSubjectRule</c> cannot drift apart on what counts as a trailing clause. It is only
+    /// ever safe as a demotion over an already-identified set: a question whose ONLY named work
+    /// sits in such a clause ("what repealed Directive 95/46/EC?") is asking about that work, so
+    /// a caller must not use this to reject a lone match.</para>
+    /// </summary>
+    public static bool FollowsAmendingClause(string normalizedQuery, int start)
+    {
+        ArgumentNullException.ThrowIfNull(normalizedQuery);
+        if (start <= 0 || start > normalizedQuery.Length) return false;
+        return normalizedQuery[..start]
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .TakeLast(AmendingClauseWindow)
+            .Any(AmendingClauseVerbs.Contains);
+    }
+
     public static string Normalize(string value)
     {
         var decomposed = value.Normalize(NormalizationForm.FormD);

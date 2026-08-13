@@ -1168,6 +1168,7 @@ public sealed class LexIndexReader : IDisposable
                         .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray(),
                     Kind: MatchKind(group.Select(match => match.Reason))),
                 StringComparer.Ordinal);
+        matches = DemoteAmendingClauseMentions(query, matches);
         var result = new List<WorkResolution>();
         var consumed = new HashSet<string>(StringComparer.Ordinal);
         foreach (var identifier in LegalIdentifierTokens(query))
@@ -1188,6 +1189,57 @@ public sealed class LexIndexReader : IDisposable
                 match.Candidates.Length == 1 ? "resolved" : "ambiguous",
                 match.Candidates, match.Kind));
         return result.OrderBy(item => WorkSearch.Normalize(item.Mention), StringComparer.Ordinal).ToArray();
+    }
+
+    /// <summary>
+    /// Drops mentions the user's own sentence put inside an amending or repealing clause, when
+    /// the sentence also named a work outside one.
+    ///
+    /// <para>An official EU title routinely ends by naming another instrument: the CRR's ends
+    /// "and amending Regulation (EU) No 648/2012". A lawyer quoting it in full therefore names
+    /// two works, both match as identity, both resolve to a single candidate, and nothing
+    /// downstream looks ambiguous. That is the conflation that served EMIR Article 26 for a CRR
+    /// question, and it is created here, so it is corrected here rather than only being survived
+    /// later by <c>WorkSubjectRule</c>.</para>
+    ///
+    /// <para>Strictly a demotion over the already-identified set, never a selector. A question
+    /// whose ONLY named work sits in such a clause is asking about that work ("what repealed
+    /// Directive 95/46/EC?"), so when nothing survives the filter, nothing is dropped.</para>
+    /// </summary>
+    private static Dictionary<string, (string[] Candidates, string? Kind)>
+        DemoteAmendingClauseMentions(
+            string query, Dictionary<string, (string[] Candidates, string? Kind)> matches)
+    {
+        if (matches.Count < 2) return matches;
+        var normalized = WorkSearch.Normalize(query);
+        var kept = matches
+            .Where(item => !OnlyEverInAnAmendingClause(normalized, item.Key))
+            .ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        return kept.Count == 0 || kept.Count == matches.Count ? matches : kept;
+    }
+
+    /// <summary>
+    /// Whether EVERY place the sentence names this work sits after an amending participle.
+    ///
+    /// <para>One occurrence is not enough to judge by. A sentence may cite an instrument in a
+    /// trailing clause and then ask about that same instrument directly, and taking only the
+    /// first position would demote the work the question is actually about. A single mention
+    /// outside a clause is therefore enough to keep it.</para>
+    /// </summary>
+    private static bool OnlyEverInAnAmendingClause(string normalizedQuery, string mention)
+    {
+        var padded = " " + normalizedQuery + " ";
+        var needle = " " + mention + " ";
+        var found = false;
+        for (var at = padded.IndexOf(needle, StringComparison.Ordinal); at >= 0;
+             at = padded.IndexOf(needle, at + 1, StringComparison.Ordinal))
+        {
+            found = true;
+            // The needle opens with a space, so its index in the padded string is already the
+            // mention's own start in the unpadded one.
+            if (!WorkSearch.FollowsAmendingClause(normalizedQuery, at)) return false;
+        }
+        return found;
     }
 
     /// <summary>Which stored name form a mention matched, reduced from the per-hit reasons
