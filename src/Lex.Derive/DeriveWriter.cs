@@ -21,7 +21,13 @@ public static class DeriveWriter
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     };
 
-    public sealed record Stats(int Works, int Versions, int Provisions, int Skipped, List<string> Errors);
+    /// <param name="EmptyProvisions">Provisions the profile emitted with no body text. They are
+    /// not a skip: the provision exists, carries a heading, and mints a text_sha256 over the empty
+    /// string, so it counts as coverage and any later real text reads as an amendment that never
+    /// happened. Counted rather than rejected, because the existing backlog would abort every run
+    /// before it could be measured.</param>
+    public sealed record Stats(int Works, int Versions, int Provisions, int Skipped, List<string> Errors,
+        int EmptyProvisions = 0);
 
     public static Stats Derive(string corpusRoot, string outRoot, string publisher)
     {
@@ -35,7 +41,7 @@ public static class DeriveWriter
             ? "CC-BY-4.0"
             : "EU reuse-with-attribution (Commission Decision 2011/833/EU)";
 
-        int works = 0, versions = 0, provisionCount = 0, skipped = 0;
+        int works = 0, versions = 0, provisionCount = 0, skipped = 0, emptyProvisions = 0;
         var errors = new List<string>();
 
         foreach (var workDir in Directory.EnumerateDirectories(worksDir).OrderBy(d => d, StringComparer.Ordinal))
@@ -257,6 +263,14 @@ public static class DeriveWriter
 
                         versions++;
                         provisionCount += extraction.Provisions.Count;
+
+                        var emptyHere = extraction.Provisions.Count(p => string.IsNullOrWhiteSpace(p.TextMd));
+                        if (emptyHere > 0)
+                        {
+                            emptyProvisions += emptyHere;
+                            Console.Error.WriteLine("  [derive] empty provisions: "
+                                + $"{emptyHere}/{extraction.Provisions.Count} {slug}/{validFrom}/{lang}");
+                        }
                     }
                     catch (Exception ex)
                     {
@@ -265,7 +279,7 @@ public static class DeriveWriter
                 }
             }
         }
-        return new Stats(works, versions, provisionCount, skipped, errors);
+        return new Stats(works, versions, provisionCount, skipped, errors, emptyProvisions);
     }
 
     /// <summary>
