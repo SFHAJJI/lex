@@ -509,6 +509,7 @@ public static class ExplainerEndpoints
                         ▼
                   CANDIDATE REVISION (zero traffic)
                         │  health + MCP + LU/EU search smoke tests
+                        │  signed eval evidence + human attestation
                         ▼
                   MCP server · this site (Container Apps, one pinned replica)</pre></div>
                 <p class="sub">Azure: Container Apps behind a managed certificate, Container Registry, Key Vault
@@ -564,9 +565,16 @@ public static class ExplainerEndpoints
                 A canonical manifest binds every index, vector, model, tokenizer and scope artifact by hash and
                 size; Key Vault signs that whole manifest and the workflow verifies it before publication.</td></tr>
                 <tr><td><b>6. Deploy safely</b></td><td>Builds an immutable image tagged with the code commit and
-                manifest hash, verifies the release again, starts a zero-traffic revision, exercises health, MCP,
-                LU and EU search, then promotes it. The preceding revision remains available for rollback.</td></tr>
-                <tr><td><b>7. Report</b></td><td>Writes a three-state outcome per publisher
+                manifest hash, verifies the release again, starts a zero-traffic revision, and exercises health,
+                MCP, LU and EU search against it. It stops there by design: this workflow cannot move traffic and
+                refuses to try. Whatever is serving keeps serving.</td></tr>
+                <tr><td><b>7. Promote deliberately</b></td><td>Traffic moves only from a separate workflow, and only
+                against a fixed evidence set bound to that exact revision: the eval report, the frozen case catalog,
+                browser evidence, and a human attestation signed with a Key Vault key the artifact publisher is not
+                granted access to. Approving the cases and publishing the artifacts are deliberately separate
+                authorities, so no automated actor can approve its own release. The preceding revision remains
+                available for rollback.</td></tr>
+                <tr><td><b>8. Report</b></td><td>Writes a three-state outcome per publisher
                 (<span class="mono">ran_committed</span> / <span class="mono">ran_no_change</span> /
                 <span class="mono">failed_*</span>) and opens an issue on failure.</td></tr>
                 </table></div>
@@ -603,6 +611,23 @@ public static class ExplainerEndpoints
                 paragraphs where an article had introductory text followed by a list. It looked plausible on
                 screen. It was caught by re-reading real output rather than trusting a passing test, fixed the
                 same day, and pinned with a fingerprint test so the profile can never drift again.</p>
+                <p><b>The right article of the wrong law.</b> A question quoting the Capital Requirements
+                Regulation by its full official title, which ends "and amending Regulation (EU) No 648/2012",
+                was answered with Article 26 of EMIR, on clearing house governance, instead of Article 26 of
+                the CRR, on Common Equity Tier 1. The model invented nothing. Retrieval handed it the wrong
+                instrument: the quoted title names two laws, both are held, both have an Article 26, and the
+                tie fell through to keyword rank over article text, which for a quoted official title is close
+                to random. The reply named no instrument, so nothing on screen let a reader notice.</p>
+                <p class="sub">Fix, at three layers. Selection now treats the mention that strictly contains
+                every other as the subject of the sentence, which is a fact about what was typed rather than a
+                keyword list, so it holds in any language. Resolution demotes a law named only inside an
+                amending clause, so the ambiguity is never produced, while a question whose only named law sits
+                in such a clause still resolves it. And the answer now always names the instrument, its
+                identifier and the effective date, and discloses the runner-up whenever a choice was made,
+                enforced after synthesis so the composer cannot drop it. Lesson: the dangerous retrieval failure
+                is not a wrong answer, it is a correct answer to a question about a different document.
+                Groundedness scoring cannot catch that, because the answer is faithful to the evidence it was
+                handed. Only naming the source in the reply makes it visible to the reader.</p>
                 </div>
 
                 <h2>How correctness is proven, not claimed</h2>
