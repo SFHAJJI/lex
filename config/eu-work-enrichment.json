@@ -31,7 +31,26 @@
     { "collection": "eu-eurlex", "work": "32024r1689", "language": "en", "value": "AI Act", "reviewed_by": "repository-review:common-names-migration-2026-08-08" },
     { "collection": "eu-eurlex", "work": "32024r1689", "language": "fr", "value": "AI Act", "reviewed_by": "repository-review:common-names-migration-2026-08-08" },
     { "collection": "eu-eurlex", "work": "32024r2847", "language": "en", "value": "Cyber Resilience Act", "reviewed_by": "repository-review:common-names-migration-2026-08-08" },
-    { "collection": "eu-eurlex", "work": "32024r2847", "language": "fr", "value": "Cyber Resilience Act", "reviewed_by": "repository-review:common-names-migration-2026-08-08" }
+    { "collection": "eu-eurlex", "work": "32024r2847", "language": "fr", "value": "Cyber Resilience Act", "reviewed_by": "repository-review:common-names-migration-2026-08-08" },
+    { "collection": "eu-eurlex", "work": "32012r0648", "language": "en", "value": "EMIR", "reviewed_by": "repository-review:financial-sector-names-2026-08-13" },
+    { "collection": "eu-eurlex", "work": "32012r0648", "language": "fr", "value": "EMIR", "reviewed_by": "repository-review:financial-sector-names-2026-08-13" },
+    { "collection": "eu-eurlex", "work": "32014r0596", "language": "en", "value": "MAR", "reviewed_by": "repository-review:financial-sector-names-2026-08-13" },
+    { "collection": "eu-eurlex", "work": "32014r0596", "language": "fr", "value": "MAR", "reviewed_by": "repository-review:financial-sector-names-2026-08-13" },
+    { "collection": "eu-eurlex", "work": "32014r0600", "language": "en", "value": "MiFIR", "reviewed_by": "repository-review:financial-sector-names-2026-08-13" },
+    { "collection": "eu-eurlex", "work": "32014r0600", "language": "fr", "value": "MiFIR", "reviewed_by": "repository-review:financial-sector-names-2026-08-13" },
+    { "collection": "eu-eurlex", "work": "32013l0036", "language": "en", "value": "CRD IV", "reviewed_by": "repository-review:financial-sector-names-2026-08-13" },
+    { "collection": "eu-eurlex", "work": "32013l0036", "language": "fr", "value": "CRD IV", "reviewed_by": "repository-review:financial-sector-names-2026-08-13" },
+    { "collection": "eu-eurlex", "work": "32014l0059", "language": "en", "value": "BRRD", "reviewed_by": "repository-review:financial-sector-names-2026-08-13" },
+    { "collection": "eu-eurlex", "work": "32014l0059", "language": "fr", "value": "BRRD", "reviewed_by": "repository-review:financial-sector-names-2026-08-13" },
+    { "collection": "eu-eurlex", "work": "32011l0061", "language": "en", "value": "AIFMD", "reviewed_by": "repository-review:financial-sector-names-2026-08-13" },
+    { "collection": "eu-eurlex", "work": "32011l0061", "language": "fr", "value": "AIFMD", "reviewed_by": "repository-review:financial-sector-names-2026-08-13" },
+    { "collection": "eu-eurlex", "work": "32009l0138", "language": "en", "value": "Solvency II", "reviewed_by": "repository-review:financial-sector-names-2026-08-13" },
+    { "collection": "eu-eurlex", "work": "32009l0138", "language": "fr", "value": "Solvency II", "reviewed_by": "repository-review:financial-sector-names-2026-08-13" },
+    { "collection": "eu-eurlex", "work": "32009l0138", "language": "fr", "value": "Solvabilité II", "reviewed_by": "repository-review:financial-sector-names-2026-08-13" },
+    { "collection": "eu-eurlex", "work": "32020r0852", "language": "en", "value": "Taxonomy Regulation", "reviewed_by": "repository-review:financial-sector-names-2026-08-13" },
+    { "collection": "eu-eurlex", "work": "32020r0852", "language": "fr", "value": "Taxonomy Regulation", "reviewed_by": "repository-review:financial-sector-names-2026-08-13" },
+    { "collection": "eu-eurlex", "work": "32015l0849", "language": "en", "value": "AMLD4", "reviewed_by": "repository-review:financial-sector-names-2026-08-13" },
+    { "collection": "eu-eurlex", "work": "32015l0849", "language": "fr", "value": "AMLD4", "reviewed_by": "repository-review:financial-sector-names-2026-08-13" }
   ],
   "discovery": []
 }
