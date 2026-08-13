@@ -2472,6 +2472,10 @@ public sealed class LexIndexReader : IDisposable
     /// </summary>
     public string? SnippetFor(string textSha, string query, int window = 240)
     {
+        ArgumentNullException.ThrowIfNull(textSha);
+        ArgumentNullException.ThrowIfNull(query);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(window);
+
         string text;
         try
         {

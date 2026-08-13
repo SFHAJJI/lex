@@ -101,6 +101,21 @@ public sealed class SnippetTests : IDisposable
         Assert.Null(reader.SnippetFor(new string('a', 64), "gouvernance"));
     }
 
+    // A public reader entry point rejects bad arguments instead of returning null for them, so a
+    // caller can never confuse "this provision holds no text" with "you passed nothing".
+    [Fact]
+    public void Bad_arguments_are_rejected_rather_than_reported_as_an_absent_snippet()
+    {
+        using var reader = Build(Body);
+
+        Assert.Throws<ArgumentNullException>(() => reader.SnippetFor(null!, "gouvernance"));
+        Assert.Throws<ArgumentNullException>(() => reader.SnippetFor(ShaOf(Body), null!));
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => reader.SnippetFor(ShaOf(Body), "gouvernance", 0));
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => reader.SnippetFor(ShaOf(Body), "gouvernance", -1));
+    }
+
     // A term the body does not contain still returns the provision's opening words rather than
     // nothing: the hit is real, it matched on the title, number or heading, and a reader scanning
     // results is better served by the first line of the article than by a blank cell.
