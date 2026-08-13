@@ -150,6 +150,32 @@ public sealed class AgentAnswerFinalizerTests
         Assert.Equal(40, result.Usage.OutputTokens);
     }
 
+    // The correction has to name what actually went wrong. Telling a model that emitted
+    // unparseable text that it "violated the evidence contract" is a false diagnosis, and a model
+    // asked to fix the wrong thing is less likely to fix the right one.
+    [Fact]
+    public async Task The_correction_names_the_failure_that_actually_happened()
+    {
+        var brokeContract = Json(Grounded("x") with
+        {
+            Claims = [new AgentClaim("x", AgentClaimKind.LegalText, ["text:missing"])],
+        });
+        var afterContract = new ScriptedAgent(brokeContract, Json(Grounded("Corrected.")));
+        var afterGarbage = new ScriptedAgent("not an object", Json(Grounded("Corrected.")));
+        var judge = new ScriptedAgent(
+            Json(new AgentGroundingJudgment(AgentJudgmentDisposition.Pass, [], null)),
+            Json(new AgentGroundingJudgment(AgentJudgmentDisposition.Pass, [], null)));
+
+        await Run(afterContract, judge);
+        await Run(afterGarbage, judge);
+
+        var contractRetry = afterContract.Prompts[^1];
+        var garbageRetry = afterGarbage.Prompts[^1];
+        Assert.Contains("evidence contract", contractRetry, StringComparison.Ordinal);
+        Assert.Contains("could not be read", garbageRetry, StringComparison.Ordinal);
+        Assert.DoesNotContain("evidence contract", garbageRetry, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task A_refusal_is_written_in_the_asker_language()
     {

@@ -98,13 +98,16 @@ internal sealed class AgentAnswerFinalizer
         AgentAnswerDraft? draft = null;
         var usage = default(ModelTokenUsage);
         var session = await _composer.CreateSessionAsync(cancellationToken);
+        // The correction names what actually went wrong. Telling a model that produced
+        // unparseable text that it "violated the evidence contract" is a false diagnosis, and a
+        // model asked to fix the wrong thing is less likely to fix the right one.
+        string? correction = null;
         for (var attempt = 0; attempt < 2 && draft is null; attempt++)
         {
             try
             {
                 var response = await _composer.RunAsync<AgentAnswerDraft>(
-                    attempt == 0 ? prompt : "The prior output violated the deterministic evidence contract. "
-                        + "Return one complete corrected object using only the same question and evidence.",
+                    attempt == 0 ? prompt : correction!,
                     session,
                     JsonOptions,
                     cancellationToken: cancellationToken);
@@ -116,6 +119,8 @@ internal sealed class AgentAnswerFinalizer
             catch (InvalidDataException)
             {
                 // One correction is allowed. The second failure falls through to a refusal.
+                correction = "The prior output violated the deterministic evidence contract. "
+                    + "Return one complete corrected object using only the same question and evidence.";
             }
             catch (JsonException)
             {
@@ -125,6 +130,9 @@ internal sealed class AgentAnswerFinalizer
                 // RunAsync, so this used to escape FinalizeAsync entirely and fail the request
                 // instead of refusing. A model that returns nonsense is exactly the case this
                 // component exists to absorb.
+                correction = "The prior output could not be read as the requested object. "
+                    + "Return one complete, valid instance of the requested structured object and "
+                    + "nothing else, using only the same question and evidence.";
             }
         }
         if (draft is null) return new(Refusal(locale), SynthesisFailed: true, usage);

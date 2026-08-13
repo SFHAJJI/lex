@@ -21,6 +21,9 @@ internal sealed class ScriptedAgent : AIAgent
     /// <summary>How many times the finalizer actually called the model.</summary>
     internal int Calls { get; private set; }
 
+    /// <summary>The text of each prompt, so a test can assert what the retry actually said.</summary>
+    internal List<string> Prompts { get; } = [];
+
     protected override Task<AgentResponse> RunCoreAsync(
         IEnumerable<ChatMessage> messages,
         AgentSession? session,
@@ -28,6 +31,7 @@ internal sealed class ScriptedAgent : AIAgent
         CancellationToken cancellationToken)
     {
         Calls++;
+        Prompts.AddRange(messages.Select(message => message.Text ?? string.Empty));
         if (_outputs.Count == 0)
             throw new InvalidOperationException(
                 $"The finalizer made call {Calls}, more than this script provides.");
