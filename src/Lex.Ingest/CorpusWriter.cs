@@ -2,30 +2,38 @@ using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Globalization;
 using Lex.Law;
+using Lex.Temporal;
 
 namespace Lex.Ingest;
 
 /// <summary>
 /// The single component that writes corpus files (C1 layout, C3 rules, F12 discipline).
-/// Adapters never touch disk (F8). Version directories are valid_from-only and are never
-/// renamed (D41). meta.json changes only when observed reality changes; every change
+/// Adapters never touch disk (F8). Version directories combine valid_from with the full hash of
+/// publisher_version_identifier, so coordinates never change as the known set grows. meta.json
+/// changes only when observed reality changes; every change
 /// appends the corresponding chain entry (F12). Body files are append-only; a declared
 /// metadata-only expression writes no body and records the reason instead.
 /// </summary>
-public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now, TextWriter? progress = null)
+public sealed class CorpusWriter(
+    string corpusRoot, DateTimeOffset now, string codeCommit, TextWriter? progress = null)
 {
     private readonly string _now = now.UtcDateTime.ToString("yyyy-MM-ddTHH:mm:ssZ");
+    private readonly string _ingesterCodeCommit = CodeIdentity.RequireFullCommit(
+        codeCommit, "ingester code commit");
     private readonly TextWriter _progress = progress ?? Console.Error;
     public int Created { get; private set; }
     public int Updated { get; private set; }
     public int Unchanged { get; private set; }
     public bool Committed { get; private set; }
+    public bool Accepted { get; private set; }
     public IReadOnlyList<SourceBuildIssue> BuildIssues { get; private set; } = [];
 
     public async Task WriteAsync(
         ISourceAdapter adapter, CancellationToken ct, bool requireComplete = false)
     {
+        var existingManifest = RefuseLegacyAppend(corpusRoot);
         var desc = adapter.Describe();
         var pub = desc.Publisher;
         using var candidate = new CorpusCandidate(corpusRoot);
@@ -482,10 +490,23 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now, TextWrit
             ValidToLatest = latest,
             HistoryBegins = desc.HistoryBegins,
             IngesterVersion = "0.1.0",
+            // A poll that materializes no different bytes must not relabel the existing corpus
+            // as though a newer, unrelated Lex revision had produced it. Write the prior
+            // materializer first; if any corpus/NOTICE/manifest fact changes below, replace it
+            // with this run's explicitly supplied identity.
+            IngesterCodeCommit = existingManifest?.IngesterCodeCommit
+                ?? _ingesterCodeCommit,
+            MigrationBaselineWorks = existingManifest?.MigrationBaselineWorks,
             PublisherDiscoverySchema = ManifestDoc.CurrentPublisherDiscoverySchema,
         };
         candidate.WriteIfChanged(Path.Combine(corpusRoot, "manifest.json"), JsonSerializer.Serialize(manifest, CorpusJson.Options));
         candidate.WriteIfChanged(Path.Combine(corpusRoot, "NOTICE"), Notice(pub, desc.TextIncluded));
+        if (candidate.HasChanges && manifest.IngesterCodeCommit != _ingesterCodeCommit)
+        {
+            manifest.IngesterCodeCommit = _ingesterCodeCommit;
+            candidate.WriteIfChanged(Path.Combine(corpusRoot, "manifest.json"),
+                JsonSerializer.Serialize(manifest, CorpusJson.Options));
+        }
         if (requireComplete && blocking.Length > 0)
         {
             // Only the blocking issues are listed. The metadata-only ones were already summarised
@@ -498,11 +519,34 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now, TextWrit
                 $"  [corpus] candidate rejected with {blocking.Length} typed acquisition issue(s); prior corpus retained");
             return;
         }
+        Accepted = true;
+        if (!candidate.HasChanges)
+        {
+            _progress.WriteLine(
+                "  [corpus] no materialized changes; prior ingester identity retained");
+            return;
+        }
         candidate.Commit();
         Committed = true;
         _progress.WriteLine($"  [corpus] works={works} versions={versions} expressions={expressions} " +
             $"with_text={expressionsWithText} without_text={manifest.ExpressionsWithoutText} " +
             $"created={Created} updated={Updated} unchanged={Unchanged}");
+    }
+
+    private static ManifestDoc? RefuseLegacyAppend(string root)
+    {
+        var path = Path.Combine(root, "manifest.json");
+        if (!File.Exists(path)) return null;
+        var manifest = JsonSerializer.Deserialize<ManifestDoc>(
+            File.ReadAllText(path), CorpusJson.Options)
+            ?? throw new InvalidDataException("Existing corpus manifest is empty.");
+        if (manifest.Schema != ManifestDoc.CurrentSchema)
+            throw new InvalidDataException(
+                $"Existing corpus schema '{manifest.Schema}' cannot be appended by the v4 writer; "
+                + "use the explicit fresh-corpus migration path.");
+        CodeIdentity.RequireFullCommit(
+            manifest.IngesterCodeCommit, "manifest ingester_code_commit");
+        return manifest;
     }
 
     private static Dictionary<string, string> VersionKeys(
@@ -517,20 +561,12 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now, TextWrit
         var result = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var dateGroup in versions.GroupBy(version => version.ValidFrom))
         {
-            var date = dateGroup.Key.ToString("yyyy-MM-dd");
+            var date = dateGroup.Key.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
             var sameDate = dateGroup.OrderBy(version => version.Id.Value, StringComparer.Ordinal).ToList();
-            if (sameDate.Count == 1)
-            {
-                result.Add(sameDate[0].Id.Value, date);
-                continue;
-            }
-
             var expectedKeys = new HashSet<string>(StringComparer.Ordinal);
             foreach (var version in sameDate)
             {
-                var hash = Convert.ToHexStringLower(
-                    SHA256.HashData(Encoding.UTF8.GetBytes(version.Id.Value)))[..12];
-                var key = $"{date}--{hash}";
+                var key = VersionIdentity.Create(version.ValidFrom, version.Id.Value);
                 if (!expectedKeys.Add(key))
                     throw new InvalidDataException(
                         $"Publisher version identifiers collide after hashing for {Path.GetFileName(workDir)} on {date}.");
@@ -546,7 +582,7 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now, TextWrit
                 .FirstOrDefault(key => !expectedKeys.Contains(key!));
             if (incompatible is not null)
                 throw new InvalidDataException(
-                    $"Legacy or incompatible same-date version key {incompatible} exists for "
+                    $"Legacy or incompatible version key {incompatible} exists for "
                     + $"{Path.GetFileName(workDir)}; a full re-ingest is required.");
         }
         return result;

@@ -338,11 +338,24 @@ switch (args0[0])
     {
         var publisher = Get("--publisher") ?? "lu-legilux";
         var corpus = Get("--corpus") ?? throw new ArgumentException("--corpus required");
+        var ingesterCodeCommit = Lex.Temporal.CodeIdentity.RequireFullCommit(
+            Get("--code-commit"), "--code-commit");
         var adapter = sourceAdapters.Resolve(publisher, Get);
-        Console.Error.WriteLine($"[lex] ingest {publisher} -> {corpus}");
-        var writer = new CorpusWriter(corpus, now);
-        await writer.WriteAsync(adapter, CancellationToken.None, requireComplete: true);
-        return writer.Committed ? 0 : 4;
+        if (Array.IndexOf(args0, "--fresh") >= 0)
+        {
+            Console.Error.WriteLine(
+                $"[lex] fresh ingest {publisher} -> disposable candidate {corpus}");
+            await FreshCorpusMigration.RunAsync(corpus, publisher, adapter, now,
+                ingesterCodeCommit, CancellationToken.None);
+            return 0;
+        }
+        else
+        {
+            Console.Error.WriteLine($"[lex] ingest {publisher} -> {corpus}");
+            var writer = new CorpusWriter(corpus, now, ingesterCodeCommit);
+            await writer.WriteAsync(adapter, CancellationToken.None, requireComplete: true);
+            return writer.Accepted ? 0 : 4;
+        }
     }
     case "work-enrichment-build":
     {
@@ -429,8 +442,13 @@ switch (args0[0])
             ?? throw new ArgumentException("--articles-commit required when --articles is supplied");
         var corpusCommit = Get("--corpus-commit")
             ?? throw new ArgumentException("--corpus-commit required");
+        var reviewedConfiguration = articles is null ? null
+            : Get("--reviewed-configuration")
+              ?? throw new ArgumentException(
+                  "--reviewed-configuration required when --articles is supplied");
         IndexFromCorpus.Build(corpus, articles, outDb, keyPem, now, semantic,
-            Get("--work-enrichment"), codeCommit, articlesCommit, corpusCommit);
+            Get("--work-enrichment"), codeCommit, articlesCommit, corpusCommit,
+            reviewedConfiguration);
         return 0;
     }
     case "derive":
@@ -438,8 +456,20 @@ switch (args0[0])
         var publisher = Get("--publisher") ?? "lu-legilux";
         var corpus = Get("--corpus") ?? throw new ArgumentException("--corpus required");
         var outRoot = Get("--out") ?? throw new ArgumentException("--out required");
+        var deriverCodeCommit = Lex.Temporal.CodeIdentity.RequireFullCommit(
+            Get("--code-commit"), "--code-commit");
+        var corpusCommit = Lex.Temporal.CodeIdentity.RequireFullCommit(
+            Get("--corpus-commit"), "--corpus-commit");
+        var deriverTreeId = Lex.Temporal.CodeIdentity.RequireFullGitObjectId(
+            Get("--deriver-tree-id"), "--deriver-tree-id");
+        var configurationPath = Get("--reviewed-configuration")
+            ?? throw new ArgumentException("--reviewed-configuration required");
+        var configurationDigest = Lex.Derive.DerivationGeneration.Sha256File(
+            configurationPath);
         Console.Error.WriteLine($"[lex] derive {publisher} {corpus} -> {outRoot}");
-        var stats = Lex.Derive.DeriveWriter.Derive(corpus, outRoot, publisher);
+        var stats = Lex.Derive.DeriveWriter.Derive(
+            corpus, outRoot, publisher, deriverCodeCommit, deriverTreeId,
+            corpusCommit, configurationDigest);
         Console.Error.WriteLine($"  [derive] works={stats.Works} versions={stats.Versions} provisions={stats.Provisions} empty_provisions={stats.EmptyProvisions} mostly_empty_versions={stats.MostlyEmpty?.Count ?? 0} skipped={stats.Skipped} errors={stats.Errors.Count}");
         // Listed rather than summarised: each line names one document whose profile failed on it,
         // which is the unit someone can go and fix. A corpus percentage names nothing.
@@ -524,6 +554,16 @@ switch (args0[0])
                 var publisher = Get("--publisher") ?? "lu-legilux";
                 var corpus = Get("--corpus") ?? throw new ArgumentException("--corpus required");
                 var articles = Get("--articles") ?? throw new ArgumentException("--articles required");
+                var deriverCodeCommit = Lex.Temporal.CodeIdentity.RequireFullCommit(
+                    Get("--code-commit"), "--code-commit");
+                var corpusCommit = Lex.Temporal.CodeIdentity.RequireFullCommit(
+                    Get("--corpus-commit"), "--corpus-commit");
+                var deriverTreeId = Lex.Temporal.CodeIdentity.RequireFullGitObjectId(
+                    Get("--deriver-tree-id"), "--deriver-tree-id");
+                var configurationPath = Get("--reviewed-configuration")
+                    ?? throw new ArgumentException("--reviewed-configuration required");
+                var configurationDigest = Lex.Derive.DerivationGeneration.Sha256File(
+                    configurationPath);
                 var onlyWork = Get("--work");
                 var tmp = Path.Combine(Path.GetTempPath(), $"lex-verify-{Guid.NewGuid():N}");
                 try
@@ -538,7 +578,9 @@ switch (args0[0])
                         CopyDir(Path.Combine(corpus, "works", onlyWork), Path.Combine(corpusToUse, "works", onlyWork));
                     }
                     var outDir = Path.Combine(tmp, "articles");
-                    Lex.Derive.DeriveWriter.Derive(corpusToUse, outDir, publisher);
+                    Lex.Derive.DeriveWriter.Derive(
+                        corpusToUse, outDir, publisher, deriverCodeCommit,
+                        deriverTreeId, corpusCommit, configurationDigest);
                     int compared = 0, mismatched = 0, missing = 0;
                     foreach (var f in Directory.EnumerateFiles(Path.Combine(outDir, publisher), "*.*", SearchOption.AllDirectories))
                     {
@@ -708,13 +750,16 @@ static void Usage() => Console.Error.WriteLine("""
     lex — point-in-time regulatory text pipeline
       lex embedding-smoke --model-dir PATH [--text TEXT] [--batch-size N]
       lex scope-preview [--publisher ID] [--scope FILE] [--previous-scope FILE] [--wave 1..4]
-      lex ingest --publisher ID --corpus PATH [--scope FILE] [--wave 1..4] [--now ISO]
+      lex ingest --publisher ID --corpus PATH --code-commit FULL_SHA [--scope FILE] [--wave 1..4] [--now ISO]
+                 [--fresh]
       lex work-enrichment-build --input REVIEWED.json --out CANONICAL.json --collection ID
       lex index  --corpus PATH [--articles PATH --articles-commit FULL_SHA] --out FILE.db [--keyfile KEY.pem] [--now ISO]
                  [--embedding-model PATH] [--vectors FILE] [--embedding-batch-size N]
                  [--time-budget-minutes N] [--work-enrichment FILE.json]
-                 --corpus-commit FULL_SHA --code-commit FULL_SHA
-      lex derive --publisher lu-legilux --corpus PATH --out PATH [--code-version SHA]
+                 [--reviewed-configuration FILE] --corpus-commit FULL_SHA --code-commit FULL_SHA
+      lex derive --publisher ID --corpus PATH --out PATH --code-commit FULL_SHA
+                 --deriver-tree-id FULL_GIT_TREE_ID --corpus-commit FULL_SHA
+                 --reviewed-configuration FILE
       lex verify corpus --corpus PATH
       lex repair checkout-line-endings --corpus PATH
       lex artifact manifest --root DIR --file RELATIVE [--file RELATIVE] --manifest FILE --signature FILE --keyfile KEY.pem --key-id ID --code-commit SHA [--source KEY=VALUE]

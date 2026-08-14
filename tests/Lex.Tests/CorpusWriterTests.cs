@@ -7,6 +7,7 @@ namespace Lex.Tests;
 
 public sealed class CorpusWriterTests : IDisposable
 {
+    private const string CodeCommit = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     private readonly string _dir = Path.Combine(Path.GetTempPath(), $"lex-writer-{Guid.NewGuid():N}");
 
     public CorpusWriterTests() => Directory.CreateDirectory(_dir);
@@ -17,14 +18,187 @@ public sealed class CorpusWriterTests : IDisposable
         var first = Path.Combine(_dir, "first");
         var reversed = Path.Combine(_dir, "reversed");
 
-        await new CorpusWriter(first, DateTimeOffset.Parse("2026-08-14T00:00:00Z"))
+        await new CorpusWriter(first, DateTimeOffset.Parse("2026-08-14T00:00:00Z"), CodeCommit)
             .WriteAsync(new SameDateAdapter(reverse: false), default);
-        await new CorpusWriter(reversed, DateTimeOffset.Parse("2026-08-14T00:00:00Z"))
+        await new CorpusWriter(reversed, DateTimeOffset.Parse("2026-08-14T00:00:00Z"), CodeCommit)
             .WriteAsync(new SameDateAdapter(reverse: true), default);
 
         Assert.Equal(await SameDateInventory(first), await SameDateInventory(reversed));
         Assert.All((await SameDateInventory(first)).Keys,
-            key => Assert.StartsWith("2025-07-28--", key, StringComparison.Ordinal));
+            key => Assert.Matches("^2025-07-28--[0-9a-f]{64}$", key));
+    }
+
+    [Fact]
+    public async Task Version_key_is_stable_when_a_same_date_publisher_version_appears_later()
+    {
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-14T00:00:00Z"), CodeCommit)
+            .WriteAsync(new SameDateAdapter(reverse: false, includeSecond: false), default);
+        var before = Assert.Single((await SameDateInventory(_dir)).Keys);
+
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-15T00:00:00Z"), CodeCommit)
+            .WriteAsync(new SameDateAdapter(reverse: false), default);
+        var after = await SameDateInventory(_dir);
+
+        Assert.Matches("^2025-07-28--[0-9a-f]{64}$", before);
+        Assert.Contains(before, after.Keys);
+        Assert.Equal(2, after.Count);
+    }
+
+    [Fact]
+    public async Task No_change_poll_keeps_the_prior_materializer_identity_and_writes_no_bytes()
+    {
+        const string laterCodeCommit = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+        var adapter = new OneVersionAdapter("in_force", "finance",
+            bodyFetch: SourceBodyFetch.Retrieved("<html>publisher text</html>"));
+        var first = new CorpusWriter(
+            _dir, DateTimeOffset.Parse("2026-08-14T00:00:00Z"), CodeCommit);
+        await first.WriteAsync(adapter, default);
+        var before = Snapshot();
+
+        var poll = new CorpusWriter(
+            _dir, DateTimeOffset.Parse("2026-08-15T00:00:00Z"), laterCodeCommit);
+        await poll.WriteAsync(adapter, default);
+
+        Assert.True(poll.Accepted);
+        Assert.False(poll.Committed);
+        Assert.Equal(before, Snapshot());
+        var manifest = JsonSerializer.Deserialize<ManifestDoc>(
+            await File.ReadAllTextAsync(Path.Combine(_dir, "manifest.json")),
+            CorpusJson.Options)!;
+        Assert.Equal(CodeCommit, manifest.IngesterCodeCommit);
+    }
+
+    [Theory]
+    [InlineData("short")]
+    [InlineData("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")]
+    public void Ingester_identity_requires_a_full_lowercase_commit(string value)
+    {
+        Assert.Throws<InvalidDataException>(() => new CorpusWriter(
+            _dir, DateTimeOffset.Parse("2026-08-14T00:00:00Z"), value));
+    }
+
+    [Fact]
+    public async Task Fresh_migration_failure_leaves_the_disposable_checkout_unchanged()
+    {
+        var corpusRoot = Path.Combine(_dir, "candidate");
+        await WriteLegacyBaselineAsync(corpusRoot);
+        var before = Inventory(corpusRoot);
+
+        await Assert.ThrowsAsync<SourceEnumerationIncompleteException>(() => FreshCorpusMigration.RunAsync(
+            corpusRoot, "test", new IncompleteAdapter(),
+            DateTimeOffset.Parse("2026-08-14T00:00:00Z"), CodeCommit, default));
+
+        Assert.Equal(before, Inventory(corpusRoot));
+    }
+
+    [Fact]
+    public async Task Fresh_migration_replaces_the_disposable_checkout_only_after_all_gates_pass()
+    {
+        var corpusRoot = Path.Combine(_dir, "candidate");
+        await WriteLegacyBaselineAsync(corpusRoot);
+        var body = SourceBodyFetch.Retrieved("""
+            <html><body>
+            <p class="title-article-norm">Article 1</p>
+            <p>Official wording.</p>
+            </body></html>
+            """);
+
+        var report = await FreshCorpusMigration.RunAsync(
+            corpusRoot, "test",
+            new OneVersionAdapter("in_force", "finance", bodyFetch: body),
+            DateTimeOffset.Parse("2026-08-14T00:00:00Z"), CodeCommit, default);
+
+        Assert.True(report.IsValid, string.Join(Environment.NewLine, report.Errors));
+        Assert.Contains("Attribution: test",
+            File.ReadAllText(Path.Combine(corpusRoot, "NOTICE")),
+            StringComparison.Ordinal);
+        var version = Assert.Single(Directory.EnumerateDirectories(
+            Path.Combine(corpusRoot, "works", "w1", "versions")));
+        Assert.Matches("^2024-01-01--[0-9a-f]{64}$", Path.GetFileName(version));
+        Assert.DoesNotContain(Directory.EnumerateFileSystemEntries(corpusRoot),
+            path => Path.GetFileName(path).StartsWith(".lex-fresh-", StringComparison.Ordinal));
+        var manifest = JsonSerializer.Deserialize<ManifestDoc>(
+            await File.ReadAllTextAsync(Path.Combine(corpusRoot, "manifest.json")),
+            CorpusJson.Options)!;
+        Assert.Equal(ManifestDoc.CurrentSchema, manifest.Schema);
+        Assert.Equal(CodeCommit, manifest.IngesterCodeCommit);
+        Assert.Equal(1, manifest.MigrationBaselineWorks);
+    }
+
+    [Fact]
+    public async Task Fresh_migration_rejects_a_complete_but_truncated_candidate()
+    {
+        var corpusRoot = Path.Combine(_dir, "candidate");
+        await WriteLegacyBaselineAsync(corpusRoot, works: 2);
+        var before = Inventory(corpusRoot);
+
+        var error = await Assert.ThrowsAsync<InvalidDataException>(() =>
+            FreshCorpusMigration.RunAsync(
+                corpusRoot, "test",
+                new ManyWorksAdapter(1),
+                DateTimeOffset.Parse("2026-08-14T00:00:00Z"), CodeCommit, default));
+
+        Assert.Contains("work count fell", error.Message, StringComparison.Ordinal);
+        Assert.Equal(before, Inventory(corpusRoot));
+    }
+
+    [Fact]
+    public async Task Fresh_migration_rejects_a_different_publisher_identity()
+    {
+        var corpusRoot = Path.Combine(_dir, "candidate");
+        await WriteLegacyBaselineAsync(corpusRoot);
+        var before = Inventory(corpusRoot);
+
+        var error = await Assert.ThrowsAsync<InvalidDataException>(() =>
+            FreshCorpusMigration.RunAsync(
+                corpusRoot, "test",
+                new ManyWorksAdapter(1, publisher: "other"),
+                DateTimeOffset.Parse("2026-08-14T00:00:00Z"), CodeCommit, default));
+
+        Assert.Contains("does not match protected baseline", error.Message,
+            StringComparison.Ordinal);
+        Assert.Equal(before, Inventory(corpusRoot));
+    }
+
+    [Fact]
+    public async Task Fresh_migration_preserves_the_verified_backup_when_rollback_move_fails()
+    {
+        var corpusRoot = Path.Combine(_dir, "candidate");
+        await WriteLegacyBaselineAsync(corpusRoot);
+        var initialSwapFailed = false;
+        void Inject(string source, string destination)
+        {
+            if (source.Contains(".lex-fresh-stage-", StringComparison.Ordinal)
+                && Path.GetFileName(source) == "manifest.json")
+            {
+                initialSwapFailed = true;
+                throw new IOException("injected staged manifest move failure");
+            }
+            if (initialSwapFailed
+                && source.Contains(".lex-fresh-backup-", StringComparison.Ordinal)
+                && Path.GetFileName(source) == "manifest.json")
+                throw new IOException("injected baseline restore failure");
+        }
+
+        var injected = typeof(FreshCorpusMigration).GetMethods(
+                System.Reflection.BindingFlags.NonPublic
+                | System.Reflection.BindingFlags.Static)
+            .Single(method => method.Name == "RunAsync"
+                && method.GetParameters().Length == 7);
+        var task = Assert.IsAssignableFrom<Task<CorpusIntegrityReport>>(
+            injected.Invoke(null,
+            [
+                corpusRoot, "test", new ManyWorksAdapter(1),
+                DateTimeOffset.Parse("2026-08-14T00:00:00Z"), CodeCommit,
+                (Action<string, string>)Inject, CancellationToken.None,
+            ]));
+        await Assert.ThrowsAsync<IOException>(() => task);
+
+        var backup = Assert.Single(Directory.EnumerateDirectories(_dir,
+            ".candidate.lex-fresh-backup-*"));
+        Assert.True(Directory.Exists(Path.Combine(backup, "works")));
+        Assert.True(File.Exists(Path.Combine(backup, "manifest.json")));
+        Assert.True(File.Exists(Path.Combine(backup, "NOTICE")));
     }
 
     [Fact]
@@ -35,10 +209,26 @@ public sealed class CorpusWriterTests : IDisposable
         Directory.CreateDirectory(Path.Combine(versions, "2025-07-28--02"));
 
         var error = await Assert.ThrowsAsync<InvalidDataException>(() =>
-            new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-14T00:00:00Z"))
+            new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-14T00:00:00Z"), CodeCommit)
                 .WriteAsync(new SameDateAdapter(reverse: false), default));
 
         Assert.Contains("full re-ingest", error.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Normal_append_refuses_a_version_three_manifest()
+    {
+        await WriteLegacyBaselineAsync(_dir);
+        var before = Snapshot();
+
+        var error = await Assert.ThrowsAsync<InvalidDataException>(() =>
+            new CorpusWriter(_dir,
+                    DateTimeOffset.Parse("2026-08-14T00:00:00Z"), CodeCommit)
+                .WriteAsync(new ManyWorksAdapter(1), default));
+
+        Assert.Contains("fresh-corpus migration", error.Message,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(before, Snapshot());
     }
 
     private static async Task<SortedDictionary<string, string>> SameDateInventory(string root)
@@ -57,13 +247,13 @@ public sealed class CorpusWriterTests : IDisposable
     [Fact]
     public async Task Existing_record_refreshes_normalized_metadata_with_an_append_only_event()
     {
-        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-01T00:00:00Z"))
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-01T00:00:00Z"), CodeCommit)
             .WriteAsync(new OneVersionAdapter("publisher_metadata", "old-domain"), default);
 
-        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-06T00:00:00Z"))
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-06T00:00:00Z"), CodeCommit)
             .WriteAsync(new OneVersionAdapter("in_force", "financial-services"), default);
 
-        var path = Path.Combine(_dir, "works", "w1", "versions", "2024-01-01", "meta.json");
+        var path = Path.Combine(OneVersionDirectory, "meta.json");
         var meta = JsonSerializer.Deserialize<VersionMeta>(await File.ReadAllTextAsync(path), CorpusJson.Options)!;
 
         Assert.Equal("in_force", meta.Raw["binding_status"]);
@@ -78,7 +268,7 @@ public sealed class CorpusWriterTests : IDisposable
     public async Task Ingest_reports_a_real_expression_denominator_and_completion()
     {
         using var progress = new StringWriter();
-        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-06T00:00:00Z"), progress)
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-06T00:00:00Z"), CodeCommit, progress)
             .WriteAsync(new OneVersionAdapter("in_force", "financial-services"), default);
 
         var lines = progress.ToString().Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
@@ -100,13 +290,13 @@ public sealed class CorpusWriterTests : IDisposable
     [Fact]
     public async Task Existing_record_adds_a_newly_available_language_by_identity()
     {
-        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-01T00:00:00Z"))
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-01T00:00:00Z"), CodeCommit)
             .WriteAsync(new OneVersionAdapter("in_force", "financial-services", ["en"]), default);
 
-        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-06T00:00:00Z"))
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-06T00:00:00Z"), CodeCommit)
             .WriteAsync(new OneVersionAdapter("in_force", "financial-services", ["en", "fr"]), default);
 
-        var path = Path.Combine(_dir, "works", "w1", "versions", "2024-01-01", "meta.json");
+        var path = Path.Combine(OneVersionDirectory, "meta.json");
         var meta = JsonSerializer.Deserialize<VersionMeta>(await File.ReadAllTextAsync(path), CorpusJson.Options)!;
 
         Assert.Equal(["en", "fr"], meta.Expressions.Select(e => e.Language));
@@ -118,7 +308,7 @@ public sealed class CorpusWriterTests : IDisposable
     [Fact]
     public async Task Existing_record_refreshes_publisher_discovery_metadata_and_expression_short_title()
     {
-        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-01T00:00:00Z"))
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-01T00:00:00Z"), CodeCommit)
             .WriteAsync(new OneVersionAdapter(
                 "in_force", "financial-services", titleShort: "GDPR - Regulation"), default);
         var publisherMetadata = new[]
@@ -131,12 +321,12 @@ public sealed class CorpusWriterTests : IDisposable
                 "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32016R0679"),
         };
 
-        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-06T00:00:00Z"))
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-06T00:00:00Z"), CodeCommit)
             .WriteAsync(new OneVersionAdapter(
                 "in_force", "financial-services", titleShort: "Regulation",
                 publisherMetadata: publisherMetadata, documentRoles: ["delegated"]), default);
 
-        var path = Path.Combine(_dir, "works", "w1", "versions", "2024-01-01", "meta.json");
+        var path = Path.Combine(OneVersionDirectory, "meta.json");
         var meta = JsonSerializer.Deserialize<VersionMeta>(await File.ReadAllTextAsync(path), CorpusJson.Options)!;
 
         Assert.Equal("Regulation", Assert.Single(meta.Expressions).TitleShort);
@@ -151,18 +341,18 @@ public sealed class CorpusWriterTests : IDisposable
     [Fact]
     public async Task Missing_publisher_record_is_tombstoned_and_can_be_resighted()
     {
-        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-01T00:00:00Z"))
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-01T00:00:00Z"), CodeCommit)
             .WriteAsync(new OneVersionAdapter("in_force", "financial-services"), default);
 
-        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-03T00:00:00Z"))
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-03T00:00:00Z"), CodeCommit)
             .WriteAsync(new EmptyAdapter(), default);
 
-        var path = Path.Combine(_dir, "works", "w1", "versions", "2024-01-01", "meta.json");
+        var path = Path.Combine(OneVersionDirectory, "meta.json");
         var withdrawn = JsonSerializer.Deserialize<VersionMeta>(
             await File.ReadAllTextAsync(path), CorpusJson.Options)!;
         Assert.Equal("withdrawn_from_source", withdrawn.Events[^1].Event);
 
-        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-06T00:00:00Z"))
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-06T00:00:00Z"), CodeCommit)
             .WriteAsync(new OneVersionAdapter("in_force", "financial-services"), default);
 
         var resighted = JsonSerializer.Deserialize<VersionMeta>(
@@ -173,7 +363,7 @@ public sealed class CorpusWriterTests : IDisposable
     [Fact]
     public async Task Manifest_records_expected_works_that_produced_no_versions()
     {
-        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-08T00:00:00Z"))
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-08T00:00:00Z"), CodeCommit)
             .WriteAsync(new OneVersionAdapter(
                 "in_force", "finance", hasVersions: false), default);
 
@@ -188,12 +378,12 @@ public sealed class CorpusWriterTests : IDisposable
     [Fact]
     public async Task Incomplete_enumeration_preserves_the_prior_clean_corpus_without_tombstones()
     {
-        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-01T00:00:00Z"))
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-01T00:00:00Z"), CodeCommit)
             .WriteAsync(new OneVersionAdapter("in_force", "finance"), default);
         var before = Snapshot();
 
         var failure = await Assert.ThrowsAsync<SourceEnumerationIncompleteException>(() =>
-            new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-08T00:00:00Z"))
+            new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-08T00:00:00Z"), CodeCommit)
                 .WriteAsync(new IncompleteAdapter(), default));
 
         Assert.Equal("incomplete_enumeration", failure.Issue.Code);
@@ -205,13 +395,13 @@ public sealed class CorpusWriterTests : IDisposable
     [Fact]
     public async Task Failed_body_acquisition_rolls_back_every_candidate_file()
     {
-        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-01T00:00:00Z"))
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-01T00:00:00Z"), CodeCommit)
             .WriteAsync(new OneVersionAdapter("in_force", "finance",
                 bodyFetch: SourceBodyFetch.Retrieved("<html>publisher text</html>")), default);
         var before = Snapshot();
 
         await Assert.ThrowsAsync<HttpRequestException>(() =>
-            new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-08T00:00:00Z"))
+            new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-08T00:00:00Z"), CodeCommit)
                 .WriteAsync(new OneVersionAdapter("in_force", "finance", ["en", "fr"],
                     titleHint: "Candidate title", bodyException: new HttpRequestException("network")), default));
 
@@ -221,7 +411,7 @@ public sealed class CorpusWriterTests : IDisposable
     [Fact]
     public async Task Typed_metadata_only_outcome_is_signed_into_the_build_inventory()
     {
-        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-08T00:00:00Z"))
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-08T00:00:00Z"), CodeCommit)
             .WriteAsync(new OneVersionAdapter("in_force", "finance",
                 bodyFetch: new SourceBodyFetch(SourceBodyStatus.PermanentNotFound,
                     Detail: "publisher returned 404", Attempts: 4)), default);
@@ -238,12 +428,12 @@ public sealed class CorpusWriterTests : IDisposable
     [Fact]
     public async Task Production_candidate_with_a_typed_issue_keeps_the_prior_corpus_selected()
     {
-        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-01T00:00:00Z"))
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-01T00:00:00Z"), CodeCommit)
             .WriteAsync(new OneVersionAdapter("in_force", "finance",
                 bodyFetch: SourceBodyFetch.Retrieved("<html>publisher text</html>")), default);
         var before = Snapshot();
 
-        var candidate = new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-08T00:00:00Z"));
+        var candidate = new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-08T00:00:00Z"), CodeCommit);
         await candidate.WriteAsync(new OneVersionAdapter("in_force", "finance", ["en", "fr"],
             titleHint: "Candidate title",
             bodyFetch: new SourceBodyFetch(SourceBodyStatus.PermanentNotFound,
@@ -264,11 +454,11 @@ public sealed class CorpusWriterTests : IDisposable
     [Fact]
     public async Task A_metadata_only_expression_does_not_discard_the_candidate()
     {
-        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-01T00:00:00Z"))
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-01T00:00:00Z"), CodeCommit)
             .WriteAsync(new OneVersionAdapter("in_force", "finance",
                 bodyFetch: SourceBodyFetch.Retrieved("<html>publisher text</html>")), default);
 
-        var candidate = new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-08T00:00:00Z"));
+        var candidate = new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-08T00:00:00Z"), CodeCommit);
         await candidate.WriteAsync(new OneVersionAdapter("in_force", "finance", ["en", "fr"],
             titleHint: "Candidate title",
             bodyFetch: new SourceBodyFetch(SourceBodyStatus.PublisherMetadataOnly,
@@ -296,7 +486,7 @@ public sealed class CorpusWriterTests : IDisposable
     [Fact]
     public async Task Metadata_only_is_recorded_as_coverage_and_not_as_a_manifest_build_issue()
     {
-        var candidate = new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-08T00:00:00Z"));
+        var candidate = new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-08T00:00:00Z"), CodeCommit);
         await candidate.WriteAsync(new OneVersionAdapter("in_force", "finance", ["en", "fr"],
             bodyFetch: new SourceBodyFetch(SourceBodyStatus.PublisherMetadataOnly,
                 Detail: "The publisher did not enumerate an XML manifestation for this expression.")),
@@ -326,12 +516,12 @@ public sealed class CorpusWriterTests : IDisposable
     [Fact]
     public async Task A_real_failure_beside_a_metadata_only_one_still_discards_the_candidate()
     {
-        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-01T00:00:00Z"))
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-01T00:00:00Z"), CodeCommit)
             .WriteAsync(new OneVersionAdapter("in_force", "finance",
                 bodyFetch: SourceBodyFetch.Retrieved("<html>publisher text</html>")), default);
         var before = Snapshot();
 
-        var candidate = new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-08T00:00:00Z"));
+        var candidate = new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-08T00:00:00Z"), CodeCommit);
         // fr and de, not en: the first write already observed en, and an expression with an
         // observation is skipped rather than refetched, so scripting en would never be reached.
         await candidate.WriteAsync(new OneVersionAdapter("in_force", "finance", ["en", "fr", "de"],
@@ -372,7 +562,7 @@ public sealed class CorpusWriterTests : IDisposable
     [Fact]
     public async Task Manifest_counts_a_fetched_body_as_an_expression_with_text()
     {
-        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-08T00:00:00Z"))
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-08T00:00:00Z"), CodeCommit)
             .WriteAsync(new OneVersionAdapter("in_force", "finance",
                 bodyFetch: SourceBodyFetch.Retrieved("<html>publisher text</html>")), default);
 
@@ -381,13 +571,13 @@ public sealed class CorpusWriterTests : IDisposable
         Assert.Equal(1, manifest.Expressions);
         Assert.Equal(1, manifest.ExpressionsWithText);
         Assert.Equal(0, manifest.ExpressionsWithoutText);
-        Assert.True(File.Exists(Path.Combine(_dir, "works", "w1", "versions", "2024-01-01", "en.html")));
+        Assert.True(File.Exists(Path.Combine(OneVersionDirectory, "en.html")));
     }
 
     [Fact]
     public async Task Empty_retrieved_body_is_a_typed_issue_not_stored_text()
     {
-        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-08T00:00:00Z"))
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-08T00:00:00Z"), CodeCommit)
             .WriteAsync(new OneVersionAdapter("in_force", "finance",
                 bodyFetch: SourceBodyFetch.Retrieved("   ")), default);
 
@@ -402,23 +592,23 @@ public sealed class CorpusWriterTests : IDisposable
         Assert.False(expr.Text.Available);
         Assert.Equal("body_empty", expr.Text.Reason);
         Assert.Empty(expr.Observations);
-        Assert.False(File.Exists(Path.Combine(_dir, "works", "w1", "versions", "2024-01-01", "en.html")));
+        Assert.False(File.Exists(Path.Combine(OneVersionDirectory, "en.html")));
     }
 
     [Fact]
     public async Task Alt_manifestation_does_not_block_primary_body_backfill()
     {
-        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-01T00:00:00Z"))
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-01T00:00:00Z"), CodeCommit)
             .WriteAsync(new AltThenPrimaryAdapter(new SourceBodyFetch(
                 SourceBodyStatus.RetryExhausted, Detail: "network", Attempts: 2)), default);
 
-        var versionDir = Path.Combine(_dir, "works", "w1", "versions", "2024-01-01");
+        var versionDir = OneVersionDirectory;
         Assert.False(File.Exists(Path.Combine(versionDir, "en.html")));
         var first = Assert.Single((await ReadVersionMeta()).Expressions);
         Assert.True(first.Text.Available);                       // an alt manifestation IS observed text
         Assert.All(first.Observations, o => Assert.NotNull(o.Format));
 
-        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-02T00:00:00Z"))
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-02T00:00:00Z"), CodeCommit)
             .WriteAsync(new AltThenPrimaryAdapter(
                 SourceBodyFetch.Retrieved("<html>primary text</html>")), default);
 
@@ -428,13 +618,42 @@ public sealed class CorpusWriterTests : IDisposable
     }
 
     private async Task<VersionMeta> ReadVersionMeta() => JsonSerializer.Deserialize<VersionMeta>(
-        await File.ReadAllTextAsync(Path.Combine(
-            _dir, "works", "w1", "versions", "2024-01-01", "meta.json")), CorpusJson.Options)!;
+        await File.ReadAllTextAsync(Path.Combine(OneVersionDirectory, "meta.json")),
+        CorpusJson.Options)!;
+
+    private string OneVersionDirectory => Path.Combine(
+        _dir, "works", "w1", "versions", StableVersionKey("2024-01-01", "official:v1"));
+
+    private static string StableVersionKey(string date, string publisherVersionIdentifier) =>
+        date + "--" + Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(
+            System.Text.Encoding.UTF8.GetBytes(publisherVersionIdentifier)));
 
     private Dictionary<string, string> Snapshot() => Directory.EnumerateFiles(_dir, "*", SearchOption.AllDirectories)
         .ToDictionary(path => Path.GetRelativePath(_dir, path).Replace('\\', '/'),
             path => Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(path))),
             StringComparer.Ordinal);
+
+    private static async Task WriteLegacyBaselineAsync(string root, int works = 1)
+    {
+        await new CorpusWriter(root,
+                DateTimeOffset.Parse("2026-08-13T00:00:00Z"), CodeCommit)
+            .WriteAsync(new ManyWorksAdapter(works), default);
+        var path = Path.Combine(root, "manifest.json");
+        var manifest = JsonSerializer.Deserialize<ManifestDoc>(
+            await File.ReadAllTextAsync(path), CorpusJson.Options)!;
+        manifest.Schema = "lex-corpus/3";
+        manifest.IngesterCodeCommit = null;
+        await File.WriteAllTextAsync(path,
+            JsonSerializer.Serialize(manifest, CorpusJson.Options) + "\n");
+        var integrity = CorpusIntegrity.Verify(root);
+        Assert.True(integrity.IsValid, string.Join(Environment.NewLine, integrity.Errors));
+    }
+
+    private static SortedDictionary<string, string> Inventory(string root) =>
+        new(Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories)
+            .ToDictionary(path => Path.GetRelativePath(root, path).Replace('\\', '/'),
+                path => Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(
+                    File.ReadAllBytes(path))), StringComparer.Ordinal), StringComparer.Ordinal);
 
     public void Dispose()
     {
@@ -509,7 +728,7 @@ public sealed class CorpusWriterTests : IDisposable
         }
     }
 
-    private sealed class SameDateAdapter(bool reverse) : ISourceAdapter
+    private sealed class SameDateAdapter(bool reverse, bool includeSecond = true) : ISourceAdapter
     {
         private readonly WorkRef _work = new(new Identifier("official:w1"), "w1", "LOI", "Work one");
 
@@ -533,7 +752,9 @@ public sealed class CorpusWriterTests : IDisposable
                 [new ExpressionRecord("fr", new DateOnly(2025, 7, 28), null, "publisher",
                     $"Version {id}", null, $"https://example.test/{id}")],
                 [], new Dictionary<string, string>());
-            IReadOnlyList<VersionRecord> versions = [Version("official:v-a"), Version("official:v-b")];
+            IReadOnlyList<VersionRecord> versions = includeSecond
+                ? [Version("official:v-a"), Version("official:v-b")]
+                : [Version("official:v-a")];
             return Task.FromResult<IReadOnlyList<VersionRecord>>(
                 reverse ? versions.Reverse().ToArray() : versions);
         }
@@ -625,5 +846,48 @@ public sealed class CorpusWriterTests : IDisposable
 
         public Task<SourceBodyFetch> FetchBody(VersionRecord version, ExpressionRecord expression, CancellationToken ct) =>
             Task.FromResult(new SourceBodyFetch(SourceBodyStatus.PublisherMetadataOnly));
+    }
+
+    private sealed class ManyWorksAdapter(int count, string publisher = "test") : ISourceAdapter
+    {
+        public PublisherDescriptor Describe() => new(
+            new Publisher(publisher, publisher, "EU", "https://example.test", Tier.A,
+                "test", null),
+            [], ["en"], TextIncluded: true, TextPublic: true,
+            HistoryBegins: "publisher");
+
+        public async IAsyncEnumerable<WorkRef> EnumerateWorks(
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
+        {
+            for (var index = 1; index <= count; index++)
+            {
+                ct.ThrowIfCancellationRequested();
+                yield return new WorkRef(new Identifier($"official:w{index}"),
+                    $"w{index}", "REG", $"Work {index}");
+            }
+            await Task.CompletedTask;
+        }
+
+        public Task<IReadOnlyList<VersionRecord>> FetchVersions(
+            WorkRef work, CancellationToken ct) =>
+            Task.FromResult<IReadOnlyList<VersionRecord>>(
+            [
+                new(new Identifier($"{work.Id.Value}:v1"), work.Id, "REG",
+                    new DateOnly(2024, 1, 1), null, "publisher", "true",
+                    new DateOnly(2024, 1, 1),
+                    [new ExpressionRecord("en", new DateOnly(2024, 1, 1), null,
+                        "publisher", work.TitleHint, work.TitleHint,
+                        $"https://example.test/{work.Slug}/v1/en")],
+                    [], new Dictionary<string, string>())
+            ]);
+
+        public Task<SourceBodyFetch> FetchBody(
+            VersionRecord version, ExpressionRecord expression, CancellationToken ct) =>
+            Task.FromResult(SourceBodyFetch.Retrieved("""
+                <html><body>
+                <p class="title-article-norm">Article 1</p>
+                <p>Protected official wording.</p>
+                </body></html>
+                """));
     }
 }

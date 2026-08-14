@@ -1,10 +1,12 @@
 using System.Security.Cryptography;
 using System.Text.Json;
+using Lex.Temporal;
 
 namespace Lex.Ingest;
 
 public sealed record CorpusIntegrityReport(
     string Schema,
+    string? IngesterCodeCommit,
     int ManifestWorks,
     int ActualWorks,
     int ManifestVersions,
@@ -24,7 +26,8 @@ public static class CorpusIntegrity
         var errors = new List<string>();
         var manifestPath = Path.Combine(corpusRoot, "manifest.json");
         if (!File.Exists(manifestPath))
-            return new("missing", 0, 0, 0, 0, 0, 0, 0, ["manifest.json is missing"]);
+            return new("missing", null, 0, 0, 0, 0, 0, 0, 0,
+                ["manifest.json is missing"]);
 
         ManifestDoc manifest;
         try
@@ -35,12 +38,26 @@ public static class CorpusIntegrity
         }
         catch (Exception ex)
         {
-            return new("unreadable", 0, 0, 0, 0, 0, 0, 0,
+            return new("unreadable", null, 0, 0, 0, 0, 0, 0, 0,
                 [$"manifest.json cannot be parsed: {ex.Message}"]);
         }
 
-        if (manifest.Schema != "lex-corpus/3")
-            errors.Add($"manifest schema is '{manifest.Schema}', expected 'lex-corpus/3'");
+        var currentSchema = manifest.Schema == ManifestDoc.CurrentSchema;
+        if (!currentSchema && manifest.Schema != "lex-corpus/3")
+            errors.Add($"manifest schema is '{manifest.Schema}', expected 'lex-corpus/3' or "
+                + $"'{ManifestDoc.CurrentSchema}'");
+        if (currentSchema)
+            try
+            {
+                CodeIdentity.RequireFullCommit(
+                    manifest.IngesterCodeCommit, "manifest ingester_code_commit");
+            }
+            catch (InvalidDataException ex)
+            {
+                errors.Add(ex.Message);
+            }
+        if (manifest.MigrationBaselineWorks is < 0)
+            errors.Add("manifest migration_baseline_works cannot be negative");
 
         if (manifest.AcquisitionRetryMaximumAttempts is < 1 or > 10)
             errors.Add("manifest acquisition_retry_maximum_attempts must be between 1 and 10");
@@ -66,7 +83,8 @@ public static class CorpusIntegrity
 
         var worksRoot = Path.Combine(corpusRoot, "works");
         if (!Directory.Exists(worksRoot))
-            return new(manifest.Schema, manifest.Works, 0, manifest.Versions, 0, 0, 0, 0,
+            return new(manifest.Schema, manifest.IngesterCodeCommit,
+                manifest.Works, 0, manifest.Versions, 0, 0, 0, 0,
                 [.. errors, "works directory is missing"]);
 
         var workIds = new HashSet<string>(StringComparer.Ordinal);
@@ -135,6 +153,18 @@ public static class CorpusIntegrity
 
                 if (!versionIds.Add(version.LexId))
                     errors.Add($"duplicate lex_id '{version.LexId}'");
+                try
+                {
+                    if (currentSchema)
+                        VersionIdentity.RequireCanonical(
+                            Path.GetFileName(versionDir), version.ValidFrom,
+                            version.PublisherVersionIdentifier, version.LexId,
+                            $"{version.Publisher}:{Path.GetFileName(workDir)}");
+                }
+                catch (InvalidDataException ex)
+                {
+                    errors.Add($"{relativeVersion}/meta.json identity mismatch: {ex.Message}");
+                }
                 var lifecycle = version.Events.LastOrDefault(e =>
                     e.Event is "withdrawn_from_source" or "resighted");
                 if (lifecycle?.Event != "withdrawn_from_source")
@@ -164,7 +194,8 @@ public static class CorpusIntegrity
         if (manifest.Versions != currentVersions)
             errors.Add($"manifest versions={manifest.Versions}, current filesystem versions={currentVersions}");
 
-        return new(manifest.Schema, manifest.Works, actualWorks, manifest.Versions,
+        return new(manifest.Schema, manifest.IngesterCodeCommit,
+            manifest.Works, actualWorks, manifest.Versions,
             actualVersions, currentVersions, expressions, observations, errors);
     }
 

@@ -25,6 +25,9 @@ internal sealed class CorpusCandidate : IDisposable
 
     public bool Exists(string target) => File.Exists(Staged(target)) || File.Exists(CheckedTarget(target));
 
+    public bool HasChanges => Directory.EnumerateFiles(
+        _stage, "*", SearchOption.AllDirectories).Any();
+
     public async Task WriteBytesAsync(string target, byte[] bytes, CancellationToken ct)
     {
         var staged = Staged(target);

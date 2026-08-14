@@ -7,5 +7,6 @@
   <ItemGroup>
     <PackageReference Include="HtmlAgilityPack" Version="1.12.4" />
     <PackageReference Include="PdfPig" Version="0.1.11" />
+    <ProjectReference Include="..\Lex.Temporal\Lex.Temporal.csproj" />
   </ItemGroup>
 </Project>

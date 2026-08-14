@@ -43,13 +43,16 @@ public sealed class IndexStampVerifierTests : IDisposable
     }
 
     [Fact]
-    public void Index_build_commit_requires_and_normalizes_a_full_git_sha()
+    public void Index_build_commit_requires_an_exact_lowercase_full_git_sha()
     {
         var method = typeof(IndexFromCorpus).GetMethod(
             "NormalizeCodeCommit", BindingFlags.NonPublic | BindingFlags.Static);
         Assert.NotNull(method);
-        var normalized = Assert.IsType<string>(method.Invoke(null, [new string('A', 40)]));
+        var normalized = Assert.IsType<string>(method.Invoke(null, [new string('a', 40)]));
         Assert.Equal(new string('a', 40), normalized);
+        var error = Assert.Throws<TargetInvocationException>(() =>
+            method.Invoke(null, [new string('A', 40)]));
+        Assert.IsType<InvalidDataException>(error.InnerException);
 
         var bad = Assert.Throws<TargetInvocationException>(() =>
             method.Invoke(null, ["abc"]));

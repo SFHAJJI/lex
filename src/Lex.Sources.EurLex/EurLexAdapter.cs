@@ -419,6 +419,8 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory
                             .ToDictionary(x => x.Key, x => x.First().GetValueOrDefault("title"), StringComparer.Ordinal)))
                     .OrderBy(v => v.Date).ThenBy(v => v.Celex, StringComparer.Ordinal)
                     .ToList();
+                var coordinates = ConsolidatedCoordinates(
+                    versions.Select(version => (version.Celex, version.Date)));
 
                 var list = new List<VersionRecord>();
                 for (var i = 0; i < versions.Count; i++)
@@ -426,7 +428,7 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory
                     var state = versions[i];
                     var celex = state.Celex;
                     var date = state.Date;
-                    DateOnly? validTo = i + 1 < versions.Count ? versions[i + 1].Date.AddDays(-1) : null;
+                    var validTo = coordinates[i].ValidTo;
                     var expressions = _scope.Languages.Select(lang =>
                     {
                         var title = state.Titles.GetValueOrDefault(lang) ?? titles.GetValueOrDefault(lang) ?? baseTitle;
@@ -768,7 +770,8 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory
         return _scope.LegalForms.Contains(LegalForm(celex, null), StringComparer.Ordinal);
     }
 
-    private static DateOnly ParseDate(string value) => DateOnly.Parse(value[..10]);
+    private static DateOnly ParseDate(string value) => DateOnly.ParseExact(
+        value[..10], "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
 
     public static string NormalizeWorkSlug(string celex) =>
         celex.ToLowerInvariant().Replace('/', '-');
@@ -880,6 +883,28 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory
     }
 
     private sealed record ConsolidatedState(string Celex, DateOnly Date, IReadOnlyDictionary<string, string?> Titles);
+
+    internal sealed record ConsolidatedCoordinate(string Celex, DateOnly Date, DateOnly? ValidTo);
+
+    internal static IReadOnlyList<ConsolidatedCoordinate> ConsolidatedCoordinates(
+        IEnumerable<(string Celex, DateOnly Date)> states)
+    {
+        var ordered = states.OrderBy(state => state.Date)
+            .ThenBy(state => state.Celex, StringComparer.Ordinal).ToArray();
+        var result = new List<ConsolidatedCoordinate>(ordered.Length);
+        for (var index = 0; index < ordered.Length; index++)
+        {
+            DateOnly? validTo = null;
+            for (var later = index + 1; later < ordered.Length; later++)
+                if (ordered[later].Date > ordered[index].Date)
+                {
+                    validTo = ordered[later].Date.AddDays(-1);
+                    break;
+                }
+            result.Add(new(ordered[index].Celex, ordered[index].Date, validTo));
+        }
+        return result;
+    }
 
     private static string? ShortTitle(string? title)
     {
