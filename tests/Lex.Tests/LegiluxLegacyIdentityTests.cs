@@ -23,6 +23,40 @@ public sealed class LegiluxLegacyIdentityTests
     }
 
     [Theory]
+    [InlineData(
+        "http://data.legilux.public.lu/eli/etat/leg/loi/1804/03/21/n1",
+        "2016-09-01",
+        "https://legilux.public.lu/eli/etat/leg/code/civil/20160901/fr",
+        "http://data.legilux.public.lu/eli/etat/leg/code/civil/20160901")]
+    [InlineData(
+        "http://data.legilux.public.lu/eli/etat/adm/agc/2023/10/06/b3399",
+        "2023-11-06",
+        "https://legilux.public.lu/eli/etat/adm/agc/2023/10/06/b3399/consolide/20231106/fr",
+        "http://data.legilux.public.lu/eli/etat/adm/agc/2023/10/06/b3399/consolide/20231106")]
+    [InlineData(
+        "http://data.legilux.public.lu/eli/etat/adm/agc/2024/09/04/b3521",
+        "2026-06-15",
+        "https://legilux.public.lu/eli/etat/adm/agc/2024/09/04/b3521/consolide/20260615",
+        "http://data.legilux.public.lu/eli/etat/adm/agc/2024/09/04/b3521/consolide/20260615")]
+    [InlineData(
+        "http://data.legilux.public.lu/eli/etat/leg/recueil/sites_monuments",
+        "2015-10-09",
+        "https://legilux.public.lu/eli/etat/leg/recueil/sites_monuments/20142209/fr",
+        "http://data.legilux.public.lu/eli/etat/leg/recueil/sites_monuments/20142209")]
+    public void Protected_v3_sources_recover_the_exact_current_publisher_identity(
+        string work, string validFrom, string source, string expected)
+    {
+        var resolver = Assert.IsAssignableFrom<ILegacyVersionIdentityResolver>(
+            new LegiluxAdapter());
+
+        var actual = resolver.ResolveLegacyVersionIdentity(new LegacyVersionIdentity(
+            work, DateOnly.Parse(validFrom),
+            [new LegacyExpressionIdentity("fr", source)]));
+
+        Assert.Equal(expected, actual.Value);
+    }
+
+    [Theory]
     [InlineData("2025-04-20", "loi/1804/03/21/n1/consolide/20250420", null)]
     [InlineData("2025-08-04", "loi/1808/11/17/n1/consolide/20250804", null)]
     [InlineData("2026-06-07", "loi/1808/11/17/n1/consolide/20260607", null)]
@@ -75,6 +109,63 @@ public sealed class LegiluxLegacyIdentityTests
             new LegacyVersionIdentity(
                 "http://data.legilux.public.lu/eli/etat/leg/code/civil",
                 new DateOnly(2025, 4, 20),
+                [new LegacyExpressionIdentity("fr", source)])));
+    }
+
+    [Theory]
+    [InlineData(
+        "http://data.legilux.public.lu/eli/etat/adm/agc/2023/10/06/b3399",
+        "2023-11-06",
+        "https://legilux.public.lu/eli/etat/adm/agc/2023/10/06/other/consolide/20231106/fr")]
+    [InlineData(
+        "http://data.legilux.public.lu/eli/etat/adm/agc/2023/10/06/b3399",
+        "2023-11-06",
+        "https://legilux.public.lu/eli/etat/adm/agc/2023/10/06/b3399/consolide/20231105/fr")]
+    [InlineData(
+        "http://data.legilux.public.lu/eli/etat/adm/agc/2023/10/06/b3399",
+        "2023-11-06",
+        "https://legilux.public.lu/eli/etat/leg/code/civil/20231106/fr")]
+    [InlineData(
+        "http://data.legilux.public.lu/eli/etat/leg/loi/1804/03/21/n1",
+        "2025-04-20",
+        "https://legilux.public.lu/eli/etat/leg/code/civil/extra/20250420/fr")]
+    [InlineData(
+        "http://data.legilux.public.lu/eli/etat/leg/loi/1804/03/21/n1",
+        "2025-04-20",
+        "https://legilux.public.lu/eli/etat/leg/code/civil/20250419/fr")]
+    [InlineData(
+        "http://data.legilux.public.lu/eli/etat/leg/loi/1804/03/21/n1",
+        "2025-04-20",
+        "https://legilux.public.lu/eli/etat/leg/code/civile%2Fcachee/20250420/fr")]
+    [InlineData(
+        "http://data.legilux.public.lu/eli/etat/leg/recueil/sites_monuments",
+        "2015-10-09",
+        "https://legilux.public.lu/eli/etat/leg/recueil/autre/20142209/fr")]
+    [InlineData(
+        "http://data.legilux.public.lu/eli/etat/leg/recueil/sites_monuments",
+        "2015-10-09",
+        "https://legilux.public.lu/eli/etat/leg/recueil/sites_monuments/2014220/fr")]
+    [InlineData(
+        "http://data.legilux.public.lu/eli/etat/leg/recueil/sites_monuments",
+        "2015-10-09",
+        "https://legilux.public.lu/eli/etat/leg/recueil/sites_monuments/20142209/extra/fr")]
+    [InlineData(
+        "http://data.legilux.public.lu/eli/etat/leg/recueil/sites_monuments",
+        "2015-10-09",
+        "https://legilux.public.lu/eli/etat/leg/recueil/sites_monuments/20142209/en")]
+    [InlineData(
+        "http://data.legilux.public.lu/eli/etat/adm/agc//b3399",
+        "2023-11-06",
+        "https://legilux.public.lu/eli/etat/adm/agc//b3399/consolide/20231106/fr")]
+    public void Legacy_identity_recovery_rejects_unbound_publisher_paths(
+        string work, string validFrom, string source)
+    {
+        var resolver = Assert.IsAssignableFrom<ILegacyVersionIdentityResolver>(
+            new LegiluxAdapter());
+
+        Assert.Throws<InvalidDataException>(() => resolver.ResolveLegacyVersionIdentity(
+            new LegacyVersionIdentity(
+                work, DateOnly.Parse(validFrom),
                 [new LegacyExpressionIdentity("fr", source)])));
     }
 }
