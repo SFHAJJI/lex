@@ -8,6 +8,9 @@ using Lex.Temporal;
 
 namespace Lex.Ingest;
 
+internal sealed record CorpusPlannedWork(
+    WorkRef Work, IReadOnlyList<VersionRecord> Versions);
+
 /// <summary>
 /// The single component that writes corpus files (C1 layout, C3 rules, F12 discipline).
 /// Adapters never touch disk (F8). Version directories combine valid_from with the full hash of
@@ -30,8 +33,15 @@ public sealed class CorpusWriter(
     public bool Accepted { get; private set; }
     public IReadOnlyList<SourceBuildIssue> BuildIssues { get; private set; } = [];
 
-    public async Task WriteAsync(
-        ISourceAdapter adapter, CancellationToken ct, bool requireComplete = false)
+    public Task WriteAsync(
+        ISourceAdapter adapter, CancellationToken ct, bool requireComplete = false) =>
+        WriteAsync(adapter, ct, requireComplete, validatePlan: null);
+
+    internal async Task WriteAsync(
+        ISourceAdapter adapter,
+        CancellationToken ct,
+        bool requireComplete,
+        Action<IReadOnlyList<CorpusPlannedWork>>? validatePlan)
     {
         var existingManifest = RefuseLegacyAppend(corpusRoot);
         var desc = adapter.Describe();
@@ -48,7 +58,7 @@ public sealed class CorpusWriter(
         // version catalogue in memory, so this adds no publisher body requests and lets the log
         // report a real denominator. A percentage without a denominator is not actionable; an
         // elapsed time without observed throughput is not an ETA.
-        var plan = new List<(WorkRef Work, IReadOnlyList<VersionRecord> Versions)>();
+        var plan = new List<CorpusPlannedWork>();
         var localBuildIssues = new List<SourceBuildIssue>();
         var enumeratedWorks = 0;
         await foreach (var work in adapter.EnumerateWorks(ct))
@@ -56,7 +66,7 @@ public sealed class CorpusWriter(
             enumeratedWorks++;
             var versionsOfWork = await adapter.FetchVersions(work, ct);
             if (versionsOfWork.Count > 0)
-                plan.Add((work, versionsOfWork));
+                plan.Add(new CorpusPlannedWork(work, versionsOfWork));
             else
                 localBuildIssues.Add(new SourceBuildIssue(
                     "no_versions", work.Slug, "The publisher enumeration returned no version records."));
@@ -70,6 +80,11 @@ public sealed class CorpusWriter(
             throw new SourceEnumerationIncompleteException(new SourceBuildIssue(
                 "incomplete_enumeration", pub.Id,
                 $"Publisher enumeration returned {enumeratedWorks} of {expectedWorks} expected works; the prior corpus remains unchanged."));
+        // Fresh migrations use this seam to prove that the metadata catalogue preserves every
+        // held baseline identity before the first expression body is requested. The plan is the
+        // same single source enumeration consumed below; the validator must not re-query the
+        // publisher.
+        validatePlan?.Invoke(plan);
         var totalExpressions = plan.Sum(item => item.Versions.Sum(version => (long)version.Expressions.Count));
         long processedExpressions = 0;
         var lastReportedPercent = -1;
