@@ -1,3 +1,4 @@
+#Requires -Version 7.2
 [CmdletBinding()]
 param(
     [string]$Cases = (Join-Path $PSScriptRoot "assistant-cases-v3.json"),

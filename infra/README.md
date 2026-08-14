@@ -7,8 +7,9 @@ account, DNS zone, resource group and Container App are data or explicit role-as
 Terraform does not recreate or silently import them.
 
 The runtime identity pulls from ACR and calls Azure OpenAI. The deployment identity receives a
-GitHub OIDC token for the `production` environment and can build an ACR image, assign the runtime
-identity and update only `ca-lex-web`. Two exact-resource assignments additionally let it read the
+GitHub OIDC token for the `production` environment and can build an ACR image, read immutable
+`lex-web` manifest metadata for dry-run retention, assign the runtime identity and update only
+`ca-lex-web`. Two exact-resource assignments additionally let it read the
 `ai-lex-web` component and its Log Analytics table policies so deployment can prove the published
 90-day retention; the custom roles contain no telemetry-record query or write action. Azure blocks
 custom role definitions inside the managed Log Analytics resource group, so the one-action table-policy

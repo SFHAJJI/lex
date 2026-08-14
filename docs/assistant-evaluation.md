@@ -51,7 +51,27 @@ Measured assistant and grader usage must remain within both the per-case ceiling
 budget. The output report contains no prompts, legal text, credentials or raw tool payloads.
 Free-form grader reasons are deliberately discarded rather than copied into release evidence.
 
-Run the strict wrapper from PowerShell:
+Run the strict wrapper from PowerShell 7.2 or later. Each local evaluation and publication script
+uses `#Requires -Version 7.2`, so Windows PowerShell 5.1 refuses before any candidate lifecycle or
+release mutation begins.
+
+Normal rollback uses the exact previously evaluated production revision retained by the preceding
+promotion. The prior release-state receipt binds that exact revision and immutable image; evidence
+signed for another revision is never interchangeable. Ordinary `lex-release-state-receipt/3`
+records carry distinct target and rollback authorization records, including each revision's own
+evidence-release tag. A successful transition swaps the former target authorization into the new
+rollback slot, so rollback verification always downloads the retained target's evidence rather
+than reusing the current release's evidence. The sole exception is the first official
+legacy bootstrap: exact candidate C is evaluated, while a dedicated signed
+`lex-first-release-equivalence/1` artifact binds fallback R and C to one immutable image and one
+canonical Container Apps template digest excluding only `revisionSuffix`, plus the exact frozen
+case-catalog SHA-256 from C's evaluation release. R is explicitly an
+equivalent first-release fallback, not an independently evaluated release. An emergency C-to-R
+move verifies exact evaluated C plus that signed equivalence and its successful, resource-bound
+first-release receipt; it never runs C-bound `verify-release` as though R were C. Because R predates
+C, a direct later promotion is refused: first move forward to exact evaluated C using the rollback
+receipt emitted by the emergency transition. The exception then ends, and the next normal
+promotion retains exact C.
 
 ```powershell
 ./evals/run-assistant-eval.ps1 `
@@ -95,12 +115,25 @@ trust root. The matching non-exportable private key is
 `kv-lex-eval-review/lex-evaluation-review-v1`. Its RBAC-enabled vault grants no access to the
 artifact publisher identity, so case approval and artifact publication are separate authorities.
 After a passing run, `deploy/publish-assistant-evaluation.ps1` uploads a four-file draft evidence
-set, then dispatches the public `lex-ops` publication workflow. That workflow temporarily activates
-the zero-traffic candidate, revalidates the report, runs the exact-code Chromium presentation gate,
-adds `assistant-browser-evidence.json`, and returns the candidate to inactive state. Only the OIDC
+set, then dispatches the public `lex-ops` publication workflow. For a normal release that workflow
+temporarily activates the zero-traffic candidate, revalidates the report, runs the exact-code
+Chromium presentation gate, adds `assistant-browser-evidence.json`, and returns the candidate to
+inactive state. The one-time bootstrap instead requires the already bounded state A active/100,
+R inactive/0 and C active/0; failure abandons C, while successful publication leaves C active only
+for the two-hour signed promotion window. Only the OIDC
 publisher can bind the resulting five-file set to the candidate revision, code, index-manifest set,
 catalog and browser-evidence digests, sign its whole-artifact manifest with `keyvault-lex-v2`,
-reverify it, and publish the release. Production promotion accepts only that fixed release shape and revalidates it against
+reverify it, and publish the release. The standard public package has those five evidence files
+plus its manifest and signature. The one-time bootstrap adds a separate three-file equivalence
+package: `bootstrap-equivalence.json`, its dedicated one-file manifest and its signature. The
+publisher re-reads the complete exact A/R/C Azure state, signs that package independently, invokes
+`assistant-eval verify-bootstrap-equivalence`, uploads only to an exact draft, then re-reads and
+reverifies A/R/C immediately before publication. Before the potentially ambiguous publish API call,
+the publisher relinquishes automatic candidate-cleanup ownership so a successful public release can
+never be followed by C deactivation and R purging. It then downloads every asset anonymously and
+compares its SHA-256 and byte length. A public release is immutable to this workflow: an interrupted
+public read-back requires explicit reconciliation and can never authorize `--clobber` on a retry.
+Production promotion accepts only the appropriate fixed release shape and revalidates it against
 Azure and the live candidate before changing traffic. Standard GitHub-hosted runners are free for
 this public repository; no private-repository Actions minutes are consumed. Exit code `0`
 means every repetition and budget gate passed; exit code `5` means evidence was produced but the

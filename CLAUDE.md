@@ -57,8 +57,9 @@ gh run watch --repo SFHAJJI/lex
 ```
 
 The workflow logs into Azure through GitHub OIDC, builds an immutable image, creates a candidate
-revision at zero traffic, verifies artifact manifests, health and MCP behavior against that
-revision, and only then promotes it. The previous revision remains available for rollback.
+revision at zero traffic, and verifies artifact manifests, health and MCP behavior against that
+revision. It never promotes. Signed assistant evaluation and the separate `revision-traffic`
+workflow own promotion, and the former production revision remains available for rollback.
 
 **Then fetch the served output and check it.** A workflow success proves its smoke tests, not
 every user path. Check `az containerapp revision list` for `runningState`, then request the live

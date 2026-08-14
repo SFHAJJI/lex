@@ -1,0 +1,841 @@
+name: bootstrap-release-state
+
+on:
+  workflow_dispatch:
+    inputs:
+      production_revision:
+        description: Exact first official candidate C
+        required: true
+        type: string
+      rollback_revision:
+        description: Exact equivalent first-release fallback R created before C
+        required: true
+        type: string
+      assistant_evaluation_release:
+        description: Signed lex-ops release evaluating C and binding the R/C equivalence
+        required: true
+        type: string
+      cleanup_inventory_run_id:
+        description: Successful bootstrap-inventory run for this exact commit and R/C pair
+        required: true
+        type: string
+      cleanup_plan_sha256:
+        description: Reviewed SHA-256 of cleanup_plan.json from that dry run
+        required: true
+        type: string
+      expected_image_digest:
+        description: Immutable sha256 digest shared by R and C
+        required: true
+        type: string
+      confirmation:
+        description: Enter bootstrap-first-official to authorize the one-time revision cleanup
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  attestations: write
+  contents: read
+  deployments: write
+  id-token: write
+
+concurrency:
+  group: lex-production
+  cancel-in-progress: false
+
+jobs:
+  bootstrap:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 30
+    env:
+      AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      AZURE_INDEX_STORAGE_ACCOUNT: ${{ vars.AZURE_INDEX_STORAGE_ACCOUNT }}
+      RESOURCE_GROUP: rg-platform
+      CONTAINER_APP: ca-lex-web
+      ACR_NAME: crsoufien3orem
+      PRODUCTION_REVISION: ${{ inputs.production_revision }}
+      ROLLBACK_REVISION: ${{ inputs.rollback_revision }}
+      EVALUATION_RELEASE: ${{ inputs.assistant_evaluation_release }}
+      CLEANUP_RUN_ID: ${{ inputs.cleanup_inventory_run_id }}
+      CLEANUP_PLAN_SHA256: ${{ inputs.cleanup_plan_sha256 }}
+      EXPECTED_IMAGE_DIGEST: ${{ inputs.expected_image_digest }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Require exact one-time bootstrap authority
+        shell: bash
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          set -eu
+          [ "$CONFIRMATION" = "bootstrap-first-official" ] \
+            || { echo "::error::exact bootstrap confirmation is required"; exit 2; }
+          for value in AZURE_CLIENT_ID AZURE_TENANT_ID AZURE_SUBSCRIPTION_ID AZURE_INDEX_STORAGE_ACCOUNT; do
+            [ -n "${!value:-}" ] || { echo "::error::$value is not configured"; exit 1; }
+          done
+          for revision in "$PRODUCTION_REVISION" "$ROLLBACK_REVISION"; do
+            [[ "$revision" =~ ^ca-lex-web--[a-z0-9-]+$ ]] \
+              || { echo "::error::invalid bootstrap revision"; exit 2; }
+          done
+          [ "$PRODUCTION_REVISION" != "$ROLLBACK_REVISION" ] \
+            || { echo "::error::bootstrap revisions must differ"; exit 2; }
+          [[ "$EVALUATION_RELEASE" =~ ^assistant-eval-[0-9a-f]{12}-[0-9a-f]{12}$ ]] \
+            || { echo "::error::canonical signed assistant evaluation release is required"; exit 2; }
+          [[ "$CLEANUP_RUN_ID" =~ ^[1-9][0-9]*$ ]] \
+            || { echo "::error::cleanup inventory run id must be numeric"; exit 2; }
+          [[ "$CLEANUP_PLAN_SHA256" =~ ^[0-9a-f]{64}$ ]] \
+            || { echo "::error::cleanup plan SHA-256 is invalid"; exit 2; }
+          [[ "$EXPECTED_IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] \
+            || { echo "::error::expected_image_digest must be immutable"; exit 2; }
+
+      - uses: azure/login@f5d393ae46f8fde4be8b75f32e3fc50e654ad0ca # v3
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Download and revalidate the reviewed read-back allowlist
+        id: plan
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          . scripts/deploy/az-retry.sh
+          . scripts/deploy/az-reauth.sh
+          run=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$CLEANUP_RUN_ID")
+          [ "$(printf '%s' "$run" | jq -r .conclusion)" = "success" ] \
+            && [ "$(printf '%s' "$run" | jq -r .event)" = "workflow_dispatch" ] \
+            && [ "$(printf '%s' "$run" | jq -r .head_sha)" = "$GITHUB_SHA" ] \
+            && [ "$(printf '%s' "$run" | jq -r .name)" = "bootstrap-inventory" ] \
+            || { echo "::error::cleanup plan run is not the successful exact-commit dry run"; exit 2; }
+          mkdir plan
+          gh run download "$CLEANUP_RUN_ID" --name lex-bootstrap-cleanup-plan --dir plan
+          [ "$(sha256sum plan/cleanup_plan.json | cut -d' ' -f1)" = "$CLEANUP_PLAN_SHA256" ] \
+            || { echo "::error::reviewed cleanup plan SHA-256 differs"; exit 2; }
+
+          fresh_plan() {
+            local inactive_limit
+            az_reauth
+            inactive_limit=$(az_retry az containerapp show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+              --query properties.configuration.maxInactiveRevisions -o tsv)
+            az_retry az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+              --all -o json \
+              | jq '[.[] | {
+                  name:.name,
+                  active:.properties.active,
+                  trafficWeight:(.properties.trafficWeight // 0),
+                  createdTime:.properties.createdTime,
+                  image:.properties.template.containers[0].image,
+                  template:.properties.template
+                }]' > live-revisions.json
+            az_retry az acr manifest list-metadata --registry "$ACR_NAME" --name lex-web -o json \
+              | jq '[.[] | {digest:.digest}]' > live-acr.json
+            az_retry az storage blob list --auth-mode login --only-show-errors \
+              --account-name "$AZURE_INDEX_STORAGE_ACCOUNT" --container-name lex \
+              --prefix staging/ -o json \
+              | jq '[.[] | {name:.name,etag:.properties.etag}]' > live-staging.json
+            jq -n \
+              --arg production "$PRODUCTION_REVISION" \
+              --arg rollback "$ROLLBACK_REVISION" \
+              --argjson inactive_limit "$inactive_limit" \
+              --slurpfile revisions live-revisions.json \
+              --slurpfile manifests live-acr.json \
+              --slurpfile blobs live-staging.json \
+              '{schema:"lex-bootstrap-inventory/1",
+                max_inactive_revisions:$inactive_limit,
+                production_revision:$production,
+                rollback_revision:$rollback,
+                revisions:$revisions[0],acr_manifests:$manifests[0],staging_blobs:$blobs[0]}' \
+              > live-inventory.json
+            python3 scripts/deploy/bootstrap_plan.py live-inventory.json > live-plan.json
+          }
+          fresh_plan
+          cmp --silent plan/cleanup_plan.json live-plan.json \
+            || { echo "::error::Azure inventory changed after the reviewed dry run"; exit 2; }
+          [ "$(jq -r .protected.production.image_digest plan/cleanup_plan.json)" \
+              = "$EXPECTED_IMAGE_DIGEST" ] \
+            && [ "$(jq -r .protected.rollback.image_digest plan/cleanup_plan.json)" \
+              = "$EXPECTED_IMAGE_DIGEST" ] \
+            || { echo "::error::cleanup plan does not bind the expected shared image"; exit 2; }
+          echo "target=$PRODUCTION_REVISION" >> "$GITHUB_OUTPUT"
+          echo "previous=$ROLLBACK_REVISION" >> "$GITHUB_OUTPUT"
+          echo "legacy_current=$(jq -r .container_apps.legacy_traffic_revision plan/cleanup_plan.json)" \
+            >> "$GITHUB_OUTPUT"
+          echo "template_digest=$(jq -r .protected.production.canonical_template_digest plan/cleanup_plan.json)" \
+            >> "$GITHUB_OUTPUT"
+
+      - name: Re-read exact bounded A/R/C state before signed verification
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          . scripts/deploy/az-retry.sh
+          . scripts/deploy/az-reauth.sh
+          az_reauth
+          inactive_limit=$(az_retry az containerapp show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+            --query properties.configuration.maxInactiveRevisions -o tsv)
+          az_retry az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+            --all -o json \
+            | jq '[.[] | {name:.name,active:.properties.active,
+                trafficWeight:(.properties.trafficWeight // 0),createdTime:.properties.createdTime,
+                image:.properties.template.containers[0].image,template:.properties.template}]' \
+            > activation-revisions.json
+          az_retry az acr manifest list-metadata --registry "$ACR_NAME" --name lex-web -o json \
+            | jq '[.[] | {digest:.digest}]' > activation-acr.json
+          az_retry az storage blob list --auth-mode login --only-show-errors \
+            --account-name "$AZURE_INDEX_STORAGE_ACCOUNT" --container-name lex \
+            --prefix staging/ -o json \
+            | jq '[.[] | {name:.name,etag:.properties.etag}]' > activation-staging.json
+          jq -n --arg production "$PRODUCTION_REVISION" --arg rollback "$ROLLBACK_REVISION" \
+            --argjson inactive_limit "$inactive_limit" \
+            --slurpfile revisions activation-revisions.json --slurpfile manifests activation-acr.json \
+            --slurpfile blobs activation-staging.json \
+            '{schema:"lex-bootstrap-inventory/1",max_inactive_revisions:$inactive_limit,
+              production_revision:$production,
+              rollback_revision:$rollback,revisions:$revisions[0],
+              acr_manifests:$manifests[0],staging_blobs:$blobs[0]}' > activation-inventory.json
+          python3 scripts/deploy/bootstrap_plan.py activation-inventory.json > activation-plan.json
+          cmp --silent plan/cleanup_plan.json activation-plan.json \
+            || { echo "::error::bootstrap inventory changed before signed verification"; exit 2; }
+          for attempt in $(seq 1 30); do
+            active=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+              --revision "$PRODUCTION_REVISION" --query properties.active -o tsv)
+            traffic=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+              --revision "$PRODUCTION_REVISION" --query properties.trafficWeight -o tsv)
+            state=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+              --revision "$PRODUCTION_REVISION" --query properties.runningState -o tsv)
+            if [ "$active" = "true" ] && [ "${traffic:-0}" = "0" ] \
+                && { [ "$state" = "Running" ] || [ "$state" = "RunningAtMaxScale" ]; }; then
+              exit 0
+            fi
+            [ "$state" = "Failed" ] && { echo "::error::bootstrap candidate failed"; exit 1; }
+            sleep 2
+          done
+          echo "::error::bootstrap candidate did not become ready"
+          exit 1
+
+      - name: Verify exact C evaluation and signed R/C canonical-template equivalence
+        id: evidence
+        shell: bash
+        env:
+          CANONICAL_TEMPLATE_DIGEST: ${{ steps.plan.outputs.template_digest }}
+        run: |
+          set -Eeuo pipefail
+          app_id=$(az containerapp show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" --query id -o tsv)
+          candidate_fqdn=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+            --revision "$PRODUCTION_REVISION" --query properties.fqdn -o tsv)
+          [ -n "$app_id" ] && [ -n "$candidate_fqdn" ] \
+            || { echo "::error::bootstrap candidate identity is incomplete"; exit 1; }
+          eval_dir=$(mktemp -d)
+          equivalence_dir=$(mktemp -d)
+          trap 'rm -rf "$eval_dir" "$equivalence_dir"' EXIT
+          for asset in \
+              assistant-eval-report.json \
+              assistant-cases-v3.json \
+              assistant-cases-v3.review.json \
+              assistant-cases-v3.review.sig \
+              assistant-browser-evidence.json \
+              assistant-eval.manifest.json \
+              assistant-eval.manifest.sig; do
+            curl --fail --show-error --silent --location --retry 3 \
+              "https://github.com/SFHAJJI/lex-ops/releases/download/$EVALUATION_RELEASE/$asset" \
+              -o "$eval_dir/$asset"
+          done
+          for asset in bootstrap-equivalence.json bootstrap-equivalence.manifest.json \
+              bootstrap-equivalence.manifest.sig; do
+            curl --fail --show-error --silent --location --retry 3 \
+              "https://github.com/SFHAJJI/lex-ops/releases/download/$EVALUATION_RELEASE/$asset" \
+              -o "$equivalence_dir/$asset"
+          done
+          cases_sha=$(sha256sum "$eval_dir/assistant-cases-v3.json" | cut -d' ' -f1)
+          [[ "$cases_sha" =~ ^[0-9a-f]{64}$ ]] \
+            || { echo "::error::assistant cases digest is invalid"; exit 1; }
+          dotnet run --project src/Lex.Ingest/Lex.Ingest.csproj -c Release -- \
+            assistant-eval verify-release \
+            --root "$eval_dir" \
+            --manifest "$eval_dir/assistant-eval.manifest.json" \
+            --signature "$eval_dir/assistant-eval.manifest.sig" \
+            --trust-roots deploy/trusted-artifact-roots.json \
+            --base-url "https://$candidate_fqdn" \
+            --candidate-container-app-resource-id "$app_id" \
+            --candidate-revision "$PRODUCTION_REVISION"
+          dotnet run --project src/Lex.Ingest/Lex.Ingest.csproj -c Release -- \
+            assistant-eval verify-bootstrap-equivalence \
+            --root "$equivalence_dir" \
+            --manifest "$equivalence_dir/bootstrap-equivalence.manifest.json" \
+            --signature "$equivalence_dir/bootstrap-equivalence.manifest.sig" \
+            --trust-roots deploy/trusted-artifact-roots.json \
+            --equivalence "$equivalence_dir/bootstrap-equivalence.json" \
+            --candidate-container-app-resource-id "$app_id" \
+            --legacy-authority-revision "${{ steps.plan.outputs.legacy_current }}" \
+            --candidate-revision "$PRODUCTION_REVISION" \
+            --rollback-revision "$ROLLBACK_REVISION" \
+            --evaluation-release "$EVALUATION_RELEASE" \
+            --canonical-template-digest "$CANONICAL_TEMPLATE_DIGEST" \
+            --image-digest "$EXPECTED_IMAGE_DIGEST" \
+            --cases-sha256 "$cases_sha"
+          report_sha=$(sha256sum "$eval_dir/assistant-eval-report.json" | cut -d' ' -f1)
+          eval_manifest_sha=$(sha256sum "$eval_dir/assistant-eval.manifest.json" | cut -d' ' -f1)
+          equivalence_sha=$(sha256sum "$equivalence_dir/bootstrap-equivalence.json" | cut -d' ' -f1)
+          equivalence_manifest_sha=$(sha256sum \
+            "$equivalence_dir/bootstrap-equivalence.manifest.json" | cut -d' ' -f1)
+          package_sha=$({
+            for asset in assistant-eval-report.json assistant-cases-v3.json \
+                assistant-cases-v3.review.json assistant-cases-v3.review.sig \
+                assistant-browser-evidence.json assistant-eval.manifest.json \
+                assistant-eval.manifest.sig; do
+              printf '%s  %s\n' "$(sha256sum "$eval_dir/$asset" | cut -d' ' -f1)" "$asset"
+            done
+            for asset in bootstrap-equivalence.json bootstrap-equivalence.manifest.json \
+                bootstrap-equivalence.manifest.sig; do
+              printf '%s  %s\n' "$(sha256sum "$equivalence_dir/$asset" | cut -d' ' -f1)" "$asset"
+            done
+          } | sort -k2 | sha256sum | cut -d' ' -f1)
+          for digest in "$report_sha" "$eval_manifest_sha" "$equivalence_sha" \
+              "$equivalence_manifest_sha" "$package_sha"; do
+            [[ "$digest" =~ ^[0-9a-f]{64}$ ]] \
+              || { echo "::error::verified bootstrap package digest is invalid"; exit 1; }
+          done
+          echo "container_app_resource_id=$app_id" >> "$GITHUB_OUTPUT"
+          echo "cases_sha256=$cases_sha" >> "$GITHUB_OUTPUT"
+          echo "report_sha256=$report_sha" >> "$GITHUB_OUTPUT"
+          echo "evaluation_manifest_sha256=$eval_manifest_sha" >> "$GITHUB_OUTPUT"
+          echo "equivalence_sha256=$equivalence_sha" >> "$GITHUB_OUTPUT"
+          echo "equivalence_manifest_sha256=$equivalence_manifest_sha" >> "$GITHUB_OUTPUT"
+          echo "package_sha256=$package_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Persist bootstrap traffic mutation authority
+        id: traffic_authority
+        shell: bash
+        run: |
+          set -eu
+          # This completed step is durable even if the following Azure write succeeds and its
+          # runner is cancelled before it can emit outputs. Recovery still infers the result from
+          # live traffic and never treats a missing post-write output as proof that no write ran.
+          echo "attempted=true" >> "$GITHUB_OUTPUT"
+          echo "legacy_current=${{ steps.plan.outputs.legacy_current }}" >> "$GITHUB_OUTPUT"
+          echo "target=$PRODUCTION_REVISION" >> "$GITHUB_OUTPUT"
+          echo "fallback=$ROLLBACK_REVISION" >> "$GITHUB_OUTPUT"
+
+      - name: Establish the first official exact release state
+        id: traffic
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          . scripts/deploy/az-retry.sh
+          . scripts/deploy/az-reauth.sh
+          az_reauth
+          app_id=$(az containerapp show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" --query id -o tsv)
+
+          set_inactive_limit() {
+            local desired="$1" body observed
+            body=$(jq -cn --argjson limit "$desired" \
+              '{properties:{configuration:{maxInactiveRevisions:$limit}}}')
+            az_retry az rest --method patch --uri "$app_id?api-version=2025-01-01" \
+              --headers 'Content-Type=application/json' --body "$body" --output none
+            for attempt in $(seq 1 12); do
+              observed=$(az containerapp show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+                --query properties.configuration.maxInactiveRevisions -o tsv 2>/dev/null || true)
+              [ "$observed" = "$desired" ] && return 0
+              sleep 5
+            done
+            return 1
+          }
+
+          deactivate_and_verify() {
+            local revision="$1" active
+            for attempt in $(seq 1 5); do
+              az_retry az containerapp revision deactivate -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+                --revision "$revision" --only-show-errors >/dev/null 2>&1 || true
+              active=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+                --revision "$revision" --query properties.active -o tsv 2>/dev/null || true)
+              [ "$active" != "true" ] && return 0
+              sleep $((attempt * 2))
+            done
+            return 1
+          }
+
+          assert_revision_state() {
+            local active="$1" inactive="$2" traffic="$3" order="$4" observed_limit
+            observed_limit=$(az containerapp show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+              --query properties.configuration.maxInactiveRevisions -o tsv)
+            az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" --all -o json \
+              | jq --argjson limit "$observed_limit" '{
+                  max_inactive_revisions:$limit,
+                  revisions:[.[] | {name:.name,active:.properties.active,
+                    createdTime:.properties.createdTime,
+                    trafficWeight:(.properties.trafficWeight // 0)}]}' \
+              | python3 scripts/deploy/revision_state.py --max-inactive 1 \
+                  --active "$active" --inactive "$inactive" --traffic "$traffic" \
+                  --created-order "$order"
+          }
+
+          # Re-run the identity planner immediately before the first mutation. This intentionally
+          # reads every revision, digest, and staging ETag rather than trusting the earlier output.
+          immediate_limit=$(az containerapp show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+            --query properties.configuration.maxInactiveRevisions -o tsv)
+          az_retry az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" --all -o json \
+            | jq '[.[] | {name:.name,
+                active:.properties.active,
+                trafficWeight:(.properties.trafficWeight // 0),createdTime:.properties.createdTime,
+                image:.properties.template.containers[0].image,template:.properties.template}]' \
+            > immediate-revisions.json
+          az_retry az acr manifest list-metadata --registry "$ACR_NAME" --name lex-web -o json \
+            | jq '[.[] | {digest:.digest}]' > immediate-acr.json
+          az_retry az storage blob list --auth-mode login --only-show-errors \
+            --account-name "$AZURE_INDEX_STORAGE_ACCOUNT" --container-name lex \
+            --prefix staging/ -o json \
+            | jq '[.[] | {name:.name,etag:.properties.etag}]' > immediate-staging.json
+          jq -n --arg production "$PRODUCTION_REVISION" --arg rollback "$ROLLBACK_REVISION" \
+            --argjson inactive_limit "$immediate_limit" \
+            --slurpfile revisions immediate-revisions.json --slurpfile manifests immediate-acr.json \
+            --slurpfile blobs immediate-staging.json \
+            '{schema:"lex-bootstrap-inventory/1",max_inactive_revisions:$inactive_limit,
+              production_revision:$production,
+              rollback_revision:$rollback,revisions:$revisions[0],
+              acr_manifests:$manifests[0],staging_blobs:$blobs[0]}' > immediate-inventory.json
+          python3 scripts/deploy/bootstrap_plan.py immediate-inventory.json > immediate-plan.json
+          cmp --silent plan/cleanup_plan.json immediate-plan.json \
+            || { echo "::error::bootstrap inventory changed immediately before mutation"; exit 2; }
+
+          candidate_runtime=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+            --revision "$PRODUCTION_REVISION" \
+            --query '{active:properties.active,traffic:properties.trafficWeight}' -o json)
+          [ "$(printf '%s' "$candidate_runtime" | jq -r .active)" = "true" ] \
+            && [ "$(printf '%s' "$candidate_runtime" | jq -r '.traffic // 0')" = "0" ] \
+            || { echo "::error::C must be active and zero traffic before maxInactiveRevisions=1"; exit 1; }
+
+          old_current=$(az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+            --all --query "[?properties.trafficWeight > \`0\`].name" -o tsv)
+          [ "$(printf '%s\n' "$old_current" | sed '/^$/d' | wc -l)" -eq 1 ] \
+            || { echo "::error::legacy traffic authority is not unique"; exit 1; }
+          jq -e --arg revision "$old_current" \
+            '.container_apps.deactivate_revisions | any(.revision == $revision)' \
+            plan/cleanup_plan.json >/dev/null \
+            || { echo "::error::legacy traffic authority is absent from the reviewed allowlist"; exit 2; }
+
+          state=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+            --revision "$PRODUCTION_REVISION" --query properties.runningState -o tsv)
+          { [ "$state" = "Running" ] || [ "$state" = "RunningAtMaxScale" ]; } \
+            || { echo "::error::bootstrap candidate did not become ready"; exit 1; }
+          candidate_fqdn=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+            --revision "$PRODUCTION_REVISION" --query properties.fqdn -o tsv)
+          curl --fail --show-error --silent --retry 5 --retry-delay 5 \
+            "https://$candidate_fqdn/healthz" >/dev/null
+
+          # Health checks can take long enough for an external inventory to drift. Re-read the
+          # complete revision/template/image/creation-time, ACR digest and staging ETag allowlist
+          # once more immediately before the first authorized state mutation.
+          pretraffic_limit=$(az_retry az containerapp show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+            --query properties.configuration.maxInactiveRevisions -o tsv)
+          az_retry az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+            --all -o json \
+            | jq '[.[] | {name:.name,active:.properties.active,
+                trafficWeight:(.properties.trafficWeight // 0),createdTime:.properties.createdTime,
+                image:.properties.template.containers[0].image,template:.properties.template}]' \
+            > pretraffic-revisions.json
+          az_retry az acr manifest list-metadata --registry "$ACR_NAME" --name lex-web -o json \
+            | jq '[.[] | {digest:.digest}]' > pretraffic-acr.json
+          az_retry az storage blob list --auth-mode login --only-show-errors \
+            --account-name "$AZURE_INDEX_STORAGE_ACCOUNT" --container-name lex \
+            --prefix staging/ -o json \
+            | jq '[.[] | {name:.name,etag:.properties.etag}]' > pretraffic-staging.json
+          jq -n --arg production "$PRODUCTION_REVISION" --arg rollback "$ROLLBACK_REVISION" \
+            --argjson inactive_limit "$pretraffic_limit" \
+            --slurpfile revisions pretraffic-revisions.json --slurpfile manifests pretraffic-acr.json \
+            --slurpfile blobs pretraffic-staging.json \
+            '{schema:"lex-bootstrap-inventory/1",max_inactive_revisions:$inactive_limit,
+              production_revision:$production,rollback_revision:$rollback,
+              revisions:$revisions[0],acr_manifests:$manifests[0],staging_blobs:$blobs[0]}' \
+            > pretraffic-inventory.json
+          python3 scripts/deploy/bootstrap_plan.py pretraffic-inventory.json > pretraffic-plan.json
+          cmp --silent plan/cleanup_plan.json pretraffic-plan.json \
+            || { echo "::error::bootstrap inventory changed immediately before traffic authority"; exit 2; }
+
+          # The one-time reviewed cleanup and R replacement already established max=1. Reassert
+          # it without using a wider cleanup limit, then prove R is the sole inactive identity.
+          set_inactive_limit 1
+          for attempt in $(seq 1 24); do
+            inactive=$(az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+              --all --query "[?properties.active==\`false\`].name" -o tsv)
+            [ "$inactive" = "$ROLLBACK_REVISION" ] && break
+            sleep 5
+          done
+          [ "$inactive" = "$ROLLBACK_REVISION" ] \
+            || { echo "::error::bootstrap fallback is not the sole inactive revision"; exit 1; }
+
+          az_retry az containerapp ingress traffic set -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+            --revision-weight "$old_current=0" "$PRODUCTION_REVISION=100" --only-show-errors
+          routed=$(az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+            --all --query "[?properties.trafficWeight > \`0\`].name" -o tsv)
+          [ "$routed" = "$PRODUCTION_REVISION" ] \
+            || { echo "::error::Azure did not route exclusively to first official production"; exit 1; }
+          echo "previous=$ROLLBACK_REVISION" >> "$GITHUB_OUTPUT"
+          echo "target=$PRODUCTION_REVISION" >> "$GITHUB_OUTPUT"
+          echo "switched=true" >> "$GITHUB_OUTPUT"
+
+          while IFS= read -r item; do
+            revision=$(printf '%s' "$item" | jq -r .revision)
+            expected_created=$(printf '%s' "$item" | jq -r .created_time)
+            expected_digest=$(printf '%s' "$item" | jq -r .image_digest)
+            expected_template=$(printf '%s' "$item" | jq -r .canonical_template_digest)
+            observed=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+              --revision "$revision" -o json 2>/dev/null || true)
+            [ -z "$observed" ] && continue
+            observed_image=$(printf '%s' "$observed" | jq -r \
+              .properties.template.containers[0].image)
+            observed_template=$(printf '%s' "$observed" \
+              | python3 scripts/deploy/revision_template_digest.py)
+            [ "$(printf '%s' "$observed" | jq -r .properties.createdTime)" = "$expected_created" ] \
+              && [ "${observed_image##*@}" = "$expected_digest" ] \
+              && [ "$observed_template" = "$expected_template" ] \
+              || { echo "::error::allowlisted legacy revision identity changed"; exit 2; }
+            deactivate_and_verify "$revision"
+          done < <(jq -c '.container_apps.deactivate_revisions[]' plan/cleanup_plan.json)
+
+          assert_revision_state "$PRODUCTION_REVISION" "$ROLLBACK_REVISION" \
+            "$PRODUCTION_REVISION=100" "$ROLLBACK_REVISION,$PRODUCTION_REVISION" \
+            || { echo "::error::first official release state did not converge"; exit 1; }
+          served_image=$(curl --fail --show-error --silent --retry 5 --retry-delay 5 \
+            https://law.soufien.lu/attestation.json | jq -r '.deployment.image // empty')
+          [ "${served_image##*@}" = "$EXPECTED_IMAGE_DIGEST" ] \
+            || { echo "::error::public endpoint does not serve the bootstrap image"; exit 1; }
+          echo "image=$served_image" >> "$GITHUB_OUTPUT"
+          echo "rollback_image=$served_image" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare domain-separated first-release fallback receipt
+        id: signed_receipt
+        shell: bash
+        env:
+          CANONICAL_TEMPLATE_DIGEST: ${{ steps.plan.outputs.template_digest }}
+          CONTAINER_APP_RESOURCE_ID: ${{ steps.evidence.outputs.container_app_resource_id }}
+          CASES_SHA256: ${{ steps.evidence.outputs.cases_sha256 }}
+          REPORT_SHA256: ${{ steps.evidence.outputs.report_sha256 }}
+          EVALUATION_MANIFEST_SHA256: ${{ steps.evidence.outputs.evaluation_manifest_sha256 }}
+          EQUIVALENCE_SHA256: ${{ steps.evidence.outputs.equivalence_sha256 }}
+          EQUIVALENCE_MANIFEST_SHA256: ${{ steps.evidence.outputs.equivalence_manifest_sha256 }}
+          BOOTSTRAP_PACKAGE_SHA256: ${{ steps.evidence.outputs.package_sha256 }}
+          LEGACY_AUTHORITY_REVISION: ${{ steps.plan.outputs.legacy_current }}
+        run: |
+          set -Eeuo pipefail
+          issued_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          jq -cS -n \
+            --arg issued_at "$issued_at" \
+            --arg repository "$GITHUB_REPOSITORY" \
+            --arg run_id "$GITHUB_RUN_ID" \
+            --arg run_attempt "$GITHUB_RUN_ATTEMPT" \
+            --arg code_commit "$GITHUB_SHA" \
+            --arg target "$PRODUCTION_REVISION" \
+            --arg rollback "$ROLLBACK_REVISION" \
+            --arg image "$EXPECTED_IMAGE_DIGEST" \
+            --arg template "$CANONICAL_TEMPLATE_DIGEST" \
+            --arg evaluation "$EVALUATION_RELEASE" \
+            --arg cleanup_plan "$CLEANUP_PLAN_SHA256" \
+            --arg app "$CONTAINER_APP_RESOURCE_ID" \
+            --arg cases "$CASES_SHA256" \
+            --arg report "$REPORT_SHA256" \
+            --arg eval_manifest "$EVALUATION_MANIFEST_SHA256" \
+            --arg equivalence "$EQUIVALENCE_SHA256" \
+            --arg equivalence_manifest "$EQUIVALENCE_MANIFEST_SHA256" \
+            --arg package "$BOOTSTRAP_PACKAGE_SHA256" \
+            --arg legacy "$LEGACY_AUTHORITY_REVISION" \
+            --arg tenant "$AZURE_TENANT_ID" \
+            --arg subscription "$AZURE_SUBSCRIPTION_ID" \
+            '{schema:"lex-first-release-receipt/1",
+              purpose:"authorize-equivalent-first-release-fallback",
+              issuer:"github-actions-oidc-attestation",issued_at:$issued_at,
+              repository:$repository,workflow:".github/workflows/bootstrap-release-state.yml",
+              run_id:$run_id,run_attempt:$run_attempt,code_commit:$code_commit,
+              environment:"production",operation:"bootstrap",azure_tenant_id:$tenant,
+              azure_subscription_id:$subscription,container_app_resource_id:$app,
+              target_revision:$target,
+              target_revision_resource_id:($app + "/revisions/" + $target),
+              target_image:$image,
+              rollback_revision:$rollback,rollback_image:$image,
+              rollback_revision_resource_id:($app + "/revisions/" + $rollback),
+              rollback_kind:"equivalent_first_release_fallback",
+              canonical_template_digest:$template,
+              assistant_evaluation_release:$evaluation,
+              assistant_cases_sha256:$cases,assistant_report_sha256:$report,
+              assistant_evaluation_manifest_sha256:$eval_manifest,
+              bootstrap_equivalence_sha256:$equivalence,
+              bootstrap_equivalence_manifest_sha256:$equivalence_manifest,
+              bootstrap_package_sha256:$package,
+              legacy_authority_revision:$legacy,cleanup_plan_sha256:$cleanup_plan}' \
+            > first-release-fallback-receipt.json
+          receipt_sha=$(sha256sum first-release-fallback-receipt.json | cut -d' ' -f1)
+          [[ "$receipt_sha" =~ ^[0-9a-f]{64}$ ]] \
+            || { echo "::error::first-release receipt digest is invalid"; exit 1; }
+          echo "sha256=$receipt_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Sign first-release fallback receipt with GitHub OIDC attestation
+        id: receipt_attestation
+        uses: actions/attest@f057fd524d485ac48d9b534c235aad15b5bb303f # v3
+        with:
+          subject-path: first-release-fallback-receipt.json
+          predicate-type: https://law.soufien.lu/attestations/first-release-fallback/v1
+          predicate-path: first-release-fallback-receipt.json
+          show-summary: false
+
+      - name: Record first official release-state receipt
+        id: release_receipt
+        shell: bash
+        env:
+          SIGNED_RECEIPT_SHA256: ${{ steps.signed_receipt.outputs.sha256 }}
+          RECEIPT_ATTESTATION_ID: ${{ steps.receipt_attestation.outputs.attestation-id }}
+          RECEIPT_ATTESTATION_URL: ${{ steps.receipt_attestation.outputs.attestation-url }}
+        run: |
+          set -Eeuo pipefail
+          [[ "$SIGNED_RECEIPT_SHA256" =~ ^[0-9a-f]{64}$ ]] \
+            && [ -n "$RECEIPT_ATTESTATION_ID" ] && [ -n "$RECEIPT_ATTESTATION_URL" ] \
+            || { echo "::error::signed first-release receipt identity is incomplete"; exit 1; }
+          receipt=$(jq -n \
+            --arg ref "$GITHUB_SHA" \
+            --arg receipt_sha "$SIGNED_RECEIPT_SHA256" \
+            --arg attestation_id "$RECEIPT_ATTESTATION_ID" \
+            --arg attestation_url "$RECEIPT_ATTESTATION_URL" \
+            --slurpfile signed first-release-fallback-receipt.json \
+            '{ref:$ref,task:"lex-revision-promotion",auto_merge:false,required_contexts:[],
+              environment:"production",description:"First official Lex release state",
+              payload:{signed_receipt:$signed[0],signed_receipt_sha256:$receipt_sha,
+                signed_receipt_attestation_id:$attestation_id,
+                signed_receipt_attestation_url:$attestation_url},
+              production_environment:true,transient_environment:false}' \
+            | gh api --method POST "repos/$GITHUB_REPOSITORY/deployments" --input -)
+          deployment_id=$(printf '%s' "$receipt" | jq -er .id)
+          echo "deployment_id=$deployment_id" >> "$GITHUB_OUTPUT"
+          jq -n --arg state success --arg environment production \
+            --arg environment_url https://law.soufien.lu \
+            --arg log_url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            '{state:$state,environment:$environment,environment_url:$environment_url,
+              log_url:$log_url,description:"First official release and fallback established"}' \
+            | gh api --method POST \
+                "repos/$GITHUB_REPOSITORY/deployments/$deployment_id/statuses" --input - >/dev/null
+
+      - name: Restore the signed fallback after an unreceipted bootstrap switch
+        if: ${{ failure() || cancelled() }}
+        shell: bash
+        env:
+          TRAFFIC_ATTEMPTED: ${{ steps.traffic_authority.outputs.attempted }}
+          FAILED_RECEIPT_DEPLOYMENT: ${{ steps.release_receipt.outputs.deployment_id }}
+          LEGACY_CURRENT_REVISION: ${{ steps.plan.outputs.legacy_current }}
+        run: |
+          set -uo pipefail
+          . scripts/deploy/az-retry.sh
+          . scripts/deploy/az-reauth.sh
+          set_inactive_limit() {
+            local desired="$1" app_id body observed
+            app_id=$(az_retry az containerapp show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+              --query id -o tsv) || return 1
+            body=$(jq -cn --argjson limit "$desired" \
+              '{properties:{configuration:{maxInactiveRevisions:$limit}}}')
+            az_retry az rest --method patch --uri "$app_id?api-version=2025-01-01" \
+              --headers 'Content-Type=application/json' --body "$body" --output none || return 1
+            for attempt in $(seq 1 12); do
+              observed=$(az containerapp show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+                --query properties.configuration.maxInactiveRevisions -o tsv 2>/dev/null || true)
+              [ "$observed" = "$desired" ] && return 0
+              sleep 5
+            done
+            return 1
+          }
+          assert_state() {
+            local limit="$1" active="$2" inactive="$3" traffic="$4" order="$5" observed
+            observed=$(az containerapp show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+              --query properties.configuration.maxInactiveRevisions -o tsv) || return 1
+            az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" --all -o json \
+              | jq --argjson limit "$observed" '{max_inactive_revisions:$limit,
+                  revisions:[.[] | {name:.name,active:.properties.active,
+                    createdTime:.properties.createdTime,
+                    trafficWeight:(.properties.trafficWeight // 0)}]}' \
+              | python3 scripts/deploy/revision_state.py --max-inactive "$limit" \
+                  --active "$active" --inactive "$inactive" --traffic "$traffic" \
+                  --created-order "$order"
+          }
+          restore_legacy_authority() {
+            local rewrite_traffic="$1"
+            if [ "$rewrite_traffic" = "true" ]; then
+              az_retry az containerapp revision activate -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+                --revision "$LEGACY_CURRENT_REVISION" --only-show-errors || return 1
+              az_retry az containerapp ingress traffic set -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+                --revision-weight "$LEGACY_CURRENT_REVISION=100" "$PRODUCTION_REVISION=0" \
+                --only-show-errors || return 1
+            fi
+            az_retry az containerapp revision deactivate -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+              --revision "$PRODUCTION_REVISION" --only-show-errors || true
+            for attempt in $(seq 1 12); do
+              assert_state 1 "$LEGACY_CURRENT_REVISION" \
+                "$PRODUCTION_REVISION" "$LEGACY_CURRENT_REVISION=100" \
+                "$LEGACY_CURRENT_REVISION,$PRODUCTION_REVISION" && break
+              sleep 5
+            done
+            assert_state 1 "$LEGACY_CURRENT_REVISION" \
+              "$PRODUCTION_REVISION" "$LEGACY_CURRENT_REVISION=100" \
+              "$LEGACY_CURRENT_REVISION,$PRODUCTION_REVISION" \
+              || { echo "::error::legacy bootstrap recovery did not converge"; return 1; }
+          }
+          restore_signed_fallback() {
+            local exact_inventory
+            set_inactive_limit 1 || return 1
+            exact_inventory=$(az_retry az containerapp revision list -g "$RESOURCE_GROUP" \
+              -n "$CONTAINER_APP" --all -o json) || return 1
+            printf '%s' "$exact_inventory" | jq -e \
+                --arg rollback "$ROLLBACK_REVISION" --arg candidate "$PRODUCTION_REVISION" '
+                  length == 2
+                  and ([.[].name] | sort) == ([$rollback,$candidate] | sort)
+                  and any(.[]; .name == $rollback and .properties.active == false
+                    and (.properties.trafficWeight // 0) == 0)
+                  and any(.[]; .name == $candidate and .properties.active == true
+                    and (.properties.trafficWeight // 0) >= 0
+                    and (.properties.trafficWeight // 0) <= 100)' >/dev/null \
+              || { echo "::error::refusing fallback recovery with unknown revision identities"; return 1; }
+            az_retry az containerapp revision activate -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+              --revision "$ROLLBACK_REVISION" --only-show-errors || return 1
+            az_retry az containerapp ingress traffic set -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+              --revision-weight "$ROLLBACK_REVISION=100" "$PRODUCTION_REVISION=0" \
+              --only-show-errors || return 1
+            az_retry az containerapp revision deactivate -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+              --revision "$PRODUCTION_REVISION" --only-show-errors || true
+            for attempt in $(seq 1 12); do
+              assert_state 1 "$ROLLBACK_REVISION" "$PRODUCTION_REVISION" \
+                "$ROLLBACK_REVISION=100" "$ROLLBACK_REVISION,$PRODUCTION_REVISION" && break
+              sleep 5
+            done
+            assert_state 1 "$ROLLBACK_REVISION" "$PRODUCTION_REVISION" \
+              "$ROLLBACK_REVISION=100" "$ROLLBACK_REVISION,$PRODUCTION_REVISION"
+          }
+
+          [ -n "${LEGACY_CURRENT_REVISION:-}" ] \
+            || { echo "bootstrap mutation was not authorized; no restoration required"; exit 0; }
+          az_reauth
+          if [ "$TRAFFIC_ATTEMPTED" != "true" ]; then
+            # No Azure mutation precedes this durable marker. Preserve the exact retryable signed
+            # preparation and prove A=100, R inactive, C active=0 without writing stale traffic.
+            assert_state 1 "$LEGACY_CURRENT_REVISION,$PRODUCTION_REVISION" \
+              "$ROLLBACK_REVISION" "$LEGACY_CURRENT_REVISION=100" \
+              "$LEGACY_CURRENT_REVISION,$ROLLBACK_REVISION,$PRODUCTION_REVISION" \
+              || { echo "::error::pre-authority bootstrap state changed unexpectedly"; exit 1; }
+            {
+              echo "## Interrupted first-release bootstrap"
+              echo
+              echo "- traffic rewrite during recovery: \`false\`"
+              echo "- active legacy authority: \`$LEGACY_CURRENT_REVISION\`"
+              echo "- exact R retained inactive and C remains active at zero traffic"
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          live_routes=''
+          for attempt in $(seq 1 12); do
+            live_routes=$(az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+              --all -o json 2>/dev/null || true)
+            printf '%s' "$live_routes" | jq -e --arg legacy "$LEGACY_CURRENT_REVISION" \
+              --arg candidate "$PRODUCTION_REVISION" --arg rollback "$ROLLBACK_REVISION" '
+                length >= 2
+                and all(.[]; ((.properties.trafficWeight // 0) | type) == "number"
+                  and ((.properties.trafficWeight // 0) % 1) == 0
+                  and (.properties.trafficWeight // 0) >= 0
+                  and (.properties.trafficWeight // 0) <= 100)
+                and all(.[] | select((.properties.trafficWeight // 0) > 0);
+                  .name == $legacy or .name == $candidate or .name == $rollback)' \
+              >/dev/null 2>&1 && break
+            sleep 5
+          done
+          printf '%s' "$live_routes" | jq -e --arg legacy "$LEGACY_CURRENT_REVISION" \
+            --arg candidate "$PRODUCTION_REVISION" --arg rollback "$ROLLBACK_REVISION" '
+              length >= 2
+              and all(.[]; ((.properties.trafficWeight // 0) | type) == "number"
+                and ((.properties.trafficWeight // 0) % 1) == 0
+                and (.properties.trafficWeight // 0) >= 0
+                and (.properties.trafficWeight // 0) <= 100)
+              and all(.[] | select((.properties.trafficWeight // 0) > 0);
+                .name == $legacy or .name == $candidate or .name == $rollback)' >/dev/null \
+            || { echo "::error::cannot infer bootstrap mutation phase from live traffic"; exit 1; }
+          legacy_exists=false
+          if az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+              --revision "$LEGACY_CURRENT_REVISION" --query name -o tsv >/dev/null 2>&1; then
+            legacy_exists=true
+          fi
+          legacy_weight=$(printf '%s' "$live_routes" | jq -r --arg revision "$LEGACY_CURRENT_REVISION" \
+            '[.[] | select(.name == $revision) | (.properties.trafficWeight // 0)] | first // 0')
+          candidate_weight=$(printf '%s' "$live_routes" | jq -r --arg revision "$PRODUCTION_REVISION" \
+            '[.[] | select(.name == $revision) | (.properties.trafficWeight // 0)] | first // 0')
+          rollback_weight=$(printf '%s' "$live_routes" | jq -r --arg revision "$ROLLBACK_REVISION" \
+            '[.[] | select(.name == $revision) | (.properties.trafficWeight // 0)] | first // 0')
+          if [ "$legacy_exists" = "true" ]; then
+            if [ "$legacy_weight" = "100" ] \
+                && [ "$candidate_weight" = "0" ] && [ "$rollback_weight" = "0" ]; then
+              restore_legacy_authority false \
+                || { echo "::error::legacy authority recovery did not converge"; exit 1; }
+            else
+              restore_legacy_authority true \
+                || { echo "::error::partial bootstrap traffic recovery did not converge"; exit 1; }
+            fi
+            echo "::error::bootstrap attempt abandoned C; create a fresh R-before-C pair for retry"
+            exit 0
+          fi
+          if [ "$candidate_weight" != "0" ] || [ "$rollback_weight" != "0" ]; then
+            restore_signed_fallback \
+              || { echo "::error::unreceipted bootstrap fallback recovery did not converge"; exit 1; }
+          else
+            echo "::error::unexpected live traffic authority; refusing a stale recovery rewrite"
+            exit 1
+          fi
+          if [[ "${FAILED_RECEIPT_DEPLOYMENT:-}" =~ ^[1-9][0-9]*$ ]]; then
+            jq -n --arg state failure --arg environment production \
+              --arg environment_url https://law.soufien.lu \
+              --arg log_url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+              '{state:$state,environment:$environment,environment_url:$environment_url,
+                log_url:$log_url,description:"Fallback restored after bootstrap receipt failure"}' \
+              | gh api --method POST \
+                  "repos/$GITHUB_REPOSITORY/deployments/$FAILED_RECEIPT_DEPLOYMENT/statuses" \
+                  --input - >/dev/null 2>&1 || true
+          fi
+          {
+            echo "## Failed/unreceipted first-release bootstrap"
+            echo
+            echo "- restored active equivalent fallback: \`$ROLLBACK_REVISION\`"
+            echo "- failed C retained as sole inactive revision: \`$PRODUCTION_REVISION\`"
+            echo "- legacy A recoverable: \`false\` (deliberately purged by reviewed bootstrap cleanup)"
+            echo "- status: operator reconciliation is required"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error::failed/unreceipted bootstrap restored signed fallback; reconciliation required"
+
+      - name: Record shared-resource cleanup prerequisites
+        if: ${{ success() }}
+        shell: bash
+        run: |
+          acr_count=$(jq '.acr.delete_digests | length' plan/cleanup_plan.json)
+          blob_count=$(jq '.blob_staging.delete | length' plan/cleanup_plan.json)
+          {
+            echo "## Legacy artifact cleanup boundary"
+            echo
+            echo "- legacy revisions reconciled from reviewed identities: \`true\`"
+            echo "- ACR digest candidates (dry run): \`$acr_count\`"
+            echo "- staging blob candidates (dry run): \`$blob_count\`"
+            echo "- ACR deletion: blocked until a cross-app pull/reference and ACR access-log audit proves no other consumer"
+            echo "- staging deletion: blocked until lex-ops release ownership is proven; normal publishing deletes exact ETags after immutable release read-back"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Bootstrap summary
+        if: ${{ success() }}
+        shell: bash
+        run: |
+          {
+            echo "## First official Lex release"
+            echo
+            echo "- operation: \`bootstrap\`"
+            echo "- active exact candidate: \`$PRODUCTION_REVISION\`"
+            echo "- sole inactive equivalent fallback: \`$ROLLBACK_REVISION\`"
+            echo "- shared immutable image: \`$EXPECTED_IMAGE_DIGEST\`"
+            echo "- signed evaluation/equivalence release: \`$EVALUATION_RELEASE\`"
+            echo "- release-state receipt: \`${{ steps.release_receipt.outputs.deployment_id }}\`"
+            echo "- steady retention limit: \`1\`"
+          } >> "$GITHUB_STEP_SUMMARY"

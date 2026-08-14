@@ -1,0 +1,179 @@
+name: bootstrap-legacy-cleanup
+
+on:
+  workflow_dispatch:
+    inputs:
+      inventory_run_id:
+        description: Successful bootstrap-legacy-inventory run for this exact commit
+        required: true
+        type: string
+      cleanup_plan_sha256:
+        description: Independently reviewed SHA-256 of cleanup_plan.json
+        required: true
+        type: string
+      confirmation:
+        description: Enter purge-legacy-inactive-for-first-official
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+  id-token: write
+
+concurrency:
+  group: lex-production
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 15
+    env:
+      AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      RESOURCE_GROUP: rg-platform
+      CONTAINER_APP: ca-lex-web
+      INVENTORY_RUN_ID: ${{ inputs.inventory_run_id }}
+      CLEANUP_PLAN_SHA256: ${{ inputs.cleanup_plan_sha256 }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Require exact reviewed one-time authority
+        shell: bash
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          set -eu
+          [ "$CONFIRMATION" = "purge-legacy-inactive-for-first-official" ] \
+            || { echo "::error::exact first-release cleanup confirmation is required"; exit 2; }
+          [[ "$INVENTORY_RUN_ID" =~ ^[1-9][0-9]*$ ]] \
+            && [[ "$CLEANUP_PLAN_SHA256" =~ ^[0-9a-f]{64}$ ]] \
+            || { echo "::error::review coordinates are invalid"; exit 2; }
+
+      - uses: azure/login@f5d393ae46f8fde4be8b75f32e3fc50e654ad0ca # v3
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Re-read exact inventory, then apply only maxInactiveRevisions=1
+        id: cleanup
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          . scripts/deploy/az-retry.sh
+          . scripts/deploy/az-reauth.sh
+          run=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$INVENTORY_RUN_ID")
+          [ "$(printf '%s' "$run" | jq -r .conclusion)" = "success" ] \
+            && [ "$(printf '%s' "$run" | jq -r .event)" = "workflow_dispatch" ] \
+            && [ "$(printf '%s' "$run" | jq -r .head_sha)" = "$GITHUB_SHA" ] \
+            && [ "$(printf '%s' "$run" | jq -r .name)" = "bootstrap-legacy-inventory" ] \
+            || { echo "::error::legacy inventory is not a successful exact-commit dry run"; exit 2; }
+          mkdir plan
+          gh run download "$INVENTORY_RUN_ID" \
+            --name lex-bootstrap-legacy-cleanup-plan --dir plan
+          [ "$(sha256sum plan/cleanup_plan.json | cut -d' ' -f1)" = "$CLEANUP_PLAN_SHA256" ] \
+            || { echo "::error::reviewed cleanup plan SHA-256 differs"; exit 2; }
+
+          fresh_inventory() {
+            local prefix="$1" limit
+            az_reauth
+            limit=$(az_retry az containerapp show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+              --query properties.configuration.maxInactiveRevisions -o tsv)
+            az_retry az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+              --all -o json \
+              | jq '[.[] | {name:.name,active:.properties.active,
+                  trafficWeight:(.properties.trafficWeight // 0),
+                  createdTime:.properties.createdTime,
+                  image:.properties.template.containers[0].image,
+                  template:.properties.template}]' > "$prefix-revisions.json"
+            jq -n --argjson limit "$limit" --slurpfile revisions "$prefix-revisions.json" \
+              '{schema:"lex-bootstrap-legacy-inventory/1",
+                max_inactive_revisions:$limit,revisions:$revisions[0]}' \
+              > "$prefix-inventory.json"
+            python3 scripts/deploy/bootstrap_legacy_plan.py "$prefix-inventory.json" \
+              > "$prefix-plan.json"
+          }
+
+          is_reviewed_post_subset() {
+            local candidate_plan="$1"
+            jq -e --slurpfile after "$candidate_plan" '
+                .legacy_authority == $after[0].legacy_authority
+                and ($after[0].revisions | length) == 2
+                and ([ $after[0].revisions[] as $item
+                      | any(.revisions[]; . == $item) ] | all)
+                and $after[0].mutation.max_inactive_revisions == 1' \
+              plan/cleanup_plan.json >/dev/null
+          }
+
+          fresh_inventory immediate
+          cleanup_pending=true
+          if cmp --silent plan/cleanup_plan.json immediate-plan.json; then
+            :
+          elif is_reviewed_post_subset immediate-plan.json; then
+            cleanup_pending=false
+            echo "cleanup already converged to an exact reviewed subset"
+          else
+            echo "::error::live revisions changed after the reviewed dry run"
+            exit 2
+          fi
+          # The reviewed run id, plan digest and literal confirmation are durable workflow inputs.
+          # If cancellation follows Azure acceptance, a fresh inventory can safely re-authorize
+          # the same idempotent max=1 write; no traffic or activation recovery is required.
+          if [ "$cleanup_pending" = "true" ]; then
+            app_id=$(az_retry az containerapp show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+              --query id -o tsv)
+            body=$(jq -cn '{properties:{configuration:{maxInactiveRevisions:1}}}')
+            az_retry az rest --method patch --uri "$app_id?api-version=2025-01-01" \
+              --headers 'Content-Type=application/json' --body "$body" --output none
+          fi
+          for attempt in $(seq 1 24); do
+            observed=$(az containerapp show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+              --query properties.configuration.maxInactiveRevisions -o tsv 2>/dev/null || true)
+            [ "$observed" = "1" ] && break
+            sleep 5
+          done
+          [ "$observed" = "1" ] \
+            || { echo "::error::maxInactiveRevisions=1 did not converge"; exit 1; }
+
+          fresh_inventory post
+          is_reviewed_post_subset post-plan.json \
+            || { echo "::error::post-cleanup identities are not an exact reviewed subset"; exit 1; }
+          survivor=$(jq -er \
+            '.revisions[] | select(.active == false and .traffic_weight == 0) | .revision' \
+            post-plan.json)
+          post_sha=$(sha256sum post-plan.json | cut -d' ' -f1)
+          authority=$(jq -c .legacy_authority post-plan.json)
+          jq -n --arg schema lex-bootstrap-legacy-cleanup-receipt/1 \
+            --arg commit "$GITHUB_SHA" --arg plan "$CLEANUP_PLAN_SHA256" \
+            --arg post "$post_sha" --arg survivor "$survivor" \
+            --argjson authority "$authority" \
+            '{schema:$schema,code_commit:$commit,cleanup_plan_sha256:$plan,
+              post_plan_sha256:$post,remaining_inactive_revision:$survivor,
+              max_inactive_revisions:1,legacy_authority:$authority}' \
+            > bootstrap-legacy-cleanup-receipt.json
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: lex-bootstrap-legacy-cleanup-receipt
+          path: bootstrap-legacy-cleanup-receipt.json
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Cleanup summary
+        shell: bash
+        run: |
+          {
+            echo "## One-time first-release legacy cleanup"
+            echo
+            echo "- reviewed plan: \`$CLEANUP_PLAN_SHA256\`"
+            echo "- maxInactiveRevisions: \`1\`"
+            echo "- traffic or activation mutation: \`false\`"
+            echo "- current A remained active at 100%: \`true\`"
+            echo "- one inactive record remains and will be replaced by exact R: \`true\`"
+          } >> "$GITHUB_STEP_SUMMARY"

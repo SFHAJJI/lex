@@ -59,11 +59,13 @@ public sealed class ReleaseWorkflowTests
         var candidateBlock = workflow[candidateStart..candidateEnd];
 
         var promoteStart = workflow.IndexOf("\n      promote:", StringComparison.Ordinal);
-        var promoteEnd = workflow.IndexOf("\n  repository_dispatch:", promoteStart,
+        var promoteEnd = workflow.IndexOf("\n      bootstrap_first_official:", promoteStart,
             StringComparison.Ordinal);
         Assert.True(promoteStart >= 0 && promoteEnd > promoteStart);
         Assert.Contains("default: false", workflow[promoteStart..promoteEnd]);
         Assert.Contains("Promote only with revision-traffic.yml", workflow);
+        Assert.DoesNotContain("repository_dispatch:", workflow);
+        Assert.DoesNotContain("github.event.client_payload", workflow);
         Assert.DoesNotContain("- name: Promote candidate", workflow);
         Assert.Contains("$candidate=0", workflow);
         Assert.Contains("AppRequests AppDependencies AppTraces", workflow);
@@ -114,10 +116,7 @@ public sealed class ReleaseWorkflowTests
         Assert.Contains("for attempt in $(seq 1 24)", workflow);
         Assert.Contains("--silent --show-error --connect-timeout 5 --max-time 10 \"$url\"", workflow);
         Assert.Contains("revision endpoint did not return a successful response", workflow);
-        Assert.Single(Regex.Matches(workflow, Regex.Escape(
-            "revision_get \"https://$rollback_fqdn/")));
-        Assert.Contains("revision_get \"https://$rollback_fqdn/healthz\"", workflow);
-        Assert.DoesNotContain("revision_get \"https://$rollback_fqdn/readyz\"", workflow);
+        Assert.DoesNotContain("rollback_fqdn", workflow);
         Assert.Equal(2, Regex.Matches(workflow, Regex.Escape(
             "revision_get \"https://$fqdn/")).Count);
         Assert.Contains("scripts/deploy/candidate_gates.py readyz \"$MANIFEST_SET\"", workflow);
@@ -125,8 +124,6 @@ public sealed class ReleaseWorkflowTests
         Assert.Contains("scripts/deploy/candidate_gates.py eu-exact \"$MANIFEST_SET\"", workflow);
         Assert.Contains("scripts/deploy/candidate_gates.py lu-temporal", workflow);
         Assert.Contains("scripts/deploy/candidate_gates.py eu-hybrid", workflow);
-        Assert.Equal(2, Regex.Matches(workflow, Regex.Escape(
-            "{ [ \"$rollback_state\" = \"Running\" ] || [ \"$rollback_state\" = \"RunningAtMaxScale\" ]; }")).Count);
         Assert.Equal(2, Regex.Matches(workflow, Regex.Escape(
             "{ [ \"$state\" = \"Running\" ] || [ \"$state\" = \"RunningAtMaxScale\" ]; }")).Count);
         Assert.Contains("assistant_smoke=$(curl", workflow);
@@ -190,29 +187,34 @@ public sealed class ReleaseWorkflowTests
                     < workflow.IndexOf("revision activate", StringComparison.Ordinal));
         Assert.True(workflow.IndexOf("echo \"target=$TARGET_REVISION\"", StringComparison.Ordinal)
                     < workflow.IndexOf("revision activate", StringComparison.Ordinal));
-        Assert.True(workflow.IndexOf("current revision changed before verification", StringComparison.Ordinal)
-                    < workflow.IndexOf("echo \"target=$TARGET_REVISION\"", StringComparison.Ordinal));
-        Assert.Contains("PREVIOUS_REVISION: ${{ steps.traffic.outputs.previous }}", workflow);
-        Assert.Contains("steps.traffic.outputs.target || steps.candidate.outputs.target", workflow);
-        Assert.Contains("failed to deactivate the candidate without changing traffic", workflow);
-        Assert.DoesNotContain("steps.candidate.outputs.previous", workflow);
+        var exactPreparation = workflow.IndexOf(
+            "traffic preparation is not the exact bounded steady state", StringComparison.Ordinal);
+        Assert.True(exactPreparation >= 0
+                    && exactPreparation < workflow.IndexOf(
+                        "echo \"target=$TARGET_REVISION\"", StringComparison.Ordinal));
+        Assert.Contains("PREVIOUS_REVISION: ${{ steps.traffic_authority.outputs.previous || steps.candidate.outputs.previous }}", workflow);
+        Assert.Contains("TRAFFIC_ATTEMPTED: ${{ steps.traffic_authority.outputs.attempted }}", workflow);
+        Assert.Contains("steps.traffic_authority.outputs.target || steps.candidate.outputs.target", workflow);
+        Assert.Contains("non-switch recovery did not converge", workflow);
         Assert.Contains("refusing recovery with identical revisions", workflow);
         Assert.Contains("expected exactly one active public quota authority", workflow);
-        Assert.Contains("name != '$ROLLBACK_REVISION' && properties.active", workflow);
+        Assert.DoesNotContain("name != '$ROLLBACK_REVISION' && properties.active", workflow);
+        Assert.DoesNotContain("name != '$PREVIOUS_REVISION' && properties.active", workflow);
         Assert.Contains("revision-weight", workflow);
         Assert.Contains("trap restore_previous ERR", workflow);
         Assert.Contains("trap restore_previous ERR TERM INT", workflow);
         Assert.Contains("for attempt in $(seq 1 5)", workflow);
-        Assert.Contains("failed to deactivate and verify the target revision", workflow);
+        Assert.Contains("failed to deactivate and verify revision", workflow);
         Assert.Contains("target_active", workflow);
         Assert.Contains("failed to restore and verify the previous revision", workflow);
         Assert.Contains("prior_promotion_deployment", workflow);
         Assert.Contains("lex-revision-promotion", workflow);
-        Assert.Contains("previous promotion receipt does not bind the target revision", workflow);
-        Assert.Contains("previous promotion receipt does not bind the evaluation release", workflow);
-        Assert.Contains("previous promotion receipt is not successful", workflow);
+        Assert.Contains("release_authorization.py", workflow);
+        Assert.Contains("an exact successful current release-state deployment is required", workflow);
+        Assert.Contains("current release-state deployment is not successful", workflow);
+        Assert.Contains("current production image differs from its release receipt", workflow);
         Assert.Contains("--allow-older-previously-promoted-evidence", workflow);
-        Assert.Contains("Record successful promotion receipt", workflow);
+        Assert.Contains("Record successful release-state receipt", workflow);
     }
 
     [Fact]
@@ -231,7 +233,11 @@ public sealed class ReleaseWorkflowTests
             .Replace("\r\n", "\n", StringComparison.Ordinal);
 
         Assert.Contains(". scripts/deploy/az-reauth.sh", workflow);
-        var calls = Regex.Matches(workflow, @"(?m)^\s*az_reauth\s*$").Count;
+        var candidateEnd = workflow.IndexOf(
+            "\n      - name: Enforce one active public quota authority", StringComparison.Ordinal);
+        Assert.True(candidateEnd > 0);
+        var candidate = workflow[..candidateEnd];
+        var calls = Regex.Matches(candidate, @"(?m)^\s*az_reauth\s*$").Count;
         Assert.Equal(2, calls);
 
         // Before the metric poll, and before the telemetry probe that sits beyond it.
@@ -393,6 +399,481 @@ public sealed class ReleaseWorkflowTests
         Assert.Contains("assignable_scopes = [\"/subscriptions/${var.subscription_id}\"]", role);
         Assert.DoesNotContain("log_analytics_resource_group_id", terraform);
         Assert.Contains("scope              = data.azurerm_application_insights.web.workspace_id", terraform[end..]);
+    }
+
+    [Fact]
+    public void Rollback_has_an_explicit_symmetric_steady_state_path()
+    {
+        var workflow = File.ReadAllText(
+            Path.Combine(RepoRoot(), ".github", "workflows", "revision-traffic.yml"));
+        var authorization = File.ReadAllText(
+            Path.Combine(RepoRoot(), "scripts", "deploy", "release_authorization.py"));
+
+        Assert.Contains("rollback requires maxInactiveRevisions=1", workflow);
+        Assert.Contains("rollback requires no inactive revisions after target activation", workflow);
+        Assert.Contains("receipt does not bind the requested rollback target", authorization);
+        Assert.Contains("new_rollback_authorization", authorization);
+        Assert.Contains("rollback_authorization", workflow);
+        Assert.Contains("if [ \"$OPERATION\" = \"promote\" ]; then", workflow);
+        Assert.Contains("rollback_image=\"$current_image\"", workflow);
+        Assert.Contains("ROLLBACK_REVISION=\"$EXPECTED_CURRENT_REVISION\"", workflow);
+        Assert.Contains(
+            "assert_revision_state 1 \"$TARGET_REVISION\" \"$ROLLBACK_REVISION\"",
+            workflow);
+        Assert.Contains("equivalent_first_release_fallback", workflow);
+        Assert.Contains("--established-release-state", workflow);
+    }
+
+    [Fact]
+    public void Heartbeat_reads_generated_fleet_status_and_unwraps_streamable_http()
+    {
+        var workflow = File.ReadAllText(
+            Path.Combine(RepoRoot(), ".github", "workflows", "heartbeat.yml"));
+
+        Assert.Contains("repos/SFHAJJI/lex-ops/commits/fleet-status", workflow);
+        Assert.Contains("Accept: application/json, text/event-stream", workflow);
+        Assert.Contains("sed -n 's/^data: //p'", workflow);
+        Assert.DoesNotContain("repos/SFHAJJI/lex-ops/commits --jq", workflow);
+        Assert.DoesNotContain("lex-ops is private", workflow);
+        Assert.DoesNotContain("LEX_OPS_TOKEN", workflow);
+    }
+
+    [Fact]
+    public void Local_evaluation_tools_require_PowerShell_7_2_before_work()
+    {
+        foreach (var relative in new[]
+                 {
+                     Path.Combine("evals", "run-assistant-eval.ps1"),
+                     Path.Combine("evals", "sign-assistant-review.ps1"),
+                     Path.Combine("deploy", "publish-assistant-evaluation.ps1"),
+                 })
+        {
+            var script = File.ReadAllText(Path.Combine(RepoRoot(), relative));
+            Assert.StartsWith("#Requires -Version 7.2", script);
+        }
+    }
+
+    [Fact]
+    public void Azure_transients_use_the_shared_bounded_retry_contract()
+    {
+        var deploy = File.ReadAllText(Path.Combine(RepoRoot(), ".github", "workflows", "deploy.yml"));
+        var traffic = File.ReadAllText(
+            Path.Combine(RepoRoot(), ".github", "workflows", "revision-traffic.yml"));
+        var retry = File.ReadAllText(Path.Combine(RepoRoot(), "scripts", "deploy", "az-retry.sh"));
+
+        Assert.Contains("az_retry az monitor app-insights query", deploy);
+        Assert.Contains(". scripts/deploy/az-retry.sh", traffic);
+        Assert.Contains(". scripts/deploy/az-reauth.sh", traffic);
+        Assert.Contains("az_retry az containerapp revision activate", traffic);
+        Assert.Contains("az_retry az containerapp ingress traffic set", traffic);
+        Assert.Contains("TooManyRequests", retry);
+        Assert.Contains("ServiceUnavailable", retry);
+        Assert.Contains("AADSTS700024", retry);
+        Assert.Contains("_azt_max", retry);
+    }
+
+    [Fact]
+    public void Revision_retention_counts_only_inactive_revisions()
+    {
+        var deploy = File.ReadAllText(Path.Combine(RepoRoot(), ".github", "workflows", "deploy.yml"));
+        var traffic = File.ReadAllText(
+            Path.Combine(RepoRoot(), ".github", "workflows", "revision-traffic.yml"));
+
+        Assert.DoesNotContain("maxInactiveRevisions:0", deploy);
+        Assert.Contains("maxInactiveRevisions:2", deploy);
+        Assert.Contains("an unresolved candidate or legacy inactive revision exists", deploy);
+        Assert.Contains("candidate retention state was not reconciled", deploy);
+        Assert.Contains("trap finish_cleanup EXIT", deploy);
+        Assert.True(
+            deploy.IndexOf("trap finish_cleanup EXIT", StringComparison.Ordinal)
+            < deploy.IndexOf("maxInactiveRevisions:2", StringComparison.Ordinal));
+        Assert.DoesNotContain("maxInactiveRevisions:0", traffic);
+        Assert.DoesNotContain("maxInactiveRevisions:100", traffic);
+        Assert.Contains("set_inactive_limit 1", traffic);
+        Assert.True(
+            traffic.IndexOf("set_inactive_limit 1", StringComparison.Ordinal)
+            < traffic.IndexOf("az_retry az containerapp ingress traffic set", StringComparison.Ordinal));
+        Assert.DoesNotContain("pinned_rollback_suffix", traffic);
+        Assert.DoesNotContain("set_inactive_limit 3", traffic);
+        Assert.DoesNotContain("pinned-rollback.json", traffic);
+        Assert.Contains("--created-order", traffic);
+        Assert.Contains("$prior_rollback,$EXPECTED_CURRENT_REVISION,$TARGET_REVISION", traffic);
+        Assert.Contains("assert_revision_state 1", traffic);
+        Assert.Contains("exact previous revision remains the sole inactive rollback", traffic);
+    }
+
+    [Fact]
+    public void Promotion_retains_the_exact_evaluated_current_revision_in_chronological_order()
+    {
+        var workflow = File.ReadAllText(
+            Path.Combine(RepoRoot(), ".github", "workflows", "revision-traffic.yml"));
+
+        Assert.Contains("assert_revision_state 2", workflow);
+        Assert.Contains("$prior_rollback,$EXPECTED_CURRENT_REVISION,$TARGET_REVISION", workflow);
+        Assert.Contains("ROLLBACK_REVISION=\"$EXPECTED_CURRENT_REVISION\"", workflow);
+        Assert.Contains("rollback_image=\"$current_image\"", workflow);
+        Assert.Contains("set_inactive_limit 2", workflow);
+        Assert.Contains("set_inactive_limit 1", workflow);
+        Assert.Contains("deactivate_and_verify \"$TARGET_REVISION\"", workflow);
+        Assert.Contains("deactivate_and_verify \"$EXPECTED_CURRENT_REVISION\"", workflow);
+        Assert.DoesNotContain("revisionSuffix", workflow);
+        Assert.DoesNotContain("clone", workflow, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Receipt_failure_recovery_is_exact_and_pre_switch_recovery_never_rewrites_traffic()
+    {
+        var workflow = File.ReadAllText(
+                Path.Combine(RepoRoot(), ".github", "workflows", "revision-traffic.yml"))
+            .Replace("\r\n", "\n", StringComparison.Ordinal);
+
+        var routed = workflow.IndexOf(
+            "[ \"$routed\" = \"$TARGET_REVISION\" ]", StringComparison.Ordinal);
+        var switched = workflow.IndexOf(
+            "echo \"switched=true\" >> \"$GITHUB_OUTPUT\"", StringComparison.Ordinal);
+        var receipt = workflow.IndexOf(
+            "- name: Record successful release-state receipt", StringComparison.Ordinal);
+        Assert.True(routed >= 0 && switched > routed && receipt > switched);
+
+        var recovery = workflow.IndexOf(
+            "- name: Restore previous revision after an interrupted or failed switch",
+            StringComparison.Ordinal);
+        var summary = workflow.IndexOf("- name: Traffic operation summary", recovery,
+            StringComparison.Ordinal);
+        Assert.True(recovery >= 0 && summary > recovery);
+        var recoveryBlock = workflow[recovery..summary];
+        var authority = workflow.IndexOf("- name: Persist traffic mutation authority",
+            StringComparison.Ordinal);
+        var trafficCall = workflow.IndexOf("az_retry az containerapp ingress traffic set",
+            authority, StringComparison.Ordinal);
+        Assert.True(authority >= 0 && trafficCall > authority);
+        Assert.Contains("echo \"attempted=true\" >> \"$GITHUB_OUTPUT\"",
+            workflow[authority..trafficCall]);
+        Assert.Contains("TRAFFIC_ATTEMPTED", recoveryBlock);
+        Assert.Contains("live_routes=$(az containerapp revision list", recoveryBlock);
+        var noRewrite = recoveryBlock.IndexOf(
+            "if [ \"$previous_weight\" = \"100\" ] && [ \"$target_weight\" = \"0\" ]; then",
+            StringComparison.Ordinal);
+        var targetBranch = recoveryBlock.IndexOf(
+            "if [ \"$TRAFFIC_ATTEMPTED\" != \"true\" ]; then",
+            noRewrite, StringComparison.Ordinal);
+        Assert.True(noRewrite >= 0 && targetBranch > noRewrite);
+        Assert.DoesNotContain("ingress traffic set", recoveryBlock[noRewrite..targetBranch]);
+        Assert.Contains("set_inactive_limit 2", recoveryBlock);
+        Assert.Contains("deactivate_and_verify \"$TARGET_REVISION\"", recoveryBlock);
+        Assert.Contains("refusing a stale recovery rewrite", recoveryBlock);
+        Assert.Contains(
+            "assert_revision_state 1 \"$PREVIOUS_REVISION\" \"$TARGET_REVISION\" \"$PREVIOUS_REVISION=100\"",
+            recoveryBlock);
+        Assert.Contains("failed/unreceipted traffic operation", recoveryBlock);
+        Assert.Contains("operator reconciliation is required", recoveryBlock);
+        Assert.DoesNotContain("name != '$PREVIOUS_REVISION' && properties.active", recoveryBlock);
+    }
+
+    [Fact]
+    public void First_release_fallback_rollback_verifies_c_and_the_signed_equivalence_chain()
+    {
+        var workflow = File.ReadAllText(
+                Path.Combine(RepoRoot(), ".github", "workflows", "revision-traffic.yml"))
+            .Replace("\r\n", "\n", StringComparison.Ordinal);
+        var evidence = workflow.IndexOf(
+            "- name: Verify signed assistant evaluation against the exact target",
+            StringComparison.Ordinal);
+        var authority = workflow.IndexOf("- name: Persist traffic mutation authority", evidence,
+            StringComparison.Ordinal);
+        Assert.True(evidence >= 0 && authority > evidence);
+        var block = workflow[evidence..authority];
+
+        Assert.Contains("lex-first-release-receipt/1", block);
+        Assert.Contains("authorize-equivalent-first-release-fallback", block);
+        Assert.Contains("azure_tenant_id", block);
+        Assert.Contains("azure_subscription_id", block);
+        Assert.Contains("bootstrap_package_sha256", block);
+        Assert.Contains("gh attestation verify", block);
+        Assert.Contains("--signer-workflow", block);
+        Assert.Contains("--source-digest", block);
+        Assert.Contains("first-release receipt attestation predicate differs", block);
+        Assert.Contains("--source-ref refs/heads/main", block);
+        Assert.Contains("first-release rollback package differs from its successful receipt", block);
+        Assert.Contains("--candidate-revision \"$EXPECTED_CURRENT_REVISION\"", block);
+        Assert.Contains("--rollback-revision \"$TARGET_REVISION\"", block);
+        Assert.Contains("--established-release-state", block);
+        Assert.Contains("assistant-eval verify-bootstrap-equivalence", block);
+        Assert.Contains("authorization_kind", block);
+        Assert.Contains("target_authorization.source_deployment_id", block);
+        Assert.Contains("first-release authority deployment is not successful", block);
+
+        var traffic = workflow.IndexOf("- name: Switch exact revision traffic", authority,
+            StringComparison.Ordinal);
+        var trafficCall = workflow.IndexOf("az_retry az containerapp ingress traffic set", traffic,
+            StringComparison.Ordinal);
+        var immediate = workflow.IndexOf(
+            "bootstrap fallback live state changed before traffic", traffic,
+            StringComparison.Ordinal);
+        Assert.True(traffic >= 0 && immediate > traffic && trafficCall > immediate);
+        Assert.Contains("revision_template_digest.py", workflow[traffic..trafficCall]);
+        Assert.Contains("--all -o json", workflow[traffic..trafficCall]);
+
+        var receipt = workflow.IndexOf("- name: Record successful release-state receipt",
+            trafficCall, StringComparison.Ordinal);
+        Assert.True(receipt > trafficCall);
+        Assert.Contains("lex-release-state-receipt/3", workflow[receipt..]);
+        Assert.Contains("source_deployment_id", workflow[receipt..]);
+        Assert.Contains("signed_package_sha256", workflow[receipt..]);
+        Assert.Contains("evidence_release", workflow[receipt..]);
+        Assert.Contains("rollback_authorization", workflow[receipt..]);
+    }
+
+    [Fact]
+    public void Retention_inventory_is_dry_run_and_receipts_bind_image_identities()
+    {
+        var inventory = File.ReadAllText(
+            Path.Combine(RepoRoot(), ".github", "workflows", "retention-inventory.yml"));
+        var traffic = File.ReadAllText(
+            Path.Combine(RepoRoot(), ".github", "workflows", "revision-traffic.yml"));
+
+        Assert.Contains("retention_plan.py", inventory);
+        Assert.Contains("az containerapp revision list", inventory);
+        Assert.Contains("az acr manifest list-metadata", inventory);
+        Assert.Contains("lex-retention-inventory/1", inventory);
+        Assert.DoesNotContain("az acr repository delete", inventory);
+        Assert.DoesNotContain("az storage blob delete", inventory);
+        Assert.Contains("target_image", traffic);
+        Assert.Contains("rollback_image", traffic);
+        Assert.Contains("rollback_revision", traffic);
+        Assert.Contains("operation: $operation", traffic);
+        Assert.DoesNotContain("if: ${{ inputs.operation == 'promote' }}", traffic);
+
+        var terraform = File.ReadAllText(Path.Combine(RepoRoot(), "infra", "main.tf"));
+        Assert.Contains("resource \"azurerm_role_assignment\" \"deploy_acr_inventory_reader\"", terraform);
+        Assert.Contains("role_definition_name = \"AcrPull\"", terraform);
+    }
+
+    [Fact]
+    public void Legacy_bootstrap_requires_exact_candidate_evaluation_and_signed_fallback_equivalence()
+    {
+        var bootstrap = File.ReadAllText(
+            Path.Combine(RepoRoot(), ".github", "workflows", "bootstrap-release-state.yml"));
+
+        Assert.Contains("deployments: write", bootstrap);
+        Assert.Contains("assistant_evaluation_release", bootstrap);
+        Assert.Contains("assistant-eval verify-release", bootstrap);
+        Assert.Contains("--candidate-revision \"$PRODUCTION_REVISION\"", bootstrap);
+        Assert.Contains("bootstrap-equivalence.json", bootstrap);
+        Assert.Contains("assistant-eval verify-bootstrap-equivalence", bootstrap);
+        Assert.Contains("--rollback-revision \"$ROLLBACK_REVISION\"", bootstrap);
+        var verifyRelease = bootstrap.IndexOf("assistant-eval verify-release", StringComparison.Ordinal);
+        var verifyEquivalence = bootstrap.IndexOf(
+            "assistant-eval verify-bootstrap-equivalence", StringComparison.Ordinal);
+        var trafficAuthority = bootstrap.IndexOf(
+            "- name: Persist bootstrap traffic mutation authority", verifyEquivalence,
+            StringComparison.Ordinal);
+        Assert.True(verifyRelease >= 0 && verifyEquivalence > verifyRelease
+            && trafficAuthority > verifyEquivalence);
+        Assert.DoesNotContain("--legacy-authority-revision",
+            bootstrap[verifyRelease..verifyEquivalence]);
+        Assert.Contains("--legacy-authority-revision \"${{ steps.plan.outputs.legacy_current }}\"",
+            bootstrap[verifyEquivalence..trafficAuthority]);
+        Assert.Contains("--cases-sha256 \"$cases_sha\"",
+            bootstrap[verifyEquivalence..trafficAuthority]);
+        Assert.Contains("cleanup_plan.json", bootstrap);
+        Assert.Contains("expected_image_digest", bootstrap);
+        Assert.Contains("set_inactive_limit 1", bootstrap);
+        Assert.Contains("assert_revision_state \"$PRODUCTION_REVISION\"", bootstrap);
+        Assert.Contains("operation:\"bootstrap\"", bootstrap);
+        Assert.Contains("schema:\"lex-first-release-receipt/1\"", bootstrap);
+        Assert.Contains("purpose:\"authorize-equivalent-first-release-fallback\"", bootstrap);
+        Assert.Contains("bootstrap_package_sha256", bootstrap);
+        Assert.Contains("azure_tenant_id", bootstrap);
+        Assert.Contains("azure_subscription_id", bootstrap);
+        Assert.Contains("attestations: write", bootstrap);
+        Assert.Contains("uses: actions/attest@f057fd524d485ac48d9b534c235aad15b5bb303f", bootstrap);
+        Assert.Contains("predicate-type: https://law.soufien.lu/attestations/first-release-fallback/v1", bootstrap);
+        Assert.Contains("signed_receipt_sha256", bootstrap);
+        Assert.DoesNotContain("maxInactiveRevisions:0", bootstrap);
+        Assert.DoesNotContain("maxInactiveRevisions:100", bootstrap);
+        Assert.DoesNotContain("revision delete", bootstrap, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Bootstrap_failure_recovery_abandons_c_before_switch_and_restores_r_after_a_purge()
+    {
+        var bootstrap = File.ReadAllText(
+                Path.Combine(RepoRoot(), ".github", "workflows", "bootstrap-release-state.yml"))
+            .Replace("\r\n", "\n", StringComparison.Ordinal);
+        var recovery = bootstrap.IndexOf(
+            "- name: Restore the signed fallback after an unreceipted bootstrap switch",
+            StringComparison.Ordinal);
+        var cleanup = bootstrap.IndexOf(
+            "- name: Record shared-resource cleanup prerequisites", recovery,
+            StringComparison.Ordinal);
+        Assert.True(recovery >= 0 && cleanup > recovery);
+        var block = bootstrap[recovery..cleanup];
+        var deactivateC = block.IndexOf("--revision \"$PRODUCTION_REVISION\"",
+            StringComparison.Ordinal);
+        var preSwitch = block.IndexOf("if [ \"$TRAFFIC_ATTEMPTED\" != \"true\" ]; then",
+            StringComparison.Ordinal);
+        var preSwitchEnd = block.IndexOf("fi\n\n          live_routes", preSwitch,
+            StringComparison.Ordinal);
+        Assert.True(deactivateC >= 0 && preSwitch >= 0 && preSwitchEnd > preSwitch);
+        Assert.DoesNotContain("ingress traffic set", block[preSwitch..preSwitchEnd]);
+        Assert.DoesNotContain("deactivate", block[preSwitch..preSwitchEnd]);
+        Assert.Contains("assert_state 1 \"$LEGACY_CURRENT_REVISION,$PRODUCTION_REVISION\"",
+            block[preSwitch..preSwitchEnd]);
+        Assert.Contains("assert_state 1 \"$LEGACY_CURRENT_REVISION\"", block);
+        Assert.DoesNotContain("set_inactive_limit 2", block);
+        var restoreFallback = block.IndexOf("restore_signed_fallback()", StringComparison.Ordinal);
+        Assert.True(restoreFallback >= 0 && restoreFallback < preSwitch);
+        Assert.Contains("set_inactive_limit 1", block[restoreFallback..preSwitch]);
+        Assert.Contains("restore_signed_fallback", block[preSwitchEnd..]);
+        Assert.Contains("--revision-weight \"$ROLLBACK_REVISION=100\"", block);
+        Assert.Contains("assert_state 1 \"$ROLLBACK_REVISION\" \"$PRODUCTION_REVISION\"", block);
+        Assert.Contains("legacy A recoverable: \\`false\\`", block);
+        Assert.Contains("live_routes=$(az containerapp revision list", block);
+        Assert.Contains("restore_legacy_authority true", block);
+        Assert.Contains("partial bootstrap traffic recovery", block);
+        Assert.Contains("restore_signed_fallback", block);
+        Assert.Contains("refusing fallback recovery with unknown revision identities", block);
+        Assert.DoesNotContain("name != '$ROLLBACK_REVISION' && properties.active", block);
+
+        var authority = bootstrap.IndexOf("- name: Persist bootstrap traffic mutation authority",
+            StringComparison.Ordinal);
+        var traffic = bootstrap.IndexOf("az_retry az containerapp ingress traffic set", authority,
+            StringComparison.Ordinal);
+        Assert.True(authority >= 0 && traffic > authority);
+        Assert.Contains("echo \"attempted=true\" >> \"$GITHUB_OUTPUT\"",
+            bootstrap[authority..traffic]);
+        Assert.Contains("C must be active and zero traffic before maxInactiveRevisions=1", bootstrap);
+
+        var receipt = bootstrap.IndexOf("- name: Record first official release-state receipt",
+            StringComparison.Ordinal);
+        Assert.True(receipt >= 0 && recovery > receipt && cleanup > recovery);
+    }
+
+    [Fact]
+    public void Bootstrap_deployment_creates_r_before_c_from_one_canonical_template_and_image()
+    {
+        var deploy = File.ReadAllText(
+            Path.Combine(RepoRoot(), ".github", "workflows", "deploy.yml"));
+
+        Assert.Contains("bootstrap_first_official", deploy);
+        Assert.Contains("bootstrap_cleanup_run_id", deploy);
+        Assert.Contains("lex-bootstrap-legacy-cleanup-receipt", deploy);
+        Assert.Contains("bootstrap-legacy-cleanup-receipt/1", deploy);
+        var fallback = deploy.IndexOf("--body @bootstrap-fallback.json", StringComparison.Ordinal);
+        var deactivateFallback = deploy.IndexOf("deactivate_revision \"$bootstrap_fallback\"",
+            fallback, StringComparison.Ordinal);
+        var candidate = deploy.IndexOf("--body @candidate.json", fallback,
+            StringComparison.Ordinal);
+        Assert.True(fallback >= 0 && deactivateFallback > fallback && candidate > deactivateFallback);
+        Assert.Contains("revision_template_digest.py", deploy);
+        Assert.Contains("canonical_template_digest", deploy);
+        Assert.Contains("fallback_created", deploy);
+        Assert.Contains("candidate_created", deploy);
+        Assert.Contains("bootstrap chronology must be exact A < R < C", deploy);
+        Assert.Contains("bootstrap_fallback", deploy);
+        Assert.Contains("R did not replace the final legacy inactive revision", deploy);
+        Assert.Contains("LEX_ASSISTANT_EVAL_CATALOG_SHA256", deploy);
+        var enforcement = deploy.IndexOf(
+            "- name: Enforce one active public quota authority", StringComparison.Ordinal);
+        var summary = deploy.IndexOf("- name: Deployment summary", enforcement,
+            StringComparison.Ordinal);
+        Assert.True(enforcement >= 0 && summary > enforcement);
+        var enforcementBlock = deploy[enforcement..summary];
+        var preserveBootstrap = enforcementBlock.IndexOf(
+            "bootstrap candidate preparation did not remain exact", StringComparison.Ordinal);
+        var genericAssertion = enforcementBlock.IndexOf(
+            "expected exactly one active public quota authority", StringComparison.Ordinal);
+        Assert.True(preserveBootstrap >= 0 && genericAssertion > preserveBootstrap);
+        Assert.Contains("CANDIDATE_OUTCOME", enforcementBlock);
+        Assert.DoesNotContain("revision deactivate", enforcementBlock);
+        Assert.DoesNotContain("maxInactiveRevisions:0", deploy);
+        Assert.DoesNotContain("maxInactiveRevisions:100", deploy);
+    }
+
+    [Fact]
+    public void One_time_legacy_cleanup_is_separate_reviewed_and_never_changes_traffic_or_activation()
+    {
+        var inventory = File.ReadAllText(Path.Combine(
+            RepoRoot(), ".github", "workflows", "bootstrap-legacy-inventory.yml"));
+        var cleanup = File.ReadAllText(Path.Combine(
+            RepoRoot(), ".github", "workflows", "bootstrap-legacy-cleanup.yml"));
+
+        Assert.Contains("bootstrap_legacy_plan.py", inventory);
+        Assert.Contains("mutations performed: \\`false\\`", inventory);
+        Assert.Contains("purge-legacy-inactive-for-first-official", cleanup);
+        Assert.Contains("cmp --silent plan/cleanup_plan.json immediate-plan.json", cleanup);
+        Assert.Contains("cleanup already converged to an exact reviewed subset", cleanup);
+        Assert.Contains("maxInactiveRevisions:1", cleanup);
+        Assert.Contains("post-cleanup identities are not an exact reviewed subset", cleanup);
+        Assert.DoesNotContain("ingress traffic set", cleanup);
+        Assert.DoesNotContain("revision activate", cleanup);
+        Assert.DoesNotContain("revision deactivate", cleanup);
+    }
+
+    [Fact]
+    public void Every_container_app_revision_list_reads_the_complete_inventory()
+    {
+        var workflows = new[]
+        {
+            "deploy.yml",
+            "revision-traffic.yml",
+            "bootstrap-abandon.yml",
+            "bootstrap-inventory.yml",
+            "bootstrap-legacy-inventory.yml",
+            "bootstrap-legacy-cleanup.yml",
+            "bootstrap-release-state.yml",
+            "retention-inventory.yml",
+        };
+        foreach (var workflowName in workflows)
+        {
+            var workflow = File.ReadAllText(Path.Combine(
+                    RepoRoot(), ".github", "workflows", workflowName))
+                .Replace("\\\r\n", " ", StringComparison.Ordinal)
+                .Replace("\\\n", " ", StringComparison.Ordinal);
+            var calls = System.Text.RegularExpressions.Regex.Matches(
+                workflow, @"az(?:_retry)?\s+containerapp\s+revision\s+list\b[^\r\n]*");
+            Assert.NotEmpty(calls);
+            foreach (System.Text.RegularExpressions.Match call in calls)
+                Assert.Contains("--all", call.Value, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public void Bootstrap_abandon_is_exact_idempotent_and_never_rewrites_traffic()
+    {
+        var workflow = File.ReadAllText(Path.Combine(
+            RepoRoot(), ".github", "workflows", "bootstrap-abandon.yml"));
+
+        Assert.Contains("abandon-first-release-candidate", workflow);
+        Assert.Contains("refusing to abandon outside exact A/R/C preparation", workflow);
+        Assert.Contains("bootstrap C was already abandoned safely", workflow);
+        Assert.Contains("bootstrap abandon requires exact A < R < C chronology", workflow);
+        Assert.Contains("--revision \"$CANDIDATE_REVISION\"", workflow);
+        Assert.Contains("length == 2", workflow);
+        Assert.DoesNotContain("ingress traffic set", workflow);
+        Assert.DoesNotContain("maxInactiveRevisions:0", workflow);
+        Assert.DoesNotContain("maxInactiveRevisions:100", workflow);
+    }
+
+    [Fact]
+    public void Every_production_mutation_workflow_is_main_ref_only()
+    {
+        var workflows = new[]
+        {
+            "deploy.yml",
+            "revision-traffic.yml",
+            "bootstrap-abandon.yml",
+            "bootstrap-legacy-cleanup.yml",
+            "bootstrap-release-state.yml",
+        };
+        foreach (var workflowName in workflows)
+        {
+            var workflow = File.ReadAllText(Path.Combine(
+                RepoRoot(), ".github", "workflows", workflowName));
+            Assert.Contains("if: github.ref == 'refs/heads/main'", workflow);
+            Assert.Contains("environment: production", workflow);
+        }
     }
 
     private static string RepoRoot()

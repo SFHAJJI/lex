@@ -131,6 +131,87 @@ switch (args0[0])
             }));
             return 0;
         }
+        if (args0.Length > 1 && args0[1] == "verify-bootstrap-equivalence")
+        {
+            var root = Path.GetFullPath(
+                Get("--root") ?? throw new ArgumentException("--root required"));
+            var containerAppResourceId = Get("--candidate-container-app-resource-id")
+                ?? throw new ArgumentException(
+                    "--candidate-container-app-resource-id required");
+            var bootstrapCandidateRevision = Get("--candidate-revision")
+                ?? throw new ArgumentException("--candidate-revision required");
+            var bootstrapRollbackRevision = Get("--rollback-revision")
+                ?? throw new ArgumentException("--rollback-revision required");
+            var bootstrapLegacyAuthorityRevision = Get("--legacy-authority-revision")
+                ?? throw new ArgumentException("--legacy-authority-revision required");
+            var bootstrapCasesSha256 = Get("--cases-sha256")
+                ?? throw new ArgumentException("--cases-sha256 required");
+            var manifestPath = Get("--manifest")
+                ?? throw new ArgumentException("--manifest required");
+            var signaturePath = Get("--signature")
+                ?? throw new ArgumentException("--signature required");
+            var equivalencePath = Get("--equivalence")
+                ?? throw new ArgumentException("--equivalence required");
+            var evaluationRelease = Get("--evaluation-release")
+                ?? throw new ArgumentException("--evaluation-release required");
+            var canonicalTemplateDigest = Get("--canonical-template-digest")
+                ?? throw new ArgumentException("--canonical-template-digest required");
+            var imageDigest = Get("--image-digest")
+                ?? throw new ArgumentException("--image-digest required");
+            var trustRootsPath = Get("--trust-roots")
+                ?? throw new ArgumentException("--trust-roots required");
+            var artifactRoots = ArtifactManifests.ParseTrustRoots(File.ReadAllBytes(
+                trustRootsPath));
+            var establishedReleaseState = Array.IndexOf(
+                args0, "--established-release-state") >= 0;
+            BootstrapEquivalenceVerifier.ValidateInvocation(
+                root, manifestPath, signaturePath, equivalencePath, artifactRoots,
+                containerAppResourceId, bootstrapLegacyAuthorityRevision,
+                bootstrapCandidateRevision, bootstrapRollbackRevision, evaluationRelease,
+                canonicalTemplateDigest, imageDigest, bootstrapCasesSha256, now,
+                establishedReleaseState);
+            using var verificationHttp = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+            using var verificationDeadline = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+            var bootstrapResolver = new AzureModelDeploymentResolver(verificationHttp);
+            var candidateTask = bootstrapResolver.ResolveContainerAppBootstrapRevisionAsync(
+                containerAppResourceId, bootstrapCandidateRevision, verificationDeadline.Token);
+            var rollbackTask = bootstrapResolver.ResolveContainerAppBootstrapRevisionAsync(
+                containerAppResourceId, bootstrapRollbackRevision, verificationDeadline.Token);
+            var routesTask = bootstrapResolver.ResolveContainerAppBootstrapRoutesAsync(
+                containerAppResourceId, verificationDeadline.Token);
+            Task<BootstrapRevisionLiveEvidence>? legacyTask = establishedReleaseState
+                ? null
+                : bootstrapResolver.ResolveContainerAppBootstrapRevisionAsync(
+                    containerAppResourceId, bootstrapLegacyAuthorityRevision,
+                    verificationDeadline.Token);
+            var lookups = new List<Task> { candidateTask, rollbackTask, routesTask };
+            if (legacyTask is not null) lookups.Add(legacyTask);
+            await Task.WhenAll(lookups);
+            var evidence = establishedReleaseState
+                ? BootstrapEquivalenceVerifier.VerifyEstablishedFallback(
+                    root, manifestPath, signaturePath, equivalencePath, artifactRoots,
+                    containerAppResourceId, bootstrapLegacyAuthorityRevision,
+                    bootstrapCandidateRevision, bootstrapRollbackRevision, evaluationRelease,
+                    canonicalTemplateDigest, imageDigest, bootstrapCasesSha256,
+                    await candidateTask, await rollbackTask, await routesTask, now)
+                : BootstrapEquivalenceVerifier.Verify(
+                    root, manifestPath, signaturePath, equivalencePath, artifactRoots,
+                    containerAppResourceId, bootstrapLegacyAuthorityRevision,
+                    bootstrapCandidateRevision, bootstrapRollbackRevision, evaluationRelease,
+                    canonicalTemplateDigest, imageDigest, bootstrapCasesSha256,
+                    await candidateTask, await rollbackTask, await legacyTask!,
+                    await routesTask, now);
+            Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(new
+            {
+                status = "passed",
+                schema = evidence.Schema,
+                candidate_revision = evidence.Candidate.RevisionName,
+                rollback_revision = evidence.Rollback.RevisionName,
+                legacy_authority_revision = evidence.LegacyAuthority.RevisionName,
+                evaluation_release = evidence.EvaluationRelease,
+            }));
+            return 0;
+        }
         if (args0.Length > 1 && args0[1] == "verify-report")
         {
             var verifiedCaseSet = AssistantEvaluationCatalog.Load(
@@ -772,6 +853,7 @@ static void Usage() => Console.Error.WriteLine("""
       lex assistant-eval verify-cases --cases FILE --review-attestation FILE --review-signature FILE
       lex assistant-eval verify-report --report FILE --cases FILE --review-attestation FILE --review-signature FILE --base-url REVISION_URL --candidate-container-app-resource-id AZURE_ID --candidate-revision NAME
       lex assistant-eval verify-release --root DIR --manifest FILE --signature FILE --trust-roots FILE --base-url REVISION_URL --candidate-container-app-resource-id AZURE_ID --candidate-revision NAME
+      lex assistant-eval verify-bootstrap-equivalence --root DIR --manifest FILE --signature FILE --trust-roots FILE --equivalence FILE --candidate-container-app-resource-id AZURE_ID --legacy-authority-revision NAME --candidate-revision NAME --rollback-revision NAME --evaluation-release TAG --canonical-template-digest SHA256 --image-digest SHA256 --cases-sha256 SHA256 [--established-release-state]
       lex artifact verify --root DIR --manifest FILE --signature FILE --trust-roots FILE
       lex artifact trust-root --keyfile KEY.pem --key-id ID
     """);

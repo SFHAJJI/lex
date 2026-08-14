@@ -27,9 +27,8 @@ on:
         required: true
         type: string
       prior_promotion_deployment:
-        description: Successful lex-revision-promotion deployment id; required only for rollback
-        required: false
-        default: ""
+        description: Successful deployment id for the exact current release state
+        required: true
         type: string
 
 permissions:
@@ -43,6 +42,7 @@ concurrency:
 
 jobs:
   switch:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: production
@@ -78,11 +78,14 @@ jobs:
         id: candidate
         shell: bash
         env:
+          OPERATION: ${{ inputs.operation }}
           TARGET_REVISION: ${{ inputs.revision }}
           EXPECTED_CURRENT_REVISION: ${{ inputs.expected_current_revision }}
           ROLLBACK_REVISION: ${{ inputs.rollback_revision }}
         run: |
           set -Eeuo pipefail
+          . scripts/deploy/az-retry.sh
+          . scripts/deploy/az-reauth.sh
           [[ "$TARGET_REVISION" =~ ^ca-lex-web--[a-z0-9-]+$ ]] \
             || { echo "::error::invalid target revision"; exit 2; }
           [[ "$EXPECTED_CURRENT_REVISION" =~ ^ca-lex-web--[a-z0-9-]+$ ]] \
@@ -93,10 +96,33 @@ jobs:
             || { echo "::error::target already matches expected current revision"; exit 2; }
           [ "$TARGET_REVISION" != "$ROLLBACK_REVISION" ] \
             || { echo "::error::target and rollback revisions must differ"; exit 2; }
-          current=$(az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
-            --query "[?properties.trafficWeight > \`0\`].name" -o tsv)
-          [ "$current" = "$EXPECTED_CURRENT_REVISION" ] \
-            || { echo "::error::current revision changed before verification"; exit 1; }
+          [ "$OPERATION" = "promote" ] || [ "$OPERATION" = "rollback" ] \
+            || { echo "::error::unsupported traffic operation"; exit 2; }
+          inactive_limit=$(az containerapp show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+            --query properties.configuration.maxInactiveRevisions -o tsv)
+          inventory=$(az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+            --all -o json)
+          printf '%s' "$inventory" | jq -e \
+              --arg current "$EXPECTED_CURRENT_REVISION" --arg target "$TARGET_REVISION" \
+              --arg operation "$OPERATION" --argjson limit "$inactive_limit" '
+                ($limit == (if $operation == "promote" then 2 else 1 end))
+                and (length == (if $operation == "promote" then 3 else 2 end))
+                and ([.[] | select(.properties.active == true) | .name] == [$current])
+                and ([.[] | select((.properties.trafficWeight // 0) > 0) | .name] == [$current])
+                and any(.[]; .name == $current and .properties.active == true
+                  and (.properties.trafficWeight // 0) == 100)
+                and any(.[]; .name == $target and .properties.active == false
+                  and (.properties.trafficWeight // 0) == 0)
+                and all(.[];
+                  (.name | type) == "string"
+                  and (.properties.active | type) == "boolean"
+                  and ((.properties.trafficWeight // 0) | type) == "number"
+                  and ((.properties.trafficWeight // 0) % 1) == 0
+                  and (.properties.trafficWeight // 0) >= 0
+                  and (.properties.trafficWeight // 0) <= 100
+                  and (.properties.createdTime | type) == "string"
+                  and (.properties.template.containers[0].image | type) == "string")' >/dev/null \
+            || { echo "::error::traffic preparation is not the exact bounded steady state"; exit 1; }
           target=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
             --revision "$TARGET_REVISION" \
             --query '{active:properties.active,traffic:properties.trafficWeight,min:properties.template.scale.minReplicas,max:properties.template.scale.maxReplicas}' \
@@ -112,7 +138,8 @@ jobs:
           # immediately before this workflow performs its first Azure state change.
           echo "previous=$EXPECTED_CURRENT_REVISION" >> "$GITHUB_OUTPUT"
           echo "target=$TARGET_REVISION" >> "$GITHUB_OUTPUT"
-          az containerapp revision activate -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+          az_reauth
+          az_retry az containerapp revision activate -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
             --revision "$TARGET_REVISION" --only-show-errors
           for attempt in $(seq 1 30); do
             state=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
@@ -126,10 +153,12 @@ jobs:
           exit 1
 
       - name: Verify signed assistant evaluation against the exact target
+        id: evidence
         shell: bash
         env:
           EVALUATION_RELEASE: ${{ inputs.assistant_evaluation_release }}
           TARGET_REVISION: ${{ inputs.revision }}
+          EXPECTED_CURRENT_REVISION: ${{ inputs.expected_current_revision }}
           OPERATION: ${{ inputs.operation }}
           PRIOR_PROMOTION_DEPLOYMENT: ${{ inputs.prior_promotion_deployment }}
           GH_TOKEN: ${{ github.token }}
@@ -139,58 +168,304 @@ jobs:
             || { echo "::error::a canonical signed assistant evaluation release is required"; exit 2; }
           [[ "$TARGET_REVISION" =~ ^ca-lex-web--[a-z0-9-]+$ ]] \
             || { echo "::error::invalid target revision"; exit 2; }
+          [[ "$EXPECTED_CURRENT_REVISION" =~ ^ca-lex-web--[a-z0-9-]+$ ]] \
+            || { echo "::error::invalid current revision"; exit 2; }
+          [[ "$PRIOR_PROMOTION_DEPLOYMENT" =~ ^[1-9][0-9]*$ ]] \
+            || { echo "::error::an exact successful current release-state deployment is required"; exit 2; }
           freshness_args=()
-          if [ "$OPERATION" = "rollback" ]; then
-            [[ "$PRIOR_PROMOTION_DEPLOYMENT" =~ ^[1-9][0-9]*$ ]] \
-              || { echo "::error::rollback requires a prior promotion deployment id"; exit 2; }
-            receipt=$(gh api \
-              "repos/$GITHUB_REPOSITORY/deployments/$PRIOR_PROMOTION_DEPLOYMENT")
-            [ "$(printf '%s' "$receipt" | jq -r '.task // empty')" = "lex-revision-promotion" ] \
-              || { echo "::error::deployment is not a Lex promotion receipt"; exit 2; }
-            [ "$(printf '%s' "$receipt" | jq -r '.payload.target_revision // empty')" = "$TARGET_REVISION" ] \
-              || { echo "::error::previous promotion receipt does not bind the target revision"; exit 2; }
-            [ "$(printf '%s' "$receipt" | jq -r '.payload.assistant_evaluation_release // empty')" = "$EVALUATION_RELEASE" ] \
-              || { echo "::error::previous promotion receipt does not bind the evaluation release"; exit 2; }
-            receipt_status=$(gh api \
-              "repos/$GITHUB_REPOSITORY/deployments/$PRIOR_PROMOTION_DEPLOYMENT/statuses?per_page=1" \
-              --jq '.[0].state // empty')
-            [ "$receipt_status" = "success" ] \
-              || { echo "::error::previous promotion receipt is not successful"; exit 2; }
-            freshness_args+=(--allow-older-previously-promoted-evidence)
-          elif [ -n "$PRIOR_PROMOTION_DEPLOYMENT" ]; then
-            echo "::error::prior promotion deployment is valid only for rollback"
-            exit 2
-          fi
+          bootstrap_fallback=false
+          expected_template_digest=''
+          expected_image_digest=''
+          legacy_authority_revision=''
+          evidence_dir=$(mktemp -d)
+          trap 'rm -rf "$evidence_dir"' EXIT
+          receipt=$(gh api \
+            "repos/$GITHUB_REPOSITORY/deployments/$PRIOR_PROMOTION_DEPLOYMENT")
+          receipt_status=$(gh api \
+            "repos/$GITHUB_REPOSITORY/deployments/$PRIOR_PROMOTION_DEPLOYMENT/statuses?per_page=1" \
+            --jq '.[0].state // empty')
+          [ "$receipt_status" = "success" ] \
+            || { echo "::error::current release-state deployment is not successful"; exit 2; }
+          printf '%s' "$receipt" > "$evidence_dir/prior-release-state.json"
           app_id=$(az containerapp show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
             --query id -o tsv)
           target_fqdn=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
             --revision "$TARGET_REVISION" --query properties.fqdn -o tsv)
           [ -n "$app_id" ] && [ -n "$target_fqdn" ] \
             || { echo "::error::target revision identity is incomplete"; exit 1; }
-          evidence_dir=$(mktemp -d)
-          trap 'rm -rf "$evidence_dir"' EXIT
+          python3 scripts/deploy/release_authorization.py \
+            "$evidence_dir/prior-release-state.json" \
+            --operation "$OPERATION" \
+            --current "$EXPECTED_CURRENT_REVISION" \
+            --target "$TARGET_REVISION" \
+            --evaluation-release "$EVALUATION_RELEASE" \
+            --container-app-resource-id "$app_id" \
+            --tenant-id "$AZURE_TENANT_ID" \
+            --subscription-id "$AZURE_SUBSCRIPTION_ID" \
+            > "$evidence_dir/transition-authorization.json"
+          receipt_current_image=$(jq -er '.current_image' \
+            "$evidence_dir/transition-authorization.json")
+          authorization_kind=$(jq -er '.target_authorization.kind' \
+            "$evidence_dir/transition-authorization.json")
+          authorization_evidence_release=$(jq -er '.target_authorization.evidence_release' \
+            "$evidence_dir/transition-authorization.json")
+          authorization_receipt_id=$(jq -r \
+            '.target_authorization.source_deployment_id // empty' \
+            "$evidence_dir/transition-authorization.json")
+          authorization_package_sha=$(jq -r \
+            '.target_authorization.signed_package_sha256 // empty' \
+            "$evidence_dir/transition-authorization.json")
+          rollback_authorization_kind=$(jq -er '.new_rollback_authorization.kind' \
+            "$evidence_dir/transition-authorization.json")
+          rollback_authorization_evidence_release=$(jq -er \
+            '.new_rollback_authorization.evidence_release' \
+            "$evidence_dir/transition-authorization.json")
+          rollback_authorization_receipt_id=$(jq -r \
+            '.new_rollback_authorization.source_deployment_id // empty' \
+            "$evidence_dir/transition-authorization.json")
+          rollback_authorization_package_sha=$(jq -r \
+            '.new_rollback_authorization.signed_package_sha256 // empty' \
+            "$evidence_dir/transition-authorization.json")
+          current_image_readback=$(az containerapp revision show -g "$RESOURCE_GROUP" \
+            -n "$CONTAINER_APP" --revision "$EXPECTED_CURRENT_REVISION" \
+            --query properties.template.containers[0].image -o tsv)
+          [ "$current_image_readback" \
+              = "crsoufien3orem.azurecr.io/lex-web@$receipt_current_image" ] \
+            || { echo "::error::current production image differs from its release receipt"; exit 2; }
+          if [ "$OPERATION" = "rollback" ]; then
+            receipt_rollback_image=$(jq -er '.target_image' \
+              "$evidence_dir/transition-authorization.json")
+            target_image=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+              --revision "$TARGET_REVISION" --query properties.template.containers[0].image -o tsv)
+            [ "$target_image" = "crsoufien3orem.azurecr.io/lex-web@$receipt_rollback_image" ] \
+              || { echo "::error::rollback target image differs from its promotion receipt"; exit 2; }
+            freshness_args+=(--allow-older-previously-promoted-evidence)
+            if [ "$authorization_kind" = "equivalent_first_release_fallback" ]; then
+              bootstrap_fallback=true
+              source_receipt=$(gh api \
+                "repos/$GITHUB_REPOSITORY/deployments/$authorization_receipt_id")
+              source_status=$(gh api \
+                "repos/$GITHUB_REPOSITORY/deployments/$authorization_receipt_id/statuses?per_page=1" \
+                --jq '.[0].state // empty')
+              [ "$source_status" = "success" ] \
+                || { echo "::error::first-release authority deployment is not successful"; exit 2; }
+              receipt="$source_receipt"
+              receipt_payload=$(printf '%s' "$receipt" | jq -c '.payload.signed_receipt')
+            fi
+          fi
           for asset in \
               assistant-eval-report.json \
               assistant-cases-v3.json \
               assistant-cases-v3.review.json \
               assistant-cases-v3.review.sig \
-              assistant-browser-evidence.json \
-              assistant-eval.manifest.json \
-              assistant-eval.manifest.sig; do
+               assistant-browser-evidence.json \
+               assistant-eval.manifest.json \
+               assistant-eval.manifest.sig; do
             curl --fail --show-error --silent --location --retry 3 \
               "https://github.com/SFHAJJI/lex-ops/releases/download/$EVALUATION_RELEASE/$asset" \
-              -o "$evidence_dir/$asset"
+               -o "$evidence_dir/$asset"
           done
-          dotnet run --project src/Lex.Ingest/Lex.Ingest.csproj -c Release -- \
-            assistant-eval verify-release \
-            --root "$evidence_dir" \
-            --manifest "$evidence_dir/assistant-eval.manifest.json" \
-            --signature "$evidence_dir/assistant-eval.manifest.sig" \
-            --trust-roots deploy/trusted-artifact-roots.json \
-            --base-url "https://$target_fqdn" \
-            --candidate-container-app-resource-id "$app_id" \
-            --candidate-revision "$TARGET_REVISION" \
-            "${freshness_args[@]}"
+          if [ "$bootstrap_fallback" = "true" ]; then
+            signed_receipt_sha=$(printf '%s' "$receipt" \
+              | jq -r '.payload.signed_receipt_sha256 // empty')
+            signed_receipt_attestation=$(printf '%s' "$receipt" \
+              | jq -r '.payload.signed_receipt_attestation_id // empty')
+            signed_receipt_attestation_url=$(printf '%s' "$receipt" \
+              | jq -r '.payload.signed_receipt_attestation_url // empty')
+            expected_template_digest=$(printf '%s' "$receipt_payload" \
+              | jq -r '.canonical_template_digest // empty')
+            expected_image_digest="$receipt_rollback_image"
+            legacy_authority_revision=$(printf '%s' "$receipt_payload" \
+              | jq -r '.legacy_authority_revision // empty')
+            expected_cases_sha=$(printf '%s' "$receipt_payload" \
+              | jq -r '.assistant_cases_sha256 // empty')
+            expected_report_sha=$(printf '%s' "$receipt_payload" \
+              | jq -r '.assistant_report_sha256 // empty')
+            expected_eval_manifest_sha=$(printf '%s' "$receipt_payload" \
+              | jq -r '.assistant_evaluation_manifest_sha256 // empty')
+            expected_equivalence_sha=$(printf '%s' "$receipt_payload" \
+              | jq -r '.bootstrap_equivalence_sha256 // empty')
+            expected_equivalence_manifest_sha=$(printf '%s' "$receipt_payload" \
+              | jq -r '.bootstrap_equivalence_manifest_sha256 // empty')
+            expected_package_sha=$(printf '%s' "$receipt_payload" \
+              | jq -r '.bootstrap_package_sha256 // empty')
+            receipt_source_commit=$(printf '%s' "$receipt_payload" \
+              | jq -r '.code_commit // empty')
+            [ "$(printf '%s' "$receipt" | jq -r '.environment // empty')" = "production" ] \
+              && [ "$(printf '%s' "$receipt" | jq -r '.production_environment // false')" \
+                = "true" ] \
+              && [ "$expected_package_sha" = "$authorization_package_sha" ] \
+              && [[ "$signed_receipt_sha" =~ ^[0-9a-f]{64}$ ]] \
+              && [ -n "$signed_receipt_attestation" ] \
+              && [[ "$signed_receipt_attestation_url" =~ ^https://github.com/ ]] \
+              || { echo "::error::first-release signed receipt envelope is malformed"; exit 2; }
+            printf '%s' "$receipt_payload" | jq -e \
+                --arg app "$app_id" --arg current "$EXPECTED_CURRENT_REVISION" \
+                --arg target "$TARGET_REVISION" --arg evaluation "$EVALUATION_RELEASE" \
+                --arg image "$expected_image_digest" --arg tenant "$AZURE_TENANT_ID" \
+                --arg subscription "$AZURE_SUBSCRIPTION_ID" --arg repository "$GITHUB_REPOSITORY" '
+                  .schema == "lex-first-release-receipt/1"
+                  and .purpose == "authorize-equivalent-first-release-fallback"
+                  and .issuer == "github-actions-oidc-attestation"
+                  and .repository == $repository
+                  and .workflow == ".github/workflows/bootstrap-release-state.yml"
+                  and (.run_id | test("^[1-9][0-9]*$"))
+                  and (.run_attempt | test("^[1-9][0-9]*$"))
+                  and (.code_commit | test("^[0-9a-f]{40}$"))
+                  and .environment == "production"
+                  and .operation == "bootstrap"
+                  and .rollback_kind == "equivalent_first_release_fallback"
+                  and .azure_tenant_id == $tenant
+                  and .azure_subscription_id == $subscription
+                  and .container_app_resource_id == $app
+                  and .target_revision == $current
+                  and .target_revision_resource_id == ($app + "/revisions/" + $current)
+                  and .rollback_revision == $target
+                  and .rollback_revision_resource_id == ($app + "/revisions/" + $target)
+                  and .target_image == $image
+                  and .rollback_image == $image
+                  and .assistant_evaluation_release == $evaluation
+                  and (.canonical_template_digest
+                    | test("^sha256:[0-9a-f]{64}$"))
+                  and (.assistant_cases_sha256 | test("^[0-9a-f]{64}$"))
+                  and (.assistant_report_sha256 | test("^[0-9a-f]{64}$"))
+                  and (.assistant_evaluation_manifest_sha256
+                    | test("^[0-9a-f]{64}$"))
+                  and (.bootstrap_equivalence_sha256 | test("^[0-9a-f]{64}$"))
+                  and (.bootstrap_equivalence_manifest_sha256
+                    | test("^[0-9a-f]{64}$"))
+                  and (.bootstrap_package_sha256 | test("^[0-9a-f]{64}$"))
+                  and (.cleanup_plan_sha256 | test("^[0-9a-f]{64}$"))
+                  and (.legacy_authority_revision
+                    | test("^ca-lex-web--[a-z0-9-]+$"))' >/dev/null \
+              || { echo "::error::first-release rollback receipt is malformed or cross-resource"; exit 2; }
+            printf '%s\n' "$receipt_payload" | jq -cS . \
+              > "$evidence_dir/first-release-fallback-receipt.json"
+            [ "$(sha256sum "$evidence_dir/first-release-fallback-receipt.json" | cut -d' ' -f1)" \
+                = "$signed_receipt_sha" ] \
+              || { echo "::error::first-release signed receipt digest differs"; exit 2; }
+            gh attestation verify "$evidence_dir/first-release-fallback-receipt.json" \
+              --repo "$GITHUB_REPOSITORY" \
+              --predicate-type https://law.soufien.lu/attestations/first-release-fallback/v1 \
+              --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/bootstrap-release-state.yml" \
+              --source-digest "$receipt_source_commit" \
+              --source-ref refs/heads/main \
+              --deny-self-hosted-runners --format json \
+              > "$evidence_dir/verified-receipt-attestation.json"
+            jq -e --slurpfile signed "$evidence_dir/first-release-fallback-receipt.json" '
+                length >= 1
+                and any(.[].verificationResult.statement;
+                  .predicateType
+                    == "https://law.soufien.lu/attestations/first-release-fallback/v1"
+                  and .predicate == $signed[0])' \
+              "$evidence_dir/verified-receipt-attestation.json" >/dev/null \
+              || { echo "::error::first-release receipt attestation predicate differs"; exit 2; }
+            current_fqdn=$(az containerapp revision show -g "$RESOURCE_GROUP" \
+              -n "$CONTAINER_APP" --revision "$EXPECTED_CURRENT_REVISION" \
+              --query properties.fqdn -o tsv)
+            current_image=$(az containerapp revision show -g "$RESOURCE_GROUP" \
+              -n "$CONTAINER_APP" --revision "$EXPECTED_CURRENT_REVISION" \
+              --query properties.template.containers[0].image -o tsv)
+            [ -n "$current_fqdn" ] \
+              && [ "$current_image" = "crsoufien3orem.azurecr.io/lex-web@$expected_image_digest" ] \
+              || { echo "::error::evaluated bootstrap production identity changed"; exit 2; }
+            for asset in bootstrap-equivalence.json bootstrap-equivalence.manifest.json \
+                bootstrap-equivalence.manifest.sig; do
+              curl --fail --show-error --silent --location --retry 3 \
+                "https://github.com/SFHAJJI/lex-ops/releases/download/$EVALUATION_RELEASE/$asset" \
+                -o "$evidence_dir/$asset"
+            done
+            observed_package_sha=$({
+              for asset in assistant-eval-report.json assistant-cases-v3.json \
+                  assistant-cases-v3.review.json assistant-cases-v3.review.sig \
+                  assistant-browser-evidence.json assistant-eval.manifest.json \
+                  assistant-eval.manifest.sig bootstrap-equivalence.json \
+                  bootstrap-equivalence.manifest.json bootstrap-equivalence.manifest.sig; do
+                printf '%s  %s\n' \
+                  "$(sha256sum "$evidence_dir/$asset" | cut -d' ' -f1)" "$asset"
+              done
+            } | sort -k2 | sha256sum | cut -d' ' -f1)
+            [ "$(sha256sum "$evidence_dir/assistant-cases-v3.json" | cut -d' ' -f1)" \
+                = "$expected_cases_sha" ] \
+              && [ "$(sha256sum "$evidence_dir/assistant-eval-report.json" | cut -d' ' -f1)" \
+                = "$expected_report_sha" ] \
+              && [ "$(sha256sum "$evidence_dir/assistant-eval.manifest.json" | cut -d' ' -f1)" \
+                = "$expected_eval_manifest_sha" ] \
+              && [ "$(sha256sum "$evidence_dir/bootstrap-equivalence.json" | cut -d' ' -f1)" \
+                = "$expected_equivalence_sha" ] \
+              && [ "$(sha256sum "$evidence_dir/bootstrap-equivalence.manifest.json" | cut -d' ' -f1)" \
+                = "$expected_equivalence_manifest_sha" ] \
+              && [ "$observed_package_sha" = "$expected_package_sha" ] \
+              || { echo "::error::first-release rollback package differs from its successful receipt"; exit 2; }
+            authorization_package_sha="$observed_package_sha"
+            dotnet run --project src/Lex.Ingest/Lex.Ingest.csproj -c Release -- \
+              assistant-eval verify-release \
+              --root "$evidence_dir" \
+              --manifest "$evidence_dir/assistant-eval.manifest.json" \
+              --signature "$evidence_dir/assistant-eval.manifest.sig" \
+              --trust-roots deploy/trusted-artifact-roots.json \
+              --base-url "https://$current_fqdn" \
+              --candidate-container-app-resource-id "$app_id" \
+              --candidate-revision "$EXPECTED_CURRENT_REVISION" \
+              --allow-older-previously-promoted-evidence
+            dotnet run --project src/Lex.Ingest/Lex.Ingest.csproj -c Release -- \
+              assistant-eval verify-bootstrap-equivalence \
+              --root "$evidence_dir" \
+              --manifest "$evidence_dir/bootstrap-equivalence.manifest.json" \
+              --signature "$evidence_dir/bootstrap-equivalence.manifest.sig" \
+              --trust-roots deploy/trusted-artifact-roots.json \
+              --equivalence "$evidence_dir/bootstrap-equivalence.json" \
+              --candidate-container-app-resource-id "$app_id" \
+              --legacy-authority-revision "$legacy_authority_revision" \
+              --candidate-revision "$EXPECTED_CURRENT_REVISION" \
+              --rollback-revision "$TARGET_REVISION" \
+              --evaluation-release "$EVALUATION_RELEASE" \
+              --canonical-template-digest "$expected_template_digest" \
+              --image-digest "$expected_image_digest" \
+              --cases-sha256 "$expected_cases_sha" \
+              --established-release-state
+          else
+            dotnet run --project src/Lex.Ingest/Lex.Ingest.csproj -c Release -- \
+              assistant-eval verify-release \
+              --root "$evidence_dir" \
+              --manifest "$evidence_dir/assistant-eval.manifest.json" \
+              --signature "$evidence_dir/assistant-eval.manifest.sig" \
+              --trust-roots deploy/trusted-artifact-roots.json \
+              --base-url "https://$target_fqdn" \
+              --candidate-container-app-resource-id "$app_id" \
+              --candidate-revision "$TARGET_REVISION" \
+              "${freshness_args[@]}"
+          fi
+          echo "bootstrap_fallback=$bootstrap_fallback" >> "$GITHUB_OUTPUT"
+          echo "container_app_resource_id=$app_id" >> "$GITHUB_OUTPUT"
+          echo "canonical_template_digest=$expected_template_digest" >> "$GITHUB_OUTPUT"
+          echo "image_digest=$expected_image_digest" >> "$GITHUB_OUTPUT"
+          echo "authorization_kind=$authorization_kind" >> "$GITHUB_OUTPUT"
+          echo "authorization_evidence_release=$authorization_evidence_release" >> "$GITHUB_OUTPUT"
+          echo "authorization_receipt_id=$authorization_receipt_id" >> "$GITHUB_OUTPUT"
+          echo "authorization_package_sha256=$authorization_package_sha" >> "$GITHUB_OUTPUT"
+          echo "rollback_authorization_kind=$rollback_authorization_kind" >> "$GITHUB_OUTPUT"
+          echo "rollback_authorization_evidence_release=$rollback_authorization_evidence_release" \
+            >> "$GITHUB_OUTPUT"
+          echo "rollback_authorization_receipt_id=$rollback_authorization_receipt_id" \
+            >> "$GITHUB_OUTPUT"
+          echo "rollback_authorization_package_sha256=$rollback_authorization_package_sha" \
+            >> "$GITHUB_OUTPUT"
+
+      - name: Persist traffic mutation authority
+        id: traffic_authority
+        shell: bash
+        env:
+          TARGET_REVISION: ${{ inputs.revision }}
+          EXPECTED_CURRENT_REVISION: ${{ inputs.expected_current_revision }}
+        run: |
+          set -eu
+          # This completed step survives cancellation after the following Azure traffic call.
+          # Recovery still infers the result from live traffic; the marker only proves this
+          # workflow was allowed to attempt the switch.
+          echo "attempted=true" >> "$GITHUB_OUTPUT"
+          echo "previous=$EXPECTED_CURRENT_REVISION" >> "$GITHUB_OUTPUT"
+          echo "target=$TARGET_REVISION" >> "$GITHUB_OUTPUT"
 
       - name: Switch exact revision traffic
         id: traffic
@@ -200,8 +475,14 @@ jobs:
           TARGET_REVISION: ${{ inputs.revision }}
           EXPECTED_CURRENT_REVISION: ${{ inputs.expected_current_revision }}
           ROLLBACK_REVISION: ${{ inputs.rollback_revision }}
+          BOOTSTRAP_FALLBACK: ${{ steps.evidence.outputs.bootstrap_fallback }}
+          EVIDENCE_APP_ID: ${{ steps.evidence.outputs.container_app_resource_id }}
+          EVIDENCE_TEMPLATE_DIGEST: ${{ steps.evidence.outputs.canonical_template_digest }}
+          EVIDENCE_IMAGE_DIGEST: ${{ steps.evidence.outputs.image_digest }}
         run: |
           set -Eeuo pipefail
+          . scripts/deploy/az-retry.sh
+          . scripts/deploy/az-reauth.sh
           [[ "$TARGET_REVISION" =~ ^ca-lex-web--[a-z0-9-]+$ ]] \
             || { echo "::error::invalid target revision"; exit 2; }
           [[ "$EXPECTED_CURRENT_REVISION" =~ ^ca-lex-web--[a-z0-9-]+$ ]] \
@@ -213,8 +494,18 @@ jobs:
           [ "$TARGET_REVISION" != "$ROLLBACK_REVISION" ] \
             || { echo "::error::target and rollback revisions must differ"; exit 2; }
 
+          az_reauth
+          app_id=$(az containerapp show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" --query id -o tsv)
+          if [ "$BOOTSTRAP_FALLBACK" = "true" ]; then
+            [ "$app_id" = "$EVIDENCE_APP_ID" ] \
+              || { echo "::error::bootstrap fallback container app identity changed"; exit 1; }
+            [[ "$EVIDENCE_TEMPLATE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] \
+              && [[ "$EVIDENCE_IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] \
+              || { echo "::error::bootstrap fallback evidence outputs are malformed"; exit 1; }
+          fi
+
           current=$(az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
-            --query "[?properties.trafficWeight > \`0\`].name" -o tsv)
+            --all --query "[?properties.trafficWeight > \`0\`].name" -o tsv)
           [ "$(printf '%s\n' "$current" | sed '/^$/d' | wc -l)" -eq 1 ] \
             || { echo "::error::expected exactly one traffic-bearing revision"; exit 1; }
           [ "$current" = "$EXPECTED_CURRENT_REVISION" ] \
@@ -222,7 +513,7 @@ jobs:
 
           target=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
             --revision "$TARGET_REVISION" \
-            --query '{state:properties.runningState,active:properties.active,fqdn:properties.fqdn,image:properties.template.containers[0].image,min:properties.template.scale.minReplicas,max:properties.template.scale.maxReplicas}' \
+            --query '{state:properties.runningState,active:properties.active,created:properties.createdTime,fqdn:properties.fqdn,image:properties.template.containers[0].image,min:properties.template.scale.minReplicas,max:properties.template.scale.maxReplicas}' \
             -o json)
           TARGET_FQDN=$(printf '%s' "$target" | jq -r .fqdn)
           image=$(printf '%s' "$target" | jq -r .image)
@@ -234,8 +525,9 @@ jobs:
             || { echo "::error::target must have exactly one pinned replica"; exit 1; }
           rollback=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
             --revision "$ROLLBACK_REVISION" \
-            --query '{fqdn:properties.fqdn,image:properties.template.containers[0].image,min:properties.template.scale.minReplicas,max:properties.template.scale.maxReplicas}' \
+            --query '{active:properties.active,created:properties.createdTime,fqdn:properties.fqdn,image:properties.template.containers[0].image,min:properties.template.scale.minReplicas,max:properties.template.scale.maxReplicas}' \
             -o json)
+          rollback_active=$(printf '%s' "$rollback" | jq -r .active)
           rollback_fqdn=$(printf '%s' "$rollback" | jq -r .fqdn)
           rollback_image=$(printf '%s' "$rollback" | jq -r .image)
           rollback_min=$(printf '%s' "$rollback" | jq -r .min)
@@ -244,30 +536,138 @@ jobs:
             || { echo "::error::rollback revision identity is incomplete"; exit 1; }
           [ "$rollback_min" = "1" ] && [ "$rollback_max" = "1" ] \
             || { echo "::error::rollback must have exactly one pinned replica"; exit 1; }
+          if [ "$OPERATION" != "promote" ] && [ "$OPERATION" != "rollback" ]; then
+            echo "::error::unsupported traffic operation"
+            exit 2
+          fi
+          [ "$ROLLBACK_REVISION" = "$EXPECTED_CURRENT_REVISION" ] \
+            || { echo "::error::pre-switch recovery must be current production"; exit 1; }
+          [ "$rollback_active" = "true" ] \
+            || { echo "::error::pre-switch recovery revision must be active"; exit 1; }
+          inactive_limit=$(az containerapp show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+            --query properties.configuration.maxInactiveRevisions -o tsv)
+          mapfile -t inactive_before < <(az containerapp revision list \
+            -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" --all \
+            --query "[?properties.active==\`false\`].name" -o tsv)
+          prior_rollback=''
+          if [ "$OPERATION" = "promote" ]; then
+            [ "$inactive_limit" = "2" ] \
+              || { echo "::error::promotion requires the bounded candidate retention state"; exit 1; }
+            [ "${#inactive_before[@]}" -eq 1 ] \
+              || { echo "::error::promotion requires exactly one inactive prior rollback"; exit 1; }
+            prior_rollback="${inactive_before[0]}"
+            [ "$prior_rollback" != "$TARGET_REVISION" ] \
+              && [ "$prior_rollback" != "$EXPECTED_CURRENT_REVISION" ] \
+              || { echo "::error::prior rollback identity overlaps production or candidate"; exit 1; }
+          else
+            [ "$inactive_limit" = "1" ] \
+              || { echo "::error::rollback requires maxInactiveRevisions=1"; exit 1; }
+            [ "${#inactive_before[@]}" -eq 0 ] \
+              || { echo "::error::rollback requires no inactive revisions after target activation"; exit 1; }
+          fi
+          active_before=$(az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+            --all --query "[?properties.active].name" -o tsv | sort | paste -sd, -)
+          expected_active=$(printf '%s\n%s\n' "$EXPECTED_CURRENT_REVISION" "$TARGET_REVISION" \
+            | sort | paste -sd, -)
+          [ "$active_before" = "$expected_active" ] \
+            || { echo "::error::traffic operation found an unexpected active revision"; exit 1; }
+          current_image="$rollback_image"
+
+          set_inactive_limit() {
+            local desired="$1" body observed
+            body=$(jq -cn --argjson limit "$desired" \
+              '{properties:{configuration:{maxInactiveRevisions:$limit}}}')
+            az_retry az rest --method patch --uri "$app_id?api-version=2025-01-01" \
+              --headers 'Content-Type=application/json' --body "$body" --output none \
+              || return 1
+            for attempt in $(seq 1 12); do
+              observed=$(az containerapp show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+                --query properties.configuration.maxInactiveRevisions -o tsv 2>/dev/null || true)
+              [ "$observed" = "$desired" ] && return 0
+              sleep 5
+            done
+            echo "::error::inactive revision limit did not converge to $desired" >&2
+            return 1
+          }
+
+          deactivate_and_verify() {
+            local revision="$1" active
+            for attempt in $(seq 1 5); do
+              az_retry az containerapp revision deactivate -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+                --revision "$revision" --only-show-errors >/dev/null 2>&1 || true
+              active=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+                --revision "$revision" --query properties.active -o tsv 2>/dev/null || true)
+              [ "$active" != "true" ] && return 0
+              sleep $((attempt * 2))
+            done
+            echo "::error::failed to deactivate and verify revision $revision" >&2
+            return 1
+          }
+
+          assert_revision_state() {
+            local expected_limit="$1" expected_active="$2" expected_inactive="$3"
+            local expected_traffic="$4" expected_order="${5:-}" observed_limit
+            local order_args=()
+            [ -z "$expected_order" ] || order_args=(--created-order "$expected_order")
+            observed_limit=$(az_retry az containerapp show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+              --query properties.configuration.maxInactiveRevisions -o tsv) || return 1
+            az_retry az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+              --all -o json \
+              | jq --argjson limit "$observed_limit" '{
+                  max_inactive_revisions:$limit,
+                  revisions:[.[] | {
+                    name:.name,
+                    active:.properties.active,
+                    createdTime:(.properties.createdTime // ""),
+                    trafficWeight:(.properties.trafficWeight // 0)
+                  }]
+                }' \
+              | python3 scripts/deploy/revision_state.py \
+                  --max-inactive "$expected_limit" \
+                  --active "$expected_active" \
+                  --inactive "$expected_inactive" \
+                  --traffic "$expected_traffic" \
+                  "${order_args[@]}"
+          }
 
           cleanup_target() {
             original_status=$?
             [ "$original_status" -ne 0 ] || original_status=1
             trap - ERR TERM INT
             set +e
-            for attempt in $(seq 1 5); do
-              az containerapp revision deactivate -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
-                --revision "$TARGET_REVISION" --only-show-errors || true
-              target_active=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
-                --revision "$TARGET_REVISION" --query properties.active -o tsv 2>/dev/null || true)
-              active=$(az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
-                --query "[?properties.active].name" -o tsv 2>/dev/null || true)
-              if [ "$target_active" != "true" ] && [ "$active" = "$EXPECTED_CURRENT_REVISION" ]; then
-                exit "$original_status"
-              fi
-              sleep $((attempt * 2))
-            done
-            echo "::error::failed to deactivate and verify the target revision" >&2
+            if [ "$OPERATION" = "rollback" ]; then
+              set_inactive_limit 1 || exit 1
+              deactivate_and_verify "$TARGET_REVISION" || exit 1
+              assert_revision_state 1 "$EXPECTED_CURRENT_REVISION" "$TARGET_REVISION" \
+                "$EXPECTED_CURRENT_REVISION=100" \
+                && exit "$original_status"
+              echo "::error::rollback pre-switch recovery did not converge" >&2
+              exit 1
+            fi
+            # Before the public switch, restore the exact bounded candidate state. Raising the
+            # limit back to two happens before C is deactivated so the evaluated prior rollback
+            # B cannot be purged by the recovery action.
+            set_inactive_limit 2 || exit 1
+            deactivate_and_verify "$TARGET_REVISION" || exit 1
+            assert_revision_state 2 "$EXPECTED_CURRENT_REVISION" \
+              "$prior_rollback,$TARGET_REVISION" "$EXPECTED_CURRENT_REVISION=100" \
+              "$prior_rollback,$EXPECTED_CURRENT_REVISION,$TARGET_REVISION" \
+              && exit "$original_status"
+            echo "::error::promotion pre-switch recovery did not converge" >&2
             exit 1
           }
           trap cleanup_target ERR TERM INT
 
-          az containerapp revision activate -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+          if [ "$OPERATION" = "promote" ]; then
+            assert_revision_state 2 "$EXPECTED_CURRENT_REVISION,$TARGET_REVISION" \
+              "$prior_rollback" "$EXPECTED_CURRENT_REVISION=100" \
+              "$prior_rollback,$EXPECTED_CURRENT_REVISION,$TARGET_REVISION"
+          else
+            assert_revision_state 1 "$EXPECTED_CURRENT_REVISION,$TARGET_REVISION" "" \
+              "$EXPECTED_CURRENT_REVISION=100"
+          fi
+
+          az_retry az containerapp revision activate -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
             --revision "$TARGET_REVISION" --only-show-errors
           for attempt in $(seq 1 30); do
             target_state=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
@@ -295,30 +695,102 @@ jobs:
                      and any(.[]; .envelope.publisher == "lu-legilux")
                      and any(.[]; .envelope.publisher == "eu-eurlex")' >/dev/null
 
+          # The exact evaluated current revision is the failure recovery and the next steady
+          # rollback. Lower the bound before switching; after A is deactivated, Azure purges the
+          # older B and retains A because the strict B < A < C order was proved above.
+          ROLLBACK_REVISION="$EXPECTED_CURRENT_REVISION"
+          rollback_image="$current_image"
+          if [ "$BOOTSTRAP_FALLBACK" = "true" ]; then
+            current_readback=$(az_retry az containerapp revision show -g "$RESOURCE_GROUP" \
+              -n "$CONTAINER_APP" --revision "$EXPECTED_CURRENT_REVISION" -o json)
+            target_readback=$(az_retry az containerapp revision show -g "$RESOURCE_GROUP" \
+              -n "$CONTAINER_APP" --revision "$TARGET_REVISION" -o json)
+            [ "$(printf '%s' "$current_readback" | jq -r .id)" \
+                = "$app_id/revisions/$EXPECTED_CURRENT_REVISION" ] \
+              && [ "$(printf '%s' "$target_readback" | jq -r .id)" \
+                = "$app_id/revisions/$TARGET_REVISION" ] \
+              && [ "$(printf '%s' "$current_readback" \
+                | jq -r .properties.template.containers[0].image)" \
+                = "crsoufien3orem.azurecr.io/lex-web@$EVIDENCE_IMAGE_DIGEST" ] \
+              && [ "$(printf '%s' "$target_readback" \
+                | jq -r .properties.template.containers[0].image)" \
+                = "crsoufien3orem.azurecr.io/lex-web@$EVIDENCE_IMAGE_DIGEST" ] \
+              && [ "$(printf '%s' "$current_readback" \
+                | python3 scripts/deploy/revision_template_digest.py)" \
+                = "$EVIDENCE_TEMPLATE_DIGEST" ] \
+              && [ "$(printf '%s' "$target_readback" \
+                | python3 scripts/deploy/revision_template_digest.py)" \
+                = "$EVIDENCE_TEMPLATE_DIGEST" ] \
+              || { echo "::error::bootstrap fallback immutable identity changed before traffic"; exit 1; }
+            # This complete --all read-back is the last gate before a C -> R mutation. It
+            # rejects cross-app receipts, rebuilt identities, and any unexpected revision.
+            assert_revision_state 1 "$EXPECTED_CURRENT_REVISION,$TARGET_REVISION" "" \
+              "$EXPECTED_CURRENT_REVISION=100" "$TARGET_REVISION,$EXPECTED_CURRENT_REVISION" \
+              || { echo "::error::bootstrap fallback live state changed before traffic"; exit 1; }
+          fi
+          set_inactive_limit 1
+
           restore_previous() {
             original_status=$?
             [ "$original_status" -ne 0 ] || original_status=1
             trap - ERR TERM INT
             set +e
+            live_routes=$(az_retry az containerapp revision list -g "$RESOURCE_GROUP" \
+              -n "$CONTAINER_APP" --all -o json) || exit 1
+            printf '%s' "$live_routes" | jq -e --arg previous "$ROLLBACK_REVISION" \
+                --arg target "$TARGET_REVISION" '
+                  any(.[]; .name == $previous)
+                  and any(.[]; .name == $target)
+                  and all(.[];
+                    (.properties.active | type) == "boolean"
+                    and ((.properties.trafficWeight // 0) | type) == "number"
+                    and ((.properties.trafficWeight // 0) % 1) == 0
+                    and (.properties.trafficWeight // 0) >= 0
+                    and (.properties.trafficWeight // 0) <= 100)
+                  and all(.[] | select((.properties.trafficWeight // 0) > 0);
+                    .name == $previous or .name == $target)' >/dev/null \
+              || { echo "::error::refusing recovery with unknown traffic authority" >&2; exit 1; }
+            previous_weight=$(printf '%s' "$live_routes" | jq -r --arg revision "$ROLLBACK_REVISION" \
+              '[.[] | select(.name == $revision) | (.properties.trafficWeight // 0)] | first')
+            target_weight=$(printf '%s' "$live_routes" | jq -r --arg revision "$TARGET_REVISION" \
+              '[.[] | select(.name == $revision) | (.properties.trafficWeight // 0)] | first')
+            if [ "$previous_weight" = "100" ] && [ "$target_weight" = "0" ]; then
+              # No public traffic switch occurred. Preserve the older rollback B during a
+              # promotion by restoring max=2 before C is deactivated; never rewrite traffic from
+              # stale step outputs in this branch.
+              if [ "$OPERATION" = "promote" ]; then
+                set_inactive_limit 2 || exit 1
+                deactivate_and_verify "$TARGET_REVISION" || exit 1
+                assert_revision_state 2 "$ROLLBACK_REVISION" \
+                  "$prior_rollback,$TARGET_REVISION" "$ROLLBACK_REVISION=100" \
+                  "$prior_rollback,$ROLLBACK_REVISION,$TARGET_REVISION" \
+                  && exit "$original_status"
+              else
+                set_inactive_limit 1 || exit 1
+                deactivate_and_verify "$TARGET_REVISION" || exit 1
+                assert_revision_state 1 "$ROLLBACK_REVISION" "$TARGET_REVISION" \
+                  "$ROLLBACK_REVISION=100" \
+                  && exit "$original_status"
+              fi
+              echo "::error::pre-switch recovery did not converge" >&2
+              exit 1
+            fi
+            set_inactive_limit 1 || exit 1
             for attempt in $(seq 1 5); do
-              az containerapp revision activate -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+              az_retry az containerapp revision activate -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
                 --revision "$ROLLBACK_REVISION" --only-show-errors || true
-              az containerapp ingress traffic set -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+              az_retry az containerapp ingress traffic set -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
                 --revision-weight "$ROLLBACK_REVISION=100" "$TARGET_REVISION=0" \
                 --only-show-errors
               routed=$(az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
-                --query "[?properties.trafficWeight > \`0\`].name" -o tsv 2>/dev/null)
+                --all --query "[?properties.trafficWeight > \`0\`].name" -o tsv 2>/dev/null)
               if [ "$routed" = "$ROLLBACK_REVISION" ]; then
-                for revision in $(az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
-                    --query "[?name != '$ROLLBACK_REVISION' && properties.active].name" -o tsv); do
-                  az containerapp revision deactivate -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
-                    --revision "$revision" --only-show-errors || true
-                done
-                active=$(az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
-                  --query "[?properties.active].name" -o tsv 2>/dev/null)
-                [ "$active" = "$ROLLBACK_REVISION" ] || continue
-                echo "restored_previous=$ROLLBACK_REVISION"
-                exit "$original_status"
+                deactivate_and_verify "$TARGET_REVISION" || true
+                if assert_revision_state 1 "$ROLLBACK_REVISION" "$TARGET_REVISION" \
+                    "$ROLLBACK_REVISION=100"; then
+                  echo "restored_previous=$ROLLBACK_REVISION"
+                  exit "$original_status"
+                fi
               fi
               sleep $((attempt * 2))
             done
@@ -327,18 +799,21 @@ jobs:
           }
           trap restore_previous ERR TERM INT
 
-          # Only this point authorizes traffic recovery. Earlier failures merely deactivate the
+          # Only this point authorizes the public switch. Earlier failures merely deactivate the
           # candidate and must not overwrite a concurrent operator's traffic decision.
-          echo "previous=$ROLLBACK_REVISION" >> "$GITHUB_OUTPUT"
-          echo "target=$TARGET_REVISION" >> "$GITHUB_OUTPUT"
-          az containerapp ingress traffic set -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+          az_retry az containerapp ingress traffic set -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
             --revision-weight "$EXPECTED_CURRENT_REVISION=0" "$TARGET_REVISION=100" \
             --only-show-errors
 
           routed=$(az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
-            --query "[?properties.trafficWeight > \`0\`].name" -o tsv)
+            --all --query "[?properties.trafficWeight > \`0\`].name" -o tsv)
           [ "$routed" = "$TARGET_REVISION" ] \
             || { echo "::error::Azure did not route exclusively to the target revision"; false; }
+          # Outputs become recovery authority only after Azure reports the target as the sole
+          # traffic bearer. A failed command before this point cannot trigger a stale rewrite.
+          echo "previous=$ROLLBACK_REVISION" >> "$GITHUB_OUTPUT"
+          echo "target=$TARGET_REVISION" >> "$GITHUB_OUTPUT"
+          echo "switched=true" >> "$GITHUB_OUTPUT"
 
           served_image=''
           for attempt in $(seq 1 12); do
@@ -351,48 +826,112 @@ jobs:
           [ "$served_image" = "$image" ] \
             || { echo "::error::public endpoint did not serve the target image"; false; }
 
-          for revision in $(az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
-              --query "[?name != '$TARGET_REVISION' && properties.active].name" -o tsv); do
-            az containerapp revision deactivate -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
-              --revision "$revision" --only-show-errors
+          # Deactivating exact former production retains it as the sole rollback. During a
+          # promotion, the older prior rollback is purged; during rollback there was no inactive
+          # record after target activation.
+          deactivate_and_verify "$EXPECTED_CURRENT_REVISION"
+          for attempt in $(seq 1 24); do
+            assert_revision_state 1 "$TARGET_REVISION" "$ROLLBACK_REVISION" \
+              "$TARGET_REVISION=100" && break
+            sleep 5
           done
-          active=$(az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
-            --query "[?properties.active].name" -o tsv)
-          [ "$active" = "$TARGET_REVISION" ] \
-            || { echo "::error::expected exactly one active public quota authority"; false; }
+          assert_revision_state 1 "$TARGET_REVISION" "$ROLLBACK_REVISION" \
+            "$TARGET_REVISION=100" \
+            || { echo "::error::exact previous revision remains the sole inactive rollback"; false; }
+          echo "expected exactly one active public quota authority"
 
           echo "image=$image" >> "$GITHUB_OUTPUT"
+          echo "rollback=$ROLLBACK_REVISION" >> "$GITHUB_OUTPUT"
+          echo "rollback_image=$rollback_image" >> "$GITHUB_OUTPUT"
+          echo "container_app_resource_id=$app_id" >> "$GITHUB_OUTPUT"
           trap - ERR TERM INT
 
-      - name: Record successful promotion receipt
-        id: promotion_receipt
-        if: ${{ inputs.operation == 'promote' }}
+      - name: Record successful release-state receipt
+        id: release_receipt
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          OPERATION: ${{ inputs.operation }}
           TARGET_REVISION: ${{ inputs.revision }}
           EVALUATION_RELEASE: ${{ inputs.assistant_evaluation_release }}
+          TARGET_IMAGE: ${{ steps.traffic.outputs.image }}
+          ROLLBACK_REVISION: ${{ steps.traffic.outputs.rollback }}
+          ROLLBACK_IMAGE: ${{ steps.traffic.outputs.rollback_image }}
+          CONTAINER_APP_RESOURCE_ID: ${{ steps.traffic.outputs.container_app_resource_id }}
+          AUTHORIZATION_KIND: ${{ steps.evidence.outputs.authorization_kind }}
+          AUTHORIZATION_EVIDENCE_RELEASE: ${{ steps.evidence.outputs.authorization_evidence_release }}
+          AUTHORIZATION_RECEIPT_ID: ${{ steps.evidence.outputs.authorization_receipt_id }}
+          AUTHORIZATION_PACKAGE_SHA256: ${{ steps.evidence.outputs.authorization_package_sha256 }}
+          ROLLBACK_AUTHORIZATION_KIND: ${{ steps.evidence.outputs.rollback_authorization_kind }}
+          ROLLBACK_AUTHORIZATION_EVIDENCE_RELEASE: ${{ steps.evidence.outputs.rollback_authorization_evidence_release }}
+          ROLLBACK_AUTHORIZATION_RECEIPT_ID: ${{ steps.evidence.outputs.rollback_authorization_receipt_id }}
+          ROLLBACK_AUTHORIZATION_PACKAGE_SHA256: ${{ steps.evidence.outputs.rollback_authorization_package_sha256 }}
         run: |
           set -Eeuo pipefail
           receipt=$(jq -n \
             --arg ref "$GITHUB_SHA" \
+            --arg operation "$OPERATION" \
             --arg revision "$TARGET_REVISION" \
             --arg evaluation "$EVALUATION_RELEASE" \
+            --arg target_image "${TARGET_IMAGE##*@}" \
+            --arg rollback_revision "$ROLLBACK_REVISION" \
+            --arg rollback_image "${ROLLBACK_IMAGE##*@}" \
+            --arg app "$CONTAINER_APP_RESOURCE_ID" \
+            --arg tenant "$AZURE_TENANT_ID" \
+            --arg subscription "$AZURE_SUBSCRIPTION_ID" \
+            --arg authorization_kind "$AUTHORIZATION_KIND" \
+            --arg authorization_evidence "$AUTHORIZATION_EVIDENCE_RELEASE" \
+            --arg authorization_receipt "$AUTHORIZATION_RECEIPT_ID" \
+            --arg authorization_package "$AUTHORIZATION_PACKAGE_SHA256" \
+            --arg rollback_authorization_kind "$ROLLBACK_AUTHORIZATION_KIND" \
+            --arg rollback_authorization_evidence "$ROLLBACK_AUTHORIZATION_EVIDENCE_RELEASE" \
+            --arg rollback_authorization_receipt "$ROLLBACK_AUTHORIZATION_RECEIPT_ID" \
+            --arg rollback_authorization_package "$ROLLBACK_AUTHORIZATION_PACKAGE_SHA256" \
             '{
               ref: $ref,
               task: "lex-revision-promotion",
               auto_merge: false,
               required_contexts: [],
               environment: "production",
-              description: "Audited Lex revision promotion",
+              description: "Audited Lex release state",
               payload: {
+                schema: "lex-release-state-receipt/3",
+                purpose: "record-audited-revision-transition",
+                operation: $operation,
+                azure_tenant_id: $tenant,
+                azure_subscription_id: $subscription,
+                container_app_resource_id: $app,
                 target_revision: $revision,
-                assistant_evaluation_release: $evaluation
+                target_revision_resource_id: ($app + "/revisions/" + $revision),
+                target_image: $target_image,
+                rollback_revision: $rollback_revision,
+                rollback_revision_resource_id: ($app + "/revisions/" + $rollback_revision),
+                rollback_image: $rollback_image,
+                assistant_evaluation_release: $evaluation,
+                target_authorization: {
+                  kind: $authorization_kind,
+                  evidence_release: $authorization_evidence,
+                  source_deployment_id: (if $authorization_receipt == "" then null
+                    else $authorization_receipt end),
+                  signed_package_sha256: (if $authorization_package == "" then null
+                    else $authorization_package end)
+                },
+                rollback_authorization: {
+                  kind: $rollback_authorization_kind,
+                  evidence_release: $rollback_authorization_evidence,
+                  source_deployment_id: (if $rollback_authorization_receipt == "" then null
+                    else $rollback_authorization_receipt end),
+                  signed_package_sha256: (if $rollback_authorization_package == "" then null
+                    else $rollback_authorization_package end)
+                }
               },
               production_environment: true,
               transient_environment: false
             }' | gh api --method POST "repos/$GITHUB_REPOSITORY/deployments" --input -)
           deployment_id=$(printf '%s' "$receipt" | jq -er '.id')
+          # Preserve the receipt identity even when posting its success status fails. Recovery
+          # can then mark that exact deployment failed after restoring the rollback revision.
+          echo "deployment_id=$deployment_id" >> "$GITHUB_OUTPUT"
           jq -n \
             --arg state success \
             --arg environment production \
@@ -401,57 +940,218 @@ jobs:
             '{state:$state,environment:$environment,environment_url:$environment_url,log_url:$log_url,description:"Traffic and release gates passed"}' \
             | gh api --method POST \
                 "repos/$GITHUB_REPOSITORY/deployments/$deployment_id/statuses" --input - >/dev/null
-          echo "deployment_id=$deployment_id" >> "$GITHUB_OUTPUT"
 
       - name: Restore previous revision after an interrupted or failed switch
         if: ${{ failure() || cancelled() }}
         shell: bash
         env:
-          PREVIOUS_REVISION: ${{ steps.traffic.outputs.previous }}
-          TARGET_REVISION: ${{ steps.traffic.outputs.target || steps.candidate.outputs.target }}
+          GH_TOKEN: ${{ github.token }}
+          OPERATION: ${{ inputs.operation }}
+          PREVIOUS_REVISION: ${{ steps.traffic_authority.outputs.previous || steps.candidate.outputs.previous }}
+          TARGET_REVISION: ${{ steps.traffic_authority.outputs.target || steps.candidate.outputs.target }}
+          TRAFFIC_ATTEMPTED: ${{ steps.traffic_authority.outputs.attempted }}
+          FAILED_RECEIPT_DEPLOYMENT: ${{ steps.release_receipt.outputs.deployment_id }}
         run: |
-          set -u
-          [ -n "${TARGET_REVISION:-}" ] \
-            || { echo "candidate activation was not attempted; no restoration required"; exit 0; }
-          if [ -z "${PREVIOUS_REVISION:-}" ]; then
+          set -uo pipefail
+          . scripts/deploy/az-retry.sh
+          . scripts/deploy/az-reauth.sh
+          az_reauth
+
+          set_inactive_limit() {
+            local desired="$1" app_id body observed
+            app_id=$(az_retry az containerapp show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+              --query id -o tsv) || return 1
+            body=$(jq -cn --argjson limit "$desired" \
+              '{properties:{configuration:{maxInactiveRevisions:$limit}}}')
+            az_retry az rest --method patch --uri "$app_id?api-version=2025-01-01" \
+              --headers 'Content-Type=application/json' --body "$body" --output none \
+              || return 1
+            for attempt in $(seq 1 12); do
+              observed=$(az containerapp show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+                --query properties.configuration.maxInactiveRevisions -o tsv 2>/dev/null || true)
+              [ "$observed" = "$desired" ] && return 0
+              sleep 5
+            done
+            return 1
+          }
+
+          deactivate_and_verify() {
+            local revision="$1" active
             for attempt in $(seq 1 5); do
-              az containerapp revision deactivate -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
-                --revision "$TARGET_REVISION" --only-show-errors || true
-              target_active=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
-                --revision "$TARGET_REVISION" --query properties.active -o tsv 2>/dev/null || true)
-              routed=$(az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
-                --query "[?properties.trafficWeight > \`0\`].name" -o tsv 2>/dev/null || true)
-              active=$(az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
-                --query "[?properties.active].name" -o tsv 2>/dev/null || true)
-              if [ "$target_active" != "true" ] \
-                  && [ "$(printf '%s\n' "$routed" | sed '/^$/d' | wc -l)" -eq 1 ] \
-                  && [ "$active" = "$routed" ]; then
-                exit 0
-              fi
+              az_retry az containerapp revision deactivate -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+                --revision "$revision" --only-show-errors >/dev/null 2>&1 || true
+              active=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+                --revision "$revision" --query properties.active -o tsv 2>/dev/null || true)
+              [ "$active" != "true" ] && return 0
               sleep $((attempt * 2))
             done
-            echo "::error::failed to deactivate the candidate without changing traffic" >&2
-            exit 1
-          fi
+            return 1
+          }
+
+          assert_revision_state() {
+            local expected_limit="$1" expected_active="$2" expected_inactive="$3"
+            local expected_traffic="$4" observed_limit
+            observed_limit=$(az_retry az containerapp show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+              --query properties.configuration.maxInactiveRevisions -o tsv) || return 1
+            az_retry az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+              --all -o json \
+              | jq --argjson limit "$observed_limit" '{
+                  max_inactive_revisions:$limit,
+                  revisions:[.[] | {
+                    name:.name,
+                    active:.properties.active,
+                    trafficWeight:(.properties.trafficWeight // 0)
+                  }]
+                }' \
+              | python3 scripts/deploy/revision_state.py \
+                  --max-inactive "$expected_limit" \
+                  --active "$expected_active" \
+                  --inactive "$expected_inactive" \
+                  --traffic "$expected_traffic"
+          }
+
+          [ -n "${TARGET_REVISION:-}" ] \
+            || { echo "candidate activation was not attempted; no restoration required"; exit 0; }
+          [ -n "${PREVIOUS_REVISION:-}" ] \
+            || { echo "::error::recovery has no verified previous identity"; exit 1; }
           [ "$PREVIOUS_REVISION" != "$TARGET_REVISION" ] \
             || { echo "::error::refusing recovery with identical revisions"; exit 1; }
+
+          live_routes=''
+          for attempt in $(seq 1 12); do
+            live_routes=$(az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+              --all -o json 2>/dev/null || true)
+            printf '%s' "$live_routes" | jq -e --arg previous "$PREVIOUS_REVISION" \
+                --arg target "$TARGET_REVISION" '
+                  any(.[]; .name == $previous)
+                  and any(.[]; .name == $target)
+                  and all(.[];
+                    (.properties.active | type) == "boolean"
+                    and ((.properties.trafficWeight // 0) | type) == "number"
+                    and ((.properties.trafficWeight // 0) % 1) == 0
+                    and (.properties.trafficWeight // 0) >= 0
+                    and (.properties.trafficWeight // 0) <= 100)
+                  and all(.[] | select((.properties.trafficWeight // 0) > 0);
+                    .name == $previous or .name == $target)' >/dev/null 2>&1 && break
+            sleep 5
+          done
+          printf '%s' "$live_routes" | jq -e --arg previous "$PREVIOUS_REVISION" \
+              --arg target "$TARGET_REVISION" '
+                any(.[]; .name == $previous)
+                and any(.[]; .name == $target)
+                and all(.[];
+                  (.properties.active | type) == "boolean"
+                  and ((.properties.trafficWeight // 0) | type) == "number"
+                  and ((.properties.trafficWeight // 0) % 1) == 0
+                  and (.properties.trafficWeight // 0) >= 0
+                  and (.properties.trafficWeight // 0) <= 100)
+                and all(.[] | select((.properties.trafficWeight // 0) > 0);
+                  .name == $previous or .name == $target)' >/dev/null \
+            || { echo "::error::cannot infer traffic mutation phase from live traffic"; exit 1; }
+          previous_weight=$(printf '%s' "$live_routes" | jq -r --arg revision "$PREVIOUS_REVISION" \
+            '[.[] | select(.name == $revision) | (.properties.trafficWeight // 0)] | first')
+          target_weight=$(printf '%s' "$live_routes" | jq -r --arg revision "$TARGET_REVISION" \
+            '[.[] | select(.name == $revision) | (.properties.trafficWeight // 0)] | first')
+
+          recover_without_traffic_write() {
+            local observed_limit target_active active_csv inactive_csv prior_rollback expected_active
+            observed_limit=$(az containerapp show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+              --query properties.configuration.maxInactiveRevisions -o tsv) || return 1
+            target_active=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+              --revision "$TARGET_REVISION" --query properties.active -o tsv) || return 1
+            active_csv=$(az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+              --all --query "[?properties.active].name" -o tsv | sort | paste -sd, -) || return 1
+            inactive_csv=$(az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+              --all --query "[?properties.active==\`false\`].name" -o tsv \
+              | sort | paste -sd, -) || return 1
+            if [ "$OPERATION" = "rollback" ]; then
+              expected_active="$PREVIOUS_REVISION"
+              [ "$target_active" != "true" ] \
+                || expected_active=$(printf '%s\n%s\n' "$PREVIOUS_REVISION" "$TARGET_REVISION" \
+                  | sort | paste -sd, -)
+              [ "$active_csv" = "$expected_active" ] \
+                || { echo "::error::rollback recovery found unexpected active revisions"; return 1; }
+              set_inactive_limit 1 || return 1
+              deactivate_and_verify "$TARGET_REVISION" || return 1
+              assert_revision_state 1 "$PREVIOUS_REVISION" "$TARGET_REVISION" \
+                "$PREVIOUS_REVISION=100"
+              return
+            fi
+            [ "$OPERATION" = "promote" ] \
+              || { echo "::error::unsupported recovery operation"; return 1; }
+            expected_active="$PREVIOUS_REVISION"
+            [ "$target_active" != "true" ] \
+              || expected_active=$(printf '%s\n%s\n' "$PREVIOUS_REVISION" "$TARGET_REVISION" \
+                | sort | paste -sd, -)
+            [ "$active_csv" = "$expected_active" ] \
+              || { echo "::error::promotion recovery found unexpected active revisions"; return 1; }
+            prior_rollback=$(printf '%s\n' "$inactive_csv" | tr ',' '\n' \
+              | grep -v -x "$TARGET_REVISION" || true)
+            if [ "$target_active" != "true" ] && [ "$observed_limit" = "1" ] \
+                && [ "$inactive_csv" = "$TARGET_REVISION" ]; then
+              # An inner post-switch trap already restored the exact previous revision. B was
+              # intentionally purged; this is the bounded A-active/C-inactive reconciliation.
+              assert_revision_state 1 "$PREVIOUS_REVISION" "$TARGET_REVISION" \
+                "$PREVIOUS_REVISION=100"
+              return
+            fi
+            [ "$(printf '%s\n' "$prior_rollback" | sed '/^$/d' | wc -l)" -eq 1 ] \
+              && [ "$prior_rollback" != "$PREVIOUS_REVISION" ] \
+              || { echo "::error::promotion recovery cannot identify exact prior rollback"; return 1; }
+            set_inactive_limit 2 || return 1
+            deactivate_and_verify "$TARGET_REVISION" || return 1
+            assert_revision_state 2 "$PREVIOUS_REVISION" \
+              "$prior_rollback,$TARGET_REVISION" "$PREVIOUS_REVISION=100"
+          }
+
+          if [ "$previous_weight" = "100" ] && [ "$target_weight" = "0" ]; then
+            # Whether or not the durable marker exists, live A proves that no recovery traffic
+            # write is needed. Raise the bound before deactivating C when B still exists.
+            recover_without_traffic_write \
+              || { echo "::error::non-switch recovery did not converge"; exit 1; }
+            exit 0
+          fi
+          if [ "$TRAFFIC_ATTEMPTED" != "true" ]; then
+            echo "::error::unexpected live traffic authority; refusing a stale recovery rewrite"
+            exit 1
+          fi
+
+          set_inactive_limit 1 \
+            || { echo "::error::failed to restore the bounded inactive limit"; exit 1; }
           for attempt in $(seq 1 5); do
-            az containerapp revision activate -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+            az_retry az containerapp revision activate -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
               --revision "$PREVIOUS_REVISION" --only-show-errors || true
-            az containerapp ingress traffic set -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+            az_retry az containerapp ingress traffic set -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
               --revision-weight "$PREVIOUS_REVISION=100" "$TARGET_REVISION=0" \
               --only-show-errors || true
             routed=$(az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
-              --query "[?properties.trafficWeight > \`0\`].name" -o tsv 2>/dev/null || true)
+              --all --query "[?properties.trafficWeight > \`0\`].name" -o tsv 2>/dev/null || true)
             if [ "$routed" = "$PREVIOUS_REVISION" ]; then
-              for revision in $(az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
-                  --query "[?name != '$PREVIOUS_REVISION' && properties.active].name" -o tsv 2>/dev/null); do
-                az containerapp revision deactivate -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
-                  --revision "$revision" --only-show-errors || true
-              done
-              active=$(az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
-                --query "[?properties.active].name" -o tsv 2>/dev/null || true)
-              [ "$active" = "$PREVIOUS_REVISION" ] && exit 0
+              deactivate_and_verify "$TARGET_REVISION" || true
+              if assert_revision_state 1 "$PREVIOUS_REVISION" "$TARGET_REVISION" "$PREVIOUS_REVISION=100"; then
+                if [[ "${FAILED_RECEIPT_DEPLOYMENT:-}" =~ ^[1-9][0-9]*$ ]]; then
+                  jq -n \
+                    --arg state failure \
+                    --arg environment production \
+                    --arg environment_url "https://law.soufien.lu" \
+                    --arg log_url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+                    '{state:$state,environment:$environment,environment_url:$environment_url,log_url:$log_url,description:"Traffic restored after release-state receipt failure; reconciliation required"}' \
+                    | gh api --method POST \
+                        "repos/$GITHUB_REPOSITORY/deployments/$FAILED_RECEIPT_DEPLOYMENT/statuses" \
+                        --input - >/dev/null 2>&1 || true
+                fi
+                {
+                  echo "## Failed/unreceipted promotion reconciliation"
+                  echo
+                  echo "- operation: \`$OPERATION\`"
+                  echo "- restored active revision: \`$PREVIOUS_REVISION\`"
+                  echo "- failed target retained as sole inactive revision: \`$TARGET_REVISION\`"
+                  echo "- release-state deployment: \`${FAILED_RECEIPT_DEPLOYMENT:-not-created}\`"
+                  echo "- status: operator reconciliation is required"
+                } >> "$GITHUB_STEP_SUMMARY"
+                echo "::error::failed/unreceipted traffic operation restored to $PREVIOUS_REVISION; operator reconciliation is required"
+                exit 0
+              fi
             fi
             sleep $((attempt * 2))
           done
@@ -466,10 +1166,10 @@ jobs:
             echo
             echo "- operation: \`${{ inputs.operation }}\`"
             echo "- previous revision: \`${{ inputs.expected_current_revision }}\`"
-            echo "- pinned rollback revision: \`${{ inputs.rollback_revision }}\`"
+            echo "- pinned rollback revision: \`${{ steps.traffic.outputs.rollback }}\`"
             echo "- active revision: \`${{ inputs.revision }}\`"
             echo "- active image: \`${{ steps.traffic.outputs.image }}\`"
             echo "- signed assistant evaluation: \`${{ inputs.assistant_evaluation_release }}\`"
-            echo "- promotion receipt: \`${{ steps.promotion_receipt.outputs.deployment_id || inputs.prior_promotion_deployment }}\`"
+            echo "- promotion receipt: \`${{ steps.release_receipt.outputs.deployment_id || inputs.prior_promotion_deployment }}\`"
             echo "- health and required-publisher MCP coverage smoke: passed"
           } >> "$GITHUB_STEP_SUMMARY"

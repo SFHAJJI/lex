@@ -27,13 +27,16 @@ jobs:
       - name: check that the fleet reported recently
         id: check
         env:
-          GH_TOKEN: ${{ secrets.LEX_OPS_TOKEN }}
+          # lex-ops is public; the repository-scoped token avoids a separate expiring PAT.
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -uo pipefail
-          # lex-ops is private: read its newest status commit through the API.
-          last=$(gh api repos/SFHAJJI/lex-ops/commits --jq '.[0].commit.committer.date' 2>/dev/null || echo "")
+          # Generated status has its own fast-forward-only branch. Main changes only when the
+          # pipeline itself changes and therefore cannot prove the nightly fleet ran.
+          last=$(gh api repos/SFHAJJI/lex-ops/commits/fleet-status \
+            --jq '.commit.committer.date' 2>/dev/null || echo "")
           if [ -z "$last" ]; then
-            echo "reason=Could not read lex-ops at all — the ops token may have expired." >> "$GITHUB_OUTPUT"
+            echo "reason=Could not read the public lex-ops fleet-status branch." >> "$GITHUB_OUTPUT"
             echo "stale=true" >> "$GITHUB_OUTPUT"; exit 0
           fi
           age=$(( ( $(date -u +%s) - $(date -u -d "$last" +%s) ) / 3600 ))
@@ -51,11 +54,14 @@ jobs:
           set -uo pipefail
           response=$(curl -sS -m 30 -X POST https://law.soufien.lu/mcp \
             -H 'Content-Type: application/json' \
+            -H 'Accept: application/json, text/event-stream' \
             -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"coverage","arguments":{}}}' \
             || true)
+          payload=$(printf '%s\n' "$response" | sed -n 's/^data: //p' | tail -n 1)
+          [ -n "$payload" ] || payload=$response
           # MCP text content is itself a JSON string inside the JSON-RPC envelope. Parse both
           # layers; grepping the outer response cannot see an unescaped `built_at` field.
-          coverage=$(printf '%s' "$response" \
+          coverage=$(printf '%s' "$payload" \
             | jq -er '.result.content | map(select(.type == "text")) | .[0].text' 2>/dev/null \
             || true)
           # Use the oldest mounted publisher build. One fresh publisher must not conceal that
@@ -91,8 +97,9 @@ jobs:
           - served index: ${{ steps.served.outputs.reason }}
 
           Silence is the one failure the fleet cannot report on its own. Likely causes, in order:
-          GitHub disabled the schedule after 60 days of repository inactivity; \`LEX_OPS_TOKEN\`
-          expired; Actions is paused. Re-run \`nightly-fleet\` manually to confirm.
+          GitHub disabled the schedule after 60 days of repository inactivity; Actions is paused;
+          or the public fleet-status branch stopped advancing. Re-run \`nightly-fleet\` manually
+          to confirm.
 
           Checked at $(date -u +%FT%TZ)."
           # One issue, reopened and updated — not one per day.

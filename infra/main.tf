@@ -88,6 +88,12 @@ resource "azurerm_role_assignment" "deploy_acr_tasks" {
   principal_id         = azurerm_user_assigned_identity.deploy.principal_id
 }
 
+resource "azurerm_role_assignment" "deploy_acr_inventory_reader" {
+  scope                = data.azurerm_container_registry.shared.id
+  role_definition_name = "AcrPull"
+  principal_id         = azurerm_user_assigned_identity.deploy.principal_id
+}
+
 resource "azurerm_role_assignment" "deploy_container_app" {
   scope                = local.container_app_id
   role_definition_name = "Container Apps Contributor"
