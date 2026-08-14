@@ -100,18 +100,19 @@ jobs:
                   and (.properties.trafficWeight // 0) == 0)
                 and any(.[]; .name == $candidate and .properties.active == true
                   and (.properties.trafficWeight // 0) == 0)
-                and ([.[] | .properties.createdTime] | all(type == "string" and endswith("Z")))' \
+                and ([.[] | .properties.createdTime] | all(type == "string"))' \
             before.json >/dev/null \
             || { echo "::error::refusing to abandon outside exact A/R/C preparation"; exit 1; }
           python3 - "$LEGACY_REVISION" "$ROLLBACK_REVISION" "$CANDIDATE_REVISION" <<'PY'
-          import datetime
           import json
           import sys
+          sys.path.insert(0, "scripts/deploy")
+          from bootstrap_plan import timestamp
 
           inventory = {item["name"]: item for item in json.load(open("before.json", encoding="utf-8"))}
           def instant(name):
               value = inventory[name]["properties"]["createdTime"]
-              return datetime.datetime.fromisoformat(value[:-1] + "+00:00")
+              return timestamp(value, f"{name}.createdTime")
           if not instant(sys.argv[1]) < instant(sys.argv[2]) < instant(sys.argv[3]):
               raise SystemExit("bootstrap abandon requires exact A < R < C chronology")
           PY

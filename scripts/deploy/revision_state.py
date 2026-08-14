@@ -2,7 +2,7 @@
 """Verify one exact Container Apps revision state from a JSON snapshot."""
 
 import argparse
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 import sys
 
@@ -29,9 +29,13 @@ def ordered_names(value):
 
 
 def created_at(value):
-    if not isinstance(value, str) or not value.endswith("Z"):
+    if not isinstance(value, str) or not (
+            value.endswith("Z") or value.endswith("+00:00")):
         raise ValueError("createdTime must be an explicit UTC instant")
-    parsed = datetime.fromisoformat(value[:-1] + "+00:00")
+    parsed = datetime.fromisoformat(
+        value[:-1] + "+00:00" if value.endswith("Z") else value)
+    if parsed.utcoffset() != timedelta(0):
+        raise ValueError("createdTime must be an explicit UTC instant")
     return parsed
 
 

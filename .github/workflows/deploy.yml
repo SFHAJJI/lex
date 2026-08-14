@@ -587,15 +587,13 @@ jobs:
               && [ "$(printf '%s' "$candidate_observed" | jq -r '.properties.trafficWeight // 0')" = "0" ] \
               || { echo "::error::bootstrap candidate differs from the canonical fallback"; exit 1; }
             python3 - "$legacy_created" "$fallback_created" "$candidate_created" <<'PY'
-          import datetime
           import sys
+          sys.path.insert(0, "scripts/deploy")
+          from bootstrap_plan import timestamp
 
-          def instant(value):
-              if not value.endswith("Z"):
-                  raise ValueError("createdTime is not explicit UTC")
-              return datetime.datetime.fromisoformat(value[:-1] + "+00:00")
-
-          if not instant(sys.argv[1]) < instant(sys.argv[2]) < instant(sys.argv[3]):
+          if not timestamp(sys.argv[1], "legacy createdTime") \
+                  < timestamp(sys.argv[2], "fallback createdTime") \
+                  < timestamp(sys.argv[3], "candidate createdTime"):
               raise SystemExit("bootstrap chronology must be exact A < R < C")
           PY
             verify_bootstrap_prepared_state

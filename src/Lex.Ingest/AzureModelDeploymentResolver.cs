@@ -192,12 +192,7 @@ public sealed class AzureModelDeploymentResolver
             throw new InvalidDataException(
                 "Active Azure Container App bootstrap candidate is not running.");
         var createdTime = properties["createdTime"]?.GetValue<string>() ?? "";
-        if (!createdTime.EndsWith('Z')
-            || !DateTimeOffset.TryParse(createdTime,
-                System.Globalization.CultureInfo.InvariantCulture,
-                System.Globalization.DateTimeStyles.RoundtripKind,
-                out var parsedCreated)
-            || parsedCreated.Offset != TimeSpan.Zero)
+        if (!TryParseExplicitUtc(createdTime, out _))
             throw new InvalidDataException(
                 "Azure Container App revision createdTime is not an explicit UTC instant.");
         var template = properties["template"] as JsonObject
@@ -250,12 +245,7 @@ public sealed class AzureModelDeploymentResolver
             var id = revision["id"]?.GetValue<string>() ?? "";
             var createdTime = properties["createdTime"]?.GetValue<string>() ?? "";
             if (!string.Equals(id.TrimEnd('/'), expectedId, StringComparison.OrdinalIgnoreCase)
-                || !createdTime.EndsWith('Z')
-                || !DateTimeOffset.TryParse(createdTime,
-                    System.Globalization.CultureInfo.InvariantCulture,
-                    System.Globalization.DateTimeStyles.RoundtripKind,
-                    out var parsedCreated)
-                || parsedCreated.Offset != TimeSpan.Zero)
+                || !TryParseExplicitUtc(createdTime, out _))
                 throw new InvalidDataException(
                     "Azure Container App revision route identity is malformed.");
             routes.Add(new BootstrapRevisionRouteEvidence(
@@ -327,6 +317,17 @@ public sealed class AzureModelDeploymentResolver
     private static bool IsReadyRunningState(string? state) =>
         string.Equals(state, "Running", StringComparison.OrdinalIgnoreCase)
         || string.Equals(state, "RunningAtMaxScale", StringComparison.OrdinalIgnoreCase);
+
+    private static bool TryParseExplicitUtc(string value, out DateTimeOffset parsed)
+    {
+        parsed = default;
+        return (value.EndsWith('Z') || value.EndsWith("+00:00", StringComparison.Ordinal))
+            && DateTimeOffset.TryParse(value,
+                System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.RoundtripKind,
+                out parsed)
+            && parsed.Offset == TimeSpan.Zero;
+    }
 
     private static AssistantCandidateRuntimeEvidence ParseCandidateTemplate(
         string resourceId,

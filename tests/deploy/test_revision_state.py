@@ -15,8 +15,8 @@ class RevisionStateTests(unittest.TestCase):
         recovered = self.state(
             limit=1,
             revisions=[
-                self.revision("previous", active=True, traffic=100, created="2026-08-13T10:00:00Z"),
-                self.revision("candidate", active=False, traffic=0, created="2026-08-14T10:00:00Z"),
+                self.revision("previous", active=True, traffic=100, created="2026-08-13T10:00:00+00:00"),
+                self.revision("candidate", active=False, traffic=0, created="2026-08-14T10:00:00+00:00"),
             ],
         )
 
@@ -50,6 +50,9 @@ class RevisionStateTests(unittest.TestCase):
         non_utc_created = copy.deepcopy(recovered)
         non_utc_created["revisions"][0]["createdTime"] = "2026-08-13T12:00:00+02:00"
         invalid_states.append(non_utc_created)
+        naive_created = copy.deepcopy(recovered)
+        naive_created["revisions"][0]["createdTime"] = "2026-08-13T10:00:00"
+        invalid_states.append(naive_created)
 
         for state in invalid_states:
             with self.subTest(state=state):

@@ -20,8 +20,14 @@ class BootstrapLegacyPlanTests(unittest.TestCase):
         self.assertEqual(1, plan["mutation"]["max_inactive_revisions"])
         self.assertFalse(plan["mutation"]["traffic_change"])
         self.assertEqual(3, len(plan["revisions"]))
-        self.assertTrue(all(item["image_digest"].startswith("sha256:")
-                            for item in plan["revisions"]))
+        self.assertTrue(plan["legacy_authority"]["image_digest"].startswith("sha256:"))
+        inactive = [item for item in plan["revisions"] if not item["active"]]
+        self.assertEqual(
+            ["crsoufien3orem.azurecr.io/lex-web:v0.42.0",
+             "crsoufien3orem.azurecr.io/lex-web:build-31547318355"],
+            [item["image"] for item in inactive],
+        )
+        self.assertTrue(all(item["image_digest"] is None for item in inactive))
 
     def test_refuses_extra_active_traffic_or_loose_types(self):
         for mutation in (
@@ -51,6 +57,13 @@ class BootstrapLegacyPlanTests(unittest.TestCase):
         self.assertNotEqual(0, completed.returncode)
 
         inventory = self.inventory()
+        tagged = "other.azurecr.io/lex-web:v0.42.0"
+        inventory["revisions"][1]["image"] = tagged
+        inventory["revisions"][1]["template"]["containers"][0]["image"] = tagged
+        completed, _ = self.run_plan(inventory)
+        self.assertNotEqual(0, completed.returncode)
+
+        inventory = self.inventory()
         inventory["revisions"][0]["createdTime"] = "2026-08-14T02:00:00+02:00"
         completed, _ = self.run_plan(inventory)
         self.assertNotEqual(0, completed.returncode)
@@ -69,8 +82,8 @@ class BootstrapLegacyPlanTests(unittest.TestCase):
 
     @staticmethod
     def inventory():
-        def revision(name, active, traffic, created, marker):
-            image = "crsoufien3orem.azurecr.io/lex-web@sha256:" + marker * 64
+        def revision(name, active, traffic, created, marker, image=None):
+            image = image or "crsoufien3orem.azurecr.io/lex-web@sha256:" + marker * 64
             return {
                 "name": name,
                 "active": active,
@@ -87,9 +100,14 @@ class BootstrapLegacyPlanTests(unittest.TestCase):
             "schema": "lex-bootstrap-legacy-inventory/1",
             "max_inactive_revisions": 100,
             "revisions": [
-                revision("ca-lex-web--a", True, 100, "2026-08-14T00:00:00Z", "a"),
-                revision("ca-lex-web--failed-1", False, 0, "2026-08-14T01:00:00Z", "b"),
-                revision("ca-lex-web--failed-2", False, 0, "2026-08-14T02:00:00Z", "c"),
+                revision("ca-lex-web--a", True, 100,
+                         "2026-08-14T00:00:00+00:00", "a"),
+                revision("ca-lex-web--failed-1", False, 0,
+                         "2026-08-14T01:00:00+00:00", "b",
+                         "crsoufien3orem.azurecr.io/lex-web:v0.42.0"),
+                revision("ca-lex-web--failed-2", False, 0,
+                         "2026-08-14T02:00:00+00:00", "c",
+                         "crsoufien3orem.azurecr.io/lex-web:build-31547318355"),
             ],
         }
 

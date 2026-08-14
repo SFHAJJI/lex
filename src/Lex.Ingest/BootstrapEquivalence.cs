@@ -623,7 +623,8 @@ public static class BootstrapEquivalenceVerifier
 
     private static DateTimeOffset Utc(string value, string field)
     {
-        if (value is null || !value.EndsWith('Z')
+        if (value is null
+            || !(value.EndsWith('Z') || value.EndsWith("+00:00", StringComparison.Ordinal))
             || !DateTimeOffset.TryParse(value,
                 System.Globalization.CultureInfo.InvariantCulture,
                 System.Globalization.DateTimeStyles.RoundtripKind,

@@ -707,6 +707,15 @@ public sealed class ReleaseWorkflowTests
         var terraform = File.ReadAllText(Path.Combine(RepoRoot(), "infra", "main.tf"));
         Assert.Contains("resource \"azurerm_role_assignment\" \"deploy_acr_inventory_reader\"", terraform);
         Assert.Contains("role_definition_name = \"AcrPull\"", terraform);
+        var indexTerraform = File.ReadAllText(
+            Path.Combine(RepoRoot(), "infra", "index-host.tf"));
+        Assert.Contains(
+            "resource \"azurerm_role_assignment\" \"deploy_index_inventory_reader\"",
+            indexTerraform);
+        Assert.Contains("role_definition_name = \"Storage Blob Data Reader\"",
+            indexTerraform);
+        Assert.Contains("principal_id         = azurerm_user_assigned_identity.deploy.principal_id",
+            indexTerraform);
     }
 
     [Fact]
@@ -836,6 +845,8 @@ public sealed class ReleaseWorkflowTests
         Assert.Contains("fallback_created", deploy);
         Assert.Contains("candidate_created", deploy);
         Assert.Contains("bootstrap chronology must be exact A < R < C", deploy);
+        Assert.Contains("from bootstrap_plan import timestamp", deploy);
+        Assert.DoesNotContain("value.endswith(\"Z\")", deploy);
         Assert.Contains("bootstrap_fallback", deploy);
         Assert.Contains("R did not replace the final legacy inactive revision", deploy);
         Assert.Contains("LEX_ASSISTANT_EVAL_CATALOG_SHA256", deploy);
@@ -914,6 +925,8 @@ public sealed class ReleaseWorkflowTests
         Assert.Contains("refusing to abandon outside exact A/R/C preparation", workflow);
         Assert.Contains("bootstrap C was already abandoned safely", workflow);
         Assert.Contains("bootstrap abandon requires exact A < R < C chronology", workflow);
+        Assert.Contains("from bootstrap_plan import timestamp", workflow);
+        Assert.DoesNotContain("endswith(\"Z\")", workflow);
         Assert.Contains("--revision \"$CANDIDATE_REVISION\"", workflow);
         Assert.Contains("length == 2", workflow);
         Assert.DoesNotContain("ingress traffic set", workflow);

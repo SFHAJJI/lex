@@ -7,11 +7,15 @@ from pathlib import Path
 import re
 import sys
 
-from bootstrap_plan import LEX_IMAGE, image_digest, timestamp
+from bootstrap_plan import LEX_IMAGE, timestamp
 from revision_template_digest import digest as canonical_template_digest
 
 
 REVISION = re.compile(r"^ca-lex-web--[a-z0-9-]+$")
+LEX_TAGGED_IMAGE = re.compile(
+    r"^crsoufien3orem\.azurecr\.io/lex-web:"
+    r"[A-Za-z0-9_][A-Za-z0-9._-]{0,127}$"
+)
 
 
 def build_plan(inventory):
@@ -48,16 +52,23 @@ def build_plan(inventory):
                 or containers[0].get("image") != image):
             raise ValueError("legacy revision image must match its one-container template")
         timestamp(revision.get("createdTime"), "legacy revision createdTime")
-        immutable_image = image_digest(image)
-        if not isinstance(image, str) or not LEX_IMAGE.fullmatch(image):
-            raise ValueError("legacy revision must use the immutable Lex ACR repository")
+        immutable_match = LEX_IMAGE.fullmatch(image or "") if isinstance(image, str) else None
+        tagged_match = (LEX_TAGGED_IMAGE.fullmatch(image or "")
+                        if isinstance(image, str) else None)
+        if active and not immutable_match:
+            raise ValueError("active legacy A must use the immutable Lex ACR repository")
+        if not active and not (immutable_match or tagged_match):
+            raise ValueError("inactive legacy revision must use the exact Lex ACR repository")
         canonical.append({
             "revision": revision["name"],
             "active": active,
             "traffic_weight": traffic,
             "created_time": revision["createdTime"],
             "image": image,
-            "image_digest": immutable_image,
+            # Historical inactive revisions may retain their exact tag reference. They are never
+            # activated or promoted; the reviewed plan binds their full image string and template
+            # before Azure's oldest-inactive purge. Only active A is an immutable authority.
+            "image_digest": immutable_match.group(1) if immutable_match else None,
             "canonical_template_digest": canonical_template_digest(template),
         })
 

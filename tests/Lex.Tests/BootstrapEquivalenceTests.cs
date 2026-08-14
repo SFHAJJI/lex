@@ -42,6 +42,54 @@ public sealed class BootstrapEquivalenceTests : IDisposable
     }
 
     [Fact]
+    public void Signed_equivalence_accepts_Azure_explicit_zero_offset_timestamps_only()
+    {
+        var evidence = Evidence() with
+        {
+            GeneratedAt = "2026-08-14T10:02:00+00:00",
+            LegacyAuthority = Evidence().LegacyAuthority with
+            {
+                CreatedTime = "2026-08-14T09:00:00+00:00",
+            },
+            Rollback = Evidence().Rollback with
+            {
+                CreatedTime = "2026-08-14T10:00:00+00:00",
+            },
+            Candidate = Evidence().Candidate with
+            {
+                CreatedTime = "2026-08-14T10:01:00+00:00",
+            },
+        };
+        var bundle = CreateBundle(evidence) with
+        {
+            CandidateLive = CandidateLive() with
+            {
+                CreatedTime = "2026-08-14T10:01:00+00:00",
+            },
+            RollbackLive = RollbackLive() with
+            {
+                CreatedTime = "2026-08-14T10:00:00+00:00",
+            },
+            LegacyLive = LegacyLive() with
+            {
+                CreatedTime = "2026-08-14T09:00:00+00:00",
+            },
+            Routes = Routes().Select(item => item with
+            {
+                CreatedTime = item.CreatedTime.Replace("Z", "+00:00", StringComparison.Ordinal),
+            }).ToArray(),
+        };
+
+        Assert.Equal(Candidate, Verify(bundle).Candidate.RevisionName);
+
+        var nonUtc = CreateBundle(evidence with
+        {
+            GeneratedAt = "2026-08-14T12:02:00+02:00",
+        });
+        Assert.Throws<InvalidDataException>(() => Verify(nonUtc));
+    }
+
+    [Fact]
     public void Tampering_with_equivalence_evidence_after_signing_fails_closed()
     {
         var bundle = CreateBundle(Evidence());
@@ -285,6 +333,7 @@ public sealed class BootstrapEquivalenceTests : IDisposable
     public void Azure_parser_accepts_inactive_fallback_but_requires_strict_live_types()
     {
         var fallback = RevisionBody(Rollback, active: false, traffic: JsonValue.Create(0));
+        fallback["properties"]!["createdTime"] = "2026-08-14T10:00:00+00:00";
 
         var parsed = ParseAzureRevision(Rollback, fallback);
 
@@ -295,6 +344,10 @@ public sealed class BootstrapEquivalenceTests : IDisposable
 
         fallback["properties"]!["active"] = "false";
         Assert.Throws<TargetInvocationException>(() => ParseAzureRevision(Rollback, fallback));
+
+        fallback = RevisionBody(Rollback, active: false, traffic: JsonValue.Create(0));
+        fallback["properties"]!["createdTime"] = "2026-08-14T12:00:00+02:00";
+        Assert.Throws<TargetInvocationException>(() => ParseAzureRevision(Rollback, fallback));
     }
 
     [Fact]
@@ -304,7 +357,7 @@ public sealed class BootstrapEquivalenceTests : IDisposable
         {
             ["value"] = new JsonArray
             {
-                RouteBody(Legacy, "2026-08-14T09:00:00Z", true, JsonValue.Create(100)),
+                RouteBody(Legacy, "2026-08-14T09:00:00+00:00", true, JsonValue.Create(100)),
                 RouteBody(Rollback, "2026-08-14T10:00:00Z", false, JsonValue.Create(0)),
                 RouteBody(Candidate, "2026-08-14T10:01:00Z", true, JsonValue.Create(0)),
             },
@@ -317,6 +370,10 @@ public sealed class BootstrapEquivalenceTests : IDisposable
         response.Remove("nextLink");
 
         response["value"]![0]!["properties"]!["trafficWeight"] = "100";
+        Assert.Throws<TargetInvocationException>(() => ParseAzureRoutes(response));
+
+        response["value"]![0]!["properties"]!["trafficWeight"] = 100;
+        response["value"]![0]!["properties"]!["createdTime"] = "2026-08-14T11:00:00+02:00";
         Assert.Throws<TargetInvocationException>(() => ParseAzureRoutes(response));
     }
 

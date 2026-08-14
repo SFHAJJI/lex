@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Build a canonical, dry-run allowlist for the one-time first release bootstrap."""
 
-from datetime import datetime
+from datetime import datetime, timedelta
 import hashlib
 import json
 from pathlib import Path
@@ -32,10 +32,12 @@ def image_digest(image):
 
 
 def timestamp(value, field):
-    if not isinstance(value, str) or not value.endswith("Z"):
+    if not isinstance(value, str) or not (
+            value.endswith("Z") or value.endswith("+00:00")):
         raise ValueError(f"{field} must be an explicit UTC instant")
-    parsed = datetime.fromisoformat(value[:-1] + "+00:00")
-    if parsed.utcoffset() is None or parsed.utcoffset().total_seconds() != 0:
+    parsed = datetime.fromisoformat(
+        value[:-1] + "+00:00" if value.endswith("Z") else value)
+    if parsed.utcoffset() != timedelta(0):
         raise ValueError(f"{field} must be an explicit UTC instant")
     return parsed
 

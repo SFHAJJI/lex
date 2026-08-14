@@ -24,6 +24,12 @@ resource "azurerm_role_assignment" "publisher_index_writer" {
   principal_id         = azurerm_user_assigned_identity.publisher.principal_id
 }
 
+resource "azurerm_role_assignment" "deploy_index_inventory_reader" {
+  scope                = local.index_blob_container_scope
+  role_definition_name = "Storage Blob Data Reader"
+  principal_id         = azurerm_user_assigned_identity.deploy.principal_id
+}
+
 resource "azurerm_virtual_network" "index" {
   count               = var.enable_index_vm ? 1 : 0
   name                = "vnet-lex-index"
