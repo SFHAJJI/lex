@@ -6,9 +6,9 @@ HTTP 200
 <!-- Titles are labels, not sentences: one that ends in a full stop renders "acts., Lex" in
      the tab and in every social card, which is what the front page did until now. -->
 <title>Benchmarks, Lex</title>
-<meta name="description" content="Point-in-time Luxembourg and reviewed EU law: what did the rule say on a given date? Permalinks, timelines, diffs and verifiable provenance.">
+<meta name="description" content="Measured retrieval relevance, latency, memory and publication gates for Lex, including explicit not-yet-measured states.">
 <meta property="og:title" content="Benchmarks, Lex">
-<meta property="og:description" content="Point-in-time Luxembourg and reviewed EU law, with grounded AI answers, per-article history, and verifiable provenance.">
+<meta property="og:description" content="Measured retrieval relevance, latency, memory and publication gates for Lex, including explicit not-yet-measured states.">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Lex">
 <meta property="og:image" content="https://golden.test/og.png">
@@ -230,11 +230,10 @@ HTTP 200
     <nav aria-label="Check the work">
       <a href="/how-it-works">How it works</a>
       <a href="/coverage">Coverage</a>
-      <a href="/architecture">Architecture</a>
-      <a href="/decisions">Decisions</a>
+      <a href="/built">Architecture dossier</a>
+      <a href="/decisions">Decisions and trade-offs</a>
       <a href="/benchmarks" aria-current="page">Benchmarks</a>
-      <a href="/verify">Verify the artifacts</a>
-      <a href="/built">How I built it</a>
+      <a href="/verify">Verify artifacts</a>
       <a href="/about">About</a>
     </nav>
   </details>
@@ -244,12 +243,7 @@ HTTP 200
 <main>
 <h1>Benchmarks</h1>
 <p class="sub">measured retrieval, latency, memory, index size and cost evidence</p>
-<nav class="tabs" aria-label="Architecture evidence" style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 22px">
-  <a class="badge" href="/architecture">Current</a>
-  <a class="badge" href="/architecture/next">Next</a>
-  <a class="badge" href="/decisions">Decisions</a>
-  <a class="badge ok" href="/benchmarks">Benchmarks</a>
-</nav><p class="lede">Evidence is published with identity and context. A missing measurement is
+<p class="lede">Evidence is published with identity and context. A missing measurement is
 displayed as missing rather than replaced with an estimate.</p>
 <h2>Current service baseline</h2>
 <div class="card"><table class="kv">
@@ -287,7 +281,7 @@ reported separately, and only the holdout can authorize a default change.</p>
     <a href="/how-it-works">How it works</a><a href="/coverage">What Lex holds, and lacks</a>
     <a href="/decisions">Decisions, and what they cost</a>
     <a href="/benchmarks">Benchmarks</a><a href="/verify">Verify it yourself</a>
-    <a href="/architecture">Architecture</a><a href="/built">How I built it</a>
+    <a href="/built">Architecture dossier</a>
     <a href="/about">About</a></div>
   <!-- The datasets, not the engine. This group used to end at "Source on GitHub" pointing at
        the engine repo, which is the wrong thing to lead with for a reader who wants to USE

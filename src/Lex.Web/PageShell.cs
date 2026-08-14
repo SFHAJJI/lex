@@ -59,16 +59,16 @@ public static class PageShell
         + "per-article history, and verifiable provenance.";
 
     private static bool ProofCurrent(string? path) => path is
-        "/how-it-works" or "/coverage" or "/architecture" or "/architecture/next"
-        or "/decisions" or "/benchmarks" or "/verify" or "/built" or "/about";
+        "/how-it-works" or "/coverage" or "/architecture/dossier"
+        or "/decisions" or "/benchmarks" or "/verify"
+        or "/built" or "/about"
+        || path?.StartsWith("/built/", StringComparison.Ordinal) == true;
 
     private static string ProofLink(string path, string label, string? currentPath)
     {
-        // Architecture's delivery ledger is a child page, not a competing primary destination.
-        // Marking the parent link current gives visual and assistive-technology users the same
-        // route-family context that the open disclosure already communicates.
         var current = currentPath == path
-            || (path == "/architecture" && currentPath == "/architecture/next");
+            || (path == "/built" && (currentPath == "/architecture/dossier"
+                || currentPath?.StartsWith("/built/", StringComparison.Ordinal) == true));
         return $"<a href=\"{path}\"{(current ? " aria-current=\"page\"" : "")}>{label}</a>";
     }
 
@@ -84,7 +84,8 @@ public static class PageShell
                                   string? subtitle = null, string nav = "", string? h1 = null,
                                   string? canonicalPath = null, string? jsonLd = null,
                                   string? description = null, string? lang = null,
-                                  string? assetVersion = null, bool assistant = false) => $$"""
+                                  string? assetVersion = null, bool assistant = false,
+                                  string? extraHead = null) => $$"""
         <!DOCTYPE html>
         <html lang="{{H(lang ?? "en")}}">
         <head>
@@ -99,7 +100,7 @@ public static class PageShell
         <meta property="og:site_name" content="Lex">
         <meta property="og:image" content="{{publicBase}}/og.png">
         <meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
-        <meta name="twitter:card" content="summary_large_image">{{Extras(publicBase, canonicalPath, jsonLd)}}
+        <meta name="twitter:card" content="summary_large_image">{{Extras(publicBase, canonicalPath, jsonLd)}}{{extraHead ?? ""}}
         <meta name="twitter:image" content="{{publicBase}}/og.png">
         <script src="/site.js?v={{Uri.EscapeDataString(assetVersion ?? "dev")}}" defer></script>
         <!-- The interval mark: a rule, two terminals, and a notch at the date being read.
@@ -315,11 +316,10 @@ public static class PageShell
             <nav aria-label="Check the work">
               {{ProofLink("/how-it-works", "How it works", canonicalPath)}}
               {{ProofLink("/coverage", "Coverage", canonicalPath)}}
-              {{ProofLink("/architecture", "Architecture", canonicalPath)}}
-              {{ProofLink("/decisions", "Decisions", canonicalPath)}}
+              {{ProofLink("/built", "Architecture dossier", canonicalPath)}}
+              {{ProofLink("/decisions", "Decisions and trade-offs", canonicalPath)}}
               {{ProofLink("/benchmarks", "Benchmarks", canonicalPath)}}
-              {{ProofLink("/verify", "Verify the artifacts", canonicalPath)}}
-              {{ProofLink("/built", "How I built it", canonicalPath)}}
+              {{ProofLink("/verify", "Verify artifacts", canonicalPath)}}
               {{ProofLink("/about", "About", canonicalPath)}}
             </nav>
           </details>
@@ -342,7 +342,7 @@ public static class PageShell
             <a href="/how-it-works">How it works</a><a href="/coverage">What Lex holds, and lacks</a>
             <a href="/decisions">Decisions, and what they cost</a>
             <a href="/benchmarks">Benchmarks</a><a href="/verify">Verify it yourself</a>
-            <a href="/architecture">Architecture</a><a href="/built">How I built it</a>
+            <a href="/built">Architecture dossier</a>
             <a href="/about">About</a></div>
           <!-- The datasets, not the engine. This group used to end at "Source on GitHub" pointing at
                the engine repo, which is the wrong thing to lead with for a reader who wants to USE

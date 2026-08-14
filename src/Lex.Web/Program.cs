@@ -127,6 +127,7 @@ app.MapMcp("/mcp");
 app.MapApi(ctx)          // the assistant, public metadata APIs, robots.txt and healthz
    .MapHome(ctx)         // the front page and the workspace mount
    .MapExplainers(ctx)   // how it works, how it was built, the decisions, how to verify
+   .MapBuilt(ctx)        // the diagram-led architecture dossier and its owned SVGs
    .MapCatalogue(ctx)    // browse, search, in force on a date, what changed
    .MapDocuments(ctx);   // one law: its timeline, its text on a date, a comparison
 

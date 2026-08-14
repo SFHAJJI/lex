@@ -112,7 +112,8 @@ public static class DocumentEndpoints
                     """);
             sb.Append(EnvelopeCard(r, IsProvisional(r, db2)));
             return Results.Content(Page($"What changed, {TitleShorten(DocTitle(b))}", sb.ToString(),
-                $"{da:yyyy-MM-dd} → {db2:yyyy-MM-dd} · no interpretation, just the text delta"), "text/html");
+                $"{da:yyyy-MM-dd} → {db2:yyyy-MM-dd} · no interpretation, just the text delta",
+                canonicalPath: $"/{publisher}/{work}/diff/{VersionCoordinate(a)}/{VersionCoordinate(b)}"), "text/html");
         });
 
         app.MapGet($"/{pubRoute}/{{work}}", (string publisher, string work) =>

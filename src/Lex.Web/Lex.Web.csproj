@@ -15,6 +15,14 @@
   </ItemGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="..\..\docs\architecture\pages\*.md">
+      <Link>architecture\pages\%(Filename)%(Extension)</Link>
+      <LogicalName>Lex.Web.architecture.pages.%(Filename)%(Extension)</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\..\docs\architecture\diagrams\*.svg">
+      <Link>architecture\diagrams\%(Filename)%(Extension)</Link>
+      <LogicalName>Lex.Web.architecture.diagrams.%(Filename)%(Extension)</LogicalName>
+    </EmbeddedResource>
     <EmbeddedResource Include="..\..\docs\architecture-program.json"
                       Link="architecture-program.json"
                       LogicalName="Lex.Web.architecture-program.json" />

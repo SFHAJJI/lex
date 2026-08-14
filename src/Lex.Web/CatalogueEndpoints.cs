@@ -20,9 +20,11 @@ public static class CatalogueEndpoints
         // Program.cs. That is the property the golden snapshots check.
         string Page(string title, string body, string? subtitle = null, string nav = "",
                     string? h1 = null, string? canonicalPath = null, string? jsonLd = null,
-                    string? description = null, string? lang = null, bool assistant = true)
+                    string? description = null, string? lang = null, bool assistant = true,
+                    string? extraHead = null)
             => PageShell.Page(ctx.PublicBase, title, body, subtitle, nav, h1, canonicalPath,
-                              jsonLd, description, lang, ctx.Options.CodeCommit, assistant);
+                              jsonLd, description, lang, ctx.Options.CodeCommit, assistant, extraHead);
+        const string NoIndexFollow = "<meta name=\"robots\" content=\"noindex,follow\">";
         var readers = ctx.Registry.All;
         var publicBase = ctx.PublicBase;
         var mcpCore = ctx.Mcp;
@@ -411,7 +413,10 @@ public static class CatalogueEndpoints
                     History can never go deeper than what the publisher itself digitised.</div>
                     """);
             }
-            return Results.Content(Page("Coverage, what we hold, and what we lack", sb.ToString(), assistant: false), "text/html");
+            return Results.Content(Page("Coverage, what we hold, and what we lack", sb.ToString(),
+                canonicalPath: "/coverage",
+                description: "Live publisher coverage, text availability, extraction profiles and explicit legal-data gaps in Lex.",
+                assistant: false), "text/html");
         });
 
         app.MapGet("/in-force-on", (string? date, string? publisher, string? kind, int? page) =>
@@ -483,7 +488,8 @@ public static class CatalogueEndpoints
                 }
             }
             return Results.Content(Page("Publisher state on a date", sb.ToString(),
-                "Luxembourg rows describe applicability; EU rows describe official consolidated wording states, not entry into force."), "text/html");
+                "Luxembourg rows describe applicability; EU rows describe official consolidated wording states, not entry into force.",
+                extraHead: NoIndexFollow), "text/html");
         });
 
         app.MapGet("/search", (string? q, string? kind, string? publisher) =>
@@ -524,7 +530,7 @@ public static class CatalogueEndpoints
                 {
                     return Results.Content(Page("Bad search query",
                         $"<div class=\"notice\">status <span class=\"mono\">invalid_request</span>, "
-                        + $"{H(error.Message)}</div>"), "text/html", statusCode: 400);
+                        + $"{H(error.Message)}</div>", extraHead: NoIndexFollow), "text/html", statusCode: 400);
                 }
                 foreach (var result in envelopes.OfType<JsonObject>())
                 {
@@ -555,7 +561,7 @@ public static class CatalogueEndpoints
                     }
                 }
             }
-            return Results.Content(Page("Search", sb.ToString()), "text/html");
+            return Results.Content(Page("Search", sb.ToString(), extraHead: NoIndexFollow), "text/html");
         });
 
         // ---- /changed: the corpus-wide counterpart of a diff. "What moved between two dates?"
@@ -633,7 +639,8 @@ public static class CatalogueEndpoints
                 <span class="mono">changes_in_period(from_date="{H(f)}", to_date="{H(t)}"{(byChurn ? ", order=\"by_churn\"" : "")})</span>
                 ,  <a href="/developers">try it in the browser</a>.</p>
                 """);
-            return Results.Content(Page("What changed", sb.ToString(), null, "find"), "text/html");
+            return Results.Content(Page("What changed", sb.ToString(), null, "find",
+                extraHead: NoIndexFollow), "text/html");
         });
 
         // ---- /find: one door for the three ways of locating a law (search, browse, in-force-on).
@@ -671,7 +678,9 @@ public static class CatalogueEndpoints
                 <p class="sub">Not sure where to start? The <a href="/">assistant</a> takes a plain question,
                 or read <a href="/stories">four laws with a story</a>.</p>
                 """;
-            return Results.Content(Page("Find a law", body, null, "find"), "text/html");
+            return Results.Content(Page("Find a law", body, null, "find",
+                canonicalPath: "/find",
+                description: "Search legal text, inspect publisher states on a date, compare change windows or browse the complete Lex catalogue."), "text/html");
         });
 
         return app;

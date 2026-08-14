@@ -10,7 +10,9 @@ using static Lex.Web.Fragments;
 namespace Lex.Web;
 
 /// <summary>
-/// The pages that explain the system rather than serve it: how it works, how it was built, the decisions and what each one cost, how to verify a build yourself, and how to point your own model at it. Static content over the mounted indexes, no request state.
+/// The explanatory and evidence pages outside the architecture dossier: product method,
+/// decisions, benchmarks, artifact verification, examples and developer integration.
+/// Static content over the mounted indexes, with no per-request state.
 /// </summary>
 public static class ExplainerEndpoints
 {
@@ -30,153 +32,13 @@ public static class ExplainerEndpoints
         var retrievalCases = LoadRetrievalCases();
         var retrievalBaseline = LoadRetrievalBaseline();
 
-        string ArchitectureTabs(string active)
-        {
-            string Tab(string id, string href, string label) =>
-                $"<a class=\"{(active == id ? "badge ok" : "badge")}\" href=\"{href}\">{label}</a>";
-            return $"""
-                <nav class="tabs" aria-label="Architecture evidence" style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 22px">
-                  {Tab("current", "/architecture", "Current")}
-                  {Tab("next", "/architecture/next", "Next")}
-                  {Tab("decisions", "/decisions", "Decisions")}
-                  {Tab("benchmarks", "/benchmarks", "Benchmarks")}
-                </nav>
-                """;
-        }
-
         static string StatusBadge(string status) =>
             $"<span class=\"badge{(status == "shipped" ? " ok" : status == "gated" ? " warn" : "")}\">{H(status)}</span>";
 
         app.MapGet("/ai", () => Results.Redirect("/developers#assistant", permanent: true));
 
-        app.MapGet("/architecture", () =>
-        {
-            var cov = readers.Values.Select(r => r.Coverage()).OrderBy(c => c.Collection).ToList();
-            var current = architecture.Current;
-            var mountedSchemas = string.Join(", ", cov.Select(c => c.Stamp.GetValueOrDefault("schema", "unknown"))
-                                                     .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal));
-            var hybridCollections = ctx.Registry.Values.Where(reader => reader.HybridReady)
-                .Select(reader => reader.Collection).Order(StringComparer.Ordinal).ToList();
-            var liveRetrieval = hybridCollections.Count == 0
-                ? $"{current.Retrieval}, deterministic FTS5/BM25"
-                : $"keyword default; local hybrid preview available (gated) on {string.Join(", ", hybridCollections)}";
-            var coverageRows = string.Join("", cov.Select(c => $"""
-                <tr><td>{H(c.Collection)}</td><td class="mono">{c.Groups:n0}</td>
-                <td class="mono">{c.Versions:n0}</td><td class="mono">{H(c.Stamp.GetValueOrDefault("schema"))}</td>
-                <td class="mono">{H(c.Stamp.GetValueOrDefault("corpus_commit"))}</td></tr>
-                """));
-            var body = ArchitectureTabs("current") + $"""
-                <p class="lede">This page describes the system serving requests now. Target-state work is kept
-                separately on <a href="/architecture/next">Next</a>.</p>
-                <div class="card"><table class="kv">
-                <tr><th>retrieval</th><td>{H(liveRetrieval)}</td></tr>
-                <tr><th>hosting</th><td>{H(current.Hosting)}, {H(current.Region)}</td></tr>
-                <tr><th>resources</th><td>{H(current.Resource)}, {H(current.Scale)}</td></tr>
-                <tr><th>structured UI contract</th><td>{H(current.StructuredContract)}</td></tr>
-                <tr><th>comparison contract</th><td>{H(current.ComparisonContract)}</td></tr>
-                <tr><th>deployment observation</th><td class="mono">{H(current.ObservedAt)}</td></tr>
-                <tr><th>deployed code</th><td class="mono">{H(ctx.Options.CodeCommit ?? "not supplied by deployment")}</td></tr>
-                <tr><th>artifact manifest set</th><td class="mono">{H(ctx.Options.ArtifactManifestId ?? "not supplied by deployment")}</td></tr>
-                <tr><th>immutable image</th><td class="mono">{H(ctx.Options.DeployImage ?? "not supplied by deployment")}</td></tr>
-                </table></div>
-                <h2>Mounted coverage, read live</h2>
-                <div class="card"><table tabindex="0" aria-label="Mounted index collections"><tr><th>collection</th><th>works</th><th>versions</th><th>schema</th><th>corpus commit</th></tr>
-                {coverageRows}</table></div>
-                <h2>Contracts preserved</h2>
-                <p>Exact publisher text, hashes, anchors, timelines, refusals, comparisons and diffs remain
-                authoritative. The backend returns structured MCP JSON and the workspace renders the separate
-                <span class="mono">UiEffect</span> field.</p>
-                """ + """
-                <p>Lex answers one question, <b>what did the rule say on that date?</b>, for Luxembourg law and the reviewed-scope EU works in the mounted index,
-                in a way a developer can build on and an auditor can check. Everything below is open source and open data.</p>
-
-                <h2>Two layers, one hash chain</h2>
-                <div class="card"><pre class="mono" style="white-space:pre-wrap;font-size:12.5px;margin:0">EVIDENCE LAYER (append-only, verbatim)          CONSUMPTION LAYER (regenerable, clean)
-                lex-corpus-lu-legilux   lex-corpus-eu-eurlex   lex-articles
-                the exact bytes the state published       →   per-ARTICLE Markdown + JSON
-                sha256 per file, observation chains            publisher anchors + measured continuity gate
-                                                               publisher timeline intervals per provision
-                             deterministic, versioned,          per-anchor history + renumbering events
-                             IMMUTABLE extraction profiles          │
-                             (akn-lu/1, xhtml-eu/1, code,          ▼
-                              never an LLM)                    signed SQLite indexes (MOUNTED_INDEX_SCHEMAS)
-                                                               provisions + FTS + time axis, ECDSA-P256 stamp
-                                                                    │
-                                    this site · /mcp (any MCP client) · datasets</pre></div>
-
-                <p>Every provision's <span class="mono">text_sha256</span> chains to a verbatim-file sha256 in the evidence
-                repo: re-run the pinned open-source extractor on the state's bytes and you get these bytes.
-                <a href="/verify">Verify it yourself</a>, the defence is never "trust Lex".</p>
-
-                <h2>The retrieval unit is the article</h2>
-                <p>Search hits, <span class="mono">as_of</span> (with <span class="mono">outline</span> and
-                <span class="mono">select</span> modes), and the <span class="mono">article_history</span> tool all operate
-                per provision. "What did Article 92 say over its life?" is a file read: every distinct text on its
-                publisher timeline, plus mechanically detected renumberings (identical-hash matching, never interpretation).</p>
-
-                <h2>Honesty as an API contract</h2>
-                <div class="card"><table>
-                <tr><th>refusal status</th><th>meaning</th></tr>
-                <tr><td class="mono">no_version_for_date</td><td>the work exists; no publisher version covers that date</td></tr>
-                <tr><td class="mono">unknown_work / unknown_anchor</td><td>Lex does not hold it, and says so</td></tr>
-                <tr><td class="mono">anchor_not_in_version</td><td>that article did not exist in that version (knowing this IS the product)</td></tr>
-                <tr><td class="mono">text_withheld</td><td>metadata held, text gate not cleared; official link provided</td></tr>
-                <tr><td class="mono">text_not_available</td><td>publisher record held; no safely derived provision text; official link provided</td></tr>
-                <tr><td class="mono">no_provision_history</td><td>the work is held without per-article history</td></tr>
-                </table></div>
-                <p class="sub">MCP MCP_SERVER_VERSION uses a closed status vocabulary. See the
-                <a href="https://github.com/SFHAJJI/lex/blob/main/docs/mcp-2-migration.md" rel="noopener">migration note</a>.</p>
-                <p>A flagged wrong answer is still wrong, so Lex refuses instead; <a href="/coverage">coverage</a> exists to
-                state what we do <b>not</b> have. The AI layer (<a href="/">the front page</a>) is additive and separated:
-                a bounded retrieval loop uses the same in-process tool core the public
-                <span class="mono">/mcp</span> serves, then Agent Framework composes claim-typed evidence
-                and conditionally judges grounded prose. Application code, not the model, owns work
-                resolution, tool authorization, citations, typed gaps and legal text (fitness rule F10).</p>
-
-                <h2>Build on it</h2>
-                <p>
-                <a href="https://github.com/SFHAJJI/lex-articles">lex-articles</a>, machine-readable corpus (CC-BY, SCHEMA.md contract) ·
-                <a href="https://github.com/SFHAJJI/lex">lex</a>, all code, Apache-2.0, incl. the
-                <a href="https://github.com/SFHAJJI/lex/blob/main/docs/lex-spec-v4.md">full decision record (D1, D47)</a> ·
-                <a href="https://github.com/SFHAJJI/lex-corpus-lu-legilux">evidence repos</a> ·
-                hosted MCP: <span class="mono">claude mcp add --transport http lex https://law.soufien.lu/mcp</span></p>
-                """;
-            body = body.Replace("MOUNTED_INDEX_SCHEMAS", H(mountedSchemas), StringComparison.Ordinal);
-            body = body.Replace("MCP_SERVER_VERSION", H(McpSdkBridge.ServerVersion), StringComparison.Ordinal);
-            return Results.Content(Page("Architecture", body,
-                "what is deployed now, read separately from what comes next",
-                canonicalPath: "/architecture"), "text/html");
-        });
-
-        app.MapGet("/architecture/next", () =>
-        {
-            var rows = string.Join("", architecture.Milestones.Select(m => $"""
-                <tr><td class="mono">{H(m.Id)}</td><td><b>{H(m.Title)}</b><br><span class="sub">{H(m.Outcome)}</span></td>
-                <td>{StatusBadge(m.Status)}</td></tr>
-                """));
-            var body = ArchitectureTabs("next") + $"""
-                <p class="lede">The accepted target architecture, with status read from the registry committed
-                beside the implementation. Only milestones marked shipped are live; gated and planned work is not.</p>
-                <div class="card"><table tabindex="0" aria-label="Architecture delivery milestones"><tr><th>milestone</th><th>outcome</th><th>status</th></tr>{rows}</table></div>
-                <h2>Target path</h2>
-                <div class="card"><pre class="mono" style="white-space:pre-wrap;margin:0;font-size:13px">Reviewed EU scope configuration
-                  -&gt; every official dated FR/EN expression plus bounded legal relationships
-                  -&gt; content-addressed text states and occurrence mappings
-                  -&gt; FTS5 keyword candidates plus local compact semantic candidates
-                  -&gt; date and hierarchy eligibility
-                  -&gt; fixed reciprocal rank fusion
-                  -&gt; the same exact provision JSON, timeline, comparison and UiEffect contracts</pre></div>
-                <p>Hybrid retrieval remains gated until its public relevance, temporal, latency and memory
-                thresholds pass. Missing official consolidation remains a named gap, never generated wording.</p>
-                <p class="sub">Program <span class="mono">{H(architecture.ProgramVersion)}</span>, updated
-                <span class="mono">{H(architecture.UpdatedAt)}</span>, review status
-                <span class="mono">{H(architecture.ReviewStatus)}</span>.</p>
-                """;
-            return Results.Content(Page("Next architecture", body,
-                "the accepted target, its gates, and what has actually shipped",
-                canonicalPath: "/architecture/next"), "text/html");
-        });
-
+        app.MapGet("/architecture", () => Results.Redirect("/built", permanent: true));
+        app.MapGet("/architecture/next", () => Results.Redirect("/built/limits", permanent: true));
         app.MapGet("/benchmarks", () =>
         {
             static string F(double value, string format) =>
@@ -229,7 +91,7 @@ public static class ExplainerEndpoints
                   Gate failures: {H(report.GateFailures.Count == 0 ? "none" : string.Join("; ", report.GateFailures))}.</p></div>
                   <p><a href="/benchmarks/latest.json">Download the complete latest benchmark report</a>.</p>
                   """;
-            var body = ArchitectureTabs("benchmarks") + $"""
+            var body = $"""
                 <p class="lede">Evidence is published with identity and context. A missing measurement is
                 displayed as missing rather than replaced with an estimate.</p>
                 <h2>Current service baseline</h2>
@@ -257,7 +119,8 @@ public static class ExplainerEndpoints
                 """;
             return Results.Content(Page("Benchmarks", body,
                 "measured retrieval, latency, memory, index size and cost evidence",
-                canonicalPath: "/benchmarks"), "text/html");
+                canonicalPath: "/benchmarks",
+                description: "Measured retrieval relevance, latency, memory and publication gates for Lex, including explicit not-yet-measured states."), "text/html");
         });
 
         app.MapGet("/benchmarks/latest.json", () =>
@@ -466,222 +329,8 @@ public static class ExplainerEndpoints
                 """;
             return Results.Content(Page("Verify", body,
                 "the signature, the hash chain, and how to check both without trusting us",
-                canonicalPath: "/verify"), "text/html");
-        });
-
-        // ---- /built: the engineering story. Written for someone deciding whether the person who
-        // built this can build things — decisions, tradeoffs, failures, and how correctness is proven.
-        app.MapGet("/built", () =>
-        {
-            var cov = readers.Values.Select(r => r.Coverage()).ToList();
-            var body = $"""
-                <p class="lede">A point-in-time legal database, an MCP server, a grounded assistant and a
-                nightly pipeline, built solo. This page is the part usually left out: the decisions, the
-                things that broke, and how correctness is actually proven rather than asserted.</p>
-
-                <div class="notice"><b>Built with AI assistance.</b> The architecture, the decisions and the
-                verification are mine; a great deal of the code was written with an AI pair. That is stated
-                here because it is true, and because the parts that matter, the decision record, the failure
-                modes below, and the tests that catch them, are where the engineering actually lives.</div>
-
-                <h2>The problem</h2>
-                <p>Ask any legal site what a law says and you get today's text. Almost every question that
-                matters is about a <b>date</b>: what applied when the contract was signed, when the fine was
-                issued, when the breach happened. Official publishers do hold dated consolidated editions,
-                but scattered across formats (Akoma Ntoso XML, Formex XML, legacy XHTML), with no article-level
-                access and no machine interface. Lex turns that into one queryable, verifiable history.</p>
-
-                <h2>The shape of it</h2>
-                <div class="card"><pre class="mono" style="white-space:pre-wrap;margin:0;font-size:13px">
-                official publishers          nightly, one scheduled job
-                Legilux · EUR-Lex/Cellar     ──────────────────────────────────
-                        │                    ingest → anomaly gate → derive →
-                        │  verbatim bytes      (&gt;5% drop =        determinism
-                        ▼  + sha256             commit nothing)     guard
-                  EVIDENCE REPOS ──────────────────────────────────────────►
-                  append-only, never rewritten            │
-                        │                                 ▼
-                        │  deterministic extraction   DERIVED REPO (per article)
-                        ▼  (immutable profiles)           │
-                  LEX-INDEX/3 + LOCAL VECTORS ◄───────────────┘
-                        │  signed whole-artifact manifest
-                        │  verified at build and startup
-                        ▼
-                  CANDIDATE REVISION (zero traffic)
-                        │  health + MCP + LU/EU search smoke tests
-                        │  signed eval evidence + human attestation
-                        ▼
-                  MCP server · this site (Container Apps, one pinned replica)</pre></div>
-                <p class="sub">Azure: Container Apps behind a managed certificate, Container Registry, Key Vault
-                signing, Application Insights via OpenTelemetry, and Azure DNS. Managed identity pulls the image
-                and authenticates the optional Azure OpenAI assistant. Retrieval itself is local and deterministic:
-                FTS5/BM25, ONNX embeddings, fixed reranking and fusion, with no generative model in the search path.
-                The web app uses 1 vCPU and 2 GiB for the mounted lexical and semantic artifacts,
-                and runs as <b>one always-on replica</b>. The single process makes the public
-                request and concurrency ledgers authoritative while keeping retrieval latency predictable.</p>
-
-                <h2>Decisions worth defending</h2>
-                <div class="card"><table>
-                <tr><th>decision</th><th>why, and what it cost</th></tr>
-                <tr><td><b>Store publisher bytes verbatim</b></td>
-                    <td>The evidence layer is never "cleaned". A hash over cleaned text proves nothing about
-                    what the state published. Cost: two layers to maintain instead of one.</td></tr>
-                <tr><td><b>Extraction profiles are immutable</b></td>
-                    <td>Once <span class="mono">akn-lu/1</span> is published, its output for a given input can
-                    never change, a frozen-fingerprint test fails the build if it does. Improvements ship as
-                    a new profile. Cost: no silent fixes, ever.</td></tr>
-                <tr><td><b>Refusals are part of the API</b></td>
-                    <td>Seven typed refusal codes instead of empty results. A caller can distinguish "no such
-                    law", "no version that day" and "text withheld". Cost: more surface to test.</td></tr>
-                <tr><td><b>Bounded retrieval, deterministic authority</b></td>
-                    <td>Application code resolves named works and authorizes work-specific tools. A bounded
-                    tool-calling loop gathers MCP evidence; Agent Framework then composes claim-typed prose and
-                    runs the conditional judge. Citations and typed gaps remain deterministic application contracts.</td></tr>
-                <tr><td><b>Nightly commits nothing when unsure</b></td>
-                    <td>A &gt;5% drop in works, or a re-derivation that is not byte-identical, aborts the run.
-                    A partial upstream response must never rewrite history.</td></tr>
-                </table>
-                <p class="sub" style="margin:8px 0 0">{architecture.Decisions.Count:n0} delivery decisions like these are read from
-                the architecture registry, alongside the numbered specification decisions. Each records its
-                rationale, so "why did you do it that way" has a written answer rather than a recollection.</p></div>
-
-                <h2>The machinery that keeps it fresh</h2>
-                <p>Law changes while you sleep, so the corpus is rebuilt while I do. One scheduled job at
-                02:17 UTC drives the whole fleet, no manual publication step exists. GitHub Actions uses OIDC
-                and short-lived Azure authorization; the signing key remains non-exportable in Key Vault.</p>
-                <div class="card"><table>
-                <tr><th>stage</th><th>what it does, and how it refuses to do damage</th></tr>
-                <tr><td><b>1. Ingest</b></td><td>Asks each publisher what versions exist, downloads any it has
-                not seen, and writes them <i>verbatim</i>. Existing files are never reopened for writing,
-                the evidence layer is append-only by construction.</td></tr>
-                <tr><td><b>2. Anomaly gate</b></td><td>If the work count drops more than 5%, the run assumes the
-                upstream response was partial, discards everything and commits nothing. A bad night leaves
-                yesterday's good data in place.</td></tr>
-                <tr><td><b>3. Derive</b></td><td>Regenerates the per-article layer from the verbatim files.</td></tr>
-                <tr><td><b>4. Determinism guard</b></td><td>If derived output changed while no source file did,
-                that means the extractor is non-deterministic, the run fails loudly and commits nothing,
-                because a silent extraction drift would corrupt history.</td></tr>
-                <tr><td><b>5. Index &amp; sign</b></td><td>Builds lex-index/3, local vectors and the benchmark evidence.
-                A canonical manifest binds every index, vector, model, tokenizer and scope artifact by hash and
-                size; Key Vault signs that whole manifest and the workflow verifies it before publication.</td></tr>
-                <tr><td><b>6. Deploy safely</b></td><td>Builds an immutable image tagged with the code commit and
-                manifest hash, verifies the release again, starts a zero-traffic revision, and exercises health,
-                MCP, LU and EU search against it. It stops there by design: this workflow cannot move traffic and
-                refuses to try. Whatever is serving keeps serving.</td></tr>
-                <tr><td><b>7. Promote deliberately</b></td><td>Traffic moves only from a separate workflow, and only
-                against a fixed evidence set bound to that exact revision: the eval report, the frozen case catalog,
-                browser evidence, and a human attestation signed with a Key Vault key the artifact publisher is not
-                granted access to. Approving the cases and publishing the artifacts are deliberately separate
-                authorities, so no automated actor can approve its own release. The preceding revision remains
-                available for rollback.</td></tr>
-                <tr><td><b>8. Report</b></td><td>Writes a three-state outcome per publisher
-                (<span class="mono">ran_committed</span> / <span class="mono">ran_no_change</span> /
-                <span class="mono">failed_*</span>) and opens an issue on failure.</td></tr>
-                </table></div>
-                <p>The result travels with the data. The pinned whole-artifact manifest is the runtime trust root;
-                each index also carries a public provenance stamp recording when and from which corpus commit it
-                was built. Every tool response returns that provenance. <b>This is the embedded stamp read live
-                from the running indexes:</b></p>
-                <div class="card"><table tabindex="0" aria-label="Mounted index provenance">
-                <tr><th>publisher</th><th>index built</th><th>from corpus commit</th><th>signature</th></tr>
-                {string.Join("", readers.Values.OrderBy(r => r.Collection, StringComparer.Ordinal).Select(r => $"""
-                    <tr><td>{H(r.Collection)}</td>
-                    <td class="mono">{H(r.Stamp.GetValueOrDefault("built_at"))}</td>
-                    <td class="mono">{H(r.Stamp.GetValueOrDefault("corpus_commit"))}</td>
-                    <td>{(r.SignatureValid ? "<span class=\"badge ok\">valid</span>" : "<span class=\"badge warn\">unsigned</span>")}</td></tr>
-                    """))}
-                </table>
-                <p class="sub" style="margin:8px 0 0">Nothing here is typed by hand. The same values come back
-                from the <a href="/developers">coverage tool</a>. The embedded signature proves provenance; the
-                <a href="/verify">release verification page</a> reports whether the complete mounted artifact set
-                passed the independently pinned trust policy.</p></div>
-
-                <h2>What broke, and what it taught</h2>
-                <div class="card">
-                <p><b>A silently dead search, caught in production.</b> The nightly job built the search index
-                without the per-article layer. Nothing errored: the index was valid, signed, and published,
-                it just had zero provisions in it, so search returned nothing. The automated eval suite caught
-                it by asking a question a user would ask and noticing the assistant could no longer find a
-                Luxembourg code.</p>
-                <p class="sub">Fix: the index step now runs after derivation and takes the article layer as a
-                required input, so the failure cannot recur. Lesson: a green build is not a working system,
-                the only tests that would have caught this are the ones that exercise it end to end, the way
-                someone actually uses it.</p>
-                <p><b>A parser that quietly duplicated text.</b> Adding Formex XML support introduced doubled
-                paragraphs where an article had introductory text followed by a list. It looked plausible on
-                screen. It was caught by re-reading real output rather than trusting a passing test, fixed the
-                same day, and pinned with a fingerprint test so the profile can never drift again.</p>
-                <p><b>The right article of the wrong law.</b> A question quoting the Capital Requirements
-                Regulation by its full official title, which ends "and amending Regulation (EU) No 648/2012",
-                was answered with Article 26 of EMIR, on clearing house governance, instead of Article 26 of
-                the CRR, on Common Equity Tier 1. The model invented nothing. Retrieval handed it the wrong
-                instrument: the quoted title names two laws, both are held, both have an Article 26, and the
-                tie fell through to keyword rank over article text, which for a quoted official title is close
-                to random. The reply named no instrument, so nothing on screen let a reader notice.</p>
-                <p class="sub">Fix, at three layers. Selection now treats the mention that strictly contains
-                every other as the subject of the sentence, which is a fact about what was typed rather than a
-                keyword list, so it holds in any language. Resolution demotes a law named only inside an
-                amending clause, so the ambiguity is never produced, while a question whose only named law sits
-                in such a clause still resolves it. And the answer now always names the instrument, its
-                identifier and the effective date, and discloses the runner-up whenever a choice was made,
-                enforced after synthesis so the composer cannot drop it. Lesson: the dangerous retrieval failure
-                is not a wrong answer, it is a correct answer to a question about a different document.
-                Groundedness scoring cannot catch that, because the answer is faithful to the evidence it was
-                handed. Only naming the source in the reply makes it visible to the reader.</p>
-                </div>
-
-                <h2>How correctness is proven, not claimed</h2>
-                <div class="card"><table tabindex="0" aria-label="Correctness evaluation layers">
-                <tr><th>mechanism</th><th>what it guarantees</th></tr>
-                <tr><td>Unit, contract, golden and architecture-fitness suites</td><td>parsers, temporal logic,
-                backward-compatible APIs, pages, index schemas, trust and deployment invariants</td></tr>
-                <tr><td>Frozen profile fingerprints</td><td>a published extraction can never change output</td></tr>
-                <tr><td>Determinism guard in CI</td><td>re-derivation is byte-identical or the run commits nothing</td></tr>
-                <tr><td>End-to-end assistant evals</td><td>the assistant picks the right tools and never cites a source it was not given</td></tr>
-                <tr><td>200-case retrieval benchmark</td><td>EU and Luxembourg exact, temporal, conceptual,
-                bilingual, typo, hierarchy, role, comparison, negative, ambiguity and gap behavior is
-                measured on separate tuning and holdout judgments before hybrid can become the default</td></tr>
-                <tr><td>LLM-judged groundedness</td><td>answers scored against the evidence actually returned</td></tr>
-                <tr><td>Pinned whole-artifact manifests</td><td>anyone can verify every released input was not altered,
-                <a href="/verify">recipe</a></td></tr>
-                </table></div>
-
-                <h2>Scale</h2>
-                <p><span class="badge">{cov.Sum(c => c.Groups):n0} works</span>
-                <span class="badge">{cov.Sum(c => c.Versions):n0} dated versions</span>
-                <span class="badge">lex-index/2 + lex-index/3 readers</span>
-                <span class="badge">3 official XML/HTML dialects</span>
-                <span class="badge">nightly, unattended</span></p>
-
-                <h2>What I would do differently</h2>
-                <p>Version the index schema migration path from day one, schema v2 required a full rebuild
-                rather than a migration. Put the end-to-end evals in the nightly pipeline, not only in my hands;
-                they caught the worst bug of the project and should be a gate, not a habit. And treat the
-                derived layer's release assets as part of the deploy, not a follow-up step, the two times
-                something shipped stale, that was why.</p>
-
-                <!-- Eight sections on how this was made, and until now not one word on who made it.
-                     Anyone still reading here has already decided the work is serious, so the answer
-                     belongs at the end rather than at the top: a law tool that opens by introducing its
-                     author reads as a portfolio, and stops being trusted as a source. Two sentences. -->
-                <h2>Who built this</h2>
-                <div class="card">
-                <p>Lex is built and run by <b><a href="/about">Soufien Hajji</a></b>, a Lead Software &amp; AI
-                Engineer specialising in taking enterprise AI copilots from prototype to production on Azure,
-                based near Luxembourg. It is a personal project, unaffiliated with any publisher or
-                public body, built the way I build professionally: the pipeline is deterministic, the claims
-                are testable, and the parts that cannot be verified say so rather than guessing.</p>
-                <p class="sub"><a href="/about"><b>About, and the other two systems built the same way →</b></a></p>
-                </div>
-
-                <p class="sub"><a href="/decisions"><b>Why it is built this way →</b></a> ·
-                <a href="/developers"><b>Use it from your own code →</b></a> ·
-                <a href="/architecture"><b>The data model →</b></a> ·
-                <a href="/verify"><b>Verify a build yourself →</b></a> ·
-                <a href="https://github.com/SFHAJJI/lex-articles" rel="noopener"><b>The dataset →</b></a></p>
-                """;
-            return Results.Content(Page("How it was built", body, null, "how",
-                canonicalPath: "/built"), "text/html");
+                canonicalPath: "/verify",
+                description: "Independently verify Lex manifests, signatures, index stamps and source hash chains without trusting the running service."), "text/html");
         });
 
         // ---- /about: who built this, and what else they have built.
@@ -753,7 +402,8 @@ public static class ExplainerEndpoints
                 """;
             return Results.Content(Page("About", body,
                 "Lead Software and AI Engineer taking enterprise AI copilots from prototype to production on Azure.",
-                "about", canonicalPath: "/about"), "text/html");
+                "about", canonicalPath: "/about",
+                description: "About Soufien Hajji, the engineer who designed, built and operates Lex and its grounded production AI systems."), "text/html");
         });
 
         // ---- /decisions: the choices, with what each one cost.
@@ -770,7 +420,7 @@ public static class ExplainerEndpoints
                 <span class="sub"><b>Choice:</b> {H(d.Choice)}<br><b>Alternative:</b> {H(d.Alternative)}<br>
                 <b>Why:</b> {H(d.Reason)}<br><b>Cost:</b> {H(d.Cost)}</span></td><td>{StatusBadge(d.Status)}</td></tr>
                 """));
-            var body = ArchitectureTabs("decisions") + $"""
+            var body = $"""
                 <p class="lede">Every program decision records the chosen path, a credible alternative, the
                 reason and the bill. Status comes from the architecture registry.</p>
                 <div class="card"><table tabindex="0" aria-label="Architecture decision register"><tr><th>decision</th><th>choice, alternative and cost</th><th>status</th></tr>
@@ -876,7 +526,7 @@ public static class ExplainerEndpoints
                 <h3>Check it yourself</h3>
                 <p class="sub">
                 <a href="/verify"><b>Verify a build &rarr;</b></a> &middot;
-                <a href="/architecture"><b>The data model &rarr;</b></a> &middot;
+                <a href="/built/model"><b>The data model &rarr;</b></a> &middot;
                 <a href="https://github.com/SFHAJJI/lex-corpus-lu-legilux" rel="noopener"><b>The evidence repo &rarr;</b></a> &middot;
                 <a href="/coverage"><b>What is missing &rarr;</b></a></p>
 
@@ -886,7 +536,8 @@ public static class ExplainerEndpoints
                 """;
             return Results.Content(Page("Decisions", body,
                 "The choices that shaped Lex, each with the alternative it was chosen over and what it cost.",
-                "how", canonicalPath: "/decisions"), "text/html");
+                "how", canonicalPath: "/decisions",
+                description: "The complete Lex architecture decision register, with chosen paths, credible alternatives, reasons and admitted costs."), "text/html");
         });
 
         // ---- /developers: everything an engineer needs — every tool, four ways to connect,
@@ -1031,7 +682,7 @@ public static class ExplainerEndpoints
                 </table>
                 <p class="sub" style="margin:8px 0 0">Why four? Evidence and derivation are kept apart on purpose:
                 the evidence repos are append-only and never rewritten, so a derived record can always be traced
-                back to the exact bytes a state published. <a href="/architecture">The full model →</a></p></div>
+                back to the exact bytes a state published. <a href="/built/data">The full data model →</a></p></div>
 
                 <p class="sub">Everything on this page is exercised by the project's own test and eval suites,
                 and the endpoint is rebuilt nightly. <a href="/built">How it was built →</a> ·
@@ -1083,11 +734,12 @@ public static class ExplainerEndpoints
                 </script>
                 """;
             return Results.Content(Page("For developers", body, null, "dev",
-                canonicalPath: "/developers"), "text/html");
+                canonicalPath: "/developers",
+                description: "Connect to the public read-only Lex MCP server, inspect typed tools, try requests and reuse the open legal datasets."), "text/html");
         });
 
-        // ---- /how-it-works: one page, plain language first, technical depth on scroll.
-        // Absorbs what used to be three separate tabs (architecture, verify, coverage).
+        // ---- /how-it-works: plain-language product method. Coverage, artifact verification and
+        // the architecture dossier remain separate because each answers a different reader job.
         app.MapGet("/how-it-works", () =>
         {
             var cov = readers.Values.Select(r => r.Coverage()).ToList();
@@ -1142,8 +794,7 @@ public static class ExplainerEndpoints
                 <h2>Under the hood</h2>
                 <p>The two-layer data model, the extraction profiles, the index schema and the refusal
                 taxonomy are documented for engineers.
-                <a href="/architecture"><b>The architecture page →</b></a> ·
-                <a href="/built"><b>How it was built, and what was hard →</b></a> ·
+                <a href="/built"><b>Architecture dossier →</b></a> ·
                 <a href="/developers"><b>Use it from your own code →</b></a></p>
 
                 <div class="notice"><b>Not legal advice, and not the official text.</b> Consolidated versions
@@ -1152,7 +803,8 @@ public static class ExplainerEndpoints
                 situation is a lawyer's job.</div>
                 """;
             return Results.Content(Page("How it works", body, null, "how",
-                canonicalPath: "/how-it-works"), "text/html");
+                canonicalPath: "/how-it-works",
+                description: "A plain-language explanation of how Lex retrieves dated official law, cites evidence and refuses unsupported answers."), "text/html");
         });
 
         app.MapGet("/stories", () =>
@@ -1276,7 +928,9 @@ public static class ExplainerEndpoints
                 """);
             return Results.Content(Page("Watch the law move", sb.ToString(),
                 "real histories from the Luxembourg and reviewed EU corpora, computed live", "find",
-                canonicalPath: "/stories", assistant: true), "text/html");
+                canonicalPath: "/stories",
+                description: "Worked, evidence-linked examples showing how Luxembourg and EU legal texts change across publisher dates.",
+                assistant: true), "text/html");
         });
 
         return app;

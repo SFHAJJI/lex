@@ -1,0 +1,178 @@
+<svg id="assistant-sequence" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1900 1720" role="img" aria-labelledby="title desc">
+  <title id="title">One bounded assistant turn, time downward</title>
+  <desc id="desc">A conventional sequence diagram with continuous lifelines shows deterministic admission and subject resolution, one typed plan, one possible contract correction, plan freeze, execution against the legal core without model observations, a direct typed result, and separate optional composer and judge roles only for requested prose.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto">
+      <path d="M0 0L9 3.5L0 7Z" fill="#445568"/>
+    </marker>
+    <style>
+      .title{font:700 26px 'IBM Plex Sans',Arial,sans-serif;fill:#162331}.group-title{font:700 16px 'IBM Plex Sans',Arial,sans-serif;fill:#162331}.head{font:700 16px 'IBM Plex Sans',Arial,sans-serif;fill:#162331}.copy{font:14px 'IBM Plex Sans',Arial,sans-serif;fill:#34485d}.small{font:12.5px 'IBM Plex Sans',Arial,sans-serif;fill:#4c5d70}.phase{font:700 13px 'IBM Plex Sans',Arial,sans-serif;letter-spacing:.035em;fill:#26394d}.phase-copy{font:12.5px 'IBM Plex Sans',Arial,sans-serif;fill:#4c5d70}.number{font:700 11px 'IBM Plex Sans',Arial,sans-serif;fill:#fff}.lifeline{fill:none;stroke:#667789;stroke-width:2;stroke-dasharray:6 6}.separator{fill:none;stroke:#c8d1da;stroke-width:1.4}.arrow{fill:none;stroke:#445568;stroke-width:2.2;marker-end:url(#arrow)}.return{fill:none;stroke:#445568;stroke-width:2.2;stroke-dasharray:7 6;marker-end:url(#arrow)}.header{fill:#fff;stroke:#8795a4;stroke-width:1.7}.deterministic{fill:#f5fbf8;stroke:#16765a;stroke-width:1.8}.model{fill:#faf7ff;stroke:#6948b5;stroke-width:1.8}.agent{fill:#fcfaff;stroke:#6948b5;stroke-width:2.2}.truth{fill:#f4fbf7;stroke:#16765a;stroke-width:2}.optional{fill:#fcfaff;stroke:#6948b5;stroke-width:2;stroke-dasharray:8 7}.phase-box{fill:#f5f7f9;stroke:#c8d1da;stroke-width:1.2}.badge{fill:#172738}
+    </style>
+  </defs>
+
+  <text x="36" y="42" class="title">One bounded assistant turn</text>
+  <text x="36" y="70" class="copy">Time moves downward. Every message starts and ends on an owning lifeline.</text>
+
+  <!-- Boundaries are ownership, not execution phases. -->
+  <rect x="625" y="96" width="690" height="1584" rx="18" class="agent"/>
+  <text x="648" y="126" class="group-title">Bounded assistant agent</text>
+  <text x="648" y="148" class="small">deterministic authority around one bounded planning role</text>
+
+  <rect x="1340" y="96" width="200" height="1584" rx="18" class="truth"/>
+  <text x="1440" y="126" text-anchor="middle" class="group-title">Legal truth</text>
+  <text x="1440" y="148" text-anchor="middle" class="small">outside the agent</text>
+
+  <rect x="1555" y="96" width="330" height="1584" rx="18" class="optional"/>
+  <text x="1720" y="126" text-anchor="middle" class="group-title">Optional prose roles</text>
+  <text x="1720" y="148" text-anchor="middle" class="small">separate logical agents</text>
+
+  <line x1="286" y1="250" x2="286" y2="1680" class="separator"/>
+  <line x1="20" y1="258" x2="1880" y2="258" class="separator"/>
+  <line x1="20" y1="590" x2="1880" y2="590" class="separator"/>
+  <line x1="20" y1="760" x2="1880" y2="760" class="separator"/>
+  <line x1="20" y1="995" x2="1880" y2="995" class="separator"/>
+  <line x1="20" y1="1235" x2="1880" y2="1235" class="separator"/>
+  <line x1="20" y1="1405" x2="1880" y2="1405" class="separator"/>
+
+  <!-- Participants. -->
+  <g aria-label="sequence participants">
+    <rect x="250" y="168" width="140" height="74" rx="9" class="header"/>
+    <text x="320" y="211" text-anchor="middle" class="head">Reader</text>
+
+    <rect x="430" y="168" width="140" height="74" rx="9" class="header"/>
+    <text x="500" y="211" text-anchor="middle" class="head">Web</text>
+
+    <rect x="648" y="168" width="174" height="74" rx="9" class="deterministic"/>
+    <text x="735" y="199" text-anchor="middle" class="head">Admission + subject</text>
+    <text x="735" y="222" text-anchor="middle" class="small">thread + official identity</text>
+
+    <rect x="883" y="168" width="174" height="74" rx="9" class="model"/>
+    <text x="970" y="199" text-anchor="middle" class="head">Planner + gate</text>
+    <text x="970" y="222" text-anchor="middle" class="small">typed proposal + validation</text>
+
+    <rect x="1118" y="168" width="174" height="74" rx="9" class="deterministic"/>
+    <text x="1205" y="199" text-anchor="middle" class="head">Executor + outcome</text>
+    <text x="1205" y="222" text-anchor="middle" class="small">catalog + evidence ledger</text>
+
+    <rect x="1353" y="168" width="174" height="74" rx="9" class="deterministic"/>
+    <text x="1440" y="199" text-anchor="middle" class="head">Legal core + index</text>
+    <text x="1440" y="222" text-anchor="middle" class="small">dates, retrieval, text, gaps</text>
+
+    <rect x="1572" y="168" width="136" height="74" rx="9" class="model"/>
+    <text x="1640" y="211" text-anchor="middle" class="head">Composer</text>
+
+    <rect x="1752" y="168" width="136" height="74" rx="9" class="model"/>
+    <text x="1820" y="211" text-anchor="middle" class="head">Judge</text>
+  </g>
+
+  <!-- Continuous lifelines stay in the foreground. -->
+  <g aria-hidden="true">
+    <path d="M320 242V1660M500 242V1660M735 242V1660M970 242V1660M1205 242V1660M1440 242V1660M1640 242V1660M1820 242V1660" class="lifeline"/>
+  </g>
+
+  <!-- Phase 1. -->
+  <rect x="26" y="278" width="240" height="76" rx="9" class="phase-box"/>
+  <text x="42" y="304" class="phase">RESOLVE DETERMINISTICALLY</text>
+  <text x="42" y="329" class="phase-copy">Official catalog authority first.</text>
+  <path d="M320 315H500" class="arrow"/>
+  <circle cx="344" cy="315" r="12" class="badge"/><text x="344" y="319" text-anchor="middle" class="number">1</text>
+  <text x="410" y="302" text-anchor="middle" class="copy">question + opaque token</text>
+
+  <path d="M500 375H735" class="arrow"/>
+  <circle cx="524" cy="375" r="12" class="badge"/><text x="524" y="379" text-anchor="middle" class="number">2</text>
+  <text x="618" y="362" text-anchor="middle" class="copy">admit + restore bounded context</text>
+
+  <path d="M735 440H1440" class="arrow"/>
+  <circle cx="759" cy="440" r="12" class="badge"/><text x="759" y="444" text-anchor="middle" class="number">3</text>
+  <text x="1088" y="427" text-anchor="middle" class="copy">resolve identity and time against the official catalog</text>
+
+  <path d="M1440 505H735" class="return"/>
+  <circle cx="1416" cy="505" r="12" class="badge"/><text x="1416" y="509" text-anchor="middle" class="number">4</text>
+  <text x="1088" y="492" text-anchor="middle" class="copy">one authorized work, bounded candidates, or none</text>
+
+  <path d="M735 556H500" class="return"/>
+  <text x="618" y="543" text-anchor="middle" class="small">ambiguity -&gt; NeedsClarification; stop before planning</text>
+  <path d="M500 578H320" class="return"/>
+  <text x="410" y="567" text-anchor="middle" class="small">ask the reader; terminal</text>
+
+  <!-- Phase 2. -->
+  <rect x="26" y="610" width="240" height="66" rx="9" class="phase-box"/>
+  <text x="42" y="636" class="phase">PLAN ONCE</text>
+  <text x="42" y="660" class="phase-copy">Schemas in; no tool access.</text>
+  <path d="M735 650H970" class="arrow"/>
+  <circle cx="759" cy="650" r="12" class="badge"/><text x="759" y="654" text-anchor="middle" class="number">5</text>
+  <text x="852" y="637" text-anchor="middle" class="copy">question + history + subject_ref</text>
+
+  <path d="M1205 715H970" class="return"/>
+  <circle cx="1181" cy="715" r="12" class="badge"/><text x="1181" y="719" text-anchor="middle" class="number">6</text>
+  <text x="1088" y="702" text-anchor="middle" class="copy">canonical typed operation schemas</text>
+
+  <!-- Phase 3. -->
+  <rect x="26" y="780" width="240" height="94" rx="9" class="phase-box"/>
+  <text x="42" y="806" class="phase">VALIDATE, CORRECT ONCE,</text>
+  <text x="42" y="827" class="phase">THEN FREEZE</text>
+  <text x="42" y="853" class="phase-copy">Second invalid plan = typed refusal.</text>
+  <path d="M970 815h72v42h-72" class="arrow"/>
+  <circle cx="1000" cy="815" r="12" class="badge"/><text x="1000" y="819" text-anchor="middle" class="number">7</text>
+  <text x="1058" y="806" class="copy">typed plan proposal</text>
+
+  <path d="M970 880h72v42h-72" class="return"/>
+  <circle cx="1000" cy="880" r="12" class="badge"/><text x="1000" y="884" text-anchor="middle" class="number">8</text>
+  <text x="1058" y="872" class="copy">if invalid: one bounded correction</text>
+
+  <path d="M970 955H1205" class="arrow"/>
+  <circle cx="994" cy="955" r="12" class="badge"/><text x="994" y="959" text-anchor="middle" class="number">9</text>
+  <text x="1088" y="942" text-anchor="middle" class="copy">valid plan value-copied, capped and frozen</text>
+
+  <!-- Phase 4. -->
+  <rect x="26" y="1015" width="240" height="75" rx="9" class="phase-box"/>
+  <text x="42" y="1041" class="phase">EXECUTE WITHOUT</text>
+  <text x="42" y="1062" class="phase">OBSERVATIONS</text>
+  <text x="42" y="1084" class="phase-copy">Planner is not called again.</text>
+  <path d="M1205 1060H1440" class="arrow"/>
+  <circle cx="1229" cy="1060" r="12" class="badge"/><text x="1229" y="1064" text-anchor="middle" class="number">10</text>
+  <text x="1322" y="1047" text-anchor="middle" class="copy">for each operation: typed call</text>
+
+  <path d="M1440 1120h70v42h-70" class="arrow"/>
+  <circle cx="1464" cy="1120" r="12" class="badge"/><text x="1464" y="1124" text-anchor="middle" class="number">11</text>
+  <text x="1420" y="1111" text-anchor="end" class="copy">SQL / FTS / vectors; dates / compare / gaps</text>
+
+  <path d="M1440 1190H1205" class="return"/>
+  <circle cx="1416" cy="1190" r="12" class="badge"/><text x="1416" y="1194" text-anchor="middle" class="number">12</text>
+  <text x="1322" y="1177" text-anchor="middle" class="copy">closed outcome + rows + hashes + links</text>
+
+  <!-- Phase 5. -->
+  <rect x="26" y="1255" width="240" height="66" rx="9" class="phase-box"/>
+  <text x="42" y="1281" class="phase">TYPED RESULT</text>
+  <text x="42" y="1305" class="phase-copy">Direct, cited and usable by default.</text>
+  <path d="M1205 1300H500" class="return"/>
+  <circle cx="1181" cy="1300" r="12" class="badge"/><text x="1181" y="1304" text-anchor="middle" class="number">13</text>
+  <text x="852" y="1287" text-anchor="middle" class="copy">cards + citations, or typed NeedsClarification / gap / refusal</text>
+
+  <path d="M500 1360H320" class="return"/>
+  <circle cx="476" cy="1360" r="12" class="badge"/><text x="476" y="1364" text-anchor="middle" class="number">14</text>
+  <text x="410" y="1347" text-anchor="middle" class="copy">render deterministic result</text>
+
+  <!-- Phase 6. -->
+  <rect x="26" y="1425" width="240" height="94" rx="9" class="phase-box"/>
+  <text x="42" y="1451" class="phase">OPTIONAL PROSE</text>
+  <text x="42" y="1475" class="phase-copy">Only explicit explain / summarise.</text>
+  <text x="42" y="1498" class="phase-copy">Same deployment, separate roles.</text>
+  <path d="M1205 1475H1640" class="arrow"/>
+  <circle cx="1229" cy="1475" r="12" class="badge"/><text x="1229" y="1479" text-anchor="middle" class="number">15</text>
+  <text x="1422" y="1462" text-anchor="middle" class="copy">accepted deterministic draft + typed evidence</text>
+
+  <path d="M1640 1535H1820" class="arrow"/>
+  <circle cx="1664" cy="1535" r="12" class="badge"/><text x="1664" y="1539" text-anchor="middle" class="number">16</text>
+  <text x="1730" y="1522" text-anchor="middle" class="copy">factual Answer / Gap claims only</text>
+
+  <path d="M1820 1595H1205" class="return"/>
+  <circle cx="1796" cy="1595" r="12" class="badge"/><text x="1796" y="1599" text-anchor="middle" class="number">17</text>
+  <text x="1512" y="1582" text-anchor="middle" class="copy">Pass / Repair / Refuse</text>
+
+  <path d="M1205 1650H500" class="return"/>
+  <circle cx="1181" cy="1650" r="12" class="badge"/><text x="1181" y="1654" text-anchor="middle" class="number">18</text>
+  <text x="852" y="1637" text-anchor="middle" class="copy">grounded prose, or the preserved deterministic fallback</text>
+
+  <text x="950" y="1703" text-anchor="middle" class="copy">The planner receives schemas only. It never observes execution and never replans.</text>
+</svg>

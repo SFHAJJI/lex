@@ -6,8 +6,10 @@ const budgets = JSON.parse(readFileSync(new URL("./budgets.json", import.meta.ur
 const PUBLIC_ROUTES = [
   "/", "/browse", "/coverage", "/in-force-on?date=2024-01-01",
   "/search?q=travail", "/changed?from=2024-01-01&to=2024-12-31", "/find",
-  "/how-it-works", "/built", "/about", "/stories", "/architecture",
-  "/architecture/next", "/decisions", "/benchmarks", "/verify", "/developers",
+  "/how-it-works", "/built", "/built/model", "/built/data", "/built/retrieval",
+  "/built/assistant", "/built/release", "/built/decisions", "/built/incidents",
+  "/built/limits", "/architecture/dossier", "/about", "/stories", "/decisions",
+  "/benchmarks", "/verify", "/developers",
 ];
 
 async function expectNoHorizontalOverflow(page: Page) {
@@ -51,9 +53,30 @@ test("the browser-facing route set stays navigable, bounded and accessible", asy
   expect(networkErrors).toEqual([]);
 });
 
+test("global navigation exposes one architecture destination and no broken local links", async ({ page, request }) => {
+  await page.goto("/");
+  const hrefs = await page.locator("header a[href], footer a[href]").evaluateAll((links) =>
+    links.map((link) => (link as HTMLAnchorElement).href));
+  const local = hrefs
+    .map((href) => new URL(href))
+    .filter((url) => url.origin === new URL(page.url()).origin);
+  const paths = local.map((url) => url.pathname);
+
+  expect(paths).not.toContain("/architecture");
+  expect(paths).not.toContain("/architecture/next");
+  expect(paths.filter((path) => path === "/built")).toHaveLength(2); // header + footer
+
+  for (const url of new Set(local.map((item) => item.href))) {
+    const response = await request.get(url);
+    expect(response.status(), url).toBeLessThan(400);
+  }
+});
+
 test("every public page reflows at the frozen desktop, modal, phone and landscape widths", async ({ page }) => {
   test.setTimeout(120_000);
-  for (const [width, height] of [[1100, 800], [1099, 800], [320, 568], [568, 320]]) {
+  for (const [width, height] of [
+    [1440, 900], [1100, 800], [1099, 800], [768, 900], [320, 568], [568, 320],
+  ]) {
     await page.setViewportSize({ width, height });
     for (const route of PUBLIC_ROUTES) {
       const response = await page.goto(route, { waitUntil: "networkidle" });
@@ -99,7 +122,7 @@ test("Check the work uses native touch disclosure semantics", async ({ browser }
     const disclosure = page.locator("details.proofnav");
     await disclosure.locator("summary").tap();
     await expect(disclosure).toHaveAttribute("open", "");
-    await expect(disclosure.getByRole("link", { name: "Verify the artifacts" })).toBeVisible();
+    await expect(disclosure.getByRole("link", { name: "Verify artifacts" })).toBeVisible();
   } finally {
     await context.close();
   }

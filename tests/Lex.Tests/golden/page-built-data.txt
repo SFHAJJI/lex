@@ -5,16 +5,16 @@ HTTP 200
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Titles are labels, not sentences: one that ends in a full stop renders "acts., Lex" in
      the tab and in every social card, which is what the front page did until now. -->
-<title>Next architecture, Lex</title>
-<meta name="description" content="Point-in-time Luxembourg and reviewed EU law: what did the rule say on a given date? Permalinks, timelines, diffs and verifiable provenance.">
-<meta property="og:title" content="Next architecture, Lex">
-<meta property="og:description" content="Point-in-time Luxembourg and reviewed EU law, with grounded AI answers, per-article history, and verifiable provenance.">
+<title>Data authority, Lex</title>
+<meta name="description" content="How Lex turns official publisher records into signed, reproducible data artifacts.">
+<meta property="og:title" content="Data authority, Lex">
+<meta property="og:description" content="How Lex turns official publisher records into signed, reproducible data artifacts.">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Lex">
 <meta property="og:image" content="https://golden.test/og.png">
 <meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
-<link rel="canonical" href="https://golden.test/architecture/next">
+<link rel="canonical" href="https://golden.test/built/data"><link rel="stylesheet" href="/dossier.css?v=dev">
 <meta name="twitter:image" content="https://golden.test/og.png">
 <script src="/site.js?v=dev" defer></script>
 <!-- The interval mark: a rule, two terminals, and a notch at the date being read.
@@ -230,11 +230,10 @@ HTTP 200
     <nav aria-label="Check the work">
       <a href="/how-it-works">How it works</a>
       <a href="/coverage">Coverage</a>
-      <a href="/architecture" aria-current="page">Architecture</a>
-      <a href="/decisions">Decisions</a>
+      <a href="/built" aria-current="page">Architecture dossier</a>
+      <a href="/decisions">Decisions and trade-offs</a>
       <a href="/benchmarks">Benchmarks</a>
-      <a href="/verify">Verify the artifacts</a>
-      <a href="/built">How I built it</a>
+      <a href="/verify">Verify artifacts</a>
       <a href="/about">About</a>
     </nav>
   </details>
@@ -242,38 +241,105 @@ HTTP 200
   <a class="navlink" href="/developers">For developers</a>
 </header>
 <main>
-<h1>Next architecture</h1>
-<p class="sub">the accepted target, its gates, and what has actually shipped</p>
-<nav class="tabs" aria-label="Architecture evidence" style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 22px">
-  <a class="badge" href="/architecture">Current</a>
-  <a class="badge ok" href="/architecture/next">Next</a>
-  <a class="badge" href="/decisions">Decisions</a>
-  <a class="badge" href="/benchmarks">Benchmarks</a>
-</nav><p class="lede">The accepted target architecture, with status read from the registry committed
-beside the implementation. Only milestones marked shipped are live; gated and planned work is not.</p>
-<div class="card"><table tabindex="0" aria-label="Architecture delivery milestones"><tr><th>milestone</th><th>outcome</th><th>status</th></tr><tr><td class="mono">M1</td><td><b>Truthful architecture narrative</b><br><span class="sub">Separate live architecture, target architecture, decisions and measured benchmarks.</span></td>
-<td><span class="badge ok">shipped</span></td></tr><tr><td class="mono">M2</td><td><b>Verified artifact publication</b><br><span class="sub">A pinned trust root verifies a signed manifest for every served artifact.</span></td>
-<td><span class="badge ok">shipped</span></td></tr><tr><td class="mono">M3</td><td><b>Expandable temporal EU corpus</b><br><span class="sub">Engineering configuration selects the acquisition set while every accepted work retains all official dated expressions; scope labels never become legal metadata or search facets.</span></td>
-<td><span class="badge ok">shipped</span></td></tr><tr><td class="mono">M4</td><td><b>Deduplicated index</b><br><span class="sub">lex-index/3 stores repeated wording once without changing timelines, exact text or diffs.</span></td>
-<td><span class="badge ok">shipped</span></td></tr><tr><td class="mono">M5</td><td><b>Local hybrid retrieval</b><br><span class="sub">Keyword and local semantic retrieval fuse deterministically only after the public quality gate passes.</span></td>
-<td><span class="badge warn">gated</span></td></tr><tr><td class="mono">M6</td><td><b>Lawyer-facing scope filters</b><br><span class="sub">Jurisdiction, hierarchy, legal form, binding status, language and date remain explicit; official publisher classifications appear as typed discovery metadata.</span></td>
-<td><span class="badge ok">shipped</span></td></tr><tr><td class="mono">M7</td><td><b>Luxembourg original-act expansion</b><br><span class="sub">Add reviewed normative acts outside the Legilux consolidation catalogue with document-class-specific temporal semantics.</span></td>
-<td><span class="badge">planned</span></td></tr><tr><td class="mono">M8</td><td><b>Size-gated local index hosting</b><br><span class="sub">Small verified indexes run locally in Container Apps. Oversized releases remain deployment-blocked until the zero-traffic VM-managed local-disk path is implemented and measured.</span></td>
-<td><span class="badge">building</span></td></tr><tr><td class="mono">M9</td><td><b>Official-metadata search and legal-research agent</b><br><span class="sub">Official publisher metadata, source-backed short-title resolution, deterministic clarification, bounded retrieval, Agent Framework evidence composition and judging, bounded memory and jurisdiction-first results are live without changing authoritative legal text. Taxonomies remain weak discovery only and model-derived discovery remains excluded from production retrieval.</span></td>
-<td><span class="badge ok">shipped</span></td></tr></table></div>
-<h2>Target path</h2>
-<div class="card"><pre class="mono" style="white-space:pre-wrap;margin:0;font-size:13px">Reviewed EU scope configuration
-  -&gt; every official dated FR/EN expression plus bounded legal relationships
-  -&gt; content-addressed text states and occurrence mappings
-  -&gt; FTS5 keyword candidates plus local compact semantic candidates
-  -&gt; date and hierarchy eligibility
-  -&gt; fixed reciprocal rank fusion
-  -&gt; the same exact provision JSON, timeline, comparison and UiEffect contracts</pre></div>
-<p>Hybrid retrieval remains gated until its public relevance, temporal, latency and memory
-thresholds pass. Missing official consolidation remains a named gap, never generated wording.</p>
-<p class="sub">Program <span class="mono">hybrid-eu/1</span>, updated
-<span class="mono">2026-08-09</span>, review status
-<span class="mono">engineer-reviewed</span>.</p>
+<h1>Data authority</h1>
+<p class="sub">Official sources, deterministic derivation and verifiable provenance.</p>
+<nav class="dossier-tabs" aria-label="Architecture dossier"><a href="/built">Overview</a><a href="/built/model">Legal model</a><a href="/built/data" aria-current="page">Data authority</a><a href="/built/retrieval">Retrieval</a><a href="/built/assistant">Assistant</a><a href="/built/release">Release</a><a href="/built/decisions">Trade-offs</a><a href="/built/incidents">Incidents</a><a href="/built/limits">Limits and scale</a><a class="dossier-print" href="/architecture/dossier">Complete dossier</a></nav><article class="architecture-dossier"><p>The evidence layer is append-only publisher material. The consumption layer is reproducible and
+disposable. That split lets an extraction improve without rewriting what the publisher served.</p>
+<p><img src="/built/diagrams/data-authority.svg" alt="Legilux and EUR-Lex feed evidence repositories, deterministic profiles, article records and signed indexes, with hashes and source URIs carried throughout." /></p>
+<p><a href="/built/diagrams/data-authority.svg">Open the data authority diagram at full size</a></p>
+<h2>Ingestion and derivation</h2>
+<div class="dossier-table" tabindex="0" role="region" aria-label="Scrollable architecture table"><table>
+<thead>
+<tr>
+<th>Stage</th>
+<th>Input</th>
+<th>Output</th>
+<th>Owner</th>
+<th>Refusal boundary</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Enumerate</td>
+<td>Official publisher catalogue</td>
+<td>Works, states, expressions and manifestations</td>
+<td><code>Lex.Sources.Legilux</code> or <code>Lex.Sources.EurLex</code></td>
+<td>A partial or implausible inventory commits nothing</td>
+</tr>
+<tr>
+<td>Acquire</td>
+<td>Official URLs</td>
+<td>Verbatim bytes and observation records</td>
+<td>publisher adapter plus evidence repository</td>
+<td>Existing evidence is not silently overwritten</td>
+</tr>
+<tr>
+<td>Derive</td>
+<td>Stored bytes plus immutable extraction profile</td>
+<td>Article records and typed gaps</td>
+<td><code>Lex.Derive</code></td>
+<td>Unsafe structure remains unavailable</td>
+</tr>
+<tr>
+<td>Index</td>
+<td>Hash-pinned corpora and article release</td>
+<td>SQLite FTS, temporal tables and optional vectors</td>
+<td><code>Lex.Ingest</code> and <code>Lex.Index</code> on the local build machine</td>
+<td>Incomplete or mismatched inputs fail the build</td>
+</tr>
+<tr>
+<td>Sign</td>
+<td>Canonical artifact manifest</td>
+<td>Signature and public verification material</td>
+<td>bounded <code>lex-ops</code> publication with Key Vault</td>
+<td>Runtime rejects a manifest outside pinned trust</td>
+</tr>
+</tbody>
+</table></div>
+<h2>Official discovery metadata</h2>
+<p>Luxembourg acquisition mirrors Legilux <code>subjectLevel1</code> and <code>subjectLevel2</code> assertions with the
+concept URI, French label, level, language and source. EU acquisition mirrors official short-title
+segments, EuroVoc assigned, alternative and broader relations, and directory classifications with
+their identifiers and source URIs. The two vocabulary systems remain distinct.</p>
+<p>These values enter a weak, explainable discovery lane. They may surface a work whose provisions do
+not contain the query phrase and the result can say which official classification matched. They do
+not establish legal identity, support a legal claim or become historical evidence. No manual legal
+alias catalogue and no model-generated metadata enter production authority.</p>
+<h2>What the cryptography proves</h2>
+<div class="dossier-table" tabindex="0" role="region" aria-label="Scrollable architecture table"><table>
+<thead>
+<tr>
+<th>Mechanism</th>
+<th>Proves</th>
+<th>Does not prove</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>SHA-256 of a file or provision</td>
+<td>The bytes read now equal the bytes previously addressed by that digest</td>
+<td>Who published the bytes or whether the law is valid</td>
+</tr>
+<tr>
+<td>Publisher URL and observation record</td>
+<td>Where and when Lex acquired the material</td>
+<td>That a later copy was not modified</td>
+</tr>
+<tr>
+<td>Signed whole-artifact manifest</td>
+<td>A controlled release identity approved this exact set of indexes, vectors, encoder and scope files</td>
+<td>Legal correctness by itself</td>
+</tr>
+<tr>
+<td>Signed evaluation and promotion receipts</td>
+<td>The exact candidate passed the stated gates and became the named revision</td>
+<td>Future behavior under every possible question</td>
+</tr>
+</tbody>
+</table></div>
+<p>Origin, integrity and release authorization are separate claims. Keeping all three is why a
+citation can be checked without treating a hash as a magical certificate of truth.</p>
+</article>
 </main>
 <footer>
 <!-- Fourteen links in one undifferentiated run answered no question a reader had. Three
@@ -286,7 +352,7 @@ thresholds pass. Missing official consolidation remains a named gap, never gener
     <a href="/how-it-works">How it works</a><a href="/coverage">What Lex holds, and lacks</a>
     <a href="/decisions">Decisions, and what they cost</a>
     <a href="/benchmarks">Benchmarks</a><a href="/verify">Verify it yourself</a>
-    <a href="/architecture">Architecture</a><a href="/built">How I built it</a>
+    <a href="/built">Architecture dossier</a>
     <a href="/about">About</a></div>
   <!-- The datasets, not the engine. This group used to end at "Source on GitHub" pointing at
        the engine repo, which is the wrong thing to lead with for a reader who wants to USE

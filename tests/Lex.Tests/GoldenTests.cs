@@ -43,16 +43,22 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
         { "browse-page2",    "/browse?page=2" },
         { "coverage",        "/coverage" },
         { "verify",          "/verify" },
-        { "architecture",    "/architecture" },
-        { "architecture-next", "/architecture/next" },
         { "benchmarks",      "/benchmarks" },
         { "built",           "/built" },
+        { "built-model",     "/built/model" },
+        { "built-data",      "/built/data" },
+        { "built-retrieval", "/built/retrieval" },
+        { "built-assistant", "/built/assistant" },
+        { "built-release",   "/built/release" },
+        { "built-decisions", "/built/decisions" },
+        { "built-incidents", "/built/incidents" },
+        { "built-limits",    "/built/limits" },
+        { "architecture-dossier", "/architecture/dossier" },
         { "decisions",       "/decisions" },
         { "about",           "/about" },
         { "stories",         "/stories" },
         { "find",            "/find" },
         { "developers",      "/developers" },
-        { "ai",              "/ai" },
         { "how-it-works",    "/how-it-works" },
         { "search",          "/search?q=travail" },
         { "search-empty",    "/search?q=zzzznotalaw" },
@@ -113,10 +119,14 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
         Assert.Contains("<summary aria-expanded=\"false\">Check the work</summary>", home);
         foreach (var path in new[]
                  {
-                     "/how-it-works", "/coverage", "/architecture", "/decisions",
-                     "/benchmarks", "/verify", "/built", "/about",
+                     "/how-it-works", "/coverage", "/built", "/decisions",
+                     "/benchmarks", "/verify", "/about",
                  })
             Assert.Contains($"href=\"{path}\"", home);
+        Assert.Contains("href=\"/built\">Architecture dossier</a>", home);
+        Assert.Contains("href=\"/decisions\">Decisions and trade-offs</a>", home);
+        Assert.DoesNotContain("href=\"/architecture\"", home);
+        Assert.DoesNotContain("How I built it", home);
         Assert.Contains("href=\"/built\"><b>I want to inspect the engineering</b>", home);
         Assert.DoesNotContain("href=\"/about\"><b>I want to know who built this</b>", home);
         Assert.Contains("href=\"/developers#assistant\">Connect your own AI</a>", home);
@@ -131,6 +141,14 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
         using var askRedirect = await _site.Client.GetAsync("/ask");
         Assert.Equal(HttpStatusCode.MovedPermanently, askRedirect.StatusCode);
         Assert.Equal("/", askRedirect.Headers.Location?.OriginalString);
+
+        using var architectureRedirect = await _site.Client.GetAsync("/architecture");
+        Assert.Equal(HttpStatusCode.MovedPermanently, architectureRedirect.StatusCode);
+        Assert.Equal("/built", architectureRedirect.Headers.Location?.OriginalString);
+
+        using var nextRedirect = await _site.Client.GetAsync("/architecture/next");
+        Assert.Equal(HttpStatusCode.MovedPermanently, nextRedirect.StatusCode);
+        Assert.Equal("/built/limits", nextRedirect.Headers.Location?.OriginalString);
     }
 
     [Fact]
@@ -219,11 +237,12 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
     }
 
     [Fact]
-    public async Task Architecture_wide_table_is_keyboard_scrollable()
+    public async Task Live_deployment_evidence_is_inside_the_release_dossier()
     {
-        var html = await _site.Client.GetStringAsync("/architecture");
+        var html = await _site.Client.GetStringAsync("/built/release");
 
-        Assert.Contains("<table tabindex=\"0\" aria-label=\"Mounted index collections\">", html);
+        Assert.Contains("id=\"live-deployment\"", html);
+        Assert.Contains("aria-label=\"Mounted index identities\"", html);
     }
 
     [Fact]
@@ -248,15 +267,15 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
 
         var expected = new Dictionary<string, string[]>
         {
-            ["/architecture/next"] = ["Architecture delivery milestones"],
-            ["/decisions"] = ["Architecture decision register"],
-            ["/built"] = ["Mounted index provenance", "Correctness evaluation layers"],
+            ["/built/limits"] = ["aria-label=\"Architecture delivery milestones\""],
+            ["/decisions"] = ["<table tabindex=\"0\" aria-label=\"Architecture decision register\">"],
+            ["/built"] = ["<div class=\"dossier-table\" tabindex=\"0\" role=\"region\" aria-label=\"Scrollable architecture table\"><table>"],
         };
-        foreach (var (path, labels) in expected)
+        foreach (var (path, fragments) in expected)
         {
             var html = await _site.Client.GetStringAsync(path);
-            foreach (var label in labels)
-                Assert.Contains($"<table tabindex=\"0\" aria-label=\"{label}\">", html);
+            foreach (var fragment in fragments)
+                Assert.Contains(fragment, html);
         }
     }
 
@@ -303,12 +322,12 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
     [Fact]
     public async Task Architecture_separates_live_target_and_unmeasured_claims()
     {
-        var current = await _site.Client.GetStringAsync("/architecture");
+        var current = await _site.Client.GetStringAsync("/built/release");
         Assert.Contains("2</td>", current);              // mounted fixture works, not a hand-written live count
         Assert.Contains(IndexBuilder.SchemaVersion, current); // mounted fixture schema, not roadmap prose
         Assert.DoesNotContain("local compact semantic candidates", current);
 
-        var next = await _site.Client.GetStringAsync("/architecture/next");
+        var next = await _site.Client.GetStringAsync("/built/limits");
         Assert.Contains("local compact semantic candidates", next);
         Assert.Contains("gated", next);
 
@@ -318,11 +337,15 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
     }
 
     [Fact]
-    public async Task Architecture_delivery_page_marks_its_primary_navigation_parent_current()
+    public async Task Retired_architecture_routes_preserve_backlinks_with_one_hop_redirects()
     {
-        var html = await _site.Client.GetStringAsync("/architecture/next");
+        using var current = await _site.Client.GetAsync("/architecture");
+        using var next = await _site.Client.GetAsync("/architecture/next");
 
-        Assert.Contains("<a href=\"/architecture\" aria-current=\"page\">Architecture</a>", html);
+        Assert.Equal(HttpStatusCode.MovedPermanently, current.StatusCode);
+        Assert.Equal("/built", current.Headers.Location?.OriginalString);
+        Assert.Equal(HttpStatusCode.MovedPermanently, next.StatusCode);
+        Assert.Equal("/built/limits", next.Headers.Location?.OriginalString);
     }
 
     [Fact]
@@ -598,8 +621,10 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
 
         foreach (var path in new[]
         {
-            "/about", "/architecture", "/architecture/next", "/decisions", "/verify",
-            "/developers", "/built", "/how-it-works", "/coverage", "/benchmarks",
+            "/about", "/decisions", "/verify",
+            "/developers", "/built", "/built/model", "/built/data", "/built/retrieval",
+            "/built/assistant", "/built/release", "/built/decisions", "/built/incidents",
+            "/built/limits", "/architecture/dossier", "/how-it-works", "/coverage", "/benchmarks",
         })
         {
             var html = await _site.Client.GetStringAsync(path);
@@ -630,6 +655,14 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
         Xunit.Assert.Equal(locs.Count, locs.Distinct().Count());
         Xunit.Assert.Contains("https://golden.test/", locs);
         Xunit.Assert.Contains("https://golden.test/browse", locs);
+        foreach (var retired in new[]
+                 {
+                     "https://golden.test/ai", "https://golden.test/ask",
+                     "https://golden.test/architecture", "https://golden.test/architecture/next",
+                     "https://golden.test/architecture/dossier", "https://golden.test/search",
+                     "https://golden.test/changed", "https://golden.test/in-force-on",
+                 })
+            Xunit.Assert.DoesNotContain(retired, locs);
         // Every work in the fixture, addressed the way a reader reaches it.
         Xunit.Assert.Contains("https://golden.test/t-pub/w1", locs);
 
@@ -658,6 +691,29 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
                 $"lastmod '{lm}' is not YYYY-MM-DD");
             Xunit.Assert.True(d <= today, $"lastmod '{lm}' is in the future");
         }
+
+        foreach (var loc in locs)
+        {
+            using var page = await _site.Client.GetAsync(new Uri(loc).PathAndQuery);
+            Xunit.Assert.Equal(HttpStatusCode.OK, page.StatusCode);
+            var html = await page.Content.ReadAsStringAsync();
+            var canonicals = Regex.Matches(html, "<link rel=\"canonical\" href=\"([^\"]+)\">");
+            Xunit.Assert.Single(canonicals.Cast<Match>());
+            Xunit.Assert.Equal(loc, canonicals[0].Groups[1].Value);
+            Xunit.Assert.DoesNotContain("<meta name=\"robots\" content=\"noindex", html);
+        }
+    }
+
+    [Theory]
+    [InlineData("/search?q=travail")]
+    [InlineData("/changed?from=2019-01-01&to=2023-01-01")]
+    [InlineData("/in-force-on?date=2021-01-01")]
+    [InlineData("/architecture/dossier")]
+    public async Task Utility_and_parameterized_result_pages_are_not_crawl_surfaces(string path)
+    {
+        var html = await _site.Client.GetStringAsync(path);
+
+        Assert.Contains("<meta name=\"robots\" content=\"noindex,follow\">", html);
     }
 
     /// <summary>

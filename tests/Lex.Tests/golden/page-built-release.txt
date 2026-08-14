@@ -5,16 +5,16 @@ HTTP 200
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Titles are labels, not sentences: one that ends in a full stop renders "acts., Lex" in
      the tab and in every social card, which is what the front page did until now. -->
-<title>Architecture, Lex</title>
-<meta name="description" content="Point-in-time Luxembourg and reviewed EU law: what did the rule say on a given date? Permalinks, timelines, diffs and verifiable provenance.">
-<meta property="og:title" content="Architecture, Lex">
-<meta property="og:description" content="Point-in-time Luxembourg and reviewed EU law, with grounded AI answers, per-article history, and verifiable provenance.">
+<title>Release, Lex</title>
+<meta name="description" content="The release state machine and separation of authority used to deploy Lex.">
+<meta property="og:title" content="Release, Lex">
+<meta property="og:description" content="The release state machine and separation of authority used to deploy Lex.">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Lex">
 <meta property="og:image" content="https://golden.test/og.png">
 <meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
-<link rel="canonical" href="https://golden.test/architecture">
+<link rel="canonical" href="https://golden.test/built/release"><link rel="stylesheet" href="/dossier.css?v=dev">
 <meta name="twitter:image" content="https://golden.test/og.png">
 <script src="/site.js?v=dev" defer></script>
 <!-- The interval mark: a rule, two terminals, and a notch at the date being read.
@@ -230,11 +230,10 @@ HTTP 200
     <nav aria-label="Check the work">
       <a href="/how-it-works">How it works</a>
       <a href="/coverage">Coverage</a>
-      <a href="/architecture" aria-current="page">Architecture</a>
-      <a href="/decisions">Decisions</a>
+      <a href="/built" aria-current="page">Architecture dossier</a>
+      <a href="/decisions">Decisions and trade-offs</a>
       <a href="/benchmarks">Benchmarks</a>
-      <a href="/verify">Verify the artifacts</a>
-      <a href="/built">How I built it</a>
+      <a href="/verify">Verify artifacts</a>
       <a href="/about">About</a>
     </nav>
   </details>
@@ -242,16 +241,111 @@ HTTP 200
   <a class="navlink" href="/developers">For developers</a>
 </header>
 <main>
-<h1>Architecture</h1>
-<p class="sub">what is deployed now, read separately from what comes next</p>
-<nav class="tabs" aria-label="Architecture evidence" style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 22px">
-  <a class="badge ok" href="/architecture">Current</a>
-  <a class="badge" href="/architecture/next">Next</a>
-  <a class="badge" href="/decisions">Decisions</a>
-  <a class="badge" href="/benchmarks">Benchmarks</a>
-</nav><p class="lede">This page describes the system serving requests now. Target-state work is kept
-separately on <a href="/architecture/next">Next</a>.</p>
-<div class="card"><table class="kv">
+<h1>Release</h1>
+<p class="sub">Candidate evaluation, signed promotion, rollback and retention.</p>
+<nav class="dossier-tabs" aria-label="Architecture dossier"><a href="/built">Overview</a><a href="/built/model">Legal model</a><a href="/built/data">Data authority</a><a href="/built/retrieval">Retrieval</a><a href="/built/assistant">Assistant</a><a href="/built/release" aria-current="page">Release</a><a href="/built/decisions">Trade-offs</a><a href="/built/incidents">Incidents</a><a href="/built/limits">Limits and scale</a><a class="dossier-print" href="/architecture/dossier">Complete dossier</a></nav><article class="architecture-dossier"><p>Code, legal data, retrieval artifacts and assistant behavior are one release unit. A deployment is
+not production merely because a container started.</p>
+<p><img src="/built/diagrams/release.svg" alt="A signed artifact set becomes a zero-traffic candidate, passes health, retrieval, assistant and browser gates, then a separate signed promotion moves traffic while retaining the exact former production revision." /></p>
+<p><a href="/built/diagrams/release.svg">Open the release diagram at full size</a></p>
+<div class="dossier-table" tabindex="0" role="region" aria-label="Scrollable architecture table"><table>
+<thead>
+<tr>
+<th>Box</th>
+<th>Responsibility</th>
+<th>Lives in</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Signed artifacts</td>
+<td>Bind code, indexes, vectors, encoder and scope to exact hashes</td>
+<td>local builder plus bounded <code>lex-ops</code> publication</td>
+</tr>
+<tr>
+<td>Candidate</td>
+<td>Start an immutable revision while production traffic remains unchanged</td>
+<td><code>deploy.yml</code> and Azure Container Apps</td>
+</tr>
+<tr>
+<td>Independent gates</td>
+<td>Verify readiness, retrieval, assistant behavior, browser behavior and human review</td>
+<td>candidate scripts, signed evaluation release and protected environments</td>
+</tr>
+<tr>
+<td>Promote or restore</td>
+<td>Revalidate identities before one traffic change or exact rollback</td>
+<td><code>revision-traffic.yml</code> and Key Vault receipts</td>
+</tr>
+<tr>
+<td>Retention boundary</td>
+<td>Preserve production and one rollback without deleting unproven shared artifacts</td>
+<td>Container Apps revision policy and <code>lex-ops</code> Blob cleanup</td>
+</tr>
+</tbody>
+</table></div>
+<h2>State machine</h2>
+<div class="dossier-table" tabindex="0" role="region" aria-label="Scrollable architecture table"><table>
+<thead>
+<tr>
+<th>State</th>
+<th>Active production</th>
+<th>Inactive records</th>
+<th>Allowed next action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Steady</td>
+<td>Current revision at 100 percent</td>
+<td>Exact former production as rollback</td>
+<td>Create one candidate</td>
+</tr>
+<tr>
+<td>Waiting</td>
+<td>Current revision at 100 percent</td>
+<td>Rollback plus one zero-traffic candidate</td>
+<td>Evaluate, promote or reconcile</td>
+</tr>
+<tr>
+<td>Promoting</td>
+<td>Evaluated candidate activated at zero traffic</td>
+<td>Previous authorities still pinned</td>
+<td>Revalidate evidence, then move traffic</td>
+</tr>
+<tr>
+<td>New steady</td>
+<td>New production at 100 percent</td>
+<td>Exact former production as rollback</td>
+<td>Emit and verify release-state receipt</td>
+</tr>
+</tbody>
+</table></div>
+<p><code>maxInactiveRevisions</code> is one in steady state and two only while a candidate waits. Azure Container
+Apps has no supported per-revision delete. An unresolved newer candidate cannot be discarded by
+lowering the limit without risking the older valid rollback, so cleanup follows identity and
+creation order rather than age.</p>
+<h2>Evidence before traffic</h2>
+<p>The deploy workflow builds an immutable image from the exact code commit and signed artifact set,
+creates a zero-traffic revision, and checks readiness, MCP, Luxembourg and EU search. The assistant
+evaluation binds frozen cases, exact candidate, tool outcomes, injection canaries, latency and cost
+to a signed report. Human review uses a separate signing authority. Only the traffic workflow can
+verify those records and promote. No automated actor can approve its own release.</p>
+<p>The current v4 release is still gated. New production measurements and claims of live behavior
+belong here only after candidate evaluation and promotion produce the matching signed receipts.</p>
+<h2>Container registry and Blob retention</h2>
+<p>The Azure Container Registry is shared and still has a legacy RBAC boundary. Broad digest deletion
+is rejected because Lex's revision inventory cannot prove that another application does not pull a
+digest. The clean target is either a dedicated Lex registry or an audited migration of every shared
+consumer to repository-scoped ABAC roles and managed identities. Only then may an exact digest
+allowlist become an automated deletion plan.</p>
+<p>Private prebuilt staging blobs have a narrower ownership proof. The publisher may delete only the
+exact staging paths it created, with matching ETags, after both the immutable Blob release and the
+public release have been downloaded and hash-verified. Release paths are never cleanup candidates.</p>
+<h2 id="live-deployment">Live deployment evidence</h2>
+<p>The release model above is the invariant. This table reads the deployed registry,
+process configuration and mounted indexes so the dossier does not copy live identities
+into prose.</p>
+<div class="dossier-table" tabindex="0" role="region" aria-label="Live deployment configuration"><table class="kv">
 <tr><th>retrieval</th><td>keyword, deterministic FTS5/BM25</td></tr>
 <tr><th>hosting</th><td>Azure Container Apps Consumption, France Central</td></tr>
 <tr><th>resources</th><td>1 vCPU, 2 GiB, 0 to 5 replicas</td></tr>
@@ -262,67 +356,14 @@ separately on <a href="/architecture/next">Next</a>.</p>
 <tr><th>artifact manifest set</th><td class="mono">not supplied by deployment</td></tr>
 <tr><th>immutable image</th><td class="mono">not supplied by deployment</td></tr>
 </table></div>
-<h2>Mounted coverage, read live</h2>
-<div class="card"><table tabindex="0" aria-label="Mounted index collections"><tr><th>collection</th><th>works</th><th>versions</th><th>schema</th><th>corpus commit</th></tr>
-<tr><td>t-pub</td><td class="mono">2</td>
-<td class="mono">3</td><td class="mono">lex-index/3</td>
-<td class="mono">goldenc</td></tr></table></div>
-<h2>Contracts preserved</h2>
-<p>Exact publisher text, hashes, anchors, timelines, refusals, comparisons and diffs remain
-authoritative. The backend returns structured MCP JSON and the workspace renders the separate
-<span class="mono">UiEffect</span> field.</p><p>Lex answers one question, <b>what did the rule say on that date?</b>, for Luxembourg law and the reviewed-scope EU works in the mounted index,
-in a way a developer can build on and an auditor can check. Everything below is open source and open data.</p>
-
-<h2>Two layers, one hash chain</h2>
-<div class="card"><pre class="mono" style="white-space:pre-wrap;font-size:12.5px;margin:0">EVIDENCE LAYER (append-only, verbatim)          CONSUMPTION LAYER (regenerable, clean)
-lex-corpus-lu-legilux   lex-corpus-eu-eurlex   lex-articles
-the exact bytes the state published       →   per-ARTICLE Markdown + JSON
-sha256 per file, observation chains            publisher anchors + measured continuity gate
-                                               publisher timeline intervals per provision
-             deterministic, versioned,          per-anchor history + renumbering events
-             IMMUTABLE extraction profiles          │
-             (akn-lu/1, xhtml-eu/1, code,          ▼
-              never an LLM)                    signed SQLite indexes (lex-index/3)
-                                               provisions + FTS + time axis, ECDSA-P256 stamp
-                                                    │
-                    this site · /mcp (any MCP client) · datasets</pre></div>
-
-<p>Every provision's <span class="mono">text_sha256</span> chains to a verbatim-file sha256 in the evidence
-repo: re-run the pinned open-source extractor on the state's bytes and you get these bytes.
-<a href="/verify">Verify it yourself</a>, the defence is never "trust Lex".</p>
-
-<h2>The retrieval unit is the article</h2>
-<p>Search hits, <span class="mono">as_of</span> (with <span class="mono">outline</span> and
-<span class="mono">select</span> modes), and the <span class="mono">article_history</span> tool all operate
-per provision. "What did Article 92 say over its life?" is a file read: every distinct text on its
-publisher timeline, plus mechanically detected renumberings (identical-hash matching, never interpretation).</p>
-
-<h2>Honesty as an API contract</h2>
-<div class="card"><table>
-<tr><th>refusal status</th><th>meaning</th></tr>
-<tr><td class="mono">no_version_for_date</td><td>the work exists; no publisher version covers that date</td></tr>
-<tr><td class="mono">unknown_work / unknown_anchor</td><td>Lex does not hold it, and says so</td></tr>
-<tr><td class="mono">anchor_not_in_version</td><td>that article did not exist in that version (knowing this IS the product)</td></tr>
-<tr><td class="mono">text_withheld</td><td>metadata held, text gate not cleared; official link provided</td></tr>
-<tr><td class="mono">text_not_available</td><td>publisher record held; no safely derived provision text; official link provided</td></tr>
-<tr><td class="mono">no_provision_history</td><td>the work is held without per-article history</td></tr>
+<h3>Mounted index identities</h3>
+<div class="dossier-table" tabindex="0" role="region" aria-label="Mounted index identities"><table>
+<tr><th>collection</th><th>works</th><th>versions</th><th>schema</th><th>corpus commit</th><th>stamp</th></tr>
+<tr><td>t-pub</td><td class="mono">2</td><td class="mono">3</td><td class="mono">lex-index/3</td><td class="mono">goldenc</td><td><span class="badge ok">valid</span></td></tr>
 </table></div>
-<p class="sub">MCP 2.0.0 uses a closed status vocabulary. See the
-<a href="https://github.com/SFHAJJI/lex/blob/main/docs/mcp-2-migration.md" rel="noopener">migration note</a>.</p>
-<p>A flagged wrong answer is still wrong, so Lex refuses instead; <a href="/coverage">coverage</a> exists to
-state what we do <b>not</b> have. The AI layer (<a href="/">the front page</a>) is additive and separated:
-a bounded retrieval loop uses the same in-process tool core the public
-<span class="mono">/mcp</span> serves, then Agent Framework composes claim-typed evidence
-and conditionally judges grounded prose. Application code, not the model, owns work
-resolution, tool authorization, citations, typed gaps and legal text (fitness rule F10).</p>
-
-<h2>Build on it</h2>
-<p>
-<a href="https://github.com/SFHAJJI/lex-articles">lex-articles</a>, machine-readable corpus (CC-BY, SCHEMA.md contract) ·
-<a href="https://github.com/SFHAJJI/lex">lex</a>, all code, Apache-2.0, incl. the
-<a href="https://github.com/SFHAJJI/lex/blob/main/docs/lex-spec-v4.md">full decision record (D1, D47)</a> ·
-<a href="https://github.com/SFHAJJI/lex-corpus-lu-legilux">evidence repos</a> ·
-hosted MCP: <span class="mono">claude mcp add --transport http lex https://law.soufien.lu/mcp</span></p>
+<p class="sub">Mounted total: 2 works and
+3 dated versions. Artifact verification remains
+a distinct job on <a href="/verify">Verify artifacts</a>.</p></article>
 </main>
 <footer>
 <!-- Fourteen links in one undifferentiated run answered no question a reader had. Three
@@ -335,7 +376,7 @@ hosted MCP: <span class="mono">claude mcp add --transport http lex https://law.s
     <a href="/how-it-works">How it works</a><a href="/coverage">What Lex holds, and lacks</a>
     <a href="/decisions">Decisions, and what they cost</a>
     <a href="/benchmarks">Benchmarks</a><a href="/verify">Verify it yourself</a>
-    <a href="/architecture">Architecture</a><a href="/built">How I built it</a>
+    <a href="/built">Architecture dossier</a>
     <a href="/about">About</a></div>
   <!-- The datasets, not the engine. This group used to end at "Source on GitHub" pointing at
        the engine repo, which is the wrong thing to lead with for a reader who wants to USE
