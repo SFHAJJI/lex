@@ -14,6 +14,18 @@ public sealed class EurLexLegacyIdentityTests
         "http://publications.europa.eu/resource/celex/12012E/TXT",
         "2012-10-26",
         "12012E/TXT")]
+    [InlineData(
+        "http://publications.europa.eu/resource/celex/11997E083",
+        "1997-10-02",
+        "11997E083")]
+    [InlineData(
+        "http://publications.europa.eu/resource/celex/12012E016",
+        "2012-10-26",
+        "12012E016")]
+    [InlineData(
+        "http://publications.europa.eu/resource/celex/12003TN02/18/A",
+        "2003-09-23",
+        "12003TN02/18/A")]
     public void Original_sources_recover_the_exact_work_CELEX_identity(
         string workIdentifier, string validFrom, string celex)
     {
@@ -77,6 +89,27 @@ public sealed class EurLexLegacyIdentityTests
                 workIdentifier,
                 new DateOnly(1997, 2, 10),
                 [Expression("en", "31996L0071")])));
+    }
+
+    [Theory]
+    [InlineData("12012E16")]
+    [InlineData("12012E")]
+    [InlineData("12012AB")]
+    [InlineData("12012AB/TXT")]
+    [InlineData("12012TN00/00/Z")]
+    [InlineData("19999ZZ999")]
+    [InlineData("12012E/TXT/EXTRA")]
+    [InlineData("12003TN02/18/A/EXTRA")]
+    public void Legacy_identity_recovery_rejects_malformed_treaty_CELEX_forms(
+        string celex)
+    {
+        var resolver = Resolver();
+
+        Assert.Throws<InvalidDataException>(() => resolver.ResolveLegacyVersionIdentity(
+            new LegacyVersionIdentity(
+                "http://publications.europa.eu/resource/celex/" + celex,
+                new DateOnly(2012, 10, 26),
+                [Expression("en", celex)])));
     }
 
     [Theory]

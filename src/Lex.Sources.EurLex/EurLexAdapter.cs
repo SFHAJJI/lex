@@ -126,7 +126,7 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory,
                 "A EUR-Lex legacy work_identifier is not an exact official CELEX resource URI.");
         var celex = value[CelexIdentifierPrefix.Length..];
         if (!System.Text.RegularExpressions.Regex.IsMatch(celex,
-                @"^(?:1[0-9]{4}[A-Z]/TXT|3[0-9]{4}[RLD][0-9]{4}(?:R\([0-9]{2}\))?)$",
+                @"^(?:1[0-9]{4}(?:E[0-9]{3}|JN[0-9]{2}/[0-9]{2}|TN[0-9]{2}/[0-9]{2}/A|[A-Z]/TXT)|3[0-9]{4}[RLD][0-9]{4}(?:R\([0-9]{2}\))?)$",
                 System.Text.RegularExpressions.RegexOptions.CultureInvariant))
             throw new InvalidDataException(
                 "A EUR-Lex legacy work_identifier does not contain one supported work CELEX.");
