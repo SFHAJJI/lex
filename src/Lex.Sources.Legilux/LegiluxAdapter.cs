@@ -24,6 +24,9 @@ public sealed class LegiluxAdapter : ISourceAdapter, ISourceBuildInventory
     internal const int SubjectMaximumRows = 200_000;
     internal const int IdentityMaximumRows = 20_000;
     internal const int ManifestationMaximumRows = 50_000;
+    internal const int HeldWorkMetadataBatchSize = 8;
+    internal const int SubjectRawRowsPerWorkMaximum = 1_024;
+    internal const int IdentityRowsPerWorkMaximum = 512;
 
     private readonly SparqlClient _sparql;
     private Dictionary<string, List<VersionRecord>>? _byWork;   // work URI -> versions
@@ -183,15 +186,15 @@ public sealed class LegiluxAdapter : ISourceAdapter, ISourceBuildInventory
                 """, pageSize: 5000, maximumRows: CatalogueMaximumRows, ct: ct,
                 onPage: n => Console.Error.WriteLine($"  [legilux] fetched {n} rows"));
 
-            var subjectRows = await _sparql.SelectPagedAsync(
-                LegiluxPublisherMetadata.Query, pageSize: 5000,
-                maximumRows: SubjectMaximumRows, ct: ct,
-                onPage: n => Console.Error.WriteLine($"  [legilux] fetched {n} subject rows"));
+            var heldWorkUris = rows.Select(row => RequiredHeldWork(row))
+                .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+            var subjectRows = await SelectHeldWorkMetadataAsync(
+                heldWorkUris, LegiluxPublisherMetadata.Query,
+                SubjectRawRowsPerWorkMaximum, SubjectMaximumRows, "subject", ct);
             var subjectsByWork = LegiluxPublisherMetadata.ParseSubjects(subjectRows);
-            var identityRows = await _sparql.SelectPagedAsync(
-                LegiluxOfficialIdentities.Query, pageSize: 5000,
-                maximumRows: IdentityMaximumRows, ct: ct,
-                onPage: n => Console.Error.WriteLine($"  [legilux] fetched {n} official identity rows"));
+            var identityRows = await SelectHeldWorkMetadataAsync(
+                heldWorkUris, LegiluxOfficialIdentities.Query,
+                IdentityRowsPerWorkMaximum, IdentityMaximumRows, "official identity", ct);
             var identitiesByWork = LegiluxOfficialIdentities.Parse(identityRows);
 
             var byConsolidation = rows.GroupBy(r => r["c"], StringComparer.Ordinal);
@@ -333,6 +336,71 @@ public sealed class LegiluxAdapter : ISourceAdapter, ISourceBuildInventory
         }
         finally { _initLock.Release(); }
     }
+
+    internal static IEnumerable<string[]> HeldWorkMetadataBatches(IEnumerable<string> workUris) =>
+        workUris.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal)
+            .Chunk(HeldWorkMetadataBatchSize);
+
+    internal static string HeldWorkValues(IReadOnlyCollection<string> works)
+    {
+        if (works.Count is < 1 or > HeldWorkMetadataBatchSize)
+            throw new ArgumentOutOfRangeException(nameof(works));
+        return string.Join(' ', works.Select(work =>
+        {
+            if (!Uri.TryCreate(work, UriKind.Absolute, out var uri)
+                || uri.Scheme is not ("http" or "https"))
+                throw new InvalidDataException($"Legilux held work has an invalid URI: {work}");
+            return $"<{uri.AbsoluteUri}>";
+        }));
+    }
+
+    private async Task<List<Dictionary<string, string>>> SelectHeldWorkMetadataAsync(
+        IReadOnlyCollection<string> heldWorkUris,
+        Func<IReadOnlyCollection<string>, string> query,
+        int perWorkMaximum,
+        int totalMaximum,
+        string label,
+        CancellationToken ct)
+    {
+        var all = new List<Dictionary<string, string>>();
+        foreach (var batch in HeldWorkMetadataBatches(heldWorkUris))
+        {
+            var requestedMaximum = checked(batch.Length * perWorkMaximum + 1);
+            if (requestedMaximum > SparqlClient.SortedTopMaximum)
+                throw new InvalidOperationException("Legilux metadata batch exceeds the Virtuoso sorted-result window.");
+            var page = await _sparql.SelectAsync(query(batch), ct);
+            if (page.Count >= requestedMaximum)
+                throw new InvalidDataException(
+                    $"Legilux {label} metadata for {batch.Length} held works exceeds {requestedMaximum - 1} rows.");
+            if (page.Count > totalMaximum - all.Count)
+                throw new InvalidDataException(
+                    $"Legilux {label} metadata exceeds the configured maximum of {totalMaximum} rows.");
+
+            var expected = batch.ToHashSet(StringComparer.Ordinal);
+            foreach (var group in page.GroupBy(row => RequiredMetadataWork(row, label), StringComparer.Ordinal))
+            {
+                if (!expected.Contains(group.Key))
+                    throw new InvalidDataException(
+                        $"Legilux {label} metadata returned an unrequested work {group.Key}.");
+                if (group.Count() > perWorkMaximum)
+                    throw new InvalidDataException(
+                        $"Legilux {label} metadata for {group.Key} exceeds {perWorkMaximum} rows.");
+            }
+            all.AddRange(page);
+            Console.Error.WriteLine($"  [legilux] fetched {all.Count} {label} rows");
+        }
+        return all;
+    }
+
+    private static string RequiredHeldWork(Dictionary<string, string> row) =>
+        row.TryGetValue("work", out var work) && !string.IsNullOrWhiteSpace(work)
+            ? work
+            : throw new InvalidDataException("Legilux catalogue row is missing work.");
+
+    private static string RequiredMetadataWork(Dictionary<string, string> row, string label) =>
+        row.TryGetValue("work", out var work) && !string.IsNullOrWhiteSpace(work)
+            ? work
+            : throw new InvalidDataException($"Legilux {label} metadata row is missing work.");
 
     private static DateOnly ParseDate(string value) => DateOnly.ParseExact(
         value, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);

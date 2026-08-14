@@ -10,19 +10,24 @@ public sealed class LegiluxPublisherMetadataTests
     private const string Base = "http://data.legilux.public.lu/resource/authority/";
 
     [Fact]
-    public void Subject_query_is_bounded_and_keeps_level_scheme_and_missing_rows_visible()
+    public void Subject_query_is_bounded_to_held_works_without_a_Virtuoso_offset_window()
     {
-        var query = Invoke<string>("LegiluxPublisherMetadata", "Query", 5000, 10000);
+        var works = Enumerable.Range(1, 8)
+            .Select(index => $"https://data.legilux.public.lu/eli/etat/leg/loi/2020/01/{index:00}/n1")
+            .ToArray();
+        var query = LegiluxPublisherMetadata.Query(works);
 
         Assert.Contains("SELECT DISTINCT ?work ?level ?subject ?label ?scheme", query);
         Assert.Contains("jolux:subjectLevel1", query);
         Assert.Contains("jolux:subjectLevel2", query);
         Assert.Contains("?act a jolux:Act", query);
-        Assert.Contains("jolux:isMemberOf ?work", query);
+        Assert.Contains("VALUES ?work", query);
         Assert.Contains("OPTIONAL { ?subject skos:prefLabel ?label", query);
         Assert.Contains("OPTIONAL { ?subject skos:inScheme ?scheme", query);
         Assert.Contains("ORDER BY ?work ?level ?subject ?scheme ?label", query);
-        Assert.Contains("LIMIT 5000 OFFSET 10000", query);
+        Assert.Contains("LIMIT 8193", query);
+        Assert.DoesNotContain("OFFSET", query, StringComparison.Ordinal);
+        Assert.All(works, work => Assert.Contains($"<{work}>", query, StringComparison.Ordinal));
     }
 
     [Fact]
@@ -95,11 +100,17 @@ public sealed class LegiluxPublisherMetadataTests
     [Fact]
     public void Official_same_as_query_and_parser_derive_all_six_code_identities()
     {
-        var query = Invoke<string>("LegiluxOfficialIdentities", "Query", 5000, 0);
+        var heldWorks = new[]
+        {
+            "https://data.legilux.public.lu/eli/etat/leg/loi/1804/03/21/n1",
+            "https://data.legilux.public.lu/eli/etat/leg/loi/1879/06/18/n1",
+        };
+        var query = LegiluxOfficialIdentities.Query(heldWorks);
         Assert.Contains("owl:sameAs", query);
-        Assert.Contains("jolux:Consolidation", query);
+        Assert.Contains("VALUES ?work", query);
         Assert.Contains("ORDER BY ?work ?identifier", query);
-        Assert.Contains("LIMIT 5000 OFFSET 0", query);
+        Assert.Contains("LIMIT 1025", query);
+        Assert.DoesNotContain("OFFSET", query, StringComparison.Ordinal);
 
         var pairs = new[]
         {
@@ -129,6 +140,32 @@ public sealed class LegiluxPublisherMetadataTests
             Assert.Null(item.Language);
             Assert.Equal(item.Identifier, item.SourceUri);
         }
+    }
+
+    [Fact]
+    public void Held_work_batches_cover_each_work_once_and_never_cross_Virtuoso_sorted_top_10000()
+    {
+        var works = Enumerable.Range(1, 19)
+            .Select(index => $"https://data.legilux.public.lu/eli/etat/leg/loi/2020/02/{index:00}/n1")
+            .Reverse()
+            .Append("https://data.legilux.public.lu/eli/etat/leg/loi/2020/02/01/n1")
+            .ToArray();
+
+        var batches = LegiluxAdapter.HeldWorkMetadataBatches(works).ToArray();
+        var subjects = batches.Select(LegiluxPublisherMetadata.Query).ToArray();
+        var identities = batches.Select(LegiluxOfficialIdentities.Query).ToArray();
+
+        Assert.Equal([8, 8, 3], batches.Select(batch => batch.Length));
+        Assert.Equal(works.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal),
+            batches.SelectMany(batch => batch));
+        Assert.All(subjects.Concat(identities), query =>
+        {
+            var limit = QueryLimit(query);
+            Assert.InRange(limit, 1, 10_000);
+            Assert.DoesNotContain("OFFSET", query, StringComparison.Ordinal);
+        });
+        Assert.All(works.Distinct(StringComparer.Ordinal), work =>
+            Assert.Equal(1, subjects.Count(query => query.Contains($"<{work}>", StringComparison.Ordinal))));
     }
 
     private static Dictionary<string, string> Row(
@@ -163,5 +200,12 @@ public sealed class LegiluxPublisherMetadataTests
             ExceptionDispatchInfo.Capture(error.InnerException).Throw();
             throw;
         }
+    }
+
+    private static int QueryLimit(string query)
+    {
+        var line = query.Split('\n').Single(value => value.TrimStart().StartsWith("LIMIT ", StringComparison.Ordinal));
+        return int.Parse(line.AsSpan(line.IndexOf("LIMIT ", StringComparison.Ordinal) + 6),
+            System.Globalization.CultureInfo.InvariantCulture);
     }
 }

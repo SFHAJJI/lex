@@ -20,9 +20,13 @@ internal static class LegiluxPublisherMetadata
             [SchemePrefix + "country"] = "country",
         };
 
-    internal static string Query(int limit, int offset) => Prefixes + $$"""
+    internal static string Query(IReadOnlyCollection<string> works)
+    {
+        var values = LegiluxAdapter.HeldWorkValues(works);
+        var limit = checked(works.Count * LegiluxAdapter.SubjectRawRowsPerWorkMaximum + 1);
+        return Prefixes + $$"""
         SELECT DISTINCT ?work ?level ?subject ?label ?scheme WHERE {
-          ?consolidation a jolux:Consolidation ; jolux:isMemberOf ?work .
+          VALUES ?work { {{values}} }
           ?act a jolux:Act ; jolux:isMemberOf ?work .
           {
             ?act jolux:subjectLevel1 ?subject .
@@ -34,8 +38,9 @@ internal static class LegiluxPublisherMetadata
           OPTIONAL { ?subject skos:prefLabel ?label . FILTER(LANG(?label) = "fr") }
           OPTIONAL { ?subject skos:inScheme ?scheme }
         } ORDER BY ?work ?level ?subject ?scheme ?label
-        LIMIT {{limit}} OFFSET {{offset}}
+        LIMIT {{limit}}
         """;
+    }
 
     internal static IReadOnlyDictionary<string, IReadOnlyList<PublisherMetadataRecord>> ParseSubjects(
         IReadOnlyList<Dictionary<string, string>> rows)
@@ -107,20 +112,24 @@ internal static class LegiluxPublisherMetadata
 internal static class LegiluxOfficialIdentities
 {
     private const string Prefixes = """
-        PREFIX jolux: <http://data.legilux.public.lu/resource/ontology/jolux#>
         PREFIX owl: <http://www.w3.org/2002/07/owl#>
         """;
 
-    internal static string Query(int limit, int offset) => Prefixes + $$"""
+    internal static string Query(IReadOnlyCollection<string> works)
+    {
+        var values = LegiluxAdapter.HeldWorkValues(works);
+        var limit = checked(works.Count * LegiluxAdapter.IdentityRowsPerWorkMaximum + 1);
+        return Prefixes + $$"""
         SELECT DISTINCT ?work ?identifier WHERE {
-          ?consolidation a jolux:Consolidation ; jolux:isMemberOf ?work .
+          VALUES ?work { {{values}} }
           { ?work owl:sameAs ?identifier }
           UNION
           { ?identifier owl:sameAs ?work }
           FILTER(?identifier != ?work)
         } ORDER BY ?work ?identifier
-        LIMIT {{limit}} OFFSET {{offset}}
+        LIMIT {{limit}}
         """;
+    }
 
     internal static IReadOnlyDictionary<string, IReadOnlyList<PublisherMetadataRecord>> Parse(
         IReadOnlyList<Dictionary<string, string>> rows)

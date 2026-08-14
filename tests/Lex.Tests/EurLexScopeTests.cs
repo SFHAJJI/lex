@@ -40,21 +40,50 @@ public sealed class EurLexScopeTests : IDisposable
     }
 
     [Fact]
-    public void Work_metadata_query_is_bounded_and_rejects_cap_plus_one()
+    public void Metadata_queries_batch_every_work_once_below_the_Virtuoso_sorted_top_10000_limit()
     {
-        var query = EurLexAdapter.WorkMetadataQuery(
-            "(\"32016R0679\" <http://publications.europa.eu/resource/celex/32016R0679>)");
-        var oversized = Enumerable.Range(0, 20_001)
+        var celex = Enumerable.Range(1, 33).Select(index => $"32024R{index:0000}")
+            .Reverse().Append("32024R0001").ToArray();
+        var batches = EurLexAdapter.MetadataWorkBatches(celex).ToArray();
+        var workQueries = batches.Select(EurLexAdapter.WorkMetadataQuery).ToArray();
+        var publisherQueries = batches.Select(EurLexAdapter.PublisherMetadataQuery).ToArray();
+
+        Assert.Equal([16, 16, 1], batches.Select(batch => batch.Length));
+        Assert.Equal(celex.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal),
+            batches.SelectMany(batch => batch));
+        Assert.All(workQueries.Concat(publisherQueries), query =>
+        {
+            Assert.DoesNotContain("LIMIT 20001", query, StringComparison.Ordinal);
+            var line = query.Split('\n').Single(value =>
+                value.TrimStart().StartsWith("LIMIT ", StringComparison.Ordinal));
+            var limit = int.Parse(line.AsSpan(line.IndexOf("LIMIT ", StringComparison.Ordinal) + 6),
+                System.Globalization.CultureInfo.InvariantCulture);
+            Assert.InRange(limit, 1, 10_000);
+        });
+        Assert.All(celex.Distinct(StringComparer.Ordinal), id =>
+            Assert.Equal(1, workQueries.Count(query => query.Contains($"\"{id}\"", StringComparison.Ordinal))));
+        Assert.All(celex.Distinct(StringComparer.Ordinal), id =>
+            Assert.Equal(1, publisherQueries.Count(query => query.Contains($"\"{id}\"", StringComparison.Ordinal))));
+    }
+
+    [Fact]
+    public void Work_metadata_query_rejects_one_work_cap_plus_one()
+    {
+        var query = EurLexAdapter.WorkMetadataQuery(["32016R0679"]);
+        var oversized = Enumerable.Range(0, 513)
             .Select(index => new Dictionary<string, string>(StringComparer.Ordinal)
             {
-                ["base"] = index.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                ["base"] = "32016R0679",
+                ["lang"] = index.ToString(System.Globalization.CultureInfo.InvariantCulture),
             })
             .ToList();
 
-        Assert.Contains("LIMIT 20001", query, StringComparison.Ordinal);
+        Assert.Contains("SELECT DISTINCT", query, StringComparison.Ordinal);
+        Assert.Contains("LIMIT 513", query, StringComparison.Ordinal);
         var error = Assert.Throws<InvalidDataException>(
             () => EurLexAdapter.RequireBoundedWorkMetadataRows(oversized));
-        Assert.Contains("exceeds 20,000 records", error.Message, StringComparison.Ordinal);
+        Assert.Contains("32016R0679", error.Message, StringComparison.Ordinal);
+        Assert.Contains("512 records", error.Message, StringComparison.Ordinal);
     }
 
     [Fact]
