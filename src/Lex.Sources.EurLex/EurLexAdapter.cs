@@ -31,6 +31,7 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory
     internal const int MetadataWorkBatchSize = 16;
     internal const int MetadataRowsPerWorkMaximum = 512;
     internal const int VirtuosoSortedTopMaximum = 10_000;
+    private const int PortalExpressionFallbackMaximum = 64;
     private static readonly SourceRetryPolicy RetryPolicy = new(MaximumAttempts: 4);
 
     private static readonly HttpClient Http = CreateClient();
@@ -58,7 +59,7 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory
     private static HttpClient CreateClient()
     {
         var c = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false })
-            { Timeout = TimeSpan.FromSeconds(180) };
+        { Timeout = TimeSpan.FromSeconds(180) };
         c.DefaultRequestHeaders.UserAgent.ParseAdd("Lex/0.1");
         c.DefaultRequestHeaders.UserAgent.ParseAdd("(+https://github.com/SFHAJJI/lex)");
         return c;
@@ -105,13 +106,27 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory
         if (celex is null)
             return new(SourceBodyStatus.ParserFailure, Detail: "The version has no CELEX identifier.");
 
+        var portalBound = version.Raw.GetValueOrDefault("expression_source")
+            == "verified_eurlex_portal";
+
         // Cellar is canonical, but a small number of language-specific corrigenda return 404
         // there while the official EUR-Lex expression URI serves the XHTML. Retry that URI only
         // when it remains on an EU institutional host; no third-party fallback can become evidence.
-        var urls = new List<string> { CellarResourceUrl(celex) };
-        if (OfficialEuUri(expression.SourceUri) is { } expressionUri &&
-            !string.Equals(expressionUri, urls[0], StringComparison.OrdinalIgnoreCase))
-            urls.Add(expressionUri);
+        var urls = new List<string>();
+        if (portalBound)
+        {
+            if (OfficialEuUri(expression.SourceUri) is not { } verifiedExpressionUri)
+                return new(SourceBodyStatus.ParserFailure,
+                    Detail: "The verified EUR-Lex expression URI is not on an official EU host.");
+            urls.Add(verifiedExpressionUri);
+        }
+        else
+        {
+            urls.Add(CellarResourceUrl(celex));
+            if (OfficialEuUri(expression.SourceUri) is { } expressionUri &&
+                !string.Equals(expressionUri, urls[0], StringComparison.OrdinalIgnoreCase))
+                urls.Add(expressionUri);
+        }
 
         FetchResult? last = null;
         var totalAttempts = 0;
@@ -123,9 +138,18 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory
             totalAttempts += last.Attempts;
             if (last.Bytes is null) continue;
 
-            var fallback = attempt == 0 ? "" : " (official EUR-Lex fallback)";
+            var text = System.Text.Encoding.UTF8.GetString(last.Bytes);
+            if (!IsAcceptableBodyIdentity(
+                    text, celex, expression.Language, portalBound, attempt > 0))
+                return new(SourceBodyStatus.ParserFailure,
+                    Detail: "The official EUR-Lex fallback did not identify the exact CELEX and language.",
+                    Attempts: totalAttempts);
+
+            var fallback = portalBound || attempt > 0
+                ? " (official EUR-Lex fallback)"
+                : "";
             Console.Error.WriteLine($"  [eurlex] {celex}: body {last.Bytes.Length / 1024} KB{fallback}");
-            return SourceBodyFetch.Retrieved(System.Text.Encoding.UTF8.GetString(last.Bytes), totalAttempts);
+            return SourceBodyFetch.Retrieved(text, totalAttempts);
         }
 
         if (last?.LimitExceeded == true)
@@ -419,12 +443,21 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory
                 // Distinct versions sorted by consolidation date; valid_to = next valid_from - 1 (publisher-dated sequence).
                 var versions = rows
                     .GroupBy(r => r["celex"], StringComparer.Ordinal)
-                    .Select(g => new ConsolidatedState(
-                        g.Key,
-                        ParseDate(g.First()["date"]),
-                        g.Where(r => r.ContainsKey("lang"))
-                            .GroupBy(r => r["lang"], StringComparer.Ordinal)
-                            .ToDictionary(x => x.Key, x => x.First().GetValueOrDefault("title"), StringComparer.Ordinal)))
+                    .Select(g =>
+                    {
+                        var stateRows = g.ToArray();
+                        return new ConsolidatedState(
+                            g.Key,
+                            ParseDate(stateRows[0]["date"]),
+                            stateRows.Where(r => r.ContainsKey("lang"))
+                                .GroupBy(r => r["lang"], StringComparer.Ordinal)
+                                .ToDictionary(x => x.Key,
+                                    x => x.First().GetValueOrDefault("title"),
+                                    StringComparer.Ordinal),
+                            ConsolidationLanguages(stateRows, _scope.Languages),
+                            stateRows.Any(row => row.GetValueOrDefault("expression_source")
+                                == "verified_eurlex_portal"));
+                    })
                     .OrderBy(v => v.Date).ThenBy(v => v.Celex, StringComparer.Ordinal)
                     .ToList();
                 var coordinates = ConsolidatedCoordinates(
@@ -437,13 +470,16 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory
                     var celex = state.Celex;
                     var date = state.Date;
                     var validTo = coordinates[i].ValidTo;
-                    var expressions = _scope.Languages.Select(lang =>
+                    var expressions = state.Languages.Select(lang =>
                     {
                         var title = state.Titles.GetValueOrDefault(lang) ?? titles.GetValueOrDefault(lang) ?? baseTitle;
-                        var sourceUri = $"https://eur-lex.europa.eu/legal-content/{lang.ToUpperInvariant()}/TXT/?uri=CELEX:{Uri.EscapeDataString(celex)}";
+                        var sourceUri = ExpressionSourceUri(lang, celex);
                         return new ExpressionRecord(lang, date, validTo, "publisher", title,
                             OfficialDisplayTitle(title, celex), sourceUri);
                     }).ToArray();
+                    var raw = SourceRaw(celex, typeCode, bindingStatus, "published");
+                    if (state.PortalBound)
+                        raw["expression_source"] = "verified_eurlex_portal";
                     list.Add(new VersionRecord(
                         Id: new Identifier($"http://publications.europa.eu/resource/celex/{celex}"),
                         WorkId: new Identifier(workUri),
@@ -455,7 +491,7 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory
                         PublicationDate: date,
                         Expressions: expressions,
                         Relations: [new RelationRecord("consolidates", new Identifier(workUri))],
-                        Raw: SourceRaw(celex, typeCode, bindingStatus, "published"),
+                        Raw: raw,
                         PublisherMetadata: publisherMetadata,
                         DocumentRoles: DocumentRoles(
                             resourceType, amending, correcting, consolidated: true)));
@@ -482,10 +518,12 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory
                             var originalValidTo = consolidatedDates.Length == 0
                                 ? (DateOnly?)null
                                 : consolidatedDates.Min().AddDays(-1);
-                            var expressions = _scope.Languages.Select(lang =>
+                            var originalLanguages = ConsolidationLanguages(
+                                baseTitleRows, _scope.Languages);
+                            var expressions = originalLanguages.Select(lang =>
                             {
                                 var title = titles.GetValueOrDefault(lang) ?? baseTitle;
-                                var sourceUri = $"https://eur-lex.europa.eu/legal-content/{lang.ToUpperInvariant()}/TXT/?uri=CELEX:{Uri.EscapeDataString(baseCelex)}";
+                                var sourceUri = ExpressionSourceUri(lang, baseCelex);
                                 return new ExpressionRecord(lang, originalDate, originalValidTo, "publisher", title,
                                     OfficialDisplayTitle(title, baseCelex), sourceUri);
                             }).ToArray();
@@ -513,33 +551,114 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory
         IEnumerable<string> celexNumbers, CancellationToken ct)
     {
         var result = new Dictionary<string, List<Dictionary<string, string>>>(StringComparer.Ordinal);
-        foreach (var chunk in celexNumbers.Chunk(100))
+        foreach (var chunk in MetadataWorkBatches(celexNumbers))
         {
-            var values = string.Join(' ', chunk.Select(c =>
-                $"(\"{c}\" <{CelexAliasUri(c)}>)"));
-            var rows = await SelectAsync(Cdm + Owl + $$"""
-                SELECT ?base ?celex ?date ?lang ?title WHERE {
+            var rows = await SelectAsync(ConsolidationsQuery(chunk), ct);
+            AddBoundedMetadataRows(result, rows, chunk, "consolidation");
+        }
+        await VerifyPortalExpressionFallbacksAsync(result, ct);
+        return result;
+    }
+
+    private async Task VerifyPortalExpressionFallbacksAsync(
+        IReadOnlyDictionary<string, List<Dictionary<string, string>>> rowsByBase,
+        CancellationToken ct)
+    {
+        var missing = rowsByBase.Values.SelectMany(rows => rows)
+            .GroupBy(row => row.GetValueOrDefault("celex")
+                ?? throw new InvalidDataException(
+                    "Publisher consolidation row is missing its CELEX identity."),
+                StringComparer.Ordinal)
+            .Where(group => group.All(row => !row.ContainsKey("lang")))
+            .OrderBy(group => group.Key, StringComparer.Ordinal)
+            .ToArray();
+        if (missing.Length > PortalExpressionFallbackMaximum)
+            throw new InvalidDataException(
+                $"Publisher returned {missing.Length} dated states without an EN/FR expression; "
+                + $"the bounded official-portal fallback permits {PortalExpressionFallbackMaximum}.");
+
+        foreach (var state in missing)
+        {
+            await VerifyPortalExpressionHeadAsync(state.Key, "en", ct);
+            foreach (var row in state)
+            {
+                row["lang"] = "en";
+                row["expression_source"] = "verified_eurlex_portal";
+            }
+        }
+    }
+
+    private async Task VerifyPortalExpressionHeadAsync(
+        string celex, string language, CancellationToken ct)
+    {
+        await PaceAsync(ct);
+        var sourceUri = ExpressionSourceUri(language, celex);
+        var sent = await SourceHttp.SendAsync(Http, () =>
+        {
+            var request = new HttpRequestMessage(HttpMethod.Head, sourceUri);
+            request.Headers.Accept.ParseAdd("text/html");
+            request.Headers.AcceptLanguage.ParseAdd(language);
+            return request;
+        }, RetryPolicy, ct, completion: HttpCompletionOption.ResponseHeadersRead);
+        using var response = sent.Response;
+        if (sent.RetryExhausted || !IsVerifiedPortalHead(response, language))
+            throw new SourceAcquisitionException(new SourceBuildIssue(
+                "publisher_expression_unavailable",
+                celex,
+                sent.FailureDetail
+                ?? $"The exact official EUR-Lex {language} expression failed its bounded HEAD verification."),
+                sent.Attempts);
+    }
+
+    internal static bool IsVerifiedPortalHead(
+        HttpResponseMessage? response, string language)
+    {
+        if (response is null || !response.IsSuccessStatusCode
+            || !string.Equals(response.Content.Headers.ContentType?.MediaType,
+                "text/html", StringComparison.OrdinalIgnoreCase)
+            || response.Content.Headers.ContentLength is > BodyCapBytes)
+            return false;
+        var contentLanguages = response.Content.Headers.ContentLanguage.ToArray();
+        return contentLanguages.Length == 1
+            && string.Equals(contentLanguages[0], language,
+                StringComparison.OrdinalIgnoreCase);
+    }
+
+    internal static string ConsolidationsQuery(IReadOnlyCollection<string> celexNumbers)
+    {
+        var values = MetadataValues(celexNumbers);
+        var limit = MetadataQueryLimit(celexNumbers.Count);
+        return Cdm + Owl + $$"""
+                SELECT DISTINCT ?base ?celex ?date ?lang ?title WHERE {
                   VALUES (?base ?alias) { {{values}} }
                   ?baseWork owl:sameAs ?alias .
                   ?s cdm:act_consolidated_based_on_resource_legal ?baseWork ;
                      cdm:resource_legal_id_celex ?celex ; cdm:act_consolidated_date ?date .
-                  ?e cdm:expression_belongs_to_work ?s ; cdm:expression_uses_language ?langUri .
-                  VALUES ?langUri {
-                    <http://publications.europa.eu/resource/authority/language/ENG>
-                    <http://publications.europa.eu/resource/authority/language/FRA>
+                  OPTIONAL {
+                    VALUES ?langUri {
+                      <http://publications.europa.eu/resource/authority/language/ENG>
+                      <http://publications.europa.eu/resource/authority/language/FRA>
+                    }
+                    ?e cdm:expression_belongs_to_work ?s ;
+                       cdm:expression_uses_language ?langUri .
+                    BIND(IF(STRENDS(STR(?langUri), "/FRA"), "fr", "en") AS ?lang)
+                    OPTIONAL { ?e cdm:expression_title ?title }
                   }
-                  BIND(IF(STRENDS(STR(?langUri), "/FRA"), "fr", "en") AS ?lang)
-                  OPTIONAL { ?e cdm:expression_title ?title }
-                } ORDER BY ?base ?celex
-                """, ct);
-            foreach (var row in rows)
-            {
-                var baseCelex = row["base"];
-                if (!result.TryGetValue(baseCelex, out var list)) result[baseCelex] = list = [];
-                list.Add(row);
-            }
-        }
-        return result;
+                } ORDER BY ?base ?celex ?lang
+                LIMIT {{limit}}
+                """;
+    }
+
+    internal static IReadOnlyList<string> ConsolidationLanguages(
+        IEnumerable<Dictionary<string, string>> rows,
+        IReadOnlyList<string> configuredLanguages)
+    {
+        var observed = rows
+            .Select(row => row.GetValueOrDefault("lang"))
+            .Where(language => !string.IsNullOrWhiteSpace(language))
+            .ToHashSet(StringComparer.Ordinal);
+        var selected = configuredLanguages.Where(observed.Contains).ToArray();
+        return selected;
     }
 
     private async Task<Dictionary<string, List<Dictionary<string, string>>>> LoadWorkMetadataAsync(
@@ -880,6 +999,44 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory
     public static string CellarResourceUrl(string celex) =>
         $"https://publications.europa.eu/resource/celex/{Uri.EscapeDataString(celex)}";
 
+    internal static string ExpressionSourceUri(string language, string celex) =>
+        $"https://eur-lex.europa.eu/legal-content/{language.ToUpperInvariant()}/TXT/"
+        + $"?uri=CELEX:{Uri.EscapeDataString(celex)}";
+
+    internal static bool IsExactPortalExpression(
+        string html, string celex, string language)
+    {
+        var htmlLanguage = System.Text.RegularExpressions.Regex.Match(
+            html,
+            "<html\\b[^>]*\\blang\\s*=\\s*[\\\"'](?<language>[^\\\"']+)[\\\"']",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase)
+            .Groups["language"].Value;
+        if (!string.Equals(htmlLanguage, language, StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        var rawTitle = System.Text.RegularExpressions.Regex.Match(
+            html,
+            "<title\\b[^>]*>(?<title>.*?)</title>",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase
+            | System.Text.RegularExpressions.RegexOptions.Singleline)
+            .Groups["title"].Value;
+        var title = System.Text.RegularExpressions.Regex.Replace(
+            System.Net.WebUtility.HtmlDecode(rawTitle), "\\s+", " ").Trim();
+        return string.Equals(
+            title,
+            $"EUR-Lex - {celex} - {language.ToUpperInvariant()} - EUR-Lex",
+            StringComparison.Ordinal);
+    }
+
+    internal static bool IsAcceptableBodyIdentity(
+        string html,
+        string celex,
+        string language,
+        bool portalBound,
+        bool usedPortalFallback) =>
+        !(portalBound || usedPortalFallback)
+        || IsExactPortalExpression(html, celex, language);
+
     public static string CelexAliasUri(string celex) =>
         $"http://publications.europa.eu/resource/celex/{Uri.EscapeDataString(celex)}";
 
@@ -991,7 +1148,12 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory
             ["consolidation_status"] = consolidationStatus,
         };
 
-    private sealed record ConsolidatedState(string Celex, DateOnly Date, IReadOnlyDictionary<string, string?> Titles);
+    private sealed record ConsolidatedState(
+        string Celex,
+        DateOnly Date,
+        IReadOnlyDictionary<string, string?> Titles,
+        IReadOnlyList<string> Languages,
+        bool PortalBound);
 
     internal sealed record ConsolidatedCoordinate(string Celex, DateOnly Date, DateOnly? ValidTo);
 
