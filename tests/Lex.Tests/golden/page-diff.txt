@@ -14,6 +14,7 @@ HTTP 200
 <meta property="og:image" content="https://golden.test/og.png">
 <meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
+<link rel="canonical" href="https://golden.test/t-pub/w1/diff/2020-01-01/2022-01-01">
 <meta name="twitter:image" content="https://golden.test/og.png">
 <script src="/site.js?v=dev" defer></script>
 <!-- The interval mark: a rule, two terminals, and a notch at the date being read.
@@ -229,11 +230,10 @@ HTTP 200
     <nav aria-label="Check the work">
       <a href="/how-it-works">How it works</a>
       <a href="/coverage">Coverage</a>
-      <a href="/architecture">Architecture</a>
-      <a href="/decisions">Decisions</a>
+      <a href="/built">Architecture dossier</a>
+      <a href="/decisions">Decisions and trade-offs</a>
       <a href="/benchmarks">Benchmarks</a>
-      <a href="/verify">Verify the artifacts</a>
-      <a href="/built">How I built it</a>
+      <a href="/verify">Verify artifacts</a>
       <a href="/about">About</a>
     </nav>
   </details>
@@ -271,7 +271,7 @@ HTTP 200
     <a href="/how-it-works">How it works</a><a href="/coverage">What Lex holds, and lacks</a>
     <a href="/decisions">Decisions, and what they cost</a>
     <a href="/benchmarks">Benchmarks</a><a href="/verify">Verify it yourself</a>
-    <a href="/architecture">Architecture</a><a href="/built">How I built it</a>
+    <a href="/built">Architecture dossier</a>
     <a href="/about">About</a></div>
   <!-- The datasets, not the engine. This group used to end at "Source on GitHub" pointing at
        the engine repo, which is the wrong thing to lead with for a reader who wants to USE

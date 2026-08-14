@@ -125,10 +125,12 @@ public static class ApiEndpoints
                              + $"<changefreq>{freq}</changefreq><priority>{priority}</priority></url>");
 
             Url("/", "1.0", "daily");
-            foreach (var p in new[] { "/browse", "/coverage", "/decisions", "/built", "/about",
-                                      "/how-it-works", "/developers", "/ai", "/verify",
-                                      "/architecture", "/architecture/next", "/benchmarks",
-                                      "/stories", "/find", "/changed" })
+            foreach (var p in new[] { "/browse", "/coverage", "/decisions", "/built",
+                                      "/built/model", "/built/data", "/built/retrieval",
+                                      "/built/assistant", "/built/release", "/built/decisions",
+                                      "/built/incidents", "/built/limits", "/about",
+                                      "/how-it-works", "/developers", "/verify",
+                                      "/benchmarks", "/stories", "/find" })
                 Url(p, "0.8", "weekly");
 
             // lastmod is when the PAGE last changed, so it can never be in the future.

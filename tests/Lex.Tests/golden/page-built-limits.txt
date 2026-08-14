@@ -5,16 +5,16 @@ HTTP 200
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Titles are labels, not sentences: one that ends in a full stop renders "acts., Lex" in
      the tab and in every social card, which is what the front page did until now. -->
-<title>Next architecture, Lex</title>
-<meta name="description" content="Point-in-time Luxembourg and reviewed EU law: what did the rule say on a given date? Permalinks, timelines, diffs and verifiable provenance.">
-<meta property="og:title" content="Next architecture, Lex">
-<meta property="og:description" content="Point-in-time Luxembourg and reviewed EU law, with grounded AI answers, per-article history, and verifiable provenance.">
+<title>Limits and scale, Lex</title>
+<meta name="description" content="The current limits, capacity triggers and next architecture moves for Lex.">
+<meta property="og:title" content="Limits and scale, Lex">
+<meta property="og:description" content="The current limits, capacity triggers and next architecture moves for Lex.">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Lex">
 <meta property="og:image" content="https://golden.test/og.png">
 <meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
-<link rel="canonical" href="https://golden.test/architecture/next">
+<link rel="canonical" href="https://golden.test/built/limits"><link rel="stylesheet" href="/dossier.css?v=dev">
 <meta name="twitter:image" content="https://golden.test/og.png">
 <script src="/site.js?v=dev" defer></script>
 <!-- The interval mark: a rule, two terminals, and a notch at the date being read.
@@ -230,11 +230,10 @@ HTTP 200
     <nav aria-label="Check the work">
       <a href="/how-it-works">How it works</a>
       <a href="/coverage">Coverage</a>
-      <a href="/architecture" aria-current="page">Architecture</a>
-      <a href="/decisions">Decisions</a>
+      <a href="/built" aria-current="page">Architecture dossier</a>
+      <a href="/decisions">Decisions and trade-offs</a>
       <a href="/benchmarks">Benchmarks</a>
-      <a href="/verify">Verify the artifacts</a>
-      <a href="/built">How I built it</a>
+      <a href="/verify">Verify artifacts</a>
       <a href="/about">About</a>
     </nav>
   </details>
@@ -242,38 +241,148 @@ HTTP 200
   <a class="navlink" href="/developers">For developers</a>
 </header>
 <main>
-<h1>Next architecture</h1>
-<p class="sub">the accepted target, its gates, and what has actually shipped</p>
-<nav class="tabs" aria-label="Architecture evidence" style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 22px">
-  <a class="badge" href="/architecture">Current</a>
-  <a class="badge ok" href="/architecture/next">Next</a>
-  <a class="badge" href="/decisions">Decisions</a>
-  <a class="badge" href="/benchmarks">Benchmarks</a>
-</nav><p class="lede">The accepted target architecture, with status read from the registry committed
-beside the implementation. Only milestones marked shipped are live; gated and planned work is not.</p>
-<div class="card"><table tabindex="0" aria-label="Architecture delivery milestones"><tr><th>milestone</th><th>outcome</th><th>status</th></tr><tr><td class="mono">M1</td><td><b>Truthful architecture narrative</b><br><span class="sub">Separate live architecture, target architecture, decisions and measured benchmarks.</span></td>
-<td><span class="badge ok">shipped</span></td></tr><tr><td class="mono">M2</td><td><b>Verified artifact publication</b><br><span class="sub">A pinned trust root verifies a signed manifest for every served artifact.</span></td>
-<td><span class="badge ok">shipped</span></td></tr><tr><td class="mono">M3</td><td><b>Expandable temporal EU corpus</b><br><span class="sub">Engineering configuration selects the acquisition set while every accepted work retains all official dated expressions; scope labels never become legal metadata or search facets.</span></td>
-<td><span class="badge ok">shipped</span></td></tr><tr><td class="mono">M4</td><td><b>Deduplicated index</b><br><span class="sub">lex-index/3 stores repeated wording once without changing timelines, exact text or diffs.</span></td>
-<td><span class="badge ok">shipped</span></td></tr><tr><td class="mono">M5</td><td><b>Local hybrid retrieval</b><br><span class="sub">Keyword and local semantic retrieval fuse deterministically only after the public quality gate passes.</span></td>
-<td><span class="badge warn">gated</span></td></tr><tr><td class="mono">M6</td><td><b>Lawyer-facing scope filters</b><br><span class="sub">Jurisdiction, hierarchy, legal form, binding status, language and date remain explicit; official publisher classifications appear as typed discovery metadata.</span></td>
-<td><span class="badge ok">shipped</span></td></tr><tr><td class="mono">M7</td><td><b>Luxembourg original-act expansion</b><br><span class="sub">Add reviewed normative acts outside the Legilux consolidation catalogue with document-class-specific temporal semantics.</span></td>
-<td><span class="badge">planned</span></td></tr><tr><td class="mono">M8</td><td><b>Size-gated local index hosting</b><br><span class="sub">Small verified indexes run locally in Container Apps. Oversized releases remain deployment-blocked until the zero-traffic VM-managed local-disk path is implemented and measured.</span></td>
-<td><span class="badge">building</span></td></tr><tr><td class="mono">M9</td><td><b>Official-metadata search and legal-research agent</b><br><span class="sub">Official publisher metadata, source-backed short-title resolution, deterministic clarification, bounded retrieval, Agent Framework evidence composition and judging, bounded memory and jurisdiction-first results are live without changing authoritative legal text. Taxonomies remain weak discovery only and model-derived discovery remains excluded from production retrieval.</span></td>
-<td><span class="badge ok">shipped</span></td></tr></table></div>
-<h2>Target path</h2>
-<div class="card"><pre class="mono" style="white-space:pre-wrap;margin:0;font-size:13px">Reviewed EU scope configuration
-  -&gt; every official dated FR/EN expression plus bounded legal relationships
-  -&gt; content-addressed text states and occurrence mappings
-  -&gt; FTS5 keyword candidates plus local compact semantic candidates
-  -&gt; date and hierarchy eligibility
-  -&gt; fixed reciprocal rank fusion
-  -&gt; the same exact provision JSON, timeline, comparison and UiEffect contracts</pre></div>
-<p>Hybrid retrieval remains gated until its public relevance, temporal, latency and memory
-thresholds pass. Missing official consolidation remains a named gap, never generated wording.</p>
+<h1>Limits and scale</h1>
+<p class="sub">Known constraints, scaling triggers and deliberately deferred work.</p>
+<nav class="dossier-tabs" aria-label="Architecture dossier"><a href="/built">Overview</a><a href="/built/model">Legal model</a><a href="/built/data">Data authority</a><a href="/built/retrieval">Retrieval</a><a href="/built/assistant">Assistant</a><a href="/built/release">Release</a><a href="/built/decisions">Trade-offs</a><a href="/built/incidents">Incidents</a><a href="/built/limits" aria-current="page">Limits and scale</a><a class="dossier-print" href="/architecture/dossier">Complete dossier</a></nav><article class="architecture-dossier"><p>Scale decisions are tied to observable triggers. The system stays simple while the current
+bottleneck is bounded, and each next move names the capability it buys and the complexity it adds.</p>
+<p><img src="/built/diagrams/scale.svg" alt="Current single-process Lex scales through measured triggers: narrow lock scope first, externalize ledgers before replicas, then move artifacts to local disk only when memory requires it." /></p>
+<p><a href="/built/diagrams/scale.svg">Open the scale diagram at full size</a></p>
+<div class="dossier-table" tabindex="0" role="region" aria-label="Scrollable architecture table"><table>
+<thead>
+<tr>
+<th>Box</th>
+<th>Responsibility</th>
+<th>Owner</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>One process</td>
+<td>Keep local indexes, thread state and admission ledgers authoritative</td>
+<td><code>Lex.Web</code> with in-process <code>Lex.Mcp</code> and <code>Lex.Ask</code></td>
+</tr>
+<tr>
+<td>Narrow gates</td>
+<td>Relieve measured encoder or vector contention before adding services</td>
+<td>MCP and assistant admission controllers</td>
+</tr>
+<tr>
+<td>Externalize state</td>
+<td>Make quotas, idempotency and thread continuity replica-safe</td>
+<td>deferred shared-state boundary</td>
+</tr>
+<tr>
+<td>Replicas or local disk</td>
+<td>Add request capacity only after state is shared; move artifacts only after memory pressure</td>
+<td>future runtime and deployment decision</td>
+</tr>
+</tbody>
+</table></div>
+<h2>Current boundaries</h2>
+<div class="dossier-table" tabindex="0" role="region" aria-label="Scrollable architecture table"><table>
+<thead>
+<tr>
+<th>Boundary</th>
+<th>Current design</th>
+<th>Consequence</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Runtime</td>
+<td>One always-on Container Apps replica with local immutable indexes</td>
+<td>Fast in-process calls; process-local quotas and thread memory are authoritative</td>
+</tr>
+<tr>
+<td>Assistant</td>
+<td>Four concurrent turns, 200 accepted turns per client address and 400 globally per day</td>
+<td>Predictable public cost; NAT and rotating addresses are not identities</td>
+</tr>
+<tr>
+<td>MCP</td>
+<td>Eight executing, sixteen queued and a two-second queue deadline</td>
+<td>Overload becomes a typed refusal rather than unbounded latency</td>
+</tr>
+<tr>
+<td>Agent</td>
+<td>Eight frozen operations, 64 evidence items and 96,000 evidence characters</td>
+<td>A large research request must be decomposed by the reader</td>
+</tr>
+<tr>
+<td>Retrieval</td>
+<td>Keyword default; hybrid available only behind signed evidence gates</td>
+<td>Conceptual recall improvements do not outrank measured precision</td>
+</tr>
+<tr>
+<td>Release</td>
+<td>One current revision, one exact rollback, one transient candidate</td>
+<td>No unlimited artifact or revision accumulation</td>
+</tr>
+</tbody>
+</table></div>
+<p>Fresh v4 relevance, latency, memory, coverage and cold-start measurements are pending the exact
+candidate promotion. Older figures are historical observations and are not presented as current.</p>
+<h2>Triggered next moves</h2>
+<div class="dossier-table" tabindex="0" role="region" aria-label="Scrollable architecture table"><table>
+<thead>
+<tr>
+<th>Observable trigger</th>
+<th>Next move</th>
+<th>Cost introduced</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>MCP queue-deadline refusals</td>
+<td>Narrow the gate to encoder and vector work before adding infrastructure</td>
+<td>More concurrency paths to test</td>
+</tr>
+<tr>
+<td>Global daily cap or Azure OpenAI 429s on three sustained days</td>
+<td>Raise model quota and public budget together; consider provisioned throughput only after utilization proves it</td>
+<td>Higher fixed or variable model cost</td>
+</tr>
+<tr>
+<td>Sustained served p95 above the release threshold</td>
+<td>Externalize quota, idempotency and thread state, then add replicas</td>
+<td>A shared state dependency and distributed coordination</td>
+</tr>
+<tr>
+<td>Working set approaches the container memory gate</td>
+<td>Move signed artifacts to verified VM-local disk under D55</td>
+<td>A second deployment path and OS operations</td>
+</tr>
+<tr>
+<td>Third publisher admitted</td>
+<td>Make the required-publisher set one source and remeasure fan-out</td>
+<td>More vocabulary and latency variance</td>
+</tr>
+</tbody>
+</table></div>
+<h2>Known limitations that matter to a reader</h2>
+<ul>
+<li>Some official states contain no safely extractable wording; they remain explicit gaps.</li>
+<li>Provision extraction quality has a historical empty-text backlog. The additive Memorial v2
+profile is shipped in code, while the refreshed corpus measurement waits for the v4 ingestion.</li>
+<li>EU citation edges and amendment relations are not yet a complete query surface.</li>
+<li>MCP comparison identifies changed states but does not yet return every provision-level text diff.</li>
+<li>Production diagnostics are sanitized but not all are correlated end to end by request id.</li>
+<li>Shared ACR cleanup remains inventory-only until registry ownership is isolated or audited.</li>
+</ul>
+<p>The detailed and dated backlog lives in <a href="https://github.com/SFHAJJI/lex/blob/main/docs/known-defects.md">known defects on GitHub</a>.
+Deliberately absent: generated consolidation, model-derived legal identity, silent taxonomy merging,
+unbounded replanning and a framework rewrite.</p>
+<h2 id="delivery-registry">Delivery registry</h2>
+<p>The target path is reviewed EU scope, official dated expressions, content-addressed
+text states, FTS5 keyword candidates plus local compact semantic candidates, temporal and
+hierarchy eligibility, fixed rank fusion, and the same typed result contracts. A capability
+is not described as live until its registry status and release evidence agree.</p>
+<div class="dossier-table" tabindex="0" role="region" aria-label="Architecture delivery milestones"><table>
+<tr><th>milestone</th><th>outcome</th><th>status</th></tr><tr><td class="mono">M1</td><td><b>Truthful architecture narrative</b><br><span class="sub">Separate live architecture, target architecture, decisions and measured benchmarks.</span></td><td><span class="badge ok">shipped</span></td></tr><tr><td class="mono">M2</td><td><b>Verified artifact publication</b><br><span class="sub">A pinned trust root verifies a signed manifest for every served artifact.</span></td><td><span class="badge ok">shipped</span></td></tr><tr><td class="mono">M3</td><td><b>Expandable temporal EU corpus</b><br><span class="sub">Engineering configuration selects the acquisition set while every accepted work retains all official dated expressions; scope labels never become legal metadata or search facets.</span></td><td><span class="badge ok">shipped</span></td></tr><tr><td class="mono">M4</td><td><b>Deduplicated index</b><br><span class="sub">lex-index/3 stores repeated wording once without changing timelines, exact text or diffs.</span></td><td><span class="badge ok">shipped</span></td></tr><tr><td class="mono">M5</td><td><b>Local hybrid retrieval</b><br><span class="sub">Keyword and local semantic retrieval fuse deterministically only after the public quality gate passes.</span></td><td><span class="badge warn">gated</span></td></tr><tr><td class="mono">M6</td><td><b>Lawyer-facing scope filters</b><br><span class="sub">Jurisdiction, hierarchy, legal form, binding status, language and date remain explicit; official publisher classifications appear as typed discovery metadata.</span></td><td><span class="badge ok">shipped</span></td></tr><tr><td class="mono">M7</td><td><b>Luxembourg original-act expansion</b><br><span class="sub">Add reviewed normative acts outside the Legilux consolidation catalogue with document-class-specific temporal semantics.</span></td><td><span class="badge">planned</span></td></tr><tr><td class="mono">M8</td><td><b>Size-gated local index hosting</b><br><span class="sub">Small verified indexes run locally in Container Apps. Oversized releases remain deployment-blocked until the zero-traffic VM-managed local-disk path is implemented and measured.</span></td><td><span class="badge">building</span></td></tr><tr><td class="mono">M9</td><td><b>Official-metadata search and legal-research agent</b><br><span class="sub">Official publisher metadata, source-backed short-title resolution, deterministic clarification, frozen plan execution, Agent Framework evidence composition and judging, bounded memory and jurisdiction-first results ship in the v4 release line. Mounted index identities and signed release evidence, not this registry, establish what a running revision serves. Taxonomies remain weak discovery only and model-derived discovery remains excluded from production retrieval.</span></td><td><span class="badge ok">shipped</span></td></tr>
+</table></div>
 <p class="sub">Program <span class="mono">hybrid-eu/1</span>, updated
-<span class="mono">2026-08-09</span>, review status
-<span class="mono">engineer-reviewed</span>.</p>
+<span class="mono">2026-08-14</span>, review status
+<span class="mono">engineer-reviewed</span>.</p></article>
 </main>
 <footer>
 <!-- Fourteen links in one undifferentiated run answered no question a reader had. Three
@@ -286,7 +395,7 @@ thresholds pass. Missing official consolidation remains a named gap, never gener
     <a href="/how-it-works">How it works</a><a href="/coverage">What Lex holds, and lacks</a>
     <a href="/decisions">Decisions, and what they cost</a>
     <a href="/benchmarks">Benchmarks</a><a href="/verify">Verify it yourself</a>
-    <a href="/architecture">Architecture</a><a href="/built">How I built it</a>
+    <a href="/built">Architecture dossier</a>
     <a href="/about">About</a></div>
   <!-- The datasets, not the engine. This group used to end at "Source on GitHub" pointing at
        the engine repo, which is the wrong thing to lead with for a reader who wants to USE

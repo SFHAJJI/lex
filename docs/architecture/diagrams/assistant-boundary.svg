@@ -1,0 +1,106 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 720" role="img" aria-labelledby="title desc">
+  <title id="title">Assistant ownership and trust boundary</title>
+  <desc id="desc">A bounded assistant agent owns thread context, subject authority, typed planning, frozen execution, outcome routing and evidence. The deterministic legal core and signed index remain outside the agent. The same canonical operations are separately projected through public MCP. Composer and judge are optional logical roles for requested prose.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto">
+      <path d="M0 0L9 3.5L0 7Z" fill="#536273"/>
+    </marker>
+    <style>
+      .title{font:700 24px 'IBM Plex Sans',Arial,sans-serif;fill:#162331}.label{font:700 17px 'IBM Plex Sans',Arial,sans-serif;fill:#162331}.copy{font:14px 'IBM Plex Sans',Arial,sans-serif;fill:#4c5d70}.small{font:13px 'IBM Plex Sans',Arial,sans-serif;fill:#4c5d70}.agent{fill:#faf7ff;stroke:#6948b5;stroke-width:2.5}.truth{fill:#f3fbf7;stroke:#16765a;stroke-width:2}.optional{fill:#f8f5ff;stroke:#6948b5;stroke-width:2;stroke-dasharray:8 7}.neutral{fill:#fff;stroke:#9aa7b4;stroke-width:2}.block{fill:#fff;stroke:#16765a;stroke-width:1.8}.model{fill:#f7f2ff;stroke:#6948b5;stroke-width:1.8}.artifact{fill:#fff8e7;stroke:#b67a08;stroke-width:1.8}.line{fill:none;stroke:#536273;stroke-width:2;marker-end:url(#arrow)}.dash{fill:none;stroke:#536273;stroke-width:2;stroke-dasharray:7 6;marker-end:url(#arrow)}
+    </style>
+  </defs>
+
+  <text x="40" y="42" class="title">Bounded plan -&gt; validate / correct once -&gt; freeze -&gt; execute</text>
+  <text x="40" y="69" class="copy">ReWOO-inspired reasoning without an observation loop. The planner proposes; application code authorizes and executes.</text>
+
+  <rect x="35" y="154" width="190" height="176" rx="14" class="neutral"/>
+  <text x="130" y="190" text-anchor="middle" class="label">Request boundary</text>
+  <text x="130" y="222" text-anchor="middle" class="copy">Reader + web</text>
+  <text x="130" y="247" text-anchor="middle" class="copy">admission</text>
+  <text x="130" y="272" text-anchor="middle" class="copy">opaque token</text>
+  <text x="130" y="305" text-anchor="middle" class="small">No browser-owned memory</text>
+
+  <g id="bounded-assistant-agent">
+    <rect x="260" y="104" width="990" height="390" rx="18" class="agent"/>
+    <text x="286" y="141" class="title">Bounded assistant agent</text>
+    <text x="286" y="166" class="copy">One typed plan, closed operations, deterministic outcomes</text>
+
+    <rect x="290" y="212" width="160" height="116" rx="12" class="artifact"/>
+    <text x="370" y="246" text-anchor="middle" class="label">Thread context</text>
+    <text x="370" y="275" text-anchor="middle" class="copy">server-owned</text>
+    <text x="370" y="299" text-anchor="middle" class="copy">bounded history</text>
+
+    <rect x="475" y="212" width="160" height="116" rx="12" class="block"/>
+    <text x="555" y="246" text-anchor="middle" class="label">Subject authority</text>
+    <text x="555" y="275" text-anchor="middle" class="copy">official identity</text>
+    <text x="555" y="299" text-anchor="middle" class="copy">clarify, never guess</text>
+
+    <rect x="660" y="212" width="180" height="116" rx="12" class="model"/>
+    <text x="750" y="246" text-anchor="middle" class="label">Planner + gate</text>
+    <text x="750" y="275" text-anchor="middle" class="copy">typed proposal</text>
+    <text x="750" y="299" text-anchor="middle" class="copy">validate, then freeze</text>
+
+    <rect x="865" y="212" width="170" height="116" rx="12" class="block"/>
+    <text x="950" y="246" text-anchor="middle" class="label">Catalog + executor</text>
+    <text x="950" y="275" text-anchor="middle" class="copy">canonical schemas</text>
+    <text x="950" y="299" text-anchor="middle" class="copy">typed calls only</text>
+
+    <rect x="1060" y="212" width="160" height="116" rx="12" class="block"/>
+    <text x="1140" y="246" text-anchor="middle" class="label">Outcome + evidence</text>
+    <text x="1140" y="275" text-anchor="middle" class="copy">closed result</text>
+    <text x="1140" y="299" text-anchor="middle" class="copy">direct reply default</text>
+
+    <path d="M450 270H475" class="line"/>
+    <path d="M635 270H660" class="line"/>
+    <path d="M840 270H865" class="line"/>
+    <path d="M1035 270H1060" class="line"/>
+  </g>
+
+  <path d="M225 270H290" class="line"/>
+  <text x="258" y="252" text-anchor="middle" class="small">admit</text>
+
+  <g id="deterministic-legal-truth">
+    <rect x="1290" y="104" width="275" height="390" rx="18" class="truth"/>
+    <text x="1427" y="141" text-anchor="middle" class="title">Deterministic legal truth</text>
+    <text x="1427" y="166" text-anchor="middle" class="copy">Outside the agent boundary</text>
+    <rect x="1320" y="212" width="215" height="104" rx="12" class="block"/>
+    <text x="1427" y="247" text-anchor="middle" class="label">Legal tool core</text>
+    <text x="1427" y="276" text-anchor="middle" class="copy">dates, search, compare, gaps</text>
+    <rect x="1320" y="350" width="215" height="104" rx="12" class="artifact"/>
+    <text x="1427" y="385" text-anchor="middle" class="label">Signed index</text>
+    <text x="1427" y="414" text-anchor="middle" class="copy">text, hashes, publisher links</text>
+    <path d="M1427 316V350" class="line"/>
+  </g>
+
+  <path d="M950 328V420H1270V260H1320" class="line"/>
+  <text x="1110" y="410" text-anchor="middle" class="small">frozen typed calls</text>
+  <path d="M1320 300H1220" class="line"/>
+  <text x="1270" y="289" text-anchor="middle" class="small">closed outcome</text>
+
+  <rect x="76" y="408" width="150" height="72" rx="12" class="neutral"/>
+  <text x="151" y="439" text-anchor="middle" class="label">Typed UI</text>
+  <text x="151" y="465" text-anchor="middle" class="copy">cited or refused</text>
+  <path d="M1140 328V458H226" class="line"/>
+
+  <g id="optional-prose-role">
+    <rect x="420" y="535" width="665" height="135" rx="16" class="optional"/>
+    <text x="447" y="570" class="label">Optional prose role</text>
+    <rect x="700" y="555" width="165" height="78" rx="10" class="model"/>
+    <text x="782" y="586" text-anchor="middle" class="label">Composer</text>
+    <text x="782" y="612" text-anchor="middle" class="small">draft from evidence</text>
+    <rect x="890" y="555" width="165" height="78" rx="10" class="model"/>
+    <text x="972" y="586" text-anchor="middle" class="label">Judge</text>
+    <text x="972" y="612" text-anchor="middle" class="small">factual claims only</text>
+    <path d="M865 594H890" class="line"/>
+  </g>
+  <path d="M1180 328V508H1045V535" class="dash"/>
+
+  <g id="public-mcp-projection">
+    <rect x="1290" y="535" width="275" height="135" rx="16" class="neutral"/>
+    <text x="1427" y="574" text-anchor="middle" class="label">Public MCP projection</text>
+    <text x="1427" y="603" text-anchor="middle" class="copy">same canonical operations</text>
+    <text x="1427" y="628" text-anchor="middle" class="copy">separate HTTP / stdio clients</text>
+    <text x="1427" y="653" text-anchor="middle" class="small">Not the planner transport</text>
+  </g>
+  <path d="M1427 494V535" class="dash"/>
+</svg>

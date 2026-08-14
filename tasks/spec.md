@@ -128,7 +128,7 @@ introduced.
 
 Research surfaces are `/`, `/browse`, `/find`, `/search`, `/changed`, `/in-force-on`, `/stories`
 and mounted publisher document/version/diff routes. Engineering and portfolio pages such as
-`/about`, `/architecture`, `/decisions`, `/verify`, `/developers`, `/ai`, `/built` and
+`/about`, `/decisions`, `/verify`, `/developers`, `/built`, its dossier tabs and
 `/how-it-works` do not load the assistant.
 
 Conversation continuity is explicit rather than implied: the panel renders the bounded tab-scoped

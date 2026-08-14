@@ -9,23 +9,33 @@ Dynamic publisher routes accept only mounted publisher IDs and validated work/da
 | Method | Pattern | Owner | Audience | Canonical behavior | Content | Indexing | Representative checks |
 |---|---|---|---|---|---|---|---|
 | GET | `/` | Home | legal reader | canonical `/` | HTML | public index | workspace shell succeeds with corpus; honest empty state without corpus |
-| GET | `/browse` | Catalogue | legal reader | canonical query URL | HTML | public index | filters and pagination; invalid page is bounded |
+| GET | `/browse` | Catalogue | legal reader | canonical `/browse` | HTML | public index | filters and pagination; invalid page is bounded |
 | GET | `/go-asof` | Catalogue | legal reader | redirect to dated work | redirect | no index | valid coordinate redirects; invalid coordinate is bounded |
-| GET | `/coverage` | Catalogue | reader, evaluator | canonical | HTML | public index | publisher counts and gaps; absent corpus disclosed |
-| GET | `/in-force-on` | Catalogue | legal reader | canonical query URL | HTML | public index | LU applicability and EU consolidation semantics remain distinct |
-| GET | `/search` | Catalogue | legal reader | canonical query URL | HTML | public index | bounded search; empty and invalid query states |
-| GET | `/changed` | Catalogue | legal reader | canonical query URL | HTML | public index | window, order, population and empty state |
-| GET | `/find` | Catalogue | no-JavaScript reader | canonical | HTML | public index | form reaches search, date and changed routes |
+| GET | `/coverage` | Catalogue | reader, evaluator | canonical `/coverage` | HTML | public index | publisher counts and gaps; absent corpus disclosed |
+| GET | `/in-force-on` | Catalogue | legal reader | none | HTML | noindex, follow | LU applicability and EU consolidation semantics remain distinct |
+| GET | `/search` | Catalogue | legal reader | none | HTML | noindex, follow | bounded search; empty and invalid query states |
+| GET | `/changed` | Catalogue | legal reader | none | HTML | noindex, follow | window, order, population and empty state |
+| GET | `/find` | Catalogue | no-JavaScript reader | canonical `/find` | HTML | public index | form reaches search, date and changed routes |
 | GET | `/{publisher}/{work}` | Documents | legal reader | canonical work URL | HTML | public index | timeline and text coverage; unknown work 404 |
 | GET | `/{publisher}/{work}/{coordinate}` | Documents | legal reader | exact-version URL or friendly date resolver | HTML | public index | opaque version key opens exactly; a date renders one state with an exact canonical URL or returns `ambiguous_version` when several states cover it |
 | GET | `/{publisher}/{work}/diff/{dateA}/{dateB}` | Documents | legal reader | canonical comparison URL | HTML | public index | comparable diff; profile mismatch refusal |
 | GET | `/provenance/{*key}` | API/verification | evaluator | canonical proof URL | HTML | public index | proof chain; unknown lex ID 404 |
 | GET | `/how-it-works` | Explainers | reader | canonical | HTML | public index | product method and limits |
-| GET | `/built` | Explainers | evaluator | canonical | HTML | public index | scheduler state and mounted freshness are evidence-derived |
+| GET | `/built` | Explainers | evaluator | canonical | HTML | public index | interview-grade architecture overview and reading paths |
+| GET | `/built/model` | Explainers | evaluator | canonical | HTML | public index | legal identity, two time axes and typed gaps |
+| GET | `/built/data` | Explainers | evaluator | canonical | HTML | public index | official-only ingestion, derivation and cryptographic claims |
+| GET | `/built/retrieval` | Explainers | evaluator | canonical | HTML | public index | top-1/top-k policy, failure taxonomy and evidence gates |
+| GET | `/built/assistant` | Explainers | evaluator | canonical | HTML | public index | bounded plan, deterministic execution, memory and optional prose |
+| GET | `/built/release` | Explainers | evaluator | canonical | HTML | public index | candidate, promotion, rollback, ACR and staging boundaries |
+| GET | `/built/decisions` | Explainers | evaluator | canonical | HTML | public index | curated trade-offs link to the complete decision register |
+| GET | `/built/incidents` | Explainers | evaluator | canonical | HTML | public index | incidents connect root causes to permanent guards |
+| GET | `/built/limits` | Explainers | evaluator | canonical | HTML | public index | current limits and observable scaling triggers |
+| GET | `/built/diagrams/{name}.svg` | Explainers | evaluator | owned allowlist | SVG | machine | accessible static diagrams; unknown names 404 |
 | GET | `/about` | Explainers | reader, evaluator | canonical | HTML | public index | project and author context; reachable from navigation |
 | GET | `/stories` | Explainers | reader | canonical | HTML | public index | examples avoid applicability and advice claims |
-| GET | `/architecture` | Explainers | evaluator | canonical | HTML | public index | current architecture evidence |
-| GET | `/architecture/next` | Explainers | evaluator | canonical | HTML | public index | roadmap does not claim unshipped behavior |
+| GET | `/architecture` | Explainers | evaluator | permanent redirect to `/built` | redirect | no index | old backlinks reach the canonical dossier in one hop |
+| GET | `/architecture/next` | Explainers | evaluator | permanent redirect to `/built/limits` | redirect | no index | old roadmap backlinks reach the limits and delivery registry in one hop |
+| GET | `/architecture/dossier` | Explainers | evaluator | self-canonical print utility | HTML | noindex, follow | print view reuses the nine canonical dossier sources |
 | GET | `/decisions` | Explainers | evaluator | canonical | HTML | public index | accepted and rejected alternatives |
 | GET | `/benchmarks` | Explainers | evaluator | canonical | HTML | public index | compatible reports or explicit not measured state |
 | GET | `/benchmarks/latest.json` | Explainers | machine, evaluator | canonical artifact | JSON | machine | complete compatible collection set; malformed report fails closed |

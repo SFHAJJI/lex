@@ -18,8 +18,7 @@ cannot know.
 **[MCP endpoint](https://law.soufien.lu/mcp)** ·
 **[Dataset (CC-BY)](https://github.com/SFHAJJI/lex-articles)** ·
 **[Examples](https://github.com/SFHAJJI/lex-articles/tree/main/examples)** ·
-**[Architecture](https://law.soufien.lu/architecture)** ·
-**[Next architecture](https://law.soufien.lu/architecture/next)** ·
+**[Architecture dossier](https://law.soufien.lu/built)** ·
 **[Benchmarks](https://law.soufien.lu/benchmarks)** ·
 **[Verify it yourself](https://law.soufien.lu/verify)** ·
 **[Program](docs/hybrid-eu-roadmap.md)** ·

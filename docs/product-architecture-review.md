@@ -342,11 +342,10 @@ Preserve the existing restrained editorial design. Replace scattered engineering
 
 - How it works
 - Coverage
-- Architecture
-- Decisions
+- Architecture dossier
+- Decisions and trade-offs
 - Benchmarks
-- Verify the artifacts
-- How I built it
+- Verify artifacts
 - About
 
 It opens on pointer hover only as an enhancement. Click and keyboard focus are first-class; Escape

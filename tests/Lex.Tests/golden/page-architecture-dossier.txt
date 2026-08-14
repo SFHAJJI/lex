@@ -1,0 +1,1375 @@
+HTTP 200
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Titles are labels, not sentences: one that ends in a full stop renders "acts., Lex" in
+     the tab and in every social card, which is what the front page did until now. -->
+<title>Architecture dossier, Lex</title>
+<meta name="description" content="The complete solution and AI architecture dossier for Lex.">
+<meta property="og:title" content="Architecture dossier, Lex">
+<meta property="og:description" content="The complete solution and AI architecture dossier for Lex.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Lex">
+<meta property="og:image" content="https://golden.test/og.png">
+<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="canonical" href="https://golden.test/architecture/dossier"><meta name="robots" content="noindex,follow"><link rel="stylesheet" href="/dossier.css?v=dev">
+<meta name="twitter:image" content="https://golden.test/og.png">
+<script src="/site.js?v=dev" defer></script>
+<!-- The interval mark: a rule, two terminals, and a notch at the date being read.
+     The same shape is the version rail at full width. An emoji was a different
+     picture on every platform and read as a generic legal site on all of them. -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect x='1' y='3' width='1.4' height='10' fill='%23c6112f'/%3E%3Crect x='13.6' y='3' width='1.4' height='10' fill='%23c6112f'/%3E%3Crect x='1' y='7.3' width='14' height='1.4' fill='%2359626c'/%3E%3Ccircle cx='10.2' cy='8' r='3' fill='%23c6112f'/%3E%3C/svg%3E">
+<style>
+  /* Self-hosted, no CDN. Three faces, chosen rather than defaulted:
+     Source Serif 4 for the law, a real reading serif with optical sizes.
+     IBM Plex Sans for the interface, drawn as technical-but-humane, and
+     deliberately not Inter, which is the default-everywhere face this year.
+     IBM Plex Mono for lex_ids, hashes and dates; Sans and Mono are a designed pair.
+     All three are variable, so one file covers 400 and 600. unicode-range means a
+     page only fetches latin-ext when it actually contains one of those characters,
+     which for French law is mostly the ligature in 'oeuvre' and 'coeur'.
+     font-display:optional: a slow font must never reflow a whole legal page after paint.
+     Preloads above still make the chosen faces win on normal connections. */
+  @font-face { font-family:'IBM Plex Mono'; font-style:normal; font-weight:400 600;
+    font-display:optional; src:url(/fonts/IBMPlexMono-latin-ext.woff2) format('woff2');
+    unicode-range:U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF }
+  @font-face { font-family:'IBM Plex Mono'; font-style:normal; font-weight:400 600;
+    font-display:optional; src:url(/fonts/IBMPlexMono-latin.woff2) format('woff2');
+    unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD }
+  @font-face { font-family:'IBM Plex Sans'; font-style:normal; font-weight:400 600;
+    font-display:optional; src:url(/fonts/IBMPlexSans-latin-ext.woff2) format('woff2');
+    unicode-range:U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF }
+  @font-face { font-family:'IBM Plex Sans'; font-style:normal; font-weight:400 600;
+    font-display:optional; src:url(/fonts/IBMPlexSans-latin.woff2) format('woff2');
+    unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD }
+  @font-face { font-family:'Source Serif 4'; font-style:normal; font-weight:400 600;
+    font-display:optional; src:url(/fonts/SourceSerif4-latin-ext.woff2) format('woff2');
+    unicode-range:U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF }
+  @font-face { font-family:'Source Serif 4'; font-style:normal; font-weight:400 600;
+    font-display:optional; src:url(/fonts/SourceSerif4-latin.woff2) format('woff2');
+    unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD }
+  /* Law is set in a serif; the interface around it is sans.
+     --accent does not mean "brand". It means: THIS IS THE MOMENT YOU ARE LOOKING AT.
+     Nothing else may use it. Not links, not headings, not buttons. That single rule
+     is the identity; everything else here is just neutrals and hairlines.
+     The ground is cool rather than cream: warm paper with a terracotta accent is the
+     house style of every AI design tool this year, and the audience here is people
+     paid to notice. */
+  :root { --bg:#f4f6f7; --fg:#0f1419; --muted:#59626c; --line:#dde2e6; --accent:#c6112f;
+          --card:#ffffff; --ok:#0f6b4f; --warn:#8a5a12; --on-accent:#ffffff;
+          --serif:'Source Serif 4',Charter,Georgia,'Iowan Old Style','Palatino Linotype',serif;
+          --sans:'IBM Plex Sans',ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+          --mono:'IBM Plex Mono',ui-monospace,'Cascadia Code',Consolas,monospace; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0d1117; --fg:#e6e9ec; --muted:#8b949e; --line:#21262d; --accent:#ff4d6a;
+            --card:#131920; --ok:#4ec78f; --warn:#e0b070; --on-accent:#0d1117; } }
+  * { box-sizing:border-box }
+  body { margin:0; font:16px/1.6 var(--sans); background:var(--bg); color:var(--fg); }
+  /* Reserve the persistent assistant's clearance in the server shell. The interactive
+     stylesheet is intentionally loaded after the legal page, so these two layout rules
+     must be present at first paint rather than moving the page when that CSS arrives. */
+  body.assistant-enabled { padding-bottom:84px }
+  body.assistant-enabled main { min-height:calc(100dvh - 94px) }
+  /* Digits line up in columns all over this product: dates, version counts, article
+     numbers, hashes. Proportional figures make those columns ragged. */
+  table, .mono, .badge, time, .kv { font-variant-numeric:tabular-nums }
+  /* Links were the single biggest consumer of the accent, which left it meaning
+     "clickable" rather than "now". Ink and a hairline underline read as a link
+     everywhere on the web and cost the accent nothing. */
+  a { color:inherit; text-decoration:underline; text-decoration-thickness:1px;
+      text-underline-offset:2px; text-decoration-color:var(--line) }
+  a:hover { text-decoration-color:var(--fg) }
+  /* The one thing that keeps it. */
+  .now, .asof { color:var(--accent); font-weight:600; font-variant-numeric:tabular-nums }
+  header { border-bottom:1px solid var(--line); padding:14px 20px; display:flex; gap:20px; align-items:baseline; flex-wrap:wrap }
+  header .brand { font-family:var(--serif); font-weight:700; font-size:21px; color:var(--fg); letter-spacing:-.01em }
+  header a.navlink { color:var(--muted); font-size:14.5px }
+  header a.navlink.on { color:var(--fg); font-weight:600; box-shadow:inset 0 -2px 0 var(--fg) }
+  header .navspacer { flex:1 }
+  .proofnav { position:relative; color:var(--muted); font-size:14.5px }
+  .proofnav summary { cursor:pointer; list-style:none; display:flex; align-items:center; gap:6px }
+  .proofnav summary::-webkit-details-marker { display:none }
+  .proofnav summary::after { content:'+'; font-family:var(--mono); font-size:12px }
+  .proofnav[open] summary::after { content:'−' }
+  .proofnav.on summary { color:var(--fg); font-weight:600 }
+  .proofnav > nav { position:absolute; z-index:50; top:calc(100% + 10px); left:-12px;
+    width:min(310px,calc(100vw - 28px)); padding:8px; display:grid; grid-template-columns:1fr 1fr;
+    gap:2px; background:var(--card); border:1px solid var(--line); border-radius:10px;
+    box-shadow:0 16px 38px rgba(0,0,0,.18) }
+  .proofnav:not([open]) > nav { display:none }
+  .proofnav > nav a { padding:7px 9px; border-radius:6px; color:var(--muted); text-decoration:none }
+  .proofnav > nav a:hover,.proofnav > nav a:focus-visible,.proofnav > nav a[aria-current=page] {
+    color:var(--fg); background:var(--bg) }
+  main { max-width:960px; margin:0 auto; padding:26px 20px 60px }
+  h1 { font-family:var(--serif); font-size:29px; line-height:1.15; letter-spacing:-.015em; margin:0 0 6px; text-wrap:balance }
+  h2 { font-family:var(--serif); font-size:20px; margin:28px 0 8px }
+  .sub { color:var(--muted); margin:0 0 18px; font-size:14.5px }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px 16px; margin:12px 0; overflow-x:auto }
+  .badge { display:inline-block; border:1px solid var(--line); border-radius:99px; padding:1px 10px; font-size:12.5px; color:var(--muted); margin-right:6px }
+  .badge.ok { color:var(--ok); border-color:var(--ok) }
+  .badge.warn { color:var(--warn); border-color:var(--warn) }
+  table { border-collapse:collapse; width:100%; font-size:14.5px }
+  th,td { text-align:left; padding:7px 10px; border-bottom:1px solid var(--line); vertical-align:top }
+  th { color:var(--muted); font-weight:600; font-size:13px }
+  .mono { font-family:var(--mono); font-size:13px; word-break:break-all }
+  .kv td:first-child { color:var(--muted); white-space:nowrap; padding-right:18px }
+  /* The catalogue. Filters are links, so every state of the page is a shareable URL. */
+  .filters { display:flex; flex-direction:column; gap:7px; margin:14px 0 16px }
+  .filters > div { display:flex; flex-wrap:wrap; gap:6px; align-items:baseline }
+  .filters i { font-style:normal; font-size:11px; letter-spacing:.06em; text-transform:uppercase;
+               color:var(--muted); width:74px; flex:none }
+  .filters .f { border:1px solid var(--line); border-radius:99px; padding:2px 11px; font-size:13px;
+                color:var(--muted); text-decoration:none }
+  .filters .f:hover { border-color:var(--fg); color:var(--fg); text-decoration:none }
+  .filters .f.on { border-color:var(--fg); color:var(--fg); font-weight:600 }
+  .filters .n { opacity:1; font-size:11.5px; font-variant-numeric:tabular-nums }
+  .filters .raw { margin-left:3px; font-size:10.5px; opacity:.8 }
+  .filters > .facetgroups { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr));
+                            gap:8px; align-items:start; margin-left:80px }
+  .facetgroup { border:1px solid var(--line); border-radius:8px; background:var(--card) }
+  .facetgroup summary { cursor:pointer; padding:7px 10px; font-size:12.5px; color:var(--fg) }
+  .facetgroup summary span { color:var(--muted); margin-left:5px }
+  .facetgroup > div { display:flex; flex-wrap:wrap; gap:6px; padding:3px 8px 9px }
+  .sourceclasses { margin-left:80px }
+  .cat td:first-child a { font-weight:600 }
+  .cat .r { text-align:right; font-variant-numeric:tabular-nums }
+  .cat .sub { font-size:12px; margin-top:2px }
+  .cat-mobile { display:none }
+  .cat th:nth-child(5), .cat td:nth-child(5),
+  .cat th:nth-child(6), .cat td:nth-child(6) { white-space:nowrap }
+  .pager { display:flex; gap:14px; align-items:baseline; margin:12px 0; font-size:14px }
+  .pager span { color:var(--muted); font-variant-numeric:tabular-nums }
+  form.inline { display:flex; gap:8px; flex-wrap:wrap; margin:10px 0 }
+  input,select,button { font:inherit; padding:7px 10px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--fg) }
+  /* Publisher names are evidence-facing labels, not layout constraints. Allow a select
+     to shrink inside the mobile content column while keeping its full option text. */
+  form.inline select { min-width:0; max-width:100% }
+  button { background:var(--fg); color:var(--bg); border-color:var(--fg); cursor:pointer }
+  footer { border-top:1px solid var(--line); margin-top:40px; padding:16px 20px; color:var(--muted); font-size:13px }
+  .notice { border-left:3px solid var(--warn); padding:10px 14px; background:var(--card); border-radius:0 8px 8px 0; margin:12px 0; font-size:14.5px }
+  .snippet { color:var(--muted); font-size:13.5px }
+  .sitemap { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:8px 30px;
+             margin-bottom:18px; padding-bottom:16px; border-bottom:1px solid var(--line) }
+  .sitemap div { display:flex; flex-direction:column; gap:3px }
+  .sitemap b { color:var(--fg); font-size:12px; letter-spacing:.06em; text-transform:uppercase;
+               margin-bottom:4px; font-weight:600 }
+  .sitemap a { color:var(--muted); min-height:24px; display:flex; align-items:center }
+  .sitemap a:hover { text-decoration-color:var(--fg) }
+  /* The one deliberate exception to the accent rule: a focus ring has to be the
+     loudest thing on the page, and accessibility outranks the identity. */
+  :focus-visible { outline:2px solid var(--accent); outline-offset:2px }
+  .rail { position:relative; height:44px; margin:14px 0 0 }
+  .rail .axis { position:absolute; left:0; right:0; top:21px; height:1px; background:var(--line) }
+  .rail .tick { position:absolute; top:13px; width:1px; height:17px; background:var(--muted); opacity:.55 }
+  .rail .tick:hover { opacity:1; background:var(--fg); width:2px }
+  .rail .tick.act { top:5px; height:33px; width:2px; background:var(--accent); opacity:1 }
+  .rail .yr { position:absolute; top:30px; font-family:var(--mono); font-size:11px; color:var(--muted) }
+  .railcap { margin:2px 0 18px } .nowmark { color:var(--accent) }
+  .railversions { display:none }
+  .vchips { display:flex; gap:6px; overflow-x:auto; padding:8px 1px 4px; scrollbar-width:thin }
+  .vchip { flex:none; min-height:44px; display:inline-flex; align-items:center; padding:4px 11px;
+           border:1px solid var(--line); border-radius:99px; font-family:var(--mono); font-size:11px;
+           color:var(--muted); text-decoration:none }
+  .vchip.act { border-color:var(--accent); color:var(--accent); font-weight:600 }
+  .lawbody { font-family:var(--serif); font-size:16.5px; line-height:1.62 }
+  .legal-markdown { margin-top:8px }
+  .legal-markdown > :first-child { margin-top:0 }
+  .legal-markdown > :last-child { margin-bottom:0 }
+  .legal-markdown table { font-family:var(--sans); font-size:14px }
+  /* Phones: law texts carry wide tables and long pre blocks. Let each scroll inside
+     itself rather than pushing the whole page sideways. Desktop is untouched. */
+  @media (max-width:900px) {
+    .rail { display:none }
+    .railversions { display:block; margin:12px 0 4px }
+    .railversions summary { min-height:44px; display:flex; align-items:center; cursor:pointer;
+                            color:var(--link); font-size:13px }
+  }
+  @media (max-width:640px) {
+    body.assistant-enabled { padding-bottom:76px }
+    main { padding:20px 14px 48px }
+    table { display:block; overflow-x:auto }
+    pre { overflow-x:auto }
+    header { gap:12px; padding:12px 14px }
+    header .navspacer { display:none }
+    .proofnav > nav { left:auto; right:0; grid-template-columns:1fr }
+    h1 { font-size:25px }
+    .rail .yr { font-size:10px }
+    .filters { gap:5px; margin-top:10px }
+    /* Keep the facet name beside its choices. Stacking every label on a separate row
+       made the first four filter groups taller than the entire 320px viewport and put
+       the persistent assistant over a live sort choice. */
+    .filters i { width:68px; margin:3px 0 1px }
+    .filters > .facetgroups { margin-left:0; grid-template-columns:1fr }
+    .sourceclasses { margin-left:0 }
+    .catcard { overflow:visible; padding:4px 14px }
+    .cat, .cat tbody { display:block; overflow:visible }
+    .cat tr { display:grid; grid-template-columns:minmax(0,1fr); padding:10px 0;
+              border-bottom:1px solid var(--line) }
+    .cat tr:first-child { display:none }
+    .cat td { display:none; border:0; padding:0 }
+    .cat td:first-child, .cat td:last-child { display:block; min-width:0 }
+    .cat td:last-child { margin-top:7px }
+    .cat td:first-child a { display:block; overflow-wrap:anywhere }
+    .cat .badge { white-space:normal; line-height:1.35 }
+    .cat-desktop { display:none }
+    .cat-mobile { display:block }
+  }
+</style></head>
+<body>
+<header>
+  <!-- The workspace IS the home page, so there is no "Ask" to link to from it, and /find,
+       /search and /changed are the no-JavaScript twins of its three tabs rather than separate
+       features. Promoting them here is what made the site look like it had two ways to do
+       everything. They stay reachable from the footer and from the noscript line. -->
+  <a class="brand" href="/">Lex</a>
+  <a class="navlink" href="/browse">Browse everything</a>
+  <details class="proofnav on">
+    <summary aria-expanded="false">Check the work</summary>
+    <nav aria-label="Check the work">
+      <a href="/how-it-works">How it works</a>
+      <a href="/coverage">Coverage</a>
+      <a href="/built" aria-current="page">Architecture dossier</a>
+      <a href="/decisions">Decisions and trade-offs</a>
+      <a href="/benchmarks">Benchmarks</a>
+      <a href="/verify">Verify artifacts</a>
+      <a href="/about">About</a>
+    </nav>
+  </details>
+  <span class="navspacer"></span>
+  <a class="navlink" href="/developers">For developers</a>
+</header>
+<main>
+<h1>Architecture dossier</h1>
+<p class="sub">The complete interview and print view, generated from the same nine source pages.</p>
+<article class="architecture-dossier architecture-dossier-full"><h2>Overview</h2>
+<p>Lex answers a narrow business question: <strong>what did this rule say on this date?</strong> It turns dated
+Luxembourg and EU publisher material into article-level research with an official link, an exact
+version and a verifiable evidence chain. It does not decide legal applicability or advise a reader
+what to do.</p>
+<p><img src="/built/diagrams/system.svg" alt="Official publishers flow through a deterministic corpus and signed index into one legal core used by the web app, public MCP server and bounded assistant." /></p>
+<p><a href="/built/diagrams/system.svg">Open the system diagram at full size</a></p>
+<div class="dossier-table" tabindex="0" role="region" aria-label="Scrollable architecture table"><table>
+<thead>
+<tr>
+<th>Box</th>
+<th>Responsibility</th>
+<th>Lives in</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Official publishers</td>
+<td>Authoritative catalogues, classifications and source files</td>
+<td>Legilux and EUR-Lex/Cellar</td>
+</tr>
+<tr>
+<td>Evidence and derivation</td>
+<td>Preserve publisher bytes, then extract articles or typed gaps reproducibly</td>
+<td><code>lex-corpus-*</code>, <code>Lex.Sources.*</code> and <code>Lex.Derive</code></td>
+</tr>
+<tr>
+<td>Signed index</td>
+<td>Bind time, text, metadata, vectors and provenance into local immutable artifacts</td>
+<td><code>Lex.Index</code>, built by <code>Lex.Ingest</code></td>
+</tr>
+<tr>
+<td>Legal core</td>
+<td>Execute the same closed read-only operations for every channel</td>
+<td><code>Lex.Mcp</code></td>
+</tr>
+<tr>
+<td>Bounded agent</td>
+<td>Plan against closed schemas and optionally explain an accepted evidence ledger</td>
+<td><code>Lex.Ask</code></td>
+</tr>
+<tr>
+<td>Reader channels</td>
+<td>Render the workspace and expose HTTP or stdio MCP without duplicating legal logic</td>
+<td><code>Lex.Web</code> and <code>Lex.Mcp.Stdio</code></td>
+</tr>
+</tbody>
+</table></div>
+<h3>The decision a reader can make</h3>
+<div class="dossier-table" tabindex="0" role="region" aria-label="Scrollable architecture table"><table>
+<thead>
+<tr>
+<th>Reader need</th>
+<th>Product behavior</th>
+<th>Failure behavior</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Find the right instrument</td>
+<td>Resolve official identity before searching article text</td>
+<td>Show several candidates or ask for clarification</td>
+</tr>
+<tr>
+<td>Read it at a date</td>
+<td>Select the publisher state whose closed interval contains that date</td>
+<td>Return a typed gap, never substitute today's text</td>
+</tr>
+<tr>
+<td>Understand why it matched</td>
+<td>Return the matched title, identifier or official classification</td>
+<td>Never present metadata as wording from the law</td>
+</tr>
+<tr>
+<td>Compare or explain</td>
+<td>Execute typed legal operations first</td>
+<td>Keep deterministic results when prose is not requested</td>
+</tr>
+<tr>
+<td>Verify a claim</td>
+<td>Return publisher permalinks, version coordinates and provision hashes</td>
+<td>Refuse unsupported model-written claims</td>
+</tr>
+</tbody>
+</table></div>
+<h3>The architecture in one sentence</h3>
+<p>Official publisher records become immutable evidence, deterministic derivations and signed local
+indexes; one typed legal core serves the UI, MCP and a bounded agent whose model may plan and
+explain but cannot choose legal identity, dates, evidence or actions.</p>
+<h3>How to read this dossier</h3>
+<p>The first four tabs explain the legal and retrieval product. <strong>Assistant</strong> shows where the agent is
+useful and where it has no authority. <strong>Release</strong> shows how evaluated code and data become one
+rollback-safe revision. The final three tabs expose decisions, incidents and limits instead of
+hiding them behind a feature list.</p>
+<p>The pages describe durable contracts, not a moment in one rollout. Mounted corpus identities,
+coverage and retrieval capabilities are read from the running revision, while latency, relevance,
+memory and promotion claims appear only when a signed report binds them to that exact artifact set.</p>
+<h3>Why this is more than a naive RAG</h3>
+<p>Lex is retrieval-augmented generation only when the reader asks for prose. Identity resolution,
+point-in-time selection, retrieval, comparison, citations and direct result cards work without
+generation. The default result is deterministic. Optional prose receives an already bounded
+evidence ledger and must bind each claim back to that ledger.</p>
+<h2>Legal model</h2>
+<p>The core modeling choice is to keep a law, a dated legal state, a language expression and the
+publisher file as different things. Collapsing them into one document would make a date lookup
+ambiguous and make provenance impossible to state precisely.</p>
+<p><img src="/built/diagrams/legal-model.svg" alt="A legal work contains dated consolidations, language expressions and publisher manifestations, with separate applicability and observation clocks." /></p>
+<p><a href="/built/diagrams/legal-model.svg">Open the legal model diagram at full size</a></p>
+<h3>FRBR and JOLux shape</h3>
+<div class="dossier-table" tabindex="0" role="region" aria-label="Scrollable architecture table"><table>
+<thead>
+<tr>
+<th>Level</th>
+<th>Meaning in Lex</th>
+<th>Responsibility</th>
+<th>Implementation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Work</td>
+<td>The legal instrument across its life</td>
+<td>Stable publisher identity and title</td>
+<td><code>Lex.Law</code> corpus records and index work catalog</td>
+</tr>
+<tr>
+<td>Dated consolidation</td>
+<td>One publisher-asserted state</td>
+<td><code>valid_from</code>, <code>valid_to</code> and stable v4 version key</td>
+<td>corpus states and <code>Lex.Temporal</code> interval selection</td>
+</tr>
+<tr>
+<td>Expression</td>
+<td>One language of that state</td>
+<td>Language-specific title and availability</td>
+<td>corpus expression records and index version rows</td>
+</tr>
+<tr>
+<td>Manifestation</td>
+<td>The file the publisher served</td>
+<td>Media type, URL, bytes and SHA-256</td>
+<td>evidence repositories and manifestation records</td>
+</tr>
+</tbody>
+</table></div>
+<p>The v4 version key is based on the full publisher version identifier, not its position in a list.
+The key combines <code>valid_from</code> with SHA-256 of that full identifier. A same-day reordering can no
+longer silently move text from one state to another.</p>
+<h3>Two clocks, two questions</h3>
+<div class="dossier-table" tabindex="0" role="region" aria-label="Scrollable architecture table"><table>
+<thead>
+<tr>
+<th>Clock</th>
+<th>It answers</th>
+<th>It does not answer</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Legal or consolidation time</td>
+<td>Which publisher state covers the reader's requested date</td>
+<td>When Lex first learned about it</td>
+</tr>
+<tr>
+<td>Observation time</td>
+<td>When a record or change entered the evidence history</td>
+<td>Whether the rule was legally applicable then</td>
+</tr>
+</tbody>
+</table></div>
+<p>For Legilux, the date is publisher-asserted legal applicability. For EUR-Lex, it is the state date
+of the consolidated wording. The UI and API keep those meanings distinct rather than claiming one
+cross-publisher definition they do not share.</p>
+<h3>Empty is a modeled outcome</h3>
+<p>A publisher can announce a state before supplying exploitable wording, or provide a manifestation
+that the current deterministic profile cannot safely segment. Lex keeps that state and returns a
+typed availability reason with the official link. It does not synthesize a consolidation or copy
+text from another date. In this product, an honest gap is useful data.</p>
+<h3>What stays outside the model</h3>
+<p>Human-authored aliases, model-inferred classifications and generated legal text do not become
+corpus authority. Official short titles may identify a work only when the source literal is an
+exact unique match. Official taxonomies remain discovery metadata and never prove historical
+applicability or legal wording.</p>
+<h2>Data authority</h2>
+<p>The evidence layer is append-only publisher material. The consumption layer is reproducible and
+disposable. That split lets an extraction improve without rewriting what the publisher served.</p>
+<p><img src="/built/diagrams/data-authority.svg" alt="Legilux and EUR-Lex feed evidence repositories, deterministic profiles, article records and signed indexes, with hashes and source URIs carried throughout." /></p>
+<p><a href="/built/diagrams/data-authority.svg">Open the data authority diagram at full size</a></p>
+<h3>Ingestion and derivation</h3>
+<div class="dossier-table" tabindex="0" role="region" aria-label="Scrollable architecture table"><table>
+<thead>
+<tr>
+<th>Stage</th>
+<th>Input</th>
+<th>Output</th>
+<th>Owner</th>
+<th>Refusal boundary</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Enumerate</td>
+<td>Official publisher catalogue</td>
+<td>Works, states, expressions and manifestations</td>
+<td><code>Lex.Sources.Legilux</code> or <code>Lex.Sources.EurLex</code></td>
+<td>A partial or implausible inventory commits nothing</td>
+</tr>
+<tr>
+<td>Acquire</td>
+<td>Official URLs</td>
+<td>Verbatim bytes and observation records</td>
+<td>publisher adapter plus evidence repository</td>
+<td>Existing evidence is not silently overwritten</td>
+</tr>
+<tr>
+<td>Derive</td>
+<td>Stored bytes plus immutable extraction profile</td>
+<td>Article records and typed gaps</td>
+<td><code>Lex.Derive</code></td>
+<td>Unsafe structure remains unavailable</td>
+</tr>
+<tr>
+<td>Index</td>
+<td>Hash-pinned corpora and article release</td>
+<td>SQLite FTS, temporal tables and optional vectors</td>
+<td><code>Lex.Ingest</code> and <code>Lex.Index</code> on the local build machine</td>
+<td>Incomplete or mismatched inputs fail the build</td>
+</tr>
+<tr>
+<td>Sign</td>
+<td>Canonical artifact manifest</td>
+<td>Signature and public verification material</td>
+<td>bounded <code>lex-ops</code> publication with Key Vault</td>
+<td>Runtime rejects a manifest outside pinned trust</td>
+</tr>
+</tbody>
+</table></div>
+<h3>Official discovery metadata</h3>
+<p>Luxembourg acquisition mirrors Legilux <code>subjectLevel1</code> and <code>subjectLevel2</code> assertions with the
+concept URI, French label, level, language and source. EU acquisition mirrors official short-title
+segments, EuroVoc assigned, alternative and broader relations, and directory classifications with
+their identifiers and source URIs. The two vocabulary systems remain distinct.</p>
+<p>These values enter a weak, explainable discovery lane. They may surface a work whose provisions do
+not contain the query phrase and the result can say which official classification matched. They do
+not establish legal identity, support a legal claim or become historical evidence. No manual legal
+alias catalogue and no model-generated metadata enter production authority.</p>
+<h3>What the cryptography proves</h3>
+<div class="dossier-table" tabindex="0" role="region" aria-label="Scrollable architecture table"><table>
+<thead>
+<tr>
+<th>Mechanism</th>
+<th>Proves</th>
+<th>Does not prove</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>SHA-256 of a file or provision</td>
+<td>The bytes read now equal the bytes previously addressed by that digest</td>
+<td>Who published the bytes or whether the law is valid</td>
+</tr>
+<tr>
+<td>Publisher URL and observation record</td>
+<td>Where and when Lex acquired the material</td>
+<td>That a later copy was not modified</td>
+</tr>
+<tr>
+<td>Signed whole-artifact manifest</td>
+<td>A controlled release identity approved this exact set of indexes, vectors, encoder and scope files</td>
+<td>Legal correctness by itself</td>
+</tr>
+<tr>
+<td>Signed evaluation and promotion receipts</td>
+<td>The exact candidate passed the stated gates and became the named revision</td>
+<td>Future behavior under every possible question</td>
+</tr>
+</tbody>
+</table></div>
+<p>Origin, integrity and release authorization are separate claims. Keeping all three is why a
+citation can be checked without treating a hash as a magical certificate of truth.</p>
+<h2>Retrieval</h2>
+<p>Most apparent RAG hallucinations begin before generation. Lex therefore treats legal identity as
+an authorization step and ranking as a later discovery step.</p>
+<p><img src="/built/diagrams/retrieval.svg" alt="A query passes through subject resolution, temporal and scope filters, keyword or gated hybrid retrieval, bounded top-k selection and typed evidence before any optional generation." /></p>
+<p><a href="/built/diagrams/retrieval.svg">Open the retrieval diagram at full size</a></p>
+<div class="dossier-table" tabindex="0" role="region" aria-label="Scrollable architecture table"><table>
+<thead>
+<tr>
+<th>Box</th>
+<th>Responsibility</th>
+<th>Implementation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Subject preflight</td>
+<td>Resolve official work identity or return ambiguity before rank can choose</td>
+<td><code>Lex.Index/WorkSearch</code> and <code>Lex.Ask</code> subject rules</td>
+</tr>
+<tr>
+<td>Time and scope</td>
+<td>Apply publisher, work, language and closed date-interval constraints</td>
+<td><code>Lex.Temporal</code>, <code>Lex.Index</code> and typed operation arguments</td>
+</tr>
+<tr>
+<td>Exact coordinate</td>
+<td>Return one known instrument, state or provision without similarity</td>
+<td>shared <code>Lex.Mcp</code> legal operations</td>
+</tr>
+<tr>
+<td>Bounded discovery</td>
+<td>Search FTS by default; add weak official metadata and only gated hybrid vectors</td>
+<td><code>Lex.Index/WorkSearch</code>, FTS5 and the pinned local encoder</td>
+</tr>
+<tr>
+<td>Result shaping</td>
+<td>Deduplicate, enforce fairness and stop at the fixed evidence budget</td>
+<td><code>Lex.Index</code> query and response contracts</td>
+</tr>
+<tr>
+<td>Typed evidence</td>
+<td>Return rows, hashes, permalinks and match reasons to MCP, UI or assistant</td>
+<td><code>Lex.Mcp</code> envelopes and <code>Lex.Ask</code> evidence ledger</td>
+</tr>
+</tbody>
+</table></div>
+<h3>Retrieval funnel</h3>
+<ol>
+<li>Parse explicit dates, identifiers, article numbers and comparison intent.</li>
+<li>Resolve the named subject against official work identity before asking the planner.</li>
+<li>Clarify zero or several credible subjects instead of letting rank silently choose one.</li>
+<li>Apply publisher, work, language and point-in-time scope.</li>
+<li>Search article text with FTS5/BM25 by default; official metadata contributes a weaker work
+discovery signal and an explicit match reason.</li>
+<li>Deduplicate text states and anchors, apply bounded per-work fairness only for unscoped discovery,
+then return typed rows and provenance.</li>
+</ol>
+<h3>Top-1 and top-k are different product decisions</h3>
+<div class="dossier-table" tabindex="0" role="region" aria-label="Scrollable architecture table"><table>
+<thead>
+<tr>
+<th>Question shape</th>
+<th>Selection</th>
+<th>Why</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Exact official identifier plus date</td>
+<td>One deterministic work and interval</td>
+<td>Similarity would weaken an exact coordinate</td>
+</tr>
+<tr>
+<td>Unique exact official short title</td>
+<td>One work, with its source literal</td>
+<td>Identity comes from publisher data, not rank</td>
+</tr>
+<tr>
+<td>Theme or conceptual discovery</td>
+<td>Bounded top-k works or provisions</td>
+<td>Several results are the useful answer</td>
+</tr>
+<tr>
+<td>One theme matches several laws</td>
+<td>Clarification or result set</td>
+<td>Metadata must not silently authorize one law</td>
+</tr>
+<tr>
+<td>Answer requires several provisions</td>
+<td>Bounded top-k evidence, then deterministic assembly</td>
+<td>Top-1 would bury necessary context</td>
+</tr>
+<tr>
+<td>No credible evidence</td>
+<td>Typed gap or refusal</td>
+<td>Expanding until something looks plausible is unsafe</td>
+</tr>
+</tbody>
+</table></div>
+<p>There is no generation loop that reads page one, asks the model whether it is satisfied and keeps
+searching. The application decides the evidence budget before execution. This makes latency,
+population and failure behavior testable.</p>
+<h3>Failure taxonomy</h3>
+<div class="dossier-table" tabindex="0" role="region" aria-label="Scrollable architecture table"><table>
+<thead>
+<tr>
+<th>Failure</th>
+<th>What goes wrong</th>
+<th>Guard or measurement</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Not retrieved</td>
+<td>The right passage never enters the candidate set</td>
+<td>Recall and negative cases</td>
+</tr>
+<tr>
+<td>Wrong passage</td>
+<td>A nearby passage outranks the answer</td>
+<td>MRR and nDCG by question category</td>
+</tr>
+<tr>
+<td>Buried evidence</td>
+<td>The passage exists below the evidence budget</td>
+<td>Recall at k and evidence-budget tests</td>
+</tr>
+<tr>
+<td>Right passage, wrong instrument</td>
+<td>The answer is faithful to a different law</td>
+<td>Identity preflight, instrument disclosure and ambiguity tests</td>
+</tr>
+<tr>
+<td>Publisher gap</td>
+<td>No safe text exists for that state</td>
+<td>Typed availability outcome, never substitute text</td>
+</tr>
+</tbody>
+</table></div>
+<h3>Why keyword remains the default</h3>
+<p>The semantic encoder, local vectors and rank fusion exist, but activation is evidence-gated. The
+frozen 200-case catalog fixes tuning and holdout judgments before measurement. A compatible signed
+report must bind relevance, latency, memory and size to the exact candidate before hybrid may become
+the default; without that evidence, keyword remains the default. A measured rejection is a valid
+architecture result, not a failed demo.</p>
+<h2>Assistant</h2>
+<p><strong>Architectural decision: bounded plan -&gt; validate and correct once -&gt; freeze -&gt; execute.</strong> This is
+ReWOO-inspired reasoning without an observation loop, not adaptive ReAct. Retrieval constrains what the
+model can know, so exact identity and time resolution happen before planning; the planner proposes a
+typed operation plan, while application code authorizes, executes and returns the normal cited result.</p>
+<h3>Ownership and trust boundary</h3>
+<div class="dossier-boundary" tabindex="0" role="region" aria-label="Scrollable assistant ownership and trust-boundary diagram"><img src="/built/diagrams/assistant-boundary.svg" alt="A clean component view: the bounded assistant agent owns thread context, subject authority, planning and validation, the canonical catalog and frozen executor, and typed outcomes with evidence. The deterministic legal core and signed index stay outside. Public MCP is a separate projection of the same canonical operations, while composer and judge are optional prose roles." /></div>
+<p><a href="/built/diagrams/assistant-boundary.svg">Open the ownership diagram at full size</a></p>
+<h3>Boundary at a glance</h3>
+<div class="dossier-table" tabindex="0" role="region" aria-label="Scrollable architecture table"><table>
+<thead>
+<tr>
+<th>Concern</th>
+<th>Inside the bounded assistant agent</th>
+<th>Outside the agent boundary</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Conversation</td>
+<td>Server-owned bounded thread context and deterministic subject authority</td>
+<td>Browser-visible transcript, opaque token and request admission</td>
+</tr>
+<tr>
+<td>Planning</td>
+<td>Planner LLM, canonical tool catalog, typed adapter and frozen executor</td>
+<td>No model can call the index or legal core directly</td>
+</tr>
+<tr>
+<td>Legal truth</td>
+<td>Closed tool calls and outcome routing only</td>
+<td>Shared deterministic <code>McpCore</code> and signed <code>Lex.Index</code> own dates, text, hashes, retrieval and gaps</td>
+</tr>
+<tr>
+<td>Normal answer</td>
+<td>Typed outcome router builds direct replies, cards, citations and disclosures</td>
+<td>Web app renders typed effects without asking a model to rewrite them</td>
+</tr>
+<tr>
+<td>Optional prose</td>
+<td>Bounded evidence ledger supplies accepted evidence</td>
+<td>Composer and judge are separate logical Agent Framework roles on the same configured Azure OpenAI deployment</td>
+</tr>
+</tbody>
+</table></div>
+<p>The canonical <code>LegalOperationCatalog</code> is the shared contract. The planner receives its closed typed
+schemas but never calls MCP, SQL, vectors or the index. After validation and freeze, the executor
+calls the deterministic legal core. Public MCP projects the same operations independently for
+external clients; it is not the assistant's internal transport.</p>
+<h3>One bounded turn, time downward</h3>
+<div class="dossier-sequence" tabindex="0" role="region" aria-label="Scrollable assistant sequence diagram"><img src="/built/diagrams/assistant.svg" alt="A conventional sequence diagram with continuous lifelines for reader, web, deterministic admission and subject authority, planner and plan gate, executor and outcome routing, the legal core and signed index, and separate optional composer and judge roles. Time runs downward through deterministic resolution, one plan, one possible correction, freeze, execution without observations, a direct typed result and optional prose." /></div>
+<p><a href="/built/diagrams/assistant.svg">Open the sequence diagram at full size</a></p>
+<div class="dossier-table" tabindex="0" role="region" aria-label="Scrollable architecture table"><table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Authority crossing</th>
+<th>Closed result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Resolve deterministically</td>
+<td>Official catalog identity, date semantics and bounded thread context enter planning</td>
+<td>One authorized subject reference, clarification context, or no subject authority</td>
+</tr>
+<tr>
+<td>Plan once</td>
+<td>Planner sees only the question, bounded history and canonical typed operation schemas</td>
+<td>A proposed plan; no tool or index access</td>
+</tr>
+<tr>
+<td>Validate, correct once, freeze</td>
+<td>Application code checks names and typed arguments; at most one contract correction</td>
+<td>An immutable plan capped at eight operations, or typed invalid request</td>
+</tr>
+<tr>
+<td>Execute without observations</td>
+<td>Frozen executor calls the deterministic legal core, which queries the signed index</td>
+<td>Closed outcomes, rows, hashes, publisher links and typed gaps</td>
+</tr>
+<tr>
+<td>Typed result</td>
+<td>Outcome router assembles cards, citations, disclosures and the bounded evidence ledger</td>
+<td>Direct usable answer, <code>NeedsClarification</code>, gap or refusal without generated prose</td>
+</tr>
+<tr>
+<td>Optional compose and judge</td>
+<td>Explicit prose request may activate two separate logical Agent Framework roles</td>
+<td>Composer draft; judge only factual Answer or Gap claims; fallback keeps the deterministic result</td>
+</tr>
+</tbody>
+</table></div>
+<h3>Why this design</h3>
+<div class="dossier-table" tabindex="0" role="region" aria-label="Scrollable architecture table"><table>
+<thead>
+<tr>
+<th>Approach</th>
+<th>Decision</th>
+<th>Product consequence</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Bounded plan, freeze and execute</td>
+<td>Chosen</td>
+<td>Identity and time resolve first; typed and cited outcomes stay useful even without generated prose.</td>
+</tr>
+<tr>
+<td>Open-ended ReAct</td>
+<td>Rejected</td>
+<td>Observing refusals and replanning can drift to another law while adding unbounded latency and model cost.</td>
+</tr>
+<tr>
+<td>Naive RAG with LLM-selected identity</td>
+<td>Rejected</td>
+<td>Ambiguous retrieval can silently choose the wrong instrument and turn missing evidence into unsupported claims.</td>
+</tr>
+</tbody>
+</table></div>
+<p>The catalog, plan schema, executor, outcomes and evidence contracts are explicit application code;
+no LangChain or LlamaIndex loop hides chunking, tool selection or retry behavior. The planner cannot
+observe tool results and replan. The judge verifies only optional generated factual prose;
+deterministic typed results need no LLM judge.</p>
+<h3>Control flow</h3>
+<ol>
+<li>The web boundary validates the bounded request, idempotency key and evaluation admission when
+present, then acquires one server thread lease. Admission applies request ownership,
+concurrency, daily cost and first-result deadline limits.</li>
+<li>The thread registry restores at most six accepted turns and deterministic subject context from
+a SHA-256 token digest. The browser presents the opaque token but owns no durable memory.</li>
+<li>Subject preflight queries the signed work catalog before the planning model is called. Exact
+identifiers and exact publisher-provided short titles may authorize a work. Weaker official
+classifications remain discovery evidence only. Ambiguity is kept as clarification context,
+never converted into a silently selected law.</li>
+<li>The bounded planning agent receives the question, bounded history, closed operation schemas and
+only opaque <code>subject_ref</code> values authorized by preflight. Without authority, work-specific
+operations receive no subject reference.</li>
+<li>The canonical plan gate validates operation names and typed arguments. One bounded corrective
+turn is allowed for a contract-shape error; a second invalid plan becomes a typed invalid request.</li>
+<li>The plan is frozen at no more than eight operations. There is no model observation or replanning
+after this point.</li>
+<li>The shared legal core executes each operation against the signed index and returns a closed
+outcome, rows, hashes and publisher links. <code>NeedsClarification</code>, legal-boundary and transport
+gaps stay typed rather than being rewritten as apparent answers.</li>
+<li>The outcome router builds the normal answer, result cards and citations deterministically. Its
+evidence ledger is bounded to 64 entries and 96,000 characters.</li>
+<li>The planner may set <code>synthesis=true</code> only when the reader explicitly asks to explain, describe
+or summarise the accepted results. There is no hidden UI toggle. For example: &quot;Show Article 6
+on 1 Jan 2021 and explain it.&quot;</li>
+<li>Runtime additionally requires no displayed clarification, no <code>NeedsClarification</code> result and no
+transport failure. The grounded composer and conditional judge are two separate logical
+Microsoft Agent Framework agents with separate sessions over the same configured Azure OpenAI
+chat client and deployment used by Ask. They are roles, not a second deployment or an
+autonomous observation loop.</li>
+<li>The composer receives the deterministic draft plus typed evidence and gets at most one format
+or evidence-contract correction. The judge runs only for Answer or Gap drafts with factual
+claims, then returns Pass, Repair or Refuse. A synthesis deadline or outage preserves the
+deterministic verified result.</li>
+</ol>
+<h3>Authority matrix</h3>
+<div class="dossier-table" tabindex="0" role="region" aria-label="Scrollable architecture table"><table>
+<thead>
+<tr>
+<th>Concern</th>
+<th>Model may</th>
+<th>Deterministic code owns</th>
+<th>Implementation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Subject</td>
+<td>Receive the resolution state and reason over the remaining wording</td>
+<td>Catalog candidates, official short-title authority, ambiguity and opaque authorization refs</td>
+<td><code>WorkSearch</code>, <code>WorkResolutionGuard</code> and <code>WorkSubjectRule</code></td>
+</tr>
+<tr>
+<td>Plan</td>
+<td>Choose among offered operations and fill typed arguments</td>
+<td>Canonical operation catalog, validation, one correction, cap and freeze</td>
+<td><code>AskService</code>, <code>OperationPlan</code> and <code>OperationArguments</code></td>
+</tr>
+<tr>
+<td>Execution</td>
+<td>Nothing</td>
+<td>Dates, SQL, FTS, vectors, comparisons and closed outcomes</td>
+<td>shared <code>McpCore</code> and <code>Lex.Index</code></td>
+</tr>
+<tr>
+<td>Presentation</td>
+<td>Draft optional prose and cite evidence ids</td>
+<td>Direct result cards, links, citations and UI effects</td>
+<td><code>OperationAnswerPolicy</code> and <code>UiMapper</code></td>
+</tr>
+<tr>
+<td>Optional prose</td>
+<td>Compose or judge only after authoritative results exist</td>
+<td>Activation condition, evidence-kind validation, fallback and budgets</td>
+<td>two <code>AIAgent</code> roles in <code>AgentAnswerFinalizer</code></td>
+</tr>
+<tr>
+<td>Safety</td>
+<td>Propose one correction before plan freeze or one prose repair</td>
+<td>No post-freeze replanning, typed refusal and deadlines</td>
+<td><code>OperationPlan</code> and <code>AgentAnswerFinalizer</code></td>
+</tr>
+</tbody>
+</table></div>
+<h3>Conversation memory</h3>
+<p><img src="/built/diagrams/memory.svg" alt="The browser keeps only a visible transcript and opaque token while bounded server memory stores six accepted turns and deterministic subject context, expiring after thirty idle minutes." /></p>
+<p><a href="/built/diagrams/memory.svg">Open the memory boundary diagram at full size</a></p>
+<div class="dossier-table" tabindex="0" role="region" aria-label="Scrollable architecture table"><table>
+<thead>
+<tr>
+<th>Boundary</th>
+<th>Responsibility</th>
+<th>Implementation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Browser component memory</td>
+<td>Keep the visible transcript and opaque capability for this tab only</td>
+<td><code>web/src/AssistantController.tsx</code></td>
+</tr>
+<tr>
+<td>Server thread registry</td>
+<td>Bound accepted turns, deterministic subject context, waiters, expiry and eviction</td>
+<td><code>Lex.Web/AskThreadRegistry</code></td>
+</tr>
+<tr>
+<td>Planner request</td>
+<td>Receive only the restored bounded transcript and authorized subject references</td>
+<td><code>Lex.Ask</code> operation planning</td>
+</tr>
+</tbody>
+</table></div>
+<p>Conversation memory is server-owned and ephemeral: at most 1,024 threads, six accepted turns,
+32 KiB per thread, 16 MiB globally, two waiters per thread and a 30-minute idle lifetime. The
+browser holds the visible transcript and opaque capability in component memory, not local storage.
+Only the token's SHA-256 digest is retained server-side. Restart, expiry, eviction or reset loses
+the thread safely; an unknown token never falls through to another conversation.</p>
+<p>The public default admits 200 accepted turns per ingress-derived client address and 400 globally
+per UTC day. Those process-local controls are honest cost and abuse limits, not user identity.</p>
+<h2>Release</h2>
+<p>Code, legal data, retrieval artifacts and assistant behavior are one release unit. A deployment is
+not production merely because a container started.</p>
+<p><img src="/built/diagrams/release.svg" alt="A signed artifact set becomes a zero-traffic candidate, passes health, retrieval, assistant and browser gates, then a separate signed promotion moves traffic while retaining the exact former production revision." /></p>
+<p><a href="/built/diagrams/release.svg">Open the release diagram at full size</a></p>
+<div class="dossier-table" tabindex="0" role="region" aria-label="Scrollable architecture table"><table>
+<thead>
+<tr>
+<th>Box</th>
+<th>Responsibility</th>
+<th>Lives in</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Signed artifacts</td>
+<td>Bind code, indexes, vectors, encoder and scope to exact hashes</td>
+<td>local builder plus bounded <code>lex-ops</code> publication</td>
+</tr>
+<tr>
+<td>Candidate</td>
+<td>Start an immutable revision while production traffic remains unchanged</td>
+<td><code>deploy.yml</code> and Azure Container Apps</td>
+</tr>
+<tr>
+<td>Independent gates</td>
+<td>Verify readiness, retrieval, assistant behavior, browser behavior and human review</td>
+<td>candidate scripts, signed evaluation release and protected environments</td>
+</tr>
+<tr>
+<td>Promote or restore</td>
+<td>Revalidate identities before one traffic change or exact rollback</td>
+<td><code>revision-traffic.yml</code> and Key Vault receipts</td>
+</tr>
+<tr>
+<td>Retention boundary</td>
+<td>Preserve production and one rollback without deleting unproven shared artifacts</td>
+<td>Container Apps revision policy and <code>lex-ops</code> Blob cleanup</td>
+</tr>
+</tbody>
+</table></div>
+<h3>State machine</h3>
+<div class="dossier-table" tabindex="0" role="region" aria-label="Scrollable architecture table"><table>
+<thead>
+<tr>
+<th>State</th>
+<th>Active production</th>
+<th>Inactive records</th>
+<th>Allowed next action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Steady</td>
+<td>Current revision at 100 percent</td>
+<td>Exact former production as rollback</td>
+<td>Create one candidate</td>
+</tr>
+<tr>
+<td>Waiting</td>
+<td>Current revision at 100 percent</td>
+<td>Rollback plus one zero-traffic candidate</td>
+<td>Evaluate, promote or reconcile</td>
+</tr>
+<tr>
+<td>Promoting</td>
+<td>Evaluated candidate activated at zero traffic</td>
+<td>Previous authorities still pinned</td>
+<td>Revalidate evidence, then move traffic</td>
+</tr>
+<tr>
+<td>New steady</td>
+<td>New production at 100 percent</td>
+<td>Exact former production as rollback</td>
+<td>Emit and verify release-state receipt</td>
+</tr>
+</tbody>
+</table></div>
+<p><code>maxInactiveRevisions</code> is one in steady state and two only while a candidate waits. Azure Container
+Apps has no supported per-revision delete. An unresolved newer candidate cannot be discarded by
+lowering the limit without risking the older valid rollback, so cleanup follows identity and
+creation order rather than age.</p>
+<h3>Evidence before traffic</h3>
+<p>The deploy workflow builds an immutable image from the exact code commit and signed artifact set,
+creates a zero-traffic revision, and checks readiness, MCP, Luxembourg and EU search. The assistant
+evaluation binds frozen cases, exact candidate, tool outcomes, injection canaries, latency and cost
+to a signed report. Human review uses a separate signing authority. Only the traffic workflow can
+verify those records and promote. No automated actor can approve its own release.</p>
+<p>Release state is never hard-coded into this page. The mounted-evidence section below reads the
+running revision's identities and indexes; candidate evaluation and promotion remain authoritative
+only through their matching signed reports and receipts.</p>
+<p>Scale is a release invariant, not a stale observation: the traffic workflow accepts a target and
+rollback only when each is pinned at <code>min=max=1</code>. Quotas, idempotency and thread state must be
+externalized before a multi-replica release is allowed.</p>
+<h3>Container registry and Blob retention</h3>
+<p>The Azure Container Registry is shared and still has a legacy RBAC boundary. Broad digest deletion
+is rejected because Lex's revision inventory cannot prove that another application does not pull a
+digest. The clean target is either a dedicated Lex registry or an audited migration of every shared
+consumer to repository-scoped ABAC roles and managed identities. Only then may an exact digest
+allowlist become an automated deletion plan.</p>
+<p>Private prebuilt staging blobs have a narrower ownership proof. The publisher may delete only the
+exact staging paths it created, with matching ETags, after both the immutable Blob release and the
+public release have been downloaded and hash-verified. Release paths are never cleanup candidates.</p>
+<h2 id="mounted-release">Mounted release evidence</h2>
+<p>The release model above is the invariant. This table reads process configuration and
+verified mounted indexes at request time. It reports the revision's identities and
+capabilities; signed promotion receipts separately prove whether traffic was authorized.</p>
+<div class="dossier-table" tabindex="0" role="region" aria-label="Mounted release identities"><table class="kv">
+<tr><th>mounted retrieval</th><td>keyword only; no compatible hybrid artifact is mounted</td></tr>
+<tr><th>deployed code</th><td class="mono">not supplied by deployment</td></tr>
+<tr><th>expected manifest set</th><td class="mono">not supplied by deployment</td></tr>
+<tr><th>verified mounted manifest set</th><td class="mono">no signed manifests mounted</td></tr>
+<tr><th>immutable image</th><td class="mono">not supplied by deployment</td></tr>
+</table></div>
+<h3>Mounted index identities</h3>
+<div class="dossier-table" tabindex="0" role="region" aria-label="Mounted index identities"><table>
+<tr><th>collection</th><th>works</th><th>versions</th><th>schema</th><th>corpus commit</th><th>stamp</th></tr>
+<tr><td>t-pub</td><td class="mono">2</td><td class="mono">3</td><td class="mono">lex-index/3</td><td class="mono">goldenc</td><td><span class="badge ok">valid</span></td></tr>
+</table></div>
+<p class="sub">Mounted total: 2 works and
+3 dated versions. Artifact verification remains
+a distinct job on <a href="/verify">Verify artifacts</a>.</p><h2>Trade-offs</h2>
+<p>An architecture decision is useful only when it names the alternative, the reason and the cost.
+The complete machine-readable register is rendered at <a href="/decisions">Architecture decisions</a>. This
+page is the interview path through the choices with the largest product consequences.</p>
+<div class="dossier-table" tabindex="0" role="region" aria-label="Scrollable architecture table"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Choice</th>
+<th>Rejected alternative</th>
+<th>Cost admitted</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>D53</td>
+<td>Store repeated wording once and map every dated occurrence to its content hash</td>
+<td>Duplicate every unchanged provision in every state</td>
+<td>Readers reconstruct a version through occurrence mappings</td>
+</tr>
+<tr>
+<td>D54</td>
+<td>Package a pinned local encoder and gate hybrid retrieval by holdout evidence</td>
+<td>Buy managed search before corpus or traffic requires it</td>
+<td>Lex owns model packaging, vectors and relevance measurement</td>
+</tr>
+<tr>
+<td>D57</td>
+<td>Return an explicit publisher gap</td>
+<td>Synthesize a consolidated text</td>
+<td>Some states remain metadata-only</td>
+</tr>
+<tr>
+<td>D58</td>
+<td>Pin trust outside the artifact and sign the complete manifest</td>
+<td>Trust a public key carried beside the data it authenticates</td>
+<td>Rotation is an explicit dual-trust release</td>
+</tr>
+<tr>
+<td>D75</td>
+<td>Admit only source-backed official identity and discovery metadata</td>
+<td>Manual aliases or model-generated legal identity</td>
+<td>Publisher vocabularies and collisions become build concerns</td>
+</tr>
+<tr>
+<td>D76</td>
+<td>Resolve subject first, freeze a typed plan, execute once, compose only on request</td>
+<td>A ReAct loop with model observation and retries</td>
+<td>More explicit application contracts</td>
+</tr>
+<tr>
+<td>D83</td>
+<td>Keep Legilux and EUR-Lex classifications as distinct weak discovery lanes</td>
+<td>Invent one cross-publisher taxonomy</td>
+<td>Facets and multilingual alignment remain deferred</td>
+</tr>
+</tbody>
+</table></div>
+<h3>Three decisions to challenge</h3>
+<p><strong>Why no ReAct loop?</strong> The measured dangerous failures were identity and evidence failures. Letting a
+model observe a deterministic refusal and try a different law can convert an honest gap into a
+plausible answer. One correction before execution fixes contract syntax without changing authority.</p>
+<p><strong>Why build semantic retrieval and leave it off?</strong> Because architecture is a reversible hypothesis.
+The vectors and encoder prove the path can run; the frozen holdout decides whether it should serve.
+The next activation can be category-specific rather than a global switch.</p>
+<p><strong>Why not unify taxonomies?</strong> EuroVoc and Legilux classifications have different authorities,
+languages and semantics. Preserving the source scheme makes a match explainable. A unified label
+would be a new assertion owned by Lex and would need its own governance and evaluation.</p>
+<p>Status vocabulary records implementation maturity, not current traffic: <code>shipped</code> means included in
+the release line, <code>gated</code> means activation still depends on evidence, and <code>planned</code> means no product
+claim yet. Mounted identities and signed promotion receipts separately establish what a running
+revision serves.</p>
+<h2>Incidents</h2>
+<p>The useful story is not that a defect existed. It is which assumption failed, why ordinary tests
+missed it and which permanent guard changed the system.</p>
+<p><img src="/built/diagrams/incident.svg" alt="A production symptom is traced through business impact and root cause into a code, contract, evaluation or operational guard that is then deliberately broken to prove the guard." /></p>
+<p><a href="/built/diagrams/incident.svg">Open the incident-learning diagram at full size</a></p>
+<div class="dossier-table" tabindex="0" role="region" aria-label="Scrollable architecture table"><table>
+<thead>
+<tr>
+<th>Stage</th>
+<th>Required evidence</th>
+<th>Where it is recorded</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Symptom and impact</td>
+<td>What a reader or operator observed and which decision became unsafe</td>
+<td>incident entry and sanitized operational evidence</td>
+</tr>
+<tr>
+<td>Detection gap</td>
+<td>Why ordinary build, unit or health checks remained green</td>
+<td>postmortem and missing-case analysis</td>
+</tr>
+<tr>
+<td>Root cause</td>
+<td>The failed system assumption, not the last visible exception</td>
+<td>source diff, trace or artifact inspection</td>
+</tr>
+<tr>
+<td>Permanent guard</td>
+<td>The smallest code, contract, evaluation or operational boundary that prevents recurrence</td>
+<td>owning module plus focused regression</td>
+</tr>
+<tr>
+<td>Proof</td>
+<td>A deliberate break that turns the guard red</td>
+<td>automated test or release-gate evidence</td>
+</tr>
+</tbody>
+</table></div>
+<h3>Case studies</h3>
+<div class="dossier-table" tabindex="0" role="region" aria-label="Scrollable architecture table"><table>
+<thead>
+<tr>
+<th>Symptom and business impact</th>
+<th>Root cause</th>
+<th>Permanent guard</th>
+<th>Lesson</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>The right Article 26 from the wrong EU regulation</td>
+<td>An official amending title named two held instruments and residual text rank chose one</td>
+<td>Deterministic subject preflight, amending-clause handling, ambiguity and instrument disclosure tests</td>
+<td>Grounded prose can still answer the wrong document</td>
+</tr>
+<tr>
+<td>Search index was valid and signed but contained no provisions</td>
+<td>The build ran without the derived article layer</td>
+<td>Required pinned article input plus end-to-end retrieval evaluation</td>
+<td>Build integrity is not product behavior</td>
+</tr>
+<tr>
+<td>Formex paragraphs appeared twice</td>
+<td>Introductory text and list traversal overlapped</td>
+<td>Immutable extraction-profile fingerprints</td>
+<td>Plausible text corruption needs content tests</td>
+</tr>
+<tr>
+<td>FTS snippets were always empty</td>
+<td>Contentless FTS5 cannot supply stored text to <code>snippet()</code></td>
+<td>Snippets cut from the content-addressed text store and contract tested</td>
+<td>A query that cannot fail loudly can fail invisibly</td>
+</tr>
+<tr>
+<td>Deployment repeatedly failed although the candidate served</td>
+<td>Several serial management-plane, OIDC, download and telemetry-arrival failures were hidden one behind another</td>
+<td>Typed Azure retries, resumable acquisition, refreshed OIDC and bounded telemetry polling</td>
+<td>Audit a serial pipeline end to end instead of paying one full cycle per cause</td>
+</tr>
+</tbody>
+</table></div>
+<h3>The retrieval lesson</h3>
+<p>The CRR/EMIR case adds a failure class to the usual RAG discussion: <strong>right passage, wrong
+instrument</strong>. A groundedness judge cannot detect it because the generated sentence is faithful to
+the evidence it received. The control must sit earlier, at subject identity, and the answer must
+name the selected instrument so a reader can see the decision.</p>
+<h3>Incident template</h3>
+<p>Every new entry records symptom, business effect, detection, why it survived, root cause, fix,
+guard, deliberate-break proof and residual risk. That format prevents a postmortem from becoming a
+timeline without an architectural consequence.</p>
+<h2>Limits and scale</h2>
+<p>Scale decisions are tied to observable triggers. The system stays simple while the current
+bottleneck is bounded, and each next move names the capability it buys and the complexity it adds.</p>
+<p><img src="/built/diagrams/scale.svg" alt="Current single-process Lex scales through measured triggers: narrow lock scope first, externalize ledgers before replicas, then move artifacts to local disk only when memory requires it." /></p>
+<p><a href="/built/diagrams/scale.svg">Open the scale diagram at full size</a></p>
+<div class="dossier-table" tabindex="0" role="region" aria-label="Scrollable architecture table"><table>
+<thead>
+<tr>
+<th>Box</th>
+<th>Responsibility</th>
+<th>Owner</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>One process</td>
+<td>Keep local indexes, thread state and admission ledgers authoritative</td>
+<td><code>Lex.Web</code> with in-process <code>Lex.Mcp</code> and <code>Lex.Ask</code></td>
+</tr>
+<tr>
+<td>Narrow gates</td>
+<td>Relieve measured encoder or vector contention before adding services</td>
+<td>MCP and assistant admission controllers</td>
+</tr>
+<tr>
+<td>Externalize state</td>
+<td>Make quotas, idempotency and thread continuity replica-safe</td>
+<td>deferred shared-state boundary</td>
+</tr>
+<tr>
+<td>Replicas or local disk</td>
+<td>Add request capacity only after state is shared; move artifacts only after memory pressure</td>
+<td>future runtime and deployment decision</td>
+</tr>
+</tbody>
+</table></div>
+<h3>Current boundaries</h3>
+<div class="dossier-table" tabindex="0" role="region" aria-label="Scrollable architecture table"><table>
+<thead>
+<tr>
+<th>Boundary</th>
+<th>Current design</th>
+<th>Consequence</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Runtime</td>
+<td>One always-on Container Apps replica with local immutable indexes</td>
+<td>Fast in-process calls; process-local quotas and thread memory are authoritative</td>
+</tr>
+<tr>
+<td>Assistant</td>
+<td>Four concurrent turns, 200 accepted turns per client address and 400 globally per day</td>
+<td>Predictable public cost; NAT and rotating addresses are not identities</td>
+</tr>
+<tr>
+<td>MCP</td>
+<td>Eight executing, sixteen queued and a two-second queue deadline</td>
+<td>Overload becomes a typed refusal rather than unbounded latency</td>
+</tr>
+<tr>
+<td>Agent</td>
+<td>Eight frozen operations, 64 evidence items and 96,000 evidence characters</td>
+<td>A large research request must be decomposed by the reader</td>
+</tr>
+<tr>
+<td>Retrieval</td>
+<td>Keyword default; hybrid available only behind signed evidence gates</td>
+<td>Conceptual recall improvements do not outrank measured precision</td>
+</tr>
+<tr>
+<td>Release</td>
+<td>One current revision, one exact rollback, one transient candidate</td>
+<td>No unlimited artifact or revision accumulation</td>
+</tr>
+</tbody>
+</table></div>
+<p>Fresh v4 relevance, latency, memory, coverage and cold-start measurements are pending the exact
+candidate promotion. Older figures are historical observations and are not presented as current.</p>
+<h3>Triggered next moves</h3>
+<div class="dossier-table" tabindex="0" role="region" aria-label="Scrollable architecture table"><table>
+<thead>
+<tr>
+<th>Observable trigger</th>
+<th>Next move</th>
+<th>Cost introduced</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>MCP queue-deadline refusals</td>
+<td>Narrow the gate to encoder and vector work before adding infrastructure</td>
+<td>More concurrency paths to test</td>
+</tr>
+<tr>
+<td>Global daily cap or Azure OpenAI 429s on three sustained days</td>
+<td>Raise model quota and public budget together; consider provisioned throughput only after utilization proves it</td>
+<td>Higher fixed or variable model cost</td>
+</tr>
+<tr>
+<td>Sustained served p95 above the release threshold</td>
+<td>Externalize quota, idempotency and thread state, then add replicas</td>
+<td>A shared state dependency and distributed coordination</td>
+</tr>
+<tr>
+<td>Working set approaches the container memory gate</td>
+<td>Move signed artifacts to verified VM-local disk under D55</td>
+<td>A second deployment path and OS operations</td>
+</tr>
+<tr>
+<td>Third publisher admitted</td>
+<td>Make the required-publisher set one source and remeasure fan-out</td>
+<td>More vocabulary and latency variance</td>
+</tr>
+</tbody>
+</table></div>
+<h3>Known limitations that matter to a reader</h3>
+<ul>
+<li>Some official states contain no safely extractable wording; they remain explicit gaps.</li>
+<li>Provision extraction quality has a historical empty-text backlog. The additive Memorial v2
+profile is shipped in code, while the refreshed corpus measurement waits for the v4 ingestion.</li>
+<li>EU citation edges and amendment relations are not yet a complete query surface.</li>
+<li>MCP comparison identifies changed states but does not yet return every provision-level text diff.</li>
+<li>Production diagnostics are sanitized but not all are correlated end to end by request id.</li>
+<li>Shared ACR cleanup remains inventory-only until registry ownership is isolated or audited.</li>
+</ul>
+<p>The detailed and dated backlog lives in <a href="https://github.com/SFHAJJI/lex/blob/main/docs/known-defects.md">known defects on GitHub</a>.
+Deliberately absent: generated consolidation, model-derived legal identity, silent taxonomy merging,
+unbounded replanning and a framework rewrite.</p>
+<h2 id="delivery-registry">Delivery registry</h2>
+<p>The target path is reviewed EU scope, official dated expressions, content-addressed
+text states, FTS5 keyword candidates plus local compact semantic candidates, temporal and
+hierarchy eligibility, fixed rank fusion, and the same typed result contracts. A capability
+is not described as live until its registry status and release evidence agree.</p>
+<div class="dossier-table" tabindex="0" role="region" aria-label="Architecture delivery milestones"><table>
+<tr><th>milestone</th><th>outcome</th><th>status</th></tr><tr><td class="mono">M1</td><td><b>Truthful architecture narrative</b><br><span class="sub">Separate live architecture, target architecture, decisions and measured benchmarks.</span></td><td><span class="badge ok">shipped</span></td></tr><tr><td class="mono">M2</td><td><b>Verified artifact publication</b><br><span class="sub">A pinned trust root verifies a signed manifest for every served artifact.</span></td><td><span class="badge ok">shipped</span></td></tr><tr><td class="mono">M3</td><td><b>Expandable temporal EU corpus</b><br><span class="sub">Engineering configuration selects the acquisition set while every accepted work retains all official dated expressions; scope labels never become legal metadata or search facets.</span></td><td><span class="badge ok">shipped</span></td></tr><tr><td class="mono">M4</td><td><b>Deduplicated index</b><br><span class="sub">lex-index/3 stores repeated wording once without changing timelines, exact text or diffs.</span></td><td><span class="badge ok">shipped</span></td></tr><tr><td class="mono">M5</td><td><b>Local hybrid retrieval</b><br><span class="sub">Keyword and local semantic retrieval fuse deterministically only after the public quality gate passes.</span></td><td><span class="badge warn">gated</span></td></tr><tr><td class="mono">M6</td><td><b>Lawyer-facing scope filters</b><br><span class="sub">Jurisdiction, hierarchy, legal form, binding status, language and date remain explicit; official publisher classifications appear as typed discovery metadata.</span></td><td><span class="badge ok">shipped</span></td></tr><tr><td class="mono">M7</td><td><b>Luxembourg original-act expansion</b><br><span class="sub">Add reviewed normative acts outside the Legilux consolidation catalogue with document-class-specific temporal semantics.</span></td><td><span class="badge">planned</span></td></tr><tr><td class="mono">M8</td><td><b>Size-gated local index hosting</b><br><span class="sub">Small verified indexes run locally in Container Apps. Oversized releases remain deployment-blocked until the zero-traffic VM-managed local-disk path is implemented and measured.</span></td><td><span class="badge">building</span></td></tr><tr><td class="mono">M9</td><td><b>Official-metadata search and legal-research agent</b><br><span class="sub">Official publisher metadata, source-backed short-title resolution, deterministic clarification, frozen plan execution, Agent Framework evidence composition and judging, bounded memory and jurisdiction-first results ship in the v4 release line. Mounted index identities and signed release evidence, not this registry, establish what a running revision serves. Taxonomies remain weak discovery only and model-derived discovery remains excluded from production retrieval.</span></td><td><span class="badge ok">shipped</span></td></tr>
+</table></div>
+<p class="sub">Program <span class="mono">hybrid-eu/1</span>, updated
+<span class="mono">2026-08-14</span>, review status
+<span class="mono">engineer-reviewed</span>.</p></article>
+</main>
+<footer>
+<!-- Fourteen links in one undifferentiated run answered no question a reader had. Three
+     named groups do: what each page is FOR is now the label above it. -->
+<nav class="sitemap" aria-label="All pages">
+  <div><b>Read the law</b>
+    <a href="/browse">Browse everything</a><a href="/stories">Worked examples</a>
+    <a href="/find">Plain pages, without JavaScript</a></div>
+  <div><b>Check the work</b>
+    <a href="/how-it-works">How it works</a><a href="/coverage">What Lex holds, and lacks</a>
+    <a href="/decisions">Decisions, and what they cost</a>
+    <a href="/benchmarks">Benchmarks</a><a href="/verify">Verify it yourself</a>
+    <a href="/built">Architecture dossier</a>
+    <a href="/about">About</a></div>
+  <!-- The datasets, not the engine. This group used to end at "Source on GitHub" pointing at
+       the engine repo, which is the wrong thing to lead with for a reader who wants to USE
+       this law rather than read the code that serves it. The corpora are the part that is
+       reusable on its own, and they were reachable only from /developers. -->
+  <div><b>Build on it</b>
+    <a href="/developers">Developers &amp; API</a>
+    <a href="https://github.com/SFHAJJI/lex-articles" rel="noopener">Dataset: law by article (CC-BY)</a>
+    <a href="https://github.com/SFHAJJI/lex-corpus-lu-legilux" rel="noopener">Corpus: Luxembourg, verbatim</a>
+    <a href="https://github.com/SFHAJJI/lex-corpus-eu-eurlex" rel="noopener">Corpus: EU, verbatim</a></div>
+</nav>
+  <b>Not legal advice, and not the official text.</b> Lex answers <i>what the rule was</i>, never what it
+  means for your situation, no interpretation, no advice. Every answer shows the source it came from.
+  LU data: Legilux, Ministère d'État, Service central de législation, Grand-Duché de Luxembourg
+  (CC-BY 4.0, metadata and content files; consolidated texts reproduced verbatim from the official filestore).
+  EU data: © European Union, reuse with attribution (Commission Decision 2011/833/EU);
+  <b>consolidated texts have no legal effect</b>, only acts published in the Official Journal are authentic.
+  · <a href="https://github.com/SFHAJJI/lex">source</a>
+</footer>
+</body></html>

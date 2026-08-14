@@ -5,16 +5,16 @@ HTTP 200
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Titles are labels, not sentences: one that ends in a full stop renders "acts., Lex" in
      the tab and in every social card, which is what the front page did until now. -->
-<title>How it was built, Lex</title>
-<meta name="description" content="Point-in-time Luxembourg and reviewed EU law: what did the rule say on a given date? Permalinks, timelines, diffs and verifiable provenance.">
-<meta property="og:title" content="How it was built, Lex">
-<meta property="og:description" content="Point-in-time Luxembourg and reviewed EU law, with grounded AI answers, per-article history, and verifiable provenance.">
+<title>Overview, Lex</title>
+<meta name="description" content="The business purpose, system boundary and reading paths for the Lex architecture.">
+<meta property="og:title" content="Overview, Lex">
+<meta property="og:description" content="The business purpose, system boundary and reading paths for the Lex architecture.">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Lex">
 <meta property="og:image" content="https://golden.test/og.png">
 <meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
-<link rel="canonical" href="https://golden.test/built">
+<link rel="canonical" href="https://golden.test/built"><link rel="stylesheet" href="/dossier.css?v=dev">
 <meta name="twitter:image" content="https://golden.test/og.png">
 <script src="/site.js?v=dev" defer></script>
 <!-- The interval mark: a rule, two terminals, and a notch at the date being read.
@@ -230,11 +230,10 @@ HTTP 200
     <nav aria-label="Check the work">
       <a href="/how-it-works">How it works</a>
       <a href="/coverage">Coverage</a>
-      <a href="/architecture">Architecture</a>
-      <a href="/decisions">Decisions</a>
+      <a href="/built" aria-current="page">Architecture dossier</a>
+      <a href="/decisions">Decisions and trade-offs</a>
       <a href="/benchmarks">Benchmarks</a>
-      <a href="/verify">Verify the artifacts</a>
-      <a href="/built" aria-current="page">How I built it</a>
+      <a href="/verify">Verify artifacts</a>
       <a href="/about">About</a>
     </nav>
   </details>
@@ -242,210 +241,110 @@ HTTP 200
   <a class="navlink" href="/developers">For developers</a>
 </header>
 <main>
-<h1>How it was built</h1>
-
-<p class="lede">A point-in-time legal database, an MCP server, a grounded assistant and a
-nightly pipeline, built solo. This page is the part usually left out: the decisions, the
-things that broke, and how correctness is actually proven rather than asserted.</p>
-
-<div class="notice"><b>Built with AI assistance.</b> The architecture, the decisions and the
-verification are mine; a great deal of the code was written with an AI pair. That is stated
-here because it is true, and because the parts that matter, the decision record, the failure
-modes below, and the tests that catch them, are where the engineering actually lives.</div>
-
-<h2>The problem</h2>
-<p>Ask any legal site what a law says and you get today's text. Almost every question that
-matters is about a <b>date</b>: what applied when the contract was signed, when the fine was
-issued, when the breach happened. Official publishers do hold dated consolidated editions,
-but scattered across formats (Akoma Ntoso XML, Formex XML, legacy XHTML), with no article-level
-access and no machine interface. Lex turns that into one queryable, verifiable history.</p>
-
-<h2>The shape of it</h2>
-<div class="card"><pre class="mono" style="white-space:pre-wrap;margin:0;font-size:13px">
-official publishers          nightly, one scheduled job
-Legilux · EUR-Lex/Cellar     ──────────────────────────────────
-        │                    ingest → anomaly gate → derive →
-        │  verbatim bytes      (&gt;5% drop =        determinism
-        ▼  + sha256             commit nothing)     guard
-  EVIDENCE REPOS ──────────────────────────────────────────►
-  append-only, never rewritten            │
-        │                                 ▼
-        │  deterministic extraction   DERIVED REPO (per article)
-        ▼  (immutable profiles)           │
-  LEX-INDEX/3 + LOCAL VECTORS ◄───────────────┘
-        │  signed whole-artifact manifest
-        │  verified at build and startup
-        ▼
-  CANDIDATE REVISION (zero traffic)
-        │  health + MCP + LU/EU search smoke tests
-        │  signed eval evidence + human attestation
-        ▼
-  MCP server · this site (Container Apps, one pinned replica)</pre></div>
-<p class="sub">Azure: Container Apps behind a managed certificate, Container Registry, Key Vault
-signing, Application Insights via OpenTelemetry, and Azure DNS. Managed identity pulls the image
-and authenticates the optional Azure OpenAI assistant. Retrieval itself is local and deterministic:
-FTS5/BM25, ONNX embeddings, fixed reranking and fusion, with no generative model in the search path.
-The web app uses 1 vCPU and 2 GiB for the mounted lexical and semantic artifacts,
-and runs as <b>one always-on replica</b>. The single process makes the public
-request and concurrency ledgers authoritative while keeping retrieval latency predictable.</p>
-
-<h2>Decisions worth defending</h2>
-<div class="card"><table>
-<tr><th>decision</th><th>why, and what it cost</th></tr>
-<tr><td><b>Store publisher bytes verbatim</b></td>
-    <td>The evidence layer is never "cleaned". A hash over cleaned text proves nothing about
-    what the state published. Cost: two layers to maintain instead of one.</td></tr>
-<tr><td><b>Extraction profiles are immutable</b></td>
-    <td>Once <span class="mono">akn-lu/1</span> is published, its output for a given input can
-    never change, a frozen-fingerprint test fails the build if it does. Improvements ship as
-    a new profile. Cost: no silent fixes, ever.</td></tr>
-<tr><td><b>Refusals are part of the API</b></td>
-    <td>Seven typed refusal codes instead of empty results. A caller can distinguish "no such
-    law", "no version that day" and "text withheld". Cost: more surface to test.</td></tr>
-<tr><td><b>Bounded retrieval, deterministic authority</b></td>
-    <td>Application code resolves named works and authorizes work-specific tools. A bounded
-    tool-calling loop gathers MCP evidence; Agent Framework then composes claim-typed prose and
-    runs the conditional judge. Citations and typed gaps remain deterministic application contracts.</td></tr>
-<tr><td><b>Nightly commits nothing when unsure</b></td>
-    <td>A &gt;5% drop in works, or a re-derivation that is not byte-identical, aborts the run.
-    A partial upstream response must never rewrite history.</td></tr>
-</table>
-<p class="sub" style="margin:8px 0 0">29 delivery decisions like these are read from
-the architecture registry, alongside the numbered specification decisions. Each records its
-rationale, so "why did you do it that way" has a written answer rather than a recollection.</p></div>
-
-<h2>The machinery that keeps it fresh</h2>
-<p>Law changes while you sleep, so the corpus is rebuilt while I do. One scheduled job at
-02:17 UTC drives the whole fleet, no manual publication step exists. GitHub Actions uses OIDC
-and short-lived Azure authorization; the signing key remains non-exportable in Key Vault.</p>
-<div class="card"><table>
-<tr><th>stage</th><th>what it does, and how it refuses to do damage</th></tr>
-<tr><td><b>1. Ingest</b></td><td>Asks each publisher what versions exist, downloads any it has
-not seen, and writes them <i>verbatim</i>. Existing files are never reopened for writing,
-the evidence layer is append-only by construction.</td></tr>
-<tr><td><b>2. Anomaly gate</b></td><td>If the work count drops more than 5%, the run assumes the
-upstream response was partial, discards everything and commits nothing. A bad night leaves
-yesterday's good data in place.</td></tr>
-<tr><td><b>3. Derive</b></td><td>Regenerates the per-article layer from the verbatim files.</td></tr>
-<tr><td><b>4. Determinism guard</b></td><td>If derived output changed while no source file did,
-that means the extractor is non-deterministic, the run fails loudly and commits nothing,
-because a silent extraction drift would corrupt history.</td></tr>
-<tr><td><b>5. Index &amp; sign</b></td><td>Builds lex-index/3, local vectors and the benchmark evidence.
-A canonical manifest binds every index, vector, model, tokenizer and scope artifact by hash and
-size; Key Vault signs that whole manifest and the workflow verifies it before publication.</td></tr>
-<tr><td><b>6. Deploy safely</b></td><td>Builds an immutable image tagged with the code commit and
-manifest hash, verifies the release again, starts a zero-traffic revision, and exercises health,
-MCP, LU and EU search against it. It stops there by design: this workflow cannot move traffic and
-refuses to try. Whatever is serving keeps serving.</td></tr>
-<tr><td><b>7. Promote deliberately</b></td><td>Traffic moves only from a separate workflow, and only
-against a fixed evidence set bound to that exact revision: the eval report, the frozen case catalog,
-browser evidence, and a human attestation signed with a Key Vault key the artifact publisher is not
-granted access to. Approving the cases and publishing the artifacts are deliberately separate
-authorities, so no automated actor can approve its own release. The preceding revision remains
-available for rollback.</td></tr>
-<tr><td><b>8. Report</b></td><td>Writes a three-state outcome per publisher
-(<span class="mono">ran_committed</span> / <span class="mono">ran_no_change</span> /
-<span class="mono">failed_*</span>) and opens an issue on failure.</td></tr>
+<h1>Overview</h1>
+<p class="sub">The system in sixty seconds and the decisions it enables.</p>
+<nav class="dossier-tabs" aria-label="Architecture dossier"><a href="/built" aria-current="page">Overview</a><a href="/built/model">Legal model</a><a href="/built/data">Data authority</a><a href="/built/retrieval">Retrieval</a><a href="/built/assistant">Assistant</a><a href="/built/release">Release</a><a href="/built/decisions">Trade-offs</a><a href="/built/incidents">Incidents</a><a href="/built/limits">Limits and scale</a><a class="dossier-print" href="/architecture/dossier">Complete dossier</a></nav><article class="architecture-dossier"><p>Lex answers a narrow business question: <strong>what did this rule say on this date?</strong> It turns dated
+Luxembourg and EU publisher material into article-level research with an official link, an exact
+version and a verifiable evidence chain. It does not decide legal applicability or advise a reader
+what to do.</p>
+<p><img src="/built/diagrams/system.svg" alt="Official publishers flow through a deterministic corpus and signed index into one legal core used by the web app, public MCP server and bounded assistant." /></p>
+<p><a href="/built/diagrams/system.svg">Open the system diagram at full size</a></p>
+<div class="dossier-table" tabindex="0" role="region" aria-label="Scrollable architecture table"><table>
+<thead>
+<tr>
+<th>Box</th>
+<th>Responsibility</th>
+<th>Lives in</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Official publishers</td>
+<td>Authoritative catalogues, classifications and source files</td>
+<td>Legilux and EUR-Lex/Cellar</td>
+</tr>
+<tr>
+<td>Evidence and derivation</td>
+<td>Preserve publisher bytes, then extract articles or typed gaps reproducibly</td>
+<td><code>lex-corpus-*</code>, <code>Lex.Sources.*</code> and <code>Lex.Derive</code></td>
+</tr>
+<tr>
+<td>Signed index</td>
+<td>Bind time, text, metadata, vectors and provenance into local immutable artifacts</td>
+<td><code>Lex.Index</code>, built by <code>Lex.Ingest</code></td>
+</tr>
+<tr>
+<td>Legal core</td>
+<td>Execute the same closed read-only operations for every channel</td>
+<td><code>Lex.Mcp</code></td>
+</tr>
+<tr>
+<td>Bounded agent</td>
+<td>Plan against closed schemas and optionally explain an accepted evidence ledger</td>
+<td><code>Lex.Ask</code></td>
+</tr>
+<tr>
+<td>Reader channels</td>
+<td>Render the workspace and expose HTTP or stdio MCP without duplicating legal logic</td>
+<td><code>Lex.Web</code> and <code>Lex.Mcp.Stdio</code></td>
+</tr>
+</tbody>
 </table></div>
-<p>The result travels with the data. The pinned whole-artifact manifest is the runtime trust root;
-each index also carries a public provenance stamp recording when and from which corpus commit it
-was built. Every tool response returns that provenance. <b>This is the embedded stamp read live
-from the running indexes:</b></p>
-<div class="card"><table tabindex="0" aria-label="Mounted index provenance">
-<tr><th>publisher</th><th>index built</th><th>from corpus commit</th><th>signature</th></tr>
-<tr><td>t-pub</td>
-<td class="mono"><TIMESTAMP></td>
-<td class="mono">goldenc</td>
-<td><span class="badge ok">valid</span></td></tr>
-</table>
-<p class="sub" style="margin:8px 0 0">Nothing here is typed by hand. The same values come back
-from the <a href="/developers">coverage tool</a>. The embedded signature proves provenance; the
-<a href="/verify">release verification page</a> reports whether the complete mounted artifact set
-passed the independently pinned trust policy.</p></div>
-
-<h2>What broke, and what it taught</h2>
-<div class="card">
-<p><b>A silently dead search, caught in production.</b> The nightly job built the search index
-without the per-article layer. Nothing errored: the index was valid, signed, and published,
-it just had zero provisions in it, so search returned nothing. The automated eval suite caught
-it by asking a question a user would ask and noticing the assistant could no longer find a
-Luxembourg code.</p>
-<p class="sub">Fix: the index step now runs after derivation and takes the article layer as a
-required input, so the failure cannot recur. Lesson: a green build is not a working system,
-the only tests that would have caught this are the ones that exercise it end to end, the way
-someone actually uses it.</p>
-<p><b>A parser that quietly duplicated text.</b> Adding Formex XML support introduced doubled
-paragraphs where an article had introductory text followed by a list. It looked plausible on
-screen. It was caught by re-reading real output rather than trusting a passing test, fixed the
-same day, and pinned with a fingerprint test so the profile can never drift again.</p>
-<p><b>The right article of the wrong law.</b> A question quoting the Capital Requirements
-Regulation by its full official title, which ends "and amending Regulation (EU) No 648/2012",
-was answered with Article 26 of EMIR, on clearing house governance, instead of Article 26 of
-the CRR, on Common Equity Tier 1. The model invented nothing. Retrieval handed it the wrong
-instrument: the quoted title names two laws, both are held, both have an Article 26, and the
-tie fell through to keyword rank over article text, which for a quoted official title is close
-to random. The reply named no instrument, so nothing on screen let a reader notice.</p>
-<p class="sub">Fix, at three layers. Selection now treats the mention that strictly contains
-every other as the subject of the sentence, which is a fact about what was typed rather than a
-keyword list, so it holds in any language. Resolution demotes a law named only inside an
-amending clause, so the ambiguity is never produced, while a question whose only named law sits
-in such a clause still resolves it. And the answer now always names the instrument, its
-identifier and the effective date, and discloses the runner-up whenever a choice was made,
-enforced after synthesis so the composer cannot drop it. Lesson: the dangerous retrieval failure
-is not a wrong answer, it is a correct answer to a question about a different document.
-Groundedness scoring cannot catch that, because the answer is faithful to the evidence it was
-handed. Only naming the source in the reply makes it visible to the reader.</p>
-</div>
-
-<h2>How correctness is proven, not claimed</h2>
-<div class="card"><table tabindex="0" aria-label="Correctness evaluation layers">
-<tr><th>mechanism</th><th>what it guarantees</th></tr>
-<tr><td>Unit, contract, golden and architecture-fitness suites</td><td>parsers, temporal logic,
-backward-compatible APIs, pages, index schemas, trust and deployment invariants</td></tr>
-<tr><td>Frozen profile fingerprints</td><td>a published extraction can never change output</td></tr>
-<tr><td>Determinism guard in CI</td><td>re-derivation is byte-identical or the run commits nothing</td></tr>
-<tr><td>End-to-end assistant evals</td><td>the assistant picks the right tools and never cites a source it was not given</td></tr>
-<tr><td>200-case retrieval benchmark</td><td>EU and Luxembourg exact, temporal, conceptual,
-bilingual, typo, hierarchy, role, comparison, negative, ambiguity and gap behavior is
-measured on separate tuning and holdout judgments before hybrid can become the default</td></tr>
-<tr><td>LLM-judged groundedness</td><td>answers scored against the evidence actually returned</td></tr>
-<tr><td>Pinned whole-artifact manifests</td><td>anyone can verify every released input was not altered,
-<a href="/verify">recipe</a></td></tr>
+<h2>The decision a reader can make</h2>
+<div class="dossier-table" tabindex="0" role="region" aria-label="Scrollable architecture table"><table>
+<thead>
+<tr>
+<th>Reader need</th>
+<th>Product behavior</th>
+<th>Failure behavior</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Find the right instrument</td>
+<td>Resolve official identity before searching article text</td>
+<td>Show several candidates or ask for clarification</td>
+</tr>
+<tr>
+<td>Read it at a date</td>
+<td>Select the publisher state whose closed interval contains that date</td>
+<td>Return a typed gap, never substitute today's text</td>
+</tr>
+<tr>
+<td>Understand why it matched</td>
+<td>Return the matched title, identifier or official classification</td>
+<td>Never present metadata as wording from the law</td>
+</tr>
+<tr>
+<td>Compare or explain</td>
+<td>Execute typed legal operations first</td>
+<td>Keep deterministic results when prose is not requested</td>
+</tr>
+<tr>
+<td>Verify a claim</td>
+<td>Return publisher permalinks, version coordinates and provision hashes</td>
+<td>Refuse unsupported model-written claims</td>
+</tr>
+</tbody>
 </table></div>
-
-<h2>Scale</h2>
-<p><span class="badge">2 works</span>
-<span class="badge">3 dated versions</span>
-<span class="badge">lex-index/2 + lex-index/3 readers</span>
-<span class="badge">3 official XML/HTML dialects</span>
-<span class="badge">nightly, unattended</span></p>
-
-<h2>What I would do differently</h2>
-<p>Version the index schema migration path from day one, schema v2 required a full rebuild
-rather than a migration. Put the end-to-end evals in the nightly pipeline, not only in my hands;
-they caught the worst bug of the project and should be a gate, not a habit. And treat the
-derived layer's release assets as part of the deploy, not a follow-up step, the two times
-something shipped stale, that was why.</p>
-
-<!-- Eight sections on how this was made, and until now not one word on who made it.
-     Anyone still reading here has already decided the work is serious, so the answer
-     belongs at the end rather than at the top: a law tool that opens by introducing its
-     author reads as a portfolio, and stops being trusted as a source. Two sentences. -->
-<h2>Who built this</h2>
-<div class="card">
-<p>Lex is built and run by <b><a href="/about">Soufien Hajji</a></b>, a Lead Software &amp; AI
-Engineer specialising in taking enterprise AI copilots from prototype to production on Azure,
-based near Luxembourg. It is a personal project, unaffiliated with any publisher or
-public body, built the way I build professionally: the pipeline is deterministic, the claims
-are testable, and the parts that cannot be verified say so rather than guessing.</p>
-<p class="sub"><a href="/about"><b>About, and the other two systems built the same way →</b></a></p>
-</div>
-
-<p class="sub"><a href="/decisions"><b>Why it is built this way →</b></a> ·
-<a href="/developers"><b>Use it from your own code →</b></a> ·
-<a href="/architecture"><b>The data model →</b></a> ·
-<a href="/verify"><b>Verify a build yourself →</b></a> ·
-<a href="https://github.com/SFHAJJI/lex-articles" rel="noopener"><b>The dataset →</b></a></p>
+<h2>The architecture in one sentence</h2>
+<p>Official publisher records become immutable evidence, deterministic derivations and signed local
+indexes; one typed legal core serves the UI, MCP and a bounded agent whose model may plan and
+explain but cannot choose legal identity, dates, evidence or actions.</p>
+<h2>How to read this dossier</h2>
+<p>The first four tabs explain the legal and retrieval product. <strong>Assistant</strong> shows where the agent is
+useful and where it has no authority. <strong>Release</strong> shows how evaluated code and data become one
+rollback-safe revision. The final three tabs expose decisions, incidents and limits instead of
+hiding them behind a feature list.</p>
+<p>The pages describe durable contracts, not a moment in one rollout. Mounted corpus identities,
+coverage and retrieval capabilities are read from the running revision, while latency, relevance,
+memory and promotion claims appear only when a signed report binds them to that exact artifact set.</p>
+<h2>Why this is more than a naive RAG</h2>
+<p>Lex is retrieval-augmented generation only when the reader asks for prose. Identity resolution,
+point-in-time selection, retrieval, comparison, citations and direct result cards work without
+generation. The default result is deterministic. Optional prose receives an already bounded
+evidence ledger and must bind each claim back to that ledger.</p>
+</article>
 </main>
 <footer>
 <!-- Fourteen links in one undifferentiated run answered no question a reader had. Three
@@ -458,7 +357,7 @@ are testable, and the parts that cannot be verified say so rather than guessing.
     <a href="/how-it-works">How it works</a><a href="/coverage">What Lex holds, and lacks</a>
     <a href="/decisions">Decisions, and what they cost</a>
     <a href="/benchmarks">Benchmarks</a><a href="/verify">Verify it yourself</a>
-    <a href="/architecture">Architecture</a><a href="/built">How I built it</a>
+    <a href="/built">Architecture dossier</a>
     <a href="/about">About</a></div>
   <!-- The datasets, not the engine. This group used to end at "Source on GitHub" pointing at
        the engine repo, which is the wrong thing to lead with for a reader who wants to USE

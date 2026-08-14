@@ -5,16 +5,16 @@ HTTP 200
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- Titles are labels, not sentences: one that ends in a full stop renders "acts., Lex" in
      the tab and in every social card, which is what the front page did until now. -->
-<title>Architecture, Lex</title>
-<meta name="description" content="Point-in-time Luxembourg and reviewed EU law: what did the rule say on a given date? Permalinks, timelines, diffs and verifiable provenance.">
-<meta property="og:title" content="Architecture, Lex">
-<meta property="og:description" content="Point-in-time Luxembourg and reviewed EU law, with grounded AI answers, per-article history, and verifiable provenance.">
+<title>Data authority, Lex</title>
+<meta name="description" content="How Lex turns official publisher records into signed, reproducible data artifacts.">
+<meta property="og:title" content="Data authority, Lex">
+<meta property="og:description" content="How Lex turns official publisher records into signed, reproducible data artifacts.">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Lex">
 <meta property="og:image" content="https://golden.test/og.png">
 <meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
-<link rel="canonical" href="https://golden.test/architecture">
+<link rel="canonical" href="https://golden.test/built/data"><link rel="stylesheet" href="/dossier.css?v=dev">
 <meta name="twitter:image" content="https://golden.test/og.png">
 <script src="/site.js?v=dev" defer></script>
 <!-- The interval mark: a rule, two terminals, and a notch at the date being read.
@@ -230,11 +230,10 @@ HTTP 200
     <nav aria-label="Check the work">
       <a href="/how-it-works">How it works</a>
       <a href="/coverage">Coverage</a>
-      <a href="/architecture" aria-current="page">Architecture</a>
-      <a href="/decisions">Decisions</a>
+      <a href="/built" aria-current="page">Architecture dossier</a>
+      <a href="/decisions">Decisions and trade-offs</a>
       <a href="/benchmarks">Benchmarks</a>
-      <a href="/verify">Verify the artifacts</a>
-      <a href="/built">How I built it</a>
+      <a href="/verify">Verify artifacts</a>
       <a href="/about">About</a>
     </nav>
   </details>
@@ -242,87 +241,105 @@ HTTP 200
   <a class="navlink" href="/developers">For developers</a>
 </header>
 <main>
-<h1>Architecture</h1>
-<p class="sub">what is deployed now, read separately from what comes next</p>
-<nav class="tabs" aria-label="Architecture evidence" style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 22px">
-  <a class="badge ok" href="/architecture">Current</a>
-  <a class="badge" href="/architecture/next">Next</a>
-  <a class="badge" href="/decisions">Decisions</a>
-  <a class="badge" href="/benchmarks">Benchmarks</a>
-</nav><p class="lede">This page describes the system serving requests now. Target-state work is kept
-separately on <a href="/architecture/next">Next</a>.</p>
-<div class="card"><table class="kv">
-<tr><th>retrieval</th><td>keyword, deterministic FTS5/BM25</td></tr>
-<tr><th>hosting</th><td>Azure Container Apps Consumption, France Central</td></tr>
-<tr><th>resources</th><td>1 vCPU, 2 GiB, 0 to 5 replicas</td></tr>
-<tr><th>structured UI contract</th><td>MCP JSON plus UiEffect</td></tr>
-<tr><th>comparison contract</th><td>exact authoritative provision text</td></tr>
-<tr><th>deployment observation</th><td class="mono">2026-08-09</td></tr>
-<tr><th>deployed code</th><td class="mono">not supplied by deployment</td></tr>
-<tr><th>artifact manifest set</th><td class="mono">not supplied by deployment</td></tr>
-<tr><th>immutable image</th><td class="mono">not supplied by deployment</td></tr>
+<h1>Data authority</h1>
+<p class="sub">Official sources, deterministic derivation and verifiable provenance.</p>
+<nav class="dossier-tabs" aria-label="Architecture dossier"><a href="/built">Overview</a><a href="/built/model">Legal model</a><a href="/built/data" aria-current="page">Data authority</a><a href="/built/retrieval">Retrieval</a><a href="/built/assistant">Assistant</a><a href="/built/release">Release</a><a href="/built/decisions">Trade-offs</a><a href="/built/incidents">Incidents</a><a href="/built/limits">Limits and scale</a><a class="dossier-print" href="/architecture/dossier">Complete dossier</a></nav><article class="architecture-dossier"><p>The evidence layer is append-only publisher material. The consumption layer is reproducible and
+disposable. That split lets an extraction improve without rewriting what the publisher served.</p>
+<p><img src="/built/diagrams/data-authority.svg" alt="Legilux and EUR-Lex feed evidence repositories, deterministic profiles, article records and signed indexes, with hashes and source URIs carried throughout." /></p>
+<p><a href="/built/diagrams/data-authority.svg">Open the data authority diagram at full size</a></p>
+<h2>Ingestion and derivation</h2>
+<div class="dossier-table" tabindex="0" role="region" aria-label="Scrollable architecture table"><table>
+<thead>
+<tr>
+<th>Stage</th>
+<th>Input</th>
+<th>Output</th>
+<th>Owner</th>
+<th>Refusal boundary</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Enumerate</td>
+<td>Official publisher catalogue</td>
+<td>Works, states, expressions and manifestations</td>
+<td><code>Lex.Sources.Legilux</code> or <code>Lex.Sources.EurLex</code></td>
+<td>A partial or implausible inventory commits nothing</td>
+</tr>
+<tr>
+<td>Acquire</td>
+<td>Official URLs</td>
+<td>Verbatim bytes and observation records</td>
+<td>publisher adapter plus evidence repository</td>
+<td>Existing evidence is not silently overwritten</td>
+</tr>
+<tr>
+<td>Derive</td>
+<td>Stored bytes plus immutable extraction profile</td>
+<td>Article records and typed gaps</td>
+<td><code>Lex.Derive</code></td>
+<td>Unsafe structure remains unavailable</td>
+</tr>
+<tr>
+<td>Index</td>
+<td>Hash-pinned corpora and article release</td>
+<td>SQLite FTS, temporal tables and optional vectors</td>
+<td><code>Lex.Ingest</code> and <code>Lex.Index</code> on the local build machine</td>
+<td>Incomplete or mismatched inputs fail the build</td>
+</tr>
+<tr>
+<td>Sign</td>
+<td>Canonical artifact manifest</td>
+<td>Signature and public verification material</td>
+<td>bounded <code>lex-ops</code> publication with Key Vault</td>
+<td>Runtime rejects a manifest outside pinned trust</td>
+</tr>
+</tbody>
 </table></div>
-<h2>Mounted coverage, read live</h2>
-<div class="card"><table tabindex="0" aria-label="Mounted index collections"><tr><th>collection</th><th>works</th><th>versions</th><th>schema</th><th>corpus commit</th></tr>
-<tr><td>t-pub</td><td class="mono">2</td>
-<td class="mono">3</td><td class="mono">lex-index/3</td>
-<td class="mono">goldenc</td></tr></table></div>
-<h2>Contracts preserved</h2>
-<p>Exact publisher text, hashes, anchors, timelines, refusals, comparisons and diffs remain
-authoritative. The backend returns structured MCP JSON and the workspace renders the separate
-<span class="mono">UiEffect</span> field.</p><p>Lex answers one question, <b>what did the rule say on that date?</b>, for Luxembourg law and the reviewed-scope EU works in the mounted index,
-in a way a developer can build on and an auditor can check. Everything below is open source and open data.</p>
-
-<h2>Two layers, one hash chain</h2>
-<div class="card"><pre class="mono" style="white-space:pre-wrap;font-size:12.5px;margin:0">EVIDENCE LAYER (append-only, verbatim)          CONSUMPTION LAYER (regenerable, clean)
-lex-corpus-lu-legilux   lex-corpus-eu-eurlex   lex-articles
-the exact bytes the state published       →   per-ARTICLE Markdown + JSON
-sha256 per file, observation chains            publisher anchors + measured continuity gate
-                                               publisher timeline intervals per provision
-             deterministic, versioned,          per-anchor history + renumbering events
-             IMMUTABLE extraction profiles          │
-             (akn-lu/1, xhtml-eu/1, code,          ▼
-              never an LLM)                    signed SQLite indexes (lex-index/3)
-                                               provisions + FTS + time axis, ECDSA-P256 stamp
-                                                    │
-                    this site · /mcp (any MCP client) · datasets</pre></div>
-
-<p>Every provision's <span class="mono">text_sha256</span> chains to a verbatim-file sha256 in the evidence
-repo: re-run the pinned open-source extractor on the state's bytes and you get these bytes.
-<a href="/verify">Verify it yourself</a>, the defence is never "trust Lex".</p>
-
-<h2>The retrieval unit is the article</h2>
-<p>Search hits, <span class="mono">as_of</span> (with <span class="mono">outline</span> and
-<span class="mono">select</span> modes), and the <span class="mono">article_history</span> tool all operate
-per provision. "What did Article 92 say over its life?" is a file read: every distinct text on its
-publisher timeline, plus mechanically detected renumberings (identical-hash matching, never interpretation).</p>
-
-<h2>Honesty as an API contract</h2>
-<div class="card"><table>
-<tr><th>refusal status</th><th>meaning</th></tr>
-<tr><td class="mono">no_version_for_date</td><td>the work exists; no publisher version covers that date</td></tr>
-<tr><td class="mono">unknown_work / unknown_anchor</td><td>Lex does not hold it, and says so</td></tr>
-<tr><td class="mono">anchor_not_in_version</td><td>that article did not exist in that version (knowing this IS the product)</td></tr>
-<tr><td class="mono">text_withheld</td><td>metadata held, text gate not cleared; official link provided</td></tr>
-<tr><td class="mono">text_not_available</td><td>publisher record held; no safely derived provision text; official link provided</td></tr>
-<tr><td class="mono">no_provision_history</td><td>the work is held without per-article history</td></tr>
+<h2>Official discovery metadata</h2>
+<p>Luxembourg acquisition mirrors Legilux <code>subjectLevel1</code> and <code>subjectLevel2</code> assertions with the
+concept URI, French label, level, language and source. EU acquisition mirrors official short-title
+segments, EuroVoc assigned, alternative and broader relations, and directory classifications with
+their identifiers and source URIs. The two vocabulary systems remain distinct.</p>
+<p>These values enter a weak, explainable discovery lane. They may surface a work whose provisions do
+not contain the query phrase and the result can say which official classification matched. They do
+not establish legal identity, support a legal claim or become historical evidence. No manual legal
+alias catalogue and no model-generated metadata enter production authority.</p>
+<h2>What the cryptography proves</h2>
+<div class="dossier-table" tabindex="0" role="region" aria-label="Scrollable architecture table"><table>
+<thead>
+<tr>
+<th>Mechanism</th>
+<th>Proves</th>
+<th>Does not prove</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>SHA-256 of a file or provision</td>
+<td>The bytes read now equal the bytes previously addressed by that digest</td>
+<td>Who published the bytes or whether the law is valid</td>
+</tr>
+<tr>
+<td>Publisher URL and observation record</td>
+<td>Where and when Lex acquired the material</td>
+<td>That a later copy was not modified</td>
+</tr>
+<tr>
+<td>Signed whole-artifact manifest</td>
+<td>A controlled release identity approved this exact set of indexes, vectors, encoder and scope files</td>
+<td>Legal correctness by itself</td>
+</tr>
+<tr>
+<td>Signed evaluation and promotion receipts</td>
+<td>The exact candidate passed the stated gates and became the named revision</td>
+<td>Future behavior under every possible question</td>
+</tr>
+</tbody>
 </table></div>
-<p class="sub">MCP 2.0.0 uses a closed status vocabulary. See the
-<a href="https://github.com/SFHAJJI/lex/blob/main/docs/mcp-2-migration.md" rel="noopener">migration note</a>.</p>
-<p>A flagged wrong answer is still wrong, so Lex refuses instead; <a href="/coverage">coverage</a> exists to
-state what we do <b>not</b> have. The AI layer (<a href="/">the front page</a>) is additive and separated:
-a bounded retrieval loop uses the same in-process tool core the public
-<span class="mono">/mcp</span> serves, then Agent Framework composes claim-typed evidence
-and conditionally judges grounded prose. Application code, not the model, owns work
-resolution, tool authorization, citations, typed gaps and legal text (fitness rule F10).</p>
-
-<h2>Build on it</h2>
-<p>
-<a href="https://github.com/SFHAJJI/lex-articles">lex-articles</a>, machine-readable corpus (CC-BY, SCHEMA.md contract) ·
-<a href="https://github.com/SFHAJJI/lex">lex</a>, all code, Apache-2.0, incl. the
-<a href="https://github.com/SFHAJJI/lex/blob/main/docs/lex-spec-v4.md">full decision record (D1, D47)</a> ·
-<a href="https://github.com/SFHAJJI/lex-corpus-lu-legilux">evidence repos</a> ·
-hosted MCP: <span class="mono">claude mcp add --transport http lex https://law.soufien.lu/mcp</span></p>
+<p>Origin, integrity and release authorization are separate claims. Keeping all three is why a
+citation can be checked without treating a hash as a magical certificate of truth.</p>
+</article>
 </main>
 <footer>
 <!-- Fourteen links in one undifferentiated run answered no question a reader had. Three
@@ -335,7 +352,7 @@ hosted MCP: <span class="mono">claude mcp add --transport http lex https://law.s
     <a href="/how-it-works">How it works</a><a href="/coverage">What Lex holds, and lacks</a>
     <a href="/decisions">Decisions, and what they cost</a>
     <a href="/benchmarks">Benchmarks</a><a href="/verify">Verify it yourself</a>
-    <a href="/architecture">Architecture</a><a href="/built">How I built it</a>
+    <a href="/built">Architecture dossier</a>
     <a href="/about">About</a></div>
   <!-- The datasets, not the engine. This group used to end at "Source on GitHub" pointing at
        the engine repo, which is the wrong thing to lead with for a reader who wants to USE

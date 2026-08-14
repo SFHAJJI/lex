@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 300" role="img" aria-labelledby="title desc">
+  <title id="title">Incident to permanent guard</title>
+  <desc id="desc">An observable symptom is linked to business impact, detection gap and root cause. The fix becomes a code, contract, evaluation or operational guard, then a deliberate-break test proves the guard detects recurrence.</desc>
+  <defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0l10 5-10 5z" fill="#59626c"/></marker></defs>
+  <style>.b{fill:#fff;stroke:#9aa4ad;stroke-width:2}.r{fill:#fff0f2;stroke:#c6112f}.g{fill:#eaf7f1;stroke:#0f6b4f}.l{stroke:#59626c;stroke-width:2;fill:none;marker-end:url(#a)}text{font:14px system-ui,sans-serif;fill:#0f1419}.s{font-size:11.5px;fill:#59626c}.h{font-weight:700}@media(prefers-color-scheme:dark){.b{fill:#131920}.r{fill:#30151b}.g{fill:#12271f}text{fill:#e6e9ec}.s{fill:#a7b0b9}}</style>
+  <rect class="r" x="22" y="66" width="145" height="86" rx="10"/><text class="h" x="95" y="99" text-anchor="middle">Symptom</text><text class="s" x="95" y="124" text-anchor="middle">what the reader saw</text>
+  <rect class="b" x="202" y="66" width="145" height="86" rx="10"/><text class="h" x="275" y="99" text-anchor="middle">Business impact</text><text class="s" x="275" y="124" text-anchor="middle">wrong decision risk</text>
+  <rect class="b" x="382" y="66" width="145" height="86" rx="10"/><text class="h" x="455" y="99" text-anchor="middle">Detection gap</text><text class="s" x="455" y="124" text-anchor="middle">why green survived</text>
+  <rect class="r" x="562" y="66" width="145" height="86" rx="10"/><text class="h" x="635" y="99" text-anchor="middle">Root cause</text><text class="s" x="635" y="124" text-anchor="middle">failed assumption</text>
+  <rect class="g" x="742" y="52" width="145" height="114" rx="10"/><text class="h" x="815" y="86" text-anchor="middle">Permanent guard</text><text class="s" x="815" y="112" text-anchor="middle">code, contract, eval</text><text class="s" x="815" y="134" text-anchor="middle">or operations</text>
+  <rect class="g" x="922" y="52" width="135" height="114" rx="10"/><text class="h" x="990" y="86" text-anchor="middle">Proof</text><text class="s" x="990" y="112" text-anchor="middle">remove the fix</text><text class="s" x="990" y="134" text-anchor="middle">observe red</text>
+  <path class="l" d="M167 109h35"/><path class="l" d="M347 109h35"/><path class="l" d="M527 109h35"/><path class="l" d="M707 109h35"/><path class="l" d="M887 109h35"/>
+  <text class="h" x="540" y="235" text-anchor="middle">A postmortem closes only when the system can detect the same class of failure.</text>
+</svg>
