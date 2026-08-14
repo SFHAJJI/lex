@@ -1,6 +1,6 @@
 {
   "program_version": "hybrid-eu/1",
-  "updated_at": "2026-08-09",
+  "updated_at": "2026-08-14",
   "review_status": "engineer-reviewed",
   "statuses": ["planned", "building", "gated", "shipped", "rejected"],
   "current": {
@@ -309,10 +309,10 @@
       "id": "D78",
       "title": "Use the assistant as a verified operation controller",
       "status": "shipped",
-      "choice": "Let the model choose a bounded MCP operation, then derive the workspace route and rendering state only from the validated result. A typed operation replaces unrelated prior workspace coordinates; an unavailable comparison retains its status and opens the verified endpoints without claiming that a diff succeeded.",
+      "choice": "Let the model choose a bounded canonical legal operation, then derive the workspace route and rendering state only from the validated result. The same operation catalog is projected separately through public MCP. A typed operation replaces unrelated prior workspace coordinates; an unavailable comparison retains its status and opens the verified endpoints without claiming that a diff succeeded.",
       "alternative": "Let model prose author routes, keep searching until a plausible law appears, or merge a new legal operation with stale search and period filters.",
       "reason": "The same question must reach the same legal operation whether it starts from a control or natural language, and a failed comparison must remain an explicit evidence gap rather than become a confident navigation sentence.",
-      "cost": "Every MCP status that changes what can be shown must cross the typed UI contract and needs an operation-to-workspace regression."
+      "cost": "Every closed operation status that changes what can be shown must cross the typed UI contract and needs an operation-to-workspace regression."
     },
     {
       "id": "D83",
