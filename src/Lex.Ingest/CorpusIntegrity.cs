@@ -32,6 +32,9 @@ public static class CorpusIntegrity
         ManifestDoc manifest;
         try
         {
+            VerifiedCorpusPath.RequireExisting(corpusRoot, corpusRoot, "root");
+            manifestPath = VerifiedCorpusPath.RequireExisting(
+                corpusRoot, manifestPath, "manifest");
             manifest = JsonSerializer.Deserialize<ManifestDoc>(
                 File.ReadAllText(manifestPath), CorpusJson.Options)
                 ?? throw new InvalidDataException("manifest is empty");
@@ -98,8 +101,16 @@ public static class CorpusIntegrity
         var expressions = 0;
         var observations = 0;
 
-        foreach (var workDir in Directory.EnumerateDirectories(worksRoot).Order(StringComparer.Ordinal))
+        if (TryVerifiedPath(corpusRoot, worksRoot, "works directory", errors) is not { } verifiedWorksRoot)
+            return new(manifest.Schema, manifest.IngesterCodeCommit,
+                manifest.Works, 0, manifest.Versions, 0, 0, 0, 0, errors);
+
+        foreach (var unverifiedWorkDir in Directory.EnumerateDirectories(verifiedWorksRoot)
+                     .Order(StringComparer.Ordinal))
         {
+            if (TryVerifiedPath(corpusRoot, unverifiedWorkDir, "work directory", errors)
+                is not { } workDir)
+                continue;
             var relativeWork = Path.GetRelativePath(corpusRoot, workDir).Replace('\\', '/');
             var workMetaPath = Path.Combine(workDir, "meta.json");
             if (!File.Exists(workMetaPath))
@@ -107,6 +118,8 @@ public static class CorpusIntegrity
                 errors.Add($"{relativeWork}/meta.json is missing");
                 continue;
             }
+            if (TryVerifiedPath(corpusRoot, workMetaPath, "work metadata", errors) is null)
+                continue;
 
             actualWorks++;
             try
@@ -128,9 +141,16 @@ public static class CorpusIntegrity
                 errors.Add($"{relativeWork}/versions is missing");
                 continue;
             }
+            if (TryVerifiedPath(corpusRoot, versionsRoot, "versions directory", errors)
+                is not { } verifiedVersionsRoot)
+                continue;
 
-            foreach (var versionDir in Directory.EnumerateDirectories(versionsRoot).Order(StringComparer.Ordinal))
+            foreach (var unverifiedVersionDir in Directory.EnumerateDirectories(verifiedVersionsRoot)
+                         .Order(StringComparer.Ordinal))
             {
+                if (TryVerifiedPath(corpusRoot, unverifiedVersionDir,
+                        "version directory", errors) is not { } versionDir)
+                    continue;
                 var relativeVersion = Path.GetRelativePath(corpusRoot, versionDir).Replace('\\', '/');
                 var versionMetaPath = Path.Combine(versionDir, "meta.json");
                 if (!File.Exists(versionMetaPath))
@@ -138,6 +158,8 @@ public static class CorpusIntegrity
                     errors.Add($"{relativeVersion}/meta.json is missing");
                     continue;
                 }
+                if (TryVerifiedPath(corpusRoot, versionMetaPath, "version metadata", errors) is null)
+                    continue;
 
                 actualVersions++;
                 VersionMeta version;
@@ -252,24 +274,18 @@ public static class CorpusIntegrity
             return;
         }
 
-        var root = Path.GetFullPath(versionDir) + Path.DirectorySeparatorChar;
         var candidate = Path.GetFullPath(Path.Combine(
             versionDir, observation.File.Replace('/', Path.DirectorySeparatorChar)));
-        var comparison = OperatingSystem.IsWindows()
-            ? StringComparison.OrdinalIgnoreCase
-            : StringComparison.Ordinal;
-        if (!candidate.StartsWith(root, comparison))
-        {
-            errors.Add($"{relativeVersion} observation escapes its version directory");
-            return;
-        }
         if (!File.Exists(candidate))
         {
             errors.Add($"{relativeVersion}/{observation.File} is missing");
             return;
         }
+        if (TryVerifiedPath(versionDir, candidate, "observation file", errors)
+            is not { } verifiedCandidate)
+            return;
 
-        using var stream = File.OpenRead(candidate);
+        using var stream = File.OpenRead(verifiedCandidate);
         var actual = Convert.ToHexStringLower(SHA256.HashData(stream));
         if (!CorpusHashes.Equal(actual, observation.Sha256))
         {
@@ -278,6 +294,20 @@ public static class CorpusIntegrity
                 ? " (LF-normalized bytes match; checkout line endings changed)"
                 : "";
             errors.Add($"{relativeVersion}/{observation.File} sha256 mismatch{suffix}");
+        }
+    }
+
+    private static string? TryVerifiedPath(
+        string root, string candidate, string description, ICollection<string> errors)
+    {
+        try
+        {
+            return VerifiedCorpusPath.RequireExisting(root, candidate, description);
+        }
+        catch (InvalidDataException error)
+        {
+            errors.Add(error.Message);
+            return null;
         }
     }
 }

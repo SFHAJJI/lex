@@ -1,0 +1,143 @@
+using Lex.Ingest;
+
+namespace Lex.Tests;
+
+public sealed partial class CorpusWriterTests
+{
+    [Theory]
+    [InlineData("work-directory")]
+    [InlineData("work-meta")]
+    [InlineData("version-directory")]
+    [InlineData("version-meta")]
+    [InlineData("observation")]
+    public async Task Fresh_migration_refuses_external_links_without_changing_the_protected_root(
+        string targetKind)
+    {
+        if (!CanCreateSymbolicLinks()) return;
+
+        var corpusRoot = Path.Combine(_dir, "linked-baseline-" + targetKind);
+        var baseline = await WriteLegacyWithdrawalBaselineAsync(corpusRoot);
+        var workDirectory = Path.Combine(corpusRoot, "works", "code-civil");
+        var target = targetKind switch
+        {
+            "work-directory" => workDirectory,
+            "work-meta" => Path.Combine(workDirectory, "meta.json"),
+            "version-directory" => Path.GetDirectoryName(baseline.MetaPath)!,
+            "version-meta" => baseline.MetaPath,
+            "observation" => baseline.BodyPath,
+            _ => throw new ArgumentOutOfRangeException(nameof(targetKind)),
+        };
+        var external = Path.Combine(_dir, "external-" + targetKind);
+        ReplaceWithExternalLink(target, external);
+        var before = LinkAwareInventory(corpusRoot);
+        var current = new LegiluxReplacementAdapter(includeWithdrawn: false);
+
+        var error = await Assert.ThrowsAsync<InvalidDataException>(() =>
+            FreshCorpusMigration.RunAsync(
+                corpusRoot, "lu-legilux", current,
+                DateTimeOffset.Parse("2026-08-14T00:00:00Z"), CodeCommit, default));
+
+        Assert.Contains("reparse point or symbolic link", error.Message,
+            StringComparison.Ordinal);
+        Assert.Equal(0, current.EnumerateCount);
+        Assert.Equal(0, current.BodyFetchCount);
+        Assert.Equal(before, LinkAwareInventory(corpusRoot));
+    }
+
+    [Fact]
+    public async Task Fresh_migration_rechecks_ancestor_links_after_live_body_fetch()
+    {
+        if (!CanCreateSymbolicLinks()) return;
+
+        var corpusRoot = Path.Combine(_dir, "ancestor-swapped-after-inventory");
+        await WriteLegacyWithdrawalBaselineAsync(corpusRoot);
+        var versions = Path.Combine(corpusRoot, "works", "code-civil", "versions");
+        var external = Path.Combine(_dir, "external-versions-after-inventory");
+        var current = new LegiluxReplacementAdapter(
+            includeWithdrawn: false,
+            beforeFirstBodyFetch: () => ReplaceWithExternalLink(versions, external));
+
+        var error = await Assert.ThrowsAsync<InvalidDataException>(() =>
+            FreshCorpusMigration.RunAsync(
+                corpusRoot, "lu-legilux", current,
+                DateTimeOffset.Parse("2026-08-14T00:00:00Z"), CodeCommit, default));
+
+        Assert.Contains("reparse point or symbolic link", error.Message,
+            StringComparison.Ordinal);
+        Assert.Equal(1, current.BodyFetchCount);
+        Assert.True((File.GetAttributes(versions) & FileAttributes.ReparsePoint) != 0);
+    }
+
+    private static void ReplaceWithExternalLink(string target, string external)
+    {
+        var directory = Directory.Exists(target);
+        if (directory)
+        {
+            Directory.Move(target, external);
+        }
+        else
+        {
+            File.Move(target, external);
+        }
+        if (directory) Directory.CreateSymbolicLink(target, external);
+        else File.CreateSymbolicLink(target, external);
+    }
+
+    private bool CanCreateSymbolicLinks()
+    {
+        var probe = Path.Combine(_dir, "link-probe-" + Guid.NewGuid().ToString("N"));
+        var target = probe + ".target";
+        Directory.CreateDirectory(target);
+        try
+        {
+            Directory.CreateSymbolicLink(probe, target);
+            return true;
+        }
+        catch (Exception error) when (error is IOException
+                                      or UnauthorizedAccessException
+                                      or PlatformNotSupportedException)
+        {
+            return false;
+        }
+        finally
+        {
+            try { if (Directory.Exists(probe)) Directory.Delete(probe); } catch { }
+            try { if (Directory.Exists(target)) Directory.Delete(target); } catch { }
+        }
+    }
+
+    private static SortedDictionary<string, string> LinkAwareInventory(string root)
+    {
+        var inventory = new SortedDictionary<string, string>(StringComparer.Ordinal);
+        Visit(root);
+        return inventory;
+
+        void Visit(string directory)
+        {
+            foreach (var entry in Directory.EnumerateFileSystemEntries(directory)
+                         .Order(StringComparer.Ordinal))
+            {
+                var relative = Path.GetRelativePath(root, entry).Replace('\\', '/');
+                var attributes = File.GetAttributes(entry);
+                if ((attributes & FileAttributes.ReparsePoint) != 0)
+                {
+                    var info = (attributes & FileAttributes.Directory) != 0
+                        ? (FileSystemInfo)new DirectoryInfo(entry)
+                        : new FileInfo(entry);
+                    inventory[relative] = "link:" + info.LinkTarget;
+                }
+                else if ((attributes & FileAttributes.Directory) != 0)
+                {
+                    inventory[relative] = "directory";
+                    Visit(entry);
+                }
+                else
+                {
+                    inventory[relative] = "file:" + Convert.ToHexStringLower(
+                        System.Security.Cryptography.SHA256.HashData(
+                            File.ReadAllBytes(entry)));
+                }
+            }
+        }
+    }
+}
