@@ -31,7 +31,6 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory
     internal const int MetadataWorkBatchSize = 16;
     internal const int MetadataRowsPerWorkMaximum = 512;
     internal const int VirtuosoSortedTopMaximum = 10_000;
-    private const int PortalExpressionFallbackMaximum = 64;
     private static readonly SourceRetryPolicy RetryPolicy = new(MaximumAttempts: 4);
 
     private static readonly HttpClient Http = CreateClient();
@@ -572,10 +571,12 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory
             .Where(group => group.All(row => !row.ContainsKey("lang")))
             .OrderBy(group => group.Key, StringComparer.Ordinal)
             .ToArray();
-        if (missing.Length > PortalExpressionFallbackMaximum)
-            throw new InvalidDataException(
-                $"Publisher returned {missing.Length} dated states without an EN/FR expression; "
-                + $"the bounded official-portal fallback permits {PortalExpressionFallbackMaximum}.");
+        RequirePortalExpressionFallbackBudget(
+            missing.Length, _scope.History.MaxVerifiedPortalFallbacks);
+
+        if (missing.Length > 0)
+            Console.Error.WriteLine(
+                $"  [eurlex] verifying {missing.Length} dated states through the official portal fallback");
 
         foreach (var state in missing)
         {
@@ -586,6 +587,14 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory
                 row["expression_source"] = "verified_eurlex_portal";
             }
         }
+    }
+
+    internal static void RequirePortalExpressionFallbackBudget(int count, int maximum)
+    {
+        if (count < 0 || maximum < 1 || count > maximum)
+            throw new InvalidDataException(
+                $"Publisher returned {count} dated states without an EN/FR expression; "
+                + $"the bounded official-portal fallback permits {maximum}.");
     }
 
     private async Task VerifyPortalExpressionHeadAsync(

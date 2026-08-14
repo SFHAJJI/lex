@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Lex.Law;
 using Lex.Sources.EurLex;
 
@@ -21,6 +22,7 @@ public sealed class EurLexScopeTests : IDisposable
         Assert.True(scope.History.IncludeAllOfficialConsolidations);
         Assert.True(scope.History.IncludeUnamended);
         Assert.False(scope.History.ManufactureConsolidations);
+        Assert.Equal(512, scope.History.MaxVerifiedPortalFallbacks);
         Assert.Equal(2, scope.ActiveDomains(1).Count());
         Assert.Contains(scope.Domains, d => d.Id == "financial-services" && d.Wave == 2);
         Assert.Contains(scope.Exclusions, e => e.Kind == "citation");
@@ -170,6 +172,18 @@ public sealed class EurLexScopeTests : IDisposable
     }
 
     [Fact]
+    public void Portal_fallback_budget_is_explicit_and_fails_before_network_work()
+    {
+        EurLexAdapter.RequirePortalExpressionFallbackBudget(192, 512);
+
+        var error = Assert.Throws<InvalidDataException>(() =>
+            EurLexAdapter.RequirePortalExpressionFallbackBudget(513, 512));
+
+        Assert.Contains("513 dated states", error.Message, StringComparison.Ordinal);
+        Assert.Contains("permits 512", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Portal_bound_body_is_identity_checked_even_on_its_first_endpoint()
     {
         const string exact =
@@ -215,6 +229,37 @@ public sealed class EurLexScopeTests : IDisposable
             new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower }));
 
         Assert.Throws<InvalidDataException>(() => EurLexScopeConfig.Load(path));
+    }
+
+    [Fact]
+    public void Portal_fallback_budget_cannot_exceed_the_offline_ingest_safety_limit()
+    {
+        var path = Path.Combine(_dir, "unsafe-portal-budget.json");
+        var safe = EurLexScopeConfig.Load();
+        var unsafeScope = safe with
+        {
+            History = safe.History with { MaxVerifiedPortalFallbacks = 513 },
+        };
+        File.WriteAllText(path, JsonSerializer.Serialize(unsafeScope,
+            new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower }));
+
+        var error = Assert.Throws<InvalidDataException>(() => EurLexScopeConfig.Load(path));
+        Assert.Contains("between 1 and 512", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Historical_v1_scope_without_portal_budget_keeps_the_previous_safe_default()
+    {
+        var path = Path.Combine(_dir, "historical-v1-scope.json");
+        var root = JsonSerializer.SerializeToNode(EurLexScopeConfig.Load(),
+            new JsonSerializerOptions
+            {
+                PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+            })!.AsObject();
+        root["history"]!.AsObject().Remove("max_verified_portal_fallbacks");
+        File.WriteAllText(path, root.ToJsonString());
+
+        Assert.Equal(64, EurLexScopeConfig.Load(path).History.MaxVerifiedPortalFallbacks);
     }
 
     [Theory]
