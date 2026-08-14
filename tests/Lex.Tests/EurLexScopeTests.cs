@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Lex.Law;
 using Lex.Sources.EurLex;
 
@@ -244,6 +245,21 @@ public sealed class EurLexScopeTests : IDisposable
 
         var error = Assert.Throws<InvalidDataException>(() => EurLexScopeConfig.Load(path));
         Assert.Contains("between 1 and 512", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Historical_v1_scope_without_portal_budget_keeps_the_previous_safe_default()
+    {
+        var path = Path.Combine(_dir, "historical-v1-scope.json");
+        var root = JsonSerializer.SerializeToNode(EurLexScopeConfig.Load(),
+            new JsonSerializerOptions
+            {
+                PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+            })!.AsObject();
+        root["history"]!.AsObject().Remove("max_verified_portal_fallbacks");
+        File.WriteAllText(path, root.ToJsonString());
+
+        Assert.Equal(64, EurLexScopeConfig.Load(path).History.MaxVerifiedPortalFallbacks);
     }
 
     [Theory]

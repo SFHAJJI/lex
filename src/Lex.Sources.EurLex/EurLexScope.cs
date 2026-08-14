@@ -82,7 +82,7 @@ public sealed record EurLexHistoryRules(
     bool IncludeAllOfficialConsolidations,
     bool IncludeUnamended,
     bool ManufactureConsolidations,
-    int MaxVerifiedPortalFallbacks);
+    int MaxVerifiedPortalFallbacks = 64);
 
 public sealed record EurLexClosureRules(
     int MaxDepth,
