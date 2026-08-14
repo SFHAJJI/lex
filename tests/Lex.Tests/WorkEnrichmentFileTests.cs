@@ -23,6 +23,16 @@ public sealed class WorkEnrichmentFileTests : IDisposable
         Path.Combine(RepoRoot(), "config", "eu-work-enrichment.json");
 
     [Fact]
+    public void Raw_byte_reviewed_configuration_inputs_have_canonical_line_endings()
+    {
+        var attributes = File.ReadAllLines(Path.Combine(RepoRoot(), ".gitattributes"))
+            .ToHashSet(StringComparer.Ordinal);
+
+        Assert.Contains("config/eu-work-enrichment.json text eol=lf", attributes);
+        Assert.Contains("config/lu-work-enrichment.json text eol=lf", attributes);
+    }
+
+    [Fact]
     public void Production_LU_citation_aliases_are_reviewed_and_target_held_code_works()
     {
         var path = Path.Combine(RepoRoot(), "config", "lu-work-enrichment.json");
