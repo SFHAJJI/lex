@@ -237,11 +237,12 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
     }
 
     [Fact]
-    public async Task Live_deployment_evidence_is_inside_the_release_dossier()
+    public async Task Mounted_release_evidence_is_inside_the_release_dossier()
     {
         var html = await _site.Client.GetStringAsync("/built/release");
 
-        Assert.Contains("id=\"live-deployment\"", html);
+        Assert.Contains("id=\"mounted-release\"", html);
+        Assert.Contains("aria-label=\"Mounted release identities\"", html);
         Assert.Contains("aria-label=\"Mounted index identities\"", html);
     }
 

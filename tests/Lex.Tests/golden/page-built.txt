@@ -336,9 +336,9 @@ explain but cannot choose legal identity, dates, evidence or actions.</p>
 useful and where it has no authority. <strong>Release</strong> shows how evaluated code and data become one
 rollback-safe revision. The final three tabs expose decisions, incidents and limits instead of
 hiding them behind a feature list.</p>
-<p>The implementation described here is merged and gated for a fresh signed v4 corpus, candidate
-evaluation and promotion. Post-promotion latency, relevance, coverage and memory figures are
-therefore marked pending until they can be read from that exact revision or its signed reports.</p>
+<p>The pages describe durable contracts, not a moment in one rollout. Mounted corpus identities,
+coverage and retrieval capabilities are read from the running revision, while latency, relevance,
+memory and promotion claims appear only when a signed report binds them to that exact artifact set.</p>
 <h2>Why this is more than a naive RAG</h2>
 <p>Lex is retrieval-augmented generation only when the reader asks for prose. Identity resolution,
 point-in-time selection, retrieval, comparison, citations and direct result cards work without

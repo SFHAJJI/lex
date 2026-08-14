@@ -164,4 +164,42 @@ public sealed class ArchitectureDossierTests : IClassFixture<GoldenTests.Site>
             prior = position;
         }
     }
+
+    [Fact]
+    public void Canonical_dossier_sources_do_not_freeze_one_rollout_state()
+    {
+        var root = Golden.RepositoryRoot();
+        var pages = Path.Combine(root, "docs", "architecture", "pages");
+        var forbidden = new[]
+        {
+            "merged and gated",
+            "still gated",
+            "fresh v4 candidate must",
+            "remain gated until",
+            "until the fresh signed v4",
+        };
+
+        foreach (var path in Directory.EnumerateFiles(pages, "*.md"))
+        {
+            var markdown = File.ReadAllText(path);
+            foreach (var phrase in forbidden)
+                Assert.DoesNotContain(phrase, markdown, StringComparison.OrdinalIgnoreCase);
+        }
+
+        var registry = File.ReadAllText(Path.Combine(root, "docs", "architecture-program.json"));
+        Assert.DoesNotContain("\"current\":", registry, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Release_dossier_matches_the_single_replica_traffic_invariant()
+    {
+        var html = await _client.GetStringAsync("/built/release");
+        var workflow = File.ReadAllText(Path.Combine(
+            Golden.RepositoryRoot(), ".github", "workflows", "revision-traffic.yml"));
+
+        Assert.Contains("min=max=1", html);
+        Assert.DoesNotContain("0 to 5 replicas", html, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("target must have exactly one pinned replica", workflow);
+        Assert.Contains("rollback must have exactly one pinned replica", workflow);
+    }
 }

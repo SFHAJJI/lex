@@ -28,6 +28,7 @@ The next activation can be category-specific rather than a global switch.
 languages and semantics. Preserving the source scheme makes a match explainable. A unified label
 would be a new assertion owned by Lex and would need its own governance and evaluation.
 
-Status vocabulary matters: `shipped` means serving, `gated` means implemented but awaiting its
-release evidence, and `planned` means no product claim yet. D75, D76 and D83 remain gated until the
-fresh signed v4 index and exact candidate are promoted.
+Status vocabulary records implementation maturity, not current traffic: `shipped` means included in
+the release line, `gated` means activation still depends on evidence, and `planned` means no product
+claim yet. Mounted identities and signed promotion receipts separately establish what a running
+revision serves.

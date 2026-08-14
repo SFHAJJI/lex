@@ -330,8 +330,12 @@ creates a zero-traffic revision, and checks readiness, MCP, Luxembourg and EU se
 evaluation binds frozen cases, exact candidate, tool outcomes, injection canaries, latency and cost
 to a signed report. Human review uses a separate signing authority. Only the traffic workflow can
 verify those records and promote. No automated actor can approve its own release.</p>
-<p>The current v4 release is still gated. New production measurements and claims of live behavior
-belong here only after candidate evaluation and promotion produce the matching signed receipts.</p>
+<p>Release state is never hard-coded into this page. The mounted-evidence section below reads the
+running revision's identities and indexes; candidate evaluation and promotion remain authoritative
+only through their matching signed reports and receipts.</p>
+<p>Scale is a release invariant, not a stale observation: the traffic workflow accepts a target and
+rollback only when each is pinned at <code>min=max=1</code>. Quotas, idempotency and thread state must be
+externalized before a multi-replica release is allowed.</p>
 <h2>Container registry and Blob retention</h2>
 <p>The Azure Container Registry is shared and still has a legacy RBAC boundary. Broad digest deletion
 is rejected because Lex's revision inventory cannot prove that another application does not pull a
@@ -341,19 +345,15 @@ allowlist become an automated deletion plan.</p>
 <p>Private prebuilt staging blobs have a narrower ownership proof. The publisher may delete only the
 exact staging paths it created, with matching ETags, after both the immutable Blob release and the
 public release have been downloaded and hash-verified. Release paths are never cleanup candidates.</p>
-<h2 id="live-deployment">Live deployment evidence</h2>
-<p>The release model above is the invariant. This table reads the deployed registry,
-process configuration and mounted indexes so the dossier does not copy live identities
-into prose.</p>
-<div class="dossier-table" tabindex="0" role="region" aria-label="Live deployment configuration"><table class="kv">
-<tr><th>retrieval</th><td>keyword, deterministic FTS5/BM25</td></tr>
-<tr><th>hosting</th><td>Azure Container Apps Consumption, France Central</td></tr>
-<tr><th>resources</th><td>1 vCPU, 2 GiB, 0 to 5 replicas</td></tr>
-<tr><th>structured UI contract</th><td>MCP JSON plus UiEffect</td></tr>
-<tr><th>comparison contract</th><td>exact authoritative provision text</td></tr>
-<tr><th>deployment observation</th><td class="mono">2026-08-09</td></tr>
+<h2 id="mounted-release">Mounted release evidence</h2>
+<p>The release model above is the invariant. This table reads process configuration and
+verified mounted indexes at request time. It reports the revision's identities and
+capabilities; signed promotion receipts separately prove whether traffic was authorized.</p>
+<div class="dossier-table" tabindex="0" role="region" aria-label="Mounted release identities"><table class="kv">
+<tr><th>mounted retrieval</th><td>keyword only; no compatible hybrid artifact is mounted</td></tr>
 <tr><th>deployed code</th><td class="mono">not supplied by deployment</td></tr>
-<tr><th>artifact manifest set</th><td class="mono">not supplied by deployment</td></tr>
+<tr><th>expected manifest set</th><td class="mono">not supplied by deployment</td></tr>
+<tr><th>verified mounted manifest set</th><td class="mono">no signed manifests mounted</td></tr>
 <tr><th>immutable image</th><td class="mono">not supplied by deployment</td></tr>
 </table></div>
 <h3>Mounted index identities</h3>

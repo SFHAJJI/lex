@@ -41,9 +41,9 @@ useful and where it has no authority. **Release** shows how evaluated code and d
 rollback-safe revision. The final three tabs expose decisions, incidents and limits instead of
 hiding them behind a feature list.
 
-The implementation described here is merged and gated for a fresh signed v4 corpus, candidate
-evaluation and promotion. Post-promotion latency, relevance, coverage and memory figures are
-therefore marked pending until they can be read from that exact revision or its signed reports.
+The pages describe durable contracts, not a moment in one rollout. Mounted corpus identities,
+coverage and retrieval capabilities are read from the running revision, while latency, relevance,
+memory and promotion claims appear only when a signed report binds them to that exact artifact set.
 
 ## Why this is more than a naive RAG
 

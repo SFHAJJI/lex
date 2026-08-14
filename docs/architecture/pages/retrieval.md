@@ -55,7 +55,7 @@ population and failure behavior testable.
 ## Why keyword remains the default
 
 The semantic encoder, local vectors and rank fusion exist, but activation is evidence-gated. The
-frozen 200-case catalog fixes tuning and holdout judgments before measurement. The current v2
-baseline deliberately says `pending_signed_production_artifacts`; the fresh v4 candidate must
-publish relevance, latency, memory and size before hybrid can be promoted. Until then, keyword is
-the production default. A measured rejection is a valid architecture result, not a failed demo.
+frozen 200-case catalog fixes tuning and holdout judgments before measurement. A compatible signed
+report must bind relevance, latency, memory and size to the exact candidate before hybrid may become
+the default; without that evidence, keyword remains the default. A measured rejection is a valid
+architecture result, not a failed demo.

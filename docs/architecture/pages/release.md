@@ -37,8 +37,13 @@ evaluation binds frozen cases, exact candidate, tool outcomes, injection canarie
 to a signed report. Human review uses a separate signing authority. Only the traffic workflow can
 verify those records and promote. No automated actor can approve its own release.
 
-The current v4 release is still gated. New production measurements and claims of live behavior
-belong here only after candidate evaluation and promotion produce the matching signed receipts.
+Release state is never hard-coded into this page. The mounted-evidence section below reads the
+running revision's identities and indexes; candidate evaluation and promotion remain authoritative
+only through their matching signed reports and receipts.
+
+Scale is a release invariant, not a stale observation: the traffic workflow accepts a target and
+rollback only when each is pinned at `min=max=1`. Quotas, idempotency and thread state must be
+externalized before a multi-replica release is allowed.
 
 ## Container registry and Blob retention
 

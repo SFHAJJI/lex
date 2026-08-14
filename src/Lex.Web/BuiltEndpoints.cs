@@ -141,16 +141,15 @@ public static class BuiltEndpoints
         static string StatusBadge(string status) =>
             $"<span class=\"badge{(status == "shipped" ? " ok" : status == "gated" ? " warn" : "")}\">{H(status)}</span>";
 
-        string LiveReleaseEvidence()
+        string MountedReleaseEvidence()
         {
-            var current = ArchitectureProgram.Registry.Current;
             var coverage = ctx.Registry.All.Values.Select(reader => reader.Coverage())
                 .OrderBy(item => item.Collection, StringComparer.Ordinal).ToList();
             var hybridCollections = ctx.Registry.All.Values.Where(reader => reader.HybridReady)
                 .Select(reader => reader.Collection).Order(StringComparer.Ordinal).ToList();
             var retrieval = hybridCollections.Count == 0
-                ? $"{current.Retrieval}, deterministic FTS5/BM25"
-                : $"keyword default; gated local hybrid preview on {string.Join(", ", hybridCollections)}";
+                ? "keyword only; no compatible hybrid artifact is mounted"
+                : $"keyword default; compatible local hybrid artifacts mounted for {string.Join(", ", hybridCollections)}";
             var coverageRows = string.Join("", ctx.Registry.All.Values
                 .OrderBy(reader => reader.Collection, StringComparer.Ordinal)
                 .Select(reader =>
@@ -164,19 +163,15 @@ public static class BuiltEndpoints
                 }));
 
             return $"""
-                <h2 id="live-deployment">Live deployment evidence</h2>
-                <p>The release model above is the invariant. This table reads the deployed registry,
-                process configuration and mounted indexes so the dossier does not copy live identities
-                into prose.</p>
-                <div class="dossier-table" tabindex="0" role="region" aria-label="Live deployment configuration"><table class="kv">
-                <tr><th>retrieval</th><td>{H(retrieval)}</td></tr>
-                <tr><th>hosting</th><td>{H(current.Hosting)}, {H(current.Region)}</td></tr>
-                <tr><th>resources</th><td>{H(current.Resource)}, {H(current.Scale)}</td></tr>
-                <tr><th>structured UI contract</th><td>{H(current.StructuredContract)}</td></tr>
-                <tr><th>comparison contract</th><td>{H(current.ComparisonContract)}</td></tr>
-                <tr><th>deployment observation</th><td class="mono">{H(current.ObservedAt)}</td></tr>
+                <h2 id="mounted-release">Mounted release evidence</h2>
+                <p>The release model above is the invariant. This table reads process configuration and
+                verified mounted indexes at request time. It reports the revision's identities and
+                capabilities; signed promotion receipts separately prove whether traffic was authorized.</p>
+                <div class="dossier-table" tabindex="0" role="region" aria-label="Mounted release identities"><table class="kv">
+                <tr><th>mounted retrieval</th><td>{H(retrieval)}</td></tr>
                 <tr><th>deployed code</th><td class="mono">{H(ctx.Options.CodeCommit ?? "not supplied by deployment")}</td></tr>
-                <tr><th>artifact manifest set</th><td class="mono">{H(ctx.Options.ArtifactManifestId ?? "not supplied by deployment")}</td></tr>
+                <tr><th>expected manifest set</th><td class="mono">{H(ctx.Options.ArtifactManifestId ?? "not supplied by deployment")}</td></tr>
+                <tr><th>verified mounted manifest set</th><td class="mono">{H(ctx.Registry.VerifiedManifestSetId ?? "no signed manifests mounted")}</td></tr>
                 <tr><th>immutable image</th><td class="mono">{H(ctx.Options.DeployImage ?? "not supplied by deployment")}</td></tr>
                 </table></div>
                 <h3>Mounted index identities</h3>
@@ -213,7 +208,7 @@ public static class BuiltEndpoints
 
         string Addendum(string slug) => slug switch
         {
-            "release" => LiveReleaseEvidence(),
+            "release" => MountedReleaseEvidence(),
             "limits" => DeliveryRegistry(),
             _ => "",
         };

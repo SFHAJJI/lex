@@ -3,9 +3,10 @@ using System.Text.Json;
 namespace Lex.Web;
 
 /// <summary>
-/// The single status registry behind the public current, next, decisions and benchmarks pages.
-/// It is embedded at build time so a deployed page cannot silently read a newer plan from disk
-/// than the code that renders it.
+/// The reviewed implementation-maturity, decision and benchmark registry used by the public
+/// evidence pages. It is embedded at build time so a deployed page cannot silently read a newer
+/// plan from disk than the code that renders it. Runtime and mounted release identities do not
+/// belong here; endpoints read those from process configuration and verified indexes.
 /// </summary>
 public static class ArchitectureProgram
 {
@@ -27,21 +28,9 @@ public sealed record ArchitectureRegistry(
     string UpdatedAt,
     string ReviewStatus,
     IReadOnlyList<string> Statuses,
-    CurrentArchitecture Current,
     IReadOnlyList<ArchitectureMilestone> Milestones,
     IReadOnlyList<ArchitectureDecision> Decisions,
     ArchitectureBaseline Baseline);
-
-public sealed record CurrentArchitecture(
-    string Retrieval,
-    string IndexSchema,
-    string Hosting,
-    string Region,
-    string Resource,
-    string Scale,
-    string ObservedAt,
-    string StructuredContract,
-    string ComparisonContract);
 
 public sealed record ArchitectureMilestone(string Id, string Title, string Status, string Outcome);
 

@@ -310,9 +310,10 @@ The next activation can be category-specific rather than a global switch.</p>
 <p><strong>Why not unify taxonomies?</strong> EuroVoc and Legilux classifications have different authorities,
 languages and semantics. Preserving the source scheme makes a match explainable. A unified label
 would be a new assertion owned by Lex and would need its own governance and evaluation.</p>
-<p>Status vocabulary matters: <code>shipped</code> means serving, <code>gated</code> means implemented but awaiting its
-release evidence, and <code>planned</code> means no product claim yet. D75, D76 and D83 remain gated until the
-fresh signed v4 index and exact candidate are promoted.</p>
+<p>Status vocabulary records implementation maturity, not current traffic: <code>shipped</code> means included in
+the release line, <code>gated</code> means activation still depends on evidence, and <code>planned</code> means no product
+claim yet. Mounted identities and signed promotion receipts separately establish what a running
+revision serves.</p>
 </article>
 </main>
 <footer>

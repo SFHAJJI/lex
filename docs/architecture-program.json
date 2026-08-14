@@ -3,17 +3,6 @@
   "updated_at": "2026-08-14",
   "review_status": "engineer-reviewed",
   "statuses": ["planned", "building", "gated", "shipped", "rejected"],
-  "current": {
-    "retrieval": "keyword",
-    "index_schema": "lex-index/3",
-    "hosting": "Azure Container Apps Consumption",
-    "region": "France Central",
-    "resource": "1 vCPU, 2 GiB",
-    "scale": "0 to 5 replicas",
-    "observed_at": "2026-08-09",
-    "structured_contract": "MCP JSON plus UiEffect",
-    "comparison_contract": "exact authoritative provision text"
-  },
   "milestones": [
     {
       "id": "M1",
@@ -66,8 +55,8 @@
     {
       "id": "M9",
       "title": "Official-metadata search and legal-research agent",
-      "status": "gated",
-      "outcome": "Official publisher metadata, source-backed short-title resolution, deterministic clarification, frozen plan execution, Agent Framework evidence composition and judging, bounded memory and jurisdiction-first results are implemented on main. They become live only with the fresh signed v4 index, candidate evaluation and promotion. Taxonomies remain weak discovery only and model-derived discovery remains excluded from production retrieval."
+      "status": "shipped",
+      "outcome": "Official publisher metadata, source-backed short-title resolution, deterministic clarification, frozen plan execution, Agent Framework evidence composition and judging, bounded memory and jurisdiction-first results ship in the v4 release line. Mounted index identities and signed release evidence, not this registry, establish what a running revision serves. Taxonomies remain weak discovery only and model-derived discovery remains excluded from production retrieval."
     }
   ],
   "decisions": [
@@ -281,20 +270,20 @@
     {
       "id": "D75",
       "title": "Separate authoritative text from provenance-aware search enrichment",
-      "status": "gated",
+      "status": "shipped",
       "choice": "Build the work catalog only from official publisher identifiers, titles, short-title segments and classifications, retaining each metadata kind, authority URI, label, language and source URI in the signed corpus and index. A unique exact short-title segment may establish work identity; taxonomy metadata is weak discovery only. Manual aliases and model-derived legal metadata are excluded from production authority.",
       "alternative": "Maintain legal-name overrides in application configuration, let generated concepts become legal fact or a strong rank signal, or keep publisher metadata in an unsigned runtime sidecar.",
       "reason": "A discovery label can improve recall without proving document identity or legal wording. Keeping every accepted value source-backed and inside the same verified artifact lets search explain why a work matched while dated publisher text remains the only basis for a legal claim.",
-      "cost": "Publisher vocabularies, collisions, source URIs, canonical ordering and migration boundaries become build responsibilities. The implementation remains gated until a fresh v4 corpus and signed index are promoted."
+      "cost": "Publisher vocabularies, collisions, source URIs, canonical ordering and migration boundaries become build responsibilities; each serving artifact must prove the exact mounted corpus and index independently."
     },
     {
       "id": "D76",
       "title": "Keep retrieval authority deterministic and use Agent Framework for grounded composition",
-      "status": "gated",
+      "status": "shipped",
       "choice": "Resolve the reader's subject before planning, give the planner only closed subject references and catalogue-derived operation schemas, allow at most one pre-execution contract correction, then freeze at most eight operations. Execute the shared legal core without a model observation or replanning loop, route closed outcomes into typed UI effects and a bounded evidence ledger, and invoke Agent Framework composition and judging only when prose was requested.",
       "alternative": "Give a ReAct-style agent the index or raw MCP surface, let a model repair deterministic tool failures by trying again, or introduce peer research agents with overlapping authority.",
       "reason": "Identity, dates, legal outcomes, citations and rendered actions are authorization decisions that must stay deterministic. A model is useful for bounded planning and optional explanation, but an ambiguous subject must return to the reader rather than be guessed by another model turn.",
-      "cost": "The application owns more explicit contracts, outcome routing, evidence bounds and regression cases. Optional composition adds latency and tokens, and the implementation remains gated until candidate evaluation and promotion prove the exact release."
+      "cost": "The application owns more explicit contracts, outcome routing, evidence bounds and regression cases. Optional composition adds latency and tokens; each release must re-prove the exact candidate before traffic moves."
     },
     {
       "id": "D77",
@@ -317,11 +306,11 @@
     {
       "id": "D83",
       "title": "Use official publisher classifications for weak discovery",
-      "status": "gated",
+      "status": "shipped",
       "choice": "Acquire Legilux subjectLevel1 and subjectLevel2 assertions and EUR-Lex short titles, EuroVoc relations and directory classifications with their official identifiers, labels, languages, kinds and source URIs. Index them as bounded discovery metadata, return the matched official assertion to callers, and keep taxonomy browsing and cross-publisher facets deferred.",
       "alternative": "Invent one shared legal taxonomy, copy engineering acquisition labels into the product, infer classifications with a model, or ignore the official publisher vocabularies.",
       "reason": "Publisher classifications can surface a relevant work even when the query words are absent from its provisions, while their source URIs let the interface explain the match. They do not prove that a phrase occurs in the law, establish historical applicability or support a legal claim.",
-      "cost": "Legilux and EUR-Lex vocabularies remain distinct and must be mirrored, bounded and re-verified independently. French-only Legilux labels are not translated, current classifications are not historical evidence, and live coverage waits for the promoted v4 index."
+      "cost": "Legilux and EUR-Lex vocabularies remain distinct and must be mirrored, bounded and re-verified independently. French-only Legilux labels are not translated, current classifications are not historical evidence, and mounted coverage remains an artifact fact rather than a static documentation claim."
     },
     {
       "id": "D84",
