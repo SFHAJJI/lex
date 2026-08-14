@@ -83,6 +83,13 @@ public sealed class CorpusWriter(
             throw new SourceEnumerationIncompleteException(new SourceBuildIssue(
                 "incomplete_enumeration", pub.Id,
                 $"Publisher enumeration returned {enumeratedWorks} of {expectedWorks} expected works; the prior corpus remains unchanged."));
+        // Engineering scope is an acquisition decision, not publisher legal metadata. Reject the
+        // complete metadata plan before any body request or candidate write, and also refuse to
+        // carry an old leaked key forward from an existing corpus.
+        ValidatePlannedRawMetadata(sourceConfigurationKind, plan);
+        if (sourceConfigurationKind == "engineering_scope"
+            || existingManifest?.SourceConfigurationKind == "engineering_scope")
+            ValidateExistingRawMetadata(corpusRoot, "engineering_scope");
         // Fresh migrations use this seam to prove that the metadata catalogue preserves every
         // held baseline identity before the first expression body is requested. The plan is the
         // same single source enumeration consumed below; the validator must not re-query the
@@ -588,6 +595,53 @@ public sealed class CorpusWriter(
             default:
                 throw new InvalidDataException(
                     $"manifest source_configuration_kind '{kind}' is unsupported");
+        }
+    }
+
+    internal static void ValidateVersionRawForSourceConfiguration(
+        string? sourceConfigurationKind, IReadOnlyDictionary<string, string> raw, string context)
+    {
+        if (sourceConfigurationKind != "engineering_scope") return;
+        var forbidden = raw.Keys.Where(key =>
+                key.Equals("domains", StringComparison.OrdinalIgnoreCase)
+                || key.Equals("scope_reasons", StringComparison.OrdinalIgnoreCase))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        if (forbidden.Length > 0)
+            throw new InvalidDataException(
+                $"source_configuration_kind=engineering_scope forbids acquisition selector "
+                + $"key(s) in corpus version raw metadata ({context}): "
+                + string.Join(", ", forbidden));
+    }
+
+    private static void ValidatePlannedRawMetadata(
+        string sourceConfigurationKind, IReadOnlyList<CorpusPlannedWork> plan)
+    {
+        foreach (var item in plan)
+            foreach (var version in item.Versions)
+                ValidateVersionRawForSourceConfiguration(
+                    sourceConfigurationKind, version.Raw,
+                    $"{item.Work.Slug}/{version.Id.Value}");
+    }
+
+    private static void ValidateExistingRawMetadata(string root, string sourceConfigurationKind)
+    {
+        var worksRoot = Path.Combine(root, "works");
+        if (!Directory.Exists(worksRoot)) return;
+        foreach (var path in Directory.EnumerateFiles(
+                     worksRoot, "meta.json", SearchOption.AllDirectories))
+        {
+            if (!path.Contains(
+                    $"{Path.DirectorySeparatorChar}versions{Path.DirectorySeparatorChar}",
+                    StringComparison.Ordinal))
+                continue;
+            var version = JsonSerializer.Deserialize<VersionMeta>(
+                File.ReadAllText(path), CorpusJson.Options)
+                ?? throw new InvalidDataException($"Existing corpus record is empty: {path}");
+            ValidateVersionRawForSourceConfiguration(
+                sourceConfigurationKind, version.Raw,
+                Path.GetRelativePath(root, path).Replace('\\', '/'));
         }
     }
 

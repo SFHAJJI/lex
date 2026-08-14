@@ -17,7 +17,8 @@ There is no manually maintained legal-name or alias file. The former
 
 1. Fresh-ingest the EU corpus with the exact engineering scope file. Corpus provenance records
    `source_configuration_kind=engineering_scope` and the SHA-256 of the raw, LF-pinned scope
-   bytes.
+   bytes. Its domain/reason labels select acquisition only; they are not copied into version
+   metadata, indexed filters, FTS, MCP responses, UI facets, or assistant evidence.
 2. Verify the v4 corpus, then derive it once. The single top-level
    `lex-articles-generation/3` manifest binds corpus and deriver identities.
 3. Build and verify the index without any enrichment argument. Official metadata is already in

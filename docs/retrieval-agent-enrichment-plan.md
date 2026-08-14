@@ -157,9 +157,11 @@ reranking. Those are two compact encodings of the same model output, not two emb
 embedding is reused for both provision and work scans. This keeps the experiment's measured ranking
 shape while removing a second Azure artifact, manifest entry and mount/failure boundary.
 
-Domains and hierarchy remain primarily filters. If the assistant infers a domain rather than the
-user selecting it, the experiment must compare scoped and unscoped candidates before excluding
-law.
+The legacy generic `domain` field is empty in current v4 builds. Official publisher
+classifications remain weak discovery metadata: search returns a typed
+`matched_publisher_metadata` object and a server-issued chip may repeat its exact official URI as
+`publisher_metadata_identifier`. Engineering acquisition-scope labels are provenance inputs only
+and never enter corpus legal metadata, FTS, facets, MCP evidence, or assistant constraints.
 
 ## Agent Framework experiment
 

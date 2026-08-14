@@ -50,8 +50,9 @@ public sealed record CoverageInfo(
     int VersionsWithText = 0);
 
 /// Values that the mounted index can actually accept as public search filters. Keeping this
-/// inventory beside the data means adding a reviewed domain or jurisdiction does not require a
-/// second hard-coded list in the web client.
+/// inventory beside the data means adding a source-backed hierarchy or jurisdiction does not
+/// require a second hard-coded list in the web client. Domains is a legacy column and current v4
+/// corpus builds leave it empty; official classifications use typed publisher metadata instead.
 public sealed record SearchFacetInfo(
     IReadOnlyList<string> Languages,
     IReadOnlyList<string> Hierarchies,

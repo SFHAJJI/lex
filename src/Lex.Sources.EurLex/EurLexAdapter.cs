@@ -28,6 +28,7 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory
     private const int FormexArchiveCapBytes = 32 * 1024 * 1024;
     private const long FormexMemberCapBytes = 64 * 1024 * 1024;
     private const long FormexExpandedCapBytes = 128 * 1024 * 1024;
+    private const int WorkMetadataBatchMaximum = 20_000;
     private static readonly SourceRetryPolicy RetryPolicy = new(MaximumAttempts: 4);
 
     private static readonly HttpClient Http = CreateClient();
@@ -452,7 +453,7 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory
                         PublicationDate: date,
                         Expressions: expressions,
                         Relations: [new RelationRecord("consolidates", new Identifier(workUri))],
-                        Raw: ScopeRaw(celex, typeCode, bindingStatus, "published", reasons),
+                        Raw: SourceRaw(celex, typeCode, bindingStatus, "published"),
                         PublisherMetadata: publisherMetadata,
                         DocumentRoles: DocumentRoles(
                             resourceType, amending, correcting, consolidated: true)));
@@ -489,8 +490,8 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory
                             list.Insert(0, new VersionRecord(
                                 new Identifier(workUri), new Identifier(workUri), typeCode, originalDate, originalValidTo,
                                 "publisher", baseTitleRows.First().GetValueOrDefault("inforce"), originalDate,
-                                expressions, [], ScopeRaw(baseCelex, typeCode, bindingStatus,
-                                    "original_official_expression", reasons), publisherMetadata,
+                                expressions, [], SourceRaw(baseCelex, typeCode, bindingStatus,
+                                    "original_official_expression"), publisherMetadata,
                                 DocumentRoles(resourceType, amending, correcting, consolidated: false)));
                         }
                     }
@@ -547,7 +548,19 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory
         {
             var values = string.Join(' ', chunk.Select(c =>
                 $"(\"{c}\" <{CelexAliasUri(c)}>)"));
-            var rows = await SelectAsync(Cdm + Owl + $$"""
+            var rows = await SelectAsync(WorkMetadataQuery(values), ct);
+            RequireBoundedWorkMetadataRows(rows);
+            foreach (var row in rows)
+            {
+                var baseCelex = row["base"];
+                if (!result.TryGetValue(baseCelex, out var list)) result[baseCelex] = list = [];
+                list.Add(row);
+            }
+        }
+        return result;
+    }
+
+    internal static string WorkMetadataQuery(string values) => Cdm + Owl + $$"""
                 SELECT ?base ?lang ?title ?title_short ?date ?inforce ?rtype ?is_amending ?is_correcting WHERE {
                   VALUES (?base ?alias) { {{values}} }
                   ?w owl:sameAs ?alias .
@@ -567,15 +580,15 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory
                   }
                   BIND(IF(STRENDS(STR(?langUri), "/FRA"), "fr", "en") AS ?lang)
                 } ORDER BY ?base ?lang
-                """, ct);
-            foreach (var row in rows)
-            {
-                var baseCelex = row["base"];
-                if (!result.TryGetValue(baseCelex, out var list)) result[baseCelex] = list = [];
-                list.Add(row);
-            }
-        }
-        return result;
+                LIMIT {{WorkMetadataBatchMaximum + 1}}
+                """;
+
+    internal static void RequireBoundedWorkMetadataRows(
+        IReadOnlyCollection<Dictionary<string, string>> rows)
+    {
+        if (rows.Count > WorkMetadataBatchMaximum)
+            throw new InvalidDataException(
+                "Publisher work metadata for a 100-work EU batch exceeds 20,000 records.");
     }
 
     private async Task<Dictionary<string, List<Dictionary<string, string>>>> LoadPublisherMetadataAsync(
@@ -909,24 +922,16 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory
         return roles.Order(StringComparer.Ordinal).ToArray();
     }
 
-    private static Dictionary<string, string> ScopeRaw(
-        string celex, string legalForm, string bindingStatus, string consolidationStatus,
-        IEnumerable<string> reasons)
-    {
-        var reasonList = reasons.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList();
-        var domains = reasonList.Where(r => r.StartsWith("domain:", StringComparison.Ordinal))
-            .Select(r => r.Split(':')[1]).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal);
-        return new Dictionary<string, string>(StringComparer.Ordinal)
+    internal static Dictionary<string, string> SourceRaw(
+        string celex, string legalForm, string bindingStatus, string consolidationStatus) =>
+        new(StringComparer.Ordinal)
         {
             ["celex"] = celex,
             ["legal_form"] = legalForm,
             ["hierarchy"] = celex.StartsWith('1') ? "primary_eu_law" : "secondary_eu_law",
             ["binding_status"] = bindingStatus,
             ["consolidation_status"] = consolidationStatus,
-            ["domains"] = string.Join(',', domains),
-            ["scope_reasons"] = string.Join(',', reasonList),
         };
-    }
 
     private sealed record ConsolidatedState(string Celex, DateOnly Date, IReadOnlyDictionary<string, string?> Titles);
 

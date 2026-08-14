@@ -181,6 +181,16 @@ public static class CorpusIntegrity
                         errors.Add(
                             $"{relativeVersion}/meta.json publisher_metadata is invalid: {ex.Message}");
                     }
+                if (currentSchema)
+                    try
+                    {
+                        CorpusWriter.ValidateVersionRawForSourceConfiguration(
+                            manifest.SourceConfigurationKind, version.Raw, relativeVersion);
+                    }
+                    catch (InvalidDataException ex)
+                    {
+                        errors.Add($"{relativeVersion}/meta.json source boundary is invalid: {ex.Message}");
+                    }
                 var lifecycle = version.Events.LastOrDefault(e =>
                     e.Event is "withdrawn_from_source" or "resighted");
                 if (lifecycle?.Event != "withdrawn_from_source")

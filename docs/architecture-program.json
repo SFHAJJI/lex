@@ -31,7 +31,7 @@
       "id": "M3",
       "title": "Expandable temporal EU corpus",
       "status": "shipped",
-      "outcome": "Configuration selects domains while every accepted work retains all official dated expressions."
+      "outcome": "Engineering configuration selects the acquisition set while every accepted work retains all official dated expressions; scope labels never become legal metadata or search facets."
     },
     {
       "id": "M4",
@@ -49,7 +49,7 @@
       "id": "M6",
       "title": "Lawyer-facing scope filters",
       "status": "shipped",
-      "outcome": "Jurisdiction, hierarchy, legal form, binding status, domain, language and date remain explicit."
+      "outcome": "Jurisdiction, hierarchy, legal form, binding status, language and date remain explicit; official publisher classifications appear as typed discovery metadata."
     },
     {
       "id": "M7",
@@ -75,7 +75,7 @@
       "id": "D52",
       "title": "Select binding acts, then close legal relationships",
       "status": "shipped",
-      "choice": "Use reviewed domain configuration and bounded legal-history relationships.",
+      "choice": "Use provenance-bound engineering acquisition scope and bounded legal-history relationships; do not publish scope labels as legal classifications.",
       "alternative": "Ingest roughly 59,100 works selected only by broad subject codes.",
       "reason": "A lawyer needs complete context for selected law, not a large shelf with arbitrary gaps.",
       "cost": "Selection rules and relationship traversal require review and dry-run reporting."
@@ -111,7 +111,7 @@
       "id": "D56",
       "title": "Represent hierarchy as metadata",
       "status": "shipped",
-      "choice": "Store legal hierarchy and domain fields beside each work and state.",
+      "choice": "Store legal hierarchy beside each work and state; keep the legacy generic domain field empty in v4 and preserve official classifications as typed publisher metadata.",
       "alternative": "Create a separate database for every legal level.",
       "reason": "Hierarchy is a query filter, while physical boundaries should follow provenance and update behavior.",
       "cost": "The ingestion model must normalize publisher classifications without erasing them."
@@ -183,9 +183,9 @@
       "id": "D64",
       "title": "Drive search facets from mounted indexes",
       "status": "shipped",
-      "choice": "Build jurisdiction, hierarchy, domain, form, status and language controls from values in verified mounted indexes.",
+      "choice": "Build jurisdiction, hierarchy, form, status and language controls from verified mounted indexes; expose official publisher classifications as matched metadata selected by exact official URI, while the legacy generic domain field stays empty in v4.",
       "alternative": "Maintain a second hard-coded list of supported scopes in the web client.",
-      "reason": "A reviewed domain or jurisdiction must become searchable without an unrelated React implementation change.",
+      "reason": "An official publisher classification or jurisdiction must become discoverable without an unrelated React implementation change; engineering scope labels are excluded.",
       "cost": "Friendly labels use stable overrides for known legal vocabulary and a deterministic fallback for new values."
     },
     {
@@ -319,7 +319,7 @@
       "title": "Take Luxembourg subject facets from the publisher, not from us",
       "status": "planned",
       "choice": "Ingest the jolux:subjectLevel1 and jolux:subjectLevel2 assertions Legilux already publishes, storing each authority URI alongside its skos:prefLabel, and expose them as a Luxembourg facet the way document type and hierarchy already are.",
-      "alternative": "Generate a Luxembourg subject vocabulary the way EU domains were enriched, or leave Luxembourg with no subject facet at all.",
+      "alternative": "Generate a Luxembourg subject vocabulary from engineering acquisition labels, or leave Luxembourg with no subject facet at all.",
       "reason": "Legilux classifies its own acts against a SKOS authority scheme of legal subjects, and its own search offers those subjects as narrowing suggestions before a query is even submitted. Citing the publisher's classification keeps subject metadata inside the rule that authority is cited data and never our opinion, which a vocabulary we invented could not satisfy. It also makes the facet comparable with the publisher's interface rather than an approximation of it.",
       "cost": "A second authority vocabulary to mirror, version and re-verify on every ingest. Labels are French only, so an English interface must show a French subject or none. Nothing equivalent exists on the EU side, so the two publishers' subject facets are not interchangeable and must not be merged into one list."
     },

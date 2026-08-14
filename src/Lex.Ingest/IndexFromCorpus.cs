@@ -161,7 +161,10 @@ public static class IndexFromCorpus
                         StatusNote: meta.InForceStatus,
                         Profile: profile,
                         Hierarchy: meta.Raw.GetValueOrDefault("hierarchy"),
-                        Domains: NormalizeDomains(meta.Raw.GetValueOrDefault("domains") ?? meta.Raw.GetValueOrDefault("scope_reasons")),
+                        // Engineering scope selects what to acquire; it is not publisher legal
+                        // metadata and can never become a domain filter or FTS field. Official
+                        // subject metadata travels through the typed PublisherMetadata records.
+                        Domains: null,
                         ActForm: meta.Raw.GetValueOrDefault("legal_form"),
                         BindingStatus: meta.Raw.GetValueOrDefault("binding_status"),
                         ConsolidationStatus: meta.Raw.GetValueOrDefault("consolidation_status"),
@@ -317,14 +320,6 @@ public static class IndexFromCorpus
         if (!string.Equals(actual, expected, StringComparison.Ordinal))
             throw new InvalidDataException(
                 $"{actualName} does not match the {expectedName}.");
-    }
-
-    private static string? NormalizeDomains(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value)) return null;
-        var domains = value.Trim('|').Split([',', '|'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList();
-        return domains.Count == 0 ? null : "|" + string.Join('|', domains) + "|";
     }
 
     private static string GitCommit(string dir)
