@@ -24,33 +24,9 @@ defects measured against the running system on 2026-08-13.
 | Corpus 4 and 5, empty bodies stored as covered, blocked primary backfill | #174 |
 | Corpus 10, counter test could not fail | #174 |
 | Corpus 11, log lines bypassed the injected writer | #174, #177 |
+| Corpus 1, positional same-date version identity | `lex-corpus/4`: full publisher version id is persisted and its full SHA-256 forms the stable version key; the one-time migration refuses a missing/replaced held state before body acquisition |
 
 ---
-
-## 1. Positional version identity can relabel law text
-
-**Severity: highest open item. Pre-existing, Legilux only.**
-
-**What is broken.** Version directories are keyed by `valid_from` plus an arrival-order suffix
-(`2025-07-28--02`). The publisher's stable version id is never persisted. On a same-date tie whose
-arrival order changes between runs, the existing-record branch rewrites `ValidTo`, `DocumentType`
-and `InForceStatus`, while the language-keyed merge and the observation skip retain the previous
-occupant's title, source URI and body bytes.
-
-**Effect.** One consolidation's text served under another consolidation's validity interval. Every
-hash still self-matches, so `verify corpus` passes and **nothing downstream can detect it**. There
-are already **13 same-date tie pairs** in the Luxembourg corpus, including the Code civil. EUR-Lex
-is unaffected because celex-based ordering is stable.
-
-**Fix.** Persist the publisher's stable version id in `VersionMeta`, reconcile on it instead of on
-position, and fail the run when a directory's persisted id does not match the incoming one.
-
-**Gain.** Removes the only known path by which Lex can serve correct-looking text under the wrong
-dates. It is the one defect that can silently corrupt the product's core claim.
-
-**Why not now.** It is a corpus-format change: new field, a migration for existing directories, and
-a re-ingest to populate it. It cannot be verified without a full run, and a half-applied identity
-change is worse than the current state.
 
 ## 2. `with_text` measures none of its target gap classes
 

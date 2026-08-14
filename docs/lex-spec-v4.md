@@ -648,11 +648,11 @@ lex-corpus-lu-legilux/
     loi-2001-04-18-droits-auteur/
       meta.json                  ← work-level: identifier, type, publisher, relations
       versions/
-        2001-05-18/
+        2001-05-18--<sha256-of-publisher-version-id>/
           meta.json              ← version-level: validity, events, expressions,
           fr.md                     observations, provenance (C3)
           de.md
-        2007-04-18/
+        2007-04-18--<sha256-of-publisher-version-id>/
           meta.json
           fr.md
           fr.obs-2019-03-12.md   ← a re-observation of fr: publisher correction (§7.4)
@@ -660,17 +660,17 @@ lex-corpus-lu-legilux/
                                      fr.<valid_from>.md, §3.3 rule 3, one shared scheme)
 ```
 
-Directory name of a version is its **`valid_from` alone**, `valid_to` is never
-in the path. Rationale (D41): 26% of Legilux versions are open intervals; a
-path embedding `valid_to` forces a rename on every closure, and the corpus
-`git log`, the demo, would fill with renames that look like edits to the law
-and are not. **No directory is ever renamed, for any reason, ever**; a closure
-is one `meta.json` chain entry (§7.4). A same-`valid_from` collision takes a
-`--02` ordinal suffix, which carries no meaning. Paths are non-authoritative:
-`meta.json` is the sole authority for intervals, and the index keys records by
-the `lex_id` inside `meta.json`, never by path. Body files are equally
-**append-only**, no ingest code path may open an existing body file for
-writing (F12).
+The v4 directory key is
+`<valid_from>--<lowercase SHA-256(publisher_version_identifier)>`; `valid_to`
+is never in the path. The full digest is an opaque collision-resistant key,
+while the unhashed publisher identifier remains in `meta.json`. It is stable
+when another publisher version later appears on the same date, unlike the v3
+arrival-order suffix. A closure changes only `meta.json`; it never renames the
+directory. After the one-time v3→v4 replacement, **no version directory is
+renamed**. Paths remain non-authoritative: the index validates the key against
+`valid_from`, `publisher_version_identifier`, and `lex_id` before consuming a
+record. Body files are equally **append-only**; no incremental ingest path may
+open an existing body file for writing (F12).
 
 Human-readable by design: `git log` on this tree must be legible as a
 legislative history without tooling. That legibility is the demo. Therefore:
@@ -685,7 +685,7 @@ lex-corpus-lu-cssf/
     circulaire-cssf-12-552/
       meta.json
       versions/
-        2012-12-11/
+        2012-12-11--<sha256-of-publisher-version-id>/
           meta.json              ← "text": { "available": false, "url": "…" }
 ```
 
@@ -693,7 +693,7 @@ lex-corpus-lu-cssf/
 
 ```json
 {
-  "schema": "lex-corpus/3",
+  "schema": "lex-corpus/4",
   "publisher": {
     "id": "lu-legilux",
     "name": "Service central de législation",
@@ -716,10 +716,16 @@ lex-corpus-lu-cssf/
   "languages": ["fr", "de"],
   "works": 1390,
   "versions": 4636,
+  "expressions": 4636,
+  "expressions_with_text": 4636,
+  "expressions_without_text": 0,
   "valid_from_earliest": "1849-03-14",
   "valid_to_latest": "2030-09-15",
   "history_begins": "publisher",
-  "ingester_version": "0.4.1"
+  "ingester_version": "0.4.1",
+  "ingester_code_commit": "<full reviewed Lex commit>",
+  "migration_baseline_works": 1390,
+  "publisher_discovery_schema": "publisher-discovery/1"
 }
 ```
 
@@ -732,6 +738,11 @@ lex-corpus-lu-cssf/
   copy (§8.1).
 - v3's `works_search_only` field is **deleted** (§1.7): a manifest may not
   advertise a corpus no section builds.
+- `ingester_code_commit` is the full Lex commit that materialized the bytes.
+  `migration_baseline_works` records the protected v3 baseline only on the
+  fresh migration. The migration additionally proves every held baseline work
+  and dated state is represented in the publisher plan before requesting any
+  body; a count-only or percentage gate is not sufficient.
 - The manifest is written only when its content changes, never as a heartbeat
   (freshness lives in `lex-ops`, §11.2).
 
@@ -739,7 +750,8 @@ lex-corpus-lu-cssf/
 
 ```json
 {
-  "lex_id": "lu-legilux:W0001392:V04",
+  "lex_id": "lu-legilux:loi-2001-04-18-n1:2007-04-18--<sha256>",
+  "publisher_version_identifier": "http://data.legilux.public.lu/eli/etat/leg/loi/2001/04/18/n1/20070418/jo",
   "work_identifier": "http://data.legilux.public.lu/eli/etat/leg/loi/2001/04/18/n1/jo",
   "publisher": "lu-legilux",
   "document_type": "LOI",
@@ -781,7 +793,7 @@ Rules, each load-bearing:
     `dateApplicability` corrections happen). Carries `scope`, the version, or
     an expression coordinate `(language, valid_from)`, plus `field`, `old`,
     `new`. Directories never move (paths are `valid_from`-only and
-    non-authoritative, C1/D41); even a revised `valid_from` leaves the path
+    non-authoritative, C1/D41); even a revised `valid_from` leaves the v4 key
     untouched.
   - `withdrawn_from_source`, tombstone; the record is never deleted, and this
     event **closes the open observation intervals** of the record's expressions.
@@ -865,6 +877,16 @@ embedded **inside** the `.db` (stamp table, §8.1), not only attached to the
 release, the artefact is consumed standalone. Retention: keep the last 12
 releases plus one per month; a release referenced by any published index
 manifest is never deleted.
+
+The derived `lex-articles` checkout contains one canonical
+`lex-articles-generation/2` `generation.json`. Its publisher entry binds the
+exact corpus commit and manifest digest, materializing ingester commit,
+deriver commit and Git tree, reviewed-configuration digest, extraction
+profiles, and profile-set digest. The articles Git commit binds that file; the
+file deliberately does not contain its own commit. Index construction refuses
+a dirty checkout or any mismatch between these coordinates and the selected
+v4 corpus/configuration, then copies the verified identities into the signed
+index stamp.
 
 ### C8, Adapter plugin seam
 
@@ -981,7 +1003,7 @@ Consequences, each of which resolves a v3 defect:
 4. **Interval closure is a dated event, and nothing else.** Closing `valid_to`
    (26% of Legilux versions are open; closures are guaranteed) appends an
    `interval_closed` event plus expression-scoped closures, no rename, no file
-   churn: directories are named by `valid_from` alone (C1/D41).
+    churn: v4 keys exclude `valid_to` and remain stable (C1/D41).
 5. **Disappearance is a dated event, written conservatively.** A record the
    publisher no longer serves gets a `withdrawn_from_source` tombstone event.
    Records are never deleted. Because a tombstone is the one entry a later
@@ -1874,7 +1896,7 @@ Numbering continues from v3; v3 decisions are restated with status.
 | **D38** | Rights-pending text withholding: `text_public` flag (C2) honoured by every public surface; `text_withheld` refusal status distinct from `text_not_available` | new (§9, §12.2) |
 | **D39** | Observation archives: private per-publisher repos, fetch-gate entry, dispatcher-run, replay backfill with original timestamps | new (§11.5) |
 | **D40** | Signed index stamp (key in `lex-ops`, public key in `lex` README + `/pubkey.pem`, signature via `provenance`), attestation is the sellable artefact; built in increment A. **Amended 2026-08-02: the implemented algorithm is ECDSA-P256-SHA256** (stamped in the `algorithm` field); the Ed25519 wording was never implemented, and this amendment lands BEFORE any public key or verify tooling publishes, so no rotation or trust break occurs. | new (§8.1); amended blueprint-verdict §3.1 |
-| **D41** | Version directories named by `valid_from` only; no directory is ever renamed; `--02` collision suffix | new (C1) |
+| **D41** | Version directories use `valid_from--SHA256(publisher_version_identifier)`: stable as same-date states are discovered, collision resistant, and never renamed after the one-time v4 migration. The publisher identifier remains explicit in metadata; the digest is only the filesystem/key coordinate. | amended 2026-08-14 (C1) |
 | **D42** | ~~Legilux runs in metadata-only mode~~ **Superseded by D44** (the robots-permitted CC-BY filestore channel); the no-SPA-API-reverse-engineering rule stands permanently | superseded 2026-08-01 |
 | **D43** | Data licence decided: stars-maximal (§16.3); code licence Apache-2.0, permanent | new (§16) |
 | **D44** | LU full-text channel: verbatim Akoma Ntoso XML from `legilux.public.lu/filestore` (robots-permitted; publisher documents CC-BY-4.0 on content files incl. commercial reuse; machine-readable `dct:license` per manifestation). Bodies stored byte-verbatim, append-only; closes R2/R19 with evidence. | supersedes D42/D34 |
