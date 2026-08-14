@@ -204,7 +204,8 @@ public sealed partial class CorpusWriterTests : IDisposable
                 corpusRoot, "test", currentOnly,
                 DateTimeOffset.Parse("2026-08-14T00:00:00Z"), CodeCommit, default));
 
-        Assert.Contains("version 2023-01-01", error.Message, StringComparison.Ordinal);
+        Assert.Contains("publisher version 'official:v0'", error.Message,
+            StringComparison.Ordinal);
         Assert.Equal(0, currentOnly.BodyFetchCount);
         Assert.Equal(before, Inventory(corpusRoot));
     }
@@ -330,7 +331,7 @@ public sealed partial class CorpusWriterTests : IDisposable
                 corpusRoot, "lu-legilux", current,
                 DateTimeOffset.Parse("2026-08-14T00:00:00Z"), CodeCommit, default));
 
-        Assert.Contains("publisher identity already present in the current plan",
+        Assert.Contains("indistinguishable states",
             error.Message, StringComparison.Ordinal);
         Assert.Equal(0, current.BodyFetchCount);
         Assert.Equal(before, Inventory(corpusRoot));
@@ -1120,7 +1121,8 @@ public sealed partial class CorpusWriterTests : IDisposable
     }
 
     private sealed class SameDateAdapter(
-        bool reverse, bool includeSecond = true, bool shareSource = false) : ISourceAdapter
+        bool reverse, bool includeSecond = true, bool shareSource = false) :
+        ISourceAdapter, ILegacyVersionIdentityResolver
     {
         private readonly WorkRef _work = new(new Identifier("official:w1"), "w1", "LOI", "Work one");
         public int BodyFetchCount { get; private set; }
@@ -1161,9 +1163,21 @@ public sealed partial class CorpusWriterTests : IDisposable
             return Task.FromResult(SourceBodyFetch.Retrieved(
                 $"<html>{version.Id.Value}</html>"));
         }
+
+        public Identifier ResolveLegacyVersionIdentity(LegacyVersionIdentity legacy) =>
+            ResolveTestLegacyIdentity(legacy, expression =>
+            {
+                const string prefix = "https://example.test/";
+                if (!expression.SourceUri.StartsWith(prefix, StringComparison.Ordinal)
+                    || expression.SourceUri[prefix.Length..] == "shared")
+                    throw new InvalidDataException(
+                        "The test legacy same-date states are indistinguishable states.");
+                return expression.SourceUri[prefix.Length..];
+            });
     }
 
-    private sealed class HistoryAdapter(bool includeHistorical) : ISourceAdapter
+    private sealed class HistoryAdapter(bool includeHistorical) :
+        ISourceAdapter, ILegacyVersionIdentityResolver
     {
         private readonly WorkRef _work = new(
             new Identifier("official:w1"), "w1", "REG", "Work one");
@@ -1206,6 +1220,17 @@ public sealed partial class CorpusWriterTests : IDisposable
             return Task.FromResult(SourceBodyFetch.Retrieved(
                 $"<html>{version.Id.Value}</html>"));
         }
+
+        public Identifier ResolveLegacyVersionIdentity(LegacyVersionIdentity legacy) =>
+            ResolveTestLegacyIdentity(legacy, expression =>
+            {
+                const string prefix = "https://example.test/";
+                var suffix = "/" + expression.Language;
+                if (!expression.SourceUri.StartsWith(prefix, StringComparison.Ordinal)
+                    || !expression.SourceUri.EndsWith(suffix, StringComparison.Ordinal))
+                    throw new InvalidDataException("The test history source URI is invalid.");
+                return expression.SourceUri[prefix.Length..^suffix.Length];
+            });
     }
 
     private sealed class LegiluxReplacementAdapter(
@@ -1401,7 +1426,8 @@ public sealed partial class CorpusWriterTests : IDisposable
     }
 
     private sealed class ManyWorksAdapter(
-        int count, string publisher = "test", int first = 1) : ISourceAdapter
+        int count, string publisher = "test", int first = 1) :
+        ISourceAdapter, ILegacyVersionIdentityResolver
     {
         public int BodyFetchCount { get; private set; }
 
@@ -1446,6 +1472,21 @@ public sealed partial class CorpusWriterTests : IDisposable
                 <p>Protected official wording.</p>
                 </body></html>
                 """));
+        }
+
+        public Identifier ResolveLegacyVersionIdentity(LegacyVersionIdentity legacy)
+        {
+            var versionIdentifier = legacy.WorkIdentifier + ":v1";
+            var slug = legacy.WorkIdentifier.StartsWith("official:", StringComparison.Ordinal)
+                ? legacy.WorkIdentifier["official:".Length..]
+                : throw new InvalidDataException("The test work identity is invalid.");
+            return ResolveTestLegacyIdentity(legacy, expression =>
+            {
+                var expected = $"https://example.test/{slug}/v1/{expression.Language}";
+                if (!string.Equals(expression.SourceUri, expected, StringComparison.Ordinal))
+                    throw new InvalidDataException("The test work source URI is invalid.");
+                return versionIdentifier;
+            });
         }
     }
 }

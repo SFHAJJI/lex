@@ -1,6 +1,5 @@
 using System.Globalization;
 using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
 using Lex.Law;
 using Lex.Temporal;
@@ -120,7 +119,6 @@ public static class FreshCorpusMigration
     }
 
     private sealed record BaselineState(
-        string Key,
         string Description,
         string VersionDirectory,
         VersionMeta Version,
@@ -200,8 +198,6 @@ public static class FreshCorpusMigration
                             $"Protected v4 corpus version has no publisher identity: "
                             + Path.GetRelativePath(root, versionDirectory));
                     states.Add(new BaselineState(
-                        PublisherStateKey(work.WorkIdentifier,
-                            version.PublisherVersionIdentifier),
                         $"work '{Bound(work.WorkIdentifier)}' publisher version "
                         + $"'{Bound(version.PublisherVersionIdentifier)}'",
                         versionDirectory, version,
@@ -211,16 +207,9 @@ public static class FreshCorpusMigration
                 }
 
                 var validFrom = ParseValidFrom(version, root, versionDirectory);
-                var expressionIdentity = ExpressionSourceIdentity(
-                    version.Expressions.Select(expression => (
-                        expression.Language,
-                        expression.SourceUri ?? expression.Text.Url
-                        ?? expression.Observations.LastOrDefault()?.SourceUri)));
                 states.Add(new BaselineState(
-                    LegacyStateKey(work.WorkIdentifier, validFrom, expressionIdentity),
                     $"work '{Bound(work.WorkIdentifier)}' version "
-                    + validFrom.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
-                    + $" expression/source {expressionIdentity}",
+                    + validFrom.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
                     versionDirectory, version, validFrom, IsWithdrawn(version)));
             }
             works.Add(new BaselineWork(work, states));
@@ -240,6 +229,29 @@ public static class FreshCorpusMigration
         {
             failureCount++;
             if (diagnostics.Count < maximumDiagnostics) diagnostics.Add(message);
+        }
+
+        var baselineStates = new List<(BaselineState State, string Key,
+            string Description, string PublisherVersionIdentifier)>();
+        foreach (var state in baseline.Works.SelectMany(work => work.States))
+        {
+            try
+            {
+                var publisherVersionIdentifier = ResolvePublisherVersionIdentifier(
+                    baseline.UsesPublisherVersionIdentifier, state, adapter);
+                baselineStates.Add((
+                    state,
+                    PublisherStateKey(
+                        state.Version.WorkIdentifier, publisherVersionIdentifier),
+                    $"work '{Bound(state.Version.WorkIdentifier)}' publisher version "
+                    + $"'{Bound(publisherVersionIdentifier)}'",
+                    publisherVersionIdentifier));
+            }
+            catch (InvalidDataException ex)
+            {
+                Fail("protected " + state.Description
+                     + " has no exact publisher identity: " + ex.Message);
+            }
         }
 
         var candidateWorks = plan.GroupBy(item => item.Work.Id.Value,
@@ -272,11 +284,7 @@ public static class FreshCorpusMigration
                          + $"'{Bound(item.Work.Id.Value)}'");
                     continue;
                 }
-                var key = baseline.UsesPublisherVersionIdentifier
-                    ? PublisherStateKey(item.Work.Id.Value, version.Id.Value)
-                    : LegacyStateKey(item.Work.Id.Value, version.ValidFrom,
-                        ExpressionSourceIdentity(version.Expressions.Select(expression => (
-                            expression.Language, expression.SourceUri))));
+                var key = PublisherStateKey(item.Work.Id.Value, version.Id.Value);
                 candidateStates[key] = candidateStates.GetValueOrDefault(key) + 1;
                 if (!candidatePublisherStates.Add(PublisherStateKey(
                         item.Work.Id.Value, version.Id.Value)))
@@ -287,7 +295,7 @@ public static class FreshCorpusMigration
 
         var withdrawn = new List<WithdrawnBaselineState>();
         var withdrawnPublisherStates = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var group in baseline.Works.SelectMany(work => work.States)
+        foreach (var group in baselineStates
                      .GroupBy(state => state.Key,
                      StringComparer.Ordinal).OrderBy(group => group.Key, StringComparer.Ordinal))
         {
@@ -301,12 +309,12 @@ public static class FreshCorpusMigration
                      + state.Description);
             else if (candidates == 0)
             {
-                if (!state.IsWithdrawn)
+                if (!state.State.IsWithdrawn)
                 {
                     Fail("candidate is missing " + state.Description);
                     continue;
                 }
-                if (!candidateWorks.TryGetValue(state.Version.WorkIdentifier,
+                if (!candidateWorks.TryGetValue(state.State.Version.WorkIdentifier,
                         out var plannedWorks) || plannedWorks.Length != 1)
                 {
                     Fail("candidate cannot retain withdrawn " + state.Description
@@ -314,21 +322,7 @@ public static class FreshCorpusMigration
                     continue;
                 }
 
-                string publisherVersionIdentifier;
-                try
-                {
-                    publisherVersionIdentifier = ResolvePublisherVersionIdentifier(
-                        baseline.UsesPublisherVersionIdentifier, state, adapter);
-                }
-                catch (InvalidDataException ex)
-                {
-                    Fail("candidate cannot retain withdrawn " + state.Description
-                         + ": " + ex.Message);
-                    continue;
-                }
-
-                var publisherState = PublisherStateKey(
-                    state.Version.WorkIdentifier, publisherVersionIdentifier);
+                var publisherState = state.Key;
                 if (candidatePublisherStates.Contains(publisherState))
                 {
                     Fail("withdrawn " + state.Description
@@ -342,7 +336,8 @@ public static class FreshCorpusMigration
                     continue;
                 }
                 withdrawn.Add(new WithdrawnBaselineState(
-                    state, plannedWorks[0].Work.Slug, publisherVersionIdentifier));
+                    state.State, plannedWorks[0].Work.Slug,
+                    state.PublisherVersionIdentifier));
             }
         }
 
@@ -591,23 +586,6 @@ public static class FreshCorpusMigration
 
     private static string PublisherStateKey(string workIdentifier, string versionIdentifier) =>
         $"publisher\0{workIdentifier}\0{versionIdentifier}";
-
-    private static string LegacyStateKey(
-        string workIdentifier, DateOnly validFrom, string expressionIdentity) =>
-        $"legacy\0{workIdentifier}\0"
-        + validFrom.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
-        + $"\0{expressionIdentity}";
-
-    private static string ExpressionSourceIdentity(
-        IEnumerable<(string Language, string? SourceUri)> expressions)
-    {
-        var canonical = string.Join("\n", expressions
-            .OrderBy(expression => expression.Language, StringComparer.Ordinal)
-            .ThenBy(expression => expression.SourceUri, StringComparer.Ordinal)
-            .Select(expression => $"{expression.Language.Length}:{expression.Language}"
-                + $"{expression.SourceUri?.Length ?? -1}:{expression.SourceUri}"));
-        return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(canonical)));
-    }
 
     private static string Bound(string? value)
     {
