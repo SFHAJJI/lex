@@ -202,4 +202,16 @@ public sealed class ArchitectureDossierTests : IClassFixture<GoldenTests.Site>
         Assert.Contains("target must have exactly one pinned replica", workflow);
         Assert.Contains("rollback must have exactly one pinned replica", workflow);
     }
+
+    [Fact]
+    public async Task Dated_benchmark_baseline_is_never_presented_as_current_or_live()
+    {
+        var html = await _client.GetStringAsync("/benchmarks");
+
+        Assert.Contains("Historical measured service baseline", html);
+        Assert.Contains("corpus commits at measurement", html);
+        Assert.Contains("historical context", html);
+        Assert.DoesNotContain("Current service baseline", html, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("live corpus commits", html, StringComparison.OrdinalIgnoreCase);
+    }
 }

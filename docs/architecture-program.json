@@ -334,6 +334,6 @@
     "mcp_internal_p99_ms": 25.1,
     "average_working_set_mib": 114,
     "relevance_benchmark": null,
-    "note": "Application Insights aggregates describe the current service, not the future hybrid retrieval path."
+    "note": "Application Insights aggregates describe the service observed on 2026-08-06 at code commit 34461dc. They are historical context, not the identity or performance of the running release or the hybrid retrieval path."
   }
 }

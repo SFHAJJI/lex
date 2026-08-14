@@ -94,12 +94,12 @@ public static class ExplainerEndpoints
             var body = $"""
                 <p class="lede">Evidence is published with identity and context. A missing measurement is
                 displayed as missing rather than replaced with an estimate.</p>
-                <h2>Current service baseline</h2>
+                <h2>Historical measured service baseline</h2>
                 <div class="card"><table class="kv">
                 <tr><th>kind</th><td>{H(b.Kind)}</td></tr>
                 <tr><th>measured</th><td class="mono">{H(b.MeasuredAt)}</td></tr>
                 <tr><th>code commit</th><td class="mono">{H(b.CodeCommit)}</td></tr>
-                <tr><th>live corpus commits</th><td class="mono">LU {H(b.LiveLuCorpusCommit)}, EU {H(b.LiveEuCorpusCommit)}</td></tr>
+                <tr><th>corpus commits at measurement</th><td class="mono">LU {H(b.LiveLuCorpusCommit)}, EU {H(b.LiveEuCorpusCommit)}</td></tr>
                 <tr><th>sampled MCP requests, 7 days</th><td class="mono">{b.McpRequests7dSampled:n0}</td></tr>
                 <tr><th>internal latency</th><td class="mono">p50 {F(b.McpInternalP50Ms, "0.00")} ms, p95 {F(b.McpInternalP95Ms, "0.00")} ms, p99 {F(b.McpInternalP99Ms, "0.00")} ms</td></tr>
                 <tr><th>average working set</th><td class="mono">{b.AverageWorkingSetMib:n0} MiB</td></tr>
