@@ -2,6 +2,8 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Diagnostics;
 using System.Reflection;
+using System.Text.Json;
+using Lex.Derive;
 using Lex.Index;
 using Lex.Ingest;
 using Microsoft.Data.Sqlite;
@@ -183,7 +185,161 @@ public sealed class IndexStampVerifierTests : IDisposable
         Assert.Equal(5, verification.ExitCode);
     }
 
-    private string Build(string key, string enrichmentDigest)
+    [Fact]
+    public void Release_verification_binds_manifest_generation_and_reviewed_configuration()
+    {
+        var root = TempDirectory();
+        var reviewed = Path.Combine(root, "reviewed.json");
+        File.WriteAllText(reviewed, "reviewed publisher configuration\n",
+            new UTF8Encoding(false));
+        var reviewedDigest = Sha(reviewed);
+        var manifestPath = Path.Combine(root, "manifest.json");
+        var manifest = new ManifestDoc
+        {
+            Publisher = new Dictionary<string, string>
+            {
+                ["id"] = "eu-eurlex", ["name"] = "EU", ["jurisdiction"] = "EU",
+                ["homepage"] = "https://example.invalid",
+            },
+            Tier = "A",
+            Attribution = "test",
+            TextIncluded = true,
+            TextPublic = true,
+            HistoryBegins = "publisher",
+            IngesterVersion = "test",
+            IngesterCodeCommit = new string('b', 40),
+        };
+        File.WriteAllText(manifestPath,
+            JsonSerializer.Serialize(manifest, CorpusJson.Options) + "\n",
+            new UTF8Encoding(false));
+        var manifestDigest = Sha(manifestPath);
+        DerivationGeneration.UpdatePublisher(root, "eu-eurlex",
+            new string('c', 40), manifestDigest, new string('b', 40),
+            new string('e', 40), new string('f', 40), reviewedDigest,
+            ["akn-eu/1"]);
+        var generationPath = Path.Combine(root, DerivationGeneration.FileName);
+        var generationDigest = Sha(generationPath);
+        var profilesDigest = DerivationGeneration.ProfileDigest(["akn-eu/1"]);
+        var key = StampSigner.CreateKeyPem();
+        var db = Build(key, reviewedDigest, new Dictionary<string, string>
+        {
+            ["builder_code_commit"] = new string('a', 40),
+            ["ingester_code_commit"] = new string('b', 40),
+            ["deriver_code_commit"] = new string('e', 40),
+            ["deriver_tree_id"] = new string('f', 40),
+            ["corpus_manifest_sha256"] = manifestDigest,
+            ["generation_sha256"] = generationDigest,
+            ["reviewed_configuration_sha256"] = reviewedDigest,
+            ["profiles_sha256"] = profilesDigest,
+        });
+
+        var files = IndexStampVerifier.Verify(db, new IndexStampVerificationInputs(
+            ExpectedCollection: "eu-eurlex",
+            ExpectedCorpusCommit: new string('c', 40),
+            WorkEnrichmentPath: reviewed,
+            ExpectedCodeCommit: new string('a', 40),
+            ExpectedArticlesCommit: new string('d', 40),
+            CorpusManifestPath: manifestPath,
+            ArticlesGenerationPath: generationPath,
+            ReviewedConfigurationPath: reviewed,
+            RequireDerivedProvenance: true));
+
+        Assert.True(files.IsValid, string.Join(Environment.NewLine, files.ProvenanceErrors));
+        Assert.Equal(0, files.ExitCode);
+
+        var digests = IndexStampVerifier.Verify(db, new IndexStampVerificationInputs(
+            ExpectedCollection: "eu-eurlex",
+            ExpectedCorpusCommit: new string('c', 40),
+            ExpectedEnrichmentSha256: reviewedDigest,
+            ExpectedCodeCommit: new string('a', 40),
+            ExpectedArticlesCommit: new string('d', 40),
+            ExpectedCorpusManifestSha256: manifestDigest,
+            ExpectedIngesterCodeCommit: new string('b', 40),
+            ExpectedDeriverCodeCommit: new string('e', 40),
+            ExpectedDeriverTreeId: new string('f', 40),
+            ExpectedGenerationSha256: generationDigest,
+            ExpectedReviewedConfigurationSha256: reviewedDigest,
+            ExpectedProfilesSha256: profilesDigest,
+            RequireDerivedProvenance: true));
+        Assert.True(digests.IsValid,
+            string.Join(Environment.NewLine, digests.ProvenanceErrors));
+
+        var generationText = File.ReadAllText(generationPath);
+        File.AppendAllText(generationPath, " \n", new UTF8Encoding(false));
+        var changedGeneration = IndexStampVerifier.Verify(db,
+            new IndexStampVerificationInputs(
+                ExpectedCollection: "eu-eurlex",
+                ExpectedCorpusCommit: new string('c', 40),
+                ExpectedCodeCommit: new string('a', 40),
+                ExpectedArticlesCommit: new string('d', 40),
+                CorpusManifestPath: manifestPath,
+                ArticlesGenerationPath: generationPath,
+                ReviewedConfigurationPath: reviewed,
+                RequireDerivedProvenance: true));
+        Assert.False(changedGeneration.ProvenanceMatches);
+        Assert.Contains(changedGeneration.ProvenanceErrors,
+            error => error.Contains("generation_sha256", StringComparison.Ordinal));
+
+        File.WriteAllText(generationPath, generationText, new UTF8Encoding(false));
+        using (var connection = new SqliteConnection($"Data Source={db}"))
+        {
+            connection.Open();
+            using var remove = connection.CreateCommand();
+            remove.CommandText = "DELETE FROM stamp WHERE k='deriver_tree_id'";
+            remove.ExecuteNonQuery();
+            Resign(connection, key);
+        }
+        var missingStampField = IndexStampVerifier.Verify(db,
+            new IndexStampVerificationInputs(
+                ExpectedCollection: "eu-eurlex",
+                ExpectedCorpusCommit: new string('c', 40),
+                ExpectedCodeCommit: new string('a', 40),
+                ExpectedArticlesCommit: new string('d', 40),
+                CorpusManifestPath: manifestPath,
+                ArticlesGenerationPath: generationPath,
+                ReviewedConfigurationPath: reviewed,
+                RequireDerivedProvenance: true));
+        Assert.Contains(missingStampField.ProvenanceErrors,
+            error => error == "stamp deriver_tree_id is absent");
+        Assert.Equal(5, missingStampField.ExitCode);
+    }
+
+    [Fact]
+    public void Release_verification_requires_independent_evidence_for_every_provenance_role()
+    {
+        var db = Build(StampSigner.CreateKeyPem(), new string('e', 64),
+            new Dictionary<string, string>
+            {
+                ["builder_code_commit"] = new string('a', 40),
+                ["ingester_code_commit"] = new string('b', 40),
+                ["deriver_code_commit"] = new string('e', 40),
+                ["deriver_tree_id"] = new string('f', 40),
+                ["corpus_manifest_sha256"] = new string('1', 64),
+                ["generation_sha256"] = new string('2', 64),
+                ["reviewed_configuration_sha256"] = new string('3', 64),
+                ["profiles_sha256"] = new string('4', 64),
+            });
+
+        var verification = IndexStampVerifier.Verify(db,
+            new IndexStampVerificationInputs(
+                ExpectedCollection: "eu-eurlex",
+                ExpectedCorpusCommit: new string('c', 40),
+                ExpectedCodeCommit: new string('a', 40),
+                ExpectedArticlesCommit: new string('d', 40),
+                RequireDerivedProvenance: true));
+
+        Assert.False(verification.IsValid);
+        Assert.Contains(verification.ProvenanceErrors,
+            error => error.Contains("corpus manifest", StringComparison.Ordinal));
+        Assert.Contains(verification.ProvenanceErrors,
+            error => error.Contains("generation", StringComparison.Ordinal));
+        Assert.Contains(verification.ProvenanceErrors,
+            error => error.Contains("reviewed configuration", StringComparison.Ordinal));
+        Assert.Equal(5, verification.ExitCode);
+    }
+
+    private string Build(string key, string enrichmentDigest,
+        IReadOnlyDictionary<string, string>? additionalStamp = null)
     {
         var db = TempFile(".db");
         var text = "Reporting obligations.";
@@ -195,17 +351,32 @@ public sealed class IndexStampVerifierTests : IDisposable
         var provision = new ProvisionRow($"{doc.Key}|en|2024-01-01", 0, "art_1",
             $"{doc.Key}#art_1", "article", "1", null, null, null, doc.Title, text,
             Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(text))));
-        IndexBuilder.Build(db, new Dictionary<string, string>
+        var stamp = new Dictionary<string, string>
         {
             ["collection"] = "eu-eurlex",
             ["corpus_commit"] = new string('c', 40),
             ["code_commit"] = new string('a', 40),
             ["articles_commit"] = new string('d', 40),
             ["built_at"] = "2026-08-09T00:00:00Z",
-        }, [doc], [provision], [], [], key,
+        };
+        foreach (var (name, value) in additionalStamp ??
+                     new Dictionary<string, string>())
+            stamp[name] = value;
+        IndexBuilder.Build(db, stamp, [doc], [provision], [], [], key,
             workSearch: new WorkSearchBuildOptions([], [], enrichmentDigest));
         return db;
     }
+
+    private string TempDirectory()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"lex-stamp-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(path);
+        _directories.Add(path);
+        return path;
+    }
+
+    private static string Sha(string path) => Convert.ToHexStringLower(
+        SHA256.HashData(File.ReadAllBytes(path)));
 
     private static void Resign(SqliteConnection connection, string key)
     {
