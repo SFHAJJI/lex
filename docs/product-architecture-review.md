@@ -262,24 +262,31 @@ Strong evidence has a non-empty legal anchor and a `keyword`, `fuzzy`, or provis
 `semantic` reason. `work_metadata`, `semantic_concept`, bare `article_intent`, and anchorless hits
 are weak. Weak evidence can propose bounded clarification choices but never authorize a work.
 
-Carried authority uses the most recent resolving turn only, includes all works resolved in that
-turn, is replaced by a newer resolving turn, and is cleared by `New conversation`. It never
-accumulates silently across topics. A clarification selection authorizes exactly its opaque work
-value and replays the pending intent once. `None of these` exits without consuming model quota.
-Unrelated text is a fresh question. At most one repeated clarification is allowed before a bounded
-gap response.
+Carried authority is a server-owned structured record from the most recent resolving turn. It
+includes all works resolved in that turn, is replaced by a newer resolving turn, and is cleared by
+a fresh unrelated aggregate or search turn and by `New conversation`. It never accumulates
+silently across topics. The prior raw transcript and assistant prose are not reinterpreted as
+authority. A clarification selection authorizes exactly its opaque work value and replays the
+pending intent once. `None of these` exits without consuming model quota. Unrelated text is a
+fresh question. At most one repeated clarification is allowed before a bounded gap response.
 
 ### 5.5 Conversation and reset
 
-Conversation is tab-scoped and server-stateless. The browser sends a bounded transcript to the
-server and Azure OpenAI when model planning or synthesis is needed, so copy must not claim that the
-content remains only in the browser. The UI warns against submitting confidential client facts and
-links to the data-handling explanation.
+Conversation continuity is server-owned, ephemeral and tab-scoped by a random opaque capability.
+The browser keeps the token and visible transcript only in component memory: neither is placed in
+web storage, a URL, logs or traces. It sends only the current message and token. The server retains
+at most six accepted turns for 30 idle minutes, bounded to 32 KiB per thread, 1,024 threads and
+16 MiB across the process. Only a SHA-256 token digest is retained. Expired, evicted and forged
+tokens fail closed without creating or joining another thread, and responses carrying the token
+are private and `no-store`. A restart loses the ephemeral memory. Durable personal profiling
+remains out of scope.
 
-`New conversation` clears transcript, pending clarification, carried work authority, and model
-context, but retains the current legal workspace. The accessible name is `New conversation`.
-Current-user messages over the server limit are rejected visibly rather than silently truncated;
-stored assistant history may be bounded without altering the current request.
+`New conversation` resets the server thread and clears the component-memory transcript, pending
+clarification, carried work authority, and model context, but retains the current legal workspace.
+The accessible name is `New conversation`. Current-user messages over the server limit are
+rejected visibly rather than silently truncated; stored assistant history may be bounded without
+altering the current request. The UI warns against submitting confidential client facts and links
+to the data-handling explanation.
 
 ### 5.6 Streaming and idempotency
 

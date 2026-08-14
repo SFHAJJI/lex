@@ -907,18 +907,22 @@ public static class ExplainerEndpoints
 
                 <h2 id="assistant-data">Assistant data and public limits</h2>
                 <div class="card">
-                <p>The browser retains at most six conversation turns in this tab's
-                <span class="mono">sessionStorage</span>. A submitted bounded transcript is sent to this
-                server and to Azure OpenAI when planning or optional synthesis is required. Starting a new
-                conversation clears that transcript but leaves the legal workspace in place. Do not submit
-                confidential client facts.</p>
-                <p>The application is server-stateless for conversation content. It keeps short-lived,
-                in-memory request identities for ten minutes. Completed responses are replayed while held
-                inside a 64 MiB cache; an evicted identity remains a tombstone and cannot execute again. Daily
-                assistant counters and rolling MCP counters use an ingress-derived client address in process
-                memory; raw addresses and raw user text are not written to application logs, traces, metrics
-                or error bodies. URL queries and address attributes are redacted before export. OpenTelemetry
-                records an allowlist of model deployment, opaque operation ID, tool, status and document count.
+                <p>The browser keeps the visible conversation and one opaque thread token only in component
+                memory for the lifetime of the page. Neither is written to browser storage or a URL. The
+                server retains at most six accepted turns in bounded, per-process memory: entries expire after
+                30 idle minutes and are limited to 32 KiB per thread, 1,024 threads and 16 MiB globally. A
+                restart, expiry, reset or capacity eviction invalidates the random token; an unknown token
+                cannot fall through to another conversation. Starting a new conversation resets that thread
+                but leaves the legal workspace in place. Assistant responses are marked private and
+                <span class="mono">no-store</span>. Do not submit confidential client facts.</p>
+                <p>Only a SHA-256 digest of the thread token is retained, and the token is excluded from
+                application logs and traces. The application separately keeps short-lived, in-memory request
+                identities for ten minutes. Completed responses are replayed while held inside a 64 MiB cache;
+                an evicted identity remains a tombstone and cannot execute again. Daily assistant counters and
+                rolling MCP counters use an ingress-derived client address in process memory; raw addresses and
+                raw user text are not written to application logs, traces, metrics or error bodies. URL queries
+                and address attributes are redacted before export. OpenTelemetry records an allowlist of model
+                deployment, opaque operation ID, tool, status and document count.
                 The deployed Application Insights request, dependency and trace tables retain that bounded
                 telemetry for 90 days; deployment fails if those table policies differ. This deployment uses
                 Azure OpenAI's standard abuse-monitoring posture, under which Microsoft may retain prompts and

@@ -15,8 +15,21 @@ internal sealed class PrivacyActivityProcessor : BaseProcessor<Activity>
     {
         activity.SetTag("url.query", null);
         foreach (var name in AddressTags) activity.SetTag(name, null);
+        foreach (var (name, _) in activity.TagObjects.ToArray())
+            if (IsSensitive(name)) activity.SetTag(name, null);
+        foreach (var (name, _) in activity.Baggage.ToArray())
+            if (IsSensitive(name)) activity.SetBaggage(name, null);
         StripQuery(activity, "url.full");
         StripQuery(activity, "http.url");
+    }
+
+    private static bool IsSensitive(string name)
+    {
+        var normalized = name.ToLowerInvariant().Replace('-', '_').Replace('.', '_');
+        return normalized.Contains("thread_token", StringComparison.Ordinal)
+            || normalized.Contains("idempotency", StringComparison.Ordinal)
+            || normalized.Contains("evaluation_admission", StringComparison.Ordinal)
+            || normalized.EndsWith("_body", StringComparison.Ordinal);
     }
 
     private static void StripQuery(Activity activity, string name)

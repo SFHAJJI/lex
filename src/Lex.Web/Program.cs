@@ -40,6 +40,8 @@ builder.Services.AddSingleton(sp =>
 builder.Services.AddSingleton(sp => new AskService(sp.GetRequiredService<McpCore>()));
 builder.Services.AddSingleton(sp => new AskRequestRegistry(
     sp.GetRequiredService<TimeProvider>()));
+builder.Services.AddSingleton(sp => new AskThreadRegistry(
+    sp.GetRequiredService<TimeProvider>()));
 builder.Services.AddSingleton(sp => new McpAdmissionController(
     sp.GetRequiredService<TimeProvider>()));
 builder.Services.AddMcpServer(McpSdkBridge.Configure)
@@ -98,6 +100,7 @@ var ctx = new WebContext(
     app.Services.GetRequiredService<McpCore>(),
     app.Services.GetRequiredService<AskService>(),
     app.Services.GetRequiredService<AskRequestRegistry>(),
+    app.Services.GetRequiredService<AskThreadRegistry>(),
     app.Services.GetRequiredService<TimeProvider>());
 
 app.Logger.LogInformation("Assistant {State}; {Count} index(es) mounted from {Dir}",

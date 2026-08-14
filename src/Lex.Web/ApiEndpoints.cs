@@ -19,11 +19,33 @@ public static class ApiEndpoints
         var readers = ctx.Registry.All;
         var askService = ctx.Ask;
         var askRequests = ctx.AskRequests;
+        var askThreads = ctx.AskThreads;
         static string ClientAddress(HttpRequest request) =>
             request.Headers["X-Forwarded-For"].FirstOrDefault()?.Split(',')[^1].Trim()
             ?? request.HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-        static string Fingerprint(byte[] body) =>
-            Convert.ToHexStringLower(SHA256.HashData(body));
+        static string Fingerprint(byte[] body, string? threadToken, string purpose = "ask-v2")
+        {
+            var scope = Encoding.UTF8.GetBytes($"{purpose}\n{threadToken ?? "-"}\n");
+            var committed = new byte[scope.Length + body.Length];
+            Buffer.BlockCopy(scope, 0, committed, 0, scope.Length);
+            Buffer.BlockCopy(body, 0, committed, scope.Length, body.Length);
+            return Convert.ToHexStringLower(SHA256.HashData(committed));
+        }
+        static JsonArray HistoryFor(AskThreadLease thread, string message)
+        {
+            var history = thread.History.DeepClone().AsArray();
+            history.Add(new JsonObject { ["role"] = "user", ["content"] = message });
+            return history;
+        }
+        static string? AssistantReply(JsonObject body) =>
+            body["clarification"]?["question"]?.GetValue<string>()
+            ?? body["reply"]?.GetValue<string>();
+        static void PrivateNoStore(HttpResponse response)
+        {
+            response.Headers.CacheControl = "private,no-store,max-age=0";
+            response.Headers.Pragma = "no-cache";
+            response.Headers.Expires = "0";
+        }
         string Page(string title, string body, string? subtitle = null, string nav = "",
                     string? h1 = null, string? canonicalPath = null, string? jsonLd = null,
                     string? description = null, string? lang = null)
@@ -103,20 +125,24 @@ public static class ApiEndpoints
 
         app.MapPost("/api/ask", async (HttpRequest req, HttpResponse res) =>
         {
+            PrivateNoStore(res);
             if (req.ContentLength is > 65536) return Results.Json(new { error = "Request too large." }, statusCode: 413);
             var body = await BoundedRequestBody.ReadAsync(req.Body, 65536, req.HttpContext.RequestAborted);
             if (body is null) return Results.Json(new { error = "Request too large." }, statusCode: 413);
             JsonNode? parsed;
             try { parsed = JsonNode.Parse(body); }
             catch { return Results.Json(new { error = "Bad JSON." }, statusCode: 400); }
-            if (parsed?["messages"] is not JsonArray history)
-                return Results.Json(new { error = "Body must be {\"messages\": [...]}." }, statusCode: 400);
+            if (!TryAskMessage(parsed, out var message, out var messageError))
+                return Results.Json(new { error = messageError }, statusCode: 400);
+            if (!TryThreadToken(req.Headers, out var threadToken))
+                return Results.Json(new { error = "Invalid X-Lex-Thread-Token." }, statusCode: 400);
             if (!TryIdempotencyKey(req.Headers, out var idempotencyKey))
                 return Results.Json(new { error = "Invalid Idempotency-Key." }, statusCode: 400);
             // Last X-Forwarded-For element: appended by our ingress, not spoofable by the client
             // (the first element is client-controlled and would reset the per-IP cap).
             var ip = ClientAddress(req);
-            var claim = askRequests.Claim(ip, idempotencyKey, Fingerprint(body));
+            var claim = askRequests.Claim(
+                ip, idempotencyKey, Fingerprint(body, threadToken));
             var requestId = claim.RequestId;
             res.Headers["X-Lex-Request-Id"] = requestId;
             if (claim.Kind != AskRequestClaimKind.Owner)
@@ -124,12 +150,28 @@ public static class ApiEndpoints
                 var replay = await claim.Completion.WaitAsync(req.HttpContext.RequestAborted);
                 return Results.Content(replay.Body, "application/json", statusCode: replay.Status);
             }
+            var acquired = await AcquireThreadAsync(
+                askThreads, threadToken, req.HttpContext.RequestAborted);
+            if (acquired.Lease is not { } thread)
+            {
+                var json = acquired.Failure!.ToJsonString();
+                claim.Complete(acquired.Status, json, retainForReplay: false);
+                return Results.Content(json, "application/json", statusCode: acquired.Status);
+            }
+            await using (thread)
             try
             {
-                var outcome = await askService.AskAsync(history, ip,
+                var outcome = await askService.AskAsync(HistoryFor(thread, message), ip,
                     req.Host.Value ?? "law.soufien.lu", req.HttpContext.RequestAborted,
-                    requestId: requestId);
+                    requestId: requestId, conversationContext: thread.Context);
                 var (status, bodyJson) = outcome;
+                var stored = status == 200 && bodyJson["error"] is null
+                    && AssistantReply(bodyJson) is { } assistant
+                    && thread.Commit(
+                        message, assistant, outcome.ConversationContext,
+                        outcome.ContextDisposition);
+                if (stored || threadToken is not null)
+                    bodyJson["thread_token"] = thread.Token;
                 var json = bodyJson.ToJsonString();
                 claim.Complete(status, json, outcome.RetainForReplay);
                 return Results.Content(json, "application/json", statusCode: status);
@@ -149,6 +191,7 @@ public static class ApiEndpoints
         // doing: "Code du travail — 3 articles as in force on 2019-03-01", not "searching…".
         app.MapPost("/api/ask/stream", async (HttpRequest req, HttpResponse res) =>
         {
+            PrivateNoStore(res);
             var streamWatch = Stopwatch.StartNew();
             async Task Reject(int status, string error)
             {
@@ -172,13 +215,19 @@ public static class ApiEndpoints
             JsonNode? parsed;
             try { parsed = JsonNode.Parse(body); }
             catch { await Reject(400, "Bad JSON."); return; }
-            if (parsed?["messages"] is not JsonArray history)
+            if (!TryAskMessage(parsed, out var message, out var messageError))
             {
-                await Reject(400, "Body must be {\"messages\": [...]}.");
+                await Reject(400, messageError);
+                return;
+            }
+            if (!TryThreadToken(req.Headers, out var threadToken))
+            {
+                await Reject(400, "Invalid X-Lex-Thread-Token.");
                 return;
             }
             var ip = ClientAddress(req);
-            var claim = askRequests.Claim(ip, idempotencyKey, Fingerprint(body));
+            var claim = askRequests.Claim(
+                ip, idempotencyKey, Fingerprint(body, threadToken));
             var requestId = claim.RequestId;
             if (claim.Kind is AskRequestClaimKind.Conflict or AskRequestClaimKind.Busy
                 or AskRequestClaimKind.ReplayUnavailable)
@@ -190,10 +239,28 @@ public static class ApiEndpoints
                 return;
             }
 
+            AskThreadLease? thread = null;
+            if (claim.Kind == AskRequestClaimKind.Owner)
+            {
+                var acquired = await AcquireThreadAsync(
+                    askThreads, threadToken, req.HttpContext.RequestAborted);
+                if (acquired.Lease is not { } acquiredThread)
+                {
+                    var json = acquired.Failure!.ToJsonString();
+                    claim.Complete(acquired.Status, json, retainForReplay: false);
+                    res.StatusCode = acquired.Status;
+                    res.ContentType = "application/json";
+                    if (req.HttpContext.RequestAborted.IsCancellationRequested)
+                        return;
+                    await res.WriteAsync(json, req.HttpContext.RequestAborted);
+                    return;
+                }
+                thread = acquiredThread;
+            }
+
             void StreamHeaders()
             {
                 res.Headers.ContentType = "text/event-stream";
-                res.Headers.CacheControl = "no-cache";
                 res.Headers["X-Accel-Buffering"] = "no";
                 res.Headers["X-Lex-Request-Id"] = requestId;
             }
@@ -263,6 +330,9 @@ public static class ApiEndpoints
                 return;
             }
 
+            await using var ownedThread = thread
+                ?? throw new InvalidOperationException("An owner requires one thread lease.");
+
             var steps = 0;
             double? firstOperationEmittedMilliseconds = null;
             var progress = new AskService.AskProgressCallbacks(
@@ -309,9 +379,10 @@ public static class ApiEndpoints
             AskService.AskOutcome outcome;
             try
             {
-                outcome = await askService.AskAsync(history, ip,
+                outcome = await askService.AskAsync(HistoryFor(ownedThread, message), ip,
                     req.Host.Value ?? "law.soufien.lu",
-                    req.HttpContext.RequestAborted, progress, requestId);
+                    req.HttpContext.RequestAborted, progress, requestId,
+                    ownedThread.Context);
             }
             catch (OperationCanceledException) when (req.HttpContext.RequestAborted.IsCancellationRequested)
             {
@@ -338,6 +409,13 @@ public static class ApiEndpoints
             bodyJson["narrated"] = status == 200 && bodyJson["ui"]?["gap"] is null && steps > 0;
             if (bodyJson["timing"] is JsonObject timing)
                 timing["operation_result_emitted_ms"] = firstOperationEmittedMilliseconds;
+            var stored = status == 200 && bodyJson["error"] is null
+                && AssistantReply(bodyJson) is { } assistant
+                && ownedThread.Commit(
+                    message, assistant, outcome.ConversationContext,
+                    outcome.ContextDisposition);
+            if (stored || threadToken is not null)
+                bodyJson["thread_token"] = ownedThread.Token;
             claim.Complete(status, bodyJson.ToJsonString(), outcome.RetainForReplay);
             if (status == 200)
                 await Send("done", bodyJson);
@@ -348,6 +426,41 @@ public static class ApiEndpoints
                     ["error"] = bodyJson["error"]?.GetValue<string>()
                         ?? "The assistant request did not complete.",
                 });
+        });
+
+        app.MapPost("/api/ask/thread/reset", async (HttpRequest req, HttpResponse res) =>
+        {
+            PrivateNoStore(res);
+            var body = await BoundedRequestBody.ReadAsync(
+                req.Body, 1_024, req.HttpContext.RequestAborted);
+            if (body is null)
+                return Results.Json(new { error = "Request too large." }, statusCode: 413);
+            if (!TryThreadToken(req.Headers, out var threadToken) || threadToken is null)
+                return Results.Json(
+                    new { error = "Invalid X-Lex-Thread-Token." }, statusCode: 400);
+            if (!TryIdempotencyKey(req.Headers, out var idempotencyKey))
+                return Results.Json(new { error = "Invalid Idempotency-Key." }, statusCode: 400);
+            var ip = ClientAddress(req);
+            var claim = askRequests.Claim(
+                ip, idempotencyKey, Fingerprint(body, threadToken, "ask-thread-reset-v1"));
+            res.Headers["X-Lex-Request-Id"] = claim.RequestId;
+            if (claim.Kind != AskRequestClaimKind.Owner)
+            {
+                var replay = await claim.Completion.WaitAsync(req.HttpContext.RequestAborted);
+                return Results.Content(replay.Body, "application/json", statusCode: replay.Status);
+            }
+            var removed = askThreads.Reset(threadToken);
+            var status = removed ? 200 : 409;
+            var response = removed
+                ? new JsonObject { ["status"] = "reset" }
+                : new JsonObject
+                {
+                    ["status"] = "thread_unavailable",
+                    ["error"] = "This assistant thread is unavailable. Start a new conversation.",
+                };
+            var json = response.ToJsonString();
+            claim.Complete(status, json, retainForReplay: removed);
+            return Results.Content(json, "application/json", statusCode: status);
         });
 
         app.MapGet("/healthz", () => Results.Text("ok"));
@@ -410,5 +523,93 @@ public static class ApiEndpoints
         }
         key = supplied;
         return true;
+    }
+
+    internal static bool TryThreadToken(
+        IHeaderDictionary headers,
+        out string? token)
+    {
+        if (!headers.TryGetValue("X-Lex-Thread-Token", out var values))
+        {
+            token = null;
+            return true;
+        }
+        token = values.Count == 1 ? values[0] : null;
+        return AskThreadRegistry.IsValidToken(token);
+    }
+
+    private static bool TryAskMessage(
+        JsonNode? parsed,
+        out string message,
+        out string error)
+    {
+        if (parsed is not JsonObject body
+            || body.Count != 1
+            || body["message"] is not JsonValue value
+            || !value.TryGetValue<string>(out message!))
+        {
+            message = "";
+            error = "Body must be {\"message\": \"...\"}.";
+            return false;
+        }
+        if (string.IsNullOrWhiteSpace(message) || message.Length > 1_000)
+        {
+            error = "Questions must contain 1 to 1,000 characters.";
+            return false;
+        }
+        error = "";
+        return true;
+    }
+
+    private static (int Status, JsonObject Body) ThreadFailure(AskThreadAcquireKind kind) =>
+        kind switch
+        {
+            AskThreadAcquireKind.NotFound => (409, new JsonObject
+            {
+                ["status"] = "thread_unavailable",
+                ["error"] = "This assistant thread expired or is unavailable. Start a new conversation.",
+            }),
+            AskThreadAcquireKind.Busy => (429, new JsonObject
+            {
+                ["status"] = "thread_busy",
+                ["error"] = "This assistant thread already has too many waiting turns.",
+            }),
+            AskThreadAcquireKind.Capacity => (503, new JsonObject
+            {
+                ["status"] = "thread_capacity",
+                ["error"] = "Assistant conversation memory is full. Try again shortly.",
+            }),
+            _ => throw new ArgumentOutOfRangeException(nameof(kind)),
+        };
+
+    private static async ValueTask<(AskThreadLease? Lease, int Status, JsonObject? Failure)>
+        AcquireThreadAsync(
+            AskThreadRegistry registry,
+            string? token,
+            CancellationToken cancellationToken)
+    {
+        try
+        {
+            var acquired = await registry.AcquireAsync(token, cancellationToken);
+            if (acquired.Lease is { } lease) return (lease, 0, null);
+            var (status, failure) = ThreadFailure(acquired.Kind);
+            return (null, status, failure);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return (null, 499, new JsonObject
+            {
+                ["status"] = "cancelled",
+                ["error"] = "The assistant request was cancelled.",
+            });
+        }
+        catch
+        {
+            return (null, 500, new JsonObject
+            {
+                ["status"] = "thread_failure",
+                ["error"] = "Assistant conversation memory is temporarily unavailable.",
+            });
+        }
     }
 }

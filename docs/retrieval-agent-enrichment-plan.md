@@ -200,13 +200,15 @@ The workspace renders accessible buttons and keeps a free-text answer. Missing `
 reason to ask; the assistant may use today and disclose the assumption. Jurisdiction, legal
 mechanism or historical period should be clarified only when different answers would result.
 
-Conversation memory is bounded, visible and restorable within one browser tab. The application
-keeps at most six turns in `sessionStorage` and sends that bounded transcript with each otherwise
-stateless request, so a Container App restart or scale-to-zero event cannot silently turn a
-follow-up into an unrelated first question. On every request the server re-runs deterministic
-resolution over the most recent prior user-authored law identity; prior assistant prose is never
-authority or legal evidence. The panel shows the retained turns and provides an explicit new-
-conversation control. Durable server sessions and personal profiling remain out of scope.
+Conversation memory is bounded, visible and ephemeral within one browser tab. The browser keeps
+the visible transcript and opaque thread capability only in component memory and sends only the
+current message. The server retains at most six accepted turns for 30 idle minutes in a bounded
+per-process registry, together with structured subject authority; it stores only a digest of the
+random token. An unrelated aggregate or search turn explicitly clears stale subject authority.
+Prior raw transcript and assistant prose are never reinterpreted as authority or legal evidence.
+Expiry, eviction, reset, restart or scale-to-zero invalidates the thread rather than falling
+through to a different conversation. The panel shows the retained turns and provides an explicit
+new-conversation control. Durable sessions and personal profiling remain out of scope.
 
 Accepted, signed work cards are the durable reusable output of offline enrichment. They may improve
 both deterministic search and future assistant planning. Provider prompt caching may reduce the

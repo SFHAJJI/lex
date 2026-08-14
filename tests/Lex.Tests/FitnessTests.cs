@@ -61,12 +61,23 @@ public class FitnessTests
         activity.SetTag("url.full", "https://law.soufien.lu/?q=TRACE_CANARY");
         activity.SetTag("http.url", "https://law.soufien.lu/?q=TRACE_CANARY");
         activity.SetTag("client.address", "203.0.113.42");
+        activity.SetTag("http.request.header.x_lex_thread_token", "THREAD_CANARY");
+        activity.SetTag("http.request.header.idempotency_key", "IDEMPOTENCY_CANARY");
+        activity.SetTag("http.request.body", "BODY_CANARY");
+        activity.SetBaggage("lex.thread_token", "BAGGAGE_CANARY");
 
         new PrivacyActivityProcessor().OnEnd(activity);
-        var exported = string.Join('\n', activity.TagObjects.Select(item => $"{item.Key}={item.Value}"));
+        var exported = string.Join('\n', activity.TagObjects
+            .Concat(activity.Baggage.Select(item =>
+                new KeyValuePair<string, object?>(item.Key, item.Value)))
+            .Select(item => $"{item.Key}={item.Value}"));
 
         Assert.DoesNotContain("TRACE_CANARY", exported, StringComparison.Ordinal);
         Assert.DoesNotContain("203.0.113.42", exported, StringComparison.Ordinal);
+        Assert.DoesNotContain("THREAD_CANARY", exported, StringComparison.Ordinal);
+        Assert.DoesNotContain("IDEMPOTENCY_CANARY", exported, StringComparison.Ordinal);
+        Assert.DoesNotContain("BODY_CANARY", exported, StringComparison.Ordinal);
+        Assert.DoesNotContain("BAGGAGE_CANARY", exported, StringComparison.Ordinal);
         Assert.Contains("https://law.soufien.lu/", exported, StringComparison.Ordinal);
     }
 

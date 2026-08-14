@@ -16,6 +16,7 @@ public sealed record WebContext(
     McpCore Mcp,
     AskService Ask,
     AskRequestRegistry AskRequests,
+    AskThreadRegistry AskThreads,
     TimeProvider Clock)
 {
     /// <summary>Absolute base for permalinks and social metadata, without a trailing slash.</summary>

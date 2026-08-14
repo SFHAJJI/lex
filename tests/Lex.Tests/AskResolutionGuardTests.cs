@@ -672,64 +672,6 @@ public sealed class AskResolutionGuardTests
         Assert.Null(prior.ClarificationFor(null));
     }
 
-    [Fact]
-    public void Conversation_reconstruction_uses_the_most_recent_resolved_user_turn_only()
-    {
-        var queries = new[] { "Show GDPR", "thanks", "Show DORA", "Article 7 on the same date" };
-        var searched = new List<string>();
-
-        var works = AskService.ResolvePriorUserWorks(queries, query =>
-        {
-            searched.Add(query);
-            return query switch
-            {
-                "Show DORA" => SearchResult("resolved",
-                    ("DORA", "resolved", new[] { "eu-eurlex:32022r2554" })),
-                "Show GDPR" => SearchResult("resolved",
-                    ("GDPR", "resolved", new[] { "eu-eurlex:32016r0679" })),
-                _ => SearchResult("not_requested"),
-            };
-        });
-
-        Assert.Equal(new[] { "Show DORA" }, searched);
-        Assert.Equal(new[] { "eu-eurlex:32022r2554" }, works);
-    }
-
-    [Fact]
-    public void Conversation_reconstruction_ignores_assistant_like_weak_evidence_and_resolver_errors()
-    {
-        var queries = new[] { "old question", "failing question", "current follow-up" };
-
-        var works = AskService.ResolvePriorUserWorks(queries, query =>
-        {
-            if (query == "failing question") return null;
-            var result = SearchResult("not_requested");
-            result[0]!["hits"] = new JsonArray
-            {
-                WeakHit("eu-eurlex:32022r2554:2024-01-01", "DORA"),
-            };
-            return result;
-        });
-
-        Assert.Empty(works);
-    }
-
-    [Fact]
-    public void Conversation_reconstruction_never_replays_more_than_three_prior_queries()
-    {
-        var queries = new[] { "one", "two", "three", "four", "five", "current" };
-        var searched = new List<string>();
-
-        var works = AskService.ResolvePriorUserWorks(queries, query =>
-        {
-            searched.Add(query);
-            return SearchResult("not_requested");
-        });
-
-        Assert.Empty(works);
-        Assert.Equal(new[] { "five", "four", "three" }, searched);
-    }
-
     private static JsonArray SearchResult(string status,
         params (string Mention, string Status, string[] Candidates)[] resolutions) =>
     [

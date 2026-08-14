@@ -38,6 +38,7 @@ Dynamic publisher routes accept only mounted publisher IDs and validated work/da
 | GET | `/ask` | API | reader | permanent redirect to `/#ask` or `/` | redirect | no index | one-hop redirect |
 | POST | `/api/ask` | API/assistant | browser client | none | JSON | machine | bounded request, typed result, typed failure |
 | POST | `/api/ask/stream` | API/assistant | browser client | none | event stream | machine | versioned ordered events, cancellation and idempotency |
+| POST | `/api/ask/thread/reset` | API/assistant | browser client | none | JSON | machine | idempotent reset of one opaque server-owned thread |
 | POST | `/mcp` | MCP SDK bridge | MCP client | protocol endpoint | MCP JSON/SSE | machine | initialize, list tools, call every frozen tool through shared core |
 | GET | `/healthz` | API/operations | platform | none | text | machine | process liveness only |
 | GET | `/readyz` | API/operations | platform | none | JSON | machine | required publishers, inventory, signatures and manifest set |

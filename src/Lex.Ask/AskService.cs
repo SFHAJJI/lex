@@ -623,23 +623,7 @@ public sealed class AskService
     private const int MaxHistory = 24;
     private const int MaxUserMessageChars = 1000;
     private const int MaxAssistantMessageChars = 4000;
-    private const int MaxContextResolutionQueries = 3;
     private const int MaxToolResultChars = 20000;
-
-    internal static IReadOnlyList<string> ResolvePriorUserWorks(
-        IReadOnlyList<string> userQueries, Func<string, JsonNode?> resolve)
-    {
-        var prior = new WorkResolutionGuard();
-        foreach (var query in userQueries.SkipLast(1).Reverse().Take(MaxContextResolutionQueries))
-        {
-            if (WorkResolutionGuard.IsExplicitNonSelection(query)) continue;
-            prior.ObserveUserConfirmation(query);
-            if (prior.ResolvedWorks.Count == 0 && resolve(query) is { } result)
-                prior.ObservePriorUserSearch(result);
-            if (prior.ResolvedWorks.Count > 0) break;
-        }
-        return prior.ResolvedWorks.Order(StringComparer.Ordinal).ToArray();
-    }
 
     internal static bool HasUnscopedArticleIntent(JsonNode result) =>
         (result is JsonArray responses
@@ -1875,7 +1859,13 @@ public sealed class AskService
         Func<string, CancellationToken, ValueTask>? Synthesis = null,
         Func<PhaseUpdate, CancellationToken, ValueTask>? Phase = null);
 
-    public sealed record AskOutcome(int Status, JsonObject Body, bool RetainForReplay)
+    public sealed record AskOutcome(
+        int Status,
+        JsonObject Body,
+        bool RetainForReplay,
+        AskConversationContext? ConversationContext = null,
+        AskConversationContextDisposition ContextDisposition =
+            AskConversationContextDisposition.Preserve)
     {
         public void Deconstruct(out int status, out JsonObject body)
             => (status, body) = (Status, Body);
@@ -1892,33 +1882,31 @@ public sealed class AskService
     private async Task<SubjectPreflight> ResolveSubjectBeforePlanningAsync(
         IReadOnlyList<string> userQueries,
         string locale,
+        AskConversationContext? conversationContext,
         CancellationToken cancellationToken)
     {
         var raw = userQueries[^1];
         var watch = Stopwatch.StartNew();
         var guard = new WorkResolutionGuard(raw);
         guard.ObserveUserConfirmation(raw);
-        var priorWorks = new HashSet<string>(StringComparer.Ordinal);
-        if (IsAnaphoricWorkReference(raw))
+        var articleFromText = ArticleNumberFromUserText(raw);
+        if (IsAnaphoricWorkReference(raw)
+            && CarriedAuthority(conversationContext, articleFromText, raw) is { } carried)
         {
-            foreach (var prior in userQueries.SkipLast(1).Reverse().Take(MaxContextResolutionQueries))
-            {
-                var priorResult = await _legalTool("search", SubjectSearchArguments(prior),
-                    cancellationToken);
-                var priorGuard = new WorkResolutionGuard(prior);
-                priorGuard.ObservePriorUserSearch(priorResult);
-                if (priorGuard.ResolvedWorks.Count == 0) continue;
-                priorWorks.UnionWith(priorGuard.ResolvedWorks);
-                break;
-            }
-            guard.AuthorizePriorWorks(priorWorks);
+            watch.Stop();
+            return new SubjectPreflight(
+                carried,
+                null,
+                SubjectResolutionTrace(
+                    new JsonArray(), carried.Members.Select(member => member.Work).ToArray(),
+                    carried.ArticleNumber, "carried", locale),
+                watch.Elapsed.TotalMilliseconds);
         }
 
         var result = await _legalTool("search", SubjectSearchArguments(raw), cancellationToken);
-        var carriesPrior = priorWorks.Count > 0 && IsAnaphoricWorkReference(raw);
-        guard.ObserveCurrentUserSearch(result, carriesPrior);
-        var article = ArticleNumberFromUserSearch(result) ?? ArticleNumberFromUserText(raw);
-        var identityAuthorized = guard.IdentityResolutionRequested || carriesPrior;
+        guard.ObserveCurrentUserSearch(result, hasPriorContext: false);
+        var article = ArticleNumberFromUserSearch(result) ?? articleFromText;
+        var identityAuthorized = guard.IdentityResolutionRequested;
         SubjectAuthority? authority = null;
         if (identityAuthorized && guard.CurrentResolvedWorks.Count == 1)
         {
@@ -1959,13 +1947,6 @@ public sealed class AskService
                     watch.Elapsed.TotalMilliseconds);
             }
         }
-        else if (carriesPrior && priorWorks.Count == 1)
-        {
-            var work = priorWorks.Single();
-            authority = new SubjectAuthority(
-                [SubjectMember(guard, work, result, article, raw)], article);
-        }
-
         if (authority is null && guard.IdentityResolutionRequested)
         {
             var choice = guard.ClarificationFor(null, locale);
@@ -1985,6 +1966,60 @@ public sealed class AskService
                 authority is null ? "none" : "resolved", locale),
             watch.Elapsed.TotalMilliseconds);
     }
+
+    private static SubjectAuthority? CarriedAuthority(
+        AskConversationContext? context,
+        string? currentArticle,
+        string rawQuery)
+    {
+        if (context?.Subjects is not { Count: > 0 and <= OperationPlan.MaximumOperations } subjects
+            || subjects.Select(subject => subject.Work)
+                .Distinct(StringComparer.Ordinal).Count() != subjects.Count
+            || context.ArticleNumber is { Length: > LegalOperationCatalog.MaximumArticleNumberLength })
+            return null;
+        var effectiveArticle = currentArticle
+            ?? (RequestsWorkLevelScope(rawQuery) ? null : context.ArticleNumber);
+        var keepAnchor = effectiveArticle is { Length: > 0 }
+            && string.Equals(effectiveArticle, context.ArticleNumber,
+                StringComparison.OrdinalIgnoreCase);
+        var members = new List<SubjectAuthorityMember>(subjects.Count);
+        foreach (var subject in subjects)
+        {
+            if (string.IsNullOrWhiteSpace(subject.Work)
+                || subject.Work.Length > LegalOperationCatalog.MaximumStringLength
+                || WorkResolutionGuard.WorkKey(subject.Work) != subject.Work
+                || subject.ArticleAnchor is { Length: > LegalOperationCatalog.MaximumAnchorLength }
+                || subject.ExactLexId is { } exact
+                && (exact.Length > LegalOperationCatalog.MaximumStringLength
+                    || WorkResolutionGuard.WorkKey(exact) != subject.Work))
+                return null;
+            members.Add(new SubjectAuthorityMember(
+                subject.Work,
+                Title: null,
+                Mentions: [],
+                ArticleAnchor: keepAnchor ? subject.ArticleAnchor : null,
+                ExactLexId: subject.ExactLexId));
+        }
+        return new SubjectAuthority(members, effectiveArticle);
+    }
+
+    private static bool RequestsWorkLevelScope(string query)
+    {
+        var normalized = $" {Lex.Index.WorkSearch.Normalize(query)} ";
+        return new[]
+        {
+            " whole law ", " whole act ", " whole instrument ", " whole document ",
+            " entire law ", " entire act ", " entire instrument ", " entire document ",
+            " as a whole ", " work level ", " texte entier ", " loi entiere ",
+            " acte entier ", " document entier ", " dans son ensemble ",
+        }.Any(marker => normalized.Contains(marker, StringComparison.Ordinal));
+    }
+
+    private static AskConversationContext? ConversationContextFor(SubjectAuthority? authority) =>
+        authority is null ? null : new AskConversationContext(
+            authority.Members.Select(member => new AskResolvedSubjectContext(
+                member.Work, member.ArticleAnchor, member.ExactLexId)).ToArray(),
+            authority.ArticleNumber);
 
     private static SubjectAuthorityMember SubjectMember(
         WorkResolutionGuard guard,
@@ -2058,7 +2093,8 @@ public sealed class AskService
         string host,
         CancellationToken ct,
         AskProgressCallbacks? progress = null,
-        string? requestId = null)
+        string? requestId = null,
+        AskConversationContext? conversationContext = null)
     {
         if (!Enabled)
             return new AskOutcome(503, new JsonObject
@@ -2126,7 +2162,7 @@ public sealed class AskService
                     new PhaseUpdate(AskPhase.Resolution, AskPhaseStatus.Started),
                     firstResult.Token));
             var subject = await ResolveSubjectBeforePlanningAsync(
-                userQueries, requestLocale, firstResult.Token);
+                userQueries, requestLocale, conversationContext, firstResult.Token);
             if (progress?.Phase is not null)
                 await NotifyProgress(() => progress.Phase(
                     new PhaseUpdate(AskPhase.Resolution, AskPhaseStatus.Completed),
@@ -2148,7 +2184,12 @@ public sealed class AskService
                 && plan.Operations.All(operation =>
                     operation.Disposition == ApplicationDisposition.Clarification))
                 return SubjectClarificationOutcome(
-                    requestId, requestLocale, subject.Clarification, subject.Trace);
+                    requestId, requestLocale, subject.Clarification, subject.Trace) with
+                {
+                    ContextDisposition = IsAnaphoricWorkReference(rawUserQuery)
+                        ? AskConversationContextDisposition.Preserve
+                        : AskConversationContextDisposition.Clear,
+                };
             run = OperationRun.Start(plan);
             var (status, body) = await ExecutePlanAsync(
                 plan, run, userQueries, rawUserQuery, planningUsage,
@@ -2157,7 +2198,17 @@ public sealed class AskService
                 () => firstResult.CancelAfter(Timeout.InfiniteTimeSpan),
                 () => ct.IsCancellationRequested
                     ? TransportOutcome.Cancelled : TransportOutcome.TimedOut);
-            return new AskOutcome(status, body, true);
+            var nextContext = ConversationContextFor(subject.Authority);
+            return new AskOutcome(
+                status,
+                body,
+                true,
+                nextContext,
+                nextContext is not null
+                    ? AskConversationContextDisposition.Replace
+                    : IsAnaphoricWorkReference(rawUserQuery)
+                        ? AskConversationContextDisposition.Preserve
+                        : AskConversationContextDisposition.Clear);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {

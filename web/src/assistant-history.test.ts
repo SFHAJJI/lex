@@ -1,17 +1,18 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {
   actionableClarificationChoices,
   AssistantResponseError,
   askStreaming,
   askQuestionError,
-  boundedAskHistory,
   clarificationFollowUp,
   compoundOperationViews,
   populationScopeLabel,
   safeHttpsUrl,
   shouldOfferContextualFollowUps,
   signatureStatusLabel,
+  validAskThreadToken,
 } from "./api.ts";
 
 test("invalid signatures are distinct from unavailable verification", () => {
@@ -31,23 +32,26 @@ test("the versioned stream ignores stale events and exposes typed operation resu
   const operations: string[] = [];
   const phases: string[] = [];
   const serverRequestId = "0123456789abcdef0123456789abcdef";
+  const threadToken = "A".repeat(43);
   try {
     globalThis.fetch = async (_input, init) => {
       const headers = new Headers(init?.headers);
       assert.equal(headers.get("Idempotency-Key"), "request-a");
+      assert.equal(headers.get("X-Lex-Thread-Token"), null);
+      assert.equal(init?.body, JSON.stringify({ message: "coverage" }));
       return new Response([
         'event: step\ndata: {"version":"1","request_id":"stale","sequence":1,"payload":{"kind":"search","text":"stale"}}',
         `event: phase\ndata: {"version":"1","request_id":"${serverRequestId}","sequence":1,"payload":{"phase":"planning","status":"completed"}}`,
         `event: operation_result\ndata: {"version":"1","request_id":"${serverRequestId}","sequence":2,"payload":{"operation_id":"op-1","order":0,"legal_outcome":"succeeded","transport_outcome":"completed","effects":["coverage"],"ui":{"coverage":{"publishers":[]}}}}`,
         `event: operation_result\ndata: {"version":"1","request_id":"${serverRequestId}","sequence":2,"payload":{"operation_id":"duplicate"}}`,
-        `event: done\ndata: {"version":"1","request_id":"${serverRequestId}","sequence":3,"payload":{"reply":"done"}}`,
+        `event: done\ndata: {"version":"1","request_id":"${serverRequestId}","sequence":3,"payload":{"reply":"done","thread_token":"${threadToken}"}}`,
       ].join("\n\n") + "\n\n", { headers: {
         "Content-Type": "text/event-stream", "X-Lex-Request-Id": serverRequestId,
       } });
     };
 
     const reply = await askStreaming(
-      [{ role: "user", content: "coverage" }],
+      "coverage",
       { onStep: () => assert.fail("stale step was accepted"),
         onOperation: (operation) => operations.push(operation.operation_id),
         onPhase: (phase, status) => phases.push(`${phase}:${status}`) },
@@ -57,6 +61,7 @@ test("the versioned stream ignores stale events and exposes typed operation resu
     assert.deepEqual(operations, ["op-1"]);
     assert.deepEqual(phases, ["planning:completed"]);
     assert.equal(reply.reply, "done");
+    assert.equal(reply.thread_token, threadToken);
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -73,7 +78,7 @@ test("a failed streaming POST is never retried as a second request", async () =>
     };
 
     await assert.rejects(() => askStreaming(
-      [{ role: "user", content: "coverage" }],
+      "coverage",
       { onStep: () => undefined, onOperation: () => undefined },
       undefined,
       "request-b"), { message: "busy" });
@@ -94,7 +99,7 @@ test("a streamed transport failure preserves the bounded server explanation", as
       } });
 
     await assert.rejects(() => askStreaming(
-      [{ role: "user", content: "coverage" }],
+      "coverage",
       { onStep: () => undefined, onOperation: () => undefined },
       undefined,
       "request-c"), (error: unknown) => error instanceof AssistantResponseError
@@ -131,42 +136,24 @@ test("compound operation views preserve every typed result in user order", () =>
   assert.ok(views[1].ui?.gap);
 });
 
-test("assistant history is validated and bounded to six restored turns", () => {
-  const source = Array.from({ length: 14 }, (_, index) => ({
-    role: index % 2 === 0 ? "user" : "assistant",
-    content: `message ${index}`,
-  }));
-  source.splice(4, 0, { role: "tool", content: "untrusted" });
+test("the opaque thread capability is exact and never browser-persisted", () => {
+  assert.equal(validAskThreadToken("A".repeat(43)), true);
+  assert.equal(validAskThreadToken("A".repeat(42)), false);
+  assert.equal(validAskThreadToken("A".repeat(42) + "."), false);
 
-  const history = boundedAskHistory(source);
-
-  assert.equal(history.length, 12);
-  assert.equal(history[0].content, "message 2");
-  assert.equal(history.at(-1)?.content, "message 13");
-  assert.ok(history.every((item) => item.role === "user" || item.role === "assistant"));
-});
-
-test("assistant history rejects non-array persisted state", () => {
-  assert.deepEqual(boundedAskHistory({ role: "user", content: "question" }), []);
-});
-
-test("assistant history cannot exceed the server message limit or begin with an orphan reply", () => {
-  const history = boundedAskHistory([
-    { role: "assistant", content: "orphan" },
-    { role: "user", content: "question" },
-    { role: "assistant", content: "x".repeat(6_500) },
-  ]);
-
-  assert.deepEqual(history.map((item) => item.role), ["user", "assistant"]);
-  assert.equal(history[1].content.length, 4000);
-  assert.match(history[1].content, /Earlier answer shortened in conversation memory/);
+  const controller = readFileSync(
+    new URL("./AssistantController.tsx", import.meta.url), "utf8");
+  assert.doesNotMatch(controller, /sessionStorage|localStorage|ASK_HISTORY/);
+  assert.match(controller, /useRef<string>/);
+  assert.match(controller, /error\.status === 409/);
+  assert.match(controller, /threadToken\.current = undefined/);
+  assert.match(controller, /history\.current = \[\]/);
 });
 
 test("an over-limit current question is rejected instead of silently changed", () => {
   const question = "x".repeat(1001);
 
   assert.match(askQuestionError(question) ?? "", /1,000/);
-  assert.throws(() => boundedAskHistory([{ role: "user", content: question }]), RangeError);
 });
 
 test("a gap or error never inherits stale workspace follow-up actions", () => {
