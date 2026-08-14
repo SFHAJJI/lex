@@ -357,15 +357,6 @@ switch (args0[0])
             return writer.Accepted ? 0 : 4;
         }
     }
-    case "work-enrichment-build":
-    {
-        var input = Get("--input") ?? throw new ArgumentException("--input required");
-        var output = Get("--out") ?? throw new ArgumentException("--out required");
-        var collection = Get("--collection") ?? throw new ArgumentException("--collection required");
-        WorkEnrichmentFile.BuildReviewedArtifact(input, output, collection);
-        Console.Error.WriteLine($"[lex] wrote reviewed work enrichment for {collection} to {output}");
-        return 0;
-    }
     case "index":
     {
         var corpus = Get("--corpus") ?? throw new ArgumentException("--corpus required");
@@ -442,13 +433,8 @@ switch (args0[0])
             ?? throw new ArgumentException("--articles-commit required when --articles is supplied");
         var corpusCommit = Get("--corpus-commit")
             ?? throw new ArgumentException("--corpus-commit required");
-        var reviewedConfiguration = articles is null ? null
-            : Get("--reviewed-configuration")
-              ?? throw new ArgumentException(
-                  "--reviewed-configuration required when --articles is supplied");
         IndexFromCorpus.Build(corpus, articles, outDb, keyPem, now, semantic,
-            Get("--work-enrichment"), codeCommit, articlesCommit, corpusCommit,
-            reviewedConfiguration);
+            codeCommit, articlesCommit, corpusCommit);
         return 0;
     }
     case "derive":
@@ -462,14 +448,10 @@ switch (args0[0])
             Get("--corpus-commit"), "--corpus-commit");
         var deriverTreeId = Lex.Temporal.CodeIdentity.RequireFullGitObjectId(
             Get("--deriver-tree-id"), "--deriver-tree-id");
-        var configurationPath = Get("--reviewed-configuration")
-            ?? throw new ArgumentException("--reviewed-configuration required");
-        var configurationDigest = Lex.Derive.DerivationGeneration.Sha256File(
-            configurationPath);
         Console.Error.WriteLine($"[lex] derive {publisher} {corpus} -> {outRoot}");
         var stats = Lex.Derive.DeriveWriter.Derive(
             corpus, outRoot, publisher, deriverCodeCommit, deriverTreeId,
-            corpusCommit, configurationDigest);
+            corpusCommit);
         Console.Error.WriteLine($"  [derive] works={stats.Works} versions={stats.Versions} provisions={stats.Provisions} empty_provisions={stats.EmptyProvisions} mostly_empty_versions={stats.MostlyEmpty?.Count ?? 0} skipped={stats.Skipped} errors={stats.Errors.Count}");
         // Listed rather than summarised: each line names one document whose profile failed on it,
         // which is the unit someone can go and fix. A corpus percentage names nothing.
@@ -480,10 +462,10 @@ switch (args0[0])
     }
     case "verify":
     {
-        // verify corpus --corpus X | verify stamp --db X [--work-enrichment FILE]
+        // verify corpus --corpus X | verify stamp --db X
         //   [--expected-collection ID] [--expected-corpus-commit SHA]
         //   [--expected-code-commit SHA] [--corpus-manifest FILE]
-        //   [--articles-generation FILE] [--reviewed-configuration FILE]
+        //   [--articles-generation FILE]
         // | verify derive --publisher P --corpus X --articles Y
         switch (args0.Length > 1 ? args0[1] : "")
         {
@@ -501,15 +483,12 @@ switch (args0[0])
             case "stamp":
             {
                 var db = Get("--db") ?? throw new ArgumentException("--db required");
-                var enrichment = Get("--work-enrichment");
                 var expectedCollection = Get("--expected-collection");
                 var expectedCorpusCommit = Get("--expected-corpus-commit");
                 var expectedCodeCommit = Get("--expected-code-commit");
                 var expectedArticlesCommit = Get("--expected-articles-commit");
                 var corpusManifest = Get("--corpus-manifest");
                 var articlesGeneration = Get("--articles-generation");
-                var reviewedConfiguration = Get("--reviewed-configuration");
-                var expectedEnrichmentSha256 = Get("--expected-enrichment-sha256");
                 var expectedCorpusManifestSha256 = Get(
                     "--expected-corpus-manifest-sha256");
                 var expectedIngesterCodeCommit = Get(
@@ -518,18 +497,14 @@ switch (args0[0])
                     "--expected-deriver-code-commit");
                 var expectedDeriverTreeId = Get("--expected-deriver-tree-id");
                 var expectedGenerationSha256 = Get("--expected-generation-sha256");
-                var expectedReviewedConfigurationSha256 = Get(
-                    "--expected-reviewed-configuration-sha256");
                 var expectedProfilesSha256 = Get("--expected-profiles-sha256");
                 var hasProvenanceEvidence = corpusManifest is not null
-                    || articlesGeneration is not null || reviewedConfiguration is not null
-                    || expectedEnrichmentSha256 is not null
+                    || articlesGeneration is not null
                     || expectedCorpusManifestSha256 is not null
                     || expectedIngesterCodeCommit is not null
                     || expectedDeriverCodeCommit is not null
                     || expectedDeriverTreeId is not null
                     || expectedGenerationSha256 is not null
-                    || expectedReviewedConfigurationSha256 is not null
                     || expectedProfilesSha256 is not null;
                 if (expectedCollection is not null || expectedCorpusCommit is not null
                     || expectedCodeCommit is not null || expectedArticlesCommit is not null
@@ -537,13 +512,18 @@ switch (args0[0])
                 {
                     var strict = IndexStampVerifier.Verify(db,
                         new IndexStampVerificationInputs(
-                            expectedCollection, expectedCorpusCommit, enrichment,
-                            expectedCodeCommit, expectedArticlesCommit,
-                            corpusManifest, articlesGeneration, reviewedConfiguration,
-                            expectedEnrichmentSha256, expectedCorpusManifestSha256,
-                            expectedIngesterCodeCommit, expectedDeriverCodeCommit,
-                            expectedDeriverTreeId, expectedGenerationSha256,
-                            expectedReviewedConfigurationSha256, expectedProfilesSha256,
+                            ExpectedCollection: expectedCollection,
+                            ExpectedCorpusCommit: expectedCorpusCommit,
+                            ExpectedCodeCommit: expectedCodeCommit,
+                            ExpectedArticlesCommit: expectedArticlesCommit,
+                            CorpusManifestPath: corpusManifest,
+                            ArticlesGenerationPath: articlesGeneration,
+                            ExpectedCorpusManifestSha256: expectedCorpusManifestSha256,
+                            ExpectedIngesterCodeCommit: expectedIngesterCodeCommit,
+                            ExpectedDeriverCodeCommit: expectedDeriverCodeCommit,
+                            ExpectedDeriverTreeId: expectedDeriverTreeId,
+                            ExpectedGenerationSha256: expectedGenerationSha256,
+                            ExpectedProfilesSha256: expectedProfilesSha256,
                             RequireDerivedProvenance: expectedArticlesCommit is not null
                                 || articlesGeneration is not null));
                     Console.WriteLine($"collection={strict.Collection} " +
@@ -557,9 +537,6 @@ switch (args0[0])
                         $"code_commit_matches={strict.CodeCommitMatches} " +
                         $"articles_commit={strict.ArticlesCommit ?? "absent"} " +
                         $"articles_commit_matches={strict.ArticlesCommitMatches} " +
-                        $"enrichment_digest={(enrichment is null
-                            && expectedEnrichmentSha256 is null ? "not_checked"
-                            : strict.EnrichmentDigestMatches ? "matches" : "MISMATCH")} " +
                         $"derived_provenance={(strict.ProvenanceMatches
                             ? "matches" : "MISMATCH")}");
                     foreach (var error in strict.ProvenanceErrors)
@@ -573,21 +550,13 @@ switch (args0[0])
                 var claimed = r.Stamp.GetValueOrDefault("content_digest") ?? "";
                 var actual = r.ComputeContentDigest();
                 var contentOk = claimed.Length > 0 && claimed == actual;
-                var expectedEnrichment = enrichment is null ? null : Convert.ToHexStringLower(
-                    System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(enrichment)));
-                var actualEnrichment = r.Stamp.GetValueOrDefault("enrichment_digest");
-                var enrichmentOk = expectedEnrichment is null
-                                   || string.Equals(expectedEnrichment, actualEnrichment,
-                                       StringComparison.OrdinalIgnoreCase);
                 Console.WriteLine($"collection={r.Collection} schema={r.Stamp.GetValueOrDefault("schema")} " +
                     $"algorithm={r.Stamp.GetValueOrDefault("algorithm")} corpus_commit={r.Stamp.GetValueOrDefault("corpus_commit")} " +
                     $"built_at={r.Stamp.GetValueOrDefault("built_at")} signature_valid={r.SignatureValid} " +
                     $"content_digest={(claimed.Length == 0 ? "absent (index predates content binding)" : contentOk ? "matches" : "MISMATCH — contents were altered")}");
-                Console.WriteLine($"enrichment_digest={(expectedEnrichment is null
-                    ? "not_checked" : enrichmentOk ? "matches" : "MISMATCH")}");
                 if (!r.SignatureValid) return 3;
                 if (claimed.Length > 0 && !contentOk) return 4;
-                return enrichmentOk ? 0 : 5;
+                return 0;
             }
             case "derive":
             {
@@ -600,10 +569,6 @@ switch (args0[0])
                     Get("--corpus-commit"), "--corpus-commit");
                 var deriverTreeId = Lex.Temporal.CodeIdentity.RequireFullGitObjectId(
                     Get("--deriver-tree-id"), "--deriver-tree-id");
-                var configurationPath = Get("--reviewed-configuration")
-                    ?? throw new ArgumentException("--reviewed-configuration required");
-                var configurationDigest = Lex.Derive.DerivationGeneration.Sha256File(
-                    configurationPath);
                 var onlyWork = Get("--work");
                 var tmp = Path.Combine(Path.GetTempPath(), $"lex-verify-{Guid.NewGuid():N}");
                 try
@@ -620,7 +585,7 @@ switch (args0[0])
                     var outDir = Path.Combine(tmp, "articles");
                     Lex.Derive.DeriveWriter.Derive(
                         corpusToUse, outDir, publisher, deriverCodeCommit,
-                        deriverTreeId, corpusCommit, configurationDigest);
+                        deriverTreeId, corpusCommit);
                     int compared = 0, mismatched = 0, missing = 0;
                     foreach (var f in Directory.EnumerateFiles(Path.Combine(outDir, publisher), "*.*", SearchOption.AllDirectories))
                     {
@@ -637,7 +602,7 @@ switch (args0[0])
                 finally { try { Directory.Delete(tmp, true); } catch { } }
             }
             default:
-                Console.Error.WriteLine("usage: lex verify corpus --corpus X | lex verify stamp --db X [--expected-collection ID] [--expected-corpus-commit SHA] [--expected-code-commit SHA] [--expected-articles-commit SHA] [--work-enrichment FILE] [--corpus-manifest FILE --articles-generation FILE --reviewed-configuration FILE] | lex verify derive --publisher P --corpus X --articles Y [--work slug]");
+                Console.Error.WriteLine("usage: lex verify corpus --corpus X | lex verify stamp --db X [--expected-collection ID] [--expected-corpus-commit SHA] [--expected-code-commit SHA] [--expected-articles-commit SHA] [--corpus-manifest FILE --articles-generation FILE] | lex verify derive --publisher P --corpus X --articles Y [--work slug]");
                 return 1;
         }
     }
@@ -792,19 +757,15 @@ static void Usage() => Console.Error.WriteLine("""
       lex scope-preview [--publisher ID] [--scope FILE] [--previous-scope FILE] [--wave 1..4]
       lex ingest --publisher ID --corpus PATH --code-commit FULL_SHA [--scope FILE] [--wave 1..4] [--now ISO]
                  [--fresh]
-      lex work-enrichment-build --input REVIEWED.json --out CANONICAL.json --collection ID
       lex index  --corpus PATH [--articles PATH --articles-commit FULL_SHA] --out FILE.db [--keyfile KEY.pem] [--now ISO]
                  [--embedding-model PATH] [--vectors FILE] [--embedding-batch-size N]
-                 [--time-budget-minutes N] [--work-enrichment FILE.json]
-                 [--reviewed-configuration FILE] --corpus-commit FULL_SHA --code-commit FULL_SHA
+                 [--time-budget-minutes N] --corpus-commit FULL_SHA --code-commit FULL_SHA
       lex derive --publisher ID --corpus PATH --out PATH --code-commit FULL_SHA
                  --deriver-tree-id FULL_GIT_TREE_ID --corpus-commit FULL_SHA
-                 --reviewed-configuration FILE
       lex verify corpus --corpus PATH
       lex verify stamp --db FILE.db --expected-collection ID --expected-corpus-commit FULL_SHA
                  --expected-code-commit FULL_SHA --expected-articles-commit FULL_SHA
                  --corpus-manifest FILE --articles-generation FILE
-                 --reviewed-configuration FILE [--work-enrichment FILE]
       lex repair checkout-line-endings --corpus PATH
       lex artifact manifest --root DIR --file RELATIVE [--file RELATIVE] --manifest FILE --signature FILE --keyfile KEY.pem --key-id ID --code-commit SHA [--source KEY=VALUE]
       lex assistant-eval --base-url REVISION_URL --candidate-container-app-resource-id AZURE_ID --candidate-revision NAME --cases FILE --review-attestation FILE --review-signature FILE --out FILE --candidate-model-resource-id AZURE_ID --candidate-deployment ID --grader-model-resource-id AZURE_ID --grader-deployment ID [--grader-key-env NAME]

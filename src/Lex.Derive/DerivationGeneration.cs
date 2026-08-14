@@ -14,7 +14,7 @@ namespace Lex.Derive;
 /// </summary>
 public static class DerivationGeneration
 {
-    public const string SchemaId = "lex-articles-generation/2";
+    public const string SchemaId = "lex-articles-generation/3";
     public const string FileName = "generation.json";
 
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -31,7 +31,6 @@ public static class DerivationGeneration
         string IngesterCodeCommit,
         string DeriverCodeCommit,
         string DeriverTreeId,
-        string ReviewedConfigurationSha256,
         IReadOnlyList<string> Profiles,
         string ProfilesSha256);
 
@@ -43,7 +42,6 @@ public static class DerivationGeneration
         string ingesterCodeCommit,
         string deriverCodeCommit,
         string deriverTreeId,
-        string reviewedConfigurationSha256,
         IEnumerable<string> profiles)
     {
         publisher = Required(publisher, "publisher");
@@ -63,9 +61,6 @@ public static class DerivationGeneration
                 deriverCodeCommit, "generation deriver_code_commit"),
             CodeIdentity.RequireFullGitObjectId(
                 deriverTreeId, "generation deriver_tree_id"),
-            CodeIdentity.RequireSha256(
-                reviewedConfigurationSha256,
-                "generation reviewed_configuration_sha256"),
             sortedProfiles,
             ProfileDigest(sortedProfiles)), publisher);
 
@@ -175,7 +170,6 @@ public static class DerivationGeneration
             value["ingester_code_commit"]?.GetValue<string>() ?? "",
             value["deriver_code_commit"]?.GetValue<string>() ?? "",
             value["deriver_tree_id"]?.GetValue<string>() ?? "",
-            value["reviewed_configuration_sha256"]?.GetValue<string>() ?? "",
             parsedProfiles,
             value["profiles_sha256"]?.GetValue<string>() ?? ""), key);
     }
@@ -198,9 +192,6 @@ public static class DerivationGeneration
             entry.DeriverCodeCommit, "generation deriver_code_commit");
         CodeIdentity.RequireFullGitObjectId(
             entry.DeriverTreeId, "generation deriver_tree_id");
-        CodeIdentity.RequireSha256(
-            entry.ReviewedConfigurationSha256,
-            "generation reviewed_configuration_sha256");
         var canonicalProfiles = entry.Profiles.Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal).ToArray();
         if (!entry.Profiles.SequenceEqual(canonicalProfiles, StringComparer.Ordinal)
@@ -224,7 +215,6 @@ public static class DerivationGeneration
         ["ingester_code_commit"] = entry.IngesterCodeCommit,
         ["deriver_code_commit"] = entry.DeriverCodeCommit,
         ["deriver_tree_id"] = entry.DeriverTreeId,
-        ["reviewed_configuration_sha256"] = entry.ReviewedConfigurationSha256,
         ["profiles"] = new JsonArray(entry.Profiles.Select(profile => (JsonNode)profile).ToArray()),
         ["profiles_sha256"] = entry.ProfilesSha256,
     };

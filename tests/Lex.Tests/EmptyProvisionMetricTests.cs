@@ -233,7 +233,7 @@ public sealed class EmptyProvisionMetricTests
 
             var stagedWrites = 0;
             var stats = DeriveWriter.Derive(corpus, output, "eu-eurlex",
-                DeriverCommit, DeriverTree, CorpusCommit, EnrichmentDigest, path =>
+                DeriverCommit, DeriverTree, CorpusCommit, path =>
             {
                 Assert.True(File.Exists(path));
                 Assert.Equal(Path.GetPathRoot(output), Path.GetPathRoot(path));
@@ -404,7 +404,7 @@ public sealed class EmptyProvisionMetricTests
 
     private static DeriveWriter.Stats DeriveRoot(string root) => DeriveWriter.Derive(
         Path.Combine(root, "corpus"), Path.Combine(root, "articles"), "eu-eurlex",
-        DeriverCommit, DeriverTree, CorpusCommit, EnrichmentDigest);
+        DeriverCommit, DeriverTree, CorpusCommit);
 
     private static void WriteWork(string root, string slug, string html)
     {

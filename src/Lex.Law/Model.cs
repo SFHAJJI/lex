@@ -46,8 +46,9 @@ public sealed record ExpressionRecord(
     string? SourceUri);
 
 /// <summary>
-/// Publisher-supplied work discovery metadata. It is searchable metadata, not legal wording and
-/// not an exact identifier unless a separate reviewed alias says so.
+/// Publisher-supplied work metadata. Taxonomy rows are weak discovery signals; an exact,
+/// unique publisher short-title segment may identify a work, and an official same-as relation
+/// may canonicalize a publisher citation. None of these rows is legal wording.
 /// </summary>
 public sealed record PublisherMetadataRecord(
     string Kind,
@@ -96,7 +97,9 @@ public sealed record SourceBuildInventory(
     int ExpectedWorks,
     IReadOnlyList<SourceBuildIssue> Issues,
     bool EnumerationComplete = true,
-    int RetryMaximumAttempts = 1);
+    int RetryMaximumAttempts = 1,
+    string SourceConfigurationKind = "code_only",
+    string? SourceConfigurationSha256 = null);
 
 public interface ISourceBuildInventory
 {

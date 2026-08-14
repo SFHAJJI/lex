@@ -477,7 +477,8 @@ Every gated denominator must be non-empty for every frozen collection. Empty den
 Tests must cover route, authorized work, MCP tool and arguments, authoritative outcome, typed UI
 effect, evidence context, reply owner, locale, model-call count, and forbidden claims. Each case
 states whether it runs against the extended fixture, a recorded MCP contract, or production. The
-fixture adds a second publisher, same-title ambiguity, reviewed aliases, an extraction-profile
+fixture adds a second publisher, same-title ambiguity, unique and colliding official short-title
+segments, an extraction-profile
 pair, a future-dated work, metadata-only records, and direct/weak discovery hits. Minimum cases:
 
 - show Article 6 GDPR as of 2021;

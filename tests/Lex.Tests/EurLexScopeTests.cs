@@ -101,6 +101,61 @@ public sealed class EurLexScopeTests : IDisposable
     }
 
     [Fact]
+    public void Cellar_taxonomy_rows_preserve_alt_broader_subdomain_and_domain_as_weak_typed_metadata()
+    {
+        const string concept = "http://eurovoc.europa.eu/5181";
+        var subjects = new[]
+        {
+            Subject("eurovoc", concept, "en", "data protection"),
+            Subject("eurovoc_alt_label", concept, "en", "data breach"),
+            Subject("eurovoc_broader", "http://eurovoc.europa.eu/2472", "en", "information policy"),
+            Subject("eurovoc_subdomain", "http://eurovoc.europa.eu/100222", "en",
+                "3231 information and information processing"),
+            Subject("eurovoc_domain", "http://eurovoc.europa.eu/100150", "en",
+                "32 EDUCATION AND COMMUNICATIONS"),
+        };
+
+        var metadata = EurLexAdapter.BuildPublisherMetadata("32016R0679", [], subjects);
+
+        Assert.Equal(5, metadata.Count);
+        Assert.Equal(subjects.Select(row => row["kind"]).Order(StringComparer.Ordinal),
+            metadata.Select(item => item.Kind));
+        Assert.All(metadata, item =>
+        {
+            Assert.Equal("en", item.Language);
+            Assert.Equal(item.Identifier, item.SourceUri);
+        });
+
+        static Dictionary<string, string> Subject(
+            string kind, string identifier, string language, string label) => new(StringComparer.Ordinal)
+        {
+            ["kind"] = kind, ["identifier"] = identifier,
+            ["lang"] = language, ["label"] = label,
+        };
+    }
+
+    [Fact]
+    public void Cellar_taxonomy_rows_fail_closed_when_the_official_shape_is_unknown_or_incomplete()
+    {
+        static Dictionary<string, string> Row(
+            string kind, string identifier, string? language = "en", string? label = "label")
+        {
+            var row = new Dictionary<string, string>(StringComparer.Ordinal)
+                { ["kind"] = kind, ["identifier"] = identifier };
+            if (language is not null) row["lang"] = language;
+            if (label is not null) row["label"] = label;
+            return row;
+        }
+
+        Assert.Throws<InvalidDataException>(() => EurLexAdapter.BuildPublisherMetadata(
+            "32016R0679", [], [Row("invented", "https://example.test/concept")]));
+        Assert.Throws<InvalidDataException>(() => EurLexAdapter.BuildPublisherMetadata(
+            "32016R0679", [], [Row("eurovoc", "not-a-uri")]));
+        Assert.Throws<InvalidDataException>(() => EurLexAdapter.BuildPublisherMetadata(
+            "32016R0679", [], [Row("eurovoc", "https://example.test/concept", label: null)]));
+    }
+
+    [Fact]
     public void Cellar_resource_type_and_relationships_produce_only_controlled_document_roles()
     {
         Assert.Equal(["amending", "consolidated", "delegated"],

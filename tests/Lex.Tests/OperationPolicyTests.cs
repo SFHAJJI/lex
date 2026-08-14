@@ -89,6 +89,41 @@ public sealed class OperationPolicyTests
     }
 
     [Fact]
+    public void Publisher_metadata_filter_is_mcp_only_and_uses_the_shared_uri_contract()
+    {
+        var search = LegalOperationCatalog.Get("search");
+        var argument = Assert.Single(search.McpArguments,
+            candidate => candidate.Name == "publisher_metadata_identifier");
+        Assert.False(argument.Planner);
+        Assert.True(argument.RequiresAbsoluteHttpUri);
+        Assert.Equal(LegalOperationCatalog.MaximumPublisherMetadataIdentifierLength,
+            argument.MaximumLength);
+        Assert.Null(search.PlannerInputSchema()["properties"]![argument.Name]);
+
+        const string prefix = "https://example.test/";
+        var maximum = prefix + new string('a', argument.MaximumLength - prefix.Length);
+        McpInputPolicy.Validate("search", new JsonObject
+        {
+            ["query"] = "energy",
+            [argument.Name] = maximum,
+        });
+        Assert.ThrowsAny<ArgumentException>(() => McpInputPolicy.Validate("search", new JsonObject
+        {
+            ["query"] = "energy",
+            [argument.Name] = maximum + "a",
+        }));
+        Assert.ThrowsAny<ArgumentException>(() => McpInputPolicy.Validate("search", new JsonObject
+        {
+            ["query"] = "energy",
+            [argument.Name] = "ftp://example.test/not-authorized",
+        }));
+
+        var schema = search.McpToolDefinition()["inputSchema"]!["properties"]![argument.Name]!;
+        Assert.Equal(LegalOperationCatalog.AbsoluteHttpUriPattern,
+            schema["pattern"]!.GetValue<string>());
+    }
+
+    [Fact]
     public void Every_shared_catalog_bound_is_identical_at_both_runtime_gates()
     {
         foreach (var operation in LegalOperationCatalog.Operations)
@@ -1403,7 +1438,6 @@ public sealed class OperationPolicyTests
         { McpStatus.UnknownAnchor, LegalOutcome.NotFound },
         { McpStatus.UnknownPublisher, LegalOutcome.NotFound },
         { McpStatus.NoVersionForDate, LegalOutcome.NotAvailable },
-        { McpStatus.AmbiguousVersion, LegalOutcome.NeedsClarification },
         { McpStatus.AnchorNotInVersion, LegalOutcome.NotAvailable },
         { McpStatus.NoProvisionHistory, LegalOutcome.NotAvailable },
         { McpStatus.TextNotAvailable, LegalOutcome.NotAvailable },

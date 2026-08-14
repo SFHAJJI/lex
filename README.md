@@ -245,8 +245,11 @@ mounted publisher by default and can filter jurisdiction, date, hierarchy,
 legal form, binding status, domain and language. Keyword retrieval is
 deterministic FTS5/BM25. Hybrid adds the pinned local encoder and fixed rank
 fusion when verified vectors are mounted; no generative model participates in
-retrieval. Official work metadata and reviewed aliases such as `RGPD`, `GDPR`,
-`DORA`, and `AI Act` resolve deterministically. Model-derived weak discovery is
+retrieval. A unique segment of an official publisher short title such as `RGPD`,
+`GDPR`, `DORA`, or `AI Act` resolves deterministically; collisions require
+clarification. Official publisher subjects, EuroVoc relations, and directory
+coordinates support weak discovery but never become legal-text evidence or work
+identity. No manually curated legal aliases are loaded. Model-derived weak discovery is
 not active, and keyword remains the production default because the signed hybrid
 holdout gate has not passed. The optional assistant runs a bounded retrieval loop over
 the same tools, then uses Agent Framework for claim-typed composition and a conditional

@@ -6,7 +6,6 @@ namespace Lex.Tests;
 
 public sealed class WorkSearchTests : IDisposable
 {
-    private static readonly string EnrichmentDigest = new('e', 64);
     private readonly List<string> _files = [];
 
     private sealed class TestEncoder : ITextEncoder
@@ -76,25 +75,6 @@ public sealed class WorkSearchTests : IDisposable
         Assert.Equal(expected, WorkSearch.Normalize(value));
 
     [Fact]
-    public void Reviewed_alias_collision_is_rejected_at_build_time()
-    {
-        var db = TempDb();
-        var first = Doc("eu:32016r0679:2016-05-04", "32016r0679", "General Data Protection Regulation");
-        var second = Doc("eu:32022r2554:2022-12-27", "32022r2554", "Digital Operational Resilience Act");
-        var aliases = new[]
-        {
-            Alias("32016r0679", "fr", "RGPD"),
-            Alias("32022r2554", "fr", "R.G.P.D."),
-        };
-
-        var error = Assert.Throws<InvalidDataException>(() => IndexBuilder.Build(
-            db, Stamp(), [first, second], [], [], [], null,
-            workSearch: new WorkSearchBuildOptions(aliases, [], EnrichmentDigest)));
-
-        Assert.Contains("alias collision", error.Message, StringComparison.OrdinalIgnoreCase);
-    }
-
-    [Fact]
     public void Publisher_discovery_is_searchable_but_cannot_become_an_exact_work_constraint()
     {
         var db = TempDb();
@@ -104,8 +84,8 @@ public sealed class WorkSearchTests : IDisposable
             PublisherMetadata =
             [
                 new PublisherMetadataRow(
-                    "publisher_short_title",
-                    "http://publications.europa.eu/ontology/cdm#expression_title_short",
+                    "eurovoc",
+                    "http://eurovoc.europa.eu/5181",
                     "fr",
                     "gdpr, personal data, personal data protection",
                     source),
@@ -128,8 +108,142 @@ public sealed class WorkSearchTests : IDisposable
             """;
         using var row = command.ExecuteReader();
         Assert.True(row.Read());
-        Assert.Equal("publisher_short_title", row.GetString(0));
+        Assert.Equal("eurovoc", row.GetString(0));
         Assert.Equal(source, row.GetString(5));
+    }
+
+    [Fact]
+    public void Publisher_metadata_URI_filter_never_turns_a_citation_identity_into_discovery()
+    {
+        var db = TempDb();
+        const string identity = "https://data.legilux.public.lu/eli/etat/leg/code/civil";
+        var doc = Doc("lu:loi-1804:2024-01-01", "loi-1804", "Code civil") with
+        {
+            Language = "fr",
+            PublisherMetadata =
+            [
+                new PublisherMetadataRow(
+                    "legilux_same_as", identity, null, "code-civil", identity,
+                    CitationIdentity: true),
+            ],
+        };
+        IndexBuilder.Build(db, Stamp(), [doc],
+            [Provision(doc, "obligations civiles")], [], [], null);
+
+        using var reader = LexIndexReader.Open(db);
+        var result = reader.SearchKeyword(
+            "obligations civiles",
+            FilterSet.All with { PublisherMetadataIdentifier = identity },
+            10,
+            fuzzyAuto: false);
+
+        Assert.Empty(result.Hits);
+    }
+
+    [Fact]
+    public void Unique_official_short_title_segment_is_a_source_backed_strong_identity()
+    {
+        var db = TempDb();
+        var source = "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32022R2554";
+        var doc = Doc("eu:32022r2554:2024-01-01", "32022r2554", "Digital resilience instrument") with
+        {
+            Language = "en",
+            PublisherMetadata =
+            [
+                new PublisherMetadataRow("publisher_short_title",
+                    "http://publications.europa.eu/ontology/cdm#expression_title_short",
+                    "en", "DORA, Digital operational Resilience Act", source),
+            ],
+        };
+        IndexBuilder.Build(db, Stamp(), [doc], [], [], [], null);
+
+        using var reader = LexIndexReader.Open(db);
+        var result = reader.SearchKeyword("DORA", FilterSet.All, 10, false);
+
+        Assert.True(result.QueryPlan!.HasStrongWorkMatch);
+        Assert.Equal(["32022r2554"], result.QueryPlan.WorkConstraints);
+        var resolution = Assert.Single(result.QueryPlan.WorkResolutions!);
+        Assert.Equal("resolved", resolution.Status);
+        Assert.Equal("publisher_short_title", resolution.Kind);
+        Assert.Contains(result.Hits, hit => hit.Doc.GroupKey == "32022r2554"
+            && hit.MatchReasons.Contains("exact_publisher_short_title"));
+    }
+
+    [Fact]
+    public void Colliding_official_short_title_segment_is_ambiguous_not_arbitrarily_authoritative()
+    {
+        var db = TempDb();
+        DocRow Crd(string work) => Doc($"eu:{work}:2024-01-01", work, $"Directive {work}") with
+        {
+            Language = "en",
+            PublisherMetadata =
+            [
+                new PublisherMetadataRow("publisher_short_title",
+                    "http://publications.europa.eu/ontology/cdm#expression_title_short",
+                    "en", "CRD", $"https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:{work.ToUpperInvariant()}"),
+            ],
+        };
+        IndexBuilder.Build(db, Stamp(),
+            [Crd("32006l0048"), Crd("32009l0111"), Crd("32010l0076")],
+            [], [], [], null);
+
+        using var reader = LexIndexReader.Open(db);
+        var result = reader.SearchKeyword("CRD", FilterSet.All, 10, false);
+
+        Assert.False(result.QueryPlan!.HasStrongWorkMatch);
+        Assert.Empty(result.QueryPlan.WorkConstraints);
+        var resolution = Assert.Single(result.QueryPlan.WorkResolutions!);
+        Assert.Equal("ambiguous", resolution.Status);
+        Assert.Equal("publisher_short_title", resolution.Kind);
+        Assert.Equal(["32006l0048", "32009l0111", "32010l0076"], resolution.Candidates);
+    }
+
+    [Fact]
+    public void Official_short_title_segmentation_is_literal_deterministic_and_bounded()
+    {
+        var db = TempDb();
+        var doc = Doc("eu:segments:2024-01-01", "segments", "Segmented instrument") with
+        {
+            PublisherMetadata =
+            [
+                new PublisherMetadataRow("publisher_short_title",
+                    "http://publications.europa.eu/ontology/cdm#expression_title_short",
+                    "fr", string.Join(',', Enumerable.Range(1, 17).Select(index => $"Alias {index}")),
+                    "https://eur-lex.europa.eu/legal-content/FR/TXT/?uri=CELEX:SEGMENTS"),
+            ],
+        };
+
+        Assert.Throws<InvalidDataException>(() =>
+            IndexBuilder.Build(db, Stamp(), [doc], [], [], [], null));
+    }
+
+    [Fact]
+    public void Direct_legal_text_precedes_matching_weak_publisher_taxonomy()
+    {
+        var db = TempDb();
+        const string subject =
+            "https://data.legilux.public.lu/resource/authority/legal-subject/hydrogen";
+        var direct = Doc("lu:direct:2024-01-01", "direct", "Hydrogen decree");
+        var taxonomy = Doc("lu:taxonomy:2024-01-01", "taxonomy", "Industrial decree") with
+        {
+            PublisherMetadata =
+            [
+                new PublisherMetadataRow("legilux_subject_level2_theme", subject, "fr",
+                    "hydrogen safety obligations", subject),
+            ],
+        };
+        IndexBuilder.Build(db, Stamp(), [direct, taxonomy],
+            [Provision(direct, "Operators must comply with hydrogen safety obligations.")],
+            [], [], null);
+
+        using var reader = LexIndexReader.Open(db);
+        var result = reader.SearchKeyword("hydrogen safety obligations", FilterSet.All, 10, false);
+
+        Assert.Equal("direct", result.Hits[0].Doc.GroupKey);
+        Assert.Contains("keyword", result.Hits[0].MatchReasons);
+        Assert.Contains(result.Hits, hit => hit.Doc.GroupKey == "taxonomy"
+            && hit.MatchReasons.Contains("work_metadata"));
+        Assert.False(result.QueryPlan!.HasStrongWorkMatch);
     }
 
     [Fact]
@@ -142,7 +256,8 @@ public sealed class WorkSearchTests : IDisposable
             ValidTo = "2022-01-01",
             PublisherMetadata =
             [
-                new PublisherMetadataRow("publisher_short_title", "short-title", "fr",
+                new PublisherMetadataRow("publisher_short_title",
+                    "http://publications.europa.eu/ontology/cdm#expression_title_short", "fr",
                     "legacyname", source),
             ],
         };
@@ -150,7 +265,8 @@ public sealed class WorkSearchTests : IDisposable
         {
             PublisherMetadata =
             [
-                new PublisherMetadataRow("publisher_short_title", "short-title", "fr",
+                new PublisherMetadataRow("publisher_short_title",
+                    "http://publications.europa.eu/ontology/cdm#expression_title_short", "fr",
                     "modernname", source),
             ],
         };
@@ -172,7 +288,8 @@ public sealed class WorkSearchTests : IDisposable
         {
             PublisherMetadata =
             [
-                new PublisherMetadataRow("eurovoc", "subject-1", "fr", "energy",
+                new PublisherMetadataRow("eurovoc",
+                    "https://publications.europa.eu/resource/authority/eurovoc/1", "fr", "energy",
                     "https://publications.europa.eu/resource/authority/eurovoc/1"),
             ],
             DocumentRoles = ["delegated"],
@@ -383,7 +500,7 @@ public sealed class WorkSearchTests : IDisposable
             {
                 PublisherMetadata =
                 [
-                    new PublisherMetadataRow("eurovoc", $"subject-{index}", "fr", "alpha", source),
+                    new PublisherMetadataRow("eurovoc", $"{source}/{index}", "fr", "alpha", source),
                 ],
             }).ToArray();
         var target = Doc("eu:target:2024-01-01", "target", "Alpha Gamma Regulation");
@@ -405,7 +522,7 @@ public sealed class WorkSearchTests : IDisposable
             {
                 PublisherMetadata =
                 [
-                    new PublisherMetadataRow("eurovoc", $"subject-{index}", "fr",
+                    new PublisherMetadataRow("eurovoc", $"{source}/{index}", "fr",
                         "sharedterm", source),
                 ],
             }).ToArray();
@@ -447,11 +564,11 @@ public sealed class WorkSearchTests : IDisposable
     }
 
     [Fact]
-    public void Reviewed_alias_inside_a_long_query_pins_the_base_work_before_its_corrigendum()
+    public void Official_short_title_inside_a_long_query_pins_the_base_work_before_its_corrigendum()
     {
         var db = TempDb();
-        var regulation = Doc("eu:32016r0679:2016-05-04", "32016r0679",
-            "General Data Protection Regulation");
+        var regulation = WithShortTitles(Doc("eu:32016r0679:2016-05-04", "32016r0679",
+            "General Data Protection Regulation"), "RGPD");
         var corrigendum = Doc("eu:32016r0679r(02):2018-05-23", "32016r0679r(02)",
             "Rectificatif au règlement (UE) 2016/679");
         var provisions = new[]
@@ -460,9 +577,7 @@ public sealed class WorkSearchTests : IDisposable
             Provision(corrigendum, "Rectificatif au règlement relatif à la protection des données."),
         };
 
-        IndexBuilder.Build(db, Stamp(), [regulation, corrigendum], provisions, [], [], null,
-            workSearch: new WorkSearchBuildOptions(
-                [Alias("32016r0679", "fr", "RGPD")], [], EnrichmentDigest));
+        IndexBuilder.Build(db, Stamp(), [regulation, corrigendum], provisions, [], [], null);
 
         using var reader = LexIndexReader.Open(db);
         var result = reader.SearchKeyword(
@@ -470,8 +585,8 @@ public sealed class WorkSearchTests : IDisposable
             FilterSet.All, 10, fuzzyAuto: false);
 
         Assert.Equal("32016r0679", result.Hits[0].Doc.GroupKey);
-        Assert.Contains("contained_alias", result.Hits[0].MatchReasons);
-        Assert.Equal(EnrichmentDigest, reader.Stamp["enrichment_digest"]);
+        Assert.Contains("contained_publisher_short_title", result.Hits[0].MatchReasons);
+        Assert.DoesNotContain("enrichment_digest", reader.Stamp.Keys);
         Assert.Equal("0", reader.Stamp["work_vector_records"]);
         Assert.DoesNotContain("vector_layout", reader.Stamp.Keys);
         Assert.Empty(result.QueryExpansions);
@@ -664,16 +779,14 @@ public sealed class WorkSearchTests : IDisposable
     }
 
     [Fact]
-    public void Multiple_reviewed_names_resolve_as_multiple_explicit_work_constraints()
+    public void Multiple_official_short_titles_resolve_as_multiple_explicit_work_constraints()
     {
         var db = TempDb();
-        var gdpr = Doc("eu:gdpr:2024-01-01", "gdpr", "Privacy regulation");
-        var dora = Doc("eu:dora:2024-01-01", "dora", "Resilience regulation");
+        var gdpr = WithShortTitles(Doc("eu:gdpr:2024-01-01", "gdpr", "Privacy regulation"), "GDPR");
+        var dora = WithShortTitles(Doc("eu:dora:2024-01-01", "dora", "Resilience regulation"), "DORA");
         IndexBuilder.Build(db, Stamp(), [gdpr, dora],
             [Provision(gdpr, "Reporting obligations."), Provision(dora, "Reporting obligations.")],
-            [], [], null, workSearch: new WorkSearchBuildOptions(
-                [Alias("gdpr", "fr", "GDPR"), Alias("dora", "fr", "DORA")],
-                [], EnrichmentDigest));
+            [], [], null);
 
         using var reader = LexIndexReader.Open(db);
         var result = reader.SearchKeyword(
@@ -691,11 +804,10 @@ public sealed class WorkSearchTests : IDisposable
     public void Multiple_names_for_one_work_remain_distinct_resolutions_with_one_constraint()
     {
         var db = TempDb();
-        var gdpr = Doc("eu:gdpr:2024-01-01", "gdpr", "Privacy regulation");
+        var gdpr = WithShortTitles(Doc("eu:gdpr:2024-01-01", "gdpr", "Privacy regulation"),
+            "GDPR", "RGPD");
         IndexBuilder.Build(db, Stamp(), [gdpr], [Provision(gdpr, "Reporting obligations.")],
-            [], [], null, workSearch: new WorkSearchBuildOptions(
-                [Alias("gdpr", "fr", "GDPR"), Alias("gdpr", "fr", "RGPD")],
-                [], EnrichmentDigest));
+            [], [], null);
 
         using var reader = LexIndexReader.Open(db);
         var result = reader.SearchKeyword(
@@ -712,10 +824,10 @@ public sealed class WorkSearchTests : IDisposable
     public void Mixed_known_and_unknown_identifiers_preserve_each_resolution_state()
     {
         var db = TempDb();
-        var gdpr = Doc("eu:32016r0679:2024-01-01", "32016r0679", "Privacy regulation");
+        var gdpr = WithShortTitles(
+            Doc("eu:32016r0679:2024-01-01", "32016r0679", "Privacy regulation"), "GDPR");
         IndexBuilder.Build(db, Stamp(), [gdpr], [Provision(gdpr, "Reporting obligations.")],
-            [], [], null, workSearch: new WorkSearchBuildOptions(
-                [Alias("32016r0679", "fr", "GDPR")], [], EnrichmentDigest));
+            [], [], null);
 
         using var reader = LexIndexReader.Open(db);
         var result = reader.SearchKeyword(
@@ -779,16 +891,14 @@ public sealed class WorkSearchTests : IDisposable
     public void Article_intent_inside_a_named_work_query_returns_the_requested_provision()
     {
         var db = TempDb();
-        var regulation = Doc("eu:32016r0679:2016-05-04", "32016r0679", "GDPR") with
+        var regulation = WithShortTitles(Doc("eu:32016r0679:2016-05-04", "32016r0679", "GDPR") with
         {
             DocumentRoles = ["delegated"],
-        };
+        }, "RGPD");
         var article = Provision(regulation,
             "The controller shall notify a personal data breach to the supervisory authority.",
             anchor: "art_33", number: "33");
-        IndexBuilder.Build(db, Stamp(), [regulation], [article], [], [], null,
-            workSearch: new WorkSearchBuildOptions(
-                [Alias("32016r0679", "fr", "RGPD")], [], EnrichmentDigest));
+        IndexBuilder.Build(db, Stamp(), [regulation], [article], [], [], null);
 
         using var reader = LexIndexReader.Open(db);
         var result = reader.SearchKeyword(
@@ -802,16 +912,14 @@ public sealed class WorkSearchTests : IDisposable
     }
 
     [Fact]
-    public void Short_reviewed_alias_inside_article_comparison_resolves_the_named_work()
+    public void Short_official_name_inside_article_comparison_resolves_the_named_work()
     {
         var db = TempDb();
-        var crr = Doc("eu:32013r0575:2020-01-01", "32013r0575",
-            "Regulation (EU) No 575/2013");
+        var crr = WithShortTitles(Doc("eu:32013r0575:2020-01-01", "32013r0575",
+            "Regulation (EU) No 575/2013"), "CRR");
         IndexBuilder.Build(db, Stamp(), [crr],
             [Provision(crr, "Institutions shall comply with own funds requirements.",
-                "art_92", "92")], [], [], null,
-            workSearch: new WorkSearchBuildOptions(
-                [Alias("32013r0575", "fr", "CRR")], [], EnrichmentDigest));
+                "art_92", "92")], [], [], null);
 
         using var reader = LexIndexReader.Open(db);
         var result = reader.SearchKeyword(
@@ -831,16 +939,14 @@ public sealed class WorkSearchTests : IDisposable
     public void Named_work_resolution_scopes_residual_provision_search()
     {
         var db = TempDb();
-        var regulation = Doc("eu:32016r0679:2016-05-04", "32016r0679", "GDPR") with
+        var regulation = WithShortTitles(Doc("eu:32016r0679:2016-05-04", "32016r0679", "GDPR") with
         {
             DocumentRoles = ["delegated"],
-        };
+        }, "RGPD");
         var unrelated = Doc("eu:unrelated:2020-01-01", "unrelated", "Reporting Act");
         IndexBuilder.Build(db, Stamp(), [regulation, unrelated],
             [Provision(regulation, "Controllers have reporting obligations."),
-             Provision(unrelated, "Companies have reporting obligations.")], [], [], null,
-            workSearch: new WorkSearchBuildOptions(
-                [Alias("32016r0679", "fr", "RGPD")], [], EnrichmentDigest));
+             Provision(unrelated, "Companies have reporting obligations.")], [], [], null);
 
         using var reader = LexIndexReader.Open(db);
         var result = reader.SearchKeyword(
@@ -920,12 +1026,11 @@ public sealed class WorkSearchTests : IDisposable
     public void A_missing_requested_article_never_falls_through_to_a_different_article()
     {
         var db = TempDb();
-        var regulation = Doc("eu:32016r0679:2016-05-04", "32016r0679", "GDPR");
+        var regulation = WithShortTitles(
+            Doc("eu:32016r0679:2016-05-04", "32016r0679", "GDPR"), "RGPD");
         IndexBuilder.Build(db, Stamp(), [regulation],
             [Provision(regulation, "Personal data breach notification.", "art_33", "33")],
-            [], [], null,
-            workSearch: new WorkSearchBuildOptions(
-                [Alias("32016r0679", "fr", "RGPD")], [], EnrichmentDigest));
+            [], [], null);
 
         using var reader = LexIndexReader.Open(db);
         var result = reader.SearchKeyword(
@@ -993,14 +1098,12 @@ public sealed class WorkSearchTests : IDisposable
     public void Role_intent_is_removed_from_the_residual_provision_query()
     {
         var db = TempDb();
-        var regulation = Doc("eu:32016r0679:2016-05-04", "32016r0679", "GDPR") with
+        var regulation = WithShortTitles(Doc("eu:32016r0679:2016-05-04", "32016r0679", "GDPR") with
         {
             DocumentRoles = ["delegated"],
-        };
+        }, "RGPD");
         IndexBuilder.Build(db, Stamp(), [regulation],
-            [Provision(regulation, "Controllers have reporting obligations.")], [], [], null,
-            workSearch: new WorkSearchBuildOptions(
-                [Alias("32016r0679", "fr", "RGPD")], [], EnrichmentDigest));
+            [Provision(regulation, "Controllers have reporting obligations.")], [], [], null);
 
         using var reader = LexIndexReader.Open(db);
         var result = reader.SearchKeyword(
@@ -1015,11 +1118,9 @@ public sealed class WorkSearchTests : IDisposable
     public void Article_intent_accepts_digit_suffixed_numbers()
     {
         var db = TempDb();
-        var regulation = Doc("eu:act:2020-01-01", "act", "Example Act");
+        var regulation = WithShortTitles(Doc("eu:act:2020-01-01", "act", "Example Act"), "Example");
         IndexBuilder.Build(db, Stamp(), [regulation],
-            [Provision(regulation, "Specific rule.", "art_6a", "6a")], [], [], null,
-            workSearch: new WorkSearchBuildOptions(
-                [Alias("act", "fr", "Example")], [], EnrichmentDigest));
+            [Provision(regulation, "Specific rule.", "art_6a", "6a")], [], [], null);
 
         using var reader = LexIndexReader.Open(db);
         var result = reader.SearchKeyword(
@@ -1034,12 +1135,11 @@ public sealed class WorkSearchTests : IDisposable
     public void Article_intent_normalizes_lettered_code_numbers_without_guessing_the_work()
     {
         var db = TempDb();
-        var code = Doc("eu:code:2020-01-01", "code", "Employment Code");
+        var code = WithShortTitles(Doc("eu:code:2020-01-01", "code", "Employment Code"),
+            "Code emploi");
         IndexBuilder.Build(db, Stamp(), [code],
             [Provision(code, "Employment notice rules.", "art_l_111-1", "L. 111-1")],
-            [], [], null,
-            workSearch: new WorkSearchBuildOptions(
-                [Alias("code", "fr", "Code emploi")], [], EnrichmentDigest));
+            [], [], null);
 
         using var reader = LexIndexReader.Open(db);
         var result = reader.SearchKeyword(
@@ -1048,107 +1148,6 @@ public sealed class WorkSearchTests : IDisposable
         Assert.Equal("art_l_111-1", result.Hits[0].Provision.Anchor);
         Assert.Equal("l 111 1", result.QueryPlan!.ArticleNumber);
         Assert.Equal(["code"], result.QueryPlan.WorkConstraints);
-    }
-
-    [Fact]
-    public void Weak_discovery_is_quarantined_from_ordinary_keyword_search()
-    {
-        var db = TempDb();
-        var direct = Doc("eu:direct:2020-01-01", "direct", "Direct evidence act");
-        var tagged = Doc("eu:tagged:2020-01-01", "tagged", "Unrelated formal title");
-        IndexBuilder.Build(db, Stamp(), [direct, tagged],
-            [Provision(direct, "This law regulates photovoltaic procurement."),
-             Provision(tagged, "This law regulates reporting obligations.")], [], [], null,
-            workSearch: new WorkSearchBuildOptions([], [
-                new WorkDiscoveryRow("tagged", "fr", "concept", "photovoltaic procurement",
-                    "test-model", new string('a', 64), new string('b', 64),
-                    "2026-08-08T00:00:00Z", 0.91, 3, 1.0,
-                    [new WorkEvidenceAnchor(tagged.Key, "art_1",
-                        Provision(tagged, "This law regulates reporting obligations.").TextSha)])
-            ], EnrichmentDigest));
-
-        using var reader = LexIndexReader.Open(db);
-        var result = reader.SearchKeyword("photovoltaic procurement", FilterSet.All, 10, fuzzyAuto: false);
-
-        Assert.Equal("direct", result.Hits[0].Doc.GroupKey);
-        Assert.DoesNotContain(result.Hits, hit => hit.MatchReasons.Contains("work_discovery"));
-    }
-
-    [Fact]
-    public void Weak_discovery_is_bounded_per_work_kind_and_evidence_set()
-    {
-        var db = TempDb();
-        var doc = Doc("eu:target:2020-01-01", "target", "Target regulation");
-        var provision = Provision(doc, "Authoritative publisher wording.");
-        WorkDiscoveryRow Discovery(int index, IReadOnlyList<WorkEvidenceAnchor>? evidence = null) =>
-            new("target", "fr", "concept", $"bounded concept {index}", "test-model",
-                new string('a', 64), new string('b', 64), "2026-08-08T00:00:00Z",
-                0.91, 3, 1.0, evidence ??
-                [new WorkEvidenceAnchor(doc.Key, provision.Anchor, provision.TextSha)]);
-
-        var tooManyConcepts = Enumerable.Range(0, WorkSearch.MaxDiscoveryPerKind + 1)
-            .Select(index => Discovery(index)).ToArray();
-        var kindError = Assert.Throws<InvalidDataException>(() => IndexBuilder.Build(
-            db, Stamp(), [doc], [provision], [], [], null,
-            workSearch: new WorkSearchBuildOptions([], tooManyConcepts, EnrichmentDigest)));
-        Assert.Contains("per-kind", kindError.Message, StringComparison.OrdinalIgnoreCase);
-
-        var tooMuchEvidence = Enumerable.Range(0, WorkSearch.MaxEvidenceAnchors + 1)
-            .Select(index => new WorkEvidenceAnchor(doc.Key, provision.Anchor, provision.TextSha))
-            .ToArray();
-        var evidenceError = Assert.Throws<InvalidDataException>(() => IndexBuilder.Build(
-            TempDb(), Stamp(), [doc], [provision], [], [], null,
-            workSearch: new WorkSearchBuildOptions([], [Discovery(0, tooMuchEvidence)],
-                EnrichmentDigest)));
-        Assert.Contains("evidence", evidenceError.Message, StringComparison.OrdinalIgnoreCase);
-    }
-
-    [Fact]
-    public void Weak_discovery_rows_are_bound_by_the_signed_content_digest()
-    {
-        var db = TempDb();
-        var doc = Doc("eu:target:2020-01-01", "target", "Target regulation");
-        var provision = Provision(doc, "Authoritative publisher wording.");
-        var discovery = new WorkDiscoveryRow(
-            "target", "fr", "concept", "bounded concept", "test-model",
-            new string('a', 64), new string('b', 64), "2026-08-08T00:00:00Z",
-            0.91, 3, 1.0,
-            [new WorkEvidenceAnchor(doc.Key, provision.Anchor, provision.TextSha)]);
-        IndexBuilder.Build(db, Stamp(), [doc], [provision], [], [], StampSigner.CreateKeyPem(),
-            workSearch: new WorkSearchBuildOptions([], [discovery], EnrichmentDigest));
-        string committed;
-        using (var reader = LexIndexReader.Open(db))
-        {
-            committed = reader.Stamp["content_digest"];
-            Assert.Equal(committed, reader.ComputeContentDigest());
-        }
-        using (var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={db}"))
-        {
-            connection.Open();
-            using var command = connection.CreateCommand();
-            command.CommandText = "UPDATE work_discovery SET value='tampered concept'";
-            command.ExecuteNonQuery();
-        }
-        using var tampered = LexIndexReader.Open(db);
-        Assert.NotEqual(committed, tampered.ComputeContentDigest());
-    }
-
-    [Fact]
-    public void Enrichment_cannot_change_the_authoritative_content_digest()
-    {
-        var plainDb = TempDb();
-        var enrichedDb = TempDb();
-        var doc = Doc("eu:32016r0679:2016-05-04", "32016r0679", "GDPR");
-        var provision = Provision(doc, "Authoritative publisher wording.");
-
-        IndexBuilder.Build(plainDb, Stamp(), [doc], [provision], [], [], null);
-        IndexBuilder.Build(enrichedDb, Stamp(), [doc], [provision], [], [], null,
-            workSearch: new WorkSearchBuildOptions(
-                [Alias("32016r0679", "fr", "RGPD")], [], EnrichmentDigest));
-
-        using var plain = LexIndexReader.Open(plainDb);
-        using var enriched = LexIndexReader.Open(enrichedDb);
-        Assert.Equal(plain.Stamp["content_digest"], enriched.Stamp["content_digest"]);
     }
 
     [Fact]
@@ -1199,9 +1198,7 @@ public sealed class WorkSearchTests : IDisposable
         var doc = Doc("eu:32016r0679:2016-05-04", "32016r0679", "General Data Protection Regulation");
         IndexBuilder.Build(db, Stamp(), [doc],
             [Provision(doc, "Personal data protection and execution measures.")],
-            [], [], null,
-            workSearch: new WorkSearchBuildOptions(
-                [Alias("32016r0679", "fr", "RGPD")], [], EnrichmentDigest));
+            [], [], null);
         using (var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={db}"))
         {
             connection.Open();
@@ -1250,6 +1247,29 @@ public sealed class WorkSearchTests : IDisposable
     }
 
     [Fact]
+    public void Extended_work_catalog_without_source_backed_citation_identity_requires_rebuild()
+    {
+        var db = TempDb();
+        var doc = Doc("eu:32016r0679:2016-05-04", "32016r0679", "GDPR");
+        IndexBuilder.Build(db, Stamp(), [doc],
+            [Provision(doc, "Personal data protection.")], [], [], null);
+        using (var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={db}"))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = """
+                ALTER TABLE work_publisher_metadata DROP COLUMN citation_identity;
+                UPDATE stamp SET v='2' WHERE k='work_catalog_version';
+                """;
+            command.ExecuteNonQuery();
+        }
+
+        var error = Assert.Throws<InvalidDataException>(() => LexIndexReader.Open(db));
+        Assert.Contains("work catalog version 2", error.Message, StringComparison.Ordinal);
+        Assert.Contains("rebuild", error.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void Hybrid_falls_back_when_an_earlier_v3_index_has_no_work_catalog()
     {
         var db = TempDb();
@@ -1287,72 +1307,25 @@ public sealed class WorkSearchTests : IDisposable
     }
 
     [Fact]
-    public void Hybrid_lookup_keeps_a_contained_reviewed_alias_deterministic()
+    public void Hybrid_lookup_keeps_a_contained_official_short_title_deterministic()
     {
         var db = TempDb();
         var vectors = TempFile(".vectors");
-        var regulation = Doc("eu:32016r0679:2016-05-04", "32016r0679", "GDPR");
+        var regulation = WithShortTitles(
+            Doc("eu:32016r0679:2016-05-04", "32016r0679", "GDPR"), "RGPD");
         var neighbour = Doc("eu:32019r2175:2019-12-27", "32019r2175", "Amending regulation");
         using var encoder = new TestEncoder();
         IndexBuilder.Build(db, Stamp(), [regulation, neighbour],
             [Provision(regulation, "Personal data protection."),
              Provision(neighbour, "Amends several data protection rules.")], [], [], null,
-            semantic: new SemanticBuildOptions(encoder, vectors, "model-sha", "tokenizer-sha"),
-            workSearch: new WorkSearchBuildOptions(
-                [Alias("32016r0679", "fr", "RGPD")], [], EnrichmentDigest));
+            semantic: new SemanticBuildOptions(encoder, vectors, "model-sha", "tokenizer-sha"));
 
         using var reader = LexIndexReader.Open(db, encoder, vectors);
         var result = reader.SearchHybrid("show me RGPD", FilterSet.All, 10, fuzzyAuto: false);
 
         Assert.Equal("keyword", result.RetrievalMode);
         Assert.Equal("32016r0679", result.Hits[0].Doc.GroupKey);
-        Assert.Contains("contained_alias", result.Hits[0].MatchReasons);
-    }
-
-    [Fact]
-    public void Hybrid_quarantines_weak_concept_vectors_from_ordinary_search()
-    {
-        var db = TempDb();
-        var vectors = TempFile(".vectors");
-        var target = Doc("eu:target:2020-01-01", "target", "Net-zero industry rules");
-        var neighbour = Doc("eu:neighbour:2020-01-01", "neighbour", "Reporting rules");
-        var targetProvision = Provision(target, "Manufacturers submit annual reports.");
-        var neighbourProvision = Provision(neighbour, "Operators keep accounting records.");
-        var progress = new List<SemanticBuildProgress>();
-        using var encoder = new TestEncoder();
-        IndexBuilder.Build(db, Stamp(), [target, neighbour], [targetProvision, neighbourProvision],
-            [], [], null,
-            semantic: new SemanticBuildOptions(
-                encoder, vectors, "model-sha", "tokenizer-sha", Progress: progress.Add),
-            workSearch: new WorkSearchBuildOptions([], [
-                new WorkDiscoveryRow("target", "fr", "concept", "solar tender criteria",
-                    "test-model", new string('a', 64), new string('b', 64),
-                    "2026-08-08T00:00:00Z", 0.91, 3, 1.0,
-                    [new WorkEvidenceAnchor(target.Key, "art_1", targetProvision.TextSha)])
-            ], EnrichmentDigest));
-
-        using var allVectors = new SemanticVectorReader(vectors);
-        Assert.Equal(5, allVectors.Count);
-        using (var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={db}"))
-        {
-            connection.Open();
-            using var command = connection.CreateCommand();
-            command.CommandText = "SELECT MIN(vector_ordinal),MAX(vector_ordinal),COUNT(*) FROM work_vectors";
-            using var row = command.ExecuteReader();
-            Assert.True(row.Read());
-            Assert.Equal(2, row.GetInt64(0));
-            Assert.Equal(4, row.GetInt64(1));
-            Assert.Equal(3, row.GetInt64(2));
-        }
-        using var reader = LexIndexReader.Open(db, encoder, vectors);
-        var result = reader.SearchHybrid("photovoltaic procurement", FilterSet.All, 10, fuzzyAuto: false);
-
-        Assert.Equal("hybrid", result.RetrievalMode);
-        Assert.DoesNotContain(result.Hits, hit => hit.MatchReasons.Contains("semantic_concept"));
-        Assert.Contains(progress, item => item.Stage == SemanticBuildStage.WorkEmbeddings
-            && item.Completed == 3 && item.Total == 3);
-        Assert.Equal("3", reader.Stamp["work_vector_records"]);
-        Assert.Equal("lex-vectors/1-mixed-provision-work", reader.Stamp["vector_layout"]);
+        Assert.Contains("contained_publisher_short_title", result.Hits[0].MatchReasons);
     }
 
     [Fact]
@@ -1361,8 +1334,7 @@ public sealed class WorkSearchTests : IDisposable
         var db = TempDb();
         var doc = Doc("eu:32016r0679:2016-05-04", "32016r0679", "GDPR");
         IndexBuilder.Build(db, Stamp(), [doc], [Provision(doc, "Personal data protection.")],
-            [], [], null,
-            workSearch: new WorkSearchBuildOptions([], [], EnrichmentDigest));
+            [], [], null);
         using (var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={db}"))
         {
             connection.Open();
@@ -1381,8 +1353,7 @@ public sealed class WorkSearchTests : IDisposable
         var db = TempDb();
         var doc = Doc("eu:32016r0679:2016-05-04", "32016r0679", "GDPR");
         IndexBuilder.Build(db, Stamp(), [doc], [Provision(doc, "Personal data protection.")],
-            [], [], null,
-            workSearch: new WorkSearchBuildOptions([], [], EnrichmentDigest));
+            [], [], null);
         using (var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={db}"))
         {
             connection.Open();
@@ -1412,13 +1383,7 @@ public sealed class WorkSearchTests : IDisposable
         var provision = Provision(doc, "Manufacturers submit annual reports.");
         using var encoder = new TestEncoder();
         IndexBuilder.Build(db, Stamp(), [doc], [provision], [], [], null,
-            semantic: new SemanticBuildOptions(encoder, vectors, "model-sha", "tokenizer-sha"),
-            workSearch: new WorkSearchBuildOptions([], [
-                new WorkDiscoveryRow("target", "fr", "concept", "solar tender criteria",
-                    "test-model", new string('a', 64), new string('b', 64),
-                    "2026-08-08T00:00:00Z", 0.91, 3, 1.0,
-                    [new WorkEvidenceAnchor(doc.Key, "art_1", provision.TextSha)])
-            ], EnrichmentDigest));
+            semantic: new SemanticBuildOptions(encoder, vectors, "model-sha", "tokenizer-sha"));
         using (var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={db}"))
         {
             connection.Open();
@@ -1463,8 +1428,7 @@ public sealed class WorkSearchTests : IDisposable
         var error = Assert.Throws<InvalidDataException>(() => IndexBuilder.Build(
             db, Stamp(), [doc], [], [], [], null,
             semantic: new SemanticBuildOptions(
-                encoder, vectors, "model-sha", "tokenizer-sha", MaxBatchTokens: 4),
-            workSearch: new WorkSearchBuildOptions([], [], EnrichmentDigest)));
+                encoder, vectors, "model-sha", "tokenizer-sha", MaxBatchTokens: 4)));
 
         Assert.Contains("work-vector input", error.Message, StringComparison.Ordinal);
     }
@@ -1602,8 +1566,18 @@ public sealed class WorkSearchTests : IDisposable
         ["corpus_commit"] = "test",
     };
 
-    private static ReviewedWorkAliasRow Alias(string work, string language, string value) =>
-        new(work, language, value, "test-reviewer");
+    private static DocRow WithShortTitles(DocRow doc, params string[] values) => doc with
+    {
+        PublisherMetadata =
+        [
+            new PublisherMetadataRow(
+                "publisher_short_title",
+                "http://publications.europa.eu/ontology/cdm#expression_title_short",
+                doc.Language,
+                string.Join(", ", values),
+                doc.SourceUri ?? "https://example.invalid"),
+        ],
+    };
 
     private static DocRow Doc(string key, string work, string title) => new(
         key, "eu", work, $"urn:celex:{work}", "REG", "fr", key[^10..], null,

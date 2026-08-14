@@ -223,8 +223,20 @@ public sealed class LexIndexReader : IDisposable
             || presentExtendedWorkTables is > 0 && presentExtendedWorkTables != extendedWorkCatalogTables.Length)
             throw new InvalidDataException(
                 $"Index {dbPath} contains a partial work catalog. Rebuild it instead of silently disabling work search.");
+        var hasExtendedWorkCatalog =
+            presentExtendedWorkTables == extendedWorkCatalogTables.Length;
+        if (hasExtendedWorkCatalog)
+        {
+            using var citationIdentityColumn = conn.CreateCommand();
+            citationIdentityColumn.CommandText =
+                "SELECT COUNT(*) FROM pragma_table_info('work_publisher_metadata') "
+                + "WHERE name='citation_identity'";
+            if (Convert.ToInt32(citationIdentityColumn.ExecuteScalar()) != 1)
+                throw new InvalidDataException(
+                    $"Index {dbPath} uses work catalog version 2; rebuild it for source-backed citation identity.");
+        }
         var workCatalogVersion = presentBaseWorkTables == 0 ? 0
-            : presentExtendedWorkTables == extendedWorkCatalogTables.Length ? 2 : 1;
+            : hasExtendedWorkCatalog ? 3 : 1;
         var hasWorkSearch = workCatalogVersion > 0;
         var hasWorkSearchStamp = stamp.ContainsKey("work_search_records")
                                  || stamp.ContainsKey("work_vector_records")
@@ -238,12 +250,12 @@ public sealed class LexIndexReader : IDisposable
                 $"Index {dbPath} has inconsistent work catalog tables and stamp claims.");
         var stampedCatalogVersion = stamp.GetValueOrDefault("work_catalog_version");
         if ((workCatalogVersion == 1 && stampedCatalogVersion is not null)
-            || (workCatalogVersion == 2 && stampedCatalogVersion != "2"))
+            || (workCatalogVersion == 3 && stampedCatalogVersion != "3"))
             throw new InvalidDataException(
                 $"Index {dbPath} has inconsistent work catalog version metadata.");
         if (hasWorkSearch)
         {
-            if (workCatalogVersion == 2)
+            if (workCatalogVersion >= 2)
             {
                 using var publisherColumn = conn.CreateCommand();
                 publisherColumn.CommandText =
@@ -259,7 +271,7 @@ public sealed class LexIndexReader : IDisposable
             var stampedPublisherMetadata = 0L;
             var stampedDocumentRoles = 0L;
             long? stampedWeakDiscovery = null;
-            if (workCatalogVersion == 2
+            if (workCatalogVersion >= 2
                 && (!long.TryParse(stamp.GetValueOrDefault("publisher_metadata_records"), out stampedPublisherMetadata)
                     || !long.TryParse(stamp.GetValueOrDefault("document_role_records"), out stampedDocumentRoles)
                     || stampedPublisherMetadata < 0 || stampedDocumentRoles < 0))
@@ -273,7 +285,7 @@ public sealed class LexIndexReader : IDisposable
                 stampedWeakDiscovery = parsedWeakDiscovery;
             }
             using var workCounts = conn.CreateCommand();
-            workCounts.CommandText = workCatalogVersion == 2
+            workCounts.CommandText = workCatalogVersion >= 2
                 ? """
                     SELECT (SELECT COUNT(*) FROM work_records),
                            (SELECT COUNT(*) FROM work_vectors),
@@ -288,12 +300,12 @@ public sealed class LexIndexReader : IDisposable
                     """;
             using var workCountRow = workCounts.ExecuteReader();
             var actualWeakDiscovery = workCountRow.Read()
-                ? workCountRow.GetInt64(workCatalogVersion == 2 ? 4 : 2)
+                ? workCountRow.GetInt64(workCatalogVersion >= 2 ? 4 : 2)
                 : -1;
             if (actualWeakDiscovery < 0
                 || workCountRow.GetInt64(0) != stampedWorks
                 || workCountRow.GetInt64(1) != stampedWorkVectors
-                || workCatalogVersion == 2 && (workCountRow.GetInt64(2) != stampedPublisherMetadata
+                || workCatalogVersion >= 2 && (workCountRow.GetInt64(2) != stampedPublisherMetadata
                                                || workCountRow.GetInt64(3) != stampedDocumentRoles)
                 || stampedWeakDiscovery is not null
                    && actualWeakDiscovery != stampedWeakDiscovery)
@@ -641,10 +653,36 @@ public sealed class LexIndexReader : IDisposable
             extended.CommandText =
                 "SELECT 1 FROM sqlite_master WHERE type='table' AND name='work_publisher_metadata'";
             if (extended.ExecuteScalar() is not null)
-                Reject("work_publisher_metadata", "length(identifier)>1000 OR length(value)>4096 "
-                    + "OR length(normalized)>4096 OR length(source_uri)>4096",
+            {
+                Reject("work_publisher_metadata", "length(kind)>128 OR length(identifier)>2048 "
+                    + "OR length(value)>4096 OR length(normalized)>4096 "
+                    + "OR length(source_uri)>2048 OR citation_identity NOT IN (0,1)",
                     "publisher work metadata");
+                using var publisherRows = connection.CreateCommand();
+                publisherRows.CommandText = """
+                    SELECT kind,identifier,value,language,source_uri,citation_identity
+                    FROM work_publisher_metadata
+                    """;
+                using var rows = publisherRows.ExecuteReader();
+                while (rows.Read())
+                {
+                    var kind = rows.GetString(0);
+                    var identifier = rows.GetString(1);
+                    var sourceUri = rows.GetString(4);
+                    var citationIdentity = rows.GetInt64(5) == 1;
+                    if (string.IsNullOrWhiteSpace(kind)
+                        || !HttpUri(identifier) || !HttpUri(sourceUri)
+                        || !citationIdentity && (rows.IsDBNull(2) || rows.IsDBNull(3))
+                        || citationIdentity && !rows.IsDBNull(3))
+                        throw new InvalidDataException(
+                            $"Index {dbPath} contains invalid publisher work metadata.");
+                }
+            }
         }
+
+        static bool HttpUri(string value) =>
+            Uri.TryCreate(value, UriKind.Absolute, out var uri)
+            && uri.Scheme is "http" or "https";
     }
 
     /// <summary>A bounded timeline page plus its exact row count.</summary>
@@ -1233,8 +1271,9 @@ public sealed class LexIndexReader : IDisposable
     /// anyway.
     private static bool IsWorkIdentity(WorkSearchHit hit) => hit.Reason switch
     {
-        "exact_identifier" or "exact_alias" or "exact_title" => true,
-        "contained_identifier" or "contained_alias" => true,
+        "exact_identifier" or "exact_alias" or "exact_title"
+            or "exact_publisher_short_title" => true,
+        "contained_identifier" or "contained_alias" or "contained_publisher_short_title" => true,
         "contained_title" => hit.MatchedValue is { } value
             && (value.Any(char.IsDigit) || IsActFormDesignation(value)),
         _ => false,
@@ -1258,8 +1297,22 @@ public sealed class LexIndexReader : IDisposable
             .GroupBy(match => WorkSearch.Normalize(match.MatchedValue!), StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => (
                     Candidates: group.Select(match => match.Doc.GroupKey)
-                        .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray(),
-                    Kind: MatchKind(group.Select(match => match.Reason))),
+                        .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).Take(20).ToArray(),
+                    Kind: MatchKind(group.Select(match => match.Reason)),
+                    ShortTitles: group.Where(match =>
+                            match.MatchedPublisherMetadata is not null
+                            && match.Reason.EndsWith("_publisher_short_title", StringComparison.Ordinal))
+                        .Select(match => new PublisherShortTitleMatch(
+                            match.Doc.GroupKey,
+                            match.MatchedPublisherMetadata!.MatchedSegment!,
+                            match.MatchedPublisherMetadata.Identifier,
+                            match.MatchedPublisherMetadata.Label ?? "",
+                            match.MatchedPublisherMetadata.Language ?? match.Doc.Language,
+                            match.MatchedPublisherMetadata.SourceUri))
+                        .Distinct().OrderBy(match => match.Work, StringComparer.Ordinal)
+                        .ThenBy(match => match.Language, StringComparer.Ordinal)
+                        .ThenBy(match => match.Identifier, StringComparer.Ordinal)
+                        .Take(20).ToArray()),
                 StringComparer.Ordinal);
         matches = DemoteAmendingClauseMentions(query, matches);
         var result = new List<WorkResolution>();
@@ -1275,12 +1328,12 @@ public sealed class LexIndexReader : IDisposable
                 0 => "unresolved",
                 1 => "resolved",
                 _ => "ambiguous",
-            }, candidates, match.Kind));
+            }, candidates, match.Kind, match.ShortTitles));
         }
         foreach (var (mention, match) in matches.Where(item => !consumed.Contains(item.Key)))
             result.Add(new WorkResolution(mention,
                 match.Candidates.Length == 1 ? "resolved" : "ambiguous",
-                match.Candidates, match.Kind));
+                match.Candidates, match.Kind, match.ShortTitles));
         return result.OrderBy(item => WorkSearch.Normalize(item.Mention), StringComparer.Ordinal).ToArray();
     }
 
@@ -1299,9 +1352,11 @@ public sealed class LexIndexReader : IDisposable
     /// whose ONLY named work sits in such a clause is asking about that work ("what repealed
     /// Directive 95/46/EC?"), so when nothing survives the filter, nothing is dropped.</para>
     /// </summary>
-    private static Dictionary<string, (string[] Candidates, string? Kind)>
+    private static Dictionary<string, (string[] Candidates, string? Kind,
+        PublisherShortTitleMatch[] ShortTitles)>
         DemoteAmendingClauseMentions(
-            string query, Dictionary<string, (string[] Candidates, string? Kind)> matches)
+            string query, Dictionary<string, (string[] Candidates, string? Kind,
+                PublisherShortTitleMatch[] ShortTitles)> matches)
     {
         if (matches.Count < 2) return matches;
         var normalized = WorkSearch.Normalize(query);
@@ -1344,6 +1399,8 @@ public sealed class LexIndexReader : IDisposable
         string? kind = null;
         foreach (var reason in reasons)
         {
+            if (reason.EndsWith("_publisher_short_title", StringComparison.Ordinal))
+                return "publisher_short_title";
             if (reason.EndsWith("_title", StringComparison.Ordinal)) return "title";
             if (reason.EndsWith("_alias", StringComparison.Ordinal)) kind = "alias";
             else if (reason.EndsWith("_identifier", StringComparison.Ordinal))
@@ -1509,7 +1566,8 @@ public sealed class LexIndexReader : IDisposable
             identityRow.Close();
 
             var (where, parameters) = WithFilters(
-                "group_key=$work_group AND language=$work_language", filters, excludeAsOf: false);
+                "docs.group_key=$work_group AND docs.language=$work_language", filters,
+                excludeAsOf: false, alias: "docs");
             using var command = Cmd($"""
                 SELECT {SelectDocCols()}
                 FROM docs
@@ -1520,8 +1578,12 @@ public sealed class LexIndexReader : IDisposable
             command.Parameters.AddWithValue("$work_group", groupKey);
             command.Parameters.AddWithValue("$work_language", language);
             using var rows = command.ExecuteReader();
-            if (rows.Read()) result.Add(new WorkSearchHit(
-                ReadDoc(rows), match.Reason, match.Score, match.MatchedValue));
+            if (rows.Read())
+            {
+                var doc = ReadDoc(rows);
+                result.Add(new WorkSearchHit(doc, match.Reason, match.Score,
+                    match.MatchedValue, match.MatchedPublisherMetadata));
+            }
         }
         return result;
     }
@@ -1532,7 +1594,8 @@ public sealed class LexIndexReader : IDisposable
             hit.Doc.Title, "", hit.Doc.BodySha ?? ""),
         hit.Doc.Title ?? hit.Doc.GroupKey,
         hit.Score,
-        [hit.Reason]);
+        [hit.Reason],
+        hit.MatchedPublisherMetadata);
 
     private List<(string Source, string Target)> FuzzyExpansions(string query)
     {
@@ -2399,6 +2462,22 @@ public sealed class LexIndexReader : IDisposable
             var names = works.Select((_, i) => $"$fw{i}").ToList();
             sql += $" AND ({Column("group_key")} IN ({string.Join(",", names)}) OR {Column("group_identifier")} IN ({string.Join(",", names)}))";
             for (var i = 0; i < works.Count; i++) ps.Add(new SqliteParameter($"$fw{i}", works[i]));
+        }
+        if (f.PublisherMetadataIdentifier is { } metadataIdentifier)
+        {
+            if (_workCatalogVersion < 2) return (sql + " AND 0=1", ps);
+            var outerGroup = Column("group_key");
+            var outerLanguage = Column("language");
+            var outerFrom = Column("valid_from");
+            sql += $"""
+                 AND EXISTS (
+                   SELECT 1 FROM work_records wr
+                   JOIN work_publisher_metadata pm ON pm.work_id=wr.work_id
+                   WHERE wr.group_key={outerGroup} AND wr.language={outerLanguage}
+                     AND pm.identifier=$fpublishermetadata AND pm.valid_from={outerFrom}
+                     AND pm.citation_identity=0)
+                """;
+            ps.Add(new SqliteParameter("$fpublishermetadata", metadataIdentifier));
         }
         if (!excludeAsOf && f.AsOf is { } d)
         {

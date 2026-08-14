@@ -41,9 +41,63 @@ public sealed class McpCore
         "/eli/reg_ue/2014/65", "/eli/dir_ue/2004/648",
         "/eli/dir_ue/2012/259", "/eli/dir_ue/2008/765",
     };
+    private static readonly HashSet<string> PublicPublisherMetadataKinds = new(StringComparer.Ordinal)
+    {
+        "publisher_short_title", "eurovoc", "directory", "eurovoc_alt_label",
+        "eurovoc_broader", "eurovoc_subdomain", "eurovoc_domain",
+        "legilux_subject_level1_theme", "legilux_subject_level1_organisation",
+        "legilux_subject_level1_place", "legilux_subject_level1_legal_resource",
+        "legilux_subject_level1_country", "legilux_subject_level2_theme",
+        "legilux_subject_level2_organisation", "legilux_subject_level2_place",
+        "legilux_subject_level2_legal_resource", "legilux_subject_level2_country",
+    };
 
     internal sealed record GlobalChangeItem(LexIndexReader Reader, ChangeRow Row, int Rank);
     internal sealed record GlobalChangePage(IReadOnlyList<GlobalChangeItem> Items, int ReaderRowsLoaded);
+
+    private static JsonObject PublisherMetadataJson(MatchedPublisherMetadata metadata)
+    {
+        if (!PublicPublisherMetadataKinds.Contains(metadata.Kind))
+            throw new InvalidDataException(
+                $"Publisher metadata kind '{metadata.Kind}' is not part of the public MCP contract.");
+        var result = new JsonObject
+        {
+            ["kind"] = metadata.Kind,
+            ["identifier"] = metadata.Identifier,
+            ["label"] = metadata.Label,
+            ["language"] = metadata.Language,
+            ["source_uri"] = metadata.SourceUri,
+        };
+        if (metadata.MatchedSegment is not null)
+            result["matched_segment"] = metadata.MatchedSegment;
+        return result;
+    }
+
+    private static JsonObject WorkResolutionJson(
+        string mention, string status, string? kind, IEnumerable<string> candidates,
+        IReadOnlyList<PublisherShortTitleMatch>? shortTitles)
+    {
+        var result = new JsonObject
+        {
+            ["mention"] = mention,
+            ["status"] = status,
+            ["kind"] = kind,
+            ["candidates"] = new JsonArray(candidates.Select(candidate =>
+                (JsonNode)candidate).ToArray()),
+        };
+        if (shortTitles is { Count: > 0 })
+            result["publisher_short_title_matches"] = new JsonArray(shortTitles.Select(match =>
+            (JsonNode)new JsonObject
+            {
+                ["work"] = match.Work,
+                ["segment"] = match.Segment,
+                ["identifier"] = match.Identifier,
+                ["label"] = match.Label,
+                ["language"] = match.Language,
+                ["source_uri"] = match.SourceUri,
+            }).ToArray());
+        return result;
+    }
 
     private sealed class ChangeCursor(
         LexIndexReader reader,
@@ -155,7 +209,6 @@ public sealed class McpCore
     public IReadOnlyList<string> MountedJurisdictions { get; }
 
     public JsonArray ToolDefs() => LegalOperationCatalog.McpToolDefinitions();
-
     private JsonObject Envelope(LexIndexReader r, string status, bool provisional = false)
     {
         var envelope = new JsonObject
@@ -1178,10 +1231,12 @@ public sealed class McpCore
                 // works it cares about can name them.
                 var works = Str("works")?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                                         .Select(w => w.Contains(':') ? w[(w.IndexOf(':') + 1)..] : w).ToArray();
+                var publisherMetadataIdentifier = Str("publisher_metadata_identifier");
                 var outp = new JsonArray();
                 var filter = new FilterSet(asOf, null, Str("source_class") ?? Str("document_type"),
                     Str("language"), works, Str("hierarchy"), Str("act_form"),
-                    Str("binding_status"), Str("domain"));
+                    Str("binding_status"), Str("domain"),
+                    PublisherMetadataIdentifier: publisherMetadataIdentifier);
                 var selectedReaders = SelectReaders(pub, jurisdiction);
                 var executions = selectedReaders.Readers
                     .Select(reader => (Reader: reader, Execution: requestedMode == "hybrid"
@@ -1198,25 +1253,36 @@ public sealed class McpCore
                             resolution.Kind,
                             Candidates = resolution.Candidates
                                 .Select(candidate => $"{item.Reader.Collection}:{candidate}"),
+                            ShortTitles = (resolution.PublisherShortTitleMatches ?? [])
+                                .Select(match => match with
+                                {
+                                    Work = $"{item.Reader.Collection}:{match.Work}",
+                                }),
                         }))
                     .GroupBy(item => item.Mention, StringComparer.Ordinal)
                     .Select(group =>
                     {
-                        var candidates = group.SelectMany(item => item.Candidates)
+                        var allCandidates = group.SelectMany(item => item.Candidates)
                             .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
-                        var status = group.Any(item => item.Status == "ambiguous") || candidates.Length > 1
-                            ? "ambiguous" : candidates.Length == 1 ? "resolved" : "unresolved";
+                        var status = group.Any(item => item.Status == "ambiguous") || allCandidates.Length > 1
+                            ? "ambiguous" : allCandidates.Length == 1 ? "resolved" : "unresolved";
                         // Across publishers the same mention may match a title in one catalogue
                         // and an identifier in another. The stronger claim is the one reported,
                         // in the same order the per-catalogue reducer uses.
-                        var kind = group.Select(item => item.Kind).Contains("title") ? "title"
+                        var kind = group.Select(item => item.Kind).Contains("publisher_short_title")
+                            ? "publisher_short_title"
+                            : group.Select(item => item.Kind).Contains("title") ? "title"
                             : group.Select(item => item.Kind).Contains("alias") ? "alias"
                             : group.Select(item => item.Kind).Contains("identifier") ? "identifier"
                             : null;
                         return new
                         {
                             Mention = group.Key, Status = status, Kind = kind,
-                            Candidates = candidates,
+                            Candidates = allCandidates.Take(20).ToArray(),
+                            PublisherShortTitleMatches = group.SelectMany(item => item.ShortTitles)
+                                .Distinct().OrderBy(match => match.Work, StringComparer.Ordinal)
+                                .ThenBy(match => match.Language, StringComparer.Ordinal)
+                                .Take(20).ToArray(),
                         };
                     }).OrderBy(item => item.Mention, StringComparer.Ordinal).ToArray();
                 var globalResolutionStatus = globalResolutions.Any(item => item.Status == "ambiguous")
@@ -1278,6 +1344,8 @@ public sealed class McpCore
                                 execution.QueryPlan?.ProvisionQuery is { Length: > 0 } pq ? pq : q)
                             : h.Snippet;
                         d["match_reasons"] = new JsonArray(h.MatchReasons.Select(x => (JsonNode)x).ToArray());
+                        if (h.MatchedPublisherMetadata is { } metadata)
+                            d["matched_publisher_metadata"] = PublisherMetadataJson(metadata);
                         if (_publicBase is not null)
                             d["permalink"] = $"{_publicBase}/{h.Doc.Collection}/{h.Doc.GroupKey}/{VersionCoordinate(h.Doc)}"
                                 + (h.Provision.Anchor.Length == 0 ? "" : $"#{h.Provision.Anchor}");
@@ -1338,31 +1406,16 @@ public sealed class McpCore
                             ["work_catalog_available"] = plan.WorkCatalogAvailable,
                             ["global_work_resolution_status"] = globalResolutionStatus,
                             ["global_work_resolutions"] = new JsonArray(globalResolutions
-                                .Select(resolution => (JsonNode)new JsonObject
-                                {
-                                    ["mention"] = resolution.Mention,
-                                    ["status"] = resolution.Status,
-                                    // Which stored name form matched. A caller choosing among the
-                                    // works one citation named needs it: a title quoted in full
-                                    // matches as a title, while the amending tail at the end of
-                                    // that same title names only a number.
-                                    ["kind"] = resolution.Kind,
-                                    ["candidates"] = new JsonArray(resolution.Candidates
-                                        .Select(candidate => (JsonNode)candidate).ToArray()),
-                                }).ToArray()),
+                                .Select(resolution => (JsonNode)WorkResolutionJson(
+                                    resolution.Mention, resolution.Status, resolution.Kind,
+                                    resolution.Candidates,
+                                    resolution.PublisherShortTitleMatches)).ToArray()),
                             ["work_resolutions"] = new JsonArray(
-                                (plan.WorkResolutions ?? []).Select(resolution => (JsonNode)new JsonObject
-                                {
-                                    ["mention"] = resolution.Mention,
-                                    ["status"] = resolution.Status,
-                                    // Which stored name form matched. A caller choosing among the
-                                    // works one citation named needs it: a title quoted in full
-                                    // matches as a title, while the amending tail at the end of
-                                    // that same title names only a number.
-                                    ["kind"] = resolution.Kind,
-                                    ["candidates"] = new JsonArray(resolution.Candidates
-                                        .Select(candidate => (JsonNode)candidate).ToArray()),
-                                }).ToArray()),
+                                (plan.WorkResolutions ?? []).Select(resolution =>
+                                    (JsonNode)WorkResolutionJson(
+                                        resolution.Mention, resolution.Status, resolution.Kind,
+                                        resolution.Candidates,
+                                        resolution.PublisherShortTitleMatches)).ToArray()),
                         },
                         ["query_expansions"] = new JsonArray(execution.QueryExpansions.Select(x => (JsonNode)x).ToArray()),
                         ["artifact_manifest_id"] = Environment.GetEnvironmentVariable("LEX_ARTIFACT_MANIFEST_ID"),

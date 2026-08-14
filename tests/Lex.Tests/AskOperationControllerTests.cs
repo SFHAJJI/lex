@@ -17,14 +17,16 @@ public sealed class AskOperationControllerTests : IDisposable
 
     public AskOperationControllerTests()
     {
-        var first = Doc("2020-01-01", "2023-12-31", "old capital requirement");
-        var second = Doc("2024-01-01", null, "new capital requirement");
-        var gdpr = Doc("32016r0679", "2018-05-25", null,
-            "lawful processing of personal data");
-        var dora = Doc("32022r2554", "2024-01-01", null,
-            "operational resilience requirements zebrafalcon");
-        var whole = Doc("32024r0001", "2024-01-01", null,
-            "This whole document is authoritative publisher text.");
+        var first = WithShortTitle(
+            Doc("2020-01-01", "2023-12-31", "old capital requirement"), "CRR");
+        var second = WithShortTitle(
+            Doc("2024-01-01", null, "new capital requirement"), "CRR");
+        var gdpr = WithShortTitle(Doc("32016r0679", "2018-05-25", null,
+            "lawful processing of personal data"), "GDPR");
+        var dora = WithShortTitle(Doc("32022r2554", "2024-01-01", null,
+            "operational resilience requirements zebrafalcon"), "DORA");
+        var whole = WithShortTitle(Doc("32024r0001", "2024-01-01", null,
+            "This whole document is authoritative publisher text."), "WHOLE");
         IndexBuilder.Build(_db, new Dictionary<string, string>
         {
             ["collection"] = "eu-eurlex",
@@ -48,15 +50,7 @@ public sealed class AskOperationControllerTests : IDisposable
             new ProvisionStateRow("32013r0575", "en", true, "art_92",
                 "2024-01-01", null, Hash("new capital requirement"),
                 second.Key, null, false),
-        ],
-        workSearch: new WorkSearchBuildOptions(
-            [
-                new ReviewedWorkAliasRow("32013r0575", "en", "CRR", "test"),
-                new ReviewedWorkAliasRow("32016r0679", "en", "GDPR", "test"),
-                new ReviewedWorkAliasRow("32022r2554", "en", "DORA", "test"),
-                new ReviewedWorkAliasRow("32024r0001", "en", "WHOLE", "test"),
-            ],
-            [], new string('a', 64)));
+        ]);
         _reader = LexIndexReader.Open(_db);
         _core = new McpCore(new Dictionary<string, LexIndexReader>
         {
@@ -477,7 +471,7 @@ public sealed class AskOperationControllerTests : IDisposable
     }
 
     [Fact]
-    public async Task Reviewed_alias_and_article_resolve_before_one_authoritative_diff()
+    public async Task Official_short_title_and_article_resolve_before_one_authoritative_diff()
     {
         var searchCalls = 0;
         async ValueTask<JsonNode> LegalTool(
@@ -1886,6 +1880,19 @@ public sealed class AskOperationControllerTests : IDisposable
 
     private static DocRow Doc(string from, string? to, string body) =>
         Doc("32013r0575", from, to, body);
+
+    private static DocRow WithShortTitle(DocRow doc, string value) => doc with
+    {
+        PublisherMetadata =
+        [
+            new PublisherMetadataRow(
+                "publisher_short_title",
+                "http://publications.europa.eu/ontology/cdm#expression_title_short",
+                doc.Language,
+                value,
+                doc.SourceUri ?? "https://example.invalid"),
+        ],
+    };
 
     private static DocRow Doc(string work, string from, string? to, string body) => new(
         $"eu-eurlex:{work}:{from}", "eu-eurlex", work, work.ToUpperInvariant(),

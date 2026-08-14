@@ -11,10 +11,6 @@ public sealed class DerivationGenerationTests : IDisposable
     private const string DeriverTree = "dddddddddddddddddddddddddddddddddddddddd";
     private const string ManifestDigest =
         "1111111111111111111111111111111111111111111111111111111111111111";
-    private const string LuConfigurationDigest =
-        "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
-    private const string EuConfigurationDigest =
-        "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
     private readonly string _root = Path.Combine(
         Path.GetTempPath(), $"lex-generation-{Guid.NewGuid():N}");
 
@@ -23,13 +19,12 @@ public sealed class DerivationGenerationTests : IDisposable
     [Fact]
     public void One_top_level_manifest_preserves_other_publishers_and_has_no_self_commit()
     {
-        Write("lu-legilux", ["akn-lu/1"], LuConfigurationDigest);
+        Write("lu-legilux", ["akn-lu/1"]);
         var path = Path.Combine(_root, DerivationGeneration.FileName);
         var first = JsonNode.Parse(File.ReadAllText(path))!;
         var preserved = first["publishers"]!["lu-legilux"]!.ToJsonString();
 
-        Write("eu-eurlex", ["xhtml-eu/1", "fmx4-eu/1"],
-            EuConfigurationDigest);
+        Write("eu-eurlex", ["xhtml-eu/1", "fmx4-eu/1"]);
 
         var root = JsonNode.Parse(File.ReadAllText(path))!;
         Assert.Equal(DerivationGeneration.SchemaId,
@@ -42,16 +37,14 @@ public sealed class DerivationGenerationTests : IDisposable
             StringComparison.Ordinal);
         var eu = DerivationGeneration.ReadPublisher(_root, "eu-eurlex");
         Assert.Equal(["fmx4-eu/1", "xhtml-eu/1"], eu.Profiles);
-        Assert.Equal(EuConfigurationDigest, eu.ReviewedConfigurationSha256);
-        Assert.Equal(LuConfigurationDigest,
-            DerivationGeneration.ReadPublisher(_root, "lu-legilux")
-                .ReviewedConfigurationSha256);
+        Assert.DoesNotContain("reviewed_configuration", File.ReadAllText(path),
+            StringComparison.Ordinal);
     }
 
     [Fact]
     public void Tampered_profile_identity_is_rejected()
     {
-        Write("eu-eurlex", ["xhtml-eu/1"], EuConfigurationDigest);
+        Write("eu-eurlex", ["xhtml-eu/1"]);
         var path = Path.Combine(_root, DerivationGeneration.FileName);
         var root = JsonNode.Parse(File.ReadAllText(path))!;
         root["publishers"]!["eu-eurlex"]!["profiles"] =
@@ -65,7 +58,7 @@ public sealed class DerivationGenerationTests : IDisposable
     [Fact]
     public void Wrong_publisher_identity_is_rejected()
     {
-        Write("eu-eurlex", ["xhtml-eu/1"], EuConfigurationDigest);
+        Write("eu-eurlex", ["xhtml-eu/1"]);
         var path = Path.Combine(_root, DerivationGeneration.FileName);
         var root = JsonNode.Parse(File.ReadAllText(path))!;
         root["publishers"]!["eu-eurlex"]!["collection"] = "lu-legilux";
@@ -82,21 +75,20 @@ public sealed class DerivationGenerationTests : IDisposable
             DerivationGeneration.UpdatePublisher(
                 _root, "eu-eurlex", "short", ManifestDigest,
                 IngesterCommit, DeriverCommit, DeriverTree,
-                EuConfigurationDigest, ["xhtml-eu/1"]));
+                ["xhtml-eu/1"]));
         Assert.Throws<InvalidDataException>(() =>
             DerivationGeneration.UpdatePublisher(
                 _root, "eu-eurlex", CorpusCommit, ManifestDigest,
-                IngesterCommit, DeriverCommit, DeriverTree,
-                "EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE",
+                IngesterCommit, DeriverCommit,
+                "DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD",
                 ["xhtml-eu/1"]));
     }
 
-    private void Write(
-        string publisher, IEnumerable<string> profiles, string configurationDigest) =>
+    private void Write(string publisher, IEnumerable<string> profiles) =>
         DerivationGeneration.UpdatePublisher(
             _root, publisher, CorpusCommit, ManifestDigest,
             IngesterCommit, DeriverCommit, DeriverTree,
-            configurationDigest, profiles);
+            profiles);
 
     public void Dispose()
     {

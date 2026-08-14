@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Security.Cryptography;
 using System.Text.Json;
 
 namespace Lex.Sources.EurLex;
@@ -22,15 +23,26 @@ public sealed record EurLexScopeConfig(
     };
 
     public static EurLexScopeConfig Load(string? path = null)
+        => LoadWithDigest(path).Scope;
+
+    internal static (EurLexScopeConfig Scope, string Sha256) LoadWithDigest(string? path = null)
     {
-        using var stream = path is null
-            ? Assembly.GetExecutingAssembly().GetManifestResourceStream("Lex.Sources.EurLex.eu-scope.json")
-              ?? throw new InvalidOperationException("Embedded EU scope configuration is missing.")
-            : File.OpenRead(path);
-        var scope = JsonSerializer.Deserialize<EurLexScopeConfig>(stream, Json)
+        byte[] bytes;
+        if (path is null)
+        {
+            using var stream = Assembly.GetExecutingAssembly()
+                .GetManifestResourceStream("Lex.Sources.EurLex.eu-scope.json")
+                ?? throw new InvalidOperationException("Embedded EU scope configuration is missing.");
+            using var buffer = new MemoryStream();
+            stream.CopyTo(buffer);
+            bytes = buffer.ToArray();
+        }
+        else
+            bytes = File.ReadAllBytes(path);
+        var scope = JsonSerializer.Deserialize<EurLexScopeConfig>(bytes, Json)
                     ?? throw new InvalidDataException("EU scope configuration is empty.");
         scope.Validate();
-        return scope;
+        return (scope, Convert.ToHexStringLower(SHA256.HashData(bytes)));
     }
 
     public IEnumerable<EurLexDomain> ActiveDomains(int? wave = null) =>

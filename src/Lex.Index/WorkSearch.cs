@@ -1,68 +1,23 @@
 using System.Globalization;
 using System.Text;
-using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.Data.Sqlite;
 
 namespace Lex.Index;
 
-public sealed record ReviewedWorkAliasRow(
-    string Work,
-    string Language,
-    string Value,
-    string ReviewedBy);
-
-public sealed record WorkEvidenceAnchor(
-    string Version,
-    string Anchor,
-    string TextSha256);
-
-public sealed record WorkDiscoveryRow(
-    string Work,
-    string Language,
-    string Kind,
-    string Value,
-    string ModelDeployment,
-    string PromptSha256,
-    string SchemaSha256,
-    string GeneratedAt,
-    double Confidence,
-    int RepeatRuns,
-    double AgreementRatio,
-    IReadOnlyList<WorkEvidenceAnchor> Evidence);
-
-public sealed record ReviewedCitationAliasRow(
-    string Alias,
-    string Work,
-    string ReviewedBy);
-
-public sealed record WorkSearchBuildOptions(
-    IReadOnlyList<ReviewedWorkAliasRow> ReviewedAliases,
-    IReadOnlyList<WorkDiscoveryRow> Discovery,
-    string EnrichmentDigest,
-    IReadOnlyList<ReviewedCitationAliasRow>? CitationAliases = null);
-
 public sealed record WorkSearchHit(
-    DocRow Doc, string Reason, double Score, string? MatchedValue = null);
+    DocRow Doc, string Reason, double Score, string? MatchedValue = null,
+    MatchedPublisherMetadata? MatchedPublisherMetadata = null);
 
 internal sealed record WorkMatch(
-    long WorkId, string Reason, double Score, string? MatchedValue = null);
+    long WorkId, string Reason, double Score, string? MatchedValue = null,
+    MatchedPublisherMetadata? MatchedPublisherMetadata = null);
 
 /// <summary>
 /// Work identity and discovery metadata. This layer never stores or rewrites legal text.
 /// </summary>
 public static class WorkSearch
 {
-    public const int MaxDiscoveryPerKind = 4;
-    public const int MaxDiscoveryPerWorkLanguage = 12;
-    public const int MaxEvidenceAnchors = 8;
-    public const int MaxDiscoveryValueLength = 512;
-
-    private static readonly HashSet<string> WeakKinds = new(StringComparer.Ordinal)
-    {
-        "description", "concept", "search_synonym", "practice_area",
-    };
-
     private static readonly HashSet<string> AllowedDocumentRoles = new(StringComparer.Ordinal)
     {
         "amending", "consolidated", "corrigendum", "delegated", "implementing",
@@ -168,8 +123,6 @@ public static class WorkSearch
     internal static void Populate(
         SqliteConnection connection,
         IReadOnlyList<DocRow> docs,
-        IReadOnlyList<ProvisionRow> provisions,
-        WorkSearchBuildOptions? options,
         SemanticBuildOptions? semantic,
         SemanticVectorWriter? vectorWriter,
         SemanticEmbeddingCache? embeddingCache)
@@ -190,24 +143,9 @@ public static class WorkSearch
             throw new InvalidDataException("Document metadata contains an unsupported role.");
         if (docs.Any(doc => (doc.PublisherMetadata?.Count ?? 0) > 512))
             throw new InvalidDataException("A document exceeds the publisher metadata limit.");
-        var sourceKeys = sources.Select(source => (source.Work, source.Language)).ToHashSet();
-        var aliases = options?.ReviewedAliases ?? [];
-        var discovery = options?.Discovery ?? [];
-        if (options is not null && !IsSha(options.EnrichmentDigest))
-            throw new InvalidDataException("Enrichment digest must be a SHA-256 value.");
-        Validate(sourceKeys, provisions, aliases, discovery);
-
         var vectorInputs = new List<(long WorkId, string Kind, string? Value, string Text)>();
         foreach (var source in sources)
         {
-            var workAliases = aliases.Where(alias => alias.Work == source.Work
-                    && alias.Language == source.Language)
-                .OrderBy(alias => Normalize(alias.Value), StringComparer.Ordinal).ToArray();
-            var workDiscovery = discovery.Where(item => item.Work == source.Work
-                    && item.Language == source.Language)
-                .OrderBy(item => item.Kind, StringComparer.Ordinal)
-                .ThenBy(item => Normalize(item.Value), StringComparer.Ordinal).ToArray();
-
             using var record = connection.CreateCommand();
             record.CommandText = """
                 INSERT INTO work_records(
@@ -228,21 +166,23 @@ public static class WorkSearch
             var workId = Convert.ToInt64(identity.ExecuteScalar(), CultureInfo.InvariantCulture);
 
             foreach (var identifier in source.Identifiers.Append(source.Work).Distinct(StringComparer.Ordinal))
-                InsertName(connection, workId, "official_identifier", identifier, null);
+                InsertName(connection, workId, "official_identifier", identifier);
             foreach (var title in source.Titles.Concat(source.ShortTitles)
                          .SelectMany(NameForms).Where(NotBlank)
                          .Distinct(StringComparer.Ordinal))
-                InsertName(connection, workId, "official_title", title, null);
-            foreach (var alias in workAliases)
-                InsertName(connection, workId, "reviewed_alias", alias.Value, alias.ReviewedBy);
-            foreach (var item in workDiscovery)
-                InsertDiscovery(connection, workId, item);
+                InsertName(connection, workId, "official_title", title);
             foreach (var doc in source.Docs)
                 foreach (var metadata in (doc.PublisherMetadata ?? []).Distinct())
+                {
                     InsertPublisherMetadata(connection, workId, doc, metadata);
+                    if (metadata.Kind == "publisher_short_title")
+                        foreach (var segment in PublisherShortTitleSegments(metadata.Value!))
+                            InsertName(connection, workId, "publisher_short_title", segment);
+                }
 
             var publisherValues = source.Docs
                 .SelectMany(doc => doc.PublisherMetadata ?? [])
+                .Where(value => !value.CitationIdentity)
                 .Select(value => value.Value)
                 .Where(NotBlank).Distinct(StringComparer.Ordinal).Cast<string>().ToArray();
             var roles = source.Latest.DocumentRoles ?? [];
@@ -257,27 +197,24 @@ public static class WorkSearch
             Add(fts, "$work", source.Work);
             Add(fts, "$language", source.Language);
             Add(fts, "$identifiers", string.Join(' ', source.Identifiers.Append(source.Work)));
-            Add(fts, "$aliases", string.Join(' ', workAliases.Select(alias => alias.Value)));
+            Add(fts, "$aliases", "");
             Add(fts, "$titles", string.Join(' ', source.Titles.Concat(source.ShortTitles)
                 .SelectMany(NameForms).Distinct(StringComparer.Ordinal)));
             Add(fts, "$facets", string.Join(' ', new[]
                 { source.Latest.Hierarchy, source.Latest.Domains, source.Latest.ActForm }
                 .Where(NotBlank).Concat(roles)));
             Add(fts, "$publisher", string.Join(' ', publisherValues));
-            Add(fts, "$discovery", string.Join(' ', workDiscovery.Select(item => item.Value)));
+            Add(fts, "$discovery", "");
             fts.ExecuteNonQuery();
 
             vectorInputs.Add((workId, "work", null,
                 "subjects: " + string.Join(' ', new[]
                     { source.Latest.Hierarchy, source.Latest.Domains, source.Latest.ActForm }
                     .Where(NotBlank).Concat(roles))
-                + "\nnames: " + string.Join(' ', workAliases.Select(alias => alias.Value)
-                    .Concat([source.Latest.Title, source.Latest.TitleShort])
+                + "\nnames: " + string.Join(' ', new[] { source.Latest.Title, source.Latest.TitleShort }
                     .Concat(source.Titles).Concat(source.ShortTitles)
                     .Where(NotBlank).SelectMany(name => NameForms(name!))
                     .Distinct(StringComparer.Ordinal))));
-            vectorInputs.AddRange(workDiscovery.Select(item =>
-                (workId, item.Kind, (string?)item.Value, $"legal {item.Kind}: {item.Value}")));
         }
         if (semantic is not null && vectorWriter is not null)
             InsertVectors(connection, semantic, vectorWriter, embeddingCache, vectorInputs);
@@ -285,8 +222,7 @@ public static class WorkSearch
 
     internal static IReadOnlyList<WorkMatch> Find(
         SqliteConnection connection, string query, string? language, DateOnly? asOf,
-        int limit, bool hasPublisherMetadata,
-        bool includeWeakDiscovery = false)
+        int limit, bool hasPublisherMetadata)
     {
         if (limit <= 0) return [];
         var normalized = Normalize(query);
@@ -311,12 +247,11 @@ public static class WorkSearch
         if (hasPublisherMetadata)
             AddPublisherMatches(tokens);
         if (hits.Count >= limit) return hits;
-        if (includeWeakDiscovery)
-            AddFtsMatches("discovery : (" + tokenQuery + ")", "work_discovery");
         return hits;
 
         void Identity(string value)
         {
+            var exactCandidates = new List<(long WorkId, string Kind, string MatchedValue)>();
             using (var exact = connection.CreateCommand())
             {
                 exact.CommandText = """
@@ -326,16 +261,26 @@ public static class WorkSearch
                     WHERE n.normalized=$normalized AND ($language IS NULL OR r.language=$language)
                     ORDER BY CASE n.kind
                       WHEN 'official_identifier' THEN 0
-                      WHEN 'reviewed_alias' THEN 1
-                      ELSE 2 END,n.work_id
+                      WHEN 'publisher_short_title' THEN 1
+                      ELSE 3 END,n.work_id
                     """;
                 Add(exact, "$normalized", value);
                 Add(exact, "$language", language);
                 using var rows = exact.ExecuteReader();
-                while (rows.Read() && hits.Count < limit)
-                    AddExact(rows.GetInt64(0), rows.GetString(1), rows.GetString(2), "exact");
+                while (rows.Read())
+                    exactCandidates.Add((rows.GetInt64(0), rows.GetString(1), rows.GetString(2)));
+            }
+            foreach (var candidate in exactCandidates)
+            {
+                var metadata = candidate.Kind == "publisher_short_title"
+                    ? EffectivePublisherShortTitle(candidate.WorkId, candidate.MatchedValue)
+                    : null;
+                if (candidate.Kind == "publisher_short_title" && metadata is null) continue;
+                AddExact(candidate.WorkId, candidate.Kind, candidate.MatchedValue, "exact", metadata);
+                if (hits.Count >= limit) break;
             }
 
+            var containedCandidates = new List<(long WorkId, string Kind, string MatchedValue)>();
             using (var contained = connection.CreateCommand())
             {
                 contained.CommandText = """
@@ -343,7 +288,7 @@ public static class WorkSearch
                     FROM work_names n
                     JOIN work_records r ON r.work_id=n.work_id
                     WHERE instr(' ' || $normalized || ' ',' ' || n.normalized || ' ') > 0
-                      AND ((n.kind='reviewed_alias' AND length(n.normalized) >= 3)
+                      AND ((n.kind='publisher_short_title' AND length(n.normalized) >= 3)
                            OR (n.kind='official_identifier' AND length(n.normalized) >= 4
                                AND n.normalized GLOB '*[0-9]*')
                            OR (n.kind='official_title' AND length(n.normalized) >= 12
@@ -351,15 +296,53 @@ public static class WorkSearch
                       AND ($language IS NULL OR r.language=$language)
                     ORDER BY CASE n.kind
                       WHEN 'official_identifier' THEN 0
-                      WHEN 'reviewed_alias' THEN 1
-                      ELSE 2 END,name_length DESC,n.work_id
+                      WHEN 'publisher_short_title' THEN 1
+                      ELSE 3 END,name_length DESC,n.work_id
                     """;
                 Add(contained, "$normalized", value);
                 Add(contained, "$language", language);
                 using var rows = contained.ExecuteReader();
-                while (rows.Read() && hits.Count < limit)
-                    AddExact(rows.GetInt64(0), rows.GetString(1), rows.GetString(2), "contained");
+                while (rows.Read())
+                    containedCandidates.Add((rows.GetInt64(0), rows.GetString(1), rows.GetString(2)));
             }
+            foreach (var candidate in containedCandidates)
+            {
+                var metadata = candidate.Kind == "publisher_short_title"
+                    ? EffectivePublisherShortTitle(candidate.WorkId, candidate.MatchedValue)
+                    : null;
+                if (candidate.Kind == "publisher_short_title" && metadata is null) continue;
+                AddExact(candidate.WorkId, candidate.Kind, candidate.MatchedValue, "contained", metadata);
+                if (hits.Count >= limit) break;
+            }
+        }
+
+        MatchedPublisherMetadata? EffectivePublisherShortTitle(
+            long workId, string normalizedSegment)
+        {
+            using var command = connection.CreateCommand();
+            command.CommandText = """
+                SELECT identifier,value,language,source_uri
+                FROM work_publisher_metadata
+                WHERE work_id=$work AND kind='publisher_short_title'
+                  AND (($as_of IS NULL AND valid_to IS NULL)
+                       OR ($as_of IS NOT NULL AND valid_from <= $as_of
+                           AND (valid_to IS NULL OR valid_to >= $as_of)))
+                ORDER BY valid_from DESC,identifier,value,language,source_uri
+                """;
+            Add(command, "$work", workId);
+            Add(command, "$as_of", asOf?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+            using var rows = command.ExecuteReader();
+            while (rows.Read())
+            {
+                var label = rows.GetString(1);
+                var segment = PublisherShortTitleSegments(label)
+                    .FirstOrDefault(candidate => Normalize(candidate) == normalizedSegment);
+                if (segment is null) continue;
+                return new MatchedPublisherMetadata(
+                    "publisher_short_title", rows.GetString(0), label,
+                    rows.IsDBNull(2) ? null : rows.GetString(2), rows.GetString(3), segment);
+            }
+            return null;
         }
 
         void AddFtsMatches(string ftsQuery, string reason)
@@ -416,10 +399,12 @@ public static class WorkSearch
                 $"CASE WHEN {tokenPredicates[index]} THEN 1 ELSE 0 END"));
             var workParameters = candidateIds.Select((_, index) => $"$publisher_work{index}").ToArray();
             search.CommandText = $"""
-                SELECT m.work_id,({tokenScore}) AS matched_tokens,m.normalized
+                SELECT m.work_id,({tokenScore}) AS matched_tokens,m.normalized,
+                       m.kind,m.identifier,m.value,m.language,m.source_uri
                 FROM work_publisher_metadata m
                 JOIN work_records r ON r.work_id=m.work_id
                 WHERE m.work_id IN ({string.Join(',', workParameters)}) AND m.normalized<>''
+                  AND m.citation_identity=0
                   AND ($language IS NULL OR r.language=$language)
                   AND (( $as_of IS NULL AND m.valid_to IS NULL)
                        OR ($as_of IS NOT NULL AND m.valid_from <= $as_of
@@ -443,11 +428,16 @@ public static class WorkSearch
                 var workId = matches.GetInt64(0);
                 if (!seen.Add(workId)) continue;
                 hits.Add(new WorkMatch(workId, "work_metadata", -10 - matches.GetInt32(1),
-                    matches.GetString(2)));
+                    matches.GetString(2), new MatchedPublisherMetadata(
+                        matches.GetString(3), matches.GetString(4),
+                        matches.IsDBNull(5) ? null : matches.GetString(5),
+                        matches.IsDBNull(6) ? null : matches.GetString(6),
+                        matches.GetString(7))));
             }
         }
 
-        void AddExact(long workId, string kind, string matchedValue, string prefix)
+        void AddExact(long workId, string kind, string matchedValue, string prefix,
+            MatchedPublisherMetadata? matchedPublisherMetadata = null)
         {
             // Resolution is per mention, not per work. "GDPR and RGPD" deliberately yields
             // two identity matches even though both names resolve to the same work. The work is
@@ -457,17 +447,18 @@ public static class WorkSearch
             var suffix = kind switch
             {
                 "official_identifier" => "identifier",
-                "reviewed_alias" => "alias",
+                "publisher_short_title" => "publisher_short_title",
                 _ => "title",
             };
             hits.Add(new WorkMatch(
-                workId, $"{prefix}_{suffix}", -1000 + hits.Count, matchedValue));
+                workId, $"{prefix}_{suffix}", -1000 + hits.Count, matchedValue,
+                matchedPublisherMetadata));
         }
     }
 
     internal static IReadOnlyList<WorkMatch> FindSemantic(
         SqliteConnection connection, SemanticVectorReader vectors, float[] queryVector,
-        int limit, bool includeWeakDiscovery = false)
+        int limit)
     {
         if (limit <= 0) return [];
         using (var table = connection.CreateCommand())
@@ -490,9 +481,8 @@ public static class WorkSearch
         command.CommandText = """
             SELECT v.work_id,v.evidence_kind,v.vector_ordinal
             FROM work_vectors v
-            WHERE $include_weak=1 OR v.evidence_kind='work'
+            WHERE v.evidence_kind='work'
             """;
-        Add(command, "$include_weak", includeWeakDiscovery ? 1 : 0);
         using var rows = command.ExecuteReader();
         var candidateLimit = Math.Max(500, limit * 20);
         var candidates = new PriorityQueue<
@@ -523,67 +513,10 @@ public static class WorkSearch
             .ToArray();
     }
 
-    private static void Validate(
-        IReadOnlySet<(string Work, string Language)> sourceKeys,
-        IReadOnlyList<ProvisionRow> provisions,
-        IReadOnlyList<ReviewedWorkAliasRow> aliases,
-        IReadOnlyList<WorkDiscoveryRow> discovery)
-    {
-        if (aliases.Any(alias => !sourceKeys.Contains((alias.Work, alias.Language))
-                                 || string.IsNullOrWhiteSpace(alias.ReviewedBy)))
-            throw new InvalidDataException("Reviewed alias is unreviewed or references an unknown work-language record.");
-        var collision = aliases.GroupBy(alias => (alias.Language, Value: Normalize(alias.Value)))
-            .FirstOrDefault(group => group.Select(alias => alias.Work)
-                .Distinct(StringComparer.Ordinal).Skip(1).Any());
-        if (collision is not null)
-            throw new InvalidDataException(
-                $"Reviewed alias collision for '{collision.Key.Value}' ({collision.Key.Language}).");
-
-        var heldEvidence = provisions.Select(provision =>
-                (provision.ProvisionId[..provision.ProvisionId.LastIndexOf('#')],
-                    provision.Anchor, provision.TextSha))
-            .ToHashSet();
-        if (discovery.Any(item => string.IsNullOrWhiteSpace(item.Value)))
-            throw new InvalidDataException("Discovery metadata contains an empty value.");
-        if (discovery.GroupBy(item => (item.Work, item.Language))
-            .Any(group => group.Count() > MaxDiscoveryPerWorkLanguage))
-            throw new InvalidDataException("Discovery metadata exceeds the per-work language cap.");
-        if (discovery.GroupBy(item => (item.Work, item.Language, item.Kind))
-            .Any(group => group.Count() > MaxDiscoveryPerKind))
-            throw new InvalidDataException("Discovery metadata exceeds the per-kind cap.");
-        if (discovery.GroupBy(item =>
-                (item.Work, item.Language, item.Kind, Value: Normalize(item.Value)))
-            .Any(group => group.Count() > 1))
-            throw new InvalidDataException("Discovery metadata contains a duplicate normalized value.");
-        foreach (var item in discovery)
-        {
-            if (!sourceKeys.Contains((item.Work, item.Language)))
-                throw new InvalidDataException("Discovery metadata references an unknown work-language record.");
-            if (!WeakKinds.Contains(item.Kind))
-                throw new InvalidDataException($"Discovery kind '{item.Kind}' is not a weak search field.");
-            if (string.IsNullOrWhiteSpace(item.Value)
-                || item.Value.Length > MaxDiscoveryValueLength
-                || Normalize(item.Value).Length < 2 || item.Confidence is < 0.7 or > 1
-                || item.RepeatRuns < 2 || item.AgreementRatio is < 0.8 or > 1)
-                throw new InvalidDataException("Discovery metadata did not pass repeatability and confidence gates.");
-            if (!IsSha(item.PromptSha256) || !IsSha(item.SchemaSha256)
-                || string.IsNullOrWhiteSpace(item.ModelDeployment)
-                || !DateTimeOffset.TryParse(item.GeneratedAt, CultureInfo.InvariantCulture,
-                    DateTimeStyles.AssumeUniversal, out _))
-                throw new InvalidDataException("Discovery metadata has invalid model provenance.");
-            if (item.Evidence is null || item.Evidence.Count is 0 or > MaxEvidenceAnchors
-                || item.Evidence.Distinct().Count() != item.Evidence.Count
-                || item.Evidence.Any(evidence =>
-                    !IsSha(evidence.TextSha256)
-                    || !heldEvidence.Contains((evidence.Version, evidence.Anchor, evidence.TextSha256))))
-                throw new InvalidDataException("Discovery metadata references evidence not held by this index build.");
-        }
-    }
-
     private static void InsertPublisherMetadata(
         SqliteConnection connection, long workId, DocRow doc, PublisherMetadataRow metadata)
     {
-        if (metadata.Kind is not ("publisher_short_title" or "eurovoc" or "directory")
+        if (string.IsNullOrWhiteSpace(metadata.Kind) || metadata.Kind.Length > 128
             || string.IsNullOrWhiteSpace(metadata.Identifier)
             || string.IsNullOrWhiteSpace(metadata.SourceUri)
             || metadata.Identifier.Length > 2048 || metadata.SourceUri.Length > 2048
@@ -591,13 +524,20 @@ public static class WorkSearch
             || (metadata.Kind == "publisher_short_title" && string.IsNullOrWhiteSpace(metadata.Value))
             || !Uri.TryCreate(metadata.SourceUri, UriKind.Absolute, out var source)
             || source.Scheme is not ("http" or "https")
-            || (metadata.Language is not null && metadata.Language != doc.Language))
+            || !Uri.TryCreate(metadata.Identifier, UriKind.Absolute, out var identifier)
+            || identifier.Scheme is not ("http" or "https")
+            || (!metadata.CitationIdentity
+                && (string.IsNullOrWhiteSpace(metadata.Value)
+                    || string.IsNullOrWhiteSpace(metadata.Language)
+                    || metadata.Language != doc.Language))
+            || (metadata.CitationIdentity && metadata.Language is not null))
             throw new InvalidDataException("Publisher metadata is invalid or has the wrong language.");
         using var command = connection.CreateCommand();
         command.CommandText = """
             INSERT OR IGNORE INTO work_publisher_metadata(
-              work_id,kind,identifier,value,normalized,language,valid_from,valid_to,source_uri)
-            VALUES ($work,$kind,$identifier,$value,$normalized,$language,$from,$to,$source)
+              work_id,kind,identifier,value,normalized,language,valid_from,valid_to,source_uri,
+              citation_identity)
+            VALUES ($work,$kind,$identifier,$value,$normalized,$language,$from,$to,$source,$citation)
             """;
         Add(command, "$work", workId);
         Add(command, "$kind", metadata.Kind);
@@ -608,11 +548,24 @@ public static class WorkSearch
         Add(command, "$from", doc.ValidFrom);
         Add(command, "$to", doc.ValidTo);
         Add(command, "$source", metadata.SourceUri);
+        Add(command, "$citation", metadata.CitationIdentity ? 1 : 0);
         command.ExecuteNonQuery();
     }
 
+    internal static IReadOnlyList<string> PublisherShortTitleSegments(string value)
+    {
+        var segments = value.Split(',').Select(segment => segment.Trim()).ToArray();
+        if (segments.Length is 0 or > 16 || segments.Any(segment =>
+                segment.Length is 0 or > 256 || Normalize(segment).Length == 0))
+            throw new InvalidDataException(
+                "Publisher short title must contain 1 to 16 non-empty comma segments of at most 256 characters.");
+        return segments.Distinct(StringComparer.Ordinal)
+            .OrderBy(segment => Normalize(segment), StringComparer.Ordinal)
+            .ThenBy(segment => segment, StringComparer.Ordinal).ToArray();
+    }
+
     private static void InsertName(
-        SqliteConnection connection, long workId, string kind, string value, string? reviewedBy)
+        SqliteConnection connection, long workId, string kind, string value)
     {
         if (string.IsNullOrWhiteSpace(value)) return;
         using var command = connection.CreateCommand();
@@ -624,31 +577,7 @@ public static class WorkSearch
         Add(command, "$kind", kind);
         Add(command, "$value", value.Trim());
         Add(command, "$normalized", Normalize(value));
-        Add(command, "$reviewed_by", reviewedBy);
-        command.ExecuteNonQuery();
-    }
-
-    private static void InsertDiscovery(SqliteConnection connection, long workId, WorkDiscoveryRow item)
-    {
-        using var command = connection.CreateCommand();
-        command.CommandText = """
-            INSERT INTO work_discovery(
-              work_id,kind,value,normalized,model_deployment,prompt_sha256,schema_sha256,
-              generated_at,confidence,repeat_runs,agreement_ratio,evidence_json)
-            VALUES ($id,$kind,$value,$normalized,$model,$prompt,$schema,$at,$confidence,$runs,$agreement,$evidence)
-            """;
-        Add(command, "$id", workId);
-        Add(command, "$kind", item.Kind);
-        Add(command, "$value", item.Value.Trim());
-        Add(command, "$normalized", Normalize(item.Value));
-        Add(command, "$model", item.ModelDeployment);
-        Add(command, "$prompt", item.PromptSha256);
-        Add(command, "$schema", item.SchemaSha256);
-        Add(command, "$at", item.GeneratedAt);
-        Add(command, "$confidence", item.Confidence);
-        Add(command, "$runs", item.RepeatRuns);
-        Add(command, "$agreement", item.AgreementRatio);
-        Add(command, "$evidence", JsonSerializer.Serialize(item.Evidence));
+        Add(command, "$reviewed_by", null);
         command.ExecuteNonQuery();
     }
 

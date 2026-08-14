@@ -74,6 +74,9 @@ public sealed class CorpusWriter(
         var sourceInventory = (adapter as ISourceBuildInventory)?.GetBuildInventory();
         var expectedWorks = Math.Max(enumeratedWorks, sourceInventory?.ExpectedWorks ?? 0);
         var retryMaximumAttempts = sourceInventory?.RetryMaximumAttempts ?? 1;
+        var sourceConfigurationKind = sourceInventory?.SourceConfigurationKind ?? "code_only";
+        var sourceConfigurationSha256 = sourceInventory?.SourceConfigurationSha256;
+        ValidateSourceConfiguration(sourceConfigurationKind, sourceConfigurationSha256);
         if (retryMaximumAttempts is < 1 or > 10)
             throw new InvalidDataException("The source retry maximum must be between 1 and 10 attempts.");
         if (sourceInventory?.EnumerationComplete == false || enumeratedWorks < expectedWorks)
@@ -511,8 +514,9 @@ public sealed class CorpusWriter(
             // with this run's explicitly supplied identity.
             IngesterCodeCommit = existingManifest?.IngesterCodeCommit
                 ?? _ingesterCodeCommit,
+            SourceConfigurationKind = sourceConfigurationKind,
+            SourceConfigurationSha256 = sourceConfigurationSha256,
             MigrationBaselineWorks = existingManifest?.MigrationBaselineWorks,
-            PublisherDiscoverySchema = ManifestDoc.CurrentPublisherDiscoverySchema,
         };
         candidate.WriteIfChanged(Path.Combine(corpusRoot, "manifest.json"), JsonSerializer.Serialize(manifest, CorpusJson.Options));
         candidate.WriteIfChanged(Path.Combine(corpusRoot, "NOTICE"), Notice(pub, desc.TextIncluded));
@@ -561,7 +565,30 @@ public sealed class CorpusWriter(
                 + "use the explicit fresh-corpus migration path.");
         CodeIdentity.RequireFullCommit(
             manifest.IngesterCodeCommit, "manifest ingester_code_commit");
+        ValidateSourceConfiguration(
+            manifest.SourceConfigurationKind, manifest.SourceConfigurationSha256);
         return manifest;
+    }
+
+    internal static void ValidateSourceConfiguration(string? kind, string? digest)
+    {
+        switch (kind)
+        {
+            case "code_only" when digest is null:
+                return;
+            case "engineering_scope" when digest is not null:
+                CodeIdentity.RequireSha256(digest, "manifest source_configuration_sha256");
+                return;
+            case "code_only":
+                throw new InvalidDataException(
+                    "manifest source_configuration_sha256 must be null for code_only sources");
+            case "engineering_scope":
+                throw new InvalidDataException(
+                    "manifest source_configuration_sha256 is required for engineering_scope sources");
+            default:
+                throw new InvalidDataException(
+                    $"manifest source_configuration_kind '{kind}' is unsupported");
+        }
     }
 
     private static Dictionary<string, string> VersionKeys(
@@ -621,14 +648,8 @@ public sealed class CorpusWriter(
     };
 
     private static List<PublisherMetadataRecord> CanonicalPublisherMetadata(
-        IReadOnlyList<PublisherMetadataRecord>? values) => (values ?? [])
-        .Distinct()
-        .OrderBy(value => value.Kind, StringComparer.Ordinal)
-        .ThenBy(value => value.Identifier, StringComparer.Ordinal)
-        .ThenBy(value => value.Language, StringComparer.Ordinal)
-        .ThenBy(value => value.Label, StringComparer.Ordinal)
-        .ThenBy(value => value.SourceUri, StringComparer.Ordinal)
-        .ToList();
+        IReadOnlyList<PublisherMetadataRecord>? values) =>
+        PublisherMetadataValidation.Canonicalize(values);
 
     private static void ValidateBodyFetch(SourceBodyFetch result)
     {

@@ -367,8 +367,6 @@ public sealed class CorpusWriterTests : IDisposable
         Assert.Equal(1, manifest.Expressions);
         Assert.Equal(0, manifest.ExpressionsWithText);
         Assert.Equal(1, manifest.ExpressionsWithoutText);
-        Assert.Equal(ManifestDoc.CurrentPublisherDiscoverySchema,
-            manifest.PublisherDiscoverySchema);
     }
 
     [Fact]

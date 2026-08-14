@@ -16,9 +16,8 @@ public static class IndexFromCorpus
 {
     public static void Build(string corpusRoot, string? articlesRoot, string dbPath, string? signingKeyPem,
                              DateTimeOffset now, SemanticBuildOptions? semantic = null,
-                             string? workEnrichmentPath = null, string? codeCommit = null,
-                             string? articlesCommit = null, string? corpusCommit = null,
-                             string? reviewedConfigurationPath = null)
+                             string? codeCommit = null,
+                             string? articlesCommit = null, string? corpusCommit = null)
     {
         if ((articlesRoot is null) != (articlesCommit is null))
             throw new InvalidDataException(
@@ -36,15 +35,14 @@ public static class IndexFromCorpus
                 "Index construction requires a fresh lex-corpus/4 input.");
         var ingesterCodeCommit = CodeIdentity.RequireFullCommit(
             manifest.IngesterCodeCommit, "manifest ingester_code_commit");
+        CorpusWriter.ValidateSourceConfiguration(
+            manifest.SourceConfigurationKind, manifest.SourceConfigurationSha256);
         var builderCodeCommit = NormalizeCodeCommit(codeCommit);
         var publisherId = manifest.Publisher["id"];
         DerivationGeneration.Entry? generation = null;
         string? generationSha256 = null;
         if (articlesRoot is not null)
         {
-            if (reviewedConfigurationPath is null)
-                throw new InvalidDataException(
-                    "A publisher-specific reviewed configuration is required with derived articles.");
             generation = DerivationGeneration.ReadPublisher(articlesRoot, publisherId);
             generationSha256 = DerivationGeneration.Sha256File(
                 Path.Combine(articlesRoot, DerivationGeneration.FileName));
@@ -55,15 +53,7 @@ public static class IndexFromCorpus
                 "generation corpus_manifest_sha256", "selected corpus manifest");
             RequireEqual(generation.IngesterCodeCommit, ingesterCodeCommit,
                 "generation ingester_code_commit", "corpus manifest ingester identity");
-            RequireEqual(generation.ReviewedConfigurationSha256,
-                DerivationGeneration.Sha256File(reviewedConfigurationPath),
-                "generation reviewed_configuration_sha256",
-                "selected publisher configuration");
         }
-        if (workEnrichmentPath is not null
-            && manifest.PublisherDiscoverySchema != ManifestDoc.CurrentPublisherDiscoverySchema)
-            throw new InvalidDataException(
-                "The corpus predates publisher-discovery migration. Re-ingest it before applying reviewed work aliases.");
 
         var docs = new List<DocRow>();
         var provisions = new List<ProvisionRow>();
@@ -178,7 +168,9 @@ public static class IndexFromCorpus
                         PublisherMetadata: (meta.PublisherMetadata ?? [])
                             .Where(value => value.Language is null || value.Language == expr.Language)
                             .Select(value => new PublisherMetadataRow(
-                                value.Kind, value.Identifier, value.Language, value.Label, value.SourceUri))
+                                value.Kind, value.Identifier, value.Language, value.Label,
+                                value.SourceUri,
+                                CitationIdentity: value.Kind == "legilux_same_as"))
                             .ToArray(),
                         DocumentRoles: meta.DocumentRoles ?? []));
 
@@ -246,8 +238,6 @@ public static class IndexFromCorpus
             stamp["corpus_manifest_sha256"] = generation.CorpusManifestSha256;
             stamp["generation_sha256"] = generationSha256!;
             stamp["profiles_sha256"] = generation.ProfilesSha256;
-            stamp["reviewed_configuration_sha256"] =
-                generation.ReviewedConfigurationSha256;
         }
         if (stampedArticlesCommit is not null)
             stamp["articles_commit"] = stampedArticlesCommit;
@@ -314,13 +304,8 @@ public static class IndexFromCorpus
         }
 
         stamp["derived_provisions"] = provisions.Count.ToString();
-        var heldWorks = docs.Select(doc => (doc.GroupKey, doc.Language)).ToHashSet();
-        var workSearch = workEnrichmentPath is null
-            ? null
-            : WorkEnrichmentFile.Load(workEnrichmentPath, publisherId, heldWorks,
-                Console.Error.WriteLine);
         IndexBuilder.Build(dbPath, stamp, docs, provisions, events, observations, signingKeyPem,
-            provisionStates, anchorEventRows, semantic, workSearch);
+            provisionStates, anchorEventRows, semantic);
         Console.Error.WriteLine($"  [index] {dbPath}: {docs.Count} rows, {provisions.Count} provisions, {provisionStates.Count} states, {anchorEventRows.Count} anchor events, signed={(signingKeyPem is not null)}");
     }
 

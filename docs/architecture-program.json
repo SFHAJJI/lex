@@ -65,9 +65,9 @@
     },
     {
       "id": "M9",
-      "title": "Reviewed search enrichment and legal-research agent",
+      "title": "Official-metadata search and legal-research agent",
       "status": "shipped",
-      "outcome": "Publisher metadata, reviewed aliases, deterministic work resolution, bounded retrieval, Agent Framework evidence composition and judging, bounded memory and jurisdiction-first results are live without changing authoritative legal text. Model-derived weak discovery remains excluded from production retrieval."
+      "outcome": "Official publisher metadata, source-backed short-title resolution, deterministic clarification, bounded retrieval, Agent Framework evidence composition and judging, bounded memory and jurisdiction-first results are live without changing authoritative legal text. Taxonomies remain weak discovery only and model-derived discovery remains excluded from production retrieval."
     }
   ],
   "decisions": [

@@ -171,6 +171,15 @@ public sealed class LegiluxAdapter : ISourceAdapter, ISourceBuildInventory
                 """, pageSize: 5000, ct,
                 onPage: n => Console.Error.WriteLine($"  [legilux] fetched {n} rows"));
 
+            var subjectRows = await _sparql.SelectPagedAsync(
+                LegiluxPublisherMetadata.Query, 5000, ct,
+                n => Console.Error.WriteLine($"  [legilux] fetched {n} subject rows"));
+            var subjectsByWork = LegiluxPublisherMetadata.ParseSubjects(subjectRows);
+            var identityRows = await _sparql.SelectPagedAsync(
+                LegiluxOfficialIdentities.Query, 5000, ct,
+                n => Console.Error.WriteLine($"  [legilux] fetched {n} official identity rows"));
+            var identitiesByWork = LegiluxOfficialIdentities.Parse(identityRows);
+
             var byConsolidation = rows.GroupBy(r => r["c"], StringComparer.Ordinal);
             var byWork = new Dictionary<string, List<VersionRecord>>(StringComparer.Ordinal);
             var works = new Dictionary<string, WorkRef>(StringComparer.Ordinal);
@@ -207,6 +216,16 @@ public sealed class LegiluxAdapter : ISourceAdapter, ISourceBuildInventory
                 if (expressions.Count == 0)
                     expressions = [new ExpressionRecord("fr", validFrom, validTo, "publisher", null, null, PublicUrl(grp.Key))];
 
+                var publisherMetadata = subjectsByWork.GetValueOrDefault(workUri, [])
+                    .Concat(identitiesByWork.GetValueOrDefault(workUri, []))
+                    .Distinct().OrderBy(value => value.Kind, StringComparer.Ordinal)
+                    .ThenBy(value => value.Identifier, StringComparer.Ordinal)
+                    .ThenBy(value => value.Language, StringComparer.Ordinal)
+                    .ThenBy(value => value.Label, StringComparer.Ordinal).ToArray();
+                if (publisherMetadata.Length > 512)
+                    throw new InvalidDataException(
+                        $"Legilux work {workUri} exceeds 512 publisher metadata records.");
+
                 var version = new VersionRecord(
                     Id: new Identifier(grp.Key),
                     WorkId: new Identifier(workUri),
@@ -218,7 +237,8 @@ public sealed class LegiluxAdapter : ISourceAdapter, ISourceBuildInventory
                     PublicationDate: pubDate,
                     Expressions: expressions,
                     Relations: [],
-                    Raw: new Dictionary<string, string>());
+                    Raw: new Dictionary<string, string>(),
+                    PublisherMetadata: publisherMetadata);
 
                 if (!byWork.TryGetValue(workUri, out var list)) byWork[workUri] = list = [];
                 list.Add(version);

@@ -48,7 +48,8 @@ public sealed record LegalArgumentDefinition(
     int? MaximumListValues = null,
     int? MaximumListItemLength = null,
     string? PlannerGuidance = null,
-    bool Opaque = false)
+    bool Opaque = false,
+    bool RequiresAbsoluteHttpUri = false)
 {
     internal JsonObject Schema(
         bool planner,
@@ -74,6 +75,10 @@ public sealed record LegalArgumentDefinition(
             {
                 schema["pattern"] = LegalOperationCatalog.IsoDatePattern;
                 if (planner) schema["format"] = "date";
+            }
+            else if (RequiresAbsoluteHttpUri)
+            {
+                schema["pattern"] = LegalOperationCatalog.AbsoluteHttpUriPattern;
             }
             overridden = AllowedValues is null ? valueOverride?.Invoke(Name) : null;
             var values = AllowedValues ?? overridden;
@@ -261,6 +266,8 @@ public static class LegalOperationCatalog
     public const int MaximumShortLength = 64;
     public const int MaximumLanguageLength = 16;
     public const int MaximumDateLength = 10;
+    public const int MaximumVersionKeyLength = 128;
+    public const int MaximumPublisherMetadataIdentifierLength = 2_048;
     public const int MaximumListValues = 50;
     public const int MaximumOffset = 100_000;
     public const int MaximumSubjectReferenceLength = 64;
@@ -268,6 +275,7 @@ public static class LegalOperationCatalog
     public const string IsoDateFormat = "yyyy-MM-dd";
     public const string IsoDatePattern =
         @"^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$";
+    public const string AbsoluteHttpUriPattern = "^https?://";
 
     private static LegalArgumentDefinition S(
         string name,
@@ -279,11 +287,13 @@ public static class LegalOperationCatalog
         int? maximumListValues = null,
         int? maximumListItemLength = null,
         string? plannerGuidance = null,
-        bool opaque = false) => new(
+        bool opaque = false,
+        bool requiresAbsoluteHttpUri = false) => new(
             name, description, MaximumLength: maximum, AllowedValues: values,
             Mcp: mcp, Planner: planner, MaximumListValues: maximumListValues,
             MaximumListItemLength: maximumListItemLength,
-            PlannerGuidance: plannerGuidance, Opaque: opaque);
+            PlannerGuidance: plannerGuidance, Opaque: opaque,
+            RequiresAbsoluteHttpUri: requiresAbsoluteHttpUri);
 
     private static LegalArgumentDefinition D(string name, string description) => new(
         name, description, MaximumLength: MaximumDateLength, IsDate: true);
@@ -322,6 +332,10 @@ public static class LegalOperationCatalog
                 S("act_form", "optional legal act form"),
                 S("binding_status", "optional binding status"),
                 S("domain", "optional reviewed legal domain id"),
+                S("publisher_metadata_identifier",
+                    "optional exact official publisher-metadata URI returned by a search hit",
+                    MaximumPublisherMetadataIdentifierLength, planner: false,
+                    requiresAbsoluteHttpUri: true),
                 S("language", "optional language code", MaximumLanguageLength),
                 S("retrieval_mode", "keyword or hybrid; default keyword until activation",
                     MaximumShortLength, values: ["keyword", "hybrid"]),

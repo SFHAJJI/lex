@@ -9,19 +9,24 @@ public sealed class CitationTargetResolutionTests : IDisposable
     private readonly List<string> _files = [];
 
     [Fact]
-    public void Index_canonicalizes_reviewed_local_citation_aliases()
+    public void Index_canonicalizes_official_same_as_local_citation_identities()
     {
         var db = TempPath();
         var citing = Doc("mixed", "citing-work");
-        var lu = Doc("mixed", "loi-1879-06-18-n1");
-        var options = new WorkSearchBuildOptions([], [], new string('a', 64),
-        [
-            new ReviewedCitationAliasRow("code-penal", lu.GroupKey, "repository-review:test"),
-        ]);
+        var aliasUri = "https://data.legilux.public.lu/eli/etat/leg/code/penal";
+        var lu = Doc("mixed", "loi-1879-06-18-n1") with
+        {
+            PublisherMetadata =
+            [
+                new PublisherMetadataRow(
+                    "legilux_same_as", aliasUri, null, "code-penal", aliasUri,
+                    CitationIdentity: true),
+            ],
+        };
         IndexBuilder.Build(db, Stamp("mixed"), [citing, lu],
         [
             Prov(citing, 0, "art_1", "/eli/etat/leg/code/penal/art_454/20210430"),
-        ], [], [], StampSigner.CreateKeyPem(), workSearch: options);
+        ], [], [], StampSigner.CreateKeyPem());
         using var reader = LexIndexReader.Open(db);
 
         Assert.Equal("mixed:loi-1879-06-18-n1", Assert.Single(reader.CitationsOf(

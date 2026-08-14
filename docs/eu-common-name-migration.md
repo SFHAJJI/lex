@@ -1,29 +1,31 @@
-# EU professional-name migration
+# EU official-name migration
 
-EUR-Lex professional names are no longer written into corpus titles by adapter code. Official
-titles and publisher short titles remain separate. Exact professional names come from
-`config/eu-work-enrichment.json` as reviewed aliases; its model-discovery section is empty.
+Legal names and classifications come only from official publisher data. EUR-Lex titles and
+`title_short` values remain separate source fields. A literal comma-delimited segment of an
+official publisher short title may identify a work when that normalized segment is unique in the
+effective catalogue. A collision is an explicit clarification, never an arbitrary choice.
 
-Production migration completed on 2026-08-09. The clean corpus was re-ingested and re-derived, the
-reviewed enrichment digest is bound into the signed EU artifact, and live smoke tests resolved
-`GDPR`, `RGPD`, `DORA`, and `AI Act` as exact aliases.
+Assigned EuroVoc concepts, official alternative labels, immediate broader relations,
+micro-thesaurus/subdomain coordinates, directory coordinates, and publisher short titles are
+stored as typed publisher metadata. Only the short-title rule above can establish work identity;
+all other metadata is weak discovery context and is not legal-text evidence.
 
-## Required build sequence
+There is no manually maintained legal-name or alias file. The former
+`config/eu-work-enrichment.json` input and its digest were removed.
 
-1. Re-ingest the EU corpus with the current adapter. This refreshes work titles and every
-   expression `title_short`, and stamps `publisher_discovery_schema=publisher-discovery/1` in the
-   corpus manifest.
-2. Re-derive articles from that corpus.
-3. Build the EU index with
-   `--work-enrichment config/eu-work-enrichment.json`.
-4. Verify the index stamp contains `enrichment_digest`, then smoke `GDPR`, `RGPD`, `DORA`, and
-   `AI Act` as `exact_alias` matches.
+## Required v4 build sequence
 
-The index command refuses to combine reviewed aliases with a corpus that lacks the migration
-marker. Reduced scopes and single-language builds deterministically retain only aliases for
-work-language records actually held by the corpus.
+1. Fresh-ingest the EU corpus with the exact engineering scope file. Corpus provenance records
+   `source_configuration_kind=engineering_scope` and the SHA-256 of the raw, LF-pinned scope
+   bytes.
+2. Verify the v4 corpus, then derive it once. The single top-level
+   `lex-articles-generation/3` manifest binds corpus and deriver identities.
+3. Build and verify the index without any enrichment argument. Official metadata is already in
+   the corpus bytes and therefore covered by corpus, generation, and signed-index provenance. The
+   source-backed citation-identity bit advances the internal work catalogue to version 3, so a
+   version-2 database must be rebuilt rather than mounted by the new reader.
+4. Smoke unique short titles and at least one deliberate collision. Verify taxonomy matches are
+   reported as publisher-metadata discovery rather than text or identity authority.
 
-## Rollback
-
-Keep the prior immutable corpus and signed index release. Roll back both code and artifacts
-together; do not mix a pre-migration corpus with the reviewed alias file.
+The old enrichment-file workflow is incompatible with this migration. Rollback must restore the
+prior immutable corpus and signed index together; never combine artifacts across the boundary.

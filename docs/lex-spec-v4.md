@@ -725,7 +725,8 @@ lex-corpus-lu-cssf/
   "ingester_version": "0.4.1",
   "ingester_code_commit": "<full reviewed Lex commit>",
   "migration_baseline_works": 1390,
-  "publisher_discovery_schema": "publisher-discovery/1"
+  "source_configuration_kind": "code_only",
+  "source_configuration_sha256": null
 }
 ```
 
@@ -739,6 +740,10 @@ lex-corpus-lu-cssf/
 - v3's `works_search_only` field is **deleted** (§1.7): a manifest may not
   advertise a corpus no section builds.
 - `ingester_code_commit` is the full Lex commit that materialized the bytes.
+  `source_configuration_kind` is `code_only` when publisher selection is entirely code-bound
+  (Luxembourg), with a null digest, or `engineering_scope` when an explicit non-legal scope input
+  is used (EU), with the SHA-256 of its raw LF-pinned bytes. Legal names, aliases, citation
+  identities and classifications are never supplied through configuration.
   `migration_baseline_works` records the protected v3 baseline only on the
   fresh migration. The migration additionally proves every held baseline work
   and dated state is represented in the publisher plan before requesting any
@@ -879,13 +884,12 @@ releases plus one per month; a release referenced by any published index
 manifest is never deleted.
 
 The derived `lex-articles` checkout contains one canonical
-`lex-articles-generation/2` `generation.json`. Its publisher entry binds the
+`lex-articles-generation/3` `generation.json`. Its publisher entry binds the
 exact corpus commit and manifest digest, materializing ingester commit,
-deriver commit and Git tree, reviewed-configuration digest, extraction
-profiles, and profile-set digest. The articles Git commit binds that file; the
+deriver commit and Git tree, extraction profiles, and profile-set digest. The articles Git commit binds that file; the
 file deliberately does not contain its own commit. Index construction refuses
 a dirty checkout or any mismatch between these coordinates and the selected
-v4 corpus/configuration, then copies the verified identities into the signed
+v4 corpus, then copies the verified identities into the signed
 index stamp.
 
 ### C8, Adapter plugin seam
@@ -1623,8 +1627,9 @@ authors a route or a rendering directive directly.
 The raw-user search is an internal authority preflight and is never narrated or rendered as a
 research result. A successful work-independent operation cancels unrelated weak candidates.
 Clarification is emitted only when a work-specific operation needs an identity that remains
-genuinely ambiguous or unresolved. Reviewed aliases and official identifiers resolve
-deterministically inside ordinary sentences; weak metadata never authorizes a work-specific tool.
+genuinely ambiguous or unresolved. Official identifiers and unique literal segments of official
+publisher short titles resolve deterministically inside ordinary sentences; colliding segments
+clarify and other publisher metadata never authorizes a work-specific tool.
 If prose synthesis or its grounding judgment fails after an operation has already produced a
 valid typed view, the assistant preserves that verified workspace result and reports it with a
 deterministic navigation sentence. Operation status remains part of the typed effect: an

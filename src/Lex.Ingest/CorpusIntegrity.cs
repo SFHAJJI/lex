@@ -51,6 +51,8 @@ public static class CorpusIntegrity
             {
                 CodeIdentity.RequireFullCommit(
                     manifest.IngesterCodeCommit, "manifest ingester_code_commit");
+                CorpusWriter.ValidateSourceConfiguration(
+                    manifest.SourceConfigurationKind, manifest.SourceConfigurationSha256);
             }
             catch (InvalidDataException ex)
             {
@@ -165,6 +167,20 @@ public static class CorpusIntegrity
                 {
                     errors.Add($"{relativeVersion}/meta.json identity mismatch: {ex.Message}");
                 }
+                if (currentSchema)
+                    try
+                    {
+                        var canonicalMetadata = PublisherMetadataValidation.Canonicalize(
+                            version.PublisherMetadata);
+                        if (!(version.PublisherMetadata ?? []).SequenceEqual(canonicalMetadata))
+                            errors.Add(
+                                $"{relativeVersion}/meta.json publisher_metadata is not canonical");
+                    }
+                    catch (InvalidDataException ex)
+                    {
+                        errors.Add(
+                            $"{relativeVersion}/meta.json publisher_metadata is invalid: {ex.Message}");
+                    }
                 var lifecycle = version.Events.LastOrDefault(e =>
                     e.Event is "withdrawn_from_source" or "resighted");
                 if (lifecycle?.Event != "withdrawn_from_source")

@@ -6,7 +6,6 @@ namespace Lex.Mcp;
 internal static class McpInputPolicy
 {
     internal const int MaximumAnchorLength = LegalOperationCatalog.MaximumAnchorLength;
-
     public static void Validate(string tool, JsonObject arguments)
     {
         var operation = LegalOperationCatalog.TryGet(tool)
@@ -42,6 +41,11 @@ internal static class McpInputPolicy
                     text, LegalOperationCatalog.IsoDateFormat, CultureInfo.InvariantCulture,
                     DateTimeStyles.None, out _))
                 throw new ArgumentException($"{name} must be an ISO date (YYYY-MM-DD).", name);
+            if (rule.RequiresAbsoluteHttpUri
+                && (!Uri.TryCreate(text, UriKind.Absolute, out var uri)
+                    || uri.Scheme is not ("http" or "https")))
+                throw new ArgumentException(
+                    $"{name} must be an absolute HTTP(S) URI.", name);
             if (rule.AllowedValues is not null
                 && !rule.AllowedValues.Contains(text, StringComparer.Ordinal))
                 throw new ArgumentException(
