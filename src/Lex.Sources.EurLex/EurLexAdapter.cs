@@ -12,9 +12,12 @@ namespace Lex.Sources.EurLex;
 /// (publications.europa.eu — robots.txt: Allow /), sequential and paced.
 /// NOTE: consolidated texts carry no legal effect; only OJ acts are authentic (§9.6).
 /// </summary>
-public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory
+public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory,
+    ILegacyVersionIdentityResolver
 {
     private const string Sparql = "https://publications.europa.eu/webapi/rdf/sparql";
+    private const string CelexIdentifierPrefix =
+        "http://publications.europa.eu/resource/celex/";
     private const string Cdm = "PREFIX cdm: <http://publications.europa.eu/ontology/cdm#>\n";
     private const string Owl = "PREFIX owl: <http://www.w3.org/2002/07/owl#>\n";
     private const string Skos = "PREFIX skos: <http://www.w3.org/2004/02/skos/core#>\n";
@@ -85,6 +88,86 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory
             RetryMaximumAttempts: RetryPolicy.MaximumAttempts,
             SourceConfigurationKind: "engineering_scope",
             SourceConfigurationSha256: _scopeSha256);
+
+    public Identifier ResolveLegacyVersionIdentity(LegacyVersionIdentity legacy)
+    {
+        var baseCelex = LegacyWorkCelex(legacy.WorkIdentifier);
+        if (legacy.Expressions.Count == 0)
+            throw new InvalidDataException(
+                "A EUR-Lex legacy version has no expression source identity.");
+
+        var states = legacy.Expressions
+            .Select(LegacyExpressionCelex)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        if (states.Length != 1)
+            throw new InvalidDataException(
+                "A EUR-Lex legacy version resolves to more than one CELEX state.");
+
+        var state = states[0];
+        var expectedDate = legacy.ValidFrom.ToString(
+            "yyyyMMdd", System.Globalization.CultureInfo.InvariantCulture);
+        var expectedConsolidation = "0" + baseCelex[1..] + "-" + expectedDate;
+        if (!string.Equals(state, baseCelex, StringComparison.Ordinal)
+            && !(baseCelex[0] == '3'
+                 && string.Equals(state, expectedConsolidation,
+                     StringComparison.Ordinal)))
+            throw new InvalidDataException(
+                "A EUR-Lex legacy expression is neither the original work CELEX nor its "
+                + "exact dated consolidation for valid_from.");
+
+        return new Identifier(CelexIdentifierPrefix + state);
+    }
+
+    private static string LegacyWorkCelex(string value)
+    {
+        if (!value.StartsWith(CelexIdentifierPrefix, StringComparison.Ordinal))
+            throw new InvalidDataException(
+                "A EUR-Lex legacy work_identifier is not an exact official CELEX resource URI.");
+        var celex = value[CelexIdentifierPrefix.Length..];
+        if (!System.Text.RegularExpressions.Regex.IsMatch(celex,
+                @"^(?:1[0-9]{4}(?:E[0-9]{3}|JN[0-9]{2}/[0-9]{2}|TN[0-9]{2}/[0-9]{2}/A|[A-Z]/TXT)|3[0-9]{4}[RLD][0-9]{4}(?:R\([0-9]{2}\))?)$",
+                System.Text.RegularExpressions.RegexOptions.CultureInvariant))
+            throw new InvalidDataException(
+                "A EUR-Lex legacy work_identifier does not contain one supported work CELEX.");
+        return celex;
+    }
+
+    private static string LegacyExpressionCelex(LegacyExpressionIdentity expression)
+    {
+        if (expression.Language.Length != 2
+            || expression.Language.Any(character => character is not (>= 'a' and <= 'z')))
+            throw new InvalidDataException(
+                "A EUR-Lex legacy expression has an invalid language code.");
+
+        // Official permanent-link and sector-0 CELEX forms:
+        // https://eur-lex.europa.eu/content/help/data-reuse/linking.html?locale=en
+        // https://eur-lex.europa.eu/content/help/eurlex-content/celex-number.html?locale=en
+        var prefix = "https://eur-lex.europa.eu/legal-content/"
+                     + expression.Language.ToUpperInvariant()
+                     + "/TXT/?uri=CELEX:";
+        if (!expression.SourceUri.StartsWith(prefix, StringComparison.Ordinal))
+            throw new InvalidDataException(
+                "A EUR-Lex legacy expression source_uri is not its exact official language path.");
+        var encodedCelex = expression.SourceUri[prefix.Length..];
+        string celex;
+        try
+        {
+            celex = Uri.UnescapeDataString(encodedCelex);
+        }
+        catch (UriFormatException ex)
+        {
+            throw new InvalidDataException(
+                "A EUR-Lex legacy expression source_uri has an invalid CELEX encoding.", ex);
+        }
+        if (celex.Length == 0
+            || !string.Equals(expression.SourceUri,
+                ExpressionSourceUri(expression.Language, celex),
+                StringComparison.Ordinal))
+            throw new InvalidDataException(
+                "A EUR-Lex legacy expression source_uri is not one canonical CELEX link.");
+        return celex;
+    }
 
     public async IAsyncEnumerable<WorkRef> EnumerateWorks([EnumeratorCancellation] CancellationToken ct)
     {

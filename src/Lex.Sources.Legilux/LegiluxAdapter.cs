@@ -40,16 +40,18 @@ public sealed class LegiluxAdapter : ISourceAdapter, ISourceBuildInventory,
 
     public Identifier ResolveLegacyVersionIdentity(LegacyVersionIdentity legacy)
     {
-        RequireOfficialEli(legacy.WorkIdentifier, "work_identifier");
+        var work = RequireOfficialEli(legacy.WorkIdentifier, "work_identifier");
         if (legacy.Expressions.Count == 0)
             throw new InvalidDataException(
                 "A withdrawn Legilux legacy version has no expression source identity.");
 
         var expectedDate = legacy.ValidFrom.ToString(
             "yyyyMMdd", System.Globalization.CultureInfo.InvariantCulture);
+        var expectedWorkStatePath = work.AbsolutePath.TrimEnd('/') + "/" + expectedDate;
         var candidates = legacy.Expressions
             .Select(expression => LegacyConsolidationIdentifier(
-                expression.SourceUri, expression.Language, expectedDate))
+                expression.SourceUri, expression.Language, expectedDate,
+                expectedWorkStatePath))
             .Distinct(StringComparer.Ordinal)
             .ToArray();
         if (candidates.Length != 1)
@@ -59,7 +61,8 @@ public sealed class LegiluxAdapter : ISourceAdapter, ISourceBuildInventory,
     }
 
     private static string LegacyConsolidationIdentifier(
-        string sourceUri, string language, string expectedDate)
+        string sourceUri, string language, string expectedDate,
+        string expectedWorkStatePath)
     {
         if (language.Length != 2
             || language.Any(character => character is not (>= 'a' and <= 'z')))
@@ -70,6 +73,9 @@ public sealed class LegiluxAdapter : ISourceAdapter, ISourceBuildInventory,
         var languageSuffix = "/" + language;
         if (path.EndsWith(languageSuffix, StringComparison.Ordinal))
             path = path[..^languageSuffix.Length];
+
+        if (string.Equals(path, expectedWorkStatePath, StringComparison.Ordinal))
+            return "http://data.legilux.public.lu" + path;
 
         const string prefix = "/eli/etat/leg/";
         var suffix = "/consolide/" + expectedDate;

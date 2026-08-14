@@ -5,6 +5,23 @@ namespace Lex.Tests;
 
 public sealed class LegiluxLegacyIdentityTests
 {
+    [Fact]
+    public void Exact_work_state_source_recovers_the_active_publisher_identity()
+    {
+        var resolver = Assert.IsAssignableFrom<ILegacyVersionIdentityResolver>(
+            new LegiluxAdapter());
+
+        var actual = resolver.ResolveLegacyVersionIdentity(new LegacyVersionIdentity(
+            "http://data.legilux.public.lu/eli/etat/leg/code/civil",
+            new DateOnly(2025, 4, 20),
+            [new LegacyExpressionIdentity("fr",
+                "https://legilux.public.lu/eli/etat/leg/code/civil/20250420/fr")]));
+
+        Assert.Equal(
+            "http://data.legilux.public.lu/eli/etat/leg/code/civil/20250420",
+            actual.Value);
+    }
+
     [Theory]
     [InlineData("2025-04-20", "loi/1804/03/21/n1/consolide/20250420", null)]
     [InlineData("2025-08-04", "loi/1808/11/17/n1/consolide/20250804", null)]
@@ -47,6 +64,7 @@ public sealed class LegiluxLegacyIdentityTests
     [InlineData("https://legilux.public.lu/eli/etat/leg/loi/1804/03/21/n1/consolide/20250420/fr/extra")]
     [InlineData("https://legilux.public.lu/eli/bogus/consolide/20250420")]
     [InlineData("https://legilux.public.lu/eli/etat/leg//consolide/20250420")]
+    [InlineData("https://legilux.public.lu/eli/etat/leg/code/civil/other/20250420/fr")]
     public void Legacy_identity_recovery_refuses_non_official_or_wrong_date_sources(
         string source)
     {
