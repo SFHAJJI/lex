@@ -287,6 +287,23 @@ public static class ApiEndpoints
                 Synthesis: (status, _) => new ValueTask(Send("synthesis", new JsonObject
                 {
                     ["status"] = status,
+                })),
+                Phase: (update, _) => new ValueTask(Send("phase", new JsonObject
+                {
+                    ["phase"] = update.Phase switch
+                    {
+                        AskService.AskPhase.Planning => "planning",
+                        AskService.AskPhase.Execution => "execution",
+                        AskService.AskPhase.Composition => "composition",
+                        _ => throw new ArgumentOutOfRangeException(nameof(update)),
+                    },
+                    ["status"] = update.Status switch
+                    {
+                        AskService.AskPhaseStatus.Started => "started",
+                        AskService.AskPhaseStatus.Completed => "completed",
+                        AskService.AskPhaseStatus.Unavailable => "unavailable",
+                        _ => throw new ArgumentOutOfRangeException(nameof(update)),
+                    },
                 })));
             AskService.AskOutcome outcome;
             try

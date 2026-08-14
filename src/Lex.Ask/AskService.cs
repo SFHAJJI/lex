@@ -1586,10 +1586,27 @@ public sealed class AskService
     /// </summary>
     public sealed record Step(string Kind, string Text, string? Work = null, string? Date = null, string? Anchor = null);
 
+    public enum AskPhase
+    {
+        Planning,
+        Execution,
+        Composition,
+    }
+
+    public enum AskPhaseStatus
+    {
+        Started,
+        Completed,
+        Unavailable,
+    }
+
+    public sealed record PhaseUpdate(AskPhase Phase, AskPhaseStatus Status);
+
     public sealed record AskProgressCallbacks(
         Func<Step, CancellationToken, ValueTask>? Step = null,
         Func<JsonObject, CancellationToken, ValueTask>? OperationResult = null,
-        Func<string, CancellationToken, ValueTask>? Synthesis = null);
+        Func<string, CancellationToken, ValueTask>? Synthesis = null,
+        Func<PhaseUpdate, CancellationToken, ValueTask>? Phase = null);
 
     public sealed record AskOutcome(int Status, JsonObject Body, bool RetainForReplay)
     {
@@ -1676,11 +1693,17 @@ public sealed class AskService
             firstResult.CancelAfter(_firstResultDeadline);
             using var planner = CancellationTokenSource.CreateLinkedTokenSource(firstResult.Token);
             planner.CancelAfter(_plannerDeadline);
+            if (progress?.Phase is not null)
+                await NotifyProgress(() => progress.Phase(
+                    new PhaseUpdate(AskPhase.Planning, AskPhaseStatus.Started), planner.Token));
             var planningWatch = Stopwatch.StartNew();
             var (plan, planningUsage, plannerRepaired) = await PlanOperationsAsync(
                 history, host, requestId, requestLocale, planner.Token);
             planningWatch.Stop();
             plan = AuthorizeInstants(plan, rawUserQuery, requestLocale);
+            if (progress?.Phase is not null)
+                await NotifyProgress(() => progress.Phase(
+                    new PhaseUpdate(AskPhase.Planning, AskPhaseStatus.Completed), firstResult.Token));
             run = OperationRun.Start(plan);
             var (status, body) = await ExecutePlanAsync(
                 plan, run, userQueries, rawUserQuery, planningUsage,
@@ -1996,6 +2019,10 @@ public sealed class AskService
         int? terminalTransportStatus = null;
         var mcpMilliseconds = 0d;
 
+        if (progress?.Phase is not null)
+            await NotifyProgress(() => progress.Phase(
+                new PhaseUpdate(AskPhase.Execution, AskPhaseStatus.Started), ct));
+
         async ValueTask Report(OperationExecution execution)
         {
             firstResultObserved();
@@ -2185,10 +2212,16 @@ public sealed class AskService
             ?? OperationAnswerPolicy.Render(plan.Locale, results, effects, disclosures);
         var reply = deterministicReply;
         double? synthesisMilliseconds = null;
+        if (progress?.Phase is not null)
+            await NotifyProgress(() => progress.Phase(
+                new PhaseUpdate(AskPhase.Execution, AskPhaseStatus.Completed), ct));
         if (plan.SynthesisRequested && displayedClarification is null
             && terminalTransportStatus is null)
         {
             var synthesisWatch = Stopwatch.StartNew();
+            if (progress?.Phase is not null)
+                await NotifyProgress(() => progress.Phase(
+                    new PhaseUpdate(AskPhase.Composition, AskPhaseStatus.Started), ct));
             if (progress?.Synthesis is not null)
                 await NotifyProgress(() => progress.Synthesis("started", ct));
             var evidence = new AgentEvidenceLedger();
@@ -2238,6 +2271,9 @@ public sealed class AskService
                 modelUsage = modelUsage.Add(finalized.Usage);
                 if (progress?.Synthesis is not null)
                     await NotifyProgress(() => progress.Synthesis("completed", ct));
+                if (progress?.Phase is not null)
+                    await NotifyProgress(() => progress.Phase(
+                        new PhaseUpdate(AskPhase.Composition, AskPhaseStatus.Completed), ct));
             }
             // A client that disconnected is not a synthesis failure and must not be answered
             // with a reply nobody is waiting for: only the synthesis deadline degrades to the
@@ -2260,6 +2296,10 @@ public sealed class AskService
                 if (progress?.Synthesis is not null)
                     await NotifyProgress(() => progress.Synthesis(
                         "unavailable", CancellationToken.None));
+                if (progress?.Phase is not null)
+                    await NotifyProgress(() => progress.Phase(
+                        new PhaseUpdate(AskPhase.Composition, AskPhaseStatus.Unavailable),
+                        CancellationToken.None));
             }
             synthesisWatch.Stop();
             synthesisMilliseconds = synthesisWatch.Elapsed.TotalMilliseconds;

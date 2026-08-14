@@ -29,6 +29,7 @@ test("external evidence links are rendered only from absolute HTTPS URLs", () =>
 test("the versioned stream ignores stale events and exposes typed operation results", async () => {
   const originalFetch = globalThis.fetch;
   const operations: string[] = [];
+  const phases: string[] = [];
   const serverRequestId = "0123456789abcdef0123456789abcdef";
   try {
     globalThis.fetch = async (_input, init) => {
@@ -36,6 +37,7 @@ test("the versioned stream ignores stale events and exposes typed operation resu
       assert.equal(headers.get("Idempotency-Key"), "request-a");
       return new Response([
         'event: step\ndata: {"version":"1","request_id":"stale","sequence":1,"payload":{"kind":"search","text":"stale"}}',
+        `event: phase\ndata: {"version":"1","request_id":"${serverRequestId}","sequence":1,"payload":{"phase":"planning","status":"completed"}}`,
         `event: operation_result\ndata: {"version":"1","request_id":"${serverRequestId}","sequence":2,"payload":{"operation_id":"op-1","order":0,"legal_outcome":"succeeded","transport_outcome":"completed","effects":["coverage"],"ui":{"coverage":{"publishers":[]}}}}`,
         `event: operation_result\ndata: {"version":"1","request_id":"${serverRequestId}","sequence":2,"payload":{"operation_id":"duplicate"}}`,
         `event: done\ndata: {"version":"1","request_id":"${serverRequestId}","sequence":3,"payload":{"reply":"done"}}`,
@@ -47,11 +49,13 @@ test("the versioned stream ignores stale events and exposes typed operation resu
     const reply = await askStreaming(
       [{ role: "user", content: "coverage" }],
       { onStep: () => assert.fail("stale step was accepted"),
-        onOperation: (operation) => operations.push(operation.operation_id) },
+        onOperation: (operation) => operations.push(operation.operation_id),
+        onPhase: (phase, status) => phases.push(`${phase}:${status}`) },
       undefined,
       "request-a");
 
     assert.deepEqual(operations, ["op-1"]);
+    assert.deepEqual(phases, ["planning:completed"]);
     assert.equal(reply.reply, "done");
   } finally {
     globalThis.fetch = originalFetch;

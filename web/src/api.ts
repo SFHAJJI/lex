@@ -105,6 +105,8 @@ export interface AskStreamHandlers {
   onStep: (step: Step) => void;
   onOperation: (operation: OperationReply) => void;
   onSynthesis?: (status: string) => void;
+  onPhase?: (phase: "planning" | "execution" | "composition",
+             status: "started" | "completed" | "unavailable") => void;
 }
 
 interface AskStreamEnvelope<T = unknown> {
@@ -331,6 +333,14 @@ export async function askStreaming(
           handlers.onOperation(envelope.payload as OperationReply);
         else if (ev === "synthesis")
           handlers.onSynthesis?.(String((envelope.payload as { status?: unknown })?.status ?? ""));
+        else if (ev === "phase") {
+          const update = envelope.payload as { phase?: unknown; status?: unknown };
+          const phase = update?.phase;
+          const status = update?.status;
+          if ((phase === "planning" || phase === "execution" || phase === "composition")
+              && (status === "started" || status === "completed" || status === "unavailable"))
+            handlers.onPhase?.(phase, status);
+        }
         else if (ev === "done") done = envelope.payload as AskReply;
         else if (ev === "transport_error")
           transportError = boundedAssistantError(

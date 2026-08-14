@@ -1285,6 +1285,38 @@ public sealed class AskOperationControllerTests : IDisposable
     }
 
     [Fact]
+    public async Task Stream_reports_typed_pipeline_phases_in_execution_order()
+    {
+        var phases = new List<AskService.PhaseUpdate>();
+        var service = new AskService(_core, new StaticPlanner("en", new JsonArray(new JsonObject
+        {
+            ["tool"] = "coverage",
+            ["arguments"] = new JsonObject(),
+        })));
+
+        var response = await service.AskAsync(
+            History("Show coverage."), Guid.NewGuid().ToString(), "law.test",
+            CancellationToken.None, new AskService.AskProgressCallbacks(
+                Phase: (phase, _) =>
+                {
+                    phases.Add(phase);
+                    return ValueTask.CompletedTask;
+                }));
+
+        Assert.Equal(200, response.Status);
+        Assert.Equal([
+            new AskService.PhaseUpdate(AskService.AskPhase.Planning,
+                AskService.AskPhaseStatus.Started),
+            new AskService.PhaseUpdate(AskService.AskPhase.Planning,
+                AskService.AskPhaseStatus.Completed),
+            new AskService.PhaseUpdate(AskService.AskPhase.Execution,
+                AskService.AskPhaseStatus.Started),
+            new AskService.PhaseUpdate(AskService.AskPhase.Execution,
+                AskService.AskPhaseStatus.Completed),
+        ], phases);
+    }
+
+    [Fact]
     public async Task Unexpected_primary_failure_preserves_every_terminal_operation_result()
     {
         var planner = new StaticPlanner("en", new JsonArray(
