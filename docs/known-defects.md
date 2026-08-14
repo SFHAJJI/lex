@@ -165,23 +165,13 @@ defensible; the current state is not.
 
 **Why not now.** No adapter can trigger it, so it is genuinely latent.
 
-## 10. Luxembourg alias catalogue
+## 10. Manual legal-alias catalogues (resolved)
 
-**What is broken.** `config/` holds only `eu-work-enrichment.json`. Luxembourg has no alias file.
-
-**Effect, and a correction.** The verdict expected Luxembourg statutes to be unresolvable by name.
-Measured on 2026-08-13, that is **not** what happens: a title-matching path exists, reports
-`match: "work_identifier_or_title"`, and does surface the financial-sector law with a note telling
-the assistant not to report it as missing. What remains unproven is whether the absence of aliases
-degrades `work_constraints` scoping in practice.
-
-**Fix, if warranted.** A `config/lu-work-enrichment.json` seeded with the statutes practitioners cite
-by name, owner-reviewed per D75.
-
-**Gain.** Unquantified, which is exactly the problem.
-
-**Why not now.** Its premise did not survive measurement. It needs a measured failure before it earns
-implementation.
+The proposed publisher-specific alias files were rejected because manually constructed legal
+identity is not publisher evidence. Both enrichment files and their ingestion/index authority were
+removed. Work identity now comes from exact official identifiers/titles and unique literal segments
+of official publisher short titles; collisions clarify. Legilux citation identities are acquired
+from official `owl:sameAs` relations. Publisher taxonomies remain weak discovery metadata.
 
 ## 11. Decompose `AskService`
 

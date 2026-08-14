@@ -1,0 +1,128 @@
+name: bootstrap-inventory
+
+on:
+  workflow_dispatch:
+    inputs:
+      production_revision:
+        description: Exact first official candidate C, created after the fallback
+        required: true
+        type: string
+      rollback_revision:
+        description: Exact equivalent first-release fallback R, created before C
+        required: true
+        type: string
+
+permissions:
+  actions: write
+  contents: read
+  id-token: write
+
+jobs:
+  dry-run:
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 15
+    env:
+      AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      AZURE_INDEX_STORAGE_ACCOUNT: ${{ vars.AZURE_INDEX_STORAGE_ACCOUNT }}
+      RESOURCE_GROUP: rg-platform
+      CONTAINER_APP: ca-lex-web
+      ACR_NAME: crsoufien3orem
+      PRODUCTION_REVISION: ${{ inputs.production_revision }}
+      ROLLBACK_REVISION: ${{ inputs.rollback_revision }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Require exact bootstrap identities and OIDC configuration
+        shell: bash
+        run: |
+          set -eu
+          for value in AZURE_CLIENT_ID AZURE_TENANT_ID AZURE_SUBSCRIPTION_ID AZURE_INDEX_STORAGE_ACCOUNT; do
+            [ -n "${!value:-}" ] || { echo "::error::$value is not configured"; exit 1; }
+          done
+          for revision in "$PRODUCTION_REVISION" "$ROLLBACK_REVISION"; do
+            [[ "$revision" =~ ^ca-lex-web--[a-z0-9-]+$ ]] \
+              || { echo "::error::invalid bootstrap revision"; exit 2; }
+          done
+          [ "$PRODUCTION_REVISION" != "$ROLLBACK_REVISION" ] \
+            || { echo "::error::bootstrap revisions must differ"; exit 2; }
+
+      - uses: azure/login@f5d393ae46f8fde4be8b75f32e3fc50e654ad0ca # v3
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Build read-back cleanup allowlist without mutations
+        id: plan
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          . scripts/deploy/az-retry.sh
+          . scripts/deploy/az-reauth.sh
+          az_reauth
+          inactive_limit=$(az_retry az containerapp show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+            --query properties.configuration.maxInactiveRevisions -o tsv)
+          az_retry az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+            --all -o json \
+            | jq '[.[] | {
+                name:.name,
+                active:.properties.active,
+                trafficWeight:(.properties.trafficWeight // 0),
+                createdTime:.properties.createdTime,
+                image:.properties.template.containers[0].image,
+                template:.properties.template
+              }]' > revisions.json
+          az_retry az acr manifest list-metadata --registry "$ACR_NAME" --name lex-web -o json \
+            | jq '[.[] | {digest:.digest}]' > acr-manifests.json
+          az_retry az storage blob list --auth-mode login --only-show-errors \
+            --account-name "$AZURE_INDEX_STORAGE_ACCOUNT" --container-name lex \
+            --prefix staging/ -o json \
+            | jq '[.[] | {name:.name,etag:.properties.etag}]' > staging-blobs.json
+
+          jq -n \
+            --arg production "$PRODUCTION_REVISION" \
+            --arg rollback "$ROLLBACK_REVISION" \
+            --argjson inactive_limit "$inactive_limit" \
+            --slurpfile revisions revisions.json \
+            --slurpfile manifests acr-manifests.json \
+            --slurpfile blobs staging-blobs.json \
+            '{
+              schema:"lex-bootstrap-inventory/1",
+              max_inactive_revisions:$inactive_limit,
+              production_revision:$production,
+              rollback_revision:$rollback,
+              revisions:$revisions[0],
+              acr_manifests:$manifests[0],
+              staging_blobs:$blobs[0]
+            }' > bootstrap-inventory.json
+          python3 scripts/deploy/bootstrap_plan.py bootstrap-inventory.json > cleanup_plan.json
+          plan_sha=$(sha256sum cleanup_plan.json | cut -d' ' -f1)
+          echo "plan_sha256=$plan_sha" >> "$GITHUB_OUTPUT"
+          {
+            echo "## First official release bootstrap dry run"
+            echo
+            echo "- cleanup plan SHA-256: \`$plan_sha\`"
+            echo "- mutations performed: \`false\`"
+            echo
+            echo '```json'
+            cat cleanup_plan.json
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload exact dry-run inventory and cleanup plan
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: lex-bootstrap-cleanup-plan
+          path: |
+            bootstrap-inventory.json
+            cleanup_plan.json
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Dry-run summary
+        shell: bash
+        run: |
+          echo "Use run \`$GITHUB_RUN_ID\` and plan \`${{ steps.plan.outputs.plan_sha256 }}\` only after independent review." >> "$GITHUB_STEP_SUMMARY"

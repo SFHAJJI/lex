@@ -22,6 +22,30 @@ export function assistantProvisionLoad(ui?: UiEffect) {
   };
 }
 
+/** Authoritative timeline rows can paint the rail while the normal workspace refresh catches up. */
+export function assistantTimelineSeed(ui?: UiEffect) {
+  const timeline = ui?.timeline;
+  if (!timeline) return undefined;
+  return {
+    versions: [...new Set(timeline.rows.map((row) => row.valid_from))].sort(),
+    languages: [...new Set(timeline.rows.map((row) => row.language).filter(
+      (value): value is string => Boolean(value)))].sort(),
+    total: timeline.total_count,
+    truncated: timeline.truncated,
+  };
+}
+
+export function assistantTimelineRows(ui?: UiEffect) {
+  const rows = ui?.timeline?.rows ?? [];
+  const dates = new Map<string, number>();
+  for (const row of rows) dates.set(row.valid_from, (dates.get(row.valid_from) ?? 0) + 1);
+  return rows.map((row, index) => ({
+    ...row,
+    key: `${row.lex_id ?? row.permalink ?? row.record_sha256 ?? row.valid_from}:${index}`,
+    canOpenByDate: dates.get(row.valid_from) === 1,
+  }));
+}
+
 export function parseAssistantPanelState(raw: string | null): AssistantPanelState {
   if (!raw) return { open: false, minimized: false };
   try {

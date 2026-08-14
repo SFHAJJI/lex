@@ -7,7 +7,7 @@ namespace Lex.Ask;
 
 public enum LegalResultClass
 {
-    Navigate,
+    Search,
     ExactText,
     Comparison,
     Timeline,
@@ -88,54 +88,45 @@ public static class LegalOperationPolicy
         _ => throw new InvalidDataException($"Unknown MCP legal status '{status}'."),
     };
 
-    public static LegalResultClass ResultClassFor(string tool) => tool switch
-    {
-        "search" or "navigate" => LegalResultClass.Navigate,
-        "as_of" => LegalResultClass.ExactText,
-        "diff" => LegalResultClass.Comparison,
-        "timeline" or "article_history" => LegalResultClass.Timeline,
-        "changes_in_period" => LegalResultClass.Ranking,
-        "in_force_on" or "coverage" or "cited_by" => LegalResultClass.Inventory,
-        "provenance" => LegalResultClass.Verification,
-        _ => throw new InvalidDataException($"Unknown MCP tool '{tool}'."),
-    };
+    public static LegalResultClass ResultClassFor(string tool) =>
+        LegalOperationCatalog.Get(tool).ResultKind switch
+        {
+            LegalResultKind.Search => LegalResultClass.Search,
+            LegalResultKind.ExactText => LegalResultClass.ExactText,
+            LegalResultKind.Comparison => LegalResultClass.Comparison,
+            LegalResultKind.Timeline => LegalResultClass.Timeline,
+            LegalResultKind.Ranking => LegalResultClass.Ranking,
+            LegalResultKind.Inventory => LegalResultClass.Inventory,
+            LegalResultKind.Verification => LegalResultClass.Verification,
+            _ => throw new ArgumentOutOfRangeException(nameof(tool)),
+        };
 
-    public static bool RequiresWorkResolution(string tool) => tool is
-        "navigate" or "as_of" or "diff" or "timeline" or "article_history" or "cited_by"
-        or "provenance";
+    public static bool RequiresWorkResolution(string tool) =>
+        LegalOperationCatalog.Get(tool).RequiresWorkResolution;
 
-    public static OperationEffect PrimaryEffectFor(string tool) => tool switch
-    {
-        "search" or "navigate" => OperationEffect.Workspace,
-        "as_of" => OperationEffect.Provision,
-        "diff" => OperationEffect.Diff,
-        "timeline" => OperationEffect.Timeline,
-        "article_history" => OperationEffect.History,
-        "changes_in_period" => OperationEffect.Ranking,
-        "in_force_on" => OperationEffect.InForce,
-        "coverage" => OperationEffect.Coverage,
-        "cited_by" => OperationEffect.CitedBy,
-        "provenance" => OperationEffect.Verification,
-        _ => throw new InvalidDataException($"Unknown MCP tool '{tool}'."),
-    };
+    public static OperationEffect PrimaryEffectFor(string tool) =>
+        Effect(LegalOperationCatalog.Get(tool).PrimaryEffect);
 
     public static bool AllowsEffect(string tool, OperationEffect effect) =>
-        tool switch
-        {
-            "search" or "navigate" => effect is OperationEffect.Workspace or OperationEffect.Gap,
-            "as_of" => effect is OperationEffect.Provision or OperationEffect.Gap,
-            "diff" => effect is OperationEffect.Diff or OperationEffect.Gap,
-            "timeline" => effect is OperationEffect.Timeline or OperationEffect.Gap,
-            "article_history" => effect is OperationEffect.History or OperationEffect.Gap,
-            "changes_in_period" => effect is OperationEffect.Ranking or OperationEffect.Workspace
-                or OperationEffect.Gap,
-            "in_force_on" => effect is OperationEffect.InForce or OperationEffect.Workspace
-                or OperationEffect.Gap,
-            "coverage" => effect is OperationEffect.Coverage or OperationEffect.Gap,
-            "cited_by" => effect is OperationEffect.CitedBy or OperationEffect.Gap,
-            "provenance" => effect is OperationEffect.Verification or OperationEffect.Gap,
-            _ => false,
-        };
+        effect == OperationEffect.Gap
+        || effect == PrimaryEffectFor(tool)
+        || (LegalOperationCatalog.Get(tool).AdditionalEffects ?? [])
+            .Any(value => Effect(value) == effect);
+
+    private static OperationEffect Effect(LegalEffectKind effect) => effect switch
+    {
+        LegalEffectKind.Provision => OperationEffect.Provision,
+        LegalEffectKind.Diff => OperationEffect.Diff,
+        LegalEffectKind.History => OperationEffect.History,
+        LegalEffectKind.Timeline => OperationEffect.Timeline,
+        LegalEffectKind.Ranking => OperationEffect.Ranking,
+        LegalEffectKind.InForce => OperationEffect.InForce,
+        LegalEffectKind.CitedBy => OperationEffect.CitedBy,
+        LegalEffectKind.Coverage => OperationEffect.Coverage,
+        LegalEffectKind.Workspace => OperationEffect.Workspace,
+        LegalEffectKind.Verification => OperationEffect.Verification,
+        _ => throw new ArgumentOutOfRangeException(nameof(effect)),
+    };
 
     public static bool AllowsSupportingCall(
         SupportingCallRole role,
@@ -147,10 +138,17 @@ public static class LegalOperationPolicy
                 && query.TryGetValue<string>(out var value)
                 && !string.IsNullOrWhiteSpace(value),
             SupportingCallRole.AnchorResolution => tool == "as_of"
-                && arguments["mode"]?.GetValue<string>() == "outline"
-                && arguments["work"] is JsonValue work
-                && work.TryGetValue<string>(out var workValue)
-                && !string.IsNullOrWhiteSpace(workValue),
+                    && arguments["mode"]?.GetValue<string>() == "outline"
+                    && arguments["work"] is JsonValue work
+                    && work.TryGetValue<string>(out var workValue)
+                    && !string.IsNullOrWhiteSpace(workValue)
+                || tool == "search"
+                    && arguments["query"] is JsonValue anchorQuery
+                    && anchorQuery.TryGetValue<string>(out var anchorValue)
+                    && !string.IsNullOrWhiteSpace(anchorValue)
+                    && arguments["works"] is JsonValue works
+                    && works.TryGetValue<string>(out var scopedWorks)
+                    && !string.IsNullOrWhiteSpace(scopedWorks),
             _ => false,
         };
 
@@ -181,7 +179,9 @@ public static class LegalOperationPolicy
     private static LegalOutcome DominantOutcome(IEnumerable<LegalOutcome> values)
     {
         var observed = values.Distinct().ToArray();
-        return observed.Any(outcome => outcome == LegalOutcome.NotAvailable)
+        return observed.Any(outcome => outcome == LegalOutcome.NeedsClarification)
+            ? LegalOutcome.NeedsClarification
+            : observed.Any(outcome => outcome == LegalOutcome.NotAvailable)
             ? LegalOutcome.NotAvailable
             : observed.Any(outcome => outcome == LegalOutcome.NotComparable)
                 ? LegalOutcome.NotComparable
@@ -355,7 +355,7 @@ public sealed record RequestedOperation
             : [];
         if (requiresResolution
             && normalized["article_number"] is JsonValue
-            && tool is "as_of" or "diff" or "article_history")
+            && LegalOperationCatalog.Get(tool).SupportsAnchorResolution)
             supporting.Add(SupportingCallRole.AnchorResolution);
         var effects = new List<OperationEffect>
         {
@@ -459,15 +459,9 @@ public sealed class OperationPlan
                        && toolValue.TryGetValue<string>(out var parsedTool)
                 ? parsedTool
                 : throw new InvalidDataException("Every planned operation must name a string tool or action.");
-            // Only a tool the planner was offered may enter a plan. Until now the name went
-            // straight to CreatePlanned, which validates against the ARGUMENT gate's tool set,
-            // and that set is wider than what the planner is allowed to choose. "navigate" is
-            // the gap: it is absent from PlannerToolNames, so the schema never offers it, but
-            // the gate accepts it and execution answers it synthetically with status ok, no
-            // legal call and no evidence. A planner response naming it, whether the structured
-            // output degraded or the text was crafted, would have produced a successful
-            // operation backed by nothing. The schema restricting the choice is not the same
-            // as the plan refusing anything else, and only the second one is an invariant.
+            // Only a tool the planner was offered may enter a plan. The schema restricting the
+            // model's choice is not the same as the plan refusing everything else, and only the
+            // second one is an invariant.
             if (!AskService.PlannerToolNames.Contains(tool, StringComparer.Ordinal))
                 throw new InvalidDataException(
                     $"A planned operation named '{tool}', which the planner was not offered.");
@@ -534,9 +528,7 @@ public sealed class OperationExecution
         if (outcome == LegalOutcome.NotEvaluated)
             throw new InvalidDataException("NotEvaluated requires a non-completed transport outcome.");
         if (outcome is not (LegalOutcome.NeedsClarification or LegalOutcome.InvalidRequest
-                or LegalOutcome.LegalBoundary)
-            && !(outcome == LegalOutcome.Succeeded
-                && Request.ResultClass == LegalResultClass.Navigate))
+                or LegalOutcome.LegalBoundary))
             throw new InvalidDataException(
                 $"Outcome '{outcome}' requires an authoritative tool result for '{Request.ResultClass}'.");
         return CompleteCore(BuildResult(

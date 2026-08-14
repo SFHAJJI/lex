@@ -103,7 +103,7 @@ public static class UiMapper
                     ["total_works_in_force"] = 0,
                     ["works"] = new JsonArray(),
                 }, args),
-                "search" or "navigate" => Workspace(args),
+                "search" => Workspace(args),
                 _ => new UiEffect(),
             };
             return WithEvidence(empty, evidence);
@@ -114,18 +114,15 @@ public static class UiMapper
         var outcome = status is null ? (LegalOutcome?)null : LegalOperationPolicy.OutcomeForStatus(status);
 
         // A refusal is a first-class view: say what is missing and what does exist instead.
-        if (status is not null && outcome is LegalOutcome.NotAvailable or LegalOutcome.NotFound
-                or LegalOutcome.NotComparable)
+        if (status is not null && outcome is LegalOutcome.NeedsClarification
+                or LegalOutcome.NotAvailable or LegalOutcome.NotFound or LegalOutcome.NotComparable)
         {
             var gap = new UiEffect(Gap: new GapView(
                 Status: status,
                 Work: S(node, "work") ?? S(node, "lex_id"),
                 Date: S(args, "date") ?? S(args, "as_of"),
-                Explanation: Explain(status, locale),
-                Available: node["versions"]?.AsArray().OfType<JsonObject>()
-                               .Select(v => S(v, "valid_from") ?? "").Where(s => s.Length > 0).Take(12).ToList()
-                           ?? node["anchors_not_in_version"]?.AsArray().Select(a => a?.GetValue<string>() ?? "").ToList()
-                           ?? []));
+                Explanation: Explain(status, locale, tool),
+                Available: GapChoices(tool, node)));
             var refused = outcome == LegalOutcome.NotComparable && tool == "diff"
                 ? UiEffect.Merge([Diff(node, args), gap])
                 : gap;
@@ -143,7 +140,6 @@ public static class UiMapper
             "cited_by" => Cited(node),
             "provenance" => Verification(node),
             "search" => Workspace(args),
-            "navigate" => Workspace(args),
             _ => new UiEffect(),
         };
         return WithEvidence(mapped, evidence);
@@ -241,11 +237,12 @@ public static class UiMapper
         // emptied the payload — an unmatched filter, a stripped result — it is a gap, not a zero.
         if (rows.Count == 0)
             return new UiEffect(Gap: new GapView(
-                McpStatus.NoResult, null, null, Explain(McpStatus.NoResult, locale), []));
+                McpStatus.NoResult, null, null, Explain(McpStatus.NoResult, locale, "coverage"), []));
         var status = LegalOperationPolicy.StatusForResult(result);
         var outcome = LegalOperationPolicy.OutcomeForStatus(status);
         if (outcome is LegalOutcome.NotAvailable or LegalOutcome.NotFound)
-            return new UiEffect(Gap: new GapView(status, null, null, Explain(status, locale), []));
+            return new UiEffect(Gap: new GapView(
+                status, null, null, Explain(status, locale, "coverage"), []));
         return new UiEffect(Coverage: new CoverageView(rows.Select(row =>
         {
             var envelope = row["envelope"] as JsonObject;
@@ -303,7 +300,17 @@ public static class UiMapper
         if (tool is not ("changes_in_period" or "in_force_on" or "cited_by"))
             return parts.FirstOrDefault(HasContent) ?? parts[0];
 
-        var combined = (parts.FirstOrDefault(HasContent) ?? parts[0]).DeepClone().AsObject();
+        var aggregateStatus = LegalOperationPolicy.StatusForResult(result);
+        var combined = (parts.FirstOrDefault(part =>
+                (S(part["envelope"] as JsonObject, "status") ?? S(part, "status"))
+                    == aggregateStatus)
+            ?? parts.FirstOrDefault(HasContent) ?? parts[0]).DeepClone().AsObject();
+        if (combined["envelope"] is not JsonObject combinedEnvelope)
+        {
+            combinedEnvelope = new JsonObject();
+            combined["envelope"] = combinedEnvelope;
+        }
+        combinedEnvelope["status"] = aggregateStatus;
         var field = tool switch
         {
             "changes_in_period" => "changes",
@@ -323,6 +330,11 @@ public static class UiMapper
                 rows.Add(row);
             }
         }
+        if (tool == "changes_in_period"
+            && rows.OfType<JsonObject>().All(row => row["global_rank"] is JsonValue))
+            rows = new JsonArray(rows.OfType<JsonObject>()
+                .OrderBy(row => row["global_rank"]!.GetValue<int>())
+                .Select(row => (JsonNode)row.DeepClone()).ToArray());
         combined[field] = rows;
         if (tool == "changes_in_period")
         {
@@ -340,7 +352,15 @@ public static class UiMapper
             };
         }
         else if (tool == "in_force_on")
+        {
             combined["total_works_in_force"] = parts.Sum(p => p["total_works_in_force"]?.GetValue<int>() ?? 0);
+            var ambiguous = new JsonArray(parts
+                .SelectMany(part => (part["ambiguous_works"] as JsonArray)
+                    ?.OfType<JsonObject>() ?? [])
+                .Take(20)
+                .Select(item => (JsonNode)item.DeepClone()).ToArray());
+            if (ambiguous.Count > 0) combined["ambiguous_works"] = ambiguous;
+        }
         else
             combined["citing_articles"] = rows.Count;
         return combined;
@@ -401,7 +421,17 @@ public static class UiMapper
         var latest = rows[^1];
         return new UiEffect(Timeline: new TimelineView(
             Subject: new Subject(CanonicalWork(o, args), S(latest, "title"), null, null,
-                S(latest, "language") ?? S(args, "language"))));
+                S(latest, "language") ?? S(args, "language")),
+            Rows: rows.Select(version => new TimelineState(
+                S(version, "lex_id"),
+                S(version, "valid_from") ?? "",
+                S(version, "valid_to"),
+                S(version, "title"),
+                S(version, "language"),
+                S(version, "permalink"),
+                S(version, "record_sha256"))).ToList(),
+            TotalCount: o["total_count"]?.GetValue<int>() ?? rows.Count,
+            Truncated: o["truncated"]?.GetValue<bool>() ?? false));
     }
 
     private static UiEffect Diff(JsonObject o, JsonObject args)
@@ -419,7 +449,11 @@ public static class UiMapper
             FromDate: from, ToDate: to,
             FromPermalink: S(a, "permalink"), ToPermalink: S(b, "permalink"),
             Note: S(o, "note"),
-            Status: S(o["envelope"] as JsonObject, "status") ?? S(o, "status")));
+            Status: S(o["envelope"] as JsonObject, "status") ?? S(o, "status"),
+            AnchorFromPresent: o["anchor_from_present"]?.GetValue<bool?>(),
+            AnchorToPresent: o["anchor_to_present"]?.GetValue<bool?>(),
+            AnchorTextEqual: o["anchor_text_equal"]?.GetValue<bool?>(),
+            ProvisionLevelComparable: o["provision_level_comparable"]?.GetValue<bool>() ?? false));
     }
 
     /// Controls the assistant set on the way to its answer, so the workspace lands the same way.
@@ -484,7 +518,8 @@ public static class UiMapper
                     : null,
                 SourceClass: S(c, "source_class"), ActForm: S(c, "act_form"),
                 BindingStatus: S(c, "binding_status"), Language: S(c, "language"),
-                Permalink: S(c, "permalink"), DiffPermalink: S(c, "diff_permalink"))).ToList(),
+                Permalink: S(c, "permalink"), DiffPermalink: S(c, "diff_permalink"),
+                GlobalRank: c["global_rank"]?.GetValue<int?>())).ToList(),
             Status: S(o["envelope"] as JsonObject, "status") ?? S(o, "status"),
             PopulationWorks: o["population"]?["works_in_scope"]?.GetValue<int>() ?? 0,
             PopulationBasis: S(o["population"] as JsonObject, "basis"),
@@ -549,14 +584,50 @@ public static class UiMapper
         return p.Length >= 2 ? $"{p[0]}:{p[1]}" : lexId;
     }
 
-    private static string Explain(string status, string locale)
+    private static IReadOnlyList<string> GapChoices(string tool, JsonObject result)
+    {
+        const int maximum = 20;
+        var choices = new List<string>(maximum);
+        void Add(JsonArray? source, string name, string? work = null)
+        {
+            foreach (var choice in source?.OfType<JsonObject>() ?? [])
+            {
+                if (choices.Count >= maximum) return;
+                if (S(choice, "version_key") is not { Length: > 0 } key
+                    || key.Length > LegalOperationCatalog.MaximumVersionKeyLength) continue;
+                choices.Add(work is null ? $"{name}={key}" : $"{work}: {name}={key}");
+            }
+        }
+
+        Add(result["version_choices"] as JsonArray, "version_key");
+        Add(result["from_version_choices"] as JsonArray, "from_version_key");
+        Add(result["to_version_choices"] as JsonArray, "to_version_key");
+        foreach (var ambiguous in (result["ambiguous_works"] as JsonArray)
+                     ?.OfType<JsonObject>() ?? [])
+        {
+            Add(ambiguous["choices"] as JsonArray, "version_key", S(ambiguous, "work"));
+            if (choices.Count >= maximum) break;
+        }
+        if (choices.Count > 0) return choices;
+
+        if (result["versions"] is JsonArray versions)
+            return versions.OfType<JsonObject>().Select(version => S(version, "valid_from") ?? "")
+                .Where(value => value.Length > 0).Take(12).ToList();
+        if (result["anchors_not_in_version"] is JsonArray anchors)
+            return anchors.Select(anchor => anchor?.GetValue<string>() ?? "")
+                .Where(value => value.Length > 0).Take(20).ToList();
+        return [];
+    }
+
+    private static string Explain(string status, string locale, string tool)
     {
         if (locale == "fr")
             return status switch
             {
                 McpStatus.NoCorpusMounted => "Lex ne dispose d'aucun index juridique vérifié, donc aucune opération juridique n'est disponible.",
                 McpStatus.NoVersionForDate => "Lex détient cet instrument, mais aucune version de l'éditeur ne couvre cette date.",
-                McpStatus.AmbiguousVersion => "L'éditeur expose plusieurs versions identifiées à cette date. Choisissez une version précise.",
+                McpStatus.AmbiguousVersion when tool == "diff" => "L'éditeur expose plusieurs versions identifiées à une limite de comparaison. Choisissez une version exacte pour chaque limite ambiguë.",
+                McpStatus.AmbiguousVersion => "L'éditeur expose plusieurs versions identifiées à cette date. Choisissez une version exacte de l'éditeur.",
                 McpStatus.UnknownWork => "Lex ne détient pas cet instrument.",
                 McpStatus.UnknownPublisher => "Aucun éditeur portant cet identifiant n'est monté ici. Reposez la question sans filtre d'éditeur pour voir tout ce que Lex détient.",
                 McpStatus.UnknownAnchor => "Cet identifiant d'article n'existe pas dans cet instrument.",
@@ -574,7 +645,8 @@ public static class UiMapper
         {
             McpStatus.NoCorpusMounted => "Lex has no verified legal index mounted, so no legal operation is available.",
             McpStatus.NoVersionForDate => "Lex holds this law, but no publisher version covers that date.",
-            McpStatus.AmbiguousVersion => "The publisher exposes several identified versions on that date. Choose one exact version.",
+            McpStatus.AmbiguousVersion when tool == "diff" => "The publisher exposes multiple identified versions at a comparison boundary. Choose one exact publisher version for each ambiguous comparison boundary.",
+            McpStatus.AmbiguousVersion => "The publisher exposes multiple identified versions for that date. Choose one exact publisher version.",
             McpStatus.UnknownWork => "Lex does not hold this work at all.",
             McpStatus.UnknownPublisher => "No publisher with that id is mounted here. Ask again without a publisher filter to see everything Lex holds.",
             McpStatus.UnknownAnchor => "That article identifier does not exist in this law.",

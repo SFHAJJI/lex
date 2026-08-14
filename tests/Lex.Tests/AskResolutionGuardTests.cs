@@ -6,6 +6,183 @@ namespace Lex.Tests;
 public sealed class AskResolutionGuardTests
 {
     [Fact]
+    public void Unique_official_publisher_short_title_carries_its_exact_source_into_authority()
+    {
+        const string work = "eu-eurlex:32022r2554";
+        var result = SearchResult("resolved", ("DORA", "resolved", new[] { work }));
+        var resolution = result[0]!["query_plan"]!["global_work_resolutions"]![0]!.AsObject();
+        resolution["kind"] = "publisher_short_title";
+        resolution["publisher_short_title_matches"] = new JsonArray(
+            PublisherShortTitle(work, "DORA"));
+
+        var guard = new AskService.WorkResolutionGuard("Show DORA's timeline");
+        guard.ObserveCurrentUserSearch(result, hasPriorContext: false);
+
+        Assert.Equal([work], guard.CurrentResolvedWorks);
+        var source = guard.AuthoritySourceFor(work);
+        Assert.NotNull(source);
+        Assert.Equal("publisher_short_title", source!.Kind);
+        Assert.Equal("DORA", source.Segment);
+        Assert.Equal("http://publications.europa.eu/ontology/cdm#expression_title_short",
+            source.Identifier);
+        Assert.Equal("https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32022R2554",
+            source.SourceUri);
+    }
+
+    [Theory]
+    [InlineData("MiCA", "eu-eurlex:32023r1114")]
+    [InlineData("CRR3", "eu-eurlex:32024r1623")]
+    public void Other_unique_official_publisher_short_titles_are_authoritative(
+        string segment, string work)
+    {
+        var result = SearchResult("resolved", (segment, "resolved", new[] { work }));
+        var resolution = result[0]!["query_plan"]!["global_work_resolutions"]![0]!.AsObject();
+        resolution["kind"] = "publisher_short_title";
+        resolution["publisher_short_title_matches"] = new JsonArray(
+            PublisherShortTitle(work, segment));
+
+        var guard = new AskService.WorkResolutionGuard($"Show {segment}'s timeline");
+        guard.ObserveCurrentUserSearch(result, hasPriorContext: false);
+
+        Assert.Equal([work], guard.CurrentResolvedWorks);
+        Assert.Equal(segment, guard.AuthoritySourceFor(work)?.Segment);
+    }
+
+    [Theory]
+    [InlineData("alias")]
+    [InlineData(null)]
+    public void Manual_or_untyped_resolution_never_becomes_subject_authority(string? kind)
+    {
+        const string work = "eu-eurlex:32024r1689";
+        var result = SearchResult("resolved", ("AI Act", "resolved", new[] { work }));
+        result[0]!["query_plan"]!["global_work_resolutions"]![0]!["kind"] = kind;
+
+        var guard = new AskService.WorkResolutionGuard("What does the AI Act require?");
+        guard.ObserveCurrentUserSearch(result, hasPriorContext: false);
+
+        Assert.True(guard.IdentityResolutionRequested);
+        Assert.True(guard.UnresolvedIdentityObserved);
+        Assert.Empty(guard.CurrentResolvedWorks);
+        Assert.False(guard.Allows("as_of", new JsonObject
+        {
+            ["work"] = work,
+            ["date"] = "2026-08-14",
+        }));
+    }
+
+    [Fact]
+    public void Publisher_short_title_authority_rejects_a_mismatched_or_malformed_source()
+    {
+        const string work = "eu-eurlex:32023r1114";
+        var result = SearchResult("resolved", ("MiCA", "resolved", new[] { work }));
+        var resolution = result[0]!["query_plan"]!["global_work_resolutions"]![0]!.AsObject();
+        resolution["kind"] = "publisher_short_title";
+        var source = PublisherShortTitle("eu-eurlex:different", "MiCA");
+        source["source_uri"] = "file:///not-publisher-evidence";
+        resolution["publisher_short_title_matches"] = new JsonArray(source);
+
+        var guard = new AskService.WorkResolutionGuard("Compare MiCA over time");
+        guard.ObserveCurrentUserSearch(result, hasPriorContext: false);
+
+        Assert.True(guard.UnresolvedIdentityObserved);
+        Assert.Empty(guard.CurrentResolvedWorks);
+        Assert.Null(guard.AuthoritySourceFor(work));
+    }
+
+    [Fact]
+    public void Publisher_short_title_authority_requires_a_literal_segment_of_the_official_label()
+    {
+        const string work = "eu-eurlex:32023r1114";
+        var result = SearchResult("resolved", ("MiCA", "resolved", new[] { work }));
+        var resolution = result[0]!["query_plan"]!["global_work_resolutions"]![0]!.AsObject();
+        resolution["kind"] = "publisher_short_title";
+        var source = PublisherShortTitle(work, "MiCA");
+        source["label"] = "Markets in Crypto-Assets Regulation";
+        resolution["publisher_short_title_matches"] = new JsonArray(source);
+
+        var guard = new AskService.WorkResolutionGuard("Show MiCA's timeline");
+        guard.ObserveCurrentUserSearch(result, hasPriorContext: false);
+
+        Assert.Empty(guard.CurrentResolvedWorks);
+        Assert.Null(guard.AuthoritySourceFor(work));
+    }
+
+    [Fact]
+    public void Official_short_title_collision_stays_a_populated_clarification()
+    {
+        const string first = "eu-eurlex:32006l0048";
+        const string second = "eu-eurlex:32009l0111";
+        var result = SearchResult("ambiguous",
+            ("CRD", "ambiguous", new[] { first, second }));
+        var resolution = result[0]!["query_plan"]!["global_work_resolutions"]![0]!.AsObject();
+        resolution["kind"] = "publisher_short_title";
+        resolution["publisher_short_title_matches"] = new JsonArray(
+            PublisherShortTitle(first, "CRD"),
+            PublisherShortTitle(second, "CRD"));
+
+        var guard = new AskService.WorkResolutionGuard("Compare CRD Article 7");
+        guard.ObserveCurrentUserSearch(result, hasPriorContext: false);
+        var clarification = guard.ClarificationFor(null);
+
+        Assert.Empty(guard.CurrentResolvedWorks);
+        Assert.NotNull(clarification);
+        Assert.Contains("official publisher short title", clarification!.Display.Question,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Equal([first, second], clarification!.Choices.SkipLast(1)
+            .Select(choice => choice.Value).Order(StringComparer.Ordinal));
+        Assert.Contains("titre abrégé officiel",
+            guard.ClarificationFor(null, "fr")!.Display.Question,
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData("eurovoc")]
+    [InlineData("directory")]
+    [InlineData("eurovoc_alt_label")]
+    [InlineData("eurovoc_broader")]
+    [InlineData("eurovoc_subdomain")]
+    [InlineData("eurovoc_domain")]
+    [InlineData("legilux_subject_level1_theme")]
+    [InlineData("legilux_subject_level1_organisation")]
+    [InlineData("legilux_subject_level1_place")]
+    [InlineData("legilux_subject_level1_legal_resource")]
+    [InlineData("legilux_subject_level1_country")]
+    [InlineData("legilux_subject_level2_theme")]
+    [InlineData("legilux_subject_level2_organisation")]
+    [InlineData("legilux_subject_level2_place")]
+    [InlineData("legilux_subject_level2_legal_resource")]
+    [InlineData("legilux_subject_level2_country")]
+    public void Weak_publisher_metadata_never_requests_or_creates_subject_authority(string kind)
+    {
+        var result = SearchResult("not_requested");
+        result[0]!["hits"] = new JsonArray(new JsonObject
+        {
+            ["lex_id"] = "eu-eurlex:weak:2026-01-01",
+            ["title"] = "Metadata-ranked instrument",
+            ["match_reasons"] = new JsonArray("work_metadata"),
+            ["matched_publisher_metadata"] = new JsonObject
+            {
+                ["kind"] = kind,
+                ["identifier"] = "https://example.test/metadata/1",
+                ["label"] = "planner-canary publisher classification",
+                ["language"] = "en",
+                ["source_uri"] = "https://example.test/metadata/1",
+            },
+        });
+
+        var guard = new AskService.WorkResolutionGuard("Which laws changed most in 2024?");
+        guard.ObserveCurrentUserSearch(result, hasPriorContext: false);
+
+        Assert.False(guard.IdentityResolutionRequested);
+        Assert.Empty(guard.CurrentResolvedWorks);
+        Assert.False(guard.Allows("as_of", new JsonObject
+        {
+            ["work"] = "eu-eurlex:weak",
+            ["date"] = "2024-12-31",
+        }));
+    }
+
+    [Fact]
     public void Ambiguous_candidates_cannot_reach_work_specific_tools_before_confirmation()
     {
         var guard = new AskService.WorkResolutionGuard();
@@ -34,11 +211,17 @@ public sealed class AskResolutionGuardTests
     {
         var guard = new AskService.WorkResolutionGuard();
         guard.ObserveSearch(SearchResult("unresolved",
-            ("gdpr", "resolved", new[] { "eu:32016r0679" }),
+            ("gdpr", "resolved", new[] { "eu-eurlex:32016r0679" }),
             ("32024R9999", "unresolved", Array.Empty<string>())));
 
-        Assert.True(guard.Allows("diff", new JsonObject { ["work"] = "eu:32016r0679" }));
-        Assert.False(guard.Allows("as_of", new JsonObject { ["work"] = "eu:other" }));
+        Assert.True(guard.Allows("diff", new JsonObject
+        {
+            ["work"] = "eu-eurlex:32016r0679",
+        }));
+        Assert.False(guard.Allows("as_of", new JsonObject
+        {
+            ["work"] = "eu-eurlex:other",
+        }));
     }
 
     [Fact]
@@ -457,6 +640,26 @@ public sealed class AskResolutionGuardTests
         Assert.Equal("eu-eurlex:32022r2554", clarification.Choices[0].Value);
     }
 
+    [Fact]
+    public void A_fictional_named_law_never_offers_unrelated_discovery_rows()
+    {
+        var guard = new AskService.WorkResolutionGuard("Atlantis Regulation");
+        var result = SearchResult("unresolved", ("atlantis regulation", "unresolved", []));
+        result[0]!["hits"] = new JsonArray
+        {
+            new JsonObject
+            {
+                ["lex_id"] = "eu-eurlex:32022r2554:2024-01-01",
+                ["title"] = "Digital operational resilience act",
+                ["match_reasons"] = new JsonArray("work_metadata"),
+            },
+        };
+
+        guard.ObserveSearch(result);
+
+        Assert.Null(guard.ClarificationFor(null));
+    }
+
     // A bare four-digit year is admitted as a search token at any length, so a work whose title
     // merely contains that year enters the pool on it alone. It must not become a menu option.
     [Fact]
@@ -652,64 +855,6 @@ public sealed class AskResolutionGuardTests
         Assert.Null(prior.ClarificationFor(null));
     }
 
-    [Fact]
-    public void Conversation_reconstruction_uses_the_most_recent_resolved_user_turn_only()
-    {
-        var queries = new[] { "Show GDPR", "thanks", "Show DORA", "Article 7 on the same date" };
-        var searched = new List<string>();
-
-        var works = AskService.ResolvePriorUserWorks(queries, query =>
-        {
-            searched.Add(query);
-            return query switch
-            {
-                "Show DORA" => SearchResult("resolved",
-                    ("DORA", "resolved", new[] { "eu-eurlex:32022r2554" })),
-                "Show GDPR" => SearchResult("resolved",
-                    ("GDPR", "resolved", new[] { "eu-eurlex:32016r0679" })),
-                _ => SearchResult("not_requested"),
-            };
-        });
-
-        Assert.Equal(new[] { "Show DORA" }, searched);
-        Assert.Equal(new[] { "eu-eurlex:32022r2554" }, works);
-    }
-
-    [Fact]
-    public void Conversation_reconstruction_ignores_assistant_like_weak_evidence_and_resolver_errors()
-    {
-        var queries = new[] { "old question", "failing question", "current follow-up" };
-
-        var works = AskService.ResolvePriorUserWorks(queries, query =>
-        {
-            if (query == "failing question") return null;
-            var result = SearchResult("not_requested");
-            result[0]!["hits"] = new JsonArray
-            {
-                WeakHit("eu-eurlex:32022r2554:2024-01-01", "DORA"),
-            };
-            return result;
-        });
-
-        Assert.Empty(works);
-    }
-
-    [Fact]
-    public void Conversation_reconstruction_never_replays_more_than_three_prior_queries()
-    {
-        var queries = new[] { "one", "two", "three", "four", "five", "current" };
-        var searched = new List<string>();
-
-        var works = AskService.ResolvePriorUserWorks(queries, query =>
-        {
-            searched.Add(query);
-            return SearchResult("not_requested");
-        });
-
-        Assert.Empty(works);
-        Assert.Equal(new[] { "five", "four", "three" }, searched);
-    }
-
     private static JsonArray SearchResult(string status,
         params (string Mention, string Status, string[] Candidates)[] resolutions) =>
     [
@@ -723,6 +868,7 @@ public sealed class AskResolutionGuardTests
                     {
                         ["mention"] = item.Mention,
                         ["status"] = item.Status,
+                        ["kind"] = "title",
                         ["candidates"] = new JsonArray(item.Candidates.Select(candidate =>
                             (JsonNode)candidate).ToArray()),
                     }).ToArray()),
@@ -736,5 +882,18 @@ public sealed class AskResolutionGuardTests
         ["title"] = title,
         ["anchor"] = null,
         ["match_reasons"] = new JsonArray("work_metadata"),
+    };
+
+    private static JsonObject PublisherShortTitle(string work, string segment) => new()
+    {
+        ["work"] = work,
+        ["segment"] = segment,
+        ["identifier"] =
+            "http://publications.europa.eu/ontology/cdm#expression_title_short",
+        ["label"] = segment + ", official expanded title",
+        ["language"] = "en",
+        ["source_uri"] =
+            "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:"
+            + work[(work.LastIndexOf(':') + 1)..].ToUpperInvariant(),
     };
 }

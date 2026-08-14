@@ -18,6 +18,7 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory
     private const string Cdm = "PREFIX cdm: <http://publications.europa.eu/ontology/cdm#>\n";
     private const string Owl = "PREFIX owl: <http://www.w3.org/2002/07/owl#>\n";
     private const string Skos = "PREFIX skos: <http://www.w3.org/2004/02/skos/core#>\n";
+    private const string EuroVoc = "PREFIX eurovoc: <http://eurovoc.europa.eu/schema#>\n";
     private const string ShortTitlePredicate =
         "http://publications.europa.eu/ontology/cdm#expression_title_short";
     // Primary XHTML is the searchable legal wording. Large annex-heavy acts legitimately exceed
@@ -27,6 +28,7 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory
     private const int FormexArchiveCapBytes = 32 * 1024 * 1024;
     private const long FormexMemberCapBytes = 64 * 1024 * 1024;
     private const long FormexExpandedCapBytes = 128 * 1024 * 1024;
+    private const int WorkMetadataBatchMaximum = 20_000;
     private static readonly SourceRetryPolicy RetryPolicy = new(MaximumAttempts: 4);
 
     private static readonly HttpClient Http = CreateClient();
@@ -35,6 +37,7 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory
     private readonly Dictionary<string, WorkRef> _works = new(StringComparer.Ordinal);
     private readonly Dictionary<string, HashSet<string>> _selectionReasons = new(StringComparer.Ordinal);
     private readonly EurLexScopeConfig _scope;
+    private readonly string _scopeSha256;
     private readonly int _wave;
     private int _expectedWorks;
     private readonly List<SourceBuildIssue> _buildIssues = [];
@@ -43,7 +46,8 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory
 
     public EurLexAdapter(string? scopePath = null, int? wave = null)
     {
-        _scope = EurLexScopeConfig.Load(scopePath ?? Environment.GetEnvironmentVariable("LEX_EU_SCOPE"));
+        (_scope, _scopeSha256) = EurLexScopeConfig.LoadWithDigest(
+            scopePath ?? Environment.GetEnvironmentVariable("LEX_EU_SCOPE"));
         _wave = wave ?? _scope.ApprovedWave;
         if (_wave is < 1 or > 4)
             throw new ArgumentOutOfRangeException(nameof(wave), "EU scope wave must be between 1 and 4.");
@@ -76,7 +80,9 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory
     public SourceBuildInventory GetBuildInventory() =>
         new(_expectedWorks, _buildIssues.OrderBy(issue => issue.Work, StringComparer.Ordinal)
             .ThenBy(issue => issue.Code, StringComparer.Ordinal).ToArray(),
-            RetryMaximumAttempts: RetryPolicy.MaximumAttempts);
+            RetryMaximumAttempts: RetryPolicy.MaximumAttempts,
+            SourceConfigurationKind: "engineering_scope",
+            SourceConfigurationSha256: _scopeSha256);
 
     public async IAsyncEnumerable<WorkRef> EnumerateWorks([EnumeratorCancellation] CancellationToken ct)
     {
@@ -447,7 +453,7 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory
                         PublicationDate: date,
                         Expressions: expressions,
                         Relations: [new RelationRecord("consolidates", new Identifier(workUri))],
-                        Raw: ScopeRaw(celex, typeCode, bindingStatus, "published", reasons),
+                        Raw: SourceRaw(celex, typeCode, bindingStatus, "published"),
                         PublisherMetadata: publisherMetadata,
                         DocumentRoles: DocumentRoles(
                             resourceType, amending, correcting, consolidated: true)));
@@ -484,8 +490,8 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory
                             list.Insert(0, new VersionRecord(
                                 new Identifier(workUri), new Identifier(workUri), typeCode, originalDate, originalValidTo,
                                 "publisher", baseTitleRows.First().GetValueOrDefault("inforce"), originalDate,
-                                expressions, [], ScopeRaw(baseCelex, typeCode, bindingStatus,
-                                    "original_official_expression", reasons), publisherMetadata,
+                                expressions, [], SourceRaw(baseCelex, typeCode, bindingStatus,
+                                    "original_official_expression"), publisherMetadata,
                                 DocumentRoles(resourceType, amending, correcting, consolidated: false)));
                         }
                     }
@@ -542,7 +548,19 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory
         {
             var values = string.Join(' ', chunk.Select(c =>
                 $"(\"{c}\" <{CelexAliasUri(c)}>)"));
-            var rows = await SelectAsync(Cdm + Owl + $$"""
+            var rows = await SelectAsync(WorkMetadataQuery(values), ct);
+            RequireBoundedWorkMetadataRows(rows);
+            foreach (var row in rows)
+            {
+                var baseCelex = row["base"];
+                if (!result.TryGetValue(baseCelex, out var list)) result[baseCelex] = list = [];
+                list.Add(row);
+            }
+        }
+        return result;
+    }
+
+    internal static string WorkMetadataQuery(string values) => Cdm + Owl + $$"""
                 SELECT ?base ?lang ?title ?title_short ?date ?inforce ?rtype ?is_amending ?is_correcting WHERE {
                   VALUES (?base ?alias) { {{values}} }
                   ?w owl:sameAs ?alias .
@@ -562,15 +580,15 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory
                   }
                   BIND(IF(STRENDS(STR(?langUri), "/FRA"), "fr", "en") AS ?lang)
                 } ORDER BY ?base ?lang
-                """, ct);
-            foreach (var row in rows)
-            {
-                var baseCelex = row["base"];
-                if (!result.TryGetValue(baseCelex, out var list)) result[baseCelex] = list = [];
-                list.Add(row);
-            }
-        }
-        return result;
+                LIMIT {{WorkMetadataBatchMaximum + 1}}
+                """;
+
+    internal static void RequireBoundedWorkMetadataRows(
+        IReadOnlyCollection<Dictionary<string, string>> rows)
+    {
+        if (rows.Count > WorkMetadataBatchMaximum)
+            throw new InvalidDataException(
+                "Publisher work metadata for a 100-work EU batch exceeds 20,000 records.");
     }
 
     private async Task<Dictionary<string, List<Dictionary<string, string>>>> LoadPublisherMetadataAsync(
@@ -581,24 +599,49 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory
         {
             var values = string.Join(' ', chunk.Select(c =>
                 $"(\"{c}\" <{CelexAliasUri(c)}>)"));
-            var rows = await SelectAsync(Cdm + Owl + Skos + $$"""
+            var rows = await SelectAsync(Cdm + Owl + Skos + EuroVoc + $$"""
                 SELECT DISTINCT ?base ?kind ?identifier ?lang ?label WHERE {
                   VALUES (?base ?alias) { {{values}} }
                   ?w owl:sameAs ?alias .
                   {
-                    ?w cdm:work_is_about_concept_eurovoc ?identifier .
-                    BIND("eurovoc" AS ?kind)
-                  } UNION {
                     ?w cdm:resource_legal_is_about_concept_directory-code ?identifier .
-                    BIND("directory" AS ?kind)
-                  }
-                  OPTIONAL {
                     ?identifier skos:prefLabel ?label .
-                    FILTER(LANG(?label) IN ("en", "fr"))
+                    BIND("directory" AS ?kind)
+                  } UNION {
+                    ?w cdm:work_is_about_concept_eurovoc ?assigned .
+                    GRAPH <http://eurovoc.europa.eu/100141> {
+                      {
+                        BIND(?assigned AS ?identifier)
+                        ?assigned skos:prefLabel ?label .
+                        BIND("eurovoc" AS ?kind)
+                      } UNION {
+                        BIND(?assigned AS ?identifier)
+                        ?assigned skos:altLabel ?label .
+                        BIND("eurovoc_alt_label" AS ?kind)
+                      } UNION {
+                        ?assigned skos:broader ?identifier .
+                        ?identifier skos:prefLabel ?label .
+                        BIND("eurovoc_broader" AS ?kind)
+                      } UNION {
+                        ?assigned skos:inScheme ?identifier .
+                        ?identifier a eurovoc:MicroThesaurus ; skos:prefLabel ?label .
+                        BIND("eurovoc_subdomain" AS ?kind)
+                      } UNION {
+                        ?assigned skos:inScheme ?subdomain .
+                        ?subdomain a eurovoc:MicroThesaurus ; eurovoc:domain ?identifier .
+                        ?identifier skos:prefLabel ?label .
+                        BIND("eurovoc_domain" AS ?kind)
+                      }
+                    }
                   }
-                  BIND(IF(BOUND(?label), LANG(?label), "") AS ?lang)
+                  FILTER(LANG(?label) IN ("en", "fr"))
+                  BIND(LANG(?label) AS ?lang)
                 } ORDER BY ?base ?kind ?identifier ?lang ?label
+                LIMIT 20001
                 """, ct);
+            if (rows.Count > 20000)
+                throw new InvalidDataException(
+                    "Publisher metadata for a 100-work EU batch exceeds 20,000 records.");
             foreach (var row in rows)
             {
                 var baseCelex = row["base"];
@@ -819,34 +862,50 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory
                                                    && !string.IsNullOrWhiteSpace(value)))
         {
             var language = row.GetValueOrDefault("lang");
-            if (string.IsNullOrWhiteSpace(language)) continue;
+            var label = row["title_short"];
+            if (language is not ("en" or "fr") || label.Length > 4096)
+                throw new InvalidDataException(
+                    "EUR-Lex publisher short title has invalid language or length.");
             values.Add(new PublisherMetadataRecord(
                 "publisher_short_title",
                 ShortTitlePredicate,
                 language,
-                row["title_short"],
+                label,
                 $"https://eur-lex.europa.eu/legal-content/{language.ToUpperInvariant()}/TXT/?uri=CELEX:{Uri.EscapeDataString(baseCelex)}"));
         }
         foreach (var row in subjectRows)
         {
             var kind = row.GetValueOrDefault("kind");
             var identifier = row.GetValueOrDefault("identifier");
-            if (kind is not ("eurovoc" or "directory") || string.IsNullOrWhiteSpace(identifier))
-                continue;
+            if (kind is not ("eurovoc" or "directory" or "eurovoc_alt_label"
+                    or "eurovoc_broader" or "eurovoc_subdomain" or "eurovoc_domain")
+                || string.IsNullOrWhiteSpace(identifier)
+                || !Uri.TryCreate(identifier, UriKind.Absolute, out var identifierUri)
+                || identifierUri.Scheme is not ("http" or "https"))
+                throw new InvalidDataException("EUR-Lex publisher metadata has an invalid kind or identifier.");
             var language = row.GetValueOrDefault("lang");
+            var label = row.GetValueOrDefault("label");
+            if (language is not ("en" or "fr") || string.IsNullOrWhiteSpace(label)
+                || label.Length > 4096)
+                throw new InvalidDataException(
+                    "EUR-Lex publisher metadata has an invalid language or label.");
             values.Add(new PublisherMetadataRecord(
                 kind,
                 identifier,
-                string.IsNullOrWhiteSpace(language) ? null : language,
-                row.GetValueOrDefault("label"),
+                language,
+                label,
                 identifier));
         }
-        return values.Distinct()
+        var canonical = values.Distinct()
             .OrderBy(value => value.Kind, StringComparer.Ordinal)
             .ThenBy(value => value.Identifier, StringComparer.Ordinal)
             .ThenBy(value => value.Language, StringComparer.Ordinal)
             .ThenBy(value => value.Label, StringComparer.Ordinal)
             .ToArray();
+        if (canonical.Length > 512)
+            throw new InvalidDataException(
+                $"EUR-Lex work {baseCelex} exceeds 512 publisher metadata records.");
+        return canonical;
     }
 
     internal static IReadOnlyList<string> DocumentRoles(
@@ -863,24 +922,16 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory
         return roles.Order(StringComparer.Ordinal).ToArray();
     }
 
-    private static Dictionary<string, string> ScopeRaw(
-        string celex, string legalForm, string bindingStatus, string consolidationStatus,
-        IEnumerable<string> reasons)
-    {
-        var reasonList = reasons.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList();
-        var domains = reasonList.Where(r => r.StartsWith("domain:", StringComparison.Ordinal))
-            .Select(r => r.Split(':')[1]).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal);
-        return new Dictionary<string, string>(StringComparer.Ordinal)
+    internal static Dictionary<string, string> SourceRaw(
+        string celex, string legalForm, string bindingStatus, string consolidationStatus) =>
+        new(StringComparer.Ordinal)
         {
             ["celex"] = celex,
             ["legal_form"] = legalForm,
             ["hierarchy"] = celex.StartsWith('1') ? "primary_eu_law" : "secondary_eu_law",
             ["binding_status"] = bindingStatus,
             ["consolidation_status"] = consolidationStatus,
-            ["domains"] = string.Join(',', domains),
-            ["scope_reasons"] = string.Join(',', reasonList),
         };
-    }
 
     private sealed record ConsolidatedState(string Celex, DateOnly Date, IReadOnlyDictionary<string, string?> Titles);
 

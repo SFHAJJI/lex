@@ -1,6 +1,8 @@
 using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Encodings.Web;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using Azure.Core;
@@ -93,6 +95,41 @@ public sealed class AzureModelDeploymentResolver
         return ParseContainerAppRevision(resourceId, revisionName, revision);
     }
 
+    public async Task<BootstrapRevisionLiveEvidence> ResolveContainerAppBootstrapRevisionAsync(
+        string resourceId,
+        string revisionName,
+        CancellationToken cancellationToken)
+    {
+        if (!ContainerAppResourceId.IsMatch(resourceId))
+            throw new InvalidDataException("Azure Container App resource id is invalid.");
+        if (!RevisionName.IsMatch(revisionName))
+            throw new InvalidDataException("Azure Container App revision name is invalid.");
+        var token = await _credential.GetTokenAsync(
+            new TokenRequestContext(["https://management.azure.com/.default"]),
+            cancellationToken);
+        var revision = await GetAsync(
+            $"https://management.azure.com{resourceId}/revisions/"
+            + $"{Uri.EscapeDataString(revisionName)}?api-version=2025-07-01",
+            token.Token, cancellationToken);
+        return ParseContainerAppBootstrapRevision(resourceId, revisionName, revision);
+    }
+
+    public async Task<IReadOnlyList<BootstrapRevisionRouteEvidence>>
+        ResolveContainerAppBootstrapRoutesAsync(
+            string resourceId,
+            CancellationToken cancellationToken)
+    {
+        if (!ContainerAppResourceId.IsMatch(resourceId))
+            throw new InvalidDataException("Azure Container App resource id is invalid.");
+        var token = await _credential.GetTokenAsync(
+            new TokenRequestContext(["https://management.azure.com/.default"]),
+            cancellationToken);
+        var revisions = await GetAsync(
+            $"https://management.azure.com{resourceId}/revisions?api-version=2025-07-01",
+            token.Token, cancellationToken);
+        return ParseContainerAppBootstrapRoutes(resourceId, revisions);
+    }
+
     internal static AssistantCandidateRuntimeEvidence ParseContainerApp(
         string resourceId,
         JsonObject app)
@@ -130,9 +167,167 @@ public sealed class AzureModelDeploymentResolver
             properties["fqdn"]?.GetValue<string>() ?? "", properties);
     }
 
+    internal static BootstrapRevisionLiveEvidence ParseContainerAppBootstrapRevision(
+        string resourceId,
+        string revisionName,
+        JsonObject revision)
+    {
+        var expectedId = resourceId.TrimEnd('/') + "/revisions/" + revisionName;
+        var properties = revision["properties"] as JsonObject
+            ?? throw new InvalidDataException("Azure Container App revision properties are absent.");
+        if (!string.Equals(revision["id"]?.GetValue<string>()?.TrimEnd('/'),
+                expectedId, StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(revision["name"]?.GetValue<string>(), revisionName,
+                StringComparison.Ordinal))
+            throw new InvalidDataException(
+                "Azure Container App revision evidence is not the requested exact revision.");
+        if (properties["active"] is not JsonValue activeValue
+            || !activeValue.TryGetValue<bool>(out var active)
+            || properties["trafficWeight"] is not JsonValue trafficValue
+            || !trafficValue.TryGetValue<int>(out var traffic)
+            || traffic is < 0 or > 100)
+            throw new InvalidDataException(
+                "Azure Container App revision activity evidence is malformed.");
+        if (active && !IsReadyRunningState(properties["runningState"]?.GetValue<string>()))
+            throw new InvalidDataException(
+                "Active Azure Container App bootstrap candidate is not running.");
+        var createdTime = properties["createdTime"]?.GetValue<string>() ?? "";
+        if (!TryParseExplicitUtc(createdTime, out _))
+            throw new InvalidDataException(
+                "Azure Container App revision createdTime is not an explicit UTC instant.");
+        var template = properties["template"] as JsonObject
+            ?? throw new InvalidDataException("Azure Container App revision template is absent.");
+        var containers = template["containers"] as JsonArray;
+        if (containers is not { Count: 1 } || containers[0] is not JsonObject container)
+            throw new InvalidDataException(
+                "Bootstrap equivalence requires exactly one Container App container.");
+        var image = container["image"]?.GetValue<string>() ?? "";
+        var codeCommitValues = (container["env"] as JsonArray)?
+            .OfType<JsonObject>()
+            .Where(item => item["name"]?.GetValue<string>() == "LEX_CODE_COMMIT")
+            .Select(item => item["value"]?.GetValue<string>() ?? "")
+            .ToArray() ?? [];
+        if (codeCommitValues.Length != 1
+            || !Regex.IsMatch(codeCommitValues[0], "^[0-9a-f]{40}$",
+                RegexOptions.CultureInvariant))
+            throw new InvalidDataException(
+                "Bootstrap equivalence requires one exact LEX_CODE_COMMIT value.");
+        return new BootstrapRevisionLiveEvidence(
+            resourceId.TrimEnd('/'), revisionName, expectedId, createdTime, image,
+            CanonicalContainerAppTemplateDigest(template), codeCommitValues[0], active, traffic);
+    }
+
+    internal static IReadOnlyList<BootstrapRevisionRouteEvidence>
+        ParseContainerAppBootstrapRoutes(string resourceId, JsonObject response)
+    {
+        if (response["nextLink"] is not null)
+            throw new InvalidDataException(
+                "Azure Container App revision inventory is paginated and therefore incomplete.");
+        if (response["value"] is not JsonArray values)
+            throw new InvalidDataException("Complete Azure Container App revision inventory is absent.");
+        var routes = new List<BootstrapRevisionRouteEvidence>(values.Count);
+        foreach (var node in values)
+        {
+            if (node is not JsonObject revision
+                || revision["name"] is not JsonValue nameValue
+                || !nameValue.TryGetValue<string>(out var name)
+                || !RevisionName.IsMatch(name)
+                || revision["properties"] is not JsonObject properties
+                || properties["active"] is not JsonValue activeValue
+                || !activeValue.TryGetValue<bool>(out var active)
+                || properties["trafficWeight"] is not JsonValue trafficValue
+                || !trafficValue.TryGetValue<int>(out var traffic)
+                || traffic is < 0 or > 100
+                || (!active && traffic != 0))
+                throw new InvalidDataException(
+                    "Azure Container App revision route inventory is malformed.");
+            var expectedId = resourceId.TrimEnd('/') + "/revisions/" + name;
+            var id = revision["id"]?.GetValue<string>() ?? "";
+            var createdTime = properties["createdTime"]?.GetValue<string>() ?? "";
+            if (!string.Equals(id.TrimEnd('/'), expectedId, StringComparison.OrdinalIgnoreCase)
+                || !TryParseExplicitUtc(createdTime, out _))
+                throw new InvalidDataException(
+                    "Azure Container App revision route identity is malformed.");
+            routes.Add(new BootstrapRevisionRouteEvidence(
+                name, expectedId, createdTime, active, traffic));
+        }
+        if (routes.Select(item => item.RevisionName).Distinct(StringComparer.Ordinal).Count()
+            != routes.Count)
+            throw new InvalidDataException(
+                "Azure Container App revision route inventory contains duplicates.");
+        return routes;
+    }
+
+    internal static string CanonicalContainerAppTemplateDigest(JsonNode revisionOrTemplate)
+    {
+        ArgumentNullException.ThrowIfNull(revisionOrTemplate);
+        JsonNode? template = revisionOrTemplate;
+        if (revisionOrTemplate is JsonObject root
+            && root["properties"] is JsonObject properties)
+            template = properties["template"];
+        else if (revisionOrTemplate is JsonObject wrapper
+            && wrapper["template"] is JsonObject wrappedTemplate)
+            template = wrappedTemplate;
+        if (template is not JsonObject templateObject
+            || templateObject["containers"] is not JsonArray)
+            throw new InvalidDataException("Container Apps revision template is required.");
+
+        using var stream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions
+        {
+            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+        }))
+        {
+            WriteCanonical(writer, templateObject, excludeRevisionSuffix: true);
+        }
+        return "sha256:" + Convert.ToHexStringLower(SHA256.HashData(stream.ToArray()));
+    }
+
+    private static void WriteCanonical(
+        Utf8JsonWriter writer,
+        JsonNode? node,
+        bool excludeRevisionSuffix = false)
+    {
+        switch (node)
+        {
+            case null:
+                writer.WriteNullValue();
+                break;
+            case JsonObject value:
+                writer.WriteStartObject();
+                foreach (var item in value.OrderBy(item => item.Key, StringComparer.Ordinal))
+                {
+                    if (excludeRevisionSuffix && item.Key == "revisionSuffix") continue;
+                    writer.WritePropertyName(item.Key);
+                    WriteCanonical(writer, item.Value);
+                }
+                writer.WriteEndObject();
+                break;
+            case JsonArray value:
+                writer.WriteStartArray();
+                foreach (var item in value) WriteCanonical(writer, item);
+                writer.WriteEndArray();
+                break;
+            default:
+                node.WriteTo(writer);
+                break;
+        }
+    }
+
     private static bool IsReadyRunningState(string? state) =>
         string.Equals(state, "Running", StringComparison.OrdinalIgnoreCase)
         || string.Equals(state, "RunningAtMaxScale", StringComparison.OrdinalIgnoreCase);
+
+    private static bool TryParseExplicitUtc(string value, out DateTimeOffset parsed)
+    {
+        parsed = default;
+        return (value.EndsWith('Z') || value.EndsWith("+00:00", StringComparison.Ordinal))
+            && DateTimeOffset.TryParse(value,
+                System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.RoundtripKind,
+                out parsed)
+            && parsed.Offset == TimeSpan.Zero;
+    }
 
     private static AssistantCandidateRuntimeEvidence ParseCandidateTemplate(
         string resourceId,

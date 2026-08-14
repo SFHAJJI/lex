@@ -8,10 +8,23 @@ on:
         required: true
         type: boolean
         default: false
-  repository_dispatch:
-    types: [verified_artifact_release]
-
+      bootstrap_first_official:
+        description: One-time creation of fallback R before exact candidate C from one image/template
+        required: true
+        type: boolean
+        default: false
+      bootstrap_cleanup_run_id:
+        description: Successful exact-commit bootstrap-legacy-cleanup run (bootstrap only)
+        required: false
+        default: ""
+        type: string
+      bootstrap_cleanup_plan_sha256:
+        description: Reviewed plan SHA-256 consumed by that cleanup run (bootstrap only)
+        required: false
+        default: ""
+        type: string
 permissions:
+  actions: read
   contents: read
   checks: read
   id-token: write
@@ -22,6 +35,7 @@ concurrency:
 
 jobs:
   deploy:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: production
     timeout-minutes: 45
@@ -67,16 +81,13 @@ jobs:
         shell: bash
         env:
           MANUAL_PROMOTE: ${{ inputs.promote }}
-          DISPATCH_PROMOTE: ${{ github.event.client_payload.promote }}
         run: |
           set -eu
           for value in AZURE_CLIENT_ID AZURE_TENANT_ID AZURE_SUBSCRIPTION_ID; do
             [ -n "${!value:-}" ] || { echo "::error::$value is not configured in the production environment"; exit 1; }
           done
-          for requested in "${MANUAL_PROMOTE:-false}" "${DISPATCH_PROMOTE:-false}"; do
-            [ "$requested" != "true" ] \
-              || { echo "::error::Promote only with revision-traffic.yml"; exit 2; }
-          done
+          [ "${MANUAL_PROMOTE:-false}" != "true" ] \
+            || { echo "::error::Promote only with revision-traffic.yml"; exit 2; }
 
       - uses: azure/login@f5d393ae46f8fde4be8b75f32e3fc50e654ad0ca # v3
         with:
@@ -153,6 +164,7 @@ jobs:
         run: |
           set -eu
           . scripts/deploy/az-retry.sh
+          . scripts/deploy/az-reauth.sh
           runtime_id=$(az identity show -g "$RESOURCE_GROUP" -n "$RUNTIME_IDENTITY" --query id -o tsv)
           runtime_client=$(az identity show -g "$RESOURCE_GROUP" -n "$RUNTIME_IDENTITY" --query clientId -o tsv)
           # These two writes land on the same container app microseconds apart, and the second
@@ -170,28 +182,105 @@ jobs:
           IMAGE: ${{ steps.image.outputs.image }}
           MANIFEST_SET: ${{ steps.image.outputs.manifest_set }}
           RUNTIME_CLIENT: ${{ steps.identity.outputs.runtime_client }}
+          BOOTSTRAP_FIRST_OFFICIAL: ${{ inputs.bootstrap_first_official }}
+          BOOTSTRAP_CLEANUP_RUN_ID: ${{ inputs.bootstrap_cleanup_run_id }}
+          BOOTSTRAP_CLEANUP_PLAN_SHA256: ${{ inputs.bootstrap_cleanup_plan_sha256 }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           . scripts/deploy/az-retry.sh
           . scripts/deploy/az-reauth.sh
-          az_write az containerapp revision set-mode -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" --mode multiple --only-show-errors
+          bootstrap="${BOOTSTRAP_FIRST_OFFICIAL:-false}"
+          [ "$bootstrap" = "true" ] || [ "$bootstrap" = "false" ] \
+            || { echo "::error::bootstrap_first_official must be boolean"; exit 2; }
+          revision_mode=$(az_retry az containerapp show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+            --query properties.configuration.activeRevisionsMode -o tsv)
+          [ "$revision_mode" = "Multiple" ] \
+            || { echo "::error::deployment requires Container Apps multiple revision mode"; exit 1; }
           mapfile -t traffic_bearers < <(az containerapp revision list \
-            -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+            -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" --all \
             --query "[?properties.trafficWeight > \`0\`].name" -o tsv)
           [ "${#traffic_bearers[@]}" -eq 1 ] \
             || { echo "::error::expected exactly one traffic-bearing revision before candidate creation"; exit 1; }
           previous="${traffic_bearers[0]}"
           app_id=$(az containerapp show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" --query id -o tsv)
-          previous_state=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
-            --revision "$previous" \
-            --query '{image:properties.template.containers[0].image,min:properties.template.scale.minReplicas,max:properties.template.scale.maxReplicas}' \
-            -o json)
-          previous_image=$(printf '%s' "$previous_state" | jq -r .image)
-          previous_min=$(printf '%s' "$previous_state" | jq -r .min)
-          previous_max=$(printf '%s' "$previous_state" | jq -r .max)
           rollback="$previous"
-          created_rollback=false
           candidate=''
+          bootstrap_fallback=''
+          canonical_template_digest=''
+          prior_rollback=''
+          legacy_created=''
+          legacy_image=''
+          legacy_template_digest=''
+          previous_inactive_limit=$(az containerapp show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+            --query properties.configuration.maxInactiveRevisions -o tsv)
+          if [ "$bootstrap" = "true" ]; then
+            [[ "${BOOTSTRAP_CLEANUP_RUN_ID:-}" =~ ^[1-9][0-9]*$ ]] \
+              && [[ "${BOOTSTRAP_CLEANUP_PLAN_SHA256:-}" =~ ^[0-9a-f]{64}$ ]] \
+              || { echo "::error::bootstrap requires exact legacy-cleanup proof"; exit 2; }
+            cleanup_run=$(gh api \
+              "repos/$GITHUB_REPOSITORY/actions/runs/$BOOTSTRAP_CLEANUP_RUN_ID")
+            [ "$(printf '%s' "$cleanup_run" | jq -r .conclusion)" = "success" ] \
+              && [ "$(printf '%s' "$cleanup_run" | jq -r .event)" = "workflow_dispatch" ] \
+              && [ "$(printf '%s' "$cleanup_run" | jq -r .head_sha)" = "$GITHUB_SHA" ] \
+              && [ "$(printf '%s' "$cleanup_run" | jq -r .name)" = "bootstrap-legacy-cleanup" ] \
+              || { echo "::error::bootstrap cleanup is not a successful exact-commit run"; exit 2; }
+            cleanup_receipt_dir=$(mktemp -d)
+            gh run download "$BOOTSTRAP_CLEANUP_RUN_ID" \
+              --name lex-bootstrap-legacy-cleanup-receipt --dir "$cleanup_receipt_dir"
+            cleanup_receipt="$cleanup_receipt_dir/bootstrap-legacy-cleanup-receipt.json"
+            jq -e --arg commit "$GITHUB_SHA" --arg plan "$BOOTSTRAP_CLEANUP_PLAN_SHA256" '
+                .schema == "lex-bootstrap-legacy-cleanup-receipt/1"
+                and .code_commit == $commit and .cleanup_plan_sha256 == $plan
+                and .max_inactive_revisions == 1
+                and (.legacy_authority.revision | type == "string")
+                and .legacy_authority.active == true
+                and .legacy_authority.traffic_weight == 100' \
+              "$cleanup_receipt" >/dev/null \
+              || { echo "::error::bootstrap cleanup receipt is invalid"; exit 2; }
+            [ "$previous_inactive_limit" = "1" ] \
+              || { echo "::error::one-time legacy cleanup has not converged to maxInactiveRevisions=1"; exit 1; }
+            [ "$(jq -r .legacy_authority.revision "$cleanup_receipt")" = "$previous" ] \
+              || { echo "::error::live A differs from the cleanup receipt"; exit 2; }
+            legacy_created=$(jq -r .legacy_authority.created_time "$cleanup_receipt")
+            legacy_image=$(jq -r .legacy_authority.image "$cleanup_receipt")
+            legacy_template_digest=$(jq -r \
+              .legacy_authority.canonical_template_digest "$cleanup_receipt")
+          else
+            [ "$previous_inactive_limit" = "1" ] \
+              || { echo "::error::steady state must retain exactly one inactive rollback"; exit 1; }
+            mapfile -t inactive_before < <(az containerapp revision list \
+              -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" --all \
+              --query "[?properties.active==\`false\`].name" -o tsv)
+            [ "${#inactive_before[@]}" -eq 1 ] \
+              || { echo "::error::an unresolved candidate or legacy inactive revision exists"; exit 1; }
+            prior_rollback="${inactive_before[0]}"
+            [ "$prior_rollback" != "$previous" ] \
+              || { echo "::error::production and retained rollback identities must differ"; exit 1; }
+          fi
+
+          verify_bootstrap_legacy_inventory() {
+            [ "$bootstrap" = "true" ] || return 0
+            local observed observed_created observed_image observed_template
+            observed=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+              --revision "$previous" -o json) || return 1
+            observed_created=$(printf '%s' "$observed" | jq -r .properties.createdTime)
+            observed_image=$(printf '%s' "$observed" | jq -r \
+              .properties.template.containers[0].image)
+            observed_template=$(printf '%s' "$observed" \
+              | python3 scripts/deploy/revision_template_digest.py) || return 1
+            [ "$(printf '%s' "$observed" | jq -r .properties.active)" = "true" ] \
+              && [ "$(printf '%s' "$observed" | jq -r '.properties.trafficWeight // 0')" = "100" ] \
+              && [ "$observed_created" = "$legacy_created" ] \
+              && [ "$observed_image" = "$legacy_image" ] \
+              && [ "$observed_template" = "$legacy_template_digest" ] \
+              || { echo "::error::legacy A changed after the reviewed cleanup"; return 1; }
+            inactive_limit=$(az containerapp show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+              --query properties.configuration.maxInactiveRevisions -o tsv) || return 1
+            [ "$inactive_limit" = "1" ] \
+              || { echo "::error::bootstrap preparation requires maxInactiveRevisions=1"; return 1; }
+          }
+
           deactivate_revision() {
             revision="$1"
             for attempt in $(seq 1 5); do
@@ -221,77 +310,160 @@ jobs:
             echo "::error::revision endpoint did not return a successful response: $url" >&2
             return 1
           }
-          cleanup_candidates() {
-            cleanup_failed=0
-            if [ -n "$candidate" ]; then
-              deactivate_revision "$candidate" || cleanup_failed=1
+          reconcile_candidate_retention() {
+            local desired_limit=1 candidate_exists=false fallback_exists=false expected actual body
+            if [ "$bootstrap" = "true" ]; then
+              # The reviewed one-time cleanup already authorized removal of every non-A legacy
+              # revision. On failure, deactivate the newest observed prepared revision under
+              # max=1. That retains A at 100 and one exact retry/abandon record without a third
+              # directly reachable revision process.
+              for attempt in $(seq 1 24); do
+                if [ -n "$bootstrap_fallback" ] && az containerapp revision show \
+                    -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" --revision "$bootstrap_fallback" \
+                    --query name -o tsv >/dev/null 2>&1; then
+                  fallback_exists=true
+                fi
+                if [ -n "$candidate" ] && az containerapp revision show \
+                    -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" --revision "$candidate" \
+                    --query name -o tsv >/dev/null 2>&1; then
+                  candidate_exists=true
+                fi
+                if [ "$fallback_exists" = true ] || [ "$candidate_exists" = true ]; then
+                  break
+                fi
+                sleep 5
+              done
+              verify_bootstrap_legacy_inventory || return 1
+              if [ "$candidate_exists" = true ]; then
+                deactivate_revision "$candidate" || return 1
+                expected="$candidate"
+              elif [ "$fallback_exists" = true ]; then
+                deactivate_revision "$bootstrap_fallback" || return 1
+                expected="$bootstrap_fallback"
+              else
+                expected=$(az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+                  --all --query "[?properties.active==\`false\`].name" -o tsv) || return 1
+              fi
+              for attempt in $(seq 1 24); do
+                actual=$(az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+                  --all --query "[?properties.active==\`false\`].name" -o tsv 2>/dev/null || true)
+                active=$(az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+                  --all --query "[?properties.active].name" -o tsv 2>/dev/null || true)
+                [ "$actual" = "$expected" ] && [ "$active" = "$previous" ] && return 0
+                sleep 5
+              done
+              echo "::error::bootstrap failure did not converge to A active plus one inactive record"
+              return 1
             fi
-            if [ "$created_rollback" = true ]; then
-              deactivate_revision "$rollback" || cleanup_failed=1
+            if [ -n "$candidate" ] && az containerapp revision show \
+                -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" --revision "$candidate" \
+                --query name -o tsv >/dev/null 2>&1; then
+              candidate_exists=true
+              desired_limit=2
+              deactivate_revision "$candidate" || return 1
             fi
-            return "$cleanup_failed"
+            body=$(jq -cn --argjson limit "$desired_limit" \
+              '{properties:{configuration:{maxInactiveRevisions:$limit}}}')
+            az_write az rest --method patch --uri "$app_id?api-version=2025-01-01" \
+              --headers 'Content-Type=application/json' --body "$body" --output none || return 1
+            for attempt in $(seq 1 12); do
+              inactive_limit=$(az containerapp show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+                --query properties.configuration.maxInactiveRevisions -o tsv 2>/dev/null || true)
+              [ "$inactive_limit" = "$desired_limit" ] && break
+              sleep 5
+            done
+            [ "$inactive_limit" = "$desired_limit" ] || return 1
+            expected="$prior_rollback"
+            [ "$candidate_exists" = false ] || expected=$(printf '%s\n%s\n' \
+              "$prior_rollback" "$candidate" | sort | paste -sd, -)
+            for attempt in $(seq 1 24); do
+              actual=$(az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+                --all --query "[?properties.active==\`false\`].name" -o tsv 2>/dev/null \
+                | sort | paste -sd, -)
+              [ "$actual" = "$expected" ] && return 0
+              sleep 5
+            done
+            echo "::error::candidate retention state was not reconciled" >&2
+            return 1
           }
           finish_cleanup() {
             status=$?
             trap - EXIT TERM INT
-            cleanup_candidates || status=1
+            set +e
+            if [ "$bootstrap" = "true" ] && [ "$status" -eq 0 ]; then
+              verify_bootstrap_prepared_state
+              [ "$?" -eq 0 ] || status=1
+            else
+              reconcile_candidate_retention
+              [ "$?" -eq 0 ] || status=1
+            fi
             exit "$status"
           }
           trap finish_cleanup EXIT
           trap 'exit 143' TERM
           trap 'exit 130' INT
-          if [ "$previous_min" != "1" ] || [ "$previous_max" != "1" ]; then
-            rollback_suffix="rb${GITHUB_SHA:0:7}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-            rollback="$CONTAINER_APP--$rollback_suffix"
-            az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
-              --revision "$previous" -o json \
-              | jq --arg previous "$previous" --arg rollback "$rollback" \
-                   --arg suffix "$rollback_suffix" '
-                .properties.template
-                | .revisionSuffix = $suffix
-                | .containers[0].resources = {cpu:1.0,memory:"2Gi"}
-                | .scale = {minReplicas:1,maxReplicas:1}
-                | {properties:{
-                    configuration:{ingress:{traffic:[
-                      {revisionName:$previous,weight:100},
-                      {revisionName:$rollback,weight:0}
-                    ]}},
-                    template:.
-                  }}' > rollback.json
-            created_rollback=true
+          verify_bootstrap_prepared_state() {
+            [ "$bootstrap" = "true" ] || return 0
+            local state
+            state=$(az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+              --all -o json) || return 1
+            printf '%s' "$state" | jq -e \
+              --arg current "$previous" --arg rollback "$bootstrap_fallback" \
+              --arg candidate "$candidate" '
+                length == 3
+                and ([.[] | select(.properties.active == true) | .name] | sort)
+                  == ([$current,$candidate] | sort)
+                and ([.[] | select(.properties.active == false) | .name] == [$rollback])
+                and ([.[] | select((.properties.trafficWeight // 0) > 0)] | length) == 1
+                and (any(.[]; .name == $current and .properties.active == true
+                  and (.properties.trafficWeight // 0) == 100))
+                and (any(.[]; .name == $rollback and .properties.active == false
+                  and (.properties.trafficWeight // 0) == 0))
+                and (any(.[]; .name == $candidate and .properties.active == true
+                  and (.properties.trafficWeight // 0) == 0))' >/dev/null
+          }
+          if [ "$bootstrap" = "false" ]; then
+            # The only normal waiting state is current production plus one retained rollback and
+            # one reviewed candidate. Refuse a second candidate instead of pruning by age.
+            retention_body=$(jq -cn '{properties:{configuration:{maxInactiveRevisions:2}}}')
             az_write az rest --method patch --uri "$app_id?api-version=2025-01-01" \
-              --headers 'Content-Type=application/json' --body @rollback.json --output none
-            for attempt in $(seq 1 30); do
-              rollback_state=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
-                --revision "$rollback" --query properties.runningState -o tsv 2>/dev/null || true)
-              { [ "$rollback_state" = "Running" ] || [ "$rollback_state" = "RunningAtMaxScale" ]; } && break
-              [ "$rollback_state" = "Failed" ] \
-                && { echo "::error::pinned rollback revision failed"; exit 1; }
-              sleep 10
+              --headers 'Content-Type=application/json' --body "$retention_body" --output none
+            for attempt in $(seq 1 12); do
+              inactive_limit=$(az containerapp show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+                --query properties.configuration.maxInactiveRevisions -o tsv)
+              [ "$inactive_limit" = "2" ] && break
+              sleep 5
             done
-            { [ "$rollback_state" = "Running" ] || [ "$rollback_state" = "RunningAtMaxScale" ]; } \
-              || { echo "::error::pinned rollback revision did not become ready"; exit 1; }
-            rollback_image=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
-              --revision "$rollback" --query properties.template.containers[0].image -o tsv)
-            [ "$rollback_image" = "$previous_image" ] \
-              || { echo "::error::pinned rollback image differs from current production"; exit 1; }
-            rollback_fqdn=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
-              --revision "$rollback" --query properties.fqdn -o tsv)
-            # The immutable production image may predate /readyz. Its exact image and
-            # legacy health contract are sufficient here; the new candidate must pass
-            # both /healthz and /readyz below.
-            revision_get "https://$rollback_fqdn/healthz" >/dev/null
+            [ "$inactive_limit" = "2" ] \
+              || { echo "::error::candidate retention policy was not applied"; exit 1; }
+          else
+            verify_bootstrap_legacy_inventory
+            initial=$(az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+              --all -o json)
+            printf '%s' "$initial" | jq -e --arg current "$previous" '
+                length == 2
+                and ([.[] | select(.properties.active == true) | .name] == [$current])
+                and ([.[] | select(.properties.active == false)] | length) == 1
+                and all(.[] | select(.name != $current);
+                  (.properties.trafficWeight // 0) == 0)
+                and any(.[]; .name == $current and (.properties.trafficWeight // 0) == 100)' \
+              >/dev/null \
+              || { echo "::error::bootstrap preparation requires exact A plus one inactive legacy record"; exit 1; }
           fi
           # A revision is immutable and its inputs are code plus the complete artifact set.
           # Include the run identity as well so an exact deployment can be retried safely.
           suffix="r${GITHUB_SHA:0:7}-${MANIFEST_SET:0:8}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           candidate="$CONTAINER_APP--$suffix"
+          eval_catalog_sha=$(sha256sum evals/assistant-cases-v3.json | cut -d' ' -f1)
+          [[ "$eval_catalog_sha" =~ ^[0-9a-f]{64}$ ]] \
+            || { echo "::error::assistant evaluation catalog digest is invalid"; exit 1; }
           az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
             --revision "$previous" -o json \
             | jq --arg previous "$previous" --arg candidate "$candidate" --arg suffix "$suffix" \
                  --arg image "$IMAGE" --arg manifest "$MANIFEST_SET" \
                  --arg requiredPublishers "lu-legilux,eu-eurlex" \
-                 --arg code "$GITHUB_SHA" --arg runtimeClient "$RUNTIME_CLIENT" '
+                 --arg code "$GITHUB_SHA" --arg runtimeClient "$RUNTIME_CLIENT" \
+                 --arg evalCatalog "$eval_catalog_sha" '
               .properties.template
               | .revisionSuffix = $suffix
               | .containers[0].image = $image
@@ -302,7 +474,8 @@ jobs:
                       and .name != "AOAI_USE_MANAGED_IDENTITY"
                       and .name != "LEX_REQUIRE_ARTIFACT_MANIFEST" and .name != "LEX_ARTIFACT_MANIFEST_ID"
                       and .name != "LEX_REQUIRED_PUBLISHERS"
-                      and .name != "LEX_CODE_COMMIT" and .name != "LEX_DEPLOY_IMAGE"))
+                      and .name != "LEX_CODE_COMMIT" and .name != "LEX_DEPLOY_IMAGE"
+                      and .name != "LEX_ASSISTANT_EVAL_CATALOG_SHA256"))
                   + [
                       {name:"AZURE_CLIENT_ID",value:$runtimeClient},
                       {name:"AOAI_USE_MANAGED_IDENTITY",value:"1"},
@@ -310,7 +483,8 @@ jobs:
                       {name:"LEX_ARTIFACT_MANIFEST_ID",value:$manifest},
                       {name:"LEX_REQUIRED_PUBLISHERS",value:$requiredPublishers},
                       {name:"LEX_CODE_COMMIT",value:$code},
-                      {name:"LEX_DEPLOY_IMAGE",value:$image}
+                      {name:"LEX_DEPLOY_IMAGE",value:$image},
+                      {name:"LEX_ASSISTANT_EVAL_CATALOG_SHA256",value:$evalCatalog}
                     ])
               | {properties:{
                   configuration:{ingress:{traffic:[
@@ -319,6 +493,71 @@ jobs:
                   ]}},
                   template:.
                 }}' > candidate.json
+          if [ "$bootstrap" = "true" ]; then
+            bootstrap_fallback_suffix="b${GITHUB_SHA:0:7}-${MANIFEST_SET:0:8}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+            bootstrap_fallback="$CONTAINER_APP--$bootstrap_fallback_suffix"
+            jq --arg candidate "$candidate" --arg fallback "$bootstrap_fallback" \
+                 --arg suffix "$bootstrap_fallback_suffix" '
+              .properties.template.revisionSuffix = $suffix
+              | .properties.configuration.ingress.traffic |= map(
+                  if .revisionName == $candidate then .revisionName = $fallback else . end)
+            ' candidate.json > bootstrap-fallback.json
+            verify_bootstrap_legacy_inventory
+            az_write az rest --method patch --uri "$app_id?api-version=2025-01-01" \
+              --headers 'Content-Type=application/json' --body @bootstrap-fallback.json --output none
+            for attempt in $(seq 1 30); do
+              fallback_state=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+                --revision "$bootstrap_fallback" --query properties.runningState -o tsv 2>/dev/null || true)
+              { [ "$fallback_state" = "Running" ] || [ "$fallback_state" = "RunningAtMaxScale" ]; } \
+                && break
+              [ "$fallback_state" = "Failed" ] \
+                && { echo "::error::bootstrap fallback revision failed"; exit 1; }
+              sleep 10
+            done
+            { [ "$fallback_state" = "Running" ] || [ "$fallback_state" = "RunningAtMaxScale" ]; } \
+              || { echo "::error::bootstrap fallback revision did not become ready"; exit 1; }
+            fallback=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+              --revision "$bootstrap_fallback" -o json)
+            fallback_image=$(printf '%s' "$fallback" | jq -r .properties.template.containers[0].image)
+            fallback_template_digest=$(printf '%s' "$fallback" \
+              | python3 scripts/deploy/revision_template_digest.py)
+            [ "$fallback_image" = "$IMAGE" ] \
+              || { echo "::error::bootstrap fallback differs from the immutable candidate image"; exit 1; }
+            [ "$(printf '%s' "$fallback" | jq -r .properties.active)" = "true" ] \
+              && [ "$(printf '%s' "$fallback" | jq -r '.properties.trafficWeight // 0')" = "0" ] \
+              || { echo "::error::new bootstrap fallback must initially be active at zero traffic"; exit 1; }
+            canonical_template_digest="$fallback_template_digest"
+            fallback_created=$(printf '%s' "$fallback" | jq -r .properties.createdTime)
+            [ -n "$fallback_created" ] && [ "$fallback_created" != "null" ] \
+              || { echo "::error::bootstrap fallback creation time is absent"; exit 1; }
+            # Container Apps creation timestamps must be strictly ordered for oldest-inactive
+            # retention. Keep the requests in separate wall-clock seconds as well as checking ARM.
+            sleep 1
+            rollback="$bootstrap_fallback"
+            prior_rollback="$bootstrap_fallback"
+            verify_bootstrap_legacy_inventory
+            deactivate_revision "$bootstrap_fallback"
+            for attempt in $(seq 1 24); do
+              bounded=$(az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+                --all -o json 2>/dev/null || true)
+              printf '%s' "$bounded" | jq -e --arg current "$previous" \
+                --arg rollback "$bootstrap_fallback" '
+                  length == 2
+                  and any(.[]; .name == $current and .properties.active == true
+                    and (.properties.trafficWeight // 0) == 100)
+                  and any(.[]; .name == $rollback and .properties.active == false
+                    and (.properties.trafficWeight // 0) == 0)' >/dev/null 2>&1 && break
+              sleep 5
+            done
+            printf '%s' "$bounded" | jq -e --arg current "$previous" \
+              --arg rollback "$bootstrap_fallback" '
+                length == 2
+                and any(.[]; .name == $current and .properties.active == true
+                  and (.properties.trafficWeight // 0) == 100)
+                and any(.[]; .name == $rollback and .properties.active == false
+                  and (.properties.trafficWeight // 0) == 0)' >/dev/null \
+              || { echo "::error::R did not replace the final legacy inactive revision"; exit 1; }
+          fi
           az_write az rest --method patch --uri "$app_id?api-version=2025-01-01" \
             --headers 'Content-Type=application/json' --body @candidate.json --output none
           for attempt in $(seq 1 30); do
@@ -334,6 +573,32 @@ jobs:
             --revision "$candidate" --query properties.template.scale -o json \
             | jq -e '.minReplicas == 1 and .maxReplicas == 1' >/dev/null \
             || { echo "::error::public assistant must run on exactly one application replica"; exit 1; }
+          if [ "$bootstrap" = "true" ]; then
+            candidate_observed=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+              --revision "$candidate" -o json)
+            candidate_image=$(printf '%s' "$candidate_observed" \
+              | jq -r .properties.template.containers[0].image)
+            candidate_template_digest=$(printf '%s' "$candidate_observed" \
+              | python3 scripts/deploy/revision_template_digest.py)
+            candidate_created=$(printf '%s' "$candidate_observed" | jq -r .properties.createdTime)
+            [ "$candidate_image" = "$IMAGE" ] \
+              && [ "$candidate_template_digest" = "$canonical_template_digest" ] \
+              && [ "$(printf '%s' "$candidate_observed" | jq -r .properties.active)" = "true" ] \
+              && [ "$(printf '%s' "$candidate_observed" | jq -r '.properties.trafficWeight // 0')" = "0" ] \
+              || { echo "::error::bootstrap candidate differs from the canonical fallback"; exit 1; }
+            python3 - "$legacy_created" "$fallback_created" "$candidate_created" <<'PY'
+          import sys
+          sys.path.insert(0, "scripts/deploy")
+          from bootstrap_plan import timestamp
+
+          if not timestamp(sys.argv[1], "legacy createdTime") \
+                  < timestamp(sys.argv[2], "fallback createdTime") \
+                  < timestamp(sys.argv[3], "candidate createdTime"):
+              raise SystemExit("bootstrap chronology must be exact A < R < C")
+          PY
+            verify_bootstrap_prepared_state
+          fi
+          verify_bootstrap_legacy_inventory
           az_write az containerapp ingress traffic set -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
             --revision-weight "$previous=100" "$candidate=0" --only-show-errors
           fqdn=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
@@ -548,7 +813,7 @@ jobs:
             "https://$fqdn/?q=$trace_canary" >/dev/null
           telemetry=''
           for attempt in $(seq 1 18); do
-            telemetry=$(az monitor app-insights query -g "$RESOURCE_GROUP" --app "$APPLICATION_INSIGHTS_NAME" \
+            telemetry=$(az_retry az monitor app-insights query -g "$RESOURCE_GROUP" --app "$APPLICATION_INSIGHTS_NAME" \
             --analytics-query "union isfuzzy=true requests, dependencies, traces
               | where timestamp > ago(15m) and operation_Id == '$trace_id'
               | extend record=tostring(pack_all()), address=tostring(column_ifexists('client_IP', ''))
@@ -565,45 +830,68 @@ jobs:
           addresses=$(printf '%s' "$telemetry" | jq -r '.tables[0].rows[0][3] // -1')
           [ "$leaks" -eq 0 ] && [ "$addresses" -eq 0 ] \
             || { echo "::error::raw query or client address reached telemetry"; exit 1; }
+
           # Zero-traffic revisions still have directly addressable FQDNs. Keep only the current
           # production authority active after the candidate has passed; promotion explicitly
           # reactivates the reviewed target.
-          for revision in $(az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
-              --query "[?properties.trafficWeight == \`0\`].name" -o tsv); do
-            deactivate_revision "$revision"
-          done
+          if [ "$bootstrap" = "false" ]; then
+            for revision in $(az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+                --all --query "[?properties.active && properties.trafficWeight == \`0\`].name" -o tsv); do
+              deactivate_revision "$revision"
+            done
+          fi
           echo "previous=$previous" >> "$GITHUB_OUTPUT"
           echo "rollback=$rollback" >> "$GITHUB_OUTPUT"
+          echo "retained_rollback=$prior_rollback" >> "$GITHUB_OUTPUT"
           echo "candidate=$candidate" >> "$GITHUB_OUTPUT"
+          echo "bootstrap_fallback=$bootstrap_fallback" >> "$GITHUB_OUTPUT"
+          echo "canonical_template_digest=$canonical_template_digest" >> "$GITHUB_OUTPUT"
+          echo "bootstrap_cleanup_run_id=${BOOTSTRAP_CLEANUP_RUN_ID:-}" >> "$GITHUB_OUTPUT"
+          echo "bootstrap_cleanup_plan_sha256=${BOOTSTRAP_CLEANUP_PLAN_SHA256:-}" >> "$GITHUB_OUTPUT"
 
       - name: Enforce one active public quota authority
         if: ${{ always() && steps.candidate.outcome != 'skipped' }}
         shell: bash
+        env:
+          BOOTSTRAP_FIRST_OFFICIAL: ${{ inputs.bootstrap_first_official }}
+          CANDIDATE_OUTCOME: ${{ steps.candidate.outcome }}
+          CANDIDATE_REVISION: ${{ steps.candidate.outputs.candidate }}
+          BOOTSTRAP_FALLBACK: ${{ steps.candidate.outputs.bootstrap_fallback }}
         run: |
           set -u
+          . scripts/deploy/az-retry.sh
+          . scripts/deploy/az-reauth.sh
+          az_reauth
           current=$(az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
-            --query "[?properties.trafficWeight > \`0\`].name" -o tsv)
+            --all --query "[?properties.trafficWeight > \`0\`].name" -o tsv)
           [ "$(printf '%s\n' "$current" | sed '/^$/d' | wc -l)" -eq 1 ] \
             || { echo "::error::expected exactly one traffic-bearing revision"; exit 1; }
-          for revision in $(az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
-              --query "[?properties.active && name != '$current'].name" -o tsv); do
-            deactivated=false
-            for attempt in $(seq 1 5); do
-              # Not az_write: the loop around this call already retries and then reads
-              # properties.active back, which is a stronger check than a return code, and a
-              # nested exponential backoff would turn a five second race into minutes.
-              az containerapp revision deactivate -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
-                --revision "$revision" --only-show-errors >/dev/null 2>&1 || true
-              active=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
-                --revision "$revision" --query properties.active -o tsv 2>/dev/null || true)
-              if [ "$active" != "true" ]; then deactivated=true; break; fi
-              sleep 5
-            done
-            [ "$deactivated" = true ] \
-              || { echo "::error::failed to deactivate non-authoritative revision $revision"; exit 1; }
-          done
+          if [ "${BOOTSTRAP_FIRST_OFFICIAL:-false}" = "true" ] \
+              && [ "$CANDIDATE_OUTCOME" = "success" ]; then
+            [ -n "$CANDIDATE_REVISION" ] && [ -n "$BOOTSTRAP_FALLBACK" ] \
+              || { echo "::error::successful bootstrap outputs are incomplete"; exit 1; }
+            inactive_limit=$(az_retry az containerapp show -g "$RESOURCE_GROUP" \
+              -n "$CONTAINER_APP" --query properties.configuration.maxInactiveRevisions -o tsv)
+            prepared=$(az_retry az containerapp revision list -g "$RESOURCE_GROUP" \
+              -n "$CONTAINER_APP" --all -o json)
+            printf '%s' "$prepared" | jq -e --arg current "$current" \
+                --arg candidate "$CANDIDATE_REVISION" --arg fallback "$BOOTSTRAP_FALLBACK" \
+                --argjson limit "$inactive_limit" '
+                  $limit == 1 and length == 3
+                  and ([.[] | select(.properties.active == true) | .name] | sort)
+                    == ([$current,$candidate] | sort)
+                  and ([.[] | select(.properties.active == false) | .name] == [$fallback])
+                  and any(.[]; .name == $current
+                    and (.properties.trafficWeight // 0) == 100)
+                  and any(.[]; .name == $candidate
+                    and (.properties.trafficWeight // 0) == 0)
+                  and any(.[]; .name == $fallback
+                    and (.properties.trafficWeight // 0) == 0)' >/dev/null \
+              || { echo "::error::bootstrap candidate preparation did not remain exact"; exit 1; }
+            exit 0
+          fi
           active=$(az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
-            --query "[?properties.active].name" -o tsv)
+            --all --query "[?properties.active].name" -o tsv)
           [ "$active" = "$current" ] \
             || { echo "::error::expected exactly one active public quota authority"; exit 1; }
 
@@ -613,6 +901,9 @@ jobs:
           IMAGE: ${{ steps.image.outputs.image }}
           CANDIDATE: ${{ steps.candidate.outputs.candidate }}
           MANIFEST_SET: ${{ steps.image.outputs.manifest_set }}
+          BOOTSTRAP_FALLBACK: ${{ steps.candidate.outputs.bootstrap_fallback }}
+          CANONICAL_TEMPLATE_DIGEST: ${{ steps.candidate.outputs.canonical_template_digest }}
+          BOOTSTRAP_CLEANUP_PLAN_SHA256: ${{ steps.candidate.outputs.bootstrap_cleanup_plan_sha256 }}
         run: |
           {
             echo "## Lex production deployment"
@@ -623,6 +914,12 @@ jobs:
             echo "- traffic promoted by this run: \`false\`"
             echo "- authentication: GitHub OIDC, managed ACR pull and managed Azure OpenAI access"
             echo "- current revision: \`${{ steps.candidate.outputs.previous }}\`"
-            echo "- pinned rollback revision: \`${{ steps.candidate.outputs.rollback }}\`"
+            echo "- pre-switch recovery revision: \`${{ steps.candidate.outputs.rollback }}\`"
+            echo "- retained prior rollback revision: \`${{ steps.candidate.outputs.retained_rollback }}\`"
+            if [ -n "$BOOTSTRAP_FALLBACK" ]; then
+              echo "- first-release equivalent fallback: \`$BOOTSTRAP_FALLBACK\`"
+              echo "- canonical template digest (excluding only revisionSuffix): \`$CANONICAL_TEMPLATE_DIGEST\`"
+              echo "- reviewed legacy cleanup plan SHA-256: \`$BOOTSTRAP_CLEANUP_PLAN_SHA256\`"
+            fi
             echo "- legacy secrets retained while the rollback revision exists; removal is a separate verified cleanup"
           } >> "$GITHUB_STEP_SUMMARY"

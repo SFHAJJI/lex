@@ -103,6 +103,8 @@ public sealed class AskService
         private readonly HashSet<string> _current = new(StringComparer.Ordinal);
         private readonly List<(string Work, string Title)> _candidates = [];
         private readonly List<WorkMention> _mentions = [];
+        private readonly Dictionary<string, AskSubjectAuthoritySource> _authoritySources =
+            new(StringComparer.Ordinal);
         // Every title the turn saw, for every work, whatever the row's match strength. The
         // clarification menu is the one surface that must name a work it did not select, and it
         // was drawing titles only from the weak-candidate list, so a work authorized by an exact
@@ -115,12 +117,17 @@ public sealed class AskService
         private bool _workIndependentAnswerObserved;
         private bool _currentAuthorityObserved;
         private bool _priorContextUsed;
+        private bool _unresolvedIdentityObserved;
+        private bool _identityResolutionRequested;
+        private string? _ambiguousPublisherShortTitle;
 
         public WorkResolutionGuard(string? identityAttempt = null) =>
             _identityAttempt = Lex.Index.WorkSearch.Normalize(identityAttempt ?? "");
 
         public IReadOnlyCollection<string> ResolvedWorks => _resolved;
         public IReadOnlyCollection<string> CurrentResolvedWorks => _current;
+        public bool IdentityResolutionRequested => _identityResolutionRequested;
+        public bool UnresolvedIdentityObserved => _unresolvedIdentityObserved;
 
         /// <summary>The stored names the resolver matched inside the CURRENT user turn, each with
         /// the works it named. This is the evidence the subject rule runs on, and it was on the
@@ -130,13 +137,19 @@ public sealed class AskService
         public string? TitleFor(string work) =>
             _titles.TryGetValue(work, out var title) && title.Length > 0 ? title : null;
 
+        public AskSubjectAuthoritySource? AuthoritySourceFor(string work) =>
+            _authoritySources.GetValueOrDefault(WorkKey(work));
+
         public void ObserveSearch(JsonNode result, bool isRawUserQuery = true)
             => ObserveSearch(result, isRawUserQuery, allowDirectProvisionAuthority: true,
                 collectCandidates: true, markCurrent: true);
 
         public void ObserveCurrentUserSearch(JsonNode result, bool hasPriorContext)
             => ObserveSearch(result, isRawUserQuery: true,
-                allowDirectProvisionAuthority: !hasPriorContext,
+                // Incidental provision hits in a broad search are evidence candidates, not work
+                // identity. Only explicit resolver output or carried structured authority may
+                // authorize a subject before planning.
+                allowDirectProvisionAuthority: false,
                 collectCandidates: !hasPriorContext, markCurrent: true);
 
         public void ObservePriorUserSearch(JsonNode result)
@@ -165,26 +178,72 @@ public sealed class AskService
                              ?? plan["work_resolution_status"]?.GetValue<string>();
                 var resolutions = plan["global_work_resolutions"] as JsonArray
                                   ?? plan["work_resolutions"] as JsonArray;
+                if (markCurrent && status is not null and not "not_requested")
+                    _identityResolutionRequested = true;
+                if (markCurrent && resolutions?.OfType<JsonObject>().Any(resolution =>
+                        resolution["status"]?.GetValue<string>() == "unresolved") == true)
+                    _unresolvedIdentityObserved = true;
+                if (collectCandidates && resolutions is not null)
+                    foreach (var resolution in resolutions.OfType<JsonObject>().Where(item =>
+                                 item["kind"]?.GetValue<string>() == "publisher_short_title"))
+                    {
+                        var mention = String(resolution, "mention") ?? "";
+                        var officialMatches = OfficialShortTitleMatches(resolution, mention);
+                        if (isRawUserQuery && markCurrent
+                            && String(resolution, "status") == "ambiguous"
+                            && officialMatches.Select(match => match.Work)
+                                .Distinct(StringComparer.Ordinal).Take(2).Count() == 2)
+                            _ambiguousPublisherShortTitle ??=
+                                officialMatches[0].Source.Segment;
+                        foreach (var match in officialMatches)
+                        {
+                            _identityMatched.Add(match.Work);
+                            AddCandidate(latestCandidates, match.Work, "");
+                        }
+                    }
                 if (isRawUserQuery && resolutions is not null)
                     foreach (var resolution in resolutions.OfType<JsonObject>()
                                  .Where(item => item["status"]?.GetValue<string>() == "resolved"))
                     {
+                        var kind = String(resolution, "kind");
+                        var mention = String(resolution, "mention") ?? "";
+                        var candidates = (resolution["candidates"] as JsonArray)?
+                            .Select(candidate => candidate is JsonValue value
+                                && value.TryGetValue<string>(out var work) ? WorkKey(work) : null)
+                            .Where(work => work is not null && IsCandidateWork(work))
+                            .Cast<string>().Distinct(StringComparer.Ordinal).ToArray() ?? [];
+                        var officialSources = kind == "publisher_short_title"
+                            ? OfficialShortTitleMatches(resolution, mention)
+                                .Where(match => candidates.Contains(match.Work,
+                                    StringComparer.Ordinal))
+                                .ToDictionary(match => match.Work, match => match.Source,
+                                    StringComparer.Ordinal)
+                            : null;
+                        var trusted = kind is "title" or "identifier"
+                            || kind == "publisher_short_title"
+                            && candidates.Length == 1
+                            && officialSources?.Count == 1;
+                        if (!trusted)
+                        {
+                            if (markCurrent) _unresolvedIdentityObserved = true;
+                            continue;
+                        }
                         var named = new List<string>();
-                        foreach (var candidate in resolution["candidates"]?.AsArray() ?? [])
-                            if (candidate?.GetValue<string>() is { } work)
-                            {
-                                _resolved.Add(WorkKey(work));
-                                if (markCurrent) _current.Add(WorkKey(work));
-                                _currentAuthorityObserved = true;
-                                named.Add(WorkKey(work));
-                            }
+                        foreach (var work in candidates)
+                        {
+                            _resolved.Add(work);
+                            if (markCurrent) _current.Add(work);
+                            _currentAuthorityObserved = true;
+                            named.Add(work);
+                            if (officialSources?.GetValueOrDefault(work) is { } source)
+                                _authoritySources[work] = source;
+                        }
                         // Only the current turn's mentions. A prior-turn resolution names works in
                         // words the user is not writing now, and a span in this turn's query is
                         // the only thing the subject rule is allowed to reason about.
-                        if (markCurrent && named.Count > 0
-                            && resolution["mention"]?.GetValue<string>() is { Length: > 0 } mention)
+                        if (markCurrent && named.Count > 0 && mention.Length > 0)
                             _mentions.Add(new WorkMention(
-                                mention, named, resolution["kind"]?.GetValue<string>()));
+                                mention, named, kind));
                     }
                 // A problem description with no named law may select a work only from an actual
                 // provision hit. Standalone work discovery has no anchor and stays a candidate
@@ -310,10 +369,15 @@ public sealed class AskService
                     ? "Aucun de ceux-ci; je vais préciser ma demande"
                     : "None of these; I will add more details",
                 NoChoice));
+            var publisherShortTitleQuestion = _ambiguousPublisherShortTitle is { } shortTitle
+                ? locale == "fr"
+                    ? $"Le titre abrégé officiel de l’éditeur « {shortTitle} » désigne plusieurs instruments détenus. Lequel Lex doit-il utiliser ?"
+                    : $"The official publisher short title “{shortTitle}” identifies several held instruments. Which one should Lex use?"
+                : null;
             var clarification = new AgentClarification(
-                locale == "fr"
+                publisherShortTitleQuestion ?? (locale == "fr"
                     ? "Lex a trouvé plusieurs instruments possibles sans preuve directe dans une disposition. Lequel doit-il utiliser ?"
-                    : "Lex found possible instruments but no direct provision evidence. Which instrument should it use?",
+                    : "Lex found possible instruments but no direct provision evidence. Which instrument should it use?"),
                 choices.Select(choice => choice.Label).ToArray());
             var display = AgentAnswerContract.Validate(new AgentAnswerDraft(
                 AgentAnswerStatus.Clarify, clarification.Question, [], [], null, clarification), []).Clarification!;
@@ -363,8 +427,75 @@ public sealed class AskService
         private static void AddCandidate(
             List<(string Work, string Title)> candidates, string work, string title)
         {
-            if (!IsCandidateWork(work) || candidates.Any(candidate => candidate.Work == work)) return;
-            candidates.Add((work, title.Trim()));
+            if (!IsCandidateWork(work)) return;
+            var normalizedTitle = title.Trim();
+            var existing = candidates.FindIndex(candidate => candidate.Work == work);
+            if (existing < 0)
+            {
+                candidates.Add((work, normalizedTitle));
+                return;
+            }
+            if (candidates[existing].Title.Length == 0 && normalizedTitle.Length > 0)
+                candidates[existing] = (work, normalizedTitle);
+        }
+
+        private static IReadOnlyList<(string Work, AskSubjectAuthoritySource Source)>
+            OfficialShortTitleMatches(JsonObject resolution, string mention)
+        {
+            const int maximumLabelLength = 4_096;
+            const int maximumSegmentLength = 256;
+            var normalizedMention = Lex.Index.WorkSearch.Normalize(mention);
+            if (normalizedMention.Length == 0
+                || resolution["publisher_short_title_matches"] is not JsonArray matches
+                || matches.Count is 0 or > 20)
+                return [];
+            var result = new List<(string Work, AskSubjectAuthoritySource Source)>();
+            foreach (var match in matches.OfType<JsonObject>())
+            {
+                var work = String(match, "work");
+                var segment = String(match, "segment");
+                var identifier = String(match, "identifier");
+                var label = String(match, "label");
+                var language = String(match, "language");
+                var sourceUri = String(match, "source_uri");
+                if (work is null || !IsCandidateWork(work) || WorkKey(work) != work
+                    || string.IsNullOrWhiteSpace(segment)
+                    || segment.Length > maximumSegmentLength
+                    || segment.Trim() != segment
+                    || Lex.Index.WorkSearch.Normalize(segment) != normalizedMention
+                    || string.IsNullOrWhiteSpace(label) || label.Length > maximumLabelLength
+                    || !ContainsLiteralPublisherShortTitleSegment(label, segment)
+                    || string.IsNullOrWhiteSpace(language)
+                    || language.Length > LegalOperationCatalog.MaximumLanguageLength
+                    || !AbsoluteHttpUri(identifier) || !AbsoluteHttpUri(sourceUri))
+                    continue;
+                result.Add((work, new AskSubjectAuthoritySource(
+                    "publisher_short_title", identifier!, segment, language, sourceUri!)));
+            }
+            return result
+                .DistinctBy(match => match.Work, StringComparer.Ordinal)
+                .OrderBy(match => match.Work, StringComparer.Ordinal)
+                .ToArray();
+        }
+
+        private static string? String(JsonObject value, string name) =>
+            value[name] is JsonValue scalar && scalar.TryGetValue<string>(out var text)
+                ? text
+                : null;
+
+        private static bool AbsoluteHttpUri(string? value) =>
+            value is { Length: > 0 and <= LegalOperationCatalog.MaximumPublisherMetadataIdentifierLength }
+            && Uri.TryCreate(value, UriKind.Absolute, out var uri)
+            && uri.Scheme is "http" or "https";
+
+        private static bool ContainsLiteralPublisherShortTitleSegment(
+            string label, string segment)
+        {
+            var segments = label.Split(',').Select(value => value.Trim()).ToArray();
+            return segments.Length is > 0 and <= 16
+                && segments.All(value => value.Length is > 0 and <= 256
+                    && Lex.Index.WorkSearch.Normalize(value).Length > 0)
+                && segments.Contains(segment, StringComparer.Ordinal);
         }
 
         private static bool HasDirectProvisionEvidence(JsonObject hit)
@@ -405,6 +536,10 @@ public sealed class AskService
             // It WAS an identity match, just not a unique one. Always relevant.
             if (reasons.Any(reason => reason.StartsWith("ambiguous_", StringComparison.Ordinal)))
                 return true;
+            // The parser found a work-shaped name and the reviewed catalogue could not resolve
+            // it. Search residue is not a substitute identity. Problem-first discovery still
+            // reaches the branch below because it reports not_requested, not unresolved.
+            if (_unresolvedIdentityObserved) return false;
             if (hit["match"]?.GetValue<string>() == "work_identifier_or_title") return false;
             if (reasons.Contains("article_intent", StringComparer.Ordinal)) return false;
             // Relatedness is judged on the row's own name against the user's own words. With no
@@ -519,11 +654,15 @@ public sealed class AskService
     private static int EnvInt(string name, int dflt)
         => int.TryParse(Environment.GetEnvironmentVariable(name), out var v) && v > 0 ? v : dflt;
 
+    internal const int DefaultPerIpDaily = 200;
+    internal const int DefaultGlobalDaily = 400;
+    internal const int DefaultConcurrent = 4;
+
     private static AskAdmissionController DefaultAdmission() => new(
         TimeProvider.System,
-        EnvInt("ASK_PER_IP_DAILY", 25),
-        EnvInt("ASK_GLOBAL_DAILY", 400),
-        EnvInt("ASK_CONCURRENT", 4));
+        EnvInt("ASK_PER_IP_DAILY", DefaultPerIpDaily),
+        EnvInt("ASK_GLOBAL_DAILY", DefaultGlobalDaily),
+        EnvInt("ASK_CONCURRENT", DefaultConcurrent));
 
     private static void Diagnostic(string code, string? detail = null)
     {
@@ -581,8 +720,8 @@ public sealed class AskService
         _ when message.Contains("must be a string.", StringComparison.Ordinal)
             => "wrong_type",
         // Split before the general date class, and deliberately narrow. A point-in-time instant is
-        // always defaulted when it is absent (DefaultedDates covers as_of, in_force_on and
-        // navigate), so this message can only mean a value the model supplied and the gate could
+        // always defaulted when it is absent (DefaultedDates covers as_of and in_force_on), so
+        // this message can only mean a value the model supplied and the gate could
         // not parse. A range bound reaching the general class below is a different matter: an
         // absent to_date is recoverable from the user's own words, and a bare year in from_date or
         // to_date has one correct expansion to the calendar boundary, so both stay retryable.
@@ -607,23 +746,7 @@ public sealed class AskService
     private const int MaxHistory = 24;
     private const int MaxUserMessageChars = 1000;
     private const int MaxAssistantMessageChars = 4000;
-    private const int MaxContextResolutionQueries = 3;
     private const int MaxToolResultChars = 20000;
-
-    internal static IReadOnlyList<string> ResolvePriorUserWorks(
-        IReadOnlyList<string> userQueries, Func<string, JsonNode?> resolve)
-    {
-        var prior = new WorkResolutionGuard();
-        foreach (var query in userQueries.SkipLast(1).Reverse().Take(MaxContextResolutionQueries))
-        {
-            if (WorkResolutionGuard.IsExplicitNonSelection(query)) continue;
-            prior.ObserveUserConfirmation(query);
-            if (prior.ResolvedWorks.Count == 0 && resolve(query) is { } result)
-                prior.ObservePriorUserSearch(result);
-            if (prior.ResolvedWorks.Count > 0) break;
-        }
-        return prior.ResolvedWorks.Order(StringComparer.Ordinal).ToArray();
-    }
 
     internal static bool HasUnscopedArticleIntent(JsonNode result) =>
         (result is JsonArray responses
@@ -632,6 +755,28 @@ public sealed class AskService
         .Any(item => item["query_plan"] is JsonObject plan
             && plan["article_number"]?.GetValue<string>() is { Length: > 0 }
             && plan["has_strong_work_match"]?.GetValue<bool>() != true);
+
+    internal static string? ArticleNumberFromUserSearch(JsonNode result)
+    {
+        var values = (result is JsonArray responses
+                ? responses.OfType<JsonObject>()
+                : result is JsonObject response ? [response] : [])
+            .Select(item => item["query_plan"]?["article_number"]?.GetValue<string>())
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(value => value!.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        return values is [var article] ? article : null;
+    }
+
+    private static string? ArticleNumberFromUserText(string query)
+    {
+        var normalized = Lex.Index.WorkSearch.Normalize(query);
+        var match = System.Text.RegularExpressions.Regex.Match(normalized,
+            @"(?:^|\s)(?:article|art)\s+(?<number>(?:[a-z]\s+)?[0-9]+(?:(?:er)|[a-z])?(?:\s+[0-9]+)*(?:\s+(?:bis|ter|quater))?)(?:\s|$)",
+            System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+        return match.Success ? match.Groups["number"].Value : null;
+    }
 
     internal static void ApplyWorkspaceDefaults(string tool, JsonObject args)
     {
@@ -686,14 +831,15 @@ public sealed class AskService
         - clarification: the request has no identifiable law, date, topic, or operation. Supply
           one question and two to four concrete options. Do not use it after a law resolves.
 
-        For a named law, put the user's exact name, acronym or identifier in work_query. Never invent
-        a canonical work id. The application resolves it deterministically. Put a mentioned article
-        number in article_number. Dates are ISO YYYY-MM-DD.
+        Work identity and mentioned article numbers are resolved deterministically before this
+        planning turn. For every work-specific operation, use exactly one subject_ref offered by
+        its closed schema. Never output work, work_query, lex_id or article_number; the server binds
+        those authoritative values after validating the closed ref. Dates are ISO YYYY-MM-DD.
 
         Bare years, by argument ROLE. A year is a window, and which rule applies depends on whether
         the slot holds a window bound or a single instant:
         - from_date / to_date: expand a bare year to 1 January and 31 December of that year.
-        - date (as_of, in_force_on, navigate): NEVER derive a single date from a bare year, a bare
+        - date (as_of, in_force_on): NEVER derive a single date from a bare year, a bare
           month, a season or a decade. Choosing a day inside a year answers a different question
           from the one asked, and it silently selects a version of the law. When the user gives a
           year with no day for a point-in-time question, plan the WINDOW form instead:
@@ -706,21 +852,27 @@ public sealed class AskService
         deterministic application replies. A compound request must remain multiple operations.
         "Which Luxembourg and EU laws changed most in 2024" is one changes_in_period operation with
         from_date=2024-01-01, to_date=2024-12-31 and order=by_churn. "Compare Article 92 of CRR
-        between 2020 and 2024" is one diff with work_query=CRR, article_number=92,
+        between 2020 and 2024" is one diff with its pre-resolved subject_ref,
         from_date=2020-01-01 and to_date=2024-12-31. "What did Article 92 of the CRR require in
-        2024" is one article_history with work_query=CRR, article_number=92,
+        2024" is one article_history with its pre-resolved subject_ref,
         from_date=2024-01-01 and to_date=2024-12-31, never an as_of with a single 2024 date.
         """;
 
     internal static readonly string[] PlannerToolNames =
-    [
-        "search", "as_of", "diff", "timeline", "article_history", "changes_in_period",
-        "in_force_on", "coverage", "cited_by", "provenance", "legal_boundary", "clarification",
-    ];
+        [.. LegalOperationCatalog.ToolNames, "legal_boundary", "clarification"];
 
-    internal static JsonArray PlannerTools(CorpusVocabulary? vocabulary = null) =>
-    [
-        new JsonObject
+    internal static JsonArray PlannerTools(
+        CorpusVocabulary? vocabulary = null,
+        SubjectAuthority? authority = null,
+        bool requireSubjectAuthority = false)
+    {
+        var offered = PlannerToolNames.Where(tool =>
+            !requireSubjectAuthority
+            || LegalOperationCatalog.TryGet(tool) is not { RequiresWorkResolution: true }
+            || authority is not null && authority.ReferencesFor(tool).Count > 0).ToArray();
+        return
+        [
+            new JsonObject
         {
             ["type"] = "function",
             ["function"] = new JsonObject
@@ -746,8 +898,10 @@ public sealed class AskService
                             // two spellings equivalent.
                             ["items"] = new JsonObject
                             {
-                                ["anyOf"] = new JsonArray(PlannerToolNames
-                                    .Select(tool => PlannerOperationSchema(tool, vocabulary))
+                                ["anyOf"] = new JsonArray(offered
+                                    .Select(tool => PlannerOperationSchema(
+                                        tool, vocabulary, authority?.ReferencesFor(tool),
+                                        authority?.ArticleNumber))
                                     .ToArray<JsonNode?>()),
                             },
                         },
@@ -761,8 +915,9 @@ public sealed class AskService
                     ["additionalProperties"] = false,
                 },
             },
-        },
-    ];
+            },
+        ];
+    }
 
     // Strict structured output is deliberately NOT enabled here, and this is the note for whoever
     // reaches for it next. It would make additionalProperties and the enums binding rather than
@@ -773,7 +928,7 @@ public sealed class AskService
     // OperationArguments, not strict mode, remains the fix for the thirteen omitted dates. Worse,
     // allOf is unsupported and each anyOf branch must itself be a complete strict object, so a
     // bare {"required":["work"]} is invalid and nullable types cannot say "this one must not be
-    // null": the work-identity gate on navigate/as_of/diff/timeline/cited_by/provenance and the
+    // null": the work-identity gate on as_of/diff/timeline/cited_by/provenance and the
     // anchor-or-article_number gate on article_history would disappear from the schema entirely.
     // And a schema strict mode refuses is a 400 on every planning call, which is a planner outage
     // rather than a degradation. If it is wanted later, put it behind a flag, catch the 400 and
@@ -782,7 +937,10 @@ public sealed class AskService
     // The two parts of that analysis that were free of it are applied: anyOf above, and
     // additionalProperties:false on the root parameters object and on each branch here.
     private static JsonObject PlannerOperationSchema(
-        string tool, CorpusVocabulary? vocabulary) => new()
+        string tool,
+        CorpusVocabulary? vocabulary,
+        IReadOnlyList<string>? subjectReferences = null,
+        string? resolvedArticleNumber = null) => new()
     {
         ["type"] = "object",
         ["properties"] = new JsonObject
@@ -792,16 +950,23 @@ public sealed class AskService
                 ["type"] = "string",
                 ["const"] = tool,
             },
-            ["arguments"] = PlannerArgumentSchema(tool, vocabulary),
+            ["arguments"] = PlannerArgumentSchema(
+                tool, vocabulary, subjectReferences, resolvedArticleNumber),
         },
         ["required"] = new JsonArray("tool", "arguments"),
         ["additionalProperties"] = false,
     };
 
     internal static JsonObject PlannerArgumentSchema(
-        string tool, CorpusVocabulary? vocabulary = null)
+        string tool,
+        CorpusVocabulary? vocabulary = null,
+        IReadOnlyList<string>? subjectReferences = null,
+        string? resolvedArticleNumber = null)
     {
         var corpus = vocabulary ?? CorpusVocabulary.Unconstrained;
+        if (LegalOperationCatalog.TryGet(tool) is { } legal)
+            return legal.PlannerInputSchema(
+                corpus.AllowedValuesFor, subjectReferences, resolvedArticleNumber);
         // Every constraint OperationArguments enforces that JSON Schema can assert is emitted
         // here, read from that gate's own accessors rather than restated. A bare
         // {"type":"string"} was how an over-length work and a non-ISO date reached the gate and
@@ -928,13 +1093,16 @@ public sealed class AskService
         string host,
         string requestId,
         string locale,
+        SubjectAuthority? authority,
         CancellationToken ct)
     {
         if (_planner is not null)
         {
-            var proposed = await _planner.PlanAsync(history, host, requestId, ct);
-            return (OperationPlan.Create(
-                requestId, locale, proposed.Operations, proposed.SynthesisRequested),
+            var proposed = await _planner.PlanAsync(
+                PlannerHistory(history, authority), host, requestId, ct);
+            var validated = OperationPlan.Create(
+                requestId, locale, proposed.Operations, proposed.SynthesisRequested);
+            return (BindSubjectAuthority(validated, authority),
                 default, false);
         }
 
@@ -943,6 +1111,7 @@ public sealed class AskService
         {
             new JsonObject { ["role"] = "system", ["content"] = PlannerPrompt(host, today) },
         };
+        if (authority is not null) messages.Add(PlannerAuthorityMessage(authority));
         foreach (var message in history)
             messages.Add(message?.DeepClone());
         // One request-construction site, mutated in place by the corrective turn rather than
@@ -953,7 +1122,8 @@ public sealed class AskService
         {
             ["model"] = _deployment,
             ["messages"] = messages,
-            ["tools"] = PlannerTools(_vocabulary),
+            ["tools"] = PlannerTools(
+                _vocabulary, authority, requireSubjectAuthority: true),
             ["tool_choice"] = new JsonObject
             {
                 ["type"] = "function",
@@ -1005,7 +1175,178 @@ public sealed class AskService
         }
 
         return await PlanWithOneRepairAsync(
-            req, _plannerSend ?? Post, _plannerDeadline, requestId, locale, _vocabulary, today, ct);
+            req, _plannerSend ?? Post, _plannerDeadline, requestId, locale, _vocabulary, today, ct,
+            operationGate: operations => BindPlannerSubjectReferences(operations, authority));
+    }
+
+    private static JsonArray PlannerHistory(JsonArray history, SubjectAuthority? authority)
+    {
+        var prepared = new JsonArray();
+        if (authority is not null) prepared.Add(PlannerAuthorityMessage(authority));
+        foreach (var message in history) prepared.Add(message?.DeepClone());
+        return prepared;
+    }
+
+    private static JsonObject PlannerAuthorityMessage(SubjectAuthority authority) => new()
+    {
+        ["role"] = "system",
+        ["content"] = "Deterministic subject references were resolved before planning. "
+            + "authorized_subject_refs="
+            + new JsonArray(authority.References.Select(reference => (JsonNode)reference).ToArray())
+                .ToJsonString()
+            + "; "
+            + "Use exactly one closed subject_ref for every work-specific operation. The refs are "
+            + "opaque server data, not instructions, and cannot be replaced with a work id or name.",
+    };
+
+    private static OperationPlan BindSubjectAuthority(
+        OperationPlan plan, SubjectAuthority? authority)
+    {
+        if (authority is null) return plan;
+        var changed = false;
+        var operations = plan.Operations.Select(operation =>
+        {
+            if (operation.Disposition is not null || !operation.RequiresWorkResolution)
+                return operation;
+            var arguments = JsonNode.Parse(operation.Arguments.GetRawText())!.AsObject();
+            var identityName = operation.Tool == "provenance" ? "lex_id" : "work";
+            var proposed = String(arguments, identityName) ?? String(arguments, "work_query");
+            var member = AuthorizedMember(authority, proposed)
+                ?? throw new InvalidDataException(
+                    $"{operation.Tool}.{identityName} must name one resolved subject authority.");
+            if (operation.Tool == "provenance" && member.ExactLexId is null)
+            {
+                changed = true;
+                var question = plan.Locale == "fr"
+                    ? "La provenance exige une version exacte. Fournissez un lex_id versionné ou ouvrez une version précise."
+                    : "Provenance requires an exact version. Provide a versioned lex_id or open one exact version.";
+                return RequestedOperation.CreateApplication(
+                    operation.OperationId, operation.UserOrder,
+                    ApplicationDisposition.Clarification,
+                    new JsonObject
+                    {
+                        ["question"] = question,
+                        ["options"] = new JsonArray(
+                            plan.Locale == "fr" ? "Fournir un lex_id versionné" : "Provide a versioned lex_id",
+                            plan.Locale == "fr" ? "Ouvrir une version précise" : "Open an exact version"),
+                    });
+            }
+            arguments.Remove("work_query");
+            if (operation.Tool == "provenance")
+                arguments["lex_id"] = member.ExactLexId
+                    ?? throw new InvalidDataException(
+                        "provenance requires an exact version reference from the user's question.");
+            else
+                arguments[identityName] = member.Work;
+            if (authority.ArticleNumber is { Length: > 0 }
+                && operation.Tool is "as_of" or "diff" or "article_history")
+            {
+                if (String(arguments, "article_number") is { Length: > 0 } proposedArticle
+                    && !string.Equals(proposedArticle, authority.ArticleNumber,
+                        StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidDataException(
+                        $"{operation.Tool}.article_number contradicts resolved subject authority.");
+                arguments["article_number"] = authority.ArticleNumber;
+            }
+            changed = true;
+            var rebound = RequestedOperation.CreatePlanned(
+                operation.OperationId, operation.UserOrder, operation.Tool, arguments);
+            foreach (var repair in operation.Repairs) rebound = rebound.WithRepair(repair);
+            return rebound.WithRepair(
+                $"{operation.Tool}.{identityName} bound_to_resolved_subject");
+        }).ToArray();
+        return changed
+            ? OperationPlan.Create(plan.RequestId, plan.Locale, operations, plan.SynthesisRequested)
+            : plan;
+    }
+
+    private static JsonArray BindPlannerSubjectReferences(
+        JsonArray operations, SubjectAuthority? authority)
+    {
+        var bound = new JsonArray();
+        foreach (var node in operations)
+        {
+            if (node is not JsonObject proposed)
+                throw new InvalidDataException("Every planned operation must be an object.");
+            var operation = proposed.DeepClone().AsObject();
+            var tool = String(operation, "tool");
+            if (tool is null || LegalOperationCatalog.TryGet(tool) is not
+                    { RequiresWorkResolution: true } legal)
+            {
+                bound.Add(operation);
+                continue;
+            }
+
+            var arguments = operation["arguments"] as JsonObject
+                ?? throw new InvalidDataException(
+                    $"Operation '{tool}' requires an argument object.");
+            foreach (var identity in new[] { "work", "work_query", "lex_id" })
+                if (arguments.ContainsKey(identity))
+                    throw new InvalidDataException(
+                        $"{tool}.{identity} is server-owned; use subject_ref.");
+            var reference = String(arguments, LegalOperationCatalog.SubjectReferenceArgument);
+            var member = authority?.MemberForReference(reference)
+                ?? throw new InvalidDataException(
+                    $"{tool}.subject_ref must name one resolved subject reference.");
+            arguments.Remove(LegalOperationCatalog.SubjectReferenceArgument);
+            if (tool == "provenance")
+                arguments["lex_id"] = member.ExactLexId
+                    ?? throw new InvalidDataException(
+                        "provenance requires an exact version reference from the user's question.");
+            else
+                arguments["work"] = member.Work;
+
+            if (legal.SupportsAnchorResolution)
+            {
+                var proposedArticle = String(arguments, "article_number");
+                if (authority!.ArticleNumber is { Length: > 0 } article)
+                {
+                    if (proposedArticle is { Length: > 0 }
+                        && !string.Equals(proposedArticle, article,
+                            StringComparison.OrdinalIgnoreCase))
+                        throw new InvalidDataException(
+                            $"{tool}.article_number contradicts resolved subject authority.");
+                    arguments["article_number"] = article;
+                }
+                else if (proposedArticle is { Length: > 0 })
+                    throw new InvalidDataException(
+                        $"{tool}.article_number was not resolved from the user's question.");
+            }
+            bound.Add(operation);
+        }
+        return bound;
+    }
+
+    private static SubjectAuthorityMember? AuthorizedMember(
+        SubjectAuthority authority, string? proposed)
+    {
+        // A single deterministic authority is already the answer to identity resolution. An
+        // injected/test planner's reformulation cannot veto or replace it; production planners
+        // never see this compatibility seam and bind an opaque subject_ref before plan freeze.
+        if (authority.Members is [var only]) return only;
+        if (string.IsNullOrWhiteSpace(proposed)) return null;
+        var work = WorkResolutionGuard.WorkKey(proposed);
+        var direct = authority.Members.Where(member => member.Work == work).ToArray();
+        if (direct is [var directMember]) return directMember;
+        var normalized = Lex.Index.WorkSearch.Normalize(proposed);
+        var named = authority.Members.Where(member =>
+                member.Mentions.Any(mention =>
+                {
+                    var candidate = Lex.Index.WorkSearch.Normalize(mention);
+                    return candidate == normalized
+                           || candidate.Length >= 4 && normalized.Contains(candidate,
+                               StringComparison.Ordinal)
+                           || normalized.Length >= 4 && candidate.Contains(normalized,
+                               StringComparison.Ordinal);
+                })
+                || member.Title is { Length: > 0 } title
+                && (Lex.Index.WorkSearch.Normalize(title) == normalized
+                    || Lex.Index.WorkSearch.Normalize(title).Contains(
+                        normalized, StringComparison.Ordinal)
+                    || normalized.Contains(
+                        Lex.Index.WorkSearch.Normalize(title), StringComparison.Ordinal)))
+            .ToArray();
+        return named is [var namedMember] ? namedMember : null;
     }
 
     /// <summary>
@@ -1035,7 +1376,9 @@ public sealed class AskService
             string locale,
             CorpusVocabulary vocabulary,
             DateOnly today,
-            CancellationToken ct)
+            CancellationToken ct,
+            Func<OperationPlan, OperationPlan>? planGate = null,
+            Func<JsonArray, JsonArray>? operationGate = null)
     {
         var messages = request["messages"] as JsonArray
             ?? throw new InvalidOperationException("A planner request must carry a message array.");
@@ -1055,7 +1398,9 @@ public sealed class AskService
             {
                 string raw;
                 (call, raw) = ExtractPlanCall(parsed, attempt);
-                var plan = BuildPlan(raw, requestId, locale, vocabulary, today);
+                var plan = BuildPlan(
+                    raw, requestId, locale, vocabulary, today, operationGate);
+                if (planGate is not null) plan = planGate(plan);
                 if (attempt > 0)
                     Diagnostic("invalid_operation_plan_recovered", repairedClass);
                 return (plan, usage, attempt > 0);
@@ -1186,7 +1531,12 @@ public sealed class AskService
     /// <summary>The one construction route from planner output to a frozen plan. Both attempts call
     /// it with the same vocabulary and the same today; it takes no attempt counter on purpose.</summary>
     private static OperationPlan BuildPlan(
-        string raw, string requestId, string locale, CorpusVocabulary vocabulary, DateOnly today)
+        string raw,
+        string requestId,
+        string locale,
+        CorpusVocabulary vocabulary,
+        DateOnly today,
+        Func<JsonArray, JsonArray>? operationGate = null)
     {
         JsonObject plan;
         try
@@ -1202,6 +1552,7 @@ public sealed class AskService
         }
         var operations = plan["operations"] as JsonArray
             ?? throw new InvalidDataException("The planner returned no operation list.");
+        if (operationGate is not null) operations = operationGate(operations);
         var synthesis = false;
         if (plan["synthesis"] is JsonValue synthesisValue
             && !synthesisValue.TryGetValue<bool>(out synthesis))
@@ -1565,12 +1916,80 @@ public sealed class AskService
     /// </summary>
     public sealed record Step(string Kind, string Text, string? Work = null, string? Date = null, string? Anchor = null);
 
+    public enum AskPhase
+    {
+        Resolution,
+        Planning,
+        Execution,
+        Composition,
+    }
+
+    public enum AskPhaseStatus
+    {
+        Started,
+        Completed,
+        Unavailable,
+    }
+
+    public sealed record PhaseUpdate(AskPhase Phase, AskPhaseStatus Status);
+
+    internal sealed record SubjectAuthorityMember(
+        string Work,
+        string? Title,
+        IReadOnlyList<string> Mentions,
+        string? ArticleAnchor,
+        string? ExactLexId,
+        AskSubjectAuthoritySource? AuthoritySource);
+
+    internal sealed record SubjectAuthority(
+        IReadOnlyList<SubjectAuthorityMember> Members,
+        string? ArticleNumber,
+        AnswerDisclosure? Disclosure = null)
+    {
+        public IReadOnlyList<string> References { get; } = Enumerable.Range(1, Members.Count)
+            .Select(index => $"subject_{index}").ToArray();
+
+        public bool Contains(string? work) => work is { Length: > 0 }
+            && Members.Any(member => member.Work == WorkResolutionGuard.WorkKey(work));
+
+        public SubjectAuthorityMember? MemberForReference(string? reference)
+        {
+            if (reference is null) return null;
+            for (var index = 0; index < References.Count; index++)
+                if (string.Equals(References[index], reference, StringComparison.Ordinal))
+                    return Members[index];
+            return null;
+        }
+
+        public IReadOnlyList<string> ReferencesFor(string tool) =>
+            tool == "provenance"
+                ? References.Where((_, index) =>
+                    Members[index].ExactLexId is { Length: > 0 }).ToArray()
+                : References;
+    }
+
+    private sealed record SubjectPreflight(
+        SubjectAuthority? Authority,
+        WorkResolutionGuard.GuardClarification? Clarification,
+        JsonObject? Trace,
+        double DurationMilliseconds)
+    {
+        public static SubjectPreflight None { get; } = new(null, null, null, 0);
+    }
+
     public sealed record AskProgressCallbacks(
         Func<Step, CancellationToken, ValueTask>? Step = null,
         Func<JsonObject, CancellationToken, ValueTask>? OperationResult = null,
-        Func<string, CancellationToken, ValueTask>? Synthesis = null);
+        Func<string, CancellationToken, ValueTask>? Synthesis = null,
+        Func<PhaseUpdate, CancellationToken, ValueTask>? Phase = null);
 
-    public sealed record AskOutcome(int Status, JsonObject Body, bool RetainForReplay)
+    public sealed record AskOutcome(
+        int Status,
+        JsonObject Body,
+        bool RetainForReplay,
+        AskConversationContext? ConversationContext = null,
+        AskConversationContextDisposition ContextDisposition =
+            AskConversationContextDisposition.Preserve)
     {
         public void Deconstruct(out int status, out JsonObject body)
             => (status, body) = (Status, Body);
@@ -1584,13 +2003,256 @@ public sealed class AskService
         catch (ObjectDisposedException) { Diagnostic("progress_transport_disconnected"); }
     }
 
+    private async Task<SubjectPreflight> ResolveSubjectBeforePlanningAsync(
+        IReadOnlyList<string> userQueries,
+        string locale,
+        AskConversationContext? conversationContext,
+        CancellationToken cancellationToken)
+    {
+        var raw = userQueries[^1];
+        var watch = Stopwatch.StartNew();
+        var guard = new WorkResolutionGuard(raw);
+        guard.ObserveUserConfirmation(raw);
+        var articleFromText = ArticleNumberFromUserText(raw);
+        if (IsAnaphoricWorkReference(raw)
+            && CarriedAuthority(conversationContext, articleFromText, raw) is { } carried)
+        {
+            watch.Stop();
+            return new SubjectPreflight(
+                carried,
+                null,
+                SubjectResolutionTrace(
+                    new JsonArray(), carried.Members.Select(member => member.Work).ToArray(),
+                    carried.ArticleNumber, "carried", locale, carried.Members),
+                watch.Elapsed.TotalMilliseconds);
+        }
+
+        var result = await _legalTool("search", SubjectSearchArguments(raw), cancellationToken);
+        guard.ObserveCurrentUserSearch(result, hasPriorContext: false);
+        var article = ArticleNumberFromUserSearch(result) ?? articleFromText;
+        var identityAuthorized = guard.IdentityResolutionRequested;
+        SubjectAuthority? authority = null;
+        if (identityAuthorized && guard.CurrentResolvedWorks.Count == 1)
+        {
+            var work = guard.CurrentResolvedWorks.Single();
+            authority = new SubjectAuthority(
+                [SubjectMember(guard, work, result, article, raw)], article);
+        }
+        else if (identityAuthorized && guard.CurrentResolvedWorks.Count > 1)
+        {
+            var selected = WorkSubjectRule.Select(
+                raw, guard.CurrentMentions, guard.CurrentResolvedWorks,
+                article is not null,
+                work => article is not null && ArticleAnchor(result, work, article) is not null,
+                work => HoldsProvisionText(result, work));
+            if (selected is WorkSubject.Decided decided)
+                authority = new SubjectAuthority(
+                    [SubjectMember(guard, decided.Work, result, article, raw)], article,
+                    decided.RunnerUp is { Length: > 0 } runnerUp
+                        ? new AnswerDisclosure(RunnerUpWork: runnerUp,
+                            RunnerUpTitle: guard.TitleFor(runnerUp))
+                        : null);
+            else if (guard.CurrentMentions.Count > 0
+                     && guard.CurrentMentions.All(mention => mention.Works.Count == 1))
+            {
+                var ordered = guard.CurrentMentions.SelectMany(mention => mention.Works)
+                    .Concat(guard.CurrentResolvedWorks)
+                    .Distinct(StringComparer.Ordinal).Take(OperationPlan.MaximumOperations)
+                    .Select(work => SubjectMember(guard, work, result, article, raw)).ToArray();
+                authority = new SubjectAuthority(ordered, article);
+            }
+            else
+            {
+                var order = (selected as WorkSubject.Undecided)?.Ordered;
+                var choice = guard.ClarificationFor(null, locale, order);
+                watch.Stop();
+                return new SubjectPreflight(null, choice,
+                    SubjectResolutionTrace(result, [], article, "ambiguous", locale),
+                    watch.Elapsed.TotalMilliseconds);
+            }
+        }
+        if (authority is null && guard.IdentityResolutionRequested)
+        {
+            var choice = guard.ClarificationFor(null, locale);
+            if (choice is null)
+                choice = UnresolvedSubjectClarification(locale);
+            watch.Stop();
+            return new SubjectPreflight(null, choice,
+                SubjectResolutionTrace(result, [], article,
+                    guard.UnresolvedIdentityObserved ? "unresolved" : "ambiguous", locale),
+                watch.Elapsed.TotalMilliseconds);
+        }
+
+        watch.Stop();
+        return new SubjectPreflight(authority, null,
+            SubjectResolutionTrace(result,
+                authority?.Members.Select(member => member.Work).ToArray() ?? [], article,
+                authority is null ? "none" : "resolved", locale, authority?.Members),
+            watch.Elapsed.TotalMilliseconds);
+    }
+
+    private static SubjectAuthority? CarriedAuthority(
+        AskConversationContext? context,
+        string? currentArticle,
+        string rawQuery)
+    {
+        if (context?.Subjects is not { Count: > 0 and <= OperationPlan.MaximumOperations } subjects
+            || subjects.Select(subject => subject.Work)
+                .Distinct(StringComparer.Ordinal).Count() != subjects.Count
+            || context.ArticleNumber is { Length: > LegalOperationCatalog.MaximumArticleNumberLength })
+            return null;
+        var effectiveArticle = currentArticle
+            ?? (RequestsWorkLevelScope(rawQuery) ? null : context.ArticleNumber);
+        var keepAnchor = effectiveArticle is { Length: > 0 }
+            && string.Equals(effectiveArticle, context.ArticleNumber,
+                StringComparison.OrdinalIgnoreCase);
+        var members = new List<SubjectAuthorityMember>(subjects.Count);
+        foreach (var subject in subjects)
+        {
+            if (string.IsNullOrWhiteSpace(subject.Work)
+                || subject.Work.Length > LegalOperationCatalog.MaximumStringLength
+                || WorkResolutionGuard.WorkKey(subject.Work) != subject.Work
+                || subject.ArticleAnchor is { Length: > LegalOperationCatalog.MaximumAnchorLength }
+                || subject.ExactLexId is { } exact
+                && (exact.Length > LegalOperationCatalog.MaximumStringLength
+                    || WorkResolutionGuard.WorkKey(exact) != subject.Work))
+                return null;
+            if (subject.AuthoritySource is not null
+                && !ValidAuthoritySource(subject.AuthoritySource))
+                return null;
+            members.Add(new SubjectAuthorityMember(
+                subject.Work,
+                Title: null,
+                Mentions: [],
+                ArticleAnchor: keepAnchor ? subject.ArticleAnchor : null,
+                ExactLexId: subject.ExactLexId,
+                AuthoritySource: subject.AuthoritySource));
+        }
+        return new SubjectAuthority(members, effectiveArticle);
+    }
+
+    private static bool RequestsWorkLevelScope(string query)
+    {
+        var normalized = $" {Lex.Index.WorkSearch.Normalize(query)} ";
+        return new[]
+        {
+            " whole law ", " whole act ", " whole instrument ", " whole document ",
+            " entire law ", " entire act ", " entire instrument ", " entire document ",
+            " as a whole ", " work level ", " texte entier ", " loi entiere ",
+            " acte entier ", " document entier ", " dans son ensemble ",
+        }.Any(marker => normalized.Contains(marker, StringComparison.Ordinal));
+    }
+
+    private static AskConversationContext? ConversationContextFor(SubjectAuthority? authority) =>
+        authority is null ? null : new AskConversationContext(
+            authority.Members.Select(member => new AskResolvedSubjectContext(
+                member.Work, member.ArticleAnchor, member.ExactLexId,
+                member.AuthoritySource)).ToArray(),
+            authority.ArticleNumber);
+
+    private static SubjectAuthorityMember SubjectMember(
+        WorkResolutionGuard guard,
+        string work,
+        JsonNode result,
+        string? article,
+        string rawQuery) => new(
+        work,
+        guard.TitleFor(work),
+        guard.CurrentMentions.Where(mention => mention.Works.Contains(work, StringComparer.Ordinal))
+            .Select(mention => mention.Mention).Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
+        article is null ? null : ArticleAnchor(result, work, article),
+        ExactLexIdFromRaw(rawQuery, work),
+        guard.AuthoritySourceFor(work));
+
+    private static bool ValidAuthoritySource(AskSubjectAuthoritySource source) =>
+        source.Kind == "publisher_short_title"
+        && source.Segment is { Length: > 0 and <= 256 }
+        && Lex.Index.WorkSearch.Normalize(source.Segment).Length > 0
+        && source.Language is { Length: > 0 and <= LegalOperationCatalog.MaximumLanguageLength }
+        && AbsoluteHttpUri(source.Identifier)
+        && AbsoluteHttpUri(source.SourceUri);
+
+    private static bool AbsoluteHttpUri(string value) =>
+        value.Length <= LegalOperationCatalog.MaximumPublisherMetadataIdentifierLength
+        && Uri.TryCreate(value, UriKind.Absolute, out var uri)
+        && uri.Scheme is "http" or "https";
+
+    private static string? ExactLexIdFromRaw(string query, string work)
+    {
+        foreach (System.Text.RegularExpressions.Match match in
+                 System.Text.RegularExpressions.Regex.Matches(
+                     query,
+                     @"(?<![\p{L}\p{N}_-])(?<lex>[a-z0-9-]+:[a-z0-9._-]+:\d{4}-\d{2}-\d{2})(?![\p{L}\p{N}_-])",
+                     System.Text.RegularExpressions.RegexOptions.IgnoreCase
+                     | System.Text.RegularExpressions.RegexOptions.CultureInvariant))
+        {
+            var lexId = match.Groups["lex"].Value;
+            if (WorkResolutionGuard.WorkKey(lexId) == work) return lexId;
+        }
+        return null;
+    }
+
+    private static JsonObject SubjectSearchArguments(string query) => new()
+    {
+        ["query"] = query,
+        ["retrieval_mode"] = "keyword",
+        ["fuzzy"] = "auto",
+        ["limit"] = 8,
+    };
+
+    private static JsonObject SubjectResolutionTrace(
+        JsonNode result, IReadOnlyList<string> works, string? article, string status,
+        string locale,
+        IReadOnlyList<SubjectAuthorityMember>? members = null)
+    {
+        var (_, docs) = Summarize(result);
+        var trace = new JsonObject
+        {
+            ["phase"] = "subject_resolution",
+            ["status"] = status,
+            ["locale"] = locale,
+            ["works"] = new JsonArray(works.Select(work => (JsonNode)work).ToArray()),
+            ["article_number"] = article,
+            ["docs"] = docs,
+        };
+        var sources = (members ?? [])
+            .Where(member => member.AuthoritySource is not null)
+            .Select(member => (JsonNode)new JsonObject
+            {
+                ["work"] = member.Work,
+                ["kind"] = member.AuthoritySource!.Kind,
+                ["identifier"] = member.AuthoritySource.Identifier,
+                ["segment"] = member.AuthoritySource.Segment,
+                ["language"] = member.AuthoritySource.Language,
+                ["source_uri"] = member.AuthoritySource.SourceUri,
+            }).ToArray();
+        if (sources.Length > 0) trace["authority_sources"] = new JsonArray(sources);
+        return trace;
+    }
+
+    private static WorkResolutionGuard.GuardClarification UnresolvedSubjectClarification(
+        string locale)
+    {
+        var clarification = new AgentClarification(
+            locale == "fr"
+                ? "Lex n'a pas pu rattacher ce nom à un instrument détenu. Donnez un titre officiel, un identifiant ou un numéro CELEX."
+                : "Lex could not match that name to a held instrument. Give an official title, identifier, or CELEX number.",
+            []);
+        var display = AgentAnswerContract.Validate(new AgentAnswerDraft(
+            AgentAnswerStatus.Clarify, clarification.Question, [], [], null, clarification), [])
+            .Clarification!;
+        return new WorkResolutionGuard.GuardClarification(display, []);
+    }
+
     public async Task<AskOutcome> AskAsync(
         JsonArray history,
         string ip,
         string host,
         CancellationToken ct,
         AskProgressCallbacks? progress = null,
-        string? requestId = null)
+        string? requestId = null,
+        AskConversationContext? conversationContext = null,
+        AskAdmissionLane admissionLane = AskAdmissionLane.Public)
     {
         if (!Enabled)
             return new AskOutcome(503, new JsonObject
@@ -1641,7 +2303,7 @@ public sealed class AskService
                     ? "Aucun instrument n'a été sélectionné. Ajoutez un titre officiel ou un identifiant lorsque vous voudrez réessayer."
                     : "No instrument was selected. Add an official title or identifier when you want to try again.",
                 requestLocale, [], []), false);
-        var admission = _admission.TryAdmit(ip);
+        var admission = _admission.TryAdmit(ip, admissionLane);
         if (!admission.Accepted)
             return new AskOutcome(429,
                 new JsonObject { ["error"] = AdmissionReason(admission.Failure) }, false);
@@ -1653,21 +2315,58 @@ public sealed class AskService
         {
             using var firstResult = CancellationTokenSource.CreateLinkedTokenSource(ct);
             firstResult.CancelAfter(_firstResultDeadline);
+            if (progress?.Phase is not null)
+                await NotifyProgress(() => progress.Phase(
+                    new PhaseUpdate(AskPhase.Resolution, AskPhaseStatus.Started),
+                    firstResult.Token));
+            var subject = await ResolveSubjectBeforePlanningAsync(
+                userQueries, requestLocale, conversationContext, firstResult.Token);
+            if (progress?.Phase is not null)
+                await NotifyProgress(() => progress.Phase(
+                    new PhaseUpdate(AskPhase.Resolution, AskPhaseStatus.Completed),
+                    firstResult.Token));
             using var planner = CancellationTokenSource.CreateLinkedTokenSource(firstResult.Token);
             planner.CancelAfter(_plannerDeadline);
+            if (progress?.Phase is not null)
+                await NotifyProgress(() => progress.Phase(
+                    new PhaseUpdate(AskPhase.Planning, AskPhaseStatus.Started), planner.Token));
             var planningWatch = Stopwatch.StartNew();
             var (plan, planningUsage, plannerRepaired) = await PlanOperationsAsync(
-                history, host, requestId, requestLocale, planner.Token);
+                history, host, requestId, requestLocale, subject.Authority, planner.Token);
             planningWatch.Stop();
             plan = AuthorizeInstants(plan, rawUserQuery, requestLocale);
+            if (progress?.Phase is not null)
+                await NotifyProgress(() => progress.Phase(
+                    new PhaseUpdate(AskPhase.Planning, AskPhaseStatus.Completed), firstResult.Token));
+            if (subject.Clarification is not null
+                && plan.Operations.All(operation =>
+                    operation.Disposition == ApplicationDisposition.Clarification))
+                return SubjectClarificationOutcome(
+                    requestId, requestLocale, subject.Clarification, subject.Trace) with
+                {
+                    ContextDisposition = IsAnaphoricWorkReference(rawUserQuery)
+                        ? AskConversationContextDisposition.Preserve
+                        : AskConversationContextDisposition.Clear,
+                };
             run = OperationRun.Start(plan);
             var (status, body) = await ExecutePlanAsync(
                 plan, run, userQueries, rawUserQuery, planningUsage,
-                planningWatch.Elapsed.TotalMilliseconds, plannerRepaired, progress, firstResult.Token,
+                planningWatch.Elapsed.TotalMilliseconds, plannerRepaired, subject, progress,
+                firstResult.Token,
                 () => firstResult.CancelAfter(Timeout.InfiniteTimeSpan),
                 () => ct.IsCancellationRequested
                     ? TransportOutcome.Cancelled : TransportOutcome.TimedOut);
-            return new AskOutcome(status, body, true);
+            var nextContext = ConversationContextFor(subject.Authority);
+            return new AskOutcome(
+                status,
+                body,
+                true,
+                nextContext,
+                nextContext is not null
+                    ? AskConversationContextDisposition.Replace
+                    : IsAnaphoricWorkReference(rawUserQuery)
+                        ? AskConversationContextDisposition.Preserve
+                        : AskConversationContextDisposition.Clear);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -1743,6 +2442,36 @@ public sealed class AskService
         }
     }
 
+    private static AskOutcome SubjectClarificationOutcome(
+        string requestId,
+        string locale,
+        WorkResolutionGuard.GuardClarification clarification,
+        JsonObject? subjectTrace)
+    {
+        var effect = new UiEffect(Gap: new GapView(
+            "needs_clarification", null, null, clarification.Display.Question,
+            clarification.Choices.Select(choice => choice.Value).ToArray()));
+        var trace = subjectTrace is null
+            ? new JsonArray()
+            : new JsonArray(subjectTrace.DeepClone());
+        var body = Body(
+            clarification.Display.Question, locale, trace, [effect], clarification.Display,
+            clarification.Choices);
+        body["operations"] = new JsonArray(new JsonObject
+        {
+            ["operation_id"] = $"{requestId}:subject",
+            ["order"] = 0,
+            ["result_class"] = null,
+            ["disposition"] = "clarification",
+            ["legal_outcome"] = "needs_clarification",
+            ["transport_outcome"] = "completed",
+            ["effects"] = new JsonArray("gap"),
+            ["ui"] = JsonNode.Parse(
+                System.Text.Json.JsonSerializer.Serialize(effect, UiJson)),
+        });
+        return new AskOutcome(200, body, true);
+    }
+
     // Any Unicode letter, not a hand-listed Latin-1 range. The ligatures French actually writes
     // (œ in "œuvre", "sœur"; æ) sit above Latin-1 Supplement, so a range split those words into
     // fragments belonging to no vocabulary and dropped the evidence they carry.
@@ -1815,7 +2544,7 @@ public sealed class AskService
 
     /// <summary>The operations whose <c>date</c> names a single instant rather than a window
     /// bound. Only these can turn a year into a day.</summary>
-    private static readonly string[] PointInTimeOperations = ["as_of", "navigate", "in_force_on"];
+    private static readonly string[] PointInTimeOperations = ["as_of", "in_force_on"];
 
     /// <summary>The repair line a widened operation carries. It rides in <c>Repairs</c> so it
     /// reaches the plan trace and the reply disclosure on the same path every other argument
@@ -1913,6 +2642,7 @@ public sealed class AskService
         ModelTokenUsage modelUsage,
         double planningMilliseconds,
         bool plannerRepaired,
+        SubjectPreflight subject,
         AskProgressCallbacks? progress,
         CancellationToken ct,
         Action firstResultObserved,
@@ -1952,7 +2682,9 @@ public sealed class AskService
         // Metadata, not content, and absent unless it happened: a plan the planner got right on the
         // first attempt carries no key, so no existing snapshot moves.
         if (plannerRepaired) planPhase["planner_retry"] = true;
-        var trace = new JsonArray { planPhase };
+        var trace = subject.Trace is null
+            ? new JsonArray { planPhase }
+            : new JsonArray(subject.Trace.DeepClone(), planPhase);
         var effects = Enumerable.Range(0, plan.Operations.Length)
             .Select(_ => new UiEffect()).ToList();
         var executedArguments = Enumerable.Range(0, plan.Operations.Length)
@@ -1970,10 +2702,22 @@ public sealed class AskService
                 ? new AnswerDisclosure(Instant: InstantSource.DefaultedToToday)
                 : null)
             .ToList();
+        if (subject.Authority?.Disclosure is { } authorityDisclosure)
+            for (var index = 0; index < plan.Operations.Length; index++)
+                if (plan.Operations[index].RequiresWorkResolution)
+                    disclosures[index] = (disclosures[index] ?? new AnswerDisclosure()) with
+                    {
+                        RunnerUpWork = authorityDisclosure.RunnerUpWork,
+                        RunnerUpTitle = authorityDisclosure.RunnerUpTitle,
+                    };
         WorkResolutionGuard.GuardClarification? clarification = null;
         AgentClarification? applicationClarification = null;
         int? terminalTransportStatus = null;
-        var mcpMilliseconds = 0d;
+        var mcpMilliseconds = subject.DurationMilliseconds;
+
+        if (progress?.Phase is not null)
+            await NotifyProgress(() => progress.Phase(
+                new PhaseUpdate(AskPhase.Execution, AskPhaseStatus.Started), ct));
 
         async ValueTask Report(OperationExecution execution)
         {
@@ -2047,7 +2791,8 @@ public sealed class AskService
                 if (operation.RequiresWorkResolution)
                 {
                     var prepared = await ResolveWorkOperationAsync(
-                        run, operation, arguments, userQueries, plan.Locale, trace,
+                        run, operation, arguments, userQueries, plan.Locale, subject.Authority,
+                        subject.Clarification, trace,
                         elapsed => mcpMilliseconds += elapsed, ct);
                     if (prepared.Arguments is null)
                     {
@@ -2076,30 +2821,19 @@ public sealed class AskService
                 JsonNode result;
                 string status;
                 executedArguments[operation.UserOrder] = arguments.DeepClone().AsObject();
-                if (operation.Tool == "navigate")
-                {
-                    result = new JsonObject { ["status"] = McpStatus.Ok };
-                    status = McpStatus.Ok;
-                }
-                else
-                {
-                    using var span = Activity.StartActivity("legal-operation");
-                    span?.SetTag("lex.operation.id", operation.OperationId);
-                    span?.SetTag("gen_ai.tool.name", operation.Tool);
-                    var mcpWatch = Stopwatch.StartNew();
-                    result = await _legalTool(operation.Tool, arguments, ct);
-                    mcpWatch.Stop();
-                    mcpMilliseconds += mcpWatch.Elapsed.TotalMilliseconds;
-                    status = LegalOperationPolicy.StatusForResult(result);
-                    span?.SetTag("lex.status", status);
-                }
+                using var span = Activity.StartActivity("legal-operation");
+                span?.SetTag("lex.operation.id", operation.OperationId);
+                span?.SetTag("gen_ai.tool.name", operation.Tool);
+                var mcpWatch = Stopwatch.StartNew();
+                result = await _legalTool(operation.Tool, arguments, ct);
+                mcpWatch.Stop();
+                mcpMilliseconds += mcpWatch.Elapsed.TotalMilliseconds;
+                status = LegalOperationPolicy.StatusForResult(result);
+                span?.SetTag("lex.status", status);
 
                 var effect = UiMapper.From(operation, arguments, result, plan.Locale);
                 effects[operation.UserOrder] = effect;
-                if (operation.Tool == "navigate")
-                    execution.CompleteLegal(LegalOutcome.Succeeded, result.AsObject());
-                else
-                    execution.Complete(status, result);
+                execution.Complete(status, result);
                 var (summaryStatus, docs) = Summarize(result);
                 trace.Add(new JsonObject
                 {
@@ -2175,10 +2909,17 @@ public sealed class AskService
             ?? OperationAnswerPolicy.Render(plan.Locale, results, effects, disclosures);
         var reply = deterministicReply;
         double? synthesisMilliseconds = null;
+        if (progress?.Phase is not null)
+            await NotifyProgress(() => progress.Phase(
+                new PhaseUpdate(AskPhase.Execution, AskPhaseStatus.Completed), ct));
         if (plan.SynthesisRequested && displayedClarification is null
+            && results.All(result => result.LegalOutcome != LegalOutcome.NeedsClarification)
             && terminalTransportStatus is null)
         {
             var synthesisWatch = Stopwatch.StartNew();
+            if (progress?.Phase is not null)
+                await NotifyProgress(() => progress.Phase(
+                    new PhaseUpdate(AskPhase.Composition, AskPhaseStatus.Started), ct));
             if (progress?.Synthesis is not null)
                 await NotifyProgress(() => progress.Synthesis("started", ct));
             var evidence = new AgentEvidenceLedger();
@@ -2228,6 +2969,9 @@ public sealed class AskService
                 modelUsage = modelUsage.Add(finalized.Usage);
                 if (progress?.Synthesis is not null)
                     await NotifyProgress(() => progress.Synthesis("completed", ct));
+                if (progress?.Phase is not null)
+                    await NotifyProgress(() => progress.Phase(
+                        new PhaseUpdate(AskPhase.Composition, AskPhaseStatus.Completed), ct));
             }
             // A client that disconnected is not a synthesis failure and must not be answered
             // with a reply nobody is waiting for: only the synthesis deadline degrades to the
@@ -2250,6 +2994,10 @@ public sealed class AskService
                 if (progress?.Synthesis is not null)
                     await NotifyProgress(() => progress.Synthesis(
                         "unavailable", CancellationToken.None));
+                if (progress?.Phase is not null)
+                    await NotifyProgress(() => progress.Phase(
+                        new PhaseUpdate(AskPhase.Composition, AskPhaseStatus.Unavailable),
+                        CancellationToken.None));
             }
             synthesisWatch.Stop();
             synthesisMilliseconds = synthesisWatch.Elapsed.TotalMilliseconds;
@@ -2338,152 +3086,78 @@ public sealed class AskService
         JsonObject plannedArguments,
         IReadOnlyList<string> userQueries,
         string locale,
+        SubjectAuthority? subjectAuthority,
+        WorkResolutionGuard.GuardClarification? preflightClarification,
         JsonArray trace,
         Action<double> recordMcpMilliseconds,
         CancellationToken cancellationToken)
     {
-        var rawUserQuery = userQueries[^1];
-        var guard = new WorkResolutionGuard(rawUserQuery);
-        guard.ObserveUserConfirmation(rawUserQuery);
-        var workQuery = String(plannedArguments, "work_query")
-            ?? String(plannedArguments, operation.Tool == "provenance" ? "lex_id" : "work")
-            ?? rawUserQuery;
-        var article = String(plannedArguments, "article_number");
-        async Task<JsonNode> Search(string query, string phase, Action<JsonNode> observe)
-        {
-            var searchArguments = new JsonObject
-            {
-                ["query"] = query,
-                ["retrieval_mode"] = "keyword",
-                ["fuzzy"] = "auto",
-                ["limit"] = 8,
-            };
-            Copy(plannedArguments, searchArguments,
-                "publisher", "jurisdiction", "source_class", "hierarchy", "domain", "language");
-            var mcpWatch = Stopwatch.StartNew();
-            var result = await _legalTool("search", searchArguments, cancellationToken);
-            mcpWatch.Stop();
-            recordMcpMilliseconds(mcpWatch.Elapsed.TotalMilliseconds);
-            var resultStatus = LegalOperationPolicy.StatusForResult(result);
-            run.ObserveSupportingCall(operation.OperationId, SupportingCallRole.WorkResolution,
-                "search", searchArguments, resultStatus, result);
-            observe(result);
-            var (status, docs) = Summarize(result);
-            trace.Add(new JsonObject
-            {
-                ["phase"] = phase,
-                ["operation_id"] = operation.OperationId,
-                ["tool"] = "search",
-                ["args"] = searchArguments.DeepClone(),
-                ["status"] = status ?? resultStatus,
-                ["docs"] = docs,
-            });
-            return result;
-        }
+        _ = userQueries;
+        var identityName = operation.Tool == "provenance" ? "lex_id" : "work";
+        var plannedIdentity = String(plannedArguments, identityName);
+        var selected = plannedIdentity is null
+            ? null
+            : WorkResolutionGuard.WorkKey(plannedIdentity);
+        var member = subjectAuthority?.Members.SingleOrDefault(candidate =>
+            candidate.Work == selected);
+        if (member is null)
+            return new PreparedOperation(
+                null, preflightClarification ?? UnresolvedSubjectClarification(locale));
 
-        var priorWorks = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var priorQuery in userQueries.SkipLast(1).Reverse().Take(MaxContextResolutionQueries))
-        {
-            var priorGuard = new WorkResolutionGuard();
-            await Search(priorQuery, "prior_work_resolution", priorGuard.ObservePriorUserSearch);
-            if (priorGuard.ResolvedWorks.Count == 0) continue;
-            priorWorks.UnionWith(priorGuard.ResolvedWorks);
-            break;
-        }
-        guard.AuthorizePriorWorks(priorWorks);
-        var carriesPriorSubject = priorWorks.Count > 0 && IsAnaphoricWorkReference(rawUserQuery);
-        var resolution = await Search(rawUserQuery, "work_resolution",
-            result => guard.ObserveCurrentUserSearch(result, hasPriorContext: carriesPriorSubject));
-        JsonNode? focused = null;
-        var resolutionQuery = article is null ? workQuery : $"{workQuery} Article {article}";
-        if (guard.CurrentResolvedWorks.Count != 1
-            && !string.Equals(resolutionQuery, rawUserQuery, StringComparison.OrdinalIgnoreCase))
-            focused = await Search(resolutionQuery, "focused_work_resolution",
-                result => guard.ObserveFocusedSearch(result, hasPriorContext: carriesPriorSubject));
-        var plannedWork = String(plannedArguments,
-            operation.Tool == "provenance" ? "lex_id" : "work");
-        var focusedCandidates = CandidateWorks(focused).Distinct().ToArray();
-        var focusedPrior = focusedCandidates.Where(priorWorks.Contains).ToArray();
-        var focusedDirect = focusedCandidates
-            .Where(guard.ResolvedWorks.Contains)
-            .Where(work => !priorWorks.Contains(work))
-            .ToArray();
-
-        // One quoted official title can name more than one work: the CRR's own title ends
-        // "...and amending Regulation (EU) No 648/2012", so quoting it names both the CRR and
-        // EMIR. Each is authorized by the user's own words; the operation still needs exactly
-        // one. The rule narrows inside that authorized set and returns WHY, so a caller cannot
-        // mistake a fall-through for a decision the way the previous `string?` allowed.
-        WorkSubject? subject = guard.CurrentResolvedWorks.Count > 1
-            ? WorkSubjectRule.Select(
-                rawUserQuery,
-                guard.CurrentMentions,
-                guard.CurrentResolvedWorks,
-                article is not null,
-                work => ArticleAnchor(focused ?? resolution, work, article!) is not null,
-                work => HoldsProvisionText(resolution, work)
-                        || HoldsProvisionText(focused, work))
-            : null;
-
-        var selected = guard.CurrentResolvedWorks.Count == 1
-            ? guard.CurrentResolvedWorks.Single()
-            : subject is not null
-                ? (subject as WorkSubject.Decided)?.Work
-            : focusedDirect is [var directWork] ? directWork
-            : !carriesPriorSubject ? null
-            : focusedPrior is [var priorWork] ? priorWork
-            : priorWorks.Count == 1 ? priorWorks.Single()
-            : plannedWork is not null
-              && guard.ResolvedWorks.Contains(WorkResolutionGuard.WorkKey(plannedWork))
-                ? WorkResolutionGuard.WorkKey(plannedWork)
-            : focusedCandidates.Where(guard.ResolvedWorks.Contains).ToArray()
-                is [var focusedWork] ? focusedWork
-            : guard.ResolvedWorks.Count == 1 ? guard.ResolvedWorks.Single()
-            : null;
-        if (selected is null)
-        {
-            var order = (subject as WorkSubject.Undecided)?.Ordered;
-            var candidate = guard.ClarificationFor(plannedWork, locale, order);
-            if (candidate is not null) return new PreparedOperation(null, candidate);
-            // An empty option list reads as a broken product. Say what could not be matched, say
-            // what was searched, and name the two moves that actually work.
-            var display = AgentAnswerContract.Validate(new AgentAnswerDraft(
-                AgentAnswerStatus.Clarify,
-                locale == "fr"
-                    ? "Donnez l'identifiant officiel ou le numéro CELEX, ou indiquez l'éditeur (Legilux ou EUR-Lex)."
-                    : "Give the official identifier or CELEX number, or name the publisher (Legilux or EUR-Lex).",
-                [], [], null,
-                new AgentClarification(
-                    locale == "fr"
-                        ? "Lex n'a pas pu rattacher un nom de votre question à un instrument qu'il détient. Il a cherché par titre officiel, identifiant et alias dans son catalogue."
-                        : "Lex could not match a name in your question to an instrument it holds. It searched its catalogue by official title, identifier and alias.",
-                    [])), []).Clarification!;
-            return new PreparedOperation(null,
-                new WorkResolutionGuard.GuardClarification(display, []));
-        }
-
-        // The reader is told which work was served and, when the user's own words authorized more
-        // than one, that a choice was made and what lost. An error nobody can see is an error
-        // nobody corrects.
-        var disclosure = subject is WorkSubject.Decided decided
-                         && decided.RunnerUp is { Length: > 0 } runnerUp
-            ? new AnswerDisclosure(RunnerUpWork: runnerUp,
-                RunnerUpTitle: guard.TitleFor(runnerUp))
-            : null;
-
+        // Work identity was resolved exactly once, from the raw user turn, before the planner.
+        // This execution boundary validates the closed authority but never re-runs raw or focused
+        // work discovery, so ranking cannot silently select a different instrument.
         var actual = plannedArguments.DeepClone().AsObject();
         actual.Remove("work_query");
         actual.Remove("article_number");
         if (operation.Tool == "provenance")
-            actual["lex_id"] = plannedWork is not null
-                && WorkResolutionGuard.WorkKey(plannedWork) == selected ? plannedWork : selected;
+            actual["lex_id"] = plannedIdentity;
         else
-            actual["work"] = selected;
-        if (article is not null)
+            actual["work"] = member.Work;
+
+        // Injected planners used by deterministic tests already return a frozen plan; production
+        // planner output passes BindPlannerSubjectReferences, which refuses an article the
+        // preflight did not authorize before it can reach this compatibility fallback.
+        var article = subjectAuthority!.ArticleNumber
+            ?? String(plannedArguments, "article_number");
+        if (article is not null && operation.Tool is "as_of" or "diff" or "article_history")
         {
-            var anchor = ArticleAnchor(focused ?? resolution, selected, article)
-                ?? "art_" + new string(article.ToLowerInvariant()
-                    .Where(character => char.IsLetterOrDigit(character) || character == '-').ToArray());
+            var anchor = member.ArticleAnchor;
+            if (anchor is null)
+            {
+                var searchArguments = new JsonObject
+                {
+                    ["query"] = $"Article {article}",
+                    ["works"] = member.Work,
+                    ["retrieval_mode"] = "keyword",
+                    ["fuzzy"] = "auto",
+                    ["limit"] = 8,
+                };
+                var watch = Stopwatch.StartNew();
+                var result = await _legalTool("search", searchArguments, cancellationToken);
+                watch.Stop();
+                recordMcpMilliseconds(watch.Elapsed.TotalMilliseconds);
+                var resultStatus = LegalOperationPolicy.StatusForResult(result);
+                run.ObserveSupportingCall(
+                    operation.OperationId, SupportingCallRole.AnchorResolution,
+                    "search", searchArguments, resultStatus, result);
+                var (status, docs) = Summarize(result);
+                trace.Add(new JsonObject
+                {
+                    ["phase"] = "anchor_resolution",
+                    ["operation_id"] = operation.OperationId,
+                    ["tool"] = "search",
+                    ["args"] = searchArguments.DeepClone(),
+                    ["status"] = status ?? resultStatus,
+                    ["docs"] = docs,
+                });
+                var candidates = ArticleAnchors(result, member.Work, article);
+                anchor = candidates is [var unique] ? unique : null;
+                if (anchor is null)
+                    return new PreparedOperation(
+                        null, UnresolvedArticleClarification(locale, article, candidates));
+            }
+
             if (operation.Tool == "as_of")
             {
                 actual["mode"] = "select";
@@ -2492,9 +3166,8 @@ public sealed class AskService
             else
                 actual["anchor"] = anchor;
         }
-        return new PreparedOperation(actual, null, disclosure);
+        return new PreparedOperation(actual, null, subjectAuthority.Disclosure);
     }
-
     /// <summary>
     /// Whether the search result shows Lex holding provision-level text for this work.
     ///
@@ -2560,7 +3233,14 @@ public sealed class AskService
 
     private static string? ArticleAnchor(JsonNode result, string work, string article)
     {
-        var normalized = new string(article.Where(char.IsLetterOrDigit).ToArray());
+        var anchors = ArticleAnchors(result, work, article);
+        return anchors is [var unique] ? unique : null;
+    }
+
+    private static string[] ArticleAnchors(JsonNode result, string work, string article)
+    {
+        var normalized = ArticleToken(article);
+        var anchors = new List<string>();
         foreach (var response in result is JsonArray array
                      ? array.OfType<JsonObject>()
                      : result is JsonObject item ? [item] : [])
@@ -2570,12 +3250,35 @@ public sealed class AskService
                 if (lexId is null || WorkResolutionGuard.WorkKey(lexId) != work) continue;
                 var candidate = hit["anchor"]?.GetValue<string>();
                 var number = hit["provision_num"]?.GetValue<string>() ?? candidate;
-                var comparable = new string((number ?? "").Where(char.IsLetterOrDigit).ToArray());
                 if (candidate is { Length: > 0 }
-                    && comparable.Contains(normalized, StringComparison.OrdinalIgnoreCase))
-                    return candidate;
+                    && ArticleToken(number ?? "") == normalized
+                    && !anchors.Contains(candidate, StringComparer.Ordinal))
+                    anchors.Add(candidate);
             }
-        return null;
+        return anchors.Take(OperationArguments.MaximumOptionCount).ToArray();
+    }
+
+    private static string ArticleToken(string value)
+    {
+        var token = new string(value.ToLowerInvariant().Where(char.IsLetterOrDigit).ToArray());
+        if (token.StartsWith("article", StringComparison.Ordinal)) token = token[7..];
+        else if (token.StartsWith("art", StringComparison.Ordinal)) token = token[3..];
+        return token;
+    }
+
+    private static WorkResolutionGuard.GuardClarification UnresolvedArticleClarification(
+        string locale, string article, IReadOnlyList<string> candidates)
+    {
+        var question = locale == "fr"
+            ? $"Lex n'a pas pu établir une disposition unique pour l'article {article}. Précisez la disposition."
+            : $"Lex could not establish one unique held provision for Article {article}. Specify the provision.";
+        var choices = candidates.Take(OperationArguments.MaximumOptionCount)
+            .Select(anchor => new WorkResolutionGuard.GuardChoice(anchor, anchor)).ToArray();
+        var clarification = new AgentClarification(
+            question, choices.Select(choice => choice.Label).ToArray());
+        var display = AgentAnswerContract.Validate(new AgentAnswerDraft(
+            AgentAnswerStatus.Clarify, question, [], [], null, clarification), []).Clarification!;
+        return new WorkResolutionGuard.GuardClarification(display, choices);
     }
 
     private static string? String(JsonObject arguments, string name) =>

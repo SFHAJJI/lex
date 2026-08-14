@@ -187,7 +187,7 @@ public class DeriveTests
 
             var first = DeriveWriter.Derive(
                 corpus, output, "lu-legilux", DeriverCommit, DeriverTree,
-                CorpusCommit, EnrichmentDigest);
+                CorpusCommit);
 
             Assert.Empty(first.Errors);
             Assert.True(File.Exists(Path.Combine(output, "lu-legilux", "works", "w1", "versions",
@@ -202,7 +202,7 @@ public class DeriveTests
                 "9999999999999999999999999999999999999999";
             var unrelated = DeriveWriter.Derive(
                 corpus, output, "lu-legilux", unrelatedCommit, DeriverTree,
-                CorpusCommit, EnrichmentDigest);
+                CorpusCommit);
             Assert.Empty(unrelated.Errors);
             Assert.All(recordBytes, item =>
                 Assert.Equal(item.Value, File.ReadAllBytes(item.Key)));
@@ -213,7 +213,7 @@ public class DeriveTests
             Directory.Delete(Path.Combine(work, "versions", secondKey), recursive: true);
             var second = DeriveWriter.Derive(
                 corpus, output, "lu-legilux", DeriverCommit, DeriverTree,
-                CorpusCommit, EnrichmentDigest);
+                CorpusCommit);
 
             Assert.Empty(second.Errors);
             Assert.False(Directory.Exists(Path.Combine(output, "lu-legilux", "works", "w1", "versions",

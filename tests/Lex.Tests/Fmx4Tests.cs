@@ -185,7 +185,7 @@ public class Fmx4Tests
 
             var stats = DeriveWriter.Derive(
                 corpus, output, "eu-eurlex", DeriverCommit, DeriverTree,
-                CorpusCommit, EnrichmentDigest);
+                CorpusCommit);
 
             Assert.Empty(stats.Errors);
             var recovered = Path.Combine(output, "eu-eurlex", "works", "32000r0001",

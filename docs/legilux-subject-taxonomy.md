@@ -1,6 +1,6 @@
 # Luxembourg subject facets from the publisher's own taxonomy
 
-Status: **planned** (D79). Nothing in this document is implemented.
+Status: **captured for weak retrieval**. Taxonomy browsing and facets remain deferred.
 
 ## 1. What exists upstream
 
@@ -48,52 +48,53 @@ The publisher's own classification is not that. It is an assertion Legilux makes
 its own act, retrievable, attributable and reproducible from the same endpoint as every
 other fact in the corpus. Storing it is the same act as storing a publication date.
 
-This also distinguishes it from the EU side. `config/eu-work-enrichment.json` carries
-reviewed aliases produced with model assistance and gated on confidence, agreement across
-repeat runs and evidence anchors. That machinery exists because those values are inferred.
-Subject assertions are not inferred, so they must **not** travel through the reviewed-alias
-path, whose provenance fields (model, prompt digest, confidence, agreement ratio) would
-have to be fabricated to fit.
+This also distinguishes publisher assertions from inferred classifications. Lex has no manual
+legal-alias or model-derived legal-metadata input: Legilux subjects and EUR-Lex metadata travel
+from their official source into corpus bytes and are covered by normal corpus provenance.
 
-## 3. What would be stored
+## 3. What is stored
 
 Per work, per subject assertion:
 
 | field | source |
 |---|---|
-| `authority_uri` | the `legal-subject/{id}` URI verbatim |
-| `label` | `skos:prefLabel`, French |
-| `level` | 1 or 2, from which predicate carried it |
+| `identifier`, `source_uri` | the official concept URI verbatim |
+| `value`, `label` | the French `skos:prefLabel` |
+| `language` | `fr` |
+| `kind` | level plus the official specific scheme |
 
 The authority URI is the identity; the label is a rendering convenience and may change
 upstream without changing the identity. Both are stored so a relabelling upstream is
 visible as a change rather than a silent rewrite.
 
-Subjects attach to the **work**, not to a dated version. The publisher asserts them on
-`jolux:Act`, and nothing in the dataset says a subject applies only from a given date, so
-inventing a validity interval for them would be manufacturing temporal precision the
-source does not have.
+The closed kinds are
+`legilux_subject_level{1|2}_{theme|organisation|place|legal_resource|country}`.
+Missing or ambiguous schemes, missing French labels, unknown schemes, invalid URIs, or more than
+512 records for a work fail ingestion. Canonical deduplication and sorting make the bytes stable.
+The work assertion is copied to each held version because the corpus record is version-shaped;
+Lex does not invent a separate validity interval for it.
 
-## 4. How it would surface
+## 4. How it surfaces now
 
-- A `subject` filter on `search`, `in_force_on` and `changes_in_period`, alongside the
-  existing `document_type`, `hierarchy`, `act_form`, `binding_status` and `domain`.
-- Facet counts on the catalogue page, grouped by level 1 with level 2 nested.
-- The subject shown on a work page as publisher-asserted metadata, labelled as such.
+- Search can match the label in the weak publisher-metadata tier and returns one bounded typed
+  `matched_publisher_metadata` object explaining the match.
+- A server-issued chip can replay the official concept URI through the exact
+  `publisher_metadata_identifier` filter on the existing search tool.
+- The metadata never establishes work authority, becomes legal evidence, or claims that the term
+  occurs in the legal text.
 
-## 5. Open measurements
+## 5. Measured held-corpus bounds
 
-These are unknown and must be measured before implementation, not assumed:
+The pre-implementation official-source audit measured 1,402 held works and 4,656 versions.
+Subjects covered 1,335 works: 613 distinct level-1 concepts and 1,174 distinct level-2 concepts,
+with at most 57 combined assertions on one work. No held assertion lacked a French preferred
+label or an unambiguous supported specific scheme. These measurements support bounded capture;
+they do not justify a cross-publisher taxonomy browser.
 
-1. **Coverage against our scope.** The counts above are across the whole Legilux dataset.
-   How many of the 1,399 works Lex actually holds carry a level-1 subject is not known.
-   A facet present on a small minority of works is worse than no facet.
-2. **Cardinality.** How many distinct level-1 and level-2 subjects appear within our
-   scope, and whether the distribution is usable as a filter or is a long tail.
-3. **Multiplicity.** Whether an act may carry several level-1 subjects, and if so what
-   the maximum is, which decides whether the facet is single or multi valued.
-4. **Level-2 to level-1 relationship.** Whether level 2 is a strict child of level 1 in
-   the authority scheme, or an independent axis that merely happens to be numbered.
+Every global paged Legilux query has a fixed total-row ceiling before accumulation: 20,000
+catalogue rows, 200,000 subject rows, 20,000 official-identity rows, and 50,000 manifestation
+rows. The final request asks for only the remaining allowance plus one; that sentinel row aborts
+the unpublished corpus candidate instead of entering the accumulator or being truncated silently.
 
 ## 6. Costs accepted
 
@@ -102,12 +103,11 @@ These are unknown and must be measured before implementation, not assumed:
 - French-only labels. An English interface must show the French subject or leave it
   unlabelled. Translating them would re-introduce exactly the invented-authority problem
   this decision avoids.
-- No EU equivalent. EUR-Lex does not expose this vocabulary, so the two publishers' subject
-  facets are not interchangeable and must never be merged into a single cross-publisher
-  list. A shared facet control implies a shared vocabulary, and there is not one.
+- No false EU equivalence. EUR-Lex/EuroVoc relations and Legilux subjects retain distinct kinds;
+  they are not merged into a shared taxonomy.
 
 ## 7. What this does not do
 
-It does not improve retrieval ranking, and it should not be justified as if it did. It is
-a navigation and scoping affordance. A subject filter narrows a result set the user is
-already looking at; it does not change which provisions match a query.
+It does not add a taxonomy endpoint, hierarchy browser, domain facet, assistant-authored concept
+filter, or evidence source. It improves recall only in a deliberately weak discovery tier while
+title and direct legal-text matches keep precedence.

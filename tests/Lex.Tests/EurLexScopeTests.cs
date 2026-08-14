@@ -11,7 +11,7 @@ public sealed class EurLexScopeTests : IDisposable
     public EurLexScopeTests() => Directory.CreateDirectory(_dir);
 
     [Fact]
-    public void Reviewed_scope_keeps_languages_histories_and_waves_explicit()
+    public void Engineering_scope_keeps_languages_histories_and_waves_explicit()
     {
         var scope = EurLexScopeConfig.Load();
 
@@ -25,6 +25,36 @@ public sealed class EurLexScopeTests : IDisposable
         Assert.Contains(scope.Domains, d => d.Id == "financial-services" && d.Wave == 2);
         Assert.Contains(scope.Exclusions, e => e.Kind == "citation");
         Assert.Contains(scope.Exclusions, e => e.Kind == "out_of_scope_language");
+    }
+
+    [Fact]
+    public void Engineering_scope_reasons_never_become_corpus_legal_metadata()
+    {
+        var raw = EurLexAdapter.SourceRaw(
+            "32016R0679", "REG", "in_force", "published");
+
+        Assert.DoesNotContain("domains", raw.Keys);
+        Assert.DoesNotContain("scope_reasons", raw.Keys);
+        Assert.DoesNotContain("financial-services", raw.Values);
+        Assert.Equal("32016R0679", raw["celex"]);
+    }
+
+    [Fact]
+    public void Work_metadata_query_is_bounded_and_rejects_cap_plus_one()
+    {
+        var query = EurLexAdapter.WorkMetadataQuery(
+            "(\"32016R0679\" <http://publications.europa.eu/resource/celex/32016R0679>)");
+        var oversized = Enumerable.Range(0, 20_001)
+            .Select(index => new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["base"] = index.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            })
+            .ToList();
+
+        Assert.Contains("LIMIT 20001", query, StringComparison.Ordinal);
+        var error = Assert.Throws<InvalidDataException>(
+            () => EurLexAdapter.RequireBoundedWorkMetadataRows(oversized));
+        Assert.Contains("exceeds 20,000 records", error.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -98,6 +128,61 @@ public sealed class EurLexScopeTests : IDisposable
         Assert.Contains(metadata, item => item.Kind == "directory"
             && item.Language == "fr"
             && item.SourceUri == item.Identifier);
+    }
+
+    [Fact]
+    public void Cellar_taxonomy_rows_preserve_alt_broader_subdomain_and_domain_as_weak_typed_metadata()
+    {
+        const string concept = "http://eurovoc.europa.eu/5181";
+        var subjects = new[]
+        {
+            Subject("eurovoc", concept, "en", "data protection"),
+            Subject("eurovoc_alt_label", concept, "en", "data breach"),
+            Subject("eurovoc_broader", "http://eurovoc.europa.eu/2472", "en", "information policy"),
+            Subject("eurovoc_subdomain", "http://eurovoc.europa.eu/100222", "en",
+                "3231 information and information processing"),
+            Subject("eurovoc_domain", "http://eurovoc.europa.eu/100150", "en",
+                "32 EDUCATION AND COMMUNICATIONS"),
+        };
+
+        var metadata = EurLexAdapter.BuildPublisherMetadata("32016R0679", [], subjects);
+
+        Assert.Equal(5, metadata.Count);
+        Assert.Equal(subjects.Select(row => row["kind"]).Order(StringComparer.Ordinal),
+            metadata.Select(item => item.Kind));
+        Assert.All(metadata, item =>
+        {
+            Assert.Equal("en", item.Language);
+            Assert.Equal(item.Identifier, item.SourceUri);
+        });
+
+        static Dictionary<string, string> Subject(
+            string kind, string identifier, string language, string label) => new(StringComparer.Ordinal)
+        {
+            ["kind"] = kind, ["identifier"] = identifier,
+            ["lang"] = language, ["label"] = label,
+        };
+    }
+
+    [Fact]
+    public void Cellar_taxonomy_rows_fail_closed_when_the_official_shape_is_unknown_or_incomplete()
+    {
+        static Dictionary<string, string> Row(
+            string kind, string identifier, string? language = "en", string? label = "label")
+        {
+            var row = new Dictionary<string, string>(StringComparer.Ordinal)
+                { ["kind"] = kind, ["identifier"] = identifier };
+            if (language is not null) row["lang"] = language;
+            if (label is not null) row["label"] = label;
+            return row;
+        }
+
+        Assert.Throws<InvalidDataException>(() => EurLexAdapter.BuildPublisherMetadata(
+            "32016R0679", [], [Row("invented", "https://example.test/concept")]));
+        Assert.Throws<InvalidDataException>(() => EurLexAdapter.BuildPublisherMetadata(
+            "32016R0679", [], [Row("eurovoc", "not-a-uri")]));
+        Assert.Throws<InvalidDataException>(() => EurLexAdapter.BuildPublisherMetadata(
+            "32016R0679", [], [Row("eurovoc", "https://example.test/concept", label: null)]));
     }
 
     [Fact]

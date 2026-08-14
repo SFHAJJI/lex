@@ -39,14 +39,15 @@ inclusive work-retrieval p95 of 168.60 ms. The immutable evidence identifiers ar
 
 These are engineer-reviewed experiment results, not lawyer-reviewed relevance judgments, a
 full-corpus enrichment validation or production claims. Production code is reimplemented in small
-PRs rather than merging the spike. Official publisher metadata and reviewed aliases ship first;
-model-derived discovery remains inactive until a separate held-out ablation justifies it.
+PRs rather than merging the spike. Official publisher metadata ships first; manually reviewed
+legal aliases were superseded by source-backed publisher short-title segments. Model-derived
+discovery remains inactive until a separate held-out ablation justifies it.
 
 ## Selected target architecture
 
 ```text
 search bar
-  -> exact identifier / reviewed name / official title resolution
+  -> exact identifier / unique official short-title segment / official title resolution
   -> weak work-level discovery metadata recall
   -> provision keyword or optional local hybrid retrieval
   -> dated law and matching passages
@@ -81,16 +82,16 @@ The enrichment database is a disposable build workbench, not a runtime service.
    record carries its deployment, prompt/schema hash, timestamp, confidence and evidence anchors.
 4. Reject collisions, identifier-like inventions, unsupported classifications, invalid evidence
    anchors and non-repeatable output automatically.
-5. Route names and aliases through publisher confirmation or review before they can receive an
-   exact-name rank. Admit only validated model-derived descriptions, concepts and synonyms to a
-   separately labelled weak discovery field; they never become legal facts or filter truth.
-6. Export additions and overrides with their provenance. Do not duplicate publisher metadata into
-   the reviewed configuration.
-7. Merge publisher metadata, reviewed aliases and validated model-derived discovery fields during
+5. Never promote manually proposed names or aliases to identity authority. Only an exact unique
+   segment of an official publisher short title can receive the source-backed short-name rank;
+   collisions clarify. Keep model-derived descriptions, concepts and synonyms quarantined and
+   absent from production retrieval.
+6. Export experimental candidates with their provenance; they are not legal metadata inputs.
+7. Index official publisher metadata from corpus bytes. If model-derived discovery ever graduates,
    indexing. Build one compact work-level FTS record, one base work vector and separate quarantined
    vectors for each accepted discovery concept. Append those typed records to the same
    vector artifact as provision chunks and map their disjoint ordinal range in SQLite. Record the
-   enrichment digest and mixed-vector layout in the artifact stamp and signed manifest. Runtime
+   mixed-vector layout in the artifact stamp and signed manifest. Runtime
    opens only the rebuilt signed index and its one verified vector artifact. Ordinary production
    retrieval ignores quarantined concept fields until their independent graduation gate passes.
 
@@ -106,13 +107,14 @@ Enrichment changes discovery metadata, never authoritative law.
 - Publisher UTF-8 text blobs and SHA-256 identities remain unchanged.
 - Work/version/anchor occurrences continue to map to the same text states.
 - Reading, citation, timeline, comparison and diff code never reads enrichment as legal wording.
-- The manifest records legal-content and reviewed-enrichment digests separately.
+- The corpus and generation manifests bind the official metadata with the other source bytes;
+  there is no separate legal-enrichment digest.
 - Pre/post tests compare the complete authoritative hash inventory and representative structured
   reads and diffs byte for byte.
-- Public provenance distinguishes publisher metadata, deterministic Lex normalization, reviewed
-  aliases and model-derived discovery aids.
+- Public provenance distinguishes publisher metadata, deterministic Lex normalization, and any
+  future model-derived discovery aids.
 
-A bad reviewed label could still harm retrieval or filtering, but it cannot change what a law says.
+A bad upstream label could still harm retrieval or filtering, but it cannot change what a law says.
 Ranking and classification therefore have separate quality gates from byte identity.
 
 ## Ranking safety belt
@@ -120,22 +122,22 @@ Ranking and classification therefore have separate quality gates from byte ident
 Lex does not assign one global weight to every enriched field. It uses match tiers:
 
 1. exact official identifier;
-2. exact, reviewed, collision-free professional alias;
-3. official title or short title;
+2. exact, unique segment of an official publisher short title;
+3. official title;
 4. article number and heading;
 5. exact provision wording;
 6. validated model-derived subject/search enrichment as a weak recall signal;
 7. semantic similarity.
 
-An exact alias such as `RGPD` may pin one unambiguous work. A broad subject phrase such as
+An official short-title segment such as `RGPD` may pin one unambiguous work. A broad subject phrase such as
 `protection des données` may eventually nominate a work as a weak discovery result but never becomes
-legal evidence. Exact identifiers and reviewed aliases remain deterministic. Publisher work
+legal evidence. Exact identifiers and unique official short-title segments remain deterministic. Publisher work
 semantics may nominate candidates; model-derived keyword and concept-vector fields are currently
 quarantined from ordinary retrieval. They can receive a bounded lower weight only after an
 independent holdout proves that they improve residual discovery without reversing direct provision
 evidence or creating weak-only assistant selection. Rejected or unvalidated proposals have no
 weight because they are absent from the index. Identifiers and aliases are never fuzzy-expanded.
-Ambiguous aliases cannot pin a work.
+Colliding short-title segments cannot pin a work.
 
 ## Single vector artifact decision
 
@@ -145,9 +147,9 @@ one immutable `lex-vectors/1` artifact, while SQLite records each vector's typed
 Provision ordinals remain a contiguous first range and work ordinals a contiguous second range;
 the reader verifies complete, non-overlapping coverage before serving hybrid search.
 
-Every semantic build creates base-work vectors from publisher titles and facets. Supplying a
-reviewed enrichment artifact may add quarantined aliases and concept records but is not required to
-make official work metadata searchable. This prevents deployment configuration from silently
+Every semantic build creates base-work vectors from publisher titles and facets. Experimental
+model-derived records, if ever approved, require a separate release decision and are not a legal
+metadata configuration input. This prevents deployment configuration from silently
 disabling the publisher-metadata layer and keeps weak activation independently reversible.
 
 Each embedding still stores a binary sign code for the fast candidate scan and an int8 code for
@@ -155,9 +157,11 @@ reranking. Those are two compact encodings of the same model output, not two emb
 embedding is reused for both provision and work scans. This keeps the experiment's measured ranking
 shape while removing a second Azure artifact, manifest entry and mount/failure boundary.
 
-Domains and hierarchy remain primarily filters. If the assistant infers a domain rather than the
-user selecting it, the experiment must compare scoped and unscoped candidates before excluding
-law.
+The legacy generic `domain` field is empty in current v4 builds. Official publisher
+classifications remain weak discovery metadata: search returns a typed
+`matched_publisher_metadata` object and a server-issued chip may repeat its exact official URI as
+`publisher_metadata_identifier`. Engineering acquisition-scope labels are provenance inputs only
+and never enter corpus legal metadata, FTS, facets, MCP evidence, or assistant constraints.
 
 ## Agent Framework experiment
 
@@ -200,13 +204,15 @@ The workspace renders accessible buttons and keeps a free-text answer. Missing `
 reason to ask; the assistant may use today and disclose the assumption. Jurisdiction, legal
 mechanism or historical period should be clarified only when different answers would result.
 
-Conversation memory is bounded, visible and restorable within one browser tab. The application
-keeps at most six turns in `sessionStorage` and sends that bounded transcript with each otherwise
-stateless request, so a Container App restart or scale-to-zero event cannot silently turn a
-follow-up into an unrelated first question. On every request the server re-runs deterministic
-resolution over the most recent prior user-authored law identity; prior assistant prose is never
-authority or legal evidence. The panel shows the retained turns and provides an explicit new-
-conversation control. Durable server sessions and personal profiling remain out of scope.
+Conversation memory is bounded, visible and ephemeral within one browser tab. The browser keeps
+the visible transcript and opaque thread capability only in component memory and sends only the
+current message. The server retains at most six accepted turns for 30 idle minutes in a bounded
+per-process registry, together with structured subject authority; it stores only a digest of the
+random token. An unrelated aggregate or search turn explicitly clears stale subject authority.
+Prior raw transcript and assistant prose are never reinterpreted as authority or legal evidence.
+Expiry, eviction, reset, restart or scale-to-zero invalidates the thread rather than falling
+through to a different conversation. The panel shows the retained turns and provides an explicit
+new-conversation control. Durable sessions and personal profiling remain out of scope.
 
 Accepted, signed work cards are the durable reusable output of offline enrichment. They may improve
 both deterministic search and future assistant planning. Provider prompt caching may reduce the
@@ -261,8 +267,8 @@ tokens, result size, citations, judgments and failures.
 
 The plan can graduate only when:
 
-- exact identifiers and reviewed aliases return the intended base work first in keyword and hybrid;
-- longer questions containing an exact alias retain that work without suppressing provision search;
+- exact identifiers and unique official short-title segments return the intended base work first in keyword and hybrid;
+- longer questions containing such a segment retain that work without suppressing provision search;
 - authoritative hash inventories and representative reads/diffs are identical before and after;
 - descriptive targets rank in the top three in every repeated case, or the result is correctly
   identified as a corpus gap;
@@ -272,11 +278,11 @@ The plan can graduate only when:
 - ordinary unaffected retrieval regresses no more than the existing two-percent program gate;
 - latency, token and Azure-cost measurements justify the selected agent variant.
 
-The publisher-first catalog, reviewed aliases, query decomposition, deterministic clarification,
+The publisher-first catalog, source-backed short-title resolution, query decomposition, deterministic clarification,
 tool authorization, bounded retrieval, Agent Framework evidence composition and conditional judging passed
 their production gates. The signed release benchmark did not pass the hybrid-default gate, so
 keyword remains the default and local hybrid remains an explicit preview. Model-derived weak
-discovery is absent from the production enrichment artifact. Failure of either future gate means
+discovery is absent from production retrieval. Failure of either future gate means
 iterate on retrieval or enrichment, not weaken the evidence contract or use unstructured chat.
 
 ## Alternatives rejected

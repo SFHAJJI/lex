@@ -23,7 +23,8 @@ internal sealed class AgentEvidenceLedger
     {
         var call = ++_call;
         if (status is not null && LegalOperationPolicy.OutcomeForStatus(status) is
-            LegalOutcome.NotAvailable or LegalOutcome.NotComparable or LegalOutcome.NotFound)
+            LegalOutcome.NeedsClarification or LegalOutcome.NotAvailable
+                or LegalOutcome.NotComparable or LegalOutcome.NotFound)
         {
             Add(tool, call, 0, AgentEvidenceKind.Coverage, null, null, null, null, null, true,
                 null, EvidencePayload(result, status));

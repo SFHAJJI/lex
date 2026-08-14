@@ -1,8 +1,10 @@
 # EU temporal corpus scope
 
-The canonical reviewed selector is
+The canonical engineering acquisition selector is
 [`src/Lex.Sources.EurLex/eu-scope.json`](../src/Lex.Sources.EurLex/eu-scope.json).
 It replaces application code as the place where an existing EUR-Lex document class enters scope.
+Its group names and selection reasons are not legal classifications and never enter corpus version
+metadata, search fields, facets, MCP output, or assistant evidence.
 
 The approved wave is the ingestion boundary. A domain above that wave is visible for review but is
 not downloaded. Each enabled domain can seed exact CELEX works and select binding regulations,
@@ -39,8 +41,9 @@ Adding a new subject that uses existing EUR-Lex legislation classes is a configu
 preview, approval-wave change and backfill. A new publisher or a class with different temporal
 semantics, such as CJEU judgments, requires adapter and schema implementation plus new fixtures.
 
-The scope file is copied into every EU index release and covered by the signed artifact manifest.
-This makes the selection rules independently identifiable beside the index they produced.
+The corpus manifest records the SHA-256 of the raw LF-pinned scope file and the ingester code
+commit that contains it; the signed index stamp carries that source-configuration identity. This
+makes the selection rules independently identifiable without copying their labels into legal data.
 
 Wave 2 was approved after the engineer-reviewed preview on 2026-08-06. The refreshed preview on
 2026-08-11 selects 1,248 works, all with loadable official metadata, and 4,728 French and English
@@ -50,7 +53,7 @@ rather than failed EN/FR acquisitions. The planning estimate is 1,239,416,832 do
 464,781,312 lexical index bytes. These estimates are replaced by measured artifact sizes after the
 first completed build.
 
-The wave uses reviewed cornerstone CELEX seeds in each practice domain instead of top-level
+The wave uses reviewed cornerstone CELEX seeds in each engineering acquisition group instead of top-level
 directory codes. Relationship closure supplies their bounded legal context. Reverse legal-basis
 closure admits regulations and directives, but excludes case-specific decisions that would turn a
 legislative corpus into an unbounded administrative case collection. Complete primary-law seeds

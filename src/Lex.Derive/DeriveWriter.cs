@@ -75,27 +75,27 @@ public static class DeriveWriter
     public static Stats Derive(
         string corpusRoot, string outRoot, string publisher,
         string deriverCodeCommit, string deriverTreeId,
-        string corpusCommit, string reviewedConfigurationSha256) =>
+        string corpusCommit) =>
         DeriveCore(corpusRoot, outRoot, publisher, deriverCodeCommit, deriverTreeId,
-            corpusCommit, reviewedConfigurationSha256, stagedFileWritten: null);
+            corpusCommit, stagedFileWritten: null);
 
     internal static Stats Derive(
         string corpusRoot, string outRoot, string publisher,
         string deriverCodeCommit, string deriverTreeId,
-        string corpusCommit, string reviewedConfigurationSha256,
+        string corpusCommit,
         Action<string>? stagedFileWritten) =>
         DeriveCore(corpusRoot, outRoot, publisher, deriverCodeCommit, deriverTreeId,
-            corpusCommit, reviewedConfigurationSha256, stagedFileWritten);
+            corpusCommit, stagedFileWritten);
 
     private static Stats DeriveCore(
         string corpusRoot, string outRoot, string publisher,
         string deriverCodeCommit, string deriverTreeId,
-        string corpusCommit, string reviewedConfigurationSha256,
+        string corpusCommit,
         Action<string>? stagedFileWritten)
     {
         var buildIdentity = ReadBuildIdentity(
             corpusRoot, deriverCodeCommit, deriverTreeId,
-            corpusCommit, reviewedConfigurationSha256);
+            corpusCommit);
         var worksDir = Path.Combine(corpusRoot, "works");
         if (!Directory.Exists(worksDir)) throw new DirectoryNotFoundException(worksDir);
 
@@ -438,7 +438,6 @@ public static class DeriveWriter
                 buildIdentity.IngesterCodeCommit,
                 buildIdentity.DeriverCodeCommit,
                 buildIdentity.DeriverTreeId,
-                buildIdentity.ReviewedConfigurationSha256,
                 acceptedProfiles);
         }
         return new Stats(works, versions, provisionCount, skipped, errors, emptyProvisions, mostlyEmpty);
@@ -448,13 +447,12 @@ public static class DeriveWriter
         string IngesterCodeCommit,
         string DeriverCodeCommit,
         string DeriverTreeId,
-        string ReviewedConfigurationSha256,
         string CorpusManifestSha256,
         string CorpusCommit);
 
     private static BuildIdentity ReadBuildIdentity(
         string corpusRoot, string deriverCodeCommit, string deriverTreeId,
-        string corpusCommit, string reviewedConfigurationSha256)
+        string corpusCommit)
     {
         var manifestPath = Path.Combine(corpusRoot, "manifest.json");
         if (!File.Exists(manifestPath))
@@ -471,10 +469,8 @@ public static class DeriveWriter
             deriverCodeCommit, "deriver code commit");
         var tree = CodeIdentity.RequireFullGitObjectId(
             deriverTreeId, "deriver tree id");
-        var configuration = CodeIdentity.RequireSha256(
-            reviewedConfigurationSha256, "reviewed configuration digest");
         var corpus = CodeIdentity.RequireFullCommit(corpusCommit, "corpus commit");
-        return new(ingester, deriver, tree, configuration,
+        return new(ingester, deriver, tree,
             DerivationGeneration.Sha256File(manifestPath), corpus);
     }
 

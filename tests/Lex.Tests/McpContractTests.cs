@@ -59,6 +59,10 @@ public class McpContractTests : IDisposable
         {
             Prov(docs[0], 0, "art_1", "the thing shall apply everywhere"),
             Prov(docs[1], 0, "art_1", "the thing shall apply everywhere, revised"),
+            Prov(docs[0], 1, "art_2", "unchanged article"),
+            Prov(docs[1], 1, "art_2", "unchanged article"),
+            Prov(docs[0], 2, "art_3", "removed article"),
+            Prov(docs[1], 2, "art_4", "added article"),
         };
         IndexBuilder.Build(_db, stamp, docs, provisions, [], [], StampSigner.CreateKeyPem());
         _reader = LexIndexReader.Open(_db);
@@ -438,7 +442,7 @@ public class McpContractTests : IDisposable
             .Single(tool => tool["name"]!.GetValue<string>() == "as_of");
         Assert.Equal(10,
             asOf["inputSchema"]!["properties"]!["date"]!["maxLength"]!.GetValue<int>());
-        Assert.Equal("^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+        Assert.Equal(LegalOperationCatalog.IsoDatePattern,
             asOf["inputSchema"]!["properties"]!["date"]!["pattern"]!.GetValue<string>());
     }
 
@@ -517,6 +521,116 @@ public class McpContractTests : IDisposable
     }
 
     [Fact]
+    public void Search_returns_the_exact_typed_publisher_metadata_row_and_accepts_only_an_explicit_identifier_filter()
+    {
+        var db = Path.Combine(Path.GetTempPath(), $"lex-mcp-publisher-metadata-{Guid.NewGuid():N}.db");
+        try
+        {
+            const string firstId = "http://eurovoc.europa.eu/558";
+            const string secondId = "http://eurovoc.europa.eu/2472";
+            DocRow Subject(string work, string identifier, string kind) =>
+                ContractDoc("eu-eurlex", work, "2024-01-01", "en") with
+                {
+                    Title = $"Instrument {work}",
+                    TitleShort = $"Instrument {work}",
+                    PublisherMetadata =
+                    [
+                        new PublisherMetadataRow(kind, identifier, "en", "energy policy", identifier),
+                    ],
+                };
+            BuildContractIndex(db, "eu-eurlex",
+                [Subject("first", firstId, "eurovoc"),
+                 Subject("second", secondId, "eurovoc_broader")]);
+            using var reader = LexIndexReader.Open(db);
+            var core = new McpCore(new Dictionary<string, LexIndexReader> { ["eu-eurlex"] = reader });
+
+            var response = Assert.IsType<JsonArray>(core.CallTool("search", new JsonObject
+            {
+                ["query"] = "energy policy",
+                ["publisher_metadata_identifier"] = firstId,
+            }));
+            var part = Assert.Single(response.OfType<JsonObject>());
+            Assert.False(part["query_plan"]!["has_strong_work_match"]!.GetValue<bool>());
+            Assert.Empty(part["query_plan"]!["work_constraints"]!.AsArray());
+            var hit = Assert.Single(part["hits"]!.AsArray())!.AsObject();
+            Assert.Equal("first", hit["work"]!.GetValue<string>());
+            Assert.Contains("work_metadata", hit["match_reasons"]!.AsArray()
+                .Select(reason => reason!.GetValue<string>()));
+            var matched = hit["matched_publisher_metadata"]!.AsObject();
+            Assert.Equal("eurovoc", matched["kind"]!.GetValue<string>());
+            Assert.Equal(firstId, matched["identifier"]!.GetValue<string>());
+            Assert.Equal("energy policy", matched["label"]!.GetValue<string>());
+            Assert.Equal("en", matched["language"]!.GetValue<string>());
+            Assert.Equal(firstId, matched["source_uri"]!.GetValue<string>());
+            Assert.Null(matched["matched_segment"]);
+
+            var definition = core.ToolDefs().OfType<JsonObject>()
+                .Single(tool => tool["name"]!.GetValue<string>() == "search");
+            var filter = definition["inputSchema"]!["properties"]!["publisher_metadata_identifier"]!;
+            Assert.Equal(2048, filter["maxLength"]!.GetValue<int>());
+            Assert.Equal("^https?://", filter["pattern"]!.GetValue<string>());
+        }
+        finally { try { File.Delete(db); } catch { } }
+    }
+
+    [Fact]
+    public void Search_keeps_EU_and_LU_metadata_in_one_neutral_cross_publisher_contract()
+    {
+        var euDb = Path.Combine(Path.GetTempPath(), $"lex-mcp-eu-topic-{Guid.NewGuid():N}.db");
+        var luDb = Path.Combine(Path.GetTempPath(), $"lex-mcp-lu-topic-{Guid.NewGuid():N}.db");
+        try
+        {
+            const string EuId = "http://eurovoc.europa.eu/558";
+            const string LuId = "https://data.legilux.public.lu/resource/authority/legal-subject/example";
+            var eu = ContractDoc("eu-eurlex", "eu-work", "2024-01-01", "en") with
+            {
+                Title = "EU instrument",
+                PublisherMetadata =
+                [new PublisherMetadataRow("eurovoc", EuId, "en", "energy policy", EuId)],
+            };
+            var lu = ContractDoc("lu-legilux", "lu-work", "2024-01-01", "fr") with
+            {
+                Title = "Acte luxembourgeois",
+                PublisherMetadata =
+                [new PublisherMetadataRow("legilux_subject_level1_theme", LuId, "fr",
+                    "politique énergétique", LuId)],
+            };
+            BuildContractIndex(euDb, "eu-eurlex", [eu]);
+            BuildContractIndex(luDb, "lu-legilux", [lu]);
+            using var euReader = LexIndexReader.Open(euDb);
+            using var luReader = LexIndexReader.Open(luDb);
+            var core = new McpCore(new Dictionary<string, LexIndexReader>
+            {
+                ["eu-eurlex"] = euReader,
+                ["lu-legilux"] = luReader,
+            });
+
+            var response = Assert.IsType<JsonArray>(core.CallTool("search", new JsonObject
+            {
+                ["query"] = "policy politique energy énergétique",
+                ["limit"] = 2,
+            }));
+
+            Assert.Equal(2, response.Count);
+            var objects = response.OfType<JsonObject>().ToArray();
+            var euHit = Assert.Single(objects.Single(part =>
+                part["envelope"]!["publisher"]!.GetValue<string>() == "eu-eurlex")["hits"]!.AsArray())!;
+            var luHit = Assert.Single(objects.Single(part =>
+                part["envelope"]!["publisher"]!.GetValue<string>() == "lu-legilux")["hits"]!.AsArray())!;
+            Assert.Equal("eurovoc", euHit["matched_publisher_metadata"]!["kind"]!.GetValue<string>());
+            Assert.Equal("legilux_subject_level1_theme",
+                luHit["matched_publisher_metadata"]!["kind"]!.GetValue<string>());
+            Assert.All(objects, part =>
+                Assert.False(part["query_plan"]!["has_strong_work_match"]!.GetValue<bool>()));
+        }
+        finally
+        {
+            try { File.Delete(euDb); } catch { }
+            try { File.Delete(luDb); } catch { }
+        }
+    }
+
+    [Fact]
     public void Global_resolution_preserves_known_and_unknown_mentions_across_publishers()
     {
         var euPath = Path.Combine(Path.GetTempPath(), $"lex-eu-{Guid.NewGuid():N}.db");
@@ -533,12 +647,19 @@ public class McpContractTests : IDisposable
                 ["collection"] = collection, ["tier"] = "A", ["history_begins"] = "publisher",
                 ["built_at"] = "2026-08-08T00:00:00Z", ["corpus_commit"] = "test",
             };
-            var gdpr = Doc("eu", "32016r0679", "Privacy regulation");
+            var gdpr = Doc("eu", "32016r0679", "Privacy regulation") with
+            {
+                PublisherMetadata =
+                [
+                    new PublisherMetadataRow(
+                        "publisher_short_title",
+                        "http://publications.europa.eu/ontology/cdm#expression_title_short",
+                        "fr", "GDPR",
+                        "https://eur-lex.europa.eu/legal-content/FR/TXT/?uri=CELEX:32016R0679"),
+                ],
+            };
             var lu = Doc("lu", "local", "Local act");
-            IndexBuilder.Build(euPath, Stamp("eu"), [gdpr], [], [], [], null,
-                workSearch: new WorkSearchBuildOptions(
-                    [new ReviewedWorkAliasRow("32016r0679", "fr", "GDPR", "test")],
-                    [], new string('a', 64)));
+            IndexBuilder.Build(euPath, Stamp("eu"), [gdpr], [], [], [], null);
             IndexBuilder.Build(luPath, Stamp("lu"), [lu], [], [], [], null);
             using var euReader = LexIndexReader.Open(euPath);
             using var luReader = LexIndexReader.Open(luPath);
@@ -563,6 +684,68 @@ public class McpContractTests : IDisposable
         {
             try { File.Delete(euPath); } catch { }
             try { File.Delete(luPath); } catch { }
+        }
+    }
+
+    [Fact]
+    public void Global_official_short_title_collisions_are_sorted_and_capped_at_twenty()
+    {
+        var paths = new List<string>();
+        var readers = new Dictionary<string, LexIndexReader>(StringComparer.Ordinal);
+        try
+        {
+            for (var publisher = 0; publisher < 8; publisher++)
+            {
+                var collection = $"p{publisher}";
+                var path = Path.Combine(Path.GetTempPath(), $"lex-{collection}-{Guid.NewGuid():N}.db");
+                paths.Add(path);
+                var docs = Enumerable.Range(0, 3).Select(index =>
+                {
+                    var work = $"w{index}";
+                    var source = $"https://example.test/{collection}/{work}";
+                    return new DocRow(
+                        $"{collection}:{work}:2024-01-01", collection, work, $"urn:{work}",
+                        "REG", "fr", "2024-01-01", null, "publisher",
+                        "2026-08-14T00:00:00Z", false, true, true, "record", "body",
+                        source, $"Directive {work}", null, null, "2024-01-01", null,
+                        PublisherMetadata:
+                        [
+                            new PublisherMetadataRow(
+                                "publisher_short_title",
+                                "http://publications.europa.eu/ontology/cdm#expression_title_short",
+                                "fr", "CRD", source),
+                        ]);
+                }).ToArray();
+                IndexBuilder.Build(path, new Dictionary<string, string>
+                {
+                    ["collection"] = collection,
+                    ["built_at"] = "2026-08-14T00:00:00Z",
+                    ["corpus_commit"] = "test",
+                }, docs, [], [], [], null);
+                readers.Add(collection, LexIndexReader.Open(path));
+            }
+
+            var core = new McpCore(readers);
+            var response = Assert.IsType<JsonArray>(core.CallTool("search", new JsonObject
+            {
+                ["query"] = "CRD",
+            }));
+            var plan = Assert.IsType<JsonObject>(response[0]!["query_plan"]);
+            var resolution = Assert.Single(
+                Assert.IsType<JsonArray>(plan["global_work_resolutions"]));
+            Assert.Equal("ambiguous", resolution!["status"]!.GetValue<string>());
+            var candidates = Assert.IsType<JsonArray>(resolution["candidates"])
+                .Select(node => node!.GetValue<string>()).ToArray();
+            Assert.Equal(20, candidates.Length);
+            Assert.Equal(candidates.Order(StringComparer.Ordinal), candidates);
+            Assert.Equal(20,
+                Assert.IsType<JsonArray>(resolution["publisher_short_title_matches"]).Count);
+        }
+        finally
+        {
+            foreach (var reader in readers.Values) reader.Dispose();
+            foreach (var path in paths)
+                try { File.Delete(path); } catch { }
         }
     }
 
@@ -671,14 +854,21 @@ public class McpContractTests : IDisposable
                 ["corpus_commit"] = "test",
             };
 
-            var gdpr = Doc("eu", "gdpr", "General Data Protection Regulation");
+            var gdpr = Doc("eu", "gdpr", "General Data Protection Regulation") with
+            {
+                PublisherMetadata =
+                [
+                    new PublisherMetadataRow(
+                        "publisher_short_title",
+                        "http://publications.europa.eu/ontology/cdm#expression_title_short",
+                        "fr", "RGPD",
+                        "https://eur-lex.europa.eu/legal-content/FR/TXT/?uri=CELEX:32016R0679"),
+                ],
+            };
             var guide = Doc("eu", "guide", "Guide to RGPD reporting");
             var unrelated = Doc("lu", "reporting", "Reporting Act");
             IndexBuilder.Build(euDb, Stamp("eu"), [gdpr, guide],
-                [Provision(gdpr, "Controllers have reporting obligations.")], [], [], null,
-                workSearch: new WorkSearchBuildOptions(
-                    [new ReviewedWorkAliasRow("gdpr", "fr", "RGPD", "reviewer")], [],
-                    new string('a', 64)));
+                [Provision(gdpr, "Controllers have reporting obligations.")], [], [], null);
             IndexBuilder.Build(luDb, Stamp("lu"), [unrelated],
                 [Provision(unrelated, "Companies have reporting obligations.")], [], [], null);
             using var eu = LexIndexReader.Open(euDb);
@@ -826,6 +1016,26 @@ public class McpContractTests : IDisposable
         Assert.Equal("unknown_anchor", Status(missing));
         Assert.Contains("art_1", Assert.IsType<JsonArray>(missing["anchors_not_in_version"])
             .Select(item => item!.GetValue<string>()));
+    }
+
+    [Theory]
+    [InlineData("art_1", true, true, true, false)]
+    [InlineData("art_2", true, true, false, true)]
+    [InlineData("art_3", true, false, true, null)]
+    [InlineData("art_4", false, true, true, null)]
+    public void Article_diff_reports_presence_and_wording_instead_of_document_identity(
+        string anchor, bool fromPresent, bool toPresent, bool changed, bool? textEqual)
+    {
+        var result = Call("diff", new JsonObject
+        {
+            ["work"] = "t-pub:w1", ["from_date"] = "2020-06-01",
+            ["to_date"] = "2022-06-01", ["anchor"] = anchor,
+        });
+
+        Assert.Equal(fromPresent, result["anchor_from_present"]!.GetValue<bool>());
+        Assert.Equal(toPresent, result["anchor_to_present"]!.GetValue<bool>());
+        Assert.Equal(changed, result["changed"]!.GetValue<bool>());
+        Assert.Equal(textEqual, result["anchor_text_equal"]?.GetValue<bool?>());
     }
 
     [Fact]

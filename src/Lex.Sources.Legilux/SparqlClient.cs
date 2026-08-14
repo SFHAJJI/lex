@@ -12,7 +12,12 @@ public sealed class SparqlClient(string endpoint, TimeSpan? pause = null)
     private static readonly HttpClient Http = CreateClient();
     private static readonly SourceRetryPolicy RetryPolicy = new(MaximumAttempts: 4);
     private readonly TimeSpan _pause = pause ?? TimeSpan.FromMilliseconds(1500);
+    private readonly Func<string, CancellationToken, Task<List<Dictionary<string, string>>>>? _selectOverride;
     private DateTimeOffset _lastRequest = DateTimeOffset.MinValue;
+
+    internal SparqlClient(
+        Func<string, CancellationToken, Task<List<Dictionary<string, string>>>> select)
+        : this("https://test.invalid", TimeSpan.Zero) => _selectOverride = select;
 
     private static HttpClient CreateClient()
     {
@@ -26,6 +31,7 @@ public sealed class SparqlClient(string endpoint, TimeSpan? pause = null)
 
     public async Task<List<Dictionary<string, string>>> SelectAsync(string query, CancellationToken ct)
     {
+        if (_selectOverride is not null) return await _selectOverride(query, ct);
         // Politeness: sequential with a pause between requests.
         var sinceLast = DateTimeOffset.UtcNow - _lastRequest;
         if (sinceLast < _pause) await Task.Delay(_pause - sinceLast, ct);
@@ -65,17 +71,31 @@ public sealed class SparqlClient(string endpoint, TimeSpan? pause = null)
         }
     }
 
-    /// <summary>Runs a paged query; <paramref name="pagedQuery"/> receives (limit, offset).</summary>
+    /// <summary>
+    /// Runs a paged query; <paramref name="pagedQuery"/> receives (limit, offset), and the
+    /// mandatory total maximum is checked before any page is appended.
+    /// </summary>
     public async Task<List<Dictionary<string, string>>> SelectPagedAsync(
-        Func<int, int, string> pagedQuery, int pageSize, CancellationToken ct, Action<int>? onPage = null)
+        Func<int, int, string> pagedQuery, int pageSize, int maximumRows,
+        CancellationToken ct, Action<int>? onPage = null)
     {
-        var all = new List<Dictionary<string, string>>();
-        for (var offset = 0; ; offset += pageSize)
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(pageSize);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumRows);
+        var all = new List<Dictionary<string, string>>(Math.Min(pageSize, maximumRows));
+        while (true)
         {
-            var page = await SelectAsync(pagedQuery(pageSize, offset), ct);
+            var remaining = maximumRows - all.Count;
+            var requestSize = (int)Math.Min(pageSize, (long)remaining + 1);
+            var page = await SelectAsync(pagedQuery(requestSize, all.Count), ct);
+            if (page.Count > requestSize)
+                throw new InvalidDataException(
+                    $"The SPARQL endpoint returned {page.Count} rows for a {requestSize}-row page.");
+            if (page.Count > remaining)
+                throw new InvalidDataException(
+                    $"The paged SPARQL result exceeds the configured maximum of {maximumRows} rows.");
             all.AddRange(page);
             onPage?.Invoke(all.Count);
-            if (page.Count < pageSize) break;
+            if (page.Count < requestSize) break;
         }
         return all;
     }

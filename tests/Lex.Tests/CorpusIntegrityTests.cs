@@ -157,6 +157,39 @@ public sealed class CorpusIntegrityTests : IDisposable
     }
 
     [Fact]
+    public async Task Version_four_rejects_tampered_source_configuration_and_unknown_metadata_kinds()
+    {
+        await new CorpusWriter(_dir,
+                DateTimeOffset.Parse("2026-08-06T00:00:00Z"), CodeCommit)
+            .WriteAsync(new TextAdapter(), default);
+        var manifestPath = Path.Combine(_dir, "manifest.json");
+        var manifest = JsonSerializer.Deserialize<ManifestDoc>(
+            await File.ReadAllTextAsync(manifestPath), CorpusJson.Options)!;
+        manifest.SourceConfigurationSha256 = new string('1', 64);
+        await File.WriteAllTextAsync(manifestPath,
+            JsonSerializer.Serialize(manifest, CorpusJson.Options) + "\n");
+
+        var metaPath = Path.Combine(VersionDirectory, "meta.json");
+        var meta = JsonSerializer.Deserialize<VersionMeta>(
+            await File.ReadAllTextAsync(metaPath), CorpusJson.Options)!;
+        meta.PublisherMetadata =
+        [
+            new PublisherMetadataRecord(
+                "invented_legal_classification", "https://example.test/concept", "en",
+                "Invented classification", "https://example.test/concept"),
+        ];
+        await File.WriteAllTextAsync(metaPath,
+            JsonSerializer.Serialize(meta, CorpusJson.Options) + "\n");
+
+        var report = CorpusIntegrity.Verify(_dir);
+
+        Assert.Contains(report.Errors, error => error.Contains(
+            "source_configuration_sha256 must be null", StringComparison.Ordinal));
+        Assert.Contains(report.Errors, error => error.Contains(
+            "publisher_metadata is invalid", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task Version_three_remains_read_only_integrity_input_for_fresh_migration()
     {
         await new CorpusWriter(_dir,
@@ -192,8 +225,7 @@ public sealed class CorpusIntegrityTests : IDisposable
         Assert.Throws<InvalidDataException>(() => Lex.Derive.DeriveWriter.Derive(
             _dir, Path.Combine(_dir, "derived"), "test", CodeCommit,
             "dddddddddddddddddddddddddddddddddddddddd",
-            "cccccccccccccccccccccccccccccccccccccccc",
-            "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"));
+            "cccccccccccccccccccccccccccccccccccccccc"));
         Assert.Throws<InvalidDataException>(() => IndexFromCorpus.Build(
             _dir, null, Path.Combine(_dir, "index.db"), null,
             DateTimeOffset.Parse("2026-08-06T00:00:00Z"),

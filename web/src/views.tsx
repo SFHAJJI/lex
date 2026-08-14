@@ -5,6 +5,7 @@ import {
 import { facetLabel, jurisdictionLabel } from "./facets";
 import { publisherOf, workSlug } from "./state";
 import { shorten } from "./pickers";
+import { assistantTimelineRows } from "./assistantShell";
 import { EvidenceActions } from "./EvidenceActions";
 import { citationText, evidenceFilename, lawEvidenceMarkdown } from "./export";
 import Markdown from "react-markdown";
@@ -302,6 +303,41 @@ export function VersionRail({ dates, current, compareTo, scope, today, work, tim
         </div>
       </div>
     </div>
+  );
+}
+
+export function Timeline({ view, onOpen }: {
+  view: NonNullable<UiEffect["timeline"]>;
+  onOpen: (date: string) => void;
+}) {
+  const rows = assistantTimelineRows({ timeline: view });
+  return (
+    <section className="evidence-panel" aria-labelledby="timeline-result-title">
+      <div className="cnt">
+        <span className="tag">{view.total_count.toLocaleString()} dated versions</span>
+        {view.truncated ? <span className="tag">showing {view.rows.length}</span> : null}
+      </div>
+      <h2 id="timeline-result-title">Version history</h2>
+      <ol className="rows">
+        {rows.map((row) => (
+          <li key={row.key}>
+            {row.canOpenByDate ? (
+              <button className="operation-open" onClick={() => onOpen(row.valid_from)}>
+                {row.valid_from}{row.valid_to ? ` to ${row.valid_to}` : " onward"}
+              </button>
+            ) : (
+              <span>{row.valid_from}{row.valid_to ? ` to ${row.valid_to}` : " onward"}</span>
+            )}
+            {row.language ? <span className="sub">{row.language.toUpperCase()}</span> : null}
+          </li>
+        ))}
+      </ol>
+      {view.truncated ? (
+        <p className="sub" role="status">
+          This result is incomplete. Open the law to load the complete version rail.
+        </p>
+      ) : null}
+    </section>
   );
 }
 
@@ -680,6 +716,9 @@ export function CitedBy({ view, onOpen }: {
           </li>
         ))}
       </ul>
+      {view.rows.length === 0 ? (
+        <Empty>No held provision version in this corpus refers to this law.</Empty>
+      ) : null}
     </>
   );
 }

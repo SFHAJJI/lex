@@ -21,6 +21,9 @@
     <EmbeddedResource Include="..\..\deploy\trusted-artifact-roots.json"
                       Link="trusted-artifact-roots.json"
                       LogicalName="Lex.Web.trusted-artifact-roots.json" />
+    <EmbeddedResource Include="..\..\deploy\trusted-evaluation-review-roots.json"
+                      Link="trusted-evaluation-review-roots.json"
+                      LogicalName="Lex.Web.trusted-evaluation-review-roots.json" />
     <EmbeddedResource Include="..\..\evals\retrieval-cases.json"
                       Link="retrieval-cases.json"
                       LogicalName="Lex.Web.retrieval-cases.json" />

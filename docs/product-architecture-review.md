@@ -262,24 +262,31 @@ Strong evidence has a non-empty legal anchor and a `keyword`, `fuzzy`, or provis
 `semantic` reason. `work_metadata`, `semantic_concept`, bare `article_intent`, and anchorless hits
 are weak. Weak evidence can propose bounded clarification choices but never authorize a work.
 
-Carried authority uses the most recent resolving turn only, includes all works resolved in that
-turn, is replaced by a newer resolving turn, and is cleared by `New conversation`. It never
-accumulates silently across topics. A clarification selection authorizes exactly its opaque work
-value and replays the pending intent once. `None of these` exits without consuming model quota.
-Unrelated text is a fresh question. At most one repeated clarification is allowed before a bounded
-gap response.
+Carried authority is a server-owned structured record from the most recent resolving turn. It
+includes all works resolved in that turn, is replaced by a newer resolving turn, and is cleared by
+a fresh unrelated aggregate or search turn and by `New conversation`. It never accumulates
+silently across topics. The prior raw transcript and assistant prose are not reinterpreted as
+authority. A clarification selection authorizes exactly its opaque work value and replays the
+pending intent once. `None of these` exits without consuming model quota. Unrelated text is a
+fresh question. At most one repeated clarification is allowed before a bounded gap response.
 
 ### 5.5 Conversation and reset
 
-Conversation is tab-scoped and server-stateless. The browser sends a bounded transcript to the
-server and Azure OpenAI when model planning or synthesis is needed, so copy must not claim that the
-content remains only in the browser. The UI warns against submitting confidential client facts and
-links to the data-handling explanation.
+Conversation continuity is server-owned, ephemeral and tab-scoped by a random opaque capability.
+The browser keeps the token and visible transcript only in component memory: neither is placed in
+web storage, a URL, logs or traces. It sends only the current message and token. The server retains
+at most six accepted turns for 30 idle minutes, bounded to 32 KiB per thread, 1,024 threads and
+16 MiB across the process. Only a SHA-256 token digest is retained. Expired, evicted and forged
+tokens fail closed without creating or joining another thread, and responses carrying the token
+are private and `no-store`. A restart loses the ephemeral memory. Durable personal profiling
+remains out of scope.
 
-`New conversation` clears transcript, pending clarification, carried work authority, and model
-context, but retains the current legal workspace. The accessible name is `New conversation`.
-Current-user messages over the server limit are rejected visibly rather than silently truncated;
-stored assistant history may be bounded without altering the current request.
+`New conversation` resets the server thread and clears the component-memory transcript, pending
+clarification, carried work authority, and model context, but retains the current legal workspace.
+The accessible name is `New conversation`. Current-user messages over the server limit are
+rejected visibly rather than silently truncated; stored assistant history may be bounded without
+altering the current request. The UI warns against submitting confidential client facts and links
+to the data-handling explanation.
 
 ### 5.6 Streaming and idempotency
 
@@ -470,7 +477,8 @@ Every gated denominator must be non-empty for every frozen collection. Empty den
 Tests must cover route, authorized work, MCP tool and arguments, authoritative outcome, typed UI
 effect, evidence context, reply owner, locale, model-call count, and forbidden claims. Each case
 states whether it runs against the extended fixture, a recorded MCP contract, or production. The
-fixture adds a second publisher, same-title ambiguity, reviewed aliases, an extraction-profile
+fixture adds a second publisher, same-title ambiguity, unique and colliding official short-title
+segments, an extraction-profile
 pair, a future-dated work, metadata-only records, and direct/weak discovery hits. Minimum cases:
 
 - show Article 6 GDPR as of 2021;
@@ -533,10 +541,12 @@ manifest set. Existing v2 reports remain public historical evidence.
 The release candidate smoke must assert semantic outcomes for representative exact, aggregate,
 comparison-gap, and clarification cases. Checking only that a JSON `reply` exists is forbidden.
 
-One live release run is limited to 20 frozen cases, 1,000,000 input tokens, 100,000 output tokens,
+One live release run is limited to 20 frozen cases, 1,000,000 input tokens, 125,000 output tokens,
 and an estimated cost of EUR 10 at the then-current deployment price. The runner calculates the
 estimate before inference and aborts if any envelope would be exceeded. Production audit calls use
-a separately reserved quota and do not consume the public allowance.
+a separately signed, release-bound capability and do not consume either public daily counter. The
+capability binds exact request digests and retains shared concurrency, queue, deadline and model
+limits; it is never a static bypass secret.
 
 ### 8.4 Performance budgets
 

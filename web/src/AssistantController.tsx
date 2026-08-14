@@ -4,8 +4,8 @@ import {
   AssistantResponseError,
   askQuestionError,
   askStreaming,
-  boundedAskHistory,
   clarificationFollowUp,
+  resetAskThread,
   shouldOfferContextualFollowUps,
   type AskMessage,
   type AskReply,
@@ -15,14 +15,12 @@ import {
 import AskPanel from "./AskPanel";
 import { assistantWorkspaceUrl, stepWorkspaceUrl } from "./assistantShell";
 
-const ASK_HISTORY_KEY = "lex.ask.history.v1";
+const MAX_VISIBLE_MESSAGES = 12;
 
-function restoredAskHistory(): AskMessage[] {
-  try {
-    return boundedAskHistory(JSON.parse(sessionStorage.getItem(ASK_HISTORY_KEY) ?? "[]"));
-  } catch {
-    return [];
-  }
+function boundedVisibleConversation(messages: AskMessage[]): AskMessage[] {
+  const visible = messages.slice(-MAX_VISIBLE_MESSAGES);
+  while (visible[0]?.role === "assistant") visible.shift();
+  return visible;
 }
 
 export interface AssistantControllerProps {
@@ -45,14 +43,14 @@ export default function AssistantController({
   const [said, setSaid] = useState<string>();
   const [resultUrl, setResultUrl] = useState<string>();
   const [allowContextualFollowUps, setAllowContextualFollowUps] = useState(false);
-  const restored = useRef(restoredAskHistory()).current;
-  const [conversation, setConversation] = useState<AskMessage[]>(restored);
+  const [conversation, setConversation] = useState<AskMessage[]>([]);
   const [activeQuestion, setActiveQuestion] = useState<string>();
   const [clarification, setClarification] = useState<{
     context: string; choices: ClarificationChoice[];
   }>();
   const abort = useRef<AbortController>();
-  const history = useRef<AskMessage[]>(restored);
+  const history = useRef<AskMessage[]>([]);
+  const threadToken = useRef<string>();
 
   useEffect(() => () => abort.current?.abort(), []);
 
@@ -84,12 +82,8 @@ export default function AssistantController({
     const idempotencyKey = crypto.randomUUID();
     const streamedOperations = new Map<string, NonNullable<AskReply["operations"]>[number]>();
     try {
-      const messages = boundedAskHistory([
-        ...history.current,
-        { role: "user", content: question } as AskMessage,
-      ]);
       const reply = await askStreaming(
-        messages,
+        question,
         {
           onStep: (step) => {
             if (abort.current === controller)
@@ -105,6 +99,7 @@ export default function AssistantController({
         },
         controller.signal,
         idempotencyKey,
+        threadToken.current,
       );
       if (abort.current !== controller) return;
       const visibleReply = reply.clarification?.question ?? reply.reply;
@@ -117,20 +112,26 @@ export default function AssistantController({
         : undefined);
       setAllowContextualFollowUps(shouldOfferContextualFollowUps(reply));
       if (!reply.error) {
-        history.current = boundedAskHistory([
-          ...messages,
+        threadToken.current = reply.thread_token;
+        history.current = boundedVisibleConversation([
+          ...history.current,
+          { role: "user", content: question } as AskMessage,
           { role: "assistant", content: visibleReply } as AskMessage,
         ]);
-        try {
-          sessionStorage.setItem(ASK_HISTORY_KEY, JSON.stringify(history.current));
-        } catch { /* Conversation memory is optional in restricted browsing modes. */ }
       }
       if (reply.narrated === false) setSteps([]);
       if (standalone) setResultUrl(assistantWorkspaceUrl(reply.ui));
       onReply?.(reply);
     } catch (error) {
-      if (!controller.signal.aborted) setSaid(error instanceof AssistantResponseError
-        ? error.message : "The request failed, try again.");
+      if (!controller.signal.aborted) {
+        if (error instanceof AssistantResponseError && error.status === 409) {
+          threadToken.current = undefined;
+          history.current = [];
+          setConversation([]);
+        }
+        setSaid(error instanceof AssistantResponseError
+          ? error.message : "The request failed, try again.");
+      }
     } finally {
       if (abort.current === controller) setBusy(false);
     }
@@ -139,6 +140,9 @@ export default function AssistantController({
   const resetConversation = useCallback(() => {
     abort.current?.abort();
     abort.current = undefined;
+    const token = threadToken.current;
+    threadToken.current = undefined;
+    if (token) void resetAskThread(token);
     history.current = [];
     setConversation([]);
     setActiveQuestion(undefined);
@@ -149,7 +153,6 @@ export default function AssistantController({
     setSteps([]);
     setClarification(undefined);
     setBusy(false);
-    try { sessionStorage.removeItem(ASK_HISTORY_KEY); } catch { /* Optional tab memory. */ }
   }, []);
 
   const followUps = clarification

@@ -1,0 +1,110 @@
+name: retention-inventory
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_revision:
+        description: Exact zero-traffic candidate to protect, if one exists
+        required: false
+        default: ""
+        type: string
+      rollback_revision:
+        description: Exact deployable rollback revision to protect
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  deployments: read
+  id-token: write
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RESOURCE_GROUP: rg-platform
+      CONTAINER_APP: ca-lex-web
+      ACR_NAME: crsoufien3orem
+      CANDIDATE_REVISION: ${{ inputs.candidate_revision }}
+      ROLLBACK_REVISION: ${{ inputs.rollback_revision }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - uses: azure/login@f5d393ae46f8fde4be8b75f32e3fc50e654ad0ca # v3
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Build exact dry-run retention plan
+        shell: bash
+        run: |
+          set -euo pipefail
+          for revision in "$CANDIDATE_REVISION" "$ROLLBACK_REVISION"; do
+            [ -z "$revision" ] || [[ "$revision" =~ ^ca-lex-web--[a-z0-9-]+$ ]] \
+              || { echo "::error::invalid protected revision"; exit 2; }
+          done
+
+          az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" --all -o json \
+            | jq '[.[] | {
+                name:.name,
+                active:.properties.active,
+                trafficWeight:(.properties.trafficWeight // 0),
+                createdTime:.properties.createdTime,
+                image:.properties.template.containers[0].image
+              }]' > revisions.json
+          production=$(jq -er \
+            '[.[] | select(.trafficWeight > 0)] | if length == 1 then .[0].name else error("traffic authority is not unique") end' \
+            revisions.json)
+
+          az acr manifest list-metadata --registry "$ACR_NAME" --name lex-web -o json \
+            | jq '[.[] | {digest:.digest,tags:(.tags // []),createdTime:(.createdTime // .lastUpdateTime)}]' \
+            > acr-manifests.json
+
+          receipts='[]'
+          while IFS= read -r deployment; do
+            id=$(printf '%s' "$deployment" | jq -r .id)
+            state=$(gh api "repos/$GITHUB_REPOSITORY/deployments/$id/statuses?per_page=1" \
+              --jq '.[0].state // empty')
+            receipt=$(printf '%s' "$deployment" | jq --arg state "$state" '{
+              id:.id,
+              state:$state,
+              created_at:.created_at,
+              target_revision:(.payload.target_revision // ""),
+              target_image:(.payload.target_image // ""),
+              rollback_revision:(.payload.rollback_revision // ""),
+              rollback_image:(.payload.rollback_image // "")
+            }')
+            receipts=$(jq -cn --argjson current "$receipts" --argjson item "$receipt" \
+              '$current + [$item]')
+          done < <(gh api "repos/$GITHUB_REPOSITORY/deployments?per_page=100" \
+            | jq -c '.[] | select(.task == "lex-revision-promotion")')
+
+          jq -n \
+            --arg production "$production" \
+            --arg candidate "$CANDIDATE_REVISION" \
+            --arg rollback "$ROLLBACK_REVISION" \
+            --slurpfile revisions revisions.json \
+            --slurpfile manifests acr-manifests.json \
+            --argjson receipts "$receipts" \
+            '{
+              schema:"lex-retention-inventory/1",
+              production_revision:$production,
+              candidate_revision:$candidate,
+              rollback_revision:$rollback,
+              revisions:$revisions[0],
+              promotion_receipts:$receipts,
+              acr_manifests:$manifests[0],
+              staging_blobs:[]
+            }' > retention-inventory.json
+          python3 scripts/deploy/retention_plan.py retention-inventory.json > retention-plan.json
+          cat retention-plan.json
+          {
+            echo "## Lex retention dry run"
+            echo
+            echo '```json'
+            cat retention-plan.json
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

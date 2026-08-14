@@ -5,11 +5,13 @@ cheap without pretending that a new legal source can be added safely through con
 
 ## Existing EUR-Lex document classes
 
-Adding another reviewed EU subject domain is a configuration change in `config/eu-scope.json`,
+Adding another reviewed EU acquisition group is a configuration change in
+`src/Lex.Sources.EurLex/eu-scope.json`,
 followed by `scope-preview`, review, and a backfill. The preview reports added and removed works,
 languages, temporal expressions, relationship-closure causes, missing consolidations, and expected
 artifact growth. The shared EUR-Lex adapter, temporal writer, derivation profiles, indexer, search,
-MCP tools, and web routes do not change.
+MCP tools, and web routes do not change. Group names and selection reasons are engineering inputs;
+they never become corpus legal metadata, indexed terms, filters, or evidence.
 
 ## A new document class from a known publisher
 
@@ -32,11 +34,10 @@ Search jurisdiction filters are matched against each mounted index's `jurisdicti
 are not mapped through a Luxembourg/EU switch, so another jurisdiction becomes searchable when
 its verified index is mounted.
 
-The search workspace also derives its jurisdiction, hierarchy, domain, act-form, binding-status,
-and language controls from mounted indexes. Extending an existing document class or reviewed
-domain does not require a parallel client-side option list. Known legal vocabulary can keep a
-lawyer-facing display-label override; an unknown value remains available through a deterministic
-readable fallback.
+The search workspace derives its jurisdiction, hierarchy, act-form, binding-status, and language
+controls from mounted indexes. The legacy generic domain field is empty in current v4 builds.
+Official classifications are returned as typed publisher metadata and may be selected again by
+their exact official URI; acquisition labels never enter that path.
 
 ## Required evidence before publication
 

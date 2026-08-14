@@ -87,7 +87,7 @@ public static class IndexBuilder
         {
             metadata.CommandText = """
                 SELECT r.group_key,r.language,m.kind,m.identifier,m.value,m.normalized,
-                       m.language,m.valid_from,m.valid_to,m.source_uri
+                       m.language,m.valid_from,m.valid_to,m.source_uri,m.citation_identity
                 FROM work_publisher_metadata m
                 JOIN work_records r ON r.work_id=m.work_id
                 ORDER BY r.group_key,r.language,m.kind,m.identifier,COALESCE(m.value,''),
@@ -99,7 +99,8 @@ public static class IndexBuilder
                     rows.GetString(0), rows.GetString(1), rows.GetString(2), rows.GetString(3),
                     rows.IsDBNull(4) ? null : rows.GetString(4), rows.GetString(5),
                     rows.IsDBNull(6) ? null : rows.GetString(6), rows.GetString(7),
-                    rows.IsDBNull(8) ? null : rows.GetString(8), rows.GetString(9));
+                    rows.IsDBNull(8) ? null : rows.GetString(8), rows.GetString(9),
+                    rows.GetInt64(10).ToString(System.Globalization.CultureInfo.InvariantCulture));
         }
         using var roles = connection.CreateCommand();
         roles.CommandText = "SELECT rid,role FROM document_roles ORDER BY rid,role";
@@ -145,8 +146,7 @@ public static class IndexBuilder
         string? signingKeyPem,
         IEnumerable<ProvisionStateRow>? provisionStates = null,
         IEnumerable<AnchorEventRow>? anchorEvents = null,
-        SemanticBuildOptions? semantic = null,
-        WorkSearchBuildOptions? workSearch = null)
+        SemanticBuildOptions? semantic = null)
     {
         var docRows = docs.ToList();
         var provisionRows = provisions.ToList();
@@ -367,7 +367,7 @@ public static class IndexBuilder
             CREATE TABLE work_publisher_metadata(
               work_id INTEGER NOT NULL, kind TEXT NOT NULL, identifier TEXT NOT NULL,
               value TEXT, normalized TEXT NOT NULL, language TEXT, valid_from TEXT NOT NULL, valid_to TEXT,
-              source_uri TEXT NOT NULL,
+              source_uri TEXT NOT NULL, citation_identity INTEGER NOT NULL,
               UNIQUE(work_id,kind,identifier,value,language,valid_from));
             CREATE INDEX ix_work_publisher_metadata
               ON work_publisher_metadata(work_id,kind,language,valid_from);
@@ -490,7 +490,7 @@ public static class IndexBuilder
             foreach (var p in new[] { "$rid", "$a", "$pid", "$pt", "$n", "$h", "$path", "$avf", "$wt", "$sha" })
                 insProv.Parameters.Add(new SqliteParameter(p, SqliteType.Text));
             var citationResolver = new CitationTargetResolver(stampValues["collection"],
-                docRows.Select(document => document.GroupKey), workSearch?.CitationAliases);
+                docRows);
             foreach (var p in provisionRows)
             {
                 if (!docByRid.TryGetValue(p.Rid, out var doc))
@@ -610,8 +610,7 @@ public static class IndexBuilder
                 ReportProgress(semantic, SemanticBuildStage.Database,
                     0, 0, databaseWatch, ref lastDatabasePercent, ref lastDatabaseReport, force: true);
 
-            WorkSearch.Populate(
-                conn, docRows, provisionRows, workSearch, semantic, semanticWriter, embeddingCache);
+            WorkSearch.Populate(conn, docRows, semantic, semanticWriter, embeddingCache);
 
             finalizationWatch = System.Diagnostics.Stopwatch.StartNew();
             ReportProgress(semantic, SemanticBuildStage.Finalization,
@@ -630,7 +629,7 @@ public static class IndexBuilder
                 ["schema"] = SchemaVersion,
                 ["algorithm"] = StampSigner.Algorithm,
                 ["content_digest"] = ContentDigest(conn, docRows, provisionRows),
-                ["work_catalog_version"] = "2",
+                ["work_catalog_version"] = "3",
             };
             using (var workCounts = conn.CreateCommand())
             {
@@ -657,8 +656,6 @@ public static class IndexBuilder
                 if (workVectorRecords > 0)
                     stamp["vector_layout"] = "lex-vectors/1-mixed-provision-work";
             }
-            if (workSearch is not null)
-                stamp["enrichment_digest"] = workSearch.EnrichmentDigest;
             finalizationCompleted++;
             finalizationHeartbeat?.SetCompleted(finalizationCompleted);
             ReportProgress(semantic, SemanticBuildStage.Finalization,

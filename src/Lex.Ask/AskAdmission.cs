@@ -2,6 +2,8 @@ namespace Lex.Ask;
 
 public enum AskAdmissionFailure { None, PerClientQuota, Busy, GlobalQuota }
 
+public enum AskAdmissionLane { Public, Evaluation }
+
 public sealed record AskAdmission(AskAdmissionFailure Failure, IDisposable? Lease)
 {
     public bool Accepted => Failure == AskAdmissionFailure.None && Lease is not null;
@@ -54,21 +56,26 @@ public sealed class AskAdmissionController
         }
     }
 
-    public AskAdmission TryAdmit(string client)
+    public AskAdmission TryAdmit(
+        string client,
+        AskAdmissionLane lane = AskAdmissionLane.Public)
     {
         lock (_sync)
         {
             ResetDayIfNeeded();
             var clientCount = _clients.GetValueOrDefault(client);
-            if (clientCount >= _perClientDaily)
+            if (lane == AskAdmissionLane.Public && clientCount >= _perClientDaily)
                 return new AskAdmission(AskAdmissionFailure.PerClientQuota, null);
             if (_executing >= _concurrent)
                 return new AskAdmission(AskAdmissionFailure.Busy, null);
-            if (_global >= _globalDaily)
+            if (lane == AskAdmissionLane.Public && _global >= _globalDaily)
                 return new AskAdmission(AskAdmissionFailure.GlobalQuota, null);
 
-            _clients[client] = clientCount + 1;
-            _global++;
+            if (lane == AskAdmissionLane.Public)
+            {
+                _clients[client] = clientCount + 1;
+                _global++;
+            }
             _executing++;
             return new AskAdmission(AskAdmissionFailure.None, new Lease(this));
         }

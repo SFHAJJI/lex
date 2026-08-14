@@ -29,6 +29,159 @@ public sealed class AskTransportTests
     }
 
     [Fact]
+    public async Task Server_threads_retain_only_bounded_recent_turns_and_bytes()
+    {
+        var clock = new ManualTimeProvider(new DateTimeOffset(2026, 8, 14, 10, 0, 0, TimeSpan.Zero));
+        var registry = new AskThreadRegistry(
+            clock, maximumThreads: 4, maximumRetainedTurns: 2,
+            maximumThreadBytes: 12_000, maximumRetainedBytes: 24_000);
+
+        string token;
+        await using (var created = AssertAcquired(await registry.AcquireAsync(null)))
+        {
+            token = created.Token;
+            Assert.Empty(created.History);
+            created.Commit("question one", "answer one", context: null);
+        }
+        await using (var second = AssertAcquired(await registry.AcquireAsync(token)))
+            second.Commit("question two", "answer two", context: null);
+        await using (var third = AssertAcquired(await registry.AcquireAsync(token)))
+            third.Commit("question three", "answer three", context: null);
+
+        await using var restored = AssertAcquired(await registry.AcquireAsync(token));
+        Assert.Equal([
+            "question two", "answer two", "question three", "answer three",
+        ], restored.History.OfType<JsonObject>()
+            .Select(message => message["content"]!.GetValue<string>()));
+        Assert.True(registry.RetainedBytes <= 24_000);
+        Assert.True(registry.RetainedBytesFor(token) <= 12_000);
+    }
+
+    [Fact]
+    public async Task Global_thread_byte_pressure_evicts_only_an_inactive_thread()
+    {
+        var registry = new AskThreadRegistry(
+            TimeProvider.System, maximumThreads: 4, maximumRetainedTurns: 1,
+            maximumThreadBytes: 64, maximumRetainedBytes: 80);
+        string firstToken;
+        await using (var first = AssertAcquired(await registry.AcquireAsync(null)))
+        {
+            firstToken = first.Token;
+            Assert.True(first.Commit("first", "first answer", context: null));
+        }
+
+        string secondToken;
+        await using (var second = AssertAcquired(await registry.AcquireAsync(null)))
+        {
+            secondToken = second.Token;
+            Assert.True(second.Commit("second", "second answer", context: null));
+        }
+
+        Assert.True(registry.RetainedBytes <= 80);
+        Assert.Equal(AskThreadAcquireKind.NotFound,
+            (await registry.AcquireAsync(firstToken)).Kind);
+        await using var retained = AssertAcquired(await registry.AcquireAsync(secondToken));
+        Assert.Contains(retained.History.OfType<JsonObject>(), message =>
+            message["content"]?.GetValue<string>() == "second answer");
+    }
+
+    [Fact]
+    public async Task Server_threads_serialize_one_owner_and_bound_waiters()
+    {
+        var registry = new AskThreadRegistry(
+            TimeProvider.System, maximumThreads: 4, maximumWaitersPerThread: 1);
+        var first = AssertAcquired(await registry.AcquireAsync(null));
+        var waiting = registry.AcquireAsync(first.Token).AsTask();
+
+        Assert.False(waiting.IsCompleted);
+        Assert.Equal(AskThreadAcquireKind.Busy,
+            (await registry.AcquireAsync(first.Token)).Kind);
+
+        await first.DisposeAsync();
+        await using var second = AssertAcquired(await waiting);
+        Assert.Equal(first.Token, second.Token);
+    }
+
+    [Fact]
+    public async Task Forged_expired_and_reset_thread_tokens_are_isolated()
+    {
+        var clock = new ManualTimeProvider(new DateTimeOffset(2026, 8, 14, 10, 0, 0, TimeSpan.Zero));
+        var registry = new AskThreadRegistry(
+            clock, maximumThreads: 4, idleTtl: TimeSpan.FromMinutes(5));
+        string token;
+        await using (var created = AssertAcquired(await registry.AcquireAsync(null)))
+        {
+            token = created.Token;
+            created.Commit("private question", "private answer", context: null);
+        }
+
+        var forged = token[..^1] + (token[^1] == 'A' ? "B" : "A");
+        Assert.Equal(AskThreadAcquireKind.NotFound,
+            (await registry.AcquireAsync(forged)).Kind);
+        await using (var intact = AssertAcquired(await registry.AcquireAsync(token)))
+            Assert.Contains(intact.History.OfType<JsonObject>(), message =>
+                message["content"]?.GetValue<string>() == "private question");
+
+        Assert.True(registry.Reset(token));
+        Assert.Equal(AskThreadAcquireKind.NotFound,
+            (await registry.AcquireAsync(token)).Kind);
+
+        await using (var replacement = AssertAcquired(await registry.AcquireAsync(null)))
+        {
+            token = replacement.Token;
+            replacement.Commit("new question", "new answer", context: null);
+        }
+        clock.Advance(TimeSpan.FromMinutes(6));
+        Assert.Equal(AskThreadAcquireKind.NotFound,
+            (await registry.AcquireAsync(token)).Kind);
+    }
+
+    [Fact]
+    public async Task Thread_context_disposition_distinguishes_preserve_replace_and_clear()
+    {
+        var registry = new AskThreadRegistry(TimeProvider.System, maximumThreads: 2);
+        var source = new AskSubjectAuthoritySource(
+            "publisher_short_title",
+            "http://publications.europa.eu/ontology/cdm#expression_title_short",
+            "CRR", "en",
+            "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32013R0575");
+        var authority = new AskConversationContext(
+            [new AskResolvedSubjectContext(
+                "eu-eurlex:32013r0575", "art_92", AuthoritySource: source)], "92");
+        string token;
+        await using (var created = AssertAcquired(await registry.AcquireAsync(null)))
+        {
+            token = created.Token;
+            Assert.True(created.Commit(
+                "CRR question", "CRR answer", authority,
+                AskConversationContextDisposition.Replace));
+        }
+        await using (var preserved = AssertAcquired(await registry.AcquireAsync(token)))
+        {
+            Assert.Equal("92", preserved.Context?.ArticleNumber);
+            Assert.Equal(source, Assert.Single(preserved.Context!.Subjects).AuthoritySource);
+            Assert.True(preserved.Commit(
+                "follow up", "follow-up answer", context: null,
+                AskConversationContextDisposition.Preserve));
+        }
+        await using (var cleared = AssertAcquired(await registry.AcquireAsync(token)))
+        {
+            Assert.Equal("92", cleared.Context?.ArticleNumber);
+            Assert.True(cleared.Commit(
+                "aggregate", "aggregate answer", context: null,
+                AskConversationContextDisposition.Clear));
+        }
+        await using var restored = AssertAcquired(await registry.AcquireAsync(token));
+        Assert.Null(restored.Context);
+    }
+
+    private static AskThreadLease AssertAcquired(AskThreadAcquire result)
+    {
+        Assert.Equal(AskThreadAcquireKind.Acquired, result.Kind);
+        return Assert.IsType<AskThreadLease>(result.Lease);
+    }
+
+    [Fact]
     public async Task Idempotency_joins_identical_work_and_rejects_key_reuse_with_other_bytes()
     {
         var registry = new AskRequestRegistry(TimeProvider.System, maximumEntries: 8);
@@ -130,10 +283,60 @@ public sealed class AskTransportTests
     }
 
     [Fact]
+    public void Evaluation_admission_skips_both_daily_counters_but_shares_concurrency()
+    {
+        var admission = new AskAdmissionController(
+            TimeProvider.System, perClientDaily: 1, globalDaily: 1, concurrent: 1);
+
+        using var publicLease = admission.TryAdmit("public-client").Lease;
+        var busyEvaluation = admission.TryAdmit(
+            "release-runner", AskAdmissionLane.Evaluation);
+
+        Assert.Equal(AskAdmissionFailure.Busy, busyEvaluation.Failure);
+        publicLease?.Dispose();
+
+        using var evaluationLease = admission.TryAdmit(
+            "release-runner", AskAdmissionLane.Evaluation).Lease;
+        Assert.NotNull(evaluationLease);
+        Assert.Equal(1, admission.AcceptedToday);
+        evaluationLease?.Dispose();
+        Assert.Equal(AskAdmissionFailure.PerClientQuota,
+            admission.TryAdmit("public-client").Failure);
+        Assert.Equal(AskAdmissionFailure.GlobalQuota,
+            admission.TryAdmit("another-public-client").Failure);
+    }
+
+    [Fact]
+    public void Public_default_admits_exactly_200_turns_per_client_per_utc_day()
+    {
+        var clock = new ManualTimeProvider(
+            new DateTimeOffset(2026, 8, 14, 23, 0, 0, TimeSpan.Zero));
+        var admission = new AskAdmissionController(
+            clock,
+            AskService.DefaultPerIpDaily,
+            AskService.DefaultGlobalDaily,
+            AskService.DefaultConcurrent);
+
+        Assert.Equal(200, AskService.DefaultPerIpDaily);
+        Assert.Equal(400, AskService.DefaultGlobalDaily);
+        for (var turn = 0; turn < 200; turn++)
+        {
+            using var lease = admission.TryAdmit("interview-client").Lease;
+            Assert.NotNull(lease);
+        }
+        Assert.Equal(AskAdmissionFailure.PerClientQuota,
+            admission.TryAdmit("interview-client").Failure);
+
+        clock.Advance(TimeSpan.FromHours(1));
+        using var nextUtcDay = admission.TryAdmit("interview-client").Lease;
+        Assert.NotNull(nextUtcDay);
+    }
+
+    [Fact]
     public async Task Http_stream_is_versioned_and_a_duplicate_does_not_plan_twice()
     {
         await using var site = new StreamingSite();
-        const string body = "{\"messages\":[{\"role\":\"user\",\"content\":\"Can Lex advise me?\"}]}";
+        const string body = "{\"message\":\"Can Lex advise me?\"}";
         using var first = Request(body, "stream-request");
         using var duplicate = Request(body, "stream-request");
 
@@ -144,6 +347,8 @@ public sealed class AskTransportTests
 
         Assert.Equal(200, (int)firstResponse.StatusCode);
         Assert.Equal(200, (int)duplicateResponse.StatusCode);
+        Assert.True(firstResponse.Headers.CacheControl?.NoStore);
+        Assert.True(firstResponse.Headers.CacheControl?.Private);
         Assert.Equal(1, site.Planner.Calls);
         var serverRequestId = firstResponse.Headers.GetValues("X-Lex-Request-Id").Single();
         Assert.Matches("^[a-f0-9]{32}$", serverRequestId);
@@ -151,14 +356,17 @@ public sealed class AskTransportTests
         Assert.Equal(serverRequestId,
             duplicateResponse.Headers.GetValues("X-Lex-Request-Id").Single());
         var frames = Frames(firstWire);
-        Assert.Equal(["operation_result", "done"], frames.Select(frame => frame.Event));
+        Assert.Equal([
+            "phase", "phase", "phase", "phase", "phase", "operation_result", "phase", "done",
+        ], frames.Select(frame => frame.Event));
         Assert.All(frames, frame =>
         {
             Assert.Equal("1", frame.Data["version"]?.GetValue<string>());
             Assert.Equal(serverRequestId, frame.Data["request_id"]?.GetValue<string>());
             Assert.True(frame.Data["server_elapsed_ms"]?.GetValue<double>() >= 0);
         });
-        Assert.Equal([1, 2], frames.Select(frame => frame.Data["sequence"]?.GetValue<int>()));
+        Assert.Equal([1, 2, 3, 4, 5, 6, 7, 8],
+            frames.Select(frame => frame.Data["sequence"]?.GetValue<int>()));
         Assert.Equal(["operation_result", "done"],
             Frames(duplicateWire).Select(frame => frame.Event));
         Assert.All(frames.Where(frame => frame.Event == "operation_result"), frame =>
@@ -173,11 +381,208 @@ public sealed class AskTransportTests
     }
 
     [Fact]
+    public async Task Http_threads_are_server_owned_and_idempotent_before_turn_mutation()
+    {
+        await using var site = new StreamingSite();
+        const string firstBody = "{\"message\":\"Can Lex advise me?\"}";
+        using var firstRequest = Request(firstBody, "thread-first");
+        var firstResponse = await site.Client.SendAsync(firstRequest);
+        var firstWire = await firstResponse.Content.ReadAsStringAsync();
+        var firstDone = Frames(firstWire).Single(frame => frame.Event == "done");
+        var token = firstDone.Data["payload"]?["thread_token"]?.GetValue<string>();
+
+        Assert.True(AskThreadRegistry.IsValidToken(token));
+        Assert.Equal(1, site.Planner.Calls);
+        Assert.Single(site.Planner.Histories);
+        Assert.Equal(["Can Lex advise me?"], site.Planner.Histories[0]
+            .OfType<JsonObject>().Select(message => message["content"]!.GetValue<string>()));
+
+        const string secondBody = "{\"message\":\"What about that law?\"}";
+        using var secondRequest = Request(secondBody, "thread-second", token);
+        using var duplicate = Request(secondBody, "thread-second", token);
+        var secondResponse = await site.Client.SendAsync(secondRequest);
+        var secondWire = await secondResponse.Content.ReadAsStringAsync();
+        var duplicateResponse = await site.Client.SendAsync(duplicate);
+        var duplicateWire = await duplicateResponse.Content.ReadAsStringAsync();
+
+        Assert.Equal(200, (int)secondResponse.StatusCode);
+        Assert.Equal(200, (int)duplicateResponse.StatusCode);
+        Assert.Equal(2, site.Planner.Calls);
+        Assert.Equal(3, site.Planner.Histories[1].Count);
+        Assert.Equal("What about that law?",
+            site.Planner.Histories[1][2]?["content"]?.GetValue<string>());
+        Assert.Equal(token, Frames(secondWire).Single(frame => frame.Event == "done")
+            .Data["payload"]?["thread_token"]?.GetValue<string>());
+        Assert.Equal(["operation_result", "done"],
+            Frames(duplicateWire).Select(frame => frame.Event));
+        Assert.Equal(2, site.Services.GetRequiredService<AskThreadRegistry>()
+            .RetainedTurnsFor(token!));
+    }
+
+    [Fact]
+    public async Task Nonstream_thread_capability_is_private_and_not_cacheable()
+    {
+        await using var site = new StreamingSite();
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/ask")
+        {
+            Content = new StringContent(
+                "{\"message\":\"Can Lex advise me?\"}", Encoding.UTF8, "application/json"),
+        };
+        request.Headers.Add("Idempotency-Key", "nonstream-thread");
+
+        var response = await site.Client.SendAsync(request);
+        var body = JsonNode.Parse(await response.Content.ReadAsStringAsync());
+
+        Assert.Equal(200, (int)response.StatusCode);
+        Assert.True(response.Headers.CacheControl?.NoStore);
+        Assert.True(response.Headers.CacheControl?.Private);
+        Assert.True(AskThreadRegistry.IsValidToken(body?["thread_token"]?.GetValue<string>()));
+    }
+
+    [Fact]
+    public async Task Unknown_thread_token_isolated_before_planning()
+    {
+        await using var site = new StreamingSite();
+        var unknown = Convert.ToBase64String(new byte[32])
+            .TrimEnd('=').Replace('+', '-').Replace('/', '_');
+        using var request = Request(
+            "{\"message\":\"Show coverage.\"}", "unknown-thread", unknown);
+
+        var response = await site.Client.SendAsync(request);
+
+        Assert.Equal(409, (int)response.StatusCode);
+        Assert.Equal("thread_unavailable",
+            JsonNode.Parse(await response.Content.ReadAsStringAsync())?
+                ["status"]?.GetValue<string>());
+        Assert.Equal(0, site.Planner.Calls);
+    }
+
+    [Fact]
+    public async Task Preexecution_thread_failures_do_not_fill_the_idempotency_registry()
+    {
+        var requests = new AskRequestRegistry(TimeProvider.System, maximumEntries: 2);
+        await using var site = new StreamingSite(askRequests: requests);
+        var unknown = Convert.ToBase64String(new byte[32])
+            .TrimEnd('=').Replace('+', '-').Replace('/', '_');
+
+        for (var i = 0; i < 5; i++)
+        {
+            using var rejected = Request(
+                "{\"message\":\"Show coverage.\"}", $"unknown-thread-{i}", unknown);
+            Assert.Equal(409, (int)(await site.Client.SendAsync(rejected)).StatusCode);
+        }
+
+        using var valid = Request(
+            "{\"message\":\"Can Lex advise me?\"}", "valid-after-forged-flood");
+        Assert.Equal(200, (int)(await site.Client.SendAsync(valid)).StatusCode);
+        Assert.Equal(1, site.Planner.Calls);
+    }
+
+    [Fact]
+    public async Task Cancelled_thread_waiter_completes_duplicate_without_replay_retention()
+    {
+        const string body = "{\"message\":\"Continue.\"}";
+        const string key = "cancelled-thread-waiter";
+        var requests = new AskRequestRegistry(TimeProvider.System, maximumEntries: 4);
+        var threads = new AskThreadRegistry(
+            TimeProvider.System, maximumThreads: 2, maximumWaitersPerThread: 1);
+        var held = AssertAcquired(await threads.AcquireAsync(null));
+        Assert.True(held.Commit("seed", "seed answer", context: null));
+        await using var site = new StreamingSite(
+            askThreads: threads, askRequests: requests);
+        using var cancellation = new CancellationTokenSource();
+        using var ownerRequest = Request(body, key, held.Token);
+        var ownerTask = site.Client.SendAsync(
+            ownerRequest, HttpCompletionOption.ResponseHeadersRead, cancellation.Token);
+        Assert.True(await EventuallyAsync(() => threads.WaitersFor(held.Token) == 1));
+        var duplicate = requests.Claim(
+            "another-client", key, AskFingerprint(body, held.Token));
+        Assert.Equal(AskRequestClaimKind.Duplicate, duplicate.Kind);
+
+        cancellation.Cancel();
+        var completed = await duplicate.Completion.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(499, completed.Status);
+        Assert.Contains("cancelled", completed.Body, StringComparison.OrdinalIgnoreCase);
+        try { await ownerTask; }
+        catch (OperationCanceledException) { }
+        Assert.True(await EventuallyAsync(() => threads.WaitersFor(held.Token) == 0));
+        await held.DisposeAsync();
+
+        using var retry = Request(body, key, held.Token);
+        Assert.Equal(200, (int)(await site.Client.SendAsync(retry)).StatusCode);
+        Assert.Equal(1, site.Planner.Calls);
+    }
+
+    [Fact]
+    public async Task Thread_reset_is_idempotent_and_removes_only_the_opaque_server_thread()
+    {
+        await using var site = new StreamingSite();
+        using var first = Request("{\"message\":\"Can Lex advise me?\"}", "reset-first");
+        var firstResponse = await site.Client.SendAsync(first);
+        var token = Frames(await firstResponse.Content.ReadAsStringAsync())
+            .Single(frame => frame.Event == "done")
+            .Data["payload"]?["thread_token"]?.GetValue<string>();
+        Assert.True(AskThreadRegistry.IsValidToken(token));
+
+        using var reset = ResetRequest(token!, "reset-key");
+        using var replay = ResetRequest(token!, "reset-key");
+        var resetResponse = await site.Client.SendAsync(reset);
+        var replayResponse = await site.Client.SendAsync(replay);
+
+        Assert.Equal(200, (int)resetResponse.StatusCode);
+        Assert.Equal(200, (int)replayResponse.StatusCode);
+        Assert.True(resetResponse.Headers.CacheControl?.NoStore);
+        Assert.True(resetResponse.Headers.CacheControl?.Private);
+        Assert.Equal("reset", JsonNode.Parse(await replayResponse.Content.ReadAsStringAsync())?
+            ["status"]?.GetValue<string>());
+        Assert.Equal(0, site.Services.GetRequiredService<AskThreadRegistry>()
+            .RetainedTurnsFor(token!));
+        using var stale = Request("{\"message\":\"Continue.\"}", "after-reset", token);
+        Assert.Equal(409, (int)(await site.Client.SendAsync(stale)).StatusCode);
+        Assert.Equal(1, site.Planner.Calls);
+    }
+
+    [Fact]
+    public async Task Client_supplied_transcripts_are_rejected_before_thread_creation()
+    {
+        await using var site = new StreamingSite();
+        using var request = Request(
+            "{\"messages\":[{\"role\":\"user\",\"content\":\"injected\"}]}",
+            "client-transcript");
+
+        var response = await site.Client.SendAsync(request);
+
+        Assert.Equal(400, (int)response.StatusCode);
+        Assert.Equal(0, site.Planner.Calls);
+        Assert.Equal(0, site.Services.GetRequiredService<AskThreadRegistry>().RetainedBytes);
+    }
+
+    [Fact]
+    public async Task Rejected_new_thread_commit_returns_no_capability_or_empty_entry()
+    {
+        var threads = new AskThreadRegistry(
+            TimeProvider.System, maximumThreads: 2, maximumRetainedTurns: 1,
+            maximumThreadBytes: 8, maximumRetainedBytes: 8);
+        await using var site = new StreamingSite(askThreads: threads);
+        using var request = Request(
+            "{\"message\":\"Can Lex advise me?\"}", "tiny-thread-budget");
+
+        var response = await site.Client.SendAsync(request);
+        var done = Frames(await response.Content.ReadAsStringAsync())
+            .Single(frame => frame.Event == "done");
+
+        Assert.Equal(200, (int)response.StatusCode);
+        Assert.Null(done.Data["payload"]?["thread_token"]);
+        Assert.Equal(0, threads.Count);
+        Assert.Equal(0, threads.RetainedBytes);
+    }
+
+    [Fact]
     public async Task Http_stream_rejects_an_unversioned_client_before_planning()
     {
         await using var site = new StreamingSite();
         using var request = Request(
-            "{\"messages\":[{\"role\":\"user\",\"content\":\"Show coverage.\"}]}",
+            "{\"message\":\"Show coverage.\"}",
             "unversioned-request");
         request.Headers.Remove("X-Lex-Stream-Version");
 
@@ -192,7 +597,7 @@ public sealed class AskTransportTests
     {
         await using var site = new StreamingSite();
         using var invalidKey = Request(
-            "{\"messages\":[{\"role\":\"user\",\"content\":\"coverage\"}]}",
+            "{\"message\":\"coverage\"}",
             new string('x', 129));
         using var badJson = Request("{", "bad-json");
         using var missingMessages = Request("{}", "missing-messages");
@@ -203,7 +608,7 @@ public sealed class AskTransportTests
         {
             (await site.Client.SendAsync(invalidKey), 400, "Invalid Idempotency-Key."),
             (await site.Client.SendAsync(badJson), 400, "Bad JSON."),
-            (await site.Client.SendAsync(missingMessages), 400, "Body must be {\"messages\": [...]}."),
+            (await site.Client.SendAsync(missingMessages), 400, "Body must be {\"message\": \"...\"}."),
             (await site.Client.SendAsync(oversized), 413, "Request too large."),
         };
 
@@ -221,7 +626,7 @@ public sealed class AskTransportTests
     public async Task Idempotency_key_boundaries_are_checked_before_planning_and_stay_out_of_request_ids()
     {
         await using var site = new StreamingSite();
-        const string body = "{\"messages\":[{\"role\":\"user\",\"content\":\"Show coverage.\"}]}";
+        const string body = "{\"message\":\"Show coverage.\"}";
         using var missing = Request(body, "placeholder");
         missing.Headers.Remove("Idempotency-Key");
         using var maximum = Request(body, new string('a', 128));
@@ -534,7 +939,7 @@ public sealed class AskTransportTests
                 ["error"]?["data"]?["status"]?.GetValue<string>());
     }
 
-    private static HttpRequestMessage Request(string body, string key)
+    private static HttpRequestMessage Request(string body, string key, string? threadToken = null)
     {
         var request = new HttpRequestMessage(HttpMethod.Post, "/api/ask/stream")
         {
@@ -542,6 +947,19 @@ public sealed class AskTransportTests
         };
         request.Headers.Add("Idempotency-Key", key);
         request.Headers.Add("X-Lex-Stream-Version", "1");
+        if (threadToken is not null)
+            request.Headers.Add("X-Lex-Thread-Token", threadToken);
+        return request;
+    }
+
+    private static HttpRequestMessage ResetRequest(string threadToken, string key)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, "/api/ask/thread/reset")
+        {
+            Content = new StringContent("{}", Encoding.UTF8, "application/json"),
+        };
+        request.Headers.Add("Idempotency-Key", key);
+        request.Headers.Add("X-Lex-Thread-Token", threadToken);
         return request;
     }
 
@@ -558,15 +976,33 @@ public sealed class AskTransportTests
     private static string Hash(string value) => Convert.ToHexStringLower(
         System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(value)));
 
+    private static string AskFingerprint(string body, string? threadToken) =>
+        Hash($"ask-v2\n{threadToken ?? "-"}\n{body}");
+
+    private static async Task<bool> EventuallyAsync(Func<bool> condition)
+    {
+        for (var attempt = 0; attempt < 100; attempt++)
+        {
+            if (condition()) return true;
+            await Task.Delay(10);
+        }
+        return condition();
+    }
+
     private sealed class StreamingSite : WebApplicationFactory<Program>
     {
         private readonly string _indexDir = Path.Combine(
             Path.GetTempPath(), $"lex-stream-{Guid.NewGuid():N}");
 
-        public StreamingSite(McpAdmissionController? mcpAdmission = null)
+        public StreamingSite(
+            McpAdmissionController? mcpAdmission = null,
+            AskThreadRegistry? askThreads = null,
+            AskRequestRegistry? askRequests = null)
         {
             Directory.CreateDirectory(_indexDir);
             McpAdmission = mcpAdmission;
+            AskThreads = askThreads;
+            AskRequests = askRequests;
             Planner = new BoundaryPlanner();
             Client = CreateClient(new WebApplicationFactoryClientOptions
             {
@@ -577,6 +1013,8 @@ public sealed class AskTransportTests
         public BoundaryPlanner Planner { get; }
         public HttpClient Client { get; }
         public McpAdmissionController? McpAdmission { get; }
+        public AskThreadRegistry? AskThreads { get; }
+        public AskRequestRegistry? AskRequests { get; }
 
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
@@ -592,6 +1030,16 @@ public sealed class AskTransportTests
                     services.RemoveAll<McpAdmissionController>();
                     services.AddSingleton(McpAdmission);
                 }
+                if (AskThreads is not null)
+                {
+                    services.RemoveAll<AskThreadRegistry>();
+                    services.AddSingleton(AskThreads);
+                }
+                if (AskRequests is not null)
+                {
+                    services.RemoveAll<AskRequestRegistry>();
+                    services.AddSingleton(AskRequests);
+                }
             });
         }
 
@@ -606,6 +1054,7 @@ public sealed class AskTransportTests
     public sealed class BoundaryPlanner : IOperationPlanner
     {
         public int Calls { get; private set; }
+        public List<JsonArray> Histories { get; } = [];
 
         public Task<OperationPlan> PlanAsync(
             JsonArray history,
@@ -614,6 +1063,7 @@ public sealed class AskTransportTests
             CancellationToken cancellationToken)
         {
             Calls++;
+            Histories.Add(history.DeepClone().AsArray());
             return Task.FromResult(OperationPlan.FromPlannerOutput(
                 requestId, "en", new JsonArray(new JsonObject
                 {

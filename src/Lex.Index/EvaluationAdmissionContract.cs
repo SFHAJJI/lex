@@ -1,0 +1,240 @@
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
+using Lex.Index;
+
+namespace Lex.Evaluation;
+
+public sealed record EvaluationAdmissionRequest(
+    string IdempotencyKey,
+    string RequestBodySha256,
+    string InvocationId,
+    int Turn,
+    int MaximumInputTokens,
+    int MaximumOutputTokens,
+    decimal MaximumCostEur);
+
+public sealed record EvaluationAdmissionCapability(
+    string Schema,
+    string KeyId,
+    string ReviewerId,
+    string CandidateRevision,
+    string CandidateImage,
+    string CodeCommit,
+    string ArtifactManifestSet,
+    string CatalogSha256,
+    DateTimeOffset IssuedAt,
+    DateTimeOffset ExpiresAt,
+    string Nonce,
+    int MaxCalls,
+    long MaximumCandidateInputTokens,
+    long MaximumCandidateOutputTokens,
+    decimal MaximumCostEur,
+    IReadOnlyList<EvaluationAdmissionRequest> AllowedRequests);
+
+public sealed record EvaluationAdmissionIdentity(
+    string CandidateRevision,
+    string CandidateImage,
+    string CodeCommit,
+    string ArtifactManifestSet,
+    string CatalogSha256);
+
+public sealed record EvaluationAdmissionAuthority(
+    string ReviewerId,
+    string KeyId,
+    string FingerprintSha256,
+    string PublicKeyPem)
+{
+    internal ArtifactTrustRoot Root => new(KeyId, FingerprintSha256, PublicKeyPem);
+}
+
+public static partial class EvaluationAdmissionContract
+{
+    public const string Schema = "lex-assistant-eval-admission/1";
+    public const int MaximumBytes = 32 * 1024;
+    public const int MaximumSignatureCharacters = 512;
+    public const int MaximumRequests = 64;
+    public static readonly TimeSpan MaximumLifetime = TimeSpan.FromMinutes(30);
+
+    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+        UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
+        WriteIndented = true,
+    };
+
+    [GeneratedRegex("^[0-9a-f]{40}$", RegexOptions.CultureInvariant)]
+    private static partial Regex CommitPattern();
+
+    [GeneratedRegex("^[0-9a-f]{64}$", RegexOptions.CultureInvariant)]
+    private static partial Regex DigestPattern();
+
+    [GeneratedRegex("^[A-Za-z0-9][A-Za-z0-9._-]{0,199}$", RegexOptions.CultureInvariant)]
+    private static partial Regex RevisionPattern();
+
+    [GeneratedRegex("^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$", RegexOptions.CultureInvariant)]
+    private static partial Regex KeyPattern();
+
+    [GeneratedRegex("^[A-Za-z0-9_-]{43}$", RegexOptions.CultureInvariant)]
+    private static partial Regex NoncePattern();
+
+    [GeneratedRegex("^[A-Za-z0-9][A-Za-z0-9._-]*(?::[0-9]+)?/[A-Za-z0-9._/-]+(?:@sha256:[0-9a-f]{64}|:sha-[0-9a-f]{12,64})$", RegexOptions.CultureInvariant)]
+    private static partial Regex ImagePattern();
+
+    public static byte[] Serialize(EvaluationAdmissionCapability capability)
+    {
+        ValidateStructure(capability);
+        var bytes = JsonSerializer.SerializeToUtf8Bytes(capability, Json);
+        if (bytes.Length > MaximumBytes)
+            throw new InvalidDataException(
+                "Evaluation admission capability exceeds its byte limit.");
+        return bytes;
+    }
+
+    public static EvaluationAdmissionCapability Verify(
+        ReadOnlySpan<byte> bytes,
+        string signature,
+        EvaluationAdmissionAuthority authority,
+        EvaluationAdmissionIdentity expectedIdentity,
+        DateTimeOffset now)
+    {
+        if (bytes.IsEmpty || bytes.Length > MaximumBytes)
+            throw new InvalidDataException(
+                "Evaluation admission capability is outside its byte limit.");
+        if (string.IsNullOrWhiteSpace(signature)
+            || signature.Length > MaximumSignatureCharacters)
+            throw new CryptographicException(
+                "Evaluation admission signature is outside its byte limit.");
+
+        var capability = Parse(bytes);
+        if (!Exact(capability.KeyId, authority.KeyId)
+            || !Exact(capability.ReviewerId, authority.ReviewerId))
+            throw new CryptographicException(
+                "Evaluation admission signer is not authorized by this release.");
+        ArtifactManifests.VerifySignature(
+            bytes, signature, capability.KeyId, [authority.Root]);
+
+        if (!Exact(capability.CandidateRevision, expectedIdentity.CandidateRevision)
+            || !Exact(capability.CandidateImage, expectedIdentity.CandidateImage)
+            || !Exact(capability.CodeCommit, expectedIdentity.CodeCommit)
+            || !Exact(capability.ArtifactManifestSet, expectedIdentity.ArtifactManifestSet)
+            || !Exact(capability.CatalogSha256, expectedIdentity.CatalogSha256))
+            throw new InvalidDataException(
+                "Evaluation admission does not match this exact candidate release.");
+        var utcNow = now.ToUniversalTime();
+        if (capability.IssuedAt.Offset != TimeSpan.Zero
+            || capability.ExpiresAt.Offset != TimeSpan.Zero
+            || capability.ExpiresAt <= capability.IssuedAt
+            || capability.ExpiresAt - capability.IssuedAt > MaximumLifetime
+            || capability.IssuedAt > utcNow.AddMinutes(2)
+            || capability.ExpiresAt <= utcNow)
+            throw new InvalidDataException(
+                "Evaluation admission is expired or outside its short-lived window.");
+        return capability;
+    }
+
+    public static EvaluationAdmissionCapability Parse(ReadOnlySpan<byte> bytes)
+    {
+        if (bytes.IsEmpty || bytes.Length > MaximumBytes)
+            throw new InvalidDataException(
+                "Evaluation admission capability is outside its byte limit.");
+        EvaluationAdmissionCapability capability;
+        try
+        {
+            capability = JsonSerializer.Deserialize<EvaluationAdmissionCapability>(bytes, Json)
+                ?? throw new InvalidDataException(
+                    "Evaluation admission capability is empty.");
+        }
+        catch (JsonException exception)
+        {
+            throw new InvalidDataException(
+                "Evaluation admission capability is malformed.", exception);
+        }
+        ValidateStructure(capability);
+        return capability;
+    }
+
+    public static byte[] RequestBody(string message) =>
+        JsonSerializer.SerializeToUtf8Bytes(new AskMessage(message), Json);
+
+    public static string RequestBodySha256(string message) =>
+        Convert.ToHexStringLower(SHA256.HashData(RequestBody(message)));
+
+    public static string RunIdentity(EvaluationAdmissionCapability capability) =>
+        RunIdentity(capability.Nonce);
+
+    public static string RunIdentity(string nonce) =>
+        Convert.ToHexStringLower(SHA256.HashData(Encoding.ASCII.GetBytes(nonce)))[..16];
+
+    private static void ValidateStructure(EvaluationAdmissionCapability capability)
+    {
+        ArgumentNullException.ThrowIfNull(capability);
+        if (capability.Schema != Schema
+            || !Matches(KeyPattern(), capability.KeyId)
+            || string.IsNullOrWhiteSpace(capability.ReviewerId)
+            || capability.ReviewerId.Length > 200
+            || !Matches(RevisionPattern(), capability.CandidateRevision)
+            || !Matches(ImagePattern(), capability.CandidateImage)
+            || !Matches(CommitPattern(), capability.CodeCommit)
+            || !Matches(DigestPattern(), capability.ArtifactManifestSet)
+            || !Matches(DigestPattern(), capability.CatalogSha256)
+            || !Matches(NoncePattern(), capability.Nonce)
+            || capability.MaxCalls is < 1 or > MaximumRequests
+            || capability.AllowedRequests is null
+            || capability.AllowedRequests.Count != capability.MaxCalls
+            || capability.MaximumCandidateInputTokens <= 0
+            || capability.MaximumCandidateOutputTokens <= 0
+            || capability.MaximumCostEur <= 0 || capability.MaximumCostEur > 100)
+            throw new InvalidDataException(
+                "Evaluation admission capability has an invalid release or budget contract.");
+
+        var keys = new HashSet<string>(StringComparer.Ordinal);
+        long input = 0;
+        long output = 0;
+        decimal cost = 0;
+        foreach (var request in capability.AllowedRequests)
+        {
+            if (request is null
+                || !Matches(KeyPattern(), request.IdempotencyKey)
+                || !Matches(DigestPattern(), request.RequestBodySha256)
+                || !Matches(KeyPattern(), request.InvocationId)
+                || request.Turn is < 1 or > 9
+                || request.MaximumInputTokens is < 1 or > 100_000
+                || request.MaximumOutputTokens is < 1 or > 20_000
+                || request.MaximumCostEur <= 0 || request.MaximumCostEur > 10
+                || !keys.Add(request.IdempotencyKey))
+                throw new InvalidDataException(
+                    "Evaluation admission has an invalid or duplicate allowed request.");
+            input = checked(input + request.MaximumInputTokens);
+            output = checked(output + request.MaximumOutputTokens);
+            cost = checked(cost + request.MaximumCostEur);
+        }
+        if (input > capability.MaximumCandidateInputTokens
+            || output > capability.MaximumCandidateOutputTokens
+            || cost > capability.MaximumCostEur)
+            throw new InvalidDataException(
+                "Evaluation admission request reservations exceed its signed budget.");
+
+        foreach (var invocation in capability.AllowedRequests
+                     .GroupBy(request => request.InvocationId, StringComparer.Ordinal))
+        {
+            var turns = invocation.Select(request => request.Turn)
+                .Order().ToArray();
+            if (!turns.SequenceEqual(Enumerable.Range(1, turns.Length)))
+                throw new InvalidDataException(
+                    "Evaluation admission invocation turns must be unique and consecutive.");
+        }
+    }
+
+    private static bool Matches(Regex pattern, string? value) =>
+        value is not null && pattern.IsMatch(value);
+
+    private static bool Exact(string left, string right) =>
+        CryptographicOperations.FixedTimeEquals(
+            SHA256.HashData(Encoding.UTF8.GetBytes(left)),
+            SHA256.HashData(Encoding.UTF8.GetBytes(right)));
+
+    private sealed record AskMessage(string Message);
+}

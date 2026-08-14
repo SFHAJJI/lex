@@ -34,6 +34,8 @@ export function first<T extends object>(res: T | T[], has: (x: T) => boolean): T
 
 export interface AskReply {
   reply: string;
+  /** Opaque, process-local bearer for the next turn; never persist or place in a URL. */
+  thread_token?: string;
   trace?: { phase?: string; operation_id?: string; tool?: string; status?: string }[];
   ui?: UiEffect;
   operations?: OperationReply[];
@@ -78,7 +80,13 @@ export function safeHttpsUrl(...candidates: (string | undefined)[]): string | un
   return undefined;
 }
 
-export class AssistantResponseError extends Error {}
+export class AssistantResponseError extends Error {
+  readonly status?: number;
+  constructor(message: string, status?: number) {
+    super(message);
+    this.status = status;
+  }
+}
 
 function boundedAssistantError(value: unknown, fallback: string): string {
   const error = typeof value === "string" ? value.trim() : "";
@@ -105,6 +113,8 @@ export interface AskStreamHandlers {
   onStep: (step: Step) => void;
   onOperation: (operation: OperationReply) => void;
   onSynthesis?: (status: string) => void;
+  onPhase?: (phase: "resolution" | "planning" | "execution" | "composition",
+             status: "started" | "completed" | "unavailable") => void;
 }
 
 interface AskStreamEnvelope<T = unknown> {
@@ -130,10 +140,7 @@ function acceptedStreamEnvelope<T>(
     : undefined;
 }
 
-const MAX_ASK_HISTORY = 12;
 const MAX_ASK_QUESTION_CHARS = 1000;
-const MAX_ASK_ASSISTANT_CHARS = 4000;
-const TRUNCATED_ASSISTANT_SUFFIX = "\n\n[Earlier answer shortened in conversation memory.]";
 
 export function askQuestionError(value: string): string | undefined {
   return value.trim().length > MAX_ASK_QUESTION_CHARS
@@ -165,24 +172,8 @@ export function clarificationFollowUp(context: string, choice: ClarificationChoi
     : `${context}\nClarification choice: ${choice.label}`;
 }
 
-export function boundedAskHistory(value: unknown): AskMessage[] {
-  if (!Array.isArray(value)) return [];
-  const history = value.filter((item): item is AskMessage =>
-    (item?.role === "user" || item?.role === "assistant")
-    && typeof item?.content === "string"
-    && item.content.trim().length > 0)
-    .map((item) => {
-      if (item.role === "user" && item.content.length > MAX_ASK_QUESTION_CHARS)
-        throw new RangeError("A user message exceeds the server limit.");
-      return { ...item, content: item.role === "assistant"
-        ? item.content.length <= MAX_ASK_ASSISTANT_CHARS ? item.content
-          : item.content.slice(0, MAX_ASK_ASSISTANT_CHARS - TRUNCATED_ASSISTANT_SUFFIX.length)
-            + TRUNCATED_ASSISTANT_SUFFIX
-        : item.content };
-    })
-    .slice(-MAX_ASK_HISTORY);
-  while (history[0]?.role === "assistant") history.shift();
-  return history;
+export function validAskThreadToken(value: unknown): value is string {
+  return typeof value === "string" && /^[A-Za-z0-9_-]{43}$/.test(value);
 }
 
 export interface Subject { work: string; title?: string; date?: string; anchor?: string; language?: string }
@@ -202,9 +193,15 @@ export interface UiEffect {
   provision?: { subject: Subject; valid_from: string; valid_to?: string; provisions: ProvisionItem[]; permalink?: string;
                 evidence?: EvidenceContext[]; total_provisions?: number; truncated?: boolean;
                 text_truncated?: boolean; outline_only?: boolean };
-  diff?: { subject: Subject; from_date: string; to_date: string; note?: string; status?: string; evidence?: EvidenceContext[] };
+  diff?: { subject: Subject; from_date: string; to_date: string; note?: string; status?: string;
+           anchor_from_present?: boolean; anchor_to_present?: boolean; anchor_text_equal?: boolean;
+           provision_level_comparable?: boolean;
+           evidence?: EvidenceContext[] };
   history?: { subject: Subject; anchor: string; distinct_texts: number; states: { valid_from: string; valid_to?: string; sha?: string; permalink?: string }[]; evidence?: EvidenceContext[] };
-  timeline?: { subject: Subject; evidence?: EvidenceContext[] };
+  timeline?: { subject: Subject; rows: { lex_id?: string; valid_from: string; valid_to?: string;
+                title?: string; language?: string; permalink?: string; record_sha256?: string }[];
+                total_count: number; truncated: boolean;
+                evidence?: EvidenceContext[] };
   ranking?: { from_date: string; to_date: string; order: string; works_changed: number; new_versions: number;
               population_works?: number; population_basis?: string; known_exclusions?: string[];
               rows: RankingRow[]; status?: string; evidence?: EvidenceContext[] };
@@ -240,6 +237,7 @@ export interface UiEffect {
 }
 export interface RankingRow {
   work: string; title?: string; versions_in_period: number; versions_total: number;
+  global_rank?: number;
   first_change: string; last_change: string; permalink?: string; diff_permalink?: string;
   // Where a comparison should start: the version in force before the window touched this law.
   // The row used to be opened as first_change vs last_change, and those are the same date
@@ -263,32 +261,40 @@ export interface Step { kind: string; text: string; work?: string; date?: string
  * never repeated automatically: callers may retry only with the same idempotency key.
  */
 export async function askStreaming(
-  messages: AskMessage[],
+  message: string,
   handlers: AskStreamHandlers,
   signal?: AbortSignal,
   idempotencyKey: string = crypto.randomUUID(),
+  threadToken?: string,
 ): Promise<AskReply> {
+  const questionError = askQuestionError(message);
+  if (!message.trim() || questionError) throw new RangeError(
+    questionError ?? "A question is required.");
+  if (threadToken !== undefined && !validAskThreadToken(threadToken))
+    throw new Error("Invalid assistant thread token.");
   if (typeof performance !== "undefined") {
     performance.clearMeasures("lex-operation-result-received-to-presented");
   }
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    "Idempotency-Key": idempotencyKey,
+    "X-Lex-Stream-Version": "1",
+  };
+  if (threadToken) headers["X-Lex-Thread-Token"] = threadToken;
   const r = await fetch("/api/ask/stream", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Idempotency-Key": idempotencyKey,
-      "X-Lex-Stream-Version": "1",
-    },
-    body: JSON.stringify({ messages }),
+    headers,
+    body: JSON.stringify({ message }),
     signal,
   });
   if (!r.ok) {
     const fallback = `Assistant request failed (${r.status}).`;
     try {
       const body = await r.json() as { error?: unknown };
-      throw new AssistantResponseError(boundedAssistantError(body.error, fallback));
+      throw new AssistantResponseError(boundedAssistantError(body.error, fallback), r.status);
     } catch (cause) {
       if (cause instanceof AssistantResponseError) throw cause;
-      throw new AssistantResponseError(fallback);
+      throw new AssistantResponseError(fallback, r.status);
     }
   }
   if (!r.body) throw new Error("Assistant stream returned no body.");
@@ -324,6 +330,15 @@ export async function askStreaming(
           handlers.onOperation(envelope.payload as OperationReply);
         else if (ev === "synthesis")
           handlers.onSynthesis?.(String((envelope.payload as { status?: unknown })?.status ?? ""));
+        else if (ev === "phase") {
+          const update = envelope.payload as { phase?: unknown; status?: unknown };
+          const phase = update?.phase;
+          const status = update?.status;
+          if ((phase === "resolution" || phase === "planning" || phase === "execution"
+                || phase === "composition")
+              && (status === "started" || status === "completed" || status === "unavailable"))
+            handlers.onPhase?.(phase, status);
+        }
         else if (ev === "done") done = envelope.payload as AskReply;
         else if (ev === "transport_error")
           transportError = boundedAssistantError(
@@ -334,15 +349,36 @@ export async function askStreaming(
   }
   if (transportError) throw new AssistantResponseError(transportError);
   if (!done) throw new Error("The answer stream ended before a terminal result.");
+  if (done.thread_token !== undefined && !validAskThreadToken(done.thread_token))
+    throw new Error("Assistant stream returned an invalid thread token.");
   return done;
 }
 
-export async function ask(messages: AskMessage[], signal?: AbortSignal): Promise<AskReply> {
+export async function ask(
+  message: string,
+  signal?: AbortSignal,
+  threadToken?: string,
+): Promise<AskReply> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (threadToken) headers["X-Lex-Thread-Token"] = threadToken;
   const r = await fetch("/api/ask", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ messages }),
+    headers,
+    body: JSON.stringify({ message }),
     signal,
   });
   return (await r.json()) as AskReply;
+}
+
+export async function resetAskThread(threadToken: string): Promise<void> {
+  if (!validAskThreadToken(threadToken)) return;
+  await fetch("/api/ask/thread/reset", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Idempotency-Key": crypto.randomUUID(),
+      "X-Lex-Thread-Token": threadToken,
+    },
+    body: "{}",
+  });
 }

@@ -98,37 +98,29 @@ public sealed class IndexStampVerifierTests : IDisposable
     }
 
     [Fact]
-    public void Strict_promotion_binds_collection_corpus_code_content_and_enrichment()
+    public void Strict_promotion_binds_collection_corpus_code_articles_and_content()
     {
-        var enrichment = TempFile(".json");
-        File.WriteAllText(enrichment, "reviewed enrichment", new UTF8Encoding(false));
-        var digest = Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(enrichment)));
         var key = StampSigner.CreateKeyPem();
-        var db = Build(key, digest);
+        var db = Build(key);
 
         var valid = IndexStampVerifier.Verify(
-            db, "eu-eurlex", new string('c', 40), enrichment, new string('a', 40),
+            db, "eu-eurlex", new string('c', 40), new string('a', 40),
             new string('d', 40));
         Assert.True(valid.IsValid);
         Assert.Equal(0, valid.ExitCode);
         Assert.False(IndexStampVerifier.Verify(
-            db, "lu-legilux", new string('c', 40), enrichment).CollectionMatches);
+            db, "lu-legilux", new string('c', 40)).CollectionMatches);
         Assert.False(IndexStampVerifier.Verify(
-            db, "eu-eurlex", new string('d', 40), enrichment).CorpusCommitMatches);
+            db, "eu-eurlex", new string('d', 40)).CorpusCommitMatches);
         var wrongCode = IndexStampVerifier.Verify(
-            db, "eu-eurlex", new string('c', 40), enrichment, new string('b', 40));
+            db, "eu-eurlex", new string('c', 40), new string('b', 40));
         Assert.False(wrongCode.CodeCommitMatches);
         Assert.Equal(5, wrongCode.ExitCode);
         var wrongArticles = IndexStampVerifier.Verify(
-            db, "eu-eurlex", new string('c', 40), enrichment, new string('a', 40),
+            db, "eu-eurlex", new string('c', 40), new string('a', 40),
             new string('e', 40));
         Assert.False(wrongArticles.ArticlesCommitMatches);
         Assert.Equal(5, wrongArticles.ExitCode);
-
-        var other = TempFile(".json");
-        File.WriteAllText(other, "different enrichment", new UTF8Encoding(false));
-        Assert.False(IndexStampVerifier.Verify(
-            db, "eu-eurlex", new string('c', 40), other).EnrichmentDigestMatches);
 
         using var connection = new SqliteConnection($"Data Source={db}");
         connection.Open();
@@ -139,7 +131,7 @@ public sealed class IndexStampVerifierTests : IDisposable
         }
         Resign(connection, key);
         var missing = IndexStampVerifier.Verify(
-            db, "eu-eurlex", new string('c', 40), enrichment, new string('a', 40));
+            db, "eu-eurlex", new string('c', 40), new string('a', 40));
         Assert.False(missing.ContentDigestPresent);
         Assert.Equal(4, missing.ExitCode);
     }
@@ -147,7 +139,7 @@ public sealed class IndexStampVerifierTests : IDisposable
     [Fact]
     public void Strict_promotion_recomputes_content_after_input_hash_validation()
     {
-        var db = Build(StampSigner.CreateKeyPem(), new string('e', 64));
+        var db = Build(StampSigner.CreateKeyPem());
         using (var connection = new SqliteConnection($"Data Source={db}"))
         {
             connection.Open();
@@ -168,7 +160,7 @@ public sealed class IndexStampVerifierTests : IDisposable
     public void Strict_promotion_rejects_an_artifact_without_bound_build_code()
     {
         var key = StampSigner.CreateKeyPem();
-        var db = Build(key, new string('e', 64));
+        var db = Build(key);
         using var connection = new SqliteConnection($"Data Source={db}");
         connection.Open();
         using (var remove = connection.CreateCommand())
@@ -186,13 +178,9 @@ public sealed class IndexStampVerifierTests : IDisposable
     }
 
     [Fact]
-    public void Release_verification_binds_manifest_generation_and_reviewed_configuration()
+    public void Release_verification_binds_manifest_and_generation()
     {
         var root = TempDirectory();
-        var reviewed = Path.Combine(root, "reviewed.json");
-        File.WriteAllText(reviewed, "reviewed publisher configuration\n",
-            new UTF8Encoding(false));
-        var reviewedDigest = Sha(reviewed);
         var manifestPath = Path.Combine(root, "manifest.json");
         var manifest = new ManifestDoc
         {
@@ -208,6 +196,8 @@ public sealed class IndexStampVerifierTests : IDisposable
             HistoryBegins = "publisher",
             IngesterVersion = "test",
             IngesterCodeCommit = new string('b', 40),
+            SourceConfigurationKind = "engineering_scope",
+            SourceConfigurationSha256 = new string('9', 64),
         };
         File.WriteAllText(manifestPath,
             JsonSerializer.Serialize(manifest, CorpusJson.Options) + "\n",
@@ -215,13 +205,13 @@ public sealed class IndexStampVerifierTests : IDisposable
         var manifestDigest = Sha(manifestPath);
         DerivationGeneration.UpdatePublisher(root, "eu-eurlex",
             new string('c', 40), manifestDigest, new string('b', 40),
-            new string('e', 40), new string('f', 40), reviewedDigest,
+            new string('e', 40), new string('f', 40),
             ["akn-eu/1"]);
         var generationPath = Path.Combine(root, DerivationGeneration.FileName);
         var generationDigest = Sha(generationPath);
         var profilesDigest = DerivationGeneration.ProfileDigest(["akn-eu/1"]);
         var key = StampSigner.CreateKeyPem();
-        var db = Build(key, reviewedDigest, new Dictionary<string, string>
+        var db = Build(key, new Dictionary<string, string>
         {
             ["builder_code_commit"] = new string('a', 40),
             ["ingester_code_commit"] = new string('b', 40),
@@ -229,19 +219,16 @@ public sealed class IndexStampVerifierTests : IDisposable
             ["deriver_tree_id"] = new string('f', 40),
             ["corpus_manifest_sha256"] = manifestDigest,
             ["generation_sha256"] = generationDigest,
-            ["reviewed_configuration_sha256"] = reviewedDigest,
             ["profiles_sha256"] = profilesDigest,
         });
 
         var files = IndexStampVerifier.Verify(db, new IndexStampVerificationInputs(
             ExpectedCollection: "eu-eurlex",
             ExpectedCorpusCommit: new string('c', 40),
-            WorkEnrichmentPath: reviewed,
             ExpectedCodeCommit: new string('a', 40),
             ExpectedArticlesCommit: new string('d', 40),
             CorpusManifestPath: manifestPath,
             ArticlesGenerationPath: generationPath,
-            ReviewedConfigurationPath: reviewed,
             RequireDerivedProvenance: true));
 
         Assert.True(files.IsValid, string.Join(Environment.NewLine, files.ProvenanceErrors));
@@ -250,7 +237,6 @@ public sealed class IndexStampVerifierTests : IDisposable
         var digests = IndexStampVerifier.Verify(db, new IndexStampVerificationInputs(
             ExpectedCollection: "eu-eurlex",
             ExpectedCorpusCommit: new string('c', 40),
-            ExpectedEnrichmentSha256: reviewedDigest,
             ExpectedCodeCommit: new string('a', 40),
             ExpectedArticlesCommit: new string('d', 40),
             ExpectedCorpusManifestSha256: manifestDigest,
@@ -258,7 +244,6 @@ public sealed class IndexStampVerifierTests : IDisposable
             ExpectedDeriverCodeCommit: new string('e', 40),
             ExpectedDeriverTreeId: new string('f', 40),
             ExpectedGenerationSha256: generationDigest,
-            ExpectedReviewedConfigurationSha256: reviewedDigest,
             ExpectedProfilesSha256: profilesDigest,
             RequireDerivedProvenance: true));
         Assert.True(digests.IsValid,
@@ -274,7 +259,6 @@ public sealed class IndexStampVerifierTests : IDisposable
                 ExpectedArticlesCommit: new string('d', 40),
                 CorpusManifestPath: manifestPath,
                 ArticlesGenerationPath: generationPath,
-                ReviewedConfigurationPath: reviewed,
                 RequireDerivedProvenance: true));
         Assert.False(changedGeneration.ProvenanceMatches);
         Assert.Contains(changedGeneration.ProvenanceErrors,
@@ -297,7 +281,6 @@ public sealed class IndexStampVerifierTests : IDisposable
                 ExpectedArticlesCommit: new string('d', 40),
                 CorpusManifestPath: manifestPath,
                 ArticlesGenerationPath: generationPath,
-                ReviewedConfigurationPath: reviewed,
                 RequireDerivedProvenance: true));
         Assert.Contains(missingStampField.ProvenanceErrors,
             error => error == "stamp deriver_tree_id is absent");
@@ -307,7 +290,7 @@ public sealed class IndexStampVerifierTests : IDisposable
     [Fact]
     public void Release_verification_requires_independent_evidence_for_every_provenance_role()
     {
-        var db = Build(StampSigner.CreateKeyPem(), new string('e', 64),
+        var db = Build(StampSigner.CreateKeyPem(),
             new Dictionary<string, string>
             {
                 ["builder_code_commit"] = new string('a', 40),
@@ -316,7 +299,6 @@ public sealed class IndexStampVerifierTests : IDisposable
                 ["deriver_tree_id"] = new string('f', 40),
                 ["corpus_manifest_sha256"] = new string('1', 64),
                 ["generation_sha256"] = new string('2', 64),
-                ["reviewed_configuration_sha256"] = new string('3', 64),
                 ["profiles_sha256"] = new string('4', 64),
             });
 
@@ -333,12 +315,10 @@ public sealed class IndexStampVerifierTests : IDisposable
             error => error.Contains("corpus manifest", StringComparison.Ordinal));
         Assert.Contains(verification.ProvenanceErrors,
             error => error.Contains("generation", StringComparison.Ordinal));
-        Assert.Contains(verification.ProvenanceErrors,
-            error => error.Contains("reviewed configuration", StringComparison.Ordinal));
         Assert.Equal(5, verification.ExitCode);
     }
 
-    private string Build(string key, string enrichmentDigest,
+    private string Build(string key,
         IReadOnlyDictionary<string, string>? additionalStamp = null)
     {
         var db = TempFile(".db");
@@ -362,8 +342,7 @@ public sealed class IndexStampVerifierTests : IDisposable
         foreach (var (name, value) in additionalStamp ??
                      new Dictionary<string, string>())
             stamp[name] = value;
-        IndexBuilder.Build(db, stamp, [doc], [provision], [], [], key,
-            workSearch: new WorkSearchBuildOptions([], [], enrichmentDigest));
+        IndexBuilder.Build(db, stamp, [doc], [provision], [], [], key);
         return db;
     }
 

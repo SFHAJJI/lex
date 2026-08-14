@@ -5,6 +5,23 @@ public sealed record PublisherMetadataRow(
     string Identifier,
     string? Language,
     string? Value,
+    string SourceUri,
+    bool CitationIdentity = false);
+
+public sealed record MatchedPublisherMetadata(
+    string Kind,
+    string Identifier,
+    string? Label,
+    string? Language,
+    string SourceUri,
+    string? MatchedSegment = null);
+
+public sealed record PublisherShortTitleMatch(
+    string Work,
+    string Segment,
+    string Identifier,
+    string Label,
+    string Language,
     string SourceUri);
 
 /// <summary>
@@ -88,7 +105,8 @@ public sealed record RetrievalHit(
     ProvisionRow Provision,
     string Snippet,
     double Score,
-    IReadOnlyList<string> MatchReasons);
+    IReadOnlyList<string> MatchReasons,
+    MatchedPublisherMetadata? MatchedPublisherMetadata = null);
 
 public sealed record SearchExecution(
     string RetrievalMode,
@@ -106,7 +124,8 @@ public sealed record WorkResolution(
     string Mention,
     string Status,
     IReadOnlyList<string> Candidates,
-    string? Kind = null);
+    string? Kind = null,
+    IReadOnlyList<PublisherShortTitleMatch>? PublisherShortTitleMatches = null);
 
 public sealed record SearchQueryPlan(
     string RawQuery,
@@ -200,7 +219,8 @@ public sealed record FilterSet(
     string? ActForm = null,
     string? BindingStatus = null,
     string? Domain = null,
-    string? DocumentRole = null)
+    string? DocumentRole = null,
+    string? PublisherMetadataIdentifier = null)
 {
     public static readonly FilterSet All = new(null, null, null, null);
 }

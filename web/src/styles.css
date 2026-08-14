@@ -492,6 +492,10 @@ main,footer{transition:margin-right .18s ease}
 .search-filters { border: 1px solid var(--line); border-radius: 9px; margin: 0 0 12px; }
 .search-filters summary { cursor: pointer; padding: 7px 10px; font-size: 13px; color: var(--muted); }
 .search-filters[open] summary { border-bottom: 1px solid var(--line); color: var(--fg); }
+.metadata-filter { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px;
+                   margin: 0 0 12px; padding: 8px 10px; border: 1px solid var(--line);
+                   border-radius: 8px; color: var(--muted); font-size: 12.5px; }
+.metadata-filter b { color: var(--fg); }
 .period-filters { margin-top: 2px; }
 .date-scope { padding: 0 16px 4px; }
 .filter-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px;
@@ -511,6 +515,19 @@ main,footer{transition:margin-right .18s ease}
 .res-worklist { border-top: 1px solid var(--line); }
 .res-work { border-bottom: 1px solid var(--line); }
 .res-work-head { font-weight: 600; }
+.publisher-metadata { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px;
+                      margin: -3px 9px 8px; font-size: 11.5px; }
+.publisher-metadata-chip { display: inline-flex; flex-wrap: wrap; gap: 4px 7px; max-width: 100%;
+                           padding: 4px 8px; border: 1px solid var(--line); border-radius: 99px;
+                           background: var(--bg); color: var(--muted); font: inherit;
+                           text-align: left; overflow-wrap: anywhere; }
+button.publisher-metadata-chip { cursor: pointer; }
+button.publisher-metadata-chip:hover,
+button.publisher-metadata-chip:focus-visible,
+button.publisher-metadata-chip[aria-pressed="true"] { border-color: var(--fg); color: var(--fg); }
+.publisher-metadata-chip b { color: var(--fg); font-weight: 600; }
+.publisher-metadata-chip.contextual { border-style: dashed; }
+.publisher-metadata-source { color: var(--muted); font-size: 11px; overflow-wrap: anywhere; }
 .res-passages { margin: 0 0 9px 18px; padding-left: 12px; border-left: 2px solid var(--line); }
 .res-passages-label { padding: 4px 9px 2px; color: var(--muted); font-size: 10px;
                       letter-spacing: .06em; text-transform: uppercase; }

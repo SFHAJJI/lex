@@ -74,12 +74,22 @@ public sealed class CorpusWriter(
         var sourceInventory = (adapter as ISourceBuildInventory)?.GetBuildInventory();
         var expectedWorks = Math.Max(enumeratedWorks, sourceInventory?.ExpectedWorks ?? 0);
         var retryMaximumAttempts = sourceInventory?.RetryMaximumAttempts ?? 1;
+        var sourceConfigurationKind = sourceInventory?.SourceConfigurationKind ?? "code_only";
+        var sourceConfigurationSha256 = sourceInventory?.SourceConfigurationSha256;
+        ValidateSourceConfiguration(sourceConfigurationKind, sourceConfigurationSha256);
         if (retryMaximumAttempts is < 1 or > 10)
             throw new InvalidDataException("The source retry maximum must be between 1 and 10 attempts.");
         if (sourceInventory?.EnumerationComplete == false || enumeratedWorks < expectedWorks)
             throw new SourceEnumerationIncompleteException(new SourceBuildIssue(
                 "incomplete_enumeration", pub.Id,
                 $"Publisher enumeration returned {enumeratedWorks} of {expectedWorks} expected works; the prior corpus remains unchanged."));
+        // Engineering scope is an acquisition decision, not publisher legal metadata. Reject the
+        // complete metadata plan before any body request or candidate write, and also refuse to
+        // carry an old leaked key forward from an existing corpus.
+        ValidatePlannedRawMetadata(sourceConfigurationKind, plan);
+        if (sourceConfigurationKind == "engineering_scope"
+            || existingManifest?.SourceConfigurationKind == "engineering_scope")
+            ValidateExistingRawMetadata(corpusRoot, "engineering_scope");
         // Fresh migrations use this seam to prove that the metadata catalogue preserves every
         // held baseline identity before the first expression body is requested. The plan is the
         // same single source enumeration consumed below; the validator must not re-query the
@@ -511,8 +521,9 @@ public sealed class CorpusWriter(
             // with this run's explicitly supplied identity.
             IngesterCodeCommit = existingManifest?.IngesterCodeCommit
                 ?? _ingesterCodeCommit,
+            SourceConfigurationKind = sourceConfigurationKind,
+            SourceConfigurationSha256 = sourceConfigurationSha256,
             MigrationBaselineWorks = existingManifest?.MigrationBaselineWorks,
-            PublisherDiscoverySchema = ManifestDoc.CurrentPublisherDiscoverySchema,
         };
         candidate.WriteIfChanged(Path.Combine(corpusRoot, "manifest.json"), JsonSerializer.Serialize(manifest, CorpusJson.Options));
         candidate.WriteIfChanged(Path.Combine(corpusRoot, "NOTICE"), Notice(pub, desc.TextIncluded));
@@ -561,7 +572,77 @@ public sealed class CorpusWriter(
                 + "use the explicit fresh-corpus migration path.");
         CodeIdentity.RequireFullCommit(
             manifest.IngesterCodeCommit, "manifest ingester_code_commit");
+        ValidateSourceConfiguration(
+            manifest.SourceConfigurationKind, manifest.SourceConfigurationSha256);
         return manifest;
+    }
+
+    internal static void ValidateSourceConfiguration(string? kind, string? digest)
+    {
+        switch (kind)
+        {
+            case "code_only" when digest is null:
+                return;
+            case "engineering_scope" when digest is not null:
+                CodeIdentity.RequireSha256(digest, "manifest source_configuration_sha256");
+                return;
+            case "code_only":
+                throw new InvalidDataException(
+                    "manifest source_configuration_sha256 must be null for code_only sources");
+            case "engineering_scope":
+                throw new InvalidDataException(
+                    "manifest source_configuration_sha256 is required for engineering_scope sources");
+            default:
+                throw new InvalidDataException(
+                    $"manifest source_configuration_kind '{kind}' is unsupported");
+        }
+    }
+
+    internal static void ValidateVersionRawForSourceConfiguration(
+        string? sourceConfigurationKind, IReadOnlyDictionary<string, string> raw, string context)
+    {
+        if (sourceConfigurationKind != "engineering_scope") return;
+        var forbidden = raw.Keys.Where(key =>
+                key.Equals("domains", StringComparison.OrdinalIgnoreCase)
+                || key.Equals("scope_reasons", StringComparison.OrdinalIgnoreCase))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        if (forbidden.Length > 0)
+            throw new InvalidDataException(
+                $"source_configuration_kind=engineering_scope forbids acquisition selector "
+                + $"key(s) in corpus version raw metadata ({context}): "
+                + string.Join(", ", forbidden));
+    }
+
+    private static void ValidatePlannedRawMetadata(
+        string sourceConfigurationKind, IReadOnlyList<CorpusPlannedWork> plan)
+    {
+        foreach (var item in plan)
+            foreach (var version in item.Versions)
+                ValidateVersionRawForSourceConfiguration(
+                    sourceConfigurationKind, version.Raw,
+                    $"{item.Work.Slug}/{version.Id.Value}");
+    }
+
+    private static void ValidateExistingRawMetadata(string root, string sourceConfigurationKind)
+    {
+        var worksRoot = Path.Combine(root, "works");
+        if (!Directory.Exists(worksRoot)) return;
+        foreach (var path in Directory.EnumerateFiles(
+                     worksRoot, "meta.json", SearchOption.AllDirectories))
+        {
+            if (!path.Contains(
+                    $"{Path.DirectorySeparatorChar}versions{Path.DirectorySeparatorChar}",
+                    StringComparison.Ordinal))
+                continue;
+            var version = JsonSerializer.Deserialize<VersionMeta>(
+                File.ReadAllText(path), CorpusJson.Options)
+                ?? throw new InvalidDataException($"Existing corpus record is empty: {path}");
+            ValidateVersionRawForSourceConfiguration(
+                sourceConfigurationKind, version.Raw,
+                Path.GetRelativePath(root, path).Replace('\\', '/'));
+        }
     }
 
     private static Dictionary<string, string> VersionKeys(
@@ -621,14 +702,8 @@ public sealed class CorpusWriter(
     };
 
     private static List<PublisherMetadataRecord> CanonicalPublisherMetadata(
-        IReadOnlyList<PublisherMetadataRecord>? values) => (values ?? [])
-        .Distinct()
-        .OrderBy(value => value.Kind, StringComparer.Ordinal)
-        .ThenBy(value => value.Identifier, StringComparer.Ordinal)
-        .ThenBy(value => value.Language, StringComparer.Ordinal)
-        .ThenBy(value => value.Label, StringComparer.Ordinal)
-        .ThenBy(value => value.SourceUri, StringComparer.Ordinal)
-        .ToList();
+        IReadOnlyList<PublisherMetadataRecord>? values) =>
+        PublisherMetadataValidation.Canonicalize(values);
 
     private static void ValidateBodyFetch(SourceBodyFetch result)
     {

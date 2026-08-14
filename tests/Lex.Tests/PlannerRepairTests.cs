@@ -532,6 +532,11 @@ public sealed class PlannerRepairTests
         planner: null,
         legalTool: (tool, arguments, cancellationToken) =>
         {
+            if (tool == "search")
+                return ValueTask.FromResult<JsonNode>(new JsonObject
+                {
+                    ["status"] = McpStatus.NoCorpusMounted,
+                });
             Assert.Equal("coverage", tool);
             return ValueTask.FromResult<JsonNode>(new JsonObject
             {

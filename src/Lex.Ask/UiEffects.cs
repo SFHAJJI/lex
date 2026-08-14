@@ -148,14 +148,20 @@ public sealed record ProvisionItem(string Anchor, string? Num, string? Heading, 
 
 public sealed record DiffView(Subject Subject, string FromDate, string ToDate,
     string? FromPermalink, string? ToPermalink, string? Note, string? Status = null,
-    IReadOnlyList<EvidenceContext>? Evidence = null);
+    IReadOnlyList<EvidenceContext>? Evidence = null, bool? AnchorFromPresent = null,
+    bool? AnchorToPresent = null, bool? AnchorTextEqual = null,
+    bool ProvisionLevelComparable = false);
 
 public sealed record HistoryView(Subject Subject, string Anchor, int DistinctTexts,
     IReadOnlyList<HistoryState> States, IReadOnlyList<EvidenceContext>? Evidence = null);
 
 public sealed record HistoryState(string ValidFrom, string? ValidTo, string? Sha, string? Permalink);
 
-public sealed record TimelineView(Subject Subject, IReadOnlyList<EvidenceContext>? Evidence = null);
+public sealed record TimelineView(Subject Subject, IReadOnlyList<TimelineState> Rows,
+    int TotalCount, bool Truncated, IReadOnlyList<EvidenceContext>? Evidence = null);
+
+public sealed record TimelineState(string? LexId, string ValidFrom, string? ValidTo, string? Title,
+    string? Language, string? Permalink, string? RecordSha256);
 
 public sealed record RankingView(string FromDate, string ToDate, string Order,
     int WorksChanged, int NewVersions, IReadOnlyList<RankingRow> Rows, string? Status = null,
@@ -171,7 +177,8 @@ public sealed record RankingRow(string Work, string? Title, int VersionsInPeriod
     int DistinctTexts = 0, bool WordingChanged = true, bool TextComparable = false,
     string? Jurisdiction = null, string? Hierarchy = null,
     IReadOnlyList<string>? Domains = null, string? SourceClass = null,
-    string? ActForm = null, string? BindingStatus = null, string? Language = null);
+    string? ActForm = null, string? BindingStatus = null, string? Language = null,
+    int? GlobalRank = null);
 
 public sealed record InForceView(string Date, int Total, IReadOnlyList<InForceRow> Rows,
     string? Status = null, IReadOnlyList<EvidenceContext>? Evidence = null);

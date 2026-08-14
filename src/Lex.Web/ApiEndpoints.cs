@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json.Nodes;
 using System.Security.Cryptography;
 using Lex.Ask;
+using Lex.Evaluation;
 using Lex.Index;
 using static Lex.Web.PageShell;
 using static Lex.Web.Fragments;
@@ -19,16 +20,92 @@ public static class ApiEndpoints
         var readers = ctx.Registry.All;
         var askService = ctx.Ask;
         var askRequests = ctx.AskRequests;
+        var askThreads = ctx.AskThreads;
+        var evaluationVerifier = ctx.EvaluationAdmissionVerifier;
+        var evaluationAdmissions = ctx.EvaluationAdmissions;
         static string ClientAddress(HttpRequest request) =>
             request.Headers["X-Forwarded-For"].FirstOrDefault()?.Split(',')[^1].Trim()
             ?? request.HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-        static string Fingerprint(byte[] body) =>
-            Convert.ToHexStringLower(SHA256.HashData(body));
+        static string Fingerprint(
+            byte[] body,
+            string? threadToken,
+            string purpose = "ask-v2",
+            string? evaluationToken = null)
+        {
+            var evaluationScope = EvaluationOwnerScope(evaluationToken);
+            var scope = Encoding.UTF8.GetBytes(evaluationScope is null
+                ? $"{purpose}\n{threadToken ?? "-"}\n"
+                : $"{purpose}\n{threadToken ?? "-"}\n{evaluationScope}\n");
+            var committed = new byte[scope.Length + body.Length];
+            Buffer.BlockCopy(scope, 0, committed, 0, scope.Length);
+            Buffer.BlockCopy(body, 0, committed, scope.Length, body.Length);
+            return Convert.ToHexStringLower(SHA256.HashData(committed));
+        }
+        static JsonArray HistoryFor(AskThreadLease thread, string message)
+        {
+            var history = thread.History.DeepClone().AsArray();
+            history.Add(new JsonObject { ["role"] = "user", ["content"] = message });
+            return history;
+        }
+        static string? AssistantReply(JsonObject body) =>
+            body["clarification"]?["question"]?.GetValue<string>()
+            ?? body["reply"]?.GetValue<string>();
+        static void PrivateNoStore(HttpResponse response)
+        {
+            response.Headers.CacheControl = "private,no-store,max-age=0";
+            response.Headers.Pragma = "no-cache";
+            response.Headers.Expires = "0";
+        }
         string Page(string title, string body, string? subtitle = null, string nav = "",
                     string? h1 = null, string? canonicalPath = null, string? jsonLd = null,
                     string? description = null, string? lang = null)
             => PageShell.Page(ctx.PublicBase, title, body, subtitle, nav, h1, canonicalPath,
                               jsonLd, description, lang);
+
+        app.MapPost("/api/ask/evaluation/admission", async (
+            HttpRequest req, HttpResponse res) =>
+        {
+            PrivateNoStore(res);
+            if (req.ContentLength is > EvaluationAdmissionContract.MaximumBytes)
+                return Results.Json(
+                    new { error = "Evaluation admission is too large." }, statusCode: 413);
+            var bytes = await BoundedRequestBody.ReadAsync(
+                req.Body, EvaluationAdmissionContract.MaximumBytes,
+                req.HttpContext.RequestAborted);
+            if (bytes is null)
+                return Results.Json(
+                    new { error = "Evaluation admission is too large." }, statusCode: 413);
+            if (!TryEvaluationSignature(req.Headers, out var signature))
+                return Results.Json(
+                    new { error = "Invalid evaluation admission signature." }, statusCode: 400);
+            EvaluationAdmissionCapability capability;
+            try
+            {
+                capability = evaluationVerifier.Verify(bytes, signature);
+            }
+            catch (Exception exception) when (exception is InvalidDataException
+                                               or CryptographicException)
+            {
+                return Results.Json(
+                    new { error = "Evaluation admission was not authorized." }, statusCode: 401);
+            }
+            var registered = evaluationAdmissions.Register(capability, bytes.Length);
+            return registered.Kind switch
+            {
+                EvaluationAdmissionRegistrationKind.Registered => Results.Json(new
+                {
+                    evaluation_token = registered.Token,
+                    expires_at = registered.ExpiresAt,
+                    max_calls = capability.MaxCalls,
+                }),
+                EvaluationAdmissionRegistrationKind.Replayed => Results.Json(
+                    new { error = "Evaluation admission was already exchanged." },
+                    statusCode: 409),
+                _ => Results.Json(
+                    new { error = "Evaluation admission capacity is unavailable." },
+                    statusCode: 503),
+            };
+        });
 
         // A crawler that is allowed everywhere still has to FIND everything. Without the
         // sitemap line it had to walk /browse fifty works at a time across twenty-nine pages.
@@ -103,20 +180,36 @@ public static class ApiEndpoints
 
         app.MapPost("/api/ask", async (HttpRequest req, HttpResponse res) =>
         {
+            PrivateNoStore(res);
             if (req.ContentLength is > 65536) return Results.Json(new { error = "Request too large." }, statusCode: 413);
             var body = await BoundedRequestBody.ReadAsync(req.Body, 65536, req.HttpContext.RequestAborted);
             if (body is null) return Results.Json(new { error = "Request too large." }, statusCode: 413);
             JsonNode? parsed;
             try { parsed = JsonNode.Parse(body); }
             catch { return Results.Json(new { error = "Bad JSON." }, statusCode: 400); }
-            if (parsed?["messages"] is not JsonArray history)
-                return Results.Json(new { error = "Body must be {\"messages\": [...]}." }, statusCode: 400);
+            if (!TryAskMessage(parsed, out var message, out var messageError))
+                return Results.Json(new { error = messageError }, statusCode: 400);
+            if (!TryThreadToken(req.Headers, out var threadToken))
+                return Results.Json(new { error = "Invalid X-Lex-Thread-Token." }, statusCode: 400);
             if (!TryIdempotencyKey(req.Headers, out var idempotencyKey))
                 return Results.Json(new { error = "Invalid Idempotency-Key." }, statusCode: 400);
+            if (!TryEvaluationToken(req.Headers, out var evaluationToken))
+                return Results.Json(
+                    new { error = "Invalid X-Lex-Evaluation-Admission." }, statusCode: 400);
+            var requestBodySha256 = Convert.ToHexStringLower(SHA256.HashData(body));
+            if (evaluationToken is not null
+                && !EvaluationInspectionAccepted(evaluationAdmissions.Inspect(
+                    evaluationToken, idempotencyKey, requestBodySha256, threadToken),
+                    out var evaluationStatus))
+                return Results.Json(
+                    new { error = "Evaluation request was not authorized." },
+                    statusCode: evaluationStatus);
             // Last X-Forwarded-For element: appended by our ingress, not spoofable by the client
             // (the first element is client-controlled and would reset the per-IP cap).
             var ip = ClientAddress(req);
-            var claim = askRequests.Claim(ip, idempotencyKey, Fingerprint(body));
+            var claim = askRequests.Claim(
+                ip, idempotencyKey, Fingerprint(
+                    body, threadToken, evaluationToken: evaluationToken));
             var requestId = claim.RequestId;
             res.Headers["X-Lex-Request-Id"] = requestId;
             if (claim.Kind != AskRequestClaimKind.Owner)
@@ -124,19 +217,52 @@ public static class ApiEndpoints
                 var replay = await claim.Completion.WaitAsync(req.HttpContext.RequestAborted);
                 return Results.Content(replay.Body, "application/json", statusCode: replay.Status);
             }
+            using var evaluationUse = evaluationToken is null
+                ? null
+                : evaluationAdmissions.Reserve(
+                    evaluationToken, idempotencyKey, requestBodySha256, threadToken);
+            if (evaluationToken is not null && evaluationUse is null)
+            {
+                const string denied = "{\"error\":\"Evaluation request was already used.\"}";
+                claim.Complete(409, denied, retainForReplay: false);
+                return Results.Content(denied, "application/json", statusCode: 409);
+            }
+            var acquired = await AcquireThreadAsync(
+                askThreads, threadToken, req.HttpContext.RequestAborted,
+                EvaluationOwnerScope(evaluationToken));
+            if (acquired.Lease is not { } thread)
+            {
+                var json = acquired.Failure!.ToJsonString();
+                claim.Complete(acquired.Status, json, retainForReplay: false);
+                return Results.Content(json, "application/json", statusCode: acquired.Status);
+            }
+            await using (thread)
             try
             {
-                var outcome = await askService.AskAsync(history, ip,
+                var outcome = await askService.AskAsync(HistoryFor(thread, message), ip,
                     req.Host.Value ?? "law.soufien.lu", req.HttpContext.RequestAborted,
-                    requestId: requestId);
+                    requestId: requestId, conversationContext: thread.Context,
+                    admissionLane: evaluationToken is null
+                        ? AskAdmissionLane.Public
+                        : AskAdmissionLane.Evaluation);
                 var (status, bodyJson) = outcome;
+                var stored = status == 200 && bodyJson["error"] is null
+                    && AssistantReply(bodyJson) is { } assistant
+                    && thread.Commit(
+                        message, assistant, outcome.ConversationContext,
+                        outcome.ContextDisposition);
+                if (stored || threadToken is not null)
+                    bodyJson["thread_token"] = thread.Token;
                 var json = bodyJson.ToJsonString();
+                if (outcome.RetainForReplay)
+                    evaluationUse?.Commit(stored ? thread.Token : null);
                 claim.Complete(status, json, outcome.RetainForReplay);
                 return Results.Content(json, "application/json", statusCode: status);
             }
             catch
             {
                 const string failure = "{\"error\":\"Unexpected error in the playground.\"}";
+                evaluationUse?.Commit();
                 claim.Complete(500, failure, retainForReplay: true);
                 return Results.Content(failure, "application/json", statusCode: 500);
             }
@@ -149,6 +275,7 @@ public static class ApiEndpoints
         // doing: "Code du travail — 3 articles as in force on 2019-03-01", not "searching…".
         app.MapPost("/api/ask/stream", async (HttpRequest req, HttpResponse res) =>
         {
+            PrivateNoStore(res);
             var streamWatch = Stopwatch.StartNew();
             async Task Reject(int status, string error)
             {
@@ -172,13 +299,34 @@ public static class ApiEndpoints
             JsonNode? parsed;
             try { parsed = JsonNode.Parse(body); }
             catch { await Reject(400, "Bad JSON."); return; }
-            if (parsed?["messages"] is not JsonArray history)
+            if (!TryAskMessage(parsed, out var message, out var messageError))
             {
-                await Reject(400, "Body must be {\"messages\": [...]}.");
+                await Reject(400, messageError);
+                return;
+            }
+            if (!TryThreadToken(req.Headers, out var threadToken))
+            {
+                await Reject(400, "Invalid X-Lex-Thread-Token.");
+                return;
+            }
+            if (!TryEvaluationToken(req.Headers, out var evaluationToken))
+            {
+                await Reject(400, "Invalid X-Lex-Evaluation-Admission.");
+                return;
+            }
+            var requestBodySha256 = Convert.ToHexStringLower(SHA256.HashData(body));
+            if (evaluationToken is not null
+                && !EvaluationInspectionAccepted(evaluationAdmissions.Inspect(
+                    evaluationToken, idempotencyKey, requestBodySha256, threadToken),
+                    out var evaluationStatus))
+            {
+                await Reject(evaluationStatus, "Evaluation request was not authorized.");
                 return;
             }
             var ip = ClientAddress(req);
-            var claim = askRequests.Claim(ip, idempotencyKey, Fingerprint(body));
+            var claim = askRequests.Claim(
+                ip, idempotencyKey, Fingerprint(
+                    body, threadToken, evaluationToken: evaluationToken));
             var requestId = claim.RequestId;
             if (claim.Kind is AskRequestClaimKind.Conflict or AskRequestClaimKind.Busy
                 or AskRequestClaimKind.ReplayUnavailable)
@@ -190,10 +338,46 @@ public static class ApiEndpoints
                 return;
             }
 
+            AskThreadLease? thread = null;
+            EvaluationAdmissionUse? evaluationUse = null;
+            if (claim.Kind == AskRequestClaimKind.Owner)
+            {
+                if (evaluationToken is not null)
+                {
+                    evaluationUse = evaluationAdmissions.Reserve(
+                        evaluationToken, idempotencyKey, requestBodySha256, threadToken);
+                    if (evaluationUse is null)
+                    {
+                        const string denied =
+                            "{\"error\":\"Evaluation request was already used.\"}";
+                        claim.Complete(409, denied, retainForReplay: false);
+                        res.StatusCode = 409;
+                        res.ContentType = "application/json";
+                        await res.WriteAsync(denied, req.HttpContext.RequestAborted);
+                        return;
+                    }
+                }
+                var acquired = await AcquireThreadAsync(
+                    askThreads, threadToken, req.HttpContext.RequestAborted,
+                    EvaluationOwnerScope(evaluationToken));
+                if (acquired.Lease is not { } acquiredThread)
+                {
+                    evaluationUse?.Dispose();
+                    var json = acquired.Failure!.ToJsonString();
+                    claim.Complete(acquired.Status, json, retainForReplay: false);
+                    res.StatusCode = acquired.Status;
+                    res.ContentType = "application/json";
+                    if (req.HttpContext.RequestAborted.IsCancellationRequested)
+                        return;
+                    await res.WriteAsync(json, req.HttpContext.RequestAborted);
+                    return;
+                }
+                thread = acquiredThread;
+            }
+
             void StreamHeaders()
             {
                 res.Headers.ContentType = "text/event-stream";
-                res.Headers.CacheControl = "no-cache";
                 res.Headers["X-Accel-Buffering"] = "no";
                 res.Headers["X-Lex-Request-Id"] = requestId;
             }
@@ -263,6 +447,10 @@ public static class ApiEndpoints
                 return;
             }
 
+            await using var ownedThread = thread
+                ?? throw new InvalidOperationException("An owner requires one thread lease.");
+            using var ownedEvaluationUse = evaluationUse;
+
             var steps = 0;
             double? firstOperationEmittedMilliseconds = null;
             var progress = new AskService.AskProgressCallbacks(
@@ -287,23 +475,47 @@ public static class ApiEndpoints
                 Synthesis: (status, _) => new ValueTask(Send("synthesis", new JsonObject
                 {
                     ["status"] = status,
+                })),
+                Phase: (update, _) => new ValueTask(Send("phase", new JsonObject
+                {
+                    ["phase"] = update.Phase switch
+                    {
+                        AskService.AskPhase.Resolution => "resolution",
+                        AskService.AskPhase.Planning => "planning",
+                        AskService.AskPhase.Execution => "execution",
+                        AskService.AskPhase.Composition => "composition",
+                        _ => throw new ArgumentOutOfRangeException(nameof(update)),
+                    },
+                    ["status"] = update.Status switch
+                    {
+                        AskService.AskPhaseStatus.Started => "started",
+                        AskService.AskPhaseStatus.Completed => "completed",
+                        AskService.AskPhaseStatus.Unavailable => "unavailable",
+                        _ => throw new ArgumentOutOfRangeException(nameof(update)),
+                    },
                 })));
             AskService.AskOutcome outcome;
             try
             {
-                outcome = await askService.AskAsync(history, ip,
+                outcome = await askService.AskAsync(HistoryFor(ownedThread, message), ip,
                     req.Host.Value ?? "law.soufien.lu",
-                    req.HttpContext.RequestAborted, progress, requestId);
+                    req.HttpContext.RequestAborted, progress, requestId,
+                    ownedThread.Context,
+                    evaluationToken is null
+                        ? AskAdmissionLane.Public
+                        : AskAdmissionLane.Evaluation);
             }
             catch (OperationCanceledException) when (req.HttpContext.RequestAborted.IsCancellationRequested)
             {
                 const string cancelled = "{\"error\":\"The assistant request was cancelled.\"}";
+                ownedEvaluationUse?.Commit();
                 claim.Complete(499, cancelled, retainForReplay: true);
                 return;
             }
             catch
             {
                 const string failure = "{\"error\":\"Unexpected error in the playground.\"}";
+                ownedEvaluationUse?.Commit();
                 claim.Complete(500, failure, retainForReplay: true);
                 await Send("transport_error", new JsonObject
                 {
@@ -320,6 +532,15 @@ public static class ApiEndpoints
             bodyJson["narrated"] = status == 200 && bodyJson["ui"]?["gap"] is null && steps > 0;
             if (bodyJson["timing"] is JsonObject timing)
                 timing["operation_result_emitted_ms"] = firstOperationEmittedMilliseconds;
+            var stored = status == 200 && bodyJson["error"] is null
+                && AssistantReply(bodyJson) is { } assistant
+                && ownedThread.Commit(
+                    message, assistant, outcome.ConversationContext,
+                    outcome.ContextDisposition);
+            if (stored || threadToken is not null)
+                bodyJson["thread_token"] = ownedThread.Token;
+            if (outcome.RetainForReplay)
+                ownedEvaluationUse?.Commit(stored ? ownedThread.Token : null);
             claim.Complete(status, bodyJson.ToJsonString(), outcome.RetainForReplay);
             if (status == 200)
                 await Send("done", bodyJson);
@@ -330,6 +551,46 @@ public static class ApiEndpoints
                     ["error"] = bodyJson["error"]?.GetValue<string>()
                         ?? "The assistant request did not complete.",
                 });
+        });
+
+        app.MapPost("/api/ask/thread/reset", async (HttpRequest req, HttpResponse res) =>
+        {
+            PrivateNoStore(res);
+            var body = await BoundedRequestBody.ReadAsync(
+                req.Body, 1_024, req.HttpContext.RequestAborted);
+            if (body is null)
+                return Results.Json(new { error = "Request too large." }, statusCode: 413);
+            if (!TryThreadToken(req.Headers, out var threadToken) || threadToken is null)
+                return Results.Json(
+                    new { error = "Invalid X-Lex-Thread-Token." }, statusCode: 400);
+            if (!TryIdempotencyKey(req.Headers, out var idempotencyKey))
+                return Results.Json(new { error = "Invalid Idempotency-Key." }, statusCode: 400);
+            if (!TryEvaluationToken(req.Headers, out var evaluationToken))
+                return Results.Json(
+                    new { error = "Invalid X-Lex-Evaluation-Admission." }, statusCode: 400);
+            var ip = ClientAddress(req);
+            var claim = askRequests.Claim(
+                ip, idempotencyKey, Fingerprint(
+                    body, threadToken, "ask-thread-reset-v1", evaluationToken));
+            res.Headers["X-Lex-Request-Id"] = claim.RequestId;
+            if (claim.Kind != AskRequestClaimKind.Owner)
+            {
+                var replay = await claim.Completion.WaitAsync(req.HttpContext.RequestAborted);
+                return Results.Content(replay.Body, "application/json", statusCode: replay.Status);
+            }
+            var removed = askThreads.Reset(
+                threadToken, EvaluationOwnerScope(evaluationToken));
+            var status = removed ? 200 : 409;
+            var response = removed
+                ? new JsonObject { ["status"] = "reset" }
+                : new JsonObject
+                {
+                    ["status"] = "thread_unavailable",
+                    ["error"] = "This assistant thread is unavailable. Start a new conversation.",
+                };
+            var json = response.ToJsonString();
+            claim.Complete(status, json, retainForReplay: removed);
+            return Results.Content(json, "application/json", statusCode: status);
         });
 
         app.MapGet("/healthz", () => Results.Text("ok"));
@@ -392,5 +653,137 @@ public static class ApiEndpoints
         }
         key = supplied;
         return true;
+    }
+
+    internal static bool TryThreadToken(
+        IHeaderDictionary headers,
+        out string? token)
+    {
+        if (!headers.TryGetValue("X-Lex-Thread-Token", out var values))
+        {
+            token = null;
+            return true;
+        }
+        token = values.Count == 1 ? values[0] : null;
+        return AskThreadRegistry.IsValidToken(token);
+    }
+
+    internal static bool TryEvaluationToken(
+        IHeaderDictionary headers,
+        out string? token)
+    {
+        if (!headers.TryGetValue("X-Lex-Evaluation-Admission", out var values))
+        {
+            token = null;
+            return true;
+        }
+        token = values.Count == 1 ? values[0] : null;
+        return EvaluationAdmissionRegistry.IsValidToken(token);
+    }
+
+    private static string? EvaluationOwnerScope(string? token) => token is null
+        ? null
+        : Convert.ToHexStringLower(SHA256.HashData(Encoding.ASCII.GetBytes(token)));
+
+    private static bool TryEvaluationSignature(
+        IHeaderDictionary headers,
+        out string signature)
+    {
+        var values = headers["X-Lex-Evaluation-Admission-Signature"];
+        signature = values.Count == 1 ? values[0] ?? "" : "";
+        return signature.Length is > 0
+            and <= EvaluationAdmissionContract.MaximumSignatureCharacters;
+    }
+
+    private static bool EvaluationInspectionAccepted(
+        EvaluationAdmissionAuthorizationKind inspection,
+        out int status)
+    {
+        status = inspection switch
+        {
+            EvaluationAdmissionAuthorizationKind.RequestNotAllowed => 403,
+            EvaluationAdmissionAuthorizationKind.AlreadyUsed => 200,
+            EvaluationAdmissionAuthorizationKind.Allowed => 200,
+            _ => 401,
+        };
+        return inspection is EvaluationAdmissionAuthorizationKind.Allowed
+            or EvaluationAdmissionAuthorizationKind.AlreadyUsed;
+    }
+
+    private static bool TryAskMessage(
+        JsonNode? parsed,
+        out string message,
+        out string error)
+    {
+        if (parsed is not JsonObject body
+            || body.Count != 1
+            || body["message"] is not JsonValue value
+            || !value.TryGetValue<string>(out message!))
+        {
+            message = "";
+            error = "Body must be {\"message\": \"...\"}.";
+            return false;
+        }
+        if (string.IsNullOrWhiteSpace(message) || message.Length > 1_000)
+        {
+            error = "Questions must contain 1 to 1,000 characters.";
+            return false;
+        }
+        error = "";
+        return true;
+    }
+
+    private static (int Status, JsonObject Body) ThreadFailure(AskThreadAcquireKind kind) =>
+        kind switch
+        {
+            AskThreadAcquireKind.NotFound => (409, new JsonObject
+            {
+                ["status"] = "thread_unavailable",
+                ["error"] = "This assistant thread expired or is unavailable. Start a new conversation.",
+            }),
+            AskThreadAcquireKind.Busy => (429, new JsonObject
+            {
+                ["status"] = "thread_busy",
+                ["error"] = "This assistant thread already has too many waiting turns.",
+            }),
+            AskThreadAcquireKind.Capacity => (503, new JsonObject
+            {
+                ["status"] = "thread_capacity",
+                ["error"] = "Assistant conversation memory is full. Try again shortly.",
+            }),
+            _ => throw new ArgumentOutOfRangeException(nameof(kind)),
+        };
+
+    private static async ValueTask<(AskThreadLease? Lease, int Status, JsonObject? Failure)>
+        AcquireThreadAsync(
+            AskThreadRegistry registry,
+            string? token,
+            CancellationToken cancellationToken,
+            string? ownerScope)
+    {
+        try
+        {
+            var acquired = await registry.AcquireAsync(
+                token, cancellationToken, ownerScope);
+            if (acquired.Lease is { } lease) return (lease, 0, null);
+            var (status, failure) = ThreadFailure(acquired.Kind);
+            return (null, status, failure);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return (null, 499, new JsonObject
+            {
+                ["status"] = "cancelled",
+                ["error"] = "The assistant request was cancelled.",
+            });
+        }
+        catch
+        {
+            return (null, 500, new JsonObject
+            {
+                ["status"] = "thread_failure",
+                ["error"] = "Assistant conversation memory is temporarily unavailable.",
+            });
+        }
     }
 }

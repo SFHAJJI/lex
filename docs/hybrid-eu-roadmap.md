@@ -35,8 +35,9 @@ official publication nor legal advice; the publisher source remains the authorit
 
 1. **Shipped:** separate current, next, decisions and benchmarks surfaces.
 2. **Shipped:** signed whole-artifact manifests and verified Azure OIDC deployment.
-3. **Shipped:** reviewed EU domain configuration with bounded legal-history closure and every
-   available official French and English consolidated expression.
+3. **Shipped:** provenance-bound EU engineering acquisition scope with bounded legal-history
+   closure and every available official French and English consolidated expression; its labels
+   do not become legal metadata or search facets.
 4. **Shipped:** `lex-index/3` with content-addressed text, occurrence mappings and transparent
    decompression.
 5. **Shipped as preview:** local multilingual embeddings, deterministic rank fusion and

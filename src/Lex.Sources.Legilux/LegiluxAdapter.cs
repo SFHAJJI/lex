@@ -17,10 +17,22 @@ public sealed class LegiluxAdapter : ISourceAdapter, ISourceBuildInventory
     private const string Endpoint = "https://data.legilux.public.lu/sparqlendpoint";
     private const string J = "PREFIX jolux: <http://data.legilux.public.lu/resource/ontology/jolux#>\n";
 
-    private readonly SparqlClient _sparql = new(Endpoint);
+    // Fixed release bounds sit well above the measured held catalogue (4,656 versions), its
+    // manifestations, six current sameAs identities, and at most 57 canonical subjects/work.
+    // Subject rows allow both general and specific scheme joins before fail-closed parsing.
+    internal const int CatalogueMaximumRows = 20_000;
+    internal const int SubjectMaximumRows = 200_000;
+    internal const int IdentityMaximumRows = 20_000;
+    internal const int ManifestationMaximumRows = 50_000;
+
+    private readonly SparqlClient _sparql;
     private Dictionary<string, List<VersionRecord>>? _byWork;   // work URI -> versions
     private Dictionary<string, WorkRef>? _works;                // work URI -> ref
     private readonly SemaphoreSlim _initLock = new(1, 1);
+
+    public LegiluxAdapter() : this(new SparqlClient(Endpoint)) { }
+
+    internal LegiluxAdapter(SparqlClient sparql) => _sparql = sparql;
 
     public PublisherDescriptor Describe() => new(
         new Publisher(
@@ -168,8 +180,19 @@ public sealed class LegiluxAdapter : ISourceAdapter, ISourceBuildInventory
                              OPTIONAL { ?expr jolux:title ?title }
                              OPTIONAL { ?expr jolux:titleShort ?titleShort } }
                 } ORDER BY ?c ?expr LIMIT {{limit}} OFFSET {{offset}}
-                """, pageSize: 5000, ct,
+                """, pageSize: 5000, maximumRows: CatalogueMaximumRows, ct: ct,
                 onPage: n => Console.Error.WriteLine($"  [legilux] fetched {n} rows"));
+
+            var subjectRows = await _sparql.SelectPagedAsync(
+                LegiluxPublisherMetadata.Query, pageSize: 5000,
+                maximumRows: SubjectMaximumRows, ct: ct,
+                onPage: n => Console.Error.WriteLine($"  [legilux] fetched {n} subject rows"));
+            var subjectsByWork = LegiluxPublisherMetadata.ParseSubjects(subjectRows);
+            var identityRows = await _sparql.SelectPagedAsync(
+                LegiluxOfficialIdentities.Query, pageSize: 5000,
+                maximumRows: IdentityMaximumRows, ct: ct,
+                onPage: n => Console.Error.WriteLine($"  [legilux] fetched {n} official identity rows"));
+            var identitiesByWork = LegiluxOfficialIdentities.Parse(identityRows);
 
             var byConsolidation = rows.GroupBy(r => r["c"], StringComparer.Ordinal);
             var byWork = new Dictionary<string, List<VersionRecord>>(StringComparer.Ordinal);
@@ -207,6 +230,16 @@ public sealed class LegiluxAdapter : ISourceAdapter, ISourceBuildInventory
                 if (expressions.Count == 0)
                     expressions = [new ExpressionRecord("fr", validFrom, validTo, "publisher", null, null, PublicUrl(grp.Key))];
 
+                var publisherMetadata = subjectsByWork.GetValueOrDefault(workUri, [])
+                    .Concat(identitiesByWork.GetValueOrDefault(workUri, []))
+                    .Distinct().OrderBy(value => value.Kind, StringComparer.Ordinal)
+                    .ThenBy(value => value.Identifier, StringComparer.Ordinal)
+                    .ThenBy(value => value.Language, StringComparer.Ordinal)
+                    .ThenBy(value => value.Label, StringComparer.Ordinal).ToArray();
+                if (publisherMetadata.Length > 512)
+                    throw new InvalidDataException(
+                        $"Legilux work {workUri} exceeds 512 publisher metadata records.");
+
                 var version = new VersionRecord(
                     Id: new Identifier(grp.Key),
                     WorkId: new Identifier(workUri),
@@ -218,7 +251,8 @@ public sealed class LegiluxAdapter : ISourceAdapter, ISourceBuildInventory
                     PublicationDate: pubDate,
                     Expressions: expressions,
                     Relations: [],
-                    Raw: new Dictionary<string, string>());
+                    Raw: new Dictionary<string, string>(),
+                    PublisherMetadata: publisherMetadata);
 
                 if (!byWork.TryGetValue(workUri, out var list)) byWork[workUri] = list = [];
                 list.Add(version);
@@ -278,7 +312,7 @@ public sealed class LegiluxAdapter : ISourceAdapter, ISourceBuildInventory
                   VALUES ?fmt { <http://data.legilux.public.lu/resource/authority/user-format/xml>
                                 <http://data.legilux.public.lu/resource/authority/user-format/pdf> }
                 } ORDER BY ?c LIMIT {{limit}} OFFSET {{offset}}
-                """, pageSize: 5000, ct,
+                """, pageSize: 5000, maximumRows: ManifestationMaximumRows, ct: ct,
                 onPage: n => Console.Error.WriteLine($"  [legilux] manifestation rows {n}"));
             var xmlFiles = new Dictionary<string, string>(StringComparer.Ordinal);
             var pdfFiles = new Dictionary<string, string>(StringComparer.Ordinal);

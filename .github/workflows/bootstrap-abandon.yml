@@ -1,0 +1,145 @@
+name: bootstrap-abandon
+
+on:
+  workflow_dispatch:
+    inputs:
+      legacy_authority_revision:
+        description: Exact current A that must remain at 100 percent
+        required: true
+        type: string
+      rollback_revision:
+        description: Exact prepared fallback R that will be purged
+        required: true
+        type: string
+      candidate_revision:
+        description: Exact prepared C to deactivate and retain for audit
+        required: true
+        type: string
+      confirmation:
+        description: Enter abandon-first-release-candidate
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: lex-production
+  cancel-in-progress: false
+
+jobs:
+  abandon:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 15
+    env:
+      AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      RESOURCE_GROUP: rg-platform
+      CONTAINER_APP: ca-lex-web
+      LEGACY_REVISION: ${{ inputs.legacy_authority_revision }}
+      ROLLBACK_REVISION: ${{ inputs.rollback_revision }}
+      CANDIDATE_REVISION: ${{ inputs.candidate_revision }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Require exact abandon authority
+        shell: bash
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          set -eu
+          [ "$CONFIRMATION" = "abandon-first-release-candidate" ] \
+            || { echo "::error::exact bootstrap abandon confirmation is required"; exit 2; }
+          for revision in "$LEGACY_REVISION" "$ROLLBACK_REVISION" "$CANDIDATE_REVISION"; do
+            [[ "$revision" =~ ^ca-lex-web--[a-z0-9-]+$ ]] \
+              || { echo "::error::invalid exact revision identity"; exit 2; }
+          done
+          [ "$LEGACY_REVISION" != "$ROLLBACK_REVISION" ] \
+            && [ "$LEGACY_REVISION" != "$CANDIDATE_REVISION" ] \
+            && [ "$ROLLBACK_REVISION" != "$CANDIDATE_REVISION" ] \
+            || { echo "::error::abandon revision identities must differ"; exit 2; }
+
+      - uses: azure/login@f5d393ae46f8fde4be8b75f32e3fc50e654ad0ca # v3
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deactivate only exact C and prove bounded A/C state
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          . scripts/deploy/az-retry.sh
+          . scripts/deploy/az-reauth.sh
+          az_reauth
+          limit=$(az_retry az containerapp show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+            --query properties.configuration.maxInactiveRevisions -o tsv)
+          [ "$limit" = "1" ] \
+            || { echo "::error::bootstrap abandon requires maxInactiveRevisions=1"; exit 1; }
+          az_retry az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+            --all -o json > before.json
+          if jq -e --arg legacy "$LEGACY_REVISION" --arg candidate "$CANDIDATE_REVISION" '
+              length == 2
+              and any(.[]; .name == $legacy and .properties.active == true
+                and (.properties.trafficWeight // 0) == 100)
+              and any(.[]; .name == $candidate and .properties.active == false
+                and (.properties.trafficWeight // 0) == 0)' before.json >/dev/null; then
+            echo "bootstrap C was already abandoned safely"
+            exit 0
+          fi
+          jq -e --arg legacy "$LEGACY_REVISION" --arg rollback "$ROLLBACK_REVISION" \
+              --arg candidate "$CANDIDATE_REVISION" '
+                length == 3
+                and any(.[]; .name == $legacy and .properties.active == true
+                  and (.properties.trafficWeight // 0) == 100)
+                and any(.[]; .name == $rollback and .properties.active == false
+                  and (.properties.trafficWeight // 0) == 0)
+                and any(.[]; .name == $candidate and .properties.active == true
+                  and (.properties.trafficWeight // 0) == 0)
+                and ([.[] | .properties.createdTime] | all(type == "string"))' \
+            before.json >/dev/null \
+            || { echo "::error::refusing to abandon outside exact A/R/C preparation"; exit 1; }
+          python3 - "$LEGACY_REVISION" "$ROLLBACK_REVISION" "$CANDIDATE_REVISION" <<'PY'
+          import json
+          import sys
+          sys.path.insert(0, "scripts/deploy")
+          from bootstrap_plan import timestamp
+
+          inventory = {item["name"]: item for item in json.load(open("before.json", encoding="utf-8"))}
+          def instant(name):
+              value = inventory[name]["properties"]["createdTime"]
+              return timestamp(value, f"{name}.createdTime")
+          if not instant(sys.argv[1]) < instant(sys.argv[2]) < instant(sys.argv[3]):
+              raise SystemExit("bootstrap abandon requires exact A < R < C chronology")
+          PY
+          az_retry az containerapp revision deactivate -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+            --revision "$CANDIDATE_REVISION" --only-show-errors
+          for attempt in $(seq 1 24); do
+            az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+              --all -o json > after.json 2>/dev/null || true
+            jq -e --arg legacy "$LEGACY_REVISION" --arg candidate "$CANDIDATE_REVISION" '
+                length == 2
+                and any(.[]; .name == $legacy and .properties.active == true
+                  and (.properties.trafficWeight // 0) == 100)
+                and any(.[]; .name == $candidate and .properties.active == false
+                  and (.properties.trafficWeight // 0) == 0)' after.json >/dev/null 2>&1 && exit 0
+            sleep 5
+          done
+          echo "::error::bootstrap abandon did not converge to exact A active plus C inactive"
+          exit 1
+
+      - name: Abandon summary
+        shell: bash
+        run: |
+          {
+            echo "## First-release candidate abandoned"
+            echo
+            echo "- active traffic authority: \`$LEGACY_REVISION\`"
+            echo "- sole inactive audit record: \`$CANDIDATE_REVISION\`"
+            echo "- purged equivalent fallback: \`$ROLLBACK_REVISION\`"
+            echo "- next attempt must create a fresh R before a fresh C"
+          } >> "$GITHUB_STEP_SUMMARY"

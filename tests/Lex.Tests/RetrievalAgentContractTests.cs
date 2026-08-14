@@ -41,6 +41,96 @@ public sealed class RetrievalAgentContractTests
     }
 
     [Fact]
+    public void Claim_content_cannot_switch_the_article_number_named_by_its_evidence()
+    {
+        var draft = Answer(new AgentClaim(
+            "Article 92 contains the notification rule.", AgentClaimKind.LegalText, ["text:1"]));
+
+        Assert.Throws<InvalidDataException>(() => AgentAnswerContract.Validate(draft, [LegalText]));
+    }
+
+    [Fact]
+    public void Claim_content_cannot_switch_a_one_digit_article_number()
+    {
+        var articleSix = LegalText with { Anchor = "art_6" };
+        var draft = Answer(new AgentClaim(
+            "Article 7 contains the rule.", AgentClaimKind.LegalText, [articleSix.Id]));
+
+        Assert.Throws<InvalidDataException>(() =>
+            AgentAnswerContract.Validate(draft, [articleSix]));
+    }
+
+    [Fact]
+    public void Change_claim_polarity_must_match_the_typed_change_evidence()
+    {
+        var unchanged = LegalText with
+        {
+            Id = "change:1",
+            Kind = AgentEvidenceKind.Change,
+            Excerpt = "{\"changed\":false,\"anchor_text_equal\":true}",
+        };
+        var same = Answer(new AgentClaim(
+            "Article 33 has the same wording on both dates.", AgentClaimKind.Change, [unchanged.Id]));
+        var opposite = same with
+        {
+            Claims = [new AgentClaim("Article 33 changed between the two dates.",
+                AgentClaimKind.Change, [unchanged.Id])],
+        };
+
+        Assert.Equal(same.Claims[0].Text,
+            AgentAnswerContract.Validate(same, [unchanged]).Claims[0].Text);
+        Assert.Throws<InvalidDataException>(() =>
+            AgentAnswerContract.Validate(opposite, [unchanged]));
+    }
+
+    [Theory]
+    [InlineData("Article 33 has not changed between the two dates.")]
+    [InlineData("L'article 33 n'a pas changé entre les deux dates.")]
+    public void Canonical_negative_change_polarity_is_supported_in_english_and_french(string claim)
+    {
+        var unchanged = LegalText with
+        {
+            Id = "change:1", Kind = AgentEvidenceKind.Change,
+            Excerpt = "{\"changed\":false,\"anchor_text_equal\":true}",
+        };
+
+        Assert.Equal(claim, AgentAnswerContract.Validate(
+            Answer(new AgentClaim(claim, AgentClaimKind.Change, [unchanged.Id])),
+            [unchanged]).Claims[0].Text);
+    }
+
+    [Theory]
+    [InlineData("Article 33 changed between the two dates.")]
+    [InlineData("L'article 33 a changé entre les deux dates.")]
+    public void Canonical_positive_change_polarity_is_supported_in_english_and_french(string claim)
+    {
+        var changed = LegalText with
+        {
+            Id = "change:1", Kind = AgentEvidenceKind.Change,
+            Excerpt = "{\"changed\":true,\"anchor_text_equal\":false}",
+        };
+
+        Assert.Equal(claim, AgentAnswerContract.Validate(
+            Answer(new AgentClaim(claim, AgentClaimKind.Change, [changed.Id])),
+            [changed]).Claims[0].Text);
+    }
+
+    [Theory]
+    [InlineData("L'article 33 a changé entre les deux dates.")]
+    [InlineData("Article 33 evolved between the two dates.")]
+    public void Contradictory_or_unrecognized_change_polarity_fails_closed(string claim)
+    {
+        var unchanged = LegalText with
+        {
+            Id = "change:1", Kind = AgentEvidenceKind.Change,
+            Excerpt = "{\"changed\":false,\"anchor_text_equal\":true}",
+        };
+
+        Assert.Throws<InvalidDataException>(() => AgentAnswerContract.Validate(
+            Answer(new AgentClaim(claim, AgentClaimKind.Change, [unchanged.Id])), [unchanged]));
+    }
+
+    [Fact]
     public void Answer_links_must_be_returned_by_the_cited_evidence()
     {
         var draft = Answer(new AgentClaim(

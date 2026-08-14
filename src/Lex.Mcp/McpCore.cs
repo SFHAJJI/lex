@@ -41,9 +41,63 @@ public sealed class McpCore
         "/eli/reg_ue/2014/65", "/eli/dir_ue/2004/648",
         "/eli/dir_ue/2012/259", "/eli/dir_ue/2008/765",
     };
+    private static readonly HashSet<string> PublicPublisherMetadataKinds = new(StringComparer.Ordinal)
+    {
+        "publisher_short_title", "eurovoc", "directory", "eurovoc_alt_label",
+        "eurovoc_broader", "eurovoc_subdomain", "eurovoc_domain",
+        "legilux_subject_level1_theme", "legilux_subject_level1_organisation",
+        "legilux_subject_level1_place", "legilux_subject_level1_legal_resource",
+        "legilux_subject_level1_country", "legilux_subject_level2_theme",
+        "legilux_subject_level2_organisation", "legilux_subject_level2_place",
+        "legilux_subject_level2_legal_resource", "legilux_subject_level2_country",
+    };
 
     internal sealed record GlobalChangeItem(LexIndexReader Reader, ChangeRow Row, int Rank);
     internal sealed record GlobalChangePage(IReadOnlyList<GlobalChangeItem> Items, int ReaderRowsLoaded);
+
+    private static JsonObject PublisherMetadataJson(MatchedPublisherMetadata metadata)
+    {
+        if (!PublicPublisherMetadataKinds.Contains(metadata.Kind))
+            throw new InvalidDataException(
+                $"Publisher metadata kind '{metadata.Kind}' is not part of the public MCP contract.");
+        var result = new JsonObject
+        {
+            ["kind"] = metadata.Kind,
+            ["identifier"] = metadata.Identifier,
+            ["label"] = metadata.Label,
+            ["language"] = metadata.Language,
+            ["source_uri"] = metadata.SourceUri,
+        };
+        if (metadata.MatchedSegment is not null)
+            result["matched_segment"] = metadata.MatchedSegment;
+        return result;
+    }
+
+    private static JsonObject WorkResolutionJson(
+        string mention, string status, string? kind, IEnumerable<string> candidates,
+        IReadOnlyList<PublisherShortTitleMatch>? shortTitles)
+    {
+        var result = new JsonObject
+        {
+            ["mention"] = mention,
+            ["status"] = status,
+            ["kind"] = kind,
+            ["candidates"] = new JsonArray(candidates.Select(candidate =>
+                (JsonNode)candidate).ToArray()),
+        };
+        if (shortTitles is { Count: > 0 })
+            result["publisher_short_title_matches"] = new JsonArray(shortTitles.Select(match =>
+            (JsonNode)new JsonObject
+            {
+                ["work"] = match.Work,
+                ["segment"] = match.Segment,
+                ["identifier"] = match.Identifier,
+                ["label"] = match.Label,
+                ["language"] = match.Language,
+                ["source_uri"] = match.SourceUri,
+            }).ToArray());
+        return result;
+    }
 
     private sealed class ChangeCursor(
         LexIndexReader reader,
@@ -154,157 +208,7 @@ public sealed class McpCore
     /// <summary>The jurisdiction codes this server actually mounts, ordinal-sorted.</summary>
     public IReadOnlyList<string> MountedJurisdictions { get; }
 
-    public JsonArray ToolDefs()
-    {
-        JsonObject Tool(string name, string desc, JsonObject props, string[] required) => new()
-        {
-            ["name"] = name,
-            ["description"] = desc,
-            ["inputSchema"] = new JsonObject
-            {
-                ["type"] = "object",
-                ["properties"] = props,
-                ["required"] = new JsonArray(required.Select(r => (JsonNode)r).ToArray()),
-                ["additionalProperties"] = false,
-            },
-        };
-        JsonObject S(string d, int maximum = 1000)
-        {
-            return new JsonObject
-            {
-                ["type"] = "string", ["description"] = d,
-                ["minLength"] = 1, ["maxLength"] = maximum,
-            };
-        }
-        JsonObject E(string d, params string[] values)
-        {
-            var value = S(d, 64);
-            value["enum"] = new JsonArray(values.Select(item => (JsonNode)item).ToArray());
-            return value;
-        }
-        JsonObject D(string d)
-        {
-            var value = S(d, 10);
-            value["pattern"] = "^[0-9]{4}-[0-9]{2}-[0-9]{2}$";
-            return value;
-        }
-        JsonObject I(string d, int? minimum = null, int? maximum = null)
-        {
-            var value = new JsonObject { ["type"] = "integer", ["description"] = d };
-            if (minimum is not null) value["minimum"] = minimum.Value;
-            if (maximum is not null) value["maximum"] = maximum.Value;
-            return value;
-        }
-
-        var workDesc = "Work-level lex_id (publisher:workkey), version-level lex_id (version segment ignored), or verbatim publisher identifier with publisher supplied. Unknown document -> call search first.";
-        return
-        [
-            Tool("as_of", "The state of one document as it stood on one date. Pure lookup, no ranking. mode=outline lists provisions without text and may be narrowed with anchors; mode=select returns only the named anchors' text; mode=full (default) returns the whole text. Every provision carries its own permalink and hash.",
-                new JsonObject
-                {
-                    ["work"] = S(workDesc), ["date"] = D("ISO date YYYY-MM-DD"),
-                    ["version_key"] = S("optional opaque key returned by timeline or an ambiguous_version choice", 128),
-                    ["publisher"] = S("publisher id; required when work is not publisher-qualified", 64),
-                    ["language"] = S("optional language code, e.g. fr", 16),
-                    ["mode"] = E("full | outline | select (default full)", "full", "outline", "select"),
-                    ["anchors"] = S("optional comma-separated provision anchors for mode=outline; required for mode=select, e.g. art_1er,art_33"),
-                }, ["work", "date"]),
-            Tool("timeline", "Every publisher state a document has been in: timeline intervals, version keys, and explicit timeline_semantics. Legilux intervals describe applicability; EUR-Lex intervals describe official consolidated wording states, not entry into force.",
-                new JsonObject
-                {
-                    ["work"] = S(workDesc),
-                    ["publisher"] = S("publisher id; required when work is not publisher-qualified", 64),
-                    ["limit"] = I("max versions (default 100)", 1, 200),
-                    ["offset"] = I("pagination offset", 0, 100000),
-                }, ["work"]),
-            Tool("in_force_on", "Compatibility name for publisher states covering a date, computed from timeline intervals and deduplicated by work. Legilux states describe applicability; EUR-Lex states are official consolidated wording states and must not be called entry into force. Every envelope carries timeline_semantics and the result carries a mandatory population disclosure.",
-                new JsonObject
-                {
-                    ["date"] = D("ISO date"), ["publisher"] = S("optional publisher id, e.g. lu-legilux", 64),
-                    ["jurisdiction"] = S("optional jurisdiction code from index metadata, e.g. LU or EU", 64),
-                    ["document_type"] = S("backward-compatible source document class filter"),
-                    ["source_class"] = S("optional source document class"),
-                    ["hierarchy"] = S("optional normalized legal hierarchy"),
-                    ["act_form"] = S("optional legal act form"),
-                    ["binding_status"] = S("optional binding status"),
-                    ["domain"] = S("optional reviewed legal domain"),
-                    ["language"] = S("optional language code", 16),
-                    ["limit"] = I("default 50", 1, 100), ["offset"] = I("pagination offset", 0, 100000),
-                }, ["date"]),
-            Tool("diff", "What changed between two dates for one work: which publisher versions cover the selected dates and, where both texts are held, retrieve them via as_of to compare. An optional held article anchor scopes the typed comparison workspace. Read timeline_semantics before describing legal applicability.",
-                new JsonObject
-                {
-                    ["work"] = S(workDesc), ["from_date"] = D("ISO date"),
-                    ["to_date"] = D("ISO date"), ["language"] = S("language code", 16),
-                    ["from_version_key"] = S("optional opaque key returned by timeline or an ambiguous_version choice", 128),
-                    ["to_version_key"] = S("optional opaque key returned by timeline or an ambiguous_version choice", 128),
-                    ["publisher"] = S("publisher id; required when work is not publisher-qualified", 64),
-                    ["anchor"] = S("optional held provision anchor returned by search, e.g. art_92", McpInputPolicy.MaximumAnchorLength),
-                }, ["work", "from_date", "to_date"]),
-            Tool("search", "Filtered legal search. keyword is deterministic FTS5/BM25; hybrid adds the pinned local encoder and fixed RRF when verified vectors are mounted. No generative model participates. The response query_plan separates resolved work constraints, article and role intent, and residual provision terms. Returns hits WITHOUT body text; full state via as_of.",
-                new JsonObject
-                {
-                    ["query"] = S("search terms"), ["publisher"] = S("optional publisher id", 64),
-                    ["jurisdiction"] = S("optional jurisdiction code from index metadata, e.g. LU or EU", 64),
-                    ["document_type"] = S("backward-compatible document type filter"),
-                    ["source_class"] = S("optional source document class"),
-                    ["hierarchy"] = S("optional normalized legal hierarchy"),
-                    ["act_form"] = S("optional legal act form"),
-                    ["binding_status"] = S("optional binding status"),
-                    ["domain"] = S("optional reviewed legal domain id"),
-                    ["language"] = S("optional language code", 16),
-                    ["retrieval_mode"] = E("keyword or hybrid; default keyword until activation", "keyword", "hybrid"),
-                    ["time_scope"] = E("all_versions or as_of", "all_versions", "as_of"),
-                    ["as_of"] = D("ISO date required when time_scope=as_of"),
-                    ["fuzzy"] = E("auto or off; visible fallback only", "auto", "off"),
-                    ["works"] = S("optional comma-separated work ids: restrict search to these works"),
-                    ["limit"] = I("default 10; minimum 1, maximum 50", 1, 50),
-                }, ["query"]),
-            Tool("article_history", "Every distinct text ONE provision (article/annex) has had on its publisher timeline, plus lifecycle events (inserted/removed/renumbered, renumbering detected mechanically by identical text hash). Read timeline_semantics before calling an interval legal applicability. Answers \"what did Article X say over its life / when did it change\".",
-                new JsonObject
-                {
-                    ["work"] = S(workDesc),
-                    ["publisher"] = S("publisher id; required when work is not publisher-qualified", 64),
-                    ["anchor"] = S("provision anchor, e.g. art_1er (find it via search or as_of mode=outline)", McpInputPolicy.MaximumAnchorLength),
-                    ["language"] = S("optional language code; defaults to the work's primary derived language", 16),
-                    // A window, not a point. "What did Article 92 require in 2024" has no single
-                    // answer when the article moved that year, and choosing a day inside the year
-                    // silently answers a different question; the dated states covering the window
-                    // ARE the answer, and collapse to one state when the article did not move.
-                    ["from_date"] = D("optional ISO date: keep only the states in force at or after it"),
-                    ["to_date"] = D("optional ISO date: keep only the states that began on or before it"),
-                }, ["work", "anchor"]),
-            Tool("provenance", "Proof chain for one lex_id: source URI, retrieval time, record/body hashes, event chain, corpus commit, index build, stamp signature.",
-                new JsonObject { ["lex_id"] = S("full lex_id"), ["language"] = S("optional", 16) }, ["lex_id"]),
-            Tool("coverage", "What we hold and what we lack, tier by tier: counts, date ranges, history_begins, known gaps. This tool exists to say what we do NOT have.",
-                new JsonObject { ["publisher"] = S("optional publisher id", 64) }, []),
-            Tool("cited_by", "Captured publisher cross-references to this work from articles in held, non-withdrawn document versions. This is historical textual evidence only: it does not determine dependency, amendment, current force, or whether the reference remains current.",
-                new JsonObject
-                {
-                    ["work"] = S("the law being cited, e.g. lu-legilux:loi-2020-06-04-a476"),
-                    ["limit"] = I("default 50", 1, 100),
-                }, ["work"]),
-            Tool("changes_in_period", "ACROSS the corpus: which works gained new versions between two dates, how many each, and when — the aggregate counterpart of diff/timeline (which cover ONE work). Use for \"what changed between 2025 and 2026\", \"which laws changed most during the pandemic\", \"what moved last month\". order=by_churn ranks by number of new versions; by_date (default) lists most recently changed first.",
-                new JsonObject
-                {
-                    ["from_date"] = D("ISO date, start of window (inclusive)"),
-                    ["to_date"] = D("ISO date, end of window (inclusive)"),
-                    ["publisher"] = S("optional publisher id", 64),
-                    ["jurisdiction"] = S("optional jurisdiction code from index metadata, e.g. LU or EU", 64),
-                    ["document_type"] = S("optional source document class(es), comma-separated; prefix with ! to exclude, e.g. !RECUEIL,!CODE_RECUEIL for instruments only"),
-                    ["source_class"] = S("optional source document class; alias of document_type"),
-                    ["hierarchy"] = S("optional normalized legal hierarchy"),
-                    ["act_form"] = S("optional legal act form"),
-                    ["binding_status"] = S("optional binding status"),
-                    ["domain"] = S("optional reviewed legal domain"),
-                    ["language"] = S("optional language code", 16),
-                    ["order"] = E("by_date (default) or by_churn", "by_date", "by_churn"),
-                    ["limit"] = I("default 20", 1, 100),
-                    ["offset"] = I("skip this many, for paging", 0, 100000),
-                }, ["from_date", "to_date"]),
-        ];
-    }
-
+    public JsonArray ToolDefs() => LegalOperationCatalog.McpToolDefinitions();
     private JsonObject Envelope(LexIndexReader r, string status, bool provisional = false)
     {
         var envelope = new JsonObject
@@ -1213,12 +1117,15 @@ public sealed class McpCore
                         "^[a-z0-9][a-z0-9_.-]*$",
                         System.Text.RegularExpressions.RegexOptions.CultureInvariant)))
                     throw new ArgumentException("anchor must be a provision anchor returned by search, e.g. art_92");
+                ProvisionRow? fromProvision = null;
+                ProvisionRow? toProvision = null;
                 if (anchor is { Length: > 0 })
                 {
                     var fromRid = LexIndexReader.RidOf(a1);
                     var toRid = LexIndexReader.RidOf(b1);
-                    var exists = r.Provision(fromRid, anchor) is not null
-                        || r.Provision(toRid, anchor) is not null;
+                    fromProvision = r.Provision(fromRid, anchor);
+                    toProvision = r.Provision(toRid, anchor);
+                    var exists = fromProvision is not null || toProvision is not null;
                     var anchors = r.ProvisionAnchors(fromRid, 100)
                         .Concat(r.ProvisionAnchors(toRid, 100))
                         .Where(value => !string.IsNullOrWhiteSpace(value))
@@ -1235,7 +1142,18 @@ public sealed class McpCore
                                 anchors.Take(100).Select(value => (JsonNode)value).ToArray()),
                         };
                 }
-                var changed = a1.Key != b1.Key;
+                var pa = a1.Profile;
+                var pb = b1.Profile;
+                var profilesDiffer = pa is not null && pb is not null && pa != pb;
+                var anchorTextEqual = !profilesDiffer
+                    && fromProvision is not null && toProvision is not null
+                    ? string.Equals(fromProvision.TextSha, toProvision.TextSha,
+                        StringComparison.Ordinal)
+                    : (bool?)null;
+                var changed = anchor is { Length: > 0 }
+                    ? (fromProvision is null) != (toProvision is null)
+                      || anchorTextEqual == false
+                    : a1.Key != b1.Key;
 
                 // Two versions of the same work are only comparable provision by provision when
                 // the same extraction profile produced both. The Code du travail is the proof:
@@ -1250,9 +1168,6 @@ public sealed class McpCore
                 // version carries no text at all, and two unknowns are not evidence of a
                 // mismatch: claiming one would be the same overreach in the other direction,
                 // and that case is already told the truth by text_not_available/text_withheld.
-                var pa = a1.Profile;
-                var pb = b1.Profile;
-                var profilesDiffer = pa is not null && pb is not null && pa != pb;
                 var comparable = !profilesDiffer && a1.TextPublic && b1.TextPublic;
                 var output = new JsonObject
                 {
@@ -1276,7 +1191,23 @@ public sealed class McpCore
                                 : "different versions applied; text diff unavailable here — compare at the official source URIs")
                             : "the same version applied on both dates",
                 };
-                if (anchor is { Length: > 0 }) output["anchor"] = anchor;
+                if (anchor is { Length: > 0 })
+                {
+                    output["anchor"] = anchor;
+                    output["anchor_from_present"] = fromProvision is not null;
+                    output["anchor_to_present"] = toProvision is not null;
+                    output["anchor_text_equal"] = anchorTextEqual;
+                    if (!profilesDiffer)
+                        output["note"] = (fromProvision is not null, toProvision is not null,
+                            anchorTextEqual) switch
+                        {
+                            (true, false, _) => "the requested provision is present only on the earlier date",
+                            (false, true, _) => "the requested provision is present only on the later date",
+                            (true, true, true) => "the requested provision has the same wording on both dates",
+                            (true, true, false) => "the requested provision has different wording on the two dates",
+                            _ => output["note"]?.GetValue<string>(),
+                        };
+                }
                 return output;
             }
             case "search":
@@ -1300,10 +1231,12 @@ public sealed class McpCore
                 // works it cares about can name them.
                 var works = Str("works")?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                                         .Select(w => w.Contains(':') ? w[(w.IndexOf(':') + 1)..] : w).ToArray();
+                var publisherMetadataIdentifier = Str("publisher_metadata_identifier");
                 var outp = new JsonArray();
                 var filter = new FilterSet(asOf, null, Str("source_class") ?? Str("document_type"),
                     Str("language"), works, Str("hierarchy"), Str("act_form"),
-                    Str("binding_status"), Str("domain"));
+                    Str("binding_status"), Str("domain"),
+                    PublisherMetadataIdentifier: publisherMetadataIdentifier);
                 var selectedReaders = SelectReaders(pub, jurisdiction);
                 var executions = selectedReaders.Readers
                     .Select(reader => (Reader: reader, Execution: requestedMode == "hybrid"
@@ -1320,25 +1253,36 @@ public sealed class McpCore
                             resolution.Kind,
                             Candidates = resolution.Candidates
                                 .Select(candidate => $"{item.Reader.Collection}:{candidate}"),
+                            ShortTitles = (resolution.PublisherShortTitleMatches ?? [])
+                                .Select(match => match with
+                                {
+                                    Work = $"{item.Reader.Collection}:{match.Work}",
+                                }),
                         }))
                     .GroupBy(item => item.Mention, StringComparer.Ordinal)
                     .Select(group =>
                     {
-                        var candidates = group.SelectMany(item => item.Candidates)
+                        var allCandidates = group.SelectMany(item => item.Candidates)
                             .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
-                        var status = group.Any(item => item.Status == "ambiguous") || candidates.Length > 1
-                            ? "ambiguous" : candidates.Length == 1 ? "resolved" : "unresolved";
+                        var status = group.Any(item => item.Status == "ambiguous") || allCandidates.Length > 1
+                            ? "ambiguous" : allCandidates.Length == 1 ? "resolved" : "unresolved";
                         // Across publishers the same mention may match a title in one catalogue
                         // and an identifier in another. The stronger claim is the one reported,
                         // in the same order the per-catalogue reducer uses.
-                        var kind = group.Select(item => item.Kind).Contains("title") ? "title"
+                        var kind = group.Select(item => item.Kind).Contains("publisher_short_title")
+                            ? "publisher_short_title"
+                            : group.Select(item => item.Kind).Contains("title") ? "title"
                             : group.Select(item => item.Kind).Contains("alias") ? "alias"
                             : group.Select(item => item.Kind).Contains("identifier") ? "identifier"
                             : null;
                         return new
                         {
                             Mention = group.Key, Status = status, Kind = kind,
-                            Candidates = candidates,
+                            Candidates = allCandidates.Take(20).ToArray(),
+                            PublisherShortTitleMatches = group.SelectMany(item => item.ShortTitles)
+                                .Distinct().OrderBy(match => match.Work, StringComparer.Ordinal)
+                                .ThenBy(match => match.Language, StringComparer.Ordinal)
+                                .Take(20).ToArray(),
                         };
                     }).OrderBy(item => item.Mention, StringComparer.Ordinal).ToArray();
                 var globalResolutionStatus = globalResolutions.Any(item => item.Status == "ambiguous")
@@ -1400,6 +1344,8 @@ public sealed class McpCore
                                 execution.QueryPlan?.ProvisionQuery is { Length: > 0 } pq ? pq : q)
                             : h.Snippet;
                         d["match_reasons"] = new JsonArray(h.MatchReasons.Select(x => (JsonNode)x).ToArray());
+                        if (h.MatchedPublisherMetadata is { } metadata)
+                            d["matched_publisher_metadata"] = PublisherMetadataJson(metadata);
                         if (_publicBase is not null)
                             d["permalink"] = $"{_publicBase}/{h.Doc.Collection}/{h.Doc.GroupKey}/{VersionCoordinate(h.Doc)}"
                                 + (h.Provision.Anchor.Length == 0 ? "" : $"#{h.Provision.Anchor}");
@@ -1460,31 +1406,16 @@ public sealed class McpCore
                             ["work_catalog_available"] = plan.WorkCatalogAvailable,
                             ["global_work_resolution_status"] = globalResolutionStatus,
                             ["global_work_resolutions"] = new JsonArray(globalResolutions
-                                .Select(resolution => (JsonNode)new JsonObject
-                                {
-                                    ["mention"] = resolution.Mention,
-                                    ["status"] = resolution.Status,
-                                    // Which stored name form matched. A caller choosing among the
-                                    // works one citation named needs it: a title quoted in full
-                                    // matches as a title, while the amending tail at the end of
-                                    // that same title names only a number.
-                                    ["kind"] = resolution.Kind,
-                                    ["candidates"] = new JsonArray(resolution.Candidates
-                                        .Select(candidate => (JsonNode)candidate).ToArray()),
-                                }).ToArray()),
+                                .Select(resolution => (JsonNode)WorkResolutionJson(
+                                    resolution.Mention, resolution.Status, resolution.Kind,
+                                    resolution.Candidates,
+                                    resolution.PublisherShortTitleMatches)).ToArray()),
                             ["work_resolutions"] = new JsonArray(
-                                (plan.WorkResolutions ?? []).Select(resolution => (JsonNode)new JsonObject
-                                {
-                                    ["mention"] = resolution.Mention,
-                                    ["status"] = resolution.Status,
-                                    // Which stored name form matched. A caller choosing among the
-                                    // works one citation named needs it: a title quoted in full
-                                    // matches as a title, while the amending tail at the end of
-                                    // that same title names only a number.
-                                    ["kind"] = resolution.Kind,
-                                    ["candidates"] = new JsonArray(resolution.Candidates
-                                        .Select(candidate => (JsonNode)candidate).ToArray()),
-                                }).ToArray()),
+                                (plan.WorkResolutions ?? []).Select(resolution =>
+                                    (JsonNode)WorkResolutionJson(
+                                        resolution.Mention, resolution.Status, resolution.Kind,
+                                        resolution.Candidates,
+                                        resolution.PublisherShortTitleMatches)).ToArray()),
                         },
                         ["query_expansions"] = new JsonArray(execution.QueryExpansions.Select(x => (JsonNode)x).ToArray()),
                         ["artifact_manifest_id"] = Environment.GetEnvironmentVariable("LEX_ARTIFACT_MANIFEST_ID"),
