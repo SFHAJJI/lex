@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Text.Json.Serialization;
 using System.Text.Json.Nodes;
@@ -102,6 +104,21 @@ internal static class AgentAnswerContract
         RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
     private static readonly Regex NumericFact = new(
         @"(?<![\p{L}\p{N}])\d{2,}(?:[-./]\d+)*(?![\p{L}\p{N}])",
+        RegexOptions.CultureInvariant);
+    private static readonly Regex ArticleFact = new(
+        @"\b(?:article|articles|art)\s*[._-]?\s*(?<number>\d+[a-z]?)\b",
+        RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+    private static readonly Regex SamePolarity = new(
+        @"\b(?:same wording|unchanged|has not changed|have not changed|did not change|no change|identical|meme libelle|inchangee?s?|n a pas change|n ont pas change|aucun changement|identique)\b",
+        RegexOptions.CultureInvariant);
+    private static readonly Regex AddedPolarity = new(
+        @"\b(?:added|ajoutee?s?|present only on the later date|present uniquement a la date ulterieure)\b",
+        RegexOptions.CultureInvariant);
+    private static readonly Regex RemovedPolarity = new(
+        @"\b(?:removed|supprimee?s?|present only on the earlier date|present uniquement a la date anterieure)\b",
+        RegexOptions.CultureInvariant);
+    private static readonly Regex ChangedPolarity = new(
+        @"\b(?:changed|has changed|have changed|different wording|wording changed|a change|ont change|modifiee?s?|libelle different)\b",
         RegexOptions.CultureInvariant);
 
     public static AgentAnswerDraft Validate(
@@ -216,21 +233,29 @@ internal static class AgentAnswerContract
             if (!evidenceText.Contains(fact.Value, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidDataException(
                     "A claim contains a numeric or dated fact absent from its cited evidence.");
+        foreach (Match article in ArticleFact.Matches(text))
+        {
+            var number = article.Groups["number"].Value;
+            if (!ArticleFact.Matches(evidenceText).Any(candidate =>
+                    string.Equals(candidate.Groups["number"].Value, number,
+                        StringComparison.OrdinalIgnoreCase)))
+                throw new InvalidDataException(
+                    "A claim names an article absent from its cited evidence.");
+        }
 
         if (kind != AgentClaimKind.Change) return;
         var facts = evidence.Select(ChangeFacts).Where(value => value is not null)
             .Select(value => value!.Value).ToArray();
         if (facts.Length == 0) return;
-        var normalized = text.ToLowerInvariant();
-        var same = normalized.Contains("same wording", StringComparison.Ordinal)
-                   || normalized.Contains("unchanged", StringComparison.Ordinal)
-                   || normalized.Contains("did not change", StringComparison.Ordinal)
-                   || normalized.Contains("no change", StringComparison.Ordinal)
-                   || normalized.Contains("identical", StringComparison.Ordinal);
-        var added = normalized.Contains("added", StringComparison.Ordinal);
-        var removed = normalized.Contains("removed", StringComparison.Ordinal);
-        var changed = !same && (normalized.Contains("changed", StringComparison.Ordinal)
-                                || normalized.Contains("different wording", StringComparison.Ordinal));
+        var normalized = Fold(text);
+        var same = SamePolarity.IsMatch(normalized);
+        var added = AddedPolarity.IsMatch(normalized);
+        var removed = RemovedPolarity.IsMatch(normalized);
+        var withoutSame = SamePolarity.Replace(normalized, " ");
+        var changed = ChangedPolarity.IsMatch(withoutSame);
+        if (new[] { same, added, removed, changed }.Count(value => value) != 1)
+            throw new InvalidDataException(
+                "A change claim must use one canonical, unambiguous change polarity.");
         var supported = same ? facts.Any(fact => fact.Changed == false)
             : added ? facts.Any(fact => fact.FromPresent == false && fact.ToPresent == true)
             : removed ? facts.Any(fact => fact.FromPresent == true && fact.ToPresent == false)
@@ -239,6 +264,17 @@ internal static class AgentAnswerContract
         if (!supported)
             throw new InvalidDataException(
                 "A change claim contradicts the polarity of its cited evidence.");
+    }
+
+    private static string Fold(string value)
+    {
+        var decomposed = value.ToLowerInvariant().Normalize(NormalizationForm.FormD);
+        var result = new StringBuilder(decomposed.Length);
+        foreach (var character in decomposed)
+            if (CharUnicodeInfo.GetUnicodeCategory(character) != UnicodeCategory.NonSpacingMark)
+                result.Append(character);
+        return Regex.Replace(result.ToString().Normalize(NormalizationForm.FormC),
+            @"[^\p{L}\p{N}]+", " ").Trim();
     }
 
     private static (bool? Changed, bool? FromPresent, bool? ToPresent)? ChangeFacts(
