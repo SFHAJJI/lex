@@ -9,6 +9,7 @@ namespace Lex.Sources.Legilux;
 /// </summary>
 public sealed class SparqlClient(string endpoint, TimeSpan? pause = null)
 {
+    internal const int SortedTopMaximum = 10_000;
     private static readonly HttpClient Http = CreateClient();
     private static readonly SourceRetryPolicy RetryPolicy = new(MaximumAttempts: 4);
     private readonly TimeSpan _pause = pause ?? TimeSpan.FromMilliseconds(1500);
@@ -86,6 +87,9 @@ public sealed class SparqlClient(string endpoint, TimeSpan? pause = null)
         {
             var remaining = maximumRows - all.Count;
             var requestSize = (int)Math.Min(pageSize, (long)remaining + 1);
+            if ((long)all.Count + requestSize > SortedTopMaximum)
+                throw new InvalidDataException(
+                    $"The Legilux Virtuoso endpoint cannot verify a sorted result beyond {SortedTopMaximum} rows; use a bounded VALUES batch instead.");
             var page = await SelectAsync(pagedQuery(requestSize, all.Count), ct);
             if (page.Count > requestSize)
                 throw new InvalidDataException(

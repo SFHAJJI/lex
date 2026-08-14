@@ -28,7 +28,9 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory
     private const int FormexArchiveCapBytes = 32 * 1024 * 1024;
     private const long FormexMemberCapBytes = 64 * 1024 * 1024;
     private const long FormexExpandedCapBytes = 128 * 1024 * 1024;
-    private const int WorkMetadataBatchMaximum = 20_000;
+    internal const int MetadataWorkBatchSize = 16;
+    internal const int MetadataRowsPerWorkMaximum = 512;
+    internal const int VirtuosoSortedTopMaximum = 10_000;
     private static readonly SourceRetryPolicy RetryPolicy = new(MaximumAttempts: 4);
 
     private static readonly HttpClient Http = CreateClient();
@@ -544,24 +546,21 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory
         IEnumerable<string> celexNumbers, CancellationToken ct)
     {
         var result = new Dictionary<string, List<Dictionary<string, string>>>(StringComparer.Ordinal);
-        foreach (var chunk in celexNumbers.Chunk(100))
+        foreach (var chunk in MetadataWorkBatches(celexNumbers))
         {
-            var values = string.Join(' ', chunk.Select(c =>
-                $"(\"{c}\" <{CelexAliasUri(c)}>)"));
-            var rows = await SelectAsync(WorkMetadataQuery(values), ct);
+            var rows = await SelectAsync(WorkMetadataQuery(chunk), ct);
             RequireBoundedWorkMetadataRows(rows);
-            foreach (var row in rows)
-            {
-                var baseCelex = row["base"];
-                if (!result.TryGetValue(baseCelex, out var list)) result[baseCelex] = list = [];
-                list.Add(row);
-            }
+            AddBoundedMetadataRows(result, rows, chunk, "work");
         }
         return result;
     }
 
-    internal static string WorkMetadataQuery(string values) => Cdm + Owl + $$"""
-                SELECT ?base ?lang ?title ?title_short ?date ?inforce ?rtype ?is_amending ?is_correcting WHERE {
+    internal static string WorkMetadataQuery(IReadOnlyCollection<string> celexNumbers)
+    {
+        var values = MetadataValues(celexNumbers);
+        var limit = MetadataQueryLimit(celexNumbers.Count);
+        return Cdm + Owl + $$"""
+                SELECT DISTINCT ?base ?lang ?title ?title_short ?date ?inforce ?rtype ?is_amending ?is_correcting WHERE {
                   VALUES (?base ?alias) { {{values}} }
                   ?w owl:sameAs ?alias .
                   OPTIONAL { ?w cdm:work_date_document ?documentDate }
@@ -580,26 +579,37 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory
                   }
                   BIND(IF(STRENDS(STR(?langUri), "/FRA"), "fr", "en") AS ?lang)
                 } ORDER BY ?base ?lang
-                LIMIT {{WorkMetadataBatchMaximum + 1}}
+                LIMIT {{limit}}
                 """;
+    }
 
     internal static void RequireBoundedWorkMetadataRows(
         IReadOnlyCollection<Dictionary<string, string>> rows)
     {
-        if (rows.Count > WorkMetadataBatchMaximum)
-            throw new InvalidDataException(
-                "Publisher work metadata for a 100-work EU batch exceeds 20,000 records.");
+        foreach (var group in rows.GroupBy(row => RequiredBase(row, "work"), StringComparer.Ordinal))
+            if (group.Count() > MetadataRowsPerWorkMaximum)
+                throw new InvalidDataException(
+                    $"Publisher work metadata for {group.Key} exceeds {MetadataRowsPerWorkMaximum} records.");
     }
 
     private async Task<Dictionary<string, List<Dictionary<string, string>>>> LoadPublisherMetadataAsync(
         IEnumerable<string> celexNumbers, CancellationToken ct)
     {
         var result = new Dictionary<string, List<Dictionary<string, string>>>(StringComparer.Ordinal);
-        foreach (var chunk in celexNumbers.Chunk(100))
+        foreach (var chunk in MetadataWorkBatches(celexNumbers))
         {
-            var values = string.Join(' ', chunk.Select(c =>
-                $"(\"{c}\" <{CelexAliasUri(c)}>)"));
-            var rows = await SelectAsync(Cdm + Owl + Skos + EuroVoc + $$"""
+            var rows = await SelectAsync(PublisherMetadataQuery(chunk), ct);
+            RequireBoundedPublisherMetadataRows(rows);
+            AddBoundedMetadataRows(result, rows, chunk, "publisher");
+        }
+        return result;
+    }
+
+    internal static string PublisherMetadataQuery(IReadOnlyCollection<string> celexNumbers)
+    {
+        var values = MetadataValues(celexNumbers);
+        var limit = MetadataQueryLimit(celexNumbers.Count);
+        return Cdm + Owl + Skos + EuroVoc + $$"""
                 SELECT DISTINCT ?base ?kind ?identifier ?lang ?label WHERE {
                   VALUES (?base ?alias) { {{values}} }
                   ?w owl:sameAs ?alias .
@@ -637,20 +647,68 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory
                   FILTER(LANG(?label) IN ("en", "fr"))
                   BIND(LANG(?label) AS ?lang)
                 } ORDER BY ?base ?kind ?identifier ?lang ?label
-                LIMIT 20001
-                """, ct);
-            if (rows.Count > 20000)
-                throw new InvalidDataException(
-                    "Publisher metadata for a 100-work EU batch exceeds 20,000 records.");
-            foreach (var row in rows)
-            {
-                var baseCelex = row["base"];
-                if (!result.TryGetValue(baseCelex, out var list)) result[baseCelex] = list = [];
-                list.Add(row);
-            }
-        }
-        return result;
+                LIMIT {{limit}}
+                """;
     }
+
+    internal static IEnumerable<string[]> MetadataWorkBatches(IEnumerable<string> celexNumbers) =>
+        celexNumbers.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal)
+            .Chunk(MetadataWorkBatchSize);
+
+    private static string MetadataValues(IReadOnlyCollection<string> celexNumbers)
+    {
+        if (celexNumbers.Count is < 1 or > MetadataWorkBatchSize)
+            throw new ArgumentOutOfRangeException(nameof(celexNumbers));
+        return string.Join(' ', celexNumbers.Select(celex =>
+            $"(\"{celex}\" <{CelexAliasUri(celex)}>)"));
+    }
+
+    private static int MetadataQueryLimit(int workCount)
+    {
+        var limit = checked(workCount * MetadataRowsPerWorkMaximum + 1);
+        return limit <= VirtuosoSortedTopMaximum
+            ? limit
+            : throw new InvalidOperationException("EU metadata batch exceeds the Virtuoso sorted-result window.");
+    }
+
+    private static void RequireBoundedPublisherMetadataRows(
+        IReadOnlyCollection<Dictionary<string, string>> rows)
+    {
+        foreach (var group in rows.GroupBy(row => RequiredBase(row, "publisher"), StringComparer.Ordinal))
+            if (group.Count() > MetadataRowsPerWorkMaximum)
+                throw new InvalidDataException(
+                    $"Publisher metadata for {group.Key} exceeds {MetadataRowsPerWorkMaximum} records.");
+    }
+
+    private static void AddBoundedMetadataRows(
+        Dictionary<string, List<Dictionary<string, string>>> result,
+        IReadOnlyCollection<Dictionary<string, string>> rows,
+        IReadOnlyCollection<string> requestedCelex,
+        string label)
+    {
+        var batchMaximum = checked(requestedCelex.Count * MetadataRowsPerWorkMaximum);
+        if (rows.Count > batchMaximum)
+            throw new InvalidDataException(
+                $"Publisher {label} metadata for {requestedCelex.Count} EU works exceeds {batchMaximum} records.");
+        var requested = requestedCelex.ToHashSet(StringComparer.Ordinal);
+        foreach (var row in rows)
+        {
+            var baseCelex = RequiredBase(row, label);
+            if (!requested.Contains(baseCelex))
+                throw new InvalidDataException(
+                    $"Publisher {label} metadata returned unrequested CELEX {baseCelex}.");
+            if (!result.TryGetValue(baseCelex, out var list)) result[baseCelex] = list = [];
+            if (list.Count >= MetadataRowsPerWorkMaximum)
+                throw new InvalidDataException(
+                    $"Publisher {label} metadata for {baseCelex} exceeds {MetadataRowsPerWorkMaximum} records.");
+            list.Add(row);
+        }
+    }
+
+    private static string RequiredBase(Dictionary<string, string> row, string label) =>
+        row.TryGetValue("base", out var value) && !string.IsNullOrWhiteSpace(value)
+            ? value
+            : throw new InvalidDataException($"Publisher {label} metadata row is missing base CELEX.");
 
     public async Task<EurLexScopePreview> PreviewScopeAsync(
         string? previousScopePath, DateTimeOffset observedAt, CancellationToken ct)
