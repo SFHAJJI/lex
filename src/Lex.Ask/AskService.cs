@@ -535,11 +535,15 @@ public sealed class AskService
     private static int EnvInt(string name, int dflt)
         => int.TryParse(Environment.GetEnvironmentVariable(name), out var v) && v > 0 ? v : dflt;
 
+    internal const int DefaultPerIpDaily = 200;
+    internal const int DefaultGlobalDaily = 400;
+    internal const int DefaultConcurrent = 4;
+
     private static AskAdmissionController DefaultAdmission() => new(
         TimeProvider.System,
-        EnvInt("ASK_PER_IP_DAILY", 25),
-        EnvInt("ASK_GLOBAL_DAILY", 400),
-        EnvInt("ASK_CONCURRENT", 4));
+        EnvInt("ASK_PER_IP_DAILY", DefaultPerIpDaily),
+        EnvInt("ASK_GLOBAL_DAILY", DefaultGlobalDaily),
+        EnvInt("ASK_CONCURRENT", DefaultConcurrent));
 
     private static void Diagnostic(string code, string? detail = null)
     {

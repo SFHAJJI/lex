@@ -927,6 +927,12 @@ public static class ExplainerEndpoints
                 telemetry for 90 days; deployment fails if those table policies differ. This deployment uses
                 Azure OpenAI's standard abuse-monitoring posture, under which Microsoft may retain prompts and
                 completions for up to 30 days. They are not used to train foundation models.</p>
+                <p>The public assistant default admits 200 accepted turns per ingress-derived client address
+                and 400 accepted turns globally per UTC day, with at most 4 turns executing concurrently.
+                The client and global daily counters are independent and reset at UTC midnight. Invalid,
+                rejected and duplicate requests do not consume an accepted turn. These process-local limits
+                are best-effort abuse and cost controls: people behind one NAT can share an address, and IPv6
+                addresses can rotate.</p>
                 <p>Public MCP admits at most 8 executing and 16 queued calls, with a 2 second queue deadline;
                 hybrid search admits 2 at once. Rolling limits are 120 calls per trusted client and 600 calls
                 globally per minute. These are best-effort abuse controls: people behind one NAT can share an

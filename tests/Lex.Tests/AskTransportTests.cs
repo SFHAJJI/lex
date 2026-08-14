@@ -276,6 +276,32 @@ public sealed class AskTransportTests
     }
 
     [Fact]
+    public void Public_default_admits_exactly_200_turns_per_client_per_utc_day()
+    {
+        var clock = new ManualTimeProvider(
+            new DateTimeOffset(2026, 8, 14, 23, 0, 0, TimeSpan.Zero));
+        var admission = new AskAdmissionController(
+            clock,
+            AskService.DefaultPerIpDaily,
+            AskService.DefaultGlobalDaily,
+            AskService.DefaultConcurrent);
+
+        Assert.Equal(200, AskService.DefaultPerIpDaily);
+        Assert.Equal(400, AskService.DefaultGlobalDaily);
+        for (var turn = 0; turn < 200; turn++)
+        {
+            using var lease = admission.TryAdmit("interview-client").Lease;
+            Assert.NotNull(lease);
+        }
+        Assert.Equal(AskAdmissionFailure.PerClientQuota,
+            admission.TryAdmit("interview-client").Failure);
+
+        clock.Advance(TimeSpan.FromHours(1));
+        using var nextUtcDay = admission.TryAdmit("interview-client").Lease;
+        Assert.NotNull(nextUtcDay);
+    }
+
+    [Fact]
     public async Task Http_stream_is_versioned_and_a_duplicate_does_not_plan_twice()
     {
         await using var site = new StreamingSite();
