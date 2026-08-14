@@ -43,52 +43,101 @@ public sealed class LegiluxAdapter : ISourceAdapter, ISourceBuildInventory,
         var work = RequireOfficialEli(legacy.WorkIdentifier, "work_identifier");
         if (legacy.Expressions.Count == 0)
             throw new InvalidDataException(
-                "A withdrawn Legilux legacy version has no expression source identity.");
+                "A legacy Legilux version has no expression source identity.");
 
         var expectedDate = legacy.ValidFrom.ToString(
             "yyyyMMdd", System.Globalization.CultureInfo.InvariantCulture);
-        var expectedWorkStatePath = work.AbsolutePath.TrimEnd('/') + "/" + expectedDate;
+        var workPath = work.AbsolutePath.TrimEnd('/');
         var candidates = legacy.Expressions
             .Select(expression => LegacyConsolidationIdentifier(
                 expression.SourceUri, expression.Language, expectedDate,
-                expectedWorkStatePath))
+                workPath))
             .Distinct(StringComparer.Ordinal)
             .ToArray();
         if (candidates.Length != 1)
             throw new InvalidDataException(
-                "A withdrawn Legilux legacy version resolves to more than one publisher identity.");
+                "A legacy Legilux version resolves to more than one publisher identity.");
         return new Identifier(candidates[0]);
     }
 
     private static string LegacyConsolidationIdentifier(
         string sourceUri, string language, string expectedDate,
-        string expectedWorkStatePath)
+        string workPath)
     {
         if (language.Length != 2
             || language.Any(character => character is not (>= 'a' and <= 'z')))
             throw new InvalidDataException(
-                "A withdrawn Legilux legacy expression has an invalid language code.");
+                "A legacy Legilux expression has an invalid language code.");
         var uri = RequireOfficialEli(sourceUri, "expression source_uri");
         var path = uri.AbsolutePath;
         var languageSuffix = "/" + language;
         if (path.EndsWith(languageSuffix, StringComparison.Ordinal))
             path = path[..^languageSuffix.Length];
 
-        if (string.Equals(path, expectedWorkStatePath, StringComparison.Ordinal))
+        const string legislativePrefix = "/eli/etat/leg/";
+        const string administrativePrefix = "/eli/etat/adm/";
+        var legislativeWork = workPath.StartsWith(legislativePrefix, StringComparison.Ordinal);
+        var administrativeWork = workPath.StartsWith(administrativePrefix, StringComparison.Ordinal);
+
+        if (legislativeWork
+            && string.Equals(path, workPath + "/" + expectedDate,
+                StringComparison.Ordinal))
             return "http://data.legilux.public.lu" + path;
 
-        const string prefix = "/eli/etat/leg/";
+        if (administrativeWork
+            && string.Equals(path, workPath + "/consolide/" + expectedDate,
+                StringComparison.Ordinal))
+            return "http://data.legilux.public.lu" + path;
+
+        const string codePrefix = legislativePrefix + "code/";
+        var codeSuffix = "/" + expectedDate;
+        if (legislativeWork
+            && path.StartsWith(codePrefix, StringComparison.Ordinal)
+            && path.EndsWith(codeSuffix, StringComparison.Ordinal)
+            && IsSafeEliSegment(path[codePrefix.Length..^codeSuffix.Length]))
+            return "http://data.legilux.public.lu" + path;
+
+        const string recueilPrefix = legislativePrefix + "recueil/";
+        var recueilStatePrefix = workPath + "/";
+        if (IsSingleSegmentWork(workPath, recueilPrefix)
+            && path.StartsWith(recueilStatePrefix, StringComparison.Ordinal)
+            && path[recueilStatePrefix.Length..] is var publisherDate
+            && publisherDate.Length == 8
+            && publisherDate.All(character => character is >= '0' and <= '9'))
+            return "http://data.legilux.public.lu" + path;
+
         var suffix = "/consolide/" + expectedDate;
-        if (!path.StartsWith(prefix, StringComparison.Ordinal)
+        if (!legislativeWork
+            || !path.StartsWith(legislativePrefix, StringComparison.Ordinal)
             || !path.EndsWith(suffix, StringComparison.Ordinal)
-            || path.Length <= prefix.Length + suffix.Length
-            || !path[prefix.Length..^suffix.Length]
+            || path.Length <= legislativePrefix.Length + suffix.Length
+            || !path[legislativePrefix.Length..^suffix.Length]
                 .Split('/').All(segment => segment.Length > 0))
             throw new InvalidDataException(
-                "A withdrawn Legilux legacy expression source is not its exact "
+                "A legacy Legilux expression source is not its exact "
                 + "consolidation path for valid_from.");
 
         return "http://data.legilux.public.lu" + path;
+    }
+
+    private static bool IsSingleSegmentWork(string path, string prefix) =>
+        path.StartsWith(prefix, StringComparison.Ordinal)
+        && IsSafeEliSegment(path[prefix.Length..]);
+
+    private static bool IsSafeEliSegment(string segment) =>
+        segment.Length > 0
+        && segment.All(character => character is >= 'a' and <= 'z'
+            or >= '0' and <= '9' or '_');
+
+    private static bool IsOfficialEliPath(string path)
+    {
+        var prefix = path.StartsWith("/eli/etat/leg/", StringComparison.Ordinal)
+            ? "/eli/etat/leg/"
+            : path.StartsWith("/eli/etat/adm/", StringComparison.Ordinal)
+                ? "/eli/etat/adm/"
+                : null;
+        return prefix is not null
+            && path[prefix.Length..].Split('/').All(IsSafeEliSegment);
     }
 
     private static Uri RequireOfficialEli(string value, string field)
@@ -97,13 +146,13 @@ public sealed class LegiluxAdapter : ISourceAdapter, ISourceBuildInventory,
             || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps)
             || (uri.Host != "legilux.public.lu"
                 && uri.Host != "data.legilux.public.lu")
-            || !uri.AbsolutePath.StartsWith("/eli/etat/leg/", StringComparison.Ordinal)
+            || !IsOfficialEliPath(uri.AbsolutePath)
             || !string.IsNullOrEmpty(uri.Query)
             || !string.IsNullOrEmpty(uri.Fragment)
             || !string.IsNullOrEmpty(uri.UserInfo)
             || !uri.IsDefaultPort)
             throw new InvalidDataException(
-                $"A withdrawn Legilux legacy {field} is not an official ELI URI.");
+                $"A legacy Legilux {field} is not an official ELI URI.");
         return uri;
     }
 
