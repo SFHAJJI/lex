@@ -88,6 +88,10 @@ public static class IndexFromCorpus
                 foreach (var expr in meta.Expressions)
                 {
                     var exprValidFrom = expr.ValidFrom ?? meta.ValidFrom;
+                    var languageWorkTitle = string.Equals(
+                        workMeta.TitleLanguage, expr.Language, StringComparison.Ordinal)
+                            ? workMeta.Title
+                            : null;
 
                     // Text comes from the derived consumption layer, per provision;
                     // the hash chain always runs derived text -> verbatim file -> observation.
@@ -125,7 +129,7 @@ public static class IndexFromCorpus
                                     ? string.Join(" / ", pa.EnumerateArray().Select(x => x.GetString())) is { Length: > 0 } joined ? joined : null
                                     : null,
                                 ArticleValidFrom: p.TryGetProperty("article_valid_from", out var av) ? av.GetString() : null,
-                                WorkTitle: workMeta.Title,
+                                WorkTitle: languageWorkTitle,
                                 TextMd: p.GetProperty("text_md").GetString() ?? "",
                                 TextSha: p.GetProperty("text_sha256").GetString() ?? "",
                                 CitationsJson: p.TryGetProperty("citations", out var cit)
@@ -154,8 +158,8 @@ public static class IndexFromCorpus
                         RecordSha: meta.RecordSha256,
                         BodySha: expr.Observations.LastOrDefault()?.Sha256,
                         SourceUri: expr.SourceUri,
-                        Title: expr.Title ?? workMeta.Title,
-                        TitleShort: expr.TitleShort ?? workMeta.Title,
+                        Title: expr.Title ?? languageWorkTitle,
+                        TitleShort: expr.TitleShort ?? languageWorkTitle,
                         Body: null,
                         PublicationDate: meta.PublicationDate,
                         StatusNote: meta.InForceStatus,
