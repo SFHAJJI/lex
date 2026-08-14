@@ -472,7 +472,7 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory
                     var validTo = coordinates[i].ValidTo;
                     var expressions = state.Languages.Select(lang =>
                     {
-                        var title = state.Titles.GetValueOrDefault(lang) ?? titles.GetValueOrDefault(lang) ?? baseTitle;
+                        var title = ExpressionTitle(lang, state.Titles, titles);
                         var sourceUri = ExpressionSourceUri(lang, celex);
                         return new ExpressionRecord(lang, date, validTo, "publisher", title,
                             OfficialDisplayTitle(title, celex), sourceUri);
@@ -522,7 +522,7 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory
                                 baseTitleRows, _scope.Languages);
                             var expressions = originalLanguages.Select(lang =>
                             {
-                                var title = titles.GetValueOrDefault(lang) ?? baseTitle;
+                                var title = ExpressionTitle(lang, titles);
                                 var sourceUri = ExpressionSourceUri(lang, baseCelex);
                                 return new ExpressionRecord(lang, originalDate, originalValidTo, "publisher", title,
                                     OfficialDisplayTitle(title, baseCelex), sourceUri);
@@ -659,6 +659,21 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory
             .ToHashSet(StringComparer.Ordinal);
         var selected = configuredLanguages.Where(observed.Contains).ToArray();
         return selected;
+    }
+
+    internal static string? ExpressionTitle(
+        string language,
+        IReadOnlyDictionary<string, string?> titles,
+        IReadOnlyDictionary<string, string?>? fallbackTitles = null)
+    {
+        if (titles.TryGetValue(language, out var title) && !string.IsNullOrWhiteSpace(title))
+            return title;
+
+        return fallbackTitles is not null
+            && fallbackTitles.TryGetValue(language, out var fallbackTitle)
+            && !string.IsNullOrWhiteSpace(fallbackTitle)
+                ? fallbackTitle
+                : null;
     }
 
     private async Task<Dictionary<string, List<Dictionary<string, string>>>> LoadWorkMetadataAsync(

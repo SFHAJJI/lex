@@ -112,6 +112,21 @@ public sealed class EurLexScopeTests : IDisposable
             EurLexAdapter.ConsolidationLanguages(rows, ["en", "fr"]));
     }
 
+    [Fact]
+    public void Expression_titles_never_cross_the_publisher_language_boundary()
+    {
+        var noStateTitles = new Dictionary<string, string?>(StringComparer.Ordinal);
+        var frenchWorkTitle = new Dictionary<string, string?>(StringComparer.Ordinal)
+        {
+            ["fr"] = "Règlement de test",
+        };
+
+        Assert.Null(EurLexAdapter.ExpressionTitle(
+            "en", noStateTitles, frenchWorkTitle));
+        Assert.Equal("Règlement de test", EurLexAdapter.ExpressionTitle(
+            "fr", noStateTitles, frenchWorkTitle));
+    }
+
     [Theory]
     [InlineData(
         "<html lang=\"en\"><head><title>EUR-Lex - 02014R0910-20140917 - EN - EUR-Lex</title></head></html>",
