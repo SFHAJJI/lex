@@ -1,3 +1,4 @@
+using System.Globalization;
 using Lex.Law;
 using Lex.Sources.Legilux;
 
@@ -50,7 +51,7 @@ public sealed class LegiluxLegacyIdentityTests
             new LegiluxAdapter());
 
         var actual = resolver.ResolveLegacyVersionIdentity(new LegacyVersionIdentity(
-            work, DateOnly.Parse(validFrom),
+            work, DateOnly.ParseExact(validFrom, "yyyy-MM-dd", CultureInfo.InvariantCulture),
             [new LegacyExpressionIdentity("fr", source)]));
 
         Assert.Equal(expected, actual.Value);
@@ -165,7 +166,7 @@ public sealed class LegiluxLegacyIdentityTests
 
         Assert.Throws<InvalidDataException>(() => resolver.ResolveLegacyVersionIdentity(
             new LegacyVersionIdentity(
-                work, DateOnly.Parse(validFrom),
+                work, DateOnly.ParseExact(validFrom, "yyyy-MM-dd", CultureInfo.InvariantCulture),
                 [new LegacyExpressionIdentity("fr", source)])));
     }
 }
