@@ -39,10 +39,14 @@ public sealed record AssistantEvaluationSet(
             throw new InvalidDataException(
                 "Assistant evaluation pricing must match the independently reviewed catalog.");
         pricing.Validate();
-        var candidateInput = Catalog.Cases.Sum(item =>
-            checked((long)item.MaximumInputTokens * item.Repetitions));
-        var candidateOutput = Catalog.Cases.Sum(item =>
-            checked((long)item.MaximumOutputTokens * item.Repetitions));
+        var candidateInput = Catalog.Cases.Sum(item => checked(
+            ((long)item.MaximumInputTokens
+             + (item.History?.Sum(turn => (long)turn.MaximumInputTokens) ?? 0))
+            * item.Repetitions));
+        var candidateOutput = Catalog.Cases.Sum(item => checked(
+            ((long)item.MaximumOutputTokens
+             + (item.History?.Sum(turn => (long)turn.MaximumOutputTokens) ?? 0))
+            * item.Repetitions));
         var graderInput = Catalog.Cases.Sum(item => item.Grading.Mode == "llm"
             ? checked((long)item.Grading.MaximumInputTokens * item.Repetitions) : 0);
         var graderOutput = Catalog.Cases.Sum(item => item.Grading.Mode == "llm"
@@ -179,7 +183,7 @@ public sealed record AssistantEvaluationCatalog(
                 "Assistant evaluation pricing, budget and cases are required.");
         Pricing.Validate();
         if (Budget.MaximumCandidateInputTokens is < 1 or > 1_000_000
-            || Budget.MaximumCandidateOutputTokens is < 1 or > 100_000
+            || Budget.MaximumCandidateOutputTokens is < 1 or > 125_000
             || Budget.MaximumGraderInputTokens is < 1 or > 1_000_000
             || Budget.MaximumGraderOutputTokens is < 1 or > 100_000
             || Budget.MaximumCostEur is <= 0 or > 10
@@ -211,11 +215,13 @@ public sealed record AssistantEvaluationCatalog(
                 throw new InvalidDataException($"Assistant evaluation case '{item.Id}' has an invalid or duplicate question.");
             if (item.History is { Count: > 8 }
                 || item.History?.Any(message => message is null
-                    || message.Role is not ("user" or "assistant")
+                    || message.Role != "user"
                     || string.IsNullOrWhiteSpace(message.Content)
-                    || message.Content.Length > 4_000) == true)
+                    || message.Content.Length > 1_000
+                    || message.MaximumInputTokens is < 1 or > 100_000
+                    || message.MaximumOutputTokens is < 1 or > 20_000) == true)
                 throw new InvalidDataException(
-                    $"Assistant evaluation case '{item.Id}' has invalid restored history.");
+                    $"Assistant evaluation case '{item.Id}' has invalid server-owned setup turns.");
             if (item.Repetitions is < 1 or > 3
                 || item.MaximumInputTokens is < 1 or > 100_000
                 || item.MaximumOutputTokens is < 1 or > 20_000
@@ -309,7 +315,11 @@ public sealed record AssistantEvaluationCase(
     AssistantEvaluationGrading Grading,
     IReadOnlyList<AssistantEvaluationMessage>? History = null);
 
-public sealed record AssistantEvaluationMessage(string Role, string Content);
+public sealed record AssistantEvaluationMessage(
+    string Role,
+    string Content,
+    int MaximumInputTokens,
+    int MaximumOutputTokens);
 
 public sealed record AssistantEvaluationExpected(
     string Tool,

@@ -17,6 +17,8 @@ public sealed record WebContext(
     AskService Ask,
     AskRequestRegistry AskRequests,
     AskThreadRegistry AskThreads,
+    EvaluationAdmissionVerifier EvaluationAdmissionVerifier,
+    EvaluationAdmissionRegistry EvaluationAdmissions,
     TimeProvider Clock)
 {
     /// <summary>Absolute base for permalinks and social metadata, without a trailing slash.</summary>

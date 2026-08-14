@@ -540,10 +540,12 @@ manifest set. Existing v2 reports remain public historical evidence.
 The release candidate smoke must assert semantic outcomes for representative exact, aggregate,
 comparison-gap, and clarification cases. Checking only that a JSON `reply` exists is forbidden.
 
-One live release run is limited to 20 frozen cases, 1,000,000 input tokens, 100,000 output tokens,
+One live release run is limited to 20 frozen cases, 1,000,000 input tokens, 125,000 output tokens,
 and an estimated cost of EUR 10 at the then-current deployment price. The runner calculates the
 estimate before inference and aborts if any envelope would be exceeded. Production audit calls use
-a separately reserved quota and do not consume the public allowance.
+a separately signed, release-bound capability and do not consume either public daily counter. The
+capability binds exact request digests and retains shared concurrency, queue, deadline and model
+limits; it is never a static bypass secret.
 
 ### 8.4 Performance budgets
 

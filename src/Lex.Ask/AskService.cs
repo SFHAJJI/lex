@@ -2098,7 +2098,8 @@ public sealed class AskService
         CancellationToken ct,
         AskProgressCallbacks? progress = null,
         string? requestId = null,
-        AskConversationContext? conversationContext = null)
+        AskConversationContext? conversationContext = null,
+        AskAdmissionLane admissionLane = AskAdmissionLane.Public)
     {
         if (!Enabled)
             return new AskOutcome(503, new JsonObject
@@ -2149,7 +2150,7 @@ public sealed class AskService
                     ? "Aucun instrument n'a été sélectionné. Ajoutez un titre officiel ou un identifiant lorsque vous voudrez réessayer."
                     : "No instrument was selected. Add an official title or identifier when you want to try again.",
                 requestLocale, [], []), false);
-        var admission = _admission.TryAdmit(ip);
+        var admission = _admission.TryAdmit(ip, admissionLane);
         if (!admission.Accepted)
             return new AskOutcome(429,
                 new JsonObject { ["error"] = AdmissionReason(admission.Failure) }, false);

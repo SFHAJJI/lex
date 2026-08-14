@@ -79,7 +79,7 @@ public sealed class AskThreadRegistry
 
     private sealed record Turn(string User, string Assistant);
 
-    private sealed class Entry(DateTimeOffset createdAt)
+    private sealed class Entry(DateTimeOffset createdAt, string? ownerScope)
     {
         public SemaphoreSlim Gate { get; } = new(1, 1);
         public List<Turn> Turns { get; set; } = [];
@@ -88,6 +88,7 @@ public sealed class AskThreadRegistry
         public long RetainedBytes { get; set; }
         public int Pins { get; set; }
         public int Waiters { get; set; }
+        public string? OwnerScope { get; } = ownerScope;
     }
 
     private readonly object _sync = new();
@@ -131,9 +132,13 @@ public sealed class AskThreadRegistry
 
     public async ValueTask<AskThreadAcquire> AcquireAsync(
         string? token,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? ownerScope = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        if (!IsValidOwnerScope(ownerScope))
+            throw new ArgumentException(
+                "A thread owner scope must be a SHA-256 digest.", nameof(ownerScope));
         Entry entry;
         string identity;
         string effectiveToken;
@@ -151,7 +156,7 @@ public sealed class AskThreadRegistry
                     identity = Identity(effectiveToken);
                 }
                 while (_entries.ContainsKey(identity));
-                entry = new Entry(_clock.GetUtcNow());
+                entry = new Entry(_clock.GetUtcNow(), ownerScope);
                 _entries.Add(identity, entry);
             }
             else
@@ -161,6 +166,8 @@ public sealed class AskThreadRegistry
                 effectiveToken = token;
                 identity = Identity(token);
                 if (!_entries.TryGetValue(identity, out entry!))
+                    return new AskThreadAcquire(AskThreadAcquireKind.NotFound);
+                if (!ScopeMatches(entry.OwnerScope, ownerScope))
                     return new AskThreadAcquire(AskThreadAcquireKind.NotFound);
             }
 
@@ -226,14 +233,16 @@ public sealed class AskThreadRegistry
                 () => Release(identity, entry, committed)));
     }
 
-    public bool Reset(string token)
+    public bool Reset(string token, string? ownerScope = null)
     {
-        if (!IsValidToken(token)) return false;
+        if (!IsValidToken(token) || !IsValidOwnerScope(ownerScope)) return false;
         lock (_sync)
         {
             RemoveExpired();
             var identity = Identity(token);
-            if (!_entries.TryGetValue(identity, out var entry) || entry.Pins != 0)
+            if (!_entries.TryGetValue(identity, out var entry)
+                || !ScopeMatches(entry.OwnerScope, ownerScope)
+                || entry.Pins != 0)
                 return false;
             RemoveEntry(identity, entry);
             return true;
@@ -406,6 +415,18 @@ public sealed class AskThreadRegistry
 
     private static string Identity(string token) => Convert.ToHexStringLower(
         SHA256.HashData(Encoding.ASCII.GetBytes(token)));
+
+    private static bool ScopeMatches(string? expected, string? supplied) =>
+        expected is null || supplied is null
+            ? expected is null && supplied is null
+            : expected.Length == supplied.Length
+              && CryptographicOperations.FixedTimeEquals(
+                  Encoding.ASCII.GetBytes(expected), Encoding.ASCII.GetBytes(supplied));
+
+    private static bool IsValidOwnerScope(string? scope) => scope is null
+        || scope is { Length: 64 }
+        && scope.All(character => character is >= '0' and <= '9'
+            or >= 'a' and <= 'f');
 
     internal long RetainedBytes
     {

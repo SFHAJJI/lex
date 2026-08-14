@@ -67,6 +67,8 @@ public sealed class LexOptions
     public string? CodeCommit { get; init; }
     public string? ArtifactManifestId { get; init; }
     public string? DeployImage { get; init; }
+    public string? Revision { get; init; }
+    public string? AssistantEvalCatalogSha256 { get; init; }
 
     /// <summary>True when the assistant has everything it needs to answer.</summary>
     public bool AssistantEnabled =>
@@ -118,5 +120,8 @@ public static class LexOptionsSetup
         CodeCommit = configuration["LEX_CODE_COMMIT"],
         ArtifactManifestId = configuration["LEX_ARTIFACT_MANIFEST_ID"],
         DeployImage = configuration["LEX_DEPLOY_IMAGE"],
+        Revision = configuration["CONTAINER_APP_REVISION"],
+        AssistantEvalCatalogSha256 =
+            configuration["LEX_ASSISTANT_EVAL_CATALOG_SHA256"],
     };
 }

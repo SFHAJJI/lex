@@ -7,7 +7,10 @@ latency and optional independent
 answer grade for every repetition.
 
 The frozen catalog is `evals/assistant-cases-v3.json`. It covers every legal operation, the four
-prompts shown in the product, direct instruction injection and a hostile restored transcript. A
+prompts shown in the product, direct instruction injection and hostile quoted-evidence injection
+executed as real user turns in one server-owned thread. The evaluator never supplies an assistant
+transcript: every repetition starts a fresh opaque thread, carries only its returned bearer token
+between setup turns, and resets it afterward. A
 separate `lex-assistant-eval-review/1` attestation binds an independent reviewer and approval to
 the exact SHA-256 of that file. Its detached ECDSA signature must verify against a dedicated,
 pinned evaluation-review trust root. Editing a question, expected argument, rubric or budget
@@ -15,7 +18,13 @@ invalidates both the digest match and signature-backed approval.
 
 The human reviewer uses `evals/sign-assistant-review.ps1` only after reading the frozen catalog.
 The script signs the exact catalog digest with the pinned, non-exportable review-key version and
-immediately runs the embedded-root verifier; it does not authorize inference by itself.
+immediately runs the embedded-root verifier; it does not authorize inference by itself. Immediately
+before a release run, `evals/sign-assistant-admission.ps1` verifies that approval again and uses the
+same non-exportable review key to sign a distinct 20-minute capability. That capability binds the
+exact candidate revision, image, code commit, index-manifest set, catalog digest, maximum candidate
+tokens/EUR, nonce and every allowed `(Idempotency-Key, request-body SHA-256)` pair. Signed invocation
+and turn coordinates additionally require each repetition to start without a thread token and bind
+its later setup/final turns to the one opaque server thread created by that first turn.
 
 Before the first HTTP or model call, the runner rejects:
 
@@ -27,11 +36,17 @@ Before the first HTTP or model call, the runner rejects:
 - pricing that differs from the reviewed, model-version-and-SKU-bound Microsoft Retail Prices snapshot;
 - a case whose declared limits exceed the catalog budget.
 
+The candidate exchanges the signed capability once for a random opaque token held only in evaluator
+memory. Its bounded server registry consumes a request only after the idempotency registry returns
+the owner; duplicate joins/replays spend neither another capability slot nor another model call.
+This lane consumes neither public daily counter, but retains the same concurrency, queue, request,
+deadline and model limits. Forged, expired, wrong-release, off-catalog and max+1 requests fail closed.
+
 During the run, deterministic contract checks never fall back to keyword matching. Every frozen
 case also requires the configured independent grader; an unavailable or malformed grader fails
 the case. Publisher-text, metadata and tool-output injection are additionally exercised at the
 code-enforced evidence boundary by the release test suite; the external black-box cases exercise
-the user and restored-transcript channels that can be supplied safely to a candidate deployment.
+same-thread user and quoted-evidence channels through the production opaque-thread API.
 Measured assistant and grader usage must remain within both the per-case ceilings and aggregate
 budget. The output report contains no prompts, legal text, credentials or raw tool payloads.
 Free-form grader reasons are deliberately discarded rather than copied into release evidence.
@@ -43,6 +58,8 @@ Run the strict wrapper from PowerShell:
   -BaseUrl https://candidate.example `
   -ReviewAttestation ./evals/assistant-cases-v3.review.json `
   -ReviewSignature ./evals/assistant-cases-v3.review.sig `
+  -Admission ./artifacts/assistant-eval-admission.json `
+  -AdmissionSignature ./artifacts/assistant-eval-admission.sig `
   -Output ./artifacts/assistant-eval-report.json `
   -CandidateContainerAppResourceId /subscriptions/<id>/resourceGroups/rg-platform/providers/Microsoft.App/containerApps/ca-lex-web `
   -CandidateRevision ca-lex-web--<immutable-suffix> `

@@ -276,6 +276,30 @@ public sealed class AskTransportTests
     }
 
     [Fact]
+    public void Evaluation_admission_skips_both_daily_counters_but_shares_concurrency()
+    {
+        var admission = new AskAdmissionController(
+            TimeProvider.System, perClientDaily: 1, globalDaily: 1, concurrent: 1);
+
+        using var publicLease = admission.TryAdmit("public-client").Lease;
+        var busyEvaluation = admission.TryAdmit(
+            "release-runner", AskAdmissionLane.Evaluation);
+
+        Assert.Equal(AskAdmissionFailure.Busy, busyEvaluation.Failure);
+        publicLease?.Dispose();
+
+        using var evaluationLease = admission.TryAdmit(
+            "release-runner", AskAdmissionLane.Evaluation).Lease;
+        Assert.NotNull(evaluationLease);
+        Assert.Equal(1, admission.AcceptedToday);
+        evaluationLease?.Dispose();
+        Assert.Equal(AskAdmissionFailure.PerClientQuota,
+            admission.TryAdmit("public-client").Failure);
+        Assert.Equal(AskAdmissionFailure.GlobalQuota,
+            admission.TryAdmit("another-public-client").Failure);
+    }
+
+    [Fact]
     public void Public_default_admits_exactly_200_turns_per_client_per_utc_day()
     {
         var clock = new ManualTimeProvider(

@@ -63,8 +63,12 @@ public class FitnessTests
         activity.SetTag("client.address", "203.0.113.42");
         activity.SetTag("http.request.header.x_lex_thread_token", "THREAD_CANARY");
         activity.SetTag("http.request.header.idempotency_key", "IDEMPOTENCY_CANARY");
+        activity.SetTag("http.request.header.x_lex_evaluation_admission",
+            "EVALUATION_ADMISSION_CANARY");
         activity.SetTag("http.request.body", "BODY_CANARY");
         activity.SetBaggage("lex.thread_token", "BAGGAGE_CANARY");
+        activity.SetBaggage("lex.evaluation_admission",
+            "EVALUATION_BAGGAGE_CANARY");
 
         new PrivacyActivityProcessor().OnEnd(activity);
         var exported = string.Join('\n', activity.TagObjects
@@ -76,6 +80,8 @@ public class FitnessTests
         Assert.DoesNotContain("203.0.113.42", exported, StringComparison.Ordinal);
         Assert.DoesNotContain("THREAD_CANARY", exported, StringComparison.Ordinal);
         Assert.DoesNotContain("IDEMPOTENCY_CANARY", exported, StringComparison.Ordinal);
+        Assert.DoesNotContain("EVALUATION_ADMISSION_CANARY", exported, StringComparison.Ordinal);
+        Assert.DoesNotContain("EVALUATION_BAGGAGE_CANARY", exported, StringComparison.Ordinal);
         Assert.DoesNotContain("BODY_CANARY", exported, StringComparison.Ordinal);
         Assert.DoesNotContain("BAGGAGE_CANARY", exported, StringComparison.Ordinal);
         Assert.Contains("https://law.soufien.lu/", exported, StringComparison.Ordinal);

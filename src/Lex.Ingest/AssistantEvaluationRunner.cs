@@ -5,6 +5,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
+using Lex.Evaluation;
 
 namespace Lex.Ingest;
 
@@ -69,6 +70,8 @@ public sealed record AssistantEvaluationGrade(
 
 public interface IAssistantEvaluationTarget
 {
+    string? AdmissionRunIdentity => null;
+
     Task VerifyReleaseIdentityAsync(
         AssistantEvaluationIdentity identity,
         CancellationToken cancellationToken);
@@ -155,8 +158,9 @@ public static class AssistantEvaluationRunner
         pricing.ValidateFor(identity, runAt);
         await target.VerifyReleaseIdentityAsync(identity, cancellationToken);
         var preflight = caseSet.Preflight(pricing);
-        var runIdentity = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(
-            $"{caseSet.Sha256}\n{identity.Target.EvidenceSha256}\n{runAt.ToUniversalTime():O}")))[..16];
+        var runIdentity = target.AdmissionRunIdentity
+            ?? Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(
+                $"{caseSet.Sha256}\n{identity.Target.EvidenceSha256}\n{runAt.ToUniversalTime():O}")))[..16];
         var results = new List<AssistantEvaluationCaseResult>();
         var totalCandidateUsage = new AssistantModelUsage(0, 0);
         var totalGraderUsage = new AssistantModelUsage(0, 0);
@@ -177,7 +181,8 @@ public static class AssistantEvaluationRunner
                 {
                     var invocation = await target.InvokeAsync(
                         evaluationCase,
-                        $"eval-{runIdentity}-{evaluationCase.Id}-{repetition}",
+                        AssistantEvaluationRequestPlan.BaseKey(
+                            runIdentity, evaluationCase.Id, repetition),
                         cancellationToken);
                     elapsed.Stop();
                     measuredTimings = invocation.Timings;
@@ -234,8 +239,16 @@ public static class AssistantEvaluationRunner
                     failures.Add("assistant evaluation target unavailable");
                 }
 
-                if (candidateUsage.InputTokens > evaluationCase.MaximumInputTokens
-                    || candidateUsage.OutputTokens > evaluationCase.MaximumOutputTokens)
+                var candidateInputCeiling = checked(
+                    (long)evaluationCase.MaximumInputTokens
+                    + (evaluationCase.History?.Sum(turn =>
+                        (long)turn.MaximumInputTokens) ?? 0));
+                var candidateOutputCeiling = checked(
+                    (long)evaluationCase.MaximumOutputTokens
+                    + (evaluationCase.History?.Sum(turn =>
+                        (long)turn.MaximumOutputTokens) ?? 0));
+                if (candidateUsage.InputTokens > candidateInputCeiling
+                    || candidateUsage.OutputTokens > candidateOutputCeiling)
                     failures.Add("measured candidate usage exceeded the case token ceiling");
                 if (graderUsage.InputTokens > evaluationCase.Grading.MaximumInputTokens
                     || graderUsage.OutputTokens > evaluationCase.Grading.MaximumOutputTokens)
@@ -611,9 +624,19 @@ public sealed class AssistantEvaluationHttpTarget : IAssistantEvaluationTarget
     private readonly HttpClient _http;
     private readonly Uri _askUri;
     private readonly Uri _attestationUri;
+    private readonly Uri _admissionUri;
+    private readonly Uri _resetUri;
     private readonly Uri _baseUri;
+    private readonly byte[]? _admissionBytes;
+    private readonly string? _admissionSignature;
+    private readonly EvaluationAdmissionCapability? _admission;
+    private string? _evaluationToken;
 
-    public AssistantEvaluationHttpTarget(HttpClient http, string baseUrl)
+    public AssistantEvaluationHttpTarget(
+        HttpClient http,
+        string baseUrl,
+        byte[]? admissionBytes = null,
+        string? admissionSignature = null)
     {
         _http = http ?? throw new ArgumentNullException(nameof(http));
         if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var uri)
@@ -624,7 +647,26 @@ public sealed class AssistantEvaluationHttpTarget : IAssistantEvaluationTarget
         _baseUri = uri;
         _askUri = new Uri(uri, "/api/ask/stream");
         _attestationUri = new Uri(uri, "/attestation.json");
+        _admissionUri = new Uri(uri, "/api/ask/evaluation/admission");
+        _resetUri = new Uri(uri, "/api/ask/thread/reset");
+        if ((admissionBytes is null) != (admissionSignature is null))
+            throw new InvalidDataException(
+                "Evaluation admission and signature are required together.");
+        if (admissionBytes is not null)
+        {
+            _admission = EvaluationAdmissionContract.Parse(admissionBytes);
+            _admissionBytes = admissionBytes.ToArray();
+            if (admissionSignature!.Length
+                > EvaluationAdmissionContract.MaximumSignatureCharacters)
+                throw new InvalidDataException(
+                    "Evaluation admission signature exceeds its byte limit.");
+            _admissionSignature = admissionSignature;
+        }
     }
+
+    public string? AdmissionRunIdentity => _admission is null
+        ? null
+        : EvaluationAdmissionContract.RunIdentity(_admission);
 
     public async Task<AssistantTargetAttestation> ReadAttestationAsync(
         AssistantCandidateRuntimeEvidence target,
@@ -684,6 +726,20 @@ public sealed class AssistantEvaluationHttpTarget : IAssistantEvaluationTarget
                 identity.IndexManifestIds.Order(StringComparer.Ordinal), StringComparer.Ordinal))
             throw new InvalidDataException(
                 "Candidate verified manifest set changed before evaluation.");
+        if (_admission is not null)
+        {
+            if (!string.Equals(_admission.CandidateRevision,
+                    identity.Target.RevisionName, StringComparison.Ordinal)
+                || !string.Equals(_admission.CandidateImage,
+                    identity.Target.Image, StringComparison.Ordinal)
+                || !string.Equals(_admission.CodeCommit,
+                    identity.Target.CodeCommit, StringComparison.Ordinal)
+                || !string.Equals(_admission.ArtifactManifestSet,
+                    identity.Target.ArtifactManifestSet, StringComparison.Ordinal))
+                throw new InvalidDataException(
+                    "Evaluation admission does not match authenticated Azure candidate evidence.");
+            await ExchangeAdmissionAsync(cancellationToken);
+        }
     }
 
     public async Task<AssistantEvaluationInvocation> InvokeAsync(
@@ -691,15 +747,72 @@ public sealed class AssistantEvaluationHttpTarget : IAssistantEvaluationTarget
         string idempotencyKey,
         CancellationToken cancellationToken)
     {
+        if (_admission is not null && _evaluationToken is null)
+            throw new InvalidOperationException(
+                "Signed evaluation admission must be exchanged after identity verification.");
+        string? threadToken = null;
+        long inputTokens = 0;
+        long outputTokens = 0;
+        try
+        {
+            var setupTurn = 0;
+            foreach (var setup in evaluationCase.History ?? [])
+            {
+                setupTurn++;
+                var setupInvocation = await InvokeSingleAsync(
+                    setup.Content,
+                    AssistantEvaluationRequestPlan.SetupKey(
+                        idempotencyKey, setupTurn),
+                    threadToken,
+                    cancellationToken);
+                if (setupInvocation.StatusCode != 200)
+                    throw new InvalidDataException(
+                        $"Assistant evaluation setup turn returned HTTP {setupInvocation.StatusCode}.");
+                AddUsage(setupInvocation.Response, ref inputTokens, ref outputTokens);
+                threadToken = RequiredThreadToken(setupInvocation.Response);
+            }
+
+            var final = await InvokeSingleAsync(
+                evaluationCase.Question, idempotencyKey, threadToken, cancellationToken);
+            if (final.Response["model_usage"] is JsonObject)
+            {
+                AddUsage(final.Response, ref inputTokens, ref outputTokens);
+                final.Response["model_usage"] = new JsonObject
+                {
+                    ["input_tokens"] = inputTokens,
+                    ["output_tokens"] = outputTokens,
+                    ["total_tokens"] = checked(inputTokens + outputTokens),
+                };
+            }
+            threadToken ??= OptionalThreadToken(final.Response);
+            return final;
+        }
+        finally
+        {
+            if (threadToken is not null)
+                await ResetThreadAsync(
+                    threadToken, $"{idempotencyKey}-reset", cancellationToken);
+        }
+    }
+
+    private async Task<AssistantEvaluationInvocation> InvokeSingleAsync(
+        string message,
+        string idempotencyKey,
+        string? threadToken,
+        CancellationToken cancellationToken)
+    {
         using var request = new HttpRequestMessage(HttpMethod.Post, _askUri)
         {
-            Content = JsonContent.Create(new JsonObject
-            {
-                ["messages"] = Messages(evaluationCase),
-            }),
+            Content = new ByteArrayContent(
+                EvaluationAdmissionContract.RequestBody(message)),
         };
+        request.Content.Headers.ContentType = new("application/json");
         request.Headers.Add("Idempotency-Key", idempotencyKey);
         request.Headers.Add("X-Lex-Stream-Version", "1");
+        if (threadToken is not null)
+            request.Headers.Add("X-Lex-Thread-Token", threadToken);
+        if (_evaluationToken is not null)
+            request.Headers.Add("X-Lex-Evaluation-Admission", _evaluationToken);
         var watch = Stopwatch.StartNew();
         using var response = await _http.SendAsync(
             request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
@@ -862,22 +975,125 @@ public sealed class AssistantEvaluationHttpTarget : IAssistantEvaluationTarget
         return NonNegativeTiming(timing, name);
     }
 
-    private static JsonArray Messages(AssistantEvaluationCase evaluationCase)
+    private async Task ExchangeAdmissionAsync(CancellationToken cancellationToken)
     {
-        var messages = new JsonArray();
-        foreach (var message in evaluationCase.History ?? [])
-            messages.Add(new JsonObject
-            {
-                ["role"] = message.Role,
-                ["content"] = message.Content,
-            });
-        messages.Add(new JsonObject
+        if (_evaluationToken is not null) return;
+        using var request = new HttpRequestMessage(HttpMethod.Post, _admissionUri)
         {
-            ["role"] = "user",
-            ["content"] = evaluationCase.Question,
-        });
-        return messages;
+            Content = new ByteArrayContent(_admissionBytes
+                ?? throw new InvalidOperationException(
+                    "Evaluation admission bytes are absent.")),
+        };
+        request.Content.Headers.ContentType = new("application/json");
+        request.Headers.Add(
+            "X-Lex-Evaluation-Admission-Signature",
+            _admissionSignature);
+        using var response = await _http.SendAsync(
+            request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+            throw new InvalidDataException(
+                $"Signed evaluation admission returned HTTP {(int)response.StatusCode}.");
+        if (response.Headers.CacheControl is not { NoStore: true, Private: true })
+            throw new InvalidDataException(
+                "Signed evaluation admission response is not private and non-cacheable.");
+        var bytes = await ReadBoundedAsync(response.Content, 64 * 1024, cancellationToken);
+        JsonObject body;
+        try
+        {
+            body = JsonNode.Parse(bytes) as JsonObject
+                ?? throw new InvalidDataException(
+                    "Signed evaluation admission response is not an object.");
+        }
+        catch (JsonException exception)
+        {
+            throw new InvalidDataException(
+                "Signed evaluation admission response is malformed.", exception);
+        }
+        var token = body["evaluation_token"]?.GetValue<string>();
+        if (!ValidOpaqueToken(token)
+            || body["max_calls"]?.GetValue<int>() != _admission?.MaxCalls)
+            throw new InvalidDataException(
+                "Signed evaluation admission response is incomplete.");
+        _evaluationToken = token;
     }
+
+    private async Task ResetThreadAsync(
+        string threadToken,
+        string idempotencyKey,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(
+                cancellationToken.IsCancellationRequested
+                    ? CancellationToken.None
+                    : cancellationToken);
+            timeout.CancelAfter(TimeSpan.FromSeconds(5));
+            using var request = new HttpRequestMessage(HttpMethod.Post, _resetUri)
+            {
+                Content = new ByteArrayContent([]),
+            };
+            request.Headers.Add("Idempotency-Key", idempotencyKey);
+            request.Headers.Add("X-Lex-Thread-Token", threadToken);
+            if (_evaluationToken is not null)
+                request.Headers.Add(
+                    "X-Lex-Evaluation-Admission", _evaluationToken);
+            using var response = await _http.SendAsync(
+                request, HttpCompletionOption.ResponseHeadersRead, timeout.Token);
+            _ = response.IsSuccessStatusCode;
+        }
+        catch
+        {
+            // The server registry is independently byte/TTL bounded. Cleanup is best effort so
+            // a network failure cannot overwrite the signed evaluation result or cancellation.
+        }
+    }
+
+    private static void AddUsage(
+        JsonObject response,
+        ref long inputTokens,
+        ref long outputTokens)
+    {
+        var usage = response["model_usage"] as JsonObject
+            ?? throw new InvalidDataException(
+                "Assistant evaluation turn has no model usage.");
+        var input = Long(usage["input_tokens"]);
+        var output = Long(usage["output_tokens"]);
+        var total = Long(usage["total_tokens"]);
+        if (input <= 0 || output <= 0 || total != input + output)
+            throw new InvalidDataException(
+                "Assistant evaluation turn has invalid model usage.");
+        inputTokens = checked(inputTokens + input);
+        outputTokens = checked(outputTokens + output);
+
+        static long Long(JsonNode? value)
+        {
+            if (value is JsonValue scalar && scalar.TryGetValue<long>(out var result))
+                return result;
+            if (value is JsonValue integer && integer.TryGetValue<int>(out var small))
+                return small;
+            return -1;
+        }
+    }
+
+    private static string RequiredThreadToken(JsonObject response) =>
+        OptionalThreadToken(response)
+        ?? throw new InvalidDataException(
+            "Assistant evaluation setup turn did not return a server thread capability.");
+
+    private static string? OptionalThreadToken(JsonObject response)
+    {
+        if (response["thread_token"] is null) return null;
+        var token = response["thread_token"]?.GetValue<string>();
+        return ValidOpaqueToken(token)
+            ? token
+            : throw new InvalidDataException(
+                "Assistant evaluation returned an invalid server thread capability.");
+    }
+
+    private static bool ValidOpaqueToken(string? token) => token is { Length: 43 }
+        && token.All(character => char.IsAsciiLetterOrDigit(character)
+                                  || character is '-' or '_');
 
     internal static async Task<byte[]> ReadBoundedAsync(
         HttpContent content,

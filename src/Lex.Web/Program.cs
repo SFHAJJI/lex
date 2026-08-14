@@ -1,5 +1,6 @@
 using Azure.Monitor.OpenTelemetry.AspNetCore;
 using Lex.Ask;
+using Lex.Evaluation;
 using Lex.Mcp;
 using Lex.Web;
 using Microsoft.AspNetCore.ResponseCompression;
@@ -41,6 +42,17 @@ builder.Services.AddSingleton(sp => new AskService(sp.GetRequiredService<McpCore
 builder.Services.AddSingleton(sp => new AskRequestRegistry(
     sp.GetRequiredService<TimeProvider>()));
 builder.Services.AddSingleton(sp => new AskThreadRegistry(
+    sp.GetRequiredService<TimeProvider>()));
+builder.Services.AddSingleton(sp => new EvaluationAdmissionVerifier(
+    EvaluationAdmissionTrustStore.Load(),
+    new EvaluationAdmissionIdentity(
+        options.Revision ?? "",
+        options.DeployImage ?? "",
+        options.CodeCommit ?? "",
+        options.ArtifactManifestId ?? "",
+        options.AssistantEvalCatalogSha256 ?? ""),
+    sp.GetRequiredService<TimeProvider>()));
+builder.Services.AddSingleton(sp => new EvaluationAdmissionRegistry(
     sp.GetRequiredService<TimeProvider>()));
 builder.Services.AddSingleton(sp => new McpAdmissionController(
     sp.GetRequiredService<TimeProvider>()));
@@ -101,6 +113,8 @@ var ctx = new WebContext(
     app.Services.GetRequiredService<AskService>(),
     app.Services.GetRequiredService<AskRequestRegistry>(),
     app.Services.GetRequiredService<AskThreadRegistry>(),
+    app.Services.GetRequiredService<EvaluationAdmissionVerifier>(),
+    app.Services.GetRequiredService<EvaluationAdmissionRegistry>(),
     app.Services.GetRequiredService<TimeProvider>());
 
 app.Logger.LogInformation("Assistant {State}; {Count} index(es) mounted from {Dir}",
