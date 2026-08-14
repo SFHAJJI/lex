@@ -143,24 +143,23 @@ public static class BuiltEndpoints
 
         string MountedReleaseEvidence()
         {
-            var coverage = ctx.Registry.All.Values.Select(reader => reader.Coverage())
-                .OrderBy(item => item.Collection, StringComparer.Ordinal).ToList();
+            var mounted = ctx.Registry.All.Values
+                .Select(reader => (Reader: reader, Coverage: reader.Coverage()))
+                .OrderBy(item => item.Coverage.Collection, StringComparer.Ordinal).ToList();
             var hybridCollections = ctx.Registry.All.Values.Where(reader => reader.HybridReady)
                 .Select(reader => reader.Collection).Order(StringComparer.Ordinal).ToList();
             var retrieval = hybridCollections.Count == 0
                 ? "keyword only; no compatible hybrid artifact is mounted"
                 : $"keyword default; compatible local hybrid artifacts mounted for {string.Join(", ", hybridCollections)}";
-            var coverageRows = string.Join("", ctx.Registry.All.Values
-                .OrderBy(reader => reader.Collection, StringComparer.Ordinal)
-                .Select(reader =>
-                {
-                    var item = reader.Coverage();
-                    return $"<tr><td>{H(item.Collection)}</td><td class=\"mono\">{item.Groups:n0}</td>"
-                        + $"<td class=\"mono\">{item.Versions:n0}</td>"
-                        + $"<td class=\"mono\">{H(item.Stamp.GetValueOrDefault("schema", "unknown"))}</td>"
-                        + $"<td class=\"mono\">{H(item.Stamp.GetValueOrDefault("corpus_commit", "unknown"))}</td>"
-                        + $"<td>{(reader.SignatureValid ? "<span class=\"badge ok\">valid</span>" : "<span class=\"badge warn\">unsigned</span>")}</td></tr>";
-                }));
+            var coverageRows = string.Join("", mounted.Select(mountedIndex =>
+            {
+                var item = mountedIndex.Coverage;
+                return $"<tr><td>{H(item.Collection)}</td><td class=\"mono\">{item.Groups:n0}</td>"
+                    + $"<td class=\"mono\">{item.Versions:n0}</td>"
+                    + $"<td class=\"mono\">{H(item.Stamp.GetValueOrDefault("schema", "unknown"))}</td>"
+                    + $"<td class=\"mono\">{H(item.Stamp.GetValueOrDefault("corpus_commit", "unknown"))}</td>"
+                    + $"<td>{(mountedIndex.Reader.SignatureValid ? "<span class=\"badge ok\">valid</span>" : "<span class=\"badge warn\">unsigned</span>")}</td></tr>";
+            }));
 
             return $"""
                 <h2 id="mounted-release">Mounted release evidence</h2>
@@ -179,8 +178,8 @@ public static class BuiltEndpoints
                 <tr><th>collection</th><th>works</th><th>versions</th><th>schema</th><th>corpus commit</th><th>stamp</th></tr>
                 {coverageRows}
                 </table></div>
-                <p class="sub">Mounted total: {coverage.Sum(item => item.Groups):n0} works and
-                {coverage.Sum(item => item.Versions):n0} dated versions. Artifact verification remains
+                <p class="sub">Mounted total: {mounted.Sum(item => item.Coverage.Groups):n0} works and
+                {mounted.Sum(item => item.Coverage.Versions):n0} dated versions. Artifact verification remains
                 a distinct job on <a href="/verify">Verify artifacts</a>.</p>
                 """;
         }
