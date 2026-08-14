@@ -67,6 +67,110 @@ public sealed class EurLexScopeTests : IDisposable
     }
 
     [Fact]
+    public void Consolidation_query_keeps_dated_states_without_an_EN_or_FR_expression()
+    {
+        var query = EurLexAdapter.ConsolidationsQuery(
+            ["32014R0910", "32019L0944", "32023R1114", "32023R2854"]);
+
+        Assert.Contains("SELECT DISTINCT", query, StringComparison.Ordinal);
+        Assert.Contains(
+            "?s cdm:act_consolidated_based_on_resource_legal ?baseWork",
+            query,
+            StringComparison.Ordinal);
+        Assert.Contains("OPTIONAL {", query, StringComparison.Ordinal);
+        Assert.Contains(
+            "?e cdm:expression_belongs_to_work ?s",
+            query,
+            StringComparison.Ordinal);
+        Assert.Contains("LIMIT 2049", query, StringComparison.Ordinal);
+
+        var rowsWithoutScopedExpression = new[]
+        {
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["base"] = "32014R0910",
+                ["celex"] = "02014R0910-20140917",
+                ["date"] = "2014-09-17",
+            },
+        };
+        Assert.Empty(EurLexAdapter.ConsolidationLanguages(
+            rowsWithoutScopedExpression, ["en", "fr"]));
+    }
+
+    [Fact]
+    public void Consolidation_languages_follow_the_official_expression_rows_in_scope_order()
+    {
+        var rows = new[]
+        {
+            new Dictionary<string, string>(StringComparer.Ordinal) { ["lang"] = "fr" },
+            new Dictionary<string, string>(StringComparer.Ordinal) { ["lang"] = "en" },
+            new Dictionary<string, string>(StringComparer.Ordinal) { ["lang"] = "fr" },
+        };
+
+        Assert.Equal(
+            ["en", "fr"],
+            EurLexAdapter.ConsolidationLanguages(rows, ["en", "fr"]));
+    }
+
+    [Theory]
+    [InlineData(
+        "<html lang=\"en\"><head><title>EUR-Lex - 02014R0910-20140917 - EN - EUR-Lex</title></head></html>",
+        "02014R0910-20140917",
+        "en",
+        true)]
+    [InlineData(
+        "<html lang=\"en\"><head><title>EUR-Lex - 02014R0910-20140917 - EN - EUR-Lex</title></head></html>",
+        "02014R0910-20140917",
+        "fr",
+        false)]
+    [InlineData(
+        "<html lang=\"en\"><head><title>EUR-Lex - 02014R0910-20240520 - EN - EUR-Lex</title></head></html>",
+        "02014R0910-20140917",
+        "en",
+        false)]
+    public void Portal_fallback_requires_the_exact_CELEX_and_language(
+        string html, string celex, string language, bool expected)
+    {
+        Assert.Equal(expected,
+            EurLexAdapter.IsExactPortalExpression(html, celex, language));
+    }
+
+    [Fact]
+    public void Portal_fallback_HEAD_must_be_bounded_HTML_in_the_requested_language()
+    {
+        using var response = new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+        {
+            Content = new ByteArrayContent([]),
+        };
+        response.Content.Headers.ContentType =
+            new System.Net.Http.Headers.MediaTypeHeaderValue("text/html");
+        response.Content.Headers.ContentLanguage.Add("en");
+        response.Content.Headers.ContentLength = 1024;
+
+        Assert.True(EurLexAdapter.IsVerifiedPortalHead(response, "en"));
+        Assert.False(EurLexAdapter.IsVerifiedPortalHead(response, "fr"));
+
+        response.Content.Headers.ContentLength = 33L * 1024 * 1024;
+        Assert.False(EurLexAdapter.IsVerifiedPortalHead(response, "en"));
+    }
+
+    [Fact]
+    public void Portal_bound_body_is_identity_checked_even_on_its_first_endpoint()
+    {
+        const string exact =
+            "<html lang=\"en\"><title>EUR-Lex - 02014R0910-20140917 - EN - EUR-Lex</title></html>";
+        const string wrong =
+            "<html lang=\"en\"><title>EUR-Lex - 02014R0910-20240520 - EN - EUR-Lex</title></html>";
+
+        Assert.True(EurLexAdapter.IsAcceptableBodyIdentity(
+            exact, "02014R0910-20140917", "en",
+            portalBound: true, usedPortalFallback: false));
+        Assert.False(EurLexAdapter.IsAcceptableBodyIdentity(
+            wrong, "02014R0910-20140917", "en",
+            portalBound: true, usedPortalFallback: false));
+    }
+
+    [Fact]
     public void Work_metadata_query_rejects_one_work_cap_plus_one()
     {
         var query = EurLexAdapter.WorkMetadataQuery(["32016R0679"]);
@@ -187,10 +291,12 @@ public sealed class EurLexScopeTests : IDisposable
 
         static Dictionary<string, string> Subject(
             string kind, string identifier, string language, string label) => new(StringComparer.Ordinal)
-        {
-            ["kind"] = kind, ["identifier"] = identifier,
-            ["lang"] = language, ["label"] = label,
-        };
+            {
+                ["kind"] = kind,
+                ["identifier"] = identifier,
+                ["lang"] = language,
+                ["label"] = label,
+            };
     }
 
     [Fact]
@@ -200,7 +306,7 @@ public sealed class EurLexScopeTests : IDisposable
             string kind, string identifier, string? language = "en", string? label = "label")
         {
             var row = new Dictionary<string, string>(StringComparer.Ordinal)
-                { ["kind"] = kind, ["identifier"] = identifier };
+            { ["kind"] = kind, ["identifier"] = identifier };
             if (language is not null) row["lang"] = language;
             if (label is not null) row["label"] = label;
             return row;
