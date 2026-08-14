@@ -2,7 +2,7 @@
 
 Every number in this document was measured against the running system or read from a signed
 artifact, never estimated. Where something is broken or unbuilt, it says so and links the record.
-This is the source document for the public `/built` page; the page is a rendering of it.
+This is the source document that the public architecture page will render in the next release.
 
 Reading paths: §0 alone is a sixty-second summary. §1-§4 are the ten-minute story. Everything
 else is reference depth, written so that one person could rebuild the system from it. A reader
@@ -20,7 +20,7 @@ the publisher served.
 | five numbers | |
 |---|---|
 | Corpus | 2,650 works, ~7,010 dated versions, two publishers |
-| Text held | EU 4,732 of 4,732 expressions; LU 3,157 of 4,649 (the gap is upstream, §3.4) |
+| Text held | EU 4,732 of 4,732 expressions; LU 3,157 of 4,649 (the gap is upstream, §3.3) |
 | Retrieval | keyword nDCG@10 0.656 vs hybrid 0.560 on holdout, so keyword is the default |
 | Under load | 255 requests, 0 failed, p50 147 ms, p95 456 ms, one replica |
 | Memory | peak 498 MB against a 1.5 GiB budget |
@@ -140,8 +140,8 @@ McpCore       the typed tool surface: 10 tools, 13 closed statuses
     └── external      public /mcp
 ```
 
-`SearchKeyword`/`SearchHybrid` have exactly one caller: `McpCore`. There is no internal HTTP
-between components (C5); it is one process by design.
+`McpCore`, retrieval benchmarks and ingest-time verification call `SearchKeyword`/`SearchHybrid`
+in-process. There is no internal HTTP between components (C5); it is one process by design.
 
 ### 4.4 Sequence: a question
 
