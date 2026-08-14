@@ -18,6 +18,7 @@ public static class McpStatus
     /// empty success is how a caller comes to state the corpus itself is empty.</summary>
     public const string UnknownPublisher = "unknown_publisher";
     public const string NoVersionForDate = "no_version_for_date";
+    public const string AmbiguousVersion = "ambiguous_version";
     public const string AnchorNotInVersion = "anchor_not_in_version";
     public const string NoProvisionHistory = "no_provision_history";
     public const string TextNotAvailable = "text_not_available";
@@ -34,6 +35,7 @@ public static class McpStatus
         UnknownAnchor,
         UnknownPublisher,
         NoVersionForDate,
+        AmbiguousVersion,
         AnchorNotInVersion,
         NoProvisionHistory,
         TextNotAvailable,

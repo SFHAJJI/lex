@@ -1167,7 +1167,7 @@ public static class ExplainerEndpoints
                 var first = vs[0];
                 var last = vs[^1];
                 // amendment cadence: median gap between consecutive versions
-                var dates = vs.Select(v => DateOnly.TryParse(v.ValidFrom, out var d) ? d : (DateOnly?)null)
+                var dates = vs.Select(v => TryIsoDate(v.ValidFrom, out var d) ? d : (DateOnly?)null)
                               .Where(d => d.HasValue).Select(d => d!.Value).OrderBy(d => d).ToList();
                 var gaps = dates.Zip(dates.Skip(1), (a, b) => b.DayNumber - a.DayNumber).OrderBy(g => g).ToList();
                 var median = gaps.Count > 0 ? gaps[gaps.Count / 2] : 0;
@@ -1183,9 +1183,9 @@ public static class ExplainerEndpoints
                          {(median > 0 ? $"<span class=\"badge\">amended every {median} days (median)</span>" : "")}
                          {(shortest > 0 ? $"<span class=\"badge\">shortest-lived version: {shortest} day{(shortest == 1 ? "" : "s")}</span>" : "")}</p>
                       <p><a href="/{H(publisher)}/{H(work)}">every version</a> ·
-                         <a href="/{H(publisher)}/{H(work)}/{H(first.ValidFrom)}">the first text</a> ·
-                         <a href="/{H(publisher)}/{H(work)}/diff/{H(first.ValidFrom)}/{H(mid.ValidFrom)}">what changed by {H(mid.ValidFrom)}</a> ·
-                         <a href="/{H(publisher)}/{H(work)}/{H(last.ValidFrom)}">the text today</a></p>
+                         <a href="/{H(publisher)}/{H(work)}/{H(VersionCoordinate(first))}">the first text</a> ·
+                         <a href="/{H(publisher)}/{H(work)}/diff/{H(VersionCoordinate(first))}/{H(VersionCoordinate(mid))}">what changed by {H(mid.ValidFrom)}</a> ·
+                         <a href="/{H(publisher)}/{H(work)}/{H(VersionCoordinate(last))}">the text today</a></p>
                       <p class="sub">Ask the assistant: <a href="/?q={Uri.EscapeDataString(askQuestion)}">{H(askQuestion)}</a></p>
                     </div>
                     """);

@@ -1124,4 +1124,499 @@ public class McpContractTests : IDisposable
         Assert.NotNull(env["freshness"]!["built_at"]);
         Assert.True(env["freshness"]!["stamp_signature_valid"]!.GetValue<bool>());
     }
+
+    [Fact]
+    public void Timeline_counts_versions_once_and_nests_their_language_expressions()
+    {
+        var db = Path.Combine(Path.GetTempPath(), $"lex-mcp-timeline-expressions-{Guid.NewGuid():N}.db");
+        try
+        {
+            var english = ContractDoc("multi", "work", "2024-01-01", "en");
+            var french = ContractDoc("multi", "work", "2024-01-01", "fr") with
+                { Title = "Titre francais" };
+            BuildContractIndex(db, "multi", [english, french]);
+            using var reader = LexIndexReader.Open(db);
+            var core = new McpCore(new Dictionary<string, LexIndexReader> { ["multi"] = reader });
+
+            var result = Assert.IsType<JsonObject>(core.CallTool("timeline", new JsonObject
+            {
+                ["work"] = "multi:work", ["limit"] = 1,
+            }));
+
+            Assert.Equal(1, result["total_count"]!.GetValue<int>());
+            var version = Assert.Single(result["versions"]!.AsArray())!.AsObject();
+            Assert.Equal(["en", "fr"], version["expressions"]!.AsArray()
+                .Select(expression => expression!["language"]!.GetValue<string>()));
+        }
+        finally { try { File.Delete(db); } catch { } }
+    }
+
+    [Fact]
+    public void In_force_pagination_uses_work_units_not_language_expression_rows()
+    {
+        var db = Path.Combine(Path.GetTempPath(), $"lex-mcp-in-force-expressions-{Guid.NewGuid():N}.db");
+        try
+        {
+            BuildContractIndex(db, "multi",
+            [
+                ContractDoc("multi", "a-work", "2024-01-01", "en"),
+                ContractDoc("multi", "a-work", "2024-01-01", "fr"),
+                ContractDoc("multi", "b-work", "2024-01-01", "en"),
+            ]);
+            using var reader = LexIndexReader.Open(db);
+            var core = new McpCore(new Dictionary<string, LexIndexReader> { ["multi"] = reader });
+
+            string WorkAt(int offset)
+            {
+                var page = Assert.IsType<JsonArray>(core.CallTool("in_force_on", new JsonObject
+                {
+                    ["date"] = "2024-06-01", ["limit"] = 1, ["offset"] = offset,
+                }));
+                var publisher = Assert.Single(page)!.AsObject();
+                Assert.Equal(2, publisher["total_works_in_force"]!.GetValue<int>());
+                return Assert.Single(publisher["works"]!.AsArray())!["work"]!.GetValue<string>();
+            }
+
+            Assert.Equal("a-work", WorkAt(0));
+            Assert.Equal("b-work", WorkAt(1));
+        }
+        finally { try { File.Delete(db); } catch { } }
+    }
+
+    [Fact]
+    public void In_force_refuses_to_choose_between_same_date_publisher_states()
+    {
+        var db = Path.Combine(Path.GetTempPath(), $"lex-mcp-in-force-ambiguous-{Guid.NewGuid():N}.db");
+        try
+        {
+            var prefix = "same:work:2025-07-28--";
+            var first = ContractDoc("same", "work", "2025-07-28", "en") with
+                { Key = prefix + new string('a', 64) };
+            var second = ContractDoc("same", "work", "2025-07-28", "en") with
+                { Key = prefix + new string('b', 64) };
+            BuildContractIndex(db, "same", [first, second]);
+            using var reader = LexIndexReader.Open(db);
+            var core = new McpCore(new Dictionary<string, LexIndexReader> { ["same"] = reader });
+
+            var part = Assert.Single(Assert.IsType<JsonArray>(core.CallTool("in_force_on", new JsonObject
+            {
+                ["date"] = "2025-08-01",
+            })))!.AsObject();
+
+            Assert.Equal(McpStatus.AmbiguousVersion,
+                part["envelope"]!["status"]!.GetValue<string>());
+            Assert.Empty(part["works"]!.AsArray());
+            var ambiguity = Assert.Single(part["ambiguous_works"]!.AsArray())!.AsObject();
+            Assert.Equal(2, ambiguity["choices"]!.AsArray().Count);
+            Assert.Equal([first.Key, second.Key], ambiguity["choices"]!.AsArray()
+                .Select(choice => choice!["lex_id"]!.GetValue<string>()));
+        }
+        finally { try { File.Delete(db); } catch { } }
+    }
+
+    [Fact]
+    public void In_force_bounds_ambiguous_version_choices_to_twenty()
+    {
+        var db = Path.Combine(Path.GetTempPath(), $"lex-mcp-in-force-bounded-{Guid.NewGuid():N}.db");
+        try
+        {
+            var docs = Enumerable.Range(0, 21).Select(index =>
+                ContractDoc("same", "work", "2025-07-28", "en") with
+                {
+                    Key = "same:work:2025-07-28--" + index.ToString("x64"),
+                }).ToArray();
+            BuildContractIndex(db, "same", docs);
+            using var reader = LexIndexReader.Open(db);
+            var core = new McpCore(new Dictionary<string, LexIndexReader> { ["same"] = reader });
+
+            var part = Assert.Single(Assert.IsType<JsonArray>(core.CallTool("in_force_on",
+                new JsonObject { ["date"] = "2025-07-28", ["limit"] = 1 })))!.AsObject();
+            var ambiguity = Assert.Single(part["ambiguous_works"]!.AsArray())!.AsObject();
+
+            Assert.Equal(20, ambiguity["choices"]!.AsArray().Count);
+            Assert.True(ambiguity["choices_truncated"]!.GetValue<bool>());
+            Assert.Equal(1, part["response_row_set"]!["returned"]!.GetValue<int>());
+        }
+        finally { try { File.Delete(db); } catch { } }
+    }
+
+    [Fact]
+    public void As_of_requires_an_exact_version_key_for_same_date_publisher_states()
+    {
+        var db = Path.Combine(Path.GetTempPath(), $"lex-mcp-as-of-ambiguous-{Guid.NewGuid():N}.db");
+        try
+        {
+            var firstKey = "2025-07-28--" + new string('a', 64);
+            var secondKey = "2025-07-28--" + new string('b', 64);
+            var first = ContractDoc("same", "work", "2025-07-28", "en") with
+                { Key = $"same:work:{firstKey}", Title = "Publisher state A" };
+            var second = ContractDoc("same", "work", "2025-07-28", "en") with
+                { Key = $"same:work:{secondKey}", Title = "Publisher state B" };
+            BuildContractIndex(db, "same", [first, second]);
+            using var reader = LexIndexReader.Open(db);
+            var core = new McpCore(new Dictionary<string, LexIndexReader> { ["same"] = reader },
+                publicBase: "https://law.example");
+
+            var ambiguous = Assert.IsType<JsonObject>(core.CallTool("as_of", new JsonObject
+            {
+                ["work"] = "same:work", ["date"] = "2025-08-01",
+            }));
+            Assert.Equal("ambiguous_version",
+                ambiguous["envelope"]!["status"]!.GetValue<string>());
+            Assert.Equal([firstKey, secondKey], ambiguous["version_choices"]!.AsArray()
+                .Select(choice => choice!["version_key"]!.GetValue<string>()));
+
+            var selected = Assert.IsType<JsonObject>(core.CallTool("as_of", new JsonObject
+            {
+                ["work"] = "same:work", ["date"] = "2025-08-01",
+                ["version_key"] = secondKey,
+            }));
+            Assert.Equal(McpStatus.TextNotAvailable,
+                selected["envelope"]!["status"]!.GetValue<string>());
+            Assert.Equal(second.Key, selected["document"]!["lex_id"]!.GetValue<string>());
+            Assert.Equal(secondKey, selected["document"]!["version_key"]!.GetValue<string>());
+            Assert.EndsWith($"/same/work/{secondKey}",
+                selected["document"]!["permalink"]!.GetValue<string>(), StringComparison.Ordinal);
+
+            Assert.Throws<ArgumentException>(() => core.CallTool("as_of", new JsonObject
+            {
+                ["work"] = "same:work", ["date"] = "2025-08-01",
+                ["version_key"] = firstKey + "-wrong",
+            }));
+        }
+        finally { try { File.Delete(db); } catch { } }
+    }
+
+    [Fact]
+    public void Language_projection_cannot_hide_a_same_boundary_publisher_state()
+    {
+        var db = Path.Combine(Path.GetTempPath(),
+            $"lex-mcp-language-ambiguity-{Guid.NewGuid():N}.db");
+        try
+        {
+            var firstKey = "2025-07-28--" + new string('a', 64);
+            var secondKey = "2025-07-28--" + new string('b', 64);
+            var english = ContractDoc("same", "work", "2025-07-28", "en") with
+                { Key = $"same:work:{firstKey}" };
+            var french = ContractDoc("same", "work", "2025-07-28", "fr") with
+                { Key = $"same:work:{secondKey}" };
+            BuildContractIndex(db, "same", [english, french]);
+            using var reader = LexIndexReader.Open(db);
+            var core = new McpCore(new Dictionary<string, LexIndexReader>
+                { ["same"] = reader });
+
+            var asOf = Assert.IsType<JsonObject>(core.CallTool("as_of", new JsonObject
+            {
+                ["work"] = "same:work", ["date"] = "2025-08-01",
+                ["language"] = "en",
+            }));
+            Assert.Equal(McpStatus.AmbiguousVersion,
+                asOf["envelope"]!["status"]!.GetValue<string>());
+            Assert.Equal([english.Key, french.Key], asOf["version_choices"]!.AsArray()
+                .Select(choice => choice!["lex_id"]!.GetValue<string>()));
+
+            var inForce = Assert.Single(Assert.IsType<JsonArray>(core.CallTool(
+                "in_force_on", new JsonObject
+                {
+                    ["date"] = "2025-08-01", ["language"] = "en",
+                })))!.AsObject();
+            var ambiguous = Assert.Single(inForce["ambiguous_works"]!.AsArray())!;
+            Assert.Equal(2, ambiguous["choices"]!.AsArray().Count);
+        }
+        finally { try { File.Delete(db); } catch { } }
+    }
+
+    [Theory]
+    [InlineData("as_of", "version_key")]
+    [InlineData("diff", "from_version_key")]
+    [InlineData("diff", "to_version_key")]
+    public void Exact_version_coordinates_are_bounded_to_128_opaque_characters(
+        string tool, string field)
+    {
+        var arguments = tool == "as_of"
+            ? new JsonObject
+            {
+                ["work"] = "t-pub:w1", ["date"] = "2024-01-01",
+                [field] = new string('x', 129),
+            }
+            : new JsonObject
+            {
+                ["work"] = "t-pub:w1", ["from_date"] = "2024-01-01",
+                ["to_date"] = "2024-01-02", [field] = new string('x', 129),
+            };
+
+        var error = Assert.Throws<ArgumentException>(() => Call(tool, arguments));
+        Assert.Contains("128", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Diff_requires_exact_version_keys_through_an_ambiguous_interval()
+    {
+        var db = Path.Combine(Path.GetTempPath(), $"lex-mcp-diff-ambiguous-{Guid.NewGuid():N}.db");
+        try
+        {
+            var firstKey = "2025-07-28--" + new string('a', 64);
+            var secondKey = "2025-07-28--" + new string('b', 64);
+            var first = ContractDoc("same", "work", "2025-07-28", "en") with
+                { Key = $"same:work:{firstKey}", Title = "Publisher state A" };
+            var second = ContractDoc("same", "work", "2025-07-28", "en") with
+                { Key = $"same:work:{secondKey}", Title = "Publisher state B" };
+            BuildContractIndex(db, "same", [first, second]);
+            using var reader = LexIndexReader.Open(db);
+            var core = new McpCore(new Dictionary<string, LexIndexReader> { ["same"] = reader });
+
+            var ambiguous = Assert.IsType<JsonObject>(core.CallTool("diff", new JsonObject
+            {
+                ["work"] = "same:work", ["from_date"] = "2025-08-01",
+                ["to_date"] = "2025-08-02",
+            }));
+            Assert.Equal(McpStatus.AmbiguousVersion,
+                ambiguous["envelope"]!["status"]!.GetValue<string>());
+            Assert.Equal(2, ambiguous["from_version_choices"]!.AsArray().Count);
+            Assert.Equal(2, ambiguous["to_version_choices"]!.AsArray().Count);
+
+            var selected = Assert.IsType<JsonObject>(core.CallTool("diff", new JsonObject
+            {
+                ["work"] = "same:work", ["from_date"] = "2025-08-01",
+                ["to_date"] = "2025-08-02", ["from_version_key"] = firstKey,
+                ["to_version_key"] = secondKey,
+            }));
+            Assert.Equal(first.Key, selected["from"]!["lex_id"]!.GetValue<string>());
+            Assert.Equal(second.Key, selected["to"]!["lex_id"]!.GetValue<string>());
+            Assert.True(selected["changed"]!.GetValue<bool>());
+        }
+        finally { try { File.Delete(db); } catch { } }
+    }
+
+    [Fact]
+    public void Article_history_applies_its_date_window_before_the_safety_cap()
+    {
+        var db = Path.Combine(Path.GetTempPath(), $"lex-mcp-history-window-{Guid.NewGuid():N}.db");
+        try
+        {
+            var start = new DateOnly(2020, 1, 1);
+            var docs = Enumerable.Range(0, 502).Select(index =>
+            {
+                var date = start.AddDays(index).ToString("yyyy-MM-dd");
+                var next = index == 501 ? null : start.AddDays(index + 1).AddDays(-1).ToString("yyyy-MM-dd");
+                return ContractDoc("history", "work", date, "en") with { ValidTo = next };
+            }).ToArray();
+            var provisions = docs.Select((doc, index) => ContractProvision(doc, $"wording {index}")).ToArray();
+            var states = docs.Zip(provisions).Select(pair => new ProvisionStateRow(
+                pair.First.GroupKey, pair.First.Language, true, "art_1", pair.First.ValidFrom,
+                pair.First.ValidTo, pair.Second.TextSha, pair.First.Key, null, false));
+            BuildContractIndex(db, "history", docs, provisions, states);
+            using var reader = LexIndexReader.Open(db);
+            var core = new McpCore(new Dictionary<string, LexIndexReader> { ["history"] = reader });
+            var last = start.AddDays(501).ToString("yyyy-MM-dd");
+
+            var result = Assert.IsType<JsonObject>(core.CallTool("article_history", new JsonObject
+            {
+                ["work"] = "history:work", ["anchor"] = "art_1",
+                ["from_date"] = last, ["to_date"] = last,
+            }));
+
+            Assert.True(result["states"] is JsonArray, result.ToJsonString());
+            Assert.Equal(1, result["distinct_texts"]!.GetValue<int>());
+            Assert.Equal(last, Assert.Single(result["states"]!.AsArray())!["valid_from"]!.GetValue<string>());
+            Assert.False(result["truncated"]!.GetValue<bool>());
+        }
+        finally { try { File.Delete(db); } catch { } }
+    }
+
+    [Fact]
+    public void Article_history_filters_lifecycle_events_before_the_safety_cap()
+    {
+        var db = Path.Combine(Path.GetTempPath(), $"lex-mcp-history-events-{Guid.NewGuid():N}.db");
+        try
+        {
+            var oldDoc = ContractDoc("history", "work", "2020-01-01", "en");
+            var currentDoc = ContractDoc("history", "work", "2024-01-01", "en");
+            var events = new[]
+            {
+                new AnchorEventRow("work", "en", true, "inserted", null, null,
+                    "art_1", "old", oldDoc.Key),
+                new AnchorEventRow("work", "en", true, "renumbered", "art_1", "art_1",
+                    null, "new", currentDoc.Key),
+            };
+            BuildContractIndex(db, "history", [oldDoc, currentDoc], anchorEvents: events);
+            using var reader = LexIndexReader.Open(db);
+            var core = new McpCore(new Dictionary<string, LexIndexReader> { ["history"] = reader });
+
+            var result = Assert.IsType<JsonObject>(core.CallTool("article_history", new JsonObject
+            {
+                ["work"] = "history:work", ["anchor"] = "art_1",
+                ["from_date"] = "2024-01-01", ["to_date"] = "2024-12-31",
+            }));
+
+            var occurrence = Assert.Single(result["anchor_events"]!.AsArray())!;
+            Assert.Equal(currentDoc.Key, occurrence["at_version"]!.GetValue<string>());
+            Assert.False(result["truncated"]!.GetValue<bool>());
+        }
+        finally { try { File.Delete(db); } catch { } }
+    }
+
+    [Fact]
+    public void Cross_publisher_churn_uses_one_global_ranking_and_page()
+    {
+        var first = Path.Combine(Path.GetTempPath(), $"lex-mcp-churn-a-{Guid.NewGuid():N}.db");
+        var second = Path.Combine(Path.GetTempPath(), $"lex-mcp-churn-z-{Guid.NewGuid():N}.db");
+        try
+        {
+            BuildChurnIndex(first, "a-pub", ("medium", 5), ("small", 1));
+            BuildChurnIndex(second, "z-pub", ("largest", 10), ("next", 4));
+            using var alpha = LexIndexReader.Open(first);
+            using var zeta = LexIndexReader.Open(second);
+            var core = new McpCore(new Dictionary<string, LexIndexReader>
+            {
+                ["a-pub"] = alpha, ["z-pub"] = zeta,
+            });
+
+            var result = Assert.IsType<JsonArray>(core.CallTool("changes_in_period", new JsonObject
+            {
+                ["from_date"] = "2024-01-01", ["to_date"] = "2024-12-31",
+                ["order"] = "by_churn", ["limit"] = 2,
+            }));
+            var rows = result.OfType<JsonObject>().SelectMany(part =>
+                part["changes"]!.AsArray().OfType<JsonObject>()).OrderBy(row =>
+                    row["global_rank"]!.GetValue<int>()).ToArray();
+
+            Assert.Equal([10, 5], rows.Select(row => row["versions_in_period"]!.GetValue<int>()));
+            Assert.Equal([1, 2], rows.Select(row => row["global_rank"]!.GetValue<int>()));
+            Assert.All(result.OfType<JsonObject>(), part =>
+            {
+                Assert.Equal(part["shown"]!.GetValue<int>(),
+                    part["response_row_set"]!["returned"]!.GetValue<int>());
+                Assert.Equal(2, part["global_response_row_set"]!["returned"]!.GetValue<int>());
+            });
+        }
+        finally
+        {
+            try { File.Delete(first); } catch { }
+            try { File.Delete(second); } catch { }
+        }
+    }
+
+    [Fact]
+    public void Global_churn_max_offset_reads_bounded_pages_instead_of_every_reader_prefix()
+    {
+        var first = Path.Combine(Path.GetTempPath(), $"lex-mcp-churn-bound-a-{Guid.NewGuid():N}.db");
+        var second = Path.Combine(Path.GetTempPath(), $"lex-mcp-churn-bound-z-{Guid.NewGuid():N}.db");
+        try
+        {
+            BuildLongChurnIndex(first, "a-pub", 300);
+            BuildLongChurnIndex(second, "z-pub", 300);
+            using var alpha = LexIndexReader.Open(first);
+            using var zeta = LexIndexReader.Open(second);
+
+            var page = McpCore.MergeGlobalChanges(
+                [alpha, zeta], "2024-01-01", "2024-12-31", null, true,
+                limit: 10, offset: 500, FilterSet.All);
+
+            Assert.Equal(10, page.Items.Count);
+            Assert.Equal(501, page.Items[0].Rank);
+            Assert.InRange(page.ReaderRowsLoaded, 510, 510 + (2 * 128));
+        }
+        finally
+        {
+            try { File.Delete(first); } catch { }
+            try { File.Delete(second); } catch { }
+        }
+    }
+
+    [Fact]
+    public void Cross_publisher_citations_are_canonical_in_forward_and_reverse_tools()
+    {
+        var luDb = Path.Combine(Path.GetTempPath(), $"lex-mcp-citation-lu-{Guid.NewGuid():N}.db");
+        var euDb = Path.Combine(Path.GetTempPath(), $"lex-mcp-citation-eu-{Guid.NewGuid():N}.db");
+        try
+        {
+            var citing = ContractDoc("lu-legilux", "citing-law", "2025-01-01", "fr");
+            var provision = ContractProvision(citing, "Cites the CRR") with
+            {
+                CitationsJson = "[{\"href\":\"/eli/reg_ue/2013/575/oj\",\"text\":\"CRR\"}]",
+            };
+            BuildContractIndex(luDb, "lu-legilux", [citing], [provision]);
+            BuildContractIndex(euDb, "eu-eurlex",
+                [ContractDoc("eu-eurlex", "32013r0575", "2025-01-01", "en")]);
+            using var lu = LexIndexReader.Open(luDb);
+            using var eu = LexIndexReader.Open(euDb);
+            Assert.True(eu.WorkExists("32013r0575"));
+            Assert.False(lu.WorkExists("32013r0575"));
+            Assert.Equal("32013r0575", McpCore.WorkKeyFromEli("/eli/reg_ue/2013/575/oj"));
+            var core = new McpCore(new Dictionary<string, LexIndexReader>
+            {
+                ["lu-legilux"] = lu, ["eu-eurlex"] = eu,
+            });
+            Assert.Equal("eu-eurlex:32013r0575", core.CanonicalCitationWork(
+                citing, "575-oj", "/eli/reg_ue/2013/575/oj"));
+
+            var forward = Assert.IsType<JsonObject>(core.CallTool("as_of", new JsonObject
+            {
+                ["work"] = "lu-legilux:citing-law", ["date"] = "2025-01-01",
+            }));
+            var citation = Assert.Single(forward["provisions"]![0]!["citations"]!.AsArray())!;
+            Assert.Equal("/eli/reg_ue/2013/575/oj", citation["href"]!.GetValue<string>());
+            Assert.Equal("eu-eurlex:32013r0575", citation["work"]!.GetValue<string>());
+
+            var reverse = Assert.IsType<JsonArray>(core.CallTool("cited_by", new JsonObject
+            {
+                ["work"] = "eu-eurlex:32013r0575",
+            }));
+            var luPart = reverse.OfType<JsonObject>().Single(part =>
+                part["envelope"]!["publisher"]!.GetValue<string>() == "lu-legilux");
+            Assert.Equal("captured_cross_references_in_held_non_withdrawn_versions",
+                luPart["evidence_scope"]!.GetValue<string>());
+            Assert.False(luPart["current_legal_effect_assessed"]!.GetValue<bool>());
+            Assert.False(luPart["relationship_type_assessed"]!.GetValue<bool>());
+            Assert.Equal("lu-legilux:citing-law",
+                Assert.Single(luPart["citations"]!.AsArray())!["work"]!.GetValue<string>());
+        }
+        finally
+        {
+            try { File.Delete(luDb); } catch { }
+            try { File.Delete(euDb); } catch { }
+        }
+    }
+
+    private static DocRow ContractDoc(string collection, string work, string date, string language) =>
+        new($"{collection}:{work}:{date}", collection, work, $"urn:{work}", "REG", language,
+            date, null, "publisher", "2026-08-01T00:00:00Z", false, true, true,
+            "record", "body", $"https://example.test/{work}/{date}/{language}", work, work,
+            null, date, null);
+
+    private static ProvisionRow ContractProvision(DocRow document, string text) =>
+        new($"{document.Key}|{document.Language}|{document.ValidFrom}", 0, "art_1",
+            $"{document.Key}#art_1", "article", "1", null, null, null, document.Title, text,
+            Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(
+                System.Text.Encoding.UTF8.GetBytes(text))));
+
+    private static void BuildContractIndex(string db, string collection, IReadOnlyList<DocRow> docs,
+        IEnumerable<ProvisionRow>? provisions = null,
+        IEnumerable<ProvisionStateRow>? states = null,
+        IEnumerable<AnchorEventRow>? anchorEvents = null) =>
+        IndexBuilder.Build(db, new Dictionary<string, string>
+        {
+            ["collection"] = collection, ["tier"] = "A", ["history_begins"] = "publisher",
+            ["built_at"] = "2026-08-01T00:00:00Z", ["corpus_commit"] = "test",
+        }, docs, provisions?.ToArray() ?? [], [], [], StampSigner.CreateKeyPem(),
+            provisionStates: states, anchorEvents: anchorEvents);
+
+    private static void BuildChurnIndex(string db, string collection,
+        params (string Work, int Versions)[] works)
+    {
+        var docs = works.SelectMany(item => Enumerable.Range(1, item.Versions).Select(index =>
+            ContractDoc(collection, item.Work, $"2024-{index:D2}-01", "en"))).ToArray();
+        BuildContractIndex(db, collection, docs, docs.Select(doc => ContractProvision(doc, doc.Key)));
+    }
+
+    private static void BuildLongChurnIndex(string db, string collection, int works)
+    {
+        var docs = Enumerable.Range(0, works).Select(index =>
+        {
+            var date = new DateOnly(2024, 1, 1).AddDays(index).ToString("yyyy-MM-dd");
+            return ContractDoc(collection, $"work-{index:D4}", date, "en");
+        }).ToArray();
+        BuildContractIndex(db, collection, docs, docs.Select(doc => ContractProvision(doc, doc.Key)));
+    }
 }

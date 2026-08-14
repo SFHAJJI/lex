@@ -19,6 +19,10 @@ namespace Lex.Web;
 /// </summary>
 public static class Fragments
 {
+    public static bool TryIsoDate(string? value, out DateOnly date) =>
+        DateOnly.TryParseExact(value, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.None, out date);
+
     // Publisher text is stored as deterministic Markdown. The React reader already parses it;
     // canonical/no-JavaScript pages must use the same presentation contract instead of exposing
     // Markdown punctuation. Raw HTML stays disabled because legal text is evidence, never markup
@@ -87,7 +91,7 @@ public static class Fragments
     public static bool IsProvisional(LexIndexReader r, DateOnly d)
     {
         var builtAt = r.Stamp.GetValueOrDefault("built_at", "");
-        return builtAt.Length >= 10 && DateOnly.TryParse(builtAt[..10], out var b) && d > b;
+        return builtAt.Length >= 10 && TryIsoDate(builtAt[..10], out var b) && d > b;
     }
 
     public static string DocTitle(DocRow d) => d.TitleShort ?? d.Title ?? d.GroupKey;
@@ -272,10 +276,11 @@ public static class Fragments
 
     public static string VersionRail(string publisher, string work, List<DocRow> versions, string? activeFrom)
     {
-        var vs = versions.GroupBy(v => v.ValidFrom, StringComparer.Ordinal).Select(g => g.First())
-                         .OrderBy(v => v.ValidFrom, StringComparer.Ordinal).ToList();
+        var vs = versions.GroupBy(v => v.Key, StringComparer.Ordinal).Select(g => g.First())
+                         .OrderBy(v => v.ValidFrom, StringComparer.Ordinal)
+                         .ThenBy(v => v.Key, StringComparer.Ordinal).ToList();
         if (vs.Count < 2) return "";
-        var ds = vs.Select(v => (v, ok: DateOnly.TryParse(v.ValidFrom, out var d), d))
+        var ds = vs.Select(v => (v, ok: TryIsoDate(v.ValidFrom, out var d), d))
                    .Where(x => x.ok).Select(x => (x.v, x.d)).ToList();
         if (ds.Count < 2) return "";
         double lo = ds[0].d.DayNumber, hi = ds[^1].d.DayNumber, span = Math.Max(1, hi - lo);
@@ -283,9 +288,10 @@ public static class Fragments
         foreach (var (v, d) in ds)
         {
             var pct = (d.DayNumber - lo) / span * 98 + 1;
-            var act = v.ValidFrom == activeFrom ? " act" : "";
+            var coordinate = VersionCoordinate(v);
+            var act = coordinate == activeFrom ? " act" : "";
             sb.Append($"<a class=\"tick{act}\" style=\"left:{pct.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)}%\" "
-                    + $"href=\"/{H(publisher)}/{H(work)}/{H(v.ValidFrom)}\" title=\"{H(v.ValidFrom)}\"></a>");
+                    + $"href=\"/{H(publisher)}/{H(work)}/{H(coordinate)}\" title=\"{H(coordinate)}\"></a>");
         }
         foreach (var (v, d) in new[] { ds[0], ds[^1] })
         {
@@ -297,16 +303,20 @@ public static class Fragments
         sb.Append($"<details class=\"railversions\"><summary>Browse {ds.Count} dated versions</summary><div class=\"vchips\">");
         foreach (var (v, _) in ds)
         {
-            var activeClass = v.ValidFrom == activeFrom ? " act" : "";
-            var ariaCurrent = v.ValidFrom == activeFrom ? " aria-current=\"date\"" : "";
-            sb.Append($"<a class=\"vchip{activeClass}\"{ariaCurrent} aria-label=\"Read version {H(v.ValidFrom)}\" "
-                    + $"href=\"/{H(publisher)}/{H(work)}/{H(v.ValidFrom)}\">{H(v.ValidFrom)}</a>");
+            var coordinate = VersionCoordinate(v);
+            var activeClass = coordinate == activeFrom ? " act" : "";
+            var ariaCurrent = coordinate == activeFrom ? " aria-current=\"date\"" : "";
+            sb.Append($"<a class=\"vchip{activeClass}\"{ariaCurrent} aria-label=\"Read version {H(coordinate)}\" "
+                    + $"href=\"/{H(publisher)}/{H(work)}/{H(coordinate)}\">{H(v.ValidFrom)}</a>");
         }
         sb.Append("</div></details>");
         sb.Append($"<p class=\"sub railcap\">{ds.Count} versions · choose a date to read the law as it stood that day"
                 + (activeFrom is null ? "" : " · <span class=\"nowmark\">▌</span> the one you are reading") + "</p>");
         return sb.ToString();
     }
+
+    public static string VersionCoordinate(DocRow document)
+        => document.Key[(document.Key.LastIndexOf(':') + 1)..];
 
     // ---- /stories: curated point-in-time narratives. Every figure is computed from the
     // mounted indexes at render time (a story that stops being true stops being shown).

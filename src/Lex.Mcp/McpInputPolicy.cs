@@ -14,14 +14,15 @@ internal static class McpInputPolicy
     private static readonly IReadOnlyDictionary<string, Rule> Rules =
         new Dictionary<string, Rule>(StringComparer.Ordinal)
         {
-            ["as_of"] = R(["work", "date", "publisher", "language", "mode", "anchors"], ["work", "date"]),
+            ["as_of"] = R(["work", "date", "version_key", "publisher", "language", "mode", "anchors"], ["work", "date"]),
             ["timeline"] = R(["work", "publisher", "limit", "offset"], ["work"],
                 ("limit", 1, 200), ("offset", 0, 100_000)),
             ["in_force_on"] = R(
                 ["date", "publisher", "jurisdiction", "document_type", "source_class",
                  "hierarchy", "act_form", "binding_status", "domain", "language", "limit", "offset"],
                 ["date"], ("limit", 1, 100), ("offset", 0, 100_000)),
-            ["diff"] = R(["work", "from_date", "to_date", "publisher", "language", "anchor"],
+            ["diff"] = R(["work", "from_date", "to_date", "from_version_key", "to_version_key",
+                "publisher", "language", "anchor"],
                 ["work", "from_date", "to_date"]),
             ["search"] = R(
                 ["query", "publisher", "jurisdiction", "document_type", "source_class",
@@ -71,6 +72,7 @@ internal static class McpInputPolicy
                 throw new ArgumentException($"{name} must be a string.", name);
             var maximum = name is "language" ? 16
                 : name is "date" or "as_of" or "from_date" or "to_date" ? 10
+                : name is "version_key" or "from_version_key" or "to_version_key" ? 128
                 : name is "anchor" ? MaximumAnchorLength
                 : name is "publisher" or "jurisdiction" or "mode" or "retrieval_mode"
                     or "time_scope" or "fuzzy" or "order" ? 64

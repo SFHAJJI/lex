@@ -300,11 +300,13 @@ public class IndexTests : IDisposable
     public void InForceOn_is_computed_from_dates_and_deduplicated_by_work()
     {
         using var r = Build();
-        var (rows, total) = r.InForceOn(new DateOnly(2023, 1, 1), FilterSet.All, 50, 0);
+        var page = r.InForceOn(new DateOnly(2023, 1, 1), FilterSet.All, 50, 0);
+        var rows = page.Rows; var total = page.TotalGroups;
         Assert.Equal(2, total);
         Assert.Equal(2, rows.Count);
         Assert.Contains(rows, x => x.Key == "t-pub:w1:2022-01-01");     // the version valid on that date
-        var (dirOnly, dirTotal) = r.InForceOn(new DateOnly(2023, 1, 1), new FilterSet(null, null, "DIR", null), 50, 0);
+        var dirPage = r.InForceOn(new DateOnly(2023, 1, 1), new FilterSet(null, null, "DIR", null), 50, 0);
+        var dirOnly = dirPage.Rows; var dirTotal = dirPage.TotalGroups;
         Assert.Equal(1, dirTotal);
         Assert.Equal("w2", dirOnly.Single().GroupKey);
     }

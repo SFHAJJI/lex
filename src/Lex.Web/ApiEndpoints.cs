@@ -67,7 +67,7 @@ public static class ApiEndpoints
             // A row without it simply omits the tag, which is allowed, rather than guessing.
             var today = ctx.Today;
             string Lastmod(string? observed) =>
-                observed is { Length: >= 10 } o && DateOnly.TryParse(o[..10], out var d) && d <= today
+                observed is { Length: >= 10 } o && TryIsoDate(o[..10], out var d) && d <= today
                     ? $"<lastmod>{d:yyyy-MM-dd}</lastmod>" : "";
 
             foreach (var r in ctx.Registry.Values)
@@ -89,8 +89,8 @@ public static class ApiEndpoints
                 // navigation, while a version page is the tens of thousands of words of law that
                 // a reader searched for. Submitting the index and withholding the content is the
                 // wrong way round.
-                foreach (var (collection, groupKey, validFrom, observed) in r.VersionPaths())
-                    sb.Append($"<url><loc>{ctx.PublicBase}/{collection}/{groupKey}/{validFrom}</loc>"
+                foreach (var (collection, groupKey, versionKey, observed) in r.VersionPaths())
+                    sb.Append($"<url><loc>{ctx.PublicBase}/{collection}/{groupKey}/{versionKey}</loc>"
                               + Lastmod(observed)
                               + "<changefreq>yearly</changefreq><priority>0.5</priority></url>");
             }

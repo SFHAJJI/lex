@@ -46,6 +46,21 @@ public sealed record DocRow(
     IReadOnlyList<PublisherMetadataRow>? PublisherMetadata = null,
     IReadOnlyList<string>? DocumentRoles = null);
 
+/// <summary>One publisher version and all language expressions available for that version.</summary>
+public sealed record TimelineVersionRow(
+    DocRow Version,
+    IReadOnlyList<DocRow> Expressions);
+
+public sealed record InForceAmbiguity(
+    string GroupKey,
+    string ValidFrom,
+    IReadOnlyList<DocRow> Choices);
+
+public sealed record InForcePage(
+    IReadOnlyList<DocRow> Rows,
+    int TotalGroups,
+    IReadOnlyList<InForceAmbiguity> Ambiguities);
+
 /// <summary>One provision (article/annex) of one document version — the retrieval unit.</summary>
 public sealed record ProvisionRow(
     string Rid,                 // parent doc rid (key|language|valid_from)

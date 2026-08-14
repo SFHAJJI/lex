@@ -648,86 +648,170 @@ public sealed class LexIndexReader : IDisposable
     }
 
     /// <summary>A bounded timeline page plus its exact row count.</summary>
-    public (List<DocRow> Rows, int Total) Timeline(string work, int limit, int offset)
+    public (List<TimelineVersionRow> Rows, int Total) Timeline(string work, int limit, int offset)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(limit);
         ArgumentOutOfRangeException.ThrowIfNegative(offset);
         var normalized = NormalizeWork(work);
         using var count = Cmd(
-            "SELECT COUNT(*) FROM docs WHERE group_key=$w OR group_identifier=$w", []);
+            "SELECT COUNT(DISTINCT key) FROM docs WHERE group_key=$w OR group_identifier=$w", []);
         count.Parameters.AddWithValue("$w", normalized);
         var total = Convert.ToInt32(count.ExecuteScalar());
         using var page = Cmd($"""
-            SELECT {SelectDocCols()} FROM docs WHERE group_key=$w OR group_identifier=$w
-            ORDER BY valid_from, language LIMIT $lim OFFSET $off
+            WITH version_page AS (
+                SELECT key, MIN(valid_from) AS valid_from
+                FROM docs WHERE group_key=$w OR group_identifier=$w
+                GROUP BY key ORDER BY valid_from, key LIMIT $lim OFFSET $off)
+            SELECT {SelectDocCols("d")} FROM docs d
+            JOIN version_page v ON v.key=d.key
+            ORDER BY v.valid_from, d.key, d.language
             """, []);
         page.Parameters.AddWithValue("$w", normalized);
         page.Parameters.AddWithValue("$lim", limit);
         page.Parameters.AddWithValue("$off", offset);
-        return (ReadAll(page), total);
+        var expressions = ReadAll(page);
+        var rows = GroupTimelineVersions(expressions, PreferredDocumentLanguage(normalized));
+        return (rows, total);
+    }
+
+    private static List<TimelineVersionRow> GroupTimelineVersions(
+        IEnumerable<DocRow> expressions, string? preferredLanguage) => expressions
+        .GroupBy(row => row.Key, StringComparer.Ordinal)
+        .OrderBy(group => group.Min(row => row.ValidFrom), StringComparer.Ordinal)
+        .ThenBy(group => group.Key, StringComparer.Ordinal)
+        .Select(group =>
+        {
+            var ordered = group.OrderBy(row => row.Language, StringComparer.Ordinal).ToArray();
+            var representative = preferredLanguage is null
+                ? ordered[0]
+                : ordered.FirstOrDefault(row => row.Language == preferredLanguage) ?? ordered[0];
+            return new TimelineVersionRow(representative, ordered);
+        }).ToList();
+
+    private string? PreferredDocumentLanguage(string normalizedWork)
+    {
+        using var command = Cmd("""
+            SELECT language FROM docs
+            WHERE group_key=$w OR group_identifier=$w
+            GROUP BY language
+            ORDER BY COUNT(DISTINCT key) DESC, language
+            LIMIT 1
+            """, []);
+        command.Parameters.AddWithValue("$w", normalizedWork);
+        return command.ExecuteScalar() as string;
     }
 
     /// <summary>
     /// Every distinct version address this index can serve, for the sitemap.
     ///
-    /// One row per (collection, work, valid_from), which is exactly the set of canonical version
-    /// URLs: a request for any date inside an interval renders that version and canonicalises to
-    /// the date the version starts. Grouped rather than selected, because a work published in
-    /// several languages has one row per language behind a single URL.
+    /// One row per exact publisher version key, which is exactly the set of canonical version
+    /// URLs. Grouped rather than selected, because a version published in several languages has
+    /// one row per language behind a single URL.
     ///
     /// One query rather than a Timeline call per work, which would require one round trip for
     /// every mounted work merely to build one file.
     /// </summary>
-    public List<(string Collection, string GroupKey, string ValidFrom, string? LastObserved)> VersionPaths()
+    public List<(string Collection, string GroupKey, string VersionKey, string? LastObserved)> VersionPaths()
     {
         using var cmd = Cmd("""
-            SELECT collection, group_key, valid_from, MAX(observed_from)
+            SELECT collection, group_key, key, MAX(observed_from)
             FROM docs
-            GROUP BY collection, group_key, valid_from
-            ORDER BY group_key, valid_from
+            GROUP BY collection, group_key, key
+            ORDER BY group_key, valid_from, key
             """, []);
         var rows = new List<(string, string, string, string?)>();
         using var rd = cmd.ExecuteReader();
         while (rd.Read())
-            rows.Add((rd.GetString(0), rd.GetString(1), rd.GetString(2),
-                      rd.IsDBNull(3) ? null : rd.GetString(3)));
+        {
+            var key = rd.GetString(2);
+            rows.Add((rd.GetString(0), rd.GetString(1),
+                key[(key.LastIndexOf(':') + 1)..],
+                rd.IsDBNull(3) ? null : rd.GetString(3)));
+        }
         return rows;
     }
 
     /// <summary>In-force set computed from validity intervals at query time (never a stored flag).
     /// Deduplicated by group; deterministic (collection, group_key) ordering for stable cursors.</summary>
-    public (List<DocRow> Rows, int TotalGroups) InForceOn(DateOnly date, FilterSet filters, int limit, int offset)
+    public InForcePage InForceOn(DateOnly date, FilterSet filters, int limit, int offset)
     {
+        // Language selects an expression to return; it must never select one publisher state
+        // over a same-boundary sibling. Build the state set without that projection, then retain
+        // only works for which at least one latest state has the requested expression.
+        var requestedLanguage = filters.Language;
+        var stateFilters = filters with { Language = null };
         var (countWhere, countParameters) = WithFilters(
-            "valid_from <= $d AND (valid_to IS NULL OR valid_to >= $d) AND withdrawn = 0",
-            filters, excludeAsOf: true);
+            "d.valid_from <= $d AND (d.valid_to IS NULL OR d.valid_to >= $d) AND d.withdrawn = 0",
+            stateFilters, excludeAsOf: true, alias: "d");
 
         int total;
-        using (var cnt = Cmd(
-                   $"SELECT COUNT(DISTINCT group_key) FROM docs WHERE {countWhere}", countParameters))
+        using (var cnt = Cmd($"""
+                   WITH eligible AS (
+                       SELECT d.* FROM docs d WHERE {countWhere}),
+                   latest AS (
+                       SELECT group_key, MAX(valid_from) AS valid_from
+                       FROM eligible GROUP BY group_key),
+                   scoped AS (
+                       SELECT l.group_key, l.valid_from FROM latest l
+                       WHERE $language IS NULL OR EXISTS (
+                           SELECT 1 FROM eligible e
+                           WHERE e.group_key=l.group_key AND e.valid_from=l.valid_from
+                             AND e.language=$language))
+                   SELECT COUNT(*) FROM scoped
+                   """, countParameters))
         {
-            cnt.Parameters.AddWithValue("$d", date.ToString("yyyy-MM-dd"));
+            cnt.Parameters.AddWithValue("$d",
+                date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+            cnt.Parameters.AddWithValue("$language",
+                (object?)requestedLanguage ?? DBNull.Value);
             total = Convert.ToInt32(cnt.ExecuteScalar());
         }
 
         var (where, ps) = WithFilters(
             "d.valid_from <= $d AND (d.valid_to IS NULL OR d.valid_to >= $d) AND d.withdrawn = 0",
-            filters, excludeAsOf: true, alias: "d");
+            stateFilters, excludeAsOf: true, alias: "d");
         using var cmd = Cmd($"""
-            SELECT {SelectDocCols()} FROM docs d
-            WHERE {where} AND d.valid_from = (
-                SELECT MAX(d2.valid_from) FROM docs d2
-                WHERE d2.group_key = d.group_key
-                  AND d2.valid_from <= $d AND (d2.valid_to IS NULL OR d2.valid_to >= $d) AND d2.withdrawn = 0)
-            ORDER BY collection, group_key, language
-            LIMIT $lim OFFSET $off
+            WITH eligible AS (
+                SELECT d.* FROM docs d WHERE {where}),
+            latest AS (
+                SELECT group_key, MAX(valid_from) AS valid_from
+                FROM eligible GROUP BY group_key),
+            group_page AS (
+                SELECT l.group_key, l.valid_from FROM latest l
+                WHERE $language IS NULL OR EXISTS (
+                    SELECT 1 FROM eligible e
+                    WHERE e.group_key=l.group_key AND e.valid_from=l.valid_from
+                      AND e.language=$language)
+                ORDER BY l.group_key LIMIT $lim OFFSET $off),
+            candidates AS (
+                SELECT e.*, ROW_NUMBER() OVER (
+                    PARTITION BY e.key ORDER BY
+                        CASE WHEN $language IS NOT NULL AND e.language=$language THEN 0 ELSE 1 END,
+                        e.language) AS expression_row
+                FROM eligible e JOIN group_page p
+                  ON p.group_key=e.group_key AND p.valid_from=e.valid_from)
+            SELECT {SelectDocCols("d")} FROM candidates d
+            WHERE d.expression_row=1
+            ORDER BY d.collection, d.group_key, d.key
             """, ps);
-        cmd.Parameters.AddWithValue("$d", date.ToString("yyyy-MM-dd"));
+        cmd.Parameters.AddWithValue("$d",
+            date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+        cmd.Parameters.AddWithValue("$language",
+            (object?)requestedLanguage ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$lim", limit);
         cmd.Parameters.AddWithValue("$off", offset);
-        var rows = ReadAll(cmd);
-        var deduped = rows.GroupBy(x => x.GroupKey).Select(g => g.OrderBy(x => x.Language).First()).ToList();
-        return (deduped, total);
+        var candidates = ReadAll(cmd);
+        var rows = new List<DocRow>();
+        var ambiguities = new List<InForceAmbiguity>();
+        foreach (var group in candidates.GroupBy(row => row.GroupKey, StringComparer.Ordinal))
+        {
+            var choices = group.OrderBy(row => row.Key, StringComparer.Ordinal).ToArray();
+            if (choices.Length == 1) rows.Add(choices[0]);
+            else if (choices.Length > 1)
+                ambiguities.Add(new InForceAmbiguity(
+                    group.Key, choices[0].ValidFrom, choices));
+        }
+        return new InForcePage(rows, total, ambiguities);
     }
 
     public List<(DocRow Doc, ProvisionRow Prov, string Snippet)> Search(string query, FilterSet filters, int limit)
@@ -1687,7 +1771,9 @@ public sealed class LexIndexReader : IDisposable
         var (where, parameters) = WithFilters(
             "d.valid_from >= $from AND d.valid_from <= $to", scoped, excludeAsOf: true,
             alias: "d");
-        var order = byChurn ? "versions DESC, last_change DESC" : "last_change DESC, versions DESC";
+        var order = byChurn
+            ? "versions DESC, last_change DESC, d.group_key"
+            : "last_change DESC, versions DESC, d.group_key";
         var metadata = IsV3
             ? "MAX(d.kind), MAX(d.hierarchy), MAX(d.domains), MAX(d.act_form), MAX(d.binding_status), MAX(d.language)"
             : "MAX(d.kind), NULL, NULL, NULL, NULL, MAX(d.language)";
@@ -1902,6 +1988,93 @@ public sealed class LexIndexReader : IDisposable
         return r.Read() ? ReadDoc(r) : null;
     }
 
+    /// <summary>
+    /// Distinct publisher states effective at <paramref name="date"/> on the latest applicable
+    /// axis boundary. Same-boundary publisher identities remain distinct instead of being
+    /// silently collapsed by <see cref="AsOf"/>.
+    /// </summary>
+    public List<DocRow> VersionsEffectiveOn(
+        string work, DateOnly date, string? language = null, int limit = 21)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(limit);
+        var normalized = NormalizeWork(work);
+        using var cmd = Cmd($"""
+            WITH eligible AS (
+                SELECT d.* FROM docs d
+                WHERE (d.group_key=$w OR d.group_identifier=$w)
+                  AND d.valid_from <= $d AND (d.valid_to IS NULL OR d.valid_to >= $d)),
+            latest AS (SELECT MAX(valid_from) AS valid_from FROM eligible),
+            matches AS (
+                SELECT d.*, ROW_NUMBER() OVER (PARTITION BY d.key ORDER BY
+                    CASE WHEN $l IS NOT NULL AND d.language=$l THEN 0 ELSE 1 END,
+                    (SELECT COUNT(*) FROM docs c
+                     WHERE c.group_key=d.group_key AND c.language=d.language) DESC,
+                    d.language) AS expression_row
+                FROM eligible d
+                WHERE d.valid_from=(SELECT valid_from FROM latest))
+            SELECT {SelectDocCols("m")} FROM matches m
+            WHERE m.expression_row=1 ORDER BY m.key LIMIT $lim
+            """, []);
+        cmd.Parameters.AddWithValue("$w", normalized);
+        cmd.Parameters.AddWithValue("$d",
+            date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+        cmd.Parameters.AddWithValue("$l", (object?)language ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$lim", limit);
+        return ReadAll(cmd);
+    }
+
+    /// <summary>One row per publisher version, with its language expressions nested.</summary>
+    public List<TimelineVersionRow> TimelineVersions(string work)
+    {
+        var normalized = NormalizeWork(work);
+        return GroupTimelineVersions(Timeline(normalized), PreferredDocumentLanguage(normalized));
+    }
+
+    /// <summary>Resolve an opaque key only among publisher states effective on this boundary.</summary>
+    public DocRow? VersionByCoordinate(
+        string work, DateOnly date, string versionKey, string? language = null)
+    {
+        var normalized = NormalizeWork(work);
+        using var cmd = Cmd($"""
+            WITH eligible AS (
+                SELECT d.* FROM docs d
+                WHERE (d.group_key=$w OR d.group_identifier=$w)
+                  AND d.valid_from <= $d AND (d.valid_to IS NULL OR d.valid_to >= $d)),
+            latest AS (SELECT MAX(valid_from) AS valid_from FROM eligible)
+            SELECT {SelectDocCols("d")} FROM eligible d
+            WHERE d.valid_from=(SELECT valid_from FROM latest)
+              AND substr(d.key, length(d.key) - length($v)) = ':' || $v
+              AND ($l IS NULL OR d.language=$l)
+            ORDER BY (SELECT COUNT(*) FROM docs c
+                      WHERE c.group_key=d.group_key AND c.language=d.language) DESC,
+                     d.language LIMIT 1
+            """, []);
+        cmd.Parameters.AddWithValue("$w", normalized);
+        cmd.Parameters.AddWithValue("$d",
+            date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+        cmd.Parameters.AddWithValue("$v", versionKey);
+        cmd.Parameters.AddWithValue("$l", (object?)language ?? DBNull.Value);
+        using var reader = cmd.ExecuteReader();
+        return reader.Read() ? ReadDoc(reader) : null;
+    }
+
+    /// <summary>Resolve one held version key inside a work using its predominant language.</summary>
+    public DocRow? VersionByKey(string work, string key)
+    {
+        var normalized = NormalizeWork(work);
+        using var command = Cmd($"""
+            SELECT {SelectDocCols("d")} FROM docs d
+            WHERE d.key=$k AND (d.group_key=$w OR d.group_identifier=$w)
+            ORDER BY (SELECT COUNT(*) FROM docs c
+                      WHERE c.group_key=d.group_key AND c.language=d.language) DESC,
+                     d.language LIMIT 1
+            """, []);
+        command.Parameters.AddWithValue("$w", normalized);
+        command.Parameters.AddWithValue("$k", key);
+        using var reader = command.ExecuteReader();
+        return reader.Read() ? ReadDoc(reader) : null;
+    }
+
     public List<DocRow> GroupsPage(int limit, int offset, FilterSet filters)
     {
         var (where, ps) = WithFilters("1=1", filters, excludeAsOf: true, alias: "d");
@@ -2042,26 +2215,36 @@ public sealed class LexIndexReader : IDisposable
     /// actually made of, and it is only answerable because the publisher's own cross-references
     /// were captured at derive time rather than thrown away with the rest of the markup.
     /// </summary>
-    public List<(string GroupKey, string ValidFrom, string Anchor, string? Num, string? Title)> CitedBy(
-        string slug, int limit)
+    public List<(string GroupKey, string VersionKey, string ValidFrom, string Anchor,
+        string? Num, string? Title)> CitedBy(
+        string targetWork, int limit, IReadOnlyList<string>? hrefFragments = null)
     {
-        using var cmd = Cmd("""
-            SELECT DISTINCT d.group_key, d.valid_from, c.anchor, p.num,
+        var colon = targetWork.IndexOf(':');
+        var slug = colon >= 0 ? targetWork[(colon + 1)..] : targetWork;
+        var fragments = hrefFragments ?? [];
+        var hrefMatch = string.Concat(fragments.Select((_, index) =>
+            $" OR instr(c.href, $fragment{index} || '/') > 0 OR substr(c.href, -length($fragment{index})) = $fragment{index}"));
+        using var cmd = Cmd($"""
+            SELECT DISTINCT d.group_key, d.key, d.valid_from, c.anchor, p.num,
                    COALESCE(d.title_short, d.title)
             FROM citations c
             JOIN docs d ON d.rid = c.rid
             LEFT JOIN provisions p ON p.rid = c.rid AND p.anchor = c.anchor
-            WHERE c.cited_slug = $s AND d.withdrawn = 0
+            WHERE (c.cited_slug = $target OR c.cited_slug = $s{hrefMatch}) AND d.withdrawn = 0
             ORDER BY d.valid_from DESC, d.group_key, c.anchor
             LIMIT $lim
             """, []);
         cmd.Parameters.AddWithValue("$s", slug);
+        cmd.Parameters.AddWithValue("$target", targetWork);
+        for (var index = 0; index < fragments.Count; index++)
+            cmd.Parameters.AddWithValue($"$fragment{index}", fragments[index]);
         cmd.Parameters.AddWithValue("$lim", limit);
-        var list = new List<(string, string, string, string?, string?)>();
+        var list = new List<(string, string, string, string, string?, string?)>();
         using var r = cmd.ExecuteReader();
         while (r.Read())
             list.Add((r.GetString(0), r.GetString(1), r.GetString(2),
-                      r.IsDBNull(3) ? null : r.GetString(3), r.IsDBNull(4) ? null : r.GetString(4)));
+                r.GetString(3), r.IsDBNull(4) ? null : r.GetString(4),
+                r.IsDBNull(5) ? null : r.GetString(5)));
         return list;
     }
 
@@ -2646,7 +2829,9 @@ public sealed class LexIndexReader : IDisposable
         string work,
         string anchor,
         string? language = null,
-        int limit = int.MaxValue)
+        int limit = int.MaxValue,
+        string? windowFrom = null,
+        string? windowTo = null)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(limit);
         var normalizedWork = NormalizeWork(work);
@@ -2656,15 +2841,22 @@ public sealed class LexIndexReader : IDisposable
                    article_valid_from, validity_conflict
             FROM provision_states
             WHERE group_key=$w AND anchor=$a AND language=$lang
+              AND ($to IS NULL OR valid_from <= $to)
+              AND ($from IS NULL OR valid_to IS NULL OR valid_to >= $from)
             ORDER BY valid_from LIMIT $lim
             """ : """
             SELECT group_key, anchor, valid_from, valid_to, text_sha, in_version,
                    article_valid_from, validity_conflict
-            FROM provision_states WHERE group_key=$w AND anchor=$a ORDER BY valid_from LIMIT $lim
+            FROM provision_states WHERE group_key=$w AND anchor=$a
+              AND ($to IS NULL OR valid_from <= $to)
+              AND ($from IS NULL OR valid_to IS NULL OR valid_to >= $from)
+            ORDER BY valid_from LIMIT $lim
             """, []);
         cmd.Parameters.AddWithValue("$w", normalizedWork);
         cmd.Parameters.AddWithValue("$a", anchor);
         if (IsV3) cmd.Parameters.AddWithValue("$lang", language ?? "und");
+        cmd.Parameters.AddWithValue("$from", (object?)windowFrom ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$to", (object?)windowTo ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$lim", limit);
         var list = new List<ProvisionStateRow>();
         using var r = cmd.ExecuteReader();
@@ -2682,16 +2874,23 @@ public sealed class LexIndexReader : IDisposable
         return list;
     }
 
-    public int ProvisionStateCount(string work, string anchor, string? language = null)
+    public int ProvisionStateCount(string work, string anchor, string? language = null,
+        string? windowFrom = null, string? windowTo = null)
     {
         var normalizedWork = NormalizeWork(work);
         if (IsV3) language ??= PreferredHistoryLanguage(normalizedWork, anchor);
         using var cmd = Cmd(IsV3
-            ? "SELECT COUNT(*) FROM provision_states WHERE group_key=$w AND anchor=$a AND language=$lang"
-            : "SELECT COUNT(*) FROM provision_states WHERE group_key=$w AND anchor=$a", []);
+            ? "SELECT COUNT(*) FROM provision_states WHERE group_key=$w AND anchor=$a AND language=$lang "
+              + "AND ($to IS NULL OR valid_from <= $to) "
+              + "AND ($from IS NULL OR valid_to IS NULL OR valid_to >= $from)"
+            : "SELECT COUNT(*) FROM provision_states WHERE group_key=$w AND anchor=$a "
+              + "AND ($to IS NULL OR valid_from <= $to) "
+              + "AND ($from IS NULL OR valid_to IS NULL OR valid_to >= $from)", []);
         cmd.Parameters.AddWithValue("$w", normalizedWork);
         cmd.Parameters.AddWithValue("$a", anchor);
         if (IsV3) cmd.Parameters.AddWithValue("$lang", language ?? "und");
+        cmd.Parameters.AddWithValue("$from", (object?)windowFrom ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$to", (object?)windowTo ?? DBNull.Value);
         return Convert.ToInt32(cmd.ExecuteScalar());
     }
 
@@ -2700,25 +2899,36 @@ public sealed class LexIndexReader : IDisposable
         string work,
         string? anchor = null,
         string? language = null,
-        int limit = int.MaxValue)
+        int limit = int.MaxValue,
+        string? windowFrom = null,
+        string? windowTo = null)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(limit);
         var normalizedWork = NormalizeWork(work);
         if (IsV3) language ??= PreferredHistoryLanguage(normalizedWork, anchor);
         using var cmd = Cmd(IsV3 ? """
-            SELECT group_key, language, is_primary_language, etype, from_anchor, to_anchor, anchor, text_sha, at_version
-            FROM anchor_events WHERE group_key=$w AND language=$lang
-              AND ($a IS NULL OR from_anchor=$a OR to_anchor=$a OR anchor=$a)
-            ORDER BY at_version LIMIT $lim
+            SELECT e.group_key, e.language, e.is_primary_language, e.etype, e.from_anchor,
+                   e.to_anchor, e.anchor, e.text_sha, e.at_version
+            FROM anchor_events e JOIN docs d ON d.key=e.at_version AND d.language=e.language
+            WHERE e.group_key=$w AND e.language=$lang
+              AND ($a IS NULL OR e.from_anchor=$a OR e.to_anchor=$a OR e.anchor=$a)
+              AND ($from IS NULL OR d.valid_from >= $from)
+              AND ($to IS NULL OR d.valid_from <= $to)
+            ORDER BY e.at_version LIMIT $lim
             """ : """
-            SELECT group_key, etype, from_anchor, to_anchor, anchor, text_sha, at_version
-            FROM anchor_events WHERE group_key=$w
-              AND ($a IS NULL OR from_anchor=$a OR to_anchor=$a OR anchor=$a)
-            ORDER BY at_version LIMIT $lim
+            SELECT e.group_key, e.etype, e.from_anchor, e.to_anchor, e.anchor, e.text_sha, e.at_version
+            FROM anchor_events e JOIN docs d ON d.key=e.at_version
+            WHERE e.group_key=$w
+              AND ($a IS NULL OR e.from_anchor=$a OR e.to_anchor=$a OR e.anchor=$a)
+              AND ($from IS NULL OR d.valid_from >= $from)
+              AND ($to IS NULL OR d.valid_from <= $to)
+            ORDER BY e.at_version LIMIT $lim
             """, []);
         cmd.Parameters.AddWithValue("$w", normalizedWork);
         cmd.Parameters.AddWithValue("$a", (object?)anchor ?? DBNull.Value);
         if (IsV3) cmd.Parameters.AddWithValue("$lang", language ?? "und");
+        cmd.Parameters.AddWithValue("$from", (object?)windowFrom ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$to", (object?)windowTo ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$lim", limit);
         var list = new List<AnchorEventRow>();
         using var r = cmd.ExecuteReader();
@@ -2737,20 +2947,30 @@ public sealed class LexIndexReader : IDisposable
         return list;
     }
 
-    public int AnchorEventCount(string work, string? anchor = null, string? language = null)
+    public int AnchorEventCount(string work, string? anchor = null, string? language = null,
+        string? windowFrom = null, string? windowTo = null)
     {
         var normalizedWork = NormalizeWork(work);
         if (IsV3) language ??= PreferredHistoryLanguage(normalizedWork, anchor);
         using var cmd = Cmd(IsV3 ? """
-            SELECT COUNT(*) FROM anchor_events WHERE group_key=$w AND language=$lang
-              AND ($a IS NULL OR from_anchor=$a OR to_anchor=$a OR anchor=$a)
+            SELECT COUNT(*) FROM anchor_events e
+            JOIN docs d ON d.key=e.at_version AND d.language=e.language
+            WHERE e.group_key=$w AND e.language=$lang
+              AND ($a IS NULL OR e.from_anchor=$a OR e.to_anchor=$a OR e.anchor=$a)
+              AND ($from IS NULL OR d.valid_from >= $from)
+              AND ($to IS NULL OR d.valid_from <= $to)
             """ : """
-            SELECT COUNT(*) FROM anchor_events WHERE group_key=$w
-              AND ($a IS NULL OR from_anchor=$a OR to_anchor=$a OR anchor=$a)
+            SELECT COUNT(*) FROM anchor_events e JOIN docs d ON d.key=e.at_version
+            WHERE e.group_key=$w
+              AND ($a IS NULL OR e.from_anchor=$a OR e.to_anchor=$a OR e.anchor=$a)
+              AND ($from IS NULL OR d.valid_from >= $from)
+              AND ($to IS NULL OR d.valid_from <= $to)
             """, []);
         cmd.Parameters.AddWithValue("$w", normalizedWork);
         cmd.Parameters.AddWithValue("$a", (object?)anchor ?? DBNull.Value);
         if (IsV3) cmd.Parameters.AddWithValue("$lang", language ?? "und");
+        cmd.Parameters.AddWithValue("$from", (object?)windowFrom ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$to", (object?)windowTo ?? DBNull.Value);
         return Convert.ToInt32(cmd.ExecuteScalar());
     }
 

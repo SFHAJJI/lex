@@ -25,6 +25,87 @@ public sealed class McpCore
     private const int MaximumPublisherRows = 8;
     private const int MaximumCoverageFacetRows = 100;
     private const int MaximumBuildIssueRows = 100;
+    private const int GlobalChangeMergePageSize = 128;
+    private static readonly System.Text.RegularExpressions.Regex CrossCollectionEli = new(
+        @"/eli/(?<type>reg_ue|reg|reg_impl|reg_del|dir_ue|dir|dir_impl|dir_del|dec|dec_impl|dec_del|dec_framw|dec_entscheid)/(?<year>[0-9]{4})/(?<number>[0-9]{1,4})(?:/|$)",
+        System.Text.RegularExpressions.RegexOptions.CultureInvariant
+        | System.Text.RegularExpressions.RegexOptions.ExplicitCapture
+        | System.Text.RegularExpressions.RegexOptions.Compiled);
+    private static readonly System.Text.RegularExpressions.Regex CrossCollectionWorkKey = new(
+        @"^3(?<year>[0-9]{4})(?<type>[rld])(?<number>[0-9]{4})$",
+        System.Text.RegularExpressions.RegexOptions.CultureInvariant
+        | System.Text.RegularExpressions.RegexOptions.ExplicitCapture
+        | System.Text.RegularExpressions.RegexOptions.Compiled);
+    private static readonly HashSet<string> KnownIncorrectEliTokens = new(StringComparer.Ordinal)
+    {
+        "/eli/reg_ue/2014/65", "/eli/dir_ue/2004/648",
+        "/eli/dir_ue/2012/259", "/eli/dir_ue/2008/765",
+    };
+
+    internal sealed record GlobalChangeItem(LexIndexReader Reader, ChangeRow Row, int Rank);
+    internal sealed record GlobalChangePage(IReadOnlyList<GlobalChangeItem> Items, int ReaderRowsLoaded);
+
+    private sealed class ChangeCursor(
+        LexIndexReader reader,
+        string from,
+        string to,
+        IReadOnlyList<string>? kinds,
+        bool byChurn,
+        FilterSet filter)
+    {
+        private IReadOnlyList<ChangeRow> _page = [];
+        private int _pageIndex = -1;
+        private int _nextOffset;
+        public LexIndexReader Reader { get; } = reader;
+        public ChangeRow? Current { get; private set; }
+        public int RowsLoaded { get; private set; }
+
+        public bool MoveNext()
+        {
+            _pageIndex++;
+            if (_pageIndex >= _page.Count)
+            {
+                _page = Reader.ChangesInPeriod(
+                    from, to, kinds, byChurn, GlobalChangeMergePageSize, _nextOffset, filter);
+                RowsLoaded += _page.Count;
+                _nextOffset += _page.Count;
+                _pageIndex = 0;
+            }
+            Current = _pageIndex < _page.Count ? _page[_pageIndex] : null;
+            return Current is not null;
+        }
+    }
+
+    internal static GlobalChangePage MergeGlobalChanges(
+        IReadOnlyList<LexIndexReader> readers,
+        string from,
+        string to,
+        IReadOnlyList<string>? kinds,
+        bool byChurn,
+        int limit,
+        int offset,
+        FilterSet filter)
+    {
+        var cursors = readers.Select(reader =>
+            new ChangeCursor(reader, from, to, kinds, byChurn, filter)).ToArray();
+        foreach (var cursor in cursors) cursor.MoveNext();
+        var result = new List<GlobalChangeItem>(limit);
+        for (var index = 0; index < offset + limit; index++)
+        {
+            var next = cursors.Where(cursor => cursor.Current is not null)
+                .OrderBy(cursor => byChurn ? -cursor.Current!.VersionsInPeriod : 0)
+                .ThenByDescending(cursor => cursor.Current!.LastChange, StringComparer.Ordinal)
+                .ThenByDescending(cursor => cursor.Current!.VersionsInPeriod)
+                .ThenBy(cursor => cursor.Reader.Collection, StringComparer.Ordinal)
+                .ThenBy(cursor => cursor.Current!.GroupKey, StringComparer.Ordinal)
+                .FirstOrDefault();
+            if (next is null) break;
+            if (index >= offset)
+                result.Add(new GlobalChangeItem(next.Reader, next.Current!, index + 1));
+            next.MoveNext();
+        }
+        return new GlobalChangePage(result, cursors.Sum(cursor => cursor.RowsLoaded));
+    }
 
     public McpCore(
         IReadOnlyDictionary<string, LexIndexReader> readers,
@@ -122,6 +203,7 @@ public sealed class McpCore
                 new JsonObject
                 {
                     ["work"] = S(workDesc), ["date"] = D("ISO date YYYY-MM-DD"),
+                    ["version_key"] = S("optional opaque key returned by timeline or an ambiguous_version choice", 128),
                     ["publisher"] = S("publisher id; required when work is not publisher-qualified", 64),
                     ["language"] = S("optional language code, e.g. fr", 16),
                     ["mode"] = E("full | outline | select (default full)", "full", "outline", "select"),
@@ -154,6 +236,8 @@ public sealed class McpCore
                 {
                     ["work"] = S(workDesc), ["from_date"] = D("ISO date"),
                     ["to_date"] = D("ISO date"), ["language"] = S("language code", 16),
+                    ["from_version_key"] = S("optional opaque key returned by timeline or an ambiguous_version choice", 128),
+                    ["to_version_key"] = S("optional opaque key returned by timeline or an ambiguous_version choice", 128),
                     ["publisher"] = S("publisher id; required when work is not publisher-qualified", 64),
                     ["anchor"] = S("optional held provision anchor returned by search, e.g. art_92", McpInputPolicy.MaximumAnchorLength),
                 }, ["work", "from_date", "to_date"]),
@@ -194,7 +278,7 @@ public sealed class McpCore
                 new JsonObject { ["lex_id"] = S("full lex_id"), ["language"] = S("optional", 16) }, ["lex_id"]),
             Tool("coverage", "What we hold and what we lack, tier by tier: counts, date ranges, history_begins, known gaps. This tool exists to say what we do NOT have.",
                 new JsonObject { ["publisher"] = S("optional publisher id", 64) }, []),
-            Tool("cited_by", "Which ARTICLES point at this law. The reverse of the cross-references the publisher writes into its own text (\"modifie par la loi du 4 juin 2020\"), captured at derive time. Answers \"what depends on this law\", \"who amended it\", \"is anything still referring to it\" — the question legal research is actually made of, and the one a search box cannot answer.",
+            Tool("cited_by", "Captured publisher cross-references to this work from articles in held, non-withdrawn document versions. This is historical textual evidence only: it does not determine dependency, amendment, current force, or whether the reference remains current.",
                 new JsonObject
                 {
                     ["work"] = S("the law being cited, e.g. lu-legilux:loi-2020-06-04-a476"),
@@ -265,6 +349,56 @@ public sealed class McpCore
          : a.TextPublic && b.TextPublic ? McpStatus.Ok
          : McpStatus.TextWithheld;
 
+    private static string VersionCoordinate(DocRow document)
+        => VersionCoordinate(document.Key);
+
+    private static string VersionCoordinate(string lexId)
+        => lexId[(lexId.LastIndexOf(':') + 1)..];
+
+    internal string CanonicalCitationWork(DocRow source, string slug, string href)
+    {
+        if (slug.Contains(':', StringComparison.Ordinal)) return slug;
+        if (readers.TryGetValue(source.Collection, out var local) && local.WorkExists(slug))
+            return $"{source.Collection}:{slug}";
+        var work = WorkKeyFromEli(href);
+        if (work is not null)
+        {
+            var matches = readers.Values.Where(reader => reader.WorkExists(work)).Take(2).ToArray();
+            if (matches.Length == 1) return $"{matches[0].Collection}:{work}";
+        }
+        return $"{source.Collection}:{slug}";
+    }
+
+    internal static string? WorkKeyFromEli(string href)
+    {
+        var match = CrossCollectionEli.Match(href);
+        if (!match.Success || KnownIncorrectEliTokens.Contains(match.Value.TrimEnd('/'))) return null;
+        var type = match.Groups["type"].Value.StartsWith("reg", StringComparison.Ordinal) ? 'r'
+            : match.Groups["type"].Value.StartsWith("dir", StringComparison.Ordinal) ? 'l' : 'd';
+        return $"3{match.Groups["year"].Value}{type}{match.Groups["number"].Value.PadLeft(4, '0')}";
+    }
+
+    private static IReadOnlyList<string> CitationHrefFragments(string targetWork)
+    {
+        var colon = targetWork.IndexOf(':');
+        var work = (colon >= 0 ? targetWork[(colon + 1)..] : targetWork).ToLowerInvariant();
+        var match = CrossCollectionWorkKey.Match(work);
+        if (!match.Success) return [];
+        var bare = match.Groups["number"].Value.TrimStart('0');
+        if (bare.Length == 0) return [];
+        var numbers = bare == match.Groups["number"].Value
+            ? [bare] : new[] { bare, match.Groups["number"].Value };
+        string[] tokens = match.Groups["type"].Value[0] switch
+        {
+            'r' => ["reg_ue", "reg", "reg_impl", "reg_del"],
+            'l' => ["dir_ue", "dir", "dir_impl", "dir_del"],
+            _ => ["dec", "dec_impl", "dec_del", "dec_framw", "dec_entscheid"],
+        };
+        return tokens.SelectMany(token => numbers.Select(number =>
+                $"/eli/{token}/{match.Groups["year"].Value}/{number}"))
+            .Where(fragment => !KnownIncorrectEliTokens.Contains(fragment)).ToArray();
+    }
+
     // Base URL for permalinks is deployment config only (never derived from or stored in
     // signed content); the field is omitted entirely when unconfigured so air-gapped
     // deployments do not emit unreachable URLs.
@@ -273,6 +407,7 @@ public sealed class McpCore
         var o = new JsonObject
         {
             ["lex_id"] = d.Key,
+            ["version_key"] = VersionCoordinate(d),
             ["work"] = d.GroupKey,
             ["work_identifier"] = d.GroupIdentifier,
             ["document_type"] = d.Kind,
@@ -308,8 +443,8 @@ public sealed class McpCore
         if (d.ActForm is not null) o["act_form"] = d.ActForm;
         if (d.BindingStatus is not null) o["binding_status"] = d.BindingStatus;
         if (d.ConsolidationStatus is not null) o["consolidation_status"] = d.ConsolidationStatus;
-        if (_publicBase is not null && d.ValidFrom is not null)
-            o["permalink"] = $"{_publicBase}/{d.Collection}/{d.GroupKey}/{d.ValidFrom}";
+        if (_publicBase is not null)
+            o["permalink"] = $"{_publicBase}/{d.Collection}/{d.GroupKey}/{VersionCoordinate(d)}";
         return o;
     }
 
@@ -366,7 +501,8 @@ public sealed class McpCore
                 var returned = Math.Min(remainingCitationRows, cits.Count);
                 if (returned > 0)
                     o["citations"] = new JsonArray(cits.Take(returned).Select(c => (JsonNode)new JsonObject
-                { ["work"] = $"{d.Collection}:{c.Slug}", ["href"] = c.Href, ["text"] = c.Label }).ToArray());
+                { ["work"] = CanonicalCitationWork(d, c.Slug, c.Href),
+                    ["href"] = c.Href, ["text"] = c.Label }).ToArray());
                 remainingCitationRows -= returned;
                 if (cits.Count > returned)
                 {
@@ -376,7 +512,7 @@ public sealed class McpCore
             }
         }
         if (_publicBase is not null)
-            o["permalink"] = $"{_publicBase}/{d.Collection}/{d.GroupKey}/{d.ValidFrom}#{p.Anchor}";
+            o["permalink"] = $"{_publicBase}/{d.Collection}/{d.GroupKey}/{VersionCoordinate(d)}#{p.Anchor}";
         return o;
     }
 
@@ -394,8 +530,13 @@ public sealed class McpCore
     private static bool ProvisionalFor(LexIndexReader r, DateOnly d)
     {
         var b = r.Stamp.GetValueOrDefault("built_at", "");
-        return b.Length >= 10 && DateOnly.TryParse(b[..10], out var bd) && d > bd;
+        return b.Length >= 10 && TryIsoDate(b[..10], out var bd) && d > bd;
     }
+
+    private static bool TryIsoDate(string? value, out DateOnly date) =>
+        DateOnly.TryParseExact(value, "yyyy-MM-dd",
+            System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.None, out date);
 
     /// <summary>
     /// Anchors a caller might have meant, for a mode=select miss.
@@ -628,7 +769,7 @@ public sealed class McpCore
         // session. Invalid public input must not queue behind a valid long-running search.
         McpInputPolicy.Validate(name, a);
         if (UnmountedFilter(a) is { } unmounted) return UnmountedFilterResult(name, unmounted);
-        var selection = ReadersFor(a);
+        var selection = ReadersFor(name, a);
         var selected = selection.Readers;
         var held = new List<SemaphoreSlim>(selected.Count);
         try
@@ -650,10 +791,18 @@ public sealed class McpCore
             CancellationTokenRegistration[] registrations = [];
             try
             {
-                foreach (var item in selected)
+                // Citation targets can cross publisher boundaries. Give the execution core
+                // isolated, read-only sessions for every mounted publisher so forward citation
+                // canonicalisation can prove that the target is actually held. The callback
+                // still reports only publishers selected for the requested operation.
+                var selectedPublishers = selected
+                    .Select(item => item.Publisher)
+                    .ToHashSet(StringComparer.Ordinal);
+                foreach (var item in readers.OrderBy(item => item.Key, StringComparer.Ordinal))
                 {
-                    sessions.Add(item.Publisher, item.Reader.CreateIsolatedSession());
-                    _sessionOpened?.Invoke(item.Publisher);
+                    sessions.Add(item.Key, item.Value.CreateIsolatedSession());
+                    if (selectedPublishers.Contains(item.Key))
+                        _sessionOpened?.Invoke(item.Key);
                 }
                 registrations = sessions.Values
                     .Select(reader => cancellationToken.Register(reader.Interrupt)).ToArray();
@@ -686,13 +835,13 @@ public sealed class McpCore
     private (
         IReadOnlyList<(string Publisher, SemaphoreSlim Semaphore, LexIndexReader Reader)> Readers,
         int Total)
-        ReadersFor(JsonObject arguments)
+    ReadersFor(string tool, JsonObject arguments)
     {
         static string? Text(JsonNode? node) => node is JsonValue value
             && value.TryGetValue<string>(out var text) ? text : null;
         var publisher = Text(arguments["publisher"]);
         var work = Text(arguments["work"]) ?? Text(arguments["lex_id"]);
-        if (publisher is null)
+        if (publisher is null && tool != "cited_by")
         {
             if (work is not null && work.Contains(':') && !work.Contains("://"))
                 publisher = work.Split(':', 2)[0];
@@ -764,7 +913,9 @@ public sealed class McpCore
         DateOnly Date(string k)
         {
             var raw = Str(k) ?? throw new ArgumentException($"{k} required (ISO date, YYYY-MM-DD)");
-            return DateOnly.TryParse(raw, System.Globalization.CultureInfo.InvariantCulture, out var d)
+            return DateOnly.TryParseExact(raw, "yyyy-MM-dd",
+                System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None, out var d)
                 ? d : throw new ArgumentException($"{k} must be an ISO date (YYYY-MM-DD), got '{raw}'");
         }
 
@@ -777,7 +928,34 @@ public sealed class McpCore
                 var res = Resolve(work, Str("publisher"));
                 if (res is null) return new JsonObject { ["status"] = McpStatus.UnknownWork, ["work"] = work };
                 var (r, w) = res.Value;
-                var doc = r.AsOf(w, date, new FilterSet(null, null, null, Str("language")));
+                var language = Str("language");
+                var versionKey = Str("version_key");
+                var exactDateVersions = versionKey is null
+                    ? r.VersionsEffectiveOn(w, date, language)
+                    : [];
+                if (versionKey is null && exactDateVersions.Count > 1)
+                    return new JsonObject
+                    {
+                        ["envelope"] = Envelope(r, McpStatus.AmbiguousVersion, ProvisionalFor(r, date)),
+                        ["work"] = w,
+                        ["date"] = date.ToString("yyyy-MM-dd"),
+                        ["version_choices"] = new JsonArray(exactDateVersions.Take(20).Select(choice =>
+                            (JsonNode)DocJson(choice, false)).ToArray()),
+                        ["choices_truncated"] = exactDateVersions.Count > 20,
+                    };
+                DocRow? doc;
+                if (versionKey is not null)
+                {
+                    doc = r.VersionByCoordinate(w, date, versionKey, language);
+                    if (doc is null)
+                        throw new ArgumentException(
+                            "version_key must identify a held version of the resolved work on date.",
+                            "version_key");
+                }
+                else
+                    doc = exactDateVersions.Count == 1
+                        ? exactDateVersions[0]
+                        : r.AsOf(w, date, new FilterSet(null, null, null, language));
                 if (doc is null)
                     return new JsonObject
                     {
@@ -887,7 +1065,7 @@ public sealed class McpCore
                 var limit = Int("limit", 100); var offset = Int("offset", 0);
                 var (rows, total) = r.Timeline(w, limit, offset);
                 if (total == 0) return new JsonObject { ["envelope"] = Envelope(r, McpStatus.UnknownWork), ["work"] = w };
-                var provisional = rows.Any(row => DateOnly.TryParse(row.ValidFrom, out var validFrom)
+                var provisional = rows.Any(row => TryIsoDate(row.Version.ValidFrom, out var validFrom)
                     && ProvisionalFor(r, validFrom));
                 return new JsonObject
                 {
@@ -895,7 +1073,26 @@ public sealed class McpCore
                     ["work"] = w,
                     ["total_count"] = total,
                     ["truncated"] = total > offset + limit,
-                    ["versions"] = new JsonArray(rows.Select(v => (JsonNode)DocJson(v, false)).ToArray()),
+                    ["versions"] = new JsonArray(rows.Select(version =>
+                    {
+                        // Compatibility: retain the former flat fields using the first expression
+                        // in ordinal language order, and add the complete expression collection.
+                        // Pagination and total_count now operate on publisher versions, not rows.
+                        var value = DocJson(version.Version, false);
+                        value["expressions"] = new JsonArray(version.Expressions.Select(expression =>
+                            (JsonNode)new JsonObject
+                            {
+                                ["language"] = expression.Language,
+                                ["title"] = expression.Title,
+                                ["title_short"] = expression.TitleShort,
+                                ["text_available"] = expression.TextAvailable,
+                                ["text_public"] = expression.TextPublic,
+                                ["source_uri"] = expression.SourceUri,
+                                ["body_sha256"] = expression.BodySha,
+                                ["extraction_profile"] = expression.Profile,
+                            }).ToArray());
+                        return (JsonNode)value;
+                    }).ToArray()),
                 };
             }
             case "in_force_on":
@@ -915,16 +1112,23 @@ public sealed class McpCore
                         Str("language"), null, Str("hierarchy"), Str("act_form"),
                         Str("binding_status"), Str("domain"));
                     var localOffset = remainingOffset;
-                    var (queriedRows, total) = r.InForceOn(
+                    var page = r.InForceOn(
                         date, filter, Math.Max(1, remainingLimit), localOffset);
+                    var queriedRows = page.Rows;
+                    var total = page.TotalGroups;
                     totalAcrossPublishers += total;
                     var skipped = Math.Min(remainingOffset, total);
                     remainingOffset -= skipped;
                     var rows = remainingLimit == 0 ? [] : queriedRows.Take(remainingLimit).ToList();
-                    remainingLimit -= rows.Count;
+                    IReadOnlyList<InForceAmbiguity> ambiguities = remainingLimit == 0
+                        ? [] : page.Ambiguities;
+                    var pageUnits = rows.Count + ambiguities.Count;
+                    remainingLimit -= pageUnits;
                     outp.Add(new JsonObject
                     {
-                        ["envelope"] = Envelope(r, total == 0 ? McpStatus.NoResult : McpStatus.Ok,
+                        ["envelope"] = Envelope(r, total == 0 ? McpStatus.NoResult
+                            : ambiguities.Count > 0 ? McpStatus.AmbiguousVersion
+                            : McpStatus.Ok,
                             ProvisionalFor(r, date)),
                         ["population"] = new JsonObject
                         {
@@ -934,8 +1138,17 @@ public sealed class McpCore
                         },
                         ["total_works_in_force"] = total,
                         ["offset"] = localOffset,
-                        ["truncated"] = total > localOffset + rows.Count,
+                        ["truncated"] = total > localOffset + pageUnits,
                         ["works"] = new JsonArray(rows.Select(v => (JsonNode)DocJson(v, false)).ToArray()),
+                        ["ambiguous_works"] = new JsonArray(ambiguities.Select(ambiguity =>
+                            (JsonNode)new JsonObject
+                            {
+                                ["work"] = $"{r.Collection}:{ambiguity.GroupKey}",
+                                ["valid_from"] = ambiguity.ValidFrom,
+                                ["choices"] = new JsonArray(ambiguity.Choices.Take(20).Select(choice =>
+                                    (JsonNode)DocJson(choice, false)).ToArray()),
+                                ["choices_truncated"] = ambiguity.Choices.Count > 20,
+                            }).ToArray()),
                     });
                 }
                 MarkPublisherSet(outp, selectedReaders.Total);
@@ -952,8 +1165,46 @@ public sealed class McpCore
                 if (res is null) return new JsonObject { ["status"] = McpStatus.UnknownWork, ["work"] = work };
                 var (r, w) = res.Value;
                 var f = new FilterSet(null, null, null, Str("language"));
-                var a1 = r.AsOf(w, from, f);
-                var b1 = r.AsOf(w, to, f);
+                var language = Str("language");
+                var fromVersionKey = Str("from_version_key");
+                var toVersionKey = Str("to_version_key");
+                var fromChoices = fromVersionKey is null ? r.VersionsEffectiveOn(w, from, language) : [];
+                var toChoices = toVersionKey is null ? r.VersionsEffectiveOn(w, to, language) : [];
+                var ambiguousFrom = fromVersionKey is null && fromChoices.Count > 1;
+                var ambiguousTo = toVersionKey is null && toChoices.Count > 1;
+                if (ambiguousFrom || ambiguousTo)
+                {
+                    var ambiguity = new JsonObject
+                    {
+                        ["envelope"] = Envelope(r, McpStatus.AmbiguousVersion,
+                            ProvisionalFor(r, from) || ProvisionalFor(r, to)),
+                        ["work"] = w,
+                        ["from_date"] = from.ToString("yyyy-MM-dd"),
+                        ["to_date"] = to.ToString("yyyy-MM-dd"),
+                        ["choices_truncated"] = fromChoices.Count > 20 || toChoices.Count > 20,
+                    };
+                    if (ambiguousFrom)
+                        ambiguity["from_version_choices"] = new JsonArray(fromChoices.Take(20)
+                            .Select(choice => (JsonNode)DocJson(choice, false)).ToArray());
+                    if (ambiguousTo)
+                        ambiguity["to_version_choices"] = new JsonArray(toChoices.Take(20)
+                            .Select(choice => (JsonNode)DocJson(choice, false)).ToArray());
+                    return ambiguity;
+                }
+                var a1 = fromVersionKey is null
+                    ? fromChoices.Count == 1 ? fromChoices[0] : r.AsOf(w, from, f)
+                    : r.VersionByCoordinate(w, from, fromVersionKey, language);
+                var b1 = toVersionKey is null
+                    ? toChoices.Count == 1 ? toChoices[0] : r.AsOf(w, to, f)
+                    : r.VersionByCoordinate(w, to, toVersionKey, language);
+                if (fromVersionKey is not null && a1 is null)
+                    throw new ArgumentException(
+                        "from_version_key must identify a held version of the resolved work on from_date.",
+                        "from_version_key");
+                if (toVersionKey is not null && b1 is null)
+                    throw new ArgumentException(
+                        "to_version_key must identify a held version of the resolved work on to_date.",
+                        "to_version_key");
                 if (a1 is null || b1 is null)
                     return new JsonObject { ["envelope"] = Envelope(r, McpStatus.NoVersionForDate), ["from_resolved"] = a1 is not null, ["to_resolved"] = b1 is not null };
                 var anchor = Str("anchor")?.Trim().ToLowerInvariant();
@@ -1035,8 +1286,7 @@ public sealed class McpCore
                     throw new ArgumentException("query must not exceed 1000 characters", "query");
                 var timeScope = Str("time_scope") ?? (Str("as_of") is null ? "all_versions" : "as_of");
                 if (timeScope is not ("all_versions" or "as_of")) throw new ArgumentException("time_scope must be all_versions or as_of");
-                DateOnly? asOf = timeScope == "as_of"
-                    ? DateOnly.Parse(Str("as_of") ?? throw new ArgumentException("as_of required when time_scope=as_of")) : null;
+                DateOnly? asOf = timeScope == "as_of" ? Date("as_of") : null;
                 var pub = Str("publisher");
                 var jurisdiction = Str("jurisdiction");
                 var limit = BoundedInt("limit", 10, 1, 50);
@@ -1151,7 +1401,7 @@ public sealed class McpCore
                             : h.Snippet;
                         d["match_reasons"] = new JsonArray(h.MatchReasons.Select(x => (JsonNode)x).ToArray());
                         if (_publicBase is not null)
-                            d["permalink"] = $"{_publicBase}/{h.Doc.Collection}/{h.Doc.GroupKey}/{h.Doc.ValidFrom}"
+                            d["permalink"] = $"{_publicBase}/{h.Doc.Collection}/{h.Doc.GroupKey}/{VersionCoordinate(h.Doc)}"
                                 + (h.Provision.Anchor.Length == 0 ? "" : $"#{h.Provision.Anchor}");
                         return (JsonNode)d;
                     }).ToArray());
@@ -1186,7 +1436,7 @@ public sealed class McpCore
                                     ? "THIS WORK IS HELD by Lex; publisher text exists but is not publicly served. Versions, dates and provenance remain available. Never report the work as missing."
                                     : "THIS WORK IS HELD by Lex; versions, publisher dates and provenance are available via timeline / in_force_on / provenance, but no safely derived provision text is available. Never report the work as missing or unknown; report the text gap precisely.";
                             if (_publicBase is not null)
-                                d["permalink"] = $"{_publicBase}/{doc.Collection}/{doc.GroupKey}/{doc.ValidFrom}";
+                                d["permalink"] = $"{_publicBase}/{doc.Collection}/{doc.GroupKey}/{VersionCoordinate(doc)}";
                             hitsArr.Add(d);
                         }
                     }
@@ -1255,29 +1505,20 @@ public sealed class McpCore
                 var (r, w) = res.Value;
                 if (!r.WorkExists(w)) return new JsonObject { ["envelope"] = Envelope(r, McpStatus.UnknownWork), ["work"] = w };
                 var requestedLanguage = Str("language");
-                var stateCount = r.ProvisionStateCount(w, anchor, requestedLanguage);
-                var eventCount = r.AnchorEventCount(w, anchor, requestedLanguage);
-                var states = r.ProvisionStates(w, anchor, requestedLanguage, MaximumHistoryRows);
-                var evs = r.AnchorEvents(w, anchor, requestedLanguage, MaximumHistoryRows);
+                var windowFrom = Str("from_date");
+                var windowTo = Str("to_date");
+                var stateCount = r.ProvisionStateCount(
+                    w, anchor, requestedLanguage, windowFrom, windowTo);
+                var eventCount = r.AnchorEventCount(
+                    w, anchor, requestedLanguage, windowFrom, windowTo);
+                var states = r.ProvisionStates(
+                    w, anchor, requestedLanguage, MaximumHistoryRows, windowFrom, windowTo);
+                var evs = r.AnchorEvents(
+                    w, anchor, requestedLanguage, MaximumHistoryRows, windowFrom, windowTo);
                 // The optional window. A state OVERLAPS the window when it began on or before
                 // to_date and had not yet ended at from_date; that is deliberately not "began
                 // inside the window", because the state a reader most needs for "in 2024" is
                 // usually the one that took effect in 2019 and was still in force throughout.
-                var windowFrom = Str("from_date");
-                var windowTo = Str("to_date");
-                if (windowFrom is not null || windowTo is not null)
-                {
-                    var filtered = states.Where(state =>
-                        (windowTo is null
-                         || string.CompareOrdinal(state.ValidFrom, windowTo) <= 0)
-                        && (windowFrom is null || state.ValidTo is null
-                            || string.CompareOrdinal(state.ValidTo, windowFrom) >= 0)).ToList();
-                    // A window that excludes everything is a real, reportable answer: Lex holds
-                    // this article and holds no state of it covering those dates. Reporting the
-                    // unfiltered history instead would answer a different question silently.
-                    states = filtered;
-                    stateCount = filtered.Count;
-                }
                 if (stateCount == 0 && eventCount == 0)
                     return new JsonObject
                     {
@@ -1305,16 +1546,17 @@ public sealed class McpCore
                     if (s.ValidityConflict) o["validity_conflict"] = true;
                     if (_publicBase is not null && s.InVersion is not null)
                     {
-                        var parts = s.InVersion.Split(':');
-                        if (parts.Length >= 3)
-                            o["permalink"] = $"{_publicBase}/{parts[0]}/{parts[1]}/{parts[2]}#{anchor}";
+                        var firstColon = s.InVersion.IndexOf(':');
+                        var lastColon = s.InVersion.LastIndexOf(':');
+                        if (firstColon > 0 && lastColon > firstColon)
+                            o["permalink"] = $"{_publicBase}/{s.InVersion[..firstColon]}/{s.InVersion[(firstColon + 1)..lastColon]}/{VersionCoordinate(s.InVersion)}#{anchor}";
                     }
                     return (JsonNode)o;
                 }).ToArray());
                 return new JsonObject
                 {
                     ["envelope"] = Envelope(r, McpStatus.Ok,
-                        states.Any(state => DateOnly.TryParse(state.ValidFrom, out var validFrom)
+                        states.Any(state => TryIsoDate(state.ValidFrom, out var validFrom)
                             && ProvisionalFor(r, validFrom))),
                     ["work"] = w,
                     ["anchor"] = anchor,
@@ -1375,7 +1617,6 @@ public sealed class McpCore
             case "cited_by":
             {
                 var w = Str("work") ?? throw new ArgumentException("work required");
-                var slug = w.Contains(':') ? w[(w.IndexOf(':') + 1)..] : w;
                 var lim = Int("limit", 50);
                 var outp = new JsonArray();
                 var selectedReaders = SelectReaders(publisher: null);
@@ -1383,7 +1624,8 @@ public sealed class McpCore
                 var responseTruncated = false;
                 foreach (var r in selectedReaders.Readers)
                 {
-                    var candidates = r.CitedBy(slug, Math.Max(1, remaining + 1));
+                    var candidates = r.CitedBy(
+                        w, Math.Max(1, remaining + 1), CitationHrefFragments(w));
                     var hits = remaining == 0 ? [] : candidates.Take(remaining).ToList();
                     responseTruncated |= candidates.Count > hits.Count;
                     remaining -= hits.Count;
@@ -1391,6 +1633,9 @@ public sealed class McpCore
                     {
                         ["envelope"] = Envelope(r, hits.Count == 0 ? McpStatus.NoResult : McpStatus.Ok),
                         ["cited_work"] = w,
+                        ["evidence_scope"] = "captured_cross_references_in_held_non_withdrawn_versions",
+                        ["current_legal_effect_assessed"] = false,
+                        ["relationship_type_assessed"] = false,
                         ["citing_articles"] = hits.Count,
                         ["citations"] = new JsonArray(hits.Select(h => (JsonNode)new JsonObject
                         {
@@ -1400,7 +1645,7 @@ public sealed class McpCore
                             ["anchor"] = h.Anchor,
                             ["num"] = h.Num,
                             ["permalink"] = _publicBase is null ? null
-                                : $"{_publicBase}/{r.Collection}/{h.GroupKey}/{h.ValidFrom}#{h.Anchor}",
+                                : $"{_publicBase}/{r.Collection}/{h.GroupKey}/{VersionCoordinate(h.VersionKey)}#{h.Anchor}",
                         }).ToArray()),
                     });
                 }
@@ -1428,24 +1673,23 @@ public sealed class McpCore
                 var offset = Int("offset", 0);
                 var outp = new JsonArray();
                 var selectedReaders = SelectReaders(pub, jurisdiction);
-                var remainingOffset = offset;
-                var remainingLimit = limit;
                 var totalAcrossPublishers = 0;
+                var globalPage = MergeGlobalChanges(
+                    selectedReaders.Readers, from, to, kinds, byChurn, limit, offset, filter);
+                var candidates = globalPage.Items;
+                var globalRanks = candidates.ToDictionary(
+                    item => (item.Reader.Collection, item.Row.GroupKey), item => item.Rank);
                 foreach (var r in selectedReaders.Readers)
                 {
                     var (works, versions) = r.ChangeTotals(from, to, kinds, filter);
                     totalAcrossPublishers += works;
-                    var localOffset = Math.Min(remainingOffset, works);
-                    remainingOffset -= localOffset;
-                    var localLimit = Math.Min(remainingLimit, Math.Max(0, works - localOffset));
-                    var rows = localLimit == 0 ? [] : r.ChangesInPeriod(
-                        from, to, kinds, byChurn, localLimit, localOffset, filter);
-                    remainingLimit -= rows.Count;
+                    var rows = candidates.Where(item => ReferenceEquals(item.Reader, r))
+                        .Select(item => item.Row).ToArray();
                     outp.Add(new JsonObject
                     {
                         ["envelope"] = Envelope(r,
                             works == 0 ? McpStatus.NoChangesInPeriod : McpStatus.Ok,
-                            DateOnly.TryParse(to, out var requestedTo) && ProvisionalFor(r, requestedTo)),
+                            TryIsoDate(to, out var requestedTo) && ProvisionalFor(r, requestedTo)),
                         ["window"] = new JsonObject { ["from"] = from, ["to"] = to },
                         ["order"] = byChurn ? "by_churn" : "by_date",
                         ["works_changed"] = works,
@@ -1457,8 +1701,8 @@ public sealed class McpCore
                             ["expected_works"] = r.Coverage(1).ExpectedWorks,
                             ["known_exclusions"] = KnownExclusions(r),
                         },
-                        ["shown"] = rows.Count,
-                        ["offset"] = localOffset,
+                        ["shown"] = rows.Length,
+                        ["offset"] = offset,
                         ["changes"] = new JsonArray(rows.Select(c =>
                         {
                             var o = new JsonObject
@@ -1483,6 +1727,7 @@ public sealed class McpCore
                                 ["text_comparable"] = c.TextComparable,
                                 ["diff_from"] = c.Baseline ?? c.FirstChange,
                                 ["diff_to"] = c.LastChange,
+                                ["global_rank"] = globalRanks[(r.Collection, c.GroupKey)],
                             };
                             if (c.SourceClass is not null) o["source_class"] = c.SourceClass;
                             if (c.Hierarchy is not null) o["hierarchy"] = c.Hierarchy;
@@ -1509,8 +1754,24 @@ public sealed class McpCore
                     });
                 }
                 MarkPublisherSet(outp, selectedReaders.Total);
-                MarkResponseRows(outp, limit, limit - remainingLimit,
-                    totalAcrossPublishers > offset + (limit - remainingLimit));
+                foreach (var item in outp.OfType<JsonObject>())
+                {
+                    var shown = item["shown"]!.GetValue<int>();
+                    item["response_row_set"] = new JsonObject
+                    {
+                        ["maximum"] = limit,
+                        ["returned"] = shown,
+                        ["truncated"] = item["works_changed"]!.GetValue<int>() > shown,
+                    };
+                    item["global_response_row_set"] = new JsonObject
+                    {
+                        ["offset"] = offset,
+                        ["maximum"] = limit,
+                        ["returned"] = candidates.Count,
+                        ["total"] = totalAcrossPublishers,
+                        ["truncated"] = totalAcrossPublishers > offset + candidates.Count,
+                    };
+                }
                 return outp;
             }
             case "coverage":

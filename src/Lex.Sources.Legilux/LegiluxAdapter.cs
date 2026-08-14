@@ -180,9 +180,9 @@ public sealed class LegiluxAdapter : ISourceAdapter, ISourceBuildInventory
                 var first = grp.First();
                 var workUri = first["work"];
                 var typeCode = first.TryGetValue("type", out var t) ? LastSegment(t) : null;
-                var validFrom = DateOnly.Parse(first["from"]);
-                DateOnly? validTo = first.TryGetValue("to", out var to) && to.Length > 0 ? DateOnly.Parse(to) : null;
-                DateOnly? pubDate = first.TryGetValue("pub", out var pd) && pd.Length > 0 ? DateOnly.Parse(pd) : null;
+                var validFrom = ParseDate(first["from"]);
+                DateOnly? validTo = first.TryGetValue("to", out var to) && to.Length > 0 ? ParseDate(to) : null;
+                DateOnly? pubDate = first.TryGetValue("pub", out var pd) && pd.Length > 0 ? ParseDate(pd) : null;
                 var status = first.TryGetValue("status", out var st) ? LastSegment(st) : null;
 
                 var expressions = grp
@@ -299,6 +299,9 @@ public sealed class LegiluxAdapter : ISourceAdapter, ISourceBuildInventory
         }
         finally { _initLock.Release(); }
     }
+
+    private static DateOnly ParseDate(string value) => DateOnly.ParseExact(
+        value, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
 
     // Adapter-internal identifier reading is permitted (F4 exempts adapters).
     private static string LastSegment(string uri) => uri.TrimEnd('/').Split('/')[^1];
