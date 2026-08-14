@@ -103,6 +103,32 @@ public class UiEffectTests
     }
 
     [Fact]
+    public void A_global_cross_publisher_page_preserves_the_authoritative_global_rank()
+    {
+        JsonObject Part(string publisher, string work, int rank) => new()
+        {
+            ["envelope"] = new JsonObject { ["status"] = "ok", ["publisher"] = publisher },
+            ["window"] = new JsonObject { ["from"] = "2024-01-01", ["to"] = "2024-12-31" },
+            ["order"] = "by_churn",
+            ["changes"] = new JsonArray(new JsonObject
+            {
+                ["work"] = work, ["global_rank"] = rank, ["versions_in_period"] = 2,
+                ["versions_total"] = 4, ["first_change"] = "2024-01-01",
+                ["last_change"] = "2024-12-31",
+            }),
+        };
+        var result = new JsonArray(
+            Part("lu-legilux", "lu-legilux:second", 2),
+            Part("eu-eurlex", "eu-eurlex:first", 1));
+
+        var effect = UiMapper.From("changes_in_period", new JsonObject(), result);
+
+        Assert.Equal([1, 2], effect.Ranking!.Rows.Select(row => row.GlobalRank));
+        Assert.Equal(["eu-eurlex:first", "lu-legilux:second"],
+            effect.Ranking.Rows.Select(row => row.Work));
+    }
+
+    [Fact]
     public void A_single_publisher_period_stamps_its_jurisdiction_on_every_row()
     {
         var result = Changes("");
@@ -405,6 +431,10 @@ public class UiEffectTests
             {
                 ["envelope"] = new JsonObject { ["status"] = "profiles_differ" },
                 ["anchor"] = "art_92",
+                ["anchor_from_present"] = true,
+                ["anchor_to_present"] = true,
+                ["anchor_text_equal"] = false,
+                ["provision_level_comparable"] = false,
                 ["from"] = new JsonObject
                 {
                     ["valid_from"] = "2019-06-27", ["title"] = "Regulation (EU) No 575/2013",
@@ -417,6 +447,10 @@ public class UiEffectTests
         Assert.Equal("2024-12-31", eff.Diff.ToDate);
         Assert.Equal("profiles_differ", eff.Diff.Status);
         Assert.Equal("en", eff.Diff.Subject.Language);
+        Assert.True(eff.Diff.AnchorFromPresent);
+        Assert.True(eff.Diff.AnchorToPresent);
+        Assert.False(eff.Diff.AnchorTextEqual);
+        Assert.False(eff.Diff.ProvisionLevelComparable);
     }
 
     [Fact]

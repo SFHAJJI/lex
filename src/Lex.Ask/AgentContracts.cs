@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using System.Text.Json.Serialization;
+using System.Text.Json.Nodes;
 
 namespace Lex.Ask;
 
@@ -99,6 +100,9 @@ internal static class AgentAnswerContract
 {
     private static readonly Regex Url = new(@"https?://[^\s<>()]+",
         RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+    private static readonly Regex NumericFact = new(
+        @"(?<![\p{L}\p{N}])\d{2,}(?:[-./]\d+)*(?![\p{L}\p{N}])",
+        RegexOptions.CultureInvariant);
 
     public static AgentAnswerDraft Validate(
         AgentAnswerDraft draft,
@@ -155,6 +159,7 @@ internal static class AgentAnswerContract
                     throw new InvalidDataException("A claim is not supported by evidence of the required type.");
                 used.Add(item);
             }
+            ValidateClaimContent(text, claim.Kind, ids.Select(id => evidenceById[id]).ToArray());
             return new AgentClaim(text, claim.Kind, ids);
         }).ToArray();
 
@@ -198,6 +203,62 @@ internal static class AgentAnswerContract
         AgentClaimKind.Provenance => evidence == AgentEvidenceKind.Provenance,
         _ => false,
     };
+
+    private static void ValidateClaimContent(
+        string text,
+        AgentClaimKind kind,
+        IReadOnlyList<AgentEvidence> evidence)
+    {
+        var evidenceText = string.Join(" ", evidence.Select(item => string.Join(" ",
+            new[] { item.Work, item.Anchor, item.Date, item.TextSha256, item.Title, item.Excerpt }
+                .Where(value => !string.IsNullOrWhiteSpace(value)))));
+        foreach (Match fact in NumericFact.Matches(text))
+            if (!evidenceText.Contains(fact.Value, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException(
+                    "A claim contains a numeric or dated fact absent from its cited evidence.");
+
+        if (kind != AgentClaimKind.Change) return;
+        var facts = evidence.Select(ChangeFacts).Where(value => value is not null)
+            .Select(value => value!.Value).ToArray();
+        if (facts.Length == 0) return;
+        var normalized = text.ToLowerInvariant();
+        var same = normalized.Contains("same wording", StringComparison.Ordinal)
+                   || normalized.Contains("unchanged", StringComparison.Ordinal)
+                   || normalized.Contains("did not change", StringComparison.Ordinal)
+                   || normalized.Contains("no change", StringComparison.Ordinal)
+                   || normalized.Contains("identical", StringComparison.Ordinal);
+        var added = normalized.Contains("added", StringComparison.Ordinal);
+        var removed = normalized.Contains("removed", StringComparison.Ordinal);
+        var changed = !same && (normalized.Contains("changed", StringComparison.Ordinal)
+                                || normalized.Contains("different wording", StringComparison.Ordinal));
+        var supported = same ? facts.Any(fact => fact.Changed == false)
+            : added ? facts.Any(fact => fact.FromPresent == false && fact.ToPresent == true)
+            : removed ? facts.Any(fact => fact.FromPresent == true && fact.ToPresent == false)
+            : changed ? facts.Any(fact => fact.Changed == true)
+            : true;
+        if (!supported)
+            throw new InvalidDataException(
+                "A change claim contradicts the polarity of its cited evidence.");
+    }
+
+    private static (bool? Changed, bool? FromPresent, bool? ToPresent)? ChangeFacts(
+        AgentEvidence evidence)
+    {
+        if (string.IsNullOrWhiteSpace(evidence.Excerpt)) return null;
+        try
+        {
+            if (JsonNode.Parse(evidence.Excerpt) is not JsonObject value) return null;
+            var equal = value["anchor_text_equal"]?.GetValue<bool?>();
+            return (
+                value["changed"]?.GetValue<bool?>() ?? (equal is null ? null : !equal),
+                value["anchor_from_present"]?.GetValue<bool?>(),
+                value["anchor_to_present"]?.GetValue<bool?>());
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return null;
+        }
+    }
 
     private static bool ContainsUrl(string value) => Url.IsMatch(value);
 

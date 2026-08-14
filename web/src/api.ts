@@ -202,10 +202,14 @@ export interface UiEffect {
   provision?: { subject: Subject; valid_from: string; valid_to?: string; provisions: ProvisionItem[]; permalink?: string;
                 evidence?: EvidenceContext[]; total_provisions?: number; truncated?: boolean;
                 text_truncated?: boolean; outline_only?: boolean };
-  diff?: { subject: Subject; from_date: string; to_date: string; note?: string; status?: string; evidence?: EvidenceContext[] };
+  diff?: { subject: Subject; from_date: string; to_date: string; note?: string; status?: string;
+           anchor_from_present?: boolean; anchor_to_present?: boolean; anchor_text_equal?: boolean;
+           provision_level_comparable?: boolean;
+           evidence?: EvidenceContext[] };
   history?: { subject: Subject; anchor: string; distinct_texts: number; states: { valid_from: string; valid_to?: string; sha?: string; permalink?: string }[]; evidence?: EvidenceContext[] };
-  timeline?: { subject: Subject; rows: { valid_from: string; valid_to?: string; title?: string;
-                language?: string; permalink?: string }[]; total_count: number; truncated: boolean;
+  timeline?: { subject: Subject; rows: { lex_id?: string; valid_from: string; valid_to?: string;
+                title?: string; language?: string; permalink?: string; record_sha256?: string }[];
+                total_count: number; truncated: boolean;
                 evidence?: EvidenceContext[] };
   ranking?: { from_date: string; to_date: string; order: string; works_changed: number; new_versions: number;
               population_works?: number; population_basis?: string; known_exclusions?: string[];
@@ -242,6 +246,7 @@ export interface UiEffect {
 }
 export interface RankingRow {
   work: string; title?: string; versions_in_period: number; versions_total: number;
+  global_rank?: number;
   first_change: string; last_change: string; permalink?: string; diff_permalink?: string;
   // Where a comparison should start: the version in force before the window touched this law.
   // The row used to be opened as first_change vs last_change, and those are the same date

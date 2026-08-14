@@ -5,6 +5,7 @@ import {
 import { facetLabel, jurisdictionLabel } from "./facets";
 import { publisherOf, workSlug } from "./state";
 import { shorten } from "./pickers";
+import { assistantTimelineRows } from "./assistantShell";
 import { EvidenceActions } from "./EvidenceActions";
 import { citationText, evidenceFilename, lawEvidenceMarkdown } from "./export";
 import Markdown from "react-markdown";
@@ -309,6 +310,7 @@ export function Timeline({ view, onOpen }: {
   view: NonNullable<UiEffect["timeline"]>;
   onOpen: (date: string) => void;
 }) {
+  const rows = assistantTimelineRows({ timeline: view });
   return (
     <section className="evidence-panel" aria-labelledby="timeline-result-title">
       <div className="cnt">
@@ -317,11 +319,15 @@ export function Timeline({ view, onOpen }: {
       </div>
       <h2 id="timeline-result-title">Version history</h2>
       <ol className="rows">
-        {view.rows.map((row) => (
-          <li key={`${row.valid_from}:${row.language ?? ""}`}>
-            <button className="operation-open" onClick={() => onOpen(row.valid_from)}>
-              {row.valid_from}{row.valid_to ? ` to ${row.valid_to}` : " onward"}
-            </button>
+        {rows.map((row) => (
+          <li key={row.key}>
+            {row.canOpenByDate ? (
+              <button className="operation-open" onClick={() => onOpen(row.valid_from)}>
+                {row.valid_from}{row.valid_to ? ` to ${row.valid_to}` : " onward"}
+              </button>
+            ) : (
+              <span>{row.valid_from}{row.valid_to ? ` to ${row.valid_to}` : " onward"}</span>
+            )}
             {row.language ? <span className="sub">{row.language.toUpperCase()}</span> : null}
           </li>
         ))}
@@ -710,6 +716,9 @@ export function CitedBy({ view, onOpen }: {
           </li>
         ))}
       </ul>
+      {view.rows.length === 0 ? (
+        <Empty>No held provision version in this corpus refers to this law.</Empty>
+      ) : null}
     </>
   );
 }

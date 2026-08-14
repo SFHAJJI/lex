@@ -493,15 +493,28 @@ export default function App() {
         clearAssistantView();
         go({ work: view.timeline!.subject.work, date, mode: "read", space: "law" });
       }} />;
-    const subject = view.diff?.subject ?? view.provision?.subject
-      ?? view.history?.subject;
+    if (view.diff) return <section className="evidence-panel" aria-label="Comparison result">
+      {view.diff.subject.anchor ? <div className="cnt">
+        <span className="tag mono">{view.diff.subject.anchor}</span>
+        {view.diff.provision_level_comparable && view.diff.anchor_text_equal === true
+          ? <span className="tag">same wording</span>
+          : view.diff.anchor_from_present === false ? <span className="tag">added</span>
+          : view.diff.anchor_to_present === false ? <span className="tag">removed</span>
+          : view.diff.provision_level_comparable && view.diff.anchor_text_equal === false
+            ? <span className="tag">wording changed</span>
+          : null}
+      </div> : null}
+      {view.diff.note ? <p>{view.diff.note}</p> : null}
+      <button className="operation-open" onClick={() => openDiff(
+        view.diff!.subject.work, view.diff!.from_date, view.diff!.to_date)}>
+        Open comparison
+      </button>
+    </section>;
+    const subject = view.provision?.subject ?? view.history?.subject;
     if (subject?.work) {
-      const from = view.diff?.from_date ?? view.provision?.valid_from ?? subject.date ?? today();
-      return <button className="operation-open" onClick={() => view.diff
-        ? openDiff(subject.work, view.diff.from_date, view.diff.to_date)
-        : openLaw(subject.work, from)}>
-        Open {view.diff ? "comparison" : view.history ? "article history"
-          : view.timeline ? "timeline" : view.provision?.outline_only
+      const from = view.provision?.valid_from ?? subject.date ?? today();
+      return <button className="operation-open" onClick={() => openLaw(subject.work, from)}>
+        Open {view.history ? "article history" : view.provision?.outline_only
             ? "table of contents" : "publisher text"}
       </button>;
     }

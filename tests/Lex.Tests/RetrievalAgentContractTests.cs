@@ -41,6 +41,38 @@ public sealed class RetrievalAgentContractTests
     }
 
     [Fact]
+    public void Claim_content_cannot_switch_the_article_number_named_by_its_evidence()
+    {
+        var draft = Answer(new AgentClaim(
+            "Article 92 contains the notification rule.", AgentClaimKind.LegalText, ["text:1"]));
+
+        Assert.Throws<InvalidDataException>(() => AgentAnswerContract.Validate(draft, [LegalText]));
+    }
+
+    [Fact]
+    public void Change_claim_polarity_must_match_the_typed_change_evidence()
+    {
+        var unchanged = LegalText with
+        {
+            Id = "change:1",
+            Kind = AgentEvidenceKind.Change,
+            Excerpt = "{\"changed\":false,\"anchor_text_equal\":true}",
+        };
+        var same = Answer(new AgentClaim(
+            "Article 33 has the same wording on both dates.", AgentClaimKind.Change, [unchanged.Id]));
+        var opposite = same with
+        {
+            Claims = [new AgentClaim("Article 33 changed between the two dates.",
+                AgentClaimKind.Change, [unchanged.Id])],
+        };
+
+        Assert.Equal(same.Claims[0].Text,
+            AgentAnswerContract.Validate(same, [unchanged]).Claims[0].Text);
+        Assert.Throws<InvalidDataException>(() =>
+            AgentAnswerContract.Validate(opposite, [unchanged]));
+    }
+
+    [Fact]
     public void Answer_links_must_be_returned_by_the_cited_evidence()
     {
         var draft = Answer(new AgentClaim(

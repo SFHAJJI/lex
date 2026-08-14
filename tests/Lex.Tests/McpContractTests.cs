@@ -59,6 +59,10 @@ public class McpContractTests : IDisposable
         {
             Prov(docs[0], 0, "art_1", "the thing shall apply everywhere"),
             Prov(docs[1], 0, "art_1", "the thing shall apply everywhere, revised"),
+            Prov(docs[0], 1, "art_2", "unchanged article"),
+            Prov(docs[1], 1, "art_2", "unchanged article"),
+            Prov(docs[0], 2, "art_3", "removed article"),
+            Prov(docs[1], 2, "art_4", "added article"),
         };
         IndexBuilder.Build(_db, stamp, docs, provisions, [], [], StampSigner.CreateKeyPem());
         _reader = LexIndexReader.Open(_db);
@@ -826,6 +830,26 @@ public class McpContractTests : IDisposable
         Assert.Equal("unknown_anchor", Status(missing));
         Assert.Contains("art_1", Assert.IsType<JsonArray>(missing["anchors_not_in_version"])
             .Select(item => item!.GetValue<string>()));
+    }
+
+    [Theory]
+    [InlineData("art_1", true, true, true, false)]
+    [InlineData("art_2", true, true, false, true)]
+    [InlineData("art_3", true, false, true, null)]
+    [InlineData("art_4", false, true, true, null)]
+    public void Article_diff_reports_presence_and_wording_instead_of_document_identity(
+        string anchor, bool fromPresent, bool toPresent, bool changed, bool? textEqual)
+    {
+        var result = Call("diff", new JsonObject
+        {
+            ["work"] = "t-pub:w1", ["from_date"] = "2020-06-01",
+            ["to_date"] = "2022-06-01", ["anchor"] = anchor,
+        });
+
+        Assert.Equal(fromPresent, result["anchor_from_present"]!.GetValue<bool>());
+        Assert.Equal(toPresent, result["anchor_to_present"]!.GetValue<bool>());
+        Assert.Equal(changed, result["changed"]!.GetValue<bool>());
+        Assert.Equal(textEqual, result["anchor_text_equal"]?.GetValue<bool?>());
     }
 
     [Fact]

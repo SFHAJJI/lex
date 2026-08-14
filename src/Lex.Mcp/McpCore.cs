@@ -1213,12 +1213,15 @@ public sealed class McpCore
                         "^[a-z0-9][a-z0-9_.-]*$",
                         System.Text.RegularExpressions.RegexOptions.CultureInvariant)))
                     throw new ArgumentException("anchor must be a provision anchor returned by search, e.g. art_92");
+                ProvisionRow? fromProvision = null;
+                ProvisionRow? toProvision = null;
                 if (anchor is { Length: > 0 })
                 {
                     var fromRid = LexIndexReader.RidOf(a1);
                     var toRid = LexIndexReader.RidOf(b1);
-                    var exists = r.Provision(fromRid, anchor) is not null
-                        || r.Provision(toRid, anchor) is not null;
+                    fromProvision = r.Provision(fromRid, anchor);
+                    toProvision = r.Provision(toRid, anchor);
+                    var exists = fromProvision is not null || toProvision is not null;
                     var anchors = r.ProvisionAnchors(fromRid, 100)
                         .Concat(r.ProvisionAnchors(toRid, 100))
                         .Where(value => !string.IsNullOrWhiteSpace(value))
@@ -1235,7 +1238,18 @@ public sealed class McpCore
                                 anchors.Take(100).Select(value => (JsonNode)value).ToArray()),
                         };
                 }
-                var changed = a1.Key != b1.Key;
+                var pa = a1.Profile;
+                var pb = b1.Profile;
+                var profilesDiffer = pa is not null && pb is not null && pa != pb;
+                var anchorTextEqual = !profilesDiffer
+                    && fromProvision is not null && toProvision is not null
+                    ? string.Equals(fromProvision.TextSha, toProvision.TextSha,
+                        StringComparison.Ordinal)
+                    : (bool?)null;
+                var changed = anchor is { Length: > 0 }
+                    ? (fromProvision is null) != (toProvision is null)
+                      || anchorTextEqual == false
+                    : a1.Key != b1.Key;
 
                 // Two versions of the same work are only comparable provision by provision when
                 // the same extraction profile produced both. The Code du travail is the proof:
@@ -1250,9 +1264,6 @@ public sealed class McpCore
                 // version carries no text at all, and two unknowns are not evidence of a
                 // mismatch: claiming one would be the same overreach in the other direction,
                 // and that case is already told the truth by text_not_available/text_withheld.
-                var pa = a1.Profile;
-                var pb = b1.Profile;
-                var profilesDiffer = pa is not null && pb is not null && pa != pb;
                 var comparable = !profilesDiffer && a1.TextPublic && b1.TextPublic;
                 var output = new JsonObject
                 {
@@ -1276,7 +1287,23 @@ public sealed class McpCore
                                 : "different versions applied; text diff unavailable here — compare at the official source URIs")
                             : "the same version applied on both dates",
                 };
-                if (anchor is { Length: > 0 }) output["anchor"] = anchor;
+                if (anchor is { Length: > 0 })
+                {
+                    output["anchor"] = anchor;
+                    output["anchor_from_present"] = fromProvision is not null;
+                    output["anchor_to_present"] = toProvision is not null;
+                    output["anchor_text_equal"] = anchorTextEqual;
+                    if (!profilesDiffer)
+                        output["note"] = (fromProvision is not null, toProvision is not null,
+                            anchorTextEqual) switch
+                        {
+                            (true, false, _) => "the requested provision is present only on the earlier date",
+                            (false, true, _) => "the requested provision is present only on the later date",
+                            (true, true, true) => "the requested provision has the same wording on both dates",
+                            (true, true, false) => "the requested provision has different wording on the two dates",
+                            _ => output["note"]?.GetValue<string>(),
+                        };
+                }
                 return output;
             }
             case "search":

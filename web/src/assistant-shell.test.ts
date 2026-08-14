@@ -4,6 +4,7 @@ import {
   STARTER_PROMPTS,
   assistantProvisionLoad,
   assistantTimelineSeed,
+  assistantTimelineRows,
   assistantWorkspaceState,
   assistantWorkspaceUrl,
   parseAssistantPanelState,
@@ -178,6 +179,20 @@ test("timeline effects seed the version rail before the workspace follow-up fetc
     total: 3,
     truncated: true,
   });
+});
+
+test("same-date timeline states never expose an ambiguous date-only destination", () => {
+  const rows = assistantTimelineRows({ timeline: {
+    subject: { work: "lu-legilux:constitution" }, total_count: 2, truncated: false,
+    rows: [
+      { lex_id: "lu-legilux:constitution:v1", valid_from: "2023-07-01", language: "fr" },
+      { lex_id: "lu-legilux:constitution:v2", valid_from: "2023-07-01", language: "fr" },
+    ],
+  } });
+
+  assert.equal(rows[0].canOpenByDate, false);
+  assert.equal(rows[1].canOpenByDate, false);
+  assert.notEqual(rows[0].key, rows[1].key);
 });
 
 test("a resolved navigation operation opens exactly its law coordinates", () => {

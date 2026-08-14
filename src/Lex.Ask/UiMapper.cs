@@ -322,6 +322,11 @@ public static class UiMapper
                 rows.Add(row);
             }
         }
+        if (tool == "changes_in_period"
+            && rows.OfType<JsonObject>().All(row => row["global_rank"] is JsonValue))
+            rows = new JsonArray(rows.OfType<JsonObject>()
+                .OrderBy(row => row["global_rank"]!.GetValue<int>())
+                .Select(row => (JsonNode)row.DeepClone()).ToArray());
         combined[field] = rows;
         if (tool == "changes_in_period")
         {
@@ -402,11 +407,13 @@ public static class UiMapper
             Subject: new Subject(CanonicalWork(o, args), S(latest, "title"), null, null,
                 S(latest, "language") ?? S(args, "language")),
             Rows: rows.Select(version => new TimelineState(
+                S(version, "lex_id"),
                 S(version, "valid_from") ?? "",
                 S(version, "valid_to"),
                 S(version, "title"),
                 S(version, "language"),
-                S(version, "permalink"))).ToList(),
+                S(version, "permalink"),
+                S(version, "record_sha256"))).ToList(),
             TotalCount: o["total_count"]?.GetValue<int>() ?? rows.Count,
             Truncated: o["truncated"]?.GetValue<bool>() ?? false));
     }
@@ -426,7 +433,11 @@ public static class UiMapper
             FromDate: from, ToDate: to,
             FromPermalink: S(a, "permalink"), ToPermalink: S(b, "permalink"),
             Note: S(o, "note"),
-            Status: S(o["envelope"] as JsonObject, "status") ?? S(o, "status")));
+            Status: S(o["envelope"] as JsonObject, "status") ?? S(o, "status"),
+            AnchorFromPresent: o["anchor_from_present"]?.GetValue<bool?>(),
+            AnchorToPresent: o["anchor_to_present"]?.GetValue<bool?>(),
+            AnchorTextEqual: o["anchor_text_equal"]?.GetValue<bool?>(),
+            ProvisionLevelComparable: o["provision_level_comparable"]?.GetValue<bool>() ?? false));
     }
 
     /// Controls the assistant set on the way to its answer, so the workspace lands the same way.
@@ -491,7 +502,8 @@ public static class UiMapper
                     : null,
                 SourceClass: S(c, "source_class"), ActForm: S(c, "act_form"),
                 BindingStatus: S(c, "binding_status"), Language: S(c, "language"),
-                Permalink: S(c, "permalink"), DiffPermalink: S(c, "diff_permalink"))).ToList(),
+                Permalink: S(c, "permalink"), DiffPermalink: S(c, "diff_permalink"),
+                GlobalRank: c["global_rank"]?.GetValue<int?>())).ToList(),
             Status: S(o["envelope"] as JsonObject, "status") ?? S(o, "status"),
             PopulationWorks: o["population"]?["works_in_scope"]?.GetValue<int>() ?? 0,
             PopulationBasis: S(o["population"] as JsonObject, "basis"),

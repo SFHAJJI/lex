@@ -115,6 +115,7 @@ public sealed class AskService
         private bool _workIndependentAnswerObserved;
         private bool _currentAuthorityObserved;
         private bool _priorContextUsed;
+        private bool _unresolvedIdentityObserved;
 
         public WorkResolutionGuard(string? identityAttempt = null) =>
             _identityAttempt = Lex.Index.WorkSearch.Normalize(identityAttempt ?? "");
@@ -165,6 +166,9 @@ public sealed class AskService
                              ?? plan["work_resolution_status"]?.GetValue<string>();
                 var resolutions = plan["global_work_resolutions"] as JsonArray
                                   ?? plan["work_resolutions"] as JsonArray;
+                if (markCurrent && resolutions?.OfType<JsonObject>().Any(resolution =>
+                        resolution["status"]?.GetValue<string>() == "unresolved") == true)
+                    _unresolvedIdentityObserved = true;
                 if (isRawUserQuery && resolutions is not null)
                     foreach (var resolution in resolutions.OfType<JsonObject>()
                                  .Where(item => item["status"]?.GetValue<string>() == "resolved"))
@@ -405,6 +409,10 @@ public sealed class AskService
             // It WAS an identity match, just not a unique one. Always relevant.
             if (reasons.Any(reason => reason.StartsWith("ambiguous_", StringComparison.Ordinal)))
                 return true;
+            // The parser found a work-shaped name and the reviewed catalogue could not resolve
+            // it. Search residue is not a substitute identity. Problem-first discovery still
+            // reaches the branch below because it reports not_requested, not unresolved.
+            if (_unresolvedIdentityObserved) return false;
             if (hit["match"]?.GetValue<string>() == "work_identifier_or_title") return false;
             if (reasons.Contains("article_intent", StringComparer.Ordinal)) return false;
             // Relatedness is judged on the row's own name against the user's own words. With no

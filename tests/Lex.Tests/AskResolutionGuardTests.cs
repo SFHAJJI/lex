@@ -457,6 +457,26 @@ public sealed class AskResolutionGuardTests
         Assert.Equal("eu-eurlex:32022r2554", clarification.Choices[0].Value);
     }
 
+    [Fact]
+    public void A_fictional_named_law_never_offers_unrelated_discovery_rows()
+    {
+        var guard = new AskService.WorkResolutionGuard("Atlantis Regulation");
+        var result = SearchResult("unresolved", ("atlantis regulation", "unresolved", []));
+        result[0]!["hits"] = new JsonArray
+        {
+            new JsonObject
+            {
+                ["lex_id"] = "eu-eurlex:32022r2554:2024-01-01",
+                ["title"] = "Digital operational resilience act",
+                ["match_reasons"] = new JsonArray("work_metadata"),
+            },
+        };
+
+        guard.ObserveSearch(result);
+
+        Assert.Null(guard.ClarificationFor(null));
+    }
+
     // A bare four-digit year is admitted as a search token at any length, so a work whose title
     // merely contains that year enters the pool on it alone. It must not become a menu option.
     [Fact]
