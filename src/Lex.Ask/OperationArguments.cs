@@ -306,13 +306,16 @@ internal static class OperationArguments
             if (value is not JsonValue textValue || !textValue.TryGetValue<string>(out var text))
                 throw new InvalidDataException(
                     $"Argument '{name}' must be a string. Received {Kind(value)}.");
-            text = text.Trim();
+            var definition = ArgumentFor(action, name);
+            // An opaque publisher coordinate is an exact comparison token. Trimming it would
+            // silently turn one proposed key into another before MCP validates the held version.
+            if (definition?.Opaque != true) text = text.Trim();
             // An empty or whitespace-only value carries no intent, so erasing the key preserves
             // every bit of information the model actually sent; the defaults and the gates below
             // then treat it as the absence it is. A malformed but non-empty value is the other
             // case entirely and stays a refusal. JSON null already took this path above.
-            if (text.Length == 0
-                || (ArgumentFor(action, name)?.MaximumListValues is not null
+            if (string.IsNullOrWhiteSpace(text)
+                || (definition?.MaximumListValues is not null
                     && Items(text).Length == 0))
             {
                 repaired.Add(Repair(action, name, "dropped"));
@@ -329,7 +332,9 @@ internal static class OperationArguments
             // "LU-Legilux" and "lu" name mounted things; the selectors behind MCP match publisher
             // ordinally, so the mounted spelling is restored before the plan is frozen. A value
             // nothing mounted matches is left alone on purpose (see CorpusVocabulary.Canonical).
-            normalized[name] = vocabulary.Canonical(name, text) ?? text;
+            normalized[name] = definition?.Opaque == true
+                ? text
+                : vocabulary.Canonical(name, text) ?? text;
         }
 
         RecoverClosedSets(action, normalized, repaired);

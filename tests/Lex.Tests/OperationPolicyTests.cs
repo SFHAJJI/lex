@@ -57,6 +57,37 @@ public sealed class OperationPolicyTests
             McpInputPolicy.Validate(tool, OperationArguments.Normalize(tool, arguments));
     }
 
+    [Theory]
+    [InlineData("as_of", "version_key")]
+    [InlineData("diff", "from_version_key")]
+    [InlineData("diff", "to_version_key")]
+    public void Exact_version_keys_remain_opaque_between_planner_and_mcp(
+        string tool, string field)
+    {
+        const string exact = " 2024-01-01~publisher-state/01 ";
+        var arguments = tool == "as_of"
+            ? new JsonObject
+            {
+                ["work"] = "eu-eurlex:work",
+                ["date"] = "2024-01-01",
+            }
+            : new JsonObject
+            {
+                ["work"] = "eu-eurlex:work",
+                ["from_date"] = "2024-01-01",
+                ["to_date"] = "2025-01-01",
+            };
+        arguments[field] = exact;
+
+        var normalized = OperationArguments.Normalize(tool, arguments);
+
+        Assert.Equal(exact, normalized[field]!.GetValue<string>());
+        McpInputPolicy.Validate(tool, normalized);
+        Assert.Equal(LegalOperationCatalog.MaximumVersionKeyLength,
+            LegalOperationCatalog.Get(tool).PlannerInputSchema()["properties"]![field]!
+                ["maxLength"]!.GetValue<int>());
+    }
+
     [Fact]
     public void Every_shared_catalog_bound_is_identical_at_both_runtime_gates()
     {
@@ -1367,6 +1398,7 @@ public sealed class OperationPolicyTests
         { McpStatus.NoResult, LegalOutcome.SucceededEmpty },
         { McpStatus.NoChangesInPeriod, LegalOutcome.SucceededEmpty },
         { McpStatus.ProfilesDiffer, LegalOutcome.NotComparable },
+        { McpStatus.AmbiguousVersion, LegalOutcome.NeedsClarification },
         { McpStatus.UnknownWork, LegalOutcome.NotFound },
         { McpStatus.UnknownAnchor, LegalOutcome.NotFound },
         { McpStatus.UnknownPublisher, LegalOutcome.NotFound },
@@ -1424,6 +1456,28 @@ public sealed class OperationPolicyTests
 
         Assert.Equal(10, tools.Length);
         Assert.All(tools, tool => _ = LegalOperationPolicy.ResultClassFor(tool));
+    }
+
+    [Fact]
+    public void An_ambiguous_publisher_version_dominates_successful_aggregate_rows()
+    {
+        var payload = new JsonArray(
+            new JsonObject
+            {
+                ["envelope"] = new JsonObject { ["status"] = McpStatus.Ok },
+            },
+            new JsonObject
+            {
+                ["envelope"] = new JsonObject
+                {
+                    ["status"] = McpStatus.AmbiguousVersion,
+                },
+            });
+
+        Assert.Equal(McpStatus.AmbiguousVersion,
+            LegalOperationPolicy.StatusForResult(payload));
+        Assert.Equal(LegalOutcome.NeedsClarification,
+            LegalOperationPolicy.OutcomeForResult(McpStatus.AmbiguousVersion, payload));
     }
 
     [Fact]
@@ -1724,6 +1778,93 @@ public sealed class OperationPolicyTests
                 ["work"] = "eu-eurlex:32013r0575",
                 ["date"] = "2024-01-01",
             }));
+    }
+
+    [Fact]
+    public void Ambiguous_publisher_versions_offer_bounded_exact_choices_in_english_and_french()
+    {
+        var asOfPayload = new JsonObject
+        {
+            ["envelope"] = new JsonObject { ["status"] = McpStatus.AmbiguousVersion },
+            ["work"] = "eu-eurlex:32013r0575",
+            ["version_choices"] = new JsonArray(Enumerable.Range(1, 21)
+                .Select(index => (JsonNode)new JsonObject
+                {
+                    ["version_key"] = $"2024-01-01~{index}",
+                }).ToArray()),
+            ["choices_truncated"] = true,
+        };
+        var asOf = UiMapper.From("as_of", new JsonObject
+        {
+            ["work"] = "eu-eurlex:32013r0575",
+            ["date"] = "2024-01-01",
+        }, asOfPayload, "en");
+
+        Assert.Equal(McpStatus.AmbiguousVersion, asOf.Gap?.Status);
+        Assert.Contains("exact publisher version", asOf.Gap?.Explanation,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(20, asOf.Gap?.Available.Count);
+        Assert.Equal("version_key=2024-01-01~1", asOf.Gap?.Available[0]);
+
+        var diffPayload = new JsonObject
+        {
+            ["envelope"] = new JsonObject { ["status"] = McpStatus.AmbiguousVersion },
+            ["work"] = "eu-eurlex:32013r0575",
+            ["from_version_choices"] = new JsonArray(new JsonObject
+            {
+                ["version_key"] = "2020-01-01~1",
+            }),
+            ["to_version_choices"] = new JsonArray(new JsonObject
+            {
+                ["version_key"] = "2024-01-01~2",
+            }),
+        };
+        var diff = UiMapper.From("diff", new JsonObject
+        {
+            ["work"] = "eu-eurlex:32013r0575",
+            ["from_date"] = "2020-01-01",
+            ["to_date"] = "2024-01-01",
+        }, diffPayload, "fr");
+
+        Assert.Contains("limite de comparaison", diff.Gap?.Explanation,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(
+            ["from_version_key=2020-01-01~1", "to_version_key=2024-01-01~2"],
+            diff.Gap?.Available);
+
+        var inForce = UiMapper.From("in_force_on", new JsonObject
+        {
+            ["date"] = "2024-01-01",
+        }, new JsonArray(
+            new JsonObject
+            {
+                ["envelope"] = new JsonObject { ["status"] = McpStatus.Ok },
+                ["works"] = new JsonArray(new JsonObject
+                {
+                    ["work"] = "lu-legilux:held-work",
+                }),
+            },
+            new JsonObject
+            {
+                ["envelope"] = new JsonObject
+                {
+                    ["status"] = McpStatus.AmbiguousVersion,
+                    ["jurisdiction"] = "EU",
+                },
+                ["ambiguous_works"] = new JsonArray(new JsonObject
+                {
+                    ["work"] = "eu-eurlex:32013r0575",
+                    ["choices"] = new JsonArray(new JsonObject
+                    {
+                        ["version_key"] = "2024-01-01~3",
+                    }),
+                }),
+            }));
+
+        Assert.Equal(McpStatus.AmbiguousVersion, inForce.Gap?.Status);
+        Assert.Null(inForce.InForce);
+        Assert.Equal(["eu-eurlex:32013r0575: version_key=2024-01-01~3"],
+            inForce.Gap?.Available);
     }
 
     [Fact]

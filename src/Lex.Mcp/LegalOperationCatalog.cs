@@ -47,7 +47,8 @@ public sealed record LegalArgumentDefinition(
     bool Planner = true,
     int? MaximumListValues = null,
     int? MaximumListItemLength = null,
-    string? PlannerGuidance = null)
+    string? PlannerGuidance = null,
+    bool Opaque = false)
 {
     internal JsonObject Schema(
         bool planner,
@@ -277,11 +278,12 @@ public static class LegalOperationCatalog
         IReadOnlyList<string>? values = null,
         int? maximumListValues = null,
         int? maximumListItemLength = null,
-        string? plannerGuidance = null) => new(
+        string? plannerGuidance = null,
+        bool opaque = false) => new(
             name, description, MaximumLength: maximum, AllowedValues: values,
             Mcp: mcp, Planner: planner, MaximumListValues: maximumListValues,
             MaximumListItemLength: maximumListItemLength,
-            PlannerGuidance: plannerGuidance);
+            PlannerGuidance: plannerGuidance, Opaque: opaque);
 
     private static LegalArgumentDefinition D(string name, string description) => new(
         name, description, MaximumLength: MaximumDateLength, IsDate: true);
@@ -349,6 +351,9 @@ public static class LegalOperationCatalog
                 P("work_query", MaximumWorkQueryLength),
                 P("article_number", MaximumArticleNumberLength),
                 D("date", "ISO date YYYY-MM-DD"),
+                S("version_key",
+                    "optional opaque key returned by timeline or an ambiguous_version choice",
+                    MaximumVersionKeyLength, opaque: true),
                 S("publisher", "publisher id; required when work is not publisher-qualified",
                     MaximumShortLength, planner: false),
                 S("language", "optional language code, e.g. fr", MaximumLanguageLength),
@@ -409,6 +414,12 @@ public static class LegalOperationCatalog
                 S("work", WorkDescription), P("work_query", MaximumWorkQueryLength),
                 P("article_number", MaximumArticleNumberLength),
                 D("from_date", "ISO date"), D("to_date", "ISO date"),
+                S("from_version_key",
+                    "optional opaque key returned by timeline or an ambiguous_version choice",
+                    MaximumVersionKeyLength, opaque: true),
+                S("to_version_key",
+                    "optional opaque key returned by timeline or an ambiguous_version choice",
+                    MaximumVersionKeyLength, opaque: true),
                 S("publisher", "publisher id; required when work is not publisher-qualified",
                     MaximumShortLength, planner: false),
                 S("language", "language code", MaximumLanguageLength),

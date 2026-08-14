@@ -179,7 +179,9 @@ public static class LegalOperationPolicy
     private static LegalOutcome DominantOutcome(IEnumerable<LegalOutcome> values)
     {
         var observed = values.Distinct().ToArray();
-        return observed.Any(outcome => outcome == LegalOutcome.NotAvailable)
+        return observed.Any(outcome => outcome == LegalOutcome.NeedsClarification)
+            ? LegalOutcome.NeedsClarification
+            : observed.Any(outcome => outcome == LegalOutcome.NotAvailable)
             ? LegalOutcome.NotAvailable
             : observed.Any(outcome => outcome == LegalOutcome.NotComparable)
                 ? LegalOutcome.NotComparable

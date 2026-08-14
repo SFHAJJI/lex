@@ -96,8 +96,9 @@ internal static class OperationAnswerPolicy
                 ? $"Cette opération n'a pas été exécutée: {Transport(fr, result.TransportOutcome)}."
                 : $"This operation was not evaluated: {Transport(fr, result.TransportOutcome)}.";
         if (result.LegalOutcome == LegalOutcome.NeedsClarification)
-            return fr ? "Lex a besoin d'un instrument précis avant de continuer."
-                : "Lex needs a specific instrument before it can continue.";
+            return Describe(locale, effect) ?? (fr
+                ? "Lex a besoin d'un instrument précis avant de continuer."
+                : "Lex needs a specific instrument before it can continue.");
         if (result.LegalOutcome == LegalOutcome.InvalidRequest)
             return fr ? "Cette demande ne correspond pas à une opération juridique valide."
                 : "This request does not map to a valid legal operation.";

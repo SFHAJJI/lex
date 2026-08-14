@@ -2760,6 +2760,7 @@ public sealed class AskService
             await NotifyProgress(() => progress.Phase(
                 new PhaseUpdate(AskPhase.Execution, AskPhaseStatus.Completed), ct));
         if (plan.SynthesisRequested && displayedClarification is null
+            && results.All(result => result.LegalOutcome != LegalOutcome.NeedsClarification)
             && terminalTransportStatus is null)
         {
             var synthesisWatch = Stopwatch.StartNew();

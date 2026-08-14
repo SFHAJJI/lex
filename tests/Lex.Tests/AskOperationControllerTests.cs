@@ -188,6 +188,55 @@ public sealed class AskOperationControllerTests : IDisposable
             item => item["phase"]?.GetValue<string>() == "primary");
     }
 
+    [Fact]
+    public async Task Exact_version_ambiguity_is_deterministic_and_never_sent_to_synthesis()
+    {
+        var planner = new StaticPlanner("en", new JsonArray(new JsonObject
+        {
+            ["tool"] = "as_of",
+            ["arguments"] = new JsonObject
+            {
+                ["work_query"] = "CRR",
+                ["date"] = "2024-01-01",
+            },
+        }), synthesis: true);
+        var synthesizer = new RecordingSynthesizer();
+        async ValueTask<JsonNode> LegalTool(
+            string tool, JsonObject arguments, CancellationToken cancellationToken)
+        {
+            if (tool == "search")
+                return await _core.CallToolAsync(tool, arguments, cancellationToken);
+            Assert.Equal("as_of", tool);
+            return new JsonObject
+            {
+                ["envelope"] = new JsonObject
+                {
+                    ["status"] = McpStatus.AmbiguousVersion,
+                },
+                ["work"] = "32013r0575",
+                ["date"] = "2024-01-01",
+                ["version_choices"] = new JsonArray(
+                    new JsonObject { ["version_key"] = "2024-01-01~1" },
+                    new JsonObject { ["version_key"] = "2024-01-01~2" }),
+            };
+        }
+        var service = new AskService(
+            _core, planner, synthesizer, legalTool: LegalTool);
+
+        var response = await service.AskAsync(
+            History("Show CRR as of 1 January 2024."), Guid.NewGuid().ToString(),
+            "law.test", CancellationToken.None);
+
+        Assert.Equal(200, response.Status);
+        Assert.Equal(0, synthesizer.Calls);
+        Assert.Equal("needs_clarification",
+            response.Body["operations"]?[0]?["legal_outcome"]?.GetValue<string>());
+        Assert.Equal(McpStatus.AmbiguousVersion,
+            response.Body["operations"]?[0]?["ui"]?["gap"]?["status"]?.GetValue<string>());
+        Assert.Contains("exact publisher version", response.Body["reply"]!.GetValue<string>(),
+            StringComparison.OrdinalIgnoreCase);
+    }
+
     // The audited bare-year failure, end to end. "in 2024" is a window; the planner turned it into
     // an as_of on one day inside that window and the December consolidation was served as though
     // it answered the year. The guard re-derives the instant from the user's own words before any
