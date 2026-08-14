@@ -1,4 +1,5 @@
 using Lex.Derive;
+using System.Text.Json.Nodes;
 using Xunit;
 
 namespace Lex.Tests;
@@ -154,4 +155,62 @@ public class DeriveTests
     [InlineData("not-a-date", "not-a-date")]
     public void Version_key_yields_its_date_without_the_collision_suffix(string key, string expected)
         => Assert.Equal(expected, DeriveWriter.DateKeyOf(key));
+
+    [Fact]
+    public void Same_date_publisher_versions_derive_to_separate_stable_keys_and_cleanup_stale_output()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"lex-derive-collision-{Guid.NewGuid():N}");
+        var corpus = Path.Combine(root, "corpus");
+        var output = Path.Combine(root, "output");
+        try
+        {
+            var work = Path.Combine(corpus, "works", "w1");
+            Directory.CreateDirectory(work);
+            File.WriteAllText(Path.Combine(work, "meta.json"),
+                new JsonObject { ["title"] = "Work one" }.ToJsonString());
+            WriteVersion(work, "2025-07-28--aaaaaaaaaaaa", "first");
+            WriteVersion(work, "2025-07-28--bbbbbbbbbbbb", "second");
+
+            var first = DeriveWriter.Derive(corpus, output, "lu-legilux");
+
+            Assert.Empty(first.Errors);
+            Assert.True(File.Exists(Path.Combine(output, "lu-legilux", "works", "w1", "versions",
+                "2025-07-28--aaaaaaaaaaaa", "fr.json")));
+            Assert.True(File.Exists(Path.Combine(output, "lu-legilux", "works", "w1", "versions",
+                "2025-07-28--bbbbbbbbbbbb", "fr.json")));
+
+            Directory.Delete(Path.Combine(work, "versions", "2025-07-28--bbbbbbbbbbbb"), recursive: true);
+            var second = DeriveWriter.Derive(corpus, output, "lu-legilux");
+
+            Assert.Empty(second.Errors);
+            Assert.False(Directory.Exists(Path.Combine(output, "lu-legilux", "works", "w1", "versions",
+                "2025-07-28--bbbbbbbbbbbb")));
+        }
+        finally
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+        }
+    }
+
+    private static void WriteVersion(string work, string key, string marker)
+    {
+        var version = Path.Combine(work, "versions", key);
+        Directory.CreateDirectory(version);
+        var xml = Akn.Replace("Premier    paragraphe", $"{marker} paragraphe", StringComparison.Ordinal);
+        File.WriteAllText(Path.Combine(version, "fr.xml"), xml);
+        File.WriteAllText(Path.Combine(version, "meta.json"), new JsonObject
+        {
+            ["work_identifier"] = "official:w1",
+            ["expressions"] = new JsonArray(new JsonObject
+            {
+                ["language"] = "fr",
+                ["source_uri"] = $"https://example.test/{marker}",
+                ["observations"] = new JsonArray(new JsonObject
+                {
+                    ["file"] = "fr.xml",
+                    ["sha256"] = marker,
+                }),
+            }),
+        }.ToJsonString());
+    }
 }

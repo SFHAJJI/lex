@@ -12,6 +12,49 @@ public sealed class CorpusWriterTests : IDisposable
     public CorpusWriterTests() => Directory.CreateDirectory(_dir);
 
     [Fact]
+    public async Task Same_date_versions_are_keyed_by_stable_publisher_identity()
+    {
+        var first = Path.Combine(_dir, "first");
+        var reversed = Path.Combine(_dir, "reversed");
+
+        await new CorpusWriter(first, DateTimeOffset.Parse("2026-08-14T00:00:00Z"))
+            .WriteAsync(new SameDateAdapter(reverse: false), default);
+        await new CorpusWriter(reversed, DateTimeOffset.Parse("2026-08-14T00:00:00Z"))
+            .WriteAsync(new SameDateAdapter(reverse: true), default);
+
+        Assert.Equal(await SameDateInventory(first), await SameDateInventory(reversed));
+        Assert.All((await SameDateInventory(first)).Keys,
+            key => Assert.StartsWith("2025-07-28--", key, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Legacy_same_date_ordinal_layout_fails_closed_until_reingested()
+    {
+        var versions = Path.Combine(_dir, "works", "w1", "versions");
+        Directory.CreateDirectory(Path.Combine(versions, "2025-07-28"));
+        Directory.CreateDirectory(Path.Combine(versions, "2025-07-28--02"));
+
+        var error = await Assert.ThrowsAsync<InvalidDataException>(() =>
+            new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-14T00:00:00Z"))
+                .WriteAsync(new SameDateAdapter(reverse: false), default));
+
+        Assert.Contains("full re-ingest", error.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static async Task<SortedDictionary<string, string>> SameDateInventory(string root)
+    {
+        var result = new SortedDictionary<string, string>(StringComparer.Ordinal);
+        var versions = Path.Combine(root, "works", "w1", "versions");
+        foreach (var directory in Directory.EnumerateDirectories(versions))
+        {
+            var meta = JsonSerializer.Deserialize<VersionMeta>(
+                await File.ReadAllTextAsync(Path.Combine(directory, "meta.json")), CorpusJson.Options)!;
+            result.Add(Path.GetFileName(directory), meta.PublisherVersionIdentifier!);
+        }
+        return result;
+    }
+
+    [Fact]
     public async Task Existing_record_refreshes_normalized_metadata_with_an_append_only_event()
     {
         await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-01T00:00:00Z"))
@@ -464,6 +507,40 @@ public sealed class CorpusWriterTests : IDisposable
             return Task.FromResult(bodyFetch
                 ?? new SourceBodyFetch(SourceBodyStatus.PublisherMetadataOnly));
         }
+    }
+
+    private sealed class SameDateAdapter(bool reverse) : ISourceAdapter
+    {
+        private readonly WorkRef _work = new(new Identifier("official:w1"), "w1", "LOI", "Work one");
+
+        public PublisherDescriptor Describe() => new(
+            new Publisher("test", "Test", "LU", "https://example.test", Tier.A, "test", null),
+            [], ["fr"], TextIncluded: true, TextPublic: true, HistoryBegins: "publisher");
+
+        public async IAsyncEnumerable<WorkRef> EnumerateWorks(
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+            yield return _work;
+            await Task.CompletedTask;
+        }
+
+        public Task<IReadOnlyList<VersionRecord>> FetchVersions(WorkRef work, CancellationToken ct)
+        {
+            VersionRecord Version(string id) => new(
+                new Identifier(id), _work.Id, "LOI", new DateOnly(2025, 7, 28), null,
+                "publisher", null, null,
+                [new ExpressionRecord("fr", new DateOnly(2025, 7, 28), null, "publisher",
+                    $"Version {id}", null, $"https://example.test/{id}")],
+                [], new Dictionary<string, string>());
+            IReadOnlyList<VersionRecord> versions = [Version("official:v-a"), Version("official:v-b")];
+            return Task.FromResult<IReadOnlyList<VersionRecord>>(
+                reverse ? versions.Reverse().ToArray() : versions);
+        }
+
+        public Task<SourceBodyFetch> FetchBody(
+            VersionRecord version, ExpressionRecord expression, CancellationToken ct) =>
+            Task.FromResult(SourceBodyFetch.Retrieved($"<html>{version.Id.Value}</html>"));
     }
 
     private sealed class IncompleteAdapter : ISourceAdapter, ISourceBuildInventory

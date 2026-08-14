@@ -71,6 +71,7 @@ public sealed class ExpressionMeta
 public sealed class VersionMeta
 {
     public required string LexId { get; set; }
+    public string? PublisherVersionIdentifier { get; set; }
     public required string WorkIdentifier { get; set; }
     public required string Publisher { get; set; }
     public string? DocumentType { get; set; }

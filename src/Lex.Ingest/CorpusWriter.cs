@@ -86,14 +86,12 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now, TextWrit
             };
             candidate.WriteIfChanged(Path.Combine(workDir, "meta.json"), JsonSerializer.Serialize(workMeta, CorpusJson.Options));
 
-            var usedVersionKeys = new HashSet<string>(StringComparer.Ordinal);
-            foreach (var v in versionsOfWork.OrderBy(v => v.ValidFrom))
+            var versionKeys = VersionKeys(workDir, versionsOfWork);
+            foreach (var v in versionsOfWork.OrderBy(v => v.ValidFrom).ThenBy(v => v.Id.Value, StringComparer.Ordinal))
             {
                 versions++;
                 var vfrom = v.ValidFrom.ToString("yyyy-MM-dd");
-                var vkey = vfrom;
-                var ordinal = 2;
-                while (!usedVersionKeys.Add(vkey)) vkey = $"{vfrom}--{ordinal++:00}"; // D41 collision suffix
+                var vkey = versionKeys[v.Id.Value];
 
                 if (v.TypeCode is not null) kinds[v.TypeCode] = kinds.GetValueOrDefault(v.TypeCode) + 1;
                 foreach (var e in v.Expressions) langs.Add(e.Language);
@@ -111,6 +109,22 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now, TextWrit
                 if (existing)
                 {
                     meta = JsonSerializer.Deserialize<VersionMeta>(await File.ReadAllTextAsync(metaPath, ct), CorpusJson.Options)!;
+                    if (meta.PublisherVersionIdentifier is not null
+                        && meta.PublisherVersionIdentifier != v.Id.Value)
+                        throw new InvalidDataException(
+                            $"Publisher version identity changed for {lexId}; a full re-ingest is required.");
+                    if (meta.PublisherVersionIdentifier is null)
+                    {
+                        meta.PublisherVersionIdentifier = v.Id.Value;
+                        meta.Events.Add(new EventEntry
+                        {
+                            Event = "metadata_revised",
+                            ObservedFrom = _now,
+                            Scope = "version",
+                            Detail = "fields=publisher_version_identifier",
+                        });
+                        changed = true;
+                    }
                     var lifecycle = meta.Events.LastOrDefault(e =>
                         e.Event is "withdrawn_from_source" or "resighted");
                     if (lifecycle?.Event == "withdrawn_from_source")
@@ -237,6 +251,7 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now, TextWrit
                     meta = new VersionMeta
                     {
                         LexId = lexId,
+                        PublisherVersionIdentifier = v.Id.Value,
                         WorkIdentifier = v.WorkId.Value,
                         Publisher = pub.Id,
                         DocumentType = v.TypeCode,
@@ -488,6 +503,53 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now, TextWrit
         _progress.WriteLine($"  [corpus] works={works} versions={versions} expressions={expressions} " +
             $"with_text={expressionsWithText} without_text={manifest.ExpressionsWithoutText} " +
             $"created={Created} updated={Updated} unchanged={Unchanged}");
+    }
+
+    private static Dictionary<string, string> VersionKeys(
+        string workDir, IReadOnlyList<VersionRecord> versions)
+    {
+        var duplicateId = versions.GroupBy(version => version.Id.Value, StringComparer.Ordinal)
+            .FirstOrDefault(group => group.Count() > 1);
+        if (duplicateId is not null)
+            throw new InvalidDataException(
+                $"Publisher returned duplicate version identifier {duplicateId.Key} for {Path.GetFileName(workDir)}.");
+
+        var result = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var dateGroup in versions.GroupBy(version => version.ValidFrom))
+        {
+            var date = dateGroup.Key.ToString("yyyy-MM-dd");
+            var sameDate = dateGroup.OrderBy(version => version.Id.Value, StringComparer.Ordinal).ToList();
+            if (sameDate.Count == 1)
+            {
+                result.Add(sameDate[0].Id.Value, date);
+                continue;
+            }
+
+            var expectedKeys = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var version in sameDate)
+            {
+                var hash = Convert.ToHexStringLower(
+                    SHA256.HashData(Encoding.UTF8.GetBytes(version.Id.Value)))[..12];
+                var key = $"{date}--{hash}";
+                if (!expectedKeys.Add(key))
+                    throw new InvalidDataException(
+                        $"Publisher version identifiers collide after hashing for {Path.GetFileName(workDir)} on {date}.");
+                result.Add(version.Id.Value, key);
+            }
+
+            var versionsDir = Path.Combine(workDir, "versions");
+            if (!Directory.Exists(versionsDir)) continue;
+            var incompatible = Directory.EnumerateDirectories(versionsDir)
+                .Select(Path.GetFileName)
+                .Where(key => key is not null
+                    && (key == date || key.StartsWith(date + "--", StringComparison.Ordinal)))
+                .FirstOrDefault(key => !expectedKeys.Contains(key!));
+            if (incompatible is not null)
+                throw new InvalidDataException(
+                    $"Legacy or incompatible same-date version key {incompatible} exists for "
+                    + $"{Path.GetFileName(workDir)}; a full re-ingest is required.");
+        }
+        return result;
     }
 
     private static ExpressionMeta CreateExpressionMeta(ExpressionRecord expression, bool textIncluded) => new()

@@ -86,6 +86,7 @@ public static class DeriveWriter
         int works = 0, versions = 0, provisionCount = 0, skipped = 0, emptyProvisions = 0;
         var errors = new List<string>();
         var mostlyEmpty = new List<string>();
+        var generatedFiles = new HashSet<string>(PathComparer);
 
         foreach (var workDir in Directory.EnumerateDirectories(worksDir).OrderBy(d => d, StringComparer.Ordinal))
         {
@@ -183,7 +184,7 @@ public static class DeriveWriter
                         var sourceSha = obs?["sha256"]?.GetValue<string>() ?? "";
                         var sourceUri = expr?["source_uri"]?.GetValue<string>()
                                         ?? vMeta["work_identifier"]?.GetValue<string>() ?? "";
-                        var lexId = $"{publisher}:{slug}:{validFrom}";
+                        var lexId = $"{publisher}:{slug}:{versionKey}";
 
                         Extraction extraction;
                         string profileId;
@@ -239,7 +240,7 @@ public static class DeriveWriter
                             continue;
                         }
 
-                        var outDir = Path.Combine(outRoot, publisher, "works", slug, "versions", validFrom);
+                        var outDir = Path.Combine(outRoot, publisher, "works", slug, "versions", versionKey);
                         Directory.CreateDirectory(outDir);
 
                         // ---- fr.md: fenced frontmatter + document. Values are YAML
@@ -252,7 +253,9 @@ public static class DeriveWriter
                         // spans were computed over extraction.Markdown alone; prepend length in codepoints
                         var headerStr = mdHeader.ToString();
                         var headerCp = headerStr.Count(c => !char.IsLowSurrogate(c));
-                        File.WriteAllText(Path.Combine(outDir, $"{lang}.md"), headerStr + extraction.Markdown, new UTF8Encoding(false));
+                        var markdownPath = Path.Combine(outDir, $"{lang}.md");
+                        File.WriteAllText(markdownPath, headerStr + extraction.Markdown, new UTF8Encoding(false));
+                        generatedFiles.Add(Path.GetFullPath(markdownPath));
 
                         // ---- fr.json
                         var provisions = new JsonArray();
@@ -289,7 +292,7 @@ public static class DeriveWriter
                             ["derived_from"] = new JsonObject
                             {
                                 ["corpus_repo"] = $"lex-corpus-{publisher}",
-                                ["path"] = $"works/{slug}/versions/{validFrom}/{unit.ObsFile}",
+                                ["path"] = $"works/{slug}/versions/{versionKey}/{unit.ObsFile}",
                                 ["sha256"] = sourceSha,
                                 ["source_uri"] = sourceUri,
                             },
@@ -305,8 +308,10 @@ public static class DeriveWriter
                             ["provisions"] = provisions,
                             ["notes"] = new JsonArray(extraction.Notes.Select(n => (JsonNode)n).ToArray()),
                         };
-                        File.WriteAllText(Path.Combine(outDir, $"{lang}.json"),
+                        var jsonPath = Path.Combine(outDir, $"{lang}.json");
+                        File.WriteAllText(jsonPath,
                             json.ToJsonString(JsonOpts) + "\n", new UTF8Encoding(false));
+                        generatedFiles.Add(Path.GetFullPath(jsonPath));
 
                         versions++;
                         provisionCount += extraction.Provisions.Count;
@@ -349,7 +354,22 @@ public static class DeriveWriter
                 }
             }
         }
+        if (errors.Count == 0)
+            RemoveStaleDerivedFiles(Path.Combine(outRoot, publisher, "works"), generatedFiles);
         return new Stats(works, versions, provisionCount, skipped, errors, emptyProvisions, mostlyEmpty);
+    }
+
+    private static readonly StringComparer PathComparer = OperatingSystem.IsWindows()
+        ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+
+    private static void RemoveStaleDerivedFiles(string worksRoot, IReadOnlySet<string> generatedFiles)
+    {
+        if (!Directory.Exists(worksRoot)) return;
+        foreach (var file in Directory.EnumerateFiles(worksRoot, "*", SearchOption.AllDirectories))
+            if (!generatedFiles.Contains(Path.GetFullPath(file))) File.Delete(file);
+        foreach (var directory in Directory.EnumerateDirectories(worksRoot, "*", SearchOption.AllDirectories)
+                     .OrderByDescending(path => path.Length))
+            if (!Directory.EnumerateFileSystemEntries(directory).Any()) Directory.Delete(directory);
     }
 
     /// <summary>
