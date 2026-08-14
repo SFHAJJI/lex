@@ -292,6 +292,7 @@ public static class ApiEndpoints
                 {
                     ["phase"] = update.Phase switch
                     {
+                        AskService.AskPhase.Resolution => "resolution",
                         AskService.AskPhase.Planning => "planning",
                         AskService.AskPhase.Execution => "execution",
                         AskService.AskPhase.Composition => "composition",

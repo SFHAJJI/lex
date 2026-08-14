@@ -442,7 +442,7 @@ public class McpContractTests : IDisposable
             .Single(tool => tool["name"]!.GetValue<string>() == "as_of");
         Assert.Equal(10,
             asOf["inputSchema"]!["properties"]!["date"]!["maxLength"]!.GetValue<int>());
-        Assert.Equal("^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+        Assert.Equal(LegalOperationCatalog.IsoDatePattern,
             asOf["inputSchema"]!["properties"]!["date"]!["pattern"]!.GetValue<string>());
     }
 

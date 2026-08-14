@@ -57,6 +57,75 @@ public sealed class OperationPolicyTests
             McpInputPolicy.Validate(tool, OperationArguments.Normalize(tool, arguments));
     }
 
+    [Fact]
+    public void Every_shared_catalog_bound_is_identical_at_both_runtime_gates()
+    {
+        foreach (var operation in LegalOperationCatalog.Operations)
+        foreach (var argument in operation.PlannerArguments.Where(planner =>
+                     operation.McpArguments.Any(mcp => mcp.Name == planner.Name)))
+        {
+            // Dates and enums have tighter structural/value constraints than their storage
+            // length. Their complete parity is asserted by the schema/value/date tests below.
+            if (argument.IsDate || argument.AllowedValues is not null) continue;
+
+            var proposed = MinimalArguments(operation.Name);
+            proposed[argument.Name] = MaximumValue(argument);
+            var executable = ExecutableForMcp(
+                operation.Name, OperationArguments.Normalize(operation.Name, proposed));
+
+            McpInputPolicy.Validate(operation.Name, executable);
+
+            var overPlanner = MinimalArguments(operation.Name);
+            overPlanner[argument.Name] = MaximumPlusOneValue(argument);
+            if (argument.Kind == LegalArgumentKind.Integer)
+            {
+                // Page bounds are safely repaired to their canonical defaults; the repaired
+                // result, not the rejected proposal, is what reaches MCP.
+                McpInputPolicy.Validate(operation.Name, ExecutableForMcp(operation.Name,
+                    OperationArguments.Normalize(operation.Name, overPlanner)));
+            }
+            else
+            {
+                Assert.Throws<InvalidDataException>(() =>
+                    OperationArguments.Normalize(operation.Name, overPlanner));
+            }
+
+            var overMcp = executable.DeepClone().AsObject();
+            overMcp[argument.Name] = MaximumPlusOneValue(argument);
+            Assert.ThrowsAny<ArgumentException>(() =>
+                McpInputPolicy.Validate(operation.Name, overMcp));
+        }
+
+        static JsonNode MaximumValue(LegalArgumentDefinition argument) =>
+            argument.Kind == LegalArgumentKind.Integer
+                ? JsonValue.Create(argument.Maximum!.Value)!
+                : JsonValue.Create(BoundedString(argument, argument.MaximumLength))!;
+
+        static JsonNode MaximumPlusOneValue(LegalArgumentDefinition argument) =>
+            argument.Kind == LegalArgumentKind.Integer
+                ? JsonValue.Create(argument.Maximum!.Value + 1)!
+                : JsonValue.Create(BoundedString(argument, argument.MaximumLength + 1))!;
+
+        static string BoundedString(LegalArgumentDefinition argument, int length)
+        {
+            var prefix = argument.Name is "work" or "lex_id" ? "p:" : "";
+            var value = new StringBuilder(prefix + new string('x', length - prefix.Length));
+            if (argument.MaximumListValues is not null)
+                for (var index = 400; index < value.Length; index += 401) value[index] = ',';
+            return value.ToString();
+        }
+
+        static JsonObject ExecutableForMcp(string tool, JsonObject normalized)
+        {
+            var executable = normalized.DeepClone().AsObject();
+            if (executable.Remove("work_query"))
+                executable[tool == "provenance" ? "lex_id" : "work"] =
+                    tool == "provenance" ? "p:w:2024-01-01" : "p:w";
+            if (executable.Remove("article_number")) executable["anchors"] = "art_1";
+            return executable;
+        }
+    }
+
     // The planner schema and the argument allowlist are one contract in two places. When they
     // drift the model emits arguments Normalize rejects, and one rejection aborts the whole plan.
     [Fact]
@@ -1329,7 +1398,7 @@ public sealed class OperationPolicyTests
     }
 
     [Theory]
-    [InlineData("search", LegalResultClass.Navigate)]
+    [InlineData("search", LegalResultClass.Search)]
     [InlineData("as_of", LegalResultClass.ExactText)]
     [InlineData("diff", LegalResultClass.Comparison)]
     [InlineData("timeline", LegalResultClass.Timeline)]
@@ -1355,6 +1424,76 @@ public sealed class OperationPolicyTests
 
         Assert.Equal(10, tools.Length);
         Assert.All(tools, tool => _ = LegalOperationPolicy.ResultClassFor(tool));
+    }
+
+    [Fact]
+    public void One_catalog_generates_both_public_and_planner_argument_contracts()
+    {
+        var publicTools = new McpCore(new Dictionary<string, LexIndexReader>()).ToolDefs();
+
+        Assert.Equal(
+            LegalOperationCatalog.McpToolDefinitions().ToJsonString(),
+            publicTools.ToJsonString());
+        foreach (var operation in LegalOperationCatalog.Operations)
+            Assert.Equal(
+                operation.PlannerInputSchema().ToJsonString(),
+                AskService.PlannerArgumentSchema(operation.Name).ToJsonString());
+    }
+
+    [Fact]
+    public void Catalog_names_and_projection_ordinals_are_unique_complete_and_stable()
+    {
+        Assert.Equal(LegalOperationCatalog.Operations.Count,
+            LegalOperationCatalog.Operations.Select(operation => operation.Name)
+                .Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(Enumerable.Range(0, LegalOperationCatalog.Operations.Count),
+            LegalOperationCatalog.Operations.Select(operation => operation.PlannerOrdinal)
+                .Order());
+        Assert.Equal(Enumerable.Range(0, LegalOperationCatalog.Operations.Count),
+            LegalOperationCatalog.Operations.Select(operation => operation.McpOrdinal)
+                .Order());
+        Assert.Equal(
+            LegalOperationCatalog.Operations.OrderBy(operation => operation.PlannerOrdinal)
+                .Select(operation => operation.Name),
+            LegalOperationCatalog.ToolNames);
+        Assert.Equal(
+            LegalOperationCatalog.Operations.OrderBy(operation => operation.McpOrdinal)
+                .Select(operation => operation.Name),
+            LegalOperationCatalog.McpToolDefinitions().OfType<JsonObject>()
+                .Select(tool => tool["name"]!.GetValue<string>()));
+    }
+
+    [Fact]
+    public void Work_specific_planner_projection_exposes_only_closed_subject_references()
+    {
+        var references = new[] { "subject_1", "subject_2" };
+
+        foreach (var operation in LegalOperationCatalog.Operations
+                     .Where(operation => operation.RequiresWorkResolution))
+        {
+            var schema = operation.PlannerInputSchema(subjectReferences: references);
+            var properties = schema["properties"]!.AsObject();
+
+            Assert.DoesNotContain("work", properties.Select(item => item.Key));
+            Assert.DoesNotContain("work_query", properties.Select(item => item.Key));
+            Assert.DoesNotContain("lex_id", properties.Select(item => item.Key));
+            Assert.Equal(references, properties["subject_ref"]!["enum"]!.AsArray()
+                .Select(item => item!.GetValue<string>()));
+            Assert.Contains("subject_ref", schema["required"]!.AsArray()
+                .Select(item => item!.GetValue<string>()));
+        }
+    }
+
+    [Fact]
+    public void Closed_subject_prompt_never_teaches_forbidden_identity_arguments()
+    {
+        var prompt = AskService.PlannerPrompt("law.test", new DateOnly(2026, 8, 14));
+
+        Assert.Contains("subject_ref", prompt, StringComparison.Ordinal);
+        Assert.DoesNotContain("work_query=", prompt, StringComparison.Ordinal);
+        Assert.DoesNotContain("article_number=", prompt, StringComparison.Ordinal);
+        Assert.Contains("Never output work, work_query, lex_id or article_number", prompt,
+            StringComparison.Ordinal);
     }
 
     [Fact]

@@ -105,7 +105,7 @@ export interface AskStreamHandlers {
   onStep: (step: Step) => void;
   onOperation: (operation: OperationReply) => void;
   onSynthesis?: (status: string) => void;
-  onPhase?: (phase: "planning" | "execution" | "composition",
+  onPhase?: (phase: "resolution" | "planning" | "execution" | "composition",
              status: "started" | "completed" | "unavailable") => void;
 }
 
@@ -337,7 +337,8 @@ export async function askStreaming(
           const update = envelope.payload as { phase?: unknown; status?: unknown };
           const phase = update?.phase;
           const status = update?.status;
-          if ((phase === "planning" || phase === "execution" || phase === "composition")
+          if ((phase === "resolution" || phase === "planning" || phase === "execution"
+                || phase === "composition")
               && (status === "started" || status === "completed" || status === "unavailable"))
             handlers.onPhase?.(phase, status);
         }

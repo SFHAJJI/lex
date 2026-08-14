@@ -152,7 +152,7 @@ public sealed class AskTransportTests
             duplicateResponse.Headers.GetValues("X-Lex-Request-Id").Single());
         var frames = Frames(firstWire);
         Assert.Equal([
-            "phase", "phase", "phase", "operation_result", "phase", "done",
+            "phase", "phase", "phase", "phase", "phase", "operation_result", "phase", "done",
         ], frames.Select(frame => frame.Event));
         Assert.All(frames, frame =>
         {
@@ -160,7 +160,7 @@ public sealed class AskTransportTests
             Assert.Equal(serverRequestId, frame.Data["request_id"]?.GetValue<string>());
             Assert.True(frame.Data["server_elapsed_ms"]?.GetValue<double>() >= 0);
         });
-        Assert.Equal([1, 2, 3, 4, 5, 6],
+        Assert.Equal([1, 2, 3, 4, 5, 6, 7, 8],
             frames.Select(frame => frame.Data["sequence"]?.GetValue<int>()));
         Assert.Equal(["operation_result", "done"],
             Frames(duplicateWire).Select(frame => frame.Event));

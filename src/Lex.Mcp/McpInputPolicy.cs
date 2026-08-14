@@ -5,146 +5,94 @@ namespace Lex.Mcp;
 
 internal static class McpInputPolicy
 {
-    internal const int MaximumAnchorLength = 512;
-    private sealed record Rule(
-        string[] Fields,
-        string[] Required,
-        IReadOnlyDictionary<string, (int Minimum, int Maximum)> Integers);
-
-    private static readonly IReadOnlyDictionary<string, Rule> Rules =
-        new Dictionary<string, Rule>(StringComparer.Ordinal)
-        {
-            ["as_of"] = R(["work", "date", "version_key", "publisher", "language", "mode", "anchors"], ["work", "date"]),
-            ["timeline"] = R(["work", "publisher", "limit", "offset"], ["work"],
-                ("limit", 1, 200), ("offset", 0, 100_000)),
-            ["in_force_on"] = R(
-                ["date", "publisher", "jurisdiction", "document_type", "source_class",
-                 "hierarchy", "act_form", "binding_status", "domain", "language", "limit", "offset"],
-                ["date"], ("limit", 1, 100), ("offset", 0, 100_000)),
-            ["diff"] = R(["work", "from_date", "to_date", "from_version_key", "to_version_key",
-                "publisher", "language", "anchor"],
-                ["work", "from_date", "to_date"]),
-            ["search"] = R(
-                ["query", "publisher", "jurisdiction", "document_type", "source_class",
-                 "hierarchy", "act_form", "binding_status", "domain", "language",
-                 "retrieval_mode", "time_scope", "as_of", "fuzzy", "works", "limit"],
-                ["query"], ("limit", 1, 50)),
-            // from_date/to_date are an optional FILTER over the states this tool already returns,
-            // never a new question and never required. They exist because "what did Article 92
-            // require in 2024" is a window question with no single answer, and a point-in-time
-            // tool cannot be handed a year without choosing a day inside it for the reader.
-            ["article_history"] = R(
-                ["work", "publisher", "anchor", "language", "from_date", "to_date"],
-                ["work", "anchor"]),
-            ["provenance"] = R(["lex_id", "language"], ["lex_id"]),
-            ["coverage"] = R(["publisher"], []),
-            ["cited_by"] = R(["work", "limit"], ["work"], ("limit", 1, 100)),
-            ["changes_in_period"] = R(
-                ["from_date", "to_date", "publisher", "jurisdiction", "document_type",
-                 "source_class", "hierarchy", "act_form", "binding_status", "domain",
-                 "language", "order", "limit", "offset"],
-                ["from_date", "to_date"], ("limit", 1, 100), ("offset", 0, 100_000)),
-        };
+    internal const int MaximumAnchorLength = LegalOperationCatalog.MaximumAnchorLength;
 
     public static void Validate(string tool, JsonObject arguments)
     {
-        if (!Rules.TryGetValue(tool, out var rule))
-            throw new ArgumentException($"Unknown tool '{tool}'.", nameof(tool));
-        if (arguments.Count > rule.Fields.Length)
+        var operation = LegalOperationCatalog.TryGet(tool)
+            ?? throw new ArgumentException($"Unknown tool '{tool}'.", nameof(tool));
+        var allowed = operation.McpArguments.ToDictionary(
+            argument => argument.Name, StringComparer.Ordinal);
+        if (arguments.Count > allowed.Count)
             throw new ArgumentException($"Too many arguments for {tool}.", nameof(arguments));
 
         foreach (var (name, node) in arguments)
         {
-            if (!rule.Fields.Contains(name, StringComparer.Ordinal))
+            if (!allowed.TryGetValue(name, out var rule))
                 throw new ArgumentException($"Unsupported argument '{name}' for {tool}.", name);
             if (node is not JsonValue value)
                 throw new ArgumentException($"{name} must be a scalar value.", name);
-            if (rule.Integers.TryGetValue(name, out var bounds))
+            if (rule.Kind == LegalArgumentKind.Integer)
             {
                 if (!value.TryGetValue<int>(out var integer))
                     throw new ArgumentException($"{name} must be an integer.", name);
-                if (integer < bounds.Minimum || integer > bounds.Maximum)
+                if (integer < rule.Minimum || integer > rule.Maximum)
                     throw new ArgumentOutOfRangeException(name,
-                        $"{name} must be between {bounds.Minimum} and {bounds.Maximum}.");
+                        $"{name} must be between {rule.Minimum} and {rule.Maximum}.");
                 continue;
             }
             if (!value.TryGetValue<string>(out var text))
                 throw new ArgumentException($"{name} must be a string.", name);
-            var maximum = name is "language" ? 16
-                : name is "date" or "as_of" or "from_date" or "to_date" ? 10
-                : name is "version_key" or "from_version_key" or "to_version_key" ? 128
-                : name is "anchor" ? MaximumAnchorLength
-                : name is "publisher" or "jurisdiction" or "mode" or "retrieval_mode"
-                    or "time_scope" or "fuzzy" or "order" ? 64
-                : 1000;
-            if (string.IsNullOrWhiteSpace(text) || text.Length > maximum)
-                throw new ArgumentException($"{name} must contain 1 to {maximum} characters.", name);
+            if (string.IsNullOrWhiteSpace(text)
+                || text.Length < rule.MinimumLength || text.Length > rule.MaximumLength)
+                throw new ArgumentException(
+                    $"{name} must contain {rule.MinimumLength} to {rule.MaximumLength} characters.",
+                    name);
+            if (rule.IsDate && !DateOnly.TryParseExact(
+                    text, LegalOperationCatalog.IsoDateFormat, CultureInfo.InvariantCulture,
+                    DateTimeStyles.None, out _))
+                throw new ArgumentException($"{name} must be an ISO date (YYYY-MM-DD).", name);
+            if (rule.AllowedValues is not null
+                && !rule.AllowedValues.Contains(text, StringComparer.Ordinal))
+                throw new ArgumentException(
+                    $"{name} must be one of: {string.Join(", ", rule.AllowedValues)}.", name);
+            if (rule.MaximumListValues is { } maximum)
+                ValidateList(name, text, maximum,
+                    rule.MaximumListItemLength ?? LegalOperationCatalog.MaximumStringLength);
         }
 
-        foreach (var required in rule.Required)
+        foreach (var required in operation.McpRequired)
             if (!arguments.ContainsKey(required))
                 throw new ArgumentException($"{required} is required.", required);
-
-        Date(arguments, "date");
-        Date(arguments, "as_of");
-        Date(arguments, "from_date");
-        Date(arguments, "to_date");
-        Enum(arguments, "mode", ["full", "outline", "select"]);
-        Enum(arguments, "retrieval_mode", ["keyword", "hybrid"]);
-        Enum(arguments, "time_scope", ["all_versions", "as_of"]);
-        Enum(arguments, "fuzzy", ["auto", "off"]);
-        Enum(arguments, "order", ["by_date", "by_churn"]);
-
-        if (tool == "as_of"
-            && String(arguments, "mode") == "select"
-            && String(arguments, "anchors") is null)
-            throw new ArgumentException("anchors is required when mode=select.", "anchors");
-        if (tool == "as_of"
-            && String(arguments, "anchors") is not null
-            && String(arguments, "mode") is not ("outline" or "select"))
+        foreach (var coupling in operation.ConditionalRequirements ?? [])
+            if (String(arguments, coupling.WhenArgument) == coupling.WhenValue
+                && String(arguments, coupling.RequiredArgument) is null)
+                throw new ArgumentException(
+                    $"{coupling.RequiredArgument} is required when "
+                    + $"{coupling.WhenArgument}={coupling.WhenValue}.",
+                    coupling.RequiredArgument);
+        foreach (var coupling in operation.AllowedValuesCouplings ?? [])
+        {
+            if (String(arguments, coupling.Argument) is null) continue;
+            var value = String(arguments, coupling.WhenArgument);
+            if (value is null || !coupling.AllowedValues.Contains(value, StringComparer.Ordinal))
+                throw new ArgumentException(
+                    $"{coupling.Argument} is supported only when {coupling.WhenArgument} is one "
+                    + $"of: {string.Join(", ", coupling.AllowedValues)}.", coupling.Argument);
+        }
+        if (operation.DateRange is { } range
+            && Date(arguments, range.FromArgument) is { } from
+            && Date(arguments, range.ToArgument) is { } to
+            && from > to)
             throw new ArgumentException(
-                "anchors is supported only when mode=outline or mode=select.", "anchors");
-        if (tool == "search"
-            && String(arguments, "time_scope") == "as_of"
-            && String(arguments, "as_of") is null)
-            throw new ArgumentException("as_of is required when time_scope=as_of.", "as_of");
-        RequirePublisherAuthority(arguments, tool == "provenance" ? "lex_id" : "work");
-        CountList(arguments, "anchors", 50, MaximumAnchorLength);
-        CountList(arguments, "works", 50);
+                $"{range.FromArgument} must not follow {range.ToArgument}.", range.FromArgument);
+        if (operation.PublisherAuthorityArgument is { } authority)
+            RequirePublisherAuthority(arguments, authority);
     }
-
-    private static Rule R(string[] fields, string[] required,
-        params (string Name, int Minimum, int Maximum)[] integers) =>
-        new(fields, required, integers.ToDictionary(
-            item => item.Name, item => (item.Minimum, item.Maximum), StringComparer.Ordinal));
 
     private static string? String(JsonObject arguments, string name) =>
         arguments[name] is JsonValue value && value.TryGetValue<string>(out var text) ? text : null;
 
-    private static void Date(JsonObject arguments, string name)
-    {
-        var value = String(arguments, name);
-        if (value is null) return;
-        if (!DateOnly.TryParseExact(value, "yyyy-MM-dd", CultureInfo.InvariantCulture,
-                DateTimeStyles.None, out _))
-            throw new ArgumentException($"{name} must be an ISO date (YYYY-MM-DD).", name);
-    }
+    private static DateOnly? Date(JsonObject arguments, string name) =>
+        DateOnly.TryParseExact(String(arguments, name), LegalOperationCatalog.IsoDateFormat,
+            CultureInfo.InvariantCulture, DateTimeStyles.None, out var date) ? date : null;
 
-    private static void Enum(JsonObject arguments, string name, string[] allowed)
-    {
-        var value = String(arguments, name);
-        if (value is not null && !allowed.Contains(value, StringComparer.Ordinal))
-            throw new ArgumentException($"{name} must be one of: {string.Join(", ", allowed)}.", name);
-    }
-
-    private static void CountList(
-        JsonObject arguments,
+    private static void ValidateList(
         string name,
+        string value,
         int maximum,
-        int maximumItemLength = 1000)
+        int maximumItemLength)
     {
-        var value = String(arguments, name);
-        if (value is null) return;
         var items = value.Split(',', StringSplitOptions.RemoveEmptyEntries
             | StringSplitOptions.TrimEntries);
         if (items.Length == 0)

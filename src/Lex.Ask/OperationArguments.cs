@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json.Nodes;
+using Lex.Mcp;
 
 namespace Lex.Ask;
 
@@ -23,15 +24,7 @@ namespace Lex.Ask;
 /// </summary>
 internal static class OperationArguments
 {
-    private const int MaximumStringLength = 1_000;
-    private const int MaximumWorkQueryLength = 900;
-    private const int MaximumArticleNumberLength = 64;
-    private const int MaximumAnchorLength = 512;
-    private const int MaximumShortLength = 64;
-    private const int MaximumLanguageLength = 16;
-    private const int MaximumDateLength = 10;
-    private const int MaximumListValues = 50;
-    private const int MaximumOffset = 100_000;
+    private const int MaximumStringLength = LegalOperationCatalog.MaximumStringLength;
 
     /// <summary>The shortest trimmed value this boundary accepts for any string argument; the
     /// planner schema emits it as <c>minLength</c>.</summary>
@@ -50,108 +43,27 @@ internal static class OperationArguments
     /// the pattern carries the constraint: four-digit year, zero-padded month 01-12, zero-padded
     /// day 01-31, ASCII hyphens, nothing else. Calendar validity (2026-02-30, 2026-02-29 in a
     /// non-leap year) is not expressible in a regex and stays with <see cref="Date"/>.</summary>
-    public const string IsoDateFormat = "yyyy-MM-dd";
+    public const string IsoDateFormat = LegalOperationCatalog.IsoDateFormat;
 
-    public const string IsoDatePattern =
-        @"^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$";
+    public const string IsoDatePattern = LegalOperationCatalog.IsoDatePattern;
 
-    private static readonly IReadOnlyDictionary<string, HashSet<string>> Allowed =
+    private static readonly IReadOnlyDictionary<string, HashSet<string>> ApplicationAllowed =
         new Dictionary<string, HashSet<string>>(StringComparer.Ordinal)
         {
-            ["search"] = Set("query", "publisher", "jurisdiction", "document_type",
-                "source_class", "hierarchy", "act_form", "binding_status", "domain",
-                "language", "retrieval_mode", "time_scope", "as_of", "fuzzy", "works", "limit"),
-            ["as_of"] = Set("work", "work_query", "article_number", "date", "version_key",
-                "language", "mode", "anchors"),
-            ["timeline"] = Set("work", "work_query", "limit", "offset"),
-            ["in_force_on"] = Set("date", "publisher", "jurisdiction", "document_type",
-                "source_class", "hierarchy", "act_form", "binding_status", "domain",
-                "language", "limit", "offset"),
-            ["diff"] = Set("work", "work_query", "article_number", "from_date", "to_date",
-                "from_version_key", "to_version_key", "language", "anchor"),
-            // from_date/to_date are a FILTER over the states this operation already returns, never
-            // a new question. They exist because the planner is told never to turn a bare year
-            // into a single day for a point-in-time question and to plan the window form instead;
-            // a rule that tells the model to emit arguments the gate refuses is not a rule.
-            ["article_history"] = Set("work", "work_query", "article_number", "anchor", "language",
-                "from_date", "to_date"),
-            ["provenance"] = Set("lex_id", "work_query", "language"),
-            ["coverage"] = Set("publisher"),
-            ["cited_by"] = Set("work", "work_query", "limit"),
-            ["changes_in_period"] = Set("from_date", "to_date", "publisher", "jurisdiction",
-                "document_type", "source_class", "hierarchy", "act_form", "binding_status",
-                "domain", "language", "order", "limit", "offset"),
+
             ["legal_boundary"] = Set("reason"),
             ["clarification"] = Set("question", "options"),
             ["gap"] = Set("reason"),
         };
 
     /// <summary>
-    /// Arguments validated against a closed value set; the planner schema is generated from it,
-    /// exactly as the argument names are generated from <see cref="Allowed"/>. Shown an open
-    /// string, the model picks a plausible synonym ("current", "semantic", "churn") and the whole
-    /// plan aborts on the first one.
-    ///
-    /// Global by name: each of these names belongs to exactly one operation (retrieval_mode,
-    /// time_scope and fuzzy to search, mode to as_of, order to changes_in_period), which is why
-    /// <see cref="Validate"/> may apply the whole table unconditionally. If a future operation
-    /// reuses a name with different values, key this by (action, name) and make Validate switch
-    /// on action in the same change.
+    /// Application-only arguments. Legal arguments, bounds, closed values, requirements and
+    /// couplings live in <see cref="LegalOperationCatalog"/> and are projected from there.
     /// </summary>
-    private static readonly IReadOnlyDictionary<string, string[]> AllowedValues =
+    private static readonly IReadOnlyDictionary<string, string[]> ApplicationRequired =
         new Dictionary<string, string[]>(StringComparer.Ordinal)
         {
-            ["retrieval_mode"] = ["keyword", "hybrid"],
-            ["time_scope"] = ["all_versions", "as_of"],
-            ["fuzzy"] = ["auto", "off"],
-            ["mode"] = ["full", "outline", "select"],
-            ["order"] = ["by_date", "by_churn"],
-        };
-
-    /// <summary>Conditional couplings the value set alone cannot express. Advertising a value
-    /// makes the model likelier to pick it, and these two fail a second gate when picked
-    /// alone.</summary>
-    private static readonly IReadOnlyDictionary<string, string> ValueGuidance =
-        new Dictionary<string, string>(StringComparer.Ordinal)
-        {
-            ["time_scope"] = "all_versions (default) or as_of; as_of requires as_of=YYYY-MM-DD",
-            ["mode"] = "full (default), outline or select; select requires anchors or article_number",
-        };
-
-    /// <summary>The arguments the planner is asked for, per action. Declaration order is the order
-    /// they are checked in and the order the planner schema emits them, so it stays byte-identical
-    /// between processes. All but the dates in <see cref="DefaultedDates"/> are demanded outright
-    /// by <see cref="Validate"/>; those are asked for and completed. The other defaults injected
-    /// by <see cref="ApplyDefaults"/> (page bounds, tuning knobs, the workspace class filter) are
-    /// deliberately absent, because asking for them would only invite noise.</summary>
-    private static readonly IReadOnlyDictionary<string, string[]> Required =
-        new Dictionary<string, string[]>(StringComparer.Ordinal)
-        {
-            ["search"] = ["query"],
-            ["as_of"] = ["date"],
-            ["in_force_on"] = ["date"],
-            ["diff"] = ["from_date", "to_date"],
-            ["changes_in_period"] = ["from_date", "to_date"],
             ["clarification"] = ["question", "options"],
-        };
-
-    /// <summary>The "at least one of these" gates, per action. Every one of them is a plain
-    /// per-action literal rather than a conditional, because the planner schema is generated per
-    /// tool; each becomes an <c>anyOf</c> of one-name <c>required</c> clauses.</summary>
-    private static readonly IReadOnlyDictionary<string, RequiredChoice[]> Choices =
-        new Dictionary<string, RequiredChoice[]>(StringComparer.Ordinal)
-        {
-            ["as_of"] = [WorkIdentity("as_of")],
-            ["diff"] = [WorkIdentity("diff")],
-            ["timeline"] = [WorkIdentity("timeline")],
-            ["cited_by"] = [WorkIdentity("cited_by")],
-            ["provenance"] = [WorkIdentity("provenance")],
-            ["article_history"] =
-            [
-                WorkIdentity("article_history"),
-                new(["anchor", "article_number"],
-                    "article_history requires an anchor or article_number."),
-            ],
         };
 
     /// <summary>The point-in-time arguments <see cref="ApplyDefaults"/> completes to today (UTC)
@@ -169,12 +81,6 @@ internal static class OperationArguments
     ///
     /// search.as_of is absent because its default is conditional on time_scope=as_of; it is
     /// applied in <see cref="ApplyDefaults"/> instead.</summary>
-    private static readonly IReadOnlyDictionary<string, string[]> DefaultedDates =
-        new Dictionary<string, string[]>(StringComparer.Ordinal)
-        {
-            ["as_of"] = ["date"],
-            ["in_force_on"] = ["date"],
-        };
 
     /// <summary>The stray argument names that are refused rather than dropped. Each of them names
     /// the instant, the law or the provision, so removing it does not leave the request
@@ -205,59 +111,64 @@ internal static class OperationArguments
     private static readonly HashSet<string> RecoverableValues =
         Set("retrieval_mode", "time_scope", "fuzzy", "mode");
 
-    /// <summary>Comma-separated list arguments: the whole value is bounded and so is each item.</summary>
-    private static readonly HashSet<string> ListArguments = Set("anchors", "works");
-
-    private static readonly HashSet<string> DateArguments =
-        Set("date", "as_of", "from_date", "to_date");
-
     /// <summary>Every argument name any operation declares. Read only by <see cref="Repair"/>, to
     /// keep a planner-invented key name off the diagnostic line it would otherwise be copied
     /// into.</summary>
     private static readonly HashSet<string> KnownArguments =
-        Allowed.Values.SelectMany(names => names).ToHashSet(StringComparer.Ordinal);
+        LegalOperationCatalog.Operations.SelectMany(operation => operation.PlannerArguments)
+            .Select(argument => argument.Name)
+            .Concat(ApplicationAllowed.Values.SelectMany(names => names))
+            .ToHashSet(StringComparer.Ordinal);
 
     /// <summary>Every action this boundary accepts; the planner schema is generated from it.</summary>
-    public static IEnumerable<string> Actions => Allowed.Keys;
+    public static IEnumerable<string> Actions =>
+        LegalOperationCatalog.ToolNames.Concat(ApplicationAllowed.Keys);
 
     /// <summary>One "at least one of <paramref name="Names"/>" gate and the refusal it throws.</summary>
     public sealed record RequiredChoice(IReadOnlyList<string> Names, string Message);
 
     /// <summary>True when the argument is a JSON integer rather than a string.</summary>
-    public static bool IsInteger(string name) => name is "limit" or "offset";
+    public static bool IsInteger(string name) =>
+        LegalOperationCatalog.Operations.SelectMany(operation => operation.PlannerArguments)
+            .Any(argument => argument.Name == name
+                && argument.Kind == LegalArgumentKind.Integer);
 
     /// <summary>True when the argument is parsed with <see cref="IsoDateFormat"/>.</summary>
-    public static bool IsDate(string name) => DateArguments.Contains(name);
+    public static bool IsDate(string name) =>
+        LegalOperationCatalog.Operations.SelectMany(operation => operation.PlannerArguments)
+            .Any(argument => argument.Name == name && argument.IsDate);
 
     /// <summary>The longest trimmed value <see cref="Normalize"/> accepts for one string
     /// argument; the planner schema emits it as <c>maxLength</c>. Read by both, so the two
     /// cannot drift.</summary>
-    public static int MaximumLengthFor(string name) => name switch
+    public static int MaximumLengthFor(string name)
     {
-        "work_query" => MaximumWorkQueryLength,
-        "article_number" => MaximumArticleNumberLength,
-        "language" => MaximumLanguageLength,
-        "date" or "as_of" or "from_date" or "to_date" => MaximumDateLength,
-        "anchor" => MaximumAnchorLength,
-        "publisher" or "jurisdiction" or "mode" or "retrieval_mode"
-            or "time_scope" or "fuzzy" or "order" => MaximumShortLength,
-        _ => MaximumStringLength,
-    };
+        var bounds = LegalOperationCatalog.Operations
+            .SelectMany(operation => operation.PlannerArguments)
+            .Where(argument => argument.Name == name
+                && argument.Kind == LegalArgumentKind.String)
+            .Select(argument => argument.MaximumLength)
+            .Distinct()
+            .ToArray();
+        return bounds.Length switch
+        {
+            0 => MaximumStringLength,
+            1 => bounds[0],
+            _ => throw new InvalidDataException(
+                $"Planner argument '{name}' has inconsistent catalogue bounds."),
+        };
+    }
 
     /// <summary>The inclusive range <see cref="Normalize"/> accepts for one integer argument of
     /// one action; the planner schema emits it as <c>minimum</c> and <c>maximum</c>.</summary>
-    public static (int Minimum, int Maximum) IntegerBoundsFor(string action, string name) =>
-        name switch
-        {
-            "limit" => (1, action switch
-            {
-                "search" => 50,
-                "in_force_on" or "cited_by" or "changes_in_period" => 100,
-                _ => 200,
-            }),
-            "offset" => (0, MaximumOffset),
-            _ => throw new InvalidDataException($"Argument '{name}' is not an integer."),
-        };
+    public static (int Minimum, int Maximum) IntegerBoundsFor(string action, string name)
+    {
+        var argument = ArgumentFor(action, name);
+        if (argument?.Kind != LegalArgumentKind.Integer
+            || argument.Minimum is null || argument.Maximum is null)
+            throw new InvalidDataException($"Argument '{name}' is not an integer for '{action}'.");
+        return (argument.Minimum.Value, argument.Maximum.Value);
+    }
 
     /// <summary>The arguments the planner schema emits as <c>required</c> for one action. Two
     /// kinds sit here: the ones <see cref="Validate"/> refuses a plan without, and the point-in-
@@ -266,44 +177,50 @@ internal static class OperationArguments
     /// only the first kind aborts the plan when it is missing. <see cref="DefaultedDatesFor"/> is
     /// the split, and the fitness test asserts the schema declares exactly their union.</summary>
     public static IReadOnlyList<string> RequiredFor(string action) =>
-        Required.TryGetValue(action, out var required) ? required : [];
+        LegalOperationCatalog.TryGet(action)?.PlannerRequired
+        ?? (ApplicationRequired.TryGetValue(action, out var required) ? required : []);
 
     /// <summary>The subset of one action's arguments that an omitted value is completed to today
     /// (UTC) for, rather than refused.</summary>
     public static IReadOnlyList<string> DefaultedDatesFor(string action) =>
-        DefaultedDates.TryGetValue(action, out var names) ? names : [];
+        LegalOperationCatalog.TryGet(action)?.DefaultedPlannerDates ?? [];
 
     /// <summary>The "at least one of" gates for one action, narrowed to the names that action
     /// actually accepts: the work identity is work or work_query everywhere except provenance,
     /// which takes lex_id or work_query and has no work argument at all.</summary>
     public static IReadOnlyList<RequiredChoice> RequiredChoicesFor(string action)
     {
-        if (!Allowed.TryGetValue(action, out var allowed))
-            throw new InvalidDataException(
-                $"Unknown legal operation or application action '{action}'.");
-        return Choices.TryGetValue(action, out var choices)
-            ? choices.Select(choice => choice with
-            {
-                Names = choice.Names.Where(allowed.Contains).ToArray(),
-            }).ToArray()
-            : [];
+        _ = AllowedSet(action);
+        return LegalOperationCatalog.TryGet(action)?.PlannerRequiredChoices?
+            .Select(choice => new RequiredChoice(choice.Names, choice.Message)).ToArray() ?? [];
     }
 
     /// <summary>The exact values <see cref="Normalize"/> accepts for one argument, or null when
     /// the argument is not value-closed at this boundary.</summary>
-    public static IReadOnlyList<string>? AllowedValuesFor(string name) =>
-        AllowedValues.TryGetValue(name, out var values) ? values : null;
+    public static IReadOnlyList<string>? AllowedValuesFor(string name)
+    {
+        var closed = LegalOperationCatalog.Operations
+            .SelectMany(operation => operation.PlannerArguments)
+            .Where(argument => argument.Name == name && argument.AllowedValues is not null)
+            .Select(argument => argument.AllowedValues!)
+            .ToArray();
+        if (closed.Length == 0) return null;
+        if (closed.Skip(1).Any(values => !values.SequenceEqual(closed[0], StringComparer.Ordinal)))
+            throw new InvalidDataException(
+                $"Planner argument '{name}' has inconsistent catalogue values.");
+        return closed[0];
+    }
 
     /// <summary>Guidance the planner schema attaches to a value-closed argument, or null.</summary>
     public static string? GuidanceFor(string name) =>
-        ValueGuidance.TryGetValue(name, out var guidance) ? guidance : null;
+        LegalOperationCatalog.Operations.SelectMany(operation => operation.PlannerArguments)
+            .Where(argument => argument.Name == name)
+            .Select(argument => argument.PlannerGuidance)
+            .FirstOrDefault(guidance => guidance is not null);
 
     /// <summary>The exact argument names <see cref="Normalize"/> accepts for one action.</summary>
     public static IReadOnlyCollection<string> AllowedFor(string action) =>
-        Allowed.TryGetValue(action, out var allowed)
-            ? allowed.ToArray()
-            : throw new InvalidDataException(
-                $"Unknown legal operation or application action '{action}'.");
+        AllowedSet(action).ToArray();
 
     public static JsonObject Normalize(
         string action,
@@ -341,8 +258,7 @@ internal static class OperationArguments
         vocabulary ??= CorpusVocabulary.Unconstrained;
         var repaired = new List<string>();
         repairs = repaired;
-        if (!Allowed.TryGetValue(action, out var allowed))
-            throw new InvalidDataException($"Unknown legal operation or application action '{action}'.");
+        var allowed = AllowedSet(action);
 
         var accepted = PartitionNames(action, proposed, allowed, repaired);
         var normalized = new JsonObject();
@@ -395,7 +311,9 @@ internal static class OperationArguments
             // every bit of information the model actually sent; the defaults and the gates below
             // then treat it as the absence it is. A malformed but non-empty value is the other
             // case entirely and stays a refusal. JSON null already took this path above.
-            if (text.Length == 0 || (ListArguments.Contains(name) && Items(text).Length == 0))
+            if (text.Length == 0
+                || (ArgumentFor(action, name)?.MaximumListValues is not null
+                    && Items(text).Length == 0))
             {
                 repaired.Add(Repair(action, name, "dropped"));
                 continue;
@@ -494,8 +412,10 @@ internal static class OperationArguments
     private static void RecoverClosedSets(
         string action, JsonObject arguments, List<string> repaired)
     {
-        foreach (var (name, values) in AllowedValues)
+        foreach (var argument in LegalOperationCatalog.TryGet(action)?.PlannerArguments ?? [])
         {
+            if (argument.AllowedValues is not { } values) continue;
+            var name = argument.Name;
             if (Text(arguments, name) is not { } value) continue;
             if (values.Contains(value, StringComparer.Ordinal)) continue;
             if (!RecoverableValues.Contains(name))
@@ -527,7 +447,10 @@ internal static class OperationArguments
                 if (Text(arguments, "time_scope") == "as_of") DefaultDate("as_of");
                 break;
             case "as_of":
-                arguments["mode"] ??= arguments["article_number"] is null ? "full" : "select";
+                arguments["mode"] ??=
+                    arguments["anchors"] is null && arguments["article_number"] is null
+                        ? "full"
+                        : "select";
                 // A select the model never narrowed selects nothing. Full text is a strict
                 // superset of the selection it failed to specify, so widening can only show more
                 // law, never hide any; refusing here showed none of it.
@@ -580,38 +503,75 @@ internal static class OperationArguments
         // "2024" could mean 2024-01-01 or 2024-12-31 and either choice silently selects a
         // different version of the law, so every one of them is refused, on every date argument
         // the action accepts rather than only the ones it requires.
-        foreach (var name in Allowed[action])
+        foreach (var name in AllowedSet(action))
             if (IsDate(name) && arguments[name] is not null) Date(arguments, name);
-        if (action is "diff" or "changes_in_period"
-            || (action == "article_history"
-                && arguments["from_date"] is not null && arguments["to_date"] is not null))
+        if (LegalOperationCatalog.TryGet(action)?.DateRange is { } range
+            && arguments[range.FromArgument] is not null
+            && arguments[range.ToArgument] is not null)
         {
-            var from = Date(arguments, "from_date");
-            var to = Date(arguments, "to_date");
+            var from = Date(arguments, range.FromArgument);
+            var to = Date(arguments, range.ToArgument);
             // Not swapped: swapping reverses which version is the before and which is the after,
             // inverting every added and removed clause in the diff.
             if (from > to)
-                throw new InvalidDataException($"{action} from_date must not follow to_date.");
+                throw new InvalidDataException(
+                    $"{action} {range.FromArgument} must not follow {range.ToArgument}.");
         }
 
         // Defence in depth. Everything below has already been recovered or refused above; these
         // are the assertions that the arguments handed to MCP still satisfy every bound they
         // satisfied before this gate learned to repair anything.
-        foreach (var (name, values) in AllowedValues) Enum(arguments, name, values);
-        if (Text(arguments, "mode") == "select"
-            && Text(arguments, "anchors") is null
-            && Text(arguments, "article_number") is null)
-            throw new InvalidDataException("as_of mode=select requires anchors.");
-
-        CountList(arguments, "anchors", MaximumListValues, MaximumAnchorLength);
-        CountList(arguments, "works", MaximumListValues);
-
-        foreach (var name in new[] { "limit", "offset" })
+        var operation = LegalOperationCatalog.TryGet(action);
+        foreach (var argument in operation?.PlannerArguments ?? [])
+            if (argument.AllowedValues is { } values)
+                Enum(arguments, argument.Name, values.ToArray());
+        foreach (var coupling in operation?.ConditionalRequirements ?? [])
         {
-            var (minimum, maximum) = IntegerBoundsFor(action, name);
-            Bound(arguments, name, minimum, maximum);
+            if (Text(arguments, coupling.WhenArgument) != coupling.WhenValue) continue;
+            if (Text(arguments, coupling.RequiredArgument) is not null) continue;
+            if (coupling.PlannerAlternativeArguments?.Any(name =>
+                    Text(arguments, name) is not null) == true) continue;
+            throw new InvalidDataException(
+                $"{action} {coupling.WhenArgument}={coupling.WhenValue} requires "
+                + $"{coupling.RequiredArgument}.");
+        }
+        foreach (var coupling in operation?.AllowedValuesCouplings ?? [])
+        {
+            if (Text(arguments, coupling.Argument) is null) continue;
+            var controlling = Text(arguments, coupling.WhenArgument);
+            if (controlling is not null
+                && coupling.AllowedValues.Contains(controlling, StringComparer.Ordinal)) continue;
+            throw new InvalidDataException(
+                $"{action} {coupling.Argument} requires {coupling.WhenArgument}="
+                + $"{string.Join(" or ", coupling.AllowedValues)}.");
+        }
+
+        foreach (var argument in operation?.PlannerArguments ?? [])
+            if (argument.MaximumListValues is { } maximum)
+                CountList(arguments, argument.Name, maximum,
+                    argument.MaximumListItemLength ?? MaximumStringLength);
+
+        foreach (var argument in operation?.PlannerArguments
+                     .Where(argument => argument.Kind == LegalArgumentKind.Integer) ?? [])
+        {
+            var (minimum, maximum) = IntegerBoundsFor(action, argument.Name);
+            Bound(arguments, argument.Name, minimum, maximum);
         }
     }
+
+    private static HashSet<string> AllowedSet(string action)
+    {
+        if (LegalOperationCatalog.TryGet(action) is { } operation)
+            return operation.PlannerArguments.Select(argument => argument.Name)
+                .ToHashSet(StringComparer.Ordinal);
+        if (ApplicationAllowed.TryGetValue(action, out var allowed)) return allowed;
+        throw new InvalidDataException(
+            $"Unknown legal operation or application action '{action}'.");
+    }
+
+    private static LegalArgumentDefinition? ArgumentFor(string action, string name) =>
+        LegalOperationCatalog.TryGet(action)?.PlannerArguments
+            .SingleOrDefault(argument => argument.Name == name);
 
     /// <summary>One repair line: the operation, the argument, and what was done to it. Argument
     /// names and verbs only, never a value, because these are logged.
@@ -641,10 +601,6 @@ internal static class OperationArguments
 
     private static string[] Items(string value) => value.Split(
         ',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-
-    private static RequiredChoice WorkIdentity(string action) =>
-        new(["work", "work_query", "lex_id"],
-            $"Operation '{action}' requires a work identity.");
 
     private static HashSet<string> Set(params string[] values) =>
         new(values, StringComparer.Ordinal);
