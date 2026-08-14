@@ -71,6 +71,9 @@ public sealed record EurLexScopeConfig(
             throw new InvalidDataException("Relationship predicates must be safe CDM local names.");
         if (History.ManufactureConsolidations)
             throw new InvalidDataException("A Lex scope may never enable synthetic consolidation.");
+        if (History.MaxVerifiedPortalFallbacks is < 1 or > 512)
+            throw new InvalidDataException(
+                "max_verified_portal_fallbacks must be between 1 and 512.");
     }
 }
 
@@ -78,7 +81,8 @@ public sealed record EurLexHistoryRules(
     bool IncludeOriginal,
     bool IncludeAllOfficialConsolidations,
     bool IncludeUnamended,
-    bool ManufactureConsolidations);
+    bool ManufactureConsolidations,
+    int MaxVerifiedPortalFallbacks);
 
 public sealed record EurLexClosureRules(
     int MaxDepth,
