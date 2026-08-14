@@ -247,6 +247,7 @@ HTTP 200
 <nav class="tabs" aria-label="Architecture evidence" style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 22px">
   <a class="badge" href="/architecture">Current</a>
   <a class="badge" href="/architecture/next">Next</a>
+  <a class="badge" href="/architecture/dossier">Dossier</a>
   <a class="badge ok" href="/decisions">Decisions</a>
   <a class="badge" href="/benchmarks">Benchmarks</a>
 </nav><p class="lede">Every program decision records the chosen path, a credible alternative, the

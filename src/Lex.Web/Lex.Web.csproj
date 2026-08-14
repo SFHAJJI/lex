@@ -15,6 +15,9 @@
   </ItemGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="..\..\docs\architecture-dossier.md"
+                      Link="architecture-dossier.md"
+                      LogicalName="Lex.Web.architecture-dossier.md" />
     <EmbeddedResource Include="..\..\docs\architecture-program.json"
                       Link="architecture-program.json"
                       LogicalName="Lex.Web.architecture-program.json" />

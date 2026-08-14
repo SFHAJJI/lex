@@ -50,7 +50,7 @@ public static class ApiEndpoints
             Url("/", "1.0", "daily");
             foreach (var p in new[] { "/browse", "/coverage", "/decisions", "/built", "/about",
                                       "/how-it-works", "/developers", "/ai", "/verify",
-                                      "/architecture", "/architecture/next", "/benchmarks",
+                                      "/architecture", "/architecture/next", "/architecture/dossier", "/benchmarks",
                                       "/stories", "/find", "/changed" })
                 Url(p, "0.8", "weekly");
 

@@ -38,6 +38,7 @@ public static class ExplainerEndpoints
                 <nav class="tabs" aria-label="Architecture evidence" style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 22px">
                   {Tab("current", "/architecture", "Current")}
                   {Tab("next", "/architecture/next", "Next")}
+                  {Tab("dossier", "/architecture/dossier", "Dossier")}
                   {Tab("decisions", "/decisions", "Decisions")}
                   {Tab("benchmarks", "/benchmarks", "Benchmarks")}
                 </nav>
@@ -48,6 +49,17 @@ public static class ExplainerEndpoints
             $"<span class=\"badge{(status == "shipped" ? " ok" : status == "gated" ? " warn" : "")}\">{H(status)}</span>";
 
         app.MapGet("/ai", () => Results.Redirect("/developers#assistant", permanent: true));
+
+        app.MapGet("/architecture/dossier", () => Results.Content(Page(
+            "The architecture dossier",
+            ArchitectureTabs("dossier")
+            + "<p class=\"lede\">This is the complete, build-pinned engineering account: domain model, "
+            + "retrieval, assistant, evidence, delivery, measured failures and deliberate limits.</p>"
+            + $"<article class=\"architecture-dossier\">{ArchitectureDossier.Html}</article>",
+            "The complete engineering account for the product serving this page.",
+            canonicalPath: "/architecture/dossier",
+            description: "The measured architecture, decisions, evidence chain, failure history and limits of Lex."),
+            "text/html"));
 
         app.MapGet("/architecture", () =>
         {

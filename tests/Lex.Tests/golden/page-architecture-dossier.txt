@@ -1,0 +1,1021 @@
+HTTP 200
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Titles are labels, not sentences: one that ends in a full stop renders "acts., Lex" in
+     the tab and in every social card, which is what the front page did until now. -->
+<title>The architecture dossier, Lex</title>
+<meta name="description" content="The measured architecture, decisions, evidence chain, failure history and limits of Lex.">
+<meta property="og:title" content="The architecture dossier, Lex">
+<meta property="og:description" content="The measured architecture, decisions, evidence chain, failure history and limits of Lex.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Lex">
+<meta property="og:image" content="https://golden.test/og.png">
+<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="canonical" href="https://golden.test/architecture/dossier">
+<meta name="twitter:image" content="https://golden.test/og.png">
+<script src="/site.js?v=dev" defer></script>
+<!-- The interval mark: a rule, two terminals, and a notch at the date being read.
+     The same shape is the version rail at full width. An emoji was a different
+     picture on every platform and read as a generic legal site on all of them. -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect x='1' y='3' width='1.4' height='10' fill='%23c6112f'/%3E%3Crect x='13.6' y='3' width='1.4' height='10' fill='%23c6112f'/%3E%3Crect x='1' y='7.3' width='14' height='1.4' fill='%2359626c'/%3E%3Ccircle cx='10.2' cy='8' r='3' fill='%23c6112f'/%3E%3C/svg%3E">
+<style>
+  /* Self-hosted, no CDN. Three faces, chosen rather than defaulted:
+     Source Serif 4 for the law, a real reading serif with optical sizes.
+     IBM Plex Sans for the interface, drawn as technical-but-humane, and
+     deliberately not Inter, which is the default-everywhere face this year.
+     IBM Plex Mono for lex_ids, hashes and dates; Sans and Mono are a designed pair.
+     All three are variable, so one file covers 400 and 600. unicode-range means a
+     page only fetches latin-ext when it actually contains one of those characters,
+     which for French law is mostly the ligature in 'oeuvre' and 'coeur'.
+     font-display:optional: a slow font must never reflow a whole legal page after paint.
+     Preloads above still make the chosen faces win on normal connections. */
+  @font-face { font-family:'IBM Plex Mono'; font-style:normal; font-weight:400 600;
+    font-display:optional; src:url(/fonts/IBMPlexMono-latin-ext.woff2) format('woff2');
+    unicode-range:U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF }
+  @font-face { font-family:'IBM Plex Mono'; font-style:normal; font-weight:400 600;
+    font-display:optional; src:url(/fonts/IBMPlexMono-latin.woff2) format('woff2');
+    unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD }
+  @font-face { font-family:'IBM Plex Sans'; font-style:normal; font-weight:400 600;
+    font-display:optional; src:url(/fonts/IBMPlexSans-latin-ext.woff2) format('woff2');
+    unicode-range:U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF }
+  @font-face { font-family:'IBM Plex Sans'; font-style:normal; font-weight:400 600;
+    font-display:optional; src:url(/fonts/IBMPlexSans-latin.woff2) format('woff2');
+    unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD }
+  @font-face { font-family:'Source Serif 4'; font-style:normal; font-weight:400 600;
+    font-display:optional; src:url(/fonts/SourceSerif4-latin-ext.woff2) format('woff2');
+    unicode-range:U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF }
+  @font-face { font-family:'Source Serif 4'; font-style:normal; font-weight:400 600;
+    font-display:optional; src:url(/fonts/SourceSerif4-latin.woff2) format('woff2');
+    unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD }
+  /* Law is set in a serif; the interface around it is sans.
+     --accent does not mean "brand". It means: THIS IS THE MOMENT YOU ARE LOOKING AT.
+     Nothing else may use it. Not links, not headings, not buttons. That single rule
+     is the identity; everything else here is just neutrals and hairlines.
+     The ground is cool rather than cream: warm paper with a terracotta accent is the
+     house style of every AI design tool this year, and the audience here is people
+     paid to notice. */
+  :root { --bg:#f4f6f7; --fg:#0f1419; --muted:#59626c; --line:#dde2e6; --accent:#c6112f;
+          --card:#ffffff; --ok:#0f6b4f; --warn:#8a5a12; --on-accent:#ffffff;
+          --serif:'Source Serif 4',Charter,Georgia,'Iowan Old Style','Palatino Linotype',serif;
+          --sans:'IBM Plex Sans',ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+          --mono:'IBM Plex Mono',ui-monospace,'Cascadia Code',Consolas,monospace; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0d1117; --fg:#e6e9ec; --muted:#8b949e; --line:#21262d; --accent:#ff4d6a;
+            --card:#131920; --ok:#4ec78f; --warn:#e0b070; --on-accent:#0d1117; } }
+  * { box-sizing:border-box }
+  body { margin:0; font:16px/1.6 var(--sans); background:var(--bg); color:var(--fg); }
+  /* Reserve the persistent assistant's clearance in the server shell. The interactive
+     stylesheet is intentionally loaded after the legal page, so these two layout rules
+     must be present at first paint rather than moving the page when that CSS arrives. */
+  body.assistant-enabled { padding-bottom:84px }
+  body.assistant-enabled main { min-height:calc(100dvh - 94px) }
+  /* Digits line up in columns all over this product: dates, version counts, article
+     numbers, hashes. Proportional figures make those columns ragged. */
+  table, .mono, .badge, time, .kv { font-variant-numeric:tabular-nums }
+  /* Links were the single biggest consumer of the accent, which left it meaning
+     "clickable" rather than "now". Ink and a hairline underline read as a link
+     everywhere on the web and cost the accent nothing. */
+  a { color:inherit; text-decoration:underline; text-decoration-thickness:1px;
+      text-underline-offset:2px; text-decoration-color:var(--line) }
+  a:hover { text-decoration-color:var(--fg) }
+  /* The one thing that keeps it. */
+  .now, .asof { color:var(--accent); font-weight:600; font-variant-numeric:tabular-nums }
+  header { border-bottom:1px solid var(--line); padding:14px 20px; display:flex; gap:20px; align-items:baseline; flex-wrap:wrap }
+  header .brand { font-family:var(--serif); font-weight:700; font-size:21px; color:var(--fg); letter-spacing:-.01em }
+  header a.navlink { color:var(--muted); font-size:14.5px }
+  header a.navlink.on { color:var(--fg); font-weight:600; box-shadow:inset 0 -2px 0 var(--fg) }
+  header .navspacer { flex:1 }
+  .proofnav { position:relative; color:var(--muted); font-size:14.5px }
+  .proofnav summary { cursor:pointer; list-style:none; display:flex; align-items:center; gap:6px }
+  .proofnav summary::-webkit-details-marker { display:none }
+  .proofnav summary::after { content:'+'; font-family:var(--mono); font-size:12px }
+  .proofnav[open] summary::after { content:'−' }
+  .proofnav.on summary { color:var(--fg); font-weight:600 }
+  .proofnav > nav { position:absolute; z-index:50; top:calc(100% + 10px); left:-12px;
+    width:min(310px,calc(100vw - 28px)); padding:8px; display:grid; grid-template-columns:1fr 1fr;
+    gap:2px; background:var(--card); border:1px solid var(--line); border-radius:10px;
+    box-shadow:0 16px 38px rgba(0,0,0,.18) }
+  .proofnav:not([open]) > nav { display:none }
+  .proofnav > nav a { padding:7px 9px; border-radius:6px; color:var(--muted); text-decoration:none }
+  .proofnav > nav a:hover,.proofnav > nav a:focus-visible,.proofnav > nav a[aria-current=page] {
+    color:var(--fg); background:var(--bg) }
+  main { max-width:960px; margin:0 auto; padding:26px 20px 60px }
+  h1 { font-family:var(--serif); font-size:29px; line-height:1.15; letter-spacing:-.015em; margin:0 0 6px; text-wrap:balance }
+  h2 { font-family:var(--serif); font-size:20px; margin:28px 0 8px }
+  .sub { color:var(--muted); margin:0 0 18px; font-size:14.5px }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px 16px; margin:12px 0; overflow-x:auto }
+  .badge { display:inline-block; border:1px solid var(--line); border-radius:99px; padding:1px 10px; font-size:12.5px; color:var(--muted); margin-right:6px }
+  .badge.ok { color:var(--ok); border-color:var(--ok) }
+  .badge.warn { color:var(--warn); border-color:var(--warn) }
+  table { border-collapse:collapse; width:100%; font-size:14.5px }
+  th,td { text-align:left; padding:7px 10px; border-bottom:1px solid var(--line); vertical-align:top }
+  th { color:var(--muted); font-weight:600; font-size:13px }
+  .mono { font-family:var(--mono); font-size:13px; word-break:break-all }
+  .kv td:first-child { color:var(--muted); white-space:nowrap; padding-right:18px }
+  /* The catalogue. Filters are links, so every state of the page is a shareable URL. */
+  .filters { display:flex; flex-direction:column; gap:7px; margin:14px 0 16px }
+  .filters > div { display:flex; flex-wrap:wrap; gap:6px; align-items:baseline }
+  .filters i { font-style:normal; font-size:11px; letter-spacing:.06em; text-transform:uppercase;
+               color:var(--muted); width:74px; flex:none }
+  .filters .f { border:1px solid var(--line); border-radius:99px; padding:2px 11px; font-size:13px;
+                color:var(--muted); text-decoration:none }
+  .filters .f:hover { border-color:var(--fg); color:var(--fg); text-decoration:none }
+  .filters .f.on { border-color:var(--fg); color:var(--fg); font-weight:600 }
+  .filters .n { opacity:1; font-size:11.5px; font-variant-numeric:tabular-nums }
+  .filters .raw { margin-left:3px; font-size:10.5px; opacity:.8 }
+  .filters > .facetgroups { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr));
+                            gap:8px; align-items:start; margin-left:80px }
+  .facetgroup { border:1px solid var(--line); border-radius:8px; background:var(--card) }
+  .facetgroup summary { cursor:pointer; padding:7px 10px; font-size:12.5px; color:var(--fg) }
+  .facetgroup summary span { color:var(--muted); margin-left:5px }
+  .facetgroup > div { display:flex; flex-wrap:wrap; gap:6px; padding:3px 8px 9px }
+  .sourceclasses { margin-left:80px }
+  .cat td:first-child a { font-weight:600 }
+  .cat .r { text-align:right; font-variant-numeric:tabular-nums }
+  .cat .sub { font-size:12px; margin-top:2px }
+  .cat-mobile { display:none }
+  .cat th:nth-child(5), .cat td:nth-child(5),
+  .cat th:nth-child(6), .cat td:nth-child(6) { white-space:nowrap }
+  .pager { display:flex; gap:14px; align-items:baseline; margin:12px 0; font-size:14px }
+  .pager span { color:var(--muted); font-variant-numeric:tabular-nums }
+  form.inline { display:flex; gap:8px; flex-wrap:wrap; margin:10px 0 }
+  input,select,button { font:inherit; padding:7px 10px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--fg) }
+  /* Publisher names are evidence-facing labels, not layout constraints. Allow a select
+     to shrink inside the mobile content column while keeping its full option text. */
+  form.inline select { min-width:0; max-width:100% }
+  button { background:var(--fg); color:var(--bg); border-color:var(--fg); cursor:pointer }
+  footer { border-top:1px solid var(--line); margin-top:40px; padding:16px 20px; color:var(--muted); font-size:13px }
+  .notice { border-left:3px solid var(--warn); padding:10px 14px; background:var(--card); border-radius:0 8px 8px 0; margin:12px 0; font-size:14.5px }
+  .snippet { color:var(--muted); font-size:13.5px }
+  .sitemap { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:8px 30px;
+             margin-bottom:18px; padding-bottom:16px; border-bottom:1px solid var(--line) }
+  .sitemap div { display:flex; flex-direction:column; gap:3px }
+  .sitemap b { color:var(--fg); font-size:12px; letter-spacing:.06em; text-transform:uppercase;
+               margin-bottom:4px; font-weight:600 }
+  .sitemap a { color:var(--muted); min-height:24px; display:flex; align-items:center }
+  .sitemap a:hover { text-decoration-color:var(--fg) }
+  /* The one deliberate exception to the accent rule: a focus ring has to be the
+     loudest thing on the page, and accessibility outranks the identity. */
+  :focus-visible { outline:2px solid var(--accent); outline-offset:2px }
+  .rail { position:relative; height:44px; margin:14px 0 0 }
+  .rail .axis { position:absolute; left:0; right:0; top:21px; height:1px; background:var(--line) }
+  .rail .tick { position:absolute; top:13px; width:1px; height:17px; background:var(--muted); opacity:.55 }
+  .rail .tick:hover { opacity:1; background:var(--fg); width:2px }
+  .rail .tick.act { top:5px; height:33px; width:2px; background:var(--accent); opacity:1 }
+  .rail .yr { position:absolute; top:30px; font-family:var(--mono); font-size:11px; color:var(--muted) }
+  .railcap { margin:2px 0 18px } .nowmark { color:var(--accent) }
+  .railversions { display:none }
+  .vchips { display:flex; gap:6px; overflow-x:auto; padding:8px 1px 4px; scrollbar-width:thin }
+  .vchip { flex:none; min-height:44px; display:inline-flex; align-items:center; padding:4px 11px;
+           border:1px solid var(--line); border-radius:99px; font-family:var(--mono); font-size:11px;
+           color:var(--muted); text-decoration:none }
+  .vchip.act { border-color:var(--accent); color:var(--accent); font-weight:600 }
+  .lawbody { font-family:var(--serif); font-size:16.5px; line-height:1.62 }
+  .legal-markdown { margin-top:8px }
+  .legal-markdown > :first-child { margin-top:0 }
+  .legal-markdown > :last-child { margin-bottom:0 }
+  .legal-markdown table { font-family:var(--sans); font-size:14px }
+  /* Phones: law texts carry wide tables and long pre blocks. Let each scroll inside
+     itself rather than pushing the whole page sideways. Desktop is untouched. */
+  @media (max-width:900px) {
+    .rail { display:none }
+    .railversions { display:block; margin:12px 0 4px }
+    .railversions summary { min-height:44px; display:flex; align-items:center; cursor:pointer;
+                            color:var(--link); font-size:13px }
+  }
+  @media (max-width:640px) {
+    body.assistant-enabled { padding-bottom:76px }
+    main { padding:20px 14px 48px }
+    table { display:block; overflow-x:auto }
+    pre { overflow-x:auto }
+    header { gap:12px; padding:12px 14px }
+    header .navspacer { display:none }
+    .proofnav > nav { left:auto; right:0; grid-template-columns:1fr }
+    h1 { font-size:25px }
+    .rail .yr { font-size:10px }
+    .filters { gap:5px; margin-top:10px }
+    /* Keep the facet name beside its choices. Stacking every label on a separate row
+       made the first four filter groups taller than the entire 320px viewport and put
+       the persistent assistant over a live sort choice. */
+    .filters i { width:68px; margin:3px 0 1px }
+    .filters > .facetgroups { margin-left:0; grid-template-columns:1fr }
+    .sourceclasses { margin-left:0 }
+    .catcard { overflow:visible; padding:4px 14px }
+    .cat, .cat tbody { display:block; overflow:visible }
+    .cat tr { display:grid; grid-template-columns:minmax(0,1fr); padding:10px 0;
+              border-bottom:1px solid var(--line) }
+    .cat tr:first-child { display:none }
+    .cat td { display:none; border:0; padding:0 }
+    .cat td:first-child, .cat td:last-child { display:block; min-width:0 }
+    .cat td:last-child { margin-top:7px }
+    .cat td:first-child a { display:block; overflow-wrap:anywhere }
+    .cat .badge { white-space:normal; line-height:1.35 }
+    .cat-desktop { display:none }
+    .cat-mobile { display:block }
+  }
+</style></head>
+<body>
+<header>
+  <!-- The workspace IS the home page, so there is no "Ask" to link to from it, and /find,
+       /search and /changed are the no-JavaScript twins of its three tabs rather than separate
+       features. Promoting them here is what made the site look like it had two ways to do
+       everything. They stay reachable from the footer and from the noscript line. -->
+  <a class="brand" href="/">Lex</a>
+  <a class="navlink" href="/browse">Browse everything</a>
+  <details class="proofnav on">
+    <summary aria-expanded="false">Check the work</summary>
+    <nav aria-label="Check the work">
+      <a href="/how-it-works">How it works</a>
+      <a href="/coverage">Coverage</a>
+      <a href="/architecture" aria-current="page">Architecture</a>
+      <a href="/decisions">Decisions</a>
+      <a href="/benchmarks">Benchmarks</a>
+      <a href="/verify">Verify the artifacts</a>
+      <a href="/built">How I built it</a>
+      <a href="/about">About</a>
+    </nav>
+  </details>
+  <span class="navspacer"></span>
+  <a class="navlink" href="/developers">For developers</a>
+</header>
+<main>
+<h1>The architecture dossier</h1>
+<p class="sub">The complete engineering account for the product serving this page.</p>
+<nav class="tabs" aria-label="Architecture evidence" style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 22px">
+  <a class="badge" href="/architecture">Current</a>
+  <a class="badge" href="/architecture/next">Next</a>
+  <a class="badge ok" href="/architecture/dossier">Dossier</a>
+  <a class="badge" href="/decisions">Decisions</a>
+  <a class="badge" href="/benchmarks">Benchmarks</a>
+</nav><p class="lede">This is the complete, build-pinned engineering account: domain model, retrieval, assistant, evidence, delivery, measured failures and deliberate limits.</p><article class="architecture-dossier"><p>Every number in this document was measured against the running system or read from a signed
+artifact, never estimated. Where something is broken or unbuilt, it says so and links the record.
+This is the complete, build-pinned engineering account rendered by the public dossier page.</p>
+<p>Reading paths: §0 alone is a sixty-second summary. §1-§4 are the ten-minute story. Everything
+else is reference depth, written so that one person could rebuild the system from it. A reader
+arriving from the RAG literature can start at §13 instead: the four-brick mapping, and the
+retrieval failure mode that frame lacks.</p>
+<hr />
+<h2>0. Sixty seconds</h2>
+<p><strong>What it is.</strong> Point-in-time Luxembourg and EU law. Ask what an article said on a date and get
+the publisher's wording back, with its identifier, effective date, and a hash chained to the file
+the publisher served.</p>
+<table>
+<thead>
+<tr>
+<th>five numbers</th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Corpus</td>
+<td>2,650 works, ~7,010 dated versions, two publishers</td>
+</tr>
+<tr>
+<td>Text held</td>
+<td>EU 4,732 of 4,732 expressions; LU 3,157 of 4,649 (the gap is upstream, §3.3)</td>
+</tr>
+<tr>
+<td>Retrieval</td>
+<td>keyword nDCG@10 0.656 vs hybrid 0.560 on holdout, so keyword is the default</td>
+</tr>
+<tr>
+<td>Under load</td>
+<td>255 requests, 0 failed, p50 147 ms, p95 456 ms, one replica</td>
+</tr>
+<tr>
+<td>Memory</td>
+<td>peak 498 MB against a 1.5 GiB budget</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Three decisions.</strong> Semantic search is built, measured and not the default. Extraction profiles
+are immutable; improvements ship as new profiles. The deploy pipeline cannot move traffic;
+promotion requires signed evidence it cannot produce for itself.</p>
+<p><strong>One incident.</strong> A question quoting the CRR by its full title was answered with the right
+article of the wrong regulation. Retrieval identity, not the model. §8.3.</p>
+<p><strong>One limit.</strong> 6,424 of 537,035 provisions extract to empty text (1.2%), measured 2026-08-13,
+worst cases named and one already recovered. §11.</p>
+<p><strong>One caveat.</strong> This is a one-person project, and several decisions below (single replica, free
+public runners, a local build machine in the release path) are the honest consequences of that.
+They are written down as decisions with costs, not hidden.</p>
+<hr />
+<h2>1. The problem</h2>
+<p>Ask any legal site what a law says and you get today's text. Almost every question that matters
+in practice is about a date: what applied when the contract was signed, when the fine was issued,
+when the breach happened. Official publishers hold dated consolidated editions, but scattered
+across formats (Akoma Ntoso XML, Formex XML, legacy XHTML, gazette PDF), with no article-level
+access and no machine interface.</p>
+<p>Lex turns that into one queryable, verifiable history, and never answers the question it must not
+answer: it retrieves and compares what the law said, and refuses to advise what anyone should do.</p>
+<h2>2. Forces</h2>
+<p>Architecture is the resolution of forces. These are the ones that shaped every decision below:</p>
+<ol>
+<li><strong>Legal text is evidence.</strong> It must be served verbatim, attributable to the publisher, and
+provably unaltered. Nothing model-generated may enter the corpus (D57, D75).</li>
+<li><strong>Authority is cited data, never our opinion</strong> (spec §3.6). Every classification, date and
+title is publisher-asserted or carries a named reviewer.</li>
+<li><strong>Point-in-time correctness is the product.</strong> A wrong date is worse than no answer.</li>
+<li><strong>One person operates it.</strong> The nightly must commit nothing when unsure, every gate must fail
+closed, and cost ceilings are enforced by pipelines, not attention.</li>
+<li><strong>Small hardware, deliberately.</strong> 1 vCPU, 2 GiB, one always-on replica. The single process
+makes the public quota ledgers authoritative and retrieval latency predictable.</li>
+</ol>
+<h2>3. The domain model</h2>
+<h3>3.1 The FRBR shape</h3>
+<pre><code>work (a law: eu-eurlex:32013r0575)
+ └─ dated consolidation (valid_from <TODAY-40>, valid_to open)
+     └─ language expression (fr, en)
+         └─ manifestation (the publisher's file: XML, HTML, PDF)
+</code></pre>
+<p>A &quot;version&quot; in Lex is a dated consolidation. Directory keys are <code>valid_from</code> plus a same-day
+collision suffix (<code><TODAY-373>--02</code>, D41). Version intervals close when the next version begins.</p>
+<h3>3.2 Two time axes</h3>
+<p><code>valid_from</code>/<code>valid_to</code> describe when the law applied (the publisher's assertion).
+<code>observed_from</code> describes when Lex first saw the record (the audit assertion). Every change to a
+version's metadata appends an event; nothing is rewritten (F12).</p>
+<h3>3.3 What may be empty, and why that is honest</h3>
+<p>Legilux announces consolidations before publishing any document for them, including future-dated
+ones. Lex records the announcement with <code>text_available=false</code> and a typed reason. Proven against
+the publisher's own SPARQL catalogue: the financial-sector law has ten announced consolidations
+since <TODAY-585> with no manifestation in any format. The 32% LU text gap is upstream reality,
+not missing ingestion, and adding more fetch formats was measured to recover exactly zero
+versions.</p>
+<h3>3.4 Identity discipline</h3>
+<p>Publisher identifiers are stored, compared and returned, never parsed for meaning. Colloquial
+names (&quot;CRR&quot;, &quot;MiFID II&quot;) exist in no publisher dataset, so they live in a reviewed alias file
+(50 rows, each with a named review), and a quarantine lane exists for model-derived candidates
+with code-enforced confidence, repeat-run and agreement gates. That lane is empty in production.</p>
+<h2>4. Views</h2>
+<h3>4.1 Context</h3>
+<pre><code>official publishers            consumers
+Legilux · EUR-Lex/Cellar       web UI (itself an MCP client)
+        │                      AI assistant (/api/ask)
+        ▼                      external MCP clients (/mcp)
+   THE PIPELINE ──► signed artifacts ──► ONE PROCESS on Container Apps
+</code></pre>
+<h3>4.2 Containers (repositories and runtime)</h3>
+<table>
+<thead>
+<tr>
+<th>repo</th>
+<th>holds</th>
+<th>written by</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>lex</code></td>
+<td>all code, spec, ADR registry, eval catalog, trust roots</td>
+<td>owner via gated PRs</td>
+</tr>
+<tr>
+<td><code>lex-corpus-lu-legilux</code></td>
+<td>LU evidence layer: verbatim publisher files + dated metadata, append-only</td>
+<td>nightly only</td>
+</tr>
+<tr>
+<td><code>lex-corpus-eu-eurlex</code></td>
+<td>EU evidence layer, same rules</td>
+<td>nightly only</td>
+</tr>
+<tr>
+<td><code>lex-articles</code></td>
+<td>derived per-article layer (Markdown + JSON), reproducible from evidence</td>
+<td>nightly only</td>
+</tr>
+<tr>
+<td><code>lex-ops</code></td>
+<td>fleet workflows, publish scripts, immutable status/ticket branch</td>
+<td>owner + workflows</td>
+</tr>
+<tr>
+<td><code>lex-git-lu</code></td>
+<td>LU law as a chronological git history, generated</td>
+<td>pipeline</td>
+</tr>
+</tbody>
+</table>
+<p>The evidence/derived split is the recovery property: the derived layer can be deleted and
+regenerated from evidence at any time, losing nothing but compute.</p>
+<h3>4.3 Components, one process</h3>
+<pre><code>IndexReader   SQLite + memory-mapped vectors, per publisher
+    │
+McpCore       the typed tool surface: 10 tools, 13 closed statuses
+    │
+    ├── web UI        calls /mcp like any other client
+    ├── assistant     plans typed operations, never free text
+    └── external      public /mcp
+</code></pre>
+<p><code>McpCore</code>, retrieval benchmarks and ingest-time verification call <code>SearchKeyword</code>/<code>SearchHybrid</code>
+in-process. There is no internal HTTP between components (C5); it is one process by design.</p>
+<h3>4.4 Sequence: a question</h3>
+<pre><code>question ─► planner (LLM, offered 12 operation names, frozen list ≤8)
+         ─► plan gate: names not offered are rejected; arguments type-checked
+         ─► operations execute against McpCore, no replanning
+         ─► evidence ledger: typed entries with per-provision hashes
+         ─► default reply: deterministic, 0% model-authored
+         ─► optional synthesis: composer ─► typed claims bound to evidence ids
+                                 ─► judge: pass / repair / refuse
+</code></pre>
+<h3>4.5 Sequence: a night</h3>
+<pre><code>02:17 UTC ─► enumerate publishers ─► ingest (append-only, hash everything)
+          ─► anomaly gate (&gt;5% drop = commit nothing)
+          ─► integrity verify (bounded manifest, typed issues)
+          ─► derive articles (immutable profiles, V2 fallback by recovered-text share)
+          ─► dataset release + index build ticket (3 commits pinned, immutable)
+</code></pre>
+<h2>5. The data anatomy</h2>
+<p>Two files per publisher, four in the image, plus the encoder.</p>
+<h3>5.1 <code>index-&lt;publisher&gt;.db</code> (SQLite, EU ~580 MB)</h3>
+<table>
+<thead>
+<tr>
+<th>table</th>
+<th>content</th>
+<th>source</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>stamp</code></td>
+<td>build provenance: commits, dates, enrichment digest, ECDSA-P256 signature with its public key</td>
+<td>build</td>
+</tr>
+<tr>
+<td><code>docs</code></td>
+<td>one row per version per language: the timeline</td>
+<td>corpus repo</td>
+</tr>
+<tr>
+<td><code>provisions</code></td>
+<td>anchors, numbers, headings, <code>text_sha</code> pointers</td>
+<td>articles repo</td>
+</tr>
+<tr>
+<td><code>text_blobs</code></td>
+<td>the wording, Brotli, one copy per distinct text, content-addressed (D53)</td>
+<td>articles repo</td>
+</tr>
+<tr>
+<td><code>provision_states</code></td>
+<td>each anchor's distinct texts over time: the article-history axis</td>
+<td>derived</td>
+</tr>
+<tr>
+<td><code>citations</code></td>
+<td>publisher-written cross-references, flattened for reverse lookup</td>
+<td>articles repo</td>
+</tr>
+<tr>
+<td><code>fts</code> (FTS5)</td>
+<td>contentless inverted index: token → provisions, BM25 weights title 10 / num 4 / heading 6 / text 1</td>
+<td>derived</td>
+</tr>
+<tr>
+<td><code>work_fts</code> + siblings</td>
+<td>identity: publisher titles and identifiers, plus the 50 reviewed aliases</td>
+<td>corpus + alias file</td>
+</tr>
+<tr>
+<td><code>semantic_chunks</code></td>
+<td>provision text state → vector ordinal</td>
+<td>derived</td>
+</tr>
+</tbody>
+</table>
+<p>D53 stores repeated wording once. It trades storage, never provenance: the shared blob holds only
+bytes, and every occurrence row knows its work, anchor and date.</p>
+<h3>5.2 <code>index-&lt;publisher&gt;.vectors</code> (EU ~320 MB)</h3>
+<p><code>LEXVEC3</code> header, then N × 384 int8 values. EU holds 777,790 chunk vectors. No text, no
+metadata, no trust decisions: geometry only, memory-mapped, consulted exclusively on the hybrid
+path.</p>
+<h3>5.3 The encoder</h3>
+<p><code>intfloat/multilingual-e5-small</code>, pinned by revision and by SHA-256 of the ONNX and tokenizer in
+<code>deploy/embedding-model/model-manifest.json</code>. Git holds the identity; releases hold the bytes;
+the runtime refuses to open ONNX without matching hashes. The same encoder embeds passages at
+build and questions at query time, which is why it is pinned: mixed-brain similarities fail
+silently.</p>
+<h3>5.4 Who reads what</h3>
+<p>Nine of the ten MCP tools run on the <code>.db</code> alone. Only <code>search</code> with <code>retrieval_mode=hybrid</code>
+touches the vectors, and hybrid is gated off by measurement (§7.1).</p>
+<h2>6. Decisions</h2>
+<p>The registry (<code>docs/architecture-program.json</code>, rendered at <code>/decisions</code>) holds the delivery
+decisions; the spec holds the numbered design decisions (D41-D84). Every entry records choice,
+named alternative, reason, and cost. A sample of the ones that explain the most:</p>
+<table>
+<thead>
+<tr>
+<th>id</th>
+<th>decision</th>
+<th>the cost it admits</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>D53</td>
+<td>store repeated wording once, content-addressed</td>
+<td>readers reconstruct versions through occurrence mappings</td>
+</tr>
+<tr>
+<td>D54</td>
+<td>run semantic retrieval locally, pinned encoder</td>
+<td>Lex owns model packaging and relevance evaluation</td>
+</tr>
+<tr>
+<td>D55</td>
+<td>Container Apps while the index fits the image; blocked above the gate until a VM path exists</td>
+<td>releases can be deployment-blocked</td>
+</tr>
+<tr>
+<td>D57</td>
+<td>never synthesize consolidation</td>
+<td>some works stay metadata-only until the publisher publishes</td>
+</tr>
+<tr>
+<td>D58</td>
+<td>pin trust outside the artifact</td>
+<td>key rotation is an explicit dual-trust release</td>
+</tr>
+<tr>
+<td>D70</td>
+<td>legal chunk boundaries before hardware optimization</td>
+<td>fixed token buckets, cache invalidation on policy change</td>
+</tr>
+<tr>
+<td>D75</td>
+<td>model-derived names quarantined behind review</td>
+<td>enrichment is slow and human-gated</td>
+</tr>
+<tr>
+<td>D83</td>
+<td>LU subject facets from the publisher's taxonomy, planned</td>
+<td>second vocabulary to mirror; French-only labels</td>
+</tr>
+<tr>
+<td>D84</td>
+<td>match counts and cursor paging for search, planned</td>
+<td>a C6 contract amendment, not a patch</td>
+</tr>
+</tbody>
+</table>
+<p>Decision IDs are cited inline in source (<code>// D48:</code>, <code>// D41 collision suffix</code>), so rationale is
+traceable from any line back to the argument.</p>
+<h2>7. Retrieval</h2>
+<h3>7.1 Keyword is the default because measurement said so</h3>
+<p>The 200-case benchmark (11 categories: exact, temporal, conceptual, bilingual, typo, hierarchy,
+role, comparison, negative, ambiguity, gap) is split into tuning and holdout sets. On EU holdout:
+keyword MRR 0.631 / nDCG@10 0.656; hybrid MRR 0.499 / nDCG@10 0.560. Hybrid wins only recall@10
+(0.757 vs 0.730). The activation gate requires hybrid to reach 98% of keyword nDCG; it does not,
+so <code>retrieval_mode</code> defaults to keyword and no generative or embedding model participates in an
+ordinary search.</p>
+<p>Why it loses, not only that it loses: the holdout is dominated by the question shapes lawyers
+actually ask, identifiers, quoted titles and dated lookups, which BM25 under a title weight of 10
+answers almost perfectly, while the small multilingual encoder's one win is recall on conceptual
+phrasing (0.757 against 0.730). The numbers therefore point at a per-category opening of the
+gate, conceptual and bilingual first with keyword everywhere else, rather than a global flip. Any
+such opening faces the same holdout discipline, and until it clears, the default stays keyword.</p>
+<h3>7.2 Identity before ranking</h3>
+<p>Work resolution decides whether the question names a law, before any ranking. Mention is not
+subject: a quoted official title can legitimately contain another law's name (every EU amending
+title does). Selection treats the mention that strictly contains every other as the subject;
+resolution demotes a work named only inside an amending clause; the reply always names the
+instrument, its identifier and date, and discloses the runner-up. Each rule exists because of the
+incident in §8.3.</p>
+<h3>7.3 What a result set is, honestly</h3>
+<p>Results are provisions, deduped by text state in SQL, fused across keyword/fuzzy/(hybrid) ranks,
+deduped by (work, anchor), capped at two per work unless the caller scoped to named works, and
+budgeted across publishers. Consequences: a &quot;27 hits&quot; answer is what survived five narrowing
+stages, not a match count. No total is currently computed and search has no pagination; recorded
+as D84 with the reason a SQL OFFSET would be wrong.</p>
+<h2>8. Incidents</h2>
+<p>One template: symptom, noticed by, why it survived review, fix, guard added, lesson.</p>
+<h3>8.1 The silently dead search</h3>
+<p>Nightly built an index without the article layer: valid, signed, zero provisions. Caught by an
+end-to-end eval question. Guard: the index step takes the article layer as a required input.
+Lesson: a green build is not a working system.</p>
+<h3>8.2 The parser that duplicated text</h3>
+<p>Formex support doubled paragraphs where intro text preceded a list. Caught by re-reading real
+output. Guard: frozen profile fingerprints; a published profile's output can never change.</p>
+<h3>8.3 The right article of the wrong law</h3>
+<p>Full CRR title quoted; EMIR's Article 26 served. The title names two instruments; both resolved
+as identity; both hold an art. 26; the residual text rank was near-random; the reply named no
+instrument. Survived review because the answer was faithful to the evidence retrieved: no
+groundedness metric can catch it. Fixes at three layers (§7.2). Lesson: the dangerous retrieval
+failure is a correct answer about the wrong document.</p>
+<h3>8.4 The two-stage nightly failure</h3>
+<p>1,492 publisher-metadata-only notices first blocked the completeness gate (wrongly counted as
+failures), and after that was fixed, overflowed the manifest's 1,000-issue integrity bound: the
+corpus committed and still published nothing. Fix: coverage facts recorded on expressions and in
+counts, never in the failure list. Lesson: narrowing a gate is not enough when a second bound
+guards the same misclassification; and the bound firing is what made the misclassification
+visible.</p>
+<h3>8.5 Snippets were empty since the schema was written</h3>
+<p><code>fts5(..., content='')</code> stores no text, so SQLite's <code>snippet()</code> returned NULL on every hit, both
+publishers, forever. Proven side by side against a normal table. Fix: windows cut in application
+code from the content-addressed store, diacritics-folded to match the tokenizer, 2.2 ms per call
+measured before shipping. Lesson: a query that cannot fail loudly will fail invisibly.</p>
+<h3>8.6 The scoped search that returned two rows</h3>
+<p>The two-per-work fairness cap also applied when the caller had named the works, so &quot;search inside
+this law&quot; returned 2 of 40 requested rows. Found by probing the running system with a scoped
+query. Guard: the cap lifts only under an explicit works scope; a contract test pins both sides.
+Lesson: every fairness rule needs a statement of when it must not apply.</p>
+<h3>8.7 The eval case the code could no longer satisfy</h3>
+<p>The frozen catalog expected a <code>navigate</code> operation the assistant deliberately no longer produces,
+and exact-count argument matching was flaky against a planner that legitimately varies its
+tuning. Found by asking the running candidate the catalog's own questions before first signing.
+Fix: the case expects what the assistant does; reviewed arguments are the load-bearing subset.
+Lesson: release evidence must be rehearsed against the running system before it is sworn to.</p>
+<h3>8.8 The deploy gate that distrusted the exit code</h3>
+<p>Every deploy failed at the final gate for two days, roughly forty minutes per attempt, while the
+deployed revision was in fact healthy. The gate exists because an exit code proves the script
+ran, and only the monitoring plane proves the revision serves: it asks Azure Monitor for the
+candidate's own metrics before the pipeline may report success.</p>
+<p>Why it survived so long: each run surfaced exactly one cause, and fixing one per forty-minute
+cycle hid the next behind another cycle. The way out was to stop iterating and audit the whole
+pipeline in one pass, which found seven distinct causes and fixed them as a batch:</p>
+<ol>
+<li>The gate read a metric window immediately after revision start, and metric ingestion lags
+minutes behind reality, so an empty series read as a dead revision. Fixed with a bounded
+poll that waits up to twelve minutes for the evidence to arrive (&quot;Wait for the metrics that
+were always going to arrive&quot;, #163).</li>
+<li>Concurrent Azure writes lost management-plane races; a typed retry now wraps the six
+mutating calls and retries only <code>ConflictingConcurrentWriteNotAllowed</code> (#162).</li>
+<li>The GitHub OIDC token expired during the long waits; the run now refreshes its assertion
+mid-flight instead of failing on the next Azure call (#166).</li>
+<li>Multi-hundred-megabyte index downloads flaked; the fetch became resumable with a low-speed
+abort so a stall fails fast and a retry continues where it stopped (#160).</li>
+<li>The az CLI crashed printing a U+2713 under a cp1252 console, truncating the very diagnostics
+needed to debug the rest; logs are fetched over REST instead.</li>
+<li>The container registry lived in a different resource group than the workflow assumed.</li>
+<li>Carriage returns in a generated path list made a cleanup loop silently match nothing.</li>
+</ol>
+<p>Guard added: the gate stayed, unchanged in intent. Removing it was the tempting fix and the
+wrong one, because a revision that starts and emits nothing is exactly what it exists to catch.</p>
+<p>Lesson, and it is the same lesson twice. Operationally: when a pipeline fails serially, audit it
+whole rather than paying a full cycle per cause. Architecturally: &quot;evidence that exists but has
+not yet arrived&quot; is a recurring shape in this system. A metric emitted but not yet ingested is
+the same situation as a consolidation announced but not yet published (§3.3). In both places the
+honest design is a bounded wait plus a truthful status, never removing the check, never guessing.</p>
+<h2>9. How correctness is proven</h2>
+<ul>
+<li><strong>1,017 tests</strong>, including golden snapshots of every public page and tool response (they caught
+every page change made while writing this document), contract tests on the MCP surface,
+architecture fitness rules, and frozen profile fingerprints.</li>
+<li><strong>Deliberate-break verification</strong>: a new test is trusted only after the fix it pins is removed
+and the test observed failing. Two tests this week passed for the wrong reason and were caught
+exactly this way.</li>
+<li><strong>The retrieval benchmark</strong> runs inside the index publication workflow; its result is signed
+and published even when the hybrid gate fails, because bad news is publishable and only
+unverifiable news is not.</li>
+<li><strong>The assistant eval</strong>: 17 frozen cases asserting typed operations, canonical arguments,
+outcomes, population minimums, three injection-canary channels (direct, restored transcript,
+quoted evidence), synthesis presence, segment latencies (first result p95 ≤ 15 s, synthesis
+p95 ≤ 45 s), and an EUR 10 ceiling priced from Microsoft's signed retail meters. LLM-graded
+rubric per case with an independent grader on a separate Azure OpenAI account.</li>
+<li><strong>Groundedness is not a score.</strong> Every factual sentence in synthesized prose must be a typed
+claim bound to evidence ids, and kind mismatches are rejected in code at request time; a judge
+passes, repairs or refuses the prose; the default reply is not model-authored at all.</li>
+</ul>
+<h2>10. The machinery: pipelines, gates, identities</h2>
+<h3>10.1 Workflows and what each one blocks</h3>
+<table>
+<thead>
+<tr>
+<th>workflow</th>
+<th>repo</th>
+<th>trigger</th>
+<th>blocks</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ci</code></td>
+<td>lex</td>
+<td>every PR</td>
+<td>merge: tests, goldens, contracts, fingerprints</td>
+</tr>
+<tr>
+<td><code>nightly-fleet</code></td>
+<td>lex-ops</td>
+<td>02:17 UTC + dispatch</td>
+<td>corpus commit: anomaly &gt;5%, determinism, integrity bounds, blocking issues</td>
+</tr>
+<tr>
+<td><code>publish-prebuilt-index</code></td>
+<td>lex-ops</td>
+<td>dispatch, hash-pinned</td>
+<td>the release: immutable ticket match, ancestry, SHA pins, stamp verify, KV signature</td>
+</tr>
+<tr>
+<td><code>deploy</code></td>
+<td>lex</td>
+<td>dispatch only</td>
+<td>traffic: structurally cannot promote</td>
+</tr>
+<tr>
+<td><code>publish-assistant-evaluation</code></td>
+<td>lex-ops</td>
+<td>dispatched by a passing eval</td>
+<td>evidence: revalidates against the exact revision, browser gate</td>
+</tr>
+<tr>
+<td><code>revision-traffic</code></td>
+<td>lex</td>
+<td>dispatch</td>
+<td>production: seven verified files, human signature, revision identity</td>
+</tr>
+</tbody>
+</table>
+<h3>10.2 The chain</h3>
+<pre><code>PR ──ci──► main ──nightly──► corpora + articles + TICKET(3 commits)
+                                   │
+                local index build ─┤ (owner's machine; a one-person-team
+                                   │  decision, recorded with its risks)
+                                   ▼
+              publish-prebuilt-index [OIDC + kv-lex-soufien signs]
+                                   ▼
+              deploy ──smoke──► candidate at 0% traffic ──✗ cannot promote
+                                   ▼
+              eval (17 cases, canaries, p95 gates, EUR ceiling)
+              + human attestation [kv-lex-eval-review]
+                                   ▼
+              publish-assistant-evaluation ──► five-file evidence release
+                                   ▼
+              revision-traffic ──verify all──► traffic moves
+</code></pre>
+<h3>10.3 Separation of authority</h3>
+<table>
+<thead>
+<tr>
+<th>authority</th>
+<th>identity</th>
+<th>deliberately cannot</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>merge code</td>
+<td>owner through branch policy</td>
+<td>bypass checks silently</td>
+</tr>
+<tr>
+<td>write corpora</td>
+<td>nightly OIDC</td>
+<td>touch code branches</td>
+</tr>
+<tr>
+<td>sign artifacts</td>
+<td><code>uami-lex-publisher</code> + <code>kv-lex-soufien</code></td>
+<td>approve evaluation cases</td>
+</tr>
+<tr>
+<td>approve cases</td>
+<td>owner's Entra identity + <code>kv-lex-eval-review</code></td>
+<td>be exercised by any workflow: the publisher identity has no access to this vault</td>
+</tr>
+<tr>
+<td>deploy</td>
+<td><code>uami-lex-deploy</code></td>
+<td>move traffic without the evidence set</td>
+</tr>
+<tr>
+<td>runtime</td>
+<td><code>uami-lex-runtime</code></td>
+<td>write anything: indexes are baked, read-only bytes</td>
+</tr>
+</tbody>
+</table>
+<p>No automated actor can approve its own release. That is the design's one-sentence answer to AI
+governance, implemented as vault ACLs rather than policy prose.</p>
+<h3>10.4 Azure inventory (resource group <code>rg-platform</code>, France Central)</h3>
+<table>
+<thead>
+<tr>
+<th>resource</th>
+<th>role</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>cae-platform-law</code> + managed certificate</td>
+<td>Container Apps environment for law.soufien.lu</td>
+</tr>
+<tr>
+<td><code>ca-lex-web</code></td>
+<td>the one app: 1 vCPU, 2 GiB, one always-on replica, revisions as immutable code+data units</td>
+</tr>
+<tr>
+<td><code>stlexindexes</code></td>
+<td>Blob: private staging (hash-pinned uploads) and immutable releases</td>
+</tr>
+<tr>
+<td><code>kv-lex-soufien</code></td>
+<td>artifact signing key (<code>keyvault-lex-v2</code>), OIDC-gated</td>
+</tr>
+<tr>
+<td><code>kv-lex-eval-review</code></td>
+<td>the human-approval key, RBAC excludes the publisher identity</td>
+</tr>
+<tr>
+<td><code>uami-lex-publisher</code> / <code>uami-lex-deploy</code> / <code>uami-lex-runtime</code></td>
+<td>the three separated identities of §10.3</td>
+</tr>
+<tr>
+<td><code>ai-lex-web</code></td>
+<td>Application Insights via OpenTelemetry</td>
+</tr>
+<tr>
+<td><code>soufien.lu</code> DNS zone</td>
+<td>the domain</td>
+</tr>
+<tr>
+<td>(adjacent groups)</td>
+<td>container registry; Azure OpenAI: candidate/planner models on one account, the eval grader on a different account, deliberately</td>
+</tr>
+</tbody>
+</table>
+<h3>10.5 The image is the product</h3>
+<p>The Docker build compiles the web bundle and binaries, downloads the published index releases,
+and verifies every manifest signature against pinned trust roots inside the build: an image with
+tampered indexes fails to build. The shipped container holds binaries, both <code>.db</code>, both
+<code>.vectors</code>, the encoder, manifests and trust roots. A revision therefore pins code and data
+together; rollback rolls both back; the only external runtime dependency is Azure OpenAI, for
+the assistant only.</p>
+<h3>10.6 Cost posture</h3>
+<p>Public repositories on free standard runners; heavy builds on the owner's machine via the
+hash-pinned ticket (the reason &quot;prebuilt&quot; exists); a EUR 10 eval ceiling priced from Microsoft's
+retail meters with no override flag; one always-on replica as the paid runtime.</p>
+<h3>10.7 What survives losing what</h3>
+<p>Continuity is a property of the layout, not a promise. Code, spec and both corpora are public
+git: losing any single machine, the build machine included, loses no evidence and no history.
+The image is immutable and rebuildable from a signed release manifest; the previous revision
+stays deployable throughout. The signing key is non-exportable in Key Vault, so a lost key is
+not a leaked key; recovery is the explicit dual-trust rotation D58 describes, published as a
+release rather than performed quietly. A GitHub outage degrades to the failure mode the gates
+were designed around: the nightly commits nothing and the site keeps serving yesterday's law.
+The one asset that is neither public nor signed is the local embedding cache; losing it costs a
+full re-embed under the D69/D70 batch discipline, compute rather than data.</p>
+<h3>10.8 Capacity triggers, and the plan when one fires</h3>
+<p>None of this is built. Each row is a threshold that is already observable with what the system
+records today, the change that threshold authorises, and the cost that change admits. The
+thresholds are targets, not measurements; the figures in brackets are measured. Writing them
+down is the point: the next architecture move is decided by a number rather than by a feeling,
+and a move made before its trigger fires is a move made without evidence.</p>
+<table>
+<thead>
+<tr>
+<th>trigger</th>
+<th>what it means</th>
+<th>the move</th>
+<th>what it costs</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>MCP queue-deadline rejections appear at all (admission is 8 executing, 16 queued, 2 s deadline)</td>
+<td>concurrency is bounded by the per-publisher execution gate rather than by CPU: a tool call with no publisher argument holds every publisher's semaphore for its whole execution</td>
+<td>narrow the gate to the encoder and vector sections, where the non-preemptable work actually is; keyword search, <code>as_of</code> and <code>diff</code> already run on isolated SQLite sessions</td>
+<td>one contained change plus a contract test, no new infrastructure</td>
+</tr>
+<tr>
+<td>more than 50 assistant users a day, or the global daily cap reached three days running, or Azure OpenAI answering 429</td>
+<td>demand exceeds the model budget rather than the machine</td>
+<td>raise the Azure OpenAI TPM quota and the daily cap together, in that order; consider provisioned throughput only after measuring sustained utilisation</td>
+<td>pay-as-you-go rises linearly, provisioned throughput is a fixed monthly floor that is cheaper only above a measured utilisation</td>
+</tr>
+<tr>
+<td>served p95 above 800 ms sustained (deploy gate is 1,500 ms; measured 456 ms at 60 rpm)</td>
+<td>the single replica is saturating</td>
+<td>move the quota ledger and the idempotency registry to a shared store, then add replicas</td>
+<td>the ledgers stop being authoritative in process memory; the index needs no change, because the artifact is immutable, signed and content-addressed, so every replica serves identical bytes</td>
+</tr>
+<tr>
+<td>peak working set above 1.2 GB (gate is 1.5 GiB, measured peak 498 MB)</td>
+<td>the memory-mapped index no longer fits beside the runtime</td>
+<td>D55's next rung: the release moves from the image onto a VM-managed local disk</td>
+<td>a second verified deployment path and OS patching, which is why D55 gates it rather than assuming it</td>
+</tr>
+<tr>
+<td>a third publisher is admitted</td>
+<td>the required-publisher set is stated in four places and MCP fans out per publisher under an 8-publisher budget</td>
+<td>unify the publisher set to one source, then re-measure fan-out latency before admitting a fourth</td>
+<td>one refactor; the fan-out cost is real and is the reason the budget exists</td>
+</tr>
+</tbody>
+</table>
+<p>What no trigger authorises: a rewrite, a framework, or splitting the process. The measured
+bottlenecks are a lock scope and two in-process ledgers, and both are contained changes.</p>
+<h2>11. Known limits</h2>
+<p>The full record with effects, fixes, gains and why-not-now lives in <code>docs/known-defects.md</code>.
+The short honest list:</p>
+<ol>
+<li><strong>Positional version identity</strong> can, on a Legilux same-date tie re-key, serve one
+consolidation's text under another's interval, undetectably (13 tie pairs exist). Highest
+open severity; needs a corpus-format change and re-ingest.</li>
+<li><strong>Empty provisions</strong>: 6,424 of 537,035 (1.2%), counted per document and flagged per version
+since 2026-08-13; the worst case (the 1993 financial-sector law, 105 of 145) was recovered by
+the second Memorial profile the same day. Ratchet gate not yet built.</li>
+<li><strong>LU text gap is upstream</strong>: 1,493 announced consolidations with no publisher manifestation in
+any format, proven by the publisher's own catalogue.</li>
+<li><strong><code>work_resolution_status</code> conflates</strong> &quot;named no law&quot; with &quot;named one we failed to resolve&quot;;
+fixing it needs a citation-shape detector, and the benchmark to prove it helps.</li>
+<li><strong>No search pagination or match count</strong> (D84): a contract amendment, not a patch.</li>
+<li><strong>Observability</strong>: 17 diagnostic codes without request-id correlation; release-time gates are
+strong, production-time telemetry is thin.</li>
+<li><strong>One replica</strong>: the quota ledger's authority and the memory-mapped index make horizontal
+scale a redesign (per-replica memory), accepted while measurements stay far below limits.</li>
+<li><strong>A flaky timing test</strong> (<code>Preparation_heartbeat...</code>) failed once on a loaded runner and passed
+on rerun; the repo forbids fixing it by raising the timeout, so it stays listed until fixed
+properly.</li>
+</ol>
+<h2>12. Deliberately not built</h2>
+<ul>
+<li>No consolidation synthesis, no entity extraction, no model-derived names in identity: the
+never-generate rule outranks completeness.</li>
+<li>No replanning loop: measured failures were identity and data failures, not plan-shape failures.</li>
+<li>No LangChain/LlamaIndex: the failures documented in §8 were findable because every layer is
+hand-written and typed.</li>
+<li>No cross-publisher joins: LU and EU identity spaces are disjoint; saying so beats approximating.</li>
+<li>No bi-temporal query surface yet: the audit axis is stored and provable via <code>provenance</code>;
+&quot;as we knew it on T&quot; waits for a real user.</li>
+<li>No UI-layer machine translation of provisions: an English rendering of a French statute would
+be the one model-generated text a reader could mistake for law. Orientation stays in the
+interface language; wording stays the publisher's.</li>
+</ul>
+<h2>13. Mapping to the common RAG decomposition</h2>
+<p>Much recent writing decomposes document QA into four bricks: parse, understand the question,
+retrieve, generate, each behind a typed contract. Lex fits, with two deviations that are the
+point:</p>
+<table>
+<thead>
+<tr>
+<th>brick</th>
+<th>Lex's counterpart</th>
+<th>deviation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>parsing</td>
+<td>the nightly: ingest + immutable extraction profiles + derived articles</td>
+<td>it is a <em>temporal corpus pipeline</em>, not per-document parsing; profiles are versioned evidence</td>
+</tr>
+<tr>
+<td>question parsing</td>
+<td>work resolution + article/role/date intent + typed operation plan</td>
+<td>identity resolution is a separate, earlier stage than ranking, and the hardest one (§8.3)</td>
+</tr>
+<tr>
+<td>retrieval</td>
+<td>FTS5/BM25 default, gated hybrid, filters, fusion, caps</td>
+<td>the fashionable half is built and measurably off</td>
+</tr>
+<tr>
+<td>generation</td>
+<td>typed operations first; prose optional, claim-typed, judged</td>
+<td>the default answer contains no generated sentence at all</td>
+</tr>
+</tbody>
+</table>
+<p>And one addition the four-brick frame lacks: a fourth retrieval failure mode. Beyond
+not-retrieved, wrong-passage and buried, there is <em>right passage, wrong document</em>: identity
+failure upstream of ranking, invisible to groundedness metrics because the answer is faithful to
+the evidence retrieved. §8.3 is its case study, and §7.2 its fixes.</p>
+</article>
+</main>
+<footer>
+<!-- Fourteen links in one undifferentiated run answered no question a reader had. Three
+     named groups do: what each page is FOR is now the label above it. -->
+<nav class="sitemap" aria-label="All pages">
+  <div><b>Read the law</b>
+    <a href="/browse">Browse everything</a><a href="/stories">Worked examples</a>
+    <a href="/find">Plain pages, without JavaScript</a></div>
+  <div><b>Check the work</b>
+    <a href="/how-it-works">How it works</a><a href="/coverage">What Lex holds, and lacks</a>
+    <a href="/decisions">Decisions, and what they cost</a>
+    <a href="/benchmarks">Benchmarks</a><a href="/verify">Verify it yourself</a>
+    <a href="/architecture">Architecture</a><a href="/built">How I built it</a>
+    <a href="/about">About</a></div>
+  <!-- The datasets, not the engine. This group used to end at "Source on GitHub" pointing at
+       the engine repo, which is the wrong thing to lead with for a reader who wants to USE
+       this law rather than read the code that serves it. The corpora are the part that is
+       reusable on its own, and they were reachable only from /developers. -->
+  <div><b>Build on it</b>
+    <a href="/developers">Developers &amp; API</a>
+    <a href="https://github.com/SFHAJJI/lex-articles" rel="noopener">Dataset: law by article (CC-BY)</a>
+    <a href="https://github.com/SFHAJJI/lex-corpus-lu-legilux" rel="noopener">Corpus: Luxembourg, verbatim</a>
+    <a href="https://github.com/SFHAJJI/lex-corpus-eu-eurlex" rel="noopener">Corpus: EU, verbatim</a></div>
+</nav>
+  <b>Not legal advice, and not the official text.</b> Lex answers <i>what the rule was</i>, never what it
+  means for your situation, no interpretation, no advice. Every answer shows the source it came from.
+  LU data: Legilux, Ministère d'État, Service central de législation, Grand-Duché de Luxembourg
+  (CC-BY 4.0, metadata and content files; consolidated texts reproduced verbatim from the official filestore).
+  EU data: © European Union, reuse with attribution (Commission Decision 2011/833/EU);
+  <b>consolidated texts have no legal effect</b>, only acts published in the Official Journal are authentic.
+  · <a href="https://github.com/SFHAJJI/lex">source</a>
+</footer>
+</body></html>

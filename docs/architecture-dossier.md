@@ -2,7 +2,7 @@
 
 Every number in this document was measured against the running system or read from a signed
 artifact, never estimated. Where something is broken or unbuilt, it says so and links the record.
-This is the source document that the public architecture page will render in the next release.
+This is the complete, build-pinned engineering account rendered by the public dossier page.
 
 Reading paths: §0 alone is a sixty-second summary. §1-§4 are the ten-minute story. Everything
 else is reference depth, written so that one person could rebuild the system from it. A reader

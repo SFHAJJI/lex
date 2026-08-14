@@ -60,7 +60,7 @@ public static class PageShell
 
     private static bool ProofCurrent(string? path) => path is
         "/how-it-works" or "/coverage" or "/architecture" or "/architecture/next"
-        or "/decisions" or "/benchmarks" or "/verify" or "/built" or "/about";
+        or "/architecture/dossier" or "/decisions" or "/benchmarks" or "/verify" or "/built" or "/about";
 
     private static string ProofLink(string path, string label, string? currentPath)
     {
@@ -68,7 +68,7 @@ public static class PageShell
         // Marking the parent link current gives visual and assistive-technology users the same
         // route-family context that the open disclosure already communicates.
         var current = currentPath == path
-            || (path == "/architecture" && currentPath == "/architecture/next");
+            || (path == "/architecture" && currentPath is "/architecture/next" or "/architecture/dossier");
         return $"<a href=\"{path}\"{(current ? " aria-current=\"page\"" : "")}>{label}</a>";
     }
 

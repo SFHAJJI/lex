@@ -45,6 +45,7 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
         { "verify",          "/verify" },
         { "architecture",    "/architecture" },
         { "architecture-next", "/architecture/next" },
+        { "architecture-dossier", "/architecture/dossier" },
         { "benchmarks",      "/benchmarks" },
         { "built",           "/built" },
         { "decisions",       "/decisions" },
@@ -131,6 +132,18 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
         using var askRedirect = await _site.Client.GetAsync("/ask");
         Assert.Equal(HttpStatusCode.MovedPermanently, askRedirect.StatusCode);
         Assert.Equal("/", askRedirect.Headers.Location?.OriginalString);
+    }
+
+    [Fact]
+    public async Task Architecture_links_to_the_embedded_full_dossier()
+    {
+        var architecture = await _site.Client.GetStringAsync("/architecture");
+        Assert.Contains("href=\"/architecture/dossier\"", architecture);
+
+        var dossier = await _site.Client.GetStringAsync("/architecture/dossier");
+        Assert.Contains("The architecture dossier", dossier);
+        Assert.Contains("This is the complete, build-pinned engineering account", dossier);
+        Assert.Contains("class=\"badge ok\" href=\"/architecture/dossier\"", dossier);
     }
 
     [Fact]

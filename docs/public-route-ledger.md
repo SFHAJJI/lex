@@ -26,6 +26,7 @@ Dynamic publisher routes accept only mounted publisher IDs and validated work/da
 | GET | `/stories` | Explainers | reader | canonical | HTML | public index | examples avoid applicability and advice claims |
 | GET | `/architecture` | Explainers | evaluator | canonical | HTML | public index | current architecture evidence |
 | GET | `/architecture/next` | Explainers | evaluator | canonical | HTML | public index | roadmap does not claim unshipped behavior |
+| GET | `/architecture/dossier` | Explainers | evaluator | canonical | HTML | public index | build-pinned source document renders without a second copy |
 | GET | `/decisions` | Explainers | evaluator | canonical | HTML | public index | accepted and rejected alternatives |
 | GET | `/benchmarks` | Explainers | evaluator | canonical | HTML | public index | compatible reports or explicit not measured state |
 | GET | `/benchmarks/latest.json` | Explainers | machine, evaluator | canonical artifact | JSON | machine | complete compatible collection set; malformed report fails closed |
