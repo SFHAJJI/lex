@@ -12,7 +12,7 @@ defects measured against the running system on 2026-08-13.
 |---|---|
 | Assistant 0, verify what production mounts | Measured: production serves `lex-index/3` with `work_catalog_available: true`. The verdict's leading finding, "deployed indexes missing the entire work catalog", was **refuted** |
 | Assistant 1, ship the work catalog | Already true in production, see above |
-| Assistant 3c, EMIR and MAR aliases | #167, EU enrichment 31 to 50 entries |
+| Assistant 3c, common EU names | #213 removed manual enrichment; unique official publisher short-title segments now establish identity and collisions clarify |
 | Assistant 3d, demote amending-clause matches | #172 |
 | Assistant 4a, scope the date-guard stand-down | #165 |
 | Assistant 4b, enforce runner-up disclosure | #170 |
@@ -25,6 +25,7 @@ defects measured against the running system on 2026-08-13.
 | Corpus 10, counter test could not fail | #174 |
 | Corpus 11, log lines bypassed the injected writer | #174, #177 |
 | Corpus 1, positional same-date version identity | `lex-corpus/4`: full publisher version id is persisted and its full SHA-256 forms the stable version key; the one-time migration refuses a missing/replaced held state before body acquisition |
+| Assistant 5, unresolved work reported as `not_requested` | #213: index resolution now emits `unresolved`, and deterministic subject preflight runs before the planner receives any work authority |
 
 ---
 
@@ -83,24 +84,6 @@ from headings across the Memorial-derived corpus.
 
 **Why not now.** Medium effort, needs a re-derive and a rebuilt index to be visible, and the
 before/after number only became measurable today.
-
-## 5. `work_resolution_status` reports `not_requested` when resolution failed
-
-**What is broken.** `BasicQueryPlan` returns `not_requested` whenever no legal identifier token is
-present and no identity match was found. The work search **did** run.
-
-**Effect.** A caller, including the assistant's planner, cannot distinguish "the question named no
-work" from "the question named a work and we failed to resolve it". Those warrant opposite
-behaviour: the first is a normal corpus-wide search, the second is a clarification.
-
-**Fix.** Report `unresolved` when a work-shaped mention was present and matched nothing, keeping
-`not_requested` for genuinely work-free queries.
-
-**Gain.** The assistant can ask a clarifying question instead of silently searching everything, which
-is the failure mode behind the CRR/EMIR class.
-
-**Why not now.** Small, but it changes a published contract value, so it needs the MCP status table
-and the assistant's branching updated together.
 
 ## 6. Manifest counters mix two populations
 

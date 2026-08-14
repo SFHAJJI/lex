@@ -198,6 +198,12 @@ and pull, but the registry is shared with other applications. Disabling the admi
 auditing those consumers could break deployments outside this repository, so that change is a
 separate cross-application migration, not part of this retention change.
 
+Broad automated deletion is therefore rejected under the current shared, legacy-RBAC boundary.
+The target is either a dedicated Lex registry with an independently auditable lifecycle, or an
+audited migration of every shared consumer to repository-scoped ABAC roles and managed identities.
+Only after one of those boundaries proves exclusive digest ownership may the read-only retention
+plan become an automated manifest-deletion workflow.
+
 Likewise, bootstrap ACR digest deletion is blocked until all Container Apps revisions, App Service
 container settings, AKS workloads, external pull identities and ACR access logs are audited for
 the exact digests. A digest appearing only in Lex's revision inventory is a generic cleanup

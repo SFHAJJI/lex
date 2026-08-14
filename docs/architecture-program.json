@@ -66,8 +66,8 @@
     {
       "id": "M9",
       "title": "Official-metadata search and legal-research agent",
-      "status": "shipped",
-      "outcome": "Official publisher metadata, source-backed short-title resolution, deterministic clarification, bounded retrieval, Agent Framework evidence composition and judging, bounded memory and jurisdiction-first results are live without changing authoritative legal text. Taxonomies remain weak discovery only and model-derived discovery remains excluded from production retrieval."
+      "status": "gated",
+      "outcome": "Official publisher metadata, source-backed short-title resolution, deterministic clarification, frozen plan execution, Agent Framework evidence composition and judging, bounded memory and jurisdiction-first results are implemented on main. They become live only with the fresh signed v4 index, candidate evaluation and promotion. Taxonomies remain weak discovery only and model-derived discovery remains excluded from production retrieval."
     }
   ],
   "decisions": [
@@ -281,20 +281,20 @@
     {
       "id": "D75",
       "title": "Separate authoritative text from provenance-aware search enrichment",
-      "status": "shipped",
-      "choice": "Build a publisher-first work catalog from official identifiers, titles, short titles and classifications, plus reviewed collision-aware aliases. Store accepted model-derived concepts in a quarantined trust class and activate them only if a separate held-out ablation proves incremental value without ranking or latency regressions. Any work vectors share the existing signed vector artifact through typed SQLite ordinal mappings.",
-      "alternative": "Treat generated metadata as legal fact or a strong rank signal, maintain a runtime sidecar database, repeat work metadata inside every provision vector, or keep professional names in application code.",
-      "reason": "Professional names require deterministic publisher metadata and reviewed overrides, while descriptive discovery requires candidate retrieval without silently converting a repeated model output into authority. A single verified artifact keeps provenance and rollback atomic.",
-      "cost": "Publisher metadata retention, alias collision handling, proposal provenance, evidence anchors, separate legal and enrichment digests, typed ordinal validation, clean corpus migration and independent regression benchmarks become build responsibilities."
+      "status": "gated",
+      "choice": "Build the work catalog only from official publisher identifiers, titles, short-title segments and classifications, retaining each metadata kind, authority URI, label, language and source URI in the signed corpus and index. A unique exact short-title segment may establish work identity; taxonomy metadata is weak discovery only. Manual aliases and model-derived legal metadata are excluded from production authority.",
+      "alternative": "Maintain legal-name overrides in application configuration, let generated concepts become legal fact or a strong rank signal, or keep publisher metadata in an unsigned runtime sidecar.",
+      "reason": "A discovery label can improve recall without proving document identity or legal wording. Keeping every accepted value source-backed and inside the same verified artifact lets search explain why a work matched while dated publisher text remains the only basis for a legal claim.",
+      "cost": "Publisher vocabularies, collisions, source URIs, canonical ordering and migration boundaries become build responsibilities. The implementation remains gated until a fresh v4 corpus and signed index are promoted."
     },
     {
       "id": "D76",
       "title": "Keep retrieval authority deterministic and use Agent Framework for grounded composition",
-      "status": "shipped",
-      "choice": "Resolve the raw user query and authorize work-specific tools in application code, run a bounded tool-calling retrieval loop over the shared MCP core, then use Agent Framework for claim-typed evidence composition and the conditional grounding judge.",
-      "alternative": "Give a model authority over work identity and citations, make the chatbot the primary navigator, or introduce a hierarchy of peer research agents.",
-      "reason": "Exact lookup and tool permission must not become stochastic, while synthesized prose benefits from structured composition and an independent evidence check.",
-      "cost": "The bounded retrieval loop and Framework composer/judge add model latency, tokens, session/privacy handling and evaluation work. The planner is application-hosted rather than a single Agent Framework research agent."
+      "status": "gated",
+      "choice": "Resolve the reader's subject before planning, give the planner only closed subject references and catalogue-derived operation schemas, allow at most one pre-execution contract correction, then freeze at most eight operations. Execute the shared legal core without a model observation or replanning loop, route closed outcomes into typed UI effects and a bounded evidence ledger, and invoke Agent Framework composition and judging only when prose was requested.",
+      "alternative": "Give a ReAct-style agent the index or raw MCP surface, let a model repair deterministic tool failures by trying again, or introduce peer research agents with overlapping authority.",
+      "reason": "Identity, dates, legal outcomes, citations and rendered actions are authorization decisions that must stay deterministic. A model is useful for bounded planning and optional explanation, but an ambiguous subject must return to the reader rather than be guessed by another model turn.",
+      "cost": "The application owns more explicit contracts, outcome routing, evidence bounds and regression cases. Optional composition adds latency and tokens, and the implementation remains gated until candidate evaluation and promotion prove the exact release."
     },
     {
       "id": "D77",
@@ -316,12 +316,12 @@
     },
     {
       "id": "D83",
-      "title": "Take Luxembourg subject facets from the publisher, not from us",
-      "status": "planned",
-      "choice": "Ingest the jolux:subjectLevel1 and jolux:subjectLevel2 assertions Legilux already publishes, storing each authority URI alongside its skos:prefLabel, and expose them as a Luxembourg facet the way document type and hierarchy already are.",
-      "alternative": "Generate a Luxembourg subject vocabulary from engineering acquisition labels, or leave Luxembourg with no subject facet at all.",
-      "reason": "Legilux classifies its own acts against a SKOS authority scheme of legal subjects, and its own search offers those subjects as narrowing suggestions before a query is even submitted. Citing the publisher's classification keeps subject metadata inside the rule that authority is cited data and never our opinion, which a vocabulary we invented could not satisfy. It also makes the facet comparable with the publisher's interface rather than an approximation of it.",
-      "cost": "A second authority vocabulary to mirror, version and re-verify on every ingest. Labels are French only, so an English interface must show a French subject or none. Nothing equivalent exists on the EU side, so the two publishers' subject facets are not interchangeable and must not be merged into one list."
+      "title": "Use official publisher classifications for weak discovery",
+      "status": "gated",
+      "choice": "Acquire Legilux subjectLevel1 and subjectLevel2 assertions and EUR-Lex short titles, EuroVoc relations and directory classifications with their official identifiers, labels, languages, kinds and source URIs. Index them as bounded discovery metadata, return the matched official assertion to callers, and keep taxonomy browsing and cross-publisher facets deferred.",
+      "alternative": "Invent one shared legal taxonomy, copy engineering acquisition labels into the product, infer classifications with a model, or ignore the official publisher vocabularies.",
+      "reason": "Publisher classifications can surface a relevant work even when the query words are absent from its provisions, while their source URIs let the interface explain the match. They do not prove that a phrase occurs in the law, establish historical applicability or support a legal claim.",
+      "cost": "Legilux and EUR-Lex vocabularies remain distinct and must be mirrored, bounded and re-verified independently. French-only Legilux labels are not translated, current classifications are not historical evidence, and live coverage waits for the promoted v4 index."
     },
     {
       "id": "D84",
