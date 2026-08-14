@@ -2,12 +2,12 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { compoundOperationViews, first, tool, type AskReply, type OperationReply,
   type ProvisionItem, type UiEffect } from "./api";
 import { publisherOf, useWorkspace, workSlug, type Space, type State } from "./state";
-import { CitedBy, CoveragePanel, Empty, EvidenceCoordinates, Gap, InForce, Provision, Ranking,
+import { CitedBy, CoveragePanel, Empty, EvidenceCoordinates, Gap, InForce, Provision, Ranking, Timeline,
   VerificationPanel, VersionRail, hasView } from "./views";
 import { Compare } from "./Compare";
 import { LawPicker, shorten } from "./pickers";
 import AssistantController from "./AssistantController";
-import { assistantProvisionLoad, assistantWorkspaceState } from "./assistantShell";
+import { assistantProvisionLoad, assistantTimelineSeed, assistantWorkspaceState } from "./assistantShell";
 import Search from "./Search";
 import Period from "./Period";
 import Coach, { COACH_KEY } from "./Coach";
@@ -391,6 +391,11 @@ export default function App() {
       let navigated = false;
       if (hasView(r.ui)) {
         setUi(r.ui);
+        const timeline = assistantTimelineSeed(r.ui);
+        if (timeline) {
+          setVersions(timeline.versions);
+          setLangs(timeline.languages);
+        }
         // The rendered view owns navigation. A comparison turn may also read each side via
         // as_of for grounded prose; those supporting provision effects must not steal the
         // diff's verified article anchor or change its destination.
@@ -483,8 +488,13 @@ export default function App() {
       }} />;
     if (view.in_force) return <InForce date={view.in_force.date} total={view.in_force.total}
       rows={view.in_force.rows} page={0} hasMore={false} onPage={() => {}} onOpen={openLaw} />;
+    if (view.timeline) return <Timeline view={view.timeline}
+      onOpen={(date) => {
+        clearAssistantView();
+        go({ work: view.timeline!.subject.work, date, mode: "read", space: "law" });
+      }} />;
     const subject = view.diff?.subject ?? view.provision?.subject
-      ?? view.history?.subject ?? view.timeline?.subject;
+      ?? view.history?.subject;
     if (subject?.work) {
       const from = view.diff?.from_date ?? view.provision?.valid_from ?? subject.date ?? today();
       return <button className="operation-open" onClick={() => view.diff

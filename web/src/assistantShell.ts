@@ -22,6 +22,19 @@ export function assistantProvisionLoad(ui?: UiEffect) {
   };
 }
 
+/** Authoritative timeline rows can paint the rail while the normal workspace refresh catches up. */
+export function assistantTimelineSeed(ui?: UiEffect) {
+  const timeline = ui?.timeline;
+  if (!timeline) return undefined;
+  return {
+    versions: [...new Set(timeline.rows.map((row) => row.valid_from))].sort(),
+    languages: [...new Set(timeline.rows.map((row) => row.language).filter(
+      (value): value is string => Boolean(value)))].sort(),
+    total: timeline.total_count,
+    truncated: timeline.truncated,
+  };
+}
+
 export function parseAssistantPanelState(raw: string | null): AssistantPanelState {
   if (!raw) return { open: false, minimized: false };
   try {

@@ -242,6 +242,31 @@ public sealed class AskOperationControllerTests : IDisposable
         Assert.Equal("2024-12-31", primary["args"]?["date"]?.GetValue<string>());
     }
 
+    [Fact]
+    public async Task Article_identity_comes_from_the_user_query_when_the_planner_omits_it()
+    {
+        var planner = new StaticPlanner("en", new JsonArray(new JsonObject
+        {
+            ["tool"] = "diff",
+            ["arguments"] = new JsonObject
+            {
+                ["work_query"] = "CRR",
+                ["from_date"] = "2020-01-01",
+                ["to_date"] = "2024-12-31",
+            },
+        }));
+        var service = new AskService(_core, planner);
+
+        var response = await service.AskAsync(
+            History("Compare Article 92 of the CRR between 2020 and 2024."),
+            Guid.NewGuid().ToString(), "law.test", CancellationToken.None);
+
+        Assert.Equal(200, response.Status);
+        var primary = Assert.Single(Assert.IsType<JsonArray>(response.Body["trace"])
+            .OfType<JsonObject>(), item => item["phase"]?.GetValue<string>() == "primary");
+        Assert.Equal("art_92", primary["args"]?["anchor"]?.GetValue<string>());
+    }
+
     // The other instant nobody stated. The argument gate completes an omitted date to today and
     // records "as_of.date defaulted" in Repairs, which is logged and traced and never reached the
     // prose a reader sees, so a reply announced a date the user never named. Whenever the served

@@ -81,7 +81,6 @@ internal static class OperationArguments
             ["changes_in_period"] = Set("from_date", "to_date", "publisher", "jurisdiction",
                 "document_type", "source_class", "hierarchy", "act_form", "binding_status",
                 "domain", "language", "order", "limit", "offset"),
-            ["navigate"] = Set("work", "work_query", "article_number", "date", "language"),
             ["legal_boundary"] = Set("reason"),
             ["clarification"] = Set("question", "options"),
             ["gap"] = Set("reason"),
@@ -142,7 +141,6 @@ internal static class OperationArguments
     private static readonly IReadOnlyDictionary<string, RequiredChoice[]> Choices =
         new Dictionary<string, RequiredChoice[]>(StringComparer.Ordinal)
         {
-            ["navigate"] = [WorkIdentity("navigate")],
             ["as_of"] = [WorkIdentity("as_of")],
             ["diff"] = [WorkIdentity("diff")],
             ["timeline"] = [WorkIdentity("timeline")],
@@ -176,7 +174,6 @@ internal static class OperationArguments
         {
             ["as_of"] = ["date"],
             ["in_force_on"] = ["date"],
-            ["navigate"] = ["date"],
         };
 
     /// <summary>The stray argument names that are refused rather than dropped. Each of them names

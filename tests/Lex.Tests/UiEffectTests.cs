@@ -230,6 +230,42 @@ public class UiEffectTests
 
         Assert.Equal("eu-eurlex:32013r0575", eff.Timeline!.Subject.Work);
         Assert.Null(eff.Timeline.Subject.Date);
+        Assert.Equal(2, eff.Timeline.TotalCount);
+        Assert.False(eff.Timeline.Truncated);
+        Assert.Collection(eff.Timeline.Rows,
+            row =>
+            {
+                Assert.Equal("2020-06-27", row.ValidFrom);
+                Assert.Equal("2021-06-26", row.ValidTo);
+            },
+            row =>
+            {
+                Assert.Equal("2021-06-27", row.ValidFrom);
+                Assert.Null(row.ValidTo);
+            });
+    }
+
+    [Fact]
+    public void A_truncated_timeline_retains_the_authoritative_total_and_continuation_state()
+    {
+        var eff = UiMapper.From("timeline", Args(("work", "eu-eurlex:32013r0575")),
+            new JsonObject
+            {
+                ["envelope"] = new JsonObject { ["status"] = "ok" },
+                ["work"] = "32013r0575",
+                ["total_count"] = 9,
+                ["truncated"] = true,
+                ["versions"] = new JsonArray(new JsonObject
+                {
+                    ["title"] = "Regulation (EU) No 575/2013",
+                    ["valid_from"] = "2024-01-01",
+                    ["permalink"] = "https://law.soufien.lu/eu-eurlex/32013r0575/2024-01-01",
+                }),
+            });
+
+        Assert.Equal(9, eff.Timeline!.TotalCount);
+        Assert.True(eff.Timeline.Truncated);
+        Assert.Single(eff.Timeline.Rows);
     }
 
     [Fact]

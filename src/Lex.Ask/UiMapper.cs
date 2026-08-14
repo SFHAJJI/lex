@@ -103,7 +103,7 @@ public static class UiMapper
                     ["total_works_in_force"] = 0,
                     ["works"] = new JsonArray(),
                 }, args),
-                "search" or "navigate" => Workspace(args),
+                "search" => Workspace(args),
                 _ => new UiEffect(),
             };
             return WithEvidence(empty, evidence);
@@ -143,7 +143,6 @@ public static class UiMapper
             "cited_by" => Cited(node),
             "provenance" => Verification(node),
             "search" => Workspace(args),
-            "navigate" => Workspace(args),
             _ => new UiEffect(),
         };
         return WithEvidence(mapped, evidence);
@@ -401,7 +400,15 @@ public static class UiMapper
         var latest = rows[^1];
         return new UiEffect(Timeline: new TimelineView(
             Subject: new Subject(CanonicalWork(o, args), S(latest, "title"), null, null,
-                S(latest, "language") ?? S(args, "language"))));
+                S(latest, "language") ?? S(args, "language")),
+            Rows: rows.Select(version => new TimelineState(
+                S(version, "valid_from") ?? "",
+                S(version, "valid_to"),
+                S(version, "title"),
+                S(version, "language"),
+                S(version, "permalink"))).ToList(),
+            TotalCount: o["total_count"]?.GetValue<int>() ?? rows.Count,
+            Truncated: o["truncated"]?.GetValue<bool>() ?? false));
     }
 
     private static UiEffect Diff(JsonObject o, JsonObject args)

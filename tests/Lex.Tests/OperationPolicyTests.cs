@@ -105,19 +105,15 @@ public sealed class OperationPolicyTests
         ], tools);
         // The property that makes anyOf equivalent to oneOf here.
         Assert.Equal(tools.Count, tools.Distinct(StringComparer.Ordinal).Count());
-        // navigate and gap are application-internal actions and stay off the planner surface.
-        Assert.Equal(["gap", "navigate"],
+        // gap is application-owned. Navigation is a typed effect of an authoritative operation,
+        // never a legal operation of its own.
+        Assert.Equal(["gap"],
             OperationArguments.Actions.Except(tools, StringComparer.Ordinal)
                 .Order(StringComparer.Ordinal));
     }
 
-    // The test above states the intent; until now nothing enforced it. A planner tool name went
-    // straight to CreatePlanned, which validates against the ARGUMENT gate's action set, and that
-    // set is deliberately wider than the planner surface. "navigate" is the consequence: the
-    // schema never offers it, but the gate accepts it and execution answers it synthetically with
-    // status ok, no legal call and no evidence, so a response naming it would have produced a
-    // successful operation backed by nothing. The schema restricting the model's choice is not
-    // the same thing as the plan refusing everything else, and only the second is an invariant.
+    // The schema restricting the model's choice is not the same thing as the plan refusing
+    // everything else, and only the second is an invariant.
     [Theory]
     [InlineData("navigate")]
     [InlineData("gap")]
@@ -508,7 +504,7 @@ public sealed class OperationPolicyTests
     // is PRESENT and does not parse is refused, because "2024" could mean 2024-01-01 or
     // 2024-12-31 and either choice silently selects a different version of the law. Every date
     // argument the action accepts is probed, not only the ones it requires, so a bad
-    // navigate.date or search.as_of cannot slip past on the way to MCP.
+    // search.as_of cannot slip past on the way to MCP.
     [Theory]
     [MemberData(nameof(EveryOperation))]
     public void The_gate_refuses_every_date_the_schema_pattern_refuses(string action)
@@ -592,7 +588,6 @@ public sealed class OperationPolicyTests
     [Theory]
     [InlineData("as_of", """{"work_query":"GDPR","article_number":"6"}""")]
     [InlineData("in_force_on", "{}")]
-    [InlineData("navigate", """{"work":"eu-eurlex:32013r0575"}""")]
     public void An_operation_with_no_date_is_answered_as_the_law_stands_today(
         string tool, string argumentsJson)
     {
@@ -604,7 +599,7 @@ public sealed class OperationPolicyTests
         Assert.Equal("2026-03-04", normalized["date"]!.GetValue<string>());
         Assert.Contains($"{tool}.date defaulted", repairs);
         // The date is not merely accepted, it is the one MCP is handed, and MCP demands one.
-        if (tool != "navigate") McpInputPolicy.Validate(tool, Executable(tool, normalized));
+        McpInputPolicy.Validate(tool, Executable(tool, normalized));
     }
 
     [Fact]
@@ -1581,28 +1576,15 @@ public sealed class OperationPolicyTests
     }
 
     [Fact]
-    public void Navigate_maps_the_resolved_subject_to_one_typed_workspace_destination()
+    public void Navigate_is_not_an_executable_operation()
     {
-        var operation = RequestedOperation.CreatePlanned("nav", 0, "navigate",
-            new JsonObject
+        Assert.DoesNotContain("navigate", OperationArguments.Actions);
+        Assert.Throws<InvalidDataException>(() => RequestedOperation.CreatePlanned(
+            "nav", 0, "navigate", new JsonObject
             {
                 ["work"] = "eu-eurlex:32013r0575",
                 ["date"] = "2024-01-01",
-                ["article_number"] = "92",
-            });
-        var executed = new JsonObject
-        {
-            ["work"] = "eu-eurlex:32013r0575",
-            ["date"] = "2024-01-01",
-            ["anchor"] = "art_92",
-        };
-
-        var effect = UiMapper.From(operation, executed,
-            new JsonObject { ["status"] = McpStatus.Ok });
-
-        Assert.Equal("eu-eurlex:32013r0575", effect.Workspace?.Work);
-        Assert.Equal("2024-01-01", effect.Workspace?.Date);
-        Assert.Equal("art_92", effect.Workspace?.Anchor);
+            }));
     }
 
     [Fact]
@@ -1741,16 +1723,10 @@ public sealed class OperationPolicyTests
         var comparison = RequestedOperation.Create(
             "comparison", 0, "diff", new JsonObject(), true, [],
             [OperationEffect.Diff, OperationEffect.Gap]);
-        var navigation = RequestedOperation.Create(
-            "navigation", 0, "navigate", new JsonObject(), true,
-            [SupportingCallRole.WorkResolution], [OperationEffect.Workspace, OperationEffect.Gap]);
-
         Assert.Throws<InvalidDataException>(() =>
             new OperationExecution(exact).CompleteLegal(LegalOutcome.Succeeded));
         Assert.Throws<InvalidDataException>(() =>
             new OperationExecution(comparison).CompleteLegal(LegalOutcome.NotComparable));
-        Assert.Equal(LegalOutcome.Succeeded,
-            new OperationExecution(navigation).CompleteLegal(LegalOutcome.Succeeded).LegalOutcome);
     }
 
     [Fact]

@@ -204,7 +204,9 @@ export interface UiEffect {
                 text_truncated?: boolean; outline_only?: boolean };
   diff?: { subject: Subject; from_date: string; to_date: string; note?: string; status?: string; evidence?: EvidenceContext[] };
   history?: { subject: Subject; anchor: string; distinct_texts: number; states: { valid_from: string; valid_to?: string; sha?: string; permalink?: string }[]; evidence?: EvidenceContext[] };
-  timeline?: { subject: Subject; evidence?: EvidenceContext[] };
+  timeline?: { subject: Subject; rows: { valid_from: string; valid_to?: string; title?: string;
+                language?: string; permalink?: string }[]; total_count: number; truncated: boolean;
+                evidence?: EvidenceContext[] };
   ranking?: { from_date: string; to_date: string; order: string; works_changed: number; new_versions: number;
               population_works?: number; population_basis?: string; known_exclusions?: string[];
               rows: RankingRow[]; status?: string; evidence?: EvidenceContext[] };

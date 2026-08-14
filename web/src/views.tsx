@@ -305,6 +305,36 @@ export function VersionRail({ dates, current, compareTo, scope, today, work, tim
   );
 }
 
+export function Timeline({ view, onOpen }: {
+  view: NonNullable<UiEffect["timeline"]>;
+  onOpen: (date: string) => void;
+}) {
+  return (
+    <section className="evidence-panel" aria-labelledby="timeline-result-title">
+      <div className="cnt">
+        <span className="tag">{view.total_count.toLocaleString()} dated versions</span>
+        {view.truncated ? <span className="tag">showing {view.rows.length}</span> : null}
+      </div>
+      <h2 id="timeline-result-title">Version history</h2>
+      <ol className="rows">
+        {view.rows.map((row) => (
+          <li key={`${row.valid_from}:${row.language ?? ""}`}>
+            <button className="operation-open" onClick={() => onOpen(row.valid_from)}>
+              {row.valid_from}{row.valid_to ? ` to ${row.valid_to}` : " onward"}
+            </button>
+            {row.language ? <span className="sub">{row.language.toUpperCase()}</span> : null}
+          </li>
+        ))}
+      </ol>
+      {view.truncated ? (
+        <p className="sub" role="status">
+          This result is incomplete. Open the law to load the complete version rail.
+        </p>
+      ) : null}
+    </section>
+  );
+}
+
 /**
  * Time-proportional, so the rhythm of amendment stays legible — a law rewritten every three
  * weeks looks nothing like one revised twice a century. Then ticks are pushed apart to keep a

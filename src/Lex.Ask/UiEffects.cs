@@ -155,7 +155,11 @@ public sealed record HistoryView(Subject Subject, string Anchor, int DistinctTex
 
 public sealed record HistoryState(string ValidFrom, string? ValidTo, string? Sha, string? Permalink);
 
-public sealed record TimelineView(Subject Subject, IReadOnlyList<EvidenceContext>? Evidence = null);
+public sealed record TimelineView(Subject Subject, IReadOnlyList<TimelineState> Rows,
+    int TotalCount, bool Truncated, IReadOnlyList<EvidenceContext>? Evidence = null);
+
+public sealed record TimelineState(string ValidFrom, string? ValidTo, string? Title,
+    string? Language, string? Permalink);
 
 public sealed record RankingView(string FromDate, string ToDate, string Order,
     int WorksChanged, int NewVersions, IReadOnlyList<RankingRow> Rows, string? Status = null,

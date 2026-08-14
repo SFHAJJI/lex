@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   STARTER_PROMPTS,
   assistantProvisionLoad,
+  assistantTimelineSeed,
   assistantWorkspaceState,
   assistantWorkspaceUrl,
   parseAssistantPanelState,
@@ -159,7 +160,24 @@ test("search and whole-work timeline effects open their matching workspace state
 
   assert.equal(assistantWorkspaceUrl({ timeline: {
     subject: { work: "eu-eurlex:32013r0575" },
+    rows: [], total_count: 0, truncated: false,
   } }), "/?space=law&work=eu-eurlex%3A32013r0575");
+});
+
+test("timeline effects seed the version rail before the workspace follow-up fetch", () => {
+  assert.deepEqual(assistantTimelineSeed({ timeline: {
+    subject: { work: "eu-eurlex:32013r0575" }, total_count: 3, truncated: true,
+    rows: [
+      { valid_from: "2024-01-01", language: "fr" },
+      { valid_from: "2020-01-01", language: "en" },
+      { valid_from: "2024-01-01", language: "fr" },
+    ],
+  } }), {
+    versions: ["2020-01-01", "2024-01-01"],
+    languages: ["en", "fr"],
+    total: 3,
+    truncated: true,
+  });
 });
 
 test("a resolved navigation operation opens exactly its law coordinates", () => {

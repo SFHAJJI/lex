@@ -90,7 +90,7 @@ public static class LegalOperationPolicy
 
     public static LegalResultClass ResultClassFor(string tool) => tool switch
     {
-        "search" or "navigate" => LegalResultClass.Navigate,
+        "search" => LegalResultClass.Navigate,
         "as_of" => LegalResultClass.ExactText,
         "diff" => LegalResultClass.Comparison,
         "timeline" or "article_history" => LegalResultClass.Timeline,
@@ -101,12 +101,12 @@ public static class LegalOperationPolicy
     };
 
     public static bool RequiresWorkResolution(string tool) => tool is
-        "navigate" or "as_of" or "diff" or "timeline" or "article_history" or "cited_by"
+        "as_of" or "diff" or "timeline" or "article_history" or "cited_by"
         or "provenance";
 
     public static OperationEffect PrimaryEffectFor(string tool) => tool switch
     {
-        "search" or "navigate" => OperationEffect.Workspace,
+        "search" => OperationEffect.Workspace,
         "as_of" => OperationEffect.Provision,
         "diff" => OperationEffect.Diff,
         "timeline" => OperationEffect.Timeline,
@@ -122,7 +122,7 @@ public static class LegalOperationPolicy
     public static bool AllowsEffect(string tool, OperationEffect effect) =>
         tool switch
         {
-            "search" or "navigate" => effect is OperationEffect.Workspace or OperationEffect.Gap,
+            "search" => effect is OperationEffect.Workspace or OperationEffect.Gap,
             "as_of" => effect is OperationEffect.Provision or OperationEffect.Gap,
             "diff" => effect is OperationEffect.Diff or OperationEffect.Gap,
             "timeline" => effect is OperationEffect.Timeline or OperationEffect.Gap,
@@ -459,15 +459,9 @@ public sealed class OperationPlan
                        && toolValue.TryGetValue<string>(out var parsedTool)
                 ? parsedTool
                 : throw new InvalidDataException("Every planned operation must name a string tool or action.");
-            // Only a tool the planner was offered may enter a plan. Until now the name went
-            // straight to CreatePlanned, which validates against the ARGUMENT gate's tool set,
-            // and that set is wider than what the planner is allowed to choose. "navigate" is
-            // the gap: it is absent from PlannerToolNames, so the schema never offers it, but
-            // the gate accepts it and execution answers it synthetically with status ok, no
-            // legal call and no evidence. A planner response naming it, whether the structured
-            // output degraded or the text was crafted, would have produced a successful
-            // operation backed by nothing. The schema restricting the choice is not the same
-            // as the plan refusing anything else, and only the second one is an invariant.
+            // Only a tool the planner was offered may enter a plan. The schema restricting the
+            // model's choice is not the same as the plan refusing everything else, and only the
+            // second one is an invariant.
             if (!AskService.PlannerToolNames.Contains(tool, StringComparer.Ordinal))
                 throw new InvalidDataException(
                     $"A planned operation named '{tool}', which the planner was not offered.");
@@ -534,9 +528,7 @@ public sealed class OperationExecution
         if (outcome == LegalOutcome.NotEvaluated)
             throw new InvalidDataException("NotEvaluated requires a non-completed transport outcome.");
         if (outcome is not (LegalOutcome.NeedsClarification or LegalOutcome.InvalidRequest
-                or LegalOutcome.LegalBoundary)
-            && !(outcome == LegalOutcome.Succeeded
-                && Request.ResultClass == LegalResultClass.Navigate))
+                or LegalOutcome.LegalBoundary))
             throw new InvalidDataException(
                 $"Outcome '{outcome}' requires an authoritative tool result for '{Request.ResultClass}'.");
         return CompleteCore(BuildResult(

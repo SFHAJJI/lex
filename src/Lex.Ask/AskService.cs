@@ -581,8 +581,8 @@ public sealed class AskService
         _ when message.Contains("must be a string.", StringComparison.Ordinal)
             => "wrong_type",
         // Split before the general date class, and deliberately narrow. A point-in-time instant is
-        // always defaulted when it is absent (DefaultedDates covers as_of, in_force_on and
-        // navigate), so this message can only mean a value the model supplied and the gate could
+        // always defaulted when it is absent (DefaultedDates covers as_of and in_force_on), so
+        // this message can only mean a value the model supplied and the gate could
         // not parse. A range bound reaching the general class below is a different matter: an
         // absent to_date is recoverable from the user's own words, and a bare year in from_date or
         // to_date has one correct expansion to the calendar boundary, so both stay retryable.
@@ -632,6 +632,19 @@ public sealed class AskService
         .Any(item => item["query_plan"] is JsonObject plan
             && plan["article_number"]?.GetValue<string>() is { Length: > 0 }
             && plan["has_strong_work_match"]?.GetValue<bool>() != true);
+
+    internal static string? ArticleNumberFromUserSearch(JsonNode result)
+    {
+        var values = (result is JsonArray responses
+                ? responses.OfType<JsonObject>()
+                : result is JsonObject response ? [response] : [])
+            .Select(item => item["query_plan"]?["article_number"]?.GetValue<string>())
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(value => value!.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        return values is [var article] ? article : null;
+    }
 
     internal static void ApplyWorkspaceDefaults(string tool, JsonObject args)
     {
@@ -693,7 +706,7 @@ public sealed class AskService
         Bare years, by argument ROLE. A year is a window, and which rule applies depends on whether
         the slot holds a window bound or a single instant:
         - from_date / to_date: expand a bare year to 1 January and 31 December of that year.
-        - date (as_of, in_force_on, navigate): NEVER derive a single date from a bare year, a bare
+        - date (as_of, in_force_on): NEVER derive a single date from a bare year, a bare
           month, a season or a decade. Choosing a day inside a year answers a different question
           from the one asked, and it silently selects a version of the law. When the user gives a
           year with no day for a point-in-time question, plan the WINDOW form instead:
@@ -773,7 +786,7 @@ public sealed class AskService
     // OperationArguments, not strict mode, remains the fix for the thirteen omitted dates. Worse,
     // allOf is unsupported and each anyOf branch must itself be a complete strict object, so a
     // bare {"required":["work"]} is invalid and nullable types cannot say "this one must not be
-    // null": the work-identity gate on navigate/as_of/diff/timeline/cited_by/provenance and the
+    // null": the work-identity gate on as_of/diff/timeline/cited_by/provenance and the
     // anchor-or-article_number gate on article_history would disappear from the schema entirely.
     // And a schema strict mode refuses is a 400 on every planning call, which is a planner outage
     // rather than a degradation. If it is wanted later, put it behind a flag, catch the 400 and
@@ -1815,7 +1828,7 @@ public sealed class AskService
 
     /// <summary>The operations whose <c>date</c> names a single instant rather than a window
     /// bound. Only these can turn a year into a day.</summary>
-    private static readonly string[] PointInTimeOperations = ["as_of", "navigate", "in_force_on"];
+    private static readonly string[] PointInTimeOperations = ["as_of", "in_force_on"];
 
     /// <summary>The repair line a widened operation carries. It rides in <c>Repairs</c> so it
     /// reaches the plan trace and the reply disclosure on the same path every other argument
@@ -2076,30 +2089,19 @@ public sealed class AskService
                 JsonNode result;
                 string status;
                 executedArguments[operation.UserOrder] = arguments.DeepClone().AsObject();
-                if (operation.Tool == "navigate")
-                {
-                    result = new JsonObject { ["status"] = McpStatus.Ok };
-                    status = McpStatus.Ok;
-                }
-                else
-                {
-                    using var span = Activity.StartActivity("legal-operation");
-                    span?.SetTag("lex.operation.id", operation.OperationId);
-                    span?.SetTag("gen_ai.tool.name", operation.Tool);
-                    var mcpWatch = Stopwatch.StartNew();
-                    result = await _legalTool(operation.Tool, arguments, ct);
-                    mcpWatch.Stop();
-                    mcpMilliseconds += mcpWatch.Elapsed.TotalMilliseconds;
-                    status = LegalOperationPolicy.StatusForResult(result);
-                    span?.SetTag("lex.status", status);
-                }
+                using var span = Activity.StartActivity("legal-operation");
+                span?.SetTag("lex.operation.id", operation.OperationId);
+                span?.SetTag("gen_ai.tool.name", operation.Tool);
+                var mcpWatch = Stopwatch.StartNew();
+                result = await _legalTool(operation.Tool, arguments, ct);
+                mcpWatch.Stop();
+                mcpMilliseconds += mcpWatch.Elapsed.TotalMilliseconds;
+                status = LegalOperationPolicy.StatusForResult(result);
+                span?.SetTag("lex.status", status);
 
                 var effect = UiMapper.From(operation, arguments, result, plan.Locale);
                 effects[operation.UserOrder] = effect;
-                if (operation.Tool == "navigate")
-                    execution.CompleteLegal(LegalOutcome.Succeeded, result.AsObject());
-                else
-                    execution.Complete(status, result);
+                execution.Complete(status, result);
                 var (summaryStatus, docs) = Summarize(result);
                 trace.Add(new JsonObject
                 {
@@ -2394,6 +2396,7 @@ public sealed class AskService
         var carriesPriorSubject = priorWorks.Count > 0 && IsAnaphoricWorkReference(rawUserQuery);
         var resolution = await Search(rawUserQuery, "work_resolution",
             result => guard.ObserveCurrentUserSearch(result, hasPriorContext: carriesPriorSubject));
+        article ??= ArticleNumberFromUserSearch(resolution);
         JsonNode? focused = null;
         var resolutionQuery = article is null ? workQuery : $"{workQuery} Article {article}";
         if (guard.CurrentResolvedWorks.Count != 1
