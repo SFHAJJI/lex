@@ -2,13 +2,14 @@ using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Lex.Temporal;
 
 namespace Lex.Derive;
 
 /// <summary>
-/// Walks an evidence corpus (works/&lt;slug&gt;/versions/&lt;valid_from&gt;/*.xml) and writes the
+/// Walks an evidence corpus (works/&lt;slug&gt;/versions/&lt;version_key&gt;/*.xml) and writes the
 /// derived consumption layer (fr.json + fr.md per version) under
-/// out/&lt;publisher&gt;/works/&lt;slug&gt;/versions/&lt;valid_from&gt;/. Pure function of
+/// out/&lt;publisher&gt;/works/&lt;slug&gt;/versions/&lt;version_key&gt;/. Pure function of
 /// (corpus bytes, profile version): deleting the output loses nothing but compute.
 /// </summary>
 public static class DeriveWriter
@@ -24,8 +25,8 @@ public static class DeriveWriter
     /// <param name="EmptyProvisions">Provisions the profile emitted with no body text. They are
     /// not a skip: the provision exists, carries a heading, and mints a text_sha256 over the empty
     /// string, so it counts as coverage and any later real text reads as an amendment that never
-    /// happened. Counted rather than rejected, because the existing backlog would abort every run
-    /// before it could be measured.</param>
+    /// happened. An existing count remains reportable backlog, while an increase for a work fails
+    /// closed and leaves that work's previously accepted derived files untouched.</param>
     /// <param name="MostlyEmpty">Versions where at least <see cref="MostlyEmptyPercent"/> of the
     /// provisions extracted with no text. Distinct from a scattered gap: it means the profile did
     /// not work on that document. Reported rather than rejected, because rejecting would discard
@@ -71,8 +72,30 @@ public static class DeriveWriter
             || (candidateWithText == currentWithText && current.Provisions.Count == 0);
     }
 
-    public static Stats Derive(string corpusRoot, string outRoot, string publisher)
+    public static Stats Derive(
+        string corpusRoot, string outRoot, string publisher,
+        string deriverCodeCommit, string deriverTreeId,
+        string corpusCommit, string reviewedConfigurationSha256) =>
+        DeriveCore(corpusRoot, outRoot, publisher, deriverCodeCommit, deriverTreeId,
+            corpusCommit, reviewedConfigurationSha256, stagedFileWritten: null);
+
+    internal static Stats Derive(
+        string corpusRoot, string outRoot, string publisher,
+        string deriverCodeCommit, string deriverTreeId,
+        string corpusCommit, string reviewedConfigurationSha256,
+        Action<string>? stagedFileWritten) =>
+        DeriveCore(corpusRoot, outRoot, publisher, deriverCodeCommit, deriverTreeId,
+            corpusCommit, reviewedConfigurationSha256, stagedFileWritten);
+
+    private static Stats DeriveCore(
+        string corpusRoot, string outRoot, string publisher,
+        string deriverCodeCommit, string deriverTreeId,
+        string corpusCommit, string reviewedConfigurationSha256,
+        Action<string>? stagedFileWritten)
     {
+        var buildIdentity = ReadBuildIdentity(
+            corpusRoot, deriverCodeCommit, deriverTreeId,
+            corpusCommit, reviewedConfigurationSha256);
         var worksDir = Path.Combine(corpusRoot, "works");
         if (!Directory.Exists(worksDir)) throw new DirectoryNotFoundException(worksDir);
 
@@ -86,20 +109,49 @@ public static class DeriveWriter
         int works = 0, versions = 0, provisionCount = 0, skipped = 0, emptyProvisions = 0;
         var errors = new List<string>();
         var mostlyEmpty = new List<string>();
+        var acceptedProfiles = new SortedSet<string>(StringComparer.Ordinal);
 
         foreach (var workDir in Directory.EnumerateDirectories(worksDir).OrderBy(d => d, StringComparer.Ordinal))
         {
             var slug = Path.GetFileName(workDir);
             var workMetaPath = Path.Combine(workDir, "meta.json");
-            if (!File.Exists(workMetaPath)) continue;
+            if (!File.Exists(workMetaPath))
+            {
+                errors.Add($"{slug}: corpus work meta.json is missing; prior derived files retained");
+                continue;
+            }
             var workMeta = JsonNode.Parse(File.ReadAllText(workMetaPath))!;
             var workTitle = workMeta["title"]?.GetValue<string>();
-            works++;
+            var outputWorkDir = Path.Combine(outRoot, publisher, "works", slug);
+            int? acceptedEmptyBaseline;
+            try
+            {
+                DerivedWorkCandidate.Recover(outputWorkDir,
+                    directory => _ = ExistingEmptyProvisionCount(directory));
+                acceptedEmptyBaseline = ExistingEmptyProvisionCount(outputWorkDir);
+            }
+            catch (Exception ex)
+            {
+                errors.Add($"{slug}: accepted derived output cannot establish the empty-provision baseline: {ex.Message}");
+                continue;
+            }
+            var errorsBeforeWork = errors.Count;
+            using var candidate = new DerivedWorkCandidate(outputWorkDir, stagedFileWritten);
+            var versionsForWork = 0;
+            var provisionsForWork = 0;
+            var skippedForWork = 0;
+            var emptyForWork = 0;
+            var mostlyEmptyForWork = new List<string>();
+            var profilesForWork = new SortedSet<string>(StringComparer.Ordinal);
 
-            var versionDirs = Directory.Exists(Path.Combine(workDir, "versions"))
-                ? Directory.EnumerateDirectories(Path.Combine(workDir, "versions"))
-                    .OrderBy(d => Path.GetFileName(d), StringComparer.Ordinal).ToList()
-                : [];
+            var versionsRoot = Path.Combine(workDir, "versions");
+            if (!Directory.Exists(versionsRoot))
+            {
+                errors.Add($"{slug}: corpus versions directory is missing; prior derived files retained");
+                continue;
+            }
+            var versionDirs = Directory.EnumerateDirectories(versionsRoot)
+                .OrderBy(d => Path.GetFileName(d), StringComparer.Ordinal).ToList();
 
             // D48: prefer one profile across a work+language when EVERY version that has a
             // primary body also has Formex. If a particular version has no primary body at all,
@@ -123,29 +175,42 @@ public static class DeriveWriter
 
             for (var i = 0; i < versionDirs.Count; i++)
             {
-                // A directory name is a version KEY, which may carry a same-day collision
-                // suffix (2025-07-28--02, D41). The date is the key's first ten characters —
+                // A directory name is a version key: date--full SHA-256 of the publisher version
+                // identifier. The date is the key's first ten characters —
                 // publishing the key as valid_from put a non-date in a date column.
                 var versionKey = Path.GetFileName(versionDirs[i]);
                 var validFrom = DateKeyOf(versionKey);
 
                 // valid_to = the next version's start, minus a day. Sibling keys for the SAME
-                // day must be skipped: taking 2025-07-28--02 as "the next version" of
-                // 2025-07-28 produced valid_to = 2025-07-27, an interval ending before it
+                // day must be skipped: taking a same-date hashed sibling as "the next version"
+                // produced valid_to = one day before valid_from, an interval ending before it
                 // began, which no point-in-time query can ever match.
                 string? validTo = null;
                 for (var j = i + 1; j < versionDirs.Count; j++)
                 {
                     var nextDate = DateKeyOf(Path.GetFileName(versionDirs[j]));
                     if (nextDate == validFrom) continue;
-                    if (DateOnly.TryParse(nextDate, out var d))
+                    if (DateOnly.TryParseExact(nextDate, "yyyy-MM-dd",
+                            System.Globalization.CultureInfo.InvariantCulture,
+                            System.Globalization.DateTimeStyles.None, out var d))
                         validTo = d.AddDays(-1).ToString("yyyy-MM-dd");
                     break;
                 }
 
                 var vMetaPath = Path.Combine(versionDirs[i], "meta.json");
-                if (!File.Exists(vMetaPath)) continue;
+                if (!File.Exists(vMetaPath))
+                {
+                    errors.Add($"{slug}/{versionKey}: corpus version meta.json is missing; "
+                        + "prior derived files retained");
+                    continue;
+                }
                 var vMeta = JsonNode.Parse(File.ReadAllText(vMetaPath))!;
+                VersionIdentity.RequireCanonical(
+                    versionKey,
+                    vMeta["valid_from"]?.GetValue<string>() ?? "",
+                    vMeta["publisher_version_identifier"]?.GetValue<string>(),
+                    vMeta["lex_id"]?.GetValue<string>() ?? "",
+                    $"{publisher}:{slug}");
 
                 var units = new List<(string Lang, string FilePath, string Kind, string ObsFile)>();
                 foreach (var f in Directory.EnumerateFiles(versionDirs[i], "*.*")
@@ -183,7 +248,7 @@ public static class DeriveWriter
                         var sourceSha = obs?["sha256"]?.GetValue<string>() ?? "";
                         var sourceUri = expr?["source_uri"]?.GetValue<string>()
                                         ?? vMeta["work_identifier"]?.GetValue<string>() ?? "";
-                        var lexId = $"{publisher}:{slug}:{validFrom}";
+                        var lexId = $"{publisher}:{slug}:{versionKey}";
 
                         Extraction extraction;
                         string profileId;
@@ -234,13 +299,12 @@ public static class DeriveWriter
 
                         if (extraction.Provisions.Count == 0)
                         {
-                            skipped++;
+                            skippedForWork++;
                             Console.Error.WriteLine($"  [derive] skipped (no provisions): {slug}/{validFrom}/{unit.ObsFile}");
                             continue;
                         }
 
-                        var outDir = Path.Combine(outRoot, publisher, "works", slug, "versions", validFrom);
-                        Directory.CreateDirectory(outDir);
+                        var relativeOutDir = Path.Combine("versions", versionKey);
 
                         // ---- fr.md: fenced frontmatter + document. Values are YAML
                         // single-quoted: titles contain ": " which is a YAML mapping error
@@ -252,7 +316,8 @@ public static class DeriveWriter
                         // spans were computed over extraction.Markdown alone; prepend length in codepoints
                         var headerStr = mdHeader.ToString();
                         var headerCp = headerStr.Count(c => !char.IsLowSurrogate(c));
-                        File.WriteAllText(Path.Combine(outDir, $"{lang}.md"), headerStr + extraction.Markdown, new UTF8Encoding(false));
+                        candidate.WriteText(Path.Combine(relativeOutDir, $"{lang}.md"),
+                            headerStr + extraction.Markdown);
 
                         // ---- fr.json
                         var provisions = new JsonArray();
@@ -289,7 +354,7 @@ public static class DeriveWriter
                             ["derived_from"] = new JsonObject
                             {
                                 ["corpus_repo"] = $"lex-corpus-{publisher}",
-                                ["path"] = $"works/{slug}/versions/{validFrom}/{unit.ObsFile}",
+                                ["path"] = $"works/{slug}/versions/{versionKey}/{unit.ObsFile}",
                                 ["sha256"] = sourceSha,
                                 ["source_uri"] = sourceUri,
                             },
@@ -305,16 +370,17 @@ public static class DeriveWriter
                             ["provisions"] = provisions,
                             ["notes"] = new JsonArray(extraction.Notes.Select(n => (JsonNode)n).ToArray()),
                         };
-                        File.WriteAllText(Path.Combine(outDir, $"{lang}.json"),
-                            json.ToJsonString(JsonOpts) + "\n", new UTF8Encoding(false));
+                        candidate.WriteText(Path.Combine(relativeOutDir, $"{lang}.json"),
+                            json.ToJsonString(JsonOpts) + "\n");
 
-                        versions++;
-                        provisionCount += extraction.Provisions.Count;
+                        profilesForWork.Add(profileId);
+                        versionsForWork++;
+                        provisionsForWork += extraction.Provisions.Count;
 
                         var emptyHere = extraction.Provisions.Count(p => string.IsNullOrWhiteSpace(p.TextMd));
+                        emptyForWork += emptyHere;
                         if (emptyHere > 0)
                         {
-                            emptyProvisions += emptyHere;
                             // ObsFile, not lang: a version can derive from html, fmx4, pdf or a
                             // gazette cut, and which artifact produced the empty text is the first
                             // thing worth knowing. It also matches the "skipped" line above.
@@ -338,7 +404,7 @@ public static class DeriveWriter
                             // how much of it to show. Printing here as well duplicated every line
                             // and made the caller's own bound meaningless.
                             if (MostlyEmpty(emptyHere, extraction.Provisions.Count))
-                                mostlyEmpty.Add($"{slug}/{validFrom}/{unit.ObsFile}: {emptyHere} of "
+                                mostlyEmptyForWork.Add($"{slug}/{validFrom}/{unit.ObsFile}: {emptyHere} of "
                                     + $"{extraction.Provisions.Count} provisions extracted empty");
                         }
                     }
@@ -348,8 +414,91 @@ public static class DeriveWriter
                     }
                 }
             }
+            if (errors.Count != errorsBeforeWork) continue;
+            if (acceptedEmptyBaseline is { } baseline && emptyForWork > baseline)
+            {
+                errors.Add($"{slug}: empty-provision count increased from accepted baseline "
+                    + $"{baseline} to {emptyForWork}; prior derived files retained");
+                continue;
+            }
+            candidate.Commit();
+            works++;
+            versions += versionsForWork;
+            provisionCount += provisionsForWork;
+            skipped += skippedForWork;
+            emptyProvisions += emptyForWork;
+            mostlyEmpty.AddRange(mostlyEmptyForWork);
+            acceptedProfiles.UnionWith(profilesForWork);
+        }
+        if (errors.Count == 0)
+        {
+            DerivationGeneration.UpdatePublisher(
+                outRoot, publisher, buildIdentity.CorpusCommit,
+                buildIdentity.CorpusManifestSha256,
+                buildIdentity.IngesterCodeCommit,
+                buildIdentity.DeriverCodeCommit,
+                buildIdentity.DeriverTreeId,
+                buildIdentity.ReviewedConfigurationSha256,
+                acceptedProfiles);
         }
         return new Stats(works, versions, provisionCount, skipped, errors, emptyProvisions, mostlyEmpty);
+    }
+
+    private sealed record BuildIdentity(
+        string IngesterCodeCommit,
+        string DeriverCodeCommit,
+        string DeriverTreeId,
+        string ReviewedConfigurationSha256,
+        string CorpusManifestSha256,
+        string CorpusCommit);
+
+    private static BuildIdentity ReadBuildIdentity(
+        string corpusRoot, string deriverCodeCommit, string deriverTreeId,
+        string corpusCommit, string reviewedConfigurationSha256)
+    {
+        var manifestPath = Path.Combine(corpusRoot, "manifest.json");
+        if (!File.Exists(manifestPath))
+            throw new InvalidDataException("Corpus manifest.json is required before derivation.");
+        var manifest = JsonNode.Parse(File.ReadAllText(manifestPath)) as JsonObject
+            ?? throw new InvalidDataException("Corpus manifest.json is not an object.");
+        if (manifest["schema"]?.GetValue<string>() != "lex-corpus/4")
+            throw new InvalidDataException(
+                "Derivation requires a fresh lex-corpus/4 input; migrate legacy corpus data first.");
+        var ingester = CodeIdentity.RequireFullCommit(
+            manifest["ingester_code_commit"]?.GetValue<string>(),
+            "manifest ingester_code_commit");
+        var deriver = CodeIdentity.RequireFullCommit(
+            deriverCodeCommit, "deriver code commit");
+        var tree = CodeIdentity.RequireFullGitObjectId(
+            deriverTreeId, "deriver tree id");
+        var configuration = CodeIdentity.RequireSha256(
+            reviewedConfigurationSha256, "reviewed configuration digest");
+        var corpus = CodeIdentity.RequireFullCommit(corpusCommit, "corpus commit");
+        return new(ingester, deriver, tree, configuration,
+            DerivationGeneration.Sha256File(manifestPath), corpus);
+    }
+
+    private static int? ExistingEmptyProvisionCount(string workOutputDirectory)
+    {
+        if (!Directory.Exists(workOutputDirectory)) return null;
+        var files = Directory.EnumerateFiles(workOutputDirectory, "*.json", SearchOption.AllDirectories)
+            .OrderBy(path => path, StringComparer.Ordinal).ToArray();
+        if (files.Length == 0)
+        {
+            if (!Directory.EnumerateFileSystemEntries(workOutputDirectory).Any()) return 0;
+            throw new InvalidDataException("the work output directory contains no derived JSON files");
+        }
+        var count = 0;
+        foreach (var path in files)
+        {
+            var root = JsonNode.Parse(File.ReadAllText(path)) as JsonObject
+                ?? throw new InvalidDataException($"{path} is not a JSON object");
+            var provisions = root["provisions"] as JsonArray
+                ?? throw new InvalidDataException($"{path} has no provisions array");
+            count += provisions.OfType<JsonObject>().Count(provision =>
+                string.IsNullOrWhiteSpace(provision["text_md"]?.GetValue<string>()));
+        }
+        return count;
     }
 
     /// <summary>
@@ -416,10 +565,11 @@ public static class DeriveWriter
     }
 
     /// <summary>
-    /// The date a version key denotes. Keys are normally an ISO date, but a second version
-    /// dated the same day carries a collision suffix (2025-07-28--02, D41). That suffix is
-    /// storage, not validity: it must never reach a date field or an interval calculation.
+    /// The date a version key denotes. Every fresh key carries a full publisher-identity hash;
+    /// that storage suffix must never reach a date field or an interval calculation.
     /// </summary>
     public static string DateKeyOf(string versionKey)
-        => versionKey.Length >= 10 && DateOnly.TryParse(versionKey[..10], out _) ? versionKey[..10] : versionKey;
+        => versionKey.Length >= 10 && DateOnly.TryParseExact(versionKey[..10], "yyyy-MM-dd",
+            System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.None, out _) ? versionKey[..10] : versionKey;
 }

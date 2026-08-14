@@ -31,11 +31,51 @@ public static class DocumentEndpoints
         {
             var r = Reader(publisher);
             if (r is null) return Results.Content(Page("Unknown publisher", $"<p>No index mounted for <b>{H(publisher)}</b>.</p>"), "text/html", statusCode: 404);
-            if (!DateOnly.TryParse(dateA, out var da) || !DateOnly.TryParse(dateB, out var db2))
-                return Results.Content(Page("Bad date", "<p>Use YYYY-MM-DD for both dates.</p>"), "text/html", statusCode: 400);
+            (DocRow? Document, DateOnly Date, IReadOnlyList<DocRow> Choices, bool Invalid) ResolveBoundary(
+                string coordinate)
+            {
+                if (TryIsoDate(coordinate, out var date))
+                {
+                    var choices = r.VersionsEffectiveOn(work, date);
+                    return choices.Count > 1
+                        ? (null, date, choices.Take(20).ToArray(), false)
+                        : (choices.Count == 1 ? choices[0] : r.AsOf(work, date, FilterSet.All),
+                            date, [], false);
+                }
+                if (coordinate.Length < 10 || !TryIsoDate(coordinate[..10], out var exactDate))
+                    return (null, default, [], true);
+                var exact = r.VersionByCoordinate(work, exactDate, coordinate);
+                return exact is null
+                    ? (null, default, [], true)
+                    : (exact, exactDate, [], false);
+            }
 
-            var a = r.AsOf(work, da, FilterSet.All);
-            var b = r.AsOf(work, db2, FilterSet.All);
+            var fromBoundary = ResolveBoundary(dateA);
+            var toBoundary = ResolveBoundary(dateB);
+            if (fromBoundary.Invalid || toBoundary.Invalid)
+                return Results.Content(Page("Bad version coordinate",
+                    "<p>Each comparison boundary must be YYYY-MM-DD or a held opaque version key.</p>"),
+                    "text/html", statusCode: 400);
+            if (fromBoundary.Choices.Count > 0 || toBoundary.Choices.Count > 0)
+            {
+                string Choices(string label, IReadOnlyList<DocRow> values, string other, bool first) =>
+                    values.Count == 0 ? "" : $"<h2>{H(label)}</h2><ul>" + string.Join("", values.Select(version =>
+                        $"<li><a class=\"mono\" href=\"/{H(publisher)}/{H(work)}/diff/"
+                        + (first ? $"{H(VersionCoordinate(version))}/{H(other)}" : $"{H(other)}/{H(VersionCoordinate(version))}")
+                        + $"\">{H(version.Key)}</a></li>")) + "</ul>";
+                return Results.Content(Page("Ambiguous publisher version",
+                    "<div class=\"notice\">status <span class=\"mono\">ambiguous_version</span>, "
+                    + "the publisher exposes separately identified states on a selected date. "
+                    + "Choose each exact comparison boundary.</div>"
+                    + Choices("From version", fromBoundary.Choices, dateB, true)
+                    + Choices("To version", toBoundary.Choices, dateA, false)),
+                    "text/html", statusCode: 409);
+            }
+
+            var da = fromBoundary.Date;
+            var db2 = toBoundary.Date;
+            var a = fromBoundary.Document;
+            var b = toBoundary.Document;
             if (a is null || b is null)
                 return Results.Content(Page("No version for date",
                     $"<p>status <span class=\"mono\">no_version_for_date</span>, resolved: {da:yyyy-MM-dd}={(a is not null)}, {db2:yyyy-MM-dd}={(b is not null)}. See the <a href=\"/{H(publisher)}/{H(work)}\">timeline</a>.</p>"),
@@ -44,12 +84,14 @@ public static class DocumentEndpoints
             var sb = new StringBuilder();
             var workspaceUrl = "/?space=law&amp;work="
                 + Uri.EscapeDataString($"{publisher}:{work}")
-                + $"&amp;date={da:yyyy-MM-dd}&amp;to={db2:yyyy-MM-dd}&amp;mode=compare";
+                + $"&amp;date={da:yyyy-MM-dd}&amp;to={db2:yyyy-MM-dd}&amp;mode=compare"
+                + $"&amp;from_version_key={Uri.EscapeDataString(VersionCoordinate(a))}"
+                + $"&amp;to_version_key={Uri.EscapeDataString(VersionCoordinate(b))}";
             sb.Append($"""
                 <div class="card"><table class="kv">
-                <tr><td>on {da:yyyy-MM-dd}</td><td class="mono"><a href="/{H(publisher)}/{H(work)}/{da:yyyy-MM-dd}">{H(a.Key)}</a> ({Interval(a)})
+                <tr><td>on {da:yyyy-MM-dd}</td><td class="mono"><a href="/{H(publisher)}/{H(work)}/{H(VersionCoordinate(a))}">{H(a.Key)}</a> ({Interval(a)})
                 &middot; <a href="{H(a.SourceUri)}">official source &nearr;</a></td></tr>
-                <tr><td>on {db2:yyyy-MM-dd}</td><td class="mono"><a href="/{H(publisher)}/{H(work)}/{db2:yyyy-MM-dd}">{H(b.Key)}</a> ({Interval(b)})
+                <tr><td>on {db2:yyyy-MM-dd}</td><td class="mono"><a href="/{H(publisher)}/{H(work)}/{H(VersionCoordinate(b))}">{H(b.Key)}</a> ({Interval(b)})
                 &middot; <a href="{H(b.SourceUri)}">official source &nearr;</a></td></tr>
                 </table></div>
                 <p><a href="{workspaceUrl}"><b>Open the structured article comparison &rarr;</b></a>
@@ -77,7 +119,7 @@ public static class DocumentEndpoints
         {
             var r = Reader(publisher);
             if (r is null) return Results.Content(Page("Unknown publisher", $"<p>No index mounted for <b>{H(publisher)}</b>. See <a href=\"/coverage\">coverage</a>.</p>"), "text/html", statusCode: 404);
-            var rows = r.Timeline(work);
+            var rows = r.TimelineVersions(work).Select(version => version.Version).ToList();
             if (rows.Count == 0)
                 return Results.Content(Page("Unknown work", $"<p>status <span class=\"mono\">unknown_work</span>, no work <b>{H(work)}</b> in {H(publisher)}. Try <a href=\"/search\">search</a>.</p>"), "text/html", statusCode: 404);
 
@@ -87,16 +129,20 @@ public static class DocumentEndpoints
             sb.Append($"<p><span class=\"badge\">{H(rows[^1].Kind)}</span> <span class=\"badge\">{rows.Select(v => v.Key).Distinct().Count()} version(s)</span> <a class=\"badge\" href=\"{H(rows[^1].SourceUri)}\">official text ↗</a></p>");
             sb.Append(VersionRail(publisher, work, rows, null));
             var todayVersion = r.AsOf(work, ctx.Today, FilterSet.All);
-            var readDate = todayVersion is null ? rows[^1].ValidFrom : ctx.Today.ToString("yyyy-MM-dd");
+            var latest = todayVersion ?? rows[^1];
+            var latestChoices = r.VersionsEffectiveOn(work, ParseIsoDate(latest.ValidFrom));
+            var readCoordinate = latestChoices.Count > 1 ? null : VersionCoordinate(latest);
             var readLabel = publisherVersionDates
                 ? "Read the latest held publisher version"
                 : todayVersion is null ? "Read the latest available publisher state" : "Read the text applicable today";
-            sb.Append($"<p><a href=\"/{H(publisher)}/{H(work)}/{H(readDate)}\"><b>{readLabel} →</b></a></p>");
+            sb.Append(readCoordinate is null
+                ? "<p><b>Choose one exact publisher state from the timeline below.</b></p>"
+                : $"<p><a href=\"/{H(publisher)}/{H(work)}/{H(readCoordinate)}\"><b>{readLabel} →</b></a></p>");
             sb.Append($"<details class=\"card\"><summary>Every version as a table</summary><table><tr><th>{(publisherVersionDates ? "publisher state" : "valid")}</th><th>as-of view</th><th>status</th><th>provenance</th></tr>");
             foreach (var v in rows)
                 sb.Append($"""
                     <tr><td class="mono">{IntervalLabel(r, v)}</td>
-                    <td><a href="/{H(publisher)}/{H(work)}/{H(v.ValidFrom)}">as of {H(v.ValidFrom)}</a></td>
+                    <td><a href="/{H(publisher)}/{H(work)}/{H(VersionCoordinate(v))}">as of {H(v.ValidFrom)}</a></td>
                     <td>{(v.ValidTo is null
                         ? $"<span class=\"badge ok\">{(publisherVersionDates ? "latest held" : "open")}</span>"
                         : $"<span class=\"badge\">{(publisherVersionDates ? "earlier state" : "superseded")}</span>")}</td>
@@ -196,19 +242,46 @@ public static class DocumentEndpoints
                 description: lawDesc), "text/html");
         });
 
-        app.MapGet($"/{pubRoute}/{{work}}/{{date}}", (string publisher, string work, string date) =>
+        app.MapGet($"/{pubRoute}/{{work}}/{{coordinate}}", (string publisher, string work, string coordinate) =>
         {
+            var date = coordinate;
             var r = Reader(publisher);
             if (r is null) return Results.Content(Page("Unknown publisher", $"<p>No index mounted for <b>{H(publisher)}</b>.</p>"), "text/html", statusCode: 404);
-            if (!DateOnly.TryParse(date, out var d))
-                return Results.Content(Page("Bad date", $"<p>'{H(date)}' is not a date (use YYYY-MM-DD).</p>"), "text/html", statusCode: 400);
-
-            var doc = r.AsOf(work, d, FilterSet.All);
+            DocRow? doc;
+            DateOnly d = default;
+            var exact = date.Length > 10 && TryIsoDate(date[..10], out d)
+                ? r.VersionByCoordinate(work, d, date)
+                : null;
+            if (exact is not null)
+            {
+                doc = exact;
+            }
+            else
+            {
+                if (!TryIsoDate(date, out d))
+                    return Results.Content(Page("Bad version coordinate",
+                        $"<p>'{H(date)}' is neither YYYY-MM-DD nor a held version key.</p>"),
+                        "text/html", statusCode: 400);
+                var sameDate = r.VersionsEffectiveOn(work, d);
+                if (sameDate.Count > 1)
+                {
+                    var choices = string.Join("", sameDate.Take(20).Select(version =>
+                        $"<li><a class=\"mono\" href=\"/{H(publisher)}/{H(work)}/{H(VersionCoordinate(version))}\">"
+                        + $"{H(version.Key)}</a></li>"));
+                    var choiceCount = sameDate.Count > 20 ? "more than 20" : sameDate.Count.ToString();
+                    return Results.Content(Page("Ambiguous publisher version",
+                        $"<div class=\"notice\">status <span class=\"mono\">ambiguous_version</span>, "
+                        + $"the publisher exposes {choiceCount} separately identified states dated {d:yyyy-MM-dd}. "
+                        + "Choose the exact publisher version:</div><ul>" + choices + "</ul>"),
+                        "text/html", statusCode: 409);
+                }
+                doc = r.AsOf(work, d, FilterSet.All);
+            }
             if (doc is null)
             {
                 if (!r.WorkExists(work))
                     return Results.Content(Page("Unknown work", $"<p>status <span class=\"mono\">unknown_work</span>, no work <b>{H(work)}</b>. Try <a href=\"/search\">search</a>.</p>"), "text/html", statusCode: 404);
-                var timeline = r.Timeline(work);
+                var timeline = r.TimelineVersions(work).Select(version => version.Version).ToList();
                 var sb0 = new StringBuilder();
                 sb0.Append($"""
                     <div class="notice">status <span class="mono">no_version_for_date</span>, the work exists, but no
@@ -216,20 +289,20 @@ public static class DocumentEndpoints
                     """);
                 sb0.Append("<ul>");
                 foreach (var v in timeline.Take(30))
-                    sb0.Append($"<li><a href=\"/{H(publisher)}/{H(work)}/{H(v.ValidFrom)}\" class=\"mono\">{Interval(v)}</a></li>");
+                    sb0.Append($"<li><a href=\"/{H(publisher)}/{H(work)}/{H(VersionCoordinate(v))}\" class=\"mono\">{Interval(v)}</a></li>");
                 sb0.Append("</ul>");
                 sb0.Append(EnvelopeCard(r, IsProvisional(r, d)));
                 return Results.Content(Page(work, sb0.ToString(), $"as of {d:yyyy-MM-dd}, honest refusal"), "text/html", statusCode: 404);
             }
 
-            var all = r.Timeline(work);
+            var all = r.TimelineVersions(work).Select(version => version.Version).ToList();
             var publisherVersionDates = UsesPublisherVersionDates(r);
-            var idx = all.FindIndex(x => x.Key == doc.Key && x.Language == doc.Language);
+            var idx = all.FindIndex(x => x.Key == doc.Key);
             var prev = idx > 0 ? all[idx - 1] : null;
             var next = idx >= 0 && idx < all.Count - 1 ? all[idx + 1] : null;
 
             var sb = new StringBuilder();
-            sb.Append(VersionRail(publisher, work, all, doc.ValidFrom));
+            sb.Append(VersionRail(publisher, work, all, VersionCoordinate(doc)));
             // Unambiguous temporal-status banner (the legislation.gov.uk precedent): the reader
             // must never wonder WHICH state of the law they are looking at.
             sb.Append(publisherVersionDates
@@ -243,7 +316,7 @@ public static class DocumentEndpoints
                 ? $"""
                    <div class="notice"><b>Point-in-time view as at {d:yyyy-MM-dd}.</b> This version has been
                    <b>superseded</b>, it applied {H(Interval(doc))}. <a href="/{H(publisher)}/{H(work)}">Jump to the
-                   version in force today</a> or <a href="/{H(publisher)}/{H(work)}/diff/{H(doc.ValidFrom)}/{H(next.ValidFrom)}">see
+                   version in force today</a> or <a href="/{H(publisher)}/{H(work)}/diff/{H(VersionCoordinate(doc))}/{H(VersionCoordinate(next))}">see
                    exactly what changed next</a>.</div>
                    """
                 : $"""
@@ -345,11 +418,11 @@ public static class DocumentEndpoints
             sb.Append("<p>");
             if (prev is not null)
             {
-                sb.Append($"<a href=\"/{H(publisher)}/{H(work)}/{H(prev.ValidFrom)}\">← previous version ({H(prev.ValidFrom)})</a> &nbsp;&nbsp;");
-                if (doc.TextPublic) sb.Append($"<a href=\"/{H(publisher)}/{H(work)}/diff/{H(prev.ValidFrom)}/{H(doc.ValidFrom)}\">what changed?</a> &nbsp;&nbsp;");
+                sb.Append($"<a href=\"/{H(publisher)}/{H(work)}/{H(VersionCoordinate(prev))}\">← previous version ({H(prev.ValidFrom)})</a> &nbsp;&nbsp;");
+                if (doc.TextPublic) sb.Append($"<a href=\"/{H(publisher)}/{H(work)}/diff/{H(VersionCoordinate(prev))}/{H(VersionCoordinate(doc))}\">what changed?</a> &nbsp;&nbsp;");
             }
             sb.Append($"<a href=\"/{H(publisher)}/{H(work)}\">timeline</a>");
-            if (next is not null) sb.Append($" &nbsp;&nbsp;<a href=\"/{H(publisher)}/{H(work)}/{H(next.ValidFrom)}\">next version ({H(next.ValidFrom)}) →</a>");
+            if (next is not null) sb.Append($" &nbsp;&nbsp;<a href=\"/{H(publisher)}/{H(work)}/{H(VersionCoordinate(next))}\">next version ({H(next.ValidFrom)}) →</a>");
             sb.Append("</p>");
             sb.Append(EnvelopeCard(r, IsProvisional(r, d)));
 
@@ -364,13 +437,21 @@ public static class DocumentEndpoints
                   + (doc.ValidTo is null ? " and is still in force." : $" to {doc.ValidTo}.");
             return Results.Content(Page($"{vName}, as of {d:yyyy-MM-dd}", sb.ToString(),
                 $"as it stood on <span class=\"asof\">{d:yyyy-MM-dd}</span>, " +
-                $"permalink: /{H(publisher)}/{H(work)}/{d:yyyy-MM-dd}",
-                h1: vName, canonicalPath: $"/{publisher}/{work}/{doc.ValidFrom}",
+                $"permalink: /{H(publisher)}/{H(work)}/{H(VersionCoordinate(doc))}",
+                h1: vName, canonicalPath: $"/{publisher}/{work}/{VersionCoordinate(doc)}",
                 description: vDesc, lang: doc.Language), "text/html");
         });
 
         return app;
     }
+
+    private static bool TryIsoDate(string? value, out DateOnly date) =>
+        DateOnly.TryParseExact(value, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.None, out date);
+
+    private static DateOnly ParseIsoDate(string value) =>
+        TryIsoDate(value, out var date) ? date
+            : throw new InvalidDataException($"Held version has invalid ISO date '{value}'.");
 
     /// <summary>One step of a breadcrumb trail, in the shape schema.org wants.</summary>
     private static JsonObject Crumb(int position, string name, string url) => new()

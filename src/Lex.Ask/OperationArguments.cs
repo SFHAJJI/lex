@@ -61,14 +61,14 @@ internal static class OperationArguments
             ["search"] = Set("query", "publisher", "jurisdiction", "document_type",
                 "source_class", "hierarchy", "act_form", "binding_status", "domain",
                 "language", "retrieval_mode", "time_scope", "as_of", "fuzzy", "works", "limit"),
-            ["as_of"] = Set("work", "work_query", "article_number", "date", "language",
-                "mode", "anchors"),
+            ["as_of"] = Set("work", "work_query", "article_number", "date", "version_key",
+                "language", "mode", "anchors"),
             ["timeline"] = Set("work", "work_query", "limit", "offset"),
             ["in_force_on"] = Set("date", "publisher", "jurisdiction", "document_type",
                 "source_class", "hierarchy", "act_form", "binding_status", "domain",
                 "language", "limit", "offset"),
             ["diff"] = Set("work", "work_query", "article_number", "from_date", "to_date",
-                "language", "anchor"),
+                "from_version_key", "to_version_key", "language", "anchor"),
             // from_date/to_date are a FILTER over the states this operation already returns, never
             // a new question. They exist because the planner is told never to turn a bare year
             // into a single day for a point-in-time question and to plan the window form instead;

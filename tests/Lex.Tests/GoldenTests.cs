@@ -181,6 +181,43 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
         Assert.Contains("form.inline select { min-width:0; max-width:100% }", search);
     }
 
+    [Theory]
+    [InlineData("q")]
+    [InlineData("kind")]
+    [InlineData("publisher")]
+    public async Task Static_search_returns_a_bounded_bad_request_for_invalid_input(string field)
+    {
+        var response = await _site.Client.GetAsync(
+            "/search?" + (field == "q" ? "" : "q=thing&")
+            + field + "=" + new string('x', 1001));
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("invalid_request", body, StringComparison.Ordinal);
+        Assert.InRange(body.Length, 1, 100_000);
+    }
+
+    [Fact]
+    public async Task Static_search_renders_the_interval_arrow_without_mojibake()
+    {
+        var search = await _site.Client.GetStringAsync("/search?q=chose");
+
+        Assert.Contains(" → ", search, StringComparison.Ordinal);
+        Assert.DoesNotContain("â†’", search, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Missing_golden_baseline_fails_outside_update_mode()
+    {
+        var missing = Path.Combine(Path.GetTempPath(), $"missing-golden-{Guid.NewGuid():N}.txt");
+
+        var error = Assert.Throws<Xunit.Sdk.XunitException>(() =>
+            Golden.AssertFile(missing, "actual", updateMode: false));
+
+        Assert.Contains("Missing golden baseline", error.Message, StringComparison.Ordinal);
+        Assert.False(File.Exists(missing));
+    }
+
     [Fact]
     public async Task Architecture_wide_table_is_keyboard_scrollable()
     {
@@ -769,14 +806,22 @@ internal static class Golden
 
     public static void Assert(string name, string actual)
     {
-        Directory.CreateDirectory(Dir);
         var path = Path.Combine(Dir, $"{name}.txt");
+        AssertFile(path, actual,
+            Environment.GetEnvironmentVariable("LEX_GOLDEN_UPDATE") == "1");
+    }
 
-        if (Environment.GetEnvironmentVariable("LEX_GOLDEN_UPDATE") == "1" || !File.Exists(path))
+    internal static void AssertFile(string path, string actual, bool updateMode)
+    {
+        if (updateMode)
         {
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             File.WriteAllText(path, actual);
             return;
         }
+        if (!File.Exists(path))
+            throw new Xunit.Sdk.XunitException(
+                $"Missing golden baseline: {path}. Run with LEX_GOLDEN_UPDATE=1, review the new file, and commit it.");
 
         var expected = File.ReadAllText(path).Replace("\r\n", "\n");
         if (expected == actual) return;
@@ -788,7 +833,7 @@ internal static class Golden
         while (i < e.Length && i < a.Length && e[i] == a[i]) i++;
         throw new Xunit.Sdk.XunitException(
             $"""
-            Golden mismatch in {name} at line {i + 1}.
+            Golden mismatch in {Path.GetFileNameWithoutExtension(path)} at line {i + 1}.
 
             expected: {(i < e.Length ? e[i] : "<end of file>")}
               actual: {(i < a.Length ? a[i] : "<end of file>")}

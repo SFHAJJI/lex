@@ -1,4 +1,6 @@
 using Lex.Derive;
+using Lex.Temporal;
+using System.Text.Json.Nodes;
 using Xunit;
 
 namespace Lex.Tests;
@@ -8,6 +10,12 @@ namespace Lex.Tests;
 // minimal but structurally faithful Legilux AKN document.
 public class DeriveTests
 {
+    private const string IngesterCommit = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    private const string DeriverCommit = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+    private const string DeriverTree = "dddddddddddddddddddddddddddddddddddddddd";
+    private const string CorpusCommit = "cccccccccccccccccccccccccccccccccccccccc";
+    private const string EnrichmentDigest =
+        "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
     private const string Akn = """
         <?xml version="1.0" encoding="UTF-8"?>
         <akomaNtoso xmlns="http://docs.oasis-open.org/legaldocml/ns/akn/3.0/CSD13" xmlns:scl="http://www.scl.lu">
@@ -143,15 +151,104 @@ public class DeriveTests
         }
     }
 
-    // D41 same-day collision keys are STORAGE, not validity. Publishing the key as a date put
-    // "2025-07-28--02" in a date column, and treating it as "the next version" of 2025-07-28
+    // Publisher-identity hashes in version keys are STORAGE, not validity. Publishing the key as
+    // a date, or treating a same-date sibling as "the next version",
     // produced valid_to = 2025-07-27 — an interval ending before it began, invisible to every
     // point-in-time query. Thirteen such intervals reached production.
     [Theory]
     [InlineData("2025-07-28", "2025-07-28")]
-    [InlineData("2025-07-28--02", "2025-07-28")]
+    [InlineData("2025-07-28--aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "2025-07-28")]
     [InlineData("1849-03-14", "1849-03-14")]
     [InlineData("not-a-date", "not-a-date")]
-    public void Version_key_yields_its_date_without_the_collision_suffix(string key, string expected)
+    public void Version_key_yields_its_date_without_the_storage_suffix(string key, string expected)
         => Assert.Equal(expected, DeriveWriter.DateKeyOf(key));
+
+    [Fact]
+    public void Same_date_publisher_versions_derive_to_separate_stable_keys_and_cleanup_stale_output()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"lex-derive-collision-{Guid.NewGuid():N}");
+        var corpus = Path.Combine(root, "corpus");
+        var output = Path.Combine(root, "output");
+        try
+        {
+            Directory.CreateDirectory(corpus);
+            File.WriteAllText(Path.Combine(corpus, "manifest.json"), $$"""
+                { "schema": "lex-corpus/4", "ingester_code_commit": "{{IngesterCommit}}" }
+                """);
+            var work = Path.Combine(corpus, "works", "w1");
+            Directory.CreateDirectory(work);
+            File.WriteAllText(Path.Combine(work, "meta.json"),
+                new JsonObject { ["title"] = "Work one" }.ToJsonString());
+            var date = new DateOnly(2025, 7, 28);
+            var firstKey = VersionIdentity.Create(date, "official:first");
+            var secondKey = VersionIdentity.Create(date, "official:second");
+            WriteVersion(work, firstKey, "official:first", "first");
+            WriteVersion(work, secondKey, "official:second", "second");
+
+            var first = DeriveWriter.Derive(
+                corpus, output, "lu-legilux", DeriverCommit, DeriverTree,
+                CorpusCommit, EnrichmentDigest);
+
+            Assert.Empty(first.Errors);
+            Assert.True(File.Exists(Path.Combine(output, "lu-legilux", "works", "w1", "versions",
+                firstKey, "fr.json")));
+            Assert.True(File.Exists(Path.Combine(output, "lu-legilux", "works", "w1", "versions",
+                secondKey, "fr.json")));
+
+            var recordBytes = Directory.EnumerateFiles(
+                    Path.Combine(output, "lu-legilux"), "*", SearchOption.AllDirectories)
+                .ToDictionary(Path.GetFullPath, File.ReadAllBytes);
+            const string unrelatedCommit =
+                "9999999999999999999999999999999999999999";
+            var unrelated = DeriveWriter.Derive(
+                corpus, output, "lu-legilux", unrelatedCommit, DeriverTree,
+                CorpusCommit, EnrichmentDigest);
+            Assert.Empty(unrelated.Errors);
+            Assert.All(recordBytes, item =>
+                Assert.Equal(item.Value, File.ReadAllBytes(item.Key)));
+            Assert.Equal(unrelatedCommit,
+                DerivationGeneration.ReadPublisher(output, "lu-legilux")
+                    .DeriverCodeCommit);
+
+            Directory.Delete(Path.Combine(work, "versions", secondKey), recursive: true);
+            var second = DeriveWriter.Derive(
+                corpus, output, "lu-legilux", DeriverCommit, DeriverTree,
+                CorpusCommit, EnrichmentDigest);
+
+            Assert.Empty(second.Errors);
+            Assert.False(Directory.Exists(Path.Combine(output, "lu-legilux", "works", "w1", "versions",
+                secondKey)));
+        }
+        finally
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+        }
+    }
+
+    private static void WriteVersion(
+        string work, string key, string publisherVersionIdentifier, string marker)
+    {
+        var version = Path.Combine(work, "versions", key);
+        Directory.CreateDirectory(version);
+        var xml = Akn.Replace("Premier    paragraphe", $"{marker} paragraphe", StringComparison.Ordinal);
+        File.WriteAllText(Path.Combine(version, "fr.xml"), xml);
+        File.WriteAllText(Path.Combine(version, "meta.json"), new JsonObject
+        {
+            ["lex_id"] = $"lu-legilux:w1:{key}",
+            ["publisher"] = "lu-legilux",
+            ["publisher_version_identifier"] = publisherVersionIdentifier,
+            ["valid_from"] = "2025-07-28",
+            ["work_identifier"] = "official:w1",
+            ["expressions"] = new JsonArray(new JsonObject
+            {
+                ["language"] = "fr",
+                ["source_uri"] = $"https://example.test/{marker}",
+                ["observations"] = new JsonArray(new JsonObject
+                {
+                    ["file"] = "fr.xml",
+                    ["sha256"] = marker,
+                }),
+            }),
+        }.ToJsonString());
+    }
 }

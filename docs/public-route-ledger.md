@@ -17,7 +17,7 @@ Dynamic publisher routes accept only mounted publisher IDs and validated work/da
 | GET | `/changed` | Catalogue | legal reader | canonical query URL | HTML | public index | window, order, population and empty state |
 | GET | `/find` | Catalogue | no-JavaScript reader | canonical | HTML | public index | form reaches search, date and changed routes |
 | GET | `/{publisher}/{work}` | Documents | legal reader | canonical work URL | HTML | public index | timeline and text coverage; unknown work 404 |
-| GET | `/{publisher}/{work}/{date}` | Documents | legal reader | canonical dated URL | HTML | public index | exact publisher state; unavailable date gap |
+| GET | `/{publisher}/{work}/{coordinate}` | Documents | legal reader | exact-version URL or friendly date resolver | HTML | public index | opaque version key opens exactly; a date renders one state with an exact canonical URL or returns `ambiguous_version` when several states cover it |
 | GET | `/{publisher}/{work}/diff/{dateA}/{dateB}` | Documents | legal reader | canonical comparison URL | HTML | public index | comparable diff; profile mismatch refusal |
 | GET | `/provenance/{*key}` | API/verification | evaluator | canonical proof URL | HTML | public index | proof chain; unknown lex ID 404 |
 | GET | `/how-it-works` | Explainers | reader | canonical | HTML | public index | product method and limits |

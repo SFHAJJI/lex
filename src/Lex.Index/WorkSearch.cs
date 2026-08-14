@@ -31,10 +31,16 @@ public sealed record WorkDiscoveryRow(
     double AgreementRatio,
     IReadOnlyList<WorkEvidenceAnchor> Evidence);
 
+public sealed record ReviewedCitationAliasRow(
+    string Alias,
+    string Work,
+    string ReviewedBy);
+
 public sealed record WorkSearchBuildOptions(
     IReadOnlyList<ReviewedWorkAliasRow> ReviewedAliases,
     IReadOnlyList<WorkDiscoveryRow> Discovery,
-    string EnrichmentDigest);
+    string EnrichmentDigest,
+    IReadOnlyList<ReviewedCitationAliasRow>? CitationAliases = null);
 
 public sealed record WorkSearchHit(
     DocRow Doc, string Reason, double Score, string? MatchedValue = null);

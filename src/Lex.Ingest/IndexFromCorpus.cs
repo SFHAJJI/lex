@@ -2,7 +2,9 @@ using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Lex.Derive;
 using Lex.Index;
+using Lex.Temporal;
 
 namespace Lex.Ingest;
 
@@ -15,7 +17,8 @@ public static class IndexFromCorpus
     public static void Build(string corpusRoot, string? articlesRoot, string dbPath, string? signingKeyPem,
                              DateTimeOffset now, SemanticBuildOptions? semantic = null,
                              string? workEnrichmentPath = null, string? codeCommit = null,
-                             string? articlesCommit = null, string? corpusCommit = null)
+                             string? articlesCommit = null, string? corpusCommit = null,
+                             string? reviewedConfigurationPath = null)
     {
         if ((articlesRoot is null) != (articlesCommit is null))
             throw new InvalidDataException(
@@ -25,9 +28,38 @@ public static class IndexFromCorpus
             : RequireCleanGitCheckout(corpusRoot, corpusCommit, "corpus");
         var stampedArticlesCommit = articlesRoot is null ? null
             : RequireCleanGitCheckout(articlesRoot, articlesCommit!, "derived articles");
+        var corpusManifestPath = Path.Combine(corpusRoot, "manifest.json");
         var manifest = JsonSerializer.Deserialize<ManifestDoc>(
-            File.ReadAllText(Path.Combine(corpusRoot, "manifest.json")), CorpusJson.Options)!;
+            File.ReadAllText(corpusManifestPath), CorpusJson.Options)!;
+        if (manifest.Schema != ManifestDoc.CurrentSchema)
+            throw new InvalidDataException(
+                "Index construction requires a fresh lex-corpus/4 input.");
+        var ingesterCodeCommit = CodeIdentity.RequireFullCommit(
+            manifest.IngesterCodeCommit, "manifest ingester_code_commit");
+        var builderCodeCommit = NormalizeCodeCommit(codeCommit);
         var publisherId = manifest.Publisher["id"];
+        DerivationGeneration.Entry? generation = null;
+        string? generationSha256 = null;
+        if (articlesRoot is not null)
+        {
+            if (reviewedConfigurationPath is null)
+                throw new InvalidDataException(
+                    "A publisher-specific reviewed configuration is required with derived articles.");
+            generation = DerivationGeneration.ReadPublisher(articlesRoot, publisherId);
+            generationSha256 = DerivationGeneration.Sha256File(
+                Path.Combine(articlesRoot, DerivationGeneration.FileName));
+            RequireEqual(generation.CorpusCommit, stampedCorpusCommit,
+                "generation corpus_commit", "selected corpus commit");
+            RequireEqual(generation.CorpusManifestSha256,
+                DerivationGeneration.Sha256File(corpusManifestPath),
+                "generation corpus_manifest_sha256", "selected corpus manifest");
+            RequireEqual(generation.IngesterCodeCommit, ingesterCodeCommit,
+                "generation ingester_code_commit", "corpus manifest ingester identity");
+            RequireEqual(generation.ReviewedConfigurationSha256,
+                DerivationGeneration.Sha256File(reviewedConfigurationPath),
+                "generation reviewed_configuration_sha256",
+                "selected publisher configuration");
+        }
         if (workEnrichmentPath is not null
             && manifest.PublisherDiscoverySchema != ManifestDoc.CurrentPublisherDiscoverySchema)
             throw new InvalidDataException(
@@ -37,6 +69,7 @@ public static class IndexFromCorpus
         var provisions = new List<ProvisionRow>();
         var events = new List<EventRow>();
         var observations = new List<ObservationRow>();
+        var derivedProfiles = new SortedSet<string>(StringComparer.Ordinal);
 
         foreach (var workDir in Directory.EnumerateDirectories(Path.Combine(corpusRoot, "works")))
         {
@@ -49,6 +82,10 @@ public static class IndexFromCorpus
             {
                 var meta = JsonSerializer.Deserialize<VersionMeta>(
                     File.ReadAllText(Path.Combine(versionDir, "meta.json")), CorpusJson.Options)!;
+                VersionIdentity.RequireCanonical(
+                    Path.GetFileName(versionDir), meta.ValidFrom,
+                    meta.PublisherVersionIdentifier, meta.LexId,
+                    $"{meta.Publisher}:{workMeta.Slug}");
 
                 var firstSighting = meta.Events.FirstOrDefault(e => e.Event == "first_sighting")?.ObservedFrom
                                     ?? meta.Events.FirstOrDefault()?.ObservedFrom ?? "";
@@ -78,7 +115,11 @@ public static class IndexFromCorpus
                         using var dd = JsonDocument.Parse(File.ReadAllText(derivedJson!));
                         if (dd.RootElement.TryGetProperty("generator", out var gen)
                             && gen.TryGetProperty("profile", out var pf))
+                        {
                             profile = pf.GetString();
+                            if (!string.IsNullOrWhiteSpace(profile))
+                                derivedProfiles.Add(profile);
+                        }
                         var seq = 0;
                         foreach (var p in dd.RootElement.GetProperty("provisions").EnumerateArray())
                         {
@@ -155,6 +196,11 @@ public static class IndexFromCorpus
             }
         }
 
+        if (generation is not null
+            && !generation.Profiles.SequenceEqual(derivedProfiles, StringComparer.Ordinal))
+            throw new InvalidDataException(
+                "Derived article profiles do not match generation.json.");
+
         var buildIssues = manifest.BuildIssues.OrderBy(issue => issue.Work, StringComparer.Ordinal)
             .ThenBy(issue => issue.Code, StringComparer.Ordinal)
             .ThenBy(issue => issue.Detail, StringComparer.Ordinal).ToArray();
@@ -181,7 +227,10 @@ public static class IndexFromCorpus
             ["modifications"] = manifest.Modifications ?? "",
             ["notice"] = ReadIfExists(Path.Combine(corpusRoot, "NOTICE")),
             ["corpus_commit"] = stampedCorpusCommit,
-            ["code_commit"] = NormalizeCodeCommit(codeCommit),
+            // code_commit remains the compatibility name for the index builder identity.
+            ["code_commit"] = builderCodeCommit,
+            ["builder_code_commit"] = builderCodeCommit,
+            ["ingester_code_commit"] = ingesterCodeCommit,
             ["built_at"] = now.UtcDateTime.ToString("yyyy-MM-ddTHH:mm:ssZ"),
             ["ingester_version"] = manifest.IngesterVersion,
             ["works"] = docs.Select(d => d.GroupKey).Distinct().Count().ToString(),
@@ -190,6 +239,16 @@ public static class IndexFromCorpus
             ["build_issues_digest"] = Convert.ToHexStringLower(
                 SHA256.HashData(Encoding.UTF8.GetBytes(buildIssuesJson))),
         };
+        if (generation is not null)
+        {
+            stamp["deriver_code_commit"] = generation.DeriverCodeCommit;
+            stamp["deriver_tree_id"] = generation.DeriverTreeId;
+            stamp["corpus_manifest_sha256"] = generation.CorpusManifestSha256;
+            stamp["generation_sha256"] = generationSha256!;
+            stamp["profiles_sha256"] = generation.ProfilesSha256;
+            stamp["reviewed_configuration_sha256"] =
+                generation.ReviewedConfigurationSha256;
+        }
         if (stampedArticlesCommit is not null)
             stamp["articles_commit"] = stampedArticlesCommit;
         if (manifest.ScopeExpectedWorks is { } scopeExpectedWorks)
@@ -267,6 +326,14 @@ public static class IndexFromCorpus
 
     private static string ReadIfExists(string path) => File.Exists(path) ? File.ReadAllText(path) : "";
 
+    private static void RequireEqual(
+        string actual, string expected, string actualName, string expectedName)
+    {
+        if (!string.Equals(actual, expected, StringComparison.Ordinal))
+            throw new InvalidDataException(
+                $"{actualName} does not match the {expectedName}.");
+    }
+
     private static string? NormalizeDomains(string? value)
     {
         if (string.IsNullOrWhiteSpace(value)) return null;
@@ -290,11 +357,7 @@ public static class IndexFromCorpus
 
     private static string NormalizeCodeCommit(string? value)
     {
-        if (value is null) return "uncommitted";
-        var normalized = value.ToLowerInvariant();
-        if (normalized.Length != 40 || normalized.Any(c => !Uri.IsHexDigit(c)))
-            throw new InvalidDataException("The commit must be a full 40-character Git SHA.");
-        return normalized;
+        return CodeIdentity.RequireFullCommit(value, "index builder code commit");
     }
 
     private static string RequireCleanGitCheckout(string directory, string expectedCommit, string label)

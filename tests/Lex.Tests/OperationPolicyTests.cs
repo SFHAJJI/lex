@@ -1307,6 +1307,7 @@ public sealed class OperationPolicyTests
         { McpStatus.UnknownAnchor, LegalOutcome.NotFound },
         { McpStatus.UnknownPublisher, LegalOutcome.NotFound },
         { McpStatus.NoVersionForDate, LegalOutcome.NotAvailable },
+        { McpStatus.AmbiguousVersion, LegalOutcome.NeedsClarification },
         { McpStatus.AnchorNotInVersion, LegalOutcome.NotAvailable },
         { McpStatus.NoProvisionHistory, LegalOutcome.NotAvailable },
         { McpStatus.TextNotAvailable, LegalOutcome.NotAvailable },

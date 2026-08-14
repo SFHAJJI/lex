@@ -342,7 +342,8 @@ public static class RetrievalBenchmarkRunner
     }
 
     private static FilterSet Filters(RetrievalBenchmarkCase c) => new(
-        c.AsOf is null ? null : DateOnly.Parse(c.AsOf), null, null, c.Language,
+        c.AsOf is null ? null : DateOnly.ParseExact(c.AsOf, "yyyy-MM-dd",
+            System.Globalization.CultureInfo.InvariantCulture), null, null, c.Language,
         null, c.Hierarchy, null, null, c.Domain);
 
     internal static RetrievalMetrics Evaluate(

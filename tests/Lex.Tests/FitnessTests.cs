@@ -33,6 +33,13 @@ public class FitnessTests
             Path.Combine(RepoRoot(), "server.json")));
         Assert.Equal(McpSdkBridge.ServerVersion,
             server.RootElement.GetProperty("version").GetString());
+        foreach (var host in new[]
+                 {
+                     Path.Combine(RepoRoot(), "src", "Lex.Web", "Program.cs"),
+                     Path.Combine(RepoRoot(), "src", "Lex.Mcp.Stdio", "Program.cs"),
+                 })
+            Assert.Contains("AddMcpServer(McpSdkBridge.Configure)",
+                File.ReadAllText(host), StringComparison.Ordinal);
 
         var migration = File.ReadAllText(
             Path.Combine(RepoRoot(), "docs", "mcp-2-migration.md"));
@@ -40,7 +47,8 @@ public class FitnessTests
                  {
                      "65,536", "2,000", "250,000", "citation rows", "500 states",
                      "1,000 events", "eight publisher", "busy", "rate_limited",
-                     "100,000", "unknown fields",
+                     "100,000", "unknown fields", "ambiguous_version", "version_key",
+                     "from_version_key", "to_version_key", "at most 20", "backward-compatible",
                  })
             Assert.Contains(required, migration, StringComparison.OrdinalIgnoreCase);
     }

@@ -23,6 +23,101 @@ public sealed class WorkEnrichmentFileTests : IDisposable
         Path.Combine(RepoRoot(), "config", "eu-work-enrichment.json");
 
     [Fact]
+    public void Raw_byte_reviewed_configuration_inputs_have_canonical_line_endings()
+    {
+        var attributes = File.ReadAllLines(Path.Combine(RepoRoot(), ".gitattributes"))
+            .ToHashSet(StringComparer.Ordinal);
+
+        Assert.Contains("config/eu-work-enrichment.json text eol=lf", attributes);
+        Assert.Contains("config/lu-work-enrichment.json text eol=lf", attributes);
+    }
+
+    [Fact]
+    public void Production_LU_citation_aliases_are_reviewed_and_target_held_code_works()
+    {
+        var path = Path.Combine(RepoRoot(), "config", "lu-work-enrichment.json");
+        var expected = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["code-civil"] = "loi-1804-03-21-n1",
+            ["code-penal"] = "loi-1879-06-18-n1",
+            ["code-securite_sociale"] = "loi-1925-12-17-n1",
+            ["code-procedure_penale"] = "loi-1808-11-17-n1",
+            ["code-procedure_civile"] = "rgd-1998-08-03-n4",
+            ["code-travail"] = "loi-2006-07-31-n2",
+        };
+        var held = expected.Values
+            .Select(work => (Work: work, Language: "fr"))
+            .ToHashSet();
+
+        var options = WorkEnrichmentFile.Load(path, "lu-legilux", held);
+
+        Assert.Equal(expected.OrderBy(pair => pair.Key), options.CitationAliases!
+            .ToDictionary(alias => alias.Alias, alias => alias.Work, StringComparer.Ordinal)
+            .OrderBy(pair => pair.Key));
+        Assert.All(options.CitationAliases!,
+            alias => Assert.StartsWith("repository-review:", alias.ReviewedBy,
+                StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Reviewed_citation_alias_target_must_be_held_instead_of_disappearing()
+    {
+        var path = Write("""
+            {
+              "schema": "lex-work-enrichment/1",
+              "aliases": [],
+              "citation_aliases": [
+                {
+                  "collection": "lu-legilux",
+                  "alias": "code-penal",
+                  "work": "loi-1879-06-18-n1",
+                  "reviewed_by": "repository-review:test"
+                }
+              ],
+              "discovery": []
+            }
+            """);
+
+        var error = Assert.Throws<InvalidDataException>(() => WorkEnrichmentFile.Load(
+            path, "lu-legilux", new HashSet<(string Work, string Language)>()));
+
+        Assert.Contains("code-penal", error.Message, StringComparison.Ordinal);
+        Assert.Contains("loi-1879-06-18-n1", error.Message, StringComparison.Ordinal);
+        Assert.Contains("not held", error.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Citation_alias_bytes_are_bound_into_the_index_enrichment_digest()
+    {
+        string Contract(string alias) => $$"""
+            {
+              "schema": "lex-work-enrichment/1",
+              "aliases": [],
+              "citation_aliases": [
+                {
+                  "collection": "lu-legilux",
+                  "alias": "{{alias}}",
+                  "work": "loi-1879-06-18-n1",
+                  "reviewed_by": "repository-review:test"
+                }
+              ],
+              "discovery": []
+            }
+            """;
+        var original = Write(Contract("code-penal"));
+        var changed = Write(Contract("code-criminal"));
+        var held = new HashSet<(string Work, string Language)>
+        {
+            ("loi-1879-06-18-n1", "fr"),
+        };
+
+        var originalOptions = WorkEnrichmentFile.Load(original, "lu-legilux", held);
+        var changedOptions = WorkEnrichmentFile.Load(changed, "lu-legilux", held);
+
+        Assert.NotEqual(originalOptions.EnrichmentDigest, changedOptions.EnrichmentDigest);
+    }
+
+    [Fact]
     public void Production_eu_aliases_are_reviewed_data_not_model_discovery()
     {
         var options = WorkEnrichmentFile.Load(ProductionArtifact(), "eu-eurlex");
@@ -183,6 +278,7 @@ public sealed class WorkEnrichmentFileTests : IDisposable
         _directories.Add(corpus);
         var manifest = new ManifestDoc
         {
+            Schema = "lex-corpus/3",
             Publisher = new Dictionary<string, string> { ["id"] = "eu-eurlex" },
             Tier = "A",
             Attribution = "test",
@@ -198,7 +294,7 @@ public sealed class WorkEnrichmentFileTests : IDisposable
             corpus, null, TempPath(), null, DateTimeOffset.Parse("2026-08-08T00:00:00Z"),
             workEnrichmentPath: ProductionArtifact()));
 
-        Assert.Contains("Re-ingest", error.Message, StringComparison.Ordinal);
+        Assert.Contains("fresh lex-corpus/4", error.Message, StringComparison.Ordinal);
     }
 
     [Fact]

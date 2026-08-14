@@ -26,7 +26,8 @@ public static class IndexBuilder
     /// works are keyed everywhere else, so a citation can be resolved to a work without parsing a
     /// URL at read time.
     /// </summary>
-    private static void WriteCitations(SqliteConnection conn, ProvisionRow p)
+    private static void WriteCitations(
+        SqliteConnection conn, ProvisionRow p, CitationTargetResolver resolver)
     {
         if (string.IsNullOrEmpty(p.CitationsJson)) return;
         JsonArray? arr;
@@ -41,6 +42,7 @@ public static class IndexBuilder
             if (string.IsNullOrWhiteSpace(href)) continue;
             var slug = SlugOfEli(href);
             if (slug is null) continue;
+            slug = resolver.CanonicalWork(slug) ?? slug;
             cmd.Parameters.Clear();
             cmd.Parameters.AddWithValue("$rid", p.Rid);
             cmd.Parameters.AddWithValue("$a", p.Anchor);
@@ -487,6 +489,8 @@ public static class IndexBuilder
             insProv.Parameters.Add(new SqliteParameter("$state", SqliteType.Integer));
             foreach (var p in new[] { "$rid", "$a", "$pid", "$pt", "$n", "$h", "$path", "$avf", "$wt", "$sha" })
                 insProv.Parameters.Add(new SqliteParameter(p, SqliteType.Text));
+            var citationResolver = new CitationTargetResolver(stampValues["collection"],
+                docRows.Select(document => document.GroupKey), workSearch?.CitationAliases);
             foreach (var p in provisionRows)
             {
                 if (!docByRid.TryGetValue(p.Rid, out var doc))
@@ -543,7 +547,7 @@ public static class IndexBuilder
                 Set(insProv, "$path", p.Path); Set(insProv, "$avf", p.ArticleValidFrom);
                 Set(insProv, "$wt", p.WorkTitle); Set(insProv, "$sha", actualSha);
                 insProv.ExecuteNonQuery();
-                WriteCitations(conn, p);
+                WriteCitations(conn, p, citationResolver);
                 DatabaseItemCompleted();
             }
 

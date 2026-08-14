@@ -432,24 +432,35 @@ public static class CatalogueEndpoints
                   <button>Show</button>
                 </form>
                 """);
-            if (DateOnly.TryParse(date, out var d))
+            if (TryIsoDate(date, out var d))
             {
                 var p = Math.Max(0, (page ?? 1) - 1);
                 const int limit = 50;
                 foreach (var r in readers.Values.Where(r => publisher is null || r.Collection == publisher))
                 {
-                    var (rows, total) = r.InForceOn(d, new FilterSet(null, null, string.IsNullOrEmpty(kind) ? null : kind, null), limit, p * limit);
+                    var inForcePage = r.InForceOn(d, new FilterSet(null, null, string.IsNullOrEmpty(kind) ? null : kind, null), limit, p * limit);
+                    var rows = inForcePage.Rows;
+                    var total = inForcePage.TotalGroups;
                     var publisherVersionDates = UsesPublisherVersionDates(r);
                     var populationLabel = publisherVersionDates
                         ? "works with an official consolidated wording state covering"
                         : "works applicable on";
                     sb.Append($"<h2>{H(r.Stamp.GetValueOrDefault("publisher_name"))}, {total:n0} {populationLabel} {d:yyyy-MM-dd}</h2>");
+                    if (inForcePage.Ambiguities.Count > 0)
+                        sb.Append($"<div class=\"notice\"><b>ambiguous_version.</b> {inForcePage.Ambiguities.Count:n0} work(s) have multiple publisher states on this boundary; choose an exact state below.</div>");
                     sb.Append($"<div class=\"card\"><table><tr><th>work</th><th>type</th><th>{(publisherVersionDates ? "publisher wording state" : "applicability interval")}</th></tr>");
                     foreach (var row in rows)
                         sb.Append($"""
                             <tr><td><a href="/{H(row.Collection)}/{H(row.GroupKey)}/{d:yyyy-MM-dd}">{H(DocTitle(row))}</a></td>
                             <td><span class="badge">{H(row.Kind)}</span></td><td class="mono">{IntervalLabel(r, row)}</td></tr>
                             """);
+                    foreach (var ambiguity in inForcePage.Ambiguities)
+                        foreach (var choice in ambiguity.Choices.Take(20))
+                            sb.Append($"""
+                                <tr><td><a href="/{H(choice.Collection)}/{H(choice.GroupKey)}/{H(VersionCoordinate(choice))}">{H(DocTitle(choice))}</a>
+                                <span class="sub">exact publisher state</span></td>
+                                <td><span class="badge">{H(choice.Kind)}</span></td><td class="mono">{IntervalLabel(r, choice)}</td></tr>
+                                """);
                     sb.Append("</table></div>");
                     if (total > limit)
                     {
@@ -504,7 +515,17 @@ public static class CatalogueEndpoints
                 };
                 if (!string.IsNullOrEmpty(publisher)) searchArguments["publisher"] = publisher;
                 if (!string.IsNullOrEmpty(kind)) searchArguments["document_type"] = kind;
-                var envelopes = mcpCore.CallTool("search", searchArguments) as JsonArray ?? [];
+                JsonArray envelopes;
+                try
+                {
+                    envelopes = mcpCore.CallTool("search", searchArguments) as JsonArray ?? [];
+                }
+                catch (ArgumentException error)
+                {
+                    return Results.Content(Page("Bad search query",
+                        $"<div class=\"notice\">status <span class=\"mono\">invalid_request</span>, "
+                        + $"{H(error.Message)}</div>"), "text/html", statusCode: 400);
+                }
                 foreach (var result in envelopes.OfType<JsonObject>())
                 {
                     var publisherId = result["envelope"]?["publisher"]?.GetValue<string>() ?? "";
@@ -527,7 +548,7 @@ public static class CatalogueEndpoints
                             + (anchor is null ? "" : $"#{H(anchor)}");
                         sb.Append($"""
                             <div class="card"><a href="{href}"><b>{H(title)}</b>{(provisionLabel is null ? "" : $",  {H(provisionLabel)}")}</a>
-                            <span class="badge">{H(sourceClass)}</span> <span class="badge mono">{H(validFrom)} â†’ {H(validTo ?? "open")}</span>
+                            <span class="badge">{H(sourceClass)}</span> <span class="badge mono">{H(validFrom)} → {H(validTo ?? "open")}</span>
                             <div class="snippet">{H(snippet)}</div>
                             <div class="mono sub">{H(provisionId)}</div></div>
                             """);
@@ -542,8 +563,8 @@ public static class CatalogueEndpoints
         app.MapGet("/changed", (string? from, string? to, string? order, string? publisher) =>
         {
             var today = ctx.Today;
-            if (!DateOnly.TryParse(to, out var toD)) toD = today;
-            if (!DateOnly.TryParse(from, out var fromD)) fromD = toD.AddYears(-1);
+            if (!TryIsoDate(to, out var toD)) toD = today;
+            if (!TryIsoDate(from, out var fromD)) fromD = toD.AddYears(-1);
             if (fromD > toD) (fromD, toD) = (toD, fromD);
             var byChurn = order == "by_churn";
             var f = fromD.ToString("yyyy-MM-dd");

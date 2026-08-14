@@ -35,10 +35,10 @@ This prevents ambiguous cross-publisher lookup and keeps request-time database w
 
 | Tool | Pagination and closed values |
 |---|---|
-| `as_of` | `mode`: `full`, `outline`, `select`; `select` requires anchors; anchors are valid only for `outline` or `select`. |
+| `as_of` | `mode`: `full`, `outline`, `select`; `select` requires anchors; anchors are valid only for `outline` or `select`. Optional `version_key` is an opaque string of at most 128 characters returned by `timeline` or an `ambiguous_version` choice. |
 | `timeline` | limit 1..200, default 100; offset 0..100,000. |
 | `in_force_on` | limit 1..100, default 50; offset 0..100,000. |
-| `diff` | optional anchor is at most 512 characters. |
+| `diff` | optional anchor is at most 512 characters. Optional `from_version_key` and `to_version_key` are opaque strings of at most 128 characters returned by `timeline` or an `ambiguous_version` choice. |
 | `search` | limit 1..50, default 10; retrieval mode `keyword` or `hybrid`; time scope `all_versions` or `as_of`; fuzzy `auto` or `off`; `as_of` is required for the matching time scope. |
 | `article_history` | no client pagination; output is bounded as described below. |
 | `provenance` | no client pagination; output is bounded as described below. |
@@ -74,6 +74,7 @@ index. At most eight publisher result envelopes are returned.
 | `ok` | The requested legal operation succeeded. |
 | `no_result`, `no_changes_in_period` | The operation succeeded and the requested population is empty. |
 | `profiles_differ` | Both versions exist, but their extraction profiles do not support a provision comparison. |
+| `ambiguous_version` | More than one publisher-identified state is effective at the requested boundary. The response returns at most 20 exact opaque choices; retry with `version_key`, or `from_version_key`/`to_version_key`. |
 | `unknown_work`, `unknown_anchor` | The requested work or provision identifier is not held. |
 | `no_version_for_date`, `anchor_not_in_version`, `no_provision_history` | The requested legal state is not available in the held publisher history. |
 | `text_not_available`, `text_withheld` | The record is held, but provision text cannot be served. |
@@ -88,3 +89,22 @@ status object above. Callers that treated `[]` as "nothing is held" must read th
 Unknown status values must fail closed. They must not be treated as empty success or transport
 errors. Clients must inspect truncation fields before claiming that returned text or rows are
 complete.
+
+## Exact publisher-version coordinates
+
+Publisher versions are identity units, not language rows and not dates alone. `timeline` returns
+one version unit with its available language expressions nested beneath it. Every version unit has
+an opaque `version_key`; exact permalinks and comparison links use that key. A friendly bare-date
+web route remains canonical when exactly one publisher state is effective on that date.
+
+Some publishers can expose two independently identified states with the same `valid_from`. Both
+states cover the whole shared interval until the next later publisher boundary. A bare `as_of`,
+`in_force_on`, web date route, or either date boundary of `diff` therefore returns
+`ambiguous_version` anywhere in that interval, not only on its first day. Choices are bounded to 20
+and carry exact keys. Supplying an exact key succeeds only when that state covers the requested
+boundary; a key cannot select an unrelated date or work.
+
+These fields are additive and backward-compatible for unambiguous histories. The one intentional
+behaviour correction is that a request which 1.x/early 2.0 silently resolved to one of several
+same-boundary publisher states now fails honestly with `ambiguous_version` and requires an exact
+choice. Date-only callers must handle that typed clarification status.

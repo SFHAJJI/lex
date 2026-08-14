@@ -78,8 +78,25 @@ public static class WorkEnrichmentFile
             .Where(item => heldWorks is null
                            || heldWorks.Contains((item.Value.Work, item.Value.Language)))
             .Select(item => item.Value).ToArray();
+        var heldWorkKeys = heldWorks?.Select(item => item.Work).ToHashSet(StringComparer.Ordinal);
+        var citationAliases = (contract.CitationAliases ?? [])
+            .Select(ToCitationAlias).Where(item => item.Collection == collection)
+            .Select(item => item.Value)
+            .ToArray();
+        if (heldWorkKeys is not null)
+        {
+            var unheld = citationAliases
+                .Where(alias => !heldWorkKeys.Contains(alias.Work))
+                .OrderBy(alias => alias.Alias, StringComparer.Ordinal)
+                .ToArray();
+            if (unheld.Length > 0)
+                throw new InvalidDataException(
+                    "Reviewed citation aliases target works not held by the corpus: "
+                    + string.Join(", ", unheld.Select(alias =>
+                        $"'{alias.Alias}' -> '{alias.Work}'")) + ".");
+        }
         return new WorkSearchBuildOptions(aliases, discovery,
-            Convert.ToHexStringLower(SHA256.HashData(bytes)));
+            Convert.ToHexStringLower(SHA256.HashData(bytes)), citationAliases);
     }
 
     public static void BuildReviewedArtifact(string inputPath, string outputPath, string collection)
@@ -100,6 +117,15 @@ public static class WorkEnrichmentFile
                     work = alias.Work,
                     language = alias.Language,
                     value = alias.Value,
+                    reviewed_by = alias.ReviewedBy,
+                }).ToArray(),
+            citation_aliases = (options.CitationAliases ?? [])
+                .OrderBy(alias => alias.Alias, StringComparer.Ordinal)
+                .Select(alias => new
+                {
+                    collection,
+                    alias = alias.Alias,
+                    work = alias.Work,
                     reviewed_by = alias.ReviewedBy,
                 }).ToArray(),
             discovery = options.Discovery
@@ -150,6 +176,13 @@ public static class WorkEnrichmentFile
             Required(item.Value, "alias.value"),
             Required(item.ReviewedBy, "alias.reviewed_by")));
 
+    private static (string Collection, ReviewedCitationAliasRow Value) ToCitationAlias(
+        CitationAlias item) =>
+        (Required(item.Collection, "citation_alias.collection"), new ReviewedCitationAliasRow(
+            Required(item.Alias, "citation_alias.alias"),
+            Required(item.Work, "citation_alias.work"),
+            Required(item.ReviewedBy, "citation_alias.reviewed_by")));
+
     private static (string Collection, WorkDiscoveryRow Value) ToDiscovery(Discovery item) =>
         (Required(item.Collection, "discovery.collection"), new WorkDiscoveryRow(
             Required(item.Work, "discovery.work"),
@@ -179,6 +212,7 @@ public static class WorkEnrichmentFile
     {
         public string? Schema { get; init; }
         public Alias[]? Aliases { get; init; }
+        public CitationAlias[]? CitationAliases { get; init; }
         public Discovery[]? Discovery { get; init; }
     }
 
@@ -188,6 +222,14 @@ public static class WorkEnrichmentFile
         public string? Work { get; init; }
         public string? Language { get; init; }
         public string? Value { get; init; }
+        public string? ReviewedBy { get; init; }
+    }
+
+    private sealed class CitationAlias
+    {
+        public string? Collection { get; init; }
+        public string? Alias { get; init; }
+        public string? Work { get; init; }
         public string? ReviewedBy { get; init; }
     }
 

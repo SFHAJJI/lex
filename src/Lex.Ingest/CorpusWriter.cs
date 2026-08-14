@@ -2,30 +2,48 @@ using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Globalization;
 using Lex.Law;
+using Lex.Temporal;
 
 namespace Lex.Ingest;
 
+internal sealed record CorpusPlannedWork(
+    WorkRef Work, IReadOnlyList<VersionRecord> Versions);
+
 /// <summary>
 /// The single component that writes corpus files (C1 layout, C3 rules, F12 discipline).
-/// Adapters never touch disk (F8). Version directories are valid_from-only and are never
-/// renamed (D41). meta.json changes only when observed reality changes; every change
+/// Adapters never touch disk (F8). Version directories combine valid_from with the full hash of
+/// publisher_version_identifier, so coordinates never change as the known set grows. meta.json
+/// changes only when observed reality changes; every change
 /// appends the corresponding chain entry (F12). Body files are append-only; a declared
 /// metadata-only expression writes no body and records the reason instead.
 /// </summary>
-public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now, TextWriter? progress = null)
+public sealed class CorpusWriter(
+    string corpusRoot, DateTimeOffset now, string codeCommit, TextWriter? progress = null)
 {
     private readonly string _now = now.UtcDateTime.ToString("yyyy-MM-ddTHH:mm:ssZ");
+    private readonly string _ingesterCodeCommit = CodeIdentity.RequireFullCommit(
+        codeCommit, "ingester code commit");
     private readonly TextWriter _progress = progress ?? Console.Error;
     public int Created { get; private set; }
     public int Updated { get; private set; }
     public int Unchanged { get; private set; }
     public bool Committed { get; private set; }
+    public bool Accepted { get; private set; }
     public IReadOnlyList<SourceBuildIssue> BuildIssues { get; private set; } = [];
 
-    public async Task WriteAsync(
-        ISourceAdapter adapter, CancellationToken ct, bool requireComplete = false)
+    public Task WriteAsync(
+        ISourceAdapter adapter, CancellationToken ct, bool requireComplete = false) =>
+        WriteAsync(adapter, ct, requireComplete, validatePlan: null);
+
+    internal async Task WriteAsync(
+        ISourceAdapter adapter,
+        CancellationToken ct,
+        bool requireComplete,
+        Action<IReadOnlyList<CorpusPlannedWork>>? validatePlan)
     {
+        var existingManifest = RefuseLegacyAppend(corpusRoot);
         var desc = adapter.Describe();
         var pub = desc.Publisher;
         using var candidate = new CorpusCandidate(corpusRoot);
@@ -40,7 +58,7 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now, TextWrit
         // version catalogue in memory, so this adds no publisher body requests and lets the log
         // report a real denominator. A percentage without a denominator is not actionable; an
         // elapsed time without observed throughput is not an ETA.
-        var plan = new List<(WorkRef Work, IReadOnlyList<VersionRecord> Versions)>();
+        var plan = new List<CorpusPlannedWork>();
         var localBuildIssues = new List<SourceBuildIssue>();
         var enumeratedWorks = 0;
         await foreach (var work in adapter.EnumerateWorks(ct))
@@ -48,7 +66,7 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now, TextWrit
             enumeratedWorks++;
             var versionsOfWork = await adapter.FetchVersions(work, ct);
             if (versionsOfWork.Count > 0)
-                plan.Add((work, versionsOfWork));
+                plan.Add(new CorpusPlannedWork(work, versionsOfWork));
             else
                 localBuildIssues.Add(new SourceBuildIssue(
                     "no_versions", work.Slug, "The publisher enumeration returned no version records."));
@@ -62,6 +80,11 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now, TextWrit
             throw new SourceEnumerationIncompleteException(new SourceBuildIssue(
                 "incomplete_enumeration", pub.Id,
                 $"Publisher enumeration returned {enumeratedWorks} of {expectedWorks} expected works; the prior corpus remains unchanged."));
+        // Fresh migrations use this seam to prove that the metadata catalogue preserves every
+        // held baseline identity before the first expression body is requested. The plan is the
+        // same single source enumeration consumed below; the validator must not re-query the
+        // publisher.
+        validatePlan?.Invoke(plan);
         var totalExpressions = plan.Sum(item => item.Versions.Sum(version => (long)version.Expressions.Count));
         long processedExpressions = 0;
         var lastReportedPercent = -1;
@@ -86,14 +109,12 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now, TextWrit
             };
             candidate.WriteIfChanged(Path.Combine(workDir, "meta.json"), JsonSerializer.Serialize(workMeta, CorpusJson.Options));
 
-            var usedVersionKeys = new HashSet<string>(StringComparer.Ordinal);
-            foreach (var v in versionsOfWork.OrderBy(v => v.ValidFrom))
+            var versionKeys = VersionKeys(workDir, versionsOfWork);
+            foreach (var v in versionsOfWork.OrderBy(v => v.ValidFrom).ThenBy(v => v.Id.Value, StringComparer.Ordinal))
             {
                 versions++;
                 var vfrom = v.ValidFrom.ToString("yyyy-MM-dd");
-                var vkey = vfrom;
-                var ordinal = 2;
-                while (!usedVersionKeys.Add(vkey)) vkey = $"{vfrom}--{ordinal++:00}"; // D41 collision suffix
+                var vkey = versionKeys[v.Id.Value];
 
                 if (v.TypeCode is not null) kinds[v.TypeCode] = kinds.GetValueOrDefault(v.TypeCode) + 1;
                 foreach (var e in v.Expressions) langs.Add(e.Language);
@@ -111,6 +132,22 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now, TextWrit
                 if (existing)
                 {
                     meta = JsonSerializer.Deserialize<VersionMeta>(await File.ReadAllTextAsync(metaPath, ct), CorpusJson.Options)!;
+                    if (meta.PublisherVersionIdentifier is not null
+                        && meta.PublisherVersionIdentifier != v.Id.Value)
+                        throw new InvalidDataException(
+                            $"Publisher version identity changed for {lexId}; a full re-ingest is required.");
+                    if (meta.PublisherVersionIdentifier is null)
+                    {
+                        meta.PublisherVersionIdentifier = v.Id.Value;
+                        meta.Events.Add(new EventEntry
+                        {
+                            Event = "metadata_revised",
+                            ObservedFrom = _now,
+                            Scope = "version",
+                            Detail = "fields=publisher_version_identifier",
+                        });
+                        changed = true;
+                    }
                     var lifecycle = meta.Events.LastOrDefault(e =>
                         e.Event is "withdrawn_from_source" or "resighted");
                     if (lifecycle?.Event == "withdrawn_from_source")
@@ -237,6 +274,7 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now, TextWrit
                     meta = new VersionMeta
                     {
                         LexId = lexId,
+                        PublisherVersionIdentifier = v.Id.Value,
                         WorkIdentifier = v.WorkId.Value,
                         Publisher = pub.Id,
                         DocumentType = v.TypeCode,
@@ -467,10 +505,23 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now, TextWrit
             ValidToLatest = latest,
             HistoryBegins = desc.HistoryBegins,
             IngesterVersion = "0.1.0",
+            // A poll that materializes no different bytes must not relabel the existing corpus
+            // as though a newer, unrelated Lex revision had produced it. Write the prior
+            // materializer first; if any corpus/NOTICE/manifest fact changes below, replace it
+            // with this run's explicitly supplied identity.
+            IngesterCodeCommit = existingManifest?.IngesterCodeCommit
+                ?? _ingesterCodeCommit,
+            MigrationBaselineWorks = existingManifest?.MigrationBaselineWorks,
             PublisherDiscoverySchema = ManifestDoc.CurrentPublisherDiscoverySchema,
         };
         candidate.WriteIfChanged(Path.Combine(corpusRoot, "manifest.json"), JsonSerializer.Serialize(manifest, CorpusJson.Options));
         candidate.WriteIfChanged(Path.Combine(corpusRoot, "NOTICE"), Notice(pub, desc.TextIncluded));
+        if (candidate.HasChanges && manifest.IngesterCodeCommit != _ingesterCodeCommit)
+        {
+            manifest.IngesterCodeCommit = _ingesterCodeCommit;
+            candidate.WriteIfChanged(Path.Combine(corpusRoot, "manifest.json"),
+                JsonSerializer.Serialize(manifest, CorpusJson.Options));
+        }
         if (requireComplete && blocking.Length > 0)
         {
             // Only the blocking issues are listed. The metadata-only ones were already summarised
@@ -483,11 +534,73 @@ public sealed class CorpusWriter(string corpusRoot, DateTimeOffset now, TextWrit
                 $"  [corpus] candidate rejected with {blocking.Length} typed acquisition issue(s); prior corpus retained");
             return;
         }
+        Accepted = true;
+        if (!candidate.HasChanges)
+        {
+            _progress.WriteLine(
+                "  [corpus] no materialized changes; prior ingester identity retained");
+            return;
+        }
         candidate.Commit();
         Committed = true;
         _progress.WriteLine($"  [corpus] works={works} versions={versions} expressions={expressions} " +
             $"with_text={expressionsWithText} without_text={manifest.ExpressionsWithoutText} " +
             $"created={Created} updated={Updated} unchanged={Unchanged}");
+    }
+
+    private static ManifestDoc? RefuseLegacyAppend(string root)
+    {
+        var path = Path.Combine(root, "manifest.json");
+        if (!File.Exists(path)) return null;
+        var manifest = JsonSerializer.Deserialize<ManifestDoc>(
+            File.ReadAllText(path), CorpusJson.Options)
+            ?? throw new InvalidDataException("Existing corpus manifest is empty.");
+        if (manifest.Schema != ManifestDoc.CurrentSchema)
+            throw new InvalidDataException(
+                $"Existing corpus schema '{manifest.Schema}' cannot be appended by the v4 writer; "
+                + "use the explicit fresh-corpus migration path.");
+        CodeIdentity.RequireFullCommit(
+            manifest.IngesterCodeCommit, "manifest ingester_code_commit");
+        return manifest;
+    }
+
+    private static Dictionary<string, string> VersionKeys(
+        string workDir, IReadOnlyList<VersionRecord> versions)
+    {
+        var duplicateId = versions.GroupBy(version => version.Id.Value, StringComparer.Ordinal)
+            .FirstOrDefault(group => group.Count() > 1);
+        if (duplicateId is not null)
+            throw new InvalidDataException(
+                $"Publisher returned duplicate version identifier {duplicateId.Key} for {Path.GetFileName(workDir)}.");
+
+        var result = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var dateGroup in versions.GroupBy(version => version.ValidFrom))
+        {
+            var date = dateGroup.Key.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+            var sameDate = dateGroup.OrderBy(version => version.Id.Value, StringComparer.Ordinal).ToList();
+            var expectedKeys = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var version in sameDate)
+            {
+                var key = VersionIdentity.Create(version.ValidFrom, version.Id.Value);
+                if (!expectedKeys.Add(key))
+                    throw new InvalidDataException(
+                        $"Publisher version identifiers collide after hashing for {Path.GetFileName(workDir)} on {date}.");
+                result.Add(version.Id.Value, key);
+            }
+
+            var versionsDir = Path.Combine(workDir, "versions");
+            if (!Directory.Exists(versionsDir)) continue;
+            var incompatible = Directory.EnumerateDirectories(versionsDir)
+                .Select(Path.GetFileName)
+                .Where(key => key is not null
+                    && (key == date || key.StartsWith(date + "--", StringComparison.Ordinal)))
+                .FirstOrDefault(key => !expectedKeys.Contains(key!));
+            if (incompatible is not null)
+                throw new InvalidDataException(
+                    $"Legacy or incompatible version key {incompatible} exists for "
+                    + $"{Path.GetFileName(workDir)}; a full re-ingest is required.");
+        }
+        return result;
     }
 
     private static ExpressionMeta CreateExpressionMeta(ExpressionRecord expression, bool textIncluded) => new()

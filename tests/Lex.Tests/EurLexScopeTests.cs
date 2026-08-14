@@ -199,6 +199,27 @@ public sealed class EurLexScopeTests : IDisposable
     }
 
     [Fact]
+    public void Same_date_publisher_states_survive_with_the_next_distinct_date_as_their_boundary()
+    {
+        var sameDate = new DateOnly(2025, 7, 28);
+        var nextDate = new DateOnly(2025, 8, 4);
+        var coordinates = EurLexAdapter.ConsolidatedCoordinates(
+        [
+            ("02025R0001-20250728", sameDate),
+            ("02025R0001-20250728R(01)", sameDate),
+            ("02025R0001-20250804", nextDate),
+        ]);
+
+        Assert.Equal(3, coordinates.Count);
+        var siblings = coordinates.Where(version => version.Date == sameDate).ToArray();
+        Assert.Equal(2, siblings.Length);
+        Assert.Equal(2, siblings.Select(version => version.Celex).Distinct().Count());
+        Assert.All(siblings, version => Assert.Equal(nextDate.AddDays(-1), version.ValidTo));
+        Assert.All(siblings, version => Assert.True(version.ValidTo >= version.Date));
+        Assert.Null(coordinates.Single(version => version.Date == nextDate).ValidTo);
+    }
+
+    [Fact]
     public async Task Original_expressions_skip_the_incompatible_consolidation_manifestation()
     {
         var date = new DateOnly(2024, 1, 1);

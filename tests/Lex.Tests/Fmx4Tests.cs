@@ -1,4 +1,5 @@
 using Lex.Derive;
+using Lex.Temporal;
 using System.Text.Json.Nodes;
 using Xunit;
 
@@ -9,6 +10,12 @@ namespace Lex.Tests;
 // footnotes never inline, publisher quote characters honoured (QUOT CODE = hex codepoint).
 public class Fmx4Tests
 {
+    private const string IngesterCommit = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    private const string DeriverCommit = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+    private const string DeriverTree = "dddddddddddddddddddddddddddddddddddddddd";
+    private const string CorpusCommit = "cccccccccccccccccccccccccccccccccccccccc";
+    private const string EnrichmentDigest =
+        "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
     private const string Fmx = """
         <?xml version="1.0" encoding="utf-8"?>
         <CONS.ACT xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
@@ -147,28 +154,42 @@ public class Fmx4Tests
         var output = Path.Combine(root, "articles");
         try
         {
+            Directory.CreateDirectory(corpus);
+            File.WriteAllText(Path.Combine(corpus, "manifest.json"), $$"""
+                { "schema": "lex-corpus/4", "ingester_code_commit": "{{IngesterCommit}}" }
+                """);
             var work = Path.Combine(corpus, "works", "32000r0001");
             Directory.CreateDirectory(work);
             File.WriteAllText(Path.Combine(work, "meta.json"), "{\"title\":\"Recovery fixture\"}");
 
-            var htmlVersion = Path.Combine(work, "versions", "2020-01-01");
+            var htmlDate = new DateOnly(2020, 1, 1);
+            var htmlId = "official:2020";
+            var htmlKey = VersionIdentity.Create(htmlDate, htmlId);
+            var htmlVersion = Path.Combine(work, "versions", htmlKey);
             Directory.CreateDirectory(htmlVersion);
-            File.WriteAllText(Path.Combine(htmlVersion, "meta.json"), VersionMeta("en.html"));
+            File.WriteAllText(Path.Combine(htmlVersion, "meta.json"),
+                VersionMeta(htmlKey, htmlDate, htmlId, "en.html"));
             File.WriteAllText(Path.Combine(htmlVersion, "en.html"), """
                 <html><body><p class="title-article-norm">Article 1</p>
                 <p>Original publisher wording.</p></body></html>
                 """);
 
-            var fmxVersion = Path.Combine(work, "versions", "2021-01-01");
+            var fmxDate = new DateOnly(2021, 1, 1);
+            var fmxId = "official:2021";
+            var fmxKey = VersionIdentity.Create(fmxDate, fmxId);
+            var fmxVersion = Path.Combine(work, "versions", fmxKey);
             Directory.CreateDirectory(Path.Combine(fmxVersion, "en.fmx4"));
-            File.WriteAllText(Path.Combine(fmxVersion, "meta.json"), VersionMeta("en.fmx4/main.xml"));
+            File.WriteAllText(Path.Combine(fmxVersion, "meta.json"),
+                VersionMeta(fmxKey, fmxDate, fmxId, "en.fmx4/main.xml"));
             File.WriteAllText(Path.Combine(fmxVersion, "en.fmx4", "main.xml"), Fmx);
 
-            var stats = DeriveWriter.Derive(corpus, output, "eu-eurlex");
+            var stats = DeriveWriter.Derive(
+                corpus, output, "eu-eurlex", DeriverCommit, DeriverTree,
+                CorpusCommit, EnrichmentDigest);
 
             Assert.Empty(stats.Errors);
             var recovered = Path.Combine(output, "eu-eurlex", "works", "32000r0001",
-                "versions", "2021-01-01", "en.json");
+                "versions", fmxKey, "en.json");
             Assert.True(File.Exists(recovered), "publisher Formex must fill an otherwise textless expression");
             var json = JsonNode.Parse(File.ReadAllText(recovered))!;
             Assert.Equal(Fmx4EuProfile.ProfileId, json["generator"]?["profile"]?.GetValue<string>());
@@ -180,8 +201,13 @@ public class Fmx4Tests
         }
     }
 
-    private static string VersionMeta(string observationFile) => $$"""
+    private static string VersionMeta(
+        string key, DateOnly date, string publisherVersionIdentifier, string observationFile) => $$"""
         {
+          "lex_id": "eu-eurlex:32000r0001:{{key}}",
+          "publisher": "eu-eurlex",
+          "publisher_version_identifier": "{{publisherVersionIdentifier}}",
+          "valid_from": "{{date:yyyy-MM-dd}}",
           "work_identifier": "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32000R0001",
           "expressions": [{
             "language": "en",

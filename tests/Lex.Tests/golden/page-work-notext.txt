@@ -243,7 +243,7 @@ HTTP 200
 </header>
 <main>
 <h1>Reglement sans texte</h1>
-<p class="sub">as it stood on <span class="asof">2020-01-01</span>, permalink: /t-pub/w2/2020-01-01</p>
+<p class="sub">as it stood on <span class="asof">2020-01-01</span>, permalink: /t-pub/w2/2019-06-01</p>
 <div class="notice" style="border-left-color:var(--ok)"><b>Point-in-time view as at 2020-01-01.</b>
 This is the latest state the publisher has consolidated, valid 2019-06-01 → open.</div><div class="notice"><b>Provision text not available.</b> Lex holds the publisher record and timeline, but no
 safely derived provision text for this version (status <span class="mono">text_not_available</span>).
