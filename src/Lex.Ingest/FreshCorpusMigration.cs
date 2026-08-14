@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Lex.Law;
+using Lex.Temporal;
 
 namespace Lex.Ingest;
 
@@ -53,7 +54,8 @@ public static class FreshCorpusMigration
             throw new InvalidDataException(
                 $"Fresh corpus publisher '{requestedPublisher}' does not match protected "
                 + $"baseline '{baselinePublisher}' and requested publisher '{publisher}'.");
-        var baseline = ReadBaselineInventory(root, baselineManifest.Schema);
+        var baseline = ReadBaselineInventory(
+            root, baselineManifest.Schema, baselinePublisher);
         var token = Guid.NewGuid().ToString("N");
         var parent = Directory.GetParent(root)!.FullName;
         var name = Path.GetFileName(root.TrimEnd(
@@ -64,10 +66,18 @@ public static class FreshCorpusMigration
         try
         {
             var writer = new CorpusWriter(stage, now, ingesterCodeCommit);
+            IReadOnlyList<WithdrawnBaselineState>? withdrawnStates = null;
             await writer.WriteAsync(adapter, cancellationToken, requireComplete: true,
-                plan => RequirePreservedBaseline(baseline, plan));
+                plan => withdrawnStates = RequirePreservedBaseline(
+                    baseline, plan, adapter));
             if (!writer.Committed)
                 throw new InvalidDataException("Fresh corpus candidate was not committed.");
+            if (withdrawnStates is null)
+                throw new InvalidDataException(
+                    "Fresh corpus baseline reconciliation did not run.");
+
+            ImportWithdrawnBaselineStates(
+                stage, withdrawnStates, now, cancellationToken);
 
             var candidateManifest = ReadManifest(stage);
             var candidatePublisher = candidateManifest.Publisher.GetValueOrDefault("id")
@@ -105,18 +115,32 @@ public static class FreshCorpusMigration
             File.ReadAllText(Path.Combine(root, "manifest.json")), CorpusJson.Options)
         ?? throw new InvalidDataException($"Corpus manifest is empty: {root}");
 
-    private sealed record BaselineState(string Key, string Description);
+    private sealed record BaselineState(
+        string Key,
+        string Description,
+        string VersionDirectory,
+        VersionMeta Version,
+        DateOnly ValidFrom,
+        bool IsWithdrawn);
+
+    private sealed record BaselineWork(
+        WorkMeta Work,
+        IReadOnlyList<BaselineState> States);
 
     private sealed record BaselineInventory(
         bool UsesPublisherVersionIdentifier,
-        IReadOnlyList<string> WorkIdentifiers,
-        IReadOnlyList<BaselineState> States);
+        IReadOnlyList<BaselineWork> Works);
 
-    private static BaselineInventory ReadBaselineInventory(string root, string schema)
+    private sealed record WithdrawnBaselineState(
+        BaselineState Baseline,
+        string DestinationWorkSlug,
+        string PublisherVersionIdentifier);
+
+    private static BaselineInventory ReadBaselineInventory(
+        string root, string schema, string publisher)
     {
         var usesPublisherVersionIdentifier = schema == ManifestDoc.CurrentSchema;
-        var works = new List<string>();
-        var states = new List<BaselineState>();
+        var works = new List<BaselineWork>();
         foreach (var workDirectory in Directory.EnumerateDirectories(
                      Path.Combine(root, "works")).Order(StringComparer.Ordinal))
         {
@@ -124,7 +148,17 @@ public static class FreshCorpusMigration
                            Path.Combine(workDirectory, "meta.json")), CorpusJson.Options)
                        ?? throw new InvalidDataException(
                            $"Protected corpus work metadata is empty: {workDirectory}");
-            works.Add(work.WorkIdentifier);
+            if (!string.Equals(work.Publisher, publisher, StringComparison.Ordinal))
+                throw new InvalidDataException(
+                    $"Protected corpus work publisher '{Bound(work.Publisher)}' does not match "
+                    + $"manifest publisher '{Bound(publisher)}': "
+                    + Path.GetRelativePath(root, workDirectory));
+            if (!string.Equals(work.Slug, Path.GetFileName(workDirectory),
+                    StringComparison.Ordinal))
+                throw new InvalidDataException(
+                    $"Protected corpus work slug '{Bound(work.Slug)}' does not match its "
+                    + $"directory: {Path.GetRelativePath(root, workDirectory)}");
+            var states = new List<BaselineState>();
             foreach (var versionDirectory in Directory.EnumerateDirectories(
                          Path.Combine(workDirectory, "versions")).Order(StringComparer.Ordinal))
             {
@@ -138,6 +172,11 @@ public static class FreshCorpusMigration
                         $"Protected corpus version work identity '{Bound(version.WorkIdentifier)}' "
                         + $"does not match containing work '{Bound(work.WorkIdentifier)}': "
                         + Path.GetRelativePath(root, versionDirectory));
+                if (!string.Equals(version.Publisher, publisher, StringComparison.Ordinal))
+                    throw new InvalidDataException(
+                        $"Protected corpus version publisher '{Bound(version.Publisher)}' "
+                        + $"does not match manifest publisher '{Bound(publisher)}': "
+                        + Path.GetRelativePath(root, versionDirectory));
                 if (usesPublisherVersionIdentifier)
                 {
                     if (string.IsNullOrEmpty(version.PublisherVersionIdentifier))
@@ -148,16 +187,14 @@ public static class FreshCorpusMigration
                         PublisherStateKey(work.WorkIdentifier,
                             version.PublisherVersionIdentifier),
                         $"work '{Bound(work.WorkIdentifier)}' publisher version "
-                        + $"'{Bound(version.PublisherVersionIdentifier)}'"));
+                        + $"'{Bound(version.PublisherVersionIdentifier)}'",
+                        versionDirectory, version,
+                        ParseValidFrom(version, root, versionDirectory),
+                        IsWithdrawn(version)));
                     continue;
                 }
 
-                if (!DateOnly.TryParseExact(version.ValidFrom, "yyyy-MM-dd",
-                        CultureInfo.InvariantCulture, DateTimeStyles.None, out var validFrom))
-                    throw new InvalidDataException(
-                        $"Protected legacy corpus version has invalid valid_from "
-                        + $"'{Bound(version.ValidFrom)}': "
-                        + Path.GetRelativePath(root, versionDirectory));
+                var validFrom = ParseValidFrom(version, root, versionDirectory);
                 var expressionIdentity = ExpressionSourceIdentity(
                     version.Expressions.Select(expression => (
                         expression.Language,
@@ -167,14 +204,18 @@ public static class FreshCorpusMigration
                     LegacyStateKey(work.WorkIdentifier, validFrom, expressionIdentity),
                     $"work '{Bound(work.WorkIdentifier)}' version "
                     + validFrom.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
-                    + $" expression/source {expressionIdentity}"));
+                    + $" expression/source {expressionIdentity}",
+                    versionDirectory, version, validFrom, IsWithdrawn(version)));
             }
+            works.Add(new BaselineWork(work, states));
         }
-        return new BaselineInventory(usesPublisherVersionIdentifier, works, states);
+        return new BaselineInventory(usesPublisherVersionIdentifier, works);
     }
 
-    private static void RequirePreservedBaseline(
-        BaselineInventory baseline, IReadOnlyList<CorpusPlannedWork> plan)
+    private static IReadOnlyList<WithdrawnBaselineState> RequirePreservedBaseline(
+        BaselineInventory baseline,
+        IReadOnlyList<CorpusPlannedWork> plan,
+        ISourceAdapter adapter)
     {
         const int maximumDiagnostics = 20;
         var diagnostics = new List<string>();
@@ -185,13 +226,14 @@ public static class FreshCorpusMigration
             if (diagnostics.Count < maximumDiagnostics) diagnostics.Add(message);
         }
 
-        var candidateWorkCounts = plan.GroupBy(item => item.Work.Id.Value,
+        var candidateWorks = plan.GroupBy(item => item.Work.Id.Value,
                 StringComparer.Ordinal)
-            .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
-        foreach (var group in baseline.WorkIdentifiers.GroupBy(value => value,
+            .ToDictionary(group => group.Key, group => group.ToArray(),
+                StringComparer.Ordinal);
+        foreach (var group in baseline.Works.GroupBy(value => value.Work.WorkIdentifier,
                      StringComparer.Ordinal).OrderBy(group => group.Key, StringComparer.Ordinal))
         {
-            var count = candidateWorkCounts.GetValueOrDefault(group.Key);
+            var count = candidateWorks.GetValueOrDefault(group.Key)?.Length ?? 0;
             if (group.Count() != 1)
                 Fail($"protected baseline contains {group.Count()} works with identity "
                      + $"'{Bound(group.Key)}'");
@@ -202,26 +244,35 @@ public static class FreshCorpusMigration
         }
 
         var candidateStates = new Dictionary<string, int>(StringComparer.Ordinal);
+        var candidatePublisherStates = new HashSet<string>(StringComparer.Ordinal);
         foreach (var item in plan)
-        foreach (var version in item.Versions)
-        {
-            if (!string.Equals(version.WorkId.Value, item.Work.Id.Value,
-                    StringComparison.Ordinal))
+            foreach (var version in item.Versions)
             {
-                Fail($"candidate version '{Bound(version.Id.Value)}' belongs to work "
-                     + $"'{Bound(version.WorkId.Value)}', not enumerated work "
-                     + $"'{Bound(item.Work.Id.Value)}'");
-                continue;
+                if (!string.Equals(version.WorkId.Value, item.Work.Id.Value,
+                        StringComparison.Ordinal))
+                {
+                    Fail($"candidate version '{Bound(version.Id.Value)}' belongs to work "
+                         + $"'{Bound(version.WorkId.Value)}', not enumerated work "
+                         + $"'{Bound(item.Work.Id.Value)}'");
+                    continue;
+                }
+                var key = baseline.UsesPublisherVersionIdentifier
+                    ? PublisherStateKey(item.Work.Id.Value, version.Id.Value)
+                    : LegacyStateKey(item.Work.Id.Value, version.ValidFrom,
+                        ExpressionSourceIdentity(version.Expressions.Select(expression => (
+                            expression.Language, expression.SourceUri))));
+                candidateStates[key] = candidateStates.GetValueOrDefault(key) + 1;
+                if (!candidatePublisherStates.Add(PublisherStateKey(
+                        item.Work.Id.Value, version.Id.Value)))
+                    Fail($"candidate contains duplicate publisher version "
+                         + $"'{Bound(version.Id.Value)}' for work "
+                         + $"'{Bound(item.Work.Id.Value)}'");
             }
-            var key = baseline.UsesPublisherVersionIdentifier
-                ? PublisherStateKey(item.Work.Id.Value, version.Id.Value)
-                : LegacyStateKey(item.Work.Id.Value, version.ValidFrom,
-                    ExpressionSourceIdentity(version.Expressions.Select(expression => (
-                        expression.Language, expression.SourceUri))));
-            candidateStates[key] = candidateStates.GetValueOrDefault(key) + 1;
-        }
 
-        foreach (var group in baseline.States.GroupBy(state => state.Key,
+        var withdrawn = new List<WithdrawnBaselineState>();
+        var withdrawnPublisherStates = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var group in baseline.Works.SelectMany(work => work.States)
+                     .GroupBy(state => state.Key,
                      StringComparer.Ordinal).OrderBy(group => group.Key, StringComparer.Ordinal))
         {
             var state = group.First();
@@ -229,14 +280,57 @@ public static class FreshCorpusMigration
             if (group.Count() != 1)
                 Fail($"protected baseline contains {group.Count()} indistinguishable states for "
                      + state.Description);
-            else if (candidates == 0)
-                Fail("candidate is missing " + state.Description);
-            else if (candidates != 1)
+            else if (candidates > 1)
                 Fail($"candidate contains {candidates} ambiguous matches for "
                      + state.Description);
+            else if (candidates == 0)
+            {
+                if (!state.IsWithdrawn)
+                {
+                    Fail("candidate is missing " + state.Description);
+                    continue;
+                }
+                if (!candidateWorks.TryGetValue(state.Version.WorkIdentifier,
+                        out var plannedWorks) || plannedWorks.Length != 1)
+                {
+                    Fail("candidate cannot retain withdrawn " + state.Description
+                         + " because its work is not uniquely present in the current plan");
+                    continue;
+                }
+
+                string publisherVersionIdentifier;
+                try
+                {
+                    publisherVersionIdentifier = ResolvePublisherVersionIdentifier(
+                        baseline.UsesPublisherVersionIdentifier, state, adapter);
+                }
+                catch (InvalidDataException ex)
+                {
+                    Fail("candidate cannot retain withdrawn " + state.Description
+                         + ": " + ex.Message);
+                    continue;
+                }
+
+                var publisherState = PublisherStateKey(
+                    state.Version.WorkIdentifier, publisherVersionIdentifier);
+                if (candidatePublisherStates.Contains(publisherState))
+                {
+                    Fail("withdrawn " + state.Description
+                         + " resolves to a publisher identity already present in the current plan");
+                    continue;
+                }
+                if (!withdrawnPublisherStates.Add(publisherState))
+                {
+                    Fail("protected baseline contains multiple withdrawn records that resolve "
+                         + "to the same publisher identity for " + state.Description);
+                    continue;
+                }
+                withdrawn.Add(new WithdrawnBaselineState(
+                    state, plannedWorks[0].Work.Slug, publisherVersionIdentifier));
+            }
         }
 
-        if (failureCount == 0) return;
+        if (failureCount == 0) return withdrawn;
         var suffix = failureCount > diagnostics.Count
             ? $"\n... {failureCount - diagnostics.Count} more failure(s) omitted"
             : "";
@@ -245,6 +339,232 @@ public static class FreshCorpusMigration
             + $"identity constraint(s) (showing at most {maximumDiagnostics}):\n"
             + string.Join("\n", diagnostics) + suffix);
     }
+
+    private static string ResolvePublisherVersionIdentifier(
+        bool baselineUsesPublisherVersionIdentifier,
+        BaselineState state,
+        ISourceAdapter adapter)
+    {
+        if (baselineUsesPublisherVersionIdentifier)
+            return state.Version.PublisherVersionIdentifier
+                   ?? throw new InvalidDataException(
+                       "the protected v4 record has no publisher identity");
+
+        if (adapter is not ILegacyVersionIdentityResolver resolver)
+            throw new InvalidDataException(
+                "the publisher adapter cannot recover a legacy publisher version identity");
+        var expressions = state.Version.Expressions.Select(expression =>
+        {
+            var sourceUri = expression.SourceUri ?? expression.Text.Url
+                ?? expression.Observations.LastOrDefault()?.SourceUri;
+            if (string.IsNullOrWhiteSpace(sourceUri))
+                throw new InvalidDataException(
+                    "the protected legacy expression has no source identity");
+            return new LegacyExpressionIdentity(expression.Language, sourceUri);
+        }).ToArray();
+        var resolved = resolver.ResolveLegacyVersionIdentity(new LegacyVersionIdentity(
+            state.Version.WorkIdentifier, state.ValidFrom, expressions)).Value;
+        if (string.IsNullOrWhiteSpace(resolved))
+            throw new InvalidDataException(
+                "the publisher adapter returned an empty legacy version identity");
+        if (state.Version.PublisherVersionIdentifier is { Length: > 0 } persisted
+            && !string.Equals(persisted, resolved, StringComparison.Ordinal))
+            throw new InvalidDataException(
+                "the recovered publisher identity disagrees with the retained record");
+        return resolved;
+    }
+
+    private static DateOnly ParseValidFrom(
+        VersionMeta version, string root, string versionDirectory)
+    {
+        if (DateOnly.TryParseExact(version.ValidFrom, "yyyy-MM-dd",
+                CultureInfo.InvariantCulture, DateTimeStyles.None, out var validFrom))
+            return validFrom;
+        throw new InvalidDataException(
+            $"Protected corpus version has invalid valid_from "
+            + $"'{Bound(version.ValidFrom)}': "
+            + Path.GetRelativePath(root, versionDirectory));
+    }
+
+    private static bool IsWithdrawn(VersionMeta version) =>
+        version.Events.LastOrDefault(entry =>
+            entry.Event is "withdrawn_from_source" or "resighted")?.Event
+        == "withdrawn_from_source";
+
+    private sealed record VerifiedObservationFile(
+        string Source, string Relative, long Length, string Sha256);
+
+    private sealed record PreparedWithdrawnImport(
+        string DestinationDirectory,
+        VersionMeta Meta,
+        IReadOnlyList<VerifiedObservationFile> Files);
+
+    private static void ImportWithdrawnBaselineStates(
+        string stage,
+        IReadOnlyList<WithdrawnBaselineState> withdrawnStates,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        var prepared = new List<PreparedWithdrawnImport>();
+        var destinations = new HashSet<string>(PathComparer);
+        foreach (var withdrawn in withdrawnStates.OrderBy(
+                     item => item.Baseline.Description, StringComparer.Ordinal))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var state = withdrawn.Baseline;
+            if (!state.IsWithdrawn || !IsWithdrawn(state.Version))
+                throw new InvalidDataException(
+                    "A baseline record selected for tombstone migration is not terminally withdrawn: "
+                    + state.Description);
+            if (string.IsNullOrWhiteSpace(withdrawn.DestinationWorkSlug)
+                || !string.Equals(withdrawn.DestinationWorkSlug,
+                    Path.GetFileName(withdrawn.DestinationWorkSlug),
+                    StringComparison.Ordinal))
+                throw new InvalidDataException(
+                    "A withdrawn baseline state has an unsafe destination work slug: "
+                    + state.Description);
+
+            var workDirectory = Path.Combine(
+                stage, "works", withdrawn.DestinationWorkSlug);
+            var workMetaPath = Path.Combine(workDirectory, "meta.json");
+            var candidateWork = File.Exists(workMetaPath)
+                ? JsonSerializer.Deserialize<WorkMeta>(
+                    File.ReadAllText(workMetaPath), CorpusJson.Options)
+                : null;
+            if (candidateWork is null
+                || !string.Equals(candidateWork.WorkIdentifier,
+                    state.Version.WorkIdentifier, StringComparison.Ordinal))
+                throw new InvalidDataException(
+                    "A withdrawn baseline state has no matching current work destination: "
+                    + state.Description);
+
+            var key = VersionIdentity.Create(
+                state.ValidFrom, withdrawn.PublisherVersionIdentifier);
+            var destination = Path.Combine(workDirectory, "versions", key);
+            if (!destinations.Add(Path.GetFullPath(destination))
+                || Directory.Exists(destination) || File.Exists(destination))
+                throw new InvalidDataException(
+                    "A withdrawn baseline state collides with an existing destination: "
+                    + state.Description);
+
+            var meta = JsonSerializer.Deserialize<VersionMeta>(
+                JsonSerializer.Serialize(state.Version, CorpusJson.Options),
+                CorpusJson.Options)
+                ?? throw new InvalidDataException(
+                    "A withdrawn baseline state could not be copied: " + state.Description);
+            var revised = new List<string>();
+            var lexId = $"{meta.Publisher}:{withdrawn.DestinationWorkSlug}:{key}";
+            if (!string.Equals(meta.LexId, lexId, StringComparison.Ordinal))
+            {
+                meta.LexId = lexId;
+                revised.Add("lex_id");
+            }
+            if (!string.Equals(meta.PublisherVersionIdentifier,
+                    withdrawn.PublisherVersionIdentifier, StringComparison.Ordinal))
+            {
+                meta.PublisherVersionIdentifier = withdrawn.PublisherVersionIdentifier;
+                revised.Add("publisher_version_identifier");
+            }
+            if (revised.Count > 0)
+                meta.Events.Add(new EventEntry
+                {
+                    Event = "metadata_revised",
+                    ObservedFrom = now.UtcDateTime.ToString("yyyy-MM-ddTHH:mm:ssZ"),
+                    Scope = "version",
+                    Detail = "fields=" + string.Join(',', revised),
+                });
+            if (!IsWithdrawn(meta))
+                throw new InvalidDataException(
+                    "Tombstone identity migration changed the terminal lifecycle: "
+                    + state.Description);
+            meta.RecordSha256 = CorpusHashes.RecordSha256(meta);
+
+            var files = VerifyObservationFiles(state.VersionDirectory, state.Version);
+            prepared.Add(new PreparedWithdrawnImport(destination, meta, files));
+        }
+
+        foreach (var item in prepared)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            Directory.CreateDirectory(item.DestinationDirectory);
+            foreach (var file in item.Files)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var destination = CheckedObservationPath(
+                    item.DestinationDirectory, file.Relative);
+                Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+                File.Copy(file.Source, destination, overwrite: false);
+                VerifyCopiedObservation(destination, file);
+            }
+            File.WriteAllText(Path.Combine(item.DestinationDirectory, "meta.json"),
+                JsonSerializer.Serialize(item.Meta, CorpusJson.Options) + "\n");
+        }
+    }
+
+    private static IReadOnlyList<VerifiedObservationFile> VerifyObservationFiles(
+        string versionDirectory, VersionMeta version)
+    {
+        var files = new Dictionary<string, VerifiedObservationFile>(PathComparer);
+        foreach (var observation in version.Expressions
+                     .SelectMany(expression => expression.Observations))
+        {
+            if (string.IsNullOrWhiteSpace(observation.File)
+                || string.IsNullOrWhiteSpace(observation.Sha256))
+                throw new InvalidDataException(
+                    "A withdrawn baseline observation has no file or sha256.");
+            var source = CheckedObservationPath(versionDirectory, observation.File);
+            if (!File.Exists(source))
+                throw new InvalidDataException(
+                    $"A withdrawn baseline observation is missing: {observation.File}");
+            var (length, sha256) = FileIdentity(source);
+            if (!CorpusHashes.Equal(sha256, observation.Sha256))
+                throw new InvalidDataException(
+                    $"A withdrawn baseline observation has a sha256 mismatch: {observation.File}");
+            var relative = Path.GetRelativePath(versionDirectory, source);
+            var verified = new VerifiedObservationFile(
+                source, relative, length, observation.Sha256);
+            if (files.TryGetValue(relative, out var prior)
+                && (prior.Length != verified.Length
+                    || !CorpusHashes.Equal(prior.Sha256, verified.Sha256)))
+                throw new InvalidDataException(
+                    $"A withdrawn baseline observation file has conflicting identities: {relative}");
+            files[relative] = verified;
+        }
+        return files.Values.OrderBy(file => file.Relative, StringComparer.Ordinal).ToArray();
+    }
+
+    private static string CheckedObservationPath(string versionDirectory, string relative)
+    {
+        var root = Path.GetFullPath(versionDirectory) + Path.DirectorySeparatorChar;
+        var candidate = Path.GetFullPath(Path.Combine(
+            versionDirectory, relative.Replace('/', Path.DirectorySeparatorChar)));
+        var comparison = OperatingSystem.IsWindows()
+            ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        if (!candidate.StartsWith(root, comparison))
+            throw new InvalidDataException(
+                $"A withdrawn baseline observation escapes its version directory: {relative}");
+        return candidate;
+    }
+
+    private static (long Length, string Sha256) FileIdentity(string path)
+    {
+        using var stream = File.OpenRead(path);
+        return (stream.Length,
+            Convert.ToHexStringLower(SHA256.HashData(stream)));
+    }
+
+    private static void VerifyCopiedObservation(
+        string destination, VerifiedObservationFile expected)
+    {
+        var actual = FileIdentity(destination);
+        if (actual.Length != expected.Length
+            || !CorpusHashes.Equal(actual.Sha256, expected.Sha256))
+            throw new InvalidDataException(
+                $"A migrated withdrawn observation changed while being copied: {expected.Relative}");
+    }
+
+    private static StringComparer PathComparer => OperatingSystem.IsWindows()
+        ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
 
     private static string PublisherStateKey(string workIdentifier, string versionIdentifier) =>
         $"publisher\0{workIdentifier}\0{versionIdentifier}";
