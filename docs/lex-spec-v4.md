@@ -745,9 +745,16 @@ lex-corpus-lu-cssf/
   is used (EU), with the SHA-256 of its raw LF-pinned bytes. Legal names, aliases, citation
   identities and classifications are never supplied through configuration.
   `migration_baseline_works` records the protected v3 baseline only on the
-  fresh migration. The migration additionally proves every held baseline work
-  and dated state is represented in the publisher plan before requesting any
-  body; a count-only or percentage gate is not sufficient.
+  fresh migration. The migration additionally proves every non-withdrawn held
+  baseline work and dated state is represented in the publisher plan before
+  requesting any body; a count-only or percentage gate is not sufficient. A
+  terminally withdrawn legacy state is instead retained as a historical
+  tombstone. Its adapter must recover one exact publisher identity from official
+  source facts before body fetching begins, and the migration copies only its
+  already verified observation bytes. A wholly withdrawn work missing from the
+  current publisher plan remains fail-closed. Manifest summaries continue to
+  describe the current publisher plan; corpus integrity reports the larger
+  retained evidence population separately.
 - The manifest is written only when its content changes, never as a heartbeat
   (freshness lives in `lex-ops`, §11.2).
 

@@ -107,6 +107,28 @@ public interface ISourceBuildInventory
 }
 
 /// <summary>
+/// The source facts retained by a legacy corpus for one publisher version whose opaque
+/// publisher identifier was not persisted yet. Only a publisher adapter may interpret these
+/// values and recover that identifier (F4).
+/// </summary>
+public sealed record LegacyVersionIdentity(
+    string WorkIdentifier,
+    DateOnly ValidFrom,
+    IReadOnlyList<LegacyExpressionIdentity> Expressions);
+
+public sealed record LegacyExpressionIdentity(string Language, string SourceUri);
+
+/// <summary>
+/// Optional one-time migration seam for a source adapter that can recover an exact publisher
+/// version identifier from its own official legacy URLs. Implementations must fail closed when
+/// the retained facts do not identify exactly one publisher version.
+/// </summary>
+public interface ILegacyVersionIdentityResolver
+{
+    Identifier ResolveLegacyVersionIdentity(LegacyVersionIdentity legacy);
+}
+
+/// <summary>
 /// The observable outcome of attempting to acquire one publisher expression. Absence is data,
 /// never an overloaded null: the corpus build must be able to distinguish a declared
 /// metadata-only record from transport exhaustion, a permanent publisher response, an

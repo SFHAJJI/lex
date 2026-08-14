@@ -4,6 +4,7 @@ using Lex.Ingest;
 using Lex.Index;
 using Lex.Law;
 using Lex.Mcp;
+using Lex.Sources.Legilux;
 
 namespace Lex.Tests;
 
@@ -205,6 +206,176 @@ public sealed class CorpusWriterTests : IDisposable
 
         Assert.Contains("version 2023-01-01", error.Message, StringComparison.Ordinal);
         Assert.Equal(0, currentOnly.BodyFetchCount);
+        Assert.Equal(before, Inventory(corpusRoot));
+    }
+
+    [Fact]
+    public async Task Fresh_migration_preserves_a_withdrawn_legacy_state_beside_its_same_date_replacement()
+    {
+        var corpusRoot = Path.Combine(_dir, "candidate");
+        var baseline = await WriteLegacyWithdrawalBaselineAsync(corpusRoot);
+        var current = new LegiluxReplacementAdapter(includeWithdrawn: false);
+
+        var report = await FreshCorpusMigration.RunAsync(
+            corpusRoot, "lu-legilux", current,
+            DateTimeOffset.Parse("2026-08-14T00:00:00Z"), CodeCommit, default);
+
+        Assert.True(report.IsValid, string.Join(Environment.NewLine, report.Errors));
+        Assert.Equal(2, report.ActualVersions);
+        Assert.Equal(1, report.CurrentVersions);
+        Assert.Equal(2, report.Expressions);
+        Assert.Equal(2, report.Observations);
+        Assert.Equal([LegiluxReplacementAdapter.LiveVersionIdentifier],
+            current.FetchedVersionIdentifiers);
+
+        var manifest = JsonSerializer.Deserialize<ManifestDoc>(
+            await File.ReadAllTextAsync(Path.Combine(corpusRoot, "manifest.json")),
+            CorpusJson.Options)!;
+        Assert.Equal(1, manifest.Works);
+        Assert.Equal(1, manifest.Versions);
+        Assert.Equal(1, manifest.Expressions);
+        Assert.Equal(1, manifest.ExpressionsWithText);
+        Assert.Equal(0, manifest.ExpressionsWithoutText);
+        Assert.Equal(["fr"], manifest.Languages);
+        Assert.Equal("2025-04-20", manifest.ValidFromEarliest);
+        Assert.Equal("2025-04-20", manifest.ValidToLatest);
+        var documentType = Assert.Single(manifest.DocumentTypes);
+        Assert.Equal("CODE", documentType["code"].ToString());
+        Assert.Equal("1", documentType["versions"].ToString());
+
+        var versions = ReadVersionsByPublisherIdentity(corpusRoot);
+        var withdrawn = versions[LegiluxReplacementAdapter.WithdrawnVersionIdentifier];
+        var live = versions[LegiluxReplacementAdapter.LiveVersionIdentifier];
+        Assert.Equal("withdrawn_from_source", withdrawn.Meta.Events.Last(entry =>
+            entry.Event == "withdrawn_from_source" || entry.Event == "resighted").Event);
+        Assert.DoesNotContain(live.Meta.Events,
+            entry => entry.Event == "withdrawn_from_source");
+        Assert.Equal(baseline.BodySha256,
+            Assert.Single(withdrawn.Meta.Expressions).Observations.Single().Sha256);
+        Assert.Equal(baseline.BodyBytes,
+            await File.ReadAllBytesAsync(Path.Combine(withdrawn.Directory,
+                Assert.Single(withdrawn.Meta.Expressions).Observations.Single().File!)));
+        Assert.Equal(StableVersionKey("2025-04-20",
+                LegiluxReplacementAdapter.WithdrawnVersionIdentifier),
+            Path.GetFileName(withdrawn.Directory));
+        Assert.Equal(StableVersionKey("2025-04-20",
+                LegiluxReplacementAdapter.LiveVersionIdentifier),
+            Path.GetFileName(live.Directory));
+        Assert.NotEqual(withdrawn.Meta.LexId, live.Meta.LexId);
+        var migration = Assert.Single(withdrawn.Meta.Events,
+            entry => entry.Event == "metadata_revised"
+                && entry.Detail == "fields=lex_id,publisher_version_identifier");
+        Assert.Equal("2026-08-14T00:00:00Z", migration.ObservedFrom);
+    }
+
+    [Fact]
+    public async Task Fresh_migration_refuses_a_tampered_withdrawn_identity_before_body_fetch()
+    {
+        var corpusRoot = Path.Combine(_dir, "candidate");
+        var baseline = await WriteLegacyWithdrawalBaselineAsync(corpusRoot);
+        var meta = JsonSerializer.Deserialize<VersionMeta>(
+            await File.ReadAllTextAsync(baseline.MetaPath), CorpusJson.Options)!;
+        var expression = Assert.Single(meta.Expressions);
+        expression.SourceUri =
+            "https://example.test/eli/etat/leg/loi/1804/03/21/n1/consolide/20250420/fr";
+        expression.Text.Url = expression.SourceUri;
+        RefreshRecordHash(meta);
+        await File.WriteAllTextAsync(baseline.MetaPath,
+            JsonSerializer.Serialize(meta, CorpusJson.Options) + "\n");
+        var before = Inventory(corpusRoot);
+        var current = new LegiluxReplacementAdapter(includeWithdrawn: false);
+
+        var error = await Assert.ThrowsAsync<InvalidDataException>(() =>
+            FreshCorpusMigration.RunAsync(
+                corpusRoot, "lu-legilux", current,
+                DateTimeOffset.Parse("2026-08-14T00:00:00Z"), CodeCommit, default));
+
+        Assert.Contains("not an official ELI URI", error.Message,
+            StringComparison.Ordinal);
+        Assert.Equal(0, current.BodyFetchCount);
+        Assert.Equal(before, Inventory(corpusRoot));
+    }
+
+    [Fact]
+    public async Task Fresh_migration_refuses_tampered_tombstone_bytes_before_source_enumeration()
+    {
+        var corpusRoot = Path.Combine(_dir, "candidate");
+        var baseline = await WriteLegacyWithdrawalBaselineAsync(corpusRoot);
+        await File.AppendAllTextAsync(baseline.BodyPath, "tampered");
+        var current = new LegiluxReplacementAdapter(includeWithdrawn: false);
+
+        var error = await Assert.ThrowsAsync<InvalidDataException>(() =>
+            FreshCorpusMigration.RunAsync(
+                corpusRoot, "lu-legilux", current,
+                DateTimeOffset.Parse("2026-08-14T00:00:00Z"), CodeCommit, default));
+
+        Assert.Contains("Protected corpus baseline is not integrity-compatible",
+            error.Message, StringComparison.Ordinal);
+        Assert.Contains("sha256 mismatch", error.Message, StringComparison.Ordinal);
+        Assert.Equal(0, current.EnumerateCount);
+        Assert.Equal(0, current.BodyFetchCount);
+    }
+
+    [Fact]
+    public async Task Fresh_migration_refuses_a_withdrawn_identity_collision_before_body_fetch()
+    {
+        var corpusRoot = Path.Combine(_dir, "candidate");
+        await WriteLegacyWithdrawalBaselineAsync(corpusRoot);
+        var before = Inventory(corpusRoot);
+        var current = new LegiluxReplacementAdapter(
+            includeWithdrawn: false, collideLegacyIdentity: true);
+
+        var error = await Assert.ThrowsAsync<InvalidDataException>(() =>
+            FreshCorpusMigration.RunAsync(
+                corpusRoot, "lu-legilux", current,
+                DateTimeOffset.Parse("2026-08-14T00:00:00Z"), CodeCommit, default));
+
+        Assert.Contains("publisher identity already present in the current plan",
+            error.Message, StringComparison.Ordinal);
+        Assert.Equal(0, current.BodyFetchCount);
+        Assert.Equal(before, Inventory(corpusRoot));
+    }
+
+    [Fact]
+    public async Task Fresh_migration_keeps_a_wholly_withdrawn_missing_work_fail_closed()
+    {
+        var corpusRoot = Path.Combine(_dir, "candidate");
+        await WriteLegacyWithdrawalBaselineAsync(corpusRoot);
+        var liveMetaPath = Path.Combine(corpusRoot, "works", "code-civil", "versions",
+            "2025-04-20", "meta.json");
+        var live = JsonSerializer.Deserialize<VersionMeta>(
+            await File.ReadAllTextAsync(liveMetaPath), CorpusJson.Options)!;
+        live.Events.Add(new EventEntry
+        {
+            Event = "withdrawn_from_source",
+            ObservedFrom = "2026-08-13T08:05:02Z",
+            Scope = "version",
+            Detail = "publisher record absent from the current enumeration",
+        });
+        RefreshRecordHash(live);
+        await File.WriteAllTextAsync(liveMetaPath,
+            JsonSerializer.Serialize(live, CorpusJson.Options) + "\n");
+        var manifestPath = Path.Combine(corpusRoot, "manifest.json");
+        var manifest = JsonSerializer.Deserialize<ManifestDoc>(
+            await File.ReadAllTextAsync(manifestPath), CorpusJson.Options)!;
+        manifest.Works = 0;
+        manifest.Versions = 0;
+        await File.WriteAllTextAsync(manifestPath,
+            JsonSerializer.Serialize(manifest, CorpusJson.Options) + "\n");
+        var integrity = CorpusIntegrity.Verify(corpusRoot);
+        Assert.True(integrity.IsValid, string.Join(Environment.NewLine, integrity.Errors));
+        var before = Inventory(corpusRoot);
+        var current = new LegiluxReplacementAdapter(
+            includeWithdrawn: false, includeWork: false);
+
+        var error = await Assert.ThrowsAsync<InvalidDataException>(() =>
+            FreshCorpusMigration.RunAsync(
+                corpusRoot, "lu-legilux", current,
+                DateTimeOffset.Parse("2026-08-14T00:00:00Z"), CodeCommit, default));
+
+        Assert.Contains("candidate is missing work", error.Message,
+            StringComparison.Ordinal);
+        Assert.Equal(0, current.BodyFetchCount);
         Assert.Equal(before, Inventory(corpusRoot));
     }
 
@@ -786,6 +957,95 @@ public sealed class CorpusWriterTests : IDisposable
         Assert.True(integrity.IsValid, string.Join(Environment.NewLine, integrity.Errors));
     }
 
+    private static async Task<LegacyWithdrawalBaseline> WriteLegacyWithdrawalBaselineAsync(
+        string root)
+    {
+        await new CorpusWriter(root,
+                DateTimeOffset.Parse("2026-08-13T00:00:00Z"), CodeCommit)
+            .WriteAsync(new LegiluxReplacementAdapter(includeWithdrawn: true), default);
+
+        var versionsRoot = Path.Combine(root, "works", "code-civil", "versions");
+        string? tombstoneTemporary = null;
+        string? tombstoneFile = null;
+        string? tombstoneSha = null;
+        byte[]? tombstoneBytes = null;
+        foreach (var directory in Directory.EnumerateDirectories(versionsRoot).ToArray())
+        {
+            var metaPath = Path.Combine(directory, "meta.json");
+            var meta = JsonSerializer.Deserialize<VersionMeta>(
+                await File.ReadAllTextAsync(metaPath), CorpusJson.Options)!;
+            var withdrawn = meta.PublisherVersionIdentifier
+                == LegiluxReplacementAdapter.WithdrawnVersionIdentifier;
+            var legacyKey = withdrawn ? "2025-04-20--02" : "2025-04-20";
+            meta.PublisherVersionIdentifier = null;
+            meta.LexId = $"lu-legilux:code-civil:{legacyKey}";
+            if (withdrawn)
+            {
+                meta.Events.Add(new EventEntry
+                {
+                    Event = "withdrawn_from_source",
+                    ObservedFrom = "2026-08-13T08:05:02Z",
+                    Scope = "version",
+                    Detail = "publisher record absent from the current enumeration",
+                });
+                var observation = Assert.Single(Assert.Single(meta.Expressions).Observations);
+                tombstoneFile = observation.File!;
+                tombstoneSha = observation.Sha256!;
+                tombstoneBytes = await File.ReadAllBytesAsync(
+                    Path.Combine(directory, tombstoneFile));
+            }
+            RefreshRecordHash(meta);
+            await File.WriteAllTextAsync(metaPath,
+                JsonSerializer.Serialize(meta, CorpusJson.Options) + "\n");
+
+            var temporary = directory + ".legacy";
+            Directory.Move(directory, temporary);
+            Directory.Move(temporary, Path.Combine(versionsRoot, legacyKey));
+            if (withdrawn) tombstoneTemporary = Path.Combine(versionsRoot, legacyKey);
+        }
+
+        var manifestPath = Path.Combine(root, "manifest.json");
+        var manifest = JsonSerializer.Deserialize<ManifestDoc>(
+            await File.ReadAllTextAsync(manifestPath), CorpusJson.Options)!;
+        manifest.Schema = "lex-corpus/3";
+        manifest.IngesterCodeCommit = null;
+        manifest.Versions = 1;
+        await File.WriteAllTextAsync(manifestPath,
+            JsonSerializer.Serialize(manifest, CorpusJson.Options) + "\n");
+        var integrity = CorpusIntegrity.Verify(root);
+        Assert.True(integrity.IsValid, string.Join(Environment.NewLine, integrity.Errors));
+
+        var tombstoneDirectory = Assert.IsType<string>(tombstoneTemporary);
+        var file = Assert.IsType<string>(tombstoneFile);
+        return new LegacyWithdrawalBaseline(
+            Path.Combine(tombstoneDirectory, "meta.json"),
+            Path.Combine(tombstoneDirectory, file),
+            Assert.IsType<string>(tombstoneSha),
+            Assert.IsType<byte[]>(tombstoneBytes));
+    }
+
+    private static Dictionary<string, (string Directory, VersionMeta Meta)>
+        ReadVersionsByPublisherIdentity(string root) =>
+        Directory.EnumerateDirectories(
+                Path.Combine(root, "works", "code-civil", "versions"))
+            .Select(directory => (Directory: directory, Meta:
+                JsonSerializer.Deserialize<VersionMeta>(File.ReadAllText(
+                    Path.Combine(directory, "meta.json")), CorpusJson.Options)!))
+            .ToDictionary(item => item.Meta.PublisherVersionIdentifier!,
+                item => item, StringComparer.Ordinal);
+
+    private static void RefreshRecordHash(VersionMeta meta)
+    {
+        meta.RecordSha256 = null;
+        meta.RecordSha256 = Convert.ToHexStringLower(
+            System.Security.Cryptography.SHA256.HashData(
+                System.Text.Encoding.UTF8.GetBytes(
+                    JsonSerializer.Serialize(meta, CorpusJson.Options))));
+    }
+
+    private sealed record LegacyWithdrawalBaseline(
+        string MetaPath, string BodyPath, string BodySha256, byte[] BodyBytes);
+
     public void Dispose()
     {
         try { Directory.Delete(_dir, true); } catch { }
@@ -946,6 +1206,75 @@ public sealed class CorpusWriterTests : IDisposable
             return Task.FromResult(SourceBodyFetch.Retrieved(
                 $"<html>{version.Id.Value}</html>"));
         }
+    }
+
+    private sealed class LegiluxReplacementAdapter(
+        bool includeWithdrawn,
+        bool collideLegacyIdentity = false,
+        bool includeWork = true) :
+        ISourceAdapter, ILegacyVersionIdentityResolver
+    {
+        public const string WorkIdentifier =
+            "http://data.legilux.public.lu/eli/etat/leg/code/civil";
+        public const string WithdrawnVersionIdentifier =
+            "http://data.legilux.public.lu/eli/etat/leg/loi/1804/03/21/n1/consolide/20250420";
+        public const string LiveVersionIdentifier =
+            "http://data.legilux.public.lu/eli/etat/leg/code/civil/20250420";
+        private static readonly WorkRef Work = new(
+            new Identifier(WorkIdentifier), "code-civil", "CODE", "Code civil");
+
+        public int EnumerateCount { get; private set; }
+        public int BodyFetchCount { get; private set; }
+        public List<string> FetchedVersionIdentifiers { get; } = [];
+
+        public PublisherDescriptor Describe() => new(
+            new Publisher("lu-legilux", "Legilux", "LU",
+                "https://legilux.public.lu", Tier.A, "test", null),
+            [], ["fr"], TextIncluded: true, TextPublic: true,
+            HistoryBegins: "publisher");
+
+        public async IAsyncEnumerable<WorkRef> EnumerateWorks(
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+            EnumerateCount++;
+            if (!includeWork) yield break;
+            yield return Work;
+            await Task.CompletedTask;
+        }
+
+        public Task<IReadOnlyList<VersionRecord>> FetchVersions(
+            WorkRef work, CancellationToken ct)
+        {
+            VersionRecord Version(string id, string publicSource) => new(
+                new Identifier(id), Work.Id, "CODE", new DateOnly(2025, 4, 20), null,
+                "publisher", "true", new DateOnly(2025, 4, 20),
+                [new ExpressionRecord("fr", new DateOnly(2025, 4, 20), null,
+                    "publisher", "Code civil", "Code civil", publicSource)],
+                [], new Dictionary<string, string>());
+            var live = Version(LiveVersionIdentifier,
+                "https://legilux.public.lu/eli/etat/leg/code/civil/20250420/fr");
+            IReadOnlyList<VersionRecord> versions = includeWithdrawn
+                ? [Version(WithdrawnVersionIdentifier,
+                    "https://legilux.public.lu/eli/etat/leg/loi/1804/03/21/n1/consolide/20250420/fr"),
+                    live]
+                : [live];
+            return Task.FromResult(versions);
+        }
+
+        public Task<SourceBodyFetch> FetchBody(
+            VersionRecord version, ExpressionRecord expression, CancellationToken ct)
+        {
+            BodyFetchCount++;
+            FetchedVersionIdentifiers.Add(version.Id.Value);
+            return Task.FromResult(SourceBodyFetch.Retrieved(
+                $"<html>{version.Id.Value}</html>"));
+        }
+
+        public Identifier ResolveLegacyVersionIdentity(LegacyVersionIdentity legacy) =>
+            collideLegacyIdentity
+                ? new Identifier(LiveVersionIdentifier)
+                : new LegiluxAdapter().ResolveLegacyVersionIdentity(legacy);
     }
 
     private sealed class IncompleteAdapter : ISourceAdapter, ISourceBuildInventory

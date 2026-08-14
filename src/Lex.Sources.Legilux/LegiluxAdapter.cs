@@ -12,7 +12,8 @@ namespace Lex.Sources.Legilux;
 /// Probe results 2026-08-01: Work = jolux:isMemberOf target; DocumentType = the
 /// consolidation's own jolux:typeDocument; compilations (CODE/RECUEIL) are Works like any other.
 /// </summary>
-public sealed class LegiluxAdapter : ISourceAdapter, ISourceBuildInventory
+public sealed class LegiluxAdapter : ISourceAdapter, ISourceBuildInventory,
+    ILegacyVersionIdentityResolver
 {
     private const string Endpoint = "https://data.legilux.public.lu/sparqlendpoint";
     private const string J = "PREFIX jolux: <http://data.legilux.public.lu/resource/ontology/jolux#>\n";
@@ -36,6 +37,65 @@ public sealed class LegiluxAdapter : ISourceAdapter, ISourceBuildInventory
     public LegiluxAdapter() : this(new SparqlClient(Endpoint)) { }
 
     internal LegiluxAdapter(SparqlClient sparql) => _sparql = sparql;
+
+    public Identifier ResolveLegacyVersionIdentity(LegacyVersionIdentity legacy)
+    {
+        RequireOfficialEli(legacy.WorkIdentifier, "work_identifier");
+        if (legacy.Expressions.Count == 0)
+            throw new InvalidDataException(
+                "A withdrawn Legilux legacy version has no expression source identity.");
+
+        var expectedDate = legacy.ValidFrom.ToString(
+            "yyyyMMdd", System.Globalization.CultureInfo.InvariantCulture);
+        var candidates = legacy.Expressions
+            .Select(expression => LegacyConsolidationIdentifier(
+                expression.SourceUri, expression.Language, expectedDate))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        if (candidates.Length != 1)
+            throw new InvalidDataException(
+                "A withdrawn Legilux legacy version resolves to more than one publisher identity.");
+        return new Identifier(candidates[0]);
+    }
+
+    private static string LegacyConsolidationIdentifier(
+        string sourceUri, string language, string expectedDate)
+    {
+        if (language.Length != 2
+            || language.Any(character => character is not (>= 'a' and <= 'z')))
+            throw new InvalidDataException(
+                "A withdrawn Legilux legacy expression has an invalid language code.");
+        var uri = RequireOfficialEli(sourceUri, "expression source_uri");
+        var path = uri.AbsolutePath.TrimEnd('/');
+        var languageSuffix = "/" + language;
+        if (path.EndsWith(languageSuffix, StringComparison.OrdinalIgnoreCase))
+            path = path[..^languageSuffix.Length];
+
+        var finalSlash = path.LastIndexOf('/');
+        if (finalSlash < 0
+            || !string.Equals(path[(finalSlash + 1)..], expectedDate,
+                StringComparison.Ordinal))
+            throw new InvalidDataException(
+                "A withdrawn Legilux legacy expression source does not carry its valid_from date.");
+
+        return "http://data.legilux.public.lu" + path;
+    }
+
+    private static Uri RequireOfficialEli(string value, string field)
+    {
+        if (!Uri.TryCreate(value, UriKind.Absolute, out var uri)
+            || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps)
+            || (uri.Host != "legilux.public.lu"
+                && uri.Host != "data.legilux.public.lu")
+            || !uri.AbsolutePath.StartsWith("/eli/", StringComparison.Ordinal)
+            || !string.IsNullOrEmpty(uri.Query)
+            || !string.IsNullOrEmpty(uri.Fragment)
+            || !string.IsNullOrEmpty(uri.UserInfo)
+            || !uri.IsDefaultPort)
+            throw new InvalidDataException(
+                $"A withdrawn Legilux legacy {field} is not an official ELI URI.");
+        return uri;
+    }
 
     public PublisherDescriptor Describe() => new(
         new Publisher(
@@ -91,7 +151,7 @@ public sealed class LegiluxAdapter : ISourceAdapter, ISourceBuildInventory
     private static HttpClient CreateBodyClient()
     {
         var c = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false })
-            { Timeout = TimeSpan.FromSeconds(180) };
+        { Timeout = TimeSpan.FromSeconds(180) };
         c.DefaultRequestHeaders.UserAgent.ParseAdd("Lex/0.1");
         c.DefaultRequestHeaders.UserAgent.ParseAdd("(+https://github.com/SFHAJJI/lex)");
         return c;
@@ -410,7 +470,11 @@ public sealed class LegiluxAdapter : ISourceAdapter, ISourceBuildInventory
 
     private static string LangCode(string langUri) => LastSegment(langUri) switch
     {
-        "FRA" => "fr", "DEU" => "de", "ENG" => "en", "LTZ" => "lb", var other => other.ToLowerInvariant()
+        "FRA" => "fr",
+        "DEU" => "de",
+        "ENG" => "en",
+        "LTZ" => "lb",
+        var other => other.ToLowerInvariant()
     };
 
     /// <summary>Public, human-facing URL for link-out (the main site, not the data subdomain).</summary>
