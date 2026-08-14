@@ -144,6 +144,8 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
         Assert.Contains("The architecture dossier", dossier);
         Assert.Contains("This is the complete, build-pinned engineering account", dossier);
         Assert.Contains("class=\"badge ok\" href=\"/architecture/dossier\"", dossier);
+        Assert.Contains("<table tabindex=\"0\" aria-label=\"Scrollable architecture table\">", dossier);
+        Assert.Contains("<pre tabindex=\"0\" aria-label=\"Scrollable architecture diagram or code\">", dossier);
     }
 
     [Fact]

@@ -28,7 +28,13 @@ internal static class ArchitectureDossier
         if (firstBreak >= 0 && markdown.AsSpan(0, firstBreak).StartsWith("# "))
             markdown = markdown[(firstBreak + 1)..];
 
-        return Markdown.ToHtml(markdown, Pipeline);
+        return Markdown.ToHtml(markdown, Pipeline)
+            .Replace("<table>",
+                "<table tabindex=\"0\" aria-label=\"Scrollable architecture table\">",
+                StringComparison.Ordinal)
+            .Replace("<pre>",
+                "<pre tabindex=\"0\" aria-label=\"Scrollable architecture diagram or code\">",
+                StringComparison.Ordinal);
     });
 
     public static string Html => Rendered.Value;

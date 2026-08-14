@@ -262,7 +262,7 @@ retrieval failure mode that frame lacks.</p>
 <p><strong>What it is.</strong> Point-in-time Luxembourg and EU law. Ask what an article said on a date and get
 the publisher's wording back, with its identifier, effective date, and a hash chained to the file
 the publisher served.</p>
-<table>
+<table tabindex="0" aria-label="Scrollable architecture table">
 <thead>
 <tr>
 <th>five numbers</th>
@@ -326,7 +326,7 @@ makes the public quota ledgers authoritative and retrieval latency predictable.<
 </ol>
 <h2>3. The domain model</h2>
 <h3>3.1 The FRBR shape</h3>
-<pre><code>work (a law: eu-eurlex:32013r0575)
+<pre tabindex="0" aria-label="Scrollable architecture diagram or code"><code>work (a law: eu-eurlex:32013r0575)
  └─ dated consolidation (valid_from <TODAY-40>, valid_to open)
      └─ language expression (fr, en)
          └─ manifestation (the publisher's file: XML, HTML, PDF)
@@ -351,14 +351,14 @@ names (&quot;CRR&quot;, &quot;MiFID II&quot;) exist in no publisher dataset, so 
 with code-enforced confidence, repeat-run and agreement gates. That lane is empty in production.</p>
 <h2>4. Views</h2>
 <h3>4.1 Context</h3>
-<pre><code>official publishers            consumers
+<pre tabindex="0" aria-label="Scrollable architecture diagram or code"><code>official publishers            consumers
 Legilux · EUR-Lex/Cellar       web UI (itself an MCP client)
         │                      AI assistant (/api/ask)
         ▼                      external MCP clients (/mcp)
    THE PIPELINE ──► signed artifacts ──► ONE PROCESS on Container Apps
 </code></pre>
 <h3>4.2 Containers (repositories and runtime)</h3>
-<table>
+<table tabindex="0" aria-label="Scrollable architecture table">
 <thead>
 <tr>
 <th>repo</th>
@@ -402,7 +402,7 @@ Legilux · EUR-Lex/Cellar       web UI (itself an MCP client)
 <p>The evidence/derived split is the recovery property: the derived layer can be deleted and
 regenerated from evidence at any time, losing nothing but compute.</p>
 <h3>4.3 Components, one process</h3>
-<pre><code>IndexReader   SQLite + memory-mapped vectors, per publisher
+<pre tabindex="0" aria-label="Scrollable architecture diagram or code"><code>IndexReader   SQLite + memory-mapped vectors, per publisher
     │
 McpCore       the typed tool surface: 10 tools, 13 closed statuses
     │
@@ -413,7 +413,7 @@ McpCore       the typed tool surface: 10 tools, 13 closed statuses
 <p><code>McpCore</code>, retrieval benchmarks and ingest-time verification call <code>SearchKeyword</code>/<code>SearchHybrid</code>
 in-process. There is no internal HTTP between components (C5); it is one process by design.</p>
 <h3>4.4 Sequence: a question</h3>
-<pre><code>question ─► planner (LLM, offered 12 operation names, frozen list ≤8)
+<pre tabindex="0" aria-label="Scrollable architecture diagram or code"><code>question ─► planner (LLM, offered 12 operation names, frozen list ≤8)
          ─► plan gate: names not offered are rejected; arguments type-checked
          ─► operations execute against McpCore, no replanning
          ─► evidence ledger: typed entries with per-provision hashes
@@ -422,7 +422,7 @@ in-process. There is no internal HTTP between components (C5); it is one process
                                  ─► judge: pass / repair / refuse
 </code></pre>
 <h3>4.5 Sequence: a night</h3>
-<pre><code>02:17 UTC ─► enumerate publishers ─► ingest (append-only, hash everything)
+<pre tabindex="0" aria-label="Scrollable architecture diagram or code"><code>02:17 UTC ─► enumerate publishers ─► ingest (append-only, hash everything)
           ─► anomaly gate (&gt;5% drop = commit nothing)
           ─► integrity verify (bounded manifest, typed issues)
           ─► derive articles (immutable profiles, V2 fallback by recovered-text share)
@@ -431,7 +431,7 @@ in-process. There is no internal HTTP between components (C5); it is one process
 <h2>5. The data anatomy</h2>
 <p>Two files per publisher, four in the image, plus the encoder.</p>
 <h3>5.1 <code>index-&lt;publisher&gt;.db</code> (SQLite, EU ~580 MB)</h3>
-<table>
+<table tabindex="0" aria-label="Scrollable architecture table">
 <thead>
 <tr>
 <th>table</th>
@@ -506,7 +506,7 @@ touches the vectors, and hybrid is gated off by measurement (§7.1).</p>
 <p>The registry (<code>docs/architecture-program.json</code>, rendered at <code>/decisions</code>) holds the delivery
 decisions; the spec holds the numbered design decisions (D41-D84). Every entry records choice,
 named alternative, reason, and cost. A sample of the ones that explain the most:</p>
-<table>
+<table tabindex="0" aria-label="Scrollable architecture table">
 <thead>
 <tr>
 <th>id</th>
@@ -682,7 +682,7 @@ passes, repairs or refuses the prose; the default reply is not model-authored at
 </ul>
 <h2>10. The machinery: pipelines, gates, identities</h2>
 <h3>10.1 Workflows and what each one blocks</h3>
-<table>
+<table tabindex="0" aria-label="Scrollable architecture table">
 <thead>
 <tr>
 <th>workflow</th>
@@ -731,7 +731,7 @@ passes, repairs or refuses the prose; the default reply is not model-authored at
 </tbody>
 </table>
 <h3>10.2 The chain</h3>
-<pre><code>PR ──ci──► main ──nightly──► corpora + articles + TICKET(3 commits)
+<pre tabindex="0" aria-label="Scrollable architecture diagram or code"><code>PR ──ci──► main ──nightly──► corpora + articles + TICKET(3 commits)
                                    │
                 local index build ─┤ (owner's machine; a one-person-team
                                    │  decision, recorded with its risks)
@@ -748,7 +748,7 @@ passes, repairs or refuses the prose; the default reply is not model-authored at
               revision-traffic ──verify all──► traffic moves
 </code></pre>
 <h3>10.3 Separation of authority</h3>
-<table>
+<table tabindex="0" aria-label="Scrollable architecture table">
 <thead>
 <tr>
 <th>authority</th>
@@ -792,7 +792,7 @@ passes, repairs or refuses the prose; the default reply is not model-authored at
 <p>No automated actor can approve its own release. That is the design's one-sentence answer to AI
 governance, implemented as vault ACLs rather than policy prose.</p>
 <h3>10.4 Azure inventory (resource group <code>rg-platform</code>, France Central)</h3>
-<table>
+<table tabindex="0" aria-label="Scrollable architecture table">
 <thead>
 <tr>
 <th>resource</th>
@@ -865,7 +865,7 @@ records today, the change that threshold authorises, and the cost that change ad
 thresholds are targets, not measurements; the figures in brackets are measured. Writing them
 down is the point: the next architecture move is decided by a number rather than by a feeling,
 and a move made before its trigger fires is a move made without evidence.</p>
-<table>
+<table tabindex="0" aria-label="Scrollable architecture table">
 <thead>
 <tr>
 <th>trigger</th>
@@ -950,7 +950,7 @@ interface language; wording stays the publisher's.</li>
 <p>Much recent writing decomposes document QA into four bricks: parse, understand the question,
 retrieve, generate, each behind a typed contract. Lex fits, with two deviations that are the
 point:</p>
-<table>
+<table tabindex="0" aria-label="Scrollable architecture table">
 <thead>
 <tr>
 <th>brick</th>
