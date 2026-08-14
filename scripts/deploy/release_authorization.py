@@ -61,6 +61,8 @@ def authorization(value, field):
         source = deployment_id(source, f"{field} source deployment")
         package = text(package, SHA256, f"{field} signed package")
     else:
+        if (source is None) != (package is None):
+            fail(f"{field} source and signed package must be paired")
         if source is not None:
             source = deployment_id(source, f"{field} source deployment")
         if package is not None:

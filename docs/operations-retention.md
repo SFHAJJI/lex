@@ -27,6 +27,8 @@ Sources:
 - https://learn.microsoft.com/rest/api/resource-manager/containerapps/container-apps/update
 - https://learn.microsoft.com/cli/azure/containerapp/revision
 - https://learn.microsoft.com/cli/azure/acr/repository
+- https://docs.github.com/rest/deployments/deployments#list-deployments
+- https://docs.github.com/rest/deployments/statuses#list-deployment-statuses
 
 ## Decision
 
@@ -48,8 +50,11 @@ Use Azure's native inactive-revision limit and make the count match the release 
 - A receipt or status failure after the public switch activates exact A, routes it at
   100 percent, deactivates failed C, and proves the exact inverse steady state under
   `maxInactiveRevisions=1`. The workflow records a failed or unreceipted promotion that requires
-  operator reconciliation. Recovery authority is emitted only after Azure reports C as the sole
-  traffic bearer; pre-switch recovery never writes traffic based on stale outputs.
+  operator reconciliation. If a receipt deployment was created, every converged recovery path
+  posts a failure status with bounded retries and reads the latest status back as `failure`; an
+  unconfirmed invalidation fails closed instead of leaving the receipt silently reusable.
+  Recovery authority is emitted only after Azure reports C as the sole traffic bearer;
+  pre-switch recovery never writes traffic based on stale outputs.
 - Rollback is a separate state path, not promotion with different labels. It starts from current
   production active and its pinned rollback inactive under `maxInactiveRevisions=1`. Activating
   the target leaves no inactive revision. A successful rollback switches to that exact target and
@@ -64,6 +69,19 @@ Use Azure's native inactive-revision limit and make the count match the release 
   live current image, selects the target's own authority, and swaps the former current authority
   into the new rollback slot. Thus a rollback never tries to authorize B with C's evaluation, and
   a C-to-R bootstrap exception followed by R-to-C preserves the two distinct authority chains.
+- The caller-supplied prior deployment ID is confirmation, not ledger authority. Before candidate
+  activation, the workflow scans at most five 100-record GitHub deployment pages for production
+  `lex-revision-promotion` records, queries each current status, validates strict newest-first
+  `(created_at, id)` order and selects the first success. The supplied ID must equal that derived
+  head, its receipt must normalize to the requested current/target transition, and the head is
+  read again immediately before activation and immediately before public traffic mutation. A
+  scan with no success inside the 500-record bound fails closed for operator reconciliation.
+- A first-release source is authenticated whenever either the target authority or the new
+  rollback authority carries it, not only during C-to-R fallback traffic. The source deployment
+  must still be successful; its domain-separated OIDC receipt, complete package digest, artifact
+  signatures, exact C evaluation and historical A/R/C equivalence manifest are all verified.
+  Historical mode relaxes only age and old-A live presence. It never relaxes repository/root,
+  tenant/subscription/app/revision identities, template/image/case/code digests or signature.
 
 The one-time first official release uses a separate bootstrap because legacy failed candidates can
 be newer than the old production revision:

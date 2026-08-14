@@ -36,6 +36,20 @@ class ReleaseAuthorizationTests(unittest.TestCase):
         )
         self.assertEqual("42", normalized["target_authorization"]["source_deployment_id"])
 
+    def test_first_post_bootstrap_promotion_carries_the_signed_exact_current_source(self):
+        result = self.run_helper(
+            self.first_release(), "promote", RELEASE_TARGET, target="ca-lex-web--new"
+        )
+
+        self.assertEqual(0, result.returncode, result.stderr)
+        normalized = json.loads(result.stdout)
+        self.assertEqual("exact_revision_evaluation", normalized["target_authorization"]["kind"])
+        self.assertIsNone(normalized["target_authorization"]["source_deployment_id"])
+        carried = normalized["new_rollback_authorization"]
+        self.assertEqual("exact_revision_evaluation", carried["kind"])
+        self.assertEqual("42", carried["source_deployment_id"])
+        self.assertEqual("c" * 64, carried["signed_package_sha256"])
+
     def test_schema_three_rollback_swaps_exact_revision_authorities(self):
         receipt = self.release_state()
 
@@ -78,6 +92,18 @@ class ReleaseAuthorizationTests(unittest.TestCase):
         for receipt, operation, release in cases:
             with self.subTest(receipt=receipt, release=release):
                 self.assertNotEqual(0, self.run_helper(receipt, operation, release).returncode)
+
+    def test_exact_authority_requires_a_complete_or_absent_bootstrap_source_pair(self):
+        source_only = self.release_state()
+        source_only["payload"]["target_authorization"]["source_deployment_id"] = "41"
+        package_only = self.release_state()
+        package_only["payload"]["target_authorization"]["signed_package_sha256"] = "c" * 64
+
+        for receipt in (source_only, package_only):
+            with self.subTest(receipt=receipt):
+                result = self.run_helper(receipt, "rollback", RELEASE_TARGET)
+                self.assertNotEqual(0, result.returncode)
+                self.assertIn("source and signed package must be paired", result.stderr)
 
     def test_historical_fallback_must_return_to_exact_release_before_promotion(self):
         receipt = self.release_state()

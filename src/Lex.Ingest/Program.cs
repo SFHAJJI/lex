@@ -164,6 +164,33 @@ switch (args0[0])
                 trustRootsPath));
             var establishedReleaseState = Array.IndexOf(
                 args0, "--established-release-state") >= 0;
+            var historicalSourcePackage = Array.IndexOf(
+                args0, "--historical-source-package") >= 0;
+            if (establishedReleaseState && historicalSourcePackage)
+                throw new ArgumentException(
+                    "bootstrap equivalence live and historical modes are mutually exclusive");
+            if (historicalSourcePackage)
+            {
+                var expectedCodeCommit = Get("--expected-code-commit")
+                    ?? throw new ArgumentException("--expected-code-commit required");
+                var historicalEvidence = BootstrapEquivalenceVerifier.VerifyHistoricalPackage(
+                    root, manifestPath, signaturePath, equivalencePath, artifactRoots,
+                    containerAppResourceId, bootstrapLegacyAuthorityRevision,
+                    bootstrapCandidateRevision, bootstrapRollbackRevision, evaluationRelease,
+                    canonicalTemplateDigest, imageDigest, bootstrapCasesSha256,
+                    expectedCodeCommit, now);
+                Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(new
+                {
+                    status = "passed",
+                    schema = historicalEvidence.Schema,
+                    candidate_revision = historicalEvidence.Candidate.RevisionName,
+                    rollback_revision = historicalEvidence.Rollback.RevisionName,
+                    legacy_authority_revision = historicalEvidence.LegacyAuthority.RevisionName,
+                    evaluation_release = historicalEvidence.EvaluationRelease,
+                    verification_mode = "historical_source_package",
+                }));
+                return 0;
+            }
             BootstrapEquivalenceVerifier.ValidateInvocation(
                 root, manifestPath, signaturePath, equivalencePath, artifactRoots,
                 containerAppResourceId, bootstrapLegacyAuthorityRevision,
@@ -853,7 +880,7 @@ static void Usage() => Console.Error.WriteLine("""
       lex assistant-eval verify-cases --cases FILE --review-attestation FILE --review-signature FILE
       lex assistant-eval verify-report --report FILE --cases FILE --review-attestation FILE --review-signature FILE --base-url REVISION_URL --candidate-container-app-resource-id AZURE_ID --candidate-revision NAME
       lex assistant-eval verify-release --root DIR --manifest FILE --signature FILE --trust-roots FILE --base-url REVISION_URL --candidate-container-app-resource-id AZURE_ID --candidate-revision NAME
-      lex assistant-eval verify-bootstrap-equivalence --root DIR --manifest FILE --signature FILE --trust-roots FILE --equivalence FILE --candidate-container-app-resource-id AZURE_ID --legacy-authority-revision NAME --candidate-revision NAME --rollback-revision NAME --evaluation-release TAG --canonical-template-digest SHA256 --image-digest SHA256 --cases-sha256 SHA256 [--established-release-state]
+      lex assistant-eval verify-bootstrap-equivalence --root DIR --manifest FILE --signature FILE --trust-roots FILE --equivalence FILE --candidate-container-app-resource-id AZURE_ID --legacy-authority-revision NAME --candidate-revision NAME --rollback-revision NAME --evaluation-release TAG --canonical-template-digest SHA256 --image-digest SHA256 --cases-sha256 SHA256 [--established-release-state | --historical-source-package --expected-code-commit FULL_SHA]
       lex artifact verify --root DIR --manifest FILE --signature FILE --trust-roots FILE
       lex artifact trust-root --keyfile KEY.pem --key-id ID
     """);

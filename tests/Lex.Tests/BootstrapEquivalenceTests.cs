@@ -204,6 +204,44 @@ public sealed class BootstrapEquivalenceTests : IDisposable
     }
 
     [Fact]
+    public void Historical_source_package_keeps_exact_signed_identity_without_live_legacy_state()
+    {
+        var bundle = CreateBundle(Evidence());
+
+        var verified = BootstrapEquivalenceVerifier.VerifyHistoricalPackage(
+            _dir, bundle.ManifestPath, bundle.SignaturePath, bundle.EvidencePath,
+            [bundle.Root], AppId, Legacy, Candidate, Rollback, Release, TemplateDigest,
+            ImageDigest, CasesSha, CodeCommit,
+            DateTimeOffset.Parse("2026-09-14T11:00:00Z"));
+
+        Assert.Equal(Candidate, verified.Candidate.RevisionName);
+        Assert.Equal(Rollback, verified.Rollback.RevisionName);
+    }
+
+    [Fact]
+    public void Historical_source_package_rejects_wrong_commit_or_claimed_role_identity()
+    {
+        var bundle = CreateBundle(Evidence());
+        Assert.Throws<InvalidDataException>(() =>
+            BootstrapEquivalenceVerifier.VerifyHistoricalPackage(
+                _dir, bundle.ManifestPath, bundle.SignaturePath, bundle.EvidencePath,
+                [bundle.Root], AppId, Legacy, Candidate, Rollback, Release, TemplateDigest,
+                ImageDigest, CasesSha, new string('1', 40),
+                DateTimeOffset.Parse("2026-09-14T11:00:00Z")));
+
+        var wrongRole = CreateBundle(Evidence() with
+        {
+            Rollback = Evidence().Rollback with { Active = true },
+        });
+        Assert.Throws<InvalidDataException>(() =>
+            BootstrapEquivalenceVerifier.VerifyHistoricalPackage(
+                _dir, wrongRole.ManifestPath, wrongRole.SignaturePath, wrongRole.EvidencePath,
+                [wrongRole.Root], AppId, Legacy, Candidate, Rollback, Release, TemplateDigest,
+                ImageDigest, CasesSha, CodeCommit,
+                DateTimeOffset.Parse("2026-09-14T11:00:00Z")));
+    }
+
+    [Fact]
     public void A_signature_from_an_untrusted_replacement_key_is_rejected()
     {
         var bundle = CreateBundle(Evidence());

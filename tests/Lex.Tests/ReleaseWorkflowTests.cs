@@ -567,6 +567,18 @@ public sealed class ReleaseWorkflowTests
             recoveryBlock);
         Assert.Contains("failed/unreceipted traffic operation", recoveryBlock);
         Assert.Contains("operator reconciliation is required", recoveryBlock);
+        Assert.Contains("mark_failed_receipt()", recoveryBlock);
+        Assert.Equal(3, Regex.Matches(recoveryBlock, "mark_failed_receipt").Count);
+        Assert.Contains("statuses?per_page=1", recoveryBlock);
+        Assert.Contains("[ \"$state\" = \"failure\" ] && return 0", recoveryBlock);
+        var firstInvalidation = recoveryBlock.IndexOf("mark_failed_receipt \\", noRewrite,
+            StringComparison.Ordinal);
+        Assert.True(firstInvalidation > noRewrite && firstInvalidation < targetBranch);
+        var rewrittenState = recoveryBlock.IndexOf(
+            "if assert_revision_state 1", targetBranch, StringComparison.Ordinal);
+        var secondInvalidation = recoveryBlock.IndexOf(
+            "mark_failed_receipt \\", rewrittenState, StringComparison.Ordinal);
+        Assert.True(rewrittenState > targetBranch && secondInvalidation > rewrittenState);
         Assert.DoesNotContain("name != '$PREVIOUS_REVISION' && properties.active", recoveryBlock);
     }
 
@@ -595,8 +607,12 @@ public sealed class ReleaseWorkflowTests
         Assert.Contains("first-release receipt attestation predicate differs", block);
         Assert.Contains("--source-ref refs/heads/main", block);
         Assert.Contains("first-release rollback package differs from its successful receipt", block);
-        Assert.Contains("--candidate-revision \"$EXPECTED_CURRENT_REVISION\"", block);
-        Assert.Contains("--rollback-revision \"$TARGET_REVISION\"", block);
+        Assert.Contains("register_bootstrap_source \"$authorization_kind\"", block);
+        Assert.Contains("register_bootstrap_source \"$rollback_authorization_kind\"", block);
+        Assert.Contains("--candidate-revision \"$signed_candidate_revision\"", block);
+        Assert.Contains("--rollback-revision \"$signed_rollback_revision\"", block);
+        Assert.Contains("--historical-source-package", block);
+        Assert.Contains("--expected-code-commit \"$receipt_source_commit\"", block);
         Assert.Contains("--established-release-state", block);
         Assert.Contains("assistant-eval verify-bootstrap-equivalence", block);
         Assert.Contains("authorization_kind", block);
@@ -622,6 +638,50 @@ public sealed class ReleaseWorkflowTests
         Assert.Contains("signed_package_sha256", workflow[receipt..]);
         Assert.Contains("evidence_release", workflow[receipt..]);
         Assert.Contains("rollback_authorization", workflow[receipt..]);
+    }
+
+    [Fact]
+    public void Release_authority_uses_the_newest_successful_ledger_head_at_evidence_and_switch()
+    {
+        var workflow = File.ReadAllText(
+                Path.Combine(RepoRoot(), ".github", "workflows", "revision-traffic.yml"))
+            .Replace("\r\n", "\n", StringComparison.Ordinal);
+        var evidence = workflow.IndexOf(
+            "- name: Verify signed assistant evaluation against the exact target",
+            StringComparison.Ordinal);
+        var preflight = workflow.IndexOf(
+            "- name: Resolve and validate current release ledger before Azure mutation",
+            StringComparison.Ordinal);
+        var activation = workflow.IndexOf(
+            "az_retry az containerapp revision activate", preflight, StringComparison.Ordinal);
+        var traffic = workflow.IndexOf("- name: Switch exact revision traffic", evidence,
+            StringComparison.Ordinal);
+        var publicSwitch = workflow.IndexOf(
+            "--revision-weight \"$EXPECTED_CURRENT_REVISION=0\" \"$TARGET_REVISION=100\"",
+            traffic, StringComparison.Ordinal);
+
+        Assert.True(preflight >= 0 && activation > preflight && evidence > activation
+                    && traffic > evidence && publicSwitch > traffic);
+        var preActivation = workflow[preflight..activation];
+        Assert.Contains("release_ledger_head.py", preActivation);
+        Assert.Contains("release_authorization.py", preActivation);
+        Assert.Contains("current release-state deployment envelope is malformed", preActivation);
+        Assert.Contains("candidate_ledger_head=$(python3 scripts/deploy/release_ledger_head.py",
+            preActivation);
+        Assert.Contains("advanced before activation", preActivation);
+        Assert.Contains("release_ledger_head.py", workflow[evidence..traffic]);
+        Assert.Contains("[ \"$PRIOR_PROMOTION_DEPLOYMENT\" = \"$ledger_head\" ]",
+            workflow[evidence..traffic]);
+        Assert.Contains("echo \"ledger_head=$ledger_head\"", workflow[evidence..traffic]);
+        Assert.Contains("live inactive rollback differs from the release ledger",
+            workflow[evidence..traffic]);
+        Assert.Contains("-n \"$CONTAINER_APP\" --all", workflow[evidence..traffic]);
+        var trafficBlock = workflow[traffic..publicSwitch];
+        Assert.Contains("live_ledger_head=$(python3 scripts/deploy/release_ledger_head.py",
+            trafficBlock);
+        Assert.Contains("[ \"$live_ledger_head\" = \"$EVIDENCE_LEDGER_HEAD\" ]",
+            trafficBlock);
+        Assert.Contains("first-release source was invalidated before traffic", trafficBlock);
     }
 
     [Fact]
@@ -734,6 +794,11 @@ public sealed class ReleaseWorkflowTests
         Assert.Contains("partial bootstrap traffic recovery", block);
         Assert.Contains("restore_signed_fallback", block);
         Assert.Contains("refusing fallback recovery with unknown revision identities", block);
+        Assert.Contains("mark_failed_receipt()", block);
+        Assert.Equal(3, Regex.Matches(block, "mark_failed_receipt").Count);
+        Assert.Contains("statuses?per_page=1", block);
+        Assert.Contains("[ \"$state\" = \"failure\" ] && return 0", block);
+        Assert.Contains("restored bootstrap has an uninvalidated receipt", block);
         Assert.DoesNotContain("name != '$ROLLBACK_REVISION' && properties.active", block);
 
         var authority = bootstrap.IndexOf("- name: Persist bootstrap traffic mutation authority",

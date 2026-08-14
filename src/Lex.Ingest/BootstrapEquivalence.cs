@@ -24,6 +24,8 @@ public static class BootstrapEquivalenceVerifier
         RegexOptions.CultureInvariant);
     private static readonly Regex Revision = new(
         "^ca-lex-web--[a-z0-9-]+$", RegexOptions.CultureInvariant);
+    private static readonly Regex CodeCommit = new(
+        "^[0-9a-f]{40}$", RegexOptions.CultureInvariant);
     private static readonly Regex ContainerAppResourceId = new(
         "^/subscriptions/[0-9a-f-]{36}/resourceGroups/[^/]{1,90}/providers/"
         + "Microsoft\\.App/containerApps/ca-lex-web$",
@@ -85,6 +87,40 @@ public static class BootstrapEquivalenceVerifier
             candidate, rollback, null, revisionRoutes, verifiedAt,
             establishedFallback: true);
 
+    public static BootstrapEquivalenceEvidence VerifyHistoricalPackage(
+        string rootDirectory,
+        string manifestPath,
+        string signaturePath,
+        string evidencePath,
+        IReadOnlyList<ArtifactTrustRoot> trustRoots,
+        string expectedContainerAppResourceId,
+        string expectedLegacyAuthorityRevision,
+        string expectedCandidateRevision,
+        string expectedRollbackRevision,
+        string expectedEvaluationRelease,
+        string expectedCanonicalTemplateDigest,
+        string expectedImageDigest,
+        string expectedCasesSha256,
+        string expectedCodeCommit,
+        DateTimeOffset verifiedAt)
+    {
+        if (!CodeCommit.IsMatch(expectedCodeCommit))
+            throw new InvalidDataException("Bootstrap equivalence code commit is invalid.");
+        var package = LoadSignedEvidence(
+            rootDirectory, manifestPath, signaturePath, evidencePath, trustRoots,
+            expectedContainerAppResourceId, expectedLegacyAuthorityRevision,
+            expectedCandidateRevision, expectedRollbackRevision, expectedEvaluationRelease,
+            expectedCanonicalTemplateDigest, expectedImageDigest, expectedCasesSha256,
+            verifiedAt, establishedFallback: true);
+        ValidateSignedPackage(
+            package, manifestPath, expectedContainerAppResourceId,
+            expectedLegacyAuthorityRevision, expectedCandidateRevision,
+            expectedRollbackRevision, expectedEvaluationRelease,
+            expectedCanonicalTemplateDigest, expectedImageDigest, expectedCasesSha256,
+            expectedCodeCommit, verifiedAt);
+        return package.Evidence;
+    }
+
     public static void ValidateInvocation(
         string rootDirectory,
         string manifestPath,
@@ -136,8 +172,15 @@ public static class BootstrapEquivalenceVerifier
             expectedCanonicalTemplateDigest, expectedImageDigest, expectedCasesSha256,
             verifiedAt, establishedFallback);
         var evidence = package.Evidence;
-        var generatedAt = package.GeneratedAt;
-        var bytes = package.Bytes;
+        if (rollback.CodeCommit != candidate.CodeCommit)
+            throw new InvalidDataException(
+                "Bootstrap candidate and rollback code commits differ.");
+        ValidateSignedPackage(
+            package, manifestPath, expectedContainerAppResourceId,
+            expectedLegacyAuthorityRevision, expectedCandidateRevision,
+            expectedRollbackRevision, expectedEvaluationRelease,
+            expectedCanonicalTemplateDigest, expectedImageDigest, expectedCasesSha256,
+            candidate.CodeCommit, verifiedAt);
 
         if (establishedFallback)
         {
@@ -179,6 +222,35 @@ public static class BootstrapEquivalenceVerifier
         if (!establishedFallback)
             RequireMatchingRouteSnapshot(legacyAuthority!,
                 routesByRevision[expectedLegacyAuthorityRevision]);
+        return evidence;
+    }
+
+    private static void ValidateSignedPackage(
+        SignedEvidence package,
+        string manifestPath,
+        string expectedContainerAppResourceId,
+        string expectedLegacyAuthorityRevision,
+        string expectedCandidateRevision,
+        string expectedRollbackRevision,
+        string expectedEvaluationRelease,
+        string expectedCanonicalTemplateDigest,
+        string expectedImageDigest,
+        string expectedCasesSha256,
+        string expectedCodeCommit,
+        DateTimeOffset verifiedAt)
+    {
+        if (!CodeCommit.IsMatch(expectedCodeCommit))
+            throw new InvalidDataException("Bootstrap equivalence code commit is invalid.");
+        var evidence = package.Evidence;
+        ValidateHistoricalRevisionClaim(
+            "legacy authority", evidence.LegacyAuthority, expectedContainerAppResourceId,
+            expectedLegacyAuthorityRevision, expectedActive: true, expectedTraffic: 100);
+        ValidateHistoricalRevisionClaim(
+            "rollback", evidence.Rollback, expectedContainerAppResourceId,
+            expectedRollbackRevision, expectedActive: false, expectedTraffic: 0);
+        ValidateHistoricalRevisionClaim(
+            "candidate", evidence.Candidate, expectedContainerAppResourceId,
+            expectedCandidateRevision, expectedActive: true, expectedTraffic: 0);
         var legacyCreated = Utc(evidence.LegacyAuthority.CreatedTime,
             "legacy_authority.created_time");
         var rollbackCreated = Utc(evidence.Rollback.CreatedTime, "rollback.created_time");
@@ -188,7 +260,7 @@ public static class BootstrapEquivalenceVerifier
                 "Bootstrap chronology must be strictly legacy A before fallback R before candidate C.");
 
         var manifest = ArtifactManifests.Parse(File.ReadAllBytes(manifestPath));
-        var evidenceSha = Convert.ToHexStringLower(SHA256.HashData(bytes));
+        var evidenceSha = Convert.ToHexStringLower(SHA256.HashData(package.Bytes));
         var expectedSources = new SortedDictionary<string, string>(StringComparer.Ordinal)
         {
             ["candidate_revision"] = expectedCandidateRevision,
@@ -204,18 +276,16 @@ public static class BootstrapEquivalenceVerifier
             ["schema"] = Schema,
         };
         if (manifest.KeyId != AssistantEvaluationReleaseVerifier.ArtifactKeyId
-            || manifest.CodeCommit != candidate.CodeCommit
-            || rollback.CodeCommit != candidate.CodeCommit
+            || manifest.CodeCommit != expectedCodeCommit
             || manifest.Sources.Count != expectedSources.Count
             || expectedSources.Any(item => !manifest.Sources.TryGetValue(item.Key, out var value)
                 || value != item.Value))
             throw new InvalidDataException(
                 "Signed bootstrap equivalence manifest does not bind its release and live template.");
         var manifestCreated = Utc(manifest.CreatedAt, "manifest.created_at");
-        if (manifestCreated < generatedAt.AddMinutes(-5)
+        if (manifestCreated < package.GeneratedAt.AddMinutes(-5)
             || manifestCreated > verifiedAt.AddMinutes(5))
             throw new InvalidDataException("Bootstrap equivalence manifest time is invalid.");
-        return evidence;
     }
 
     private static SignedEvidence LoadSignedEvidence(
@@ -403,6 +473,27 @@ public static class BootstrapEquivalenceVerifier
             throw new InvalidDataException(
                 "Established bootstrap evidence has an invalid historical legacy authority.");
         _ = Utc(claimed.CreatedTime, "legacy_authority.created_time");
+    }
+
+    private static void ValidateHistoricalRevisionClaim(
+        string role,
+        BootstrapEquivalenceRevision claimed,
+        string expectedContainerAppResourceId,
+        string expectedRevision,
+        bool expectedActive,
+        int expectedTraffic)
+    {
+        var expectedRevisionId = expectedContainerAppResourceId.TrimEnd('/')
+            + "/revisions/" + expectedRevision;
+        if (claimed is null
+            || claimed.RevisionName != expectedRevision
+            || !string.Equals(claimed.RevisionResourceId?.TrimEnd('/'), expectedRevisionId,
+                StringComparison.OrdinalIgnoreCase)
+            || claimed.Active != expectedActive
+            || claimed.TrafficWeight != expectedTraffic)
+            throw new InvalidDataException(
+                $"Signed bootstrap {role} identity or preparation state is invalid.");
+        _ = Utc(claimed.CreatedTime, $"{role}.created_time");
     }
 
     private static void ValidateEstablishedRoutes(
