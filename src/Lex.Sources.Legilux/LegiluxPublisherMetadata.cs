@@ -18,6 +18,7 @@ internal static class LegiluxPublisherMetadata
             [SchemePrefix + "place"] = "place",
             [SchemePrefix + "legal-resource"] = "legal_resource",
             [SchemePrefix + "country"] = "country",
+            ["http://publications.europa.eu/resource/authority/country"] = "country",
         };
 
     internal static string Query(IReadOnlyCollection<string> works)

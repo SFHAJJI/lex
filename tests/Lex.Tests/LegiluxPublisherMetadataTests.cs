@@ -67,6 +67,25 @@ public sealed class LegiluxPublisherMetadataTests
     }
 
     [Fact]
+    public void Official_publications_office_country_subject_is_preserved_as_a_country()
+    {
+        const string work = "http://data.legilux.public.lu/eli/etat/leg/loi/2004/12/21/n4";
+        const string subject = "http://publications.europa.eu/resource/authority/country/BEL";
+        var byWork = Parse("ParseSubjects",
+        [
+            Row(work, "2", subject, "Belgique",
+                "http://publications.europa.eu/resource/authority/country"),
+        ]);
+
+        var metadata = Assert.Single(Assert.Single(byWork).Value);
+        Assert.Equal("legilux_subject_level2_country", metadata.Kind);
+        Assert.Equal(subject, metadata.Identifier);
+        Assert.Equal("fr", metadata.Language);
+        Assert.Equal("Belgique", metadata.Label);
+        Assert.Equal(subject, metadata.SourceUri);
+    }
+
+    [Fact]
     public void Missing_ambiguous_or_unknown_subject_authority_fails_closed()
     {
         var work = "https://data.legilux.public.lu/eli/etat/leg/loi/2020/01/01/n1";
