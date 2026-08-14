@@ -79,6 +79,7 @@ public static class LegalOperationPolicy
         McpStatus.Ok => LegalOutcome.Succeeded,
         McpStatus.NoResult or McpStatus.NoChangesInPeriod => LegalOutcome.SucceededEmpty,
         McpStatus.ProfilesDiffer => LegalOutcome.NotComparable,
+        McpStatus.AmbiguousVersion => LegalOutcome.NeedsClarification,
         McpStatus.UnknownWork or McpStatus.UnknownAnchor
             or McpStatus.UnknownPublisher => LegalOutcome.NotFound,
         McpStatus.NoVersionForDate or McpStatus.AnchorNotInVersion

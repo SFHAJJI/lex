@@ -556,6 +556,7 @@ public static class UiMapper
             {
                 McpStatus.NoCorpusMounted => "Lex ne dispose d'aucun index juridique vérifié, donc aucune opération juridique n'est disponible.",
                 McpStatus.NoVersionForDate => "Lex détient cet instrument, mais aucune version de l'éditeur ne couvre cette date.",
+                McpStatus.AmbiguousVersion => "L'éditeur expose plusieurs versions identifiées à cette date. Choisissez une version précise.",
                 McpStatus.UnknownWork => "Lex ne détient pas cet instrument.",
                 McpStatus.UnknownPublisher => "Aucun éditeur portant cet identifiant n'est monté ici. Reposez la question sans filtre d'éditeur pour voir tout ce que Lex détient.",
                 McpStatus.UnknownAnchor => "Cet identifiant d'article n'existe pas dans cet instrument.",
@@ -573,6 +574,7 @@ public static class UiMapper
         {
             McpStatus.NoCorpusMounted => "Lex has no verified legal index mounted, so no legal operation is available.",
             McpStatus.NoVersionForDate => "Lex holds this law, but no publisher version covers that date.",
+            McpStatus.AmbiguousVersion => "The publisher exposes several identified versions on that date. Choose one exact version.",
             McpStatus.UnknownWork => "Lex does not hold this work at all.",
             McpStatus.UnknownPublisher => "No publisher with that id is mounted here. Ask again without a publisher filter to see everything Lex holds.",
             McpStatus.UnknownAnchor => "That article identifier does not exist in this law.",
