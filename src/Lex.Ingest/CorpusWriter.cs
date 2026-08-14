@@ -115,6 +115,7 @@ public sealed class CorpusWriter(
                 DocumentType = work.TypeCode,
                 Slug = work.Slug,
                 Title = work.TitleHint,
+                TitleLanguage = WorkTitleLanguage(work.TitleHint, versionsOfWork),
                 SourceUri = versionsOfWork[^1].Expressions.FirstOrDefault()?.SourceUri,
             };
             candidate.WriteIfChanged(Path.Combine(workDir, "meta.json"), JsonSerializer.Serialize(workMeta, CorpusJson.Options));
@@ -759,6 +760,24 @@ public sealed class CorpusWriter(
     private static StringComparer PathComparer => OperatingSystem.IsWindows()
         ? StringComparer.OrdinalIgnoreCase
         : StringComparer.Ordinal;
+
+    private static string? WorkTitleLanguage(
+        string? title,
+        IReadOnlyList<VersionRecord> versions)
+    {
+        if (string.IsNullOrWhiteSpace(title)) return null;
+
+        var languages = versions
+            .SelectMany(version => version.Expressions)
+            .Where(expression => string.Equals(expression.Title, title, StringComparison.Ordinal)
+                || string.Equals(expression.TitleShort, title, StringComparison.Ordinal))
+            .Select(expression => expression.Language)
+            .Where(language => !string.IsNullOrWhiteSpace(language))
+            .Distinct(StringComparer.Ordinal)
+            .Take(2)
+            .ToArray();
+        return languages.Length == 1 ? languages[0] : null;
+    }
 
     private static string Min(string? a, string b) => a is null || string.CompareOrdinal(b, a) < 0 ? b : a;
     private static string Max(string? a, string b) => a is null || string.CompareOrdinal(b, a) > 0 ? b : a;

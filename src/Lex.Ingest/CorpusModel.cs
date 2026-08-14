@@ -26,6 +26,7 @@ public sealed class WorkMeta
     public string? DocumentType { get; set; }
     public required string Slug { get; set; }
     public string? Title { get; set; }
+    public string? TitleLanguage { get; set; }
     public string? SourceUri { get; set; }
 }
 

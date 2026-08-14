@@ -1,7 +1,9 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Lex.Ingest;
+using Lex.Index;
 using Lex.Law;
+using Lex.Mcp;
 
 namespace Lex.Tests;
 
@@ -66,6 +68,38 @@ public sealed class CorpusWriterTests : IDisposable
             await File.ReadAllTextAsync(Path.Combine(_dir, "manifest.json")),
             CorpusJson.Options)!;
         Assert.Equal(CodeCommit, manifest.IngesterCodeCommit);
+    }
+
+    [Fact]
+    public async Task Work_title_fallback_never_crosses_an_expression_language_boundary()
+    {
+        var corpus = Path.Combine(_dir, "language-honest-corpus");
+        var db = Path.Combine(_dir, "language-honest.db");
+        await new CorpusWriter(
+                corpus, DateTimeOffset.Parse("2026-08-14T00:00:00Z"), CodeCommit)
+            .WriteAsync(new CrossLanguageTitleAdapter(), default);
+
+        var workMeta = JsonSerializer.Deserialize<WorkMeta>(
+            await File.ReadAllTextAsync(Path.Combine(corpus, "works", "w1", "meta.json")),
+            CorpusJson.Options)!;
+        Assert.Equal("fr", workMeta.TitleLanguage);
+
+        IndexFromCorpus.Build(corpus, null, db, null,
+            DateTimeOffset.Parse("2026-08-14T00:00:00Z"),
+            codeCommit: new string('d', 40));
+        using var reader = LexIndexReader.Open(db);
+        var response = Assert.IsType<JsonObject>(new McpCore(
+            new Dictionary<string, LexIndexReader> { [reader.Collection] = reader })
+            .CallTool("timeline", new JsonObject { ["work"] = "test:w1" }));
+        var expressions = Assert.IsType<JsonArray>(response["versions"]![0]!["expressions"]);
+        var english = Assert.Single(expressions.OfType<JsonObject>(), value =>
+            value["language"]!.GetValue<string>() == "en");
+        var french = Assert.Single(expressions.OfType<JsonObject>(), value =>
+            value["language"]!.GetValue<string>() == "fr");
+
+        Assert.Null(english["title"]);
+        Assert.Equal("32024R0001", english["title_short"]!.GetValue<string>());
+        Assert.Equal("Règlement de test", french["title"]!.GetValue<string>());
     }
 
     [Theory]
@@ -995,6 +1029,43 @@ public sealed class CorpusWriterTests : IDisposable
             Task.FromResult<IReadOnlyList<VersionRecord>>([]);
 
         public Task<SourceBodyFetch> FetchBody(VersionRecord version, ExpressionRecord expression, CancellationToken ct) =>
+            Task.FromResult(new SourceBodyFetch(SourceBodyStatus.PublisherMetadataOnly));
+    }
+
+    private sealed class CrossLanguageTitleAdapter : ISourceAdapter
+    {
+        private static readonly WorkRef Work = new(
+            new Identifier("official:w1"), "w1", "REG", "Règlement de test");
+
+        public PublisherDescriptor Describe() => new(
+            new Publisher("test", "Test", "EU", "https://example.test", Tier.A, "test", null),
+            [], ["en", "fr"], TextIncluded: false, TextPublic: false,
+            HistoryBegins: "publisher");
+
+        public async IAsyncEnumerable<WorkRef> EnumerateWorks(
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+            yield return Work;
+            await Task.CompletedTask;
+        }
+
+        public Task<IReadOnlyList<VersionRecord>> FetchVersions(
+            WorkRef work, CancellationToken ct) =>
+            Task.FromResult<IReadOnlyList<VersionRecord>>
+            ([new VersionRecord(
+                new Identifier("official:v1"), Work.Id, "REG",
+                new DateOnly(2024, 1, 1), null, "publisher", "true",
+                new DateOnly(2024, 1, 1),
+                [new ExpressionRecord("en", new DateOnly(2024, 1, 1), null,
+                     "publisher", null, "32024R0001", "https://example.test/v1/en"),
+                 new ExpressionRecord("fr", new DateOnly(2024, 1, 1), null,
+                     "publisher", "Règlement de test", "Règlement de test",
+                     "https://example.test/v1/fr")],
+                [], new Dictionary<string, string>())]);
+
+        public Task<SourceBodyFetch> FetchBody(
+            VersionRecord version, ExpressionRecord expression, CancellationToken ct) =>
             Task.FromResult(new SourceBodyFetch(SourceBodyStatus.PublisherMetadataOnly));
     }
 
