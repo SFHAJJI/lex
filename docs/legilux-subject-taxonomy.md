@@ -91,6 +91,11 @@ with at most 57 combined assertions on one work. No held assertion lacked a Fren
 label or an unambiguous supported specific scheme. These measurements support bounded capture;
 they do not justify a cross-publisher taxonomy browser.
 
+Every global paged Legilux query has a fixed total-row ceiling before accumulation: 20,000
+catalogue rows, 200,000 subject rows, 20,000 official-identity rows, and 50,000 manifestation
+rows. The final request asks for only the remaining allowance plus one; that sentinel row aborts
+the unpublished corpus candidate instead of entering the accumulator or being truncated silently.
+
 ## 6. Costs accepted
 
 - A second authority vocabulary to mirror, version and re-verify on every ingest, with the
