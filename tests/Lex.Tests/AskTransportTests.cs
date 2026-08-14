@@ -140,8 +140,14 @@ public sealed class AskTransportTests
     public async Task Thread_context_disposition_distinguishes_preserve_replace_and_clear()
     {
         var registry = new AskThreadRegistry(TimeProvider.System, maximumThreads: 2);
+        var source = new AskSubjectAuthoritySource(
+            "publisher_short_title",
+            "http://publications.europa.eu/ontology/cdm#expression_title_short",
+            "CRR", "en",
+            "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32013R0575");
         var authority = new AskConversationContext(
-            [new AskResolvedSubjectContext("eu-eurlex:32013r0575", "art_92")], "92");
+            [new AskResolvedSubjectContext(
+                "eu-eurlex:32013r0575", "art_92", AuthoritySource: source)], "92");
         string token;
         await using (var created = AssertAcquired(await registry.AcquireAsync(null)))
         {
@@ -153,6 +159,7 @@ public sealed class AskTransportTests
         await using (var preserved = AssertAcquired(await registry.AcquireAsync(token)))
         {
             Assert.Equal("92", preserved.Context?.ArticleNumber);
+            Assert.Equal(source, Assert.Single(preserved.Context!.Subjects).AuthoritySource);
             Assert.True(preserved.Commit(
                 "follow up", "follow-up answer", context: null,
                 AskConversationContextDisposition.Preserve));

@@ -103,6 +103,8 @@ public sealed class AskService
         private readonly HashSet<string> _current = new(StringComparer.Ordinal);
         private readonly List<(string Work, string Title)> _candidates = [];
         private readonly List<WorkMention> _mentions = [];
+        private readonly Dictionary<string, AskSubjectAuthoritySource> _authoritySources =
+            new(StringComparer.Ordinal);
         // Every title the turn saw, for every work, whatever the row's match strength. The
         // clarification menu is the one surface that must name a work it did not select, and it
         // was drawing titles only from the weak-candidate list, so a work authorized by an exact
@@ -117,6 +119,7 @@ public sealed class AskService
         private bool _priorContextUsed;
         private bool _unresolvedIdentityObserved;
         private bool _identityResolutionRequested;
+        private string? _ambiguousPublisherShortTitle;
 
         public WorkResolutionGuard(string? identityAttempt = null) =>
             _identityAttempt = Lex.Index.WorkSearch.Normalize(identityAttempt ?? "");
@@ -133,6 +136,9 @@ public sealed class AskService
 
         public string? TitleFor(string work) =>
             _titles.TryGetValue(work, out var title) && title.Length > 0 ? title : null;
+
+        public AskSubjectAuthoritySource? AuthoritySourceFor(string work) =>
+            _authoritySources.GetValueOrDefault(WorkKey(work));
 
         public void ObserveSearch(JsonNode result, bool isRawUserQuery = true)
             => ObserveSearch(result, isRawUserQuery, allowDirectProvisionAuthority: true,
@@ -177,26 +183,67 @@ public sealed class AskService
                 if (markCurrent && resolutions?.OfType<JsonObject>().Any(resolution =>
                         resolution["status"]?.GetValue<string>() == "unresolved") == true)
                     _unresolvedIdentityObserved = true;
+                if (collectCandidates && resolutions is not null)
+                    foreach (var resolution in resolutions.OfType<JsonObject>().Where(item =>
+                                 item["kind"]?.GetValue<string>() == "publisher_short_title"))
+                    {
+                        var mention = String(resolution, "mention") ?? "";
+                        var officialMatches = OfficialShortTitleMatches(resolution, mention);
+                        if (isRawUserQuery && markCurrent
+                            && String(resolution, "status") == "ambiguous"
+                            && officialMatches.Select(match => match.Work)
+                                .Distinct(StringComparer.Ordinal).Take(2).Count() == 2)
+                            _ambiguousPublisherShortTitle ??=
+                                officialMatches[0].Source.Segment;
+                        foreach (var match in officialMatches)
+                        {
+                            _identityMatched.Add(match.Work);
+                            AddCandidate(latestCandidates, match.Work, "");
+                        }
+                    }
                 if (isRawUserQuery && resolutions is not null)
                     foreach (var resolution in resolutions.OfType<JsonObject>()
                                  .Where(item => item["status"]?.GetValue<string>() == "resolved"))
                     {
+                        var kind = String(resolution, "kind");
+                        var mention = String(resolution, "mention") ?? "";
+                        var candidates = (resolution["candidates"] as JsonArray)?
+                            .Select(candidate => candidate is JsonValue value
+                                && value.TryGetValue<string>(out var work) ? WorkKey(work) : null)
+                            .Where(work => work is not null && IsCandidateWork(work))
+                            .Cast<string>().Distinct(StringComparer.Ordinal).ToArray() ?? [];
+                        var officialSources = kind == "publisher_short_title"
+                            ? OfficialShortTitleMatches(resolution, mention)
+                                .Where(match => candidates.Contains(match.Work,
+                                    StringComparer.Ordinal))
+                                .ToDictionary(match => match.Work, match => match.Source,
+                                    StringComparer.Ordinal)
+                            : null;
+                        var trusted = kind is "title" or "identifier"
+                            || kind == "publisher_short_title"
+                            && candidates.Length == 1
+                            && officialSources?.Count == 1;
+                        if (!trusted)
+                        {
+                            if (markCurrent) _unresolvedIdentityObserved = true;
+                            continue;
+                        }
                         var named = new List<string>();
-                        foreach (var candidate in resolution["candidates"]?.AsArray() ?? [])
-                            if (candidate?.GetValue<string>() is { } work)
-                            {
-                                _resolved.Add(WorkKey(work));
-                                if (markCurrent) _current.Add(WorkKey(work));
-                                _currentAuthorityObserved = true;
-                                named.Add(WorkKey(work));
-                            }
+                        foreach (var work in candidates)
+                        {
+                            _resolved.Add(work);
+                            if (markCurrent) _current.Add(work);
+                            _currentAuthorityObserved = true;
+                            named.Add(work);
+                            if (officialSources?.GetValueOrDefault(work) is { } source)
+                                _authoritySources[work] = source;
+                        }
                         // Only the current turn's mentions. A prior-turn resolution names works in
                         // words the user is not writing now, and a span in this turn's query is
                         // the only thing the subject rule is allowed to reason about.
-                        if (markCurrent && named.Count > 0
-                            && resolution["mention"]?.GetValue<string>() is { Length: > 0 } mention)
+                        if (markCurrent && named.Count > 0 && mention.Length > 0)
                             _mentions.Add(new WorkMention(
-                                mention, named, resolution["kind"]?.GetValue<string>()));
+                                mention, named, kind));
                     }
                 // A problem description with no named law may select a work only from an actual
                 // provision hit. Standalone work discovery has no anchor and stays a candidate
@@ -322,10 +369,15 @@ public sealed class AskService
                     ? "Aucun de ceux-ci; je vais préciser ma demande"
                     : "None of these; I will add more details",
                 NoChoice));
+            var publisherShortTitleQuestion = _ambiguousPublisherShortTitle is { } shortTitle
+                ? locale == "fr"
+                    ? $"Le titre abrégé officiel de l’éditeur « {shortTitle} » désigne plusieurs instruments détenus. Lequel Lex doit-il utiliser ?"
+                    : $"The official publisher short title “{shortTitle}” identifies several held instruments. Which one should Lex use?"
+                : null;
             var clarification = new AgentClarification(
-                locale == "fr"
+                publisherShortTitleQuestion ?? (locale == "fr"
                     ? "Lex a trouvé plusieurs instruments possibles sans preuve directe dans une disposition. Lequel doit-il utiliser ?"
-                    : "Lex found possible instruments but no direct provision evidence. Which instrument should it use?",
+                    : "Lex found possible instruments but no direct provision evidence. Which instrument should it use?"),
                 choices.Select(choice => choice.Label).ToArray());
             var display = AgentAnswerContract.Validate(new AgentAnswerDraft(
                 AgentAnswerStatus.Clarify, clarification.Question, [], [], null, clarification), []).Clarification!;
@@ -375,8 +427,75 @@ public sealed class AskService
         private static void AddCandidate(
             List<(string Work, string Title)> candidates, string work, string title)
         {
-            if (!IsCandidateWork(work) || candidates.Any(candidate => candidate.Work == work)) return;
-            candidates.Add((work, title.Trim()));
+            if (!IsCandidateWork(work)) return;
+            var normalizedTitle = title.Trim();
+            var existing = candidates.FindIndex(candidate => candidate.Work == work);
+            if (existing < 0)
+            {
+                candidates.Add((work, normalizedTitle));
+                return;
+            }
+            if (candidates[existing].Title.Length == 0 && normalizedTitle.Length > 0)
+                candidates[existing] = (work, normalizedTitle);
+        }
+
+        private static IReadOnlyList<(string Work, AskSubjectAuthoritySource Source)>
+            OfficialShortTitleMatches(JsonObject resolution, string mention)
+        {
+            const int maximumLabelLength = 4_096;
+            const int maximumSegmentLength = 256;
+            var normalizedMention = Lex.Index.WorkSearch.Normalize(mention);
+            if (normalizedMention.Length == 0
+                || resolution["publisher_short_title_matches"] is not JsonArray matches
+                || matches.Count is 0 or > 20)
+                return [];
+            var result = new List<(string Work, AskSubjectAuthoritySource Source)>();
+            foreach (var match in matches.OfType<JsonObject>())
+            {
+                var work = String(match, "work");
+                var segment = String(match, "segment");
+                var identifier = String(match, "identifier");
+                var label = String(match, "label");
+                var language = String(match, "language");
+                var sourceUri = String(match, "source_uri");
+                if (work is null || !IsCandidateWork(work) || WorkKey(work) != work
+                    || string.IsNullOrWhiteSpace(segment)
+                    || segment.Length > maximumSegmentLength
+                    || segment.Trim() != segment
+                    || Lex.Index.WorkSearch.Normalize(segment) != normalizedMention
+                    || string.IsNullOrWhiteSpace(label) || label.Length > maximumLabelLength
+                    || !ContainsLiteralPublisherShortTitleSegment(label, segment)
+                    || string.IsNullOrWhiteSpace(language)
+                    || language.Length > LegalOperationCatalog.MaximumLanguageLength
+                    || !AbsoluteHttpUri(identifier) || !AbsoluteHttpUri(sourceUri))
+                    continue;
+                result.Add((work, new AskSubjectAuthoritySource(
+                    "publisher_short_title", identifier!, segment, language, sourceUri!)));
+            }
+            return result
+                .DistinctBy(match => match.Work, StringComparer.Ordinal)
+                .OrderBy(match => match.Work, StringComparer.Ordinal)
+                .ToArray();
+        }
+
+        private static string? String(JsonObject value, string name) =>
+            value[name] is JsonValue scalar && scalar.TryGetValue<string>(out var text)
+                ? text
+                : null;
+
+        private static bool AbsoluteHttpUri(string? value) =>
+            value is { Length: > 0 and <= LegalOperationCatalog.MaximumPublisherMetadataIdentifierLength }
+            && Uri.TryCreate(value, UriKind.Absolute, out var uri)
+            && uri.Scheme is "http" or "https";
+
+        private static bool ContainsLiteralPublisherShortTitleSegment(
+            string label, string segment)
+        {
+            var segments = label.Split(',').Select(value => value.Trim()).ToArray();
+            return segments.Length is > 0 and <= 16
+                && segments.All(value => value.Length is > 0 and <= 256
+                    && Lex.Index.WorkSearch.Normalize(value).Length > 0)
+                && segments.Contains(segment, StringComparer.Ordinal);
         }
 
         private static bool HasDirectProvisionEvidence(JsonObject hit)
@@ -1819,7 +1938,8 @@ public sealed class AskService
         string? Title,
         IReadOnlyList<string> Mentions,
         string? ArticleAnchor,
-        string? ExactLexId);
+        string? ExactLexId,
+        AskSubjectAuthoritySource? AuthoritySource);
 
     internal sealed record SubjectAuthority(
         IReadOnlyList<SubjectAuthorityMember> Members,
@@ -1903,7 +2023,7 @@ public sealed class AskService
                 null,
                 SubjectResolutionTrace(
                     new JsonArray(), carried.Members.Select(member => member.Work).ToArray(),
-                    carried.ArticleNumber, "carried", locale),
+                    carried.ArticleNumber, "carried", locale, carried.Members),
                 watch.Elapsed.TotalMilliseconds);
         }
 
@@ -1967,7 +2087,7 @@ public sealed class AskService
         return new SubjectPreflight(authority, null,
             SubjectResolutionTrace(result,
                 authority?.Members.Select(member => member.Work).ToArray() ?? [], article,
-                authority is null ? "none" : "resolved", locale),
+                authority is null ? "none" : "resolved", locale, authority?.Members),
             watch.Elapsed.TotalMilliseconds);
     }
 
@@ -1997,12 +2117,16 @@ public sealed class AskService
                 && (exact.Length > LegalOperationCatalog.MaximumStringLength
                     || WorkResolutionGuard.WorkKey(exact) != subject.Work))
                 return null;
+            if (subject.AuthoritySource is not null
+                && !ValidAuthoritySource(subject.AuthoritySource))
+                return null;
             members.Add(new SubjectAuthorityMember(
                 subject.Work,
                 Title: null,
                 Mentions: [],
                 ArticleAnchor: keepAnchor ? subject.ArticleAnchor : null,
-                ExactLexId: subject.ExactLexId));
+                ExactLexId: subject.ExactLexId,
+                AuthoritySource: subject.AuthoritySource));
         }
         return new SubjectAuthority(members, effectiveArticle);
     }
@@ -2022,7 +2146,8 @@ public sealed class AskService
     private static AskConversationContext? ConversationContextFor(SubjectAuthority? authority) =>
         authority is null ? null : new AskConversationContext(
             authority.Members.Select(member => new AskResolvedSubjectContext(
-                member.Work, member.ArticleAnchor, member.ExactLexId)).ToArray(),
+                member.Work, member.ArticleAnchor, member.ExactLexId,
+                member.AuthoritySource)).ToArray(),
             authority.ArticleNumber);
 
     private static SubjectAuthorityMember SubjectMember(
@@ -2036,7 +2161,21 @@ public sealed class AskService
         guard.CurrentMentions.Where(mention => mention.Works.Contains(work, StringComparer.Ordinal))
             .Select(mention => mention.Mention).Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
         article is null ? null : ArticleAnchor(result, work, article),
-        ExactLexIdFromRaw(rawQuery, work));
+        ExactLexIdFromRaw(rawQuery, work),
+        guard.AuthoritySourceFor(work));
+
+    private static bool ValidAuthoritySource(AskSubjectAuthoritySource source) =>
+        source.Kind == "publisher_short_title"
+        && source.Segment is { Length: > 0 and <= 256 }
+        && Lex.Index.WorkSearch.Normalize(source.Segment).Length > 0
+        && source.Language is { Length: > 0 and <= LegalOperationCatalog.MaximumLanguageLength }
+        && AbsoluteHttpUri(source.Identifier)
+        && AbsoluteHttpUri(source.SourceUri);
+
+    private static bool AbsoluteHttpUri(string value) =>
+        value.Length <= LegalOperationCatalog.MaximumPublisherMetadataIdentifierLength
+        && Uri.TryCreate(value, UriKind.Absolute, out var uri)
+        && uri.Scheme is "http" or "https";
 
     private static string? ExactLexIdFromRaw(string query, string work)
     {
@@ -2063,10 +2202,11 @@ public sealed class AskService
 
     private static JsonObject SubjectResolutionTrace(
         JsonNode result, IReadOnlyList<string> works, string? article, string status,
-        string locale)
+        string locale,
+        IReadOnlyList<SubjectAuthorityMember>? members = null)
     {
         var (_, docs) = Summarize(result);
-        return new JsonObject
+        var trace = new JsonObject
         {
             ["phase"] = "subject_resolution",
             ["status"] = status,
@@ -2075,6 +2215,19 @@ public sealed class AskService
             ["article_number"] = article,
             ["docs"] = docs,
         };
+        var sources = (members ?? [])
+            .Where(member => member.AuthoritySource is not null)
+            .Select(member => (JsonNode)new JsonObject
+            {
+                ["work"] = member.Work,
+                ["kind"] = member.AuthoritySource!.Kind,
+                ["identifier"] = member.AuthoritySource.Identifier,
+                ["segment"] = member.AuthoritySource.Segment,
+                ["language"] = member.AuthoritySource.Language,
+                ["source_uri"] = member.AuthoritySource.SourceUri,
+            }).ToArray();
+        if (sources.Length > 0) trace["authority_sources"] = new JsonArray(sources);
+        return trace;
     }
 
     private static WorkResolutionGuard.GuardClarification UnresolvedSubjectClarification(

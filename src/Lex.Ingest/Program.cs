@@ -112,6 +112,8 @@ switch (args0[0])
     }
     case "assistant-eval":
     {
+        if (args0.Length > 1 && EvalAdmissionCli.IsCommand(args0[1]))
+            return EvalAdmissionCli.Run(args0[1..], now);
         if (args0.Length > 1 && args0[1] == "verify-cases")
         {
             var verifiedCases = AssistantEvaluationCatalog.Load(
@@ -881,6 +883,8 @@ static void Usage() => Console.Error.WriteLine("""
       lex assistant-eval verify-report --report FILE --cases FILE --review-attestation FILE --review-signature FILE --base-url REVISION_URL --candidate-container-app-resource-id AZURE_ID --candidate-revision NAME
       lex assistant-eval verify-release --root DIR --manifest FILE --signature FILE --trust-roots FILE --base-url REVISION_URL --candidate-container-app-resource-id AZURE_ID --candidate-revision NAME
       lex assistant-eval verify-bootstrap-equivalence --root DIR --manifest FILE --signature FILE --trust-roots FILE --equivalence FILE --candidate-container-app-resource-id AZURE_ID --legacy-authority-revision NAME --candidate-revision NAME --rollback-revision NAME --evaluation-release TAG --canonical-template-digest SHA256 --image-digest SHA256 --cases-sha256 SHA256 [--established-release-state | --historical-source-package --expected-code-commit FULL_SHA]
+      lex assistant-eval create-admission --cases FILE --review-attestation FILE --review-signature FILE --candidate-revision NAME --candidate-image IMAGE_DIGEST --code-commit FULL_SHA --artifact-manifest-set SHA256 --out FILE
+      lex assistant-eval verify-admission --cases FILE --review-attestation FILE --review-signature FILE --candidate-revision NAME --candidate-image IMAGE_DIGEST --code-commit FULL_SHA --artifact-manifest-set SHA256 --admission FILE --signature FILE
       lex artifact verify --root DIR --manifest FILE --signature FILE --trust-roots FILE
       lex artifact trust-root --keyfile KEY.pem --key-id ID
     """);

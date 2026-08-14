@@ -434,6 +434,56 @@ public sealed class AskOperationControllerTests : IDisposable
         Assert.Null(response.Body["clarification"]);
     }
 
+    [Fact]
+    public async Task Weak_publisher_metadata_cannot_turn_an_aggregate_preflight_into_authority()
+    {
+        var searches = 0;
+        var aggregateCalls = 0;
+        async ValueTask<JsonNode> LegalTool(
+            string tool, JsonObject arguments, CancellationToken cancellationToken)
+        {
+            if (tool == "search")
+            {
+                searches++;
+                var hit = Hit("eu-eurlex:32022r2554:2024-01-01", null, "work_metadata");
+                hit["matched_publisher_metadata"] = new JsonObject
+                {
+                    ["kind"] = "eurovoc_domain",
+                    ["identifier"] = "http://publications.europa.eu/resource/authority/eurovoc/1000",
+                    ["label"] = "Financial regulation",
+                    ["language"] = "en",
+                    ["source_uri"] =
+                        "http://publications.europa.eu/resource/authority/eurovoc/1000",
+                };
+                return Envelope([], hit);
+            }
+            if (tool == "changes_in_period") aggregateCalls++;
+            return await _core.CallToolAsync(tool, arguments, cancellationToken);
+        }
+        var service = new AskService(_core, new StaticPlanner("en", new JsonArray(
+            new JsonObject
+            {
+                ["tool"] = "changes_in_period",
+                ["arguments"] = new JsonObject
+                {
+                    ["from_date"] = "2024-01-01",
+                    ["to_date"] = "2024-12-31",
+                    ["order"] = "by_churn",
+                },
+            })), legalTool: LegalTool);
+
+        var response = await service.AskAsync(
+            History("Which EU laws changed most in 2024?"), Guid.NewGuid().ToString(),
+            "law.test", CancellationToken.None);
+
+        Assert.Equal(1, searches);
+        Assert.Equal(1, aggregateCalls);
+        Assert.Null(response.Body["clarification"]);
+        Assert.Null(response.ConversationContext);
+        Assert.Equal("changes_in_period",
+            response.Body["operations"]?[0]?["tool"]?.GetValue<string>());
+    }
+
     [Theory]
     [InlineData("search", "Find capital requirement provisions.")]
     [InlineData("coverage", "What legal material does Lex hold?")]
@@ -564,6 +614,10 @@ public sealed class AskOperationControllerTests : IDisposable
         Assert.DoesNotContain("lex_id", properties.Select(x => x.Key));
         Assert.DoesNotContain("eu-eurlex:32013r0575", requests[0].ToJsonString(),
             StringComparison.Ordinal);
+        Assert.DoesNotContain("expression_title_short", requests[0].ToJsonString(),
+            StringComparison.Ordinal);
+        Assert.DoesNotContain("https://example.test/32013r0575", requests[0].ToJsonString(),
+            StringComparison.Ordinal);
         var primary = Assert.Single(
             Assert.IsType<JsonArray>(response.Body["trace"]).OfType<JsonObject>(),
             item => item["phase"]?.GetValue<string>() == "primary");
@@ -590,7 +644,17 @@ public sealed class AskOperationControllerTests : IDisposable
             History("Show the CRR timeline."), "thread-client", "law.test",
             CancellationToken.None);
         var context = Assert.IsType<AskConversationContext>(first.ConversationContext);
-        Assert.Equal("eu-eurlex:32013r0575", Assert.Single(context.Subjects).Work);
+        var heldSubject = Assert.Single(context.Subjects);
+        Assert.Equal("eu-eurlex:32013r0575", heldSubject.Work);
+        Assert.Equal("publisher_short_title", heldSubject.AuthoritySource?.Kind);
+        Assert.Equal("CRR", heldSubject.AuthoritySource?.Segment);
+        var resolution = Assert.Single(
+            Assert.IsType<JsonArray>(first.Body["trace"]).OfType<JsonObject>(),
+            item => item["phase"]?.GetValue<string>() == "subject_resolution");
+        var source = Assert.Single(
+            Assert.IsType<JsonArray>(resolution["authority_sources"]).OfType<JsonObject>());
+        Assert.Equal("publisher_short_title", source["kind"]?.GetValue<string>());
+        Assert.Null(source["label"]);
 
         var secondService = new AskService(_core, new StaticPlanner("en", new JsonArray(
             new JsonObject
@@ -1349,6 +1413,7 @@ public sealed class AskOperationControllerTests : IDisposable
                     {
                         ["mention"] = item.Mention,
                         ["status"] = item.Status,
+                        ["kind"] = "title",
                         ["candidates"] = new JsonArray(item.Candidates
                             .Select(candidate => (JsonNode)candidate).ToArray()),
                     }).ToArray()),

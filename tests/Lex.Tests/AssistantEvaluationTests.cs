@@ -3,6 +3,7 @@ using System.Text.Json.Nodes;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
+using System.Diagnostics;
 using Lex.Ingest;
 using Lex.Index;
 using Lex.Evaluation;
@@ -16,6 +17,35 @@ public sealed class AssistantEvaluationTimingCollection;
 [Collection("Assistant evaluation timing")]
 public sealed class AssistantEvaluationTests : IDisposable
 {
+    [Fact]
+    public async Task Ingest_entrypoint_dispatches_the_bounded_admission_commands()
+    {
+        var executable = typeof(EvalAdmissionCli).Assembly.Location;
+        using var process = new Process
+        {
+            StartInfo = new ProcessStartInfo("dotnet")
+            {
+                WorkingDirectory = Path.GetDirectoryName(executable)!,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+            },
+        };
+        process.StartInfo.ArgumentList.Add(executable);
+        process.StartInfo.ArgumentList.Add("assistant-eval");
+        process.StartInfo.ArgumentList.Add("create-admission");
+
+        Assert.True(process.Start());
+        var output = process.StandardOutput.ReadToEndAsync();
+        var error = process.StandardError.ReadToEndAsync();
+        await process.WaitForExitAsync();
+
+        Assert.NotEqual(0, process.ExitCode);
+        Assert.Contains("--cases required exactly once", await error);
+        Assert.DoesNotContain("--out required", await error);
+        Assert.Empty(await output);
+    }
+
     private readonly string _dir = Path.Combine(
         Path.GetTempPath(), $"lex-assistant-eval-{Guid.NewGuid():N}");
 

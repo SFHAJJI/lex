@@ -385,7 +385,13 @@ public sealed class AskThreadRegistry
         ? null
         : new AskConversationContext(
             context.Subjects.Select(subject => new AskResolvedSubjectContext(
-                subject.Work, subject.ArticleAnchor, subject.ExactLexId)).ToArray(),
+                subject.Work, subject.ArticleAnchor, subject.ExactLexId,
+                subject.AuthoritySource is null ? null : new AskSubjectAuthoritySource(
+                    subject.AuthoritySource.Kind,
+                    subject.AuthoritySource.Identifier,
+                    subject.AuthoritySource.Segment,
+                    subject.AuthoritySource.Language,
+                    subject.AuthoritySource.SourceUri))).ToArray(),
             context.ArticleNumber);
 
     private static long Bytes(
@@ -399,10 +405,19 @@ public sealed class AskThreadRegistry
         if (context is null) return bytes;
         bytes += context.ArticleNumber is null ? 0 : Encoding.UTF8.GetByteCount(context.ArticleNumber);
         foreach (var subject in context.Subjects)
+        {
             bytes += Encoding.UTF8.GetByteCount(subject.Work)
                 + (subject.ArticleAnchor is null ? 0 : Encoding.UTF8.GetByteCount(subject.ArticleAnchor))
                 + (subject.ExactLexId is null ? 0 : Encoding.UTF8.GetByteCount(subject.ExactLexId))
                 + 24;
+            if (subject.AuthoritySource is { } source)
+                bytes += Encoding.UTF8.GetByteCount(source.Kind)
+                    + Encoding.UTF8.GetByteCount(source.Identifier)
+                    + Encoding.UTF8.GetByteCount(source.Segment)
+                    + Encoding.UTF8.GetByteCount(source.Language)
+                    + Encoding.UTF8.GetByteCount(source.SourceUri)
+                    + 24;
+        }
         return bytes;
     }
 

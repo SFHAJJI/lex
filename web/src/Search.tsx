@@ -1,6 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { tool } from "./api";
+import { safeHttpsUrl, tool } from "./api";
 import { facetLabel as label, jurisdictionForPublisher, jurisdictionLabel } from "./facets";
+import {
+  parsePublisherMetadata,
+  publisherMetadataCaption,
+  publisherMetadataFilterArguments,
+  type PublisherMetadata,
+} from "./publisherMetadata";
 import { ScopeFilters } from "./ScopeFilters";
 import type { State } from "./state";
 import { shorten } from "./pickers";
@@ -45,6 +51,7 @@ type HitMeta = {
   jurisdiction?: string;
   timelineSemantics?: string;
   domains?: string[]; consolidationStatus?: string; matchReasons?: string[];
+  publisherMetadata?: PublisherMetadata;
 };
 type WorkHit = HitMeta & { work: string; title: string };
 type ArticleHit = HitMeta & {
@@ -81,6 +88,9 @@ export default function Search(p: SearchProps) {
   const [expansions, setExpansions] = useState<string[]>([]);
   const [error, setError] = useState<string>();
   const [articleLimit, setArticleLimit] = useState(INITIAL_ARTICLES);
+  const [metadataFilter, setMetadataFilter] = useState<{
+    query: string; metadata: PublisherMetadata;
+  }>();
   const box = useRef<HTMLInputElement>(null);
 
   useEffect(() => setText(p.state.q ?? ""), [p.state.q]);
@@ -101,6 +111,13 @@ export default function Search(p: SearchProps) {
   const actForm = p.state.actForm ?? "";
   const bindingStatus = p.state.bindingStatus ?? "";
   const language = p.state.language ?? "";
+  // Bind the component-memory filter to the exact submitted query that produced its server row.
+  // A new query drops it synchronously, without putting an opaque publisher URI in URL state.
+  const activeMetadata = metadataFilter?.query === q ? metadataFilter.metadata : undefined;
+  const metadataArguments = activeMetadata
+    ? publisherMetadataFilterArguments(activeMetadata)
+    : undefined;
+  const metadataIdentifier = metadataArguments?.publisher_metadata_identifier;
 
   useEffect(() => {
     if (!q.trim()) { setWorks([]); setArticles([]); setError(undefined); return; }
@@ -118,7 +135,8 @@ export default function Search(p: SearchProps) {
                           ...(actForm ? { act_form: actForm } : {}),
                           ...(bindingStatus ? { binding_status: bindingStatus } : {}),
                           ...(language ? { language } : {}),
-                          ...(sourceClass ? { source_class: sourceClass } : {}) })
+                          ...(sourceClass ? { source_class: sourceClass } : {}),
+                          ...(metadataArguments ?? {}) })
       .then((res) => {
         if (!live) return;
         const envelopes = Array.isArray(res) ? res : [res];
@@ -141,8 +159,12 @@ export default function Search(p: SearchProps) {
             language: h.language, domains: Array.isArray(h.domains) ? h.domains : [],
             consolidationStatus: h.consolidation_status,
             matchReasons: Array.isArray(h.match_reasons) ? h.match_reasons : [],
+            publisherMetadata: parsePublisherMetadata(h.matched_publisher_metadata),
           };
-          if (!byWork.has(work)) byWork.set(work, { work, title, ...meta });
+          const existing = byWork.get(work);
+          if (!existing) byWork.set(work, { work, title, ...meta });
+          else if (!existing.publisherMetadata && meta.publisherMetadata)
+            byWork.set(work, { ...existing, publisherMetadata: meta.publisherMetadata });
           if (h.anchor)
             arts.push({ work, title, anchor: h.anchor, num: h.provision_num,
                         snippet: h.snippet, ...meta, validFrom: String(h.valid_from) });
@@ -157,7 +179,8 @@ export default function Search(p: SearchProps) {
       .catch(() => { if (live) { setWorks([]); setArticles([]); setError("Search could not be reached. Try again."); } })
       .finally(() => { if (live) setBusy(false); });
     return () => { live = false; };
-  }, [q, asOf, retrieval, jurisdiction, hierarchy, domain, sourceClass, actForm, bindingStatus, language]);
+  }, [q, asOf, retrieval, jurisdiction, hierarchy, domain, sourceClass, actForm, bindingStatus,
+      language, metadataIdentifier]);
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -237,6 +260,15 @@ export default function Search(p: SearchProps) {
 
           <ScopeFilters values={p.state} onChange={p.onRefine} />
 
+          {activeMetadata ? (
+            <div className="metadata-filter" role="status">
+              <span>Filtering by {publisherMetadataCaption(activeMetadata.kind)}: <b>{activeMetadata.displayLabel}</b></span>
+              <button type="button" className="linky" onClick={() => setMetadataFilter(undefined)}>
+                clear publisher filter
+              </button>
+            </div>
+          ) : null}
+
           {expansions.length > 0 ? <p className="sub expansion">Spelling fallback tried: {expansions.join(", ")}</p> : null}
 
           {busy && works.length === 0 && articles.length === 0 ? <ResultsSkeleton /> : null}
@@ -264,6 +296,12 @@ export default function Search(p: SearchProps) {
                             ? <span className="warntext">official merged wording not published</span> : null}
                         </span>
                       </button>
+                      <PublisherMetadataContext
+                        metadata={w.publisherMetadata}
+                        activeIdentifier={metadataIdentifier}
+                        onFilter={(metadata) => setMetadataFilter(metadata
+                          ? { query: q, metadata }
+                          : undefined)} />
                       {passages.length > 0 ? (
                         <div className="res-passages">
                           <div className="res-passages-label">Matching passages</div>
@@ -276,6 +314,12 @@ export default function Search(p: SearchProps) {
                                   <span className="hitmeta"><Validity hit={a} /><HitContext hit={a} />
                                     {a.language ? <span>{a.language.toUpperCase()}</span> : null}</span>
                                 </button>
+                                <PublisherMetadataContext
+                                  metadata={a.publisherMetadata}
+                                  activeIdentifier={metadataIdentifier}
+                                  onFilter={(metadata) => setMetadataFilter(metadata
+                                    ? { query: q, metadata }
+                                    : undefined)} />
                               </li>
                             ))}
                           </ul>
@@ -317,14 +361,54 @@ function Validity({ hit }: { hit: HitMeta & { work: string } }) {
 }
 
 function HitContext({ hit }: { hit: HitMeta }) {
-  const reasons = (hit.matchReasons ?? []).map((reason) => reason === "semantic" ? "meaning match" :
-    reason === "exact_identifier" ? "exact identifier" : reason === "fuzzy" ? "spelling match" :
-    reason === "keyword" ? "word match" : label(reason));
+  const reasons = (hit.matchReasons ?? [])
+    .filter((reason) => !hit.publisherMetadata
+      || reason !== "work_metadata" && !reason.endsWith("_publisher_short_title"))
+    .map((reason) => reason === "semantic" ? "meaning match" :
+      reason === "exact_identifier" ? "exact identifier" : reason === "fuzzy" ? "spelling match" :
+      reason === "keyword" ? "word match" : label(reason));
   return <>
     {hit.hierarchy ? <span>{label(hit.hierarchy)}</span> : null}
     {(hit.domains ?? []).slice(0, 2).map((domain) => <span key={domain}>{label(domain)}</span>)}
     {reasons.map((reason) => <span key={reason}>{reason}</span>)}
   </>;
+}
+
+function PublisherMetadataContext({ metadata, activeIdentifier, onFilter }: {
+  metadata?: PublisherMetadata;
+  activeIdentifier?: string;
+  onFilter: (metadata?: PublisherMetadata) => void;
+}) {
+  if (!metadata) return null;
+  const filter = publisherMetadataFilterArguments(metadata);
+  const active = filter?.publisher_metadata_identifier === activeIdentifier;
+  const source = safeHttpsUrl(metadata.sourceUri);
+  const caption = publisherMetadataCaption(metadata.kind);
+  return (
+    <div className="publisher-metadata">
+      {filter ? (
+        <button type="button" className="publisher-metadata-chip" aria-pressed={active}
+                title={`Filter this search by the exact official ${caption}`}
+                onClick={() => onFilter(active ? undefined : metadata)}>
+          <span>{caption}</span>
+          <b>{metadata.displayLabel}</b>
+        </button>
+      ) : (
+        <span className="publisher-metadata-chip contextual">
+          <span>{caption}</span>
+          <b>{metadata.displayLabel}</b>
+        </span>
+      )}
+      {source ? (
+        <a className="publisher-metadata-source" href={source} target="_blank"
+           rel="noopener noreferrer">publisher source ↗</a>
+      ) : (
+        <span className="publisher-metadata-source" title={metadata.sourceUri}>
+          publisher source URI
+        </span>
+      )}
+    </div>
+  );
 }
 
 /** The index marks matched words with guillemets; they render as marks, not as punctuation. */

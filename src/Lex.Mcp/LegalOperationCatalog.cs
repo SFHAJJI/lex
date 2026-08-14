@@ -331,7 +331,8 @@ public static class LegalOperationCatalog
                 S("hierarchy", "optional normalized legal hierarchy"),
                 S("act_form", "optional legal act form"),
                 S("binding_status", "optional binding status"),
-                S("domain", "optional reviewed legal domain id"),
+                S("domain", "legacy domain id filter; current v4 indexes leave it empty; "
+                    + "use publisher_metadata_identifier for official classifications"),
                 S("publisher_metadata_identifier",
                     "optional exact official publisher-metadata URI returned by a search hit",
                     MaximumPublisherMetadataIdentifierLength, planner: false,
@@ -591,7 +592,7 @@ public static class LegalOperationCatalog
             S("hierarchy", "optional normalized legal hierarchy"),
             S("act_form", "optional legal act form"),
             S("binding_status", "optional binding status"),
-            S("domain", "optional reviewed legal domain"),
+            S("domain", "legacy domain filter; current v4 indexes leave it empty"),
             S("language", "optional language code", MaximumLanguageLength),
         ]);
         if (includeOrder)

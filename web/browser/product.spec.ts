@@ -371,3 +371,75 @@ test("workspace state follows browser back and forward navigation", async ({ pag
   await expect.poll(() => new URL(page.url()).searchParams.get("space")).toBe("time");
   await expect(page.getByRole("heading", { name: "What changed", exact: true })).toBeVisible();
 });
+
+test("official metadata chips apply only the exact server URI and HTTP provenance stays inert",
+  async ({ page }) => {
+    const identifier = "http://publications.europa.eu/resource/authority/eurovoc/1000";
+    const calls: Record<string, unknown>[] = [];
+    await page.route("**/mcp", async (route) => {
+      const request = route.request().postDataJSON() as {
+        id: number;
+        params?: { arguments?: Record<string, unknown> };
+      };
+      calls.push(request.params?.arguments ?? {});
+      const payload = [{
+        envelope: {
+          publisher: "eu-eurlex",
+          jurisdiction: "EU",
+          timeline_semantics: "official_consolidation_state",
+        },
+        retrieval_mode: "keyword",
+        hits: [{
+          lex_id: "eu-eurlex:32022r2554:2024-01-01",
+          title: "Digital Operational Resilience Act",
+          language: "en",
+          valid_from: "2024-01-01",
+          valid_to: null,
+          match_reasons: ["work_metadata"],
+          matched_publisher_metadata: {
+            kind: "eurovoc_domain",
+            identifier,
+            label: "Financial regulation",
+            language: "en",
+            source_uri: identifier,
+          },
+        }],
+      }];
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: request.id,
+          result: { content: [{ type: "text", text: JSON.stringify(payload) }] },
+        }),
+      });
+    });
+
+    await page.goto("/?space=search&q=capital", { waitUntil: "networkidle" });
+    const chip = page.getByRole("button", {
+      name: /Publisher EuroVoc domain.*Financial regulation/,
+    });
+    await expect(chip).toBeVisible();
+    await expect(page.locator(".publisher-metadata a")).toHaveCount(0);
+    await expect(page.locator(".publisher-metadata-source"))
+      .toHaveAttribute("title", identifier);
+
+    await chip.click();
+    await expect.poll(() => calls.some((call) =>
+      call.publisher_metadata_identifier === identifier)).toBe(true);
+    await expect(page.getByRole("status")).toContainText("Financial regulation");
+    expect(new URL(page.url()).searchParams.has("publisher_metadata_identifier")).toBe(false);
+    expect(await page.evaluate((opaque) =>
+      [...Object.values(localStorage), ...Object.values(sessionStorage)]
+        .some((value) => value.includes(opaque)), identifier)).toBe(false);
+
+    await page.getByRole("textbox", { name: "Search for a law, an identifier, or words in the text" })
+      .fill("new question");
+    await page.getByRole("button", { name: "Search", exact: true }).click();
+    await expect.poll(() => calls.some((call) => call.query === "new question"
+      && call.publisher_metadata_identifier === undefined)).toBe(true);
+    await expect(page.getByRole("status")).toHaveCount(0);
+    await expectNoHorizontalOverflow(page);
+    await expectNoSeriousAxeViolation(page);
+  });
