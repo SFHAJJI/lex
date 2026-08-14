@@ -42,6 +42,11 @@ public sealed class LegiluxLegacyIdentityTests
     [InlineData("https://example.test/eli/etat/leg/loi/1804/03/21/n1/consolide/20250420")]
     [InlineData("https://legilux.public.lu/eli/etat/leg/loi/1804/03/21/n1/consolide/20250419")]
     [InlineData("https://legilux.public.lu/eli/etat/leg/loi/1804/03/21/n1/consolide/20250420?changed=true")]
+    [InlineData("https://legilux.public.lu/eli/etat/leg/loi/1804/03/21/n1/20250420")]
+    [InlineData("https://legilux.public.lu/eli/etat/leg/loi/1804/03/21/n1/not-consolide/20250420/fr")]
+    [InlineData("https://legilux.public.lu/eli/etat/leg/loi/1804/03/21/n1/consolide/20250420/fr/extra")]
+    [InlineData("https://legilux.public.lu/eli/bogus/consolide/20250420")]
+    [InlineData("https://legilux.public.lu/eli/etat/leg//consolide/20250420")]
     public void Legacy_identity_recovery_refuses_non_official_or_wrong_date_sources(
         string source)
     {

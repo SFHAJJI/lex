@@ -66,17 +66,21 @@ public sealed class LegiluxAdapter : ISourceAdapter, ISourceBuildInventory,
             throw new InvalidDataException(
                 "A withdrawn Legilux legacy expression has an invalid language code.");
         var uri = RequireOfficialEli(sourceUri, "expression source_uri");
-        var path = uri.AbsolutePath.TrimEnd('/');
+        var path = uri.AbsolutePath;
         var languageSuffix = "/" + language;
-        if (path.EndsWith(languageSuffix, StringComparison.OrdinalIgnoreCase))
+        if (path.EndsWith(languageSuffix, StringComparison.Ordinal))
             path = path[..^languageSuffix.Length];
 
-        var finalSlash = path.LastIndexOf('/');
-        if (finalSlash < 0
-            || !string.Equals(path[(finalSlash + 1)..], expectedDate,
-                StringComparison.Ordinal))
+        const string prefix = "/eli/etat/leg/";
+        var suffix = "/consolide/" + expectedDate;
+        if (!path.StartsWith(prefix, StringComparison.Ordinal)
+            || !path.EndsWith(suffix, StringComparison.Ordinal)
+            || path.Length <= prefix.Length + suffix.Length
+            || !path[prefix.Length..^suffix.Length]
+                .Split('/').All(segment => segment.Length > 0))
             throw new InvalidDataException(
-                "A withdrawn Legilux legacy expression source does not carry its valid_from date.");
+                "A withdrawn Legilux legacy expression source is not its exact "
+                + "consolidation path for valid_from.");
 
         return "http://data.legilux.public.lu" + path;
     }
@@ -87,7 +91,7 @@ public sealed class LegiluxAdapter : ISourceAdapter, ISourceBuildInventory,
             || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps)
             || (uri.Host != "legilux.public.lu"
                 && uri.Host != "data.legilux.public.lu")
-            || !uri.AbsolutePath.StartsWith("/eli/", StringComparison.Ordinal)
+            || !uri.AbsolutePath.StartsWith("/eli/etat/leg/", StringComparison.Ordinal)
             || !string.IsNullOrEmpty(uri.Query)
             || !string.IsNullOrEmpty(uri.Fragment)
             || !string.IsNullOrEmpty(uri.UserInfo)

@@ -8,7 +8,7 @@ using Lex.Sources.Legilux;
 
 namespace Lex.Tests;
 
-public sealed class CorpusWriterTests : IDisposable
+public sealed partial class CorpusWriterTests : IDisposable
 {
     private const string CodeCommit = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     private readonly string _dir = Path.Combine(Path.GetTempPath(), $"lex-writer-{Guid.NewGuid():N}");
@@ -1211,7 +1211,8 @@ public sealed class CorpusWriterTests : IDisposable
     private sealed class LegiluxReplacementAdapter(
         bool includeWithdrawn,
         bool collideLegacyIdentity = false,
-        bool includeWork = true) :
+        bool includeWork = true,
+        Action? beforeFirstBodyFetch = null) :
         ISourceAdapter, ILegacyVersionIdentityResolver
     {
         public const string WorkIdentifier =
@@ -1265,6 +1266,7 @@ public sealed class CorpusWriterTests : IDisposable
         public Task<SourceBodyFetch> FetchBody(
             VersionRecord version, ExpressionRecord expression, CancellationToken ct)
         {
+            if (BodyFetchCount == 0) beforeFirstBodyFetch?.Invoke();
             BodyFetchCount++;
             FetchedVersionIdentifiers.Add(version.Id.Value);
             return Task.FromResult(SourceBodyFetch.Retrieved(

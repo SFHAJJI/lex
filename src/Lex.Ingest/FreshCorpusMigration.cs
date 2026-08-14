@@ -77,7 +77,7 @@ public static class FreshCorpusMigration
                     "Fresh corpus baseline reconciliation did not run.");
 
             ImportWithdrawnBaselineStates(
-                stage, withdrawnStates, now, cancellationToken);
+                root, stage, withdrawnStates, now, cancellationToken);
 
             var candidateManifest = ReadManifest(stage);
             var candidatePublisher = candidateManifest.Publisher.GetValueOrDefault("id")
@@ -110,10 +110,14 @@ public static class FreshCorpusMigration
         }
     }
 
-    private static ManifestDoc ReadManifest(string root) =>
-        JsonSerializer.Deserialize<ManifestDoc>(
-            File.ReadAllText(Path.Combine(root, "manifest.json")), CorpusJson.Options)
-        ?? throw new InvalidDataException($"Corpus manifest is empty: {root}");
+    private static ManifestDoc ReadManifest(string root)
+    {
+        var path = VerifiedCorpusPath.RequireExisting(
+            root, Path.Combine(root, "manifest.json"), "manifest");
+        return JsonSerializer.Deserialize<ManifestDoc>(
+            File.ReadAllText(path), CorpusJson.Options)
+            ?? throw new InvalidDataException($"Corpus manifest is empty: {root}");
+    }
 
     private sealed record BaselineState(
         string Key,
@@ -141,11 +145,17 @@ public static class FreshCorpusMigration
     {
         var usesPublisherVersionIdentifier = schema == ManifestDoc.CurrentSchema;
         var works = new List<BaselineWork>();
-        foreach (var workDirectory in Directory.EnumerateDirectories(
-                     Path.Combine(root, "works")).Order(StringComparer.Ordinal))
+        var worksRoot = VerifiedCorpusPath.RequireExisting(
+            root, Path.Combine(root, "works"), "works directory");
+        foreach (var unverifiedWorkDirectory in Directory.EnumerateDirectories(worksRoot)
+                     .Order(StringComparer.Ordinal))
         {
+            var workDirectory = VerifiedCorpusPath.RequireExisting(
+                root, unverifiedWorkDirectory, "work directory");
+            var workMetaPath = VerifiedCorpusPath.RequireExisting(
+                root, Path.Combine(workDirectory, "meta.json"), "work metadata");
             var work = JsonSerializer.Deserialize<WorkMeta>(File.ReadAllText(
-                           Path.Combine(workDirectory, "meta.json")), CorpusJson.Options)
+                           workMetaPath), CorpusJson.Options)
                        ?? throw new InvalidDataException(
                            $"Protected corpus work metadata is empty: {workDirectory}");
             if (!string.Equals(work.Publisher, publisher, StringComparison.Ordinal))
@@ -159,11 +169,17 @@ public static class FreshCorpusMigration
                     $"Protected corpus work slug '{Bound(work.Slug)}' does not match its "
                     + $"directory: {Path.GetRelativePath(root, workDirectory)}");
             var states = new List<BaselineState>();
-            foreach (var versionDirectory in Directory.EnumerateDirectories(
-                         Path.Combine(workDirectory, "versions")).Order(StringComparer.Ordinal))
+            var versionsRoot = VerifiedCorpusPath.RequireExisting(
+                root, Path.Combine(workDirectory, "versions"), "versions directory");
+            foreach (var unverifiedVersionDirectory in Directory.EnumerateDirectories(versionsRoot)
+                         .Order(StringComparer.Ordinal))
             {
+                var versionDirectory = VerifiedCorpusPath.RequireExisting(
+                    root, unverifiedVersionDirectory, "version directory");
+                var versionMetaPath = VerifiedCorpusPath.RequireExisting(
+                    root, Path.Combine(versionDirectory, "meta.json"), "version metadata");
                 var version = JsonSerializer.Deserialize<VersionMeta>(File.ReadAllText(
-                                  Path.Combine(versionDirectory, "meta.json")), CorpusJson.Options)
+                                  versionMetaPath), CorpusJson.Options)
                               ?? throw new InvalidDataException(
                                   $"Protected corpus version metadata is empty: {versionDirectory}");
                 if (!string.Equals(version.WorkIdentifier, work.WorkIdentifier,
@@ -400,6 +416,7 @@ public static class FreshCorpusMigration
         IReadOnlyList<VerifiedObservationFile> Files);
 
     private static void ImportWithdrawnBaselineStates(
+        string protectedRoot,
         string stage,
         IReadOnlyList<WithdrawnBaselineState> withdrawnStates,
         DateTimeOffset now,
@@ -479,7 +496,8 @@ public static class FreshCorpusMigration
                     + state.Description);
             meta.RecordSha256 = CorpusHashes.RecordSha256(meta);
 
-            var files = VerifyObservationFiles(state.VersionDirectory, state.Version);
+            var files = VerifyObservationFiles(
+                protectedRoot, state.VersionDirectory, state.Version);
             prepared.Add(new PreparedWithdrawnImport(destination, meta, files));
         }
 
@@ -502,8 +520,10 @@ public static class FreshCorpusMigration
     }
 
     private static IReadOnlyList<VerifiedObservationFile> VerifyObservationFiles(
-        string versionDirectory, VersionMeta version)
+        string protectedRoot, string versionDirectory, VersionMeta version)
     {
+        versionDirectory = VerifiedCorpusPath.RequireExisting(
+            protectedRoot, versionDirectory, "version directory");
         var files = new Dictionary<string, VerifiedObservationFile>(PathComparer);
         foreach (var observation in version.Expressions
                      .SelectMany(expression => expression.Observations))
@@ -512,7 +532,10 @@ public static class FreshCorpusMigration
                 || string.IsNullOrWhiteSpace(observation.Sha256))
                 throw new InvalidDataException(
                     "A withdrawn baseline observation has no file or sha256.");
-            var source = CheckedObservationPath(versionDirectory, observation.File);
+            var source = VerifiedCorpusPath.RequireExisting(
+                protectedRoot,
+                CheckedObservationPath(versionDirectory, observation.File),
+                "observation file");
             if (!File.Exists(source))
                 throw new InvalidDataException(
                     $"A withdrawn baseline observation is missing: {observation.File}");
