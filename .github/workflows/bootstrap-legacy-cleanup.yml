@@ -11,14 +11,20 @@ on:
         description: Independently reviewed SHA-256 of cleanup_plan.json
         required: true
         type: string
+      recovery_plan_sha256:
+        description: Reviewed A+2 recovery plan SHA-256; leave empty for ordinary cleanup
+        required: false
+        default: ''
+        type: string
       confirmation:
-        description: Enter purge-legacy-inactive-for-first-official
+        description: Enter the exact ordinary-cleanup or A+2-recovery confirmation
         required: true
         type: string
 
 permissions:
   actions: read
   contents: read
+  deployments: write
   id-token: write
 
 concurrency:
@@ -30,7 +36,7 @@ jobs:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: production
-    timeout-minutes: 15
+    timeout-minutes: 45
     env:
       AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
       AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
@@ -39,6 +45,7 @@ jobs:
       CONTAINER_APP: ca-lex-web
       INVENTORY_RUN_ID: ${{ inputs.inventory_run_id }}
       CLEANUP_PLAN_SHA256: ${{ inputs.cleanup_plan_sha256 }}
+      RECOVERY_PLAN_SHA256: ${{ inputs.recovery_plan_sha256 }}
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -49,11 +56,18 @@ jobs:
           CONFIRMATION: ${{ inputs.confirmation }}
         run: |
           set -eu
-          [ "$CONFIRMATION" = "purge-legacy-inactive-for-first-official" ] \
-            || { echo "::error::exact first-release cleanup confirmation is required"; exit 2; }
           [[ "$INVENTORY_RUN_ID" =~ ^[1-9][0-9]*$ ]] \
             && [[ "$CLEANUP_PLAN_SHA256" =~ ^[0-9a-f]{64}$ ]] \
             || { echo "::error::review coordinates are invalid"; exit 2; }
+          if [ -n "$RECOVERY_PLAN_SHA256" ]; then
+            [ "$CONFIRMATION" = "reconcile-reviewed-inactive-for-first-official" ] \
+              && [[ "$RECOVERY_PLAN_SHA256" =~ ^[0-9a-f]{64}$ ]] \
+              && [ "$GITHUB_RUN_ATTEMPT" = "1" ] \
+              || { echo "::error::exact one-attempt A+2 recovery authority is required"; exit 2; }
+          else
+            [ "$CONFIRMATION" = "purge-legacy-inactive-for-first-official" ] \
+              || { echo "::error::exact first-release cleanup confirmation is required"; exit 2; }
+          fi
 
       - uses: azure/login@f5d393ae46f8fde4be8b75f32e3fc50e654ad0ca # v3
         with:
@@ -61,7 +75,7 @@ jobs:
           tenant-id: ${{ env.AZURE_TENANT_ID }}
           subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Re-read exact inventory, then apply only maxInactiveRevisions=1
+      - name: Re-read exact inventory, then perform only the reviewed operation
         id: cleanup
         shell: bash
         run: |
@@ -79,6 +93,12 @@ jobs:
             --name lex-bootstrap-legacy-cleanup-plan --dir plan
           [ "$(sha256sum plan/cleanup_plan.json | cut -d' ' -f1)" = "$CLEANUP_PLAN_SHA256" ] \
             || { echo "::error::reviewed cleanup plan SHA-256 differs"; exit 2; }
+          if [ -n "$RECOVERY_PLAN_SHA256" ]; then
+            [ -f plan/recovery_plan.json ] \
+              && [ -f plan/bootstrap-legacy-recovery-inventory.json ] \
+              && [ "$(sha256sum plan/recovery_plan.json | cut -d' ' -f1)" = "$RECOVERY_PLAN_SHA256" ] \
+              || { echo "::error::reviewed A+2 recovery plan SHA-256 differs"; exit 2; }
+          fi
 
           fresh_inventory() {
             local prefix="$1" limit
@@ -100,6 +120,42 @@ jobs:
               > "$prefix-plan.json"
           }
 
+          capture_recovery_inventory() {
+            local prefix="$1"
+            shift
+            rm -f "$prefix-config.json" "$prefix-revisions.json" "$prefix-inventory.json"
+            "$@" containerapp show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+              --query '{activeRevisionsMode:properties.configuration.activeRevisionsMode,
+                maxInactiveRevisions:properties.configuration.maxInactiveRevisions,
+                ingressTraffic:properties.configuration.ingress.traffic}' -o json \
+              > "$prefix-config.json" || return 1
+            "$@" containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+              --all -o json \
+              | jq '[.[] | {name:.name,active:.properties.active,
+                  trafficWeight:(.properties.trafficWeight // 0),
+                  createdTime:.properties.createdTime,
+                  image:.properties.template.containers[0].image,
+                  template:.properties.template}]' > "$prefix-revisions.json" || return 1
+            jq -n --slurpfile config "$prefix-config.json" \
+              --slurpfile revisions "$prefix-revisions.json" \
+              '{schema:"lex-bootstrap-legacy-recovery-inventory/1",
+                active_revisions_mode:$config[0].activeRevisionsMode,
+                max_inactive_revisions:$config[0].maxInactiveRevisions,
+                ingress_traffic:(($config[0].ingressTraffic // []) | map({
+                  revisionName:.revisionName,weight:.weight,
+                  latestRevision:(.latestRevision // false),label:(.label // null)})),
+                revisions:$revisions[0]}' > "$prefix-inventory.json" || return 1
+          }
+
+          fresh_recovery_inventory() {
+            az_reauth || return 1
+            capture_recovery_inventory "$1" az_retry az
+          }
+
+          observe_recovery_inventory() {
+            capture_recovery_inventory "$1" az 2> "$1-read-error.txt"
+          }
+
           is_reviewed_post_subset() {
             local candidate_plan="$1"
             jq -e --slurpfile after "$candidate_plan" '
@@ -110,6 +166,200 @@ jobs:
                 and $after[0].mutation.max_inactive_revisions == 1' \
               plan/cleanup_plan.json >/dev/null
           }
+
+          write_receipt() {
+            local post_plan="$1" survivor="$2" post_sha authority
+            post_sha=$(sha256sum "$post_plan" | cut -d' ' -f1)
+            authority=$(jq -c .legacy_authority "$post_plan")
+            jq -n --arg schema lex-bootstrap-legacy-cleanup-receipt/1 \
+              --arg commit "$GITHUB_SHA" --arg plan "$CLEANUP_PLAN_SHA256" \
+              --arg recovery "$RECOVERY_PLAN_SHA256" --arg post "$post_sha" \
+              --arg survivor "$survivor" --argjson authority "$authority" \
+              '{schema:$schema,code_commit:$commit,cleanup_plan_sha256:$plan,
+                recovery_plan_sha256:($recovery | if length == 0 then null else . end),
+                post_plan_sha256:$post,remaining_inactive_revision:$survivor,
+                max_inactive_revisions:1,legacy_authority:$authority}' \
+              > bootstrap-legacy-cleanup-receipt.json
+          }
+
+          if [ -n "$RECOVERY_PLAN_SHA256" ]; then
+            fresh_recovery_inventory immediate-recovery
+            python3 scripts/deploy/bootstrap_legacy_recovery_plan.py \
+              immediate-recovery-inventory.json > immediate-recovery-plan.json
+            cmp --silent plan/recovery_plan.json immediate-recovery-plan.json \
+              || { echo "::error::live A+2 recovery plan differs from review"; exit 2; }
+            python3 scripts/deploy/bootstrap_legacy_recovery_plan.py --classify \
+              plan/recovery_plan.json immediate-recovery-inventory.json \
+              > entry-recovery-state.json
+            jq -e '.state == "unchanged"' entry-recovery-state.json >/dev/null \
+              || { echo "::error::A+2 recovery did not start from exact reviewed state"; exit 2; }
+            entry_state=$(jq -r .state entry-recovery-state.json)
+            [ "$entry_state" = "unchanged" ] \
+              || { echo "::error::A+2 recovery entry state is not mutation-safe"; exit 2; }
+
+            target=$(jq -er '.operation.revision' plan/recovery_plan.json)
+            app_id=$(az_retry az containerapp show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+              --query id -o tsv)
+            token=$(az_retry az account get-access-token \
+              --resource https://management.azure.com/ --query accessToken -o tsv)
+            client_request_id=$(python3 -c 'import uuid; print(uuid.uuid4())')
+            : > recovery-response-headers.txt
+            : > recovery-response-body.json
+            attempt_environment=bootstrap-legacy-recovery-authority
+            prior_attempts=$(gh api --paginate \
+              "repos/$GITHUB_REPOSITORY/deployments?environment=$attempt_environment&per_page=100" \
+              | jq -s --arg plan "$RECOVERY_PLAN_SHA256" '
+                  [ .[][] | select((.payload | type) == "object"
+                    and .payload.schema == "lex-bootstrap-legacy-recovery-attempt/1"
+                    and .payload.recovery_plan_sha256 == $plan) ] | length')
+            [ "$prior_attempts" = "0" ] \
+              || { echo "::error::this exact reviewed A+2 POST authority was already consumed"; exit 2; }
+            attempt_payload=$(jq -n --arg schema lex-bootstrap-legacy-recovery-attempt/1 \
+              --arg plan "$RECOVERY_PLAN_SHA256" --arg target "$target" \
+              --arg run_id "$GITHUB_RUN_ID" --arg client_request_id "$client_request_id" \
+              '{schema:$schema,recovery_plan_sha256:$plan,target_revision:$target,
+                authorizing_run_id:$run_id,x_ms_client_request_id:$client_request_id}')
+            attempt_deployment=$(jq -n --arg ref "$GITHUB_SHA" \
+              --arg environment "$attempt_environment" --argjson payload "$attempt_payload" \
+              '{ref:$ref,environment:$environment,auto_merge:false,required_contexts:[],
+                payload:$payload,description:"Single-use reviewed A+2 recovery authority",
+                production_environment:false,transient_environment:true}' \
+              | gh api --method POST "repos/$GITHUB_REPOSITORY/deployments" --input -)
+            attempt_deployment_id=$(printf '%s' "$attempt_deployment" | jq -er .id)
+            set +e
+            http_status=$(printf 'header = "Authorization: Bearer %s"\n' "$token" \
+              | curl --silent --show-error --request POST --config - \
+                --connect-timeout 10 --max-time 60 \
+                --header "x-ms-client-request-id: $client_request_id" \
+                --header 'Content-Length: 0' \
+                --dump-header recovery-response-headers.txt \
+                --output recovery-response-body.json \
+                --write-out '%{http_code}' \
+                "https://management.azure.com${app_id}/revisions/$target/deactivate?api-version=2025-01-01")
+            curl_exit=$?
+            set -e
+            unset token
+            response_request_id=$(awk -F': *' '
+              tolower($1) == "x-ms-request-id" {gsub("\\r", "", $2); value=$2}
+              END {print value}' recovery-response-headers.txt)
+            response_correlation_id=$(awk -F': *' '
+              tolower($1) == "x-ms-correlation-request-id" {gsub("\\r", "", $2); value=$2}
+              END {print value}' recovery-response-headers.txt)
+            response_body_sha=$(sha256sum recovery-response-body.json | cut -d' ' -f1)
+            jq -n --arg schema lex-bootstrap-legacy-recovery-evidence/1 \
+              --arg commit "$GITHUB_SHA" --arg cleanup_plan "$CLEANUP_PLAN_SHA256" \
+              --arg recovery_plan "$RECOVERY_PLAN_SHA256" --arg target "$target" \
+              --arg attempt_deployment_id "$attempt_deployment_id" \
+              --arg attempted_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+              --arg client_request_id "$client_request_id" \
+              --arg response_request_id "$response_request_id" \
+              --arg response_correlation_id "$response_correlation_id" \
+              --arg http_status "$http_status" --argjson curl_exit "$curl_exit" \
+              --arg response_body_sha256 "$response_body_sha" \
+              '{schema:$schema,code_commit:$commit,cleanup_plan_sha256:$cleanup_plan,
+                recovery_plan_sha256:$recovery_plan,target_revision:$target,
+                attempt_deployment_id:$attempt_deployment_id,
+                attempted_at:$attempted_at,request:{method:"POST",retry:false,
+                  x_ms_client_request_id:$client_request_id},
+                response:{curl_exit_code:$curl_exit,http_status:$http_status,
+                  x_ms_request_id:$response_request_id,
+                  x_ms_correlation_request_id:$response_correlation_id,
+                  body_sha256:$response_body_sha256}}' \
+              > bootstrap-legacy-recovery-evidence.json
+
+            outcome=inconclusive
+            survivor=""
+            last_observation_error=""
+            consecutive_converged=0
+            for attempt in $(seq 1 60); do
+              rm -f observed-recovery-state.json observed-recovery-error.txt
+              if ! observe_recovery_inventory observed-recovery; then
+                consecutive_converged=0
+                last_observation_error=$(cat observed-recovery-read-error.txt 2>/dev/null || true)
+              elif ! python3 scripts/deploy/bootstrap_legacy_recovery_plan.py --classify \
+                  plan/recovery_plan.json observed-recovery-inventory.json \
+                  > observed-recovery-state.json 2> observed-recovery-error.txt; then
+                outcome=refused
+                last_observation_error=$(cat observed-recovery-error.txt 2>/dev/null || true)
+                break
+              elif jq -e '.state == "converged"' observed-recovery-state.json >/dev/null; then
+                observed_survivor=$(jq -er .remaining_inactive_revision \
+                  observed-recovery-state.json)
+                if [ "$observed_survivor" = "$survivor" ]; then
+                  consecutive_converged=$((consecutive_converged + 1))
+                else
+                  survivor="$observed_survivor"
+                  consecutive_converged=1
+                fi
+                last_observation_error=""
+                if [ "$consecutive_converged" = "3" ]; then
+                  outcome=converged
+                  break
+                fi
+              else
+                jq -e '.state == "unchanged"' observed-recovery-state.json >/dev/null \
+                  || { echo "::error::recovery classifier returned an unknown state"; exit 2; }
+                survivor=""
+                consecutive_converged=0
+                last_observation_error=""
+              fi
+              [ "$attempt" = "60" ] || sleep 10
+            done
+
+            if [ "$outcome" = "converged" ]; then
+              sleep 10
+              attempt=$((attempt + 1))
+              if ! observe_recovery_inventory final-recovery; then
+                outcome=inconclusive
+                survivor=""
+                last_observation_error=$(cat final-recovery-read-error.txt 2>/dev/null || true)
+              elif ! python3 scripts/deploy/bootstrap_legacy_recovery_plan.py --classify \
+                  plan/recovery_plan.json final-recovery-inventory.json \
+                  > final-recovery-state.json 2> final-recovery-error.txt; then
+                outcome=refused
+                survivor=""
+                last_observation_error=$(cat final-recovery-error.txt 2>/dev/null || true)
+              elif ! jq -e --arg survivor "$survivor" '
+                  .state == "converged" and .remaining_inactive_revision == $survivor' \
+                  final-recovery-state.json >/dev/null; then
+                outcome=inconclusive
+                survivor=""
+              else
+                cp final-recovery-inventory.json observed-recovery-inventory.json
+              fi
+            fi
+
+            if [ "$outcome" = "converged" ]; then
+              jq '{schema:"lex-bootstrap-legacy-inventory/1",
+                    max_inactive_revisions:.max_inactive_revisions,
+                    revisions:.revisions}' observed-recovery-inventory.json \
+                > recovery-post-inventory.json
+              python3 scripts/deploy/bootstrap_legacy_plan.py recovery-post-inventory.json \
+                > recovery-post-plan.json
+              is_reviewed_post_subset recovery-post-plan.json \
+                || { echo "::error::converged recovery is not an exact reviewed subset"; exit 2; }
+              [ "$(jq -er '.revisions[] | select(.active == false) | .revision' \
+                    recovery-post-plan.json)" = "$survivor" ] \
+                || { echo "::error::recovery survivor identity differs"; exit 2; }
+              write_receipt recovery-post-plan.json "$survivor"
+            fi
+            error_sha=""
+            if [ -n "$last_observation_error" ]; then
+              error_sha=$(printf '%s' "$last_observation_error" | sha256sum | cut -d' ' -f1)
+            fi
+            jq --arg outcome "$outcome" --arg survivor "$survivor" \
+              --argjson attempts "$attempt" --arg observation_error_sha256 "$error_sha" \
+              '. + {outcome:$outcome,observation_attempts:$attempts,
+                remaining_inactive_revision:($survivor | if length == 0 then null else . end),
+                last_observation_error_sha256:
+                  ($observation_error_sha256 | if length == 0 then null else . end)}' \
+              bootstrap-legacy-recovery-evidence.json \
+              > bootstrap-legacy-recovery-evidence.tmp
+            mv bootstrap-legacy-recovery-evidence.tmp \
+              bootstrap-legacy-recovery-evidence.json
+            echo "outcome=$outcome" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
 
           fresh_inventory immediate
           cleanup_pending=true
@@ -147,23 +397,24 @@ jobs:
           survivor=$(jq -er \
             '.revisions[] | select(.active == false and .traffic_weight == 0) | .revision' \
             post-plan.json)
-          post_sha=$(sha256sum post-plan.json | cut -d' ' -f1)
-          authority=$(jq -c .legacy_authority post-plan.json)
-          jq -n --arg schema lex-bootstrap-legacy-cleanup-receipt/1 \
-            --arg commit "$GITHUB_SHA" --arg plan "$CLEANUP_PLAN_SHA256" \
-            --arg post "$post_sha" --arg survivor "$survivor" \
-            --argjson authority "$authority" \
-            '{schema:$schema,code_commit:$commit,cleanup_plan_sha256:$plan,
-              post_plan_sha256:$post,remaining_inactive_revision:$survivor,
-              max_inactive_revisions:1,legacy_authority:$authority}' \
-            > bootstrap-legacy-cleanup-receipt.json
+          write_receipt post-plan.json "$survivor"
+          echo "outcome=converged" >> "$GITHUB_OUTPUT"
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: steps.cleanup.outputs.outcome == 'converged'
         with:
           name: lex-bootstrap-legacy-cleanup-receipt
           path: bootstrap-legacy-cleanup-receipt.json
           if-no-files-found: error
           retention-days: 7
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: inputs.recovery_plan_sha256 != '' && always()
+        with:
+          name: lex-bootstrap-legacy-recovery-evidence
+          path: bootstrap-legacy-recovery-evidence.json
+          if-no-files-found: error
+          retention-days: 90
 
       - name: Cleanup summary
         shell: bash
@@ -172,8 +423,19 @@ jobs:
             echo "## One-time first-release legacy cleanup"
             echo
             echo "- reviewed plan: \`$CLEANUP_PLAN_SHA256\`"
+            if [ -n "$RECOVERY_PLAN_SHA256" ]; then
+              echo "- reviewed A+2 recovery plan: \`$RECOVERY_PLAN_SHA256\`"
+              echo "- A+2 recovery outcome: \`${{ steps.cleanup.outputs.outcome }}\`"
+            fi
             echo "- maxInactiveRevisions: \`1\`"
             echo "- traffic or activation mutation: \`false\`"
             echo "- current A remained active at 100%: \`true\`"
             echo "- one inactive record remains and will be replaced by exact R: \`true\`"
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Refuse an inconclusive or unreviewed A+2 recovery outcome
+        if: inputs.recovery_plan_sha256 != '' && steps.cleanup.outputs.outcome != 'converged'
+        shell: bash
+        run: |
+          echo "::error::the one reviewed POST did not prove exact A plus one reviewed survivor"
+          exit 1

@@ -88,15 +88,21 @@ be newer than the old production revision:
 
 - `.github/workflows/bootstrap-legacy-inventory.yml` first records every live revision and full
   template with `revision list --all`. The strict planner requires exactly one active A at 100
-  percent, every other revision inactive at zero traffic, explicit UTC creation times, immutable
-  images and strict JSON types. It performs no mutation.
+  percent, every other revision inactive at zero traffic, explicit UTC creation times and strict
+  JSON types. A is digest-pinned; historical inactive Lex ACR image references and their complete
+  templates are exact-fingerprinted and are never activated. The inventory performs no mutation.
 - `.github/workflows/bootstrap-legacy-cleanup.yml` accepts only the successful exact-commit dry-run,
   independently reviewed plan SHA-256 and the literal one-time confirmation. It re-reads and
   compares the complete plan immediately before its only Azure mutation: setting
-  `maxInactiveRevisions=1`. It never changes traffic or activation. Read-back proves A's exact
-  identity/template/image is unchanged at 100 percent and that one reviewed inactive record
-  remains. Cancellation after the patch is retry-safe because the authority step precedes the
-  idempotent max=1 write.
+  `maxInactiveRevisions=1`. It never changes traffic or activation. Azure accepted that
+  configuration before its inactive-revision list converged, so the workflow refuses a receipt
+  until read-back proves exact A at 100 percent plus one reviewed inactive record.
+- If an exact reviewed A+2 state remains after that configuration write, the same inventory may
+  additionally authorize one direct, non-retried deactivation POST for the exact older inactive
+  record. Microsoft documents deactivation, but not already-inactive retention reconciliation;
+  this is therefore a bounded observed recovery, not a claimed platform guarantee. Three
+  consecutive exact A+one-reviewed-survivor reads issue the ordinary cleanup receipt. An unchanged
+  A+2 state is recorded as inconclusive and fails without another mutation.
 - The bootstrap deploy requires that cleanup receipt. It builds immutable image I, creates active
   zero-traffic fallback R first from the intended canonical template, then deactivates R under
   max=1. This replaces the last legacy inactive record. It creates active zero-traffic C second.
