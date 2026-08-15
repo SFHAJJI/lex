@@ -81,6 +81,23 @@ echo "$SETS" | while IFS=: read -r repo collection asset release_tag; do
        "$release_base/$manifest"; then
     fetch_optional "$OUT/$signature" "$release_base/$signature" \
       || { echo "ERROR: $repo signed artifact manifest has no signature" >&2; exit 1; }
+    manifest_ticket=$(jq -er '.sources.queue_ticket_id | select(type == "string")' \
+      "$OUT/$manifest") \
+      || { echo "ERROR: $repo signed manifest has no queue ticket" >&2; exit 1; }
+    if [ "$manifest_ticket" != "$ticket" ]; then
+      echo "ERROR: $repo signed queue ticket does not match the exact release tag" >&2
+      exit 1
+    fi
+    manifest_collection=$(jq -er '.sources.collection | select(type == "string")' \
+      "$OUT/$manifest")
+    manifest_corpus=$(jq -er '.sources.corpus_commit | select(type == "string")' \
+      "$OUT/$manifest")
+    if [ "$manifest_collection" != "$collection" ] \
+      || ! printf '%s' "$manifest_corpus" | grep -Eq '^[0-9a-f]{40}$'; then
+      echo "ERROR: $repo signed manifest has another collection or invalid corpus commit" >&2
+      exit 1
+    fi
+    manifest_sha256=$(sha256sum "$OUT/$manifest" | cut -d' ' -f1)
     jq -r '.files[].path' "$OUT/$manifest" | while IFS= read -r companion; do
       [ "$companion" = "$asset" ] && continue
       case "$companion" in
@@ -110,6 +127,25 @@ echo "$SETS" | while IFS=: read -r repo collection asset release_tag; do
     if fetch_optional "$OUT/$benchmark" "$release_base/$benchmark" \
       && fetch_optional "$OUT/$benchmark_manifest" "$release_base/$benchmark_manifest" \
       && fetch_optional "$OUT/$benchmark_signature" "$release_base/$benchmark_signature"; then
+      benchmark_ticket=$(jq -er '.sources.queue_ticket_id | select(type == "string")' \
+        "$OUT/$benchmark_manifest") \
+        || { echo "ERROR: $repo signed benchmark manifest has no queue ticket" >&2; exit 1; }
+      if [ "$benchmark_ticket" != "$ticket" ]; then
+        echo "ERROR: $repo signed benchmark queue ticket does not match the exact release tag" >&2
+        exit 1
+      fi
+      benchmark_collection=$(jq -er '.sources.collection | select(type == "string")' \
+        "$OUT/$benchmark_manifest")
+      benchmark_corpus=$(jq -er '.sources.corpus_commit | select(type == "string")' \
+        "$OUT/$benchmark_manifest")
+      benchmark_index=$(jq -er '.sources.index_manifest_sha256 | select(type == "string")' \
+        "$OUT/$benchmark_manifest")
+      if [ "$benchmark_collection" != "$collection" ] \
+        || [ "$benchmark_corpus" != "$manifest_corpus" ] \
+        || [ "$benchmark_index" != "$manifest_sha256" ]; then
+        echo "ERROR: $repo signed benchmark manifest does not bind the exact index release" >&2
+        exit 1
+      fi
       echo "  fetched signed public retrieval benchmark: $benchmark"
     else
       rm -f "$OUT/$benchmark" "$OUT/$benchmark_manifest" "$OUT/$benchmark_signature"

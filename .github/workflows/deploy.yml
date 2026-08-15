@@ -33,6 +33,7 @@ on:
         type: string
 permissions:
   actions: read
+  attestations: read
   contents: read
   checks: read
   id-token: write
@@ -127,6 +128,7 @@ jobs:
         id: image
         shell: bash
         env:
+          GH_TOKEN: ${{ github.token }}
           LU_RELEASE_TAG: ${{ inputs.lu_release_tag }}
           EU_RELEASE_TAG: ${{ inputs.eu_release_tag }}
         run: |
@@ -146,13 +148,40 @@ jobs:
             rest="${item#*:}"
             collection="${rest%%:*}"
             release_tag="${rest#*:}"
+            ticket="${release_tag#index-$collection-}"
+            repository="SFHAJJI/$repo"
             release_base="https://github.com/SFHAJJI/$repo/releases/download/$release_tag"
+            immutable_releases=$(gh api -H 'X-GitHub-Api-Version: 2026-03-10' \
+              "repos/$repository/immutable-releases")
+            printf '%s' "$immutable_releases" \
+              | python3 scripts/deploy/release_artifact_gate.py immutability \
+              || { echo "::error::$repository does not enforce immutable releases"; exit 1; }
+            gh release verify "$release_tag" --repo "$repository" >/dev/null \
+              || { echo "::error::$repository release attestation is invalid"; exit 1; }
             manifest="index-$collection.manifest.json"
             curl --fail --silent --show-error --location \
               --connect-timeout 5 --max-time 60 \
               -o "$release_dir/$manifest" \
               "$release_base/$manifest" \
               || { echo "::error::$repo release is missing $manifest"; exit 1; }
+            gh release verify-asset "$release_tag" "$release_dir/$manifest" --repo "$repository" \
+              >/dev/null \
+              || { echo "::error::$repo index manifest is not attested by the exact release"; exit 1; }
+            corpus_commit=$(python3 scripts/deploy/release_artifact_gate.py manifest \
+              "$collection" "$ticket" < "$release_dir/$manifest") \
+              || { echo "::error::$repo index manifest does not bind the exact release ticket"; exit 1; }
+            index_manifest_sha256=$(sha256sum "$release_dir/$manifest" | cut -d' ' -f1)
+            release=$(gh api -H 'X-GitHub-Api-Version: 2026-03-10' \
+              "repos/$repository/releases/tags/$release_tag")
+            printf '%s' "$release" \
+              | python3 scripts/deploy/release_artifact_gate.py release \
+                  "$release_tag" "$corpus_commit" \
+              || { echo "::error::$repo release identity is not final and immutable"; exit 1; }
+            tag_ref=$(gh api -H 'X-GitHub-Api-Version: 2026-03-10' \
+              "repos/$repository/git/ref/tags/$release_tag")
+            printf '%s' "$tag_ref" \
+              | python3 scripts/deploy/release_artifact_gate.py tag-ref "$corpus_commit" \
+              || { echo "::error::$repo release tag does not target the signed corpus"; exit 1; }
             if jq -e --arg vector "index-$collection.vectors" \
               'any(.files[]?; .path == $vector)' "$release_dir/$manifest" >/dev/null; then
               benchmark_manifest="retrieval-benchmark-$collection.manifest.json"
@@ -161,6 +190,14 @@ jobs:
                 -o "$release_dir/$benchmark_manifest" \
                 "$release_base/$benchmark_manifest" \
                 || { echo "::error::$repo vector release is missing $benchmark_manifest"; exit 1; }
+              gh release verify-asset "$release_tag" "$release_dir/$benchmark_manifest" \
+                --repo "$repository" >/dev/null \
+                || { echo "::error::$repo benchmark manifest is not attested by the exact release"; exit 1; }
+              python3 scripts/deploy/release_artifact_gate.py manifest \
+                "$collection" "$ticket" "$corpus_commit" "$index_manifest_sha256" \
+                < "$release_dir/$benchmark_manifest" \
+                >/dev/null \
+                || { echo "::error::$repo benchmark manifest does not bind the exact release"; exit 1; }
             fi
           done
           index_manifest_count=$(find "$release_dir" -name 'index-*.manifest.json' | wc -l)

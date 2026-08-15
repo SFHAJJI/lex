@@ -428,6 +428,9 @@ public sealed class RetrievalBenchmarkTests
         Assert.DoesNotContain("releases/latest/download", fetch);
         Assert.Contains("has_vectors", fetch);
         Assert.Contains("vector release is missing signed retrieval benchmark evidence", fetch);
+        Assert.Contains(".sources.queue_ticket_id", fetch);
+        Assert.Contains(".sources.index_manifest_sha256", fetch);
+        Assert.Contains("signed queue ticket does not match the exact release tag", fetch);
         Assert.Contains("ARG LEX_RELEASE_TAG_LU_LEGILUX", dockerfile);
         Assert.Contains("ARG LEX_RELEASE_TAG_EU_EURLEX", dockerfile);
         Assert.Contains("\"lex-corpus-lu-legilux:lu-legilux:$lu_release_tag\"", workflow);

@@ -47,6 +47,14 @@ public sealed class ReleaseWorkflowTests
         Assert.Contains("--build-arg \"LEX_RELEASE_TAG_LU_LEGILUX=$lu_release_tag\"", workflow);
         Assert.Contains("--build-arg \"LEX_RELEASE_TAG_EU_EURLEX=$eu_release_tag\"", workflow);
         Assert.DoesNotContain("releases/latest/download/$manifest", workflow);
+        Assert.Contains("attestations: read", workflow);
+        Assert.Contains("X-GitHub-Api-Version: 2026-03-10", workflow);
+        Assert.Contains("repos/$repository/immutable-releases", workflow);
+        Assert.Contains("gh release verify \"$release_tag\" --repo \"$repository\"", workflow);
+        Assert.Contains("gh release verify-asset \"$release_tag\" \"$release_dir/$manifest\" --repo \"$repository\"", workflow);
+        Assert.Contains("scripts/deploy/release_artifact_gate.py manifest", workflow);
+        Assert.Contains("scripts/deploy/release_artifact_gate.py release", workflow);
+        Assert.Contains("scripts/deploy/release_artifact_gate.py tag-ref", workflow);
     }
 
     [Fact]
