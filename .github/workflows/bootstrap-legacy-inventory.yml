@@ -39,8 +39,12 @@ jobs:
           . scripts/deploy/az-retry.sh
           . scripts/deploy/az-reauth.sh
           az_reauth
-          limit=$(az_retry az containerapp show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
-            --query properties.configuration.maxInactiveRevisions -o tsv)
+          az_retry az containerapp show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+            --query '{activeRevisionsMode:properties.configuration.activeRevisionsMode,
+              maxInactiveRevisions:properties.configuration.maxInactiveRevisions,
+              ingressTraffic:properties.configuration.ingress.traffic}' -o json \
+            > app-config.json
+          limit=$(jq -er '.maxInactiveRevisions | numbers' app-config.json)
           az_retry az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
             --all -o json \
             | jq '[.[] | {name:.name,active:.properties.active,
@@ -55,11 +59,33 @@ jobs:
           python3 scripts/deploy/bootstrap_legacy_plan.py \
             bootstrap-legacy-inventory.json > cleanup_plan.json
           plan_sha=$(sha256sum cleanup_plan.json | cut -d' ' -f1)
+          recovery_plan_sha=""
+          revision_count=$(jq 'length' revisions.json)
+          if [ "$limit" = "1" ] && [ "$revision_count" = "3" ]; then
+            jq -n --slurpfile config app-config.json --slurpfile revisions revisions.json \
+              '{schema:"lex-bootstrap-legacy-recovery-inventory/1",
+                active_revisions_mode:$config[0].activeRevisionsMode,
+                max_inactive_revisions:$config[0].maxInactiveRevisions,
+                ingress_traffic:(($config[0].ingressTraffic // []) | map({
+                  revisionName:.revisionName,weight:.weight,
+                  latestRevision:(.latestRevision // false),label:(.label // null)})),
+                revisions:$revisions[0]}' \
+              > bootstrap-legacy-recovery-inventory.json
+            python3 scripts/deploy/bootstrap_legacy_recovery_plan.py \
+              bootstrap-legacy-recovery-inventory.json > recovery_plan.json
+            recovery_plan_sha=$(sha256sum recovery_plan.json | cut -d' ' -f1)
+          fi
           echo "plan_sha256=$plan_sha" >> "$GITHUB_OUTPUT"
+          echo "recovery_plan_sha256=$recovery_plan_sha" >> "$GITHUB_OUTPUT"
           {
             echo "## One-time first-release legacy cleanup dry run"
             echo
             echo "- cleanup plan SHA-256: \`$plan_sha\`"
+            if [ -n "$recovery_plan_sha" ]; then
+              echo "- A+2 recovery plan SHA-256: \`$recovery_plan_sha\`"
+            else
+              echo "- A+2 recovery plan: \`not applicable\`"
+            fi
             echo "- mutations performed: \`false\`"
             echo
             echo '```json'
@@ -73,10 +99,12 @@ jobs:
           path: |
             bootstrap-legacy-inventory.json
             cleanup_plan.json
+            bootstrap-legacy-recovery-inventory.json
+            recovery_plan.json
           if-no-files-found: error
           retention-days: 7
 
       - name: Record review coordinates
         shell: bash
         run: |
-          echo "Review run \`$GITHUB_RUN_ID\` and plan \`${{ steps.plan.outputs.plan_sha256 }}\` before the exact-confirmation cleanup." >> "$GITHUB_STEP_SUMMARY"
+          echo "Review run \`$GITHUB_RUN_ID\`, cleanup plan \`${{ steps.plan.outputs.plan_sha256 }}\`, and any A+2 recovery plan \`${{ steps.plan.outputs.recovery_plan_sha256 }}\` before exact-confirmation cleanup." >> "$GITHUB_STEP_SUMMARY"
