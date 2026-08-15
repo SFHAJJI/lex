@@ -217,14 +217,18 @@ public sealed class CorpusWriter(
                         revised.Add($"raw.{key}");
                     }
                     var publisherMetadata = CanonicalPublisherMetadata(v.PublisherMetadata);
-                    if (!(meta.PublisherMetadata ?? []).SequenceEqual(publisherMetadata))
+                    if ((meta.PublisherMetadata is null) != (publisherMetadata.Count == 0)
+                        || meta.PublisherMetadata is not null
+                        && !meta.PublisherMetadata.SequenceEqual(publisherMetadata))
                     {
                         meta.PublisherMetadata = publisherMetadata.Count == 0 ? null : publisherMetadata;
                         revised.Add("publisher_metadata");
                     }
                     var documentRoles = (v.DocumentRoles ?? []).Distinct(StringComparer.Ordinal)
                         .Order(StringComparer.Ordinal).ToList();
-                    if (!(meta.DocumentRoles ?? []).SequenceEqual(documentRoles, StringComparer.Ordinal))
+                    if ((meta.DocumentRoles is null) != (documentRoles.Count == 0)
+                        || meta.DocumentRoles is not null
+                        && !meta.DocumentRoles.SequenceEqual(documentRoles, StringComparer.Ordinal))
                     {
                         meta.DocumentRoles = documentRoles.Count == 0 ? null : documentRoles;
                         revised.Add("document_roles");
@@ -247,8 +251,12 @@ public sealed class CorpusWriter(
                         if (current.SourceUri != expression.SourceUri)
                         {
                             current.SourceUri = expression.SourceUri;
-                            current.Text.Url = expression.SourceUri;
                             revised.Add($"expressions.{expression.Language}.source_uri");
+                        }
+                        if (current.Text.Url != expression.SourceUri)
+                        {
+                            current.Text.Url = expression.SourceUri;
+                            revised.Add($"expressions.{expression.Language}.text.url");
                         }
                     }
                     if (revised.Count > 0)
@@ -392,13 +400,9 @@ public sealed class CorpusWriter(
                                 hasAlt = true;
                                 bodyAdded = true;
                             }
-                            else if (bodyFailures.ContainsKey(exprRec.Language)
-                                     && altResult.Status != SourceBodyStatus.PublisherMetadataOnly)
-                            {
-                                bodyFailures[exprRec.Language] = new SourceBodyFetch(
-                                    altResult.Status, Detail: altResult.Detail, Attempts: altResult.Attempts);
-                                exprMeta.Text.Reason = bodyFailures[exprRec.Language].IssueCode;
-                            }
+                            // The alternate manifestation is optional. When both channels fail,
+                            // retain the primary-body outcome: replacing it with a Formex 404 or
+                            // parser error hides the actual reason searchable text is absent.
                         }
                         // an alt manifestation IS observed text: versions whose primary body was
                         // never fetchable (size cap, 404) become text-available through it

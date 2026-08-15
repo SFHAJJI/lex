@@ -226,8 +226,7 @@ public sealed partial class CorpusWriterTests : IDisposable
         Assert.Equal(1, report.CurrentVersions);
         Assert.Equal(2, report.Expressions);
         Assert.Equal(2, report.Observations);
-        Assert.Equal([LegiluxReplacementAdapter.LiveVersionIdentifier],
-            current.FetchedVersionIdentifiers);
+        Assert.Empty(current.FetchedVersionIdentifiers);
 
         var manifest = JsonSerializer.Deserialize<ManifestDoc>(
             await File.ReadAllTextAsync(Path.Combine(corpusRoot, "manifest.json")),
@@ -714,6 +713,64 @@ public sealed partial class CorpusWriterTests : IDisposable
     }
 
     [Fact]
+    public async Task Existing_record_restores_canonical_empty_metadata_and_text_url()
+    {
+        var adapter = new OneVersionAdapter("in_force", "financial-services");
+        await new CorpusWriter(_dir,
+                DateTimeOffset.Parse("2026-08-01T00:00:00Z"), CodeCommit)
+            .WriteAsync(adapter, default);
+        var metaPath = Path.Combine(OneVersionDirectory, "meta.json");
+        var stale = await ReadVersionMeta();
+        stale.PublisherMetadata = [];
+        stale.DocumentRoles = [];
+        Assert.Single(stale.Expressions).Text.Url = "https://stale.example.test/body";
+        RefreshRecordHash(stale);
+        await File.WriteAllTextAsync(metaPath,
+            JsonSerializer.Serialize(stale, CorpusJson.Options) + "\n");
+
+        await new CorpusWriter(_dir,
+                DateTimeOffset.Parse("2026-08-02T00:00:00Z"), CodeCommit)
+            .WriteAsync(adapter, default);
+
+        var current = await ReadVersionMeta();
+        Assert.Null(current.PublisherMetadata);
+        Assert.Null(current.DocumentRoles);
+        var expression = Assert.Single(current.Expressions);
+        Assert.Equal(expression.SourceUri, expression.Text.Url);
+        var revision = current.Events.Last(item => item.Event == "metadata_revised");
+        Assert.Contains("publisher_metadata", revision.Detail, StringComparison.Ordinal);
+        Assert.Contains("document_roles", revision.Detail, StringComparison.Ordinal);
+        Assert.Contains("expressions.en.text.url", revision.Detail, StringComparison.Ordinal);
+        Assert.DoesNotContain("expressions.en.source_uri", revision.Detail,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Optional_manifestation_failure_does_not_hide_the_primary_body_failure()
+    {
+        await new CorpusWriter(_dir,
+                DateTimeOffset.Parse("2026-08-08T00:00:00Z"), CodeCommit)
+            .WriteAsync(new OneVersionAdapter(
+                "in_force", "finance",
+                bodyFetch: new SourceBodyFetch(
+                    SourceBodyStatus.ParserFailure,
+                    Detail: "primary identity did not match", Attempts: 2),
+                altFetch: new SourceManifestationFetch(
+                    SourceBodyStatus.PermanentNotFound,
+                    Detail: "optional Formex returned 404")), default);
+
+        var manifest = JsonSerializer.Deserialize<ManifestDoc>(
+            await File.ReadAllTextAsync(Path.Combine(_dir, "manifest.json")),
+            CorpusJson.Options)!;
+        var issue = Assert.Single(manifest.BuildIssues);
+        Assert.Equal("body_parser_failure", issue.Code);
+        Assert.Contains("primary identity did not match", issue.Detail,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain("optional Formex", issue.Detail,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Production_candidate_with_a_typed_issue_keeps_the_prior_corpus_selected()
     {
         await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-01T00:00:00Z"), CodeCommit)
@@ -1063,7 +1120,8 @@ public sealed partial class CorpusWriterTests : IDisposable
         SourceBodyFetch? bodyFetch = null,
         string titleHint = "Work one",
         Exception? bodyException = null,
-        IReadOnlyDictionary<string, SourceBodyFetch>? bodyFetchByLanguage = null) : ISourceAdapter
+        IReadOnlyDictionary<string, SourceBodyFetch>? bodyFetchByLanguage = null,
+        SourceManifestationFetch? altFetch = null) : ISourceAdapter
     {
         private readonly WorkRef _work = new(new Identifier("official:w1"), "w1", "REG", titleHint);
 
@@ -1118,6 +1176,12 @@ public sealed partial class CorpusWriterTests : IDisposable
             return Task.FromResult(bodyFetch
                 ?? new SourceBodyFetch(SourceBodyStatus.PublisherMetadataOnly));
         }
+
+
+        public Task<SourceManifestationFetch> FetchAltManifestation(
+            VersionRecord version, ExpressionRecord expression, CancellationToken ct) =>
+            Task.FromResult(altFetch
+                ?? new SourceManifestationFetch(SourceBodyStatus.PublisherMetadataOnly));
     }
 
     private sealed class SameDateAdapter(

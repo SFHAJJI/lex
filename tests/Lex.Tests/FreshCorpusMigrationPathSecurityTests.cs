@@ -50,16 +50,18 @@ public sealed partial class CorpusWriterTests
         if (!CanCreateSymbolicLinks()) return;
 
         var corpusRoot = Path.Combine(_dir, "ancestor-swapped-after-inventory");
-        await WriteLegacyWithdrawalBaselineAsync(corpusRoot);
-        var versions = Path.Combine(corpusRoot, "works", "code-civil", "versions");
+        await WriteLegacyBaselineAsync(corpusRoot,
+            new LegacyPublisherIdentityAdapter("official:v1", ["en"]));
+        var versions = Directory.GetParent(
+            Path.GetDirectoryName(VersionMetaPath(corpusRoot))!)!.FullName;
         var external = Path.Combine(_dir, "external-versions-after-inventory");
-        var current = new LegiluxReplacementAdapter(
-            includeWithdrawn: false,
+        var current = new LegacyPublisherIdentityAdapter(
+            "official:v1", ["en", "fr"],
             beforeFirstBodyFetch: () => ReplaceWithExternalLink(versions, external));
 
         var error = await Assert.ThrowsAsync<InvalidDataException>(() =>
             FreshCorpusMigration.RunAsync(
-                corpusRoot, "lu-legilux", current,
+                corpusRoot, "test", current,
                 DateTimeOffset.Parse("2026-08-14T00:00:00Z"), CodeCommit, default));
 
         Assert.Contains("reparse point or symbolic link", error.Message,

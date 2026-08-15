@@ -1113,26 +1113,109 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory,
     internal static bool IsExactPortalExpression(
         string html, string celex, string language)
     {
-        var htmlLanguage = System.Text.RegularExpressions.Regex.Match(
-            html,
-            "<html\\b[^>]*\\blang\\s*=\\s*[\\\"'](?<language>[^\\\"']+)[\\\"']",
-            System.Text.RegularExpressions.RegexOptions.IgnoreCase)
-            .Groups["language"].Value;
-        if (!string.Equals(htmlLanguage, language, StringComparison.OrdinalIgnoreCase))
+        if (string.IsNullOrWhiteSpace(html)
+            || string.IsNullOrWhiteSpace(celex)
+            || string.IsNullOrWhiteSpace(language))
+            return false;
+        var markup = HtmlNonStructuralContent.Replace(html, "");
+        if (markup.Contains("<!--", StringComparison.Ordinal)
+            || markup.Contains("-->", StringComparison.Ordinal)
+            || HtmlInertTag.IsMatch(markup))
             return false;
 
-        var rawTitle = System.Text.RegularExpressions.Regex.Match(
-            html,
-            "<title\\b[^>]*>(?<title>.*?)</title>",
-            System.Text.RegularExpressions.RegexOptions.IgnoreCase
-            | System.Text.RegularExpressions.RegexOptions.Singleline)
-            .Groups["title"].Value;
-        var title = System.Text.RegularExpressions.Regex.Replace(
-            System.Net.WebUtility.HtmlDecode(rawTitle), "\\s+", " ").Trim();
-        return string.Equals(
-            title,
-            $"EUR-Lex - {celex} - {language.ToUpperInvariant()} - EUR-Lex",
-            StringComparison.Ordinal);
+        var identityTags = new List<System.Text.RegularExpressions.Match>();
+        var contentRoots = new List<System.Text.RegularExpressions.Match>();
+        foreach (System.Text.RegularExpressions.Match tag in HtmlOpeningTag.Matches(markup))
+        {
+            var attributes = tag.Groups["attributes"].Value;
+            var properties = HtmlAttributeValues(attributes, "property");
+            if (properties.SelectMany(value => value.Split(
+                        (char[]?)null, StringSplitOptions.RemoveEmptyEntries))
+                    .Any(value => string.Equals(
+                        value, "eli:id_local", StringComparison.Ordinal)))
+                identityTags.Add(tag);
+
+            var ids = HtmlAttributeValues(attributes, "id");
+            if (ids.Any(value => string.Equals(
+                    value, "PP1Contents", StringComparison.OrdinalIgnoreCase)))
+                contentRoots.Add(tag);
+
+            if (identityTags.Count > 1 || contentRoots.Count > 1) return false;
+        }
+
+        if (identityTags.Count != 1 || contentRoots.Count != 1) return false;
+        if (!string.Equals(identityTags[0].Groups["name"].Value,
+                "meta", StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(contentRoots[0].Groups["name"].Value,
+                "div", StringComparison.OrdinalIgnoreCase))
+            return false;
+        var identityAttributes = identityTags[0].Groups["attributes"].Value;
+        var identityProperties = HtmlAttributeValues(identityAttributes, "property");
+        var identityContents = HtmlAttributeValues(identityAttributes, "content");
+        if (identityProperties.Count != 1 || identityContents.Count != 1
+            || !string.Equals(identityContents[0], celex, StringComparison.Ordinal))
+            return false;
+
+        var rootAttributes = contentRoots[0].Groups["attributes"].Value;
+        if (HtmlAttributeValues(rootAttributes, "id").Count != 1) return false;
+        var child = FirstContentElement(markup,
+            contentRoots[0].Index + contentRoots[0].Length);
+        if (child is null) return false;
+        if (!string.Equals(child.Groups["name"].Value,
+                "div", StringComparison.OrdinalIgnoreCase))
+            return false;
+        var selectedLanguages = HtmlAttributeValues(
+            child.Groups["attributes"].Value, "lang");
+        return selectedLanguages.Count == 1
+               && string.Equals(selectedLanguages[0], language,
+                   StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static readonly System.Text.RegularExpressions.Regex HtmlOpeningTag = new(
+        "<(?<name>[A-Za-z][A-Za-z0-9:-]*)\\b(?<attributes>[^<>]*?)>",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase
+        | System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
+    private static readonly System.Text.RegularExpressions.Regex HtmlNonStructuralContent = new(
+        "<!--.*?-->|<(?<raw>script|style|title|textarea|template|noscript|iframe|noembed|noframes|xmp|listing)"
+        + "\\b[^>]*>.*?</\\k<raw>\\s*>",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase
+        | System.Text.RegularExpressions.RegexOptions.Singleline
+        | System.Text.RegularExpressions.RegexOptions.CultureInvariant,
+        TimeSpan.FromSeconds(10));
+
+    private static readonly System.Text.RegularExpressions.Regex HtmlInertTag = new(
+        "</?(?:script|style|title|textarea|template|noscript|iframe|noembed|noframes|xmp|listing|plaintext)\\b",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase
+        | System.Text.RegularExpressions.RegexOptions.CultureInvariant,
+        TimeSpan.FromSeconds(2));
+
+    private static IReadOnlyList<string> HtmlAttributeValues(
+        string attributes, string attributeName)
+    {
+        var pattern = $"(?:^|\\s){System.Text.RegularExpressions.Regex.Escape(attributeName)}"
+                      + "\\s*=\\s*(?:\\\"(?<double>[^\\\"]*)\\\"|'(?<single>[^']*)'"
+                      + "|(?<bare>[^\\s\\\"'=<>`]+))";
+        return System.Text.RegularExpressions.Regex.Matches(
+                attributes, pattern,
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase
+                | System.Text.RegularExpressions.RegexOptions.CultureInvariant)
+            .Select(match => match.Groups["double"].Success
+                ? match.Groups["double"].Value
+                : match.Groups["single"].Success
+                    ? match.Groups["single"].Value
+                    : match.Groups["bare"].Value)
+            .Select(value => System.Net.WebUtility.HtmlDecode(value) ?? "")
+            .ToArray();
+    }
+
+    private static System.Text.RegularExpressions.Match? FirstContentElement(
+        string html, int position)
+    {
+        while (position < html.Length && char.IsWhiteSpace(html[position])) position++;
+        if (position >= html.Length || html[position] != '<') return null;
+        var child = HtmlOpeningTag.Match(html, position);
+        return child.Success && child.Index == position ? child : null;
     }
 
     internal static bool IsAcceptableBodyIdentity(

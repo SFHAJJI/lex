@@ -129,27 +129,124 @@ public sealed class EurLexScopeTests : IDisposable
             "fr", noStateTitles, frenchWorkTitle));
     }
 
-    [Theory]
-    [InlineData(
-        "<html lang=\"en\"><head><title>EUR-Lex - 02014R0910-20140917 - EN - EUR-Lex</title></head></html>",
-        "02014R0910-20140917",
-        "en",
-        true)]
-    [InlineData(
-        "<html lang=\"en\"><head><title>EUR-Lex - 02014R0910-20140917 - EN - EUR-Lex</title></head></html>",
-        "02014R0910-20140917",
-        "fr",
-        false)]
-    [InlineData(
-        "<html lang=\"en\"><head><title>EUR-Lex - 02014R0910-20240520 - EN - EUR-Lex</title></head></html>",
-        "02014R0910-20140917",
-        "en",
-        false)]
-    public void Portal_fallback_requires_the_exact_CELEX_and_language(
-        string html, string celex, string language, bool expected)
+    [Fact]
+    public void Portal_fallback_uses_the_selected_legal_document_not_the_page_shell()
     {
-        Assert.Equal(expected,
-            EurLexAdapter.IsExactPortalExpression(html, celex, language));
+        var html = PortalHtml("32014R0680", "FR",
+            shellLanguage: "en", shellTitleLanguage: "EN");
+
+        Assert.True(EurLexAdapter.IsExactPortalExpression(
+            html, "32014R0680", "fr"));
+    }
+
+    [Theory]
+    [InlineData("32014R0681", "fr")]
+    [InlineData("32014R0680", "en")]
+    public void Portal_fallback_rejects_the_wrong_CELEX_or_selected_language(
+        string celex, string language)
+    {
+        var html = PortalHtml("32014R0680", "FR");
+
+        Assert.False(EurLexAdapter.IsExactPortalExpression(html, celex, language));
+    }
+
+    [Fact]
+    public void Portal_fallback_accepts_attribute_order_quotes_case_and_decoded_CELEX()
+    {
+        const string html = """
+            <HTML lang='en'><head><title>misleading shell</title>
+            <META CONTENT='12012E&#47;TXT' data-extra='x' PROPERTY='eli:id_local'>
+            </head><body><DIV CLASS='panel' ID='PP1Contents'>
+              <DIV data-extra='x' LANG='FR'><p>Texte sélectionné</p></DIV>
+            </DIV></body></HTML>
+            """;
+
+        Assert.True(EurLexAdapter.IsExactPortalExpression(
+            html, "12012E/TXT", "fr"));
+    }
+
+    [Fact]
+    public void Portal_fallback_rejects_duplicate_or_ambiguous_identity_roots()
+    {
+        var exact = PortalHtml("32014R0680", "FR");
+        var duplicateCelex = exact.Replace("</head>",
+            "<meta property='eli:id_local' content='32014R0680'></head>",
+            StringComparison.Ordinal);
+        var duplicateContents = exact.Replace("</body>",
+            "<div id='PP1Contents'><div lang='FR'>duplicate</div></div></body>",
+            StringComparison.Ordinal);
+
+        Assert.False(EurLexAdapter.IsExactPortalExpression(
+            duplicateCelex, "32014R0680", "fr"));
+        Assert.False(EurLexAdapter.IsExactPortalExpression(
+            duplicateContents, "32014R0680", "fr"));
+    }
+
+    [Fact]
+    public void Portal_fallback_requires_the_official_meta_and_div_marker_shapes()
+    {
+        var exact = PortalHtml("32014R0680", "FR");
+        var arbitraryIdentityTag = exact.Replace(
+            "<meta about=\"official\" property=\"eli:id_local\"",
+            "<span about=\"official\" property=\"eli:id_local\"",
+            StringComparison.Ordinal).Replace(
+            "content=\"32014R0680\" lang=\"\">",
+            "content=\"32014R0680\" lang=\"\"></span>",
+            StringComparison.Ordinal);
+        var arbitraryContentRoot = exact.Replace(
+            "<div id=\"PP1Contents\"", "<section id=\"PP1Contents\"",
+            StringComparison.Ordinal);
+
+        Assert.False(EurLexAdapter.IsExactPortalExpression(
+            arbitraryIdentityTag, "32014R0680", "fr"));
+        Assert.False(EurLexAdapter.IsExactPortalExpression(
+            arbitraryContentRoot, "32014R0680", "fr"));
+    }
+
+    [Fact]
+    public void Portal_fallback_does_not_take_language_from_translation_metadata_or_nested_content()
+    {
+        const string translationOnly = """
+            <html lang='en'><head>
+              <meta property='eli:id_local' content='32014R0680'>
+              <meta property='eli:language' content='FR'>
+            </head><body><div id='PP1Contents'>
+              <div><span lang='FR'>French appears only below the selected root</span></div>
+            </div></body></html>
+            """;
+
+        Assert.False(EurLexAdapter.IsExactPortalExpression(
+            translationOnly, "32014R0680", "fr"));
+    }
+
+    [Theory]
+    [InlineData("<!-- {0} -->")]
+    [InlineData("<script>const fixture = `{0}`;</script>")]
+    [InlineData("<style>/* {0} */</style>")]
+    [InlineData("<textarea>{0}</textarea>")]
+    [InlineData("<template>{0}</template>")]
+    [InlineData("<noscript>{0}</noscript>")]
+    [InlineData("<iframe>{0}</iframe>")]
+    [InlineData("<noembed>{0}</noembed>")]
+    [InlineData("<noframes>{0}</noframes>")]
+    [InlineData("<xmp>{0}</xmp>")]
+    [InlineData("<title>{0}</title>")]
+    [InlineData("<listing>{0}</listing>")]
+    [InlineData("<plaintext>{0}")]
+    [InlineData("<template><template></template>{0}</template>")]
+    public void Portal_fallback_ignores_identity_markers_in_non_document_content(
+        string wrapper)
+    {
+        const string fake = """
+            <meta property='eli:id_local' content='32014R0680'>
+            <div id='PP1Contents'><div lang='FR'>not selected law</div></div>
+            """;
+        var html = "<html><body>" + string.Format(
+            System.Globalization.CultureInfo.InvariantCulture, wrapper, fake)
+            + "</body></html>";
+
+        Assert.False(EurLexAdapter.IsExactPortalExpression(
+            html, "32014R0680", "fr"));
     }
 
     [Fact]
@@ -186,10 +283,8 @@ public sealed class EurLexScopeTests : IDisposable
     [Fact]
     public void Portal_bound_body_is_identity_checked_even_on_its_first_endpoint()
     {
-        const string exact =
-            "<html lang=\"en\"><title>EUR-Lex - 02014R0910-20140917 - EN - EUR-Lex</title></html>";
-        const string wrong =
-            "<html lang=\"en\"><title>EUR-Lex - 02014R0910-20240520 - EN - EUR-Lex</title></html>";
+        var exact = PortalHtml("02014R0910-20140917", "EN");
+        var wrong = PortalHtml("02014R0910-20240520", "EN");
 
         Assert.True(EurLexAdapter.IsAcceptableBodyIdentity(
             exact, "02014R0910-20140917", "en",
@@ -198,6 +293,23 @@ public sealed class EurLexScopeTests : IDisposable
             wrong, "02014R0910-20140917", "en",
             portalBound: true, usedPortalFallback: false));
     }
+
+    private static string PortalHtml(
+        string celex,
+        string selectedLanguage,
+        string shellLanguage = "en",
+        string shellTitleLanguage = "EN") => $$"""
+            <html lang="{{shellLanguage}}"><head>
+              <title>EUR-Lex - shell - {{shellTitleLanguage}} - EUR-Lex</title>
+              <meta about="official" property="eli:id_local" content="{{celex}}" lang="">
+              <meta property="eli:language" content="EN">
+              <meta property="eli:language" content="FR">
+            </head><body>
+              <div id="PP1Contents" class="panel"><div class="" lang="{{selectedLanguage}}">
+                <p>Selected legal document</p>
+              </div></div>
+            </body></html>
+            """;
 
     [Fact]
     public void Work_metadata_query_rejects_one_work_cap_plus_one()
