@@ -38,6 +38,30 @@ class BootstrapLegacyRecoveryPlanTests(unittest.TestCase):
             plan["allowed_remaining_inactive_revisions"],
         )
 
+    def test_null_or_missing_legacy_suffix_canonicalizes_from_resource_name(self):
+        inventory = self.inventory()
+        for revision in inventory["revisions"]:
+            revision["template"]["revisionSuffix"] = None
+
+        completed, plan = self.run_plan(inventory)
+
+        self.assertEqual(0, completed.returncode, completed.stderr)
+        self.assertEqual(
+            ["a", "older", "newer"],
+            [item["template"]["revisionSuffix"]
+             for item in plan["reviewed_inventory"]["revisions"]],
+        )
+
+        missing_inventory = copy.deepcopy(inventory)
+        del missing_inventory["revisions"][1]["template"]["revisionSuffix"]
+        missing_completed, missing_plan = self.run_plan(missing_inventory)
+        self.assertEqual(0, missing_completed.returncode, missing_completed.stderr)
+        self.assertEqual(plan, missing_plan)
+
+        exact_completed, exact_plan = self.run_plan(self.inventory())
+        self.assertEqual(0, exact_completed.returncode, exact_completed.stderr)
+        self.assertEqual(exact_plan, plan)
+
     def test_refuses_any_authority_route_or_shape_drift(self):
         mutations = (
             lambda value: value.update(active_revisions_mode="Single"),
@@ -57,6 +81,8 @@ class BootstrapLegacyRecoveryPlanTests(unittest.TestCase):
             lambda value: value["revisions"][1].update(trafficWeight=1),
             lambda value: value["revisions"][1]["template"].update(
                 revisionSuffix="wrong"),
+            lambda value: value["revisions"][1]["template"].update(
+                revisionSuffix=7),
             lambda value: value.update(max_inactive_revisions=True),
         )
         for mutation in mutations:
