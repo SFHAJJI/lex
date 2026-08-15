@@ -269,7 +269,7 @@ This is legal <i>information</i>, never legal advice: it reports what the text s
 never what it means for your situation.</p>
 <p class="sub">“Valid from → to” = the window in which this text applied.
 “Open” = still current as far as the publisher has consolidated.
-Each article carries its own hash so you can prove it was not tampered with , 
+Each displayed provision carries its own hash so you can prove it was not tampered with,
 <a href="/verify">here is how</a>.</p></details><p><a href="/t-pub/w2">timeline</a></p><div class="card"><table class="kv">
 <tr><td>tier</td><td>A, publisher-supplied applicability dates</td></tr>
 <tr><td>history begins</td><td>publisher</td></tr>

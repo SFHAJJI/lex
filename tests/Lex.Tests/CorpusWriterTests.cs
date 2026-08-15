@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Lex.Derive;
@@ -7,6 +9,9 @@ using Lex.Index;
 using Lex.Law;
 using Lex.Mcp;
 using Lex.Sources.Legilux;
+using Lex.Web;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace Lex.Tests;
 
@@ -172,6 +177,274 @@ public sealed partial class CorpusWriterTests : IDisposable
         Assert.Equal("real", Assert.Single(returned)!["anchor"]!.GetValue<string>());
         Assert.DoesNotContain(coverageAnchor, response.ToJsonString(), StringComparison.Ordinal);
         Assert.DoesNotContain(coverageWId, response.ToJsonString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Whitespace_empty_derived_provisions_remain_evidence_but_never_enter_runtime()
+    {
+        const string whitespace = " \r\n\t";
+        const string emptyHeading = "Runtime exclusion canary heading";
+
+        static void MakeWhitespaceOnly(JsonObject provision, string heading)
+        {
+            provision["heading"] = heading;
+            provision["text_md"] = whitespace;
+            provision["text_sha256"] = Convert.ToHexStringLower(
+                SHA256.HashData(Encoding.UTF8.GetBytes(whitespace)));
+        }
+
+        async Task<(string Db, JsonObject Evidence)> Build(
+            string name, string html, Action<JsonArray> edit,
+            Action<JsonObject, JsonObject>? editHistory = null,
+            bool expectInvalid = false,
+            string? expectedInvalidMessage = null,
+            bool catalogBeforeEdit = false)
+        {
+            var fixture = Path.Combine(_dir, name);
+            var corpus = Path.Combine(fixture, "corpus");
+            var articles = Path.Combine(fixture, "articles");
+            var db = Path.Combine(fixture, "index-test.db");
+            await new CorpusWriter(corpus, DateTimeOffset.Parse("2026-08-14T00:00:00Z"), CodeCommit)
+                .WriteAsync(new OneVersionAdapter("true", "finance",
+                    bodyFetch: SourceBodyFetch.Retrieved(html)), default);
+            var corpusCommit = CommitGitDirectory(corpus);
+            var stats = DeriveWriter.Derive(corpus, articles, "test",
+                new string('b', 40), new string('d', 40), corpusCommit);
+            Assert.Empty(stats.Errors);
+            var derivedPath = Directory.EnumerateFiles(
+                articles, "en.json", SearchOption.AllDirectories).Single();
+            var evidence = JsonNode.Parse(await File.ReadAllTextAsync(derivedPath))!.AsObject();
+            if (catalogBeforeEdit) CatalogBuilder.Build(articles);
+            edit(evidence["provisions"]!.AsArray());
+            await File.WriteAllTextAsync(derivedPath, evidence.ToJsonString());
+            if (!catalogBeforeEdit) CatalogBuilder.Build(articles);
+            if (editHistory is not null)
+            {
+                var historyPath = Path.Combine(articles, "test", "works", "w1", "history.json");
+                var history = JsonNode.Parse(await File.ReadAllTextAsync(historyPath))!.AsObject();
+                editHistory(evidence, history);
+                await File.WriteAllTextAsync(historyPath, history.ToJsonString());
+            }
+            var articlesCommit = CommitGitDirectory(articles);
+            void BuildIndex() => IndexFromCorpus.Build(corpus, articles, db, null,
+                    DateTimeOffset.Parse("2026-08-14T00:00:00Z"),
+                    codeCommit: new string('c', 40), articlesCommit: articlesCommit,
+                    corpusCommit: corpusCommit);
+            if (expectInvalid)
+            {
+                var error = Assert.ThrowsAny<Exception>(BuildIndex);
+                if (expectedInvalidMessage is not null)
+                    Assert.Contains(expectedInvalidMessage, error.Message,
+                        StringComparison.Ordinal);
+                Assert.False(File.Exists(db));
+            }
+            else
+                BuildIndex();
+            return (db, evidence);
+        }
+
+        var mixed = await Build("mixed", """
+            <html><body>
+            <p class="title-article-norm">Article 1</p><p>First searchable rule.</p>
+            <p class="title-article-norm">Article 2</p>
+            <p class="title-article-norm">Article 3</p><p>Third searchable rule.</p>
+            </body></html>
+            """, provisions => MakeWhitespaceOnly(
+                Assert.IsType<JsonObject>(provisions[1]), emptyHeading),
+            editHistory: (evidence, history) =>
+            {
+                var provisions = evidence["provisions"]!.AsArray();
+                var real = Assert.IsType<JsonObject>(provisions[0]);
+                var blank = Assert.IsType<JsonObject>(provisions[1]);
+                var events = new JsonArray(
+                    new JsonObject
+                    {
+                        ["type"] = "inserted",
+                        ["anchor"] = real["anchor"]!.GetValue<string>(),
+                        ["at_version"] = evidence["lex_id"]!.GetValue<string>(),
+                    },
+                    new JsonObject
+                    {
+                        ["type"] = "renumbered",
+                        ["from"] = blank["anchor"]!.GetValue<string>(),
+                        ["to"] = real["anchor"]!.GetValue<string>(),
+                        ["text_sha256"] = blank["text_sha256"]!.GetValue<string>(),
+                        ["at_version"] = evidence["lex_id"]!.GetValue<string>(),
+                    });
+                history["anchor_events"] = events.DeepClone();
+                history["anchor_events_by_language"]!["en"] = events;
+            });
+        var mixedEvidence = mixed.Evidence["provisions"]!.AsArray();
+        Assert.Equal(3, mixedEvidence.Count);
+        Assert.Equal(whitespace, mixedEvidence[1]!["text_md"]!.GetValue<string>());
+        Assert.Equal(emptyHeading, mixedEvidence[1]!["heading"]!.GetValue<string>());
+        var emptyAnchor = mixedEvidence[1]!["anchor"]!.GetValue<string>();
+        var emptyTextSha = mixedEvidence[1]!["text_sha256"]!.GetValue<string>();
+
+        using (var connection = new Microsoft.Data.Sqlite.SqliteConnection(
+                   $"Data Source={mixed.Db};Mode=ReadOnly"))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = """
+                SELECT
+                  (SELECT COUNT(*) FROM provisions),
+                  (SELECT COUNT(*) FROM provisions WHERE seq NOT IN (0,1)),
+                  (SELECT COUNT(*) FROM provisions WHERE anchor=$empty),
+                  (SELECT COUNT(*) FROM provision_states WHERE anchor=$empty),
+                  (SELECT COUNT(*) FROM anchor_events
+                    WHERE from_anchor=$empty OR to_anchor=$empty OR anchor=$empty),
+                  (SELECT COUNT(*) FROM provision_states),
+                  (SELECT COUNT(*) FROM anchor_events),
+                  (SELECT COUNT(*) FROM lexical_states WHERE text_sha=$empty_sha),
+                  (SELECT COUNT(*) FROM text_blobs WHERE text_sha=$empty_sha),
+                  (SELECT COUNT(*) FROM semantic_chunks WHERE state_id IN
+                    (SELECT state_id FROM lexical_states WHERE text_sha=$empty_sha)),
+                  (SELECT COUNT(*) FROM fts WHERE rowid IN
+                    (SELECT state_id FROM lexical_states WHERE text_sha=$empty_sha)),
+                  (SELECT COUNT(*) FROM fts WHERE fts MATCH $canary),
+                  (SELECT text_available FROM docs LIMIT 1),
+                  (SELECT text_public FROM docs LIMIT 1)
+                """;
+            command.Parameters.AddWithValue("$empty", emptyAnchor);
+            command.Parameters.AddWithValue("$empty_sha", emptyTextSha);
+            command.Parameters.AddWithValue("$canary", "runtime exclusion canary heading");
+            using var row = command.ExecuteReader();
+            Assert.True(row.Read());
+            Assert.Equal(2, row.GetInt32(0));
+            Assert.Equal(0, row.GetInt32(1));
+            Assert.Equal(0, row.GetInt32(2));
+            Assert.Equal(0, row.GetInt32(3));
+            Assert.Equal(0, row.GetInt32(4));
+            Assert.Equal(2, row.GetInt32(5));
+            Assert.Equal(1, row.GetInt32(6));
+            Assert.Equal(0, row.GetInt32(7));
+            Assert.Equal(0, row.GetInt32(8));
+            Assert.Equal(0, row.GetInt32(9));
+            Assert.Equal(0, row.GetInt32(10));
+            Assert.Equal(0, row.GetInt32(11));
+            Assert.Equal(1, row.GetInt32(12));
+            Assert.Equal(1, row.GetInt32(13));
+        }
+        using (var reader = LexIndexReader.Open(mixed.Db))
+        {
+            var document = reader.AsOf("w1", new DateOnly(2024, 1, 1), FilterSet.All)!;
+            Assert.Equal([0, 1], reader.Provisions(LexIndexReader.RidOf(document)).Select(p => p.Seq));
+            var body = reader.BuildBody(document)!;
+            Assert.Contains("First searchable rule.", body, StringComparison.Ordinal);
+            Assert.Contains("Third searchable rule.", body, StringComparison.Ordinal);
+            Assert.DoesNotContain(emptyHeading, body, StringComparison.Ordinal);
+            Assert.Empty(reader.SearchKeyword(emptyHeading, FilterSet.All, 10, fuzzyAuto: false).Hits);
+            var core = new McpCore(
+                new Dictionary<string, LexIndexReader> { [reader.Collection] = reader });
+            var response = Assert.IsType<JsonObject>(core.CallTool("as_of", new JsonObject
+                {
+                    ["work"] = "test:w1", ["date"] = "2024-01-01", ["mode"] = "full",
+                }));
+            Assert.Equal(2, response["total_provisions"]!.GetValue<int>());
+            Assert.DoesNotContain(emptyHeading, response.ToJsonString(), StringComparison.Ordinal);
+            Assert.Equal("3", reader.Stamp["derived_provisions"]);
+            Assert.Equal("2", reader.Stamp["indexed_provisions"]);
+            Assert.Equal("1", reader.Stamp["excluded_empty_provisions"]);
+        }
+        using (var site = new RuntimeIndexSite(Path.GetDirectoryName(mixed.Db)!))
+        {
+            var html = await site.Client.GetStringAsync("/test/w1/2024-01-01");
+            Assert.Contains("First searchable rule.", html, StringComparison.Ordinal);
+            Assert.Contains("Third searchable rule.", html, StringComparison.Ordinal);
+            Assert.DoesNotContain(emptyHeading, html, StringComparison.Ordinal);
+        }
+
+        var allEmpty = await Build("all-empty", """
+            <html><body>
+            <p class="title-article-norm">Article 1</p><p>Temporary wording.</p>
+            <p class="title-article-norm">Article 2</p><p>Temporary wording too.</p>
+            </body></html>
+            """, provisions =>
+            {
+                for (var index = 0; index < provisions.Count; index++)
+                    MakeWhitespaceOnly(Assert.IsType<JsonObject>(provisions[index]),
+                        $"All-empty canary {index + 1}");
+            });
+        Assert.All(allEmpty.Evidence["provisions"]!.AsArray(), provision =>
+            Assert.True(string.IsNullOrWhiteSpace(provision!["text_md"]!.GetValue<string>())));
+        using (var reader = LexIndexReader.Open(allEmpty.Db))
+        {
+            var document = reader.AsOf("w1", new DateOnly(2024, 1, 1), FilterSet.All)!;
+            Assert.True(document.TextAvailable);
+            Assert.False(document.TextPublic);
+            Assert.Empty(reader.Provisions(LexIndexReader.RidOf(document)));
+            Assert.Null(reader.BuildBody(document));
+            Assert.False(reader.HasProvisionHistory("w1"));
+            Assert.Empty(reader.SearchKeyword("All-empty canary", FilterSet.All, 10,
+                fuzzyAuto: false).Hits);
+            var core = new McpCore(
+                new Dictionary<string, LexIndexReader> { [reader.Collection] = reader });
+            var response = Assert.IsType<JsonObject>(core.CallTool("as_of", new JsonObject
+                {
+                    ["work"] = "test:w1", ["date"] = "2024-01-01", ["mode"] = "full",
+                }));
+            Assert.Equal("text_not_available",
+                response["envelope"]!["status"]!.GetValue<string>());
+            Assert.DoesNotContain("text_withheld", response.ToJsonString(),
+                StringComparison.Ordinal);
+            var search = Assert.IsType<JsonArray>(core.CallTool("search",
+                new JsonObject { ["query"] = "Work one" }));
+            var searchPart = Assert.Single(search.OfType<JsonObject>());
+            var searchHit = Assert.Single(searchPart["hits"]!.AsArray())!.AsObject();
+            Assert.Equal("w1", searchHit["work"]!.GetValue<string>());
+            Assert.Contains("exact_title", searchHit["match_reasons"]!.AsArray()
+                .Select(reason => reason!.GetValue<string>()));
+            Assert.Contains("no safely derived provision text",
+                searchHit["match_note"]!.GetValue<string>(),
+                StringComparison.Ordinal);
+            Assert.DoesNotContain("not publicly served", searchHit.ToJsonString(),
+                StringComparison.Ordinal);
+            var missing = Fragments.MissingTextBox(document,
+                Fragments.PublisherTextGateOpen(reader));
+            Assert.Contains("text_not_available", missing, StringComparison.Ordinal);
+            Assert.Contains("href=\"https://example.test/v1/en\"", missing,
+                StringComparison.Ordinal);
+            Assert.DoesNotContain("Text withheld", missing, StringComparison.Ordinal);
+            Assert.DoesNotContain("All-empty canary", missing, StringComparison.Ordinal);
+            Assert.Equal("2", reader.Stamp["derived_provisions"]);
+            Assert.Equal("0", reader.Stamp["indexed_provisions"]);
+            Assert.Equal("2", reader.Stamp["excluded_empty_provisions"]);
+        }
+        using (var site = new RuntimeIndexSite(Path.GetDirectoryName(allEmpty.Db)!))
+        {
+            var html = await site.Client.GetStringAsync("/test/w1/2024-01-01");
+            Assert.Contains("text_not_available", html, StringComparison.Ordinal);
+            Assert.Contains("href=\"https://example.test/v1/en\"", html,
+                StringComparison.Ordinal);
+            Assert.DoesNotContain("Text withheld", html, StringComparison.Ordinal);
+            Assert.DoesNotContain("All-empty canary", html, StringComparison.Ordinal);
+        }
+
+        await Build("tampered-blank", """
+            <html><body>
+            <p class="title-article-norm">Article 1</p><p>Original text.</p>
+            </body></html>
+            """, provisions =>
+            {
+                var provision = Assert.IsType<JsonObject>(Assert.Single(provisions));
+                provision["text_md"] = whitespace;
+            }, expectInvalid: true,
+            expectedInvalidMessage: "text_sha256 does not match text_md");
+
+        foreach (var requiredIdentity in new[] { "provision_id", "anchor" })
+            await Build($"malformed-blank-{requiredIdentity}", """
+                <html><body>
+                <p class="title-article-norm">Article 1</p><p>Original text.</p>
+                </body></html>
+                """, provisions =>
+                {
+                    var provision = Assert.IsType<JsonObject>(Assert.Single(provisions));
+                    MakeWhitespaceOnly(provision, "Malformed blank evidence");
+                    provision[requiredIdentity] = null;
+                }, expectInvalid: true,
+                expectedInvalidMessage: $"provision {requiredIdentity} is required",
+                catalogBeforeEdit: requiredIdentity == "anchor");
     }
 
     [Theory]
@@ -1303,6 +1576,31 @@ public sealed partial class CorpusWriterTests : IDisposable
         Git("add", ".");
         Git("commit", "-m", "fixture");
         return Git("rev-parse", "HEAD");
+    }
+
+    private sealed class RuntimeIndexSite : WebApplicationFactory<Program>
+    {
+        private readonly string _indexDirectory;
+        private readonly string _webRoot;
+        public HttpClient Client { get; }
+
+        public RuntimeIndexSite(string indexDirectory)
+        {
+            _indexDirectory = indexDirectory;
+            _webRoot = Path.Combine(indexDirectory, "wwwroot");
+            Directory.CreateDirectory(_webRoot);
+            Client = CreateClient(new WebApplicationFactoryClientOptions
+            {
+                AllowAutoRedirect = false,
+            });
+        }
+
+        protected override void ConfigureWebHost(IWebHostBuilder builder)
+        {
+            builder.UseSetting("LEX_INDEX_DIR", _indexDirectory);
+            builder.UseSetting("LEX_PUBLIC_BASE_URL", "https://runtime.test");
+            builder.UseWebRoot(_webRoot);
+        }
     }
 
     private sealed class OneVersionAdapter(

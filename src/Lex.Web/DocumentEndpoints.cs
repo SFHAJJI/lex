@@ -104,12 +104,14 @@ public static class DocumentEndpoints
                      && r.BuildBody(a) is { } bodyA && r.BuildBody(b) is { } bodyB)
                 sb.Append(RenderDiff(bodyA, bodyB));
             else
+            {
                 sb.Append($"""
                     <div class="notice"><b>Different versions applied</b>, but a text diff is unavailable here
-                    (status <span class="mono">{(!a.TextAvailable || !b.TextAvailable ? "text_not_available" : "text_withheld")}</span>). Compare at the official source:
+                    (status <span class="mono">{ComparisonTextStatus(r, a, b)}</span>). Compare at the official source:
                     <a href="{H(a.SourceUri)}">version of {H(a.ValidFrom)}</a> vs
                     <a href="{H(b.SourceUri)}">version of {H(b.ValidFrom)}</a>.</div>
                     """);
+            }
             sb.Append(EnvelopeCard(r, IsProvisional(r, db2)));
             return Results.Content(Page($"What changed, {TitleShorten(DocTitle(b))}", sb.ToString(),
                 $"{da:yyyy-MM-dd} → {db2:yyyy-MM-dd} · no interpretation, just the text delta",
@@ -336,7 +338,7 @@ public static class DocumentEndpoints
                 It identifies a publisher wording state. The authentic legal acts remain those
                 published in the Official Journal; Lex preserves the consolidated wording, source
                 and hashes as a reading and comparison aid.</p>
-                <p class="sub">Each article carries its own hash so you can verify that Lex served
+                <p class="sub">Each displayed provision carries its own hash so you can verify that Lex served
                 the indexed text unchanged, <a href="/verify">here is how</a>.</p></details>
                 """ : """
                 <details class="card"><summary><b>New here? What am I looking at?</b></summary>
@@ -350,7 +352,7 @@ public static class DocumentEndpoints
                 never what it means for your situation.</p>
                 <p class="sub">“Valid from → to” = the window in which this text applied.
                 “Open” = still current as far as the publisher has consolidated.
-                Each article carries its own hash so you can prove it was not tampered with , 
+                Each displayed provision carries its own hash so you can prove it was not tampered with,
                 <a href="/verify">here is how</a>.</p></details>
                 """;
             var record = $"""
@@ -370,7 +372,7 @@ public static class DocumentEndpoints
             {
                 sb.Append($"""
                     <div class="notice" style="border-left-color:var(--ok)"><b>Text included, per-article reading view.</b>
-                    Deterministic extraction of the verbatim retrieved document; each article carries its own hash and anchor.
+                    Deterministic extraction of the verbatim retrieved document; each displayed provision carries its own hash and anchor.
                     {H(r.Stamp.GetValueOrDefault("attribution"))}</div>
                     <details class="card"><summary><b>Outline, {provisions.Count} provisions</b></summary><p>
                     """);
@@ -412,7 +414,7 @@ public static class DocumentEndpoints
             {
                 // No wording is held, so the record is not a receipt for the answer, it IS the answer.
                 // Hiding it here would leave the page with nothing on it.
-                sb.Append(MissingTextBox(doc));
+                sb.Append(MissingTextBox(doc, PublisherTextGateOpen(r)));
                 sb.Append($"""<div class="card">{record}</div>""");
             }
             sb.Append(primer);

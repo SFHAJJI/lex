@@ -56,12 +56,32 @@ public static class Fragments
         </table></div>
         """;
 
-    public static string MissingTextBox(DocRow d)
+    public static bool PublisherTextGateOpen(LexIndexReader reader) =>
+        string.Equals(reader.Stamp.GetValueOrDefault("text_public"), "true",
+            StringComparison.Ordinal);
+
+    public static string ComparisonTextStatus(
+        LexIndexReader reader, DocRow first, DocRow second) =>
+        !first.TextAvailable || !second.TextAvailable
+        || PublisherTextGateOpen(reader) && (!first.TextPublic || !second.TextPublic)
+            ? "text_not_available"
+            : "text_withheld";
+
+    public static string MissingTextBox(DocRow d, bool publisherTextGateOpen)
     {
-        if (d.TextAvailable)
+        if (d.TextAvailable && !publisherTextGateOpen)
             return $"""
                 <div class="notice"><b>Text withheld.</b> Lex holds publisher text for this version, but a publication gate
                 prevents serving the wording (status <span class="mono">text_withheld</span>). Read the official text at
+                <a href="{H(d.SourceUri)}" rel="noopener">{H(d.SourceUri)}</a>.</div>
+                """;
+
+        if (d.TextAvailable)
+            return $"""
+                <div class="notice"><b>Provision text not available.</b> Lex holds the official publisher file, but no
+                non-whitespace provision body was safely derived for this version (status
+                <span class="mono">text_not_available</span>). A heading alone is not presented as legal wording.
+                Read the official text at
                 <a href="{H(d.SourceUri)}" rel="noopener">{H(d.SourceUri)}</a>.</div>
                 """;
 
