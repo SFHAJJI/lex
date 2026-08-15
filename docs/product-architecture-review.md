@@ -530,20 +530,24 @@ missing, ungradeable, empty-context, stale, self-inconsistent, below threshold, 
 is unavailable. Keyword fallback cannot pass an LLM-only rubric. The frozen clock is part of the
 case identity.
 
-The v3 evaluation is blind-authored and independently reviewed before expected outcomes are
-unsealed. Its report records case and prompt digests, evaluator and grader deployments, grading
-mode per case, repetitions, code commit, artifact manifests, resource and memory limits, token
-usage, pass thresholds, failures, and latency percentiles. The report and signature use the
-`keyvault-lex-v2` trusted root, are verified on `/verify`, and must match the promoted commit and
-manifest set. Existing v2 reports remain public historical evidence.
+The v3 evaluation is frozen before inference, then its exact digest is reviewed and signed by the
+project owner using a separate evaluation-review authority. This separation is not a claim of
+external or third-party review. Its report records case and prompt digests, evaluator and grader
+deployments, grading mode per case, repetitions, code commit, artifact manifests, resource and
+memory limits, token usage, pass thresholds, failures, and latency percentiles. The catalog review
+signature uses the dedicated pinned evaluation-review root. The published report and browser
+evidence set uses the `keyvault-lex-v2` artifact root, is verified on `/verify`, and must match the
+promoted commit and manifest set. Existing v2 reports remain public historical evidence.
 
 The release candidate smoke must assert semantic outcomes for representative exact, aggregate,
 comparison-gap, and clarification cases. Checking only that a JSON `reply` exists is forbidden.
 
-One live release run is limited to 20 frozen cases, 1,000,000 input tokens, 125,000 output tokens,
-and an estimated cost of EUR 10 at the then-current deployment price. The runner calculates the
-estimate before inference and aborts if any envelope would be exceeded. Production audit calls use
-a separately signed, release-bound capability and do not consume either public daily counter. The
+One live release run is limited to 25 frozen cases, 620,000 candidate input tokens, 123,000
+candidate output tokens, 294,000 grader input tokens and 49,000 grader output tokens. The catalog's
+current maximum-token reservation is EUR 0.3820232 under an outer EUR 10 ceiling. The runner
+calculates the estimate before inference and aborts if any envelope would be exceeded. Production
+audit calls use a separately signed, release-bound capability and do not consume either public daily
+counter. The
 capability binds exact request digests and retains shared concurrency, queue, deadline and model
 limits; it is never a static bypass secret.
 

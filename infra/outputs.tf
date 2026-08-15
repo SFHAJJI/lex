@@ -24,7 +24,7 @@ output "evaluation_review_key_id" {
 }
 
 output "evaluation_review_public_key_pem" {
-  description = "Independent review public material embedded in the release evaluator."
+  description = "Project-owner evaluation-review public material embedded in the release evaluator."
   value       = azurerm_key_vault_key.evaluation_review.public_key_pem
 }
 

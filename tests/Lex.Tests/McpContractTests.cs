@@ -407,6 +407,8 @@ public class McpContractTests : IDisposable
 
         Assert.Equal("no_corpus_mounted", result["status"]?.GetValue<string>());
         Assert.Contains("coverage tool", result["hosted_endpoint_note"]?.GetValue<string>());
+        Assert.Contains("signed index artifacts", result["detail"]?.GetValue<string>());
+        Assert.DoesNotContain("signed corpus", result["detail"]?.GetValue<string>());
         Assert.DoesNotContain("1,409", result.ToJsonString());
         Assert.DoesNotContain("947 MB", result.ToJsonString());
     }

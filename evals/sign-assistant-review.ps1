@@ -5,7 +5,7 @@ param(
     [Parameter(Mandatory = $true)][string]$OutputAttestation,
     [Parameter(Mandatory = $true)][string]$OutputSignature,
     [string]$Reviewer = "Soufien Hajji",
-    [string]$Attestation = "I independently reviewed every frozen case, expected typed operation, grading rubric, safety boundary and release budget and approve this exact catalog as production release evidence.",
+    [string]$Attestation = "I reviewed every frozen case, expected typed operation, grading rubric, safety boundary and release budget and approve this exact catalog as production release evidence.",
     [string]$Vault = "kv-lex-eval-review",
     [string]$Key = "lex-evaluation-review-v1",
     [string]$KeyVersion = "b716c12bb450464ebad5d3046a3ae2e7"
@@ -56,4 +56,4 @@ if ([string]::IsNullOrWhiteSpace($signature)) {
 & dotnet run --project (Join-Path $repository "src/Lex.Ingest/Lex.Ingest.csproj") `
     -c Release -- assistant-eval verify-cases `
     --cases $casesPath --review-attestation $reviewPath --review-signature $signaturePath
-if ($LASTEXITCODE -ne 0) { throw "The signed independent review failed verification." }
+if ($LASTEXITCODE -ne 0) { throw "The signed project-owner review failed verification." }

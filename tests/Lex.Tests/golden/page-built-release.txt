@@ -267,7 +267,7 @@ not production merely because a container started.</p>
 <td><code>deploy.yml</code> and Azure Container Apps</td>
 </tr>
 <tr>
-<td>Independent gates</td>
+<td>Separated gates</td>
 <td>Verify readiness, retrieval, assistant behavior, browser behavior and human review</td>
 <td>candidate scripts, signed evaluation release and protected environments</td>
 </tr>
@@ -279,7 +279,7 @@ not production merely because a container started.</p>
 <tr>
 <td>Retention boundary</td>
 <td>Preserve production and one rollback without deleting unproven shared artifacts</td>
-<td>Container Apps revision policy and <code>lex-ops</code> Blob cleanup</td>
+<td>Container Apps revision policy and <code>lex-ops</code> private-staging cleanup</td>
 </tr>
 </tbody>
 </table></div>
@@ -320,31 +320,532 @@ not production merely because a container started.</p>
 </tr>
 </tbody>
 </table></div>
+<blockquote>
+<p><strong>Why this design?</strong> A zero-traffic candidate can be tested against production-shaped services
+without changing the reader's route. Keeping the exact former production revision makes rollback
+an identity selection, not a rebuild that might fetch different bytes.</p>
+<pre tabindex="0" aria-label="Scrollable architecture diagram or code"><code class="language-text">identities != signed_evaluation ? leave_traffic_unchanged : promote_once_and_retain_previous
+</code></pre>
+</blockquote>
 <p><code>maxInactiveRevisions</code> is one in steady state and two only while a candidate waits. Azure Container
 Apps has no supported per-revision delete. An unresolved newer candidate cannot be discarded by
 lowering the limit without risking the older valid rollback, so cleanup follows identity and
 creation order rather than age.</p>
 <h2>Evidence before traffic</h2>
-<p>The deploy workflow builds an immutable image from the exact code commit and signed artifact set,
-creates a zero-traffic revision, and checks readiness, MCP, Luxembourg and EU search. The assistant
-evaluation binds frozen cases, exact candidate, tool outcomes, injection canaries, latency and cost
-to a signed report. Human review uses a separate signing authority. Only the traffic workflow can
-verify those records and promote. No automated actor can approve its own release.</p>
-<p>Release state is never hard-coded into this page. The mounted-evidence section below reads the
-running revision's identities and indexes; candidate evaluation and promotion remain authoritative
-only through their matching signed reports and receipts.</p>
-<p>Scale is a release invariant, not a stale observation: the traffic workflow accepts a target and
-rollback only when each is pinned at <code>min=max=1</code>. Quotas, idempotency and thread state must be
-externalized before a multi-replica release is allowed.</p>
+<p>The deploy workflow creates a zero-traffic revision from the exact image and signed artifact set,
+then checks readiness, Model Context Protocol (MCP), Luxembourg and European Union (EU) search. The
+assistant evaluation binds the frozen cases, candidate, typed outcomes, latency and cost to a
+signed report under separate project-owner review. Only the traffic workflow may revalidate those
+records and promote; no automated actor approves its own output.</p>
+<p>This page does not hard-code mounted state: runtime evidence supplies the active identities and
+capabilities. The traffic workflow also requires target and rollback to remain at <code>min=max=1</code>;
+quotas, idempotency and thread state must be externalized before multiple replicas are allowed.</p>
+<h2>Release evidence chain</h2>
+<p>This is the complete continuous integration and continuous delivery (CI/CD) chain at the level where
+an operator can decide whether traffic is safe. The detailed workflow and script mechanics stay in
+the linked runbooks rather than being copied into this dossier.</p>
+<p><strong>Status legend:</strong> <strong>Built</strong> means the implementation and deterministic tests exist; <strong>Measured</strong>
+means the named frozen artifact or result was reproduced; <strong>Quarantined</strong> means activation is
+denied by its gate; <strong>Next</strong> means exact-release evidence or an operator action is still outstanding.
+These labels describe the evidence cited here, not a claim about an uninspected live revision.</p>
+<div class="dossier-table" tabindex="0" role="region" aria-label="Scrollable architecture table"><table>
+<thead>
+<tr>
+<th>Stage</th>
+<th>Status</th>
+<th>Input identity</th>
+<th>Gate</th>
+<th>Evidence and signature boundary</th>
+<th>Failure behavior</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Publisher acquisition</td>
+<td><strong>Measured</strong></td>
+<td>Exact EUR-Lex or Legilux response, requested publisher identity and observation time</td>
+<td>Bounded retries, complete enumeration and typed acquisition issues</td>
+<td>Corpus inventory binds acquired files, hashes and source coordinates; this is integrity evidence, not a detached signature</td>
+<td>Keep the accepted corpus; incomplete enumeration cannot create removals or publish.</td>
+</tr>
+<tr>
+<td>Corpus release</td>
+<td><strong>Measured</strong></td>
+<td>Immutable raw records plus the exact adapter/code commit</td>
+<td>Integrity, expected inventory, provenance and publisher-specific completeness checks</td>
+<td>Protected corpus Git commit/ref plus its integrity manifest binding files, hashes and source coordinates</td>
+<td>Refuse the corpus release and retain its predecessor.</td>
+</tr>
+<tr>
+<td>Derived articles</td>
+<td><strong>Measured</strong></td>
+<td>Exact corpus commit, immutable extraction profile and deriver commit</td>
+<td>Deterministic re-derive, schema checks and extraction-quality guards</td>
+<td>Protected articles Git commit/ref plus its integrity manifest binding corpus, profile, code and derived-file hashes</td>
+<td>Refuse the article layer; source evidence is never rewritten to hide a gap.</td>
+</tr>
+<tr>
+<td>SQLite and vectors</td>
+<td><strong>Measured</strong></td>
+<td>Exact articles commit, index code, encoder/tokenizer and build configuration</td>
+<td>Stamp verification, content/ordinal checks, required publishers and reproducible artifact hashes</td>
+<td>Build tickets, index stamps and hashes bind database, vectors, model bundle, scope and commits; no detached release signature exists yet</td>
+<td>Do not mount or stage a mismatched artifact set.</td>
+</tr>
+<tr>
+<td>200-case deterministic retrieval benchmark</td>
+<td><strong>Quarantined</strong> for Luxembourg (LU); <strong>Next</strong> for EU</td>
+<td>Frozen engineer-reviewed cases, exact index/vector/model identities and machine envelope</td>
+<td>Exactness, temporal, relevance, latency, memory and regression thresholds; <strong>no large language model (LLM) grader</strong></td>
+<td>Benchmark report and digest become inputs to the later signed artifact release</td>
+<td>Keyword remains the default: LU hybrid failed its accepted evidence gate and exact-release EU hybrid remains unproven.</td>
+</tr>
+<tr>
+<td>Private staging</td>
+<td><strong>Next</strong></td>
+<td>The exact locally verified release bytes, hashes and create-only destination names</td>
+<td>Create each private object once, then bind its entity tag (ETag), hash and byte length; this is coordination evidence, not immutable storage</td>
+<td>Draft inventory and storage ETags record the exact staged objects; staging is not public signed evidence</td>
+<td>Delete only the exact failed draft objects the publisher created; never a canonical release.</td>
+</tr>
+<tr>
+<td>Signed release</td>
+<td><strong>Next</strong></td>
+<td>Exact staged bytes, artifact identities and publication workflow commit</td>
+<td>An <strong>exact-byte publication transaction</strong> signs the manifest, publishes once, downloads every public asset and compares the Secure Hash Algorithm 256-bit (SHA-256) digest plus length</td>
+<td>This final artifact publication is the first detached-signature boundary: immutable public release, whole-artifact manifest and signature</td>
+<td>Ambiguous read-back requires reconciliation; retry never overwrites an existing public release.</td>
+</tr>
+<tr>
+<td>Zero-traffic candidate</td>
+<td><strong>Next</strong></td>
+<td>Exact code commit, immutable image digest and signed artifact set</td>
+<td>Readiness, attestation, both jurisdictions, Hypertext Transfer Protocol (HTTP) contract and one-replica invariant</td>
+<td>Azure Resource Manager plus runtime attestation bind revision, image, code and the already signed mounted manifest set</td>
+<td>Candidate remains at zero traffic; production and exact rollback are unchanged.</td>
+</tr>
+<tr>
+<td>25-case live assistant evaluation</td>
+<td><strong>Next</strong></td>
+<td>Frozen reviewed catalog, exact candidate, Azure candidate deployment and separate grader deployment</td>
+<td>Real plan/freeze/execute requests, typed result checks, grader score, token/cost/latency and browser gates</td>
+<td>Catalog review is separately signed; report and browser-evidence hashes are bound by the signed evaluation release</td>
+<td>Any repetition or budget failure denies promotion and returns the candidate to zero traffic.</td>
+</tr>
+<tr>
+<td>Promotion or rollback</td>
+<td><strong>Next</strong></td>
+<td>Exact candidate evidence release plus current production/rollback identities</td>
+<td>Protected workflow revalidates every identity immediately before one traffic mutation</td>
+<td>Signed promotion and release-state receipts</td>
+<td>No identity match means no traffic change; rollback selects the exact retained former production revision.</td>
+</tr>
+</tbody>
+</table></div>
+<p>The offline retrieval benchmark and live assistant evaluation answer different questions. The first
+uses 200 fixed judgments and deterministic metrics to decide whether hybrid retrieval may activate;
+it does not call an answer model or a model grader. The second uses 25 natural-language cases against
+the real Azure-backed candidate and a separately authenticated release grader to test planning,
+typed execution and bounded final responses.</p>
+<blockquote>
+<p><strong>Why this design?</strong> Keyword retrieval remains the production default because a semantic model is
+a release artifact, not a configuration preference. Hybrid mounts only when the exact signed
+database, vectors, encoder and benchmark evidence pass together; a failed or missing result keeps
+the capability quarantined without weakening deterministic search.</p>
+</blockquote>
+<blockquote>
+<p><strong>Why this design?</strong> Every stage pins exact commits, digests and byte lengths because a tag, cache
+hit or protected branch can move after a build starts. Navigation may follow <code>main</code>; release
+authority comes only from the immutable identities recorded in signed evidence.</p>
+</blockquote>
+<h2>Inspect the implementation</h2>
+<p>Links follow protected <code>main</code> so the map stays useful as code evolves. Signed evidence binds exact
+commits and digests, so a <code>main</code> link is navigation, never proof that those bytes were released.
+The dossier keeps one system overview and one release/evidence overview; specialized legal,
+retrieval and assistant diagrams remain only when they explain a materially different relationship.
+That is the anti-bloat rule, not a reason to delete useful contract diagrams.</p>
+<h3>Worked evidence trace: General Data Protection Regulation (GDPR) Article 6</h3>
+<p>This trace was reproduced from the frozen EU database whose file SHA-256
+is <code>f827e089bddff64709926af4341bc0ddbfbef829a5c3e29400754aec3b649fd9</code>. It is
+<strong>Measured</strong> local evidence for the exact build below, not a claim that the pending signed release or
+25-case live evaluation has completed.</p>
+<div class="dossier-table" tabindex="0" role="region" aria-label="Scrollable architecture table"><table>
+<thead>
+<tr>
+<th>Trace step</th>
+<th>Status and exact evidence</th>
+<th>Source and test</th>
+<th>Limitation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Publisher bytes</td>
+<td><strong>Measured.</strong> The held English expression came from <a href="https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:02016R0679-20160504">EUR-Lex</a>; its current observed body SHA-256 is <code>28524c5589d9c80dee357fe96498302b4fefb29b3cc9ada7dcad52c967e3f15c</code>.</td>
+<td><a href="https://github.com/SFHAJJI/lex/blob/main/src/Lex.Sources.EurLex/EurLexAdapter.cs"><code>EurLexAdapter.FetchBody</code></a>; <a href="https://github.com/SFHAJJI/lex/blob/main/tests/Lex.Tests/EurLexScopeTests.cs"><code>EurLexScopeTests</code></a></td>
+<td>The official source remains authoritative; acquisition proves what Lex observed, not legal effect. See <a href="https://github.com/SFHAJJI/lex/blob/main/docs/architecture/pages/data.md">data authority</a>.</td>
+</tr>
+<tr>
+<td>Corpus version</td>
+<td><strong>Measured.</strong> Corpus commit <code>e9c4df0981c855855a1a28218cf086ddeb5bb691</code>, manifest SHA-256 <code>eb5abe73c30f7d50decc71539e0e39a76ebb3b1da437b69fd9e3ab38c65a4bd0</code>, exact version <code>eu-eurlex:32016r0679:2016-05-04--af3e8edcc8aeb9b8c10e891880377cb0b363a8fa7005a1b45557d21afa592de5</code>.</td>
+<td><a href="https://github.com/SFHAJJI/lex/blob/main/src/Lex.Ingest/CorpusWriter.cs"><code>CorpusWriter.WriteAsync</code></a>; <a href="https://github.com/SFHAJJI/lex/blob/main/tests/Lex.Tests/CorpusIntegrityTests.cs"><code>CorpusIntegrityTests</code></a></td>
+<td>The manifest is integrity-bound in a protected corpus commit; it is not a detached artifact signature.</td>
+</tr>
+<tr>
+<td>Derived article</td>
+<td><strong>Measured.</strong> Articles commit <code>ac8851147534b9addfa2231c4364cbd785065841</code>, profile <code>xhtml-eu/1</code>, anchor <code>art_6</code>, Article 6 text SHA-256 <code>dffea205327743e03f21c6910a899b7bfc081e40905defd085ab9d52dbb3fc87</code>.</td>
+<td><a href="https://github.com/SFHAJJI/lex/blob/main/src/Lex.Derive/DeriveWriter.cs"><code>DeriveWriter.Derive</code></a>; <a href="https://github.com/SFHAJJI/lex/blob/main/tests/Lex.Tests/XhtmlEuTests.cs"><code>XhtmlEuTests</code></a></td>
+<td>Derivation can expose only safely structured text; <a href="https://github.com/SFHAJJI/lex/blob/main/docs/known-defects.md">known defects</a> retain image-only and structural gaps.</td>
+</tr>
+<tr>
+<td>Index row and text blob</td>
+<td><strong>Measured.</strong> Builder commit <code>27f0e02cb0da8e0fdf9f8322d3eef3b3ae09c776</code>, content digest <code>158bf28e9cfe5facefe5b728ba221f6d00162b101f79b5d59b937695d4ea20f1</code>, record SHA-256 <code>44d09ee49e187e02cf8649106b90badc16600d8227eb1f6f851b2054775bcf84</code>; the <code>art_6</code> row addresses the text blob by the article digest above.</td>
+<td><a href="https://github.com/SFHAJJI/lex/blob/main/src/Lex.Ingest/IndexFromCorpus.cs"><code>IndexFromCorpus.Build</code></a> and <a href="https://github.com/SFHAJJI/lex/blob/main/src/Lex.Index/IndexBuilder.cs"><code>IndexBuilder.Build</code></a>; <a href="https://github.com/SFHAJJI/lex/blob/main/tests/Lex.Tests/IndexTests.cs"><code>IndexTests</code></a></td>
+<td>The database stamp is verified build provenance; the first detached release-signature boundary is final artifact publication.</td>
+</tr>
+<tr>
+<td>Typed legal operation</td>
+<td><strong>Measured.</strong> <code>as_of(work=eu-eurlex:32016r0679, date=2021-01-01, language=en, mode=select, anchors=art_6)</code> returned <code>ok</code>, the exact version above and one provision at <code>art_6</code>.</td>
+<td><a href="https://github.com/SFHAJJI/lex/blob/main/src/Lex.Mcp/McpCore.cs"><code>McpCore.CallToolAsync</code></a>; <a href="https://github.com/SFHAJJI/lex/blob/main/tests/Lex.Tests/McpContractTests.cs"><code>McpContractTests</code></a>; <a href="https://github.com/SFHAJJI/lex/blob/main/docs/assistant-evaluation-scenario-matrix.md">frozen-data evaluation evidence</a></td>
+<td>EUR-Lex intervals are official consolidated-wording states, not an independent conclusion about entry into force or applicability.</td>
+</tr>
+<tr>
+<td>User-interface citation</td>
+<td><strong>Built; Measured.</strong> <code>UiMapper.From</code> maps only typed fields into a provision view and preserves <code>/eu-eurlex/32016r0679/2016-05-04--af3e8edcc8aeb9b8c10e891880377cb0b363a8fa7005a1b45557d21afa592de5#art_6</code> as the citation target.</td>
+<td><a href="https://github.com/SFHAJJI/lex/blob/main/src/Lex.Ask/UiMapper.cs"><code>UiMapper.From</code></a>; <a href="https://github.com/SFHAJJI/lex/blob/main/tests/Lex.Tests/AgentEvidenceLedgerTests.cs"><code>AgentEvidenceLedgerTests</code></a> and <a href="https://github.com/SFHAJJI/lex/blob/main/web/src/assistant-shell.test.ts"><code>assistant-shell.test.ts</code></a></td>
+<td>A user-interface (UI) citation proves the result's source coordinate and hashes; it does not turn model prose into legal authority or advice.</td>
+</tr>
+</tbody>
+</table></div>
+<h3>Source map</h3>
+<p>Each row keeps implementation, test/evidence and the relevant boundary together. Symbol labels are
+orientation aids; links omit line numbers so normal refactors do not rot the map.</p>
+<div class="dossier-table" tabindex="0" role="region" aria-label="Scrollable architecture table"><table>
+<thead>
+<tr>
+<th>Boundary</th>
+<th>Status</th>
+<th>Implementation</th>
+<th>Test, evidence and limitation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Publisher ingest</td>
+<td><strong>Built</strong></td>
+<td><a href="https://github.com/SFHAJJI/lex/blob/main/src/Lex.Sources.EurLex/EurLexAdapter.cs"><code>EurLexAdapter.EnumerateWorks/FetchBody</code></a>, <a href="https://github.com/SFHAJJI/lex/blob/main/src/Lex.Sources.Legilux/LegiluxAdapter.cs"><code>LegiluxAdapter.EnumerateWorks/FetchBody</code></a>, <a href="https://github.com/SFHAJJI/lex/blob/main/src/Lex.Ingest/CorpusWriter.cs"><code>CorpusWriter.WriteAsync</code></a>; bounded orchestration starts in <a href="https://github.com/SFHAJJI/lex-ops/blob/main/.github/workflows/fresh-corpus-v4.yml"><code>fresh-corpus-v4.yml</code></a>.</td>
+<td><a href="https://github.com/SFHAJJI/lex/blob/main/tests/Lex.Tests/EurLexScopeTests.cs"><code>EurLexScopeTests</code></a>, <a href="https://github.com/SFHAJJI/lex/blob/main/tests/Lex.Tests/CorpusWriterTests.cs"><code>CorpusWriterTests</code></a>; incomplete enumeration cannot publish or manufacture removals.</td>
+</tr>
+<tr>
+<td>Deterministic derive</td>
+<td><strong>Built; Measured</strong></td>
+<td><a href="https://github.com/SFHAJJI/lex/blob/main/src/Lex.Derive/DeriveWriter.cs"><code>DeriveWriter.Derive</code></a> and profile-owned extraction.</td>
+<td><a href="https://github.com/SFHAJJI/lex/blob/main/tests/Lex.Tests/DeriveTests.cs"><code>DeriveTests</code></a>, worked trace above; unsafe structure remains a typed gap, not guessed text.</td>
+</tr>
+<tr>
+<td>Index and signing boundary</td>
+<td><strong>Built; Measured</strong></td>
+<td><a href="https://github.com/SFHAJJI/lex/blob/main/src/Lex.Ingest/IndexFromCorpus.cs"><code>IndexFromCorpus.Build</code></a>, <a href="https://github.com/SFHAJJI/lex/blob/main/src/Lex.Index/IndexBuilder.cs"><code>IndexBuilder.Build</code></a>, <a href="https://github.com/SFHAJJI/lex/blob/main/src/Lex.Index/ArtifactManifest.cs"><code>ArtifactManifests.VerifyDirectory</code></a>.</td>
+<td><a href="https://github.com/SFHAJJI/lex/blob/main/tests/Lex.Tests/IndexTests.cs"><code>IndexTests</code></a>, <a href="https://github.com/SFHAJJI/lex/blob/main/tests/Lex.Tests/ArtifactManifestTests.cs"><code>ArtifactManifestTests</code></a>; local stamps are not the detached public-release signature.</td>
+</tr>
+<tr>
+<td>Retrieval cases and benchmark</td>
+<td><strong>Built</strong>; hybrid is <strong>Quarantined</strong> for LU and <strong>Next</strong> for EU</td>
+<td><a href="https://github.com/SFHAJJI/lex/blob/main/evals/retrieval-cases.json"><code>retrieval-cases.json</code></a>, <a href="https://github.com/SFHAJJI/lex/blob/main/evals/retrieval-baseline-v2.json"><code>retrieval-baseline-v2.json</code></a>, <a href="https://github.com/SFHAJJI/lex/blob/main/src/Lex.Index/RetrievalBenchmark.cs"><code>RetrievalBenchmarkRunner.Run</code></a>. When compatible signed reports are mounted, the generated report is served at <a href="/benchmarks/latest.json"><code>/benchmarks/latest.json</code></a>; it is not a hand-edited source file.</td>
+<td><a href="https://github.com/SFHAJJI/lex/blob/main/tests/Lex.Tests/RetrievalBenchmarkTests.cs"><code>RetrievalBenchmarkTests</code></a>, <a href="https://github.com/SFHAJJI/lex/blob/main/docs/hybrid-search.md">hybrid activation contract</a>; no accepted exact-release report means keyword stays active and the latest-report endpoint fails closed.</td>
+</tr>
+<tr>
+<td>Exact-byte publication</td>
+<td><strong>Built</strong>; exact release is <strong>Next</strong></td>
+<td><a href="https://github.com/SFHAJJI/lex-ops/blob/main/.github/workflows/publish-prebuilt-index.yml"><code>publish-prebuilt-index.yml</code></a> owns the reviewed dispatch boundary; <a href="https://github.com/SFHAJJI/lex-ops/blob/main/publish-prebuilt-index.sh"><code>publish-prebuilt-index.sh</code></a> owns create-only staging, provenance, signing, read-back and recovery.</td>
+<td><a href="https://github.com/SFHAJJI/lex-ops/blob/main/tests/test_prebuilt_publication_contracts.py"><code>test_prebuilt_publication_contracts.py</code></a>; the workflow commit is part of evidence, and links to <code>main</code> are not release authority.</td>
+</tr>
+<tr>
+<td>Exact-tag fetch, deploy and runtime activation</td>
+<td><strong>Built</strong>; candidate is <strong>Next</strong></td>
+<td><a href="https://github.com/SFHAJJI/lex/blob/main/.github/workflows/deploy.yml"><code>deploy.yml</code></a>, <a href="https://github.com/SFHAJJI/lex/blob/main/deploy/fetch-indexes.sh"><code>fetch-indexes.sh</code></a>, <a href="https://github.com/SFHAJJI/lex/blob/main/src/Lex.Web/IndexRegistry.cs"><code>IndexRegistry</code></a>.</td>
+<td><a href="https://github.com/SFHAJJI/lex/blob/main/tests/Lex.Tests/ReleaseWorkflowTests.cs"><code>ReleaseWorkflowTests</code></a>, <a href="https://github.com/SFHAJJI/lex/blob/main/tests/Lex.Tests/ArtifactManifestTests.cs"><code>ArtifactManifestTests</code></a>; a tag alone cannot authorize bytes, and a mismatch refuses activation.</td>
+</tr>
+<tr>
+<td>Plan, one correction and freeze</td>
+<td><strong>Built</strong></td>
+<td><a href="https://github.com/SFHAJJI/lex/blob/main/src/Lex.Ask/AskService.cs"><code>AskService.PlanWithOneRepairAsync</code></a>, <a href="https://github.com/SFHAJJI/lex/blob/main/src/Lex.Ask/OperationContracts.cs"><code>OperationPlan.FromPlannerOutput</code></a>.</td>
+<td><a href="https://github.com/SFHAJJI/lex/blob/main/tests/Lex.Tests/AskOperationControllerTests.cs"><code>AskOperationControllerTests</code></a>; one pre-freeze correction is allowed, no execution observation returns to the planner.</td>
+</tr>
+<tr>
+<td>MCP execution and UI effects</td>
+<td><strong>Built; Measured</strong></td>
+<td><a href="https://github.com/SFHAJJI/lex/blob/main/src/Lex.Mcp/McpCore.cs"><code>McpCore.CallToolAsync</code></a>, <a href="https://github.com/SFHAJJI/lex/blob/main/src/Lex.Ask/UiMapper.cs"><code>UiMapper.From</code></a>.</td>
+<td><a href="https://github.com/SFHAJJI/lex/blob/main/tests/Lex.Tests/McpContractTests.cs"><code>McpContractTests</code></a>, worked trace above; operations are read-only and typed gaps survive to the UI.</td>
+</tr>
+<tr>
+<td>Assistant catalog, runner and publication</td>
+<td>Runner <strong>Built</strong>; 25-case catalog <strong>Measured</strong>; live run <strong>Next</strong></td>
+<td><a href="https://github.com/SFHAJJI/lex/blob/main/evals/assistant-cases-v3.json"><code>assistant-cases-v3.json</code></a>, <a href="https://github.com/SFHAJJI/lex/blob/main/src/Lex.Ingest/AssistantEvaluationRunner.cs"><code>AssistantEvaluationRunner.RunAsync</code></a>, <a href="https://github.com/SFHAJJI/lex/blob/main/src/Lex.Ingest/AssistantEvaluationRelease.cs"><code>AssistantEvaluationReleaseVerifier</code></a>, <a href="https://github.com/SFHAJJI/lex/blob/main/deploy/publish-assistant-evaluation.ps1"><code>publish-assistant-evaluation.ps1</code></a>, <a href="https://github.com/SFHAJJI/lex-ops/blob/main/.github/workflows/publish-assistant-evaluation.yml"><code>publish-assistant-evaluation.yml</code></a>.</td>
+<td><a href="https://github.com/SFHAJJI/lex/blob/main/tests/Lex.Tests/AssistantEvaluationTests.cs"><code>AssistantEvaluationTests</code></a>, <a href="https://github.com/SFHAJJI/lex/blob/main/docs/assistant-evaluation-scenario-matrix.md">25-case matrix</a>, <a href="https://github.com/SFHAJJI/lex/blob/main/evals/assistant-cases-v3.review.json">owner review</a> and <a href="https://github.com/SFHAJJI/lex/blob/main/evals/assistant-cases-v3.review.sig">detached signature</a>; the exact catalog is owner-signed but has not yet been run live.</td>
+</tr>
+<tr>
+<td>Traffic promotion and rollback</td>
+<td><strong>Built</strong>; this promotion is <strong>Next</strong></td>
+<td><a href="https://github.com/SFHAJJI/lex/blob/main/.github/workflows/revision-traffic.yml"><code>revision-traffic.yml</code></a>.</td>
+<td><a href="https://github.com/SFHAJJI/lex/blob/main/tests/Lex.Tests/ReleaseWorkflowTests.cs"><code>ReleaseWorkflowTests</code></a>; exact identities and one-replica state are rechecked immediately before the single traffic mutation.</td>
+</tr>
+<tr>
+<td>Limits and incidents</td>
+<td><strong>Built</strong> evidence surface</td>
+<td><a href="https://github.com/SFHAJJI/lex/blob/main/docs/architecture/pages/limits.md"><code>limits.md</code></a>, <a href="https://github.com/SFHAJJI/lex/blob/main/docs/architecture/pages/incidents.md"><code>incidents.md</code></a>.</td>
+<td><a href="https://github.com/SFHAJJI/lex/blob/main/tests/Lex.Tests/ArchitectureDossierTests.cs"><code>ArchitectureDossierTests</code></a>; a limit remains visible until the named replacement evidence exists.</td>
+</tr>
+</tbody>
+</table></div>
+<h3>Suggested reading order</h3>
+<ol>
+<li><a href="https://github.com/SFHAJJI/lex/blob/main/docs/architecture/pages/overview.md">Overview and system boundary</a></li>
+<li><a href="https://github.com/SFHAJJI/lex/blob/main/docs/architecture/pages/data.md">Data authority</a></li>
+<li><a href="https://github.com/SFHAJJI/lex/blob/main/evals/retrieval-cases.json">Frozen retrieval cases</a></li>
+<li><a href="https://github.com/SFHAJJI/lex/blob/main/src/Lex.Index/RetrievalBenchmark.cs">Deterministic benchmark runner</a></li>
+<li><a href="https://github.com/SFHAJJI/lex/blob/main/docs/architecture/pages/assistant.md">Bounded assistant architecture</a></li>
+<li><a href="https://github.com/SFHAJJI/lex/blob/main/docs/architecture/pages/release.md">Release and evidence contract</a></li>
+<li><a href="https://github.com/SFHAJJI/lex/blob/main/docs/architecture/pages/limits.md">Verified limits and scale triggers</a></li>
+</ol>
+<h2>Assistant evaluation gate</h2>
+<div class="dossier-table" tabindex="0" role="region" aria-label="Scrollable architecture table"><table>
+<thead>
+<tr>
+<th>Bound fact</th>
+<th>Current release contract</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Catalog author</td>
+<td><code>Lex release engineering</code>, identified as <code>system:lex-release-engineering</code></td>
+</tr>
+<tr>
+<td>Evaluation reviewer</td>
+<td>Soufien Hajji, using a separate non-exportable evaluation-review signing key</td>
+</tr>
+<tr>
+<td>Review claim</td>
+<td>The project owner reviews the catalog produced by the release-engineering identity. This is separation from the catalog author, not third-party review, external audit or legal review.</td>
+</tr>
+<tr>
+<td>Frozen set</td>
+<td>25 frozen scenarios, 49 final candidate HTTP requests, ten same-thread setup HTTP requests, 59 total candidate HTTP requests and 49 release-grader requests</td>
+</tr>
+<tr>
+<td>Candidate token budget</td>
+<td>The current reservation is 620,000 input and 123,000 output tokens. Setup and final turns are charged to this candidate budget.</td>
+</tr>
+<tr>
+<td>Grader token budget</td>
+<td>The current reservation is 294,000 input and 49,000 output tokens on a separately authenticated <code>gpt-5-nano</code> deployment.</td>
+</tr>
+<tr>
+<td>Cost control</td>
+<td>The catalog has an outer EUR 10 ceiling, where <code>EUR</code> is the standard currency code for euros. The current maximum-token reservation prices at EUR 0.3820232 before inference, then measured use is gated again. This is not a live Azure billing cutoff and cannot interrupt an in-flight model call. Signed call counts and per-call token ceilings bound the run instead.</td>
+</tr>
+<tr>
+<td>CI/CD</td>
+<td>GitHub Actions creates an immutable zero-traffic candidate, verifies the signed artifact manifest and both jurisdictions, runs HTTP and browser evaluation, publishes signed evidence, then a separate protected workflow revalidates it before promotion or exact rollback.</td>
+</tr>
+</tbody>
+</table></div>
+<h3>Evaluation flow</h3>
+<p>Server-Sent Events (SSE) carry the versioned intermediate contract; the equal terminal object is
+the authoritative completed response.</p>
+<p><code>Question -&gt; resolve identity -&gt; Plan once -&gt; validate or correct once -&gt; freeze -&gt; execute typed tools -&gt; typed SSE and terminal result -&gt; optional runtime prose check -&gt; deterministic release checks -&gt; separate release grade -&gt; signed promotion gate</code></p>
+<blockquote>
+<p><strong>Why this design?</strong> One bounded correction recovers a malformed plan before it can touch legal
+tools, while the freeze prevents a model from adapting its legal request after seeing results.
+This keeps planning useful without creating an observation-driven agent loop.</p>
+<pre tabindex="0" aria-label="Scrollable architecture diagram or code"><code class="language-text">plan = validate(first_proposal) ?? validate(one_corrected_proposal)
+freeze(plan); execute_in_user_order(plan) // no observation, no replan
+</code></pre>
+</blockquote>
+<p>The Runtime grounding judge checks only optional generated factual prose during an ordinary request
+and falls back to the typed result. The separate Release grader receives the frozen question,
+rubric, bounded reply, typed operations and trace. Before grading, the deterministic runner checks
+tool arguments, legal and transport outcomes, UI effect, model identity, tokens, latency and stream
+equality. It reads typed SSE plus the matching terminal object—not Azure logs or model
+chain-of-thought—and the signed report omits prompts, legal text, raw tool payloads and free-form
+grader reasons.</p>
+<h3>Frozen catalog field glossary</h3>
+<div class="dossier-table" tabindex="0" role="region" aria-label="Scrollable architecture table"><table>
+<thead>
+<tr>
+<th>Catalog field</th>
+<th>What it controls</th>
+<th>Where the evaluator reads the result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>id</code>, <code>question</code>, <code>history</code></td>
+<td>Stable scenario identity, final user input and up to eight server-owned setup turns</td>
+<td>Catalog bytes bind the inputs; only an opaque thread token crosses between real HTTP turns. A setup turn with its own <code>expected</code> contract is checked from its typed terminal response before continuation.</td>
+</tr>
+<tr>
+<td><code>repetitions</code></td>
+<td>Re-runs the whole plan, freeze and execute path to expose nondeterministic planning or answers</td>
+<td>Every repetition has its own signed request coordinates and result. Any failed repetition deterministically fails the release gate.</td>
+</tr>
+<tr>
+<td><code>maximum_input_tokens</code>, <code>maximum_output_tokens</code></td>
+<td>Per-turn candidate ceilings; setup messages declare their own ceilings</td>
+<td>Candidate terminal <code>model_usage</code>, aggregated across setup and final turns, is checked per case and against the candidate budget.</td>
+</tr>
+<tr>
+<td><code>maximum_latency_ms</code></td>
+<td>Maximum wall time for the complete case invocation</td>
+<td>Total duration sums all successful setup and final turns. Planner, MCP, first-result and residual fields retain the slowest turn, so setup latency cannot disappear. Thread reset is cleanup, not inference.</td>
+</tr>
+<tr>
+<td><code>expected_synthesis</code></td>
+<td>Whether the final turn must run optional generated prose</td>
+<td>Presence of the final stream's measured synthesis segment must match exactly; absence is not treated as zero latency.</td>
+</tr>
+<tr>
+<td><code>expected.tool</code></td>
+<td>The authorized legal operation for a single-operation case</td>
+<td>The terminal typed operation and its equal <code>operation_result</code> SSE payload.</td>
+</tr>
+<tr>
+<td><code>expected.operations</code></td>
+<td>Two to eight authorized operations whose order is part of the contract</td>
+<td>Ordered terminal operations, equal streamed copies and ordered primary-call traces. Clarification and legal-boundary operations stay single-operation because they deliberately make no primary call.</td>
+</tr>
+<tr>
+<td><code>expected.legal_outcome</code></td>
+<td>Closed legal result such as <code>succeeded</code>, <code>needs_clarification</code> or <code>legal_boundary</code></td>
+<td>Terminal operation contract, not answer wording.</td>
+</tr>
+<tr>
+<td><code>expected.transport_outcome</code></td>
+<td>Whether execution completed or ended in a typed transport state</td>
+<td>Terminal operation contract and streamed copy. The current signed catalog requires <code>completed</code>; controlled failure branches belong in deterministic and chaos tests.</td>
+</tr>
+<tr>
+<td><code>expected.effect</code></td>
+<td>Required UI contract such as provision, diff, timeline, coverage or gap</td>
+<td>Typed <code>effects</code> on the terminal operation. Browser tests separately prove presentation.</td>
+</tr>
+<tr>
+<td><code>expected.arguments</code></td>
+<td>Reviewed argument values that every acceptable plan must contain</td>
+<td>Primary-call trace, or the frozen operation-plan trace when clarification correctly prevents execution. Values are exact; additional bounded tuning arguments may vary.</td>
+</tr>
+<tr>
+<td><code>expected.argument_alternatives</code></td>
+<td>Complete reviewed alternative argument sets, of which one must match</td>
+<td>The same typed trace. The EU cases accept exact <code>publisher=eu-eurlex</code> or exact <code>jurisdiction=EU</code>; an unscoped plan fails. Redundant scope is accepted only when every alternative-owned value is reviewed, so <code>jurisdiction=EU</code> plus <code>publisher=lu-legilux</code> fails.</td>
+</tr>
+<tr>
+<td><code>gap_status</code>, <code>clarification</code></td>
+<td>Required typed gap or clarification behavior when a case declares it</td>
+<td>Typed UI gap and top-level clarification objects.</td>
+</tr>
+<tr>
+<td><code>population_minimum</code>, <code>population_path</code></td>
+<td>A lower bound on a specific typed result population</td>
+<td>Bounded JavaScript Object Notation (JSON) pointer into the terminal response, never a prose count.</td>
+</tr>
+<tr>
+<td><code>forbidden_reply_contains</code></td>
+<td>Injection canaries and prohibited disclosure markers</td>
+<td>Bounded final reply, case-insensitively; it is a negative safety check, not the accuracy grader.</td>
+</tr>
+<tr>
+<td><code>grading.mode</code>, <code>threshold</code>, <code>rubric</code></td>
+<td>Selects deterministic-only or separate LLM grading and defines the pass score</td>
+<td>Deterministic contract failures are evaluated first. For LLM mode, the separate grader sees the question, rubric, bounded reply, operations and trace and returns a 1 to 5 score.</td>
+</tr>
+<tr>
+<td><code>grading.maximum_input_tokens</code>, <code>grading.maximum_output_tokens</code></td>
+<td>Per-call Release grader ceilings, separate from candidate use</td>
+<td>Authenticated grader application programming interface (API) usage and aggregate grader budget. An unavailable or malformed grader fails closed.</td>
+</tr>
+<tr>
+<td>Aggregate budget and pricing</td>
+<td>Candidate tokens, grader tokens, latency percentiles, exact model deployment meter snapshot and outer euro limit</td>
+<td>Reserved maxima are checked before the first call; measured typed usage and timings are checked after every run.</td>
+</tr>
+</tbody>
+</table></div>
+<p>The detailed evaluator mechanics and the owner-signed live catalog's layered coverage map are in
+<a href="https://github.com/SFHAJJI/lex/blob/main/docs/assistant-evaluation.md">assistant release evaluation</a>
+and the
+<a href="https://github.com/SFHAJJI/lex/blob/main/docs/assistant-evaluation-scenario-matrix.md">assistant evaluation scenario matrix</a>.</p>
+<h2>Verified limits</h2>
+<p>These are present release boundaries, not generic risks. A limit stays visible until the named
+evidence exists; a model answer cannot waive it.</p>
+<div class="dossier-table" tabindex="0" role="region" aria-label="Scrollable architecture table"><table>
+<thead>
+<tr>
+<th>Limitation</th>
+<th>User impact</th>
+<th>Current containment</th>
+<th>Next evidence needed</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Publisher and jurisdiction coverage is limited to EUR-Lex/EU and Legilux/Luxembourg.</td>
+<td>Lex cannot establish coverage or absence for another publisher or jurisdiction.</td>
+<td>Coverage responses disclose the mounted set and known gaps; required publishers are release-gated.</td>
+<td>A new immutable source adapter, corpus/articles/index evidence and the same retrieval and release gates for that publisher.</td>
+</tr>
+<tr>
+<td>Luxembourg hybrid retrieval remains quarantined because the accepted relevance and latency gate has not passed.</td>
+<td>Luxembourg search uses deterministic keyword retrieval; conceptual recall may be lower.</td>
+<td>Keyword is the production default and hybrid cannot activate from configuration alone.</td>
+<td>A fresh signed holdout report meeting relevance, warm-latency, memory and regression thresholds.</td>
+</tr>
+<tr>
+<td>EU hybrid retrieval is currently unproven for this release.</td>
+<td>EU search also remains keyword-first; no semantic improvement is claimed.</td>
+<td>The signed activation flag stays false unless the exact EU artifacts and model pass the frozen benchmark.</td>
+<td>An accepted exact-release EU benchmark report, including holdout and cold/warm operational measurements.</td>
+</tr>
+<tr>
+<td>Current image-only EU annex wording is not derived through optical character recognition (OCR) or searchable.</td>
+<td>A reader may see the official record and source but cannot search or quote annex text Lex does not safely hold.</td>
+<td>Source identity, source address and byte evidence are retained; the text state remains explicitly unavailable rather than guessed.</td>
+<td>An additive, reviewed acquisition/extraction profile with fidelity measurements, protected corpus/articles commits and a rebuilt signed artifact release.</td>
+</tr>
+<tr>
+<td>The exact 25-case assistant catalog is owner-reviewed and signed, but has not yet been executed against a candidate.</td>
+<td>No claim is made yet that a candidate passed the new LU, language, empty, refusal, compound and continuation cases.</td>
+<td>Preflight verifies the digest-bound owner review and trusted signature before inference; any catalog-byte change invalidates approval.</td>
+<td>Live signed report, browser evidence and promotion verification for the same candidate identities.</td>
+</tr>
+<tr>
+<td>Runtime quotas, idempotency and assistant thread state are process-local.</td>
+<td>The service cannot safely scale to multiple active replicas today.</td>
+<td>Release verification pins production, rollback and candidate revisions to one replica each.</td>
+<td>Externalized shared state plus concurrency, failover and latency evidence before a multi-replica release.</td>
+</tr>
+</tbody>
+</table></div>
+<p>Operational thresholds are detailed under <a href="/built/limits">limits and scale</a>, retrieval activation
+under
+<a href="https://github.com/SFHAJJI/lex/blob/main/docs/hybrid-search.md">local hybrid retrieval</a>, dated gaps under
+<a href="https://github.com/SFHAJJI/lex/blob/main/docs/known-defects.md">known defects</a>, and permanent guards
+derived from failures under <a href="/built/incidents">incidents</a>.</p>
 <h2>Container registry and Blob retention</h2>
-<p>The Azure Container Registry is shared and still has a legacy RBAC boundary. Broad digest deletion
-is rejected because Lex's revision inventory cannot prove that another application does not pull a
-digest. The clean target is either a dedicated Lex registry or an audited migration of every shared
-consumer to repository-scoped ABAC roles and managed identities. Only then may an exact digest
-allowlist become an automated deletion plan.</p>
-<p>Private prebuilt staging blobs have a narrower ownership proof. The publisher may delete only the
-exact staging paths it created, with matching ETags, after both the immutable Blob release and the
-public release have been downloaded and hash-verified. Release paths are never cleanup candidates.</p>
+<p>The Azure Container Registry is shared and still has a legacy role-based access control (RBAC)
+boundary. Broad digest deletion is rejected because Lex cannot prove that another application does
+not pull a digest. The clean target is a dedicated registry or an audited move of every shared
+consumer to repository-scoped attribute-based access control (ABAC) and managed identities; only
+then can an exact-digest allowlist become an automated deletion plan.</p>
+<p>Private Azure Blob staging objects have a narrower ownership proof. They are disposable
+coordination records, not the canonical release. The publisher may delete only the exact
+create-only staging names it created, with matching ETags, after the GitHub Immutable Release
+assets and signature have been downloaded and matched by hash and length, or after a failed draft
+has been reconciled. Canonical GitHub release tags and assets are outside Blob cleanup entirely.
+Moving the canonical boundary to Azure immutable write-once, read-many (WORM) storage is a future
+option only when retention or compliance requirements justify a separate architecture decision
+and migration evidence.</p>
 <h2 id="mounted-release">Mounted release evidence</h2>
 <p>The release model above is the invariant. This table reads process configuration and
 verified mounted indexes at request time. It reports the revision's identities and

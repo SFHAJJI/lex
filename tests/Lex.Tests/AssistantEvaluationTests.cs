@@ -72,14 +72,14 @@ public sealed class AssistantEvaluationTests : IDisposable
     }
 
     [Fact]
-    public void Repository_catalog_is_bounded_and_explicitly_blocked_until_independent_review()
+    public void Repository_catalog_is_bounded_and_blocked_until_separate_author_owner_review()
     {
         var path = Path.Combine(RepoRoot(), "evals", "assistant-cases-v3.json");
 
         var set = AssistantEvaluationCatalog.Load(path);
 
         Assert.Equal("lex-assistant-eval/3", set.Catalog.Schema);
-        Assert.InRange(set.Catalog.Cases.Count, 16, 20);
+        Assert.Equal(25, set.Catalog.Cases.Count);
         Assert.Equal("https://prices.azure.com/api/retail/prices",
             set.Catalog.Pricing.SourceUri);
         Assert.Equal("gpt-5-mini", set.Catalog.Pricing.Candidate.ModelName);
@@ -91,8 +91,10 @@ public sealed class AssistantEvaluationTests : IDisposable
         Assert.Equal(
             ["article_history", "as_of", "changes_in_period", "cited_by", "coverage",
                 "diff", "in_force_on", "legal_boundary", "provenance", "search", "timeline"],
-            set.Catalog.Cases.Select(item => item.Expected.Tool).Distinct().Order().ToArray());
-        Assert.Contains(set.Catalog.Cases, item => item.Expected.LegalOutcome == "needs_clarification");
+            set.Catalog.Cases.SelectMany(item => item.Expected.ReviewedOperations())
+                .Select(item => item.Tool).Distinct().Order().ToArray());
+        Assert.Contains(set.Catalog.Cases, item => item.Expected.ReviewedOperations()
+            .Any(operation => operation.LegalOutcome == "needs_clarification"));
         Assert.All(set.Catalog.Cases, item => Assert.Equal("llm", item.Grading.Mode));
         Assert.Contains(set.Catalog.Cases,
             item => item.Id == "direct-injection-keeps-authority");
@@ -104,13 +106,62 @@ public sealed class AssistantEvaluationTests : IDisposable
             item => item.Id == "quoted-tool-evidence-remains-data" && item.History?.Count == 2);
         Assert.Contains(set.Catalog.Cases, item => item.ExpectedSynthesis == true);
         Assert.Contains(set.Catalog.Cases, item => item.ExpectedSynthesis == false);
+        Assert.Equal("Lex release engineering", set.Catalog.AuthoredBy);
+        Assert.Equal("system:lex-release-engineering", set.Catalog.AuthorId);
+        var euInForce = Assert.Single(set.Catalog.Cases,
+            item => item.Id == "eu-in-force-date");
+        var euInForceOperation = Assert.Single(euInForce.Expected.ReviewedOperations());
+        Assert.Equal("2024-06-01", euInForceOperation.Arguments["date"]);
+        Assert.Equal(2, euInForceOperation.ArgumentAlternatives?.Count);
+        Assert.Contains(euInForceOperation.ArgumentAlternatives!, alternative =>
+            alternative.Count == 1
+            && alternative.TryGetValue("publisher", out var publisher)
+            && publisher == "eu-eurlex");
+        Assert.Contains(euInForceOperation.ArgumentAlternatives!, alternative =>
+            alternative.Count == 1
+            && alternative.TryGetValue("jurisdiction", out var jurisdiction)
+            && jurisdiction == "EU");
+        var provenance = Assert.Single(set.Catalog.Cases,
+            item => item.Id == "exact-provenance");
+        Assert.Equal(
+            "eu-eurlex:32016r0679:2016-05-04--af3e8edcc8aeb9b8c10e891880377cb0b363a8fa7005a1b45557d21afa592de5",
+            Assert.Single(provenance.Expected.ReviewedOperations()).Arguments["lex_id"]);
+        Assert.Contains(set.Catalog.Cases, item => item.Id == "lu-constitution-article");
+        Assert.Contains(set.Catalog.Cases, item => item.Id == "lu-constitution-article-history");
+        Assert.Contains(set.Catalog.Cases, item => item.Id == "crr-article-french");
+        Assert.Contains(set.Catalog.Cases, item => item.Id == "lu-text-not-available");
+        Assert.Contains(set.Catalog.Cases, item => item.Id == "eu-empty-change-period");
+        Assert.Contains(set.Catalog.Cases, item => item.Id == "lu-profile-not-comparable");
+        Assert.Contains(set.Catalog.Cases, item => item.Id == "gdpr-article-and-timeline"
+            && item.Expected.ReviewedOperations().Count == 2);
+        Assert.Contains(set.Catalog.Cases, item => item.Id == "clarification-continues-with-identity"
+            && item.History is [{ Expected: not null }]);
         var admissionPlan = AssistantEvaluationRequestPlan.Build(
             set.Catalog,
             Convert.ToBase64String(new byte[32])
                 .TrimEnd('=').Replace('+', '-').Replace('/', '_'));
-        Assert.Equal(41, admissionPlan.Count);
-        Assert.Equal(41, admissionPlan.Select(request => request.IdempotencyKey)
+        Assert.Equal(59, admissionPlan.Count);
+        Assert.Equal(59, admissionPlan.Select(request => request.IdempotencyKey)
             .Distinct(StringComparer.Ordinal).Count());
+        var candidateInput = set.Catalog.Cases.Sum(item => checked(
+            ((long)item.MaximumInputTokens
+             + (item.History?.Sum(turn => (long)turn.MaximumInputTokens) ?? 0))
+            * item.Repetitions));
+        var candidateOutput = set.Catalog.Cases.Sum(item => checked(
+            ((long)item.MaximumOutputTokens
+             + (item.History?.Sum(turn => (long)turn.MaximumOutputTokens) ?? 0))
+            * item.Repetitions));
+        var graderInput = set.Catalog.Cases.Sum(item =>
+            checked((long)item.Grading.MaximumInputTokens * item.Repetitions));
+        var graderOutput = set.Catalog.Cases.Sum(item =>
+            checked((long)item.Grading.MaximumOutputTokens * item.Repetitions));
+        Assert.Equal(620_000, candidateInput);
+        Assert.Equal(123_000, candidateOutput);
+        Assert.Equal(294_000, graderInput);
+        Assert.Equal(49_000, graderOutput);
+        Assert.Equal(0.3820232m,
+            set.Catalog.Pricing.CandidateCost(candidateInput, candidateOutput)
+            + set.Catalog.Pricing.GraderCost(graderInput, graderOutput));
         Assert.True(set.Catalog.Cases.Sum(item => checked(
                 ((long)item.MaximumInputTokens
                  + (item.History?.Sum(turn => (long)turn.MaximumInputTokens) ?? 0))
@@ -178,7 +229,7 @@ public sealed class AssistantEvaluationTests : IDisposable
     [InlineData("digest")]
     [InlineData("self")]
     [InlineData("stale")]
-    public void Independent_review_must_bind_the_exact_cases_and_a_distinct_reviewer(string mutation)
+    public void Owner_review_must_bind_the_exact_cases_and_a_distinct_reviewer(string mutation)
     {
         var path = Write(Catalog());
         var unreviewed = AssistantEvaluationCatalog.Load(path);
@@ -250,6 +301,7 @@ public sealed class AssistantEvaluationTests : IDisposable
     [InlineData("duplicate")]
     [InlineData("ungradeable")]
     [InlineData("unexpected")]
+    [InlineData("compound-clarification")]
     public void Malformed_or_self_inconsistent_catalogs_fail_closed(string mutation)
     {
         var catalog = Catalog();
@@ -267,6 +319,11 @@ public sealed class AssistantEvaluationTests : IDisposable
                 break;
             case "unexpected":
                 catalog["cases"]![0]!["surprise"] = true;
+                break;
+            case "compound-clarification":
+                catalog["cases"]![0]!["expected"] = CompoundExpected();
+                catalog["cases"]![0]!["expected"]!["operations"]![0]!["legal_outcome"] =
+                    "needs_clarification";
                 break;
         }
 
@@ -290,6 +347,142 @@ public sealed class AssistantEvaluationTests : IDisposable
         Assert.Equal(240, report.ActualCandidateUsage.OutputTokens);
         Assert.Equal(0.00432m, report.ActualTotalCostEur);
         Assert.All(report.Results, result => Assert.True(result.Passed));
+    }
+
+    [Fact]
+    public async Task Runner_requires_one_complete_reviewed_argument_alternative()
+    {
+        var catalog = Catalog();
+        foreach (var item in catalog["cases"]!.AsArray())
+            item!["expected"]!["argument_alternatives"] = new JsonArray(
+                new JsonObject { ["publisher"] = "eu-eurlex" },
+                new JsonObject { ["jurisdiction"] = "EU" });
+        var set = Reviewed(catalog);
+
+        var publisherResponse = Response();
+        publisherResponse["trace"]![0]!["args"]!["publisher"] = "eu-eurlex";
+        var publisher = await AssistantEvaluationRunner.RunAsync(
+            set, new StubTarget(publisherResponse), null, Identity(), Pricing(),
+            DateTimeOffset.Parse("2026-08-11T02:00:00Z"), CancellationToken.None);
+
+        var jurisdictionResponse = Response();
+        jurisdictionResponse["trace"]![0]!["args"]!["jurisdiction"] = "EU";
+        var jurisdiction = await AssistantEvaluationRunner.RunAsync(
+            set, new StubTarget(jurisdictionResponse), null, Identity(), Pricing(),
+            DateTimeOffset.Parse("2026-08-11T02:00:00Z"), CancellationToken.None);
+
+        var safelyRedundantResponse = Response();
+        safelyRedundantResponse["trace"]![0]!["args"]!["jurisdiction"] = "EU";
+        safelyRedundantResponse["trace"]![0]!["args"]!["publisher"] = "eu-eurlex";
+        var safelyRedundant = await AssistantEvaluationRunner.RunAsync(
+            set, new StubTarget(safelyRedundantResponse), null, Identity(), Pricing(),
+            DateTimeOffset.Parse("2026-08-11T02:00:00Z"), CancellationToken.None);
+
+        var conflictingResponse = Response();
+        conflictingResponse["trace"]![0]!["args"]!["jurisdiction"] = "EU";
+        conflictingResponse["trace"]![0]!["args"]!["publisher"] = "lu-legilux";
+        var conflicting = await AssistantEvaluationRunner.RunAsync(
+            set, new StubTarget(conflictingResponse), null, Identity(), Pricing(),
+            DateTimeOffset.Parse("2026-08-11T02:00:00Z"), CancellationToken.None);
+
+        var unscoped = await AssistantEvaluationRunner.RunAsync(
+            set, new StubTarget(Response()), null, Identity(), Pricing(),
+            DateTimeOffset.Parse("2026-08-11T02:00:00Z"), CancellationToken.None);
+
+        Assert.True(publisher.ActivationGatePassed);
+        Assert.True(jurisdiction.ActivationGatePassed);
+        Assert.True(safelyRedundant.ActivationGatePassed);
+        Assert.False(conflicting.ActivationGatePassed);
+        Assert.All(conflicting.Results, result => Assert.Contains(result.Failures,
+            failure => failure.Contains(
+                "conflicted with a nonchosen reviewed argument alternative",
+                StringComparison.Ordinal)));
+        Assert.False(unscoped.ActivationGatePassed);
+        Assert.All(unscoped.Results, result => Assert.Contains(result.Failures,
+            failure => failure.Contains(
+                "reviewed argument alternative", StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public async Task Runner_checks_every_compound_operation_in_reviewed_order()
+    {
+        var catalog = Catalog();
+        foreach (var item in catalog["cases"]!.AsArray())
+            item!["expected"] = CompoundExpected();
+        var set = Reviewed(catalog);
+
+        var valid = await AssistantEvaluationRunner.RunAsync(
+            set, new StubTarget(CompoundResponse()), null, Identity(), Pricing(),
+            DateTimeOffset.Parse("2026-08-11T02:00:00Z"), CancellationToken.None);
+        var reversedResponse = CompoundResponse();
+        var operations = reversedResponse["operations"]!.AsArray();
+        reversedResponse["operations"] = new JsonArray(
+            operations[1]!.DeepClone(), operations[0]!.DeepClone());
+        var reversed = await AssistantEvaluationRunner.RunAsync(
+            set, new StubTarget(reversedResponse), null, Identity(), Pricing(),
+            DateTimeOffset.Parse("2026-08-11T02:00:00Z"), CancellationToken.None);
+        var wrongSecondArgumentsResponse = CompoundResponse();
+        wrongSecondArgumentsResponse["trace"]![1]!["args"]!["work"] =
+            "eu-eurlex:32013r0575";
+        var wrongSecondArguments = await AssistantEvaluationRunner.RunAsync(
+            set, new StubTarget(wrongSecondArgumentsResponse), null, Identity(), Pricing(),
+            DateTimeOffset.Parse("2026-08-11T02:00:00Z"), CancellationToken.None);
+
+        Assert.True(valid.ActivationGatePassed);
+        Assert.False(reversed.ActivationGatePassed);
+        Assert.All(reversed.Results, result => Assert.Contains(result.Failures,
+            failure => failure.Contains("operation 1 tool", StringComparison.Ordinal)));
+        Assert.False(wrongSecondArguments.ActivationGatePassed);
+        Assert.All(wrongSecondArguments.Results, result => Assert.Contains(result.Failures,
+            failure => failure.Contains(
+                "operation 2 canonical argument 'work'", StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public async Task Runner_checks_a_reviewed_setup_turn_before_clarification_continues()
+    {
+        var catalog = Catalog();
+        catalog["budget"]!["maximum_candidate_input_tokens"] = 2_500;
+        catalog["budget"]!["maximum_candidate_output_tokens"] = 500;
+        catalog["cases"]![0]!["history"] = new JsonArray(new JsonObject
+        {
+            ["role"] = "user",
+            ["content"] = "Show the timeline for the Atlantis Regulation.",
+            ["maximum_input_tokens"] = 250,
+            ["maximum_output_tokens"] = 50,
+            ["expected_synthesis"] = false,
+            ["expected"] = new JsonObject
+            {
+                ["tool"] = "timeline",
+                ["legal_outcome"] = "needs_clarification",
+                ["transport_outcome"] = "completed",
+                ["effect"] = "gap",
+                ["arguments"] = new JsonObject
+                {
+                    ["work_query"] = "Atlantis Regulation",
+                },
+                ["clarification"] = true,
+            },
+        });
+        var set = Reviewed(catalog);
+        var setup = ClarificationResponse();
+
+        var valid = await AssistantEvaluationRunner.RunAsync(
+            set, new StubTarget(Response(), setupResponse: setup), null,
+            Identity(), Pricing(), DateTimeOffset.Parse("2026-08-11T02:00:00Z"),
+            CancellationToken.None);
+        var driftedSetup = setup.DeepClone().AsObject();
+        driftedSetup["operations"]![0]!["legal_outcome"] = "not_found";
+        var invalid = await AssistantEvaluationRunner.RunAsync(
+            set, new StubTarget(Response(), setupResponse: driftedSetup), null,
+            Identity(), Pricing(), DateTimeOffset.Parse("2026-08-11T02:00:00Z"),
+            CancellationToken.None);
+
+        Assert.True(valid.ActivationGatePassed);
+        Assert.False(invalid.ActivationGatePassed);
+        Assert.Contains(invalid.Results.SelectMany(result => result.Failures),
+            failure => failure.Contains("setup turn 1", StringComparison.Ordinal)
+                       && failure.Contains("legal_outcome", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -542,6 +735,38 @@ public sealed class AssistantEvaluationTests : IDisposable
             first.Response["model_usage"]?["output_tokens"]?.GetValue<long>());
         Assert.Equal(1_200,
             second.Response["model_usage"]?["input_tokens"]?.GetValue<long>());
+        Assert.Single(first.SetupInvocations!);
+        Assert.Single(second.SetupInvocations!);
+    }
+
+    [Fact]
+    public async Task Evaluation_target_includes_every_setup_turn_in_case_latency()
+    {
+        var catalog = Catalog();
+        catalog["cases"]![0]!["history"] = new JsonArray(new JsonObject
+        {
+            ["role"] = "user",
+            ["content"] = "Keep this first request in the same evaluation thread.",
+            ["maximum_input_tokens"] = 250,
+            ["maximum_output_tokens"] = 50,
+        });
+        catalog["budget"]!["maximum_candidate_input_tokens"] = 2_500;
+        catalog["budget"]!["maximum_candidate_output_tokens"] = 500;
+        var handler = new ThreadedEvaluationHandler(
+            terminalDelayMilliseconds: 40,
+            setupPlannerMilliseconds: 80,
+            setupMcpMilliseconds: 70);
+        using var http = new HttpClient(handler);
+        var target = new AssistantEvaluationHttpTarget(http, "http://localhost");
+
+        var invocation = await target.InvokeAsync(
+            Reviewed(catalog).Catalog.Cases[0], "eval-setup-latency",
+            CancellationToken.None);
+
+        Assert.True(invocation.Timings.TotalMilliseconds >= 70,
+            $"Expected setup plus final latency, got {invocation.Timings.TotalMilliseconds} ms.");
+        Assert.Equal(80, invocation.Timings.PlannerMilliseconds);
+        Assert.Equal(70, invocation.Timings.McpMilliseconds);
     }
 
     [Fact]
@@ -1105,11 +1330,11 @@ public sealed class AssistantEvaluationTests : IDisposable
         ["schema"] = "lex-assistant-eval-review/1",
         ["key_id"] = "independent-reviewer",
         ["cases_sha256"] = casesSha256,
-        ["reviewer"] = "independent reviewer B",
+        ["reviewer"] = "project owner reviewer B",
         ["reviewer_id"] = "entra:test-reviewer",
         ["reviewed_at"] = "2026-08-11T01:00:00Z",
         ["decision"] = "approved",
-        ["attestation"] = "I reviewed every case independently against the typed product contract.",
+        ["attestation"] = "I reviewed every case against the typed product contract.",
     };
 
     private static JsonObject Catalog() => JsonNode.Parse("""
@@ -1144,7 +1369,7 @@ public sealed class AssistantEvaluationTests : IDisposable
             "maximum_output_tokens":200,
             "maximum_latency_ms":1000,
             "expected_synthesis":false,
-            "expected":{"tool":"as_of","legal_outcome":"succeeded","transport_outcome":"completed","effect":"provision","arguments":{"work":"eu-eurlex:32016r0679","date":"2021-01-01","mode":"select","anchor":"art_6"}},
+            "expected":{"tool":"as_of","legal_outcome":"succeeded","transport_outcome":"completed","effect":"provision","arguments":{"work":"eu-eurlex:32016r0679","date":"2021-01-01","mode":"select","anchors":"art_6"}},
             "grading":{"mode":"deterministic","threshold":5,"maximum_input_tokens":1000,"maximum_output_tokens":200}
           },{
             "id":"gdpr-as-of-synthesis",
@@ -1154,7 +1379,7 @@ public sealed class AssistantEvaluationTests : IDisposable
             "maximum_output_tokens":200,
             "maximum_latency_ms":1000,
             "expected_synthesis":true,
-            "expected":{"tool":"as_of","legal_outcome":"succeeded","transport_outcome":"completed","effect":"provision","arguments":{"work":"eu-eurlex:32016r0679","date":"2021-01-01","mode":"select","anchor":"art_6"}},
+            "expected":{"tool":"as_of","legal_outcome":"succeeded","transport_outcome":"completed","effect":"provision","arguments":{"work":"eu-eurlex:32016r0679","date":"2021-01-01","mode":"select","anchors":"art_6"}},
             "grading":{"mode":"deterministic","threshold":5,"maximum_input_tokens":1000,"maximum_output_tokens":200}
           }]
         }
@@ -1301,7 +1526,7 @@ public sealed class AssistantEvaluationTests : IDisposable
           "model_identity":{"resource_host":"candidate-models.example","deployment":"candidate-release"},
           "model_usage":{"input_tokens":600,"output_tokens":120,"total_tokens":720},
           "trace":[
-            {"phase":"primary","tool":"as_of","args":{"work":"eu-eurlex:32016r0679","date":"2021-01-01","mode":"select","anchor":"art_6"}}
+            {"phase":"primary","tool":"as_of","args":{"work":"eu-eurlex:32016r0679","date":"2021-01-01","mode":"select","anchors":"art_6"}}
           ],
           "operations":[{
             "tool":"as_of",
@@ -1314,10 +1539,77 @@ public sealed class AssistantEvaluationTests : IDisposable
         }
         """)!.AsObject();
 
+    private static JsonObject CompoundExpected() => JsonNode.Parse("""
+        {
+          "operations":[{
+            "tool":"as_of","legal_outcome":"succeeded","transport_outcome":"completed",
+            "effect":"provision",
+            "arguments":{"work":"eu-eurlex:32016r0679","date":"2021-01-01","mode":"select","anchors":"art_6"}
+          },{
+            "tool":"timeline","legal_outcome":"succeeded","transport_outcome":"completed",
+            "effect":"timeline","arguments":{"work":"eu-eurlex:32016r0679"}
+          }],
+          "clarification":false
+        }
+        """)!.AsObject();
+
+    private static JsonObject CompoundResponse()
+    {
+        var response = Response();
+        response["trace"]!.AsArray().Add(new JsonObject
+        {
+            ["phase"] = "primary",
+            ["tool"] = "timeline",
+            ["args"] = new JsonObject { ["work"] = "eu-eurlex:32016r0679" },
+        });
+        response["operations"]!.AsArray().Add(new JsonObject
+        {
+            ["tool"] = "timeline",
+            ["result_class"] = "timeline",
+            ["legal_outcome"] = "succeeded",
+            ["transport_outcome"] = "completed",
+            ["effects"] = new JsonArray("timeline"),
+            ["ui"] = new JsonObject { ["timeline"] = new JsonObject { ["status"] = "ok" } },
+        });
+        return response;
+    }
+
+    private static JsonObject ClarificationResponse()
+    {
+        var response = Response();
+        response["reply"] = "Which instrument do you mean?";
+        response["trace"] = new JsonArray(new JsonObject
+        {
+            ["phase"] = "operation_plan",
+            ["operations"] = new JsonArray(new JsonObject
+            {
+                ["arguments"] = new JsonObject
+                {
+                    ["work_query"] = "Atlantis Regulation",
+                },
+            }),
+        });
+        response["operations"] = new JsonArray(new JsonObject
+        {
+            ["tool"] = "timeline",
+            ["result_class"] = "timeline",
+            ["legal_outcome"] = "needs_clarification",
+            ["transport_outcome"] = "completed",
+            ["effects"] = new JsonArray("gap"),
+            ["ui"] = new JsonObject { ["gap"] = new JsonObject { ["status"] = "clarification" } },
+        });
+        response["clarification"] = new JsonObject
+        {
+            ["question"] = "Which instrument do you mean?",
+        };
+        return response;
+    }
+
     private sealed class StubTarget(
         JsonObject response,
         double elapsedMilliseconds = 20,
-        bool invertSynthesis = false) : IAssistantEvaluationTarget
+        bool invertSynthesis = false,
+        JsonObject? setupResponse = null) : IAssistantEvaluationTarget
     {
         public int Calls { get; private set; }
         public List<string> Keys { get; } = [];
@@ -1333,8 +1625,7 @@ public sealed class AssistantEvaluationTests : IDisposable
         {
             Calls++;
             Keys.Add(idempotencyKey);
-            return Task.FromResult(new AssistantEvaluationInvocation(
-                200, response.DeepClone().AsObject(), new AssistantEvaluationTimings(
+            var timings = new AssistantEvaluationTimings(
                     PlannerMilliseconds: 5,
                     McpMilliseconds: 5,
                     TransportQueueResidualMilliseconds: 1,
@@ -1342,7 +1633,14 @@ public sealed class AssistantEvaluationTests : IDisposable
                     SynthesisMilliseconds: invertSynthesis
                         ? (evaluationCase.ExpectedSynthesis == true ? null : 5)
                         : (evaluationCase.ExpectedSynthesis == true ? 5 : null),
-                    TotalMilliseconds: elapsedMilliseconds)));
+                    TotalMilliseconds: elapsedMilliseconds);
+            IReadOnlyList<AssistantEvaluationSetupInvocation>? setupInvocations =
+                evaluationCase.History is { Count: > 0 } && setupResponse is not null
+                    ? [new AssistantEvaluationSetupInvocation(
+                        200, setupResponse.DeepClone().AsObject(), timings)]
+                    : null;
+            return Task.FromResult(new AssistantEvaluationInvocation(
+                200, response.DeepClone().AsObject(), timings, setupInvocations));
         }
     }
 
@@ -1425,7 +1723,10 @@ public sealed class AssistantEvaluationTests : IDisposable
         }
     }
 
-    private sealed class ThreadedEvaluationHandler : HttpMessageHandler
+    private sealed class ThreadedEvaluationHandler(
+        int terminalDelayMilliseconds = 0,
+        double setupPlannerMilliseconds = 12,
+        double setupMcpMilliseconds = 34) : HttpMessageHandler
     {
         public string ThreadToken { get; } = Convert.ToBase64String(new byte[32])
             .TrimEnd('=').Replace('+', '-').Replace('/', '_');
@@ -1460,10 +1761,11 @@ public sealed class AssistantEvaluationTests : IDisposable
                 : null);
             var responseBody = Response();
             responseBody["thread_token"] = ThreadToken;
+            var isSetup = RequestThreadTokens[^1] is null;
             responseBody["timing"] = new JsonObject
             {
-                ["planner_ms"] = 12,
-                ["mcp_ms"] = 34,
+                ["planner_ms"] = isSetup ? setupPlannerMilliseconds : 12,
+                ["mcp_ms"] = isSetup ? setupMcpMilliseconds : 34,
                 ["synthesis_ms"] = null,
                 ["operation_result_emitted_ms"] = 0,
             };
@@ -1476,11 +1778,20 @@ public sealed class AssistantEvaluationTests : IDisposable
                 ["payload"] = payload,
             };
             var operation = responseBody["operations"]![0]!.DeepClone().AsObject();
-            var wire = $"event: operation_result\ndata: {Envelope(1, operation).ToJsonString()}\n\n"
-                       + $"event: done\ndata: {Envelope(2, responseBody).ToJsonString()}\n\n";
+            var operationWire =
+                $"event: operation_result\ndata: {Envelope(1, operation).ToJsonString()}\n\n";
+            var doneWire =
+                $"event: done\ndata: {Envelope(2, responseBody).ToJsonString()}\n\n";
+            HttpContent content = terminalDelayMilliseconds == 0
+                ? new StringContent(
+                    operationWire + doneWire, Encoding.UTF8, "text/event-stream")
+                : new StreamContent(new DelayedChunkStream(
+                    Encoding.UTF8.GetBytes(operationWire),
+                    Encoding.UTF8.GetBytes(doneWire), terminalDelayMilliseconds));
+            content.Headers.ContentType = new("text/event-stream");
             var response = new HttpResponseMessage(System.Net.HttpStatusCode.OK)
             {
-                Content = new StringContent(wire, Encoding.UTF8, "text/event-stream"),
+                Content = content,
             };
             response.Headers.Add(
                 "X-Lex-Request-Id", "0123456789abcdef0123456789abcdef");

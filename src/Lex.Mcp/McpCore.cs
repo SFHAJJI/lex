@@ -811,7 +811,7 @@ public sealed class McpCore
                 ["status"] = McpStatus.NoCorpusMounted,
                 ["detail"] = "This server started with zero verified indexes, so it holds no law "
                            + "and cannot answer legal questions. The engine is available, but its "
-                           + "signed corpus artifacts were not mounted.",
+                           + "signed index artifacts were not mounted.",
                 ["hosted_endpoint"] = "https://law.soufien.lu/mcp",
                 ["hosted_endpoint_note"] = "Public, no key, no signup. Call the coverage tool "
                            + "there for live mounted counts and known gaps.",

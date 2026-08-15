@@ -180,10 +180,11 @@ rollback identities exactly; older receipts remain audit evidence but do not ret
 images. A mismatch refuses cleanup. Deleting a manifest digest also removes every tag that
 references that manifest, which is why tag-based protection is rejected.
 
-Private prebuilt staging blobs are deleted by exact path and ETag only after the signed immutable
-Blob release and public GitHub release have both been downloaded and hash-verified. Paths under
-`releases/` are not cleanup candidates. A bootstrap inventory is only a dry-run allowlist: it
-cannot delete staging owned by a concurrent lex-ops publication.
+Private prebuilt staging blobs are deleted by exact path and ETag only after the canonical GitHub
+Immutable Release assets and detached signature have been downloaded and matched by hash and
+length, or after a failed draft has been explicitly reconciled. There is no canonical Blob release;
+GitHub release tags and assets are outside Blob cleanup. A bootstrap inventory is only a dry-run
+allowlist: it cannot delete staging owned by a concurrent lex-ops publication.
 
 `.github/workflows/retention-inventory.yml` is read-only. It inventories Azure revisions, ACR
 manifests and audited release-state receipts, then emits an exact dry-run plan through

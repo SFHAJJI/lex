@@ -135,6 +135,15 @@ FOUNDATION  Lex.Temporal (interval algebra)   Lex.Index (SQLite: filter-first, v
   application verifies indexes, vectors, embedding assets, scope, benchmark
   and source commits before any file is mounted. The embedded index stamp
   remains public provenance, not its own trust root.
+- **Release-gated assistant behavior**: 25 frozen scenarios validate the typed
+  plan, arguments, outcomes, UI effects, answer and latency against an immutable
+  zero-traffic candidate. The catalog records author `Lex release engineering`;
+  Evaluation reviewer Soufien Hajji uses a separate signing authority. This
+  project-owner review is not a third-party audit. Candidate and release-grader tokens are budgeted
+  separately. The current maximum reservation is EUR 0.3820232 under an outer
+  EUR 10 preflight and measured-use ceiling, not a live billing cutoff. The
+  [release dossier](https://law.soufien.lu/built/release) shows the CI/CD flow and
+  [evaluation mechanics](docs/assistant-evaluation.md).
 - **Honest refusals**: `no_version_for_date`, `anchor_not_in_version`,
   `outside_observed_window`, `text_not_available`, `text_withheld`, a flagged wrong answer is still
   a wrong answer, so Lex refuses instead.
@@ -264,7 +273,8 @@ Issues and PRs welcome, the highest-leverage areas:
   with an official machine-readable channel. The seam is publisher-pure by
   fitness test; adapters never touch files or git.
 - **Assistant release cases** ([evals/assistant-cases-v3.json](evals/assistant-cases-v3.json)):
-  frozen typed-operation judgments, independently digest-attested and run with the strict
+  frozen typed-operation judgments, digest-attested by a project-owner reviewer identity distinct
+  from the catalog author and run with the strict
   [release evaluator](docs/assistant-evaluation.md). The gate has no keyword or grader fallback;
   cases specify the exact operation contract or refusal boundary expected from a natural question.
 - **Extraction improvements**: profiles are immutable; improvements ship as a
