@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Lex.Sources.EurLex;
 
@@ -71,9 +72,10 @@ public sealed record EurLexScopeConfig(
             throw new InvalidDataException("Relationship predicates must be safe CDM local names.");
         if (History.ManufactureConsolidations)
             throw new InvalidDataException("A Lex scope may never enable synthetic consolidation.");
-        if (History.MaxVerifiedPortalFallbacks is < 1 or > 512)
+        if (History.MaxUnscopedConsolidations is < 1 or > 512)
             throw new InvalidDataException(
-                "max_verified_portal_fallbacks must be between 1 and 512.");
+                "max_verified_portal_fallbacks, retained as the unscoped-state bound, "
+                + "must be between 1 and 512.");
     }
 }
 
@@ -82,7 +84,9 @@ public sealed record EurLexHistoryRules(
     bool IncludeAllOfficialConsolidations,
     bool IncludeUnamended,
     bool ManufactureConsolidations,
-    int MaxVerifiedPortalFallbacks = 64);
+    // Schema v1 compatibility: this key now bounds dated states with no configured-language expression.
+    [property: JsonPropertyName("max_verified_portal_fallbacks")]
+    int MaxUnscopedConsolidations = 64);
 
 public sealed record EurLexClosureRules(
     int MaxDepth,

@@ -22,7 +22,7 @@ public sealed class EurLexScopeTests : IDisposable
         Assert.True(scope.History.IncludeAllOfficialConsolidations);
         Assert.True(scope.History.IncludeUnamended);
         Assert.False(scope.History.ManufactureConsolidations);
-        Assert.Equal(512, scope.History.MaxVerifiedPortalFallbacks);
+        Assert.Equal(512, scope.History.MaxUnscopedConsolidations);
         Assert.Equal(2, scope.ActiveDomains(1).Count());
         Assert.Contains(scope.Domains, d => d.Id == "financial-services" && d.Wave == 2);
         Assert.Contains(scope.Exclusions, e => e.Kind == "citation");
@@ -258,31 +258,34 @@ public sealed class EurLexScopeTests : IDisposable
     }
 
     [Fact]
-    public void Portal_fallback_HEAD_must_be_bounded_HTML_in_the_requested_language()
+    public void A_portal_shell_cannot_manufacture_an_English_expression_for_a_Portuguese_state()
     {
-        using var response = new HttpResponseMessage(System.Net.HttpStatusCode.OK)
-        {
-            Content = new ByteArrayContent([]),
-        };
-        response.Content.Headers.ContentType =
-            new System.Net.Http.Headers.MediaTypeHeaderValue("text/html");
-        response.Content.Headers.ContentLanguage.Add("en");
-        response.Content.Headers.ContentLength = 1024;
+        var html = PortalHtml("01989L0665-19900103", "PT",
+            shellLanguage: "en", shellTitleLanguage: "EN");
 
-        Assert.True(EurLexAdapter.IsVerifiedPortalHead(response, "en"));
-        Assert.False(EurLexAdapter.IsVerifiedPortalHead(response, "fr"));
+        Assert.False(EurLexAdapter.IsExactPortalExpression(
+            html, "01989L0665-19900103", "en"));
 
-        response.Content.Headers.ContentLength = 33L * 1024 * 1024;
-        Assert.False(EurLexAdapter.IsVerifiedPortalHead(response, "en"));
+        var original = new DateOnly(1989, 12, 21);
+        var gap = new DateOnly(1990, 1, 3);
+        var next = new DateOnly(1992, 7, 14);
+        var coordinates = EurLexAdapter.ConsolidatedCoordinates(
+        [
+            ("31989L0665", original),
+            ("01989L0665-19900103", gap),
+            ("01989L0665-19920714", next),
+        ]);
+        Assert.Equal(gap.AddDays(-1), coordinates[0].ValidTo);
+        Assert.Equal(next.AddDays(-1), coordinates[1].ValidTo);
     }
 
     [Fact]
-    public void Portal_fallback_budget_is_explicit_and_fails_before_network_work()
+    public void Unscoped_consolidation_budget_is_explicit_and_fails_before_network_work()
     {
-        EurLexAdapter.RequirePortalExpressionFallbackBudget(192, 512);
+        EurLexAdapter.RequireUnscopedConsolidationBudget(192, 512);
 
         var error = Assert.Throws<InvalidDataException>(() =>
-            EurLexAdapter.RequirePortalExpressionFallbackBudget(513, 512));
+            EurLexAdapter.RequireUnscopedConsolidationBudget(513, 512));
 
         Assert.Contains("513 dated states", error.Message, StringComparison.Ordinal);
         Assert.Contains("permits 512", error.Message, StringComparison.Ordinal);
@@ -293,18 +296,21 @@ public sealed class EurLexScopeTests : IDisposable
     {
         const string celex = "32025L0516";
         var handler = new PortalSequenceHandler(
-            PortalHtml("32025L9999", "EN"), PortalHtml(celex, "EN"));
+            new PortalResponse(System.Net.HttpStatusCode.NotFound, ""),
+            new PortalResponse(System.Net.HttpStatusCode.OK,
+                PortalHtml("32025L9999", "EN")),
+            new PortalResponse(System.Net.HttpStatusCode.OK, PortalHtml(celex, "EN")));
         using var client = new HttpClient(handler);
         var adapter = new EurLexAdapter(
             scopePath: null, wave: null, http: client,
             delay: static (_, _) => Task.CompletedTask);
-        var (version, expression) = PortalBoundVersion(celex);
+        var (version, expression) = VersionWithEnumeratedExpression(celex);
 
         var result = await adapter.FetchBody(version, expression, default);
 
         Assert.Equal(SourceBodyStatus.Retrieved, result.Status);
-        Assert.Equal(2, result.Attempts);
-        Assert.Equal(2, handler.RequestCount);
+        Assert.Equal(3, result.Attempts);
+        Assert.Equal(3, handler.RequestCount);
     }
 
     [Fact]
@@ -313,18 +319,21 @@ public sealed class EurLexScopeTests : IDisposable
         const string celex = "32025L0516";
         const string sentinel = "publisher-response-must-not-leak";
         var invalid = PortalHtml("32025L9999", "EN") + sentinel;
-        var handler = new PortalSequenceHandler(invalid, invalid);
+        var handler = new PortalSequenceHandler(
+            new PortalResponse(System.Net.HttpStatusCode.NotFound, ""),
+            new PortalResponse(System.Net.HttpStatusCode.OK, invalid),
+            new PortalResponse(System.Net.HttpStatusCode.OK, invalid));
         using var client = new HttpClient(handler);
         var adapter = new EurLexAdapter(
             scopePath: null, wave: null, http: client,
             delay: static (_, _) => Task.CompletedTask);
-        var (version, expression) = PortalBoundVersion(celex);
+        var (version, expression) = VersionWithEnumeratedExpression(celex);
 
         var result = await adapter.FetchBody(version, expression, default);
 
         Assert.Equal(SourceBodyStatus.ParserFailure, result.Status);
-        Assert.Equal(2, result.Attempts);
-        Assert.Equal(2, handler.RequestCount);
+        Assert.Equal(3, result.Attempts);
+        Assert.Equal(3, handler.RequestCount);
         Assert.Contains("endpoint=eur-lex.europa.eu/legal-content/EN/TXT/", result.Detail,
             StringComparison.Ordinal);
         Assert.Contains("status=200", result.Detail, StringComparison.Ordinal);
@@ -341,7 +350,7 @@ public sealed class EurLexScopeTests : IDisposable
         const string celex = "32025L0516";
         var invalid = PortalHtml("32025L9999", "EN");
         var handler = new PortalSequenceHandler(
-            new PortalResponse(System.Net.HttpStatusCode.ServiceUnavailable, ""),
+            new PortalResponse(System.Net.HttpStatusCode.NotFound, ""),
             new PortalResponse(System.Net.HttpStatusCode.ServiceUnavailable, ""),
             new PortalResponse(System.Net.HttpStatusCode.OK, invalid),
             new PortalResponse(System.Net.HttpStatusCode.OK, invalid),
@@ -350,7 +359,7 @@ public sealed class EurLexScopeTests : IDisposable
         var adapter = new EurLexAdapter(
             scopePath: null, wave: null, http: client,
             delay: static (_, _) => Task.CompletedTask);
-        var (version, expression) = PortalBoundVersion(celex);
+        var (version, expression) = VersionWithEnumeratedExpression(celex);
 
         var result = await adapter.FetchBody(version, expression, default);
 
@@ -365,6 +374,7 @@ public sealed class EurLexScopeTests : IDisposable
     {
         const string celex = "32025L0516";
         var handler = new PortalSequenceHandler(
+            new PortalResponse(System.Net.HttpStatusCode.NotFound, ""),
             new PortalResponse(System.Net.HttpStatusCode.OK,
                 PortalHtml("32025L9999", "EN")),
             new PortalResponse(System.Net.HttpStatusCode.NotFound, ""));
@@ -372,24 +382,21 @@ public sealed class EurLexScopeTests : IDisposable
         var adapter = new EurLexAdapter(
             scopePath: null, wave: null, http: client,
             delay: static (_, _) => Task.CompletedTask);
-        var (version, expression) = PortalBoundVersion(celex);
+        var (version, expression) = VersionWithEnumeratedExpression(celex);
 
         var result = await adapter.FetchBody(version, expression, default);
 
         Assert.Equal(SourceBodyStatus.ParserFailure, result.Status);
-        Assert.Equal(2, result.Attempts);
+        Assert.Equal(3, result.Attempts);
         Assert.Contains("status=200", result.Detail, StringComparison.Ordinal);
         Assert.Contains("exact_identity=false", result.Detail, StringComparison.Ordinal);
     }
 
     [Fact]
-    public async Task Portal_fallback_enumeration_preflights_one_real_exact_body()
+    public void Consolidation_without_a_scoped_publisher_expression_stays_language_empty()
     {
-        const string celex = "32025L0516";
-        var handler = new PortalSequenceHandler(
-            PortalHtml(celex, "EN"),
-            PortalHtml("32025L9999", "EN"),
-            PortalHtml(celex, "EN"));
+        const string celex = "01989L0665-19900103";
+        var handler = new PortalSequenceHandler(PortalHtml(celex, "PT"));
         using var client = new HttpClient(handler);
         var adapter = new EurLexAdapter(
             scopePath: null, wave: null, http: client,
@@ -401,14 +408,15 @@ public sealed class EurLexScopeTests : IDisposable
         var rows = new Dictionary<string, List<Dictionary<string, string>>>(
             StringComparer.Ordinal)
         {
-            ["32025L0516"] = [row],
+            ["31989L0665"] = [row],
         };
 
-        await adapter.VerifyPortalExpressionFallbacksAsync(rows, default);
+        adapter.RetainUnscopedConsolidations(rows);
 
-        Assert.Equal(3, handler.RequestCount);
-        Assert.Equal("en", row["lang"]);
-        Assert.Equal("verified_eurlex_portal", row["expression_source"]);
+        Assert.Equal(0, handler.RequestCount);
+        Assert.False(row.ContainsKey("lang"));
+        Assert.False(row.ContainsKey("expression_source"));
+        Assert.Empty(EurLexAdapter.ConsolidationLanguages([row], ["en", "fr"]));
     }
 
     [Fact]
@@ -435,7 +443,7 @@ public sealed class EurLexScopeTests : IDisposable
     }
 
     private static (VersionRecord Version, ExpressionRecord Expression)
-        PortalBoundVersion(string celex)
+        VersionWithEnumeratedExpression(string celex)
     {
         var date = new DateOnly(2025, 3, 25);
         var work = new Identifier("http://publications.europa.eu/resource/celex/" + celex);
@@ -447,7 +455,6 @@ public sealed class EurLexScopeTests : IDisposable
             [expression], [], new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 ["celex"] = celex,
-                ["expression_source"] = "verified_eurlex_portal",
             }, null, null), expression);
     }
 
@@ -565,13 +572,13 @@ public sealed class EurLexScopeTests : IDisposable
     }
 
     [Fact]
-    public void Portal_fallback_budget_cannot_exceed_the_offline_ingest_safety_limit()
+    public void Unscoped_consolidation_budget_cannot_exceed_the_offline_ingest_safety_limit()
     {
         var path = Path.Combine(_dir, "unsafe-portal-budget.json");
         var safe = EurLexScopeConfig.Load();
         var unsafeScope = safe with
         {
-            History = safe.History with { MaxVerifiedPortalFallbacks = 513 },
+            History = safe.History with { MaxUnscopedConsolidations = 513 },
         };
         File.WriteAllText(path, JsonSerializer.Serialize(unsafeScope,
             new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower }));
@@ -581,7 +588,7 @@ public sealed class EurLexScopeTests : IDisposable
     }
 
     [Fact]
-    public void Historical_v1_scope_without_portal_budget_keeps_the_previous_safe_default()
+    public void Historical_v1_scope_without_unscoped_state_budget_keeps_the_safe_default()
     {
         var path = Path.Combine(_dir, "historical-v1-scope.json");
         var root = JsonSerializer.SerializeToNode(EurLexScopeConfig.Load(),
@@ -592,7 +599,7 @@ public sealed class EurLexScopeTests : IDisposable
         root["history"]!.AsObject().Remove("max_verified_portal_fallbacks");
         File.WriteAllText(path, root.ToJsonString());
 
-        Assert.Equal(64, EurLexScopeConfig.Load(path).History.MaxVerifiedPortalFallbacks);
+        Assert.Equal(64, EurLexScopeConfig.Load(path).History.MaxUnscopedConsolidations);
     }
 
     [Theory]

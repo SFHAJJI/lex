@@ -650,6 +650,30 @@ public sealed partial class CorpusWriterTests : IDisposable
     }
 
     [Fact]
+    public async Task Dated_state_without_a_scoped_expression_remains_in_the_corpus()
+    {
+        var candidate = new CorpusWriter(
+            _dir, DateTimeOffset.Parse("2026-08-15T00:00:00Z"), CodeCommit);
+
+        await candidate.WriteAsync(
+            new OneVersionAdapter("in_force", "financial-services", []),
+            default, requireComplete: true);
+
+        Assert.True(candidate.Committed);
+        Assert.Empty(candidate.BuildIssues);
+        var meta = JsonSerializer.Deserialize<VersionMeta>(
+            await File.ReadAllTextAsync(Path.Combine(OneVersionDirectory, "meta.json")),
+            CorpusJson.Options)!;
+        Assert.Empty(meta.Expressions);
+        var manifest = JsonSerializer.Deserialize<ManifestDoc>(
+            await File.ReadAllTextAsync(Path.Combine(_dir, "manifest.json")),
+            CorpusJson.Options)!;
+        Assert.Equal(1, manifest.Works);
+        Assert.Equal(1, manifest.Versions);
+        Assert.Equal(0, manifest.Expressions);
+    }
+
+    [Fact]
     public async Task Existing_record_adds_a_newly_available_language_by_identity()
     {
         await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-01T00:00:00Z"), CodeCommit)
