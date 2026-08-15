@@ -109,6 +109,8 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
             "hierarchy", "act_form", "binding_status", "domain", "language", "works",
         })
             Assert.Contains(field, html);
+        Assert.Contains("integrity manifests bound to protected commits", html);
+        Assert.DoesNotContain("signed nightly index", html);
     }
 
     [Fact]

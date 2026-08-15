@@ -207,6 +207,169 @@ public sealed class ArchitectureDossierTests : IClassFixture<GoldenTests.Site>
     }
 
     [Fact]
+    public async Task Release_dossier_explains_the_owned_assistant_evaluation_gate()
+    {
+        var html = await _client.GetStringAsync("/built/release");
+        var productReview = File.ReadAllText(Path.Combine(
+            Golden.RepositoryRoot(), "docs", "product-architecture-review.md"));
+
+        Assert.Contains("Evaluation reviewer", html);
+        Assert.Contains("Soufien Hajji", html);
+        Assert.Contains("Catalog author", html);
+        Assert.Contains("Lex release engineering", html);
+        Assert.Contains("25 frozen scenarios", html);
+        Assert.Contains("not third-party review", html);
+        Assert.Contains("Plan once", html);
+        Assert.Contains("Runtime grounding judge", html);
+        Assert.Contains("Release grader", html);
+        Assert.Contains("Candidate token budget", html);
+        Assert.Contains("Grader token budget", html);
+        Assert.Contains("EUR 10", html);
+        Assert.Contains("not a live Azure billing cutoff", html);
+        Assert.Contains("setup and final turns", html);
+        Assert.Contains("expected_synthesis", html);
+        Assert.Contains("argument_alternatives", html);
+        Assert.Contains("typed SSE", html);
+        Assert.Contains("Any failed repetition", html);
+        Assert.Contains("Publisher acquisition", html);
+        Assert.Contains("Corpus release", html);
+        Assert.Contains("Derived articles", html);
+        Assert.Contains("SQLite and vectors", html);
+        Assert.Contains("200-case deterministic retrieval benchmark", html);
+        Assert.Contains("no large language model (LLM) grader", html);
+        Assert.Contains("25-case live assistant evaluation", html);
+        Assert.Contains("exact-byte publication transaction", html);
+        Assert.Contains("Verified limits", html);
+        Assert.Contains("Luxembourg hybrid", html);
+        Assert.Contains("EU hybrid", html);
+        Assert.Contains("image-only EU annex", html);
+        Assert.Contains("25 frozen cases", productReview);
+        Assert.Contains("620,000 candidate input tokens", productReview);
+        Assert.Contains("294,000 grader input tokens", productReview);
+        Assert.DoesNotContain("20 frozen cases", productReview);
+    }
+
+    [Fact]
+    public async Task Release_dossier_links_each_release_boundary_to_its_implementation()
+    {
+        var html = await _client.GetStringAsync("/built/release");
+        var overview = await _client.GetStringAsync("/built");
+        var retention = File.ReadAllText(Path.Combine(
+            Golden.RepositoryRoot(), "docs", "operations-retention.md"));
+        var infrastructure = File.ReadAllText(Path.Combine(
+            Golden.RepositoryRoot(), "infra", "README.md"));
+        var decisions = File.ReadAllText(Path.Combine(
+            Golden.RepositoryRoot(), "docs", "architecture-program.json"));
+        var hybridRoadmap = File.ReadAllText(Path.Combine(
+            Golden.RepositoryRoot(), "docs", "hybrid-eu-roadmap.md"));
+        var specification = File.ReadAllText(Path.Combine(
+            Golden.RepositoryRoot(), "docs", "lex-spec-v4.md"));
+
+        Assert.Contains("Inspect the implementation", html);
+        Assert.Contains("Links follow protected <code>main</code>", html);
+        Assert.Contains("Signed evidence binds exact", html);
+        Assert.Contains("commits and digests", html);
+        Assert.Contains("Suggested reading order", html);
+        Assert.Contains("GitHub Immutable Release", html);
+        Assert.Contains("coordination evidence, not immutable storage", html);
+        Assert.DoesNotContain("immutable Blob release", html);
+        Assert.DoesNotContain("Release paths are never cleanup candidates", html);
+        Assert.DoesNotContain("signed immutable Blob release", retention);
+        Assert.Contains("There is no canonical Blob release", retention);
+        Assert.Contains("GitHub Immutable", infrastructure);
+        Assert.Contains("is the canonical durable artifact boundary", infrastructure);
+        Assert.Contains("GitHub Immutable Release is the current canonical durable authority", decisions);
+        Assert.DoesNotContain("Blob is the durable distribution layer", decisions);
+        Assert.Contains("GitHub Immutable Release", hybridRoadmap);
+        Assert.Contains("publication through Blob is never automatic", hybridRoadmap);
+        Assert.DoesNotContain("published through Blob instead of GitHub Releases", hybridRoadmap);
+        Assert.DoesNotContain("downloads and verifies a release from Blob", hybridRoadmap);
+        Assert.Contains("blocks the current publication path", specification);
+        Assert.Contains("separately reviewed and authorized write-once-read-many publication design", specification);
+        Assert.DoesNotContain("moves publication to Blob", specification);
+        Assert.Contains("Status legend", html);
+        Assert.Contains("Built", html);
+        Assert.Contains("Measured", html);
+        Assert.Contains("Quarantined", html);
+        Assert.Contains("Next", html);
+        Assert.Contains("Worked evidence trace: General Data Protection Regulation (GDPR) Article 6", html);
+        Assert.Contains("eu-eurlex:32016r0679:2016-05-04--af3e8edc", html);
+        Assert.Contains("record SHA-256", html);
+        Assert.Contains("dffea205327743e03f21c6910a899b7bfc081e40905defd085ab9d52dbb3fc87", html);
+        Assert.Contains("as_of(work=eu-eurlex:32016r0679", html);
+        Assert.Contains("#art_6", html);
+        Assert.Equal(4, Count(html, "Why this design?"));
+        Assert.Equal(1, Count(html, "<img src=\"/built/diagrams/"));
+        Assert.Equal(1, Count(overview, "<img src=\"/built/diagrams/"));
+
+        var expectedLinks = new[]
+        {
+            "https://github.com/SFHAJJI/lex/blob/main/src/Lex.Sources.EurLex/EurLexAdapter.cs",
+            "https://github.com/SFHAJJI/lex/blob/main/src/Lex.Derive/DeriveWriter.cs",
+            "https://github.com/SFHAJJI/lex/blob/main/src/Lex.Ingest/IndexFromCorpus.cs",
+            "https://github.com/SFHAJJI/lex/blob/main/evals/retrieval-cases.json",
+            "https://github.com/SFHAJJI/lex/blob/main/evals/retrieval-baseline-v2.json",
+            "https://github.com/SFHAJJI/lex/blob/main/src/Lex.Index/RetrievalBenchmark.cs",
+            "https://github.com/SFHAJJI/lex-ops/blob/main/.github/workflows/publish-prebuilt-index.yml",
+            "https://github.com/SFHAJJI/lex-ops/blob/main/publish-prebuilt-index.sh",
+            "https://github.com/SFHAJJI/lex/blob/main/deploy/fetch-indexes.sh",
+            "https://github.com/SFHAJJI/lex/blob/main/src/Lex.Web/IndexRegistry.cs",
+            "https://github.com/SFHAJJI/lex/blob/main/src/Lex.Ask/AskService.cs",
+            "https://github.com/SFHAJJI/lex/blob/main/src/Lex.Mcp/McpCore.cs",
+            "https://github.com/SFHAJJI/lex/blob/main/src/Lex.Ask/UiMapper.cs",
+            "https://github.com/SFHAJJI/lex/blob/main/evals/assistant-cases-v3.json",
+            "https://github.com/SFHAJJI/lex/blob/main/evals/assistant-cases-v3.review.json",
+            "https://github.com/SFHAJJI/lex/blob/main/evals/assistant-cases-v3.review.sig",
+            "https://github.com/SFHAJJI/lex/blob/main/src/Lex.Ingest/AssistantEvaluationRunner.cs",
+            "https://github.com/SFHAJJI/lex-ops/blob/main/.github/workflows/publish-assistant-evaluation.yml",
+            "https://github.com/SFHAJJI/lex/blob/main/.github/workflows/revision-traffic.yml",
+            "https://github.com/SFHAJJI/lex/blob/main/docs/architecture/pages/limits.md",
+            "https://github.com/SFHAJJI/lex/blob/main/docs/architecture/pages/incidents.md",
+        };
+        Assert.All(expectedLinks, link => Assert.Contains($"href=\"{link}\"", html));
+        Assert.Contains("href=\"/benchmarks/latest.json\"", html);
+        Assert.DoesNotContain("#L", html);
+
+        using var benchmark = await _client.GetAsync("/benchmarks/latest.json");
+        Assert.Equal(HttpStatusCode.NotFound, benchmark.StatusCode);
+        Assert.Equal("application/json", benchmark.Content.Headers.ContentType?.MediaType);
+    }
+
+    private static int Count(string source, string value)
+    {
+        var count = 0;
+        for (var position = source.IndexOf(value, StringComparison.Ordinal);
+             position >= 0;
+             position = source.IndexOf(value, position + value.Length, StringComparison.Ordinal))
+            count++;
+        return count;
+    }
+
+    [Fact]
+    public void Evaluation_matrix_distinguishes_owner_signed_catalog_from_unexecuted_candidate()
+    {
+        var matrix = File.ReadAllText(Path.Combine(
+            Golden.RepositoryRoot(), "docs", "assistant-evaluation-scenario-matrix.md"));
+
+        Assert.Contains("Owner-reviewed and signed", matrix);
+        Assert.Contains("cd8aae6fcbf45d0a60f8ce488854499060e73774fd158a5aaf6434e75362ec5b", matrix);
+        Assert.Contains("candidate has already passed the live run", matrix);
+        Assert.Contains("Live LLM release evaluation", matrix);
+        Assert.Contains("Deterministic integration", matrix);
+        Assert.Contains("Browser and UI", matrix);
+        Assert.Contains("Controlled transport and chaos", matrix);
+        Assert.Contains("succeeded_empty", matrix);
+        Assert.Contains("no post-freeze replanning", matrix);
+        Assert.Contains("clarification round-trip", matrix);
+        Assert.Contains("Luxembourg", matrix);
+        Assert.Contains("25 live cases", matrix);
+        Assert.Contains("lu-constitution-article", matrix);
+        Assert.Contains("lu-profile-not-comparable", matrix);
+        Assert.Contains("gdpr-article-and-timeline", matrix);
+        Assert.Contains("clarification-continues-with-identity", matrix);
+    }
+
+    [Fact]
     public async Task Dated_benchmark_baseline_is_never_presented_as_current_or_live()
     {
         var html = await _client.GetStringAsync("/benchmarks");

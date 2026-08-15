@@ -39,13 +39,13 @@ test("the browser-facing route set stays navigable, bounded and accessible", asy
   });
 
   for (const route of PUBLIC_ROUTES) {
-    const response = await page.goto(route, { waitUntil: "networkidle" });
+    const response = await page.goto(route);
     expect(response?.status(), route).toBe(200);
     await expectNoHorizontalOverflow(page);
   }
 
   for (const route of ["/", "/browse", "/coverage", "/built", "/developers"]) {
-    await page.goto(route, { waitUntil: "networkidle" });
+    await page.goto(route);
     await expectNoSeriousAxeViolation(page);
   }
   expect(consoleErrors).toEqual([]);

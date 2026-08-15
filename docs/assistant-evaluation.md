@@ -3,20 +3,22 @@
 The assistant release gate is not a prompt-demo script. It exercises the public `/api/ask`
 contract against the candidate application's versioned event stream and records the operation,
 legal outcome, transport outcome, canonical arguments, typed UI effect, model-token use, segmented
-latency and optional independent
-answer grade for every repetition.
+latency and the separate release answer grade for every repetition.
 
-The frozen catalog is `evals/assistant-cases-v3.json`. It covers every legal operation, the four
+The frozen catalog is `evals/assistant-cases-v3.json`. Catalog author: `Lex release engineering`.
+Evaluation reviewer: **Soufien Hajji**. The reviewer is separate from the catalog-author
+identity and uses a separate signing authority; this is project-owner review, not an external,
+third-party or legal audit. The owner-reviewed and signed 25-case catalog covers every legal operation, the four
 prompts shown in the product, direct instruction injection and hostile quoted-evidence injection
 executed as real user turns in one server-owned thread. The evaluator never supplies an assistant
 transcript: every repetition starts a fresh opaque thread, carries only its returned bearer token
 between setup turns, and resets it afterward. A
-separate `lex-assistant-eval-review/1` attestation binds an independent reviewer and approval to
+separate `lex-assistant-eval-review/1` attestation binds that reviewer and approval to
 the exact SHA-256 of that file. Its detached ECDSA signature must verify against a dedicated,
 pinned evaluation-review trust root. Editing a question, expected argument, rubric or budget
 invalidates both the digest match and signature-backed approval.
 
-The human reviewer uses `evals/sign-assistant-review.ps1` only after reading the frozen catalog.
+Soufien Hajji uses `evals/sign-assistant-review.ps1` only after reading the frozen catalog.
 The script signs the exact catalog digest with the pinned, non-exportable review-key version and
 immediately runs the embedded-root verifier; it does not authorize inference by itself. Immediately
 before a release run, `evals/sign-assistant-admission.ps1` verifies that approval again and uses the
@@ -31,8 +33,8 @@ Before the first HTTP or model call, the runner rejects:
 - an absent, unsigned, untrusted, self-authored, stale or digest-mismatched review;
 - an incomplete code/index/model/resource identity;
 - a grader deployment or HTTPS model resource shared with the candidate models;
-- more than 20 cases or three repetitions;
-- a reservation above either model's frozen token budget or EUR 10;
+- more than 25 cases or three repetitions;
+- a reservation above either model's frozen token budget or the outer EUR 10 catalog ceiling;
 - pricing that differs from the reviewed, model-version-and-SKU-bound Microsoft Retail Prices snapshot;
 - a case whose declared limits exceed the catalog budget.
 
@@ -42,10 +44,18 @@ the owner; duplicate joins/replays spend neither another capability slot nor ano
 This lane consumes neither public daily counter, but retains the same concurrency, queue, request,
 deadline and model limits. Forged, expired, wrong-release, off-catalog and max+1 requests fail closed.
 
-During the run, deterministic contract checks never fall back to keyword matching. Every frozen
-case also requires the configured independent grader; an unavailable or malformed grader fails
-the case. Publisher-text, metadata and tool-output injection are additionally exercised at the
-code-enforced evidence boundary by the release test suite; the external black-box cases exercise
+During the run, deterministic contract checks never fall back to keyword matching. Reviewed common
+arguments must all match, and a case with `argument_alternatives` must match one complete reviewed
+alternative. The EU in-force case therefore accepts `publisher=eu-eurlex` or `jurisdiction=EU`, but
+never an unscoped call. Alternative-owned values must also be consistent: exact redundant EU scope
+is permitted, but `jurisdiction=EU` together with `publisher=lu-legilux` fails. A compound case
+checks every typed operation and primary call in reviewed order. A setup turn that declares its own
+expected contract is checked before the final continuation is allowed. Every frozen case also
+requires the configured separate release grader; an
+unavailable or malformed grader fails the case. The grader compares the question and rubric with
+the bounded final reply, typed operations and trace. It does not replace deterministic plan,
+argument, outcome, effect or stream checks. Publisher-text, metadata and tool-output injection are additionally exercised at the
+code-enforced evidence boundary by the release test suite; the black-box cases exercise
 same-thread user and quoted-evidence channels through the production opaque-thread API.
 Measured assistant and grader usage must remain within both the per-case ceilings and aggregate
 budget. The output report contains no prompts, legal text, credentials or raw tool payloads.
@@ -86,7 +96,7 @@ promotion retains exact C.
   -CandidateModelResourceId /subscriptions/<id>/resourceGroups/<rg>/providers/Microsoft.CognitiveServices/accounts/<candidate> `
   -CandidateDeployment <candidate-deployment> `
   -GraderModelResourceId /subscriptions/<id>/resourceGroups/<rg>/providers/Microsoft.CognitiveServices/accounts/<grader> `
-  -GraderDeployment <independent-deployment>
+  -GraderDeployment <separate-grader-deployment>
 ```
 
 For the one-time first-official bootstrap, run the same command with
@@ -103,12 +113,23 @@ the run, so a traffic or identity change invalidates the report. In ordinary mod
 a bounded inactive-to-active-to-inactive candidate lifecycle and verifies that exactly one
 production quota authority remains afterward, including on failure. It also obtains both deployments' resource,
 endpoint, model name, immutable model version and SKU from Azure Resource Manager before inference.
-Candidate and grader usage and EUR prices are reserved, measured and gated independently. The
+Candidate and grader usage and EUR prices are reserved, measured and gated separately. The current
+25-case catalog reserves at most 620,000 candidate input tokens, 123,000 candidate output tokens,
+294,000 grader input tokens and 49,000 grader output tokens. At the frozen meter prices that is
+EUR 0.3820232, below the outer EUR 10 limit. Its signed admission plan contains 59 candidate HTTP
+requests—ten setup and 49 final requests—and a passing run makes 49 separate release-grader
+requests. Preflight stops before inference when the reservation
+cannot fit, and measured use is gated again afterward. The limit is not a live Azure billing
+listener and cannot interrupt an in-flight model call; the signed call plan and per-call token
+ceilings provide the hard execution bound. The
 catalog binds the exact model versions, GlobalStandard meter IDs, effective dates, EUR rates,
 Microsoft Retail Prices source and a maximum seven-day validity window; the CLI accepts no price
 override.
 Per-case timing records planner, MCP, submit-to-first-`operation_result`, explicit synthesis,
-transport/queue residual and terminal duration. The release gate enforces first-result p95 at 15 s,
+transport/queue residual and terminal duration. A multi-turn case sums setup and final terminal
+durations; its planner, MCP, first-result and residual samples retain the slowest turn. Setup work
+therefore counts toward both the per-case ceiling and aggregate latency gate. Best-effort thread
+reset is cleanup rather than candidate inference. The release gate enforces first-result p95 at 15 s,
 every first result at 25 s, synthesis p95 at 45 s, and the frozen residual/terminal envelopes. The
 catalog contains both synthesis-required and synthesis-forbidden cases, so an absent synthesis
 sample cannot pass as zero latency. Every streamed operation payload must also equal its terminal
@@ -160,3 +181,10 @@ this public repository; no private-repository Actions minutes are consumed. Exit
 means every repetition and budget gate passed; exit code `5` means evidence was produced but the
 candidate is not authorized for promotion. Invalid catalog, review or release identity fails
 before inference.
+
+The public release dossier contains the field-by-field catalog glossary. The current owner-signed
+25-case live map and the division between live large language model (LLM), deterministic
+integration, browser and controlled transport coverage are recorded in
+[`assistant-evaluation-scenario-matrix.md`](assistant-evaluation-scenario-matrix.md). Only the exact
+catalog digest covered by `assistant-cases-v3.review.json` and its detached signature may authorize
+inference; any catalog-byte change requires a new owner review and signature.

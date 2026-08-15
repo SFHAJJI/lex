@@ -475,6 +475,29 @@ public sealed class ReleaseWorkflowTests
     }
 
     [Fact]
+    public void Evaluation_review_signer_records_project_owner_review_without_external_review_claims()
+    {
+        var script = File.ReadAllText(Path.Combine(
+            RepoRoot(), "evals", "sign-assistant-review.ps1"));
+
+        Assert.Contains("[string]$Reviewer = \"Soufien Hajji\"", script);
+        Assert.Contains("I reviewed every frozen case", script);
+        Assert.Contains("signed project-owner review", script);
+        Assert.DoesNotContain("independently reviewed", script, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("signed independent review", script, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Signed_evaluation_review_files_are_byte_preserved_by_git()
+    {
+        var attributes = File.ReadAllLines(Path.Combine(RepoRoot(), ".gitattributes"));
+
+        Assert.Contains(
+            "evals/assistant-cases-v3.review.json -text whitespace=cr-at-eol", attributes);
+        Assert.Contains("evals/assistant-cases-v3.review.sig -text", attributes);
+    }
+
+    [Fact]
     public void Local_evaluation_has_an_explicit_non_mutating_first_official_mode()
     {
         var script = File.ReadAllText(Path.Combine(

@@ -91,10 +91,10 @@
       "id": "D55",
       "title": "Move the host when the measured index outgrows the image",
       "status": "building",
-      "choice": "Keep query files local: use Container Apps for a small verified set, and promote releases above the recorded size or runtime gates from Blob onto a VM-managed disk.",
+      "choice": "Keep query files local: use Container Apps while the signed release satisfies the active size and runtime gates. If a release crosses a gate, block promotion until a separately reviewed host and canonical publication design exists.",
       "alternative": "Commit permanently to either Container Apps, a VM, Blob range reads or an Azure Files-mounted SQLite database regardless of measurements.",
-      "reason": "Blob is the durable distribution layer, while SQLite FTS and memory-mapped vectors require local random access. The completed artifact, rollback footprint and runtime gates determine the cheapest correct host.",
-      "cost": "The pipeline blocks releases that exceed the active Container Apps path. A second verified VM deployment path and operating-system patching remain to be implemented before such a release can receive traffic."
+      "reason": "GitHub Immutable Release is the current canonical durable authority. Private Blob storage uses create-only names and exact ETags and hashes for staging and coordination only, while SQLite FTS and memory-mapped vectors require local random access.",
+      "cost": "The pipeline blocks releases that exceed the active Container Apps or GitHub asset path. An artifact above 2 GiB requires a separately reviewed and authorized write-once-read-many publication design; a verified VM deployment path and operating-system patching must exist before it can receive traffic."
     },
     {
       "id": "D56",

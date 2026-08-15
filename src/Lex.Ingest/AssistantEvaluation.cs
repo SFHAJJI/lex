@@ -28,7 +28,7 @@ public sealed record AssistantEvaluationSet(
             || string.IsNullOrWhiteSpace(Review.Attestation)
             || Review.Attestation.Length > 2_000)
             throw new InvalidDataException(
-                "Assistant evaluation cases require a dated, digest-bound independent approval.");
+                "Assistant evaluation cases require dated, digest-bound project-owner approval from an identity separate from the catalog author.");
     }
 
     public AssistantEvaluationPreflight Preflight(
@@ -37,7 +37,7 @@ public sealed record AssistantEvaluationSet(
         EnsureReleaseReady();
         if (pricing != Catalog.Pricing)
             throw new InvalidDataException(
-                "Assistant evaluation pricing must match the independently reviewed catalog.");
+                "Assistant evaluation pricing must match the owner-reviewed catalog.");
         pricing.Validate();
         var candidateInput = Catalog.Cases.Sum(item => checked(
             ((long)item.MaximumInputTokens
@@ -197,8 +197,8 @@ public sealed record AssistantEvaluationCatalog(
                 < Budget.MaximumFirstOperationHardLatencyMs
             || Budget.MaximumTotalP99LatencyMs > 90_000)
             throw new InvalidDataException("Assistant evaluation budget exceeds the release envelope.");
-        if (Cases.Count is < 1 or > 20)
-            throw new InvalidDataException("Assistant evaluation requires 1 to 20 cases.");
+        if (Cases.Count is < 1 or > 25)
+            throw new InvalidDataException("Assistant evaluation requires 1 to 25 cases.");
         if (!Cases.Any(item => item.ExpectedSynthesis == true)
             || !Cases.Any(item => item.ExpectedSynthesis == false))
             throw new InvalidDataException(
@@ -219,9 +219,13 @@ public sealed record AssistantEvaluationCatalog(
                     || string.IsNullOrWhiteSpace(message.Content)
                     || message.Content.Length > 1_000
                     || message.MaximumInputTokens is < 1 or > 100_000
-                    || message.MaximumOutputTokens is < 1 or > 20_000) == true)
+                    || message.MaximumOutputTokens is < 1 or > 20_000
+                    || (message.Expected is null) != (message.ExpectedSynthesis is null)) == true)
                 throw new InvalidDataException(
                     $"Assistant evaluation case '{item.Id}' has invalid server-owned setup turns.");
+            foreach (var setup in item.History ?? [])
+                if (setup.Expected is not null)
+                    ValidateExpected(setup.Expected, $"{item.Id} setup turn");
             if (item.Repetitions is < 1 or > 3
                 || item.MaximumInputTokens is < 1 or > 100_000
                 || item.MaximumOutputTokens is < 1 or > 20_000
@@ -230,33 +234,10 @@ public sealed record AssistantEvaluationCatalog(
             if (item.ExpectedSynthesis is null)
                 throw new InvalidDataException(
                     $"Assistant evaluation case '{item.Id}' must declare expected_synthesis.");
-            if (item.Expected is null || !Tools.Contains(item.Expected.Tool)
-                || !Outcomes.Contains(item.Expected.LegalOutcome)
-                || !Effects.Contains(item.Expected.Effect)
-                || item.Expected.TransportOutcome != "completed")
-                throw new InvalidDataException($"Assistant evaluation case '{item.Id}' has an invalid expected contract.");
-            if (item.Expected.Arguments is null || item.Expected.Arguments.Count > 12
-                || item.Expected.Arguments.Any(argument =>
-                    string.IsNullOrWhiteSpace(argument.Key) || argument.Key.Length > 64
-                    || string.IsNullOrWhiteSpace(argument.Value) || argument.Value.Length > 1_000))
-                throw new InvalidDataException($"Assistant evaluation case '{item.Id}' has invalid expected arguments.");
-            if (item.Expected.PopulationMinimum is < 0)
-                throw new InvalidDataException($"Assistant evaluation case '{item.Id}' has an invalid population bound.");
-            if (item.Expected.PopulationMinimum is not null
-                && (string.IsNullOrWhiteSpace(item.Expected.PopulationPath)
-                    || item.Expected.PopulationPath.Length > 200
-                    || !item.Expected.PopulationPath.StartsWith("/", StringComparison.Ordinal)))
+            if (item.Expected is null)
                 throw new InvalidDataException(
-                    $"Assistant evaluation case '{item.Id}' requires a bounded JSON population path.");
-            if (item.Expected.PopulationMinimum is null
-                && item.Expected.PopulationPath is not null)
-                throw new InvalidDataException(
-                    $"Assistant evaluation case '{item.Id}' has a population path without a bound.");
-            if (item.Expected.ForbiddenReplyContains is { Count: > 8 }
-                || item.Expected.ForbiddenReplyContains?.Any(value =>
-                    string.IsNullOrWhiteSpace(value) || value.Length > 100) == true)
-                throw new InvalidDataException(
-                    $"Assistant evaluation case '{item.Id}' has invalid forbidden reply markers.");
+                    $"Assistant evaluation case '{item.Id}' has no expected contract.");
+            ValidateExpected(item.Expected, item.Id);
             if (item.Grading is null
                 || item.Grading.Mode is not ("deterministic" or "llm")
                 || item.Grading.Threshold is < 1 or > 5
@@ -267,6 +248,76 @@ public sealed record AssistantEvaluationCatalog(
                 || item.Grading.MaximumInputTokens is < 1 or > 100_000
                 || item.Grading.MaximumOutputTokens is < 1 or > 20_000)
                 throw new InvalidDataException($"Assistant evaluation case '{item.Id}' has an invalid grading contract.");
+        }
+
+        static bool InvalidArgument(KeyValuePair<string, string> argument) =>
+            string.IsNullOrWhiteSpace(argument.Key) || argument.Key.Length > 64
+            || string.IsNullOrWhiteSpace(argument.Value) || argument.Value.Length > 1_000;
+
+        static void ValidateExpected(
+            AssistantEvaluationExpected expected,
+            string context)
+        {
+            var compound = expected.Operations;
+            if (compound is not null
+                && (compound.Count is < 2 or > 8
+                    || expected.Tool is not null
+                    || expected.LegalOutcome is not null
+                    || expected.TransportOutcome is not null
+                    || expected.Effect is not null
+                    || expected.Arguments is not null
+                    || expected.ArgumentAlternatives is not null))
+                throw new InvalidDataException(
+                    $"Assistant evaluation case '{context}' has an invalid compound contract.");
+            var operations = expected.ReviewedOperations();
+            if (compound is not null && operations.Any(operation =>
+                    operation.Tool == "legal_boundary"
+                    || operation.LegalOutcome == "needs_clarification"))
+                throw new InvalidDataException(
+                    $"Assistant evaluation case '{context}' has an unsupported non-executable compound operation.");
+            foreach (var operation in operations)
+            {
+                if (!Tools.Contains(operation.Tool)
+                    || !Outcomes.Contains(operation.LegalOutcome)
+                    || !Effects.Contains(operation.Effect)
+                    || operation.TransportOutcome != "completed")
+                    throw new InvalidDataException(
+                        $"Assistant evaluation case '{context}' has an invalid expected contract.");
+                if (operation.Arguments is null || operation.Arguments.Count > 12
+                    || operation.Arguments.Any(InvalidArgument))
+                    throw new InvalidDataException(
+                        $"Assistant evaluation case '{context}' has invalid expected arguments.");
+                if (operation.ArgumentAlternatives is { Count: < 2 or > 4 }
+                    || operation.ArgumentAlternatives?.Any(alternative =>
+                        alternative is null
+                        || alternative.Count is < 1 or > 12
+                        || alternative.Any(InvalidArgument)
+                        || alternative.Keys.Any(operation.Arguments.ContainsKey)) == true
+                    || operation.ArgumentAlternatives?.Select(alternative => string.Join('\n',
+                            alternative.OrderBy(argument => argument.Key, StringComparer.Ordinal)
+                                .Select(argument => $"{argument.Key}={argument.Value}")))
+                        .Distinct(StringComparer.Ordinal).Count()
+                        != operation.ArgumentAlternatives?.Count)
+                    throw new InvalidDataException(
+                        $"Assistant evaluation case '{context}' has invalid expected argument alternatives.");
+            }
+            if (expected.PopulationMinimum is < 0)
+                throw new InvalidDataException(
+                    $"Assistant evaluation case '{context}' has an invalid population bound.");
+            if (expected.PopulationMinimum is not null
+                && (string.IsNullOrWhiteSpace(expected.PopulationPath)
+                    || expected.PopulationPath.Length > 200
+                    || !expected.PopulationPath.StartsWith("/", StringComparison.Ordinal)))
+                throw new InvalidDataException(
+                    $"Assistant evaluation case '{context}' requires a bounded JSON population path.");
+            if (expected.PopulationMinimum is null && expected.PopulationPath is not null)
+                throw new InvalidDataException(
+                    $"Assistant evaluation case '{context}' has a population path without a bound.");
+            if (expected.ForbiddenReplyContains is { Count: > 8 }
+                || expected.ForbiddenReplyContains?.Any(value =>
+                    string.IsNullOrWhiteSpace(value) || value.Length > 100) == true)
+                throw new InvalidDataException(
+                    $"Assistant evaluation case '{context}' has invalid forbidden reply markers.");
         }
     }
 
@@ -319,19 +370,38 @@ public sealed record AssistantEvaluationMessage(
     string Role,
     string Content,
     int MaximumInputTokens,
-    int MaximumOutputTokens);
+    int MaximumOutputTokens,
+    bool? ExpectedSynthesis = null,
+    AssistantEvaluationExpected? Expected = null);
 
 public sealed record AssistantEvaluationExpected(
+    string? Tool,
+    string? LegalOutcome,
+    string? TransportOutcome,
+    string? Effect,
+    IReadOnlyDictionary<string, string>? Arguments,
+    string? GapStatus = null,
+    bool? Clarification = null,
+    int? PopulationMinimum = null,
+    string? PopulationPath = null,
+    IReadOnlyList<string>? ForbiddenReplyContains = null,
+    IReadOnlyList<IReadOnlyDictionary<string, string>>? ArgumentAlternatives = null,
+    IReadOnlyList<AssistantEvaluationExpectedOperation>? Operations = null)
+{
+    public IReadOnlyList<AssistantEvaluationExpectedOperation> ReviewedOperations() =>
+        Operations ??
+        [new AssistantEvaluationExpectedOperation(
+            Tool!, LegalOutcome!, TransportOutcome!, Effect!, Arguments!,
+            ArgumentAlternatives)];
+}
+
+public sealed record AssistantEvaluationExpectedOperation(
     string Tool,
     string LegalOutcome,
     string TransportOutcome,
     string Effect,
     IReadOnlyDictionary<string, string> Arguments,
-    string? GapStatus = null,
-    bool? Clarification = null,
-    int? PopulationMinimum = null,
-    string? PopulationPath = null,
-    IReadOnlyList<string>? ForbiddenReplyContains = null);
+    IReadOnlyList<IReadOnlyDictionary<string, string>>? ArgumentAlternatives = null);
 
 public sealed record AssistantEvaluationGrading(
     string Mode,

@@ -1,7 +1,7 @@
 # Lex Azure infrastructure
 
 This configuration owns Lex identities, role assignments, the non-exportable artifact signing key,
-the independently authorized assistant-evaluation review key and the optional local-index VM path.
+the separately authorized assistant-evaluation review key and the optional local-index VM path.
 The existing shared registry, Azure OpenAI account, storage
 account, DNS zone, resource group and Container App are data or explicit role-assignment scopes.
 Terraform does not recreate or silently import them.
@@ -25,7 +25,7 @@ Key Vault.
 Assistant-evaluation approval uses a second RBAC-enabled Key Vault. Only the explicitly configured
 human `evaluation_reviewer_object_id` receives Crypto Officer rights there; the publisher identity
 has no access. Its public P-256 root is pinned into the evaluator release, so the process publishing
-an artifact cannot manufacture the independent approval required to run the release gate. The
+an artifact cannot manufacture the separate project-owner approval required to run the release gate. The
 human reviewer can manage the review key but has no artifact-sign operation; the OIDC publisher
 can sign artifacts but has no access to the review vault.
 
@@ -47,14 +47,16 @@ imported with a proven no-op plan.
 ## Index-host transition
 
 The Container App remains the live host while the mounted verified artifact set passes the size,
-cold-start, latency and memory gates recorded in `docs/hybrid-eu-roadmap.md`. Blob is the durable
-artifact distribution layer, never the SQLite or vector query path.
+cold-start, latency and memory gates recorded in `docs/hybrid-eu-roadmap.md`. GitHub Immutable
+Release is the canonical durable artifact boundary. Private Blob objects are create-only staging
+and coordination evidence, never the canonical release or the SQLite/vector query path.
 
 When the gate selects the VM path, Terraform provisions a candidate hostname, a static public IP,
-network controls and a managed data disk. The same Lex container downloads a signed release from
-Blob into a versioned directory on that disk, verifies it, warms it and atomically switches the
-`current` link. Smoke tests use the candidate hostname before `law.soufien.lu` is changed. The
-Container App and its last production revision stay intact until live acceptance succeeds.
+network controls and a managed data disk. The same Lex container downloads the exact GitHub
+Immutable Release into a versioned directory on that disk, verifies it, warms it and atomically
+switches the `current` link. Smoke tests use the candidate hostname before `law.soufien.lu` is
+changed. The Container App and its last production revision stay intact until live acceptance
+succeeds.
 
 Disk capacity is calculated for three release sets—active, previous and incoming—plus 10 percent
 headroom, then rounded up to an Azure managed-disk tier. For example, a measured 40 GiB artifact
