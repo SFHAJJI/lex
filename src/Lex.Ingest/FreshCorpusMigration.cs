@@ -65,18 +65,23 @@ public static class FreshCorpusMigration
         try
         {
             var writer = new CorpusWriter(stage, now, ingesterCodeCommit);
-            IReadOnlyList<WithdrawnBaselineState>? withdrawnStates = null;
+            BaselineReconciliation? reconciliation = null;
+            IReadOnlyList<string>? matchedProtectedPaths = null;
             await writer.WriteAsync(adapter, cancellationToken, requireComplete: true,
-                plan => withdrawnStates = RequirePreservedBaseline(
-                    baseline, plan, adapter));
+                plan =>
+                {
+                    reconciliation = RequirePreservedBaseline(baseline, plan, adapter);
+                    matchedProtectedPaths = ImportMatchedBaselineStates(
+                        root, stage, reconciliation.Matched, now, cancellationToken);
+                });
             if (!writer.Committed)
                 throw new InvalidDataException("Fresh corpus candidate was not committed.");
-            if (withdrawnStates is null)
+            if (reconciliation is null)
                 throw new InvalidDataException(
                     "Fresh corpus baseline reconciliation did not run.");
 
             ImportWithdrawnBaselineStates(
-                root, stage, withdrawnStates, now, cancellationToken);
+                root, stage, reconciliation.Withdrawn, now, cancellationToken);
 
             var candidateManifest = ReadManifest(stage);
             var candidatePublisher = candidateManifest.Publisher.GetValueOrDefault("id")
@@ -97,6 +102,11 @@ public static class FreshCorpusMigration
                 throw new InvalidDataException("Fresh corpus candidate failed integrity:\n"
                     + string.Join("\n", integrity.Errors));
 
+            if (matchedProtectedPaths is null)
+                throw new InvalidDataException(
+                    "Fresh corpus matched baseline import did not run.");
+            RevalidateMatchedBaselinePaths(
+                root, matchedProtectedPaths, cancellationToken);
             ReplaceCandidateTree(root, stage, backup, beforeMove);
             return integrity;
         }
@@ -137,6 +147,16 @@ public static class FreshCorpusMigration
         BaselineState Baseline,
         string DestinationWorkSlug,
         string PublisherVersionIdentifier);
+
+    private sealed record MatchedBaselineState(
+        BaselineState Baseline,
+        string DestinationWorkSlug,
+        string PublisherVersionIdentifier,
+        VersionRecord Current);
+
+    private sealed record BaselineReconciliation(
+        IReadOnlyList<MatchedBaselineState> Matched,
+        IReadOnlyList<WithdrawnBaselineState> Withdrawn);
 
     private static BaselineInventory ReadBaselineInventory(
         string root, string schema, string publisher)
@@ -217,7 +237,7 @@ public static class FreshCorpusMigration
         return new BaselineInventory(usesPublisherVersionIdentifier, works);
     }
 
-    private static IReadOnlyList<WithdrawnBaselineState> RequirePreservedBaseline(
+    private static BaselineReconciliation RequirePreservedBaseline(
         BaselineInventory baseline,
         IReadOnlyList<CorpusPlannedWork> plan,
         ISourceAdapter adapter)
@@ -271,7 +291,8 @@ public static class FreshCorpusMigration
                 Fail($"candidate contains {count} works with identity '{Bound(group.Key)}'");
         }
 
-        var candidateStates = new Dictionary<string, int>(StringComparer.Ordinal);
+        var candidateStates = new Dictionary<string,
+            List<(CorpusPlannedWork Work, VersionRecord Version)>>(StringComparer.Ordinal);
         var candidatePublisherStates = new HashSet<string>(StringComparer.Ordinal);
         foreach (var item in plan)
             foreach (var version in item.Versions)
@@ -285,7 +306,9 @@ public static class FreshCorpusMigration
                     continue;
                 }
                 var key = PublisherStateKey(item.Work.Id.Value, version.Id.Value);
-                candidateStates[key] = candidateStates.GetValueOrDefault(key) + 1;
+                if (!candidateStates.TryGetValue(key, out var matches))
+                    candidateStates[key] = matches = [];
+                matches.Add((item, version));
                 if (!candidatePublisherStates.Add(PublisherStateKey(
                         item.Work.Id.Value, version.Id.Value)))
                     Fail($"candidate contains duplicate publisher version "
@@ -293,6 +316,7 @@ public static class FreshCorpusMigration
                          + $"'{Bound(item.Work.Id.Value)}'");
             }
 
+        var matched = new List<MatchedBaselineState>();
         var withdrawn = new List<WithdrawnBaselineState>();
         var withdrawnPublisherStates = new HashSet<string>(StringComparer.Ordinal);
         foreach (var group in baselineStates
@@ -300,14 +324,14 @@ public static class FreshCorpusMigration
                      StringComparer.Ordinal).OrderBy(group => group.Key, StringComparer.Ordinal))
         {
             var state = group.First();
-            var candidates = candidateStates.GetValueOrDefault(group.Key);
+            var candidates = candidateStates.GetValueOrDefault(group.Key) ?? [];
             if (group.Count() != 1)
                 Fail($"protected baseline contains {group.Count()} indistinguishable states for "
                      + state.Description);
-            else if (candidates > 1)
-                Fail($"candidate contains {candidates} ambiguous matches for "
+            else if (candidates.Count > 1)
+                Fail($"candidate contains {candidates.Count} ambiguous matches for "
                      + state.Description);
-            else if (candidates == 0)
+            else if (candidates.Count == 0)
             {
                 if (!state.State.IsWithdrawn)
                 {
@@ -339,9 +363,23 @@ public static class FreshCorpusMigration
                     state.State, plannedWorks[0].Work.Slug,
                     state.PublisherVersionIdentifier));
             }
+            else
+            {
+                var candidate = candidates[0];
+                if (candidate.Version.ValidFrom != state.State.ValidFrom)
+                {
+                    Fail("candidate changed valid_from for " + state.Description
+                         + $" from {state.State.ValidFrom:yyyy-MM-dd} to "
+                         + $"{candidate.Version.ValidFrom:yyyy-MM-dd}");
+                    continue;
+                }
+                matched.Add(new MatchedBaselineState(
+                    state.State, candidate.Work.Work.Slug,
+                    state.PublisherVersionIdentifier, candidate.Version));
+            }
         }
 
-        if (failureCount == 0) return withdrawn;
+        if (failureCount == 0) return new BaselineReconciliation(matched, withdrawn);
         var suffix = failureCount > diagnostics.Count
             ? $"\n... {failureCount - diagnostics.Count} more failure(s) omitted"
             : "";
@@ -403,12 +441,98 @@ public static class FreshCorpusMigration
         == "withdrawn_from_source";
 
     private sealed record VerifiedObservationFile(
-        string Source, string Relative, long Length, string Sha256);
+        string Source, string Relative, string Sha256);
 
-    private sealed record PreparedWithdrawnImport(
+    private sealed record PreparedBaselineImport(
         string DestinationDirectory,
         VersionMeta Meta,
         IReadOnlyList<VerifiedObservationFile> Files);
+
+    private static IReadOnlyList<string> ImportMatchedBaselineStates(
+        string protectedRoot,
+        string stage,
+        IReadOnlyList<MatchedBaselineState> matchedStates,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        var prepared = new List<PreparedBaselineImport>();
+        var destinations = new HashSet<string>(PathComparer);
+        var protectedPaths = new HashSet<string>(PathComparer);
+        foreach (var matched in matchedStates.OrderBy(
+                     item => item.Baseline.Description, StringComparer.Ordinal))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var state = matched.Baseline;
+            RequireSafeWorkSlug(matched.DestinationWorkSlug, state.Description);
+            if (!string.Equals(matched.Current.WorkId.Value,
+                    state.Version.WorkIdentifier, StringComparison.Ordinal)
+                || !string.Equals(matched.Current.Id.Value,
+                    matched.PublisherVersionIdentifier, StringComparison.Ordinal)
+                || matched.Current.ValidFrom != state.ValidFrom)
+                throw new InvalidDataException(
+                    "A matched baseline state changed publisher identity before import: "
+                    + state.Description);
+
+            var destination = Path.Combine(
+                stage, "works", matched.DestinationWorkSlug, "versions",
+                VersionIdentity.Create(state.ValidFrom, matched.PublisherVersionIdentifier));
+            RequireUnusedDestination(destinations, destination, state.Description);
+
+            var currentLanguages = matched.Current.Expressions
+                .GroupBy(expression => expression.Language, StringComparer.Ordinal)
+                .ToArray();
+            if (currentLanguages.Any(group => group.Count() != 1))
+                throw new InvalidDataException(
+                    "A matched candidate state contains duplicate expression languages: "
+                    + state.Description);
+            var retainedLanguages = currentLanguages
+                .Select(group => group.Key).ToHashSet(StringComparer.Ordinal);
+            var baselineLanguages = state.Version.Expressions
+                .GroupBy(expression => expression.Language, StringComparer.Ordinal)
+                .ToArray();
+            if (baselineLanguages.Any(group => group.Count() != 1))
+                throw new InvalidDataException(
+                    "A matched baseline state contains duplicate expression languages: "
+                    + state.Description);
+
+            var meta = CloneVersionMeta(state);
+            var priorExpressionCount = meta.Expressions.Count;
+            meta.Expressions = meta.Expressions
+                .Where(expression => retainedLanguages.Contains(expression.Language))
+                .ToList();
+            var revised = new List<string>();
+            ReconcileTemporalMetadata(meta, matched.Current, now);
+            ReconcileCurrentMetadata(meta, matched.Current, revised);
+            revised.AddRange(RewriteDestinationIdentity(
+                meta, matched.DestinationWorkSlug,
+                matched.PublisherVersionIdentifier, destination));
+            if (meta.Expressions.Count != priorExpressionCount)
+                revised.Add("expressions");
+            AppendMigrationRevision(meta, revised, now);
+
+            var files = PrepareObservationFiles(
+                protectedRoot, state.VersionDirectory, meta);
+            protectedPaths.Add(state.VersionDirectory);
+            foreach (var file in files) protectedPaths.Add(file.Source);
+            prepared.Add(new PreparedBaselineImport(destination, meta, files));
+        }
+
+        WritePreparedBaselineImports(protectedRoot, prepared, cancellationToken);
+        return protectedPaths.OrderBy(path => path, PathComparer).ToArray();
+    }
+
+    private static void RevalidateMatchedBaselinePaths(
+        string protectedRoot,
+        IReadOnlyList<string> protectedPaths,
+        CancellationToken cancellationToken)
+    {
+        foreach (var path in protectedPaths)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            VerifiedCorpusPath.RequireExisting(
+                protectedRoot, path, "matched baseline path");
+        }
+    }
 
     private static void ImportWithdrawnBaselineStates(
         string protectedRoot,
@@ -417,7 +541,7 @@ public static class FreshCorpusMigration
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
-        var prepared = new List<PreparedWithdrawnImport>();
+        var prepared = new List<PreparedBaselineImport>();
         var destinations = new HashSet<string>(PathComparer);
         foreach (var withdrawn in withdrawnStates.OrderBy(
                      item => item.Baseline.Description, StringComparer.Ordinal))
@@ -428,13 +552,7 @@ public static class FreshCorpusMigration
                 throw new InvalidDataException(
                     "A baseline record selected for tombstone migration is not terminally withdrawn: "
                     + state.Description);
-            if (string.IsNullOrWhiteSpace(withdrawn.DestinationWorkSlug)
-                || !string.Equals(withdrawn.DestinationWorkSlug,
-                    Path.GetFileName(withdrawn.DestinationWorkSlug),
-                    StringComparison.Ordinal))
-                throw new InvalidDataException(
-                    "A withdrawn baseline state has an unsafe destination work slug: "
-                    + state.Description);
+            RequireSafeWorkSlug(withdrawn.DestinationWorkSlug, state.Description);
 
             var workDirectory = Path.Combine(
                 stage, "works", withdrawn.DestinationWorkSlug);
@@ -453,49 +571,31 @@ public static class FreshCorpusMigration
             var key = VersionIdentity.Create(
                 state.ValidFrom, withdrawn.PublisherVersionIdentifier);
             var destination = Path.Combine(workDirectory, "versions", key);
-            if (!destinations.Add(Path.GetFullPath(destination))
-                || Directory.Exists(destination) || File.Exists(destination))
-                throw new InvalidDataException(
-                    "A withdrawn baseline state collides with an existing destination: "
-                    + state.Description);
+            RequireUnusedDestination(destinations, destination, state.Description);
 
-            var meta = JsonSerializer.Deserialize<VersionMeta>(
-                JsonSerializer.Serialize(state.Version, CorpusJson.Options),
-                CorpusJson.Options)
-                ?? throw new InvalidDataException(
-                    "A withdrawn baseline state could not be copied: " + state.Description);
-            var revised = new List<string>();
-            var lexId = $"{meta.Publisher}:{withdrawn.DestinationWorkSlug}:{key}";
-            if (!string.Equals(meta.LexId, lexId, StringComparison.Ordinal))
-            {
-                meta.LexId = lexId;
-                revised.Add("lex_id");
-            }
-            if (!string.Equals(meta.PublisherVersionIdentifier,
-                    withdrawn.PublisherVersionIdentifier, StringComparison.Ordinal))
-            {
-                meta.PublisherVersionIdentifier = withdrawn.PublisherVersionIdentifier;
-                revised.Add("publisher_version_identifier");
-            }
-            if (revised.Count > 0)
-                meta.Events.Add(new EventEntry
-                {
-                    Event = "metadata_revised",
-                    ObservedFrom = now.UtcDateTime.ToString("yyyy-MM-ddTHH:mm:ssZ"),
-                    Scope = "version",
-                    Detail = "fields=" + string.Join(',', revised),
-                });
+            var meta = CloneVersionMeta(state);
+            var revised = RewriteDestinationIdentity(
+                meta, withdrawn.DestinationWorkSlug,
+                withdrawn.PublisherVersionIdentifier, destination);
+            AppendMigrationRevision(meta, revised, now);
             if (!IsWithdrawn(meta))
                 throw new InvalidDataException(
                     "Tombstone identity migration changed the terminal lifecycle: "
                     + state.Description);
-            meta.RecordSha256 = CorpusHashes.RecordSha256(meta);
 
-            var files = VerifyObservationFiles(
+            var files = PrepareObservationFiles(
                 protectedRoot, state.VersionDirectory, state.Version);
-            prepared.Add(new PreparedWithdrawnImport(destination, meta, files));
+            prepared.Add(new PreparedBaselineImport(destination, meta, files));
         }
 
+        WritePreparedBaselineImports(protectedRoot, prepared, cancellationToken);
+    }
+
+    private static void WritePreparedBaselineImports(
+        string protectedRoot,
+        IReadOnlyList<PreparedBaselineImport> prepared,
+        CancellationToken cancellationToken)
+    {
         foreach (var item in prepared)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -506,15 +606,188 @@ public static class FreshCorpusMigration
                 var destination = CheckedObservationPath(
                     item.DestinationDirectory, file.Relative);
                 Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
-                File.Copy(file.Source, destination, overwrite: false);
-                VerifyCopiedObservation(destination, file);
+                var source = VerifiedCorpusPath.RequireExisting(
+                    protectedRoot, file.Source, "baseline observation file");
+                var sourceIdentity = VerifySourceObservation(source, file);
+                File.Copy(source, destination, overwrite: false);
+                VerifyCopiedObservation(destination, file, sourceIdentity.Length);
             }
             File.WriteAllText(Path.Combine(item.DestinationDirectory, "meta.json"),
                 JsonSerializer.Serialize(item.Meta, CorpusJson.Options) + "\n");
         }
     }
 
-    private static IReadOnlyList<VerifiedObservationFile> VerifyObservationFiles(
+    private static VersionMeta CloneVersionMeta(BaselineState state) =>
+        JsonSerializer.Deserialize<VersionMeta>(
+            JsonSerializer.Serialize(state.Version, CorpusJson.Options),
+            CorpusJson.Options)
+        ?? throw new InvalidDataException(
+            "A protected baseline state could not be copied: " + state.Description);
+
+    private static List<string> RewriteDestinationIdentity(
+        VersionMeta meta,
+        string destinationWorkSlug,
+        string publisherVersionIdentifier,
+        string destination)
+    {
+        var revised = new List<string>();
+        var lexId = $"{meta.Publisher}:{destinationWorkSlug}:{Path.GetFileName(destination)}";
+        if (!string.Equals(meta.LexId, lexId, StringComparison.Ordinal))
+        {
+            meta.LexId = lexId;
+            revised.Add("lex_id");
+        }
+        if (!string.Equals(meta.PublisherVersionIdentifier,
+                publisherVersionIdentifier, StringComparison.Ordinal))
+        {
+            meta.PublisherVersionIdentifier = publisherVersionIdentifier;
+            revised.Add("publisher_version_identifier");
+        }
+        return revised;
+    }
+
+    private static void ReconcileCurrentMetadata(
+        VersionMeta meta, VersionRecord current, List<string> revised)
+    {
+        if (!string.Equals(meta.ValidTimeSource,
+                current.ValidTimeSource, StringComparison.Ordinal))
+        {
+            meta.ValidTimeSource = current.ValidTimeSource;
+            revised.Add("valid_time_source");
+        }
+        if (meta.Raw.Count != current.Raw.Count
+            || meta.Raw.Any(item => !current.Raw.TryGetValue(item.Key, out var value)
+                                    || !string.Equals(item.Value, value,
+                                        StringComparison.Ordinal)))
+        {
+            meta.Raw = new Dictionary<string, string>(
+                current.Raw, StringComparer.Ordinal);
+            revised.Add("raw");
+        }
+
+        var relations = current.Relations.Select(relation =>
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["type"] = relation.Type,
+                ["target"] = relation.Target.Value,
+            }).ToList();
+        if (!RelationsEqual(meta.Relations, relations))
+        {
+            meta.Relations = relations;
+            revised.Add("relations");
+        }
+
+        var currentExpressions = current.Expressions.ToDictionary(
+            expression => expression.Language, StringComparer.Ordinal);
+        foreach (var expression in meta.Expressions)
+        {
+            var planned = currentExpressions[expression.Language];
+            if (!string.Equals(expression.ValidTimeSource,
+                    planned.ValidTimeSource, StringComparison.Ordinal))
+            {
+                expression.ValidTimeSource = planned.ValidTimeSource;
+                revised.Add($"expressions.{expression.Language}.valid_time_source");
+            }
+        }
+    }
+
+    private static void ReconcileTemporalMetadata(
+        VersionMeta meta, VersionRecord current, DateTimeOffset now)
+    {
+        var observedFrom = now.UtcDateTime.ToString("yyyy-MM-ddTHH:mm:ssZ");
+        ReconcileDate(meta, meta.ValidTo, current.ValidTo?.ToString("yyyy-MM-dd"),
+            "version", "valid_to", observedFrom, value => meta.ValidTo = value);
+        ReconcileDate(meta, meta.PublicationDate,
+            current.PublicationDate?.ToString("yyyy-MM-dd"),
+            "version", "publication_date", observedFrom,
+            value => meta.PublicationDate = value);
+
+        var currentExpressions = current.Expressions.ToDictionary(
+            expression => expression.Language, StringComparer.Ordinal);
+        foreach (var expression in meta.Expressions)
+        {
+            var planned = currentExpressions[expression.Language];
+            var plannedValidFrom = planned.ValidFrom?.ToString("yyyy-MM-dd");
+            var scope = $"expression:{expression.Language}:{plannedValidFrom ?? "null"}";
+            ReconcileDate(meta, expression.ValidFrom, plannedValidFrom,
+                scope, "valid_from", observedFrom,
+                value => expression.ValidFrom = value);
+            ReconcileDate(meta, expression.ValidTo,
+                planned.ValidTo?.ToString("yyyy-MM-dd"),
+                scope, "valid_to", observedFrom,
+                value => expression.ValidTo = value);
+        }
+    }
+
+    private static void ReconcileDate(
+        VersionMeta meta,
+        string? previous,
+        string? current,
+        string scope,
+        string field,
+        string observedFrom,
+        Action<string?> assign)
+    {
+        if (string.Equals(previous, current, StringComparison.Ordinal)) return;
+        assign(current);
+        var closed = field == "valid_to" && previous is null && current is not null;
+        meta.Events.Add(new EventEntry
+        {
+            Event = closed ? "interval_closed" : "validity_revised",
+            ObservedFrom = observedFrom,
+            Scope = scope,
+            Detail = closed
+                ? $"field={field};new={current}"
+                : $"field={field};old={previous ?? "null"};new={current ?? "null"}",
+        });
+    }
+
+    private static bool RelationsEqual(
+        IReadOnlyList<Dictionary<string, string>> current,
+        IReadOnlyList<Dictionary<string, string>> planned) =>
+        current.Count == planned.Count
+        && current.Zip(planned).All(pair =>
+            pair.First.Count == 2
+            && pair.First.GetValueOrDefault("type") == pair.Second["type"]
+            && pair.First.GetValueOrDefault("target") == pair.Second["target"]);
+
+    private static void AppendMigrationRevision(
+        VersionMeta meta, IReadOnlyList<string> revised, DateTimeOffset now)
+    {
+        if (revised.Count > 0)
+            meta.Events.Add(new EventEntry
+            {
+                Event = "metadata_revised",
+                ObservedFrom = now.UtcDateTime.ToString("yyyy-MM-ddTHH:mm:ssZ"),
+                Scope = "version",
+                Detail = "fields=" + string.Join(',', revised),
+            });
+        meta.RecordSha256 = CorpusHashes.RecordSha256(meta);
+    }
+
+    private static void RequireSafeWorkSlug(string workSlug, string description)
+    {
+        if (string.IsNullOrWhiteSpace(workSlug)
+            || Path.IsPathRooted(workSlug)
+            || workSlug is "." or ".."
+            || workSlug.Contains('/') || workSlug.Contains('\\')
+            || workSlug.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0
+            || !string.Equals(workSlug, Path.GetFileName(workSlug),
+                StringComparison.Ordinal))
+            throw new InvalidDataException(
+                "A baseline state has an unsafe destination work slug: " + description);
+    }
+
+    private static void RequireUnusedDestination(
+        HashSet<string> destinations, string destination, string description)
+    {
+        if (!destinations.Add(Path.GetFullPath(destination))
+            || Directory.Exists(destination) || File.Exists(destination))
+            throw new InvalidDataException(
+                "A baseline state collides with an existing destination: " + description);
+    }
+
+    private static IReadOnlyList<VerifiedObservationFile> PrepareObservationFiles(
         string protectedRoot, string versionDirectory, VersionMeta version)
     {
         versionDirectory = VerifiedCorpusPath.RequireExisting(
@@ -526,26 +799,21 @@ public static class FreshCorpusMigration
             if (string.IsNullOrWhiteSpace(observation.File)
                 || string.IsNullOrWhiteSpace(observation.Sha256))
                 throw new InvalidDataException(
-                    "A withdrawn baseline observation has no file or sha256.");
+                    "A baseline observation has no file or sha256.");
             var source = VerifiedCorpusPath.RequireExisting(
                 protectedRoot,
                 CheckedObservationPath(versionDirectory, observation.File),
                 "observation file");
             if (!File.Exists(source))
                 throw new InvalidDataException(
-                    $"A withdrawn baseline observation is missing: {observation.File}");
-            var (length, sha256) = FileIdentity(source);
-            if (!CorpusHashes.Equal(sha256, observation.Sha256))
-                throw new InvalidDataException(
-                    $"A withdrawn baseline observation has a sha256 mismatch: {observation.File}");
+                    $"A baseline observation is missing: {observation.File}");
             var relative = Path.GetRelativePath(versionDirectory, source);
             var verified = new VerifiedObservationFile(
-                source, relative, length, observation.Sha256);
+                source, relative, observation.Sha256);
             if (files.TryGetValue(relative, out var prior)
-                && (prior.Length != verified.Length
-                    || !CorpusHashes.Equal(prior.Sha256, verified.Sha256)))
+                && !CorpusHashes.Equal(prior.Sha256, verified.Sha256))
                 throw new InvalidDataException(
-                    $"A withdrawn baseline observation file has conflicting identities: {relative}");
+                    $"A baseline observation file has conflicting identities: {relative}");
             files[relative] = verified;
         }
         return files.Values.OrderBy(file => file.Relative, StringComparer.Ordinal).ToArray();
@@ -572,13 +840,23 @@ public static class FreshCorpusMigration
     }
 
     private static void VerifyCopiedObservation(
-        string destination, VerifiedObservationFile expected)
+        string destination, VerifiedObservationFile expected, long sourceLength)
     {
         var actual = FileIdentity(destination);
-        if (actual.Length != expected.Length
+        if (actual.Length != sourceLength
             || !CorpusHashes.Equal(actual.Sha256, expected.Sha256))
             throw new InvalidDataException(
-                $"A migrated withdrawn observation changed while being copied: {expected.Relative}");
+                $"A migrated baseline observation changed while being copied: {expected.Relative}");
+    }
+
+    private static (long Length, string Sha256) VerifySourceObservation(
+        string source, VerifiedObservationFile expected)
+    {
+        var actual = FileIdentity(source);
+        if (!CorpusHashes.Equal(actual.Sha256, expected.Sha256))
+            throw new InvalidDataException(
+                $"A protected baseline observation changed before it was copied: {expected.Relative}");
+        return actual;
     }
 
     private static StringComparer PathComparer => OperatingSystem.IsWindows()
