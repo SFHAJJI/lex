@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import type { AskMessage, Step } from "./api";
+import type { AskExecutionDetails, AskMessage, Step } from "./api";
 import { STARTER_PROMPTS, parseAssistantPanelState } from "./assistantShell";
 
 export interface AskPanelProps {
@@ -11,10 +11,18 @@ export interface AskPanelProps {
   said?: string;
   conversation: AskMessage[];
   activeQuestion?: string;
+  execution?: AskExecutionDetails;
   onSubmit: (text: string) => void;
   onReset: () => void;
   onOpenStep: (step: Step) => void;
   followUps?: { label: string; run: () => void }[];
+}
+
+function ExecutionDetails({ value }: { value?: AskExecutionDetails }) {
+  return value ? <details className="ap-execution">
+    <summary>Plan and execution details</summary>
+    <pre tabIndex={0} aria-label="Plan and execution details JSON">{JSON.stringify(value, null, 2)}</pre>
+  </details> : null;
 }
 
 const PANEL_KEY = "lex.ask.panel.v1";
@@ -156,6 +164,7 @@ export default function AskPanel(p: AskPanelProps) {
               {p.conversation.map((message, index) => <li key={index} className={message.role}>
                 <b>{message.role === "user" ? "You" : "Lex"}</b>
                 <span>{message.content}</span>
+                {message.role === "assistant" ? <ExecutionDetails value={message.execution} /> : null}
               </li>)}
             </ol> : null}
 
@@ -173,6 +182,7 @@ export default function AskPanel(p: AskPanelProps) {
             </ol> : null}
 
             {p.said ? <div className="said"><b>what I found</b>{p.said}</div> : null}
+            {p.said ? <ExecutionDetails value={p.execution} /> : null}
             {p.said && (p.followUps?.length ?? 0) > 0 ? <div className="ap-next">
               {p.followUps!.map((followUp) => <button key={followUp.label} className="ap-chip next"
                 onClick={followUp.run}>{followUp.label}</button>)}

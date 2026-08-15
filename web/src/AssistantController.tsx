@@ -5,10 +5,12 @@ import {
   askQuestionError,
   askStreaming,
   clarificationFollowUp,
+  executionDetails,
   resetAskThread,
   shouldOfferContextualFollowUps,
   type AskMessage,
   type AskReply,
+  type AskExecutionDetails,
   type ClarificationChoice,
   type Step,
 } from "./api";
@@ -45,6 +47,7 @@ export default function AssistantController({
   const [allowContextualFollowUps, setAllowContextualFollowUps] = useState(false);
   const [conversation, setConversation] = useState<AskMessage[]>([]);
   const [activeQuestion, setActiveQuestion] = useState<string>();
+  const [execution, setExecution] = useState<AskExecutionDetails>();
   const [clarification, setClarification] = useState<{
     context: string; choices: ClarificationChoice[];
   }>();
@@ -66,6 +69,7 @@ export default function AssistantController({
       setAllowContextualFollowUps(false);
       setSteps([]);
       setClarification(undefined);
+      setExecution(undefined);
       return;
     }
     setConversation(history.current);
@@ -76,6 +80,7 @@ export default function AssistantController({
     setAllowContextualFollowUps(false);
     setSteps([]);
     setClarification(undefined);
+    setExecution(undefined);
     abort.current?.abort();
     const controller = new AbortController();
     abort.current = controller;
@@ -103,7 +108,9 @@ export default function AssistantController({
       );
       if (abort.current !== controller) return;
       const visibleReply = reply.clarification?.question ?? reply.reply;
+      const details = executionDetails(reply);
       setSaid(reply.error ?? visibleReply);
+      setExecution(details);
       const choices = reply.clarification
         ? actionableClarificationChoices(reply.clarification)
         : undefined;
@@ -116,7 +123,7 @@ export default function AssistantController({
         history.current = boundedVisibleConversation([
           ...history.current,
           { role: "user", content: question } as AskMessage,
-          { role: "assistant", content: visibleReply } as AskMessage,
+          { role: "assistant", content: visibleReply, execution: details } as AskMessage,
         ]);
       }
       if (reply.narrated === false) setSteps([]);
@@ -131,6 +138,7 @@ export default function AssistantController({
         }
         setSaid(error instanceof AssistantResponseError
           ? error.message : "The request failed, try again.");
+        setExecution(undefined);
       }
     } finally {
       if (abort.current === controller) setBusy(false);
@@ -152,6 +160,7 @@ export default function AssistantController({
     setAllowContextualFollowUps(false);
     setSteps([]);
     setClarification(undefined);
+    setExecution(undefined);
     setBusy(false);
   }, []);
 
@@ -173,6 +182,7 @@ export default function AssistantController({
     said={said}
     conversation={conversation}
     activeQuestion={activeQuestion}
+    execution={execution}
     onSubmit={submit}
     onReset={resetConversation}
     followUps={followUps}

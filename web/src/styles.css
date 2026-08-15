@@ -332,6 +332,11 @@ main,footer{transition:margin-right .18s ease}
 .ap-chip:hover{border-color:var(--fg);color:var(--fg)}
 .ap-body .steps{margin-bottom:10px}
 .ap-body .said{font-size:15px;margin:0}
+.ap-execution{margin-top:9px;border-top:1px solid var(--line);padding-top:7px;color:var(--muted)}
+.ap-execution summary{cursor:pointer;font-size:11.5px;font-weight:700;letter-spacing:.04em}
+.ap-execution pre{max-height:260px;overflow:auto;margin:7px 0 0;padding:9px;border-radius:7px;
+  background:var(--bg);border:1px solid var(--line);color:var(--fg);font:11px/1.45 var(--mono);
+  white-space:pre-wrap;overflow-wrap:anywhere}
 .ap-form{display:flex;gap:8px;padding:11px 12px;border-top:1px solid var(--line);background:var(--bg)}
 .ap-form input{flex:1;min-width:0;border-radius:9px;border:1px solid var(--line);padding:10px 12px;
   font:inherit;font-size:14px;background:var(--card)}
