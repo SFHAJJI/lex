@@ -6,7 +6,7 @@ The two fresh-context reviews are inputs, not implementation authority. Every P0
 classified against the accepted specification. `Accepted minimal` means the risk is real but the
 reviewer's proposed machinery was reduced to the smallest contract that closes it.
 
-## Claude review
+## Independent review — initial findings
 
 | Finding | Disposition | Accepted resolution |
 |---|---|---|
@@ -47,7 +47,7 @@ reviewer's proposed machinery was reduced to the smallest contract that closes i
 | P1-32 inference cost unauthorized | Accepted | Fixed calls, token envelope, EUR 10 preflight ceiling and separate audit quota, section 8.3 |
 | P1-33 non-advice boundary unowned | Accepted | Application-owned `legal_boundary` disposition and forbidden-claim cases, sections 5.2, 5.3 and 8.1 |
 
-## Codex review
+## Independent review — implementation findings
 
 | Finding | Disposition | Accepted resolution |
 |---|---|---|

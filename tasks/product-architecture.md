@@ -11,7 +11,7 @@ Status: accepted and in progress
 - [x] Audit current main and production across product, data, retrieval, assistant, UI,
   accessibility, security, operations, evaluation and documentation.
 - [x] Write the target architecture and release contract.
-- [x] Complete independent Codex and Claude adversarial reviews.
+- [x] Complete two independent adversarial reviews.
 - [x] Reconcile every P0/P1 into the accepted specification or an explicit trade-off.
 - [x] Record the maintainer verdict and implementation ownership.
 - [x] Audit reachable `lex-ops` history and make the repository public safely.
