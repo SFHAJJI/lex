@@ -477,13 +477,19 @@ public static class DeriveWriter
     private static int? ExistingEmptyProvisionCount(string workOutputDirectory)
     {
         if (!Directory.Exists(workOutputDirectory)) return null;
-        var files = Directory.EnumerateFiles(workOutputDirectory, "*.json", SearchOption.AllDirectories)
+        if (!Directory.EnumerateFileSystemEntries(workOutputDirectory).Any()) return 0;
+
+        var versionsDirectory = Path.Combine(workOutputDirectory, "versions");
+        if (!Directory.Exists(versionsDirectory))
+            throw new InvalidDataException(
+                $"{workOutputDirectory} has no derived versions directory");
+
+        var files = Directory.EnumerateFiles(versionsDirectory, "*.json", SearchOption.AllDirectories)
             .OrderBy(path => path, StringComparer.Ordinal).ToArray();
         if (files.Length == 0)
-        {
-            if (!Directory.EnumerateFileSystemEntries(workOutputDirectory).Any()) return 0;
-            throw new InvalidDataException("the work output directory contains no derived JSON files");
-        }
+            throw new InvalidDataException(
+                $"{versionsDirectory} contains no derived version JSON files");
+
         var count = 0;
         foreach (var path in files)
         {

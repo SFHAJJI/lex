@@ -172,6 +172,82 @@ public sealed class EmptyProvisionMetricTests
     }
 
     [Fact]
+    public void Catalog_metadata_is_not_part_of_the_empty_provision_baseline()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"lex-empty-prov-{Guid.NewGuid():N}");
+        try
+        {
+            var first = DeriveFixture(root, Html);
+            Assert.Empty(first.Errors);
+            Assert.Equal(1, first.EmptyProvisions);
+
+            var acceptedWork = Path.Combine(root, "articles", "eu-eurlex", "works",
+                "32000r0001");
+            File.WriteAllText(Path.Combine(acceptedWork, "work.json"),
+                """{ "schema": "lex-articles/1", "versions": [] }""");
+            File.WriteAllText(Path.Combine(acceptedWork, "history.json"),
+                """{ "schema": "lex-articles/1", "anchors": {} }""");
+
+            var repeated = DeriveFixture(root, Html);
+
+            Assert.Empty(repeated.Errors);
+            Assert.Equal(1, repeated.EmptyProvisions);
+        }
+        finally
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Malformed_json_below_versions_cannot_be_ignored_by_the_baseline()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"lex-empty-prov-{Guid.NewGuid():N}");
+        try
+        {
+            Assert.Empty(DeriveFixture(root, Html).Errors);
+            var malformed = Path.Combine(root, "articles", "eu-eurlex", "works",
+                "32000r0001", "versions", FixtureVersionKey, "unexpected.json");
+            File.WriteAllText(malformed, """{ "schema": "lex-articles/1" }""");
+
+            var repeated = DeriveFixture(root, Html);
+
+            var error = Assert.Single(repeated.Errors);
+            Assert.Contains("unexpected.json has no provisions array", error,
+                StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Nonempty_accepted_work_without_version_payloads_cannot_be_a_zero_baseline()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"lex-empty-prov-{Guid.NewGuid():N}");
+        try
+        {
+            WriteWork(root, "32000r0001", Html);
+            var acceptedWork = Path.Combine(root, "articles", "eu-eurlex", "works",
+                "32000r0001");
+            Directory.CreateDirectory(acceptedWork);
+            File.WriteAllText(Path.Combine(acceptedWork, "history.json"),
+                """{ "schema": "lex-articles/1", "anchors": {} }""");
+
+            var stats = DeriveRoot(root);
+
+            var error = Assert.Single(stats.Errors);
+            Assert.Contains("has no derived versions directory", error,
+                StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public void Accepted_work_replaces_stale_output_while_a_rejected_work_is_preserved()
     {
         var root = Path.Combine(Path.GetTempPath(), $"lex-empty-prov-{Guid.NewGuid():N}");
