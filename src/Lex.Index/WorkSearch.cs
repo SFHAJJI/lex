@@ -29,6 +29,12 @@ public static class WorkSearch
         "leur", "leurs", "par", "pour", "que", "qui", "sur", "the", "une", "vers",
     };
 
+    private static readonly HashSet<string> ActFormDesignations = new(StringComparer.Ordinal)
+    {
+        "loi", "reglement", "arrete", "code", "constitution", "convention",
+        "ordonnance", "decret", "directive", "regulation", "traite",
+    };
+
     // Some publishers title a consolidated manifestation with a banner in front of the work's own
     // name: "Version consolidée applicable au 31/10/2002 : Loi du 5 avril 1993 relative au secteur
     // financier". The name is the part after the colon; no citation a lawyer writes carries the
@@ -119,6 +125,10 @@ public static class WorkSearch
             ? string.Concat(tokens)
             : normalized;
     }
+
+    internal static bool IsActFormDesignation(string value) =>
+        Normalize(value).Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            is [var first, ..] && ActFormDesignations.Contains(first);
 
     internal static void Populate(
         SqliteConnection connection,
@@ -291,8 +301,7 @@ public static class WorkSearch
                       AND ((n.kind='publisher_short_title' AND length(n.normalized) >= 3)
                            OR (n.kind='official_identifier' AND length(n.normalized) >= 4
                                AND n.normalized GLOB '*[0-9]*')
-                           OR (n.kind='official_title' AND length(n.normalized) >= 12
-                               AND instr(n.normalized,' ') > 0))
+                           OR (n.kind='official_title' AND instr(n.normalized,' ') > 0))
                       AND ($language IS NULL OR r.language=$language)
                     ORDER BY CASE n.kind
                       WHEN 'official_identifier' THEN 0
@@ -303,7 +312,14 @@ public static class WorkSearch
                 Add(contained, "$language", language);
                 using var rows = contained.ExecuteReader();
                 while (rows.Read())
-                    containedCandidates.Add((rows.GetInt64(0), rows.GetString(1), rows.GetString(2)));
+                {
+                    var kind = rows.GetString(1);
+                    var matchedValue = rows.GetString(2);
+                    if (kind == "official_title" && matchedValue.Length < 12
+                        && !IsActFormDesignation(matchedValue))
+                        continue;
+                    containedCandidates.Add((rows.GetInt64(0), kind, matchedValue));
+                }
             }
             foreach (var candidate in containedCandidates)
             {
