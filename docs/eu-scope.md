@@ -17,8 +17,13 @@ and English and retains every official consolidated expression available. A work
 consolidation remains present through its original official expression. Its metadata says that the
 merged wording is not published or not required; Lex does not manufacture a merge.
 
-Cellar's negotiated XHTML is the primary body source. If a language-specific expression is
-advertised but Cellar returns no body, ingestion retries the expression's official EUR-Lex URL;
+Cellar's negotiated XHTML is the primary body source. A dated consolidation for which Cellar
+publishes no English or French expression remains a temporal state with no expression in this
+language-scoped corpus; an English EUR-Lex page shell never manufactures English legal text.
+The historical `max_verified_portal_fallbacks` scope key is retained for compatibility, but now
+bounds this zero-expression state count; it no longer authorizes a language fallback.
+If a language-specific expression is advertised but Cellar returns no body, ingestion retries
+the expression's official EUR-Lex URL;
 the fallback is restricted to HTTPS EU institutional hosts. Searchable XHTML has a separate
 32 MiB offline-ingest limit so annex-heavy acts are retained. Optional Formex archives have their
 own compressed, per-member and expanded-data limits; skipping an oversized Formex archive does

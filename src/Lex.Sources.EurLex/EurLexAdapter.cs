@@ -211,27 +211,13 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory,
         if (celex is null)
             return new(SourceBodyStatus.ParserFailure, Detail: "The version has no CELEX identifier.");
 
-        var portalBound = version.Raw.GetValueOrDefault("expression_source")
-            == "verified_eurlex_portal";
-
         // Cellar is canonical, but a small number of language-specific corrigenda return 404
         // there while the official EUR-Lex expression URI serves the XHTML. Retry that URI only
         // when it remains on an EU institutional host; no third-party fallback can become evidence.
-        var urls = new List<string>();
-        if (portalBound)
-        {
-            if (OfficialEuUri(expression.SourceUri) is not { } verifiedExpressionUri)
-                return new(SourceBodyStatus.ParserFailure,
-                    Detail: "The verified EUR-Lex expression URI is not on an official EU host.");
-            urls.Add(verifiedExpressionUri);
-        }
-        else
-        {
-            urls.Add(CellarResourceUrl(celex));
-            if (OfficialEuUri(expression.SourceUri) is { } expressionUri &&
-                !string.Equals(expressionUri, urls[0], StringComparison.OrdinalIgnoreCase))
-                urls.Add(expressionUri);
-        }
+        var urls = new List<string> { CellarResourceUrl(celex) };
+        if (OfficialEuUri(expression.SourceUri) is { } expressionUri &&
+            !string.Equals(expressionUri, urls[0], StringComparison.OrdinalIgnoreCase))
+            urls.Add(expressionUri);
 
         FetchResult? last = null;
         var totalAttempts = 0;
@@ -240,8 +226,7 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory,
             var remainingAttempts = RetryPolicy.MaximumAttempts - totalAttempts;
             if (remainingAttempts <= 0) break;
 
-            var requiresPortalIdentity = portalBound || attempt > 0;
-            if (requiresPortalIdentity)
+            if (attempt > 0)
             {
                 var exact = await FetchExactPortalBodyAsync(
                     urls[attempt], celex, expression.Language, remainingAttempts, ct);
@@ -264,7 +249,7 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory,
 
             var text = System.Text.Encoding.UTF8.GetString(last.Bytes);
 
-            var fallback = portalBound || attempt > 0
+            var fallback = attempt > 0
                 ? " (official EUR-Lex fallback)"
                 : "";
             Console.Error.WriteLine($"  [eurlex] {celex}: body {last.Bytes.Length / 1024} KB{fallback}");
@@ -650,9 +635,7 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory,
                                 .ToDictionary(x => x.Key,
                                     x => x.First().GetValueOrDefault("title"),
                                     StringComparer.Ordinal),
-                            ConsolidationLanguages(stateRows, _scope.Languages),
-                            stateRows.Any(row => row.GetValueOrDefault("expression_source")
-                                == "verified_eurlex_portal"));
+                            ConsolidationLanguages(stateRows, _scope.Languages));
                     })
                     .OrderBy(v => v.Date).ThenBy(v => v.Celex, StringComparer.Ordinal)
                     .ToList();
@@ -674,8 +657,6 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory,
                             OfficialDisplayTitle(title, celex), sourceUri);
                     }).ToArray();
                     var raw = SourceRaw(celex, typeCode, bindingStatus, "published");
-                    if (state.PortalBound)
-                        raw["expression_source"] = "verified_eurlex_portal";
                     list.Add(new VersionRecord(
                         Id: new Identifier($"http://publications.europa.eu/resource/celex/{celex}"),
                         WorkId: new Identifier(workUri),
@@ -752,105 +733,33 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory,
             var rows = await SelectAsync(ConsolidationsQuery(chunk), ct);
             AddBoundedMetadataRows(result, rows, chunk, "consolidation");
         }
-        await VerifyPortalExpressionFallbacksAsync(result, ct);
+        RetainUnscopedConsolidations(result);
         return result;
     }
 
-    internal async Task VerifyPortalExpressionFallbacksAsync(
-        IReadOnlyDictionary<string, List<Dictionary<string, string>>> rowsByBase,
-        CancellationToken ct)
+    internal void RetainUnscopedConsolidations(
+        IReadOnlyDictionary<string, List<Dictionary<string, string>>> rowsByBase)
     {
-        var missing = rowsByBase.Values.SelectMany(rows => rows)
+        var unscoped = rowsByBase.Values.SelectMany(rows => rows)
             .GroupBy(row => row.GetValueOrDefault("celex")
                 ?? throw new InvalidDataException(
                     "Publisher consolidation row is missing its CELEX identity."),
                 StringComparer.Ordinal)
-            .Where(group => group.All(row => !row.ContainsKey("lang")))
-            .OrderBy(group => group.Key, StringComparer.Ordinal)
-            .ToArray();
-        RequirePortalExpressionFallbackBudget(
-            missing.Length, _scope.History.MaxVerifiedPortalFallbacks);
+            .Count(group => group.All(row => !row.ContainsKey("lang")));
+        RequireUnscopedConsolidationBudget(
+            unscoped, _scope.History.MaxUnscopedConsolidations);
 
-        if (missing.Length > 0)
+        if (unscoped > 0)
             Console.Error.WriteLine(
-                $"  [eurlex] verifying {missing.Length} dated states through the official portal fallback");
-
-        foreach (var state in missing)
-        {
-            await VerifyPortalExpressionHeadAsync(state.Key, "en", ct);
-            foreach (var row in state)
-            {
-                row["lang"] = "en";
-                row["expression_source"] = "verified_eurlex_portal";
-            }
-        }
-
-        if (missing.Length > 0)
-            await VerifyPortalExpressionBodyAsync(missing[0].Key, "en", ct);
+                $"  [eurlex] retaining {unscoped} dated states without an EN/FR publisher expression");
     }
 
-    internal static void RequirePortalExpressionFallbackBudget(int count, int maximum)
+    internal static void RequireUnscopedConsolidationBudget(int count, int maximum)
     {
         if (count < 0 || maximum < 1 || count > maximum)
             throw new InvalidDataException(
-                $"Publisher returned {count} dated states without an EN/FR expression; "
-                + $"the bounded official-portal fallback permits {maximum}.");
-    }
-
-    private async Task VerifyPortalExpressionHeadAsync(
-        string celex, string language, CancellationToken ct)
-    {
-        await PaceAsync(ct);
-        var sourceUri = ExpressionSourceUri(language, celex);
-        var sent = await SourceHttp.SendAsync(_http, () =>
-        {
-            var request = new HttpRequestMessage(HttpMethod.Head, sourceUri);
-            request.Headers.Accept.ParseAdd("text/html");
-            request.Headers.AcceptLanguage.ParseAdd(language);
-            return request;
-        }, RetryPolicy, ct, delay: _delay,
-            completion: HttpCompletionOption.ResponseHeadersRead);
-        using var response = sent.Response;
-        if (sent.RetryExhausted || !IsVerifiedPortalHead(response, language))
-            throw new SourceAcquisitionException(new SourceBuildIssue(
-                "publisher_expression_unavailable",
-                celex,
-                sent.FailureDetail
-                ?? $"The exact official EUR-Lex {language} expression failed its bounded HEAD verification."),
-                sent.Attempts);
-    }
-
-    private async Task VerifyPortalExpressionBodyAsync(
-        string celex, string language, CancellationToken ct)
-    {
-        var fetched = await FetchExactPortalBodyAsync(
-            ExpressionSourceUri(language, celex), celex, language,
-            RetryPolicy.MaximumAttempts, ct);
-        if (fetched.Fetch.Bytes is null || !fetched.ExactIdentity)
-            throw new SourceAcquisitionException(new SourceBuildIssue(
-                "publisher_expression_unavailable",
-                celex,
-                fetched.IdentityFailureDetail
-                ?? fetched.Fetch.FailureDetail
-                ?? PortalIdentityFingerprint(fetched.Fetch, fetched.ExactIdentity)),
-                fetched.Fetch.Attempts);
-        Console.Error.WriteLine(
-            $"  [eurlex] {celex}: strict portal GET preflight passed; "
-            + PortalIdentityFingerprint(fetched.Fetch, exactIdentity: true));
-    }
-
-    internal static bool IsVerifiedPortalHead(
-        HttpResponseMessage? response, string language)
-    {
-        if (response is null || !response.IsSuccessStatusCode
-            || !string.Equals(response.Content.Headers.ContentType?.MediaType,
-                "text/html", StringComparison.OrdinalIgnoreCase)
-            || response.Content.Headers.ContentLength is > BodyCapBytes)
-            return false;
-        var contentLanguages = response.Content.Headers.ContentLanguage.ToArray();
-        return contentLanguages.Length == 1
-            && string.Equals(contentLanguages[0], language,
-                StringComparison.OrdinalIgnoreCase);
+                $"Publisher returned {count} dated states without a configured-language expression; "
+                + $"the bounded unscoped-state policy permits {maximum}.");
     }
 
     internal static string ConsolidationsQuery(IReadOnlyCollection<string> celexNumbers)
@@ -1491,8 +1400,7 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory,
         string Celex,
         DateOnly Date,
         IReadOnlyDictionary<string, string?> Titles,
-        IReadOnlyList<string> Languages,
-        bool PortalBound);
+        IReadOnlyList<string> Languages);
 
     internal sealed record ConsolidatedCoordinate(string Celex, DateOnly Date, DateOnly? ValidTo);
 
