@@ -44,6 +44,9 @@ public sealed class ReleaseWorkflowTests
         Assert.Contains("--build-arg \"LEX_REQUIRE_ARTIFACT_MANIFEST=1\"", workflow);
         Assert.Contains("{name:\"LEX_REQUIRE_ARTIFACT_MANIFEST\",value:\"1\"}", workflow);
         Assert.Contains("scripts/deploy/candidate_gates.py eu-exact \"$MANIFEST_SET\"", workflow);
+        Assert.Contains("--build-arg \"LEX_RELEASE_TAG_LU_LEGILUX=$lu_release_tag\"", workflow);
+        Assert.Contains("--build-arg \"LEX_RELEASE_TAG_EU_EURLEX=$eu_release_tag\"", workflow);
+        Assert.DoesNotContain("releases/latest/download/$manifest", workflow);
     }
 
     [Fact]
@@ -121,10 +124,12 @@ public sealed class ReleaseWorkflowTests
         Assert.Equal(2, Regex.Matches(workflow, Regex.Escape(
             "revision_get \"https://$fqdn/")).Count);
         Assert.Contains("scripts/deploy/candidate_gates.py readyz \"$MANIFEST_SET\"", workflow);
+        Assert.Contains("readiness=$(revision_get \"https://$fqdn/readyz\")", workflow);
+        Assert.Contains("eu_hybrid_ready=$(printf '%s' \"$readiness\"", workflow);
         Assert.Contains("scripts/deploy/candidate_gates.py coverage", workflow);
         Assert.Contains("scripts/deploy/candidate_gates.py eu-exact \"$MANIFEST_SET\"", workflow);
         Assert.Contains("scripts/deploy/candidate_gates.py lu-temporal", workflow);
-        Assert.Contains("scripts/deploy/candidate_gates.py eu-hybrid", workflow);
+        Assert.Contains("scripts/deploy/candidate_gates.py eu-hybrid \"$eu_hybrid_ready\"", workflow);
         Assert.Equal(2, Regex.Matches(workflow, Regex.Escape(
             "{ [ \"$state\" = \"Running\" ] || [ \"$state\" = \"RunningAtMaxScale\" ]; }")).Count);
         Assert.Contains("assistant_smoke=$(curl", workflow);

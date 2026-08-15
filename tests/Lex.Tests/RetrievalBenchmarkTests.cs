@@ -413,16 +413,27 @@ public sealed class RetrievalBenchmarkTests
     }
 
     [Fact]
-    public void Deployment_fetches_and_tracks_both_publisher_benchmark_manifests()
+    public void Deployment_fetches_index_and_benchmark_evidence_from_one_immutable_release()
     {
         var root = RepoRoot();
         var fetch = File.ReadAllText(Path.Combine(root, "deploy", "fetch-indexes.sh"));
+        var dockerfile = File.ReadAllText(Path.Combine(root, "Dockerfile"));
         var workflow = File.ReadAllText(Path.Combine(root, ".github", "workflows", "deploy.yml"));
 
         Assert.Contains("benchmark=\"retrieval-benchmark-$collection.json\"", fetch);
         Assert.DoesNotContain("if [ \"$repo\" = \"lex-corpus-eu-eurlex\" ]", fetch);
+        Assert.Contains("LEX_RELEASE_TAG_LU_LEGILUX", fetch);
+        Assert.Contains("LEX_RELEASE_TAG_EU_EURLEX", fetch);
+        Assert.Contains("release_base=\"https://github.com/SFHAJJI/$repo/releases/download/$release_tag\"", fetch);
+        Assert.DoesNotContain("releases/latest/download", fetch);
+        Assert.Contains("has_vectors", fetch);
+        Assert.Contains("vector release is missing signed retrieval benchmark evidence", fetch);
+        Assert.Contains("ARG LEX_RELEASE_TAG_LU_LEGILUX", dockerfile);
+        Assert.Contains("ARG LEX_RELEASE_TAG_EU_EURLEX", dockerfile);
         Assert.Contains("retrieval-benchmark-eu-eurlex.manifest.json", workflow);
         Assert.Contains("retrieval-benchmark-lu-legilux.manifest.json", workflow);
+        Assert.Contains("release_base=\"https://github.com/SFHAJJI/$repo/releases/download/$release_tag\"", workflow);
+        Assert.DoesNotContain("releases/latest/download", workflow);
     }
 
     private static DocRow Doc(string collection, string work) => new(

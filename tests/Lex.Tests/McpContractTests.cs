@@ -496,14 +496,35 @@ public class McpContractTests : IDisposable
     }
 
     [Fact]
-    public void Search_reports_the_mode_actually_used_and_visible_fuzzy_expansions()
+    public void Explicit_hybrid_search_is_typed_unavailable_instead_of_silently_running_keyword()
     {
-        var noVectors = Call("search", new JsonObject
+        var core = new McpCore(
+            new Dictionary<string, LexIndexReader> { ["t-pub"] = _reader },
+            hybridStatuses: new Dictionary<string, string>
+            {
+                ["t-pub"] = "benchmark_gate_failed",
+            });
+        var rows = Assert.IsType<JsonArray>(core.CallTool("search", new JsonObject
         {
             ["query"] = "thing", ["retrieval_mode"] = "hybrid",
-        });
-        Assert.Equal("keyword", noVectors["retrieval_mode"]!.GetValue<string>());
-        var plan = Assert.IsType<JsonObject>(noVectors["query_plan"]);
+        }));
+        var unavailable = Assert.IsType<JsonObject>(Assert.Single(rows));
+
+        Assert.Equal(McpStatus.RetrievalModeUnavailable, Status(unavailable));
+        Assert.Equal("hybrid", unavailable["requested_retrieval_mode"]!.GetValue<string>());
+        Assert.Equal("benchmark_gate_failed",
+            unavailable["retrieval_unavailable_reason"]!.GetValue<string>());
+        Assert.Null(unavailable["retrieval_mode"]);
+        Assert.Empty(unavailable["hits"]!.AsArray());
+        Assert.Null(unavailable["query_plan"]);
+    }
+
+    [Fact]
+    public void Keyword_search_remains_normal_and_reports_visible_fuzzy_expansions()
+    {
+        var keyword = Call("search", new JsonObject { ["query"] = "thing" });
+        Assert.Equal("keyword", keyword["retrieval_mode"]!.GetValue<string>());
+        var plan = Assert.IsType<JsonObject>(keyword["query_plan"]);
         Assert.Equal("thing", plan["provision_query"]!.GetValue<string>());
         Assert.False(plan["has_strong_work_match"]!.GetValue<bool>());
         Assert.Equal("not_requested", plan["work_resolution_status"]!.GetValue<string>());

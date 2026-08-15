@@ -72,6 +72,9 @@ public sealed class ArchitectureDossierTests : IClassFixture<GoldenTests.Site>
         Assert.DoesNotContain("<table tabindex=", html);
         Assert.Contains("<img src=\"/built/diagrams/retrieval.svg\" alt=\"", html);
         Assert.Contains("Open the retrieval diagram at full size", html);
+        Assert.Contains("Offline signed benchmarks authorize vector mounting", html);
+        Assert.Contains("never switches an individual query", html);
+        Assert.Contains("user or API caller explicitly chooses", html);
 
         var css = await _client.GetStringAsync("/dossier.css");
         Assert.Contains(".dossier-table {", css);

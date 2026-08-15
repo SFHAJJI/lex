@@ -395,6 +395,42 @@ test("workspace state follows browser back and forward navigation", async ({ pag
   await expect(page.getByRole("heading", { name: "What changed", exact: true })).toBeVisible();
 });
 
+test("quarantined meaning search stays selected and reports unavailability without keyword fallback",
+  async ({ page }) => {
+    await page.route("**/mcp", async (route) => {
+      const request = route.request().postDataJSON() as { id: number };
+      const payload = [{
+        envelope: {
+          publisher: "eu-eurlex",
+          jurisdiction: "EU",
+          status: "retrieval_mode_unavailable",
+        },
+        requested_retrieval_mode: "hybrid",
+        retrieval_unavailable_reason: "benchmark_gate_failed",
+        hits: [],
+      }];
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: request.id,
+          result: { content: [{ type: "text", text: JSON.stringify(payload) }] },
+        }),
+      });
+    });
+
+    await page.goto("/?space=search&q=personal+data&retrieval=hybrid", {
+      waitUntil: "networkidle",
+    });
+
+    await expect(page.getByRole("button", { name: /Words \+ meaning/ }))
+      .toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByText(/signed retrieval benchmark has not authorized it/i)).toBeVisible();
+    await expect(page.locator(".res-head .badge")).toHaveText("meaning unavailable");
+    expect(new URL(page.url()).searchParams.get("retrieval")).toBe("hybrid");
+  });
+
 test("official metadata chips apply only the exact server URI and HTTP provenance stays inert",
   async ({ page }) => {
     const identifier = "http://publications.europa.eu/resource/authority/eurovoc/1000";
