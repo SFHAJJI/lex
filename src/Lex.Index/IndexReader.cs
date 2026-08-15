@@ -1276,19 +1276,9 @@ public sealed class LexIndexReader : IDisposable
             or "exact_publisher_short_title" => true,
         "contained_identifier" or "contained_alias" or "contained_publisher_short_title" => true,
         "contained_title" => hit.MatchedValue is { } value
-            && (value.Any(char.IsDigit) || IsActFormDesignation(value)),
+            && (value.Any(char.IsDigit) || WorkSearch.IsActFormDesignation(value)),
         _ => false,
     };
-
-    private static readonly HashSet<string> ActFormDesignations = new(StringComparer.Ordinal)
-    {
-        "loi", "reglement", "arrete", "code", "constitution", "convention",
-        "ordonnance", "decret", "directive", "regulation", "traite",
-    };
-
-    private static bool IsActFormDesignation(string value) =>
-        WorkSearch.Normalize(value).Split(' ', StringSplitOptions.RemoveEmptyEntries)
-            is [var first, ..] && ActFormDesignations.Contains(first);
 
     private static IReadOnlyList<WorkResolution> BuildWorkResolutions(
         string query, IReadOnlyList<WorkSearchHit> identityMatches)

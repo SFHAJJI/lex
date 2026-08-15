@@ -741,6 +741,7 @@ public sealed class WorkSearchTests : IDisposable
         "Que prévoit la Constitution du Grand-Duché de Luxembourg sur la liberté de la presse ?", true)]
     [InlineData("Reporting obligations",
         "Which reporting obligations apply to a controller?", false)]
+    [InlineData("Plan local", "Que prévoit le Plan local pour les habitants ?", false)]
     [InlineData("Cours et Tribunaux", "Que publient les Cours et Tribunaux ?", false)]
     [InlineData("Regulation (EU) 2016/679",
         "What does Regulation (EU) 2016/679 require?", true)]
@@ -798,6 +799,28 @@ public sealed class WorkSearchTests : IDisposable
         Assert.All(result.QueryPlan.WorkResolutions, item => Assert.Equal("resolved", item.Status));
         Assert.Contains(result.Hits, hit => hit.Doc.GroupKey == "gdpr");
         Assert.Contains(result.Hits, hit => hit.Doc.GroupKey == "dora");
+    }
+
+    [Fact]
+    public void Multiple_national_code_titles_resolve_inside_a_comparison_sentence()
+    {
+        var db = TempDb();
+        var labour = Doc("lu:loi-2006-07-31-n2:2024-01-01", "loi-2006-07-31-n2",
+            "Code du travail");
+        var penal = Doc("lu:loi-1879-06-18-n1:2024-01-01", "loi-1879-06-18-n1",
+            "Code pénal");
+        IndexBuilder.Build(db, Stamp(), [labour, penal],
+            [Provision(labour, "Le contrat de travail est encadré."),
+             Provision(penal, "Les infractions sont punies par la loi.")], [], [], null);
+
+        using var reader = LexIndexReader.Open(db);
+        var result = reader.SearchKeyword(
+            "Compare le Code du travail et le Code pénal.", FilterSet.All, 10, false);
+
+        Assert.Equal("resolved", result.QueryPlan!.WorkResolutionStatus);
+        Assert.Equal(["loi-1879-06-18-n1", "loi-2006-07-31-n2"],
+            result.QueryPlan.WorkConstraints);
+        Assert.Equal(2, result.QueryPlan.WorkResolutions!.Count);
     }
 
     [Fact]
