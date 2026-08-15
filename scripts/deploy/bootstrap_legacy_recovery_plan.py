@@ -30,10 +30,17 @@ def canonical_inventory(inventory, allowed_counts):
         "max_inactive_revisions": 1,
         "revisions": revisions,
     })
-    by_name = {item.get("name"): item for item in revisions}
-    for name, item in by_name.items():
-        if item["template"].get("revisionSuffix") != name.split("--", 1)[1]:
+    canonical_revisions = []
+    for item in revisions:
+        suffix = item["name"].split("--", 1)[1]
+        observed_suffix = item["template"].get("revisionSuffix")
+        # Historical ACA revision-list records omit this redundant template field.
+        if observed_suffix is not None and observed_suffix != suffix:
             raise ValueError("revisionSuffix must exactly match the revision resource name")
+        canonical_item = dict(item)
+        canonical_item["template"] = dict(item["template"])
+        canonical_item["template"]["revisionSuffix"] = suffix
+        canonical_revisions.append(canonical_item)
 
     routes = inventory.get("ingress_traffic")
     if not isinstance(routes, list) or len(routes) != 1 or not isinstance(routes[0], dict):
@@ -49,7 +56,7 @@ def canonical_inventory(inventory, allowed_counts):
         "max_inactive_revisions": 1,
         "ingress_traffic": routes,
         "revisions": sorted(
-            revisions,
+            canonical_revisions,
             key=lambda item: (timestamp(item["createdTime"], "revision createdTime"),
                               item["name"])),
     }
