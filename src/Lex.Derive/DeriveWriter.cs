@@ -22,7 +22,7 @@ public static class DeriveWriter
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     };
 
-    /// <param name="EmptyProvisions">Provisions the profile emitted with no body text. They are
+    /// <param name="EmptyProvisions">Searchable provisions the profile emitted with no body text. They are
     /// not a skip: the provision exists, carries a heading, and mints a text_sha256 over the empty
     /// string, so it counts as coverage and any later real text reads as an amendment that never
     /// happened. An existing count remains reportable backlog, while an increase for a work fails
@@ -123,12 +123,12 @@ public static class DeriveWriter
             var workMeta = JsonNode.Parse(File.ReadAllText(workMetaPath))!;
             var workTitle = workMeta["title"]?.GetValue<string>();
             var outputWorkDir = Path.Combine(outRoot, publisher, "works", slug);
-            int? acceptedEmptyBaseline;
+            Dictionary<string, int>? acceptedEmptyBaseline;
             try
             {
                 DerivedWorkCandidate.Recover(outputWorkDir,
-                    directory => _ = ExistingEmptyProvisionCount(directory));
-                acceptedEmptyBaseline = ExistingEmptyProvisionCount(outputWorkDir);
+                    directory => _ = ExistingEmptyProvisionSignatures(directory));
+                acceptedEmptyBaseline = ExistingEmptyProvisionSignatures(outputWorkDir);
             }
             catch (Exception ex)
             {
@@ -141,6 +141,7 @@ public static class DeriveWriter
             var provisionsForWork = 0;
             var skippedForWork = 0;
             var emptyForWork = 0;
+            var extractionEmptySignatures = new Dictionary<string, int>(StringComparer.Ordinal);
             var mostlyEmptyForWork = new List<string>();
             var profilesForWork = new SortedSet<string>(StringComparer.Ordinal);
 
@@ -297,12 +298,18 @@ public static class DeriveWriter
                             ["generator"] = $"{profileId} · lex derive",
                         };
 
-                        if (extraction.Provisions.Count == 0)
+                        if (extraction.Provisions.Count == 0
+                            && (extraction.PublisherStructuralEmptyArticles?.Count ?? 0) == 0)
                         {
                             skippedForWork++;
                             Console.Error.WriteLine($"  [derive] skipped (no provisions): {slug}/{validFrom}/{unit.ObsFile}");
                             continue;
                         }
+                        if (extraction.Provisions.Count == 0
+                            && (extraction.PublisherStructuralEmptyArticles?.Count ?? 0) > 0)
+                            throw new InvalidDataException(
+                                "publisher-structural empty coverage has no searchable provision; "
+                                + "refusing a derived expression that would falsely appear text-public");
 
                         var relativeOutDir = Path.Combine("versions", versionKey);
 
@@ -342,6 +349,10 @@ public static class DeriveWriter
                                 ["citations"] = cites,
                             });
                         }
+                        var structuralEmptyArticles =
+                            extraction.PublisherStructuralEmptyArticles ?? [];
+                        ValidateStructuralEmptyArticles(
+                            structuralEmptyArticles, extraction.Provisions);
                         var json = new JsonObject
                         {
                             ["schema"] = SchemaId,
@@ -370,6 +381,13 @@ public static class DeriveWriter
                             ["provisions"] = provisions,
                             ["notes"] = new JsonArray(extraction.Notes.Select(n => (JsonNode)n).ToArray()),
                         };
+                        if (structuralEmptyArticles.Count > 0)
+                            json["publisher_structural_empty_articles"] = new JsonArray(
+                                structuralEmptyArticles.Select(value => (JsonNode)new JsonObject
+                                {
+                                    ["anchor"] = value.Anchor,
+                                    ["w_id"] = value.WId,
+                                }).ToArray());
                         candidate.WriteText(Path.Combine(relativeOutDir, $"{lang}.json"),
                             json.ToJsonString(JsonOpts) + "\n");
 
@@ -378,14 +396,27 @@ public static class DeriveWriter
                         provisionsForWork += extraction.Provisions.Count;
 
                         var emptyHere = extraction.Provisions.Count(p => string.IsNullOrWhiteSpace(p.TextMd));
+                        var publisherStructuralEmptyHere = structuralEmptyArticles.Count;
+                        var extractionEmptyHere = emptyHere;
                         emptyForWork += emptyHere;
-                        if (emptyHere > 0)
+                        foreach (var provision in extraction.Provisions.Where(provision =>
+                                     string.IsNullOrWhiteSpace(provision.TextMd)))
+                            Increment(extractionEmptySignatures, EmptyProvisionSignature(
+                                validFrom, lang, provision.Type, provision.Num,
+                                provision.Heading, provision.Path));
+                        if (publisherStructuralEmptyHere > 0)
+                            Console.Error.WriteLine("  [derive] publisher-structural empty coverage: "
+                                + $"{publisherStructuralEmptyHere}/"
+                                + $"{publisherStructuralEmptyHere + extraction.Provisions.Count} "
+                                + $"{slug}/{validFrom}/{unit.ObsFile}");
+                        if (extractionEmptyHere > 0)
                         {
                             // ObsFile, not lang: a version can derive from html, fmx4, pdf or a
                             // gazette cut, and which artifact produced the empty text is the first
                             // thing worth knowing. It also matches the "skipped" line above.
                             Console.Error.WriteLine("  [derive] empty provisions: "
-                                + $"{emptyHere}/{extraction.Provisions.Count} {slug}/{validFrom}/{unit.ObsFile}");
+                                + $"{extractionEmptyHere}/{extraction.Provisions.Count} "
+                                + $"{slug}/{validFrom}/{unit.ObsFile}");
 
                             // A scattered empty provision is a gap in one article. A version that is
                             // mostly empty is a profile that did not work on this document, which is
@@ -403,8 +434,8 @@ public static class DeriveWriter
                             // Collected, not printed. The list is returned and the caller decides
                             // how much of it to show. Printing here as well duplicated every line
                             // and made the caller's own bound meaningless.
-                            if (MostlyEmpty(emptyHere, extraction.Provisions.Count))
-                                mostlyEmptyForWork.Add($"{slug}/{validFrom}/{unit.ObsFile}: {emptyHere} of "
+                            if (MostlyEmpty(extractionEmptyHere, extraction.Provisions.Count))
+                                mostlyEmptyForWork.Add($"{slug}/{validFrom}/{unit.ObsFile}: {extractionEmptyHere} of "
                                     + $"{extraction.Provisions.Count} provisions extracted empty");
                         }
                     }
@@ -415,11 +446,19 @@ public static class DeriveWriter
                 }
             }
             if (errors.Count != errorsBeforeWork) continue;
-            if (acceptedEmptyBaseline is { } baseline && emptyForWork > baseline)
+            if (acceptedEmptyBaseline is { } baseline)
             {
-                errors.Add($"{slug}: empty-provision count increased from accepted baseline "
-                    + $"{baseline} to {emptyForWork}; prior derived files retained");
-                continue;
+                var added = extractionEmptySignatures
+                    .Where(pair => pair.Value > baseline.GetValueOrDefault(pair.Key))
+                    .OrderBy(pair => pair.Key, StringComparer.Ordinal).ToArray();
+                if (added.Length > 0)
+                {
+                    errors.Add($"{slug}: empty-provision signature is not in the accepted baseline: "
+                        + $"{string.Join(", ", added.Take(5).Select(pair => pair.Key))}"
+                        + (added.Length > 5 ? $" (+{added.Length - 5} more)" : "")
+                        + "; prior derived files retained");
+                    continue;
+                }
             }
             candidate.Commit();
             works++;
@@ -474,10 +513,12 @@ public static class DeriveWriter
             DerivationGeneration.Sha256File(manifestPath), corpus);
     }
 
-    private static int? ExistingEmptyProvisionCount(string workOutputDirectory)
+    private static Dictionary<string, int>? ExistingEmptyProvisionSignatures(
+        string workOutputDirectory)
     {
         if (!Directory.Exists(workOutputDirectory)) return null;
-        if (!Directory.EnumerateFileSystemEntries(workOutputDirectory).Any()) return 0;
+        if (!Directory.EnumerateFileSystemEntries(workOutputDirectory).Any())
+            return new Dictionary<string, int>(StringComparer.Ordinal);
 
         var versionsDirectory = Path.Combine(workOutputDirectory, "versions");
         if (!Directory.Exists(versionsDirectory))
@@ -490,18 +531,110 @@ public static class DeriveWriter
             throw new InvalidDataException(
                 $"{versionsDirectory} contains no derived version JSON files");
 
-        var count = 0;
+        var signatures = new Dictionary<string, int>(StringComparer.Ordinal);
         foreach (var path in files)
         {
             var root = JsonNode.Parse(File.ReadAllText(path)) as JsonObject
                 ?? throw new InvalidDataException($"{path} is not a JSON object");
             var provisions = root["provisions"] as JsonArray
                 ?? throw new InvalidDataException($"{path} has no provisions array");
-            count += provisions.OfType<JsonObject>().Count(provision =>
-                string.IsNullOrWhiteSpace(provision["text_md"]?.GetValue<string>()));
+            var validFrom = root["valid_from"]?.GetValue<string>();
+            var language = root["language"]?.GetValue<string>();
+            if (string.IsNullOrWhiteSpace(validFrom) || string.IsNullOrWhiteSpace(language))
+                throw new InvalidDataException($"{path} has no valid_from/language identity");
+            var provisionAnchors = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var provision in provisions)
+            {
+                if (provision is not JsonObject value)
+                    throw new InvalidDataException($"{path} contains a non-object provision");
+                var anchor = value["anchor"]?.GetValue<string>();
+                if (string.IsNullOrWhiteSpace(anchor) || !provisionAnchors.Add(anchor))
+                    throw new InvalidDataException($"{path} contains an invalid or duplicate provision anchor");
+                var text = value["text_md"]?.GetValue<string>()
+                    ?? throw new InvalidDataException($"{path} provision {anchor} has no text_md string");
+                if (string.IsNullOrWhiteSpace(text))
+                {
+                    var type = value["type"]?.GetValue<string>()
+                        ?? throw new InvalidDataException($"{path} provision {anchor} has no type");
+                    var pathValues = value["path"] as JsonArray
+                        ?? throw new InvalidDataException($"{path} provision {anchor} has no path array");
+                    var stablePath = pathValues.Select(node => node?.GetValue<string>()
+                            ?? throw new InvalidDataException(
+                                $"{path} provision {anchor} has a non-string path value"))
+                        .ToArray();
+                    Increment(signatures, EmptyProvisionSignature(
+                        validFrom, language, type,
+                        value["num"]?.GetValue<string>(),
+                        value["heading"]?.GetValue<string>(), stablePath));
+                }
+            }
+            ValidateAcceptedStructuralEmptyArticles(root, path, provisionAnchors);
         }
-        return count;
+        return signatures;
     }
+
+    private static void ValidateStructuralEmptyArticles(
+        IReadOnlyList<PublisherStructuralEmptyArticle> structural,
+        IReadOnlyList<Provision> provisions)
+    {
+        var anchors = new HashSet<string>(StringComparer.Ordinal);
+        var wIds = new HashSet<string>(StringComparer.Ordinal);
+        var provisionAnchors = provisions.Select(value => value.Anchor)
+            .ToHashSet(StringComparer.Ordinal);
+        foreach (var value in structural)
+        {
+            if (string.IsNullOrWhiteSpace(value.Anchor) || string.IsNullOrWhiteSpace(value.WId)
+                || !value.WId.StartsWith("/eli/etat/leg/", StringComparison.Ordinal)
+                || !anchors.Add(value.Anchor) || !wIds.Add(value.WId)
+                || provisionAnchors.Contains(value.Anchor))
+                throw new InvalidDataException(
+                    "publisher-structural empty article evidence is invalid or duplicated");
+        }
+    }
+
+    private static void ValidateAcceptedStructuralEmptyArticles(
+        JsonObject root, string path, IReadOnlySet<string> provisionAnchors)
+    {
+        if (!root.TryGetPropertyValue("publisher_structural_empty_articles", out var node)) return;
+        if (node is not JsonArray values)
+            throw new InvalidDataException(
+                $"{path} publisher_structural_empty_articles is not an array");
+        var anchors = new HashSet<string>(StringComparer.Ordinal);
+        var wIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var nodeValue in values)
+        {
+            if (nodeValue is not JsonObject value || value.Count != 2
+                || !value.ContainsKey("anchor") || !value.ContainsKey("w_id"))
+                throw new InvalidDataException(
+                    $"{path} publisher_structural_empty_articles entry has invalid keys");
+            var anchor = value["anchor"]?.GetValue<string>();
+            var wId = value["w_id"]?.GetValue<string>();
+            if (string.IsNullOrWhiteSpace(anchor) || string.IsNullOrWhiteSpace(wId)
+                || !wId.StartsWith("/eli/etat/leg/", StringComparison.Ordinal)
+                || !anchors.Add(anchor) || !wIds.Add(wId))
+                throw new InvalidDataException(
+                    $"{path} publisher_structural_empty_articles contains an invalid or duplicate identity");
+            if (provisionAnchors.Contains(anchor))
+                throw new InvalidDataException(
+                    $"{path} publisher structural-empty anchor {anchor} is also a provision");
+        }
+    }
+
+    private static string EmptyProvisionSignature(
+        string validFrom, string language, string type, string? num,
+        string? heading, IReadOnlyList<string> path)
+        => new JsonArray
+        {
+            validFrom,
+            language,
+            type,
+            num,
+            heading,
+            new JsonArray(path.Select(value => (JsonNode)value).ToArray()),
+        }.ToJsonString();
+
+    private static void Increment(Dictionary<string, int> counts, string value)
+        => counts[value] = counts.GetValueOrDefault(value) + 1;
 
     /// <summary>
     /// D48: map language -> Formex main-member path for a version dir. Members live under

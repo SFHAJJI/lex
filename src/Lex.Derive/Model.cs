@@ -5,6 +5,8 @@ namespace Lex.Derive;
 
 public sealed record Citation(string? Href, string Text);
 
+public sealed record PublisherStructuralEmptyArticle(string Anchor, string WId);
+
 public sealed record Provision(
     string Anchor,
     string? Eli,
@@ -22,7 +24,8 @@ public sealed record Provision(
 public sealed record Extraction(
     IReadOnlyList<Provision> Provisions,
     string Markdown,
-    IReadOnlyList<string> Notes);
+    IReadOnlyList<string> Notes,
+    IReadOnlyList<PublisherStructuralEmptyArticle>? PublisherStructuralEmptyArticles = null);
 
 internal static class MdUtil
 {

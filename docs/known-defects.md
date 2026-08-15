@@ -26,6 +26,8 @@ defects measured against the running system on 2026-08-13.
 | Corpus 11, log lines bypassed the injected writer | #174, #177 |
 | Corpus 1, positional same-date version identity | `lex-corpus/4`: full publisher version id is persisted and its full SHA-256 forms the stable version key; the one-time migration refuses a missing/replaced held state before body acquisition |
 | Assistant 5, unresolved work reported as `not_requested` | #213: index resolution now emits `unresolved`, and deterministic subject preflight runs before the planner receives any work authority |
+| Corpus 3, empty-provision growth | `akn-lu/2` compares a multiset of stable version/language/type/label/path signatures with the accepted layer and refuses any new extraction-empty signature. Official publisher-structural empty articles are preserved separately as signed `{anchor,w_id}` coverage evidence, never as searchable provisions; frozen `akn-lu/1` remains runnable unchanged |
+| Legilux duplicate presentation attribute | The one measured, byte-identical duplicate `scl:cols-nb` defect is parsed through the frozen `akn-lu-identical-scl-duplicate/1` profile; conflicting, repeated, or broader malformed XML still refuses |
 
 ---
 
@@ -59,13 +61,17 @@ text reads as an amendment that never happened.
 Luxembourg financial-sector law holds **105 of 145** empty in its 2003 consolidation. The verdict
 counted **1,603 false amendment states** produced this way.
 
-**Fix.** The counter shipped in #176. What remains is the gate: a ratchet that fails a run when a
-work's empty-provision count *increases*, which does not punish the existing backlog. `derive`
-already exits 2 on a non-empty error list, so the mechanism exists.
+**Fix.** The counter shipped in #176. The gate now compares stable empty-provision signatures per
+version and language, rather than one aggregate count, and refuses any new signature while allowing
+publisher-reminted anchors. Official publisher-structural empty articles are retained in the signed
+derived JSON as `publisher_structural_empty_articles`; they are excluded from provisions, Markdown,
+FTS, semantic retrieval, and MCP results. A structural-only expression is refused so it cannot be
+misreported as public text.
 
 **Gain.** Kills the false-amendment-history class and stops the backlog growing silently.
 
-**Why not now.** Nothing blocks it. This is the next fix after the current one.
+**Remaining work.** MCP and the UI do not expose the structural-coverage array in this release. A
+future typed coverage view can surface it without making those publisher placeholders searchable.
 
 ## 4. `pdf-memorial-lu/1` extracts poorly
 

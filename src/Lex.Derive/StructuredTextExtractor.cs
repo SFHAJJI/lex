@@ -17,12 +17,26 @@ public static class StructuredTextExtractor
     {
         if (LooksLikeAkomaNtoso(source))
         {
-            var articles = AknLuProfile.Extract(source, lexIdBase);
-            if (articles.Provisions.Count > 0)
-                return new Result(articles, AknLuProfile.ProfileId);
-            return new Result(
-                AknLuDocumentProfile.Extract(source, lexIdBase),
-                AknLuDocumentProfile.ProfileId);
+            try
+            {
+                return ExtractAkn(source, lexIdBase);
+            }
+            catch (XmlException)
+            {
+                var repaired = RemoveOneByteIdenticalDuplicateSclAttribute(source);
+                if (ReferenceEquals(repaired, source)) throw;
+                var result = ExtractAkn(repaired, lexIdBase);
+                if (result.ProfileId != AknLuProfileV2.ProfileId)
+                    throw new InvalidDataException(
+                        "the bounded duplicate scl:* repair is not combined with another extraction profile");
+                return new Result(
+                    result.Extraction with
+                    {
+                        Notes = [.. result.Extraction.Notes,
+                            "one byte-identical duplicate scl:* presentation attribute removed for parsing; publisher evidence unchanged"]
+                    },
+                    AknLuDuplicateSclAttributeProfile.ProfileId);
+            }
         }
 
         try
@@ -57,6 +71,28 @@ public static class StructuredTextExtractor
             TolerantHtmlEuProfile.ProfileId);
     }
 
+    private static Result ExtractAkn(string source, string lexIdBase)
+    {
+        var articles = AknLuProfileV2.Extract(source, lexIdBase);
+        if (articles.Provisions.Count > 0
+            || (articles.PublisherStructuralEmptyArticles?.Count ?? 0) > 0)
+            return new Result(articles, AknLuProfileV2.ProfileId);
+        return new Result(
+            AknLuDocumentProfile.Extract(source, lexIdBase),
+            AknLuDocumentProfile.ProfileId);
+    }
+
+    private static string RemoveOneByteIdenticalDuplicateSclAttribute(string source)
+    {
+        const string defect = " scl:cols-nb=\"5\" scl:cols-nb=\"5\"";
+        var first = source.IndexOf(defect, StringComparison.Ordinal);
+        if (first < 0 || source.IndexOf(defect, first + defect.Length,
+                StringComparison.Ordinal) >= 0)
+            return source;
+        return source.Remove(first + " scl:cols-nb=\"5\"".Length,
+            " scl:cols-nb=\"5\"".Length);
+    }
+
     private static bool LooksLikeAkomaNtoso(string source)
     {
         // Only inspect markup names. This is deliberately a bounded format sniff, not a
@@ -65,6 +101,11 @@ public static class StructuredTextExtractor
         return span.Contains("<akomaNtoso", StringComparison.OrdinalIgnoreCase)
                || span.Contains(":akomaNtoso", StringComparison.OrdinalIgnoreCase);
     }
+}
+
+public static class AknLuDuplicateSclAttributeProfile
+{
+    public const string ProfileId = "akn-lu-identical-scl-duplicate/1";
 }
 
 /// <summary>

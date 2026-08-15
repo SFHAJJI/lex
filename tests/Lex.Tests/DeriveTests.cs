@@ -137,6 +137,16 @@ public class DeriveTests
         var pinned = Convert.ToHexStringLower(
             System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(combined)));
         Assert.Equal("1c55e3140c5945dca3be0d782d1a0b1a9b742f03de2721f7ff6aab8e2db9a223", pinned);
+        Assert.Null(x.PublisherStructuralEmptyArticles);
+        var observable = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(
+            System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(new
+            {
+                x.Provisions,
+                x.Markdown,
+                x.Notes,
+            })));
+        Assert.Equal("4492b54be03b7e849022e5dd7a80090d8fa5122fd458f6af5f0e4108563b69c8",
+            observable);
     }
 
     [Fact]
