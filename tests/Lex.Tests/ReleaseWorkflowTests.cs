@@ -58,6 +58,49 @@ public sealed class ReleaseWorkflowTests
     }
 
     [Fact]
+    public void Cross_repository_release_credentials_are_confined_before_checkout()
+    {
+        var deploy = File.ReadAllText(Path.Combine(
+            RepoRoot(), ".github", "workflows", "deploy.yml"));
+        var steps = deploy.IndexOf("    steps:", StringComparison.Ordinal);
+        var authorization = deploy.IndexOf(
+            "      - name: Authorize exact cross-repository releases", StringComparison.Ordinal);
+        var firstUses = deploy.IndexOf("      - uses:", steps, StringComparison.Ordinal);
+        var firstNamedStep = deploy.IndexOf("      - name:", steps, StringComparison.Ordinal);
+
+        Assert.True(steps >= 0 && authorization == firstNamedStep && authorization < firstUses,
+            "Cross-repository authorization must be the first executable step before any action.");
+        Assert.Single(Regex.Matches(deploy, "secrets\\.LEX_OPS_TOKEN").Cast<Match>());
+        Assert.DoesNotContain("secrets.LEX_OPS_TOKEN", deploy[firstUses..]);
+        var deployAuthorization = deploy[authorization..firstUses];
+        Assert.Contains("GH_TOKEN: ${{ secrets.LEX_OPS_TOKEN }}", deployAuthorization);
+        Assert.Contains("immutable-releases", deployAuthorization);
+        Assert.Contains("gh release verify", deployAuthorization);
+        Assert.DoesNotContain("scripts/", deployAuthorization);
+        Assert.DoesNotContain("GITHUB_OUTPUT", deployAuthorization);
+        Assert.DoesNotContain("actions/", deployAuthorization);
+        Assert.DoesNotContain("set -x", deployAuthorization);
+        Assert.Contains("lex-corpus-lu-legilux:lu-legilux:$lu_release_tag", deployAuthorization);
+        Assert.Contains("lex-corpus-eu-eurlex:eu-eurlex:$eu_release_tag", deployAuthorization);
+        Assert.Contains("repos/$repository/immutable-releases", deployAuthorization);
+        Assert.Contains("gh release verify \"$release_tag\" --repo \"$repository\"", deployAuthorization);
+        Assert.Contains("gh release verify-asset \"$release_tag\" \"$release_dir/$manifest\"", deployAuthorization);
+        Assert.Contains("gh release verify-asset \"$release_tag\" \"$release_dir/$benchmark_manifest\"", deployAuthorization);
+
+        var buildStart = deploy.IndexOf("- name: Build immutable image in ACR", StringComparison.Ordinal);
+        var buildEnd = deploy.IndexOf("- name: Configure identity-backed pulls", buildStart,
+            StringComparison.Ordinal);
+        Assert.True(buildStart > firstUses && buildEnd > buildStart);
+        var build = deploy[buildStart..buildEnd];
+        Assert.DoesNotContain("GH_TOKEN:", build);
+        Assert.DoesNotContain("gh api", build);
+        Assert.DoesNotContain("gh release", build);
+        Assert.Contains("https://api.github.com/repos/$repository/releases/tags/$release_tag", build);
+        Assert.Contains("https://api.github.com/repos/$repository/git/ref/tags/$release_tag", build);
+
+    }
+
+    [Fact]
     public void Candidate_deployment_is_zero_traffic_unless_promotion_is_explicit()
     {
         var workflow = File.ReadAllText(Path.Combine(RepoRoot(), ".github", "workflows", "deploy.yml"));

@@ -59,6 +59,58 @@ jobs:
       RUNTIME_IDENTITY: uami-lex-runtime
       APPLICATION_INSIGHTS_NAME: ai-lex-web
     steps:
+      - name: Authorize exact cross-repository releases
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.LEX_OPS_TOKEN }}
+          LU_RELEASE_TAG: ${{ inputs.lu_release_tag }}
+          EU_RELEASE_TAG: ${{ inputs.eu_release_tag }}
+        run: |
+          set -euo pipefail
+          [[ "$LU_RELEASE_TAG" =~ ^index-lu-legilux-[0-9a-f]{64}$ ]] \
+            || { echo "::error::LU release tag is not an exact immutable ticket tag"; exit 1; }
+          [[ "$EU_RELEASE_TAG" =~ ^index-eu-eurlex-[0-9a-f]{64}$ ]] \
+            || { echo "::error::EU release tag is not an exact immutable ticket tag"; exit 1; }
+          lu_release_tag="$LU_RELEASE_TAG"
+          eu_release_tag="$EU_RELEASE_TAG"
+          release_dir=$(mktemp -d)
+          trap 'rm -rf "$release_dir"' EXIT
+          for item in \
+            "lex-corpus-lu-legilux:lu-legilux:$lu_release_tag" \
+            "lex-corpus-eu-eurlex:eu-eurlex:$eu_release_tag"; do
+            repo="${item%%:*}"
+            rest="${item#*:}"
+            collection="${rest%%:*}"
+            release_tag="${rest#*:}"
+            repository="SFHAJJI/$repo"
+            release_base="https://github.com/SFHAJJI/$repo/releases/download/$release_tag"
+            gh api -H 'X-GitHub-Api-Version: 2026-03-10' \
+              "repos/$repository/immutable-releases" \
+              | jq -e 'type == "object" and .enabled == true' >/dev/null \
+              || { echo "::error::$repository does not enforce immutable releases"; exit 1; }
+            gh release verify "$release_tag" --repo "$repository" >/dev/null \
+              || { echo "::error::$repository release attestation is invalid"; exit 1; }
+            manifest="index-$collection.manifest.json"
+            curl --fail --silent --show-error --location \
+              --connect-timeout 5 --max-time 60 \
+              -o "$release_dir/$manifest" "$release_base/$manifest" \
+              || { echo "::error::$repo release is missing $manifest"; exit 1; }
+            gh release verify-asset "$release_tag" "$release_dir/$manifest" --repo "$repository" \
+              >/dev/null \
+              || { echo "::error::$repo index manifest is not attested by the exact release"; exit 1; }
+            if jq -e --arg vector "index-$collection.vectors" \
+              'any(.files[]?; .path == $vector)' "$release_dir/$manifest" >/dev/null; then
+              benchmark_manifest="retrieval-benchmark-$collection.manifest.json"
+              curl --fail --silent --show-error --location \
+                --connect-timeout 5 --max-time 60 \
+                -o "$release_dir/$benchmark_manifest" "$release_base/$benchmark_manifest" \
+                || { echo "::error::$repo vector release is missing $benchmark_manifest"; exit 1; }
+              gh release verify-asset "$release_tag" "$release_dir/$benchmark_manifest" \
+                --repo "$repository" >/dev/null \
+                || { echo "::error::$repo benchmark manifest is not attested by the exact release"; exit 1; }
+            fi
+          done
+
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       - name: Require successful CI for this exact commit
@@ -128,11 +180,10 @@ jobs:
         id: image
         shell: bash
         env:
-          GH_TOKEN: ${{ github.token }}
           LU_RELEASE_TAG: ${{ inputs.lu_release_tag }}
           EU_RELEASE_TAG: ${{ inputs.eu_release_tag }}
         run: |
-          set -eu
+          set -euo pipefail
           [[ "$LU_RELEASE_TAG" =~ ^index-lu-legilux-[0-9a-f]{64}$ ]] \
             || { echo "::error::LU release tag is not an exact immutable ticket tag"; exit 1; }
           [[ "$EU_RELEASE_TAG" =~ ^index-eu-eurlex-[0-9a-f]{64}$ ]] \
@@ -151,34 +202,30 @@ jobs:
             ticket="${release_tag#index-$collection-}"
             repository="SFHAJJI/$repo"
             release_base="https://github.com/SFHAJJI/$repo/releases/download/$release_tag"
-            immutable_releases=$(gh api -H 'X-GitHub-Api-Version: 2026-03-10' \
-              "repos/$repository/immutable-releases")
-            printf '%s' "$immutable_releases" \
-              | python3 scripts/deploy/release_artifact_gate.py immutability \
-              || { echo "::error::$repository does not enforce immutable releases"; exit 1; }
-            gh release verify "$release_tag" --repo "$repository" >/dev/null \
-              || { echo "::error::$repository release attestation is invalid"; exit 1; }
             manifest="index-$collection.manifest.json"
             curl --fail --silent --show-error --location \
               --connect-timeout 5 --max-time 60 \
               -o "$release_dir/$manifest" \
               "$release_base/$manifest" \
               || { echo "::error::$repo release is missing $manifest"; exit 1; }
-            gh release verify-asset "$release_tag" "$release_dir/$manifest" --repo "$repository" \
-              >/dev/null \
-              || { echo "::error::$repo index manifest is not attested by the exact release"; exit 1; }
             corpus_commit=$(python3 scripts/deploy/release_artifact_gate.py manifest \
               "$collection" "$ticket" < "$release_dir/$manifest") \
               || { echo "::error::$repo index manifest does not bind the exact release ticket"; exit 1; }
             index_manifest_sha256=$(sha256sum "$release_dir/$manifest" | cut -d' ' -f1)
-            release=$(gh api -H 'X-GitHub-Api-Version: 2026-03-10' \
-              "repos/$repository/releases/tags/$release_tag")
+            release=$(curl --fail --silent --show-error --location \
+              --connect-timeout 5 --max-time 60 \
+              -H 'Accept: application/vnd.github+json' \
+              -H 'X-GitHub-Api-Version: 2026-03-10' \
+              "https://api.github.com/repos/$repository/releases/tags/$release_tag")
             printf '%s' "$release" \
               | python3 scripts/deploy/release_artifact_gate.py release \
                   "$release_tag" "$corpus_commit" \
               || { echo "::error::$repo release identity is not final and immutable"; exit 1; }
-            tag_ref=$(gh api -H 'X-GitHub-Api-Version: 2026-03-10' \
-              "repos/$repository/git/ref/tags/$release_tag")
+            tag_ref=$(curl --fail --silent --show-error --location \
+              --connect-timeout 5 --max-time 60 \
+              -H 'Accept: application/vnd.github+json' \
+              -H 'X-GitHub-Api-Version: 2026-03-10' \
+              "https://api.github.com/repos/$repository/git/ref/tags/$release_tag")
             printf '%s' "$tag_ref" \
               | python3 scripts/deploy/release_artifact_gate.py tag-ref "$corpus_commit" \
               || { echo "::error::$repo release tag does not target the signed corpus"; exit 1; }
@@ -190,9 +237,6 @@ jobs:
                 -o "$release_dir/$benchmark_manifest" \
                 "$release_base/$benchmark_manifest" \
                 || { echo "::error::$repo vector release is missing $benchmark_manifest"; exit 1; }
-              gh release verify-asset "$release_tag" "$release_dir/$benchmark_manifest" \
-                --repo "$repository" >/dev/null \
-                || { echo "::error::$repo benchmark manifest is not attested by the exact release"; exit 1; }
               python3 scripts/deploy/release_artifact_gate.py manifest \
                 "$collection" "$ticket" "$corpus_commit" "$index_manifest_sha256" \
                 < "$release_dir/$benchmark_manifest" \
