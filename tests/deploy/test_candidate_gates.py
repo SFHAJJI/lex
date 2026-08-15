@@ -1,5 +1,7 @@
 import json
 from pathlib import Path
+import re
+import shutil
 import subprocess
 import sys
 import unittest
@@ -7,10 +9,46 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts" / "deploy" / "candidate_gates.py"
+DEPLOY_WORKFLOW = ROOT / ".github" / "workflows" / "deploy.yml"
 MANIFEST = "b" * 64
 
 
 class CandidateGateTests(unittest.TestCase):
+    def test_workflow_extracts_a_unique_typed_false_hybrid_state(self):
+        workflow = DEPLOY_WORKFLOW.read_text(encoding="utf-8")
+        start = workflow.index("publisher_hybrid_ready() {")
+        end = workflow.index("\n          }", start)
+        extractor = workflow[start:end]
+
+        self.assertIn('jq -r --arg publisher "$publisher"', extractor)
+        self.assertNotIn("jq -er", extractor)
+
+        jq = shutil.which("jq")
+        if jq is None:
+            self.skipTest("jq is unavailable; the workflow option contract was still checked")
+        jq_filter = re.search(r"jq -r --arg publisher \"\$publisher\" '(.*?)'", extractor,
+                              re.DOTALL)
+        self.assertIsNotNone(jq_filter)
+
+        false_state = self.run_hybrid_ready_filter(
+            jq, jq_filter.group(1),
+            {"publishers": [{"publisher": "lu-legilux", "hybridReady": False}]})
+        self.assertEqual(0, false_state.returncode, false_state.stderr)
+        self.assertEqual("false", false_state.stdout.strip())
+
+        invalid_states = [
+            {"publishers": []},
+            {"publishers": [
+                {"publisher": "lu-legilux", "hybridReady": False},
+                {"publisher": "lu-legilux", "hybridReady": True},
+            ]},
+            {"publishers": [{"publisher": "lu-legilux", "hybridReady": "false"}]},
+        ]
+        for payload in invalid_states:
+            with self.subTest(payload=payload):
+                completed = self.run_hybrid_ready_filter(jq, jq_filter.group(1), payload)
+                self.assertNotEqual(0, completed.returncode)
+
     def test_readiness_binds_publishers_and_verified_manifest(self):
         payload = {
             "ready": True,
@@ -151,6 +189,16 @@ class CandidateGateTests(unittest.TestCase):
         return subprocess.run(
             [sys.executable, str(SCRIPT), gate, *arguments],
             cwd=ROOT,
+            input=json.dumps(payload, separators=(",", ":")),
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+
+    @staticmethod
+    def run_hybrid_ready_filter(jq, jq_filter, payload):
+        return subprocess.run(
+            [jq, "-r", "--arg", "publisher", "lu-legilux", jq_filter],
             input=json.dumps(payload, separators=(",", ":")),
             text=True,
             capture_output=True,
