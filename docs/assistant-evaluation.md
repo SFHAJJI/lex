@@ -89,13 +89,19 @@ promotion retains exact C.
   -GraderDeployment <independent-deployment>
 ```
 
+For the one-time first-official bootstrap, run the same command with
+`-BootstrapFirstOfficial`. That mode accepts only the already-active candidate C at exactly zero
+traffic, does not activate or deactivate it, and revalidates active/zero-traffic state after the
+evaluation even when evaluation fails. Without the switch, the ordinary contract is unchanged:
+the candidate must start inactive at zero traffic and the wrapper returns it to that state.
+
 `AOAI_GRADER_KEY` is read from the environment by default and is never written to the report.
 The runner obtains the candidate revision's code, image, resources, zero traffic weight, model
 configuration and signed-index manifest set from Azure Resource Manager and `/attestation.json`;
 callers cannot label a different service as the candidate. It re-resolves the same revision after
-the run, so a traffic or identity change invalidates the report. The wrapper owns a bounded
-inactive-to-active-to-inactive candidate lifecycle and verifies that exactly one production quota
-authority remains afterward, including on failure. It also obtains both deployments' resource,
+the run, so a traffic or identity change invalidates the report. In ordinary mode, the wrapper owns
+a bounded inactive-to-active-to-inactive candidate lifecycle and verifies that exactly one
+production quota authority remains afterward, including on failure. It also obtains both deployments' resource,
 endpoint, model name, immutable model version and SKU from Azure Resource Manager before inference.
 Candidate and grader usage and EUR prices are reserved, measured and gated independently. The
 catalog binds the exact model versions, GlobalStandard meter IDs, effective dates, EUR rates,
@@ -120,7 +126,22 @@ temporarily activates the zero-traffic candidate, revalidates the report, runs t
 Chromium presentation gate, adds `assistant-browser-evidence.json`, and returns the candidate to
 inactive state. The one-time bootstrap instead requires the already bounded state A active/100,
 R inactive/0 and C active/0; failure abandons C, while successful publication leaves C active only
-for the two-hour signed promotion window. Only the OIDC
+for the two-hour signed promotion window. The publication helper enables this path only when its
+three equivalence arguments are supplied together:
+
+```powershell
+./deploy/publish-assistant-evaluation.ps1 `
+  -Report ./artifacts/assistant-eval-report.json `
+  -Cases ./evals/assistant-cases-v3.json `
+  -ReviewAttestation ./evals/assistant-cases-v3.review.json `
+  -ReviewSignature ./evals/assistant-cases-v3.review.sig `
+  -CandidateRevision ca-lex-web--<candidate> `
+  -BootstrapRollbackRevision ca-lex-web--<fallback> `
+  -BootstrapCanonicalTemplateDigest sha256:<64-lowercase-hex> `
+  -BootstrapExpectedImageDigest sha256:<64-lowercase-hex>
+```
+
+Only the OIDC
 publisher can bind the resulting five-file set to the candidate revision, code, index-manifest set,
 catalog and browser-evidence digests, sign its whole-artifact manifest with `keyvault-lex-v2`,
 reverify it, and publish the release. The standard public package has those five evidence files
