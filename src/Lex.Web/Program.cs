@@ -36,7 +36,9 @@ builder.Services.AddSingleton<IndexRegistry>();
 builder.Services.AddSingleton(sp =>
 {
     var registry = sp.GetRequiredService<IndexRegistry>();
-    return new McpCore(registry.All, registry.VerifiedManifestSetId, options.PublicBaseUrl);
+    return new McpCore(registry.All, registry.VerifiedManifestSetId, options.PublicBaseUrl,
+        registry.HybridActivations.ToDictionary(
+            item => item.Key, item => item.Value.Reason, StringComparer.Ordinal));
 });
 builder.Services.AddSingleton(sp => new AskService(sp.GetRequiredService<McpCore>()));
 builder.Services.AddSingleton(sp => new AskRequestRegistry(

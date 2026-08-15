@@ -2,6 +2,7 @@ using Lex.Index;
 using Microsoft.Extensions.Options;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 
 namespace Lex.Web;
 
@@ -18,9 +19,19 @@ public sealed class IndexRegistry : IDisposable
     private readonly Dictionary<string, LexIndexReader> _readers = new(StringComparer.Ordinal);
     private readonly List<VerifiedArtifactManifest> _artifactManifests = [];
     private readonly HashSet<string> _verifiedFiles = new(StringComparer.Ordinal);
-    private readonly MultilingualE5Encoder? _encoder;
+    private readonly Dictionary<string, HybridActivationStatus> _hybridActivations = new(StringComparer.Ordinal);
+    private readonly ITextEncoder? _encoder;
 
     public IndexRegistry(IOptions<LexOptions> options, ILogger<IndexRegistry> log)
+        : this(options, log, ArtifactTrustStore.Roots, path => MultilingualE5Encoder.Open(path))
+    {
+    }
+
+    internal IndexRegistry(
+        IOptions<LexOptions> options,
+        ILogger<IndexRegistry> log,
+        IReadOnlyList<ArtifactTrustRoot> trustRoots,
+        Func<string, ITextEncoder> openEncoder)
     {
         var dir = options.Value.IndexDir;
         if (!Directory.Exists(dir))
@@ -35,14 +46,14 @@ public sealed class IndexRegistry : IDisposable
             log.LogCritical("Artifact manifests are required but none exist in {Dir}; no index will be mounted.", dir);
             return;
         }
-        try
+        foreach (var manifest in manifests)
         {
-            foreach (var manifest in manifests)
+            try
             {
                 var signature = manifest[..^".json".Length] + ".sig";
                 var manifestBytes = File.ReadAllBytes(manifest);
                 foreach (var path in ArtifactManifests.VerifyDirectory(
-                             dir, manifest, signature, ArtifactTrustStore.Roots))
+                             dir, manifest, signature, trustRoots))
                     _verifiedFiles.Add(path);
                 var parsed = ArtifactManifests.Parse(manifestBytes);
                 _artifactManifests.Add(new VerifiedArtifactManifest(
@@ -51,14 +62,18 @@ public sealed class IndexRegistry : IDisposable
                     parsed.KeyId,
                     parsed.CodeCommit,
                     parsed.CreatedAt,
-                    parsed.Files.Select(f => f.Path).ToArray()));
+                    parsed.Files.Select(f => f.Path).ToArray(),
+                    parsed.Sources));
                 log.LogInformation("Verified artifact manifest {Manifest}", Path.GetFileName(manifest));
             }
-        }
-        catch (Exception ex)
-        {
-            log.LogCritical("Artifact verification failed; no index will be mounted: {Reason}", ex.Message);
-            return;
+            catch (Exception ex)
+            {
+                // Benchmark evidence is an independent signed artifact. A missing, corrupt or
+                // untrusted report quarantines semantic retrieval without hiding a separately
+                // verified legal database from deterministic keyword search.
+                log.LogError("Artifact manifest {Manifest} was rejected: {Reason}",
+                    Path.GetFileName(manifest), ex.Message);
+            }
         }
 
         if (!string.IsNullOrWhiteSpace(options.Value.EmbeddingModelDir))
@@ -73,7 +88,7 @@ public sealed class IndexRegistry : IDisposable
                         if (!_verifiedFiles.Contains(relative))
                             throw new InvalidDataException($"embedding artifact '{relative}' is not in a verified manifest");
                     }
-                _encoder = MultilingualE5Encoder.Open(modelDir);
+                _encoder = openEncoder(modelDir);
                 log.LogInformation("Loaded local embedding model {Model} at {Revision}",
                     _encoder.ModelId, _encoder.ModelRevision);
             }
@@ -91,13 +106,14 @@ public sealed class IndexRegistry : IDisposable
                     throw new InvalidDataException("the database is not listed by a verified artifact manifest");
                 var vectorPath = Path.ChangeExtension(db, ".vectors");
                 var vectorRelative = Path.GetRelativePath(dir, vectorPath).Replace('\\', '/');
-                var hybridReady = _encoder is not null && File.Exists(vectorPath)
-                                  && (manifests.Count == 0 || _verifiedFiles.Contains(vectorRelative));
-                LexIndexReader reader;
-                if (hybridReady)
+                var reader = LexIndexReader.Open(db);
+                var activation = HybridActivation(reader, Path.GetFileName(db), vectorRelative,
+                    vectorPath, options.Value.CodeCommit);
+                if (activation.Activated)
                 {
                     try
                     {
+                        reader.Dispose();
                         reader = LexIndexReader.Open(db, _encoder, vectorPath);
                     }
                     catch (Exception ex)
@@ -109,13 +125,11 @@ public sealed class IndexRegistry : IDisposable
                             "Hybrid retrieval disabled for {Db}; mounting verified lexical index: {Reason}",
                             Path.GetFileName(db), ex.Message);
                         reader = LexIndexReader.Open(db);
+                        activation = new(false, "vector_open_failed");
                     }
                 }
-                else
-                {
-                    reader = LexIndexReader.Open(db);
-                }
                 _readers[reader.Collection] = reader;
+                _hybridActivations[reader.Collection] = activation;
                 log.LogInformation("Mounted {Db} ({Collection}, signature_valid={Valid})",
                     db, reader.Collection, reader.SignatureValid);
             }
@@ -133,6 +147,8 @@ public sealed class IndexRegistry : IDisposable
 
     public IReadOnlyDictionary<string, LexIndexReader> All => _readers;
 
+    public IReadOnlyDictionary<string, HybridActivationStatus> HybridActivations => _hybridActivations;
+
     public IReadOnlyList<VerifiedArtifactManifest> VerifiedArtifactManifests => _artifactManifests;
 
     public string? VerifiedManifestSetId => _artifactManifests.Count == 0 ? null
@@ -142,7 +158,8 @@ public sealed class IndexRegistry : IDisposable
 
     public ReadinessReport Readiness(LexOptions options) =>
         ReadinessPolicy.Evaluate(_readers, options.RequiredPublisherSet,
-            options.RequireArtifactManifest, options.ArtifactManifestId, VerifiedManifestSetId);
+            options.RequireArtifactManifest, options.ArtifactManifestId, VerifiedManifestSetId,
+            _hybridActivations);
 
     public bool IsArtifactVerified(string relativePath) =>
         _verifiedFiles.Contains(relativePath.Replace('\\', '/'));
@@ -158,6 +175,49 @@ public sealed class IndexRegistry : IDisposable
     public IEnumerable<LexIndexReader> For(string? publisher) =>
         publisher is null ? _readers.Values : _readers.Values.Where(r => r.Collection == publisher);
 
+    private HybridActivationStatus HybridActivation(
+        LexIndexReader reader,
+        string indexFile,
+        string vectorRelative,
+        string vectorPath,
+        string? runtimeCodeCommit)
+    {
+        if (_encoder is null) return new(false, "encoder_unavailable");
+        if (!File.Exists(vectorPath)) return new(false, "vector_missing");
+        if (!_verifiedFiles.Contains(vectorRelative)) return new(false, "vector_unverified");
+
+        var indexManifests = _artifactManifests.Where(item =>
+            item.Artifacts.Contains(indexFile, StringComparer.Ordinal)
+            && item.Artifacts.Contains(vectorRelative, StringComparer.Ordinal)).ToArray();
+        if (indexManifests.Length != 1) return new(false, "index_manifest_missing");
+
+        var benchmarkFile = $"retrieval-benchmark-{reader.Collection}.json";
+        if (!_verifiedFiles.Contains(benchmarkFile)) return new(false, "benchmark_missing");
+        var benchmarkManifests = _artifactManifests.Where(item =>
+            item.Artifacts.Contains(benchmarkFile, StringComparer.Ordinal)).ToArray();
+        if (benchmarkManifests.Length != 1) return new(false, "benchmark_missing");
+
+        try
+        {
+            var report = JsonSerializer.Deserialize<RetrievalBenchmarkReport>(
+                File.ReadAllBytes(Path.Combine(Path.GetDirectoryName(vectorPath)!, benchmarkFile)),
+                new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower });
+            if (report is null) return new(false, "benchmark_invalid");
+            if (report.IndexBytes != new FileInfo(Path.Combine(
+                    Path.GetDirectoryName(vectorPath)!, indexFile)).Length
+                || report.VectorBytes != new FileInfo(vectorPath).Length)
+                return new(false, "benchmark_identity_mismatch");
+            return HybridActivationGate.Evaluate(
+                report, reader.Collection, runtimeCodeCommit, reader.Stamp,
+                _encoder.ModelId, _encoder.ModelRevision,
+                indexManifests[0], benchmarkManifests[0]);
+        }
+        catch (Exception)
+        {
+            return new(false, "benchmark_invalid");
+        }
+    }
+
     public void Dispose()
     {
         foreach (var r in _readers.Values) r.Dispose();
@@ -172,7 +232,135 @@ public sealed record VerifiedArtifactManifest(
     string KeyId,
     string CodeCommit,
     string CreatedAt,
-    IReadOnlyList<string> Artifacts);
+    IReadOnlyList<string> Artifacts,
+    IReadOnlyDictionary<string, string>? Sources = null);
+
+public sealed record HybridActivationStatus(bool Activated, string Reason);
+
+internal static class HybridActivationGate
+{
+    private static readonly RetrievalBenchmarkCaseSet Cases = LoadCases();
+    private static readonly RetrievalBenchmarkBaseline Baseline = LoadBaseline();
+
+    public static HybridActivationStatus Evaluate(
+        RetrievalBenchmarkReport report,
+        string collection,
+        string? runtimeCodeCommit,
+        IReadOnlyDictionary<string, string> indexStamp,
+        string modelId,
+        string modelRevision,
+        VerifiedArtifactManifest indexManifest,
+        VerifiedArtifactManifest benchmarkManifest)
+    {
+        var expected = Cases.Cases.Where(item => item.Collection == collection).ToArray();
+        var failures = report.GateFailures;
+        if (report.Schema != "lex-retrieval-benchmark/3"
+            || report.BaselineSchema != Baseline.Schema
+            || !string.Equals(Cases.Sha256, Baseline.CasesSha256,
+                StringComparison.OrdinalIgnoreCase)
+            || expected.Length == 0
+            || report.SampleCount != expected.Length
+            || report.TuningSampleCount != expected.Count(item => item.Split == "tuning")
+            || report.HoldoutSampleCount != expected.Count(item => item.Split == "holdout")
+            || report.KeywordTuning is null || report.HybridTuning is null
+            || report.KeywordHoldout is null || report.HybridHoldout is null
+            || failures is null
+            || report.ActivationGatePassed != (failures.Count == 0)
+            || report.ReviewStatus is not ("reviewed" or "lawyer-reviewed")
+            || !string.Equals(report.ExpectedCasesSha256, Baseline.CasesSha256,
+                StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(report.ActualCasesSha256, Baseline.CasesSha256,
+                StringComparison.OrdinalIgnoreCase)
+            || report.ReviewAttestation != $"{Baseline.ReviewedBy}@{Baseline.ReviewedAt}")
+            return new(false, "benchmark_invalid");
+
+        var vectorFile = $"index-{collection}.vectors";
+        var identityMatches = RetrievalBenchmarkGate.HasReleaseIdentity(report)
+            && string.Equals(runtimeCodeCommit, report.CodeCommit, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(indexStamp.GetValueOrDefault("collection"), collection,
+                StringComparison.Ordinal)
+            && string.Equals(indexStamp.GetValueOrDefault("code_commit"), report.CodeCommit,
+                StringComparison.OrdinalIgnoreCase)
+            && string.Equals(indexStamp.GetValueOrDefault("corpus_commit"), report.CorpusCommit,
+                StringComparison.OrdinalIgnoreCase)
+            && string.Equals(indexStamp.GetValueOrDefault("embedding_model"), report.ModelId,
+                StringComparison.Ordinal)
+            && string.Equals(indexStamp.GetValueOrDefault("embedding_revision"), report.ModelRevision,
+                StringComparison.Ordinal)
+            && string.Equals(modelId, report.ModelId, StringComparison.Ordinal)
+            && string.Equals(modelRevision, report.ModelRevision, StringComparison.Ordinal)
+            && ClaimsMatchVerifiedManifests(report, collection, indexManifest, benchmarkManifest)
+            && indexManifest.Artifacts.Contains(vectorFile, StringComparer.Ordinal)
+            && indexManifest.Artifacts.Contains("model-manifest.json", StringComparer.Ordinal)
+            && indexManifest.Artifacts.Contains("model.onnx", StringComparer.Ordinal)
+            && indexManifest.Artifacts.Contains("sentencepiece.bpe.model", StringComparer.Ordinal);
+        if (!identityMatches)
+            return new(false, "benchmark_identity_mismatch");
+
+        if (!report.ActivationGatePassed)
+            return new(false, "benchmark_gate_failed");
+
+        var hybrid = report.HybridHoldout;
+        var keyword = report.KeywordHoldout;
+        if (hybrid.ExactFirstAccuracy < 1
+            || hybrid.TemporalLeakageFailures != 0
+            || hybrid.NoHitAccuracy < 1
+            || hybrid.ResolutionAccuracy < 1
+            || hybrid.RoleIntentAccuracy < 1
+            || hybrid.P95Ms > 250
+            || hybrid.NdcgAt10 + 0.000001 < keyword.NdcgAt10 * 0.98
+            || report.MemoryLimitBytes <= 0
+            || report.ProcessMemoryBytes >= report.MemoryLimitBytes * 0.75)
+            return new(false, "benchmark_invalid");
+
+        return new(true, "activated");
+    }
+
+    public static bool ClaimsMatchVerifiedManifests(
+        RetrievalBenchmarkReport report,
+        string collection,
+        VerifiedArtifactManifest indexManifest,
+        VerifiedArtifactManifest benchmarkManifest)
+    {
+        var benchmarkFile = $"retrieval-benchmark-{collection}.json";
+        var indexFile = $"index-{collection}.db";
+        return string.Equals(indexManifest.Sha256, report.ManifestId,
+                   StringComparison.OrdinalIgnoreCase)
+               && string.Equals(indexManifest.CodeCommit, report.CodeCommit,
+                   StringComparison.OrdinalIgnoreCase)
+               && indexManifest.Artifacts.Contains(indexFile, StringComparer.Ordinal)
+               && string.Equals(indexManifest.Sources?.GetValueOrDefault("collection"), collection,
+                   StringComparison.Ordinal)
+               && string.Equals(indexManifest.Sources?.GetValueOrDefault("corpus_commit"),
+                   report.CorpusCommit, StringComparison.OrdinalIgnoreCase)
+               && benchmarkManifest.Artifacts.Count == 1
+               && benchmarkManifest.Artifacts.Contains(benchmarkFile, StringComparer.Ordinal)
+               && string.Equals(benchmarkManifest.CodeCommit, report.CodeCommit,
+                   StringComparison.OrdinalIgnoreCase)
+               && string.Equals(benchmarkManifest.Sources?.GetValueOrDefault("collection"), collection,
+                   StringComparison.Ordinal)
+               && string.Equals(benchmarkManifest.Sources?.GetValueOrDefault("corpus_commit"),
+                   report.CorpusCommit, StringComparison.OrdinalIgnoreCase)
+               && string.Equals(benchmarkManifest.Sources?.GetValueOrDefault("index_manifest_sha256"),
+                   indexManifest.Sha256, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static RetrievalBenchmarkCaseSet LoadCases()
+    {
+        using var stream = typeof(HybridActivationGate).Assembly
+            .GetManifestResourceStream("Lex.Web.retrieval-cases.json")
+            ?? throw new InvalidOperationException("Embedded retrieval benchmark cases are missing.");
+        return RetrievalBenchmarkCatalog.LoadSet(stream);
+    }
+
+    private static RetrievalBenchmarkBaseline LoadBaseline()
+    {
+        using var stream = typeof(HybridActivationGate).Assembly
+            .GetManifestResourceStream("Lex.Web.retrieval-baseline-v2.json")
+            ?? throw new InvalidOperationException("Embedded retrieval benchmark baseline is missing.");
+        return RetrievalBenchmarkCatalog.LoadBaseline(stream);
+    }
+}
 
 public sealed record PublisherReadiness(
     string Publisher,
@@ -181,7 +369,9 @@ public sealed record PublisherReadiness(
     int? ExpectedWorks,
     int ActualWorks,
     int BuildIssueCount,
-    bool Complete);
+    bool Complete,
+    bool HybridReady,
+    string HybridStatus);
 
 public sealed record ReadinessReport(
     bool Ready,
@@ -199,7 +389,8 @@ public static class ReadinessPolicy
         IReadOnlyList<string> requiredPublishers,
         bool requireArtifactManifest,
         string? expectedManifestSet,
-        string? verifiedManifestSet)
+        string? verifiedManifestSet,
+        IReadOnlyDictionary<string, HybridActivationStatus>? hybridActivations = null)
     {
         var required = requiredPublishers.Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal).ToArray();
@@ -223,7 +414,8 @@ public static class ReadinessPolicy
         var publishers = required.Select(publisher =>
         {
             if (!readers.TryGetValue(publisher, out var reader))
-                return new PublisherReadiness(publisher, false, false, null, 0, 0, false);
+                return new PublisherReadiness(
+                    publisher, false, false, null, 0, 0, false, false, "not_mounted");
             var coverage = reader.Coverage();
             var issueCount = coverage.BuildIssues?.Count ?? 0;
             var complete = reader.SignatureValid
@@ -235,9 +427,12 @@ public static class ReadinessPolicy
             else if (coverage.Groups != coverage.ExpectedWorks)
                 issues.Add($"{publisher}:inventory_mismatch");
             if (issueCount > 0) issues.Add($"{publisher}:build_issues_present");
+            var hybrid = hybridActivations?.GetValueOrDefault(publisher)
+                         ?? new HybridActivationStatus(reader.HybridReady,
+                             reader.HybridReady ? "activated" : "not_evaluated");
             return new PublisherReadiness(
                 publisher, true, reader.SignatureValid, coverage.ExpectedWorks,
-                coverage.Groups, issueCount, complete);
+                coverage.Groups, issueCount, complete, hybrid.Activated, hybrid.Reason);
         }).ToArray();
         return new ReadinessReport(
             issues.Count == 0 && publishers.All(item => item.Complete),

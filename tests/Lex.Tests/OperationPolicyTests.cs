@@ -1443,6 +1443,7 @@ public sealed class OperationPolicyTests
         { McpStatus.TextNotAvailable, LegalOutcome.NotAvailable },
         { McpStatus.TextWithheld, LegalOutcome.NotAvailable },
         { McpStatus.NoCorpusMounted, LegalOutcome.NotAvailable },
+        { McpStatus.RetrievalModeUnavailable, LegalOutcome.NotAvailable },
     };
 
     [Theory]
@@ -1589,6 +1590,7 @@ public sealed class OperationPolicyTests
     {
         Assert.Equal("2.0.0", McpSdkBridge.ServerVersion);
         Assert.DoesNotContain("outside_observed_window", McpSdkBridge.ServerInstructions);
+        Assert.Contains(McpStatus.RetrievalModeUnavailable, McpSdkBridge.ServerInstructions);
     }
 
     [Fact]
@@ -1726,6 +1728,28 @@ public sealed class OperationPolicyTests
                 ["envelope"] = new JsonObject { ["status"] = "invented_future_status" },
                 ["provisions"] = new JsonArray { new JsonObject { ["anchor"] = "art_1" } },
             }));
+    }
+
+    [Fact]
+    public void Quarantined_hybrid_search_is_an_explicit_user_visible_gap()
+    {
+        var effect = UiMapper.From("search", new JsonObject
+        {
+            ["query"] = "personal data", ["retrieval_mode"] = "hybrid",
+        }, new JsonArray(new JsonObject
+        {
+            ["envelope"] = new JsonObject
+            {
+                ["publisher"] = "eu-eurlex",
+                ["status"] = McpStatus.RetrievalModeUnavailable,
+            },
+            ["requested_retrieval_mode"] = "hybrid",
+            ["retrieval_unavailable_reason"] = "benchmark_gate_failed",
+            ["hits"] = new JsonArray(),
+        }));
+
+        Assert.Equal(McpStatus.RetrievalModeUnavailable, effect.Gap?.Status);
+        Assert.Contains("signed retrieval benchmark", effect.Gap?.Explanation);
     }
 
     [Fact]

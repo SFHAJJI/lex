@@ -17,9 +17,25 @@ class CandidateGateTests(unittest.TestCase):
             "requiredPublishers": ["eu-eurlex", "lu-legilux"],
             "mountedPublishers": ["eu-eurlex", "lu-legilux"],
             "verifiedManifestSet": MANIFEST,
+            "publishers": [
+                {
+                    "publisher": "eu-eurlex",
+                    "hybridReady": True,
+                    "hybridStatus": "activated",
+                },
+                {
+                    "publisher": "lu-legilux",
+                    "hybridReady": False,
+                    "hybridStatus": "benchmark_gate_failed",
+                },
+            ],
         }
         self.assert_passes("readyz", payload, MANIFEST)
         payload["verifiedManifestSet"] = "c" * 64
+        self.assert_fails("readyz", payload, MANIFEST)
+
+        payload["verifiedManifestSet"] = MANIFEST
+        del payload["publishers"][1]["hybridStatus"]
         self.assert_fails("readyz", payload, MANIFEST)
 
     def test_mcp_legal_and_retrieval_contracts(self):
@@ -53,10 +69,34 @@ class CandidateGateTests(unittest.TestCase):
         temporal["provisions"] = []
         self.assert_fails("lu-temporal", temporal)
 
-        hybrid = [{"retrieval_mode": "hybrid", "hits": [{"work": "x"}]}]
-        self.assert_passes("eu-hybrid", hybrid)
-        hybrid[0]["retrieval_mode"] = "keyword"
-        self.assert_fails("eu-hybrid", hybrid)
+        eu_hybrid = [{
+            "envelope": {"publisher": "eu-eurlex", "status": "ok"},
+            "retrieval_mode": "hybrid",
+            "hits": [{"work": "x"}],
+        }]
+        self.assert_passes("hybrid", eu_hybrid, "eu-eurlex", "true", "activated")
+        self.assert_fails("hybrid", eu_hybrid, "lu-legilux", "true", "activated")
+        self.assert_fails("hybrid", eu_hybrid, "eu-eurlex", "false", "benchmark_gate_failed")
+        eu_hybrid[0]["envelope"]["status"] = "retrieval_mode_unavailable"
+        self.assert_fails("hybrid", eu_hybrid, "eu-eurlex", "true", "activated")
+
+        lu_quarantined = [{
+            "envelope": {
+                "publisher": "lu-legilux",
+                "status": "retrieval_mode_unavailable",
+            },
+            "requested_retrieval_mode": "hybrid",
+            "retrieval_unavailable_reason": "benchmark_gate_failed",
+            "hits": [],
+        }]
+        self.assert_passes(
+            "hybrid", lu_quarantined, "lu-legilux", "false", "benchmark_gate_failed")
+        self.assert_fails(
+            "hybrid", lu_quarantined, "lu-legilux", "false", "vector_missing")
+        self.assert_fails(
+            "hybrid", lu_quarantined, "eu-eurlex", "false", "benchmark_gate_failed")
+        self.assert_fails(
+            "hybrid", lu_quarantined, "lu-legilux", "true", "activated")
 
     def test_assistant_smoke_requires_the_planned_and_executed_tool(self):
         response = self.coverage_response()

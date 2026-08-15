@@ -84,7 +84,8 @@ public static class LegalOperationPolicy
             or McpStatus.UnknownPublisher => LegalOutcome.NotFound,
         McpStatus.NoVersionForDate or McpStatus.AnchorNotInVersion
             or McpStatus.NoProvisionHistory or McpStatus.TextNotAvailable
-            or McpStatus.TextWithheld or McpStatus.NoCorpusMounted => LegalOutcome.NotAvailable,
+            or McpStatus.TextWithheld or McpStatus.NoCorpusMounted
+            or McpStatus.RetrievalModeUnavailable => LegalOutcome.NotAvailable,
         _ => throw new InvalidDataException($"Unknown MCP legal status '{status}'."),
     };
 

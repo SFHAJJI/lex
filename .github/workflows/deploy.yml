@@ -8,6 +8,14 @@ on:
         required: true
         type: boolean
         default: false
+      lu_release_tag:
+        description: Exact immutable LU index release tag (index-lu-legilux- plus 64-hex ticket)
+        required: true
+        type: string
+      eu_release_tag:
+        description: Exact immutable EU index release tag (index-eu-eurlex- plus 64-hex ticket)
+        required: true
+        type: string
       bootstrap_first_official:
         description: One-time creation of fallback R before exact candidate C from one image/template
         required: true
@@ -25,6 +33,7 @@ on:
         type: string
 permissions:
   actions: read
+  attestations: read
   contents: read
   checks: read
   id-token: write
@@ -118,22 +127,78 @@ jobs:
       - name: Build immutable image in ACR
         id: image
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LU_RELEASE_TAG: ${{ inputs.lu_release_tag }}
+          EU_RELEASE_TAG: ${{ inputs.eu_release_tag }}
         run: |
           set -eu
+          [[ "$LU_RELEASE_TAG" =~ ^index-lu-legilux-[0-9a-f]{64}$ ]] \
+            || { echo "::error::LU release tag is not an exact immutable ticket tag"; exit 1; }
+          [[ "$EU_RELEASE_TAG" =~ ^index-eu-eurlex-[0-9a-f]{64}$ ]] \
+            || { echo "::error::EU release tag is not an exact immutable ticket tag"; exit 1; }
+          lu_release_tag="$LU_RELEASE_TAG"
+          eu_release_tag="$EU_RELEASE_TAG"
           release_dir=$(mktemp -d)
           trap 'rm -rf "$release_dir"' EXIT
           for item in \
-            lex-corpus-lu-legilux:index-lu-legilux.manifest.json \
-            lex-corpus-eu-eurlex:index-eu-eurlex.manifest.json \
-            lex-corpus-lu-legilux:retrieval-benchmark-lu-legilux.manifest.json \
-            lex-corpus-eu-eurlex:retrieval-benchmark-eu-eurlex.manifest.json; do
+            "lex-corpus-lu-legilux:lu-legilux:$lu_release_tag" \
+            "lex-corpus-eu-eurlex:eu-eurlex:$eu_release_tag"; do
             repo="${item%%:*}"
-            manifest="${item#*:}"
+            rest="${item#*:}"
+            collection="${rest%%:*}"
+            release_tag="${rest#*:}"
+            ticket="${release_tag#index-$collection-}"
+            repository="SFHAJJI/$repo"
+            release_base="https://github.com/SFHAJJI/$repo/releases/download/$release_tag"
+            immutable_releases=$(gh api -H 'X-GitHub-Api-Version: 2026-03-10' \
+              "repos/$repository/immutable-releases")
+            printf '%s' "$immutable_releases" \
+              | python3 scripts/deploy/release_artifact_gate.py immutability \
+              || { echo "::error::$repository does not enforce immutable releases"; exit 1; }
+            gh release verify "$release_tag" --repo "$repository" >/dev/null \
+              || { echo "::error::$repository release attestation is invalid"; exit 1; }
+            manifest="index-$collection.manifest.json"
             curl --fail --silent --show-error --location \
               --connect-timeout 5 --max-time 60 \
               -o "$release_dir/$manifest" \
-              "https://github.com/SFHAJJI/$repo/releases/latest/download/$manifest" \
+              "$release_base/$manifest" \
               || { echo "::error::$repo release is missing $manifest"; exit 1; }
+            gh release verify-asset "$release_tag" "$release_dir/$manifest" --repo "$repository" \
+              >/dev/null \
+              || { echo "::error::$repo index manifest is not attested by the exact release"; exit 1; }
+            corpus_commit=$(python3 scripts/deploy/release_artifact_gate.py manifest \
+              "$collection" "$ticket" < "$release_dir/$manifest") \
+              || { echo "::error::$repo index manifest does not bind the exact release ticket"; exit 1; }
+            index_manifest_sha256=$(sha256sum "$release_dir/$manifest" | cut -d' ' -f1)
+            release=$(gh api -H 'X-GitHub-Api-Version: 2026-03-10' \
+              "repos/$repository/releases/tags/$release_tag")
+            printf '%s' "$release" \
+              | python3 scripts/deploy/release_artifact_gate.py release \
+                  "$release_tag" "$corpus_commit" \
+              || { echo "::error::$repo release identity is not final and immutable"; exit 1; }
+            tag_ref=$(gh api -H 'X-GitHub-Api-Version: 2026-03-10' \
+              "repos/$repository/git/ref/tags/$release_tag")
+            printf '%s' "$tag_ref" \
+              | python3 scripts/deploy/release_artifact_gate.py tag-ref "$corpus_commit" \
+              || { echo "::error::$repo release tag does not target the signed corpus"; exit 1; }
+            if jq -e --arg vector "index-$collection.vectors" \
+              'any(.files[]?; .path == $vector)' "$release_dir/$manifest" >/dev/null; then
+              benchmark_manifest="retrieval-benchmark-$collection.manifest.json"
+              curl --fail --silent --show-error --location \
+                --connect-timeout 5 --max-time 60 \
+                -o "$release_dir/$benchmark_manifest" \
+                "$release_base/$benchmark_manifest" \
+                || { echo "::error::$repo vector release is missing $benchmark_manifest"; exit 1; }
+              gh release verify-asset "$release_tag" "$release_dir/$benchmark_manifest" \
+                --repo "$repository" >/dev/null \
+                || { echo "::error::$repo benchmark manifest is not attested by the exact release"; exit 1; }
+              python3 scripts/deploy/release_artifact_gate.py manifest \
+                "$collection" "$ticket" "$corpus_commit" "$index_manifest_sha256" \
+                < "$release_dir/$benchmark_manifest" \
+                >/dev/null \
+                || { echo "::error::$repo benchmark manifest does not bind the exact release"; exit 1; }
+            fi
           done
           index_manifest_count=$(find "$release_dir" -name 'index-*.manifest.json' | wc -l)
           [ "$index_manifest_count" -eq 2 ] \
@@ -148,6 +213,8 @@ jobs:
           # concurrent build could already have moved.
           build=$(az acr build --registry "$ACR_NAME" --image "lex-web:$tag" \
             --build-arg "LEX_REQUIRE_ARTIFACT_MANIFEST=1" \
+            --build-arg "LEX_RELEASE_TAG_LU_LEGILUX=$lu_release_tag" \
+            --build-arg "LEX_RELEASE_TAG_EU_EURLEX=$eu_release_tag" \
             --build-arg "LEX_EXPECTED_MANIFEST_SET=$manifest_set" \
             --file Dockerfile . --no-logs -o json)
           printf '%s' "$build" \
@@ -932,9 +999,28 @@ jobs:
           fqdn=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
             --revision "$candidate" --query properties.fqdn -o tsv)
           revision_get "https://$fqdn/healthz"
-          revision_get "https://$fqdn/readyz" \
+          readiness=$(revision_get "https://$fqdn/readyz")
+          printf '%s' "$readiness" \
             | python3 scripts/deploy/candidate_gates.py readyz "$MANIFEST_SET" \
             || { echo "::error::candidate readiness contract failed"; exit 1; }
+          publisher_hybrid_ready() {
+            local publisher=$1
+            printf '%s' "$readiness" | jq -er --arg publisher "$publisher" '
+            [.publishers[] | select(.publisher == $publisher) | .hybridReady]
+            | if length == 1 and (.[0] | type) == "boolean" then .[0]
+              else error("publisher hybrid readiness is absent or ambiguous") end'
+          }
+          publisher_hybrid_status() {
+            local publisher=$1
+            printf '%s' "$readiness" | jq -er --arg publisher "$publisher" '
+            [.publishers[] | select(.publisher == $publisher) | .hybridStatus]
+            | if length == 1 and (.[0] | type) == "string" and (.[0] | length) > 0
+              then .[0] else error("publisher hybrid status is absent or ambiguous") end'
+          }
+          eu_hybrid_ready=$(publisher_hybrid_ready eu-eurlex)
+          lu_hybrid_ready=$(publisher_hybrid_ready lu-legilux)
+          eu_hybrid_status=$(publisher_hybrid_status eu-eurlex)
+          lu_hybrid_status=$(publisher_hybrid_status lu-legilux)
           mcp_text() {
             local response payload result
             response=$(curl --fail --show-error --silent --retry 3 --retry-delay 5 \
@@ -960,8 +1046,13 @@ jobs:
           printf '%s' "$lu_temporal" | python3 scripts/deploy/candidate_gates.py lu-temporal \
             || { echo "::error::Luxembourg temporal smoke returned no provisions"; exit 1; }
           eu_hybrid=$(mcp_text '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"search","arguments":{"query":"personal data protection rights","publisher":"eu-eurlex","retrieval_mode":"hybrid","language":"en","fuzzy":"off","limit":3}}}')
-          printf '%s' "$eu_hybrid" | python3 scripts/deploy/candidate_gates.py eu-hybrid \
-            || { echo "::error::EU hybrid retrieval smoke returned no hits"; exit 1; }
+          printf '%s' "$eu_hybrid" \
+            | python3 scripts/deploy/candidate_gates.py hybrid eu-eurlex "$eu_hybrid_ready" "$eu_hybrid_status" \
+            || { echo "::error::EU hybrid activation smoke contradicted readiness"; exit 1; }
+          lu_hybrid=$(mcp_text '{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"search","arguments":{"query":"Code penal","publisher":"lu-legilux","retrieval_mode":"hybrid","language":"fr","fuzzy":"off","limit":3}}}')
+          printf '%s' "$lu_hybrid" \
+            | python3 scripts/deploy/candidate_gates.py hybrid lu-legilux "$lu_hybrid_ready" "$lu_hybrid_status" \
+            || { echo "::error::Luxembourg hybrid activation smoke contradicted readiness"; exit 1; }
           assistant_smoke=$(curl --fail --show-error --silent --retry 2 --retry-all-errors --retry-delay 5 \
             --connect-timeout 5 --max-time 180 -H 'Content-Type: application/json' \
             -d '{"messages":[{"role":"user","content":"Show coverage."}]}' \

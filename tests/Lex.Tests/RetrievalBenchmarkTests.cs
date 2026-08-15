@@ -240,10 +240,21 @@ public sealed class RetrievalBenchmarkTests
         var manifests = new[]
         {
             new Lex.Web.VerifiedArtifactManifest("index.manifest.json", new string('1', 64),
-                "key", new string('a', 40), report.Timestamp, ["index-eu-eurlex.db"]),
+                "key", report.CodeCommit, report.Timestamp, ["index-eu-eurlex.db"],
+                new Dictionary<string, string>
+                {
+                    ["collection"] = "eu-eurlex",
+                    ["corpus_commit"] = report.CorpusCommit,
+                }),
             new Lex.Web.VerifiedArtifactManifest("benchmark.manifest.json", new string('2', 64),
                 "key", report.CodeCommit, report.Timestamp,
-                ["retrieval-benchmark-eu-eurlex.json"]),
+                ["retrieval-benchmark-eu-eurlex.json"],
+                new Dictionary<string, string>
+                {
+                    ["collection"] = "eu-eurlex",
+                    ["corpus_commit"] = report.CorpusCommit,
+                    ["index_manifest_sha256"] = new string('1', 64),
+                }),
         };
 
         Assert.True(Lex.Web.ExplainerEndpoints.BenchmarkClaimsMatchVerifiedManifests(
@@ -252,6 +263,92 @@ public sealed class RetrievalBenchmarkTests
             report with { ManifestId = new string('3', 64) }, "eu-eurlex", manifests));
         Assert.False(Lex.Web.ExplainerEndpoints.BenchmarkClaimsMatchVerifiedManifests(
             report with { CodeCommit = new string('c', 40) }, "eu-eurlex", manifests));
+        Assert.False(Lex.Web.ExplainerEndpoints.BenchmarkClaimsMatchVerifiedManifests(
+            report, "eu-eurlex",
+            [manifests[0] with { CodeCommit = new string('c', 40) }, manifests[1]]));
+        Assert.False(Lex.Web.ExplainerEndpoints.BenchmarkClaimsMatchVerifiedManifests(
+            report, "eu-eurlex",
+            [manifests[0], manifests[1] with
+            {
+                Sources = new Dictionary<string, string>
+                {
+                    ["collection"] = "eu-eurlex",
+                    ["corpus_commit"] = report.CorpusCommit,
+                    ["index_manifest_sha256"] = new string('4', 64),
+                },
+            }]));
+    }
+
+    [Fact]
+    public void Hybrid_activation_requires_a_passing_report_bound_to_the_exact_runtime()
+    {
+        const string collection = "lu-legilux";
+        var cases = Cases().Where(item => item.Collection == collection).ToArray();
+        var baseline = RetrievalBenchmarkCatalog.LoadBaseline(
+            Path.Combine(RepoRoot(), "evals", "retrieval-baseline-v2.json"));
+        var report = Report() with
+        {
+            SampleCount = cases.Length,
+            TuningSampleCount = cases.Count(item => item.Split == "tuning"),
+            HoldoutSampleCount = cases.Count(item => item.Split == "holdout"),
+            BaselineSchema = baseline.Schema,
+            ExpectedCasesSha256 = baseline.CasesSha256,
+            ActualCasesSha256 = baseline.CasesSha256,
+            ReviewStatus = "reviewed",
+            ReviewAttestation = $"{baseline.ReviewedBy}@{baseline.ReviewedAt}",
+            CorpusCommit = new string('c', 40),
+            ManifestId = new string('1', 64),
+            ModelId = "test/e5",
+            ModelRevision = "test-revision",
+        };
+        var indexManifest = new Lex.Web.VerifiedArtifactManifest(
+            "index-lu-legilux.manifest.json", report.ManifestId, "key", report.CodeCommit,
+            report.Timestamp,
+            ["index-lu-legilux.db", "index-lu-legilux.vectors", "model-manifest.json",
+                "model.onnx", "sentencepiece.bpe.model"],
+            new Dictionary<string, string>
+            {
+                ["collection"] = collection,
+                ["corpus_commit"] = report.CorpusCommit,
+            });
+        var benchmarkManifest = new Lex.Web.VerifiedArtifactManifest(
+            "retrieval-benchmark-lu-legilux.manifest.json", new string('2', 64), "key",
+            report.CodeCommit, report.Timestamp, ["retrieval-benchmark-lu-legilux.json"],
+            new Dictionary<string, string>
+            {
+                ["collection"] = collection,
+                ["corpus_commit"] = report.CorpusCommit,
+                ["index_manifest_sha256"] = indexManifest.Sha256,
+            });
+        var stamp = new Dictionary<string, string>
+        {
+            ["collection"] = collection,
+            ["code_commit"] = report.CodeCommit,
+            ["corpus_commit"] = report.CorpusCommit,
+            ["embedding_model"] = report.ModelId,
+            ["embedding_revision"] = report.ModelRevision,
+        };
+
+        var accepted = Lex.Web.HybridActivationGate.Evaluate(
+            report, collection, report.CodeCommit, stamp, report.ModelId,
+            report.ModelRevision, indexManifest, benchmarkManifest);
+        var failedGate = Lex.Web.HybridActivationGate.Evaluate(
+            report with
+            {
+                ActivationGatePassed = false,
+                GateFailures = ["holdout warm p95 exceeds 250 ms"],
+            }, collection, report.CodeCommit, stamp, report.ModelId,
+            report.ModelRevision, indexManifest, benchmarkManifest);
+        var wrongRuntime = Lex.Web.HybridActivationGate.Evaluate(
+            report, collection, new string('f', 40), stamp, report.ModelId,
+            report.ModelRevision, indexManifest, benchmarkManifest);
+
+        Assert.True(accepted.Activated);
+        Assert.Equal("activated", accepted.Reason);
+        Assert.False(failedGate.Activated);
+        Assert.Equal("benchmark_gate_failed", failedGate.Reason);
+        Assert.False(wrongRuntime.Activated);
+        Assert.Equal("benchmark_identity_mismatch", wrongRuntime.Reason);
     }
 
     [Fact]
@@ -316,16 +413,31 @@ public sealed class RetrievalBenchmarkTests
     }
 
     [Fact]
-    public void Deployment_fetches_and_tracks_both_publisher_benchmark_manifests()
+    public void Deployment_fetches_index_and_benchmark_evidence_from_one_immutable_release()
     {
         var root = RepoRoot();
         var fetch = File.ReadAllText(Path.Combine(root, "deploy", "fetch-indexes.sh"));
+        var dockerfile = File.ReadAllText(Path.Combine(root, "Dockerfile"));
         var workflow = File.ReadAllText(Path.Combine(root, ".github", "workflows", "deploy.yml"));
 
         Assert.Contains("benchmark=\"retrieval-benchmark-$collection.json\"", fetch);
         Assert.DoesNotContain("if [ \"$repo\" = \"lex-corpus-eu-eurlex\" ]", fetch);
-        Assert.Contains("retrieval-benchmark-eu-eurlex.manifest.json", workflow);
-        Assert.Contains("retrieval-benchmark-lu-legilux.manifest.json", workflow);
+        Assert.Contains("LEX_RELEASE_TAG_LU_LEGILUX", fetch);
+        Assert.Contains("LEX_RELEASE_TAG_EU_EURLEX", fetch);
+        Assert.Contains("release_base=\"https://github.com/SFHAJJI/$repo/releases/download/$release_tag\"", fetch);
+        Assert.DoesNotContain("releases/latest/download", fetch);
+        Assert.Contains("has_vectors", fetch);
+        Assert.Contains("vector release is missing signed retrieval benchmark evidence", fetch);
+        Assert.Contains(".sources.queue_ticket_id", fetch);
+        Assert.Contains(".sources.index_manifest_sha256", fetch);
+        Assert.Contains("signed queue ticket does not match the exact release tag", fetch);
+        Assert.Contains("ARG LEX_RELEASE_TAG_LU_LEGILUX", dockerfile);
+        Assert.Contains("ARG LEX_RELEASE_TAG_EU_EURLEX", dockerfile);
+        Assert.Contains("\"lex-corpus-lu-legilux:lu-legilux:$lu_release_tag\"", workflow);
+        Assert.Contains("\"lex-corpus-eu-eurlex:eu-eurlex:$eu_release_tag\"", workflow);
+        Assert.Contains("benchmark_manifest=\"retrieval-benchmark-$collection.manifest.json\"", workflow);
+        Assert.Contains("release_base=\"https://github.com/SFHAJJI/$repo/releases/download/$release_tag\"", workflow);
+        Assert.DoesNotContain("releases/latest/download", workflow);
     }
 
     private static DocRow Doc(string collection, string work) => new(

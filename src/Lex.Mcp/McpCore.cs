@@ -17,6 +17,7 @@ public sealed class McpCore
     private readonly Action<string>? _sessionOpened;
     private readonly int? _publisherSelectionTotal;
     private readonly string? _publicBase;
+    private readonly IReadOnlyDictionary<string, string> _hybridStatuses;
     private const int MaximumProvisionRows = 2000;
     private const int MaximumHistoryRows = 500;
     private const int MaximumProvenanceRows = 1000;
@@ -164,9 +165,11 @@ public sealed class McpCore
     public McpCore(
         IReadOnlyDictionary<string, LexIndexReader> readers,
         string? artifactManifestIdentity = null,
-        string? publicBase = null)
+        string? publicBase = null,
+        IReadOnlyDictionary<string, string>? hybridStatuses = null)
         : this(readers, artifactManifestIdentity, readers.Count > 0, null, null,
-            (publicBase ?? Environment.GetEnvironmentVariable("LEX_PUBLIC_BASE_URL"))?.TrimEnd('/'))
+            (publicBase ?? Environment.GetEnvironmentVariable("LEX_PUBLIC_BASE_URL"))?.TrimEnd('/'),
+            hybridStatuses)
     {
     }
 
@@ -174,7 +177,7 @@ public sealed class McpCore
         IReadOnlyDictionary<string, LexIndexReader> readers,
         Action<string> sessionOpened)
         : this(readers, null, readers.Count > 0, sessionOpened, null,
-            Environment.GetEnvironmentVariable("LEX_PUBLIC_BASE_URL")?.TrimEnd('/'))
+            Environment.GetEnvironmentVariable("LEX_PUBLIC_BASE_URL")?.TrimEnd('/'), null)
     {
     }
 
@@ -184,7 +187,8 @@ public sealed class McpCore
         bool corpusMounted,
         Action<string>? sessionOpened,
         int? publisherSelectionTotal,
-        string? publicBase)
+        string? publicBase,
+        IReadOnlyDictionary<string, string>? hybridStatuses)
     {
         this.readers = readers;
         this.artifactManifestIdentity = artifactManifestIdentity;
@@ -192,6 +196,12 @@ public sealed class McpCore
         _sessionOpened = sessionOpened;
         _publisherSelectionTotal = publisherSelectionTotal;
         _publicBase = publicBase;
+        _hybridStatuses = readers.ToDictionary(
+            item => item.Key,
+            item => item.Value.HybridReady
+                ? "activated"
+                : hybridStatuses?.GetValueOrDefault(item.Key) ?? "not_activated",
+            StringComparer.Ordinal);
         _readerExecutions = readers.ToDictionary(
             item => item.Key, _ => new SemaphoreSlim(1, 1), StringComparer.Ordinal);
         MountedPublishers = readers.Keys.Order(StringComparer.Ordinal).ToArray();
@@ -728,7 +738,7 @@ public sealed class McpCore
                 cancellationToken.ThrowIfCancellationRequested();
                 var result = new McpCore(
                     sessions, artifactManifestIdentity, _corpusMounted, null,
-                    selection.Total, _publicBase).CallToolCore(name, a);
+                    selection.Total, _publicBase, _hybridStatuses).CallToolCore(name, a);
                 cancellationToken.ThrowIfCancellationRequested();
                 return result;
             }
@@ -1253,7 +1263,25 @@ public sealed class McpCore
                     Str("binding_status"), Str("domain"),
                     PublisherMetadataIdentifier: publisherMetadataIdentifier);
                 var selectedReaders = SelectReaders(pub, jurisdiction);
+                foreach (var reader in selectedReaders.Readers.Where(reader =>
+                             requestedMode == "hybrid" && !reader.HybridReady))
+                {
+                    outp.Add(new JsonObject
+                    {
+                        ["envelope"] = Envelope(reader, McpStatus.RetrievalModeUnavailable),
+                        ["requested_retrieval_mode"] = "hybrid",
+                        ["retrieval_unavailable_reason"] =
+                            _hybridStatuses.GetValueOrDefault(reader.Collection, "not_activated"),
+                        ["time_scope"] = timeScope,
+                        ["as_of"] = asOf?.ToString("yyyy-MM-dd"),
+                        ["query_expansions"] = new JsonArray(),
+                        ["artifact_manifest_id"] =
+                            Environment.GetEnvironmentVariable("LEX_ARTIFACT_MANIFEST_ID"),
+                        ["hits"] = new JsonArray(),
+                    });
+                }
                 var executions = selectedReaders.Readers
+                    .Where(reader => requestedMode != "hybrid" || reader.HybridReady)
                     .Select(reader => (Reader: reader, Execution: requestedMode == "hybrid"
                         ? reader.SearchHybrid(q, filter, limit * 6, fuzzy == "auto")
                         : reader.SearchKeyword(q, filter, limit * 6, fuzzy == "auto")))

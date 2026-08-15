@@ -54,8 +54,10 @@ population and failure behavior testable.
 
 ## Why keyword remains the default
 
-The semantic encoder, local vectors and rank fusion exist, but activation is evidence-gated. The
-frozen 200-case catalog fixes tuning and holdout judgments before measurement. A compatible signed
-report must bind relevance, latency, memory and size to the exact candidate before hybrid may become
-the default; without that evidence, keyword remains the default. A measured rejection is a valid
+The semantic encoder, local vectors and rank fusion exist, but activation is evidence-gated.
+Offline signed benchmarks authorize vector mounting during deployment and startup; benchmark logic never switches an individual query.
+The user or API caller explicitly chooses keyword or hybrid, and an
+explicit hybrid request receives a typed unavailable result for any publisher whose exact signed
+candidate did not pass. A compatible signed report binds relevance, latency, memory and size to that
+candidate before its vectors may mount. Keyword remains the default. A measured rejection is a valid
 architecture result, not a failed demo.

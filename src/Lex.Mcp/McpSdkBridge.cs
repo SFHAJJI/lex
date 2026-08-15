@@ -22,7 +22,7 @@ public static class McpSdkBridge
         "(publisher:workkey), a version-level lex_id (version segment ignored), or a verbatim " +
         "publisher identifier when `publisher` is supplied. Legal result statuses are closed and documented in the MCP 2.0 " +
         "migration note. Refusals such as no_version_for_date, text_withheld and " +
-        "text_not_available are honest answers, not transport errors.";
+        "text_not_available and retrieval_mode_unavailable are honest answers, not transport errors.";
 
     public static void Configure(McpServerOptions options)
     {
