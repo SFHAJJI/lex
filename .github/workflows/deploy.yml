@@ -38,7 +38,7 @@ jobs:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: production
-    timeout-minutes: 45
+    timeout-minutes: 90
     env:
       AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
       AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
@@ -212,6 +212,7 @@ jobs:
           legacy_created=''
           legacy_image=''
           legacy_template_digest=''
+          cleanup_survivor=''
           previous_inactive_limit=$(az containerapp show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
             --query properties.configuration.maxInactiveRevisions -o tsv)
           if [ "$bootstrap" = "true" ]; then
@@ -235,7 +236,9 @@ jobs:
                 and .max_inactive_revisions == 1
                 and (.legacy_authority.revision | type == "string")
                 and .legacy_authority.active == true
-                and .legacy_authority.traffic_weight == 100' \
+                and .legacy_authority.traffic_weight == 100
+                and (.remaining_inactive_revision | type == "string")
+                and .remaining_inactive_revision != .legacy_authority.revision' \
               "$cleanup_receipt" >/dev/null \
               || { echo "::error::bootstrap cleanup receipt is invalid"; exit 2; }
             [ "$previous_inactive_limit" = "1" ] \
@@ -246,6 +249,7 @@ jobs:
             legacy_image=$(jq -r .legacy_authority.image "$cleanup_receipt")
             legacy_template_digest=$(jq -r \
               .legacy_authority.canonical_template_digest "$cleanup_receipt")
+            cleanup_survivor=$(jq -r .remaining_inactive_revision "$cleanup_receipt")
           else
             [ "$previous_inactive_limit" = "1" ] \
               || { echo "::error::steady state must retain exactly one inactive rollback"; exit 1; }
@@ -281,6 +285,63 @@ jobs:
               || { echo "::error::bootstrap preparation requires maxInactiveRevisions=1"; return 1; }
           }
 
+          verify_bootstrap_forward_topology() {
+            [ "$bootstrap" = "true" ] || return 0
+            local expected="$1" revisions configuration
+            revisions=$(az containerapp revision list -g "$RESOURCE_GROUP" \
+              -n "$CONTAINER_APP" --all -o json) || return 1
+            configuration=$(az containerapp show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+              --query '{mode:properties.configuration.activeRevisionsMode,
+                maxInactiveRevisions:properties.configuration.maxInactiveRevisions,
+                routes:properties.configuration.ingress.traffic}' -o json) || return 1
+            case "$expected" in
+              before-fallback)
+                printf '%s' "$revisions" | jq -e --arg authority "$previous" \
+                  --arg survivor "$cleanup_survivor" '
+                    length == 2
+                    and any(.[]; .name == $authority and .properties.active == true
+                      and (.properties.trafficWeight // 0) == 100)
+                    and any(.[]; .name == $survivor and .properties.active == false
+                      and (.properties.trafficWeight // 0) == 0)' >/dev/null || return 1
+                ;;
+              fallback-active)
+                printf '%s' "$revisions" | jq -e --arg authority "$previous" \
+                  --arg survivor "$cleanup_survivor" --arg fallback "$bootstrap_fallback" '
+                    length == 3
+                    and any(.[]; .name == $authority and .properties.active == true
+                      and (.properties.trafficWeight // 0) == 100)
+                    and any(.[]; .name == $survivor and .properties.active == false
+                      and (.properties.trafficWeight // 0) == 0)
+                    and any(.[]; .name == $fallback and .properties.active == true
+                      and (.properties.trafficWeight // 0) == 0)' >/dev/null || return 1
+                ;;
+              fallback-inactive)
+                printf '%s' "$revisions" | jq -e --arg authority "$previous" \
+                  --arg fallback "$bootstrap_fallback" '
+                    length == 2
+                    and any(.[]; .name == $authority and .properties.active == true
+                      and (.properties.trafficWeight // 0) == 100)
+                    and any(.[]; .name == $fallback and .properties.active == false
+                      and (.properties.trafficWeight // 0) == 0)' >/dev/null || return 1
+                ;;
+              *) return 1 ;;
+            esac
+            printf '%s' "$configuration" | jq -e --arg authority "$previous" \
+              --arg fallback "$bootstrap_fallback" --arg expected "$expected" '
+                .mode == "Multiple" and .maxInactiveRevisions == 1
+                and all(.routes[];
+                  (.latestRevision // false) == false and (.label // null) == null)
+                and if $expected == "fallback-active" then (.routes |
+                  length == 2
+                  and any(.[]; .revisionName == $authority and .weight == 100)
+                  and any(.[]; .revisionName == $fallback and .weight == 0))
+                else (.routes |
+                  length == 1
+                  and .[0].revisionName == $authority
+                  and .[0].weight == 100)
+                end' >/dev/null
+          }
+
           deactivate_revision() {
             revision="$1"
             for attempt in $(seq 1 5); do
@@ -291,7 +352,7 @@ jobs:
                 --revision "$revision" --only-show-errors >/dev/null 2>&1 || true
               active=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
                 --revision "$revision" --query properties.active -o tsv 2>/dev/null || true)
-              [ "$active" != "true" ] && return 0
+              [ "$active" = "false" ] && return 0
               sleep 5
             done
             echo "::error::failed to deactivate non-authoritative revision $revision"
@@ -503,6 +564,8 @@ jobs:
                   if .revisionName == $candidate then .revisionName = $fallback else . end)
             ' candidate.json > bootstrap-fallback.json
             verify_bootstrap_legacy_inventory
+            verify_bootstrap_forward_topology before-fallback \
+              || { echo "::error::reviewed bootstrap topology changed before R creation"; exit 1; }
             az_write az rest --method patch --uri "$app_id?api-version=2025-01-01" \
               --headers 'Content-Type=application/json' --body @bootstrap-fallback.json --output none
             for attempt in $(seq 1 30); do
@@ -536,26 +599,15 @@ jobs:
             rollback="$bootstrap_fallback"
             prior_rollback="$bootstrap_fallback"
             verify_bootstrap_legacy_inventory
+            verify_bootstrap_forward_topology fallback-active \
+              || { echo "::error::reviewed bootstrap topology changed before R deactivation"; exit 1; }
             deactivate_revision "$bootstrap_fallback"
-            for attempt in $(seq 1 24); do
-              bounded=$(az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
-                --all -o json 2>/dev/null || true)
-              printf '%s' "$bounded" | jq -e --arg current "$previous" \
-                --arg rollback "$bootstrap_fallback" '
-                  length == 2
-                  and any(.[]; .name == $current and .properties.active == true
-                    and (.properties.trafficWeight // 0) == 100)
-                  and any(.[]; .name == $rollback and .properties.active == false
-                    and (.properties.trafficWeight // 0) == 0)' >/dev/null 2>&1 && break
-              sleep 5
+            for attempt in $(seq 1 60); do
+              verify_bootstrap_forward_topology fallback-inactive \
+                >/dev/null 2>&1 && break
+              sleep 10
             done
-            printf '%s' "$bounded" | jq -e --arg current "$previous" \
-              --arg rollback "$bootstrap_fallback" '
-                length == 2
-                and any(.[]; .name == $current and .properties.active == true
-                  and (.properties.trafficWeight // 0) == 100)
-                and any(.[]; .name == $rollback and .properties.active == false
-                  and (.properties.trafficWeight // 0) == 0)' >/dev/null \
+            verify_bootstrap_forward_topology fallback-inactive \
               || { echo "::error::R did not replace the final legacy inactive revision"; exit 1; }
           fi
           az_write az rest --method patch --uri "$app_id?api-version=2025-01-01" \

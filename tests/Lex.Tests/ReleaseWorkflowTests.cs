@@ -20,7 +20,7 @@ public sealed class ReleaseWorkflowTests
                     < workflow.IndexOf("azure/login@", StringComparison.Ordinal));
         Assert.Contains("image=\"$ACR_SERVER/lex-web@$digest\"", workflow);
         Assert.DoesNotContain("image=\"$ACR_SERVER/lex-web:$tag\"", workflow);
-        Assert.Contains("timeout-minutes: 45", workflow);
+        Assert.Contains("timeout-minutes: 90", workflow);
         Assert.Contains("mapfile -t traffic_bearers", workflow);
         Assert.Contains("expected exactly one traffic-bearing revision before candidate creation", workflow);
         Assert.Contains("--connect-timeout 5 --max-time 60", workflow);
@@ -952,12 +952,22 @@ public sealed class ReleaseWorkflowTests
         Assert.Contains("bootstrap_cleanup_run_id", deploy);
         Assert.Contains("lex-bootstrap-legacy-cleanup-receipt", deploy);
         Assert.Contains("bootstrap-legacy-cleanup-receipt/1", deploy);
+        Assert.Contains("remaining_inactive_revision", deploy);
+        Assert.Contains("cleanup_survivor=$(jq -r .remaining_inactive_revision", deploy);
+        Assert.Contains("verify_bootstrap_forward_topology()", deploy);
         var fallback = deploy.IndexOf("--body @bootstrap-fallback.json", StringComparison.Ordinal);
+        var beforeFallback = deploy.LastIndexOf("verify_bootstrap_forward_topology before-fallback",
+            fallback, StringComparison.Ordinal);
         var deactivateFallback = deploy.IndexOf("deactivate_revision \"$bootstrap_fallback\"",
             fallback, StringComparison.Ordinal);
+        var beforeDeactivation = deploy.LastIndexOf(
+            "verify_bootstrap_forward_topology fallback-active", deactivateFallback,
+            StringComparison.Ordinal);
         var candidate = deploy.IndexOf("--body @candidate.json", fallback,
             StringComparison.Ordinal);
-        Assert.True(fallback >= 0 && deactivateFallback > fallback && candidate > deactivateFallback);
+        Assert.True(beforeFallback >= 0 && fallback > beforeFallback
+                    && deactivateFallback > fallback && beforeDeactivation > fallback
+                    && deactivateFallback > beforeDeactivation && candidate > deactivateFallback);
         Assert.Contains("revision_template_digest.py", deploy);
         Assert.Contains("canonical_template_digest", deploy);
         Assert.Contains("fallback_created", deploy);
@@ -967,6 +977,17 @@ public sealed class ReleaseWorkflowTests
         Assert.DoesNotContain("value.endswith(\"Z\")", deploy);
         Assert.Contains("bootstrap_fallback", deploy);
         Assert.Contains("R did not replace the final legacy inactive revision", deploy);
+        var retainedFallback = deploy[deactivateFallback..deploy.IndexOf(
+            "R did not replace the final legacy inactive revision", deactivateFallback,
+            StringComparison.Ordinal)];
+        Assert.Contains("for attempt in $(seq 1 60)", retainedFallback);
+        Assert.Contains("sleep 10", retainedFallback);
+        Assert.Contains("verify_bootstrap_forward_topology fallback-inactive", retainedFallback);
+        Assert.Contains("(.latestRevision // false) == false", deploy);
+        Assert.Contains("(.label // null) == null", deploy);
+        Assert.Contains(".mode == \"Multiple\" and .maxInactiveRevisions == 1", deploy);
+        Assert.Contains("[ \"$active\" = \"false\" ] && return 0", deploy);
+        Assert.DoesNotContain("[ \"$active\" != \"true\" ] && return 0", deploy);
         Assert.Contains("LEX_ASSISTANT_EVAL_CATALOG_SHA256", deploy);
         var enforcement = deploy.IndexOf(
             "- name: Enforce one active public quota authority", StringComparison.Ordinal);
