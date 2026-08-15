@@ -289,17 +289,230 @@ public sealed class EurLexScopeTests : IDisposable
     }
 
     [Fact]
-    public void Portal_bound_body_is_identity_checked_even_on_its_first_endpoint()
+    public async Task Portal_bound_body_retries_one_transient_identity_mismatch()
     {
-        var exact = PortalHtml("02014R0910-20140917", "EN");
-        var wrong = PortalHtml("02014R0910-20240520", "EN");
+        const string celex = "32025L0516";
+        var handler = new PortalSequenceHandler(
+            PortalHtml("32025L9999", "EN"), PortalHtml(celex, "EN"));
+        using var client = new HttpClient(handler);
+        var adapter = new EurLexAdapter(
+            scopePath: null, wave: null, http: client,
+            delay: static (_, _) => Task.CompletedTask);
+        var (version, expression) = PortalBoundVersion(celex);
 
-        Assert.True(EurLexAdapter.IsAcceptableBodyIdentity(
-            exact, "02014R0910-20140917", "en",
-            portalBound: true, usedPortalFallback: false));
-        Assert.False(EurLexAdapter.IsAcceptableBodyIdentity(
-            wrong, "02014R0910-20140917", "en",
-            portalBound: true, usedPortalFallback: false));
+        var result = await adapter.FetchBody(version, expression, default);
+
+        Assert.Equal(SourceBodyStatus.Retrieved, result.Status);
+        Assert.Equal(2, result.Attempts);
+        Assert.Equal(2, handler.RequestCount);
+    }
+
+    [Fact]
+    public async Task Portal_bound_body_exhaustion_is_typed_and_logs_only_a_fingerprint()
+    {
+        const string celex = "32025L0516";
+        const string sentinel = "publisher-response-must-not-leak";
+        var invalid = PortalHtml("32025L9999", "EN") + sentinel;
+        var handler = new PortalSequenceHandler(invalid, invalid);
+        using var client = new HttpClient(handler);
+        var adapter = new EurLexAdapter(
+            scopePath: null, wave: null, http: client,
+            delay: static (_, _) => Task.CompletedTask);
+        var (version, expression) = PortalBoundVersion(celex);
+
+        var result = await adapter.FetchBody(version, expression, default);
+
+        Assert.Equal(SourceBodyStatus.ParserFailure, result.Status);
+        Assert.Equal(2, result.Attempts);
+        Assert.Equal(2, handler.RequestCount);
+        Assert.Contains("endpoint=eur-lex.europa.eu/legal-content/EN/TXT/", result.Detail,
+            StringComparison.Ordinal);
+        Assert.Contains("status=200", result.Detail, StringComparison.Ordinal);
+        Assert.Contains("content_type=text/html", result.Detail, StringComparison.Ordinal);
+        Assert.Contains("bytes=", result.Detail, StringComparison.Ordinal);
+        Assert.Contains("sha256=", result.Detail, StringComparison.Ordinal);
+        Assert.Contains("exact_identity=false", result.Detail, StringComparison.Ordinal);
+        Assert.DoesNotContain(sentinel, result.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Portal_body_transport_and_identity_failures_share_one_attempt_budget()
+    {
+        const string celex = "32025L0516";
+        var invalid = PortalHtml("32025L9999", "EN");
+        var handler = new PortalSequenceHandler(
+            new PortalResponse(System.Net.HttpStatusCode.ServiceUnavailable, ""),
+            new PortalResponse(System.Net.HttpStatusCode.ServiceUnavailable, ""),
+            new PortalResponse(System.Net.HttpStatusCode.OK, invalid),
+            new PortalResponse(System.Net.HttpStatusCode.OK, invalid),
+            new PortalResponse(System.Net.HttpStatusCode.OK, PortalHtml(celex, "EN")));
+        using var client = new HttpClient(handler);
+        var adapter = new EurLexAdapter(
+            scopePath: null, wave: null, http: client,
+            delay: static (_, _) => Task.CompletedTask);
+        var (version, expression) = PortalBoundVersion(celex);
+
+        var result = await adapter.FetchBody(version, expression, default);
+
+        Assert.Equal(SourceBodyStatus.ParserFailure, result.Status);
+        Assert.Equal(4, result.Attempts);
+        Assert.Equal(4, handler.RequestCount);
+        Assert.Equal(4, adapter.GetBuildInventory().RetryMaximumAttempts);
+    }
+
+    [Fact]
+    public async Task Portal_identity_failure_is_not_relabelled_by_a_later_not_found()
+    {
+        const string celex = "32025L0516";
+        var handler = new PortalSequenceHandler(
+            new PortalResponse(System.Net.HttpStatusCode.OK,
+                PortalHtml("32025L9999", "EN")),
+            new PortalResponse(System.Net.HttpStatusCode.NotFound, ""));
+        using var client = new HttpClient(handler);
+        var adapter = new EurLexAdapter(
+            scopePath: null, wave: null, http: client,
+            delay: static (_, _) => Task.CompletedTask);
+        var (version, expression) = PortalBoundVersion(celex);
+
+        var result = await adapter.FetchBody(version, expression, default);
+
+        Assert.Equal(SourceBodyStatus.ParserFailure, result.Status);
+        Assert.Equal(2, result.Attempts);
+        Assert.Contains("status=200", result.Detail, StringComparison.Ordinal);
+        Assert.Contains("exact_identity=false", result.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Portal_fallback_enumeration_preflights_one_real_exact_body()
+    {
+        const string celex = "32025L0516";
+        var handler = new PortalSequenceHandler(
+            PortalHtml(celex, "EN"),
+            PortalHtml("32025L9999", "EN"),
+            PortalHtml(celex, "EN"));
+        using var client = new HttpClient(handler);
+        var adapter = new EurLexAdapter(
+            scopePath: null, wave: null, http: client,
+            delay: static (_, _) => Task.CompletedTask);
+        var row = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["celex"] = celex,
+        };
+        var rows = new Dictionary<string, List<Dictionary<string, string>>>(
+            StringComparer.Ordinal)
+        {
+            ["32025L0516"] = [row],
+        };
+
+        await adapter.VerifyPortalExpressionFallbacksAsync(rows, default);
+
+        Assert.Equal(3, handler.RequestCount);
+        Assert.Equal("en", row["lang"]);
+        Assert.Equal("verified_eurlex_portal", row["expression_source"]);
+    }
+
+    [Fact]
+    public async Task Portal_client_is_stateless_between_public_expression_requests()
+    {
+        using var listener = new System.Net.Sockets.TcpListener(
+            System.Net.IPAddress.Loopback, 0);
+        listener.Start();
+        var endpoint = (System.Net.IPEndPoint)listener.LocalEndpoint;
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var server = CaptureCookieRequestsAsync(listener, timeout.Token);
+        using var handler = EurLexAdapter.CreateHandler();
+        using var client = new HttpClient(handler);
+
+        Assert.False(handler.UseCookies);
+        Assert.False(handler.AllowAutoRedirect);
+        await client.GetAsync($"http://127.0.0.1:{endpoint.Port}/first", timeout.Token);
+        await client.GetAsync($"http://127.0.0.1:{endpoint.Port}/second", timeout.Token);
+        var requests = await server;
+
+        Assert.Equal(2, requests.Count);
+        Assert.DoesNotContain("\r\nCookie:", requests[1],
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static (VersionRecord Version, ExpressionRecord Expression)
+        PortalBoundVersion(string celex)
+    {
+        var date = new DateOnly(2025, 3, 25);
+        var work = new Identifier("http://publications.europa.eu/resource/celex/" + celex);
+        var expression = new ExpressionRecord(
+            "en", date, null, "publisher", "Test", "Test",
+            EurLexAdapter.ExpressionSourceUri("en", celex));
+        return (new VersionRecord(
+            work, work, "DIR", date, null, "publisher", "true", date,
+            [expression], [], new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["celex"] = celex,
+                ["expression_source"] = "verified_eurlex_portal",
+            }, null, null), expression);
+    }
+
+    private sealed record PortalResponse(System.Net.HttpStatusCode Status, string Body);
+
+    private static async Task<IReadOnlyList<string>> CaptureCookieRequestsAsync(
+        System.Net.Sockets.TcpListener listener, CancellationToken cancellationToken)
+    {
+        var requests = new List<string>();
+        for (var index = 0; index < 2; index++)
+        {
+            using var socket = await listener.AcceptTcpClientAsync(cancellationToken);
+            await using var stream = socket.GetStream();
+            using var bytes = new MemoryStream();
+            var buffer = new byte[1024];
+            while (bytes.Length < 16 * 1024)
+            {
+                var count = await stream.ReadAsync(buffer, cancellationToken);
+                if (count == 0) break;
+                bytes.Write(buffer, 0, count);
+                var value = System.Text.Encoding.ASCII.GetString(bytes.ToArray());
+                if (value.Contains("\r\n\r\n", StringComparison.Ordinal)) break;
+            }
+            requests.Add(System.Text.Encoding.ASCII.GetString(bytes.ToArray()));
+            var response = System.Text.Encoding.ASCII.GetBytes(
+                "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n"
+                + "Set-Cookie: lex-session=publisher-value; Path=/\r\n"
+                + "Connection: close\r\n\r\n");
+            await stream.WriteAsync(response, cancellationToken);
+        }
+        return requests;
+    }
+
+    private sealed class PortalSequenceHandler : HttpMessageHandler
+    {
+        private readonly Queue<PortalResponse> _responses;
+
+        public PortalSequenceHandler(params string[] bodies)
+            : this(bodies.Select(body => new PortalResponse(
+                System.Net.HttpStatusCode.OK, body)).ToArray())
+        {
+        }
+
+        public PortalSequenceHandler(params PortalResponse[] responses) =>
+            _responses = new Queue<PortalResponse>(responses);
+
+        public int RequestCount { get; private set; }
+
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            RequestCount++;
+            if (_responses.Count == 0)
+                throw new InvalidOperationException("The test portal response queue is empty.");
+            var current = _responses.Dequeue();
+            var response = new HttpResponseMessage(current.Status)
+            {
+                RequestMessage = request,
+                Content = new StringContent(current.Body,
+                    System.Text.Encoding.UTF8, "text/html"),
+            };
+            response.Content.Headers.ContentLanguage.Add("en");
+            return Task.FromResult(response);
+        }
     }
 
     private static string PortalHtml(

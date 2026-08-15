@@ -1,4 +1,5 @@
 using Lex.Ingest;
+using Lex.Law;
 
 namespace Lex.Tests;
 
@@ -67,6 +68,115 @@ public sealed partial class CorpusWriterTests
         Assert.Contains("reparse point or symbolic link", error.Message,
             StringComparison.Ordinal);
         Assert.Equal(1, current.BodyFetchCount);
+        Assert.True((File.GetAttributes(versions) & FileAttributes.ReparsePoint) != 0);
+    }
+
+    [Fact]
+    public async Task Fresh_migration_refuses_a_fileless_metadata_destination_link()
+    {
+        if (!CanCreateSymbolicLinks()) return;
+
+        var corpusRoot = Path.Combine(_dir, "linked-fileless-stage-meta");
+        var adapter = new OneVersionAdapter("in_force", "finance");
+        await new CorpusWriter(corpusRoot,
+                DateTimeOffset.Parse("2026-08-13T00:00:00Z"), CodeCommit)
+            .WriteAsync(adapter, default);
+        var before = LinkAwareInventory(corpusRoot);
+        var external = Path.Combine(_dir, "external-fileless-stage-meta");
+        Directory.CreateDirectory(external);
+        var swapped = false;
+
+        void LinkMetadataDestination(string destination)
+        {
+            if (swapped
+                || !destination.EndsWith("meta.json", StringComparison.Ordinal)) return;
+            var versionDirectory = Path.GetDirectoryName(destination)!;
+            Directory.CreateDirectory(Path.GetDirectoryName(versionDirectory)!);
+            Directory.CreateSymbolicLink(versionDirectory, external);
+            swapped = true;
+        }
+
+        var error = await Assert.ThrowsAsync<InvalidDataException>(() =>
+            RunFreshWithStageWriteHook(
+                corpusRoot, new OneVersionAdapter("in_force", "finance"),
+                LinkMetadataDestination));
+
+        Assert.True(swapped);
+        Assert.Contains("reparse point or symbolic link", error.Message,
+            StringComparison.Ordinal);
+        Assert.False(File.Exists(Path.Combine(external, "meta.json")));
+        Assert.Equal(before, LinkAwareInventory(corpusRoot));
+    }
+
+    [Fact]
+    public async Task Fresh_migration_refuses_a_nested_observation_destination_link()
+    {
+        if (!CanCreateSymbolicLinks()) return;
+
+        const string member = "CL2012R0648FR0200010.0001.doc.xml";
+        var body = SourceBodyFetch.Retrieved("<html>publisher text</html>");
+        var corpusRoot = Path.Combine(_dir, "linked-nested-stage-observation");
+        await new CorpusWriter(corpusRoot,
+                DateTimeOffset.Parse("2026-08-13T00:00:00Z"), CodeCommit)
+            .WriteAsync(new AltThenPrimaryAdapter(body, member), default);
+        var before = LinkAwareInventory(corpusRoot);
+        var external = Path.Combine(_dir, "external-nested-stage-observation");
+        Directory.CreateDirectory(external);
+        var swapped = false;
+
+        void LinkObservationDestination(string destination)
+        {
+            if (swapped || !destination.EndsWith(member, StringComparison.Ordinal)) return;
+            var nestedDirectory = Path.GetDirectoryName(destination)!;
+            Directory.CreateDirectory(Path.GetDirectoryName(nestedDirectory)!);
+            Directory.CreateSymbolicLink(nestedDirectory, external);
+            swapped = true;
+        }
+
+        var error = await Assert.ThrowsAsync<InvalidDataException>(() =>
+            RunFreshWithStageWriteHook(
+                corpusRoot, new AltThenPrimaryAdapter(body, member),
+                LinkObservationDestination));
+
+        Assert.True(swapped);
+        Assert.Contains("reparse point or symbolic link", error.Message,
+            StringComparison.Ordinal);
+        Assert.False(File.Exists(Path.Combine(external, member)));
+        Assert.Equal(before, LinkAwareInventory(corpusRoot));
+    }
+
+    [Fact]
+    public async Task Fresh_migration_rechecks_the_source_after_the_stage_write_hook()
+    {
+        if (!CanCreateSymbolicLinks()) return;
+
+        var body = SourceBodyFetch.Retrieved("<html>publisher text</html>");
+        var corpusRoot = Path.Combine(_dir, "source-swapped-before-stage-copy");
+        await new CorpusWriter(corpusRoot,
+                DateTimeOffset.Parse("2026-08-13T00:00:00Z"), CodeCommit)
+            .WriteAsync(new OneVersionAdapter(
+                "in_force", "finance", bodyFetch: body), default);
+        var versions = Directory.GetParent(
+            Path.GetDirectoryName(VersionMetaPath(corpusRoot))!)!.FullName;
+        var external = Path.Combine(_dir, "external-source-before-stage-copy");
+        var swapped = false;
+
+        void LinkSourceAncestor(string destination)
+        {
+            if (swapped || !destination.EndsWith(".html", StringComparison.Ordinal)) return;
+            ReplaceWithExternalLink(versions, external);
+            swapped = true;
+        }
+
+        var error = await Assert.ThrowsAsync<InvalidDataException>(() =>
+            RunFreshWithStageWriteHook(
+                corpusRoot, new OneVersionAdapter(
+                    "in_force", "finance", bodyFetch: body),
+                LinkSourceAncestor));
+
+        Assert.True(swapped);
+        Assert.Contains("reparse point or symbolic link", error.Message,
+            StringComparison.Ordinal);
         Assert.True((File.GetAttributes(versions) & FileAttributes.ReparsePoint) != 0);
     }
 

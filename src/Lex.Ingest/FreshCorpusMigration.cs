@@ -22,6 +22,17 @@ public static class FreshCorpusMigration
         RunAsync(corpusRoot, publisher, adapter, now, ingesterCodeCommit,
             beforeMove: null, cancellationToken);
 
+    internal static Task<CorpusIntegrityReport> RunAsync(
+        string corpusRoot,
+        string publisher,
+        ISourceAdapter adapter,
+        DateTimeOffset now,
+        string ingesterCodeCommit,
+        Action<string, string>? beforeMove,
+        CancellationToken cancellationToken) =>
+        RunAsync(corpusRoot, publisher, adapter, now, ingesterCodeCommit,
+            beforeMove, beforeStageFileWrite: null, cancellationToken);
+
     internal static async Task<CorpusIntegrityReport> RunAsync(
         string corpusRoot,
         string publisher,
@@ -29,6 +40,7 @@ public static class FreshCorpusMigration
         DateTimeOffset now,
         string ingesterCodeCommit,
         Action<string, string>? beforeMove,
+        Action<string>? beforeStageFileWrite,
         CancellationToken cancellationToken)
     {
         var root = Path.GetFullPath(corpusRoot);
@@ -72,7 +84,8 @@ public static class FreshCorpusMigration
                 {
                     reconciliation = RequirePreservedBaseline(baseline, plan, adapter);
                     matchedProtectedPaths = ImportMatchedBaselineStates(
-                        root, stage, reconciliation.Matched, now, cancellationToken);
+                        root, stage, reconciliation.Matched, now,
+                        beforeStageFileWrite, cancellationToken);
                 });
             if (!writer.Committed)
                 throw new InvalidDataException("Fresh corpus candidate was not committed.");
@@ -81,7 +94,8 @@ public static class FreshCorpusMigration
                     "Fresh corpus baseline reconciliation did not run.");
 
             ImportWithdrawnBaselineStates(
-                root, stage, reconciliation.Withdrawn, now, cancellationToken);
+                root, stage, reconciliation.Withdrawn, now,
+                beforeStageFileWrite, cancellationToken);
 
             var candidateManifest = ReadManifest(stage);
             var candidatePublisher = candidateManifest.Publisher.GetValueOrDefault("id")
@@ -453,6 +467,7 @@ public static class FreshCorpusMigration
         string stage,
         IReadOnlyList<MatchedBaselineState> matchedStates,
         DateTimeOffset now,
+        Action<string>? beforeStageFileWrite,
         CancellationToken cancellationToken)
     {
         var prepared = new List<PreparedBaselineImport>();
@@ -517,7 +532,8 @@ public static class FreshCorpusMigration
             prepared.Add(new PreparedBaselineImport(destination, meta, files));
         }
 
-        WritePreparedBaselineImports(protectedRoot, prepared, cancellationToken);
+        WritePreparedBaselineImports(
+            protectedRoot, stage, prepared, beforeStageFileWrite, cancellationToken);
         return protectedPaths.OrderBy(path => path, PathComparer).ToArray();
     }
 
@@ -539,6 +555,7 @@ public static class FreshCorpusMigration
         string stage,
         IReadOnlyList<WithdrawnBaselineState> withdrawnStates,
         DateTimeOffset now,
+        Action<string>? beforeStageFileWrite,
         CancellationToken cancellationToken)
     {
         var prepared = new List<PreparedBaselineImport>();
@@ -588,33 +605,89 @@ public static class FreshCorpusMigration
             prepared.Add(new PreparedBaselineImport(destination, meta, files));
         }
 
-        WritePreparedBaselineImports(protectedRoot, prepared, cancellationToken);
+        WritePreparedBaselineImports(
+            protectedRoot, stage, prepared, beforeStageFileWrite, cancellationToken);
     }
 
     private static void WritePreparedBaselineImports(
         string protectedRoot,
+        string stage,
         IReadOnlyList<PreparedBaselineImport> prepared,
+        Action<string>? beforeStageFileWrite,
         CancellationToken cancellationToken)
     {
         foreach (var item in prepared)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            Directory.CreateDirectory(item.DestinationDirectory);
             foreach (var file in item.Files)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var destination = CheckedObservationPath(
                     item.DestinationDirectory, file.Relative);
-                Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
                 var source = VerifiedCorpusPath.RequireExisting(
                     protectedRoot, file.Source, "baseline observation file");
                 var sourceIdentity = VerifySourceObservation(source, file);
+                beforeStageFileWrite?.Invoke(destination);
+                destination = PrepareStageFileDestination(stage, destination);
+                source = VerifiedCorpusPath.RequireExisting(
+                    protectedRoot, source, "baseline observation file");
                 File.Copy(source, destination, overwrite: false);
                 VerifyCopiedObservation(destination, file, sourceIdentity.Length);
             }
-            File.WriteAllText(Path.Combine(item.DestinationDirectory, "meta.json"),
-                JsonSerializer.Serialize(item.Meta, CorpusJson.Options) + "\n");
+            var metaDestination = Path.Combine(item.DestinationDirectory, "meta.json");
+            beforeStageFileWrite?.Invoke(metaDestination);
+            metaDestination = PrepareStageFileDestination(stage, metaDestination);
+            using var meta = new FileStream(
+                metaDestination, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+            using var writer = new StreamWriter(
+                meta, new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+            writer.Write(JsonSerializer.Serialize(item.Meta, CorpusJson.Options) + "\n");
         }
+    }
+
+    private static string PrepareStageFileDestination(
+        string stageRoot, string destination)
+    {
+        var fullStage = Path.TrimEndingDirectorySeparator(Path.GetFullPath(stageRoot));
+        var fullDestination = Path.GetFullPath(destination);
+        var comparison = OperatingSystem.IsWindows()
+            ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        var stagePrefix = Path.EndsInDirectorySeparator(fullStage)
+            ? fullStage
+            : fullStage + Path.DirectorySeparatorChar;
+        if (!fullDestination.StartsWith(stagePrefix, comparison))
+            throw new InvalidDataException(
+                $"A baseline import destination escapes its fresh stage: {destination}");
+
+        var parent = Path.GetDirectoryName(fullDestination)
+            ?? throw new InvalidDataException(
+                $"A baseline import destination has no parent: {destination}");
+        VerifiedCorpusPath.RequireExisting(
+            fullStage, fullStage, "fresh-stage root");
+        var relativeParent = Path.GetRelativePath(fullStage, parent);
+        var current = fullStage;
+        foreach (var component in relativeParent.Split(
+                     [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar],
+                     StringSplitOptions.RemoveEmptyEntries))
+        {
+            var next = Path.Combine(current, component);
+            if (File.Exists(next) && !Directory.Exists(next))
+                throw new InvalidDataException(
+                    $"A baseline import destination parent is not a directory: {next}");
+            if (!Directory.Exists(next))
+            {
+                VerifiedCorpusPath.RequireExisting(
+                    fullStage, current, "baseline import destination parent");
+                Directory.CreateDirectory(next);
+            }
+            VerifiedCorpusPath.RequireExisting(
+                fullStage, next, "baseline import destination parent");
+            current = next;
+        }
+        if (File.Exists(fullDestination) || Directory.Exists(fullDestination))
+            throw new InvalidDataException(
+                $"A baseline import destination already exists: {fullDestination}");
+        return fullDestination;
     }
 
     private static VersionMeta CloneVersionMeta(BaselineState state) =>

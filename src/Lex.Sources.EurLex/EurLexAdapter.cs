@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using System.Security.Cryptography;
 using System.Text.Json;
 using Lex.Law;
 
@@ -31,12 +32,15 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory,
     private const int FormexArchiveCapBytes = 32 * 1024 * 1024;
     private const long FormexMemberCapBytes = 64 * 1024 * 1024;
     private const long FormexExpandedCapBytes = 128 * 1024 * 1024;
+    private const int PortalIdentityMaximumResponses = 2;
     internal const int MetadataWorkBatchSize = 16;
     internal const int MetadataRowsPerWorkMaximum = 512;
     internal const int VirtuosoSortedTopMaximum = 10_000;
     private static readonly SourceRetryPolicy RetryPolicy = new(MaximumAttempts: 4);
 
     private static readonly HttpClient Http = CreateClient();
+    private readonly HttpClient _http;
+    private readonly Func<TimeSpan, CancellationToken, Task> _delay;
     private DateTimeOffset _lastRequest = DateTimeOffset.MinValue;
     private readonly Dictionary<string, List<VersionRecord>> _byWork = new(StringComparer.Ordinal);
     private readonly Dictionary<string, WorkRef> _works = new(StringComparer.Ordinal);
@@ -50,7 +54,18 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory,
     private readonly SemaphoreSlim _initLock = new(1, 1);
 
     public EurLexAdapter(string? scopePath = null, int? wave = null)
+        : this(scopePath, wave, Http, Task.Delay)
     {
+    }
+
+    internal EurLexAdapter(
+        string? scopePath,
+        int? wave,
+        HttpClient http,
+        Func<TimeSpan, CancellationToken, Task> delay)
+    {
+        _http = http ?? throw new ArgumentNullException(nameof(http));
+        _delay = delay ?? throw new ArgumentNullException(nameof(delay));
         (_scope, _scopeSha256) = EurLexScopeConfig.LoadWithDigest(
             scopePath ?? Environment.GetEnvironmentVariable("LEX_EU_SCOPE"));
         _wave = wave ?? _scope.ApprovedWave;
@@ -60,12 +75,20 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory,
 
     private static HttpClient CreateClient()
     {
-        var c = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false })
+        var c = new HttpClient(CreateHandler())
         { Timeout = TimeSpan.FromSeconds(180) };
         c.DefaultRequestHeaders.UserAgent.ParseAdd("Lex/0.1");
         c.DefaultRequestHeaders.UserAgent.ParseAdd("(+https://github.com/SFHAJJI/lex)");
         return c;
     }
+
+    internal static HttpClientHandler CreateHandler() => new()
+    {
+        AllowAutoRedirect = false,
+        // Every legal expression is a public immutable publisher coordinate. A process-wide
+        // session jar lets one expression's portal shell influence later acquisitions.
+        UseCookies = false,
+    };
 
     public PublisherDescriptor Describe() => new(
         new Publisher(
@@ -214,18 +237,32 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory,
         var totalAttempts = 0;
         for (var attempt = 0; attempt < urls.Count; attempt++)
         {
-            await PaceAsync(ct);
-            last = await FetchBytes(urls[attempt], expression.Language,
-                "application/xhtml+xml, text/html", BodyCapBytes, ct);
-            totalAttempts += last.Attempts;
+            var remainingAttempts = RetryPolicy.MaximumAttempts - totalAttempts;
+            if (remainingAttempts <= 0) break;
+
+            var requiresPortalIdentity = portalBound || attempt > 0;
+            if (requiresPortalIdentity)
+            {
+                var exact = await FetchExactPortalBodyAsync(
+                    urls[attempt], celex, expression.Language, remainingAttempts, ct);
+                last = exact.Fetch;
+                totalAttempts += last.Attempts;
+                if (!exact.ExactIdentity && exact.IdentityFailureDetail is not null)
+                    return new(SourceBodyStatus.ParserFailure,
+                        Detail: exact.IdentityFailureDetail,
+                        Attempts: totalAttempts);
+            }
+            else
+            {
+                await PaceAsync(ct);
+                last = await FetchBytes(urls[attempt], expression.Language,
+                    "application/xhtml+xml, text/html", BodyCapBytes,
+                    remainingAttempts, ct);
+                totalAttempts += last.Attempts;
+            }
             if (last.Bytes is null) continue;
 
             var text = System.Text.Encoding.UTF8.GetString(last.Bytes);
-            if (!IsAcceptableBodyIdentity(
-                    text, celex, expression.Language, portalBound, attempt > 0))
-                return new(SourceBodyStatus.ParserFailure,
-                    Detail: "The official EUR-Lex fallback did not identify the exact CELEX and language.",
-                    Attempts: totalAttempts);
 
             var fallback = portalBound || attempt > 0
                 ? " (official EUR-Lex fallback)"
@@ -266,13 +303,16 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory,
         };
     }
 
-    private static async Task<FetchResult> FetchBytes(
+    private async Task<FetchResult> FetchBytes(
         string initialUrl,
         string language,
         string accept,
         int capBytes,
+        int maximumAttempts,
         CancellationToken ct)
     {
+        if (maximumAttempts is < 1 or > 10)
+            throw new ArgumentOutOfRangeException(nameof(maximumAttempts));
         var url = initialUrl;
         HttpResponseMessage? resp = null;
         var attempts = 0;
@@ -281,14 +321,20 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory,
         for (var hop = 0; hop < 6; hop++)
         {
             resp?.Dispose();
+            var remainingAttempts = maximumAttempts - attempts;
+            if (remainingAttempts <= 0)
+                return new FetchResult(null, null, false, url, Attempts: attempts,
+                    RetryExhausted: true,
+                    FailureDetail: "The redirect chain exhausted the bounded acquisition policy.");
             var currentUrl = url;
-            var sent = await SourceHttp.SendAsync(Http, () =>
+            var sent = await SourceHttp.SendAsync(_http, () =>
             {
                 var req = new HttpRequestMessage(HttpMethod.Get, currentUrl);
                 req.Headers.TryAddWithoutValidation("Accept", accept);
                 req.Headers.AcceptLanguage.ParseAdd(language);
                 return req;
-            }, RetryPolicy, ct);
+            }, RetryPolicy with { MaximumAttempts = remainingAttempts }, ct,
+                delay: _delay);
             attempts += sent.Attempts;
             retryExhausted = sent.RetryExhausted;
             failureDetail = sent.FailureDetail;
@@ -323,8 +369,69 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory,
 
         await using var stream = await resp.Content.ReadAsStreamAsync(ct);
         var bounded = await ReadBounded(stream, capBytes, ct);
+        var contentLanguage = string.Join(",",
+            resp.Content.Headers.ContentLanguage.OrderBy(value => value, StringComparer.Ordinal));
         return new FetchResult(bounded.Bytes, resp.StatusCode, bounded.LimitExceeded, url,
-            resp.Content.Headers.ContentType?.MediaType, attempts);
+            resp.Content.Headers.ContentType?.MediaType,
+            string.IsNullOrEmpty(contentLanguage) ? null : contentLanguage,
+            Attempts: attempts);
+    }
+
+    private async Task<PortalBodyFetch> FetchExactPortalBodyAsync(
+        string sourceUri,
+        string celex,
+        string language,
+        int maximumAttempts,
+        CancellationToken ct)
+    {
+        FetchResult? last = null;
+        var attempts = 0;
+        var identityResponses = 0;
+        string? identityFailureDetail = null;
+        while (attempts < maximumAttempts
+               && identityResponses < PortalIdentityMaximumResponses)
+        {
+            await PaceAsync(ct);
+            var fetched = await FetchBytes(sourceUri, language,
+                "application/xhtml+xml, text/html", BodyCapBytes,
+                maximumAttempts - attempts, ct);
+            attempts += fetched.Attempts;
+            last = fetched with { Attempts = attempts };
+            if (fetched.Bytes is null)
+                return new(last, ExactIdentity: false,
+                    IdentityFailureDetail: identityFailureDetail);
+
+            var text = System.Text.Encoding.UTF8.GetString(fetched.Bytes);
+            if (IsExactPortalExpression(text, celex, language))
+                return new(last, ExactIdentity: true, IdentityFailureDetail: null);
+
+            identityResponses++;
+            identityFailureDetail = PortalIdentityFingerprint(
+                last, exactIdentity: false);
+            Console.Error.WriteLine(
+                $"  [eurlex] {celex}: portal identity mismatch; "
+                + identityFailureDetail);
+        }
+
+        return new(last ?? throw new InvalidOperationException(
+            "The portal acquisition loop ended without an attempt."),
+            ExactIdentity: false, IdentityFailureDetail: identityFailureDetail);
+    }
+
+    private static string PortalIdentityFingerprint(
+        FetchResult fetched, bool exactIdentity)
+    {
+        var endpoint = Uri.TryCreate(fetched.SourceUri, UriKind.Absolute, out var uri)
+            ? uri.Host + uri.AbsolutePath
+            : "invalid-official-uri";
+        var digest = fetched.Bytes is null
+            ? "none"
+            : Convert.ToHexString(SHA256.HashData(fetched.Bytes)).ToLowerInvariant();
+        return $"endpoint={endpoint}; status={(int?)fetched.StatusCode}; "
+               + $"content_type={fetched.MediaType ?? "none"}; "
+               + $"content_language={fetched.ContentLanguage ?? "none"}; "
+               + $"bytes={fetched.Bytes?.Length ?? 0}; sha256={digest}; "
+               + $"exact_identity={exactIdentity.ToString().ToLowerInvariant()}";
     }
 
     internal static async Task<BoundedRead> ReadBounded(Stream stream, int capBytes, CancellationToken ct)
@@ -364,7 +471,8 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory,
         await PaceAsync(ct);
         // Cellar's negotiation parser requires the exact spaceless mtype parameter.
         var fetched = await FetchBytes(CellarResourceUrl(celex), expression.Language,
-            "application/zip;mtype=fmx4", FormexArchiveCapBytes, ct);
+            "application/zip;mtype=fmx4", FormexArchiveCapBytes,
+            RetryPolicy.MaximumAttempts, ct);
         if (fetched.Bytes is null || fetched.MediaType is not "application/zip")
         {
             if (fetched.LimitExceeded)
@@ -464,15 +572,21 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory,
         bool LimitExceeded,
         string SourceUri,
         string? MediaType = null,
+        string? ContentLanguage = null,
         int Attempts = 1,
         bool RetryExhausted = false,
         string? FailureDetail = null);
+
+    private sealed record PortalBodyFetch(
+        FetchResult Fetch,
+        bool ExactIdentity,
+        string? IdentityFailureDetail);
 
     private async Task PaceAsync(CancellationToken ct)
     {
         var since = DateTimeOffset.UtcNow - _lastRequest;
         var pause = TimeSpan.FromMilliseconds(1500);
-        if (since < pause) await Task.Delay(pause - since, ct);
+        if (since < pause) await _delay(pause - since, ct);
         _lastRequest = DateTimeOffset.UtcNow;
     }
 
@@ -642,7 +756,7 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory,
         return result;
     }
 
-    private async Task VerifyPortalExpressionFallbacksAsync(
+    internal async Task VerifyPortalExpressionFallbacksAsync(
         IReadOnlyDictionary<string, List<Dictionary<string, string>>> rowsByBase,
         CancellationToken ct)
     {
@@ -670,6 +784,9 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory,
                 row["expression_source"] = "verified_eurlex_portal";
             }
         }
+
+        if (missing.Length > 0)
+            await VerifyPortalExpressionBodyAsync(missing[0].Key, "en", ct);
     }
 
     internal static void RequirePortalExpressionFallbackBudget(int count, int maximum)
@@ -685,13 +802,14 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory,
     {
         await PaceAsync(ct);
         var sourceUri = ExpressionSourceUri(language, celex);
-        var sent = await SourceHttp.SendAsync(Http, () =>
+        var sent = await SourceHttp.SendAsync(_http, () =>
         {
             var request = new HttpRequestMessage(HttpMethod.Head, sourceUri);
             request.Headers.Accept.ParseAdd("text/html");
             request.Headers.AcceptLanguage.ParseAdd(language);
             return request;
-        }, RetryPolicy, ct, completion: HttpCompletionOption.ResponseHeadersRead);
+        }, RetryPolicy, ct, delay: _delay,
+            completion: HttpCompletionOption.ResponseHeadersRead);
         using var response = sent.Response;
         if (sent.RetryExhausted || !IsVerifiedPortalHead(response, language))
             throw new SourceAcquisitionException(new SourceBuildIssue(
@@ -700,6 +818,25 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory,
                 sent.FailureDetail
                 ?? $"The exact official EUR-Lex {language} expression failed its bounded HEAD verification."),
                 sent.Attempts);
+    }
+
+    private async Task VerifyPortalExpressionBodyAsync(
+        string celex, string language, CancellationToken ct)
+    {
+        var fetched = await FetchExactPortalBodyAsync(
+            ExpressionSourceUri(language, celex), celex, language,
+            RetryPolicy.MaximumAttempts, ct);
+        if (fetched.Fetch.Bytes is null || !fetched.ExactIdentity)
+            throw new SourceAcquisitionException(new SourceBuildIssue(
+                "publisher_expression_unavailable",
+                celex,
+                fetched.IdentityFailureDetail
+                ?? fetched.Fetch.FailureDetail
+                ?? PortalIdentityFingerprint(fetched.Fetch, fetched.ExactIdentity)),
+                fetched.Fetch.Attempts);
+        Console.Error.WriteLine(
+            $"  [eurlex] {celex}: strict portal GET preflight passed; "
+            + PortalIdentityFingerprint(fetched.Fetch, exactIdentity: true));
     }
 
     internal static bool IsVerifiedPortalHead(
@@ -1239,15 +1376,6 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory,
         return child.Success && child.Index == position ? child : null;
     }
 
-    internal static bool IsAcceptableBodyIdentity(
-        string html,
-        string celex,
-        string language,
-        bool portalBound,
-        bool usedPortalFallback) =>
-        !(portalBound || usedPortalFallback)
-        || IsExactPortalExpression(html, celex, language);
-
     public static string CelexAliasUri(string celex) =>
         $"http://publications.europa.eu/resource/celex/{Uri.EscapeDataString(celex)}";
 
@@ -1401,7 +1529,7 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory,
     private async Task<List<Dictionary<string, string>>> SelectAsync(string query, CancellationToken ct)
     {
         await PaceAsync(ct);
-        var sent = await SourceHttp.SendAsync(Http, () =>
+        var sent = await SourceHttp.SendAsync(_http, () =>
         {
             var req = new HttpRequestMessage(HttpMethod.Post, Sparql)
             {
@@ -1409,7 +1537,8 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory,
             };
             req.Headers.Accept.ParseAdd("application/sparql-results+json");
             return req;
-        }, RetryPolicy, ct, completion: HttpCompletionOption.ResponseContentRead);
+        }, RetryPolicy, ct, delay: _delay,
+            completion: HttpCompletionOption.ResponseContentRead);
         using var resp = sent.Response;
         if (resp is null || sent.RetryExhausted || !resp.IsSuccessStatusCode)
             throw new SourceAcquisitionException(new SourceBuildIssue(
