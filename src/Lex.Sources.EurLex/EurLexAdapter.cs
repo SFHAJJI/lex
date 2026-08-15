@@ -1111,13 +1111,34 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory,
         + $"?uri=CELEX:{Uri.EscapeDataString(celex)}";
 
     internal static bool IsExactPortalExpression(
-        string html, string celex, string language)
+        string html, string celex, string language) =>
+        IsExactPortalExpression(html, celex, language,
+            static value => HtmlNonStructuralContent.Replace(value, ""));
+
+    internal static bool IsExactPortalExpression(
+        string html, string celex, string language,
+        Func<string, string> removeNonStructuralContent)
+    {
+        try
+        {
+            return IsExactPortalExpressionCore(
+                html, celex, language, removeNonStructuralContent);
+        }
+        catch (System.Text.RegularExpressions.RegexMatchTimeoutException)
+        {
+            return false;
+        }
+    }
+
+    private static bool IsExactPortalExpressionCore(
+        string html, string celex, string language,
+        Func<string, string> removeNonStructuralContent)
     {
         if (string.IsNullOrWhiteSpace(html)
             || string.IsNullOrWhiteSpace(celex)
             || string.IsNullOrWhiteSpace(language))
             return false;
-        var markup = HtmlNonStructuralContent.Replace(html, "");
+        var markup = removeNonStructuralContent(html);
         if (markup.Contains("<!--", StringComparison.Ordinal)
             || markup.Contains("-->", StringComparison.Ordinal)
             || HtmlInertTag.IsMatch(markup))
