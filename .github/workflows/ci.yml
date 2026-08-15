@@ -20,7 +20,67 @@ jobs:
       - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
         with:
           dotnet-version: 10.0.x
+      - name: Diagnose official EUR-Lex response identity
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        run: |
+          set -euo pipefail
+          probe=$(mktemp -d)
+          trap 'rm -rf -- "$probe"' EXIT
+          for celex in 32014R0680 32025L0516; do
+            body="$probe/$celex.html"
+            headers="$probe/$celex.headers"
+            metrics="$probe/$celex.metrics"
+            curl --silent --show-error --location --max-redirs 5 \
+              --connect-timeout 30 --max-time 180 --max-filesize 33554432 \
+              --user-agent 'Lex/0.1 (+https://github.com/SFHAJJI/lex)' \
+              --header 'Accept: application/xhtml+xml, text/html' \
+              --header 'Accept-Language: en' \
+              --dump-header "$headers" --output "$body" \
+              --write-out $'status=%{http_code}\nurl=%{url_effective}\ntype=%{content_type}\nredirects=%{num_redirects}\nsize=%{size_download}\nremote_ip=%{remote_ip}\n' \
+              "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:$celex" \
+              > "$metrics"
+            CELEX="$celex" BODY="$body" HEADERS="$headers" METRICS="$metrics" python3 - <<'PY'
+          import hashlib
+          import html
+          import os
+          import re
+          from pathlib import Path
+
+          celex = os.environ["CELEX"]
+          body = Path(os.environ["BODY"]).read_bytes()
+          text = body.decode("utf-8", errors="replace")
+          title = re.search(r"<title[^>]*>(.*?)</title>", text, re.I | re.S)
+          title_text = "" if title is None else re.sub(r"\s+", " ", html.unescape(title.group(1))).strip()[:160]
+          print(f"--- {celex} ---")
+          print(Path(os.environ["METRICS"]).read_text(encoding="utf-8").strip())
+          print(f"sha256={hashlib.sha256(body).hexdigest()}")
+          print(f"eli_id_local={len(re.findall(r'eli:id_local', text, re.I))}")
+          print(f"celex_literal={len(re.findall(re.escape(celex), html.unescape(text), re.I))}")
+          print(f"pp1_contents={len(re.findall(r'id=[\"\']PP1Contents[\"\']', text, re.I))}")
+          print(f"lang_en={len(re.findall(r'lang=[\"\']EN[\"\']', text, re.I))}")
+          print(f"title={title_text}")
+          selected = {}
+          for line in Path(os.environ["HEADERS"]).read_text(encoding="iso-8859-1").splitlines():
+              if ":" in line:
+                  key, value = line.split(":", 1)
+                  key = key.lower().strip()
+                  if key in {"server", "content-type", "content-language", "location", "x-cache"}:
+                      selected[key] = value.strip()
+          for key, value in sorted(selected.items()):
+              print(f"header_{key}={value}")
+          PY
+          done
       - run: dotnet build -c Release --nologo
+      - name: Validate the exact parser on live runner bytes
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        env:
+          EURLEX_RUNNER_DIAGNOSTIC: "1"
+        run: >-
+          dotnet test tests/Lex.Tests/Lex.Tests.csproj -c Release --no-build --nologo
+          --filter FullyQualifiedName~EurLexRunnerDiagnosticTests
+          --logger "console;verbosity=detailed"
       - name: test (fitness rules + frozen profile fingerprints)
         shell: bash
         run: |
