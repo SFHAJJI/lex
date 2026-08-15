@@ -948,10 +948,8 @@ public static class ExplainerEndpoints
             item.Artifacts.Contains(indexFile, StringComparer.Ordinal)).ToArray();
         return benchmarkManifests.Length == 1
                && indexManifests.Length == 1
-               && string.Equals(report.CodeCommit, benchmarkManifests[0].CodeCommit,
-                   StringComparison.OrdinalIgnoreCase)
-               && string.Equals(report.ManifestId, indexManifests[0].Sha256,
-                   StringComparison.OrdinalIgnoreCase);
+               && HybridActivationGate.ClaimsMatchVerifiedManifests(
+                   report, collection, indexManifests[0], benchmarkManifests[0]);
     }
 
     private static IReadOnlyList<RetrievalBenchmarkCase> LoadRetrievalCases()

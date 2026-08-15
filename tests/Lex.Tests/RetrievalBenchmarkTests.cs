@@ -240,10 +240,21 @@ public sealed class RetrievalBenchmarkTests
         var manifests = new[]
         {
             new Lex.Web.VerifiedArtifactManifest("index.manifest.json", new string('1', 64),
-                "key", new string('a', 40), report.Timestamp, ["index-eu-eurlex.db"]),
+                "key", report.CodeCommit, report.Timestamp, ["index-eu-eurlex.db"],
+                new Dictionary<string, string>
+                {
+                    ["collection"] = "eu-eurlex",
+                    ["corpus_commit"] = report.CorpusCommit,
+                }),
             new Lex.Web.VerifiedArtifactManifest("benchmark.manifest.json", new string('2', 64),
                 "key", report.CodeCommit, report.Timestamp,
-                ["retrieval-benchmark-eu-eurlex.json"]),
+                ["retrieval-benchmark-eu-eurlex.json"],
+                new Dictionary<string, string>
+                {
+                    ["collection"] = "eu-eurlex",
+                    ["corpus_commit"] = report.CorpusCommit,
+                    ["index_manifest_sha256"] = new string('1', 64),
+                }),
         };
 
         Assert.True(Lex.Web.ExplainerEndpoints.BenchmarkClaimsMatchVerifiedManifests(
@@ -252,6 +263,20 @@ public sealed class RetrievalBenchmarkTests
             report with { ManifestId = new string('3', 64) }, "eu-eurlex", manifests));
         Assert.False(Lex.Web.ExplainerEndpoints.BenchmarkClaimsMatchVerifiedManifests(
             report with { CodeCommit = new string('c', 40) }, "eu-eurlex", manifests));
+        Assert.False(Lex.Web.ExplainerEndpoints.BenchmarkClaimsMatchVerifiedManifests(
+            report, "eu-eurlex",
+            [manifests[0] with { CodeCommit = new string('c', 40) }, manifests[1]]));
+        Assert.False(Lex.Web.ExplainerEndpoints.BenchmarkClaimsMatchVerifiedManifests(
+            report, "eu-eurlex",
+            [manifests[0], manifests[1] with
+            {
+                Sources = new Dictionary<string, string>
+                {
+                    ["collection"] = "eu-eurlex",
+                    ["corpus_commit"] = report.CorpusCommit,
+                    ["index_manifest_sha256"] = new string('4', 64),
+                },
+            }]));
     }
 
     [Fact]
