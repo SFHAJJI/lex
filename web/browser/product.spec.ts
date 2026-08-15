@@ -72,6 +72,27 @@ test("global navigation exposes one architecture destination and no broken local
   }
 });
 
+test("release evaluation evidence fails closed without inventing a passing result", async ({ page, request }) => {
+  const response = await page.goto("/built/release");
+  expect(response?.status()).toBe(200);
+  await expect(page.getByRole("heading", { name: "Latest signed assistant evaluation" }))
+    .toBeVisible();
+  await expect(page.getByText("No verified evaluation published.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "evaluation.json", exact: true }))
+    .toHaveAttribute("href", "/built/release/evaluation.json");
+  await expect(page.getByRole("link", { name: "attestation.json", exact: true }))
+    .toHaveAttribute("href", "/attestation.json");
+
+  const status = await request.get("/built/release/evaluation.json");
+  expect(status.status()).toBe(200);
+  expect(await status.json()).toEqual({
+    schema: "lex-public-assistant-evaluation-status/1",
+    status: "unavailable",
+  });
+  await expectNoHorizontalOverflow(page);
+  await expectNoSeriousAxeViolation(page);
+});
+
 test("every public page reflows at the frozen desktop, modal, phone and landscape widths", async ({ page }) => {
   test.setTimeout(120_000);
   for (const [width, height] of [

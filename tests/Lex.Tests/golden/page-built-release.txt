@@ -585,6 +585,12 @@ orientation aids; links omit line numbers so normal refactors do not rot the map
 <td><a href="https://github.com/SFHAJJI/lex/blob/main/tests/Lex.Tests/AssistantEvaluationTests.cs"><code>AssistantEvaluationTests</code></a>, <a href="https://github.com/SFHAJJI/lex/blob/main/docs/assistant-evaluation-scenario-matrix.md">25-case matrix</a>, <a href="https://github.com/SFHAJJI/lex/blob/main/evals/assistant-cases-v3.review.json">owner review</a> and <a href="https://github.com/SFHAJJI/lex/blob/main/evals/assistant-cases-v3.review.sig">detached signature</a>; the exact catalog is owner-signed but has not yet been run live.</td>
 </tr>
 <tr>
+<td>Latest signed assistant evaluation</td>
+<td>Card <strong>Built</strong>; signed result <strong>Next</strong></td>
+<td><a href="https://github.com/SFHAJJI/lex/blob/main/src/Lex.Web/AssistantEvaluationEvidence.cs"><code>AssistantEvaluationEvidenceVerifier</code></a>, <a href="https://github.com/SFHAJJI/lex/blob/main/src/Lex.Web/AssistantEvaluationEvidenceProvider.cs"><code>GitHubAssistantEvaluationEvidenceProvider</code></a>, <a href="https://github.com/SFHAJJI/lex/blob/main/src/Lex.Web/BuiltEndpoints.cs"><code>BuiltEndpoints</code></a> and the machine-readable <a href="/built/release/evaluation.json"><code>/built/release/evaluation.json</code></a>.</td>
+<td><a href="https://github.com/SFHAJJI/lex/blob/main/src/Lex.Ingest/AssistantEvaluationRelease.cs"><code>AssistantEvaluationReleaseVerifier</code></a> is the canonical pre-signing semantic authority. <a href="https://github.com/SFHAJJI/lex/blob/main/tests/Lex.Tests/AssistantEvaluationEvidenceTests.cs"><code>AssistantEvaluationEvidenceTests</code></a> and <a href="https://github.com/SFHAJJI/lex/blob/main/tests/Lex.Tests/ArchitectureDossierTests.cs"><code>ArchitectureDossierTests</code></a> authenticate the immutable release, signed bytes and exact runtime binding, then label bounded fields as signed report claims; they do not duplicate or independently rescore the evaluation. Otherwise the card says no verified evaluation is published.</td>
+</tr>
+<tr>
 <td>Traffic promotion and rollback</td>
 <td><strong>Built</strong>; this promotion is <strong>Next</strong></td>
 <td><a href="https://github.com/SFHAJJI/lex/blob/main/.github/workflows/revision-traffic.yml"><code>revision-traffic.yml</code></a>.</td>
@@ -846,7 +852,13 @@ has been reconciled. Canonical GitHub release tags and assets are outside Blob c
 Moving the canonical boundary to Azure immutable write-once, read-many (WORM) storage is a future
 option only when retention or compliance requirements justify a separate architecture decision
 and migration evidence.</p>
-<h2 id="mounted-release">Mounted release evidence</h2>
+<h2 id="latest-signed-evaluation">Latest signed assistant evaluation</h2>
+<div class="notice"><b>No verified evaluation published.</b> This revision exposes no
+cryptographically verified immutable evaluation package that matches its exact code,
+image, artifact set, mounted indexes and signed catalog. Legal search and readiness do
+not depend on this optional evidence view.</div>
+<p class="sub">Machine-readable status: <a href="/built/release/evaluation.json">evaluation.json</a>.
+Running identities: <a href="/attestation.json">attestation.json</a>.</p><h2 id="mounted-release">Mounted release evidence</h2>
 <p>The release model above is the invariant. This table reads process configuration and
 verified mounted indexes at request time. It reports the revision's identities and
 capabilities; signed promotion receipts separately prove whether traffic was authorized.</p>

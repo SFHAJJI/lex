@@ -27,6 +27,7 @@ Dynamic publisher routes accept only mounted publisher IDs and validated work/da
 | GET | `/built/retrieval` | Explainers | evaluator | canonical | HTML | public index | top-1/top-k policy, failure taxonomy and evidence gates |
 | GET | `/built/assistant` | Explainers | evaluator | canonical | HTML | public index | bounded plan, deterministic execution, memory and optional prose |
 | GET | `/built/release` | Explainers | evaluator | canonical | HTML | public index | candidate, promotion, rollback, ACR and staging boundaries |
+| GET | `/built/release/evaluation.json` | Explainers | machine, evaluator | exact runtime-bound evidence | JSON | machine | authenticated immutable-release identity and bounded signed report claims, or typed unavailable; no prompts, replies or grader reasoning |
 | GET | `/built/decisions` | Explainers | evaluator | canonical | HTML | public index | curated trade-offs link to the complete decision register |
 | GET | `/built/incidents` | Explainers | evaluator | canonical | HTML | public index | incidents connect root causes to permanent guards |
 | GET | `/built/limits` | Explainers | evaluator | canonical | HTML | public index | current limits and observable scaling triggers |

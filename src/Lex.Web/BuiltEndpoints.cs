@@ -1,4 +1,7 @@
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using System.Globalization;
 using Markdig;
 using static Lex.Web.PageShell;
 
@@ -184,6 +187,64 @@ public static class BuiltEndpoints
                 """;
         }
 
+        static string EvaluationEvidenceCard(AssistantEvaluationEvidenceSnapshot snapshot)
+        {
+            if (snapshot.Evidence is not { } evidence)
+                return """
+                    <h2 id="latest-signed-evaluation">Latest signed assistant evaluation</h2>
+                    <div class="notice"><b>No verified evaluation published.</b> This revision exposes no
+                    cryptographically verified immutable evaluation package that matches its exact code,
+                    image, artifact set, mounted indexes and signed catalog. Legal search and readiness do
+                    not depend on this optional evidence view.</div>
+                    <p class="sub">Machine-readable status: <a href="/built/release/evaluation.json">evaluation.json</a>.
+                    Running identities: <a href="/attestation.json">attestation.json</a>.</p>
+                    """;
+
+            var candidateTokens = checked(evidence.CandidateInputTokens + evidence.CandidateOutputTokens);
+            var graderTokens = checked(evidence.GraderInputTokens + evidence.GraderOutputTokens);
+            var measuredCost = evidence.TotalCostEur.ToString("0.0000", CultureInfo.InvariantCulture);
+            var maximumCost = evidence.MaximumCostEur.ToString("0.##", CultureInfo.InvariantCulture);
+            return $"""
+                <h2 id="latest-signed-evaluation">Latest signed assistant evaluation</h2>
+                <div class="card">
+                <p><span class="badge ok">Verified release</span> <b>Exact runtime match.</b>
+                Signed report verdict: <b>passed</b>. Signed catalog: {evidence.CaseCount:n0} cases /
+                {evidence.RepetitionCount:n0} repetitions. The canonical release verifier checked the
+                case, grade, budget and timing semantics before signing; this page authenticates that
+                immutable report and its runtime bindings. No mutable <span class="mono">latest</span>
+                pointer is trusted.</p>
+                <div class="dossier-table" tabindex="0" role="region" aria-label="Latest signed assistant evaluation"><table class="kv">
+                <tr><th>evaluated at</th><td class="mono">{H(evidence.RunAt)}</td></tr>
+                <tr><th>running and evaluated revision</th><td class="mono">{H(evidence.Revision)}</td></tr>
+                <tr><th>running and evaluated code commit</th><td class="mono">{H(evidence.CodeCommit)}</td></tr>
+                <tr><th>running and evaluated image</th><td class="mono">{H(evidence.Image)}</td></tr>
+                <tr><th>running and evaluated artifact set</th><td class="mono">{H(evidence.ArtifactManifestSet)}</td></tr>
+                <tr><th>signed catalog SHA-256</th><td class="mono">{H(evidence.CatalogSha256)}</td></tr>
+                <tr><th>signed report SHA-256</th><td class="mono">{H(evidence.ReportSha256)}</td></tr>
+                <tr><th>candidate model</th><td>{H(evidence.CandidateModelName)} {H(evidence.CandidateModelVersion)}
+                <span class="mono">({H(evidence.CandidateDeployment)})</span></td></tr>
+                <tr><th>release grader</th><td>{H(evidence.GraderModelName)} {H(evidence.GraderModelVersion)}
+                <span class="mono">({H(evidence.GraderDeployment)})</span></td></tr>
+                <tr><th>measured tokens</th><td class="mono">candidate {candidateTokens:n0}; grader {graderTokens:n0}</td></tr>
+                <tr><th>measured cost</th><td class="mono">EUR {measuredCost} / EUR {maximumCost} maximum</td></tr>
+                <tr><th>measured latency</th><td class="mono">first result p95 {evidence.FirstOperationP95Milliseconds:n0} ms;
+                total p99 {evidence.TotalP99Milliseconds:n0} ms; browser presentation p95 {evidence.BrowserP95Milliseconds:n0} ms</td></tr>
+                </table></div>
+                <p><a href="{H(evidence.ReleaseUrl)}">Immutable GitHub release</a> ·
+                <a href="{H(evidence.ReportUrl)}">report</a> ·
+                <a href="{H(evidence.ManifestUrl)}">signed manifest</a> ·
+                <a href="{H(evidence.SignatureUrl)}">signature</a> ·
+                <a href="/built/release/evaluation.json">public status JSON</a> ·
+                <a href="/attestation.json">running attestation</a></p>
+                </div>
+                <p class="sub">These hashes intentionally differ: the 40-character Git commit identifies
+                source code; the artifact-set, catalog and report values are separate SHA-256 identities.
+                Verification on this page means the signed report embeds the former identities exactly and
+                its own full digest matches the release tag; it does not rerun or independently rescore the
+                evaluation.</p>
+                """;
+        }
+
         string DeliveryRegistry()
         {
             var registry = ArchitectureProgram.Registry;
@@ -205,9 +266,9 @@ public static class BuiltEndpoints
                 """;
         }
 
-        string Addendum(string slug) => slug switch
+        string Addendum(string slug, AssistantEvaluationEvidenceSnapshot evaluation) => slug switch
         {
-            "release" => MountedReleaseEvidence(),
+            "release" => EvaluationEvidenceCard(evaluation) + MountedReleaseEvidence(),
             "limits" => DeliveryRegistry(),
             _ => "",
         };
@@ -215,21 +276,99 @@ public static class BuiltEndpoints
         foreach (var definition in Pages)
         {
             var page = definition;
-            app.MapGet(page.Path, () => Results.Content(Page(
-                page.Label,
-                Article(page, Addendum(page.Slug)),
-                page.Subtitle,
-                page.Path,
-                page.Description), "text/html"));
+            app.MapGet(page.Path, async (HttpContext http,
+                IAssistantEvaluationEvidenceProvider evaluations,
+                CancellationToken cancellationToken) =>
+            {
+                var evidence = page.Slug == "release"
+                    ? await evaluations.GetAsync(cancellationToken)
+                    : AssistantEvaluationEvidenceSnapshot.Unavailable;
+                if (page.Slug == "release") http.Response.Headers.CacheControl = "no-store";
+                return Results.Content(Page(
+                    page.Label,
+                    Article(page, Addendum(page.Slug, evidence)),
+                    page.Subtitle,
+                    page.Path,
+                    page.Description), "text/html");
+            });
         }
 
-        app.MapGet("/architecture/dossier", () => Results.Content(Page(
-            "Architecture dossier",
-            FullArticle(Addendum),
-            "The complete interview and print view, generated from the same nine source pages.",
-            "/architecture/dossier",
-            "The complete solution and AI architecture dossier for Lex.",
-            noIndex: true), "text/html"));
+        app.MapGet("/architecture/dossier", async (HttpContext http,
+            IAssistantEvaluationEvidenceProvider evaluations,
+            CancellationToken cancellationToken) =>
+        {
+            var evidence = await evaluations.GetAsync(cancellationToken);
+            http.Response.Headers.CacheControl = "no-store";
+            return Results.Content(Page(
+                "Architecture dossier",
+                FullArticle(slug => Addendum(slug, evidence)),
+                "The complete interview and print view, generated from the same nine source pages.",
+                "/architecture/dossier",
+                "The complete solution and AI architecture dossier for Lex.",
+                noIndex: true), "text/html");
+        });
+
+        app.MapGet("/built/release/evaluation.json", async (HttpContext http,
+            IAssistantEvaluationEvidenceProvider evaluations,
+            CancellationToken cancellationToken) =>
+        {
+            http.Response.Headers.CacheControl = "no-store";
+            var snapshot = await evaluations.GetAsync(cancellationToken);
+            var json = new JsonObject
+            {
+                ["schema"] = "lex-public-assistant-evaluation-status/1",
+                ["status"] = snapshot.Verified ? "verified_signed_release" : "unavailable",
+            };
+            if (snapshot.Evidence is { } evidence)
+            {
+                json["release_tag"] = evidence.ReleaseTag;
+                json["release_url"] = evidence.ReleaseUrl;
+                json["run_at"] = evidence.RunAt;
+                json["candidate_revision"] = evidence.Revision;
+                json["code_commit"] = evidence.CodeCommit;
+                json["image"] = evidence.Image;
+                json["report_sha256"] = evidence.ReportSha256;
+                json["artifact_manifest_set"] = evidence.ArtifactManifestSet;
+                json["index_manifest_ids"] = new JsonArray(evidence.IndexManifestIds
+                    .Order(StringComparer.Ordinal).Select(value => JsonValue.Create(value)).ToArray());
+                json["catalog_sha256"] = evidence.CatalogSha256;
+                json["signed_report_verdict"] = "passed";
+                json["cases"] = evidence.CaseCount;
+                json["repetitions"] = evidence.RepetitionCount;
+                json["candidate_model"] = new JsonObject
+                {
+                    ["host"] = evidence.CandidateModelHost,
+                    ["deployment"] = evidence.CandidateDeployment,
+                    ["name"] = evidence.CandidateModelName,
+                    ["version"] = evidence.CandidateModelVersion,
+                };
+                json["grader_model"] = new JsonObject
+                {
+                    ["deployment"] = evidence.GraderDeployment,
+                    ["name"] = evidence.GraderModelName,
+                    ["version"] = evidence.GraderModelVersion,
+                };
+                json["usage"] = new JsonObject
+                {
+                    ["candidate_input_tokens"] = evidence.CandidateInputTokens,
+                    ["candidate_output_tokens"] = evidence.CandidateOutputTokens,
+                    ["grader_input_tokens"] = evidence.GraderInputTokens,
+                    ["grader_output_tokens"] = evidence.GraderOutputTokens,
+                };
+                json["latency_milliseconds"] = new JsonObject
+                {
+                    ["first_operation_p95"] = evidence.FirstOperationP95Milliseconds,
+                    ["total_p99"] = evidence.TotalP99Milliseconds,
+                    ["browser_p95"] = evidence.BrowserP95Milliseconds,
+                };
+                json["actual_cost_eur"] = evidence.TotalCostEur;
+                json["maximum_cost_eur"] = evidence.MaximumCostEur;
+            }
+            return Results.Content(json.ToJsonString(new JsonSerializerOptions
+            {
+                WriteIndented = true,
+            }), "application/json");
+        });
 
         app.MapGet("/built/diagrams/{name}.svg", (string name) =>
         {

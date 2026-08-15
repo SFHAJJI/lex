@@ -240,8 +240,16 @@ public static class ExplainerEndpoints
                 ["served_at"] = ctx.Clock.GetUtcNow().ToString("yyyy-MM-ddTHH:mm:ssZ"),
                 ["deployment"] = new JsonObject
                 {
+                    ["revision"] = ctx.Options.Revision,
+                    ["revision_hostname"] = ctx.Options.RevisionHostname,
                     ["code_commit"] = ctx.Options.CodeCommit,
                     ["artifact_manifest_set"] = ctx.Options.ArtifactManifestId,
+                    ["verified_artifact_manifest_set"] = ctx.Registry.VerifiedManifestSetId,
+                    ["assistant_eval_catalog_sha256"] = ctx.Options.AssistantEvalCatalogSha256,
+                    ["assistant_model_host"] =
+                        Uri.TryCreate(ctx.Options.AzureOpenAiEndpoint, UriKind.Absolute, out var modelEndpoint)
+                            ? modelEndpoint.IdnHost : null,
+                    ["assistant_model_deployment"] = ctx.Options.AzureOpenAiDeployment,
                     ["image"] = ctx.Options.DeployImage,
                 },
                 ["artifact_manifests"] = manifests,

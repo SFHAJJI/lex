@@ -1,4 +1,5 @@
 using System.Net;
+using Lex.Web;
 
 namespace Lex.Tests;
 
@@ -250,6 +251,96 @@ public sealed class ArchitectureDossierTests : IClassFixture<GoldenTests.Site>
     }
 
     [Fact]
+    public async Task Release_page_and_status_fail_closed_before_a_matching_signed_run_exists()
+    {
+        using var page = await _client.GetAsync("/built/release");
+        var html = await page.Content.ReadAsStringAsync();
+        using var status = await _client.GetAsync("/built/release/evaluation.json");
+        var json = await status.Content.ReadAsStringAsync();
+
+        Assert.Contains("No verified evaluation published.", html);
+        Assert.Contains("href=\"/attestation.json\"", html);
+        Assert.Contains("href=\"/built/release/evaluation.json\"", html);
+        Assert.Equal("no-store", page.Headers.CacheControl?.ToString());
+        Assert.Equal("no-store", status.Headers.CacheControl?.ToString());
+        Assert.Equal("application/json", status.Content.Headers.ContentType?.MediaType);
+        Assert.Contains("\"schema\": \"lex-public-assistant-evaluation-status/1\"", json);
+        Assert.Contains("\"status\": \"unavailable\"", json);
+        Assert.DoesNotContain("report_sha256", json);
+    }
+
+    [Fact]
+    public async Task Release_page_discloses_only_runtime_bound_signed_report_claims()
+    {
+        var evidence = new VerifiedAssistantEvaluationEvidence(
+            Repository: "SFHAJJI/lex-ops",
+            ReleaseTag: "assistant-eval-aaaaaaaaaaaa-bbbbbbbbbbbb",
+            ReleaseUrl: "https://github.com/SFHAJJI/lex-ops/releases/tag/assistant-eval-aaaaaaaaaaaa-bbbbbbbbbbbb",
+            ReportUrl: "https://github.com/SFHAJJI/lex-ops/releases/download/assistant-eval-aaaaaaaaaaaa-bbbbbbbbbbbb/assistant-eval-report.json",
+            ManifestUrl: "https://github.com/SFHAJJI/lex-ops/releases/download/assistant-eval-aaaaaaaaaaaa-bbbbbbbbbbbb/assistant-eval.manifest.json",
+            SignatureUrl: "https://github.com/SFHAJJI/lex-ops/releases/download/assistant-eval-aaaaaaaaaaaa-bbbbbbbbbbbb/assistant-eval.manifest.sig",
+            RunAt: "2026-08-15T12:00:00Z",
+            CodeCommit: new string('a', 40),
+            Revision: "ca-lex-web--candidate",
+            RevisionHostname: "candidate.example",
+            Image: "registry.example/lex@sha256:" + new string('c', 64),
+            ArtifactManifestSet: new string('d', 64),
+            CatalogSha256: new string('e', 64),
+            ReportSha256: new string('b', 64),
+            CandidateEvidenceSha256: new string('f', 64),
+            CandidateModelHost: "candidate-models.example",
+            CandidateDeployment: "candidate-release",
+            CandidateModelName: "gpt-5-mini",
+            CandidateModelVersion: "2025-08-07",
+            GraderDeployment: "lex-assistant-eval-grader",
+            GraderModelName: "gpt-5-nano",
+            GraderModelVersion: "2025-08-07",
+            IndexManifestIds: [new string('1', 64), new string('2', 64)],
+            CaseCount: 25,
+            RepetitionCount: 49,
+            CandidateInputTokens: 1000,
+            CandidateOutputTokens: 100,
+            GraderInputTokens: 500,
+            GraderOutputTokens: 50,
+            TotalCostEur: 0.38m,
+            MaximumCostEur: 10m,
+            FirstOperationP95Milliseconds: 850,
+            TotalP99Milliseconds: 2_500,
+            BrowserP95Milliseconds: 42);
+        using var site = new GoldenTests.Site(new AssistantEvaluationEvidenceSnapshot(evidence));
+        using var page = await site.Client.GetAsync("/built/release");
+        var html = await page.Content.ReadAsStringAsync();
+        var json = await site.Client.GetStringAsync("/built/release/evaluation.json");
+
+        Assert.Contains("Exact runtime match.", html);
+        Assert.Contains("Signed report verdict: <b>passed</b>", html);
+        Assert.Contains("Signed catalog: 25 cases /", html);
+        Assert.Contains("49 repetitions", html);
+        Assert.Contains("canonical release verifier checked", html);
+        Assert.Contains("does not rerun or independently rescore", html);
+        Assert.DoesNotContain("All 25 reviewed cases", html);
+        Assert.Contains("EUR 0.3800 / EUR 10 maximum", html);
+        Assert.Contains("first result p95 850 ms", html);
+        Assert.Contains("running and evaluated code commit", html);
+        Assert.Contains("signed report SHA-256", html);
+        Assert.Contains("These hashes intentionally differ", html);
+        Assert.Contains("\"status\": \"verified_signed_release\"", json);
+        Assert.Contains("\"signed_report_verdict\": \"passed\"", json);
+        Assert.Contains("\"cases\": 25", json);
+        Assert.Contains("\"repetitions\": 49", json);
+        Assert.Contains("\"code_commit\": \"" + new string('a', 40) + "\"", json);
+        Assert.Contains("\"candidate_model\"", json);
+        Assert.Contains("\"gpt-5-mini\"", json);
+        Assert.Contains("\"grader_model\"", json);
+        Assert.Contains("\"usage\"", json);
+        Assert.Contains("\"latency_milliseconds\"", json);
+        Assert.DoesNotContain("resource_id", json);
+        Assert.DoesNotContain("reviewer_id", json);
+        Assert.DoesNotContain("prompt", json);
+        Assert.DoesNotContain("reply", json);
+    }
+
+    [Fact]
     public async Task Release_dossier_links_each_release_boundary_to_its_implementation()
     {
         var html = await _client.GetStringAsync("/built/release");
@@ -322,12 +413,17 @@ public sealed class ArchitectureDossierTests : IClassFixture<GoldenTests.Site>
             "https://github.com/SFHAJJI/lex/blob/main/evals/assistant-cases-v3.review.sig",
             "https://github.com/SFHAJJI/lex/blob/main/src/Lex.Ingest/AssistantEvaluationRunner.cs",
             "https://github.com/SFHAJJI/lex-ops/blob/main/.github/workflows/publish-assistant-evaluation.yml",
+            "https://github.com/SFHAJJI/lex/blob/main/src/Lex.Web/AssistantEvaluationEvidence.cs",
+            "https://github.com/SFHAJJI/lex/blob/main/src/Lex.Web/AssistantEvaluationEvidenceProvider.cs",
+            "https://github.com/SFHAJJI/lex/blob/main/src/Lex.Web/BuiltEndpoints.cs",
+            "https://github.com/SFHAJJI/lex/blob/main/tests/Lex.Tests/AssistantEvaluationEvidenceTests.cs",
             "https://github.com/SFHAJJI/lex/blob/main/.github/workflows/revision-traffic.yml",
             "https://github.com/SFHAJJI/lex/blob/main/docs/architecture/pages/limits.md",
             "https://github.com/SFHAJJI/lex/blob/main/docs/architecture/pages/incidents.md",
         };
         Assert.All(expectedLinks, link => Assert.Contains($"href=\"{link}\"", html));
         Assert.Contains("href=\"/benchmarks/latest.json\"", html);
+        Assert.Contains("href=\"/built/release/evaluation.json\"", html);
         Assert.DoesNotContain("#L", html);
 
         using var benchmark = await _client.GetAsync("/benchmarks/latest.json");
