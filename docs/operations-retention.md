@@ -93,21 +93,37 @@ be newer than the old production revision:
   templates are exact-fingerprinted and are never activated. The inventory performs no mutation.
 - `.github/workflows/bootstrap-legacy-cleanup.yml` accepts only the successful exact-commit dry-run,
   independently reviewed plan SHA-256 and the literal one-time confirmation. It re-reads and
-  compares the complete plan immediately before its only Azure mutation: setting
-  `maxInactiveRevisions=1`. It never changes traffic or activation. Azure accepted that
-  configuration before its inactive-revision list converged, so the workflow refuses a receipt
-  until read-back proves exact A at 100 percent plus one reviewed inactive record.
-- If an exact reviewed A+2 state remains after that configuration write, the same inventory may
-  additionally authorize one direct, non-retried deactivation POST for the exact older inactive
-  record. Microsoft documents deactivation, but not already-inactive retention reconciliation;
-  this is therefore a bounded observed recovery, not a claimed platform guarantee. Three
-  consecutive exact A+one-reviewed-survivor reads issue the ordinary cleanup receipt. An unchanged
-  A+2 state is recorded as inconclusive and fails without another mutation.
-- The bootstrap deploy requires that cleanup receipt. It builds immutable image I, creates active
-  zero-traffic fallback R first from the intended canonical template, then deactivates R under
-  max=1. This replaces the last legacy inactive record. It creates active zero-traffic C second.
-  The only preparation state is therefore A active/100, R inactive/0 and C active/0, with exact
-  chronology `A < R < C`; there is never a temporary third active revision process.
+  compares the complete plan immediately before acting. The ordinary path may set
+  `maxInactiveRevisions=1` without changing traffic or activation, then issues a receipt only for
+  exact A at 100 percent plus one reviewed inactive record. The service was observed retaining an
+  exact A plus two inactive records after accepting that configuration; the Microsoft contract
+  defines the limit but does not promise synchronous convergence on the configuration write.
+- For that exact A+O+S observation, the cleanup workflow performs no Azure mutation. A separate
+  reviewed handoff binds A, the older inactive O, the newer inactive S, their complete identities
+  and templates, the sole named A100 route, `Multiple` mode, `maxInactiveRevisions=1`, A readiness
+  and the exact latest/latest-ready pointers. The latest pointer must be S; latest-ready is bound
+  exactly to O or S so a safely abandoned failed active-zero revision remains recoverable without
+  pretending it was ready. The workflow emits a versioned receipt only after a fresh byte-equivalent
+  plan re-read. The earlier attempted already-inactive deactivation returned
+  `RevisionAlreadyInRequestedState`; its single-use evidence is retained and is not retried.
+- The bootstrap deploy requires that receipt. From one canonical immutable image I, it creates
+  active zero-traffic fallback R using a template-only update. Exact read-back must prove A+S+R,
+  meaning the lifecycle event removed O, before only R is deactivated. Exact A+S+R is preserved
+  while inactive. A second template-only update creates active zero-traffic C; exact read-back must
+  then prove A+R+C, meaning the lifecycle event removed S. Only after that proof may the workflow
+  explicitly register A100/C0 and run candidate gates. The preparation state is therefore A
+  active/100, R inactive/0 and C active/0 with exact chronology `A < R < C`; there is never a
+  temporary third active revision process and no legal traffic moves during preparation.
+- Ordinary failure or TERM handling deactivates only an exact R or C created by that run and proves
+  the corresponding safe A+S+R or A+R+C state. It never reports those states as converged. A hard
+  runner stop can interrupt cleanup. Recovery is therefore an explicit two-boundary operation:
+  `.github/workflows/bootstrap-preparation-inventory.yml` first records the exact A+S+R or A+R+C
+  state without mutation; only its independently reviewed plan can authorize
+  `.github/workflows/bootstrap-abandon.yml` to deactivate that one exact active-zero R or C. The
+  abandon workflow never rebuilds or reuses an image, never changes traffic/configuration/template,
+  and proves stable A100 plus the same two exact inactive records. A fresh legacy inventory and
+  independently reviewed no-write handoff receipt are then required before another template
+  lifecycle update.
 - Evaluate exact C. A separately signed `lex-first-release-equivalence/1` artifact binds A, R and C
   resource identities and states, strict `A < R < C` chronology, I, and the canonical R/C template
   digest. The digest excludes only `revisionSuffix`; code, artifact set, model configuration,
@@ -118,9 +134,12 @@ be newer than the old production revision:
   application URL sends it zero traffic. A and C run separate in-process limiters, so the window
   is an explicit temporary exposure boundary: no public application traffic may target C, the
   exact evaluation must start immediately, and expiration requires the exact-confirmation
-  `.github/workflows/bootstrap-abandon.yml` path. That path accepts only A active/100, R inactive/0,
-  C active/0 with `A < R < C`, deactivates only C, and proves A active/100 plus C inactive/0. It is
-  idempotent after cancellation.
+  preparation-inventory plus `.github/workflows/bootstrap-abandon.yml` path. The generic recovery
+  boundary accepts only A active/100, one exact retained inactive, and one exact newer active-zero
+  target: S+R after a hard stop during fallback creation, or R+C after candidate creation. It
+  deactivates only that reviewed R or C and proves A100 plus both exact inactive records. A retry
+  starts only after a fresh reviewed plan; the command is never blindly replayed against an
+  unobserved state.
 - `.github/workflows/bootstrap-inventory.yml` then performs a mutation-free read-back of the exact
   three-revision state, immutable ACR digests and staging ETags. Its reviewed plan hash and
   exact-commit run are inputs to `.github/workflows/bootstrap-release-state.yml`, which rebuilds
@@ -128,8 +147,8 @@ be newer than the old production revision:
 - Success switches C to 100 percent and deactivates A under max=1. Because `A < R < C`, Azure
   purges A and retains exact R. Success ends with C active and R sole inactive on one immutable
   image digest. A failure before durable mutation authority performs no Azure writes. Once
-  mutation is authorized, a pre-switch failure deactivates C, intentionally retaining C as the
-  sole inactive retry record and leaving A at 100 percent; a fresh attempt creates a new R first.
+  mutation is authorized, a pre-switch failure deactivates C, intentionally retaining exact R and
+  C inactive while leaving A at 100 percent; a fresh reviewed handoff precedes another R/C pair.
   After A is deliberately purged, a receipt failure restores signed R active with C sole inactive
   and explicitly records that old A is no longer recoverable.
 - The successful bootstrap deployment receipt is domain-separated as

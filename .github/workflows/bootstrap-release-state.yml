@@ -659,6 +659,26 @@ jobs:
                   --active "$active" --inactive "$inactive" --traffic "$traffic" \
                   --created-order "$order"
           }
+          assert_recovery_topology() {
+            local authority="$1" latest="$2" observed
+            observed=$(az containerapp show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+              --query '{mode:properties.configuration.activeRevisionsMode,
+                maxInactiveRevisions:properties.configuration.maxInactiveRevisions,
+                routes:properties.configuration.ingress.traffic,
+                latestRevisionName:properties.latestRevisionName,
+                latestReadyRevisionName:properties.latestReadyRevisionName}' -o json) \
+              || return 1
+            printf '%s' "$observed" | jq -e --arg authority "$authority" \
+                --arg latest "$latest" '
+                  .mode == "Multiple" and .maxInactiveRevisions == 1
+                  and .latestRevisionName == $latest
+                  and .latestReadyRevisionName == $latest
+                  and (.routes | type) == "array" and (.routes | length) == 1
+                  and .routes[0].revisionName == $authority
+                  and .routes[0].weight == 100
+                  and (.routes[0].latestRevision // false) == false
+                  and (.routes[0].label // null) == null' >/dev/null
+          }
           mark_failed_receipt() {
             local deployment_id="${FAILED_RECEIPT_DEPLOYMENT:-}" payload state
             [ -n "$deployment_id" ] || return 0
@@ -697,14 +717,20 @@ jobs:
               --revision "$PRODUCTION_REVISION" --only-show-errors || true
             for attempt in $(seq 1 12); do
               assert_state 1 "$LEGACY_CURRENT_REVISION" \
-                "$PRODUCTION_REVISION" "$LEGACY_CURRENT_REVISION=100" \
-                "$LEGACY_CURRENT_REVISION,$PRODUCTION_REVISION" && break
+                "$ROLLBACK_REVISION,$PRODUCTION_REVISION" "$LEGACY_CURRENT_REVISION=100" \
+                "$LEGACY_CURRENT_REVISION,$ROLLBACK_REVISION,$PRODUCTION_REVISION" \
+                && assert_recovery_topology "$LEGACY_CURRENT_REVISION" \
+                  "$PRODUCTION_REVISION" && break
               sleep 5
             done
-            assert_state 1 "$LEGACY_CURRENT_REVISION" \
-              "$PRODUCTION_REVISION" "$LEGACY_CURRENT_REVISION=100" \
-              "$LEGACY_CURRENT_REVISION,$PRODUCTION_REVISION" \
-              || { echo "::error::legacy bootstrap recovery did not converge"; return 1; }
+            if ! assert_state 1 "$LEGACY_CURRENT_REVISION" \
+                "$ROLLBACK_REVISION,$PRODUCTION_REVISION" "$LEGACY_CURRENT_REVISION=100" \
+                "$LEGACY_CURRENT_REVISION,$ROLLBACK_REVISION,$PRODUCTION_REVISION" \
+                || ! assert_recovery_topology "$LEGACY_CURRENT_REVISION" \
+                  "$PRODUCTION_REVISION"; then
+              echo "::error::legacy bootstrap recovery did not converge"
+              return 1
+            fi
           }
           restore_signed_fallback() {
             local exact_inventory
@@ -730,11 +756,14 @@ jobs:
               --revision "$PRODUCTION_REVISION" --only-show-errors || true
             for attempt in $(seq 1 12); do
               assert_state 1 "$ROLLBACK_REVISION" "$PRODUCTION_REVISION" \
-                "$ROLLBACK_REVISION=100" "$ROLLBACK_REVISION,$PRODUCTION_REVISION" && break
+                "$ROLLBACK_REVISION=100" "$ROLLBACK_REVISION,$PRODUCTION_REVISION" \
+                && assert_recovery_topology "$ROLLBACK_REVISION" \
+                  "$PRODUCTION_REVISION" && break
               sleep 5
             done
             assert_state 1 "$ROLLBACK_REVISION" "$PRODUCTION_REVISION" \
-              "$ROLLBACK_REVISION=100" "$ROLLBACK_REVISION,$PRODUCTION_REVISION"
+              "$ROLLBACK_REVISION=100" "$ROLLBACK_REVISION,$PRODUCTION_REVISION" \
+              && assert_recovery_topology "$ROLLBACK_REVISION" "$PRODUCTION_REVISION"
           }
 
           [ -n "${LEGACY_CURRENT_REVISION:-}" ] \
@@ -743,10 +772,14 @@ jobs:
           if [ "$TRAFFIC_ATTEMPTED" != "true" ]; then
             # No Azure mutation precedes this durable marker. Preserve the exact retryable signed
             # preparation and prove A=100, R inactive, C active=0 without writing stale traffic.
-            assert_state 1 "$LEGACY_CURRENT_REVISION,$PRODUCTION_REVISION" \
-              "$ROLLBACK_REVISION" "$LEGACY_CURRENT_REVISION=100" \
-              "$LEGACY_CURRENT_REVISION,$ROLLBACK_REVISION,$PRODUCTION_REVISION" \
-              || { echo "::error::pre-authority bootstrap state changed unexpectedly"; exit 1; }
+            if ! assert_state 1 "$LEGACY_CURRENT_REVISION,$PRODUCTION_REVISION" \
+                "$ROLLBACK_REVISION" "$LEGACY_CURRENT_REVISION=100" \
+                "$LEGACY_CURRENT_REVISION,$ROLLBACK_REVISION,$PRODUCTION_REVISION" \
+                || ! assert_recovery_topology "$LEGACY_CURRENT_REVISION" \
+                  "$PRODUCTION_REVISION"; then
+              echo "::error::pre-authority bootstrap state changed unexpectedly"
+              exit 1
+            fi
             {
               echo "## Interrupted first-release bootstrap"
               echo
@@ -805,7 +838,7 @@ jobs:
             fi
             mark_failed_receipt \
               || { echo "::error::restored bootstrap has an uninvalidated receipt"; exit 1; }
-            echo "::error::bootstrap attempt abandoned C; create a fresh R-before-C pair for retry"
+            echo "::error::bootstrap attempt retained inactive R/C; fresh reviewed handoff required"
             exit 0
           fi
           if [ "$candidate_weight" != "0" ] || [ "$rollback_weight" != "0" ]; then

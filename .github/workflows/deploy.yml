@@ -38,7 +38,7 @@ jobs:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: production
-    timeout-minutes: 90
+    timeout-minutes: 180
     env:
       AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
       AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
@@ -207,12 +207,24 @@ jobs:
           rollback="$previous"
           candidate=''
           bootstrap_fallback=''
+          fallback_patch_attempted=false
+          candidate_patch_attempted=false
+          fallback_created=''
+          candidate_created=''
           canonical_template_digest=''
           prior_rollback=''
           legacy_created=''
           legacy_image=''
           legacy_template_digest=''
+          cleanup_predecessor=''
+          cleanup_predecessor_created=''
+          cleanup_predecessor_image=''
+          cleanup_predecessor_template=''
           cleanup_survivor=''
+          cleanup_survivor_created=''
+          cleanup_survivor_image=''
+          cleanup_survivor_template=''
+          cleanup_handoff_latest_ready=''
           previous_inactive_limit=$(az containerapp show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
             --query properties.configuration.maxInactiveRevisions -o tsv)
           if [ "$bootstrap" = "true" ]; then
@@ -231,12 +243,51 @@ jobs:
               --name lex-bootstrap-legacy-cleanup-receipt --dir "$cleanup_receipt_dir"
             cleanup_receipt="$cleanup_receipt_dir/bootstrap-legacy-cleanup-receipt.json"
             jq -e --arg commit "$GITHUB_SHA" --arg plan "$BOOTSTRAP_CLEANUP_PLAN_SHA256" '
-                .schema == "lex-bootstrap-legacy-cleanup-receipt/1"
+                def plain_sha: type == "string" and length == 64
+                  and test("^[0-9a-f]+$");
+                def digest: type == "string" and length == 71
+                  and test("^sha256:[0-9a-f]+$");
+                def identity: type == "object"
+                  and (.revision | type == "string")
+                  and (.active | type == "boolean")
+                  and (.traffic_weight | type == "number")
+                  and (.created_time | type == "string")
+                  and (.image | type == "string")
+                  and (.canonical_template_digest | digest);
+                .schema == "lex-bootstrap-legacy-cleanup-receipt/2"
                 and .code_commit == $commit and .cleanup_plan_sha256 == $plan
                 and .max_inactive_revisions == 1
                 and (.legacy_authority.revision | type == "string")
                 and .legacy_authority.active == true
                 and .legacy_authority.traffic_weight == 100
+                and (.inactive_handoff | type == "object")
+                and (.inactive_handoff.retained_until_candidate | identity)
+                and .inactive_handoff.retained_until_candidate.active == false
+                and .inactive_handoff.retained_until_candidate.traffic_weight == 0
+                and .remaining_inactive_revision
+                  == .inactive_handoff.retained_until_candidate.revision
+                and if .first_pruned_inactive_revision == null then
+                  .recovery_plan_sha256 == null
+                  and .reviewed_inventory_sha256 == null
+                  and (.post_plan_sha256 | plain_sha)
+                  and .inactive_handoff.first_pruned_inactive == null
+                  and .handoff_latest_revision == null
+                  and .handoff_latest_ready_revision == null
+                else (.inactive_handoff.first_pruned_inactive | identity)
+                  and (.recovery_plan_sha256 | plain_sha)
+                  and (.reviewed_inventory_sha256 | plain_sha)
+                  and .post_plan_sha256 == null
+                  and .inactive_handoff.first_pruned_inactive.active == false
+                  and .inactive_handoff.first_pruned_inactive.traffic_weight == 0
+                  and .first_pruned_inactive_revision
+                    == .inactive_handoff.first_pruned_inactive.revision
+                  and .handoff_latest_revision == .remaining_inactive_revision
+                  and (.handoff_latest_ready_revision
+                    == .inactive_handoff.first_pruned_inactive.revision
+                    or .handoff_latest_ready_revision == .remaining_inactive_revision)
+                  and .first_pruned_inactive_revision != .remaining_inactive_revision
+                  and .first_pruned_inactive_revision != .legacy_authority.revision
+                end
                 and (.remaining_inactive_revision | type == "string")
                 and .remaining_inactive_revision != .legacy_authority.revision' \
               "$cleanup_receipt" >/dev/null \
@@ -249,7 +300,41 @@ jobs:
             legacy_image=$(jq -r .legacy_authority.image "$cleanup_receipt")
             legacy_template_digest=$(jq -r \
               .legacy_authority.canonical_template_digest "$cleanup_receipt")
+            cleanup_predecessor=$(jq -r '.first_pruned_inactive_revision // empty' \
+              "$cleanup_receipt")
+            cleanup_predecessor_created=$(jq -r \
+              '.inactive_handoff.first_pruned_inactive.created_time // empty' "$cleanup_receipt")
+            cleanup_predecessor_image=$(jq -r \
+              '.inactive_handoff.first_pruned_inactive.image // empty' "$cleanup_receipt")
+            cleanup_predecessor_template=$(jq -r \
+              '.inactive_handoff.first_pruned_inactive.canonical_template_digest // empty' \
+              "$cleanup_receipt")
             cleanup_survivor=$(jq -r .remaining_inactive_revision "$cleanup_receipt")
+            cleanup_survivor_created=$(jq -r \
+              .inactive_handoff.retained_until_candidate.created_time "$cleanup_receipt")
+            cleanup_survivor_image=$(jq -r \
+              .inactive_handoff.retained_until_candidate.image "$cleanup_receipt")
+            cleanup_survivor_template=$(jq -r \
+              .inactive_handoff.retained_until_candidate.canonical_template_digest \
+              "$cleanup_receipt")
+            cleanup_handoff_latest_ready=$(jq -r \
+              '.handoff_latest_ready_revision // .remaining_inactive_revision' \
+              "$cleanup_receipt")
+            python3 - "$legacy_created" "$cleanup_predecessor_created" \
+                "$cleanup_survivor_created" <<'PY'
+          import sys
+          sys.path.insert(0, "scripts/deploy")
+          from bootstrap_plan import timestamp
+
+          authority = timestamp(sys.argv[1], "legacy createdTime")
+          survivor = timestamp(sys.argv[3], "survivor createdTime")
+          if sys.argv[2]:
+              valid = authority < timestamp(sys.argv[2], "first-pruned createdTime") < survivor
+          else:
+              valid = authority < survivor
+          if not valid:
+              raise SystemExit("reviewed handoff chronology must be exact A < [O <] S")
+          PY
           else
             [ "$previous_inactive_limit" = "1" ] \
               || { echo "::error::steady state must retain exactly one inactive rollback"; exit 1; }
@@ -275,6 +360,8 @@ jobs:
               | python3 scripts/deploy/revision_template_digest.py) || return 1
             [ "$(printf '%s' "$observed" | jq -r .properties.active)" = "true" ] \
               && [ "$(printf '%s' "$observed" | jq -r '.properties.trafficWeight // 0')" = "100" ] \
+              && { [ "$(printf '%s' "$observed" | jq -r .properties.runningState)" = "Running" ] \
+                || [ "$(printf '%s' "$observed" | jq -r .properties.runningState)" = "RunningAtMaxScale" ]; } \
               && [ "$observed_created" = "$legacy_created" ] \
               && [ "$observed_image" = "$legacy_image" ] \
               && [ "$observed_template" = "$legacy_template_digest" ] \
@@ -285,63 +372,184 @@ jobs:
               || { echo "::error::bootstrap preparation requires maxInactiveRevisions=1"; return 1; }
           }
 
+          verify_bootstrap_handoff_identity() {
+            local name="$1" expected_active="$2" expected_traffic="$3"
+            local expected_created="$4" expected_image="$5" expected_template="$6"
+            local require_ready="$7" observed observed_template observed_running
+            observed=$(printf '%s' "$revisions" | jq -ce --arg name "$name" '
+              [.[] | select(.name == $name)]
+              | if length == 1 then .[0] else error("revision identity count differs") end') \
+              || return 1
+            observed_template=$(printf '%s' "$observed" \
+              | python3 scripts/deploy/revision_template_digest.py) || return 1
+            observed_running=$(printf '%s' "$observed" | jq -r .properties.runningState)
+            [ "$(printf '%s' "$observed" | jq -r .properties.active)" = "$expected_active" ] \
+              && [ "$(printf '%s' "$observed" | jq -r '.properties.trafficWeight // 0')" \
+                = "$expected_traffic" ] \
+              && [ "$(printf '%s' "$observed" | jq -r .properties.createdTime)" \
+                = "$expected_created" ] \
+              && [ "$(printf '%s' "$observed" \
+                | jq -r .properties.template.containers[0].image)" = "$expected_image" ] \
+              && [ "$observed_template" = "$expected_template" ] \
+              || return 1
+            [ "$require_ready" = "false" ] \
+              || [ "$observed_running" = "Running" ] \
+              || [ "$observed_running" = "RunningAtMaxScale" ]
+          }
+
+          verify_created_after() {
+            python3 - "$1" "$2" <<'PY'
+          import sys
+          sys.path.insert(0, "scripts/deploy")
+          from bootstrap_plan import timestamp
+
+          if not timestamp(sys.argv[1], "earlier createdTime") \
+                  < timestamp(sys.argv[2], "later createdTime"):
+              raise SystemExit("prepared revision chronology is not strictly increasing")
+          PY
+          }
+
           verify_bootstrap_forward_topology() {
             [ "$bootstrap" = "true" ] || return 0
-            local expected="$1" revisions configuration
+            local expected="$1" revisions configuration expected_latest expected_ready=''
+            local expected_previous_ready=''
             revisions=$(az containerapp revision list -g "$RESOURCE_GROUP" \
               -n "$CONTAINER_APP" --all -o json) || return 1
             configuration=$(az containerapp show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
               --query '{mode:properties.configuration.activeRevisionsMode,
                 maxInactiveRevisions:properties.configuration.maxInactiveRevisions,
-                routes:properties.configuration.ingress.traffic}' -o json) || return 1
+                routes:properties.configuration.ingress.traffic,
+                latestRevisionName:properties.latestRevisionName,
+                latestReadyRevisionName:properties.latestReadyRevisionName}' -o json) || return 1
             case "$expected" in
               before-fallback)
-                printf '%s' "$revisions" | jq -e --arg authority "$previous" \
-                  --arg survivor "$cleanup_survivor" '
-                    length == 2
-                    and any(.[]; .name == $authority and .properties.active == true
-                      and (.properties.trafficWeight // 0) == 100)
-                    and any(.[]; .name == $survivor and .properties.active == false
-                      and (.properties.trafficWeight // 0) == 0)' >/dev/null || return 1
+                # Exact A + predecessor + survivor, or reviewed A + survivor when O is absent.
+                if [ -n "$cleanup_predecessor" ]; then
+                  printf '%s' "$revisions" | jq -e --arg authority "$previous" \
+                    --arg predecessor "$cleanup_predecessor" --arg survivor "$cleanup_survivor" '
+                      ([.[].name] | sort) == ([$authority,$predecessor,$survivor] | sort)' \
+                    >/dev/null || return 1
+                else
+                  printf '%s' "$revisions" | jq -e --arg authority "$previous" \
+                    --arg survivor "$cleanup_survivor" '
+                      ([.[].name] | sort) == ([$authority,$survivor] | sort)' \
+                    >/dev/null || return 1
+                fi
+                verify_bootstrap_handoff_identity "$previous" true 100 "$legacy_created" \
+                  "$legacy_image" "$legacy_template_digest" true || return 1
+                if [ -n "$cleanup_predecessor" ]; then
+                  verify_bootstrap_handoff_identity "$cleanup_predecessor" false 0 \
+                    "$cleanup_predecessor_created" "$cleanup_predecessor_image" \
+                    "$cleanup_predecessor_template" false || return 1
+                fi
+                verify_bootstrap_handoff_identity "$cleanup_survivor" false 0 \
+                  "$cleanup_survivor_created" "$cleanup_survivor_image" \
+                  "$cleanup_survivor_template" false || return 1
+                expected_latest="$cleanup_survivor"
+                expected_ready="$cleanup_handoff_latest_ready"
                 ;;
-              fallback-active)
+              fallback-active|fallback-recoverable)
+                # Exact A + survivor + R; predecessor must already be absent.
                 printf '%s' "$revisions" | jq -e --arg authority "$previous" \
                   --arg survivor "$cleanup_survivor" --arg fallback "$bootstrap_fallback" '
-                    length == 3
-                    and any(.[]; .name == $authority and .properties.active == true
-                      and (.properties.trafficWeight // 0) == 100)
-                    and any(.[]; .name == $survivor and .properties.active == false
-                      and (.properties.trafficWeight // 0) == 0)
-                    and any(.[]; .name == $fallback and .properties.active == true
-                      and (.properties.trafficWeight // 0) == 0)' >/dev/null || return 1
+                    ([.[].name] | sort) == ([$authority,$survivor,$fallback] | sort)' \
+                  >/dev/null || return 1
+                verify_bootstrap_handoff_identity "$previous" true 100 "$legacy_created" \
+                  "$legacy_image" "$legacy_template_digest" true || return 1
+                verify_bootstrap_handoff_identity "$cleanup_survivor" false 0 \
+                  "$cleanup_survivor_created" "$cleanup_survivor_image" \
+                  "$cleanup_survivor_template" false || return 1
+                ready_requirement=false
+                [ "$expected" != "fallback-active" ] || ready_requirement=true
+                verify_bootstrap_handoff_identity "$bootstrap_fallback" true 0 \
+                  "$fallback_created" "$IMAGE" "$canonical_template_digest" \
+                  "$ready_requirement" || return 1
+                expected_latest="$bootstrap_fallback"
+                [ "$expected" != "fallback-recoverable" ] \
+                  || expected_previous_ready="$cleanup_survivor"
                 ;;
-              fallback-inactive)
+              fallback-inactive|fallback-inactive-recovery)
+                # Exact safe failed preparation is A + survivor + R, never claimed as A + R.
                 printf '%s' "$revisions" | jq -e --arg authority "$previous" \
-                  --arg fallback "$bootstrap_fallback" '
-                    length == 2
-                    and any(.[]; .name == $authority and .properties.active == true
-                      and (.properties.trafficWeight // 0) == 100)
-                    and any(.[]; .name == $fallback and .properties.active == false
-                      and (.properties.trafficWeight // 0) == 0)' >/dev/null || return 1
+                  --arg survivor "$cleanup_survivor" --arg fallback "$bootstrap_fallback" '
+                    ([.[].name] | sort) == ([$authority,$survivor,$fallback] | sort)' \
+                  >/dev/null || return 1
+                verify_bootstrap_handoff_identity "$previous" true 100 "$legacy_created" \
+                  "$legacy_image" "$legacy_template_digest" true || return 1
+                verify_bootstrap_handoff_identity "$cleanup_survivor" false 0 \
+                  "$cleanup_survivor_created" "$cleanup_survivor_image" \
+                  "$cleanup_survivor_template" false || return 1
+                verify_bootstrap_handoff_identity "$bootstrap_fallback" false 0 \
+                  "$fallback_created" "$IMAGE" "$canonical_template_digest" false || return 1
+                expected_latest="$bootstrap_fallback"
+                [ "$expected" != "fallback-inactive-recovery" ] \
+                  || expected_previous_ready="$cleanup_survivor"
+                ;;
+              candidate-active|candidate-recoverable|candidate-prepared)
+                # Exact A + R + C; C creation must prune the reviewed survivor.
+                printf '%s' "$revisions" | jq -e --arg authority "$previous" \
+                  --arg fallback "$bootstrap_fallback" --arg candidate "$candidate" '
+                    ([.[].name] | sort) == ([$authority,$fallback,$candidate] | sort)' \
+                  >/dev/null || return 1
+                verify_bootstrap_handoff_identity "$previous" true 100 "$legacy_created" \
+                  "$legacy_image" "$legacy_template_digest" true || return 1
+                verify_bootstrap_handoff_identity "$bootstrap_fallback" false 0 \
+                  "$fallback_created" "$IMAGE" "$canonical_template_digest" false || return 1
+                ready_requirement=false
+                { [ "$expected" != "candidate-active" ] \
+                  && [ "$expected" != "candidate-prepared" ]; } || ready_requirement=true
+                verify_bootstrap_handoff_identity "$candidate" true 0 \
+                  "$candidate_created" "$IMAGE" "$canonical_template_digest" \
+                  "$ready_requirement" || return 1
+                expected_latest="$candidate"
+                [ "$expected" != "candidate-recoverable" ] \
+                  || expected_previous_ready="$bootstrap_fallback"
+                ;;
+              candidate-inactive)
+                printf '%s' "$revisions" | jq -e --arg authority "$previous" \
+                  --arg fallback "$bootstrap_fallback" --arg candidate "$candidate" '
+                    ([.[].name] | sort) == ([$authority,$fallback,$candidate] | sort)' \
+                  >/dev/null || return 1
+                verify_bootstrap_handoff_identity "$previous" true 100 "$legacy_created" \
+                  "$legacy_image" "$legacy_template_digest" true || return 1
+                verify_bootstrap_handoff_identity "$bootstrap_fallback" false 0 \
+                  "$fallback_created" "$IMAGE" "$canonical_template_digest" false || return 1
+                verify_bootstrap_handoff_identity "$candidate" false 0 \
+                  "$candidate_created" "$IMAGE" "$canonical_template_digest" false || return 1
+                expected_latest="$candidate"
+                expected_previous_ready="$bootstrap_fallback"
                 ;;
               *) return 1 ;;
             esac
+            [ -n "$expected_ready" ] || expected_ready="$expected_latest"
             printf '%s' "$configuration" | jq -e --arg authority "$previous" \
-              --arg fallback "$bootstrap_fallback" --arg expected "$expected" '
+              --arg candidate "$candidate" --arg expected "$expected" \
+              --arg latest "$expected_latest" --arg ready "$expected_ready" \
+              --arg previousReady "$expected_previous_ready" '
                 .mode == "Multiple" and .maxInactiveRevisions == 1
+                and .latestRevisionName == $latest
+                and if $previousReady == "" then .latestReadyRevisionName == $ready
+                  else (.latestReadyRevisionName == $ready
+                    or .latestReadyRevisionName == $previousReady)
+                  end
                 and all(.routes[];
                   (.latestRevision // false) == false and (.label // null) == null)
-                and if $expected == "fallback-active" then (.routes |
-                  length == 2
-                  and any(.[]; .revisionName == $authority and .weight == 100)
-                  and any(.[]; .revisionName == $fallback and .weight == 0))
-                else (.routes |
-                  length == 1
-                  and .[0].revisionName == $authority
-                  and .[0].weight == 100)
+                and if $expected == "candidate-recoverable" then
+                  (((.routes | length) == 1
+                      and .routes[0].revisionName == $authority
+                      and .routes[0].weight == 100)
+                    or ((.routes | length) == 2
+                      and any(.routes[]; .revisionName == $authority and .weight == 100)
+                      and any(.routes[]; .revisionName == $candidate and .weight == 0)))
+                elif $expected == "candidate-prepared" then
+                  ((.routes | length) == 2
+                    and any(.routes[]; .revisionName == $authority and .weight == 100)
+                    and any(.routes[]; .revisionName == $candidate and .weight == 0))
+                else ((.routes | length) == 1
+                  and .routes[0].revisionName == $authority
+                  and .routes[0].weight == 100)
                 end' >/dev/null
           }
-
           deactivate_revision() {
             revision="$1"
             for attempt in $(seq 1 5); do
@@ -374,47 +582,84 @@ jobs:
           reconcile_candidate_retention() {
             local desired_limit=1 candidate_exists=false fallback_exists=false expected actual body
             if [ "$bootstrap" = "true" ]; then
-              # The reviewed one-time cleanup already authorized removal of every non-A legacy
-              # revision. On failure, deactivate the newest observed prepared revision under
-              # max=1. That retains A at 100 and one exact retry/abandon record without a third
-              # directly reachable revision process.
-              for attempt in $(seq 1 24); do
-                if [ -n "$bootstrap_fallback" ] && az containerapp revision show \
-                    -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" --revision "$bootstrap_fallback" \
-                    --query name -o tsv >/dev/null 2>&1; then
-                  fallback_exists=true
-                fi
-                if [ -n "$candidate" ] && az containerapp revision show \
+              # Failure cleanup never claims convergence. It only deactivates an exact R or C
+              # created by this run and proves one reviewed safe state. A later attempt requires
+              # a fresh inventory and reviewed resume receipt for that new topology.
+              if [ "$candidate_patch_attempted" = true ]; then
+                for attempt in $(seq 1 60); do
+                  if az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+                      --revision "$candidate" --query name -o tsv >/dev/null 2>&1; then
+                    candidate_exists=true
+                    break
+                  fi
+                  sleep 10
+                done
+                [ "$candidate_exists" = true ] \
+                  || { echo "::error::attempted C did not become observable"; return 1; }
+                if [ -z "$candidate_created" ] || [ "$candidate_created" = "null" ]; then
+                  candidate_created=$(az containerapp revision show \
                     -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" --revision "$candidate" \
-                    --query name -o tsv >/dev/null 2>&1; then
-                  candidate_exists=true
+                    --query properties.createdTime -o tsv) || return 1
                 fi
-                if [ "$fallback_exists" = true ] || [ "$candidate_exists" = true ]; then
-                  break
+                verify_created_after "$fallback_created" "$candidate_created" || return 1
+                if verify_bootstrap_forward_topology candidate-inactive; then
+                  echo "exact C was already inactive"
+                  echo "bootstrap failed safely; a fresh reviewed resume receipt is required"
+                  return 0
                 fi
-                sleep 5
-              done
-              verify_bootstrap_legacy_inventory || return 1
-              if [ "$candidate_exists" = true ]; then
+                for attempt in $(seq 1 60); do
+                  verify_bootstrap_forward_topology candidate-recoverable \
+                    >/dev/null 2>&1 && break
+                  sleep 10
+                done
+                verify_bootstrap_forward_topology candidate-recoverable || return 1
                 deactivate_revision "$candidate" || return 1
-                expected="$candidate"
-              elif [ "$fallback_exists" = true ]; then
+                for attempt in $(seq 1 30); do
+                  verify_bootstrap_forward_topology candidate-inactive \
+                    >/dev/null 2>&1 && break
+                  sleep 10
+                done
+                verify_bootstrap_forward_topology candidate-inactive || return 1
+              elif [ "$fallback_patch_attempted" = true ]; then
+                for attempt in $(seq 1 60); do
+                  if az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+                      --revision "$bootstrap_fallback" --query name -o tsv >/dev/null 2>&1; then
+                    fallback_exists=true
+                    break
+                  fi
+                  sleep 10
+                done
+                [ "$fallback_exists" = true ] \
+                  || { echo "::error::attempted R did not become observable"; return 1; }
+                if [ -z "$fallback_created" ] || [ "$fallback_created" = "null" ]; then
+                  fallback_created=$(az containerapp revision show \
+                    -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" --revision "$bootstrap_fallback" \
+                    --query properties.createdTime -o tsv) || return 1
+                fi
+                verify_created_after "$cleanup_survivor_created" "$fallback_created" || return 1
+                if verify_bootstrap_forward_topology fallback-inactive-recovery; then
+                  echo "exact R was already inactive"
+                  echo "bootstrap failed safely; a fresh reviewed resume receipt is required"
+                  return 0
+                fi
+                for attempt in $(seq 1 60); do
+                  verify_bootstrap_forward_topology fallback-recoverable \
+                    >/dev/null 2>&1 && break
+                  sleep 10
+                done
+                verify_bootstrap_forward_topology fallback-recoverable || return 1
                 deactivate_revision "$bootstrap_fallback" || return 1
-                expected="$bootstrap_fallback"
+                for attempt in $(seq 1 30); do
+                  verify_bootstrap_forward_topology fallback-inactive-recovery \
+                    >/dev/null 2>&1 && break
+                  sleep 10
+                done
+                verify_bootstrap_forward_topology fallback-inactive-recovery || return 1
               else
-                expected=$(az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
-                  --all --query "[?properties.active==\`false\`].name" -o tsv) || return 1
+                verify_bootstrap_forward_topology before-fallback || return 1
               fi
-              for attempt in $(seq 1 24); do
-                actual=$(az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
-                  --all --query "[?properties.active==\`false\`].name" -o tsv 2>/dev/null || true)
-                active=$(az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
-                  --all --query "[?properties.active].name" -o tsv 2>/dev/null || true)
-                [ "$actual" = "$expected" ] && [ "$active" = "$previous" ] && return 0
-                sleep 5
-              done
-              echo "::error::bootstrap failure did not converge to A active plus one inactive record"
-              return 1
+              echo "bootstrap failed safely; a fresh reviewed resume receipt is required"
+              return 0
             fi
             if [ -n "$candidate" ] && az containerapp revision show \
                 -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" --revision "$candidate" \
@@ -452,11 +697,12 @@ jobs:
             trap - EXIT TERM INT
             set +e
             if [ "$bootstrap" = "true" ] && [ "$status" -eq 0 ]; then
-              verify_bootstrap_prepared_state
-              [ "$?" -eq 0 ] || status=1
+              if ! verify_bootstrap_prepared_state; then
+                status=1
+                reconcile_candidate_retention || status=1
+              fi
             else
-              reconcile_candidate_retention
-              [ "$?" -eq 0 ] || status=1
+              reconcile_candidate_retention || status=1
             fi
             exit "$status"
           }
@@ -481,7 +727,8 @@ jobs:
                 and (any(.[]; .name == $rollback and .properties.active == false
                   and (.properties.trafficWeight // 0) == 0))
                 and (any(.[]; .name == $candidate and .properties.active == true
-                  and (.properties.trafficWeight // 0) == 0))' >/dev/null
+                  and (.properties.trafficWeight // 0) == 0))' >/dev/null \
+              && verify_bootstrap_forward_topology candidate-prepared
           }
           if [ "$bootstrap" = "false" ]; then
             # The only normal waiting state is current production plus one retained rollback and
@@ -499,17 +746,8 @@ jobs:
               || { echo "::error::candidate retention policy was not applied"; exit 1; }
           else
             verify_bootstrap_legacy_inventory
-            initial=$(az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
-              --all -o json)
-            printf '%s' "$initial" | jq -e --arg current "$previous" '
-                length == 2
-                and ([.[] | select(.properties.active == true) | .name] == [$current])
-                and ([.[] | select(.properties.active == false)] | length) == 1
-                and all(.[] | select(.name != $current);
-                  (.properties.trafficWeight // 0) == 0)
-                and any(.[]; .name == $current and (.properties.trafficWeight // 0) == 100)' \
-              >/dev/null \
-              || { echo "::error::bootstrap preparation requires exact A plus one inactive legacy record"; exit 1; }
+            verify_bootstrap_forward_topology before-fallback \
+              || { echo "::error::bootstrap preparation requires exact reviewed A + O + S"; exit 1; }
           fi
           # A revision is immutable and its inputs are code plus the complete artifact set.
           # Include the run identity as well so an exact deployment can be retried safely.
@@ -557,15 +795,21 @@ jobs:
           if [ "$bootstrap" = "true" ]; then
             bootstrap_fallback_suffix="b${GITHUB_SHA:0:7}-${MANIFEST_SET:0:8}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
             bootstrap_fallback="$CONTAINER_APP--$bootstrap_fallback_suffix"
-            jq --arg candidate "$candidate" --arg fallback "$bootstrap_fallback" \
-                 --arg suffix "$bootstrap_fallback_suffix" '
-              .properties.template.revisionSuffix = $suffix
-              | .properties.configuration.ingress.traffic |= map(
-                  if .revisionName == $candidate then .revisionName = $fallback else . end)
+            jq --arg suffix "$bootstrap_fallback_suffix" '
+              .properties.template
+              | .revisionSuffix = $suffix
+              | {properties:{template:.}}
             ' candidate.json > bootstrap-fallback.json
+            jq '.properties.template | {properties:{template:.}}' \
+              candidate.json > bootstrap-candidate.json
+            canonical_template_digest=$(python3 \
+              scripts/deploy/revision_template_digest.py < bootstrap-fallback.json)
+            [[ "$canonical_template_digest" =~ ^sha256:[0-9a-f]{64}$ ]] \
+              || { echo "::error::bootstrap canonical template digest is invalid"; exit 1; }
             verify_bootstrap_legacy_inventory
             verify_bootstrap_forward_topology before-fallback \
               || { echo "::error::reviewed bootstrap topology changed before R creation"; exit 1; }
+            fallback_patch_attempted=true
             az_write az rest --method patch --uri "$app_id?api-version=2025-01-01" \
               --headers 'Content-Type=application/json' --body @bootstrap-fallback.json --output none
             for attempt in $(seq 1 30); do
@@ -585,20 +829,27 @@ jobs:
             fallback_template_digest=$(printf '%s' "$fallback" \
               | python3 scripts/deploy/revision_template_digest.py)
             [ "$fallback_image" = "$IMAGE" ] \
+              && [ "$fallback_template_digest" = "$canonical_template_digest" ] \
               || { echo "::error::bootstrap fallback differs from the immutable candidate image"; exit 1; }
             [ "$(printf '%s' "$fallback" | jq -r .properties.active)" = "true" ] \
               && [ "$(printf '%s' "$fallback" | jq -r '.properties.trafficWeight // 0')" = "0" ] \
               || { echo "::error::new bootstrap fallback must initially be active at zero traffic"; exit 1; }
-            canonical_template_digest="$fallback_template_digest"
             fallback_created=$(printf '%s' "$fallback" | jq -r .properties.createdTime)
             [ -n "$fallback_created" ] && [ "$fallback_created" != "null" ] \
               || { echo "::error::bootstrap fallback creation time is absent"; exit 1; }
+            verify_created_after "$cleanup_survivor_created" "$fallback_created" \
+              || { echo "::error::bootstrap fallback is not newer than the handoff"; exit 1; }
             # Container Apps creation timestamps must be strictly ordered for oldest-inactive
             # retention. Keep the requests in separate wall-clock seconds as well as checking ARM.
             sleep 1
             rollback="$bootstrap_fallback"
             prior_rollback="$bootstrap_fallback"
             verify_bootstrap_legacy_inventory
+            for attempt in $(seq 1 60); do
+              verify_bootstrap_forward_topology fallback-active \
+                >/dev/null 2>&1 && break
+              sleep 10
+            done
             verify_bootstrap_forward_topology fallback-active \
               || { echo "::error::reviewed bootstrap topology changed before R deactivation"; exit 1; }
             deactivate_revision "$bootstrap_fallback"
@@ -608,10 +859,19 @@ jobs:
               sleep 10
             done
             verify_bootstrap_forward_topology fallback-inactive \
-              || { echo "::error::R did not replace the final legacy inactive revision"; exit 1; }
+              || { echo "::error::R deactivation did not preserve exact A + survivor + R"; exit 1; }
           fi
-          az_write az rest --method patch --uri "$app_id?api-version=2025-01-01" \
-            --headers 'Content-Type=application/json' --body @candidate.json --output none
+          if [ "$bootstrap" = "true" ]; then
+            verify_bootstrap_forward_topology fallback-inactive \
+              || { echo "::error::bootstrap handoff changed before C creation"; exit 1; }
+            candidate_patch_attempted=true
+            az_write az rest --method patch --uri "$app_id?api-version=2025-01-01" \
+              --headers 'Content-Type=application/json' \
+              --body @bootstrap-candidate.json --output none
+          else
+            az_write az rest --method patch --uri "$app_id?api-version=2025-01-01" \
+              --headers 'Content-Type=application/json' --body @candidate.json --output none
+          fi
           for attempt in $(seq 1 30); do
             state=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
               --revision "$candidate" --query properties.runningState -o tsv 2>/dev/null || true)
@@ -648,11 +908,27 @@ jobs:
                   < timestamp(sys.argv[3], "candidate createdTime"):
               raise SystemExit("bootstrap chronology must be exact A < R < C")
           PY
+            for attempt in $(seq 1 60); do
+              verify_bootstrap_forward_topology candidate-active \
+                >/dev/null 2>&1 && break
+              sleep 10
+            done
+            verify_bootstrap_forward_topology candidate-active \
+              || { echo "::error::C did not replace the reviewed survivor"; exit 1; }
             verify_bootstrap_prepared_state
           fi
           verify_bootstrap_legacy_inventory
           az_write az containerapp ingress traffic set -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
             --revision-weight "$previous=100" "$candidate=0" --only-show-errors
+          if [ "$bootstrap" = "true" ]; then
+            for attempt in $(seq 1 12); do
+              verify_bootstrap_forward_topology candidate-prepared \
+                >/dev/null 2>&1 && break
+              sleep 5
+            done
+            verify_bootstrap_forward_topology candidate-prepared \
+              || { echo "::error::bootstrap candidate routes did not converge to exact A100/C0"; exit 1; }
+          fi
           fqdn=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
             --revision "$candidate" --query properties.fqdn -o tsv)
           revision_get "https://$fqdn/healthz"

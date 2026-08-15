@@ -42,13 +42,16 @@ jobs:
           az_retry az containerapp show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
             --query '{activeRevisionsMode:properties.configuration.activeRevisionsMode,
               maxInactiveRevisions:properties.configuration.maxInactiveRevisions,
-              ingressTraffic:properties.configuration.ingress.traffic}' -o json \
+              ingressTraffic:properties.configuration.ingress.traffic,
+              latestRevisionName:properties.latestRevisionName,
+              latestReadyRevisionName:properties.latestReadyRevisionName}' -o json \
             > app-config.json
           limit=$(jq -er '.maxInactiveRevisions | numbers' app-config.json)
           az_retry az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
             --all -o json \
             | jq '[.[] | {name:.name,active:.properties.active,
                 trafficWeight:(.properties.trafficWeight // 0),
+                runningState:(.properties.runningState // null),
                 createdTime:.properties.createdTime,
                 image:.properties.template.containers[0].image,
                 template:.properties.template}]' > revisions.json
@@ -63,9 +66,11 @@ jobs:
           revision_count=$(jq 'length' revisions.json)
           if [ "$limit" = "1" ] && [ "$revision_count" = "3" ]; then
             jq -n --slurpfile config app-config.json --slurpfile revisions revisions.json \
-              '{schema:"lex-bootstrap-legacy-recovery-inventory/1",
+              '{schema:"lex-bootstrap-legacy-recovery-inventory/2",
                 active_revisions_mode:$config[0].activeRevisionsMode,
                 max_inactive_revisions:$config[0].maxInactiveRevisions,
+                latest_revision_name:$config[0].latestRevisionName,
+                latest_ready_revision_name:$config[0].latestReadyRevisionName,
                 ingress_traffic:(($config[0].ingressTraffic // []) | map({
                   revisionName:.revisionName,weight:.weight,
                   latestRevision:(.latestRevision // false),label:(.label // null)})),
@@ -82,9 +87,9 @@ jobs:
             echo
             echo "- cleanup plan SHA-256: \`$plan_sha\`"
             if [ -n "$recovery_plan_sha" ]; then
-              echo "- A+2 recovery plan SHA-256: \`$recovery_plan_sha\`"
+              echo "- A+2 deploy-handoff plan SHA-256: \`$recovery_plan_sha\`"
             else
-              echo "- A+2 recovery plan: \`not applicable\`"
+              echo "- A+2 deploy-handoff plan: \`not applicable\`"
             fi
             echo "- mutations performed: \`false\`"
             echo
@@ -107,4 +112,4 @@ jobs:
       - name: Record review coordinates
         shell: bash
         run: |
-          echo "Review run \`$GITHUB_RUN_ID\`, cleanup plan \`${{ steps.plan.outputs.plan_sha256 }}\`, and any A+2 recovery plan \`${{ steps.plan.outputs.recovery_plan_sha256 }}\` before exact-confirmation cleanup." >> "$GITHUB_STEP_SUMMARY"
+          echo "Review run \`$GITHUB_RUN_ID\`, cleanup plan \`${{ steps.plan.outputs.plan_sha256 }}\`, and any no-write A+2 deploy-handoff plan \`${{ steps.plan.outputs.recovery_plan_sha256 }}\` before exact-confirmation cleanup." >> "$GITHUB_STEP_SUMMARY"
