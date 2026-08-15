@@ -87,11 +87,43 @@ public class VisualDiffTests
             "https://example.test/recueil", "Tax collection", "Tax collection", null,
             "applicable", null, null, null, null, null, null);
 
-        var html = Fragments.MissingTextBox(collection);
+        var html = Fragments.MissingTextBox(collection, publisherTextGateOpen: true);
 
         Assert.Contains("Thematic collection", html);
         Assert.Contains("not one legal instrument", html);
         Assert.DoesNotContain("Provision text not available", html);
+    }
+
+    [Fact]
+    public void Comparison_text_gap_status_is_independent_of_version_order()
+    {
+        static DocRow Document(string key, bool available) => new(
+            key, "test", "work", "urn:work", "REG", "en", "2026-01-01", null,
+            "publisher", "2026-01-02T00:00:00Z", false, available, false,
+            "record", null, "https://example.test/source", "Law", "Law", null,
+            "2026-01-01", null);
+        var available = Document("test:work:available", available: true);
+        var unavailable = Document("test:work:unavailable", available: false);
+        var db = Path.Combine(Path.GetTempPath(), $"lex-gap-{Guid.NewGuid():N}.db");
+        try
+        {
+            IndexBuilder.Build(db, new Dictionary<string, string>
+            {
+                ["collection"] = "test", ["text_public"] = "false",
+            }, [available, unavailable], [], [], [], null);
+            using (var reader = LexIndexReader.Open(db))
+            {
+                Assert.Equal("text_not_available",
+                    Fragments.ComparisonTextStatus(reader, available, unavailable));
+                Assert.Equal("text_not_available",
+                    Fragments.ComparisonTextStatus(reader, unavailable, available));
+            }
+        }
+        finally
+        {
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            if (File.Exists(db)) File.Delete(db);
+        }
     }
 
     [Fact]

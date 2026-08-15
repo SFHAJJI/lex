@@ -245,13 +245,28 @@ public sealed class McpCore
         return envelope;
     }
 
-    private static string TextStatus(DocRow d) => !d.TextAvailable ? McpStatus.TextNotAvailable
-        : d.TextPublic ? McpStatus.Ok : McpStatus.TextWithheld;
+    private static bool PublisherTextGateOpen(LexIndexReader reader) =>
+        string.Equals(reader.Stamp.GetValueOrDefault("text_public"), "true",
+            StringComparison.Ordinal);
 
-    private static string ComparisonTextStatus(DocRow a, DocRow b)
+    private static string TextStatus(LexIndexReader reader, DocRow d) =>
+        !d.TextAvailable ? McpStatus.TextNotAvailable
+        : d.TextPublic ? McpStatus.Ok
+        : PublisherTextGateOpen(reader) ? McpStatus.TextNotAvailable
+        : McpStatus.TextWithheld;
+
+    private static string ComparisonTextStatus(LexIndexReader reader, DocRow a, DocRow b)
         => !a.TextAvailable || !b.TextAvailable ? McpStatus.TextNotAvailable
          : a.TextPublic && b.TextPublic ? McpStatus.Ok
+         : PublisherTextGateOpen(reader) ? McpStatus.TextNotAvailable
          : McpStatus.TextWithheld;
+
+    private static string WorkMatchNote(LexIndexReader reader, DocRow document) =>
+        document.TextPublic
+            ? "THIS WORK IS HELD by Lex, matched on its identifier or title rather than its wording. Call as_of on it for the text."
+            : document.TextAvailable && !PublisherTextGateOpen(reader)
+                ? "THIS WORK IS HELD by Lex; publisher text exists but is not publicly served. Versions, dates and provenance remain available. Never report the work as missing."
+                : "THIS WORK IS HELD by Lex; versions, publisher dates and provenance are available via timeline / in_force_on / provenance, but no safely derived provision text is available. Never report the work as missing or unknown; report the text gap precisely.";
 
     private static string VersionCoordinate(DocRow document)
         => VersionCoordinate(document.Key);
@@ -867,7 +882,7 @@ public sealed class McpCore
                         ["work"] = w,
                         ["date"] = date.ToString("yyyy-MM-dd"),
                     };
-                var status = TextStatus(doc);
+                var status = TextStatus(r, doc);
                 var mode = Str("mode") ?? "full";
                 var o = new JsonObject
                 {
@@ -1172,7 +1187,7 @@ public sealed class McpCore
                 var output = new JsonObject
                 {
                     ["envelope"] = Envelope(r, profilesDiffer ? McpStatus.ProfilesDiffer
-                                               : ComparisonTextStatus(a1, b1),
+                                               : ComparisonTextStatus(r, a1, b1),
                         ProvisionalFor(r, from) || ProvisionalFor(r, to)),
                     ["work"] = w,
                     ["changed"] = changed,
@@ -1346,6 +1361,8 @@ public sealed class McpCore
                         d["match_reasons"] = new JsonArray(h.MatchReasons.Select(x => (JsonNode)x).ToArray());
                         if (h.MatchedPublisherMetadata is { } metadata)
                             d["matched_publisher_metadata"] = PublisherMetadataJson(metadata);
+                        if (h.Provision.PType == "work" && !h.Doc.TextPublic)
+                            d["match_note"] = WorkMatchNote(r, h.Doc);
                         if (_publicBase is not null)
                             d["permalink"] = $"{_publicBase}/{h.Doc.Collection}/{h.Doc.GroupKey}/{VersionCoordinate(h.Doc)}"
                                 + (h.Provision.Anchor.Length == 0 ? "" : $"#{h.Provision.Anchor}");
@@ -1376,11 +1393,7 @@ public sealed class McpCore
                         {
                             var d = DocJson(doc, false);
                             d["match"] = "work_identifier_or_title";
-                            d["match_note"] = doc.TextPublic
-                                ? "THIS WORK IS HELD by Lex, matched on its identifier or title rather than its wording. Call as_of on it for the text."
-                                : doc.TextAvailable
-                                    ? "THIS WORK IS HELD by Lex; publisher text exists but is not publicly served. Versions, dates and provenance remain available. Never report the work as missing."
-                                    : "THIS WORK IS HELD by Lex; versions, publisher dates and provenance are available via timeline / in_force_on / provenance, but no safely derived provision text is available. Never report the work as missing or unknown; report the text gap precisely.";
+                            d["match_note"] = WorkMatchNote(r, doc);
                             if (_publicBase is not null)
                                 d["permalink"] = $"{_publicBase}/{doc.Collection}/{doc.GroupKey}/{VersionCoordinate(doc)}";
                             hitsArr.Add(d);

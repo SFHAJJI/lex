@@ -60,6 +60,10 @@ public static class IndexFromCorpus
         var events = new List<EventRow>();
         var observations = new List<ObservationRow>();
         var derivedProfiles = new SortedSet<string>(StringComparer.Ordinal);
+        var indexedProvisionStates = new HashSet<(string Work, string Language, string Anchor, string TextSha)>();
+        var indexedProvisionAnchors = new HashSet<(string Work, string Language, string Anchor)>();
+        var derivedProvisionCount = 0;
+        var excludedEmptyProvisions = 0;
 
         foreach (var workDir in Directory.EnumerateDirectories(Path.Combine(corpusRoot, "works")))
         {
@@ -104,6 +108,7 @@ public static class IndexFromCorpus
                     // law is routinely publisher XML on some dates and a read PDF on others, so a
                     // work-level answer would be wrong for half of them.
                     string? profile = null;
+                    var indexedInExpression = 0;
                     if (hasDerived)
                     {
                         using var dd = JsonDocument.Parse(File.ReadAllText(derivedJson!));
@@ -117,11 +122,27 @@ public static class IndexFromCorpus
                         var seq = 0;
                         foreach (var p in dd.RootElement.GetProperty("provisions").EnumerateArray())
                         {
-                            provisions.Add(new ProvisionRow(
+                            derivedProvisionCount++;
+                            var anchor = p.GetProperty("anchor").GetString();
+                            if (string.IsNullOrWhiteSpace(anchor))
+                                throw new InvalidDataException(
+                                    $"{derivedJson}: provision anchor is required.");
+                            var provisionId = p.GetProperty("provision_id").GetString();
+                            if (string.IsNullOrWhiteSpace(provisionId))
+                                throw new InvalidDataException(
+                                    $"{derivedJson}: provision provision_id is required.");
+                            var textMd = p.GetProperty("text_md").GetString() ?? "";
+                            var textSha = p.GetProperty("text_sha256").GetString() ?? "";
+                            var actualTextSha = Convert.ToHexStringLower(
+                                SHA256.HashData(Encoding.UTF8.GetBytes(textMd)));
+                            if (!string.Equals(textSha, actualTextSha, StringComparison.Ordinal))
+                                throw new InvalidDataException(
+                                    $"{derivedJson}: provision {anchor} text_sha256 does not match text_md.");
+                            var candidate = new ProvisionRow(
                                 Rid: rid,
-                                Seq: seq++,
-                                Anchor: p.GetProperty("anchor").GetString()!,
-                                ProvisionId: p.GetProperty("provision_id").GetString()!,
+                                Seq: seq,
+                                Anchor: anchor,
+                                ProvisionId: provisionId,
                                 PType: p.GetProperty("type").GetString() ?? "article",
                                 Num: p.TryGetProperty("num", out var n) ? n.GetString() : null,
                                 Heading: p.TryGetProperty("heading", out var h) ? h.GetString() : null,
@@ -130,11 +151,21 @@ public static class IndexFromCorpus
                                     : null,
                                 ArticleValidFrom: p.TryGetProperty("article_valid_from", out var av) ? av.GetString() : null,
                                 WorkTitle: languageWorkTitle,
-                                TextMd: p.GetProperty("text_md").GetString() ?? "",
-                                TextSha: p.GetProperty("text_sha256").GetString() ?? "",
+                                TextMd: textMd,
+                                TextSha: textSha,
                                 CitationsJson: p.TryGetProperty("citations", out var cit)
                                     && cit.ValueKind == JsonValueKind.Array && cit.GetArrayLength() > 0
-                                    ? cit.GetRawText() : null));
+                                    ? cit.GetRawText() : null);
+                            if (string.IsNullOrWhiteSpace(textMd))
+                            {
+                                excludedEmptyProvisions++;
+                                continue;
+                            }
+                            provisions.Add(candidate);
+                            seq++;
+                            indexedInExpression++;
+                            indexedProvisionStates.Add((workMeta.Slug, expr.Language, anchor, textSha));
+                            indexedProvisionAnchors.Add((workMeta.Slug, expr.Language, anchor));
                         }
                     }
 
@@ -154,7 +185,7 @@ public static class IndexFromCorpus
                         ObservedFrom: firstSighting,
                         Withdrawn: withdrawn,
                         TextAvailable: expr.Text.Available,
-                        TextPublic: manifest.TextPublic && expr.Text.Available && hasDerived,
+                        TextPublic: manifest.TextPublic && expr.Text.Available && indexedInExpression > 0,
                         RecordSha: meta.RecordSha256,
                         BodySha: expr.Observations.LastOrDefault()?.Sha256,
                         SourceUri: expr.SourceUri,
@@ -163,7 +194,7 @@ public static class IndexFromCorpus
                         Body: null,
                         PublicationDate: meta.PublicationDate,
                         StatusNote: meta.InForceStatus,
-                        Profile: profile,
+                        Profile: indexedInExpression > 0 ? profile : null,
                         Hierarchy: meta.Raw.GetValueOrDefault("hierarchy"),
                         // Engineering scope selects what to acquire; it is not publisher legal
                         // metadata and can never become a domain filter or FTS field. Official
@@ -269,6 +300,10 @@ public static class IndexFromCorpus
                 {
                     foreach (var a in anchors.EnumerateObject())
                         foreach (var s in a.Value.EnumerateArray())
+                        {
+                            var textSha = s.GetProperty("text_sha256").GetString() ?? "";
+                            if (!indexedProvisionStates.Contains((slug, language, a.Name, textSha)))
+                                continue;
                             provisionStates.Add(new ProvisionStateRow(
                                 GroupKey: slug,
                                 Language: language,
@@ -276,24 +311,38 @@ public static class IndexFromCorpus
                                 Anchor: a.Name,
                                 ValidFrom: s.GetProperty("valid_from").GetString() ?? "",
                                 ValidTo: s.TryGetProperty("valid_to", out var vt) ? vt.GetString() : null,
-                                TextSha: s.GetProperty("text_sha256").GetString() ?? "",
+                                TextSha: textSha,
                                 InVersion: s.TryGetProperty("in_version", out var iv) ? iv.GetString() : null,
                                 ArticleValidFrom: s.TryGetProperty("article_valid_from", out var av) ? av.GetString() : null,
                                 ValidityConflict: s.TryGetProperty("validity_conflict", out var vc) && vc.GetBoolean()));
+                        }
                 }
                 void AddEvents(string language, JsonElement eventsForLanguage)
                 {
                     foreach (var e in eventsForLanguage.EnumerateArray())
+                    {
+                        var from = e.TryGetProperty("from", out var f) ? f.GetString() : null;
+                        var to = e.TryGetProperty("to", out var t) ? t.GetString() : null;
+                        var anchor = e.TryGetProperty("anchor", out var an) ? an.GetString() : null;
+                        var textSha = e.TryGetProperty("text_sha256", out var ts) ? ts.GetString() : null;
+                        var referencedAnchors = new[] { from, to, anchor }.OfType<string>().ToArray();
+                        if (referencedAnchors.Length == 0
+                            || referencedAnchors.Any(value =>
+                                !indexedProvisionAnchors.Contains((slug, language, value)))
+                            || textSha is not null && referencedAnchors.Any(value =>
+                                !indexedProvisionStates.Contains((slug, language, value, textSha))))
+                            continue;
                         anchorEventRows.Add(new AnchorEventRow(
                             GroupKey: slug,
                             Language: language,
                             IsPrimaryLanguage: language == primaryLanguage,
                             EType: e.GetProperty("type").GetString() ?? "",
-                            FromAnchor: e.TryGetProperty("from", out var f) ? f.GetString() : null,
-                            ToAnchor: e.TryGetProperty("to", out var t) ? t.GetString() : null,
-                            Anchor: e.TryGetProperty("anchor", out var an) ? an.GetString() : null,
-                            TextSha: e.TryGetProperty("text_sha256", out var ts) ? ts.GetString() : null,
+                            FromAnchor: from,
+                            ToAnchor: to,
+                            Anchor: anchor,
+                            TextSha: textSha,
                             AtVersion: e.TryGetProperty("at_version", out var atv) ? atv.GetString() : null));
+                    }
                 }
 
                 if (hd.RootElement.TryGetProperty("anchors_by_language", out var languageHistories))
@@ -310,7 +359,9 @@ public static class IndexFromCorpus
             }
         }
 
-        stamp["derived_provisions"] = provisions.Count.ToString();
+        stamp["derived_provisions"] = derivedProvisionCount.ToString();
+        stamp["indexed_provisions"] = provisions.Count.ToString();
+        stamp["excluded_empty_provisions"] = excludedEmptyProvisions.ToString();
         IndexBuilder.Build(dbPath, stamp, docs, provisions, events, observations, signingKeyPem,
             provisionStates, anchorEventRows, semantic);
         Console.Error.WriteLine($"  [index] {dbPath}: {docs.Count} rows, {provisions.Count} provisions, {provisionStates.Count} states, {anchorEventRows.Count} anchor events, signed={(signingKeyPem is not null)}");

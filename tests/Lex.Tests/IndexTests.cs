@@ -339,6 +339,25 @@ public class IndexTests : IDisposable
     }
 
     [Fact]
+    public void Index_builder_refuses_whitespace_before_semantic_processing()
+    {
+        var doc = Row("t-pub:w1:2020-01-01", "w1", "2020-01-01", null, text: true);
+        var vectors = Path.ChangeExtension(_db, ".vectors");
+        using var encoder = new FakeEncoder();
+
+        var error = Assert.Throws<InvalidDataException>(() => IndexBuilder.Build(
+            _db, new Dictionary<string, string> { ["collection"] = "t-pub" },
+            [doc], [Prov(doc, 0, "art_1", " \r\n\t")], [], [], null,
+            semantic: new SemanticBuildOptions(
+                encoder, vectors, "model-sha", "tokenizer-sha")));
+
+        Assert.Contains("no non-whitespace body text", error.Message, StringComparison.Ordinal);
+        Assert.Equal(0, encoder.EncodeCalls);
+        Assert.False(File.Exists(_db));
+        Assert.False(File.Exists(vectors));
+    }
+
+    [Fact]
     public void Version_three_stores_repeated_wording_once_but_preserves_each_occurrence()
     {
         var first = Row("t-pub:w1:2020-01-01", "w1", "2020-01-01", "2021-12-31", text: true);

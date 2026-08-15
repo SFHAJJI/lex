@@ -83,14 +83,14 @@ public sealed class SnippetTests : IDisposable
         Assert.DoesNotContain("Les établissements de crédit sont soumis", snippet);
     }
 
-    // A provision whose extraction produced nothing has no window to offer. Returning an invented
-    // one, or the title, would dress a text gap as content.
+    // A provision whose extraction produced nothing is not a runtime provision. Letting it reach
+    // the index would make every downstream consumer decide whether a blank row is legal text.
     [Fact]
-    public void A_provision_with_no_text_yields_no_snippet()
+    public void A_provision_with_no_text_is_refused_before_snippet_storage()
     {
-        using var reader = Build("   ");
+        var error = Assert.Throws<InvalidDataException>(() => Build("   "));
 
-        Assert.Null(reader.SnippetFor(ShaOf("   "), "gouvernance"));
+        Assert.Contains("no non-whitespace body text", error.Message, StringComparison.Ordinal);
     }
 
     [Fact]

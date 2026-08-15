@@ -150,6 +150,11 @@ public static class IndexBuilder
     {
         var docRows = docs.ToList();
         var provisionRows = provisions.ToList();
+        var blankProvision = provisionRows.FirstOrDefault(
+            provision => string.IsNullOrWhiteSpace(provision.TextMd));
+        if (blankProvision is not null)
+            throw new InvalidDataException(
+                $"Provision {blankProvision.ProvisionId} has no non-whitespace body text.");
         var provisionStateRows = (provisionStates ?? []).ToList();
         var anchorEventRows = (anchorEvents ?? []).ToList();
         var eventRows = events.ToList();
