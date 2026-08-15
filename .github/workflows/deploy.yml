@@ -1005,7 +1005,7 @@ jobs:
             || { echo "::error::candidate readiness contract failed"; exit 1; }
           publisher_hybrid_ready() {
             local publisher=$1
-            printf '%s' "$readiness" | jq -er --arg publisher "$publisher" '
+            printf '%s' "$readiness" | jq -r --arg publisher "$publisher" '
             [.publishers[] | select(.publisher == $publisher) | .hybridReady]
             | if length == 1 and (.[0] | type) == "boolean" then .[0]
               else error("publisher hybrid readiness is absent or ambiguous") end'
