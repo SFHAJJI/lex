@@ -139,6 +139,14 @@ public sealed class EurLexScopeTests : IDisposable
             html, "32014R0680", "fr"));
     }
 
+    [Fact]
+    public void Portal_fallback_treats_a_regex_timeout_as_non_exact_identity()
+    {
+        Assert.False(EurLexAdapter.IsExactPortalExpression(
+            "<html></html>", "32014R0680", "fr",
+            _ => throw new System.Text.RegularExpressions.RegexMatchTimeoutException()));
+    }
+
     [Theory]
     [InlineData("32014R0681", "fr")]
     [InlineData("32014R0680", "en")]
