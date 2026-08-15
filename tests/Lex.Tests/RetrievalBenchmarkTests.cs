@@ -294,7 +294,7 @@ public sealed class RetrievalBenchmarkTests
             BaselineSchema = baseline.Schema,
             ExpectedCasesSha256 = baseline.CasesSha256,
             ActualCasesSha256 = baseline.CasesSha256,
-            ReviewStatus = baseline.ReviewStatus,
+            ReviewStatus = "reviewed",
             ReviewAttestation = $"{baseline.ReviewedBy}@{baseline.ReviewedAt}",
             CorpusCommit = new string('c', 40),
             ManifestId = new string('1', 64),
@@ -430,8 +430,9 @@ public sealed class RetrievalBenchmarkTests
         Assert.Contains("vector release is missing signed retrieval benchmark evidence", fetch);
         Assert.Contains("ARG LEX_RELEASE_TAG_LU_LEGILUX", dockerfile);
         Assert.Contains("ARG LEX_RELEASE_TAG_EU_EURLEX", dockerfile);
-        Assert.Contains("retrieval-benchmark-eu-eurlex.manifest.json", workflow);
-        Assert.Contains("retrieval-benchmark-lu-legilux.manifest.json", workflow);
+        Assert.Contains("\"lex-corpus-lu-legilux:lu-legilux:$lu_release_tag\"", workflow);
+        Assert.Contains("\"lex-corpus-eu-eurlex:eu-eurlex:$eu_release_tag\"", workflow);
+        Assert.Contains("benchmark_manifest=\"retrieval-benchmark-$collection.manifest.json\"", workflow);
         Assert.Contains("release_base=\"https://github.com/SFHAJJI/$repo/releases/download/$release_tag\"", workflow);
         Assert.DoesNotContain("releases/latest/download", workflow);
     }

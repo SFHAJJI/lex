@@ -84,7 +84,8 @@ export default function Search(p: SearchProps) {
   const [works, setWorks] = useState<WorkHit[]>([]);
   const [articles, setArticles] = useState<ArticleHit[]>([]);
   const [busy, setBusy] = useState(false);
-  const [modeUsed, setModeUsed] = useState("keyword");
+  const [modeUsed, setModeUsed] = useState<"keyword" | "hybrid" | "unavailable">("keyword");
+  const [modeUnavailable, setModeUnavailable] = useState<string>();
   const [expansions, setExpansions] = useState<string[]>([]);
   const [error, setError] = useState<string>();
   const [articleLimit, setArticleLimit] = useState(INITIAL_ARTICLES);
@@ -125,6 +126,7 @@ export default function Search(p: SearchProps) {
     setArticleLimit(INITIAL_ARTICLES);
     setBusy(true);
     setError(undefined);
+    setModeUnavailable(undefined);
     setExpansions([]);
     setWorks([]);
     setArticles([]);
@@ -141,7 +143,18 @@ export default function Search(p: SearchProps) {
         if (!live) return;
         const envelopes = Array.isArray(res) ? res : [res];
         const hits = fusePublisherHits<any>(envelopes);
-        setModeUsed(envelopes.some((e: any) => e?.retrieval_mode === "hybrid") ? "hybrid" : "keyword");
+        const unavailable = envelopes.filter((e: any) =>
+          e?.envelope?.status === "retrieval_mode_unavailable");
+        const usedHybrid = envelopes.some((e: any) => e?.retrieval_mode === "hybrid");
+        const usedKeyword = envelopes.some((e: any) => e?.retrieval_mode === "keyword");
+        setModeUsed(usedHybrid ? "hybrid" : usedKeyword ? "keyword" : "unavailable");
+        if (unavailable.length > 0) {
+          const publishers = unavailable
+            .map((e: any) => String(e?.envelope?.publisher ?? ""))
+            .filter(Boolean)
+            .join(", ");
+          setModeUnavailable(`Words + meaning is unavailable${publishers ? ` for ${publishers}` : ""}: its signed retrieval benchmark has not authorized it. Choose Exact words.`);
+        }
         setExpansions([...new Set(envelopes.flatMap((e: any) => e?.query_expansions ?? []))] as string[]);
         // The same hits answer two different questions, so they are split rather than ranked
         // together: "which law is this" and "where is this said". A reader almost always wants
@@ -240,7 +253,8 @@ export default function Search(p: SearchProps) {
         <div className="results">
           <div className="res-head">
             <span className="sub">{busy ? "Searching…" : `${resultLawCount} law${resultLawCount === 1 ? "" : "s"}, ${articles.length} matching passage${articles.length === 1 ? "" : "s"}`}</span>
-            <span className="badge">{modeUsed === "hybrid" ? "words + meaning" : "exact words"}</span>
+            <span className="badge">{modeUsed === "hybrid" ? "words + meaning"
+              : modeUsed === "unavailable" ? "meaning unavailable" : "exact words"}</span>
             <span className="grow" />
             <div className="search-mode" role="group" aria-label="Search method">
               <button className={retrieval === "keyword" ? "on" : ""}
@@ -253,7 +267,9 @@ export default function Search(p: SearchProps) {
             </div>
           </div>
 
-          {retrieval === "hybrid" ? (
+          {retrieval === "hybrid" && modeUnavailable ? (
+            <p className="mode-note" role="status">{modeUnavailable}</p>
+          ) : retrieval === "hybrid" ? (
             <p className="mode-note">Concept search across French and English. It can take a few seconds;
               identifiers and quoted legal text still use exact lookup.</p>
           ) : null}

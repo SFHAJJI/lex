@@ -125,11 +125,14 @@ public sealed class ReleaseWorkflowTests
             "revision_get \"https://$fqdn/")).Count);
         Assert.Contains("scripts/deploy/candidate_gates.py readyz \"$MANIFEST_SET\"", workflow);
         Assert.Contains("readiness=$(revision_get \"https://$fqdn/readyz\")", workflow);
-        Assert.Contains("eu_hybrid_ready=$(printf '%s' \"$readiness\"", workflow);
+        Assert.Contains("publisher_hybrid_ready() {", workflow);
+        Assert.Contains("eu_hybrid_ready=$(publisher_hybrid_ready eu-eurlex)", workflow);
+        Assert.Contains("lu_hybrid_ready=$(publisher_hybrid_ready lu-legilux)", workflow);
         Assert.Contains("scripts/deploy/candidate_gates.py coverage", workflow);
         Assert.Contains("scripts/deploy/candidate_gates.py eu-exact \"$MANIFEST_SET\"", workflow);
         Assert.Contains("scripts/deploy/candidate_gates.py lu-temporal", workflow);
-        Assert.Contains("scripts/deploy/candidate_gates.py eu-hybrid \"$eu_hybrid_ready\"", workflow);
+        Assert.Contains("scripts/deploy/candidate_gates.py hybrid eu-eurlex \"$eu_hybrid_ready\"", workflow);
+        Assert.Contains("scripts/deploy/candidate_gates.py hybrid lu-legilux \"$lu_hybrid_ready\"", workflow);
         Assert.Equal(2, Regex.Matches(workflow, Regex.Escape(
             "{ [ \"$state\" = \"Running\" ] || [ \"$state\" = \"RunningAtMaxScale\" ]; }")).Count);
         Assert.Contains("assistant_smoke=$(curl", workflow);
@@ -142,7 +145,8 @@ public sealed class ReleaseWorkflowTests
         Assert.Contains("coverage smoke did not expose both required publishers", workflow);
         Assert.Contains("exact EU identifier contract failed", workflow);
         Assert.Contains("Luxembourg temporal smoke returned no provisions", workflow);
-        Assert.Contains("EU hybrid retrieval smoke returned no hits", workflow);
+        Assert.Contains("EU hybrid activation smoke contradicted readiness", workflow);
+        Assert.Contains("Luxembourg hybrid activation smoke contradicted readiness", workflow);
         Assert.Contains("current-user injection escaped its authorized boundary", workflow);
         Assert.Contains("restored-transcript injection escaped its authorized boundary", workflow);
         Assert.Contains("set -euo pipefail", candidateBlock);

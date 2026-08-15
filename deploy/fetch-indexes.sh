@@ -11,8 +11,10 @@
 # Taking them from there makes the served index provably the published one and removes the
 # laptop from production entirely.
 #
-# `releases/latest/download/<asset>` is GitHub's own redirect to the newest release asset,
-# so this needs no token, no API call and no tag kept in sync.
+# The protected deploy supplies one immutable release tag per publisher. Every database,
+# companion and benchmark file for that publisher comes from that exact tag; following
+# `latest` independently for each file would permit a release created mid-build to mix two
+# otherwise valid generations.
 set -eu
 
 OUT="${1:-/indexes}"
@@ -45,15 +47,21 @@ fetch_optional() {
   curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors -o "$1" "$2"
 }
 
-# publisher repo : asset name
-SETS="lex-corpus-lu-legilux:index-lu-legilux.db
-lex-corpus-eu-eurlex:index-eu-eurlex.db"
+# publisher repo : collection : asset name : immutable release tag
+SETS="lex-corpus-lu-legilux:lu-legilux:index-lu-legilux.db:${LEX_RELEASE_TAG_LU_LEGILUX:-}
+lex-corpus-eu-eurlex:eu-eurlex:index-eu-eurlex.db:${LEX_RELEASE_TAG_EU_EURLEX:-}"
 
-echo "$SETS" | while IFS=: read -r repo asset; do
+echo "$SETS" | while IFS=: read -r repo collection asset release_tag; do
   [ -n "$repo" ] || continue
-  url="https://github.com/SFHAJJI/$repo/releases/latest/download/$asset"
-  echo "fetching $asset from $repo"
-  fetch "$OUT/$asset" "$url"
+  ticket="${release_tag#index-$collection-}"
+  if [ "$ticket" = "$release_tag" ] || [ "${#ticket}" -ne 64 ] \
+    || ! printf '%s' "$ticket" | grep -Eq '^[0-9a-f]{64}$'; then
+    echo "ERROR: $repo requires an exact index-$collection-<64 hex> release tag" >&2
+    exit 1
+  fi
+  release_base="https://github.com/SFHAJJI/$repo/releases/download/$release_tag"
+  echo "fetching $asset from $repo release $release_tag"
+  fetch "$OUT/$asset" "$release_base/$asset"
 
   # A truncated or rate-limited download would otherwise produce a container that starts
   # happily and answers every question with no_corpus_mounted. Fail the build instead.
@@ -70,17 +78,16 @@ echo "$SETS" | while IFS=: read -r repo asset; do
   manifest="$stem.manifest.json"
   signature="$stem.manifest.sig"
   if fetch_optional "$OUT/$manifest" \
-       "https://github.com/SFHAJJI/$repo/releases/latest/download/$manifest"; then
-    fetch_optional "$OUT/$signature" \
-      "https://github.com/SFHAJJI/$repo/releases/latest/download/$signature"
+       "$release_base/$manifest"; then
+    fetch_optional "$OUT/$signature" "$release_base/$signature" \
+      || { echo "ERROR: $repo signed artifact manifest has no signature" >&2; exit 1; }
     jq -r '.files[].path' "$OUT/$manifest" | while IFS= read -r companion; do
       [ "$companion" = "$asset" ] && continue
       case "$companion" in
         ""|/*|*\\*|..|../*|*/..|*/../*) echo "ERROR: unsafe release artifact path: $companion" >&2; exit 1 ;;
       esac
       mkdir -p "$(dirname "$OUT/$companion")"
-      fetch "$OUT/$companion" \
-        "https://github.com/SFHAJJI/$repo/releases/latest/download/$companion"
+      fetch "$OUT/$companion" "$release_base/$companion"
     done
     echo "  fetched signed manifest: $manifest"
   elif [ "$REQUIRE_MANIFEST" = "1" ]; then
@@ -90,20 +97,28 @@ echo "$SETS" | while IFS=: read -r repo asset; do
     rm -f "$OUT/$manifest"
     echo "  migration: no artifact manifest published yet"
   fi
-  collection="${stem#index-}"
   benchmark="retrieval-benchmark-$collection.json"
   benchmark_manifest="retrieval-benchmark-$collection.manifest.json"
   benchmark_signature="retrieval-benchmark-$collection.manifest.sig"
-  if fetch_optional "$OUT/$benchmark" \
-       "https://github.com/SFHAJJI/$repo/releases/latest/download/$benchmark" \
-    && fetch_optional "$OUT/$benchmark_manifest" \
-       "https://github.com/SFHAJJI/$repo/releases/latest/download/$benchmark_manifest" \
-    && fetch_optional "$OUT/$benchmark_signature" \
-       "https://github.com/SFHAJJI/$repo/releases/latest/download/$benchmark_signature"; then
-    echo "  fetched signed public retrieval benchmark: $benchmark"
-  else
-    rm -f "$OUT/$benchmark" "$OUT/$benchmark_manifest" "$OUT/$benchmark_signature"
-    echo "  retrieval benchmark not published yet"
+  has_vectors=false
+  if [ -f "$OUT/$manifest" ] \
+    && jq -e --arg vector "$stem.vectors" \
+      'any(.files[]?; .path == $vector)' "$OUT/$manifest" >/dev/null; then
+    has_vectors=true
+  fi
+  if [ "$has_vectors" = "true" ]; then
+    if fetch_optional "$OUT/$benchmark" "$release_base/$benchmark" \
+      && fetch_optional "$OUT/$benchmark_manifest" "$release_base/$benchmark_manifest" \
+      && fetch_optional "$OUT/$benchmark_signature" "$release_base/$benchmark_signature"; then
+      echo "  fetched signed public retrieval benchmark: $benchmark"
+    else
+      rm -f "$OUT/$benchmark" "$OUT/$benchmark_manifest" "$OUT/$benchmark_signature"
+      if [ "$REQUIRE_MANIFEST" = "1" ]; then
+        echo "ERROR: $repo vector release is missing signed retrieval benchmark evidence" >&2
+        exit 1
+      fi
+      echo "  migration: vectors quarantined because retrieval benchmark evidence is absent"
+    fi
   fi
   echo "  ok: $asset $((size / 1024 / 1024)) MB"
 done

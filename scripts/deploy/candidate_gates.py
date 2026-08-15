@@ -39,6 +39,23 @@ def readyz(payload, arguments):
             "candidate mounted-publisher set is incomplete")
     require(report.get("verifiedManifestSet") == arguments[0],
             "candidate readiness is not bound to the signed manifest set")
+    publishers = array_value(report.get("publishers"),
+                             "candidate readiness has no publisher activation rows")
+    require(len(publishers) == len(required)
+            and all(isinstance(row, dict) for row in publishers)
+            and all(isinstance(row.get("publisher"), str) for row in publishers)
+            and sorted(row.get("publisher") for row in publishers) == required,
+            "candidate readiness activation rows are incomplete")
+    for row in publishers:
+        hybrid_ready = row.get("hybridReady")
+        hybrid_status = row.get("hybridStatus")
+        require(isinstance(hybrid_ready, bool),
+                "candidate readiness has no typed hybrid activation state")
+        require(isinstance(hybrid_status, str) and hybrid_status,
+                "candidate readiness has no hybrid activation reason")
+        require((hybrid_ready and hybrid_status == "activated")
+                or (not hybrid_ready and hybrid_status != "activated"),
+                "candidate readiness hybrid state contradicts its reason")
 
 
 def coverage(payload, arguments):
@@ -86,14 +103,39 @@ def lu_temporal(payload, arguments):
             "Luxembourg temporal response returned no provisions")
 
 
-def eu_hybrid(payload, arguments):
-    require(not arguments, "hybrid gate accepts no arguments")
+def hybrid(payload, arguments):
+    require(len(arguments) == 2
+            and arguments[0] in ("eu-eurlex", "lu-legilux")
+            and arguments[1] in ("true", "false"),
+            "hybrid gate requires a publisher and its signed activation state")
+    publisher, activation = arguments
     rows = array_value(payload, "hybrid response must be an array")
-    require(rows and isinstance(rows[0], dict), "hybrid response has no publisher row")
-    require(rows[0].get("retrieval_mode") == "hybrid",
-            "EU search did not use hybrid retrieval")
-    require(isinstance(rows[0].get("hits"), list) and rows[0]["hits"],
-            "EU hybrid retrieval returned no hits")
+    require(len(rows) == 1 and isinstance(rows[0], dict),
+            "hybrid response does not contain exactly one publisher row")
+    row = rows[0]
+    envelope = object_value(row.get("envelope"),
+                            "hybrid response has no envelope")
+    require(envelope.get("publisher") == publisher,
+            "hybrid response publisher contradicts the requested publisher")
+    if activation == "true":
+        require(envelope.get("status") == "ok",
+                f"{publisher} activated hybrid response is not successful")
+        require(row.get("retrieval_mode") == "hybrid",
+                f"{publisher} search did not use activated hybrid retrieval")
+        require(isinstance(row.get("hits"), list) and row["hits"],
+                f"{publisher} hybrid retrieval returned no hits")
+        return
+    require(envelope.get("status") == "retrieval_mode_unavailable",
+            "quarantined hybrid request was not typed unavailable")
+    require(row.get("requested_retrieval_mode") == "hybrid",
+            "quarantined hybrid response lost the requested mode")
+    require(isinstance(row.get("retrieval_unavailable_reason"), str)
+            and row["retrieval_unavailable_reason"],
+            "quarantined hybrid response has no reason")
+    require(row.get("retrieval_mode") is None,
+            "quarantined hybrid request silently executed another mode")
+    require(row.get("hits") == [],
+            "quarantined hybrid request returned unapproved retrieval hits")
 
 
 def trace_plan(payload):
@@ -150,7 +192,7 @@ GATES = {
     "coverage": coverage,
     "eu-exact": eu_exact,
     "lu-temporal": lu_temporal,
-    "eu-hybrid": eu_hybrid,
+    "hybrid": hybrid,
     "assistant": assistant,
     "injection": injection,
 }

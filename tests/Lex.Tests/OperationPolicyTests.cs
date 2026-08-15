@@ -1590,6 +1590,7 @@ public sealed class OperationPolicyTests
     {
         Assert.Equal("2.0.0", McpSdkBridge.ServerVersion);
         Assert.DoesNotContain("outside_observed_window", McpSdkBridge.ServerInstructions);
+        Assert.Contains(McpStatus.RetrievalModeUnavailable, McpSdkBridge.ServerInstructions);
     }
 
     [Fact]

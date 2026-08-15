@@ -69,18 +69,29 @@ class CandidateGateTests(unittest.TestCase):
         temporal["provisions"] = []
         self.assert_fails("lu-temporal", temporal)
 
-        hybrid = [{"retrieval_mode": "hybrid", "hits": [{"work": "x"}]}]
-        self.assert_passes("eu-hybrid", hybrid, "true")
-        self.assert_fails("eu-hybrid", hybrid, "false")
+        eu_hybrid = [{
+            "envelope": {"publisher": "eu-eurlex", "status": "ok"},
+            "retrieval_mode": "hybrid",
+            "hits": [{"work": "x"}],
+        }]
+        self.assert_passes("hybrid", eu_hybrid, "eu-eurlex", "true")
+        self.assert_fails("hybrid", eu_hybrid, "lu-legilux", "true")
+        self.assert_fails("hybrid", eu_hybrid, "eu-eurlex", "false")
+        eu_hybrid[0]["envelope"]["status"] = "retrieval_mode_unavailable"
+        self.assert_fails("hybrid", eu_hybrid, "eu-eurlex", "true")
 
-        quarantined = [{
-            "envelope": {"status": "retrieval_mode_unavailable"},
+        lu_quarantined = [{
+            "envelope": {
+                "publisher": "lu-legilux",
+                "status": "retrieval_mode_unavailable",
+            },
             "requested_retrieval_mode": "hybrid",
             "retrieval_unavailable_reason": "benchmark_gate_failed",
             "hits": [],
         }]
-        self.assert_passes("eu-hybrid", quarantined, "false")
-        self.assert_fails("eu-hybrid", quarantined, "true")
+        self.assert_passes("hybrid", lu_quarantined, "lu-legilux", "false")
+        self.assert_fails("hybrid", lu_quarantined, "eu-eurlex", "false")
+        self.assert_fails("hybrid", lu_quarantined, "lu-legilux", "true")
 
     def test_assistant_smoke_requires_the_planned_and_executed_tool(self):
         response = self.coverage_response()
