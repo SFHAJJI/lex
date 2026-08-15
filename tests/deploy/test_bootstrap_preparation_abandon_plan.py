@@ -1,4 +1,3 @@
-import copy
 import json
 from pathlib import Path
 import subprocess
@@ -9,7 +8,6 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts" / "deploy" / "bootstrap_preparation_abandon_plan.py"
-HANDOFF_SCRIPT = ROOT / "scripts" / "deploy" / "bootstrap_legacy_recovery_plan.py"
 
 
 class BootstrapPreparationAbandonPlanTests(unittest.TestCase):
@@ -17,10 +15,13 @@ class BootstrapPreparationAbandonPlanTests(unittest.TestCase):
         completed, plan = self.run_plan(self.inventory())
 
         self.assertEqual(0, completed.returncode, completed.stderr)
-        self.assertEqual("lex-bootstrap-preparation-abandon-plan/1", plan["schema"])
+        self.assertEqual("lex-bootstrap-preparation-abandon-plan/2", plan["schema"])
         self.assertTrue(plan["dry_run"])
         self.assertEqual("ca-lex-web--r", plan["target"]["revision"])
-        self.assertEqual("ca-lex-web--s", plan["retained_inactive"]["revision"])
+        self.assertEqual(
+            ["ca-lex-web--o", "ca-lex-web--s"],
+            [item["revision"] for item in plan["superseded_inactive"]],
+        )
         self.assertEqual({
             "method": "DEACTIVATE",
             "revision": "ca-lex-web--r",
@@ -35,11 +36,22 @@ class BootstrapPreparationAbandonPlanTests(unittest.TestCase):
         self.assertEqual({"state": "target-active"}, state)
 
         post = self.inventory()
-        post["revisions"][2]["active"] = False
+        post["revisions"] = [post["revisions"][0], post["revisions"][3]]
+        post["revisions"][1]["active"] = False
         post["latest_ready_revision_name"] = "ca-lex-web--r"
         completed, state = self.classify(plan, post)
         self.assertEqual(0, completed.returncode, completed.stderr)
         self.assertEqual({"state": "target-inactive"}, state)
+
+        post["latest_ready_revision_name"] = "ca-lex-web--s"
+        completed, _ = self.classify(plan, post)
+        self.assertNotEqual(0, completed.returncode)
+
+        transient = self.inventory()
+        transient["revisions"] = transient["revisions"][:1] + transient["revisions"][2:]
+        transient["revisions"][2]["active"] = False
+        completed, _ = self.classify(plan, transient)
+        self.assertNotEqual(0, completed.returncode)
 
     def test_accepts_candidate_route_and_null_or_missing_suffix(self):
         inventory = self.inventory()
@@ -56,7 +68,7 @@ class BootstrapPreparationAbandonPlanTests(unittest.TestCase):
         self.assertEqual(2, len(plan["ingress_traffic"]))
         self.assertEqual("a", plan["reviewed_inventory"]["revisions"][0]
                          ["template"]["revisionSuffix"])
-        self.assertEqual("s", plan["reviewed_inventory"]["revisions"][1]
+        self.assertEqual("o", plan["reviewed_inventory"]["revisions"][1]
                          ["template"]["revisionSuffix"])
 
     def test_refuses_authority_route_mode_chronology_and_template_drift(self):
@@ -91,7 +103,7 @@ class BootstrapPreparationAbandonPlanTests(unittest.TestCase):
         mutations = (
             lambda value: value["revisions"][1]["template"].update(
                 scale={"minReplicas": 1}),
-            lambda value: value["revisions"][1].update(image=self.image("d")),
+            lambda value: value["revisions"][1].update(image=self.image("e")),
             lambda value: value["revisions"][0].update(active=False),
             lambda value: value["revisions"][2].update(trafficWeight=2),
             lambda value: value["ingress_traffic"].append({
@@ -111,40 +123,21 @@ class BootstrapPreparationAbandonPlanTests(unittest.TestCase):
         completed, _ = self.classify(plan, self.inventory())
         self.assertNotEqual(0, completed.returncode)
 
-    def test_failed_target_can_be_abandoned_then_enter_an_exact_no_write_handoff(self):
+    def test_refuses_failed_target(self):
         inventory = self.inventory()
-        inventory["revisions"][2]["runningState"] = "Failed"
+        inventory["revisions"][3]["runningState"] = "Failed"
         inventory["latest_ready_revision_name"] = "ca-lex-web--s"
-        completed, plan = self.run_plan(inventory)
-        self.assertEqual(0, completed.returncode, completed.stderr)
-
-        post = copy.deepcopy(inventory)
-        post["revisions"][2]["active"] = False
-        completed, state = self.classify(plan, post)
-        self.assertEqual(0, completed.returncode, completed.stderr)
-        self.assertEqual({"state": "target-inactive"}, state)
-
-        post["schema"] = "lex-bootstrap-legacy-recovery-inventory/2"
-        with tempfile.TemporaryDirectory(dir=ROOT) as directory:
-            source = Path(directory) / "handoff.json"
-            source.write_text(json.dumps(post), encoding="utf-8")
-            completed = subprocess.run(
-                [sys.executable, str(HANDOFF_SCRIPT), str(source)], cwd=ROOT,
-                text=True, capture_output=True, check=False,
-            )
-        self.assertEqual(0, completed.returncode, completed.stderr)
-        handoff = json.loads(completed.stdout)
-        self.assertEqual("ca-lex-web--r", handoff["latest_revision_name"])
-        self.assertEqual("ca-lex-web--s", handoff["latest_ready_revision_name"])
+        completed, _ = self.run_plan(inventory)
+        self.assertNotEqual(0, completed.returncode)
 
     @classmethod
     def inventory(cls):
         return {
-            "schema": "lex-bootstrap-preparation-inventory/1",
+            "schema": "lex-bootstrap-preparation-inventory/2",
             "active_revisions_mode": "Multiple",
             "max_inactive_revisions": 1,
             "latest_revision_name": "ca-lex-web--r",
-            "latest_ready_revision_name": "ca-lex-web--s",
+            "latest_ready_revision_name": "ca-lex-web--r",
             "ingress_traffic": [{
                 "revisionName": "ca-lex-web--a", "weight": 100,
                 "latestRevision": False, "label": None,
@@ -152,6 +145,8 @@ class BootstrapPreparationAbandonPlanTests(unittest.TestCase):
             "revisions": [
                 cls.revision("ca-lex-web--a", True, 100,
                              "2026-08-12T00:00:00Z", "a", "Running"),
+                cls.revision("ca-lex-web--o", False, 0,
+                             "2026-08-12T12:00:00Z", "d", None),
                 cls.revision("ca-lex-web--s", False, 0,
                              "2026-08-13T00:00:00Z", "b", None),
                 cls.revision("ca-lex-web--r", True, 0,

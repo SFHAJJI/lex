@@ -11,10 +11,9 @@ from bootstrap_legacy_plan import LEX_IMAGE, REVISION, build_plan as build_legac
 from bootstrap_plan import timestamp
 
 
-INVENTORY_SCHEMA = "lex-bootstrap-preparation-inventory/1"
-PLAN_SCHEMA = "lex-bootstrap-preparation-abandon-plan/1"
+INVENTORY_SCHEMA = "lex-bootstrap-preparation-inventory/2"
+PLAN_SCHEMA = "lex-bootstrap-preparation-abandon-plan/2"
 READY_STATES = {"Running", "RunningAtMaxScale"}
-TARGET_STATES = READY_STATES | {"Failed"}
 INVENTORY_KEYS = {
     "schema", "active_revisions_mode", "max_inactive_revisions",
     "latest_revision_name", "latest_ready_revision_name",
@@ -32,10 +31,10 @@ def compact_sha256(value):
     return hashlib.sha256(encoded).hexdigest()
 
 
-def canonical_revisions(inventory):
+def canonical_revisions(inventory, counts):
     revisions = inventory.get("revisions")
-    if not isinstance(revisions, list) or len(revisions) != 3:
-        raise ValueError("preparation abandonment requires exactly three revisions")
+    if not isinstance(revisions, list) or len(revisions) not in counts:
+        raise ValueError("preparation abandonment revision count is invalid")
     canonical = []
     names = set()
     for item in revisions:
@@ -101,20 +100,21 @@ def build_plan(inventory):
             or inventory["max_inactive_revisions"] != 1:
         raise ValueError("preparation requires raw Multiple mode and maxInactiveRevisions=1")
 
-    revisions = canonical_revisions(inventory)
+    revisions = canonical_revisions(inventory, {3, 4})
     traffic = [item for item in revisions if item["trafficWeight"] > 0]
     zero_active = [item for item in revisions
                    if item["active"] and item["trafficWeight"] == 0]
     inactive = [item for item in revisions if not item["active"]]
     if len(traffic) != 1 or not traffic[0]["active"] or traffic[0]["trafficWeight"] != 100 \
-            or len(zero_active) != 1 or len(inactive) != 1 \
-            or inactive[0]["trafficWeight"] != 0:
-        raise ValueError("preparation must be exact A100 plus one active0 target and one inactive0")
-    authority_raw, target_raw, retained_raw = traffic[0], zero_active[0], inactive[0]
+            or len(zero_active) != 1 or len(inactive) not in {1, 2} \
+            or any(item["trafficWeight"] != 0 for item in inactive):
+        raise ValueError(
+            "preparation must be exact A100 plus one or two inactive0 and one active0 target")
+    authority_raw, target_raw = traffic[0], zero_active[0]
     if authority_raw["runningState"] not in READY_STATES:
         raise ValueError("preparation authority A must be running and ready")
-    if target_raw["runningState"] not in TARGET_STATES:
-        raise ValueError("active0 target must have a stable Running or Failed state")
+    if target_raw["runningState"] not in READY_STATES:
+        raise ValueError("active0 target must be running and ready")
     if not LEX_IMAGE.fullmatch(target_raw.get("image") or ""):
         raise ValueError("active0 target must use an immutable Lex ACR image")
 
@@ -129,20 +129,20 @@ def build_plan(inventory):
     })
     identities = {item["revision"]: item for item in legacy["revisions"]}
     authority = identities[authority_raw["name"]]
-    retained = identities[retained_raw["name"]]
+    superseded = [identities[item["name"]] for item in inactive]
     target = copy.deepcopy(identities[target_raw["name"]])
     target["active"] = True
-    if not timestamp(authority["created_time"], "authority createdTime") \
-            < timestamp(retained["created_time"], "retained createdTime") \
-            < timestamp(target["created_time"], "target createdTime"):
-        raise ValueError("preparation chronology must be exact A < retained < target")
+    chronology = [authority, *superseded, target]
+    if any(not timestamp(earlier["created_time"], "earlier createdTime")
+           < timestamp(later["created_time"], "later createdTime")
+           for earlier, later in zip(chronology, chronology[1:])):
+        raise ValueError("preparation chronology must be exact A < [O <] S < target")
 
     routes = canonical_routes(inventory.get("ingress_traffic"), authority["revision"],
                               target["revision"], True)
     if inventory.get("latest_revision_name") != target["revision"] \
-            or inventory.get("latest_ready_revision_name") \
-            not in {retained["revision"], target["revision"]}:
-        raise ValueError("preparation latest pointers do not bind retained/target")
+            or inventory.get("latest_ready_revision_name") != target["revision"]:
+        raise ValueError("preparation latest pointers must bind the ready target")
     reviewed = {
         "schema": INVENTORY_SCHEMA,
         "active_revisions_mode": "Multiple",
@@ -157,7 +157,7 @@ def build_plan(inventory):
         "dry_run": True,
         "inventory_sha256": compact_sha256(reviewed),
         "legacy_authority": authority,
-        "retained_inactive": retained,
+        "superseded_inactive": superseded,
         "target": target,
         "ingress_traffic": routes,
         "operation": {
@@ -190,32 +190,28 @@ def classify(plan, inventory):
         raise ValueError("post-abandon inventory shape or configuration differs")
     target_name = plan["target"]["revision"]
     authority_name = plan["legacy_authority"]["revision"]
-    retained_name = plan["retained_inactive"]["revision"]
-    revisions = canonical_revisions(inventory)
+    revisions = canonical_revisions(inventory, {2})
     by_name = {item["name"]: item for item in revisions}
-    if set(by_name) != {authority_name, retained_name, target_name}:
+    if set(by_name) != {authority_name, target_name}:
         raise ValueError("post-abandon revision identities differ")
     if not by_name[authority_name]["active"] or by_name[authority_name]["trafficWeight"] != 100 \
             or by_name[authority_name]["runningState"] not in READY_STATES \
-            or by_name[retained_name]["active"] or by_name[retained_name]["trafficWeight"] != 0 \
             or by_name[target_name]["active"] or by_name[target_name]["trafficWeight"] != 0:
         raise ValueError("post-abandon revision states differ")
     canonical_routes(inventory.get("ingress_traffic"), authority_name, target_name, False)
     if inventory.get("latest_revision_name") != target_name \
-            or inventory.get("latest_ready_revision_name") not in {retained_name, target_name}:
+            or inventory.get("latest_ready_revision_name") != target_name:
         raise ValueError("post-abandon latest pointers differ")
 
-    normalized = copy.deepcopy(inventory)
-    for item in normalized["revisions"]:
-        if item["name"] == target_name:
-            item["active"] = True
-            item["runningState"] = next(
-                reviewed["runningState"] for reviewed in plan["reviewed_inventory"]["revisions"]
-                if reviewed["name"] == target_name)
-    normalized["ingress_traffic"] = plan["reviewed_inventory"]["ingress_traffic"]
-    normalized["latest_ready_revision_name"] = \
-        plan["reviewed_inventory"]["latest_ready_revision_name"]
-    if build_plan(normalized) != plan:
+    observed = build_legacy_plan({
+        "schema": "lex-bootstrap-legacy-inventory/1",
+        "max_inactive_revisions": 1,
+        "revisions": revisions,
+    })
+    identities = {item["revision"]: item for item in observed["revisions"]}
+    identities[target_name]["active"] = True
+    if identities[authority_name] != plan["legacy_authority"] \
+            or identities[target_name] != plan["target"]:
         raise ValueError("post-abandon image, template or chronology differs")
     return {"state": "target-inactive"}
 

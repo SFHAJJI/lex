@@ -40,13 +40,37 @@ class BootstrapRecoveryTests(unittest.TestCase):
             state["revisions"]["C"]["created"],
         )
 
+    def test_r_deactivation_collapses_receipt_exact_four_to_exact_a_plus_r(self):
+        state = {
+            "limit": 1,
+            "revisions": {
+                "A": {"created": 1, "active": True, "traffic": 100},
+                "O": {"created": 2, "active": False, "traffic": 0},
+                "S": {"created": 3, "active": False, "traffic": 0},
+                "R": {"created": 4, "active": True, "traffic": 0},
+            },
+        }
+
+        self.deactivate(state, "R")
+
+        self.assert_state(
+            state, 1, active={"A"}, inactive={"R"}, traffic={"A": 100}
+        )
+
     def test_pre_switch_failure_abandons_c_and_keeps_a_at_100(self):
         state = self.prepared()
 
+        unsafe = {"limit": state["limit"], "revisions": {
+            name: dict(revision) for name, revision in state["revisions"].items()
+        }}
+        self.deactivate(unsafe, "C")
+        self.assertNotIn("R", unsafe["revisions"])
+
+        self.set_limit(state, 2)
         self.deactivate(state, "C")
 
         self.assert_state(
-            state, 1, active={"A"}, inactive={"C"}, traffic={"A": 100}
+            state, 2, active={"A"}, inactive={"R", "C"}, traffic={"A": 100}
         )
 
     def test_failure_after_traffic_api_success_or_readback_restores_existing_a(self):

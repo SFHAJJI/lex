@@ -56,7 +56,7 @@ jobs:
                 image:.properties.template.containers[0].image,
                 template:.properties.template}]' > revisions.json
           jq -n --slurpfile config app-config.json --slurpfile revisions revisions.json \
-            '{schema:"lex-bootstrap-preparation-inventory/1",
+            '{schema:"lex-bootstrap-preparation-inventory/2",
               active_revisions_mode:$config[0].activeRevisionsMode,
               max_inactive_revisions:$config[0].maxInactiveRevisions,
               latest_revision_name:$config[0].latestRevisionName,
