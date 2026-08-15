@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.RegularExpressions;
 
 namespace Lex.Tests;
@@ -450,6 +451,123 @@ public sealed class ReleaseWorkflowTests
         {
             var script = File.ReadAllText(Path.Combine(RepoRoot(), relative));
             Assert.StartsWith("#Requires -Version 7.2", script);
+        }
+    }
+
+    [Fact]
+    public void Local_evaluation_has_an_explicit_non_mutating_first_official_mode()
+    {
+        var script = File.ReadAllText(Path.Combine(
+                RepoRoot(), "evals", "run-assistant-eval.ps1"))
+            .Replace("\r\n", "\n", StringComparison.Ordinal);
+
+        Assert.Contains("[switch]$BootstrapFirstOfficial", script);
+        Assert.Contains(
+            "The first-official evaluation candidate must remain active at zero traffic.",
+            script);
+        Assert.Contains(
+            "The evaluation runner must own activation of an inactive zero-traffic candidate.",
+            script);
+        Assert.Contains("if ($BootstrapFirstOfficial) {", script);
+        Assert.Contains("if (-not $BootstrapFirstOfficial) {", script);
+        Assert.Contains("Get-CandidateState", script);
+        Assert.Contains("before evaluation", script);
+        Assert.Contains("after evaluation", script);
+
+        var finallyBlock = script.IndexOf("finally {", StringComparison.Ordinal);
+        var bootstrapCleanup = script.IndexOf(
+            "if ($BootstrapFirstOfficial)", finallyBlock, StringComparison.Ordinal);
+        var finalState = script.IndexOf(
+            "$finalState = Get-CandidateState", bootstrapCleanup, StringComparison.Ordinal);
+        var ordinaryCleanup = script.IndexOf(
+            "$inactive = $false", finalState, StringComparison.Ordinal);
+        Assert.True(finallyBlock >= 0 && bootstrapCleanup > finallyBlock
+            && finalState > bootstrapCleanup && ordinaryCleanup > finalState);
+        Assert.DoesNotContain("revision deactivate", script[bootstrapCleanup..ordinaryCleanup]);
+    }
+
+    [Fact]
+    public void Evaluation_publication_requires_and_forwards_the_complete_bootstrap_tuple()
+    {
+        var script = File.ReadAllText(Path.Combine(
+                RepoRoot(), "deploy", "publish-assistant-evaluation.ps1"))
+            .Replace("\r\n", "\n", StringComparison.Ordinal);
+
+        Assert.Contains("$BootstrapRollbackRevision", script);
+        Assert.Contains("$BootstrapCanonicalTemplateDigest", script);
+        Assert.Contains("$BootstrapExpectedImageDigest", script);
+        Assert.Contains("bootstrap equivalence inputs must be supplied together", script);
+        Assert.Contains("\\Aca-lex-web--[a-z0-9-]+\\z", script);
+        Assert.Contains("\\Asha256:[0-9a-f]{64}\\z", script);
+        Assert.Contains("-cnotmatch", script);
+        Assert.Contains("bootstrap_rollback_revision=$BootstrapRollbackRevision", script);
+        Assert.Contains(
+            "bootstrap_canonical_template_digest=$BootstrapCanonicalTemplateDigest", script);
+        Assert.Contains("bootstrap_expected_image_digest=$BootstrapExpectedImageDigest", script);
+
+        var tupleValidation = script.IndexOf(
+            "bootstrap equivalence inputs must be supplied together", StringComparison.Ordinal);
+        var resolveFiles = script.IndexOf("Resolve-Path", StringComparison.Ordinal);
+        var createDraft = script.IndexOf("gh release create", StringComparison.Ordinal);
+        Assert.True(tupleValidation >= 0 && resolveFiles > tupleValidation && createDraft > resolveFiles);
+    }
+
+    [Fact]
+    public void Evaluation_publication_rejects_a_partial_bootstrap_tuple_before_reading_files()
+    {
+        var result = RunEvaluationPublicationValidation(
+            "-BootstrapRollbackRevision", "ca-lex-web--rollback");
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("bootstrap equivalence inputs must be supplied together", result.Output);
+        Assert.DoesNotContain("Cannot find path", result.Output);
+    }
+
+    [Fact]
+    public void Evaluation_publication_rejects_non_exact_bootstrap_values_before_reading_files()
+    {
+        var digest = "sha256:" + new string('a', 64);
+        var invalidInputs = new (string[] Arguments, string ExpectedMessage)[]
+        {
+            (new[]
+            {
+                "-CandidateRevision", "CA-LEX-WEB--candidate",
+                "-BootstrapRollbackRevision", "ca-lex-web--rollback",
+                "-BootstrapCanonicalTemplateDigest", digest,
+                "-BootstrapExpectedImageDigest", digest,
+            }, "CandidateRevision is not an exact Lex Container Apps revision name."),
+            (new[]
+            {
+                "-BootstrapRollbackRevision", "CA-LEX-WEB--rollback",
+                "-BootstrapCanonicalTemplateDigest", digest,
+                "-BootstrapExpectedImageDigest", digest,
+            }, "BootstrapRollbackRevision is not a distinct exact Lex revision name."),
+            (new[]
+            {
+                "-BootstrapRollbackRevision", "ca-lex-web--rollback",
+                "-BootstrapCanonicalTemplateDigest", "sha256:" + new string('A', 64),
+                "-BootstrapExpectedImageDigest", digest,
+            }, "BootstrapCanonicalTemplateDigest must be a lowercase sha256 digest."),
+            (new[]
+            {
+                "-BootstrapRollbackRevision", "ca-lex-web--rollback",
+                "-BootstrapCanonicalTemplateDigest", digest,
+                "-BootstrapExpectedImageDigest", "sha256:" + new string('A', 64),
+            }, "BootstrapExpectedImageDigest must be a lowercase sha256 digest."),
+            (new[]
+            {
+                "-BootstrapRollbackRevision", "ca-lex-web--rollback\n",
+                "-BootstrapCanonicalTemplateDigest", digest,
+                "-BootstrapExpectedImageDigest", digest,
+            }, "BootstrapRollbackRevision is not a distinct exact Lex revision name."),
+        };
+
+        foreach (var (arguments, expectedMessage) in invalidInputs)
+        {
+            var result = RunEvaluationPublicationValidation(arguments);
+            Assert.NotEqual(0, result.ExitCode);
+            Assert.Contains(expectedMessage, result.Output);
+            Assert.DoesNotContain("Cannot find path", result.Output);
         }
     }
 
@@ -961,5 +1079,44 @@ public sealed class ReleaseWorkflowTests
             directory = Directory.GetParent(directory)?.FullName
                         ?? throw new InvalidOperationException("Repository root not found.");
         return directory;
+    }
+
+    private static (int ExitCode, string Output) RunEvaluationPublicationValidation(
+        params string[] extraArguments)
+    {
+        var script = Path.Combine(RepoRoot(), "deploy", "publish-assistant-evaluation.ps1");
+        var missing = Path.Combine(Path.GetTempPath(), $"lex-missing-{Guid.NewGuid():N}");
+        var start = new ProcessStartInfo("pwsh")
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+        };
+        var arguments = new List<string>
+        {
+            "-NoProfile", "-NonInteractive", "-File", script,
+            "-Report", missing, "-Cases", missing,
+            "-ReviewAttestation", missing, "-ReviewSignature", missing,
+        };
+        if (!extraArguments.Contains("-CandidateRevision", StringComparer.OrdinalIgnoreCase))
+            arguments.AddRange(["-CandidateRevision", "ca-lex-web--candidate"]);
+        arguments.AddRange(extraArguments);
+        foreach (var argument in arguments) start.ArgumentList.Add(argument);
+
+        using var process = Process.Start(start)
+                            ?? throw new InvalidOperationException("PowerShell did not start.");
+        var standardOutput = process.StandardOutput.ReadToEndAsync();
+        var standardError = process.StandardError.ReadToEndAsync();
+        if (!process.WaitForExit(30_000))
+        {
+            if (!process.HasExited) process.Kill(entireProcessTree: true);
+            process.WaitForExit();
+            Task.WaitAll(standardOutput, standardError);
+            Assert.Fail("PowerShell validation timed out after 30 seconds.\n"
+                        + standardOutput.Result + standardError.Result);
+        }
+        Task.WaitAll(standardOutput, standardError);
+        var output = standardOutput.Result + standardError.Result;
+        return (process.ExitCode, output);
     }
 }

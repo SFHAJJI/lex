@@ -14,7 +14,8 @@ param(
     [Parameter(Mandatory = $true)][string]$GraderModelResourceId,
     [Parameter(Mandatory = $true)][string]$GraderDeployment,
     [string]$GraderKeyEnvironment = "AOAI_GRADER_KEY",
-    [string]$Cases = (Join-Path $PSScriptRoot "assistant-cases-v3.json")
+    [string]$Cases = (Join-Path $PSScriptRoot "assistant-cases-v3.json"),
+    [switch]$BootstrapFirstOfficial
 )
 
 $ErrorActionPreference = "Stop"
@@ -53,22 +54,37 @@ function Invoke-AzureText([string[]]$CommandArguments) {
     return (($result | Out-String).Trim())
 }
 
-$active = Invoke-AzureText @(
-    "containerapp", "revision", "show", "-g", $resourceGroup, "-n", $containerApp,
-    "--revision", $CandidateRevision, "--query", "properties.active", "-o", "tsv")
-$traffic = Invoke-AzureText @(
-    "containerapp", "revision", "show", "-g", $resourceGroup, "-n", $containerApp,
-    "--revision", $CandidateRevision, "--query", "properties.trafficWeight", "-o", "tsv")
-if ($active -ne "false" -or $traffic -ne "0") {
+function Get-CandidateState {
+    return [pscustomobject]@{
+        Active = Invoke-AzureText @(
+            "containerapp", "revision", "show", "-g", $resourceGroup, "-n", $containerApp,
+            "--revision", $CandidateRevision, "--query", "properties.active", "-o", "tsv")
+        Traffic = Invoke-AzureText @(
+            "containerapp", "revision", "show", "-g", $resourceGroup, "-n", $containerApp,
+            "--revision", $CandidateRevision, "--query", "properties.trafficWeight", "-o", "tsv")
+    }
+}
+
+$bootstrapStateFailure =
+    "The first-official evaluation candidate must remain active at zero traffic."
+$initialState = Get-CandidateState
+if ($BootstrapFirstOfficial) {
+    if ($initialState.Active -ne "true" -or $initialState.Traffic -ne "0") {
+        throw "$bootstrapStateFailure State differed before evaluation."
+    }
+}
+elseif ($initialState.Active -ne "false" -or $initialState.Traffic -ne "0") {
     throw "The evaluation runner must own activation of an inactive zero-traffic candidate."
 }
 
 $evaluationExitCode = 1
 $cleanupFailure = $null
 try {
-    & az containerapp revision activate -g $resourceGroup -n $containerApp `
-        --revision $CandidateRevision | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "The candidate revision could not be activated." }
+    if (-not $BootstrapFirstOfficial) {
+        & az containerapp revision activate -g $resourceGroup -n $containerApp `
+            --revision $CandidateRevision | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "The candidate revision could not be activated." }
+    }
     $ready = $false
     foreach ($attempt in 1..20) {
         $running = Invoke-AzureText @(
@@ -83,32 +99,42 @@ try {
     $evaluationExitCode = $LASTEXITCODE
 }
 finally {
-    $inactive = $false
-    foreach ($attempt in 1..5) {
-        & az containerapp revision deactivate -g $resourceGroup -n $containerApp `
-            --revision $CandidateRevision 2>$null | Out-Null
+    if ($BootstrapFirstOfficial) {
+        $finalState = Get-CandidateState
+        if ($finalState.Active -ne "true" -or $finalState.Traffic -ne "0") {
+            $cleanupFailure = "$bootstrapStateFailure State differed after evaluation."
+        }
+    }
+    else {
+        $inactive = $false
+        foreach ($attempt in 1..5) {
+            & az containerapp revision deactivate -g $resourceGroup -n $containerApp `
+                --revision $CandidateRevision 2>$null | Out-Null
+            try {
+                $state = Get-CandidateState
+                if ($state.Active -eq "false" -and $state.Traffic -eq "0") {
+                    $inactive = $true
+                    break
+                }
+            }
+            catch { }
+            Start-Sleep -Seconds $attempt
+        }
+        if (-not $inactive) {
+            $cleanupFailure = "The candidate revision could not be returned to inactive zero-traffic state."
+        }
         try {
-            $state = Invoke-AzureText @(
-                "containerapp", "revision", "show", "-g", $resourceGroup,
-                "-n", $containerApp, "--revision", $CandidateRevision,
-                "--query", "properties.active", "-o", "tsv")
-            if ($state -eq "false") { $inactive = $true; break }
+            $activeCount = [int](Invoke-AzureText @(
+                "containerapp", "revision", "list", "-g", $resourceGroup, "-n", $containerApp,
+                "--query", '[?properties.active==`true`] | length(@)', "-o", "tsv"))
+            if ($activeCount -ne 1 -and -not $cleanupFailure) {
+                $cleanupFailure = "Expected one active quota authority after evaluation; found $activeCount."
+            }
         }
-        catch { }
-        Start-Sleep -Seconds $attempt
-    }
-    if (-not $inactive) {
-        $cleanupFailure = "The candidate revision could not be returned to inactive state."
-    }
-    try {
-        $activeCount = [int](Invoke-AzureText @(
-            "containerapp", "revision", "list", "-g", $resourceGroup, "-n", $containerApp,
-            "--query", '[?properties.active==`true`] | length(@)', "-o", "tsv"))
-        if ($activeCount -ne 1) {
-            $cleanupFailure = "Expected one active quota authority after evaluation; found $activeCount."
+        catch {
+            if (-not $cleanupFailure) { $cleanupFailure = $_.Exception.Message }
         }
     }
-    catch { $cleanupFailure = $_.Exception.Message }
 }
 
 if ($cleanupFailure) { throw $cleanupFailure }
