@@ -153,6 +153,81 @@ public sealed partial class CorpusWriterTests : IDisposable
         Assert.Equal(1, manifest.MigrationBaselineWorks);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Fresh_migration_handles_the_recorded_256_character_nested_destination(
+        bool removeParentBeforeCopy)
+    {
+        var body = SourceBodyFetch.Retrieved("<html>publisher text</html>");
+        const string member = "CL2012R0648FR0200010.0001.doc.xml";
+        const string workSlug = "32012r0648";
+        const string language = "fr";
+        var versionKeyShape = "2024-01-01--" + new string('a', 64);
+        var destinationTail = Path.Combine(
+            "works", workSlug, "versions", versionKeyShape,
+            language + ".fmx4", member);
+        var parent = Path.TrimEndingDirectorySeparator(Path.GetTempPath());
+        var stageWithoutRootName = Path.Combine(
+            parent, "..lex-fresh-stage-" + new string('a', 32), destinationTail);
+        var rootNameLength = 256 - stageWithoutRootName.Length;
+        Assert.InRange(rootNameLength, 8, 200);
+        var unique = "lex" + Guid.NewGuid().ToString("N");
+        var rootName = string.Concat(Enumerable.Repeat(
+            unique, (rootNameLength + unique.Length - 1) / unique.Length))
+            [..rootNameLength];
+        var corpusRoot = Path.Combine(parent, rootName);
+        try
+        {
+            var adapter = new AltThenPrimaryAdapter(body, member, workSlug, language);
+            await new CorpusWriter(corpusRoot,
+                    DateTimeOffset.Parse("2026-08-13T00:00:00Z"), CodeCommit)
+                .WriteAsync(adapter, default);
+
+            var baselineVersion = Assert.Single(Directory.EnumerateDirectories(
+                Path.Combine(corpusRoot, "works", workSlug, "versions")));
+            var baselineMeta = JsonSerializer.Deserialize<VersionMeta>(
+                await File.ReadAllTextAsync(Path.Combine(baselineVersion, "meta.json")),
+                CorpusJson.Options)!;
+            var nested = Assert.Single(
+                Assert.Single(baselineMeta.Expressions).Observations,
+                observation => observation.File?.Contains('/', StringComparison.Ordinal) == true);
+            var expected = await File.ReadAllBytesAsync(Path.Combine(
+                baselineVersion,
+                nested.File!.Replace('/', Path.DirectorySeparatorChar)));
+
+            var boundaryObserved = false;
+            void RemoveNestedParent(string destination)
+            {
+                if (boundaryObserved
+                    || !destination.EndsWith(member, StringComparison.Ordinal)) return;
+                Assert.Equal(256, destination.Length);
+                if (removeParentBeforeCopy)
+                {
+                    var nestedParent = Path.GetDirectoryName(destination)!;
+                    Directory.CreateDirectory(nestedParent);
+                    Directory.Delete(nestedParent);
+                }
+                boundaryObserved = true;
+            }
+            var report = await RunFreshWithStageWriteHook(
+                corpusRoot, new AltThenPrimaryAdapter(
+                    body, member, workSlug, language), RemoveNestedParent);
+
+            Assert.True(report.IsValid, string.Join(Environment.NewLine, report.Errors));
+            Assert.True(boundaryObserved);
+            var currentVersion = Assert.Single(Directory.EnumerateDirectories(
+                Path.Combine(corpusRoot, "works", workSlug, "versions")));
+            Assert.Equal(expected, await File.ReadAllBytesAsync(Path.Combine(
+                currentVersion,
+                nested.File.Replace('/', Path.DirectorySeparatorChar))));
+        }
+        finally
+        {
+            if (Directory.Exists(corpusRoot)) Directory.Delete(corpusRoot, recursive: true);
+        }
+    }
+
     [Fact]
     public async Task Fresh_migration_rejects_a_complete_but_truncated_candidate()
     {
@@ -1391,13 +1466,35 @@ public sealed partial class CorpusWriterTests : IDisposable
             throw new InvalidOperationException("No work may be fetched after an incomplete enumeration.");
     }
 
-    private sealed class AltThenPrimaryAdapter(SourceBodyFetch bodyFetch) : ISourceAdapter
+    private static async Task<CorpusIntegrityReport> RunFreshWithStageWriteHook(
+        string corpusRoot, ISourceAdapter adapter, Action<string> beforeStageFileWrite)
     {
-        private readonly WorkRef _work = new(new Identifier("official:w1"), "w1", "REG", "Work one");
+        var migrate = typeof(FreshCorpusMigration).GetMethods(
+                System.Reflection.BindingFlags.NonPublic
+                | System.Reflection.BindingFlags.Static)
+            .Single(method => method.Name == "RunAsync"
+                && method.GetParameters().Length == 8);
+        var task = Assert.IsAssignableFrom<Task<CorpusIntegrityReport>>(migrate.Invoke(null,
+        [
+            corpusRoot, "test", adapter,
+            DateTimeOffset.Parse("2026-08-14T00:00:00Z"), CodeCommit,
+            null, beforeStageFileWrite, CancellationToken.None,
+        ]));
+        return await task;
+    }
+
+    private sealed class AltThenPrimaryAdapter(
+        SourceBodyFetch bodyFetch,
+        string manifestationMember = "main.xml",
+        string workSlug = "w1",
+        string language = "en") : ISourceAdapter
+    {
+        private readonly WorkRef _work = new(
+            new Identifier("official:w1"), workSlug, "REG", "Work one");
 
         public PublisherDescriptor Describe() => new(
             new Publisher("test", "Test", "EU", "https://example.test", Tier.A, "test", null),
-            [], ["en"], TextIncluded: true, TextPublic: true, HistoryBegins: "publisher");
+            [], [language], TextIncluded: true, TextPublic: true, HistoryBegins: "publisher");
 
         public async IAsyncEnumerable<WorkRef> EnumerateWorks(
             [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
@@ -1414,8 +1511,8 @@ public sealed partial class CorpusWriterTests : IDisposable
                 new(
                     new Identifier("official:v1"), _work.Id, "REG", new DateOnly(2024, 1, 1), null,
                     "publisher", "true", new DateOnly(2024, 1, 1),
-                    [new ExpressionRecord("en", new DateOnly(2024, 1, 1), null, "publisher",
-                        "Work one", "Work one", "https://example.test/v1/en")],
+                    [new ExpressionRecord(language, new DateOnly(2024, 1, 1), null, "publisher",
+                        "Work one", "Work one", $"https://example.test/v1/{language}")],
                     [], new Dictionary<string, string>(), null, null)
             ];
             return Task.FromResult(versions);
@@ -1427,8 +1524,8 @@ public sealed partial class CorpusWriterTests : IDisposable
         public Task<SourceManifestationFetch> FetchAltManifestation(
             VersionRecord version, ExpressionRecord expression, CancellationToken ct) =>
             Task.FromResult(SourceManifestationFetch.Retrieved(new ManifestationFetch(
-                "fmx4", [new ManifestationMember("main.xml", "<xml/>"u8.ToArray())],
-                "https://example.test/v1/en/fmx4")));
+                "fmx4", [new ManifestationMember(manifestationMember, "<xml/>"u8.ToArray())],
+                $"https://example.test/v1/{language}/fmx4")));
     }
 
     private sealed class EmptyAdapter : ISourceAdapter
