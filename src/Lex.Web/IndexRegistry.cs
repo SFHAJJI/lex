@@ -172,7 +172,123 @@ public sealed record VerifiedArtifactManifest(
     string KeyId,
     string CodeCommit,
     string CreatedAt,
-    IReadOnlyList<string> Artifacts);
+    IReadOnlyList<string> Artifacts,
+    IReadOnlyDictionary<string, string>? Sources = null);
+
+public sealed record HybridActivationStatus(bool Activated, string Reason);
+
+internal static class HybridActivationGate
+{
+    private static readonly RetrievalBenchmarkCaseSet Cases = LoadCases();
+    private static readonly RetrievalBenchmarkBaseline Baseline = LoadBaseline();
+
+    public static HybridActivationStatus Evaluate(
+        RetrievalBenchmarkReport report,
+        string collection,
+        string? runtimeCodeCommit,
+        IReadOnlyDictionary<string, string> indexStamp,
+        string modelId,
+        string modelRevision,
+        VerifiedArtifactManifest indexManifest,
+        VerifiedArtifactManifest benchmarkManifest)
+    {
+        var expected = Cases.Cases.Where(item => item.Collection == collection).ToArray();
+        var failures = report.GateFailures;
+        if (report.Schema != "lex-retrieval-benchmark/3"
+            || report.BaselineSchema != Baseline.Schema
+            || expected.Length == 0
+            || report.SampleCount != expected.Length
+            || report.TuningSampleCount != expected.Count(item => item.Split == "tuning")
+            || report.HoldoutSampleCount != expected.Count(item => item.Split == "holdout")
+            || report.KeywordTuning is null || report.HybridTuning is null
+            || report.KeywordHoldout is null || report.HybridHoldout is null
+            || failures is null
+            || report.ActivationGatePassed != (failures.Count == 0)
+            || !string.Equals(report.ExpectedCasesSha256, Baseline.CasesSha256,
+                StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(report.ActualCasesSha256, Baseline.CasesSha256,
+                StringComparison.OrdinalIgnoreCase)
+            || report.ReviewAttestation != $"{Baseline.ReviewedBy}@{Baseline.ReviewedAt}")
+            return new(false, "benchmark_invalid");
+
+        if (!report.ActivationGatePassed)
+            return new(false, "benchmark_gate_failed");
+
+        var benchmarkFile = $"retrieval-benchmark-{collection}.json";
+        var indexFile = $"index-{collection}.db";
+        var vectorFile = $"index-{collection}.vectors";
+        var identityMatches = RetrievalBenchmarkGate.HasReleaseIdentity(report)
+            && string.Equals(runtimeCodeCommit, report.CodeCommit, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(indexStamp.GetValueOrDefault("collection"), collection,
+                StringComparison.Ordinal)
+            && string.Equals(indexStamp.GetValueOrDefault("code_commit"), report.CodeCommit,
+                StringComparison.OrdinalIgnoreCase)
+            && string.Equals(indexStamp.GetValueOrDefault("corpus_commit"), report.CorpusCommit,
+                StringComparison.OrdinalIgnoreCase)
+            && string.Equals(indexStamp.GetValueOrDefault("embedding_model"), report.ModelId,
+                StringComparison.Ordinal)
+            && string.Equals(indexStamp.GetValueOrDefault("embedding_revision"), report.ModelRevision,
+                StringComparison.Ordinal)
+            && string.Equals(modelId, report.ModelId, StringComparison.Ordinal)
+            && string.Equals(modelRevision, report.ModelRevision, StringComparison.Ordinal)
+            && string.Equals(indexManifest.Sha256, report.ManifestId,
+                StringComparison.OrdinalIgnoreCase)
+            && string.Equals(indexManifest.CodeCommit, report.CodeCommit,
+                StringComparison.OrdinalIgnoreCase)
+            && indexManifest.Artifacts.Contains(indexFile, StringComparer.Ordinal)
+            && indexManifest.Artifacts.Contains(vectorFile, StringComparer.Ordinal)
+            && indexManifest.Artifacts.Contains("model-manifest.json", StringComparer.Ordinal)
+            && indexManifest.Artifacts.Contains("model.onnx", StringComparer.Ordinal)
+            && indexManifest.Artifacts.Contains("sentencepiece.bpe.model", StringComparer.Ordinal)
+            && string.Equals(indexManifest.Sources?.GetValueOrDefault("collection"), collection,
+                StringComparison.Ordinal)
+            && string.Equals(indexManifest.Sources?.GetValueOrDefault("corpus_commit"),
+                report.CorpusCommit, StringComparison.OrdinalIgnoreCase)
+            && benchmarkManifest.Artifacts.Count == 1
+            && benchmarkManifest.Artifacts.Contains(benchmarkFile, StringComparer.Ordinal)
+            && string.Equals(benchmarkManifest.CodeCommit, report.CodeCommit,
+                StringComparison.OrdinalIgnoreCase)
+            && string.Equals(benchmarkManifest.Sources?.GetValueOrDefault("collection"), collection,
+                StringComparison.Ordinal)
+            && string.Equals(benchmarkManifest.Sources?.GetValueOrDefault("corpus_commit"),
+                report.CorpusCommit, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(benchmarkManifest.Sources?.GetValueOrDefault("index_manifest_sha256"),
+                indexManifest.Sha256, StringComparison.OrdinalIgnoreCase);
+        if (!identityMatches)
+            return new(false, "benchmark_identity_mismatch");
+
+        var hybrid = report.HybridHoldout;
+        var keyword = report.KeywordHoldout;
+        if (hybrid.ExactFirstAccuracy < 1
+            || hybrid.TemporalLeakageFailures != 0
+            || hybrid.NoHitAccuracy < 1
+            || hybrid.ResolutionAccuracy < 1
+            || hybrid.RoleIntentAccuracy < 1
+            || hybrid.P95Ms > 250
+            || hybrid.NdcgAt10 + 0.000001 < keyword.NdcgAt10 * 0.98
+            || report.MemoryLimitBytes <= 0
+            || report.ProcessMemoryBytes >= report.MemoryLimitBytes * 0.75)
+            return new(false, "benchmark_invalid");
+
+        return new(true, "activated");
+    }
+
+    private static RetrievalBenchmarkCaseSet LoadCases()
+    {
+        using var stream = typeof(HybridActivationGate).Assembly
+            .GetManifestResourceStream("Lex.Web.retrieval-cases.json")
+            ?? throw new InvalidOperationException("Embedded retrieval benchmark cases are missing.");
+        return RetrievalBenchmarkCatalog.LoadSet(stream);
+    }
+
+    private static RetrievalBenchmarkBaseline LoadBaseline()
+    {
+        using var stream = typeof(HybridActivationGate).Assembly
+            .GetManifestResourceStream("Lex.Web.retrieval-baseline-v2.json")
+            ?? throw new InvalidOperationException("Embedded retrieval benchmark baseline is missing.");
+        return RetrievalBenchmarkCatalog.LoadBaseline(stream);
+    }
+}
 
 public sealed record PublisherReadiness(
     string Publisher,

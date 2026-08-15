@@ -255,6 +255,78 @@ public sealed class RetrievalBenchmarkTests
     }
 
     [Fact]
+    public void Hybrid_activation_requires_a_passing_report_bound_to_the_exact_runtime()
+    {
+        const string collection = "lu-legilux";
+        var cases = Cases().Where(item => item.Collection == collection).ToArray();
+        var baseline = RetrievalBenchmarkCatalog.LoadBaseline(
+            Path.Combine(RepoRoot(), "evals", "retrieval-baseline-v2.json"));
+        var report = Report() with
+        {
+            SampleCount = cases.Length,
+            TuningSampleCount = cases.Count(item => item.Split == "tuning"),
+            HoldoutSampleCount = cases.Count(item => item.Split == "holdout"),
+            BaselineSchema = baseline.Schema,
+            ExpectedCasesSha256 = baseline.CasesSha256,
+            ActualCasesSha256 = baseline.CasesSha256,
+            ReviewStatus = baseline.ReviewStatus,
+            ReviewAttestation = $"{baseline.ReviewedBy}@{baseline.ReviewedAt}",
+            CorpusCommit = new string('c', 40),
+            ManifestId = new string('1', 64),
+            ModelId = "test/e5",
+            ModelRevision = "test-revision",
+        };
+        var indexManifest = new Lex.Web.VerifiedArtifactManifest(
+            "index-lu-legilux.manifest.json", report.ManifestId, "key", report.CodeCommit,
+            report.Timestamp,
+            ["index-lu-legilux.db", "index-lu-legilux.vectors", "model-manifest.json",
+                "model.onnx", "sentencepiece.bpe.model"],
+            new Dictionary<string, string>
+            {
+                ["collection"] = collection,
+                ["corpus_commit"] = report.CorpusCommit,
+            });
+        var benchmarkManifest = new Lex.Web.VerifiedArtifactManifest(
+            "retrieval-benchmark-lu-legilux.manifest.json", new string('2', 64), "key",
+            report.CodeCommit, report.Timestamp, ["retrieval-benchmark-lu-legilux.json"],
+            new Dictionary<string, string>
+            {
+                ["collection"] = collection,
+                ["corpus_commit"] = report.CorpusCommit,
+                ["index_manifest_sha256"] = indexManifest.Sha256,
+            });
+        var stamp = new Dictionary<string, string>
+        {
+            ["collection"] = collection,
+            ["code_commit"] = report.CodeCommit,
+            ["corpus_commit"] = report.CorpusCommit,
+            ["embedding_model"] = report.ModelId,
+            ["embedding_revision"] = report.ModelRevision,
+        };
+
+        var accepted = Lex.Web.HybridActivationGate.Evaluate(
+            report, collection, report.CodeCommit, stamp, report.ModelId,
+            report.ModelRevision, indexManifest, benchmarkManifest);
+        var failedGate = Lex.Web.HybridActivationGate.Evaluate(
+            report with
+            {
+                ActivationGatePassed = false,
+                GateFailures = ["holdout warm p95 exceeds 250 ms"],
+            }, collection, report.CodeCommit, stamp, report.ModelId,
+            report.ModelRevision, indexManifest, benchmarkManifest);
+        var wrongRuntime = Lex.Web.HybridActivationGate.Evaluate(
+            report, collection, new string('f', 40), stamp, report.ModelId,
+            report.ModelRevision, indexManifest, benchmarkManifest);
+
+        Assert.True(accepted.Activated);
+        Assert.Equal("activated", accepted.Reason);
+        Assert.False(failedGate.Activated);
+        Assert.Equal("benchmark_gate_failed", failedGate.Reason);
+        Assert.False(wrongRuntime.Activated);
+        Assert.Equal("benchmark_identity_mismatch", wrongRuntime.Reason);
+    }
+
+    [Fact]
     public void Runner_reports_tuning_and_holdout_without_cross_split_aggregation()
     {
         var db = Path.Combine(Path.GetTempPath(), $"lex-benchmark-{Guid.NewGuid():N}.db");
