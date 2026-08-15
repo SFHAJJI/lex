@@ -1,5 +1,7 @@
+using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Lex.Derive;
 using Lex.Ingest;
 using Lex.Index;
 using Lex.Law;
@@ -101,6 +103,75 @@ public sealed partial class CorpusWriterTests : IDisposable
         Assert.Null(english["title"]);
         Assert.Equal("32024R0001", english["title_short"]!.GetValue<string>());
         Assert.Equal("Règlement de test", french["title"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task Publisher_structural_empty_coverage_never_becomes_a_search_or_Mcp_provision()
+    {
+        var corpus = Path.Combine(_dir, "coverage-corpus");
+        var articles = Path.Combine(_dir, "coverage-articles");
+        var db = Path.Combine(_dir, "coverage.db");
+        const string coverageAnchor = "publisherplaceholder";
+        const string coverageWId = "/eli/etat/leg/loi/2025/01/01/n1/art_placeholder";
+        var body = $$"""
+            <akomaNtoso xmlns="http://docs.oasis-open.org/legaldocml/ns/akn/3.0"><act><body>
+              <article id="{{coverageAnchor}}" wId="{{coverageWId}}"><num/><alinea><content><p/></content></alinea></article>
+              <article id="real" wId="/eli/etat/leg/loi/2025/01/01/n1/art_1"><num>Art. 1.</num><alinea><content><p>Searchable legal wording.</p></content></alinea></article>
+            </body></act></akomaNtoso>
+            """;
+        await new CorpusWriter(corpus, DateTimeOffset.Parse("2026-08-14T00:00:00Z"), CodeCommit)
+            .WriteAsync(new OneVersionAdapter("true", "finance",
+                bodyFetch: SourceBodyFetch.Retrieved(body)), default);
+        var corpusCommit = CommitGitDirectory(corpus);
+
+        var stats = DeriveWriter.Derive(corpus, articles, "test",
+            new string('b', 40), new string('d', 40), corpusCommit);
+        Assert.Empty(stats.Errors);
+        var derivedPath = Directory.EnumerateFiles(articles, "en.json", SearchOption.AllDirectories)
+            .Single();
+        var derived = JsonNode.Parse(await File.ReadAllTextAsync(derivedPath))!.AsObject();
+        Assert.Equal("real", Assert.Single(derived["provisions"]!.AsArray())!["anchor"]!.GetValue<string>());
+        var coverage = Assert.Single(derived["publisher_structural_empty_articles"]!.AsArray())!;
+        Assert.Equal(coverageAnchor, coverage["anchor"]!.GetValue<string>());
+        Assert.Equal(coverageWId, coverage["w_id"]!.GetValue<string>());
+
+        var articlesCommit = CommitGitDirectory(articles);
+        IndexFromCorpus.Build(corpus, articles, db, null,
+            DateTimeOffset.Parse("2026-08-14T00:00:00Z"),
+            codeCommit: new string('c', 40), articlesCommit: articlesCommit,
+            corpusCommit: corpusCommit);
+
+        using (var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={db}"))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = """
+                SELECT
+                  (SELECT COUNT(*) FROM provisions WHERE anchor=$anchor),
+                  (SELECT COUNT(*) FROM fts WHERE fts MATCH $query),
+                  (SELECT COUNT(*) FROM semantic_chunks)
+                """;
+            command.Parameters.AddWithValue("$anchor", coverageAnchor);
+            command.Parameters.AddWithValue("$query", coverageAnchor);
+            using var row = command.ExecuteReader();
+            Assert.True(row.Read());
+            Assert.Equal(0, row.GetInt32(0));
+            Assert.Equal(0, row.GetInt32(1));
+            Assert.Equal(0, row.GetInt32(2));
+        }
+        using var reader = LexIndexReader.Open(db);
+        Assert.Empty(reader.SearchKeyword(
+            coverageAnchor, FilterSet.All, 10, fuzzyAuto: false).Hits);
+        var response = Assert.IsType<JsonObject>(new McpCore(
+            new Dictionary<string, LexIndexReader> { [reader.Collection] = reader })
+            .CallTool("as_of", new JsonObject
+            {
+                ["work"] = "test:w1", ["date"] = "2024-01-01", ["mode"] = "outline",
+            }));
+        var returned = Assert.IsType<JsonArray>(response["provisions"]);
+        Assert.Equal("real", Assert.Single(returned)!["anchor"]!.GetValue<string>());
+        Assert.DoesNotContain(coverageAnchor, response.ToJsonString(), StringComparison.Ordinal);
+        Assert.DoesNotContain(coverageWId, response.ToJsonString(), StringComparison.Ordinal);
     }
 
     [Theory]
@@ -1206,6 +1277,32 @@ public sealed partial class CorpusWriterTests : IDisposable
     public void Dispose()
     {
         try { Directory.Delete(_dir, true); } catch { }
+    }
+
+    private static string CommitGitDirectory(string directory)
+    {
+        string Git(params string[] args)
+        {
+            var start = new ProcessStartInfo("git")
+            {
+                WorkingDirectory = directory,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+            };
+            foreach (var arg in args) start.ArgumentList.Add(arg);
+            using var process = Process.Start(start)!;
+            var output = process.StandardOutput.ReadToEnd();
+            var error = process.StandardError.ReadToEnd();
+            Assert.True(process.WaitForExit(10_000) && process.ExitCode == 0, error);
+            return output.Trim().ToLowerInvariant();
+        }
+
+        Git("init");
+        Git("config", "user.name", "Lex Test");
+        Git("config", "user.email", "lex@example.invalid");
+        Git("add", ".");
+        Git("commit", "-m", "fixture");
+        return Git("rev-parse", "HEAD");
     }
 
     private sealed class OneVersionAdapter(

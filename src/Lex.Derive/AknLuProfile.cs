@@ -19,8 +19,17 @@ public static class AknLuProfile
 
     private static readonly string[] ContainerNames =
         ["book", "part", "title", "chapter", "section", "subsection"];
+    private const string OfficialLegiluxWIdPrefix = "/eli/etat/leg/";
 
-    public static Extraction Extract(string xml, string lexIdBase)
+    public static Extraction Extract(string xml, string lexIdBase) =>
+        ExtractCore(xml, lexIdBase, preservePublisherStructuralEmpties: false);
+
+    internal static Extraction ExtractWithPublisherStructuralEmpties(
+        string xml, string lexIdBase) =>
+        ExtractCore(xml, lexIdBase, preservePublisherStructuralEmpties: true);
+
+    private static Extraction ExtractCore(
+        string xml, string lexIdBase, bool preservePublisherStructuralEmpties)
     {
         var doc = XDocument.Parse(xml, LoadOptions.None);
         var root = doc.Root ?? throw new InvalidDataException("empty XML document");
@@ -41,19 +50,46 @@ public static class AknLuProfile
         provisionSources = provisionSources
             .Where(p => !provisionSources.Any(q => q.El != p.El && q.El.Descendants().Contains(p.El)))
             .ToList();
+        Dictionary<string, int>? officialIds = null;
+        Dictionary<string, int>? officialWIds = null;
+        HashSet<string>? documentTargets = null;
+        if (preservePublisherStructuralEmpties)
+        {
+            var allElements = root.DescendantsAndSelf().ToArray();
+            officialIds = allElements
+                .Select(element => (string?)element.Attribute("id"))
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .GroupBy(value => value!, StringComparer.Ordinal)
+                .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
+            officialWIds = allElements
+                .Select(element => (string?)element.Attribute("wId"))
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .GroupBy(value => value!, StringComparer.Ordinal)
+                .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
+            documentTargets = allElements
+                .SelectMany(element => element.Attributes())
+                .Where(attribute => attribute.Name.LocalName is "id" or "eId")
+                .Select(attribute => attribute.Value)
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .ToHashSet(StringComparer.Ordinal);
+        }
 
         // frontmatter is the writer's job; the extraction is pure document content
         var md = new StringBuilder();
         var provisions = new List<Provision>();
         var lastPath = new List<string>();
         var seenAnchors = new HashSet<string>(StringComparer.Ordinal);
+        List<PublisherStructuralEmptyArticle>? publisherStructuralEmptyArticles =
+            preservePublisherStructuralEmpties ? [] : null;
         var ordinal = 0;
 
         foreach (var (el, type) in provisionSources)
         {
             ordinal++;
             var scl = ReadSclMeta(el);
-            var anchor = (string?)el.Attribute("id");
+            var officialAnchor = (string?)el.Attribute("id");
+            var officialWId = (string?)el.Attribute("wId");
+            var anchor = officialAnchor;
             if (string.IsNullOrWhiteSpace(anchor))
                 anchor = type == "annex" ? Slug(AnnexTitle(el, akn) ?? $"annex_{ordinal}") : $"{type}_{ordinal}";
             if (!seenAnchors.Add(anchor))
@@ -72,6 +108,25 @@ public static class AknLuProfile
 
             var citations = new List<Citation>();
             var body = RenderBody(el, akn, citations, type);
+            var publisherStructuralEmpty = preservePublisherStructuralEmpties
+                && type == "article"
+                && !string.IsNullOrWhiteSpace(officialAnchor)
+                && officialIds!.GetValueOrDefault(officialAnchor) == 1
+                && !string.IsNullOrWhiteSpace(officialWId)
+                && officialWId.StartsWith(OfficialLegiluxWIdPrefix, StringComparison.Ordinal)
+                && officialWIds!.GetValueOrDefault(officialWId) == 1
+                && num is null
+                && heading is null
+                && body.Length == 0
+                && string.IsNullOrWhiteSpace(el.Value)
+                && HasOnlyKnownEmptyStructure(el, akn, documentTargets!)
+                    ? new PublisherStructuralEmptyArticle(officialAnchor, officialWId)
+                    : null;
+            if (publisherStructuralEmpty is not null)
+            {
+                publisherStructuralEmptyArticles!.Add(publisherStructuralEmpty);
+                continue;
+            }
 
             // ---- assemble markdown: emit container headings on path change, then the provision
             for (var i = 0; i < path.Count; i++)
@@ -107,13 +162,16 @@ public static class AknLuProfile
                 Citations: citations));
         }
 
-        if (provisions.Count == 0)
+        if (publisherStructuralEmptyArticles?.Count > 0)
+            notes.Add($"{publisherStructuralEmptyArticles.Count} official publisher-structural empty article(s) preserved outside searchable provisions");
+
+        if (provisions.Count == 0 && (publisherStructuralEmptyArticles?.Count ?? 0) == 0)
             notes.Add("no article/annex elements found; document not extracted (profile coverage gap)");
 
         var markdown = md.ToString();
         // spans as Unicode codepoint offsets (portable for non-.NET consumers)
         var converted = ToCodepointSpans(markdown, provisions);
-        return new Extraction(converted, markdown, notes);
+        return new Extraction(converted, markdown, notes, publisherStructuralEmptyArticles);
     }
 
     // ---------------------------------------------------------------- scl metadata
@@ -181,6 +239,108 @@ public static class AknLuProfile
 
         foreach (var el in content) RenderBlock(el, akn, blocks, citations, "");
         return string.Join("\n\n", blocks.Where(b => b.Length > 0));
+    }
+
+    private static bool HasOnlyKnownEmptyStructure(
+        XElement article, XNamespace akn, IReadOnlySet<string> documentTargets)
+    {
+        if (!HasOnlyAttributes(article, "id", "wId")) return false;
+
+        var children = article.Elements().ToArray();
+        var index = 0;
+        if (index >= children.Length || !Is(children[index], akn, "num")
+            || !IsEmptyInline(children[index], akn, "u"))
+            return false;
+        index++;
+        if (index < children.Length && Is(children[index], akn, "heading"))
+        {
+            if (!IsEmptyInline(children[index], akn, "b", wrapperRequired: true)) return false;
+            index++;
+        }
+        if (index == children.Length) return false;
+
+        var bodyName = children[index].Name.LocalName;
+        if (bodyName is not ("alinea" or "paragraph")) return false;
+        for (; index < children.Length; index++)
+        {
+            var child = children[index];
+            if (!Is(child, akn, bodyName)) return false;
+            if (bodyName == "alinea"
+                    ? !IsEmptyAlinea(child, akn, documentTargets)
+                    : !IsEmptyParagraph(child, akn, documentTargets))
+                return false;
+        }
+        return true;
+    }
+
+    private static bool IsEmptyParagraph(
+        XElement paragraph, XNamespace akn, IReadOnlySet<string> documentTargets)
+    {
+        if (!HasOnlyAttributes(paragraph, "id")
+            || string.IsNullOrWhiteSpace((string?)paragraph.Attribute("id")))
+            return false;
+        var children = paragraph.Elements().ToArray();
+        if (children.Length < 2 || !Is(children[0], akn, "num")
+            || !IsEmptyInline(children[0], akn, "u"))
+            return false;
+        return children.Skip(1).All(child => Is(child, akn, "alinea")
+            && IsEmptyAlinea(child, akn, documentTargets));
+    }
+
+    private static bool IsEmptyAlinea(
+        XElement alinea, XNamespace akn, IReadOnlySet<string> documentTargets)
+    {
+        if (alinea.HasAttributes) return false;
+        var content = alinea.Elements().ToArray();
+        return content.Length == 1 && Is(content[0], akn, "content")
+            && !content[0].HasAttributes
+            && content[0].Elements().Any()
+            && content[0].Elements().All(p => Is(p, akn, "p")
+                && IsEmptyParagraphText(p, akn, documentTargets));
+    }
+
+    private static bool IsEmptyParagraphText(
+        XElement paragraph, XNamespace akn, IReadOnlySet<string> documentTargets)
+    {
+        if (paragraph.HasAttributes) return false;
+        foreach (var noteRef in paragraph.Elements())
+        {
+            if (!Is(noteRef, akn, "noteRef") || noteRef.HasElements
+                || !string.IsNullOrWhiteSpace(noteRef.Value)
+                || !HasOnlyAttributes(noteRef, "href", "marker"))
+                return false;
+            var href = (string?)noteRef.Attribute("href") ?? "";
+            var marker = (string?)noteRef.Attribute("marker") ?? "";
+            if (href.Length <= 2 || !href.StartsWith("#M", StringComparison.Ordinal)
+                || href.AsSpan(2).ContainsAnyExceptInRange('0', '9')
+                || marker.Length == 0
+                || marker.AsSpan().ContainsAnyExceptInRange('0', '9')
+                || documentTargets.Contains(href[1..]))
+                return false;
+        }
+        return true;
+    }
+
+    private static bool IsEmptyInline(
+        XElement element, XNamespace akn, string wrapper, bool wrapperRequired = false)
+    {
+        if (element.HasAttributes) return false;
+        var children = element.Elements().ToArray();
+        if (children.Length > 1 || (wrapperRequired && children.Length != 1)) return false;
+        return children.All(child => Is(child, akn, wrapper)
+            && !child.HasAttributes && !child.Elements().Any());
+    }
+
+    private static bool Is(XElement element, XNamespace akn, string localName)
+        => element.Name.Namespace == akn && element.Name.LocalName == localName;
+
+    private static bool HasOnlyAttributes(XElement element, params string[] names)
+    {
+        var attributes = element.Attributes().Where(attribute => !attribute.IsNamespaceDeclaration)
+            .ToArray();
+        return attributes.Length == names.Length
+            && names.All(name => attributes.Count(attribute => attribute.Name.NamespaceName.Length == 0
+                && attribute.Name.LocalName == name) == 1);
     }
 
     private static void RenderBlock(XElement el, XNamespace akn, List<string> blocks, List<Citation> citations, string listIndent)
@@ -328,4 +488,12 @@ public static class AknLuProfile
     private static string Sha256Hex(string text) => MdUtil.Sha256Hex(text);
     private static List<Provision> ToCodepointSpans(string markdown, List<Provision> provisions)
         => MdUtil.ToCodepointSpans(markdown, provisions);
+}
+
+public static class AknLuProfileV2
+{
+    public const string ProfileId = "akn-lu/2";
+
+    public static Extraction Extract(string xml, string lexIdBase) =>
+        AknLuProfile.ExtractWithPublisherStructuralEmpties(xml, lexIdBase);
 }

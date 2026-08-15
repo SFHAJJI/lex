@@ -359,6 +359,8 @@ public static class CatalogueEndpoints
                         var what = pr.Profile switch
                         {
                             "akn-lu/1" => "publisher XML (Akoma Ntoso), article boundaries from the publisher",
+                            "akn-lu/2" => "publisher XML (Akoma Ntoso), article boundaries from the publisher; publisher-only structural placeholders are preserved as non-searchable coverage evidence",
+                            "akn-lu-identical-scl-duplicate/1" => "publisher XML (Akoma Ntoso), after one disclosed byte-identical presentation-attribute repair for parsing",
                             "akn-lu-document/1" => "publisher XML (Akoma Ntoso), exposed as one document because the publisher supplied no article or annex boundary",
                             "fmx4-eu/1" => "publisher XML (Formex 4), article boundaries from the publisher",
                             "xhtml-eu/1" => "publisher XHTML, article boundaries from the publisher",

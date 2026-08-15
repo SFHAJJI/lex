@@ -1,5 +1,6 @@
 using Lex.Derive;
 using Lex.Temporal;
+using System.Text.Json.Nodes;
 using Xunit;
 
 namespace Lex.Tests;
@@ -151,7 +152,7 @@ public sealed class EmptyProvisionMetricTests
                 """);
 
             var error = Assert.Single(regression.Errors);
-            Assert.Contains("empty-provision count increased", error,
+            Assert.Contains("empty-provision signature", error,
                 StringComparison.OrdinalIgnoreCase);
             Assert.Equal(acceptedBytes, File.ReadAllBytes(output));
 
@@ -164,6 +165,183 @@ public sealed class EmptyProvisionMetricTests
                 """);
             Assert.Single(repeated.Errors);
             Assert.Equal(acceptedBytes, File.ReadAllBytes(output));
+        }
+        finally
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Publisher_structural_empty_articles_are_preserved_but_do_not_count_as_extraction_regressions()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"lex-empty-prov-{Guid.NewGuid():N}");
+        try
+        {
+            Assert.Empty(DeriveFixture(root, Html).Errors);
+
+            var expanded = DeriveFixture(root, """
+                <akomaNtoso xmlns="http://docs.oasis-open.org/legaldocml/ns/akn/3.0"><act><body>
+                  <article id="empty_1" wId="/eli/etat/leg/loi/2025/01/01/n1/art_1"><num/><alinea><content><p/></content></alinea></article>
+                  <article id="empty_2" wId="/eli/etat/leg/loi/2025/01/01/n1/art_2"><num/><alinea><content><p/></content></alinea></article>
+                  <article id="real" wId="/eli/etat/leg/loi/2025/01/01/n1/art_3"><num>Art. 1.</num><alinea><content><p>Texte.</p></content></alinea></article>
+                </body></act></akomaNtoso>
+                """);
+
+            Assert.Empty(expanded.Errors);
+            Assert.Equal(0, expanded.EmptyProvisions);
+            var output = JsonNode.Parse(File.ReadAllText(Output(root, "32000r0001")))!.AsObject();
+            var provisions = output["provisions"]!.AsArray().OfType<JsonObject>().ToArray();
+            Assert.Equal("real", Assert.Single(provisions)["anchor"]!.GetValue<string>());
+            var coverage = output["publisher_structural_empty_articles"]!.AsArray()
+                .OfType<JsonObject>().ToArray();
+            Assert.Equal(["empty_1", "empty_2"], coverage
+                .Select(value => value["anchor"]!.GetValue<string>()));
+            Assert.Equal([
+                "/eli/etat/leg/loi/2025/01/01/n1/art_1",
+                "/eli/etat/leg/loi/2025/01/01/n1/art_2",
+            ], coverage.Select(value => value["w_id"]!.GetValue<string>()));
+        }
+        finally
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Structural_coverage_without_a_searchable_provision_is_refused()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"lex-empty-prov-{Guid.NewGuid():N}");
+        try
+        {
+            var result = DeriveFixture(root, """
+                <akomaNtoso xmlns="http://docs.oasis-open.org/legaldocml/ns/akn/3.0"><act><body>
+                  <article id="empty_1" wId="/eli/etat/leg/loi/2025/01/01/n1/art_1"><num/><alinea><content><p/></content></alinea></article>
+                </body></act></akomaNtoso>
+                """);
+
+            Assert.Contains("no searchable provision", Assert.Single(result.Errors),
+                StringComparison.Ordinal);
+            Assert.Equal(0, result.Versions);
+            Assert.False(File.Exists(Output(root, "32000r0001")));
+        }
+        finally
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Publisher_anchor_remint_does_not_change_the_stable_empty_signature()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"lex-empty-prov-{Guid.NewGuid():N}");
+        try
+        {
+            Assert.Empty(DeriveFixture(root, Html).Errors);
+            var path = Output(root, "32000r0001");
+            var accepted = JsonNode.Parse(File.ReadAllText(path))!.AsObject();
+            var empty = accepted["provisions"]!.AsArray().OfType<JsonObject>()
+                .Single(value => string.IsNullOrWhiteSpace(value["text_md"]!.GetValue<string>()));
+            empty["anchor"] = "publisher-reminted-anchor";
+            empty["provision_id"] = accepted["lex_id"]!.GetValue<string>()
+                + "#publisher-reminted-anchor";
+            File.WriteAllText(path, accepted.ToJsonString());
+
+            var repeated = DeriveFixture(root, Html);
+
+            Assert.Empty(repeated.Errors);
+            Assert.Equal(1, repeated.EmptyProvisions);
+        }
+        finally
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void A_same_count_with_a_new_empty_identity_is_still_a_regression()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"lex-empty-prov-{Guid.NewGuid():N}");
+        try
+        {
+            Assert.Empty(DeriveFixture(root, Html).Errors);
+
+            var changedIdentity = DeriveFixture(root, """
+                <html><body>
+                <p class="title-article-norm">Article 1</p>
+                <p>Original publisher wording.</p>
+                <p class="title-article-norm">Article 3</p>
+                </body></html>
+                """);
+
+            Assert.Contains("empty-provision signature", Assert.Single(changedIdentity.Errors),
+                StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Malformed_or_duplicate_accepted_structural_empty_evidence_is_refused()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"lex-empty-prov-{Guid.NewGuid():N}");
+        const string source = """
+            <akomaNtoso xmlns="http://docs.oasis-open.org/legaldocml/ns/akn/3.0"><act><body>
+              <article id="empty_1" wId="/eli/etat/leg/loi/2025/01/01/n1/art_1"><num/><alinea><content><p/></content></alinea></article>
+              <article id="real" wId="/eli/etat/leg/loi/2025/01/01/n1/art_2"><num>Art. 1.</num><alinea><content><p>Texte.</p></content></alinea></article>
+            </body></act></akomaNtoso>
+            """;
+        try
+        {
+            Assert.Empty(DeriveFixture(root, source).Errors);
+            var path = Output(root, "32000r0001");
+            var accepted = JsonNode.Parse(File.ReadAllText(path))!.AsObject();
+            accepted["publisher_structural_empty_articles"] = new JsonArray(new JsonObject());
+            File.WriteAllText(path, accepted.ToJsonString());
+
+            var malformed = DeriveFixture(root, source);
+            Assert.Contains("publisher_structural_empty_articles", Assert.Single(malformed.Errors),
+                StringComparison.Ordinal);
+
+            accepted = JsonNode.Parse(File.ReadAllText(path))!.AsObject();
+            var entry = new JsonObject
+            {
+                ["anchor"] = "empty_1",
+                ["w_id"] = "/eli/etat/leg/loi/2025/01/01/n1/art_1",
+            };
+            accepted["publisher_structural_empty_articles"] = new JsonArray(
+                entry.DeepClone(), entry.DeepClone());
+            File.WriteAllText(path, accepted.ToJsonString());
+
+            var duplicate = DeriveFixture(root, source);
+            Assert.Contains("duplicate", Assert.Single(duplicate.Errors),
+                StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Labeled_empty_Akn_articles_still_trip_the_extraction_regression_ratchet()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"lex-empty-prov-{Guid.NewGuid():N}");
+        try
+        {
+            Assert.Empty(DeriveFixture(root, Html).Errors);
+
+            var regression = DeriveFixture(root, """
+                <akomaNtoso xmlns="http://docs.oasis-open.org/legaldocml/ns/akn/3.0"><act><body>
+                  <article id="empty_1"><num>Art. 1.</num><alinea><content><p/></content></alinea></article>
+                  <article id="empty_2"><num>Art. 2.</num><alinea><content><p/></content></alinea></article>
+                </body></act></akomaNtoso>
+                """);
+
+            Assert.Contains("empty-provision signature", Assert.Single(regression.Errors),
+                StringComparison.Ordinal);
         }
         finally
         {
