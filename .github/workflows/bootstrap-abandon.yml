@@ -101,7 +101,7 @@ jobs:
                   template:.properties.template}]' > "$prefix-revisions.json" || return 1
             jq -n --slurpfile config "$prefix-config.json" \
               --slurpfile revisions "$prefix-revisions.json" \
-              '{schema:"lex-bootstrap-preparation-inventory/1",
+              '{schema:"lex-bootstrap-preparation-inventory/2",
                 active_revisions_mode:$config[0].activeRevisionsMode,
                 max_inactive_revisions:$config[0].maxInactiveRevisions,
                 latest_revision_name:$config[0].latestRevisionName,
@@ -210,7 +210,7 @@ jobs:
           if [ -n "$last_error" ]; then
             error_sha=$(printf '%s' "$last_error" | sha256sum | cut -d' ' -f1)
           fi
-          jq -n --arg schema lex-bootstrap-preparation-abandon-evidence/1 \
+          jq -n --arg schema lex-bootstrap-preparation-abandon-evidence/2 \
             --arg commit "$GITHUB_SHA" --arg plan "$PLAN_SHA256" --arg target "$target" \
             --arg entry "$entry_state" --arg outcome "$outcome" \
             --argjson attempted "$command_attempted" --argjson command_exit "$command_exit" \
@@ -234,14 +234,14 @@ jobs:
               last_observation_error_sha256:($error_sha | if length == 0 then null else . end)}' \
             > bootstrap-preparation-abandon-evidence.json
           if [ "$outcome" = "converged" ]; then
-            jq -n --arg schema lex-bootstrap-preparation-abandon-receipt/1 \
+            jq -n --arg schema lex-bootstrap-preparation-abandon-receipt/2 \
               --arg commit "$GITHUB_SHA" --arg plan "$PLAN_SHA256" --arg target "$target" \
               --slurpfile reviewed reviewed/bootstrap-preparation-abandon-plan.json \
               '{schema:$schema,code_commit:$commit,plan_sha256:$plan,
                 target_revision:$target,legacy_authority:$reviewed[0].legacy_authority,
-                retained_inactive:$reviewed[0].retained_inactive,
+                superseded_inactive:$reviewed[0].superseded_inactive,
                 abandoned_target:$reviewed[0].target,
-                terminal_state:"A100 plus two exact inactive revisions"}' \
+                terminal_state:"exact A100 plus inactive R"}' \
               > bootstrap-preparation-abandon-receipt.json
           fi
           echo "outcome=$outcome" >> "$GITHUB_OUTPUT"
@@ -271,7 +271,7 @@ jobs:
             echo "- reviewed plan: \`$PLAN_SHA256\`"
             echo "- outcome: \`${{ steps.abandon.outputs.outcome }}\`"
             echo "- traffic/configuration/template mutation: \`false\`"
-            echo "- next action: fresh legacy inventory and reviewed no-write handoff"
+            echo "- next action: fresh legacy inventory and reviewed cleanup receipt"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Refuse an inconclusive abandonment

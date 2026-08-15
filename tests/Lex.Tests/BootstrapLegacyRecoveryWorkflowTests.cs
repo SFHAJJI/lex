@@ -69,7 +69,8 @@ public sealed class BootstrapLegacyRecoveryWorkflowTests
         Assert.Contains("verify_bootstrap_forward_topology candidate-active", deploy);
         Assert.Contains("verify_bootstrap_forward_topology candidate-prepared", deploy);
         Assert.Contains("A + predecessor + survivor", deploy);
-        Assert.Contains("A + survivor + R", deploy);
+        Assert.Contains("A + optional predecessor + survivor + R", deploy);
+        Assert.Contains("Exact A + R; superseded O/S must be absent", deploy);
         Assert.Contains("A + R + C", deploy);
         Assert.Contains("60); do", deploy);
     }
@@ -106,10 +107,10 @@ public sealed class BootstrapLegacyRecoveryWorkflowTests
             StringComparison.Ordinal)];
 
         Assert.Contains("for attempt in $(seq 1 60); do\n"
-            + "                  verify_bootstrap_forward_topology candidate-recoverable",
+            + "                    verify_bootstrap_forward_topology candidate-recoverable",
             recovery);
         Assert.Contains("for attempt in $(seq 1 60); do\n"
-            + "                  verify_bootstrap_forward_topology fallback-recoverable",
+            + "                  if verify_bootstrap_forward_topology fallback-inactive-recovery",
             recovery);
         Assert.True(recovery.IndexOf("verify_bootstrap_forward_topology candidate-recoverable",
                         StringComparison.Ordinal)
@@ -136,6 +137,27 @@ public sealed class BootstrapLegacyRecoveryWorkflowTests
             recovery);
         Assert.Contains("verify_bootstrap_forward_topology fallback-inactive-recovery",
             recovery);
+        Assert.Contains("verify_bootstrap_forward_topology fallback-pruning", recovery);
+        var fallbackRecovery = recovery[recovery.IndexOf(
+            "elif [ \"$fallback_patch_attempted\" = true ]; then",
+            StringComparison.Ordinal)..];
+        var finalFallback = fallbackRecovery.IndexOf(
+            "verify_bootstrap_forward_topology fallback-inactive-recovery",
+            StringComparison.Ordinal);
+        var activeFallback = fallbackRecovery.IndexOf(
+            "verify_bootstrap_forward_topology fallback-recoverable",
+            StringComparison.Ordinal);
+        var deactivateFallback = fallbackRecovery.IndexOf(
+            "deactivate_revision \"$bootstrap_fallback\"", StringComparison.Ordinal);
+        Assert.True(finalFallback >= 0 && activeFallback > finalFallback
+            && deactivateFallback > activeFallback);
+        var raiseRetention = recovery.IndexOf(
+            "{properties:{configuration:{maxInactiveRevisions:2}}}",
+            StringComparison.Ordinal);
+        var deactivateCandidate = recovery.IndexOf("deactivate_revision \"$candidate\"",
+            StringComparison.Ordinal);
+        Assert.True(raiseRetention >= 0 && deactivateCandidate > raiseRetention);
+        Assert.Contains("verify_bootstrap_forward_topology candidate-retained", recovery);
     }
 
     [Fact]
