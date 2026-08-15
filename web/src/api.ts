@@ -36,23 +36,113 @@ export interface AskReply {
   reply: string;
   /** Opaque, process-local bearer for the next turn; never persist or place in a URL. */
   thread_token?: string;
-  trace?: { phase?: string; operation_id?: string; tool?: string; status?: string }[];
+  trace?: Record<string, unknown>[];
   ui?: UiEffect;
   operations?: OperationReply[];
   clarification?: AskClarification;
   error?: string;
+  model_usage?: { input_tokens?: number; output_tokens?: number; total_tokens?: number };
+  model_identity?: { resource_host?: string; deployment?: string };
+  timing?: { planner_ms?: number; mcp_ms?: number; synthesis_ms?: number | null };
   /** False when the answer was a refusal: its steps are withheld from the transcript. */
   narrated?: boolean;
 }
 export interface OperationReply {
   operation_id: string;
   order: number;
+  tool?: string;
   result_class?: string;
   disposition?: string;
   legal_outcome: string;
   transport_outcome: string;
   effects: string[];
   ui?: UiEffect;
+}
+
+export interface AskExecutionDetails {
+  /** The exact server-validated operation_plan trace object returned by /api/ask/stream. */
+  operation_plan: Record<string, unknown> | null;
+  /** Compact terminal outcomes; the potentially large legal/UI payload remains in the answer. */
+  operation_outcomes: {
+    operation_id: string;
+    order: number;
+    tool?: string;
+    result_class?: string;
+    disposition?: string;
+    legal_outcome: string;
+    transport_outcome: string;
+    effects: string[];
+  }[];
+  model_usage?: { input_tokens: number; output_tokens: number; total_tokens: number };
+  model_identity?: { resource_host: string; deployment: string };
+  timing?: { planner_ms: number; mcp_ms: number; synthesis_ms?: number };
+}
+
+const boundedText = (value: unknown, maximum = 200) =>
+  typeof value === "string" && value.length > 0 && value.length <= maximum ? value : undefined;
+const boundedNumber = (value: unknown) =>
+  typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : undefined;
+const boundedInteger = (value: unknown) =>
+  typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : undefined;
+
+/**
+ * Exposes the exact frozen operation plan already returned to this browser, plus a deliberately
+ * compact terminal outcome summary. The other trace phases, reply prose, legal/UI payloads and
+ * thread capability are not duplicated in the disclosure.
+ */
+export function executionDetails(reply: AskReply): AskExecutionDetails | undefined {
+  const rawPlan = Array.isArray(reply.trace)
+    ? reply.trace.find((entry) => entry && typeof entry === "object" && !Array.isArray(entry)
+      && entry.phase === "operation_plan") : undefined;
+  const replyOperations: unknown[] = Array.isArray(reply.operations) ? reply.operations : [];
+  const outcomes = replyOperations.slice(0, 8).flatMap((value) => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+    const operation = value as Record<string, unknown>;
+    const operationId = boundedText(operation.operation_id);
+    const order = boundedInteger(operation.order);
+    const legalOutcome = boundedText(operation.legal_outcome);
+    const transportOutcome = boundedText(operation.transport_outcome);
+    if (!operationId || order === undefined || !legalOutcome || !transportOutcome) return [];
+    const tool = boundedText(operation.tool);
+    const resultClass = boundedText(operation.result_class);
+    const disposition = boundedText(operation.disposition);
+    return [{
+      operation_id: operationId,
+      order,
+      ...(tool ? { tool } : {}),
+      ...(resultClass ? { result_class: resultClass } : {}),
+      ...(disposition ? { disposition } : {}),
+      legal_outcome: legalOutcome,
+      transport_outcome: transportOutcome,
+      effects: (Array.isArray(operation.effects) ? operation.effects : [])
+        .map((effect) => boundedText(effect))
+        .filter((effect): effect is string => effect !== undefined).slice(0, 16),
+    }];
+  });
+  const inputTokens = boundedInteger(reply.model_usage?.input_tokens);
+  const outputTokens = boundedInteger(reply.model_usage?.output_tokens);
+  const totalTokens = boundedInteger(reply.model_usage?.total_tokens);
+  const resourceHost = boundedText(reply.model_identity?.resource_host);
+  const deployment = boundedText(reply.model_identity?.deployment);
+  const plannerMs = boundedNumber(reply.timing?.planner_ms);
+  const mcpMs = boundedNumber(reply.timing?.mcp_ms);
+  const synthesisMs = boundedNumber(reply.timing?.synthesis_ms);
+  if (!rawPlan && outcomes.length === 0) return undefined;
+  return {
+    operation_plan: rawPlan ?? null,
+    operation_outcomes: outcomes,
+    model_usage: inputTokens !== undefined && outputTokens !== undefined
+      && totalTokens !== undefined
+      ? { input_tokens: inputTokens, output_tokens: outputTokens, total_tokens: totalTokens }
+      : undefined,
+    model_identity: resourceHost && deployment
+      ? { resource_host: resourceHost, deployment }
+      : undefined,
+    timing: plannerMs !== undefined && mcpMs !== undefined
+      ? { planner_ms: plannerMs, mcp_ms: mcpMs,
+          ...(synthesisMs !== undefined ? { synthesis_ms: synthesisMs } : {}) }
+      : undefined,
+  };
 }
 
 /** Preserve every terminal operation view in user order for compound requests. */
@@ -101,7 +191,12 @@ export function populationScopeLabel(value: number | undefined): string | undefi
 export function shouldOfferContextualFollowUps(reply: AskReply): boolean {
   return !reply.error && !reply.clarification && !reply.ui?.gap;
 }
-export interface AskMessage { role: "user" | "assistant"; content: string }
+export interface AskMessage {
+  role: "user" | "assistant";
+  content: string;
+  /** Tab-memory-only projection used by the ordinary per-answer execution disclosure. */
+  execution?: AskExecutionDetails;
+}
 export interface ClarificationChoice { label: string; value?: string }
 export interface AskClarification {
   question: string;

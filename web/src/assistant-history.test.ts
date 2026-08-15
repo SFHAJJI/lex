@@ -8,12 +8,123 @@ import {
   askQuestionError,
   clarificationFollowUp,
   compoundOperationViews,
+  executionDetails,
   populationScopeLabel,
   safeHttpsUrl,
   shouldOfferContextualFollowUps,
   signatureStatusLabel,
   validAskThreadToken,
 } from "./api.ts";
+
+test("execution details expose only the frozen typed plan and bounded outcome metadata", () => {
+  const details = executionDetails({
+    reply: "publisher text must not be copied into diagnostics",
+    thread_token: "A".repeat(43),
+    trace: [
+      { phase: "subject_resolution", works: ["secret future field"] },
+      {
+        phase: "operation_plan",
+        request_id: "request-1",
+        locale: "en",
+        duration_ms: 42,
+        planner_retry: true,
+        operations: [{
+          operation_id: "request-1:op-1",
+          order: 0,
+          tool: "as_of",
+          result_class: "provision",
+          disposition: "display",
+          arguments: {
+            work: "eu-eurlex:32016r0679", date: "2021-01-01",
+          },
+          repairs: ["as_of.page dropped"],
+        }],
+      },
+      { phase: "primary", args: { unbounded: "payload" } },
+    ],
+    operations: [{
+      operation_id: "request-1:op-1",
+      order: 0,
+      tool: "as_of",
+      result_class: "provision",
+      disposition: "display",
+      legal_outcome: "succeeded",
+      transport_outcome: "completed",
+      effects: ["provision"],
+      ui: { provision: {
+        subject: { work: "eu-eurlex:32016r0679" },
+        valid_from: "2016-05-04",
+        provisions: [{ anchor: "art_6", text: "must not survive" }],
+      } },
+    }],
+    model_usage: { input_tokens: 120, output_tokens: 30, total_tokens: 150 },
+    model_identity: { resource_host: "example.openai.azure.com", deployment: "planner" },
+    timing: { planner_ms: 42, mcp_ms: 8, synthesis_ms: null },
+  });
+
+  assert.deepEqual(details, {
+    operation_plan: {
+      phase: "operation_plan",
+      request_id: "request-1",
+      locale: "en",
+      duration_ms: 42,
+      planner_retry: true,
+      operations: [{
+        operation_id: "request-1:op-1",
+        order: 0,
+        tool: "as_of",
+        result_class: "provision",
+        disposition: "display",
+        arguments: { work: "eu-eurlex:32016r0679", date: "2021-01-01" },
+        repairs: ["as_of.page dropped"],
+      }],
+    },
+    operation_outcomes: [{
+      operation_id: "request-1:op-1",
+      order: 0,
+      tool: "as_of",
+      result_class: "provision",
+      disposition: "display",
+      legal_outcome: "succeeded",
+      transport_outcome: "completed",
+      effects: ["provision"],
+    }],
+    model_usage: { input_tokens: 120, output_tokens: 30, total_tokens: 150 },
+    model_identity: { resource_host: "example.openai.azure.com", deployment: "planner" },
+    timing: { planner_ms: 42, mcp_ms: 8 },
+  });
+  assert.doesNotMatch(JSON.stringify(details), /publisher text|thread_token|secret future field|unbounded/);
+});
+
+test("malformed terminal operation metadata is ignored instead of hiding the answer", () => {
+  const malformed = {
+    reply: "The verified answer remains visible.",
+    trace: [{ phase: "operation_plan", operations: [] }],
+    operations: [null],
+  } as unknown as Parameters<typeof executionDetails>[0];
+
+  assert.deepEqual(executionDetails(malformed)?.operation_outcomes, []);
+});
+
+test("a pre-plan clarification honestly shows that no operation plan was frozen", () => {
+  assert.deepEqual(executionDetails({
+    reply: "Which instrument?",
+    trace: [{ phase: "subject_resolution", status: "unresolved" }],
+    operations: [{
+      operation_id: "request-2:subject", order: 0, legal_outcome: "needs_clarification",
+      transport_outcome: "completed", effects: ["gap"], disposition: "clarification",
+    }],
+  }), {
+    operation_plan: null,
+    operation_outcomes: [{
+      operation_id: "request-2:subject", order: 0, disposition: "clarification",
+      legal_outcome: "needs_clarification", transport_outcome: "completed", effects: ["gap"],
+    }],
+    model_usage: undefined,
+    model_identity: undefined,
+    timing: undefined,
+  });
+});
 
 test("invalid signatures are distinct from unavailable verification", () => {
   assert.equal(signatureStatusLabel(true), "signature verified");

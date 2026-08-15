@@ -1926,6 +1926,12 @@ public sealed class AskOperationControllerTests : IDisposable
         var trace = Assert.IsType<JsonArray>(response.Body["trace"]).OfType<JsonObject>().ToArray();
         var plan = trace.Single(item => item["phase"]?.GetValue<string>() == "operation_plan");
         var primary = trace.Single(item => item["phase"]?.GetValue<string>() == "primary");
+        Assert.Equal(["phase", "request_id", "locale", "duration_ms", "operations"],
+            plan.Select(item => item.Key));
+        var frozen = Assert.IsType<JsonObject>(plan["operations"]?[0]);
+        Assert.Equal([
+            "operation_id", "order", "tool", "result_class", "disposition", "arguments", "repairs",
+        ], frozen.Select(item => item.Key));
         Assert.Equal("!RECUEIL,!CODE_RECUEIL",
             plan["operations"]?[0]?["arguments"]?["source_class"]?.GetValue<string>());
         Assert.Equal(plan["operations"]?[0]?["arguments"]?.ToJsonString(),

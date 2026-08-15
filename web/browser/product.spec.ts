@@ -216,6 +216,67 @@ test("a typed assistant operation is presented within the local browser budget",
   await expect(page.locator("[data-lex-operation-result-id]")).toHaveCount(1);
 });
 
+test("each assistant answer discloses its safe typed plan and execution evidence", async ({ page }) => {
+  const requestId = "4123456789abcdef0123456789abcdef";
+  const operation = {
+    operation_id: `${requestId}:op-1`, order: 0, tool: "as_of",
+    result_class: "provision", disposition: "display", legal_outcome: "succeeded",
+    transport_outcome: "completed", effects: ["provision"],
+  };
+  await page.addInitScript(({ requestId, operation }) => {
+    const originalFetch = window.fetch.bind(window);
+    window.fetch = (input, init) => {
+      const url = typeof input === "string" ? input : input instanceof URL
+        ? input.href : input.url;
+      if (!url.endsWith("/api/ask/stream")) return originalFetch(input, init);
+      const envelope = (sequence: number, payload: unknown) => JSON.stringify({
+        version: "1", request_id: requestId, sequence, server_elapsed_ms: 10, payload,
+      });
+      const reply = {
+        reply: "Verified Article 6.",
+        thread_token: "A".repeat(43),
+        trace: [{
+          phase: "operation_plan", request_id: requestId, locale: "en", duration_ms: 12,
+          operations: [{
+            operation_id: operation.operation_id, order: 0, tool: "as_of",
+            result_class: "provision", disposition: "display",
+            arguments: { work: "eu-eurlex:32016r0679", date: "2021-01-01", anchors: "art_6" },
+            repairs: [],
+          }],
+        }],
+        operations: [operation],
+        model_usage: { input_tokens: 120, output_tokens: 30, total_tokens: 150 },
+        model_identity: { resource_host: "example.openai.azure.com", deployment: "planner" },
+        timing: { planner_ms: 12, mcp_ms: 7, synthesis_ms: null },
+      };
+      return Promise.resolve(new Response(
+        `event: done\ndata: ${envelope(1, reply)}\n\n`, {
+          status: 200,
+          headers: { "Content-Type": "text/event-stream", "X-Lex-Request-Id": requestId },
+        }));
+    };
+  }, { requestId, operation });
+
+  await page.goto("/");
+  await page.getByRole("button", { name: "Open Ask Lex legal research assistant" }).click();
+  await page.getByRole("textbox", { name: "Ask Lex" }).fill("Show GDPR Article 6 in 2021.");
+  await page.getByRole("button", { name: "Ask", exact: true }).click();
+  await expect(page.locator(".said")).toContainText("Verified Article 6.");
+
+  const disclosure = page.locator("details.ap-execution");
+  await expect(disclosure).toHaveCount(1);
+  await expect(disclosure.locator("pre")).toBeHidden();
+  await disclosure.getByText("Plan and execution details", { exact: true }).click();
+  await expect(disclosure.locator("pre")).toBeVisible();
+  await expect(disclosure.locator("pre")).toContainText('"tool": "as_of"');
+  await expect(disclosure.locator("pre")).toContainText('"anchors": "art_6"');
+  await expect(disclosure.locator("pre")).toContainText('"legal_outcome": "succeeded"');
+  await expect(disclosure).not.toContainText("thread_token");
+  await expect(disclosure).not.toContainText("provisions");
+  await expectNoHorizontalOverflow(page);
+  await expectNoSeriousAxeViolation(page);
+});
+
 test("an operation without a typed view is never counted as presented", async ({ page }) => {
   const requestId = "1123456789abcdef0123456789abcdef";
   const operation = {
