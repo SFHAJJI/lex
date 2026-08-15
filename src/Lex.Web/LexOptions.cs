@@ -68,6 +68,7 @@ public sealed class LexOptions
     public string? ArtifactManifestId { get; init; }
     public string? DeployImage { get; init; }
     public string? Revision { get; init; }
+    public string? RevisionHostname { get; init; }
     public string? AssistantEvalCatalogSha256 { get; init; }
 
     /// <summary>True when the assistant has everything it needs to answer.</summary>
@@ -121,6 +122,7 @@ public static class LexOptionsSetup
         ArtifactManifestId = configuration["LEX_ARTIFACT_MANIFEST_ID"],
         DeployImage = configuration["LEX_DEPLOY_IMAGE"],
         Revision = configuration["CONTAINER_APP_REVISION"],
+        RevisionHostname = configuration["CONTAINER_APP_HOSTNAME"],
         AssistantEvalCatalogSha256 =
             configuration["LEX_ASSISTANT_EVAL_CATALOG_SHA256"],
     };

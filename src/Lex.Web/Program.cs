@@ -58,6 +58,7 @@ builder.Services.AddSingleton(sp => new EvaluationAdmissionRegistry(
     sp.GetRequiredService<TimeProvider>()));
 builder.Services.AddSingleton(sp => new McpAdmissionController(
     sp.GetRequiredService<TimeProvider>()));
+builder.Services.AddAssistantEvaluationEvidence();
 builder.Services.AddMcpServer(McpSdkBridge.Configure)
     .WithHttpTransport(options => options.Stateless = true)
     .WithLexTools();

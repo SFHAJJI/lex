@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using Lex.Index;
+using Lex.Web;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http.Metadata;
@@ -361,6 +362,16 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
         Assert.Contains("lex-artifacts/1", attestation["artifact_signature_binds"]!.GetValue<string>());
         Assert.Contains("canonical stamp text", attestation["embedded_stamp_signature_binds"]!.GetValue<string>());
         Assert.NotNull(attestation["signature_binds"]); // compatibility contract
+        var deployment = attestation["deployment"]!.AsObject();
+        Assert.True(deployment.ContainsKey("revision"));
+        Assert.True(deployment.ContainsKey("revision_hostname"));
+        Assert.True(deployment.ContainsKey("code_commit"));
+        Assert.True(deployment.ContainsKey("artifact_manifest_set"));
+        Assert.True(deployment.ContainsKey("verified_artifact_manifest_set"));
+        Assert.True(deployment.ContainsKey("assistant_eval_catalog_sha256"));
+        Assert.True(deployment.ContainsKey("assistant_model_host"));
+        Assert.True(deployment.ContainsKey("assistant_model_deployment"));
+        Assert.True(deployment.ContainsKey("image"));
     }
 
     [Fact]
@@ -730,9 +741,15 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
 
         public readonly HttpClient Client;
         private readonly string _dir = Path.Combine(Path.GetTempPath(), $"lex-golden-{Guid.NewGuid():N}");
+        private readonly AssistantEvaluationEvidenceSnapshot _evaluation;
 
-        public Site()
+        public Site() : this(AssistantEvaluationEvidenceSnapshot.Unavailable)
         {
+        }
+
+        internal Site(AssistantEvaluationEvidenceSnapshot evaluation)
+        {
+            _evaluation = evaluation;
             Directory.CreateDirectory(_dir);
             var appDir = Path.Combine(_dir, "wwwroot", "app");
             Directory.CreateDirectory(appDir);
@@ -755,6 +772,9 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
             {
                 services.RemoveAll<TimeProvider>();
                 services.AddSingleton<TimeProvider>(new FixedTimeProvider(FixedNow));
+                services.RemoveAll<IAssistantEvaluationEvidenceProvider>();
+                services.AddSingleton<IAssistantEvaluationEvidenceProvider>(
+                    new FixedEvaluationEvidenceProvider(_evaluation));
             });
         }
 
@@ -800,6 +820,14 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
             public override DateTimeOffset GetUtcNow() => utcNow;
         }
 
+        private sealed class FixedEvaluationEvidenceProvider(
+            AssistantEvaluationEvidenceSnapshot snapshot)
+            : IAssistantEvaluationEvidenceProvider
+        {
+            public Task<AssistantEvaluationEvidenceSnapshot> GetAsync(
+                CancellationToken cancellationToken) => Task.FromResult(snapshot);
+        }
+
         protected override void Dispose(bool disposing)
         {
             base.Dispose(disposing);
@@ -816,6 +844,11 @@ internal static class Golden
 
     public static string RepositoryRoot()
     {
+        var configured = Environment.GetEnvironmentVariable("LEX_TEST_REPOSITORY_ROOT");
+        if (configured is not null && File.Exists(Path.Combine(configured, "Lex.slnx")))
+            return Path.GetFullPath(configured);
+        var working = Directory.GetCurrentDirectory();
+        if (File.Exists(Path.Combine(working, "Lex.slnx"))) return working;
         var d = AppContext.BaseDirectory;
         while (d is not null && !File.Exists(Path.Combine(d, "Lex.slnx"))) d = Path.GetDirectoryName(d);
         return d ?? throw new InvalidOperationException("Lex.slnx not found above the test binary.");
