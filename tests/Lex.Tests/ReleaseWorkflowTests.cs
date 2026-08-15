@@ -20,7 +20,7 @@ public sealed class ReleaseWorkflowTests
                     < workflow.IndexOf("azure/login@", StringComparison.Ordinal));
         Assert.Contains("image=\"$ACR_SERVER/lex-web@$digest\"", workflow);
         Assert.DoesNotContain("image=\"$ACR_SERVER/lex-web:$tag\"", workflow);
-        Assert.Contains("timeout-minutes: 90", workflow);
+        Assert.Contains("timeout-minutes: 180", workflow);
         Assert.Contains("mapfile -t traffic_bearers", workflow);
         Assert.Contains("expected exactly one traffic-bearing revision before candidate creation", workflow);
         Assert.Contains("--connect-timeout 5 --max-time 60", workflow);
@@ -908,6 +908,17 @@ public sealed class ReleaseWorkflowTests
         Assert.Contains("assert_state 1 \"$LEGACY_CURRENT_REVISION,$PRODUCTION_REVISION\"",
             block[preSwitch..preSwitchEnd]);
         Assert.Contains("assert_state 1 \"$LEGACY_CURRENT_REVISION\"", block);
+        Assert.Contains("\"$ROLLBACK_REVISION,$PRODUCTION_REVISION\"", block);
+        Assert.Contains("fresh reviewed handoff required", block);
+        Assert.Contains("assert_recovery_topology()", block);
+        Assert.Contains(".mode == \"Multiple\" and .maxInactiveRevisions == 1", block);
+        Assert.Contains(".routes[0].revisionName == $authority", block);
+        Assert.Contains("(.routes[0].latestRevision // false) == false", block);
+        Assert.Contains("(.routes[0].label // null) == null", block);
+        Assert.Contains(".latestRevisionName == $latest", block);
+        Assert.Contains(".latestReadyRevisionName == $latest", block);
+        Assert.Contains("assert_recovery_topology \"$LEGACY_CURRENT_REVISION\"", block);
+        Assert.Contains("assert_recovery_topology \"$ROLLBACK_REVISION\"", block);
         Assert.DoesNotContain("set_inactive_limit 2", block);
         var restoreFallback = block.IndexOf("restore_signed_fallback()", StringComparison.Ordinal);
         Assert.True(restoreFallback >= 0 && restoreFallback < preSwitch);
@@ -951,8 +962,10 @@ public sealed class ReleaseWorkflowTests
         Assert.Contains("bootstrap_first_official", deploy);
         Assert.Contains("bootstrap_cleanup_run_id", deploy);
         Assert.Contains("lex-bootstrap-legacy-cleanup-receipt", deploy);
-        Assert.Contains("bootstrap-legacy-cleanup-receipt/1", deploy);
+        Assert.Contains("bootstrap-legacy-cleanup-receipt/2", deploy);
+        Assert.Contains("first_pruned_inactive_revision", deploy);
         Assert.Contains("remaining_inactive_revision", deploy);
+        Assert.Contains("handoff_latest_ready_revision", deploy);
         Assert.Contains("cleanup_survivor=$(jq -r .remaining_inactive_revision", deploy);
         Assert.Contains("verify_bootstrap_forward_topology()", deploy);
         var fallback = deploy.IndexOf("--body @bootstrap-fallback.json", StringComparison.Ordinal);
@@ -963,7 +976,7 @@ public sealed class ReleaseWorkflowTests
         var beforeDeactivation = deploy.LastIndexOf(
             "verify_bootstrap_forward_topology fallback-active", deactivateFallback,
             StringComparison.Ordinal);
-        var candidate = deploy.IndexOf("--body @candidate.json", fallback,
+        var candidate = deploy.IndexOf("--body @bootstrap-candidate.json", fallback,
             StringComparison.Ordinal);
         Assert.True(beforeFallback >= 0 && fallback > beforeFallback
                     && deactivateFallback > fallback && beforeDeactivation > fallback
@@ -976,13 +989,20 @@ public sealed class ReleaseWorkflowTests
         Assert.Contains("from bootstrap_plan import timestamp", deploy);
         Assert.DoesNotContain("value.endswith(\"Z\")", deploy);
         Assert.Contains("bootstrap_fallback", deploy);
-        Assert.Contains("R did not replace the final legacy inactive revision", deploy);
+        Assert.Contains("R deactivation did not preserve exact A + survivor + R", deploy);
         var retainedFallback = deploy[deactivateFallback..deploy.IndexOf(
-            "R did not replace the final legacy inactive revision", deactivateFallback,
+            "R deactivation did not preserve exact A + survivor + R", deactivateFallback,
             StringComparison.Ordinal)];
         Assert.Contains("for attempt in $(seq 1 60)", retainedFallback);
         Assert.Contains("sleep 10", retainedFallback);
         Assert.Contains("verify_bootstrap_forward_topology fallback-inactive", retainedFallback);
+        var fallbackActive = deploy[deploy.IndexOf(
+            "verify_created_after \"$cleanup_survivor_created\" \"$fallback_created\"",
+            StringComparison.Ordinal)..deactivateFallback];
+        Assert.Contains("for attempt in $(seq 1 60)", fallbackActive);
+        Assert.Contains("verify_bootstrap_forward_topology fallback-active", fallbackActive);
+        Assert.Contains("verify_bootstrap_forward_topology candidate-active", deploy);
+        Assert.Contains(".properties.template | {properties:{template:.}}", deploy);
         Assert.Contains("(.latestRevision // false) == false", deploy);
         Assert.Contains("(.label // null) == null", deploy);
         Assert.Contains(".mode == \"Multiple\" and .maxInactiveRevisions == 1", deploy);
@@ -1035,6 +1055,7 @@ public sealed class ReleaseWorkflowTests
             "revision-traffic.yml",
             "bootstrap-abandon.yml",
             "bootstrap-inventory.yml",
+            "bootstrap-preparation-inventory.yml",
             "bootstrap-legacy-inventory.yml",
             "bootstrap-legacy-cleanup.yml",
             "bootstrap-release-state.yml",
@@ -1048,6 +1069,12 @@ public sealed class ReleaseWorkflowTests
                 .Replace("\\\n", " ", StringComparison.Ordinal);
             var calls = System.Text.RegularExpressions.Regex.Matches(
                 workflow, @"az(?:_retry)?\s+containerapp\s+revision\s+list\b[^\r\n]*");
+            if (workflowName == "bootstrap-abandon.yml")
+            {
+                Assert.Contains("\"$@\" containerapp revision list", workflow);
+                Assert.Contains("--all -o json", workflow);
+                continue;
+            }
             Assert.NotEmpty(calls);
             foreach (System.Text.RegularExpressions.Match call in calls)
                 Assert.Contains("--all", call.Value, StringComparison.Ordinal);
@@ -1055,20 +1082,28 @@ public sealed class ReleaseWorkflowTests
     }
 
     [Fact]
-    public void Bootstrap_abandon_is_exact_idempotent_and_never_rewrites_traffic()
+    public void Bootstrap_abandon_requires_a_reviewed_exact_plan_and_never_rewrites_traffic()
     {
         var workflow = File.ReadAllText(Path.Combine(
             RepoRoot(), ".github", "workflows", "bootstrap-abandon.yml"));
 
-        Assert.Contains("abandon-first-release-candidate", workflow);
-        Assert.Contains("refusing to abandon outside exact A/R/C preparation", workflow);
-        Assert.Contains("bootstrap C was already abandoned safely", workflow);
-        Assert.Contains("bootstrap abandon requires exact A < R < C chronology", workflow);
-        Assert.Contains("from bootstrap_plan import timestamp", workflow);
-        Assert.DoesNotContain("endswith(\"Z\")", workflow);
-        Assert.Contains("--revision \"$CANDIDATE_REVISION\"", workflow);
-        Assert.Contains("length == 2", workflow);
+        Assert.Contains("abandon-reviewed-bootstrap-preparation", workflow);
+        Assert.Contains("bootstrap-preparation-inventory", workflow);
+        Assert.Contains("lex-bootstrap-preparation-abandon-plan", workflow);
+        Assert.Contains("bootstrap_preparation_abandon_plan.py --classify", workflow);
+        Assert.Contains("cmp --silent reviewed/bootstrap-preparation-abandon-plan.json", workflow);
+        Assert.Contains("/revisions/$target/deactivate?api-version=2025-01-01", workflow);
+        Assert.Contains("--connect-timeout 10 --max-time 60", workflow);
+        Assert.Contains("x-ms-client-request-id: $client_request_id", workflow);
+        Assert.Contains("request:{method:\"POST\",retry:false", workflow);
+        Assert.Contains("consecutive=$((consecutive + 1))", workflow);
+        Assert.Contains("[ \"$consecutive\" = \"3\" ]", workflow);
+        Assert.Contains("final-read-error.txt", workflow);
+        Assert.Contains("lex-bootstrap-preparation-abandon-receipt/1", workflow);
+        Assert.Contains("fresh legacy inventory and reviewed no-write handoff", workflow);
         Assert.DoesNotContain("ingress traffic set", workflow);
+        Assert.DoesNotContain("az rest --method patch", workflow);
+        Assert.DoesNotContain("containerapp revision activate", workflow);
         Assert.DoesNotContain("maxInactiveRevisions:0", workflow);
         Assert.DoesNotContain("maxInactiveRevisions:100", workflow);
     }
