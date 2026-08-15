@@ -126,13 +126,16 @@ public sealed class ReleaseWorkflowTests
         Assert.Contains("scripts/deploy/candidate_gates.py readyz \"$MANIFEST_SET\"", workflow);
         Assert.Contains("readiness=$(revision_get \"https://$fqdn/readyz\")", workflow);
         Assert.Contains("publisher_hybrid_ready() {", workflow);
+        Assert.Contains("publisher_hybrid_status() {", workflow);
         Assert.Contains("eu_hybrid_ready=$(publisher_hybrid_ready eu-eurlex)", workflow);
         Assert.Contains("lu_hybrid_ready=$(publisher_hybrid_ready lu-legilux)", workflow);
+        Assert.Contains("eu_hybrid_status=$(publisher_hybrid_status eu-eurlex)", workflow);
+        Assert.Contains("lu_hybrid_status=$(publisher_hybrid_status lu-legilux)", workflow);
         Assert.Contains("scripts/deploy/candidate_gates.py coverage", workflow);
         Assert.Contains("scripts/deploy/candidate_gates.py eu-exact \"$MANIFEST_SET\"", workflow);
         Assert.Contains("scripts/deploy/candidate_gates.py lu-temporal", workflow);
-        Assert.Contains("scripts/deploy/candidate_gates.py hybrid eu-eurlex \"$eu_hybrid_ready\"", workflow);
-        Assert.Contains("scripts/deploy/candidate_gates.py hybrid lu-legilux \"$lu_hybrid_ready\"", workflow);
+        Assert.Contains("scripts/deploy/candidate_gates.py hybrid eu-eurlex \"$eu_hybrid_ready\" \"$eu_hybrid_status\"", workflow);
+        Assert.Contains("scripts/deploy/candidate_gates.py hybrid lu-legilux \"$lu_hybrid_ready\" \"$lu_hybrid_status\"", workflow);
         Assert.Equal(2, Regex.Matches(workflow, Regex.Escape(
             "{ [ \"$state\" = \"Running\" ] || [ \"$state\" = \"RunningAtMaxScale\" ]; }")).Count);
         Assert.Contains("assistant_smoke=$(curl", workflow);

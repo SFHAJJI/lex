@@ -74,11 +74,11 @@ class CandidateGateTests(unittest.TestCase):
             "retrieval_mode": "hybrid",
             "hits": [{"work": "x"}],
         }]
-        self.assert_passes("hybrid", eu_hybrid, "eu-eurlex", "true")
-        self.assert_fails("hybrid", eu_hybrid, "lu-legilux", "true")
-        self.assert_fails("hybrid", eu_hybrid, "eu-eurlex", "false")
+        self.assert_passes("hybrid", eu_hybrid, "eu-eurlex", "true", "activated")
+        self.assert_fails("hybrid", eu_hybrid, "lu-legilux", "true", "activated")
+        self.assert_fails("hybrid", eu_hybrid, "eu-eurlex", "false", "benchmark_gate_failed")
         eu_hybrid[0]["envelope"]["status"] = "retrieval_mode_unavailable"
-        self.assert_fails("hybrid", eu_hybrid, "eu-eurlex", "true")
+        self.assert_fails("hybrid", eu_hybrid, "eu-eurlex", "true", "activated")
 
         lu_quarantined = [{
             "envelope": {
@@ -89,9 +89,14 @@ class CandidateGateTests(unittest.TestCase):
             "retrieval_unavailable_reason": "benchmark_gate_failed",
             "hits": [],
         }]
-        self.assert_passes("hybrid", lu_quarantined, "lu-legilux", "false")
-        self.assert_fails("hybrid", lu_quarantined, "eu-eurlex", "false")
-        self.assert_fails("hybrid", lu_quarantined, "lu-legilux", "true")
+        self.assert_passes(
+            "hybrid", lu_quarantined, "lu-legilux", "false", "benchmark_gate_failed")
+        self.assert_fails(
+            "hybrid", lu_quarantined, "lu-legilux", "false", "vector_missing")
+        self.assert_fails(
+            "hybrid", lu_quarantined, "eu-eurlex", "false", "benchmark_gate_failed")
+        self.assert_fails(
+            "hybrid", lu_quarantined, "lu-legilux", "true", "activated")
 
     def test_assistant_smoke_requires_the_planned_and_executed_tool(self):
         response = self.coverage_response()

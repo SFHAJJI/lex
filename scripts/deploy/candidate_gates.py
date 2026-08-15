@@ -6,6 +6,7 @@ import sys
 
 MAXIMUM_PAYLOAD_BYTES = 4 * 1024 * 1024
 DIGEST = re.compile(r"^[0-9a-f]{64}$")
+HYBRID_STATUS = re.compile(r"^[a-z0-9_]{1,128}$")
 
 
 class GateFailure(ValueError):
@@ -104,11 +105,15 @@ def lu_temporal(payload, arguments):
 
 
 def hybrid(payload, arguments):
-    require(len(arguments) == 2
+    require(len(arguments) == 3
             and arguments[0] in ("eu-eurlex", "lu-legilux")
-            and arguments[1] in ("true", "false"),
-            "hybrid gate requires a publisher and its signed activation state")
-    publisher, activation = arguments
+            and arguments[1] in ("true", "false")
+            and HYBRID_STATUS.fullmatch(arguments[2]),
+            "hybrid gate requires a publisher and its signed activation state and status")
+    publisher, activation, expected_status = arguments
+    require((activation == "true" and expected_status == "activated")
+            or (activation == "false" and expected_status != "activated"),
+            "hybrid activation state contradicts its readiness status")
     rows = array_value(payload, "hybrid response must be an array")
     require(len(rows) == 1 and isinstance(rows[0], dict),
             "hybrid response does not contain exactly one publisher row")
@@ -132,6 +137,8 @@ def hybrid(payload, arguments):
     require(isinstance(row.get("retrieval_unavailable_reason"), str)
             and row["retrieval_unavailable_reason"],
             "quarantined hybrid response has no reason")
+    require(row["retrieval_unavailable_reason"] == expected_status,
+            "quarantined hybrid response contradicts its readiness reason")
     require(row.get("retrieval_mode") is None,
             "quarantined hybrid request silently executed another mode")
     require(row.get("hits") == [],

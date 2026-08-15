@@ -973,8 +973,17 @@ jobs:
             | if length == 1 and (.[0] | type) == "boolean" then .[0]
               else error("publisher hybrid readiness is absent or ambiguous") end'
           }
+          publisher_hybrid_status() {
+            local publisher=$1
+            printf '%s' "$readiness" | jq -er --arg publisher "$publisher" '
+            [.publishers[] | select(.publisher == $publisher) | .hybridStatus]
+            | if length == 1 and (.[0] | type) == "string" and (.[0] | length) > 0
+              then .[0] else error("publisher hybrid status is absent or ambiguous") end'
+          }
           eu_hybrid_ready=$(publisher_hybrid_ready eu-eurlex)
           lu_hybrid_ready=$(publisher_hybrid_ready lu-legilux)
+          eu_hybrid_status=$(publisher_hybrid_status eu-eurlex)
+          lu_hybrid_status=$(publisher_hybrid_status lu-legilux)
           mcp_text() {
             local response payload result
             response=$(curl --fail --show-error --silent --retry 3 --retry-delay 5 \
@@ -1001,11 +1010,11 @@ jobs:
             || { echo "::error::Luxembourg temporal smoke returned no provisions"; exit 1; }
           eu_hybrid=$(mcp_text '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"search","arguments":{"query":"personal data protection rights","publisher":"eu-eurlex","retrieval_mode":"hybrid","language":"en","fuzzy":"off","limit":3}}}')
           printf '%s' "$eu_hybrid" \
-            | python3 scripts/deploy/candidate_gates.py hybrid eu-eurlex "$eu_hybrid_ready" \
+            | python3 scripts/deploy/candidate_gates.py hybrid eu-eurlex "$eu_hybrid_ready" "$eu_hybrid_status" \
             || { echo "::error::EU hybrid activation smoke contradicted readiness"; exit 1; }
           lu_hybrid=$(mcp_text '{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"search","arguments":{"query":"Code penal","publisher":"lu-legilux","retrieval_mode":"hybrid","language":"fr","fuzzy":"off","limit":3}}}')
           printf '%s' "$lu_hybrid" \
-            | python3 scripts/deploy/candidate_gates.py hybrid lu-legilux "$lu_hybrid_ready" \
+            | python3 scripts/deploy/candidate_gates.py hybrid lu-legilux "$lu_hybrid_ready" "$lu_hybrid_status" \
             || { echo "::error::Luxembourg hybrid activation smoke contradicted readiness"; exit 1; }
           assistant_smoke=$(curl --fail --show-error --silent --retry 2 --retry-all-errors --retry-delay 5 \
             --connect-timeout 5 --max-time 180 -H 'Content-Type: application/json' \
