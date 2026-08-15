@@ -1113,6 +1113,18 @@ public sealed class ReleaseWorkflowTests
     }
 
     [Fact]
+    public void Bootstrap_template_request_matches_the_server_scale_shape_and_reports_exact_mismatches()
+    {
+        var deploy = File.ReadAllText(
+            Path.Combine(RepoRoot(), ".github", "workflows", "deploy.yml"));
+
+        Assert.Contains(".scale = {minReplicas:1,maxReplicas:1,rules:null}", deploy);
+        Assert.Contains("bootstrap fallback image differs from the requested immutable image", deploy);
+        Assert.Contains("bootstrap fallback template digest differs from the canonical template", deploy);
+        Assert.DoesNotContain("bootstrap fallback differs from the immutable candidate image", deploy);
+    }
+
+    [Fact]
     public void One_time_legacy_cleanup_is_separate_reviewed_and_never_changes_traffic_or_activation()
     {
         var inventory = File.ReadAllText(Path.Combine(

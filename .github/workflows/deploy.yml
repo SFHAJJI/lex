@@ -878,7 +878,7 @@ jobs:
               | .revisionSuffix = $suffix
               | .containers[0].image = $image
               | .containers[0].resources = {cpu:1.0,memory:"2Gi"}
-              | .scale = {minReplicas:1,maxReplicas:1}
+              | .scale = {minReplicas:1,maxReplicas:1,rules:null}
               | .containers[0].env = ((.containers[0].env // [])
                   | map(select(.name != "AOAI_KEY" and .name != "AZURE_CLIENT_ID"
                       and .name != "AOAI_USE_MANAGED_IDENTITY"
@@ -940,8 +940,9 @@ jobs:
             fallback_template_digest=$(printf '%s' "$fallback" \
               | python3 scripts/deploy/revision_template_digest.py)
             [ "$fallback_image" = "$IMAGE" ] \
-              && [ "$fallback_template_digest" = "$canonical_template_digest" ] \
-              || { echo "::error::bootstrap fallback differs from the immutable candidate image"; exit 1; }
+              || { echo "::error::bootstrap fallback image differs from the requested immutable image"; exit 1; }
+            [ "$fallback_template_digest" = "$canonical_template_digest" ] \
+              || { echo "::error::bootstrap fallback template digest differs from the canonical template"; exit 1; }
             [ "$(printf '%s' "$fallback" | jq -r .properties.active)" = "true" ] \
               && [ "$(printf '%s' "$fallback" | jq -r '.properties.trafficWeight // 0')" = "0" ] \
               || { echo "::error::new bootstrap fallback must initially be active at zero traffic"; exit 1; }
