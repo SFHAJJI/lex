@@ -374,12 +374,12 @@ public static class AssistantEvaluationReleaseVerifier
     private static string DescribeAdmissionDrift(
         ReadOnlySpan<byte> signed,
         ReadOnlySpan<byte> derived,
-        string? signedRunIdentity,
-        string derivedRunIdentity)
+        string? reportRunIdentity,
+        string admissionRunIdentity)
     {
-        if (!FixedEquals(signedRunIdentity, derivedRunIdentity))
-            return $"The report names run identity {Bounded(signedRunIdentity)} and the signed "
-                + $"admission derives {Bounded(derivedRunIdentity)}.";
+        if (!FixedEquals(reportRunIdentity, admissionRunIdentity))
+            return $"The report names run identity {Bounded(reportRunIdentity)} and the signed "
+                + $"admission derives {Bounded(admissionRunIdentity)}.";
         JsonObject? left, right;
         try
         {
