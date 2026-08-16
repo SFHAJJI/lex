@@ -183,6 +183,58 @@ public sealed class AskOperationControllerTests : IDisposable
     }
 
     [Fact]
+    public async Task Canonical_hashed_version_is_preserved_as_exact_provenance_authority()
+    {
+        var exact = $"eu-eurlex:32013r0575:2020-01-01--{new string('a', 64)}";
+        var planner = new StaticPlanner("en", new JsonArray(new JsonObject
+        {
+            ["tool"] = "provenance",
+            ["arguments"] = new JsonObject { ["work_query"] = "CRR" },
+        }));
+        var service = new AskService(_core, planner);
+
+        var response = await service.AskAsync(
+            History($"Verify {exact}."), Guid.NewGuid().ToString(),
+            "law.test", CancellationToken.None);
+
+        Assert.Equal(200, response.Status);
+        var primary = Assert.Single(Assert.IsType<JsonArray>(response.Body["trace"])
+            .OfType<JsonObject>(),
+            item => item["phase"]?.GetValue<string>() == "primary");
+        Assert.Equal(exact, primary["args"]?["lex_id"]?.GetValue<string>());
+    }
+
+    public static TheoryData<string> MalformedCanonicalVersionSuffixes => new()
+    {
+        new string('a', 63),
+        new string('a', 65),
+        new string('A', 64),
+        new string('g', 64),
+    };
+
+    [Theory]
+    [MemberData(nameof(MalformedCanonicalVersionSuffixes))]
+    public async Task Malformed_hashed_version_is_not_exact_provenance_authority(string suffix)
+    {
+        var planner = new StaticPlanner("en", new JsonArray(new JsonObject
+        {
+            ["tool"] = "provenance",
+            ["arguments"] = new JsonObject { ["work_query"] = "CRR" },
+        }));
+        var service = new AskService(_core, planner);
+
+        var response = await service.AskAsync(
+            History($"Verify eu-eurlex:32013r0575:2020-01-01--{suffix}."),
+            Guid.NewGuid().ToString(), "law.test", CancellationToken.None);
+
+        Assert.Equal("needs_clarification",
+            response.Body["operations"]?[0]?["legal_outcome"]?.GetValue<string>());
+        Assert.DoesNotContain(Assert.IsType<JsonArray>(response.Body["trace"])
+                .OfType<JsonObject>(),
+            item => item["phase"]?.GetValue<string>() == "primary");
+    }
+
+    [Fact]
     public async Task Exact_version_ambiguity_is_deterministic_and_never_sent_to_synthesis()
     {
         var planner = new StaticPlanner("en", new JsonArray(new JsonObject

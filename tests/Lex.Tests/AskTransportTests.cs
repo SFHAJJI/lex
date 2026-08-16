@@ -381,6 +381,39 @@ public sealed class AskTransportTests
     }
 
     [Fact]
+    public async Task Owner_streams_terminal_refusal_once_and_replays_the_same_operation()
+    {
+        var planner = new InvalidPlanner();
+        await using var site = new StreamingSite(planner: planner);
+        const string body = "{\"message\":\"Show coverage.\"}";
+        using var owner = Request(body, "invalid-plan");
+        using var duplicate = Request(body, "invalid-plan");
+
+        var ownerResponse = await site.Client.SendAsync(owner);
+        var ownerFrames = Frames(await ownerResponse.Content.ReadAsStringAsync());
+        var duplicateResponse = await site.Client.SendAsync(duplicate);
+        var duplicateFrames = Frames(await duplicateResponse.Content.ReadAsStringAsync());
+
+        Assert.Equal(200, (int)ownerResponse.StatusCode);
+        Assert.Equal(200, (int)duplicateResponse.StatusCode);
+        Assert.Equal(1, planner.Calls);
+        var ownerOperation = Assert.Single(
+            ownerFrames, frame => frame.Event == "operation_result").Data["payload"];
+        var ownerDone = ownerFrames.Single(frame => frame.Event == "done").Data["payload"];
+        Assert.True(JsonNode.DeepEquals(ownerOperation, ownerDone?["operations"]?[0]));
+        Assert.True(ownerDone?["timing"]?["operation_result_emitted_ms"]?.GetValue<double>() >= 0);
+        var duplicateOperation = Assert.Single(
+            duplicateFrames, frame => frame.Event == "operation_result").Data["payload"];
+        Assert.True(JsonNode.DeepEquals(ownerOperation, duplicateOperation));
+        var duplicateDone = duplicateFrames.Single(frame => frame.Event == "done").Data["payload"];
+        Assert.Equal(
+            ownerDone?["timing"]?["operation_result_emitted_ms"]?.GetValue<double>(),
+            duplicateDone?["timing"]?["operation_result_emitted_ms"]?.GetValue<double>());
+        Assert.Equal(["operation_result", "done"],
+            duplicateFrames.Select(frame => frame.Event));
+    }
+
+    [Fact]
     public async Task Http_threads_are_server_owned_and_idempotent_before_turn_mutation()
     {
         await using var site = new StreamingSite();
@@ -993,17 +1026,20 @@ public sealed class AskTransportTests
     {
         private readonly string _indexDir = Path.Combine(
             Path.GetTempPath(), $"lex-stream-{Guid.NewGuid():N}");
+        private readonly IOperationPlanner _planner;
 
         public StreamingSite(
             McpAdmissionController? mcpAdmission = null,
             AskThreadRegistry? askThreads = null,
-            AskRequestRegistry? askRequests = null)
+            AskRequestRegistry? askRequests = null,
+            IOperationPlanner? planner = null)
         {
             Directory.CreateDirectory(_indexDir);
             McpAdmission = mcpAdmission;
             AskThreads = askThreads;
             AskRequests = askRequests;
             Planner = new BoundaryPlanner();
+            _planner = planner ?? Planner;
             Client = CreateClient(new WebApplicationFactoryClientOptions
             {
                 AllowAutoRedirect = false,
@@ -1024,7 +1060,7 @@ public sealed class AskTransportTests
             {
                 services.RemoveAll<AskService>();
                 services.AddSingleton(_ => new AskService(
-                    new McpCore(new Dictionary<string, Lex.Index.LexIndexReader>()), Planner));
+                    new McpCore(new Dictionary<string, Lex.Index.LexIndexReader>()), _planner));
                 if (McpAdmission is not null)
                 {
                     services.RemoveAll<McpAdmissionController>();
@@ -1070,6 +1106,21 @@ public sealed class AskTransportTests
                     ["tool"] = "legal_boundary",
                     ["arguments"] = new JsonObject { ["reason"] = "legal advice" },
                 }), synthesisRequested: false));
+        }
+    }
+
+    private sealed class InvalidPlanner : IOperationPlanner
+    {
+        public int Calls { get; private set; }
+
+        public Task<OperationPlan> PlanAsync(
+            JsonArray history,
+            string host,
+            string requestId,
+            CancellationToken cancellationToken)
+        {
+            Calls++;
+            throw new InvalidDataException("The planner returned a terminal invalid plan.");
         }
     }
 
