@@ -85,7 +85,57 @@ public sealed class AskService
     private static CorpusVocabulary VocabularyOf(McpCore core)
     {
         ArgumentNullException.ThrowIfNull(core);
-        return new CorpusVocabulary(core.MountedPublishers, core.MountedJurisdictions);
+        return new CorpusVocabulary(
+            core.MountedPublishers, core.MountedJurisdictions, HybridRetrievalServable(core));
+    }
+
+    /// <summary>The query the servability probe asks with. Short, and about nothing: the answer is
+    /// read off the envelopes, never off the hits.</summary>
+    private const string HybridProbeQuery = "retrieval capability probe";
+
+    /// <summary>Whether every mounted publisher can serve a hybrid search, asked of this server
+    /// once, at construction, rather than assumed or configured.
+    ///
+    /// <para>Nothing else here can answer it. Semantic activation is decided per publisher when the
+    /// process opens its indexes, against a signed retrieval benchmark, so no stamp, no manifest
+    /// and no coverage row states it: an index can carry vectors on disk and still be unable to
+    /// serve them because this process has no encoder. The one component that knows is the reader
+    /// behind MCP, and the one honest way to ask it is the question itself. So the probe asks for a
+    /// hybrid search and reads the answer MCP gives a caller who cannot be served: a
+    /// retrieval_mode_unavailable envelope per publisher, produced before any execution, which is
+    /// why asking costs nothing on the corpus that has to be asked about.</para>
+    ///
+    /// <para>Every publisher, not any: a plan may name one, so hybrid is plannable only where the
+    /// whole mounted set can serve it. Readiness cannot change while the process runs, because a
+    /// reader holds or lacks its encoder and vectors from the moment it is opened, so one answer
+    /// is the whole truth for this process and the probe is not repeated.</para>
+    ///
+    /// <para>An unanswerable probe is answered no. This decides which retrieval mode the assistant
+    /// may plan, and keyword is the mode every mounted corpus can always serve, so a fault here
+    /// costs a keyword ranking rather than an operation that cannot execute.</para></summary>
+    internal static bool HybridRetrievalServable(McpCore core)
+    {
+        ArgumentNullException.ThrowIfNull(core);
+        JsonNode probe;
+        try
+        {
+            probe = core.CallTool("search", new JsonObject
+            {
+                ["query"] = HybridProbeQuery,
+                ["retrieval_mode"] = "hybrid",
+                ["limit"] = 1,
+            });
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+        // A build with no corpus mounted answers with the readiness object rather than an array,
+        // and holds nothing to search by any mode.
+        return probe is JsonArray publishers
+            && publishers.Count > 0
+            && publishers.All(publisher => publisher?["envelope"] is JsonObject envelope
+                && String(envelope, "status") != McpStatus.RetrievalModeUnavailable);
     }
 
     internal sealed class WorkResolutionGuard
@@ -2172,6 +2222,20 @@ public sealed class AskService
                 SubjectResolutionTrace(result, [], article, "unresolved", locale),
                 watch.Elapsed.TotalMilliseconds, requestedTimelineWork);
         }
+        // A turn that cites an instrument by act form and date has named one, whether or not any
+        // stored name matched it. Resolving nothing and then answering the words with a workspace
+        // is the confidently-wrong shape this product exists to prevent: asked for the Luxembourg
+        // law of 5 April 1993, the degradation served eight European directives headed by one that
+        // merely shares the date. The citation shape only detects that a subject was named; it can
+        // never choose one, because the index's own citation graph shows 93 of 401 apparently
+        // unique loi dates are shared with an act it does not hold.
+        if (authority is null && Lex.Index.WorkSearch.CitesInstrumentByDate(raw))
+        {
+            watch.Stop();
+            return new SubjectPreflight(null, UnresolvedSubjectClarification(locale),
+                SubjectResolutionTrace(result, [], article, "unresolved", locale),
+                watch.Elapsed.TotalMilliseconds, requestedTimelineWork);
+        }
 
         watch.Stop();
         return new SubjectPreflight(authority, null,
@@ -2470,13 +2534,19 @@ public sealed class AskService
             if (subject.Clarification is not null
                 && plan.Operations.All(operation =>
                     operation.Disposition == ApplicationDisposition.Clarification))
-                return SubjectClarificationOutcome(
-                    requestId, requestLocale, subject.Clarification, subject.Trace) with
+            {
+                var outcome = SubjectClarificationOutcome(
+                    requestId, requestLocale, subject.Clarification, subject.Trace);
+                AttachExecutionEvidence(
+                    outcome.Body, planningUsage, planningWatch.Elapsed.TotalMilliseconds,
+                    subject.DurationMilliseconds, synthesisMilliseconds: null);
+                return outcome with
                 {
                     ContextDisposition = IsAnaphoricWorkReference(rawUserQuery)
                         ? AskConversationContextDisposition.Preserve
                         : AskConversationContextDisposition.Clear,
                 };
+            }
             run = OperationRun.Start(plan);
             var (status, body) = await ExecutePlanAsync(
                 plan, run, userQueries, rawUserQuery, planningUsage,
@@ -2946,6 +3016,19 @@ public sealed class AskService
                                 RunnerUpTitle = selection.RunnerUpTitle,
                             };
                 }
+                else if (operation.Tool == "search"
+                         && ResolvedSubjectTerm(rawUserQuery, subject.Authority) is { } term)
+                {
+                    // `search` is the one tool whose schema still lets the model write the subject
+                    // as free text, and it does: one unchanging question about the CRR produced
+                    // four different queries across six runs, so the same question reached the
+                    // index four different ways. Once the preflight has identified the instrument,
+                    // the term that identified it is both the least invented thing available and
+                    // the one already proven to retrieve the work, so a paraphrase can only add
+                    // variance. Discovery is untouched, because this needs a resolved authority.
+                    arguments = arguments.DeepClone().AsObject();
+                    arguments["query"] = term;
+                }
 
                 JsonNode result;
                 string status;
@@ -3133,6 +3216,31 @@ public sealed class AskService
         }
         var body = Body(reply, plan.Locale, trace, effects,
             displayedClarification, clarification?.Choices);
+        AttachExecutionEvidence(
+            body, modelUsage, planningMilliseconds, mcpMilliseconds, synthesisMilliseconds);
+        body["operations"] = new JsonArray(results.Select(result =>
+        {
+            var effect = effects[result.UserOrder];
+            return (JsonNode)OperationReply(
+                plan.Operations[result.UserOrder], result, effect);
+        }).ToArray());
+        if (terminalTransportStatus is { } failedStatus)
+            body["error"] = failedStatus switch
+            {
+                499 => "The assistant request was cancelled.",
+                504 => "The operation timed out. Try a narrower question.",
+                _ => "A legal operation failed upstream.",
+            };
+        return (terminalTransportStatus ?? 200, body);
+    }
+
+    private void AttachExecutionEvidence(
+        JsonObject body,
+        ModelTokenUsage modelUsage,
+        double planningMilliseconds,
+        double mcpMilliseconds,
+        double? synthesisMilliseconds)
+    {
         body["model_usage"] = new JsonObject
         {
             ["input_tokens"] = modelUsage.InputTokens,
@@ -3151,20 +3259,6 @@ public sealed class AskService
             ["mcp_ms"] = mcpMilliseconds,
             ["synthesis_ms"] = synthesisMilliseconds,
         };
-        body["operations"] = new JsonArray(results.Select(result =>
-        {
-            var effect = effects[result.UserOrder];
-            return (JsonNode)OperationReply(
-                plan.Operations[result.UserOrder], result, effect);
-        }).ToArray());
-        if (terminalTransportStatus is { } failedStatus)
-            body["error"] = failedStatus switch
-            {
-                499 => "The assistant request was cancelled.",
-                504 => "The operation timed out. Try a narrower question.",
-                _ => "A legal operation failed upstream.",
-            };
-        return (terminalTransportStatus ?? 200, body);
     }
 
     private static JsonObject OperationReply(
@@ -3203,6 +3297,22 @@ public sealed class AskService
                 _ => "This operation was not evaluated.",
             },
             []));
+
+    /// <summary>
+    /// The reader's own words that named the resolved instrument, in the casing they wrote them.
+    ///
+    /// <para>Only when the preflight settled on exactly one work, and only from the segment that
+    /// work was matched on, so nothing here chooses a subject: it reports the one already chosen.
+    /// The reader's casing is kept rather than the stored form's, because the stored alias is a
+    /// normalisation artefact and the words in the question are what the reader can check.</para>
+    /// </summary>
+    private static string? ResolvedSubjectTerm(string rawUserQuery, SubjectAuthority? authority)
+    {
+        if (authority is not { Members: [{ AuthoritySource.Segment: { Length: > 0 } segment }] })
+            return null;
+        var index = rawUserQuery.IndexOf(segment, StringComparison.OrdinalIgnoreCase);
+        return index < 0 ? null : rawUserQuery.Substring(index, segment.Length);
+    }
 
     private sealed record PreparedOperation(
         JsonObject? Arguments,
@@ -3251,8 +3361,9 @@ public sealed class AskService
             ?? String(plannedArguments, "article_number");
         if (article is not null && operation.Tool is "as_of" or "diff" or "article_history")
         {
+            var requestedLanguage = String(actual, "language");
             var anchor = member.ArticleAnchor;
-            if (anchor is null)
+            if (anchor is null || requestedLanguage is not null)
             {
                 var searchArguments = new JsonObject
                 {
@@ -3262,6 +3373,8 @@ public sealed class AskService
                     ["fuzzy"] = "auto",
                     ["limit"] = 8,
                 };
+                if (requestedLanguage is not null)
+                    searchArguments["language"] = requestedLanguage;
                 var watch = Stopwatch.StartNew();
                 var result = await _legalTool("search", searchArguments, cancellationToken);
                 watch.Stop();
@@ -3392,6 +3505,11 @@ public sealed class AskService
         var token = new string(value.ToLowerInvariant().Where(char.IsLetterOrDigit).ToArray());
         if (token.StartsWith("article", StringComparison.Ordinal)) token = token[7..];
         else if (token.StartsWith("art", StringComparison.Ordinal)) token = token[3..];
+        if (token.Length > 2
+            && (token.EndsWith("er", StringComparison.Ordinal)
+                || token.EndsWith("re", StringComparison.Ordinal))
+            && token[..^2].All(char.IsDigit))
+            token = token[..^2];
         return token;
     }
 

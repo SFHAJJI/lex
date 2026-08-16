@@ -522,6 +522,37 @@ public sealed class AskOperationControllerTests : IDisposable
             plan["operations"]?[0]?["arguments"]?["work_query"]?.GetValue<string>());
     }
 
+    [Fact]
+    public async Task Early_subject_clarification_keeps_zero_model_usage_and_authenticated_timing()
+    {
+        var service = new AskService(_core, new StaticPlanner("en", new JsonArray(new JsonObject
+        {
+            ["tool"] = "clarification",
+            ["arguments"] = new JsonObject
+            {
+                ["question"] = "Which held instrument do you mean?",
+                ["options"] = new JsonArray(
+                    "Provide an official title", "Provide an official identifier"),
+            },
+        })));
+
+        var response = await service.AskAsync(
+            History("What does the Atlantis Regulation require?"),
+            Guid.NewGuid().ToString(), "law.test", CancellationToken.None);
+
+        Assert.Equal(200, response.Status);
+        Assert.Equal(0, response.Body["model_usage"]?["input_tokens"]?.GetValue<long>());
+        Assert.Equal(0, response.Body["model_usage"]?["output_tokens"]?.GetValue<long>());
+        Assert.Equal(0, response.Body["model_usage"]?["total_tokens"]?.GetValue<long>());
+        Assert.False(string.IsNullOrWhiteSpace(
+            response.Body["model_identity"]?["resource_host"]?.GetValue<string>()));
+        Assert.False(string.IsNullOrWhiteSpace(
+            response.Body["model_identity"]?["deployment"]?.GetValue<string>()));
+        Assert.True(response.Body["timing"]?["planner_ms"]?.GetValue<double>() >= 0);
+        Assert.True(response.Body["timing"]?["mcp_ms"]?.GetValue<double>() >= 0);
+        Assert.Null(response.Body["timing"]?["synthesis_ms"]);
+    }
+
     [Theory]
     [InlineData("Show the timeline for the Atlantis Regulation and quote Article 5.")]
     [InlineData("Show the timeline for the Atlantis Regulation and summarize Article 5.")]
@@ -1655,6 +1686,56 @@ public sealed class AskOperationControllerTests : IDisposable
             .Select(hit => hit["anchor"]!.GetValue<string>()), options);
     }
 
+    [Fact]
+    public async Task Requested_language_resolves_its_ordinal_anchor_instead_of_another_language_anchor()
+    {
+        const string question =
+            "Show Article 1 of the Constitution in French as it stood on 1 January 2024.";
+        const string work = "eu-eurlex:32016r0679";
+        var raw = Envelope(
+            [("Constitution", "resolved", [work])],
+            ProvisionHit($"{work}:2023-07-01", "art_1", "1"),
+            Hit($"{work}:2023-07-01", null, "work_metadata"));
+        var focused = Envelope(
+            [("Constitution", "resolved", [work])],
+            ProvisionHit($"{work}:2023-07-01", "art_1er", "1er"));
+        var focusedCalls = 0;
+        async ValueTask<JsonNode> LegalTool(
+            string tool, JsonObject arguments, CancellationToken cancellationToken)
+        {
+            if (tool != "search")
+                return await _core.CallToolAsync(tool, arguments, cancellationToken);
+            if (arguments["query"]?.GetValue<string>() == question)
+                return raw.DeepClone();
+            focusedCalls++;
+            Assert.Equal("Article 1", arguments["query"]?.GetValue<string>());
+            Assert.Equal("fr", arguments["language"]?.GetValue<string>());
+            return focused.DeepClone();
+        }
+        var service = new AskService(_core, new StaticPlanner("en", new JsonArray(new JsonObject
+        {
+            ["tool"] = "as_of",
+            ["arguments"] = new JsonObject
+            {
+                ["work_query"] = "Constitution",
+                ["article_number"] = "1",
+                ["date"] = "2024-01-01",
+                ["language"] = "fr",
+                ["mode"] = "select",
+                ["anchors"] = "art_1er",
+            },
+        })), legalTool: LegalTool);
+
+        var response = await service.AskAsync(
+            History(question), Guid.NewGuid().ToString(), "law.test", CancellationToken.None);
+
+        Assert.Equal(1, focusedCalls);
+        var primary = Assert.Single(
+            Assert.IsType<JsonArray>(response.Body["trace"]).OfType<JsonObject>(),
+            item => item["phase"]?.GetValue<string>() == "primary");
+        Assert.Equal("art_1er", primary["args"]?["anchors"]?.GetValue<string>());
+    }
+
     private Func<string, JsonObject, CancellationToken, ValueTask<JsonNode>> SearchStub(
         string rawQuery, JsonNode raw, JsonNode focused) =>
         async (tool, arguments, cancellationToken) => tool == "search"
@@ -2269,6 +2350,72 @@ public sealed class AskOperationControllerTests : IDisposable
     {
         _reader.Dispose();
         try { File.Delete(_db); } catch { }
+    }
+
+    /// <summary>
+    /// `search` is the one tool whose schema still lets the planner write the subject as free
+    /// text, and left alone it does: one unchanging question about the CRR produced four different
+    /// queries across six live runs, so the same question reached the index four different ways
+    /// and the case passed roughly one time in six. Once the preflight has identified the
+    /// instrument, the term that identified it is both the least invented thing available and the
+    /// one already proven to retrieve the work, so a paraphrase can only add variance.
+    /// </summary>
+    [Fact]
+    public async Task A_resolved_subject_is_searched_by_the_reader_s_own_term()
+    {
+        var planner = new StaticPlanner("en", new JsonArray(new JsonObject
+        {
+            ["tool"] = "search",
+            ["arguments"] = new JsonObject
+            {
+                ["query"] = "Capital Requirements Regulation (CRR)",
+                ["jurisdiction"] = "EU",
+                ["time_scope"] = "as_of",
+                ["as_of"] = "2021-01-01",
+            },
+        }));
+        var service = new AskService(_core, planner);
+
+        var response = await service.AskAsync(
+            History("Open the CRR workspace at 1 January 2021 without quoting or summarising it."),
+            Guid.NewGuid().ToString(), "law.test", CancellationToken.None);
+
+        Assert.Equal(200, response.Status);
+        var primary = Assert.Single(Assert.IsType<JsonArray>(response.Body["trace"])
+            .OfType<JsonObject>(), item => item["phase"]?.GetValue<string>() == "primary");
+        Assert.Equal("CRR", primary["args"]?["query"]?.GetValue<string>());
+        // The rest of the planner's arguments are untouched: only the subject was server-owned.
+        Assert.Equal("2021-01-01", primary["args"]?["as_of"]?.GetValue<string>());
+    }
+
+    /// <summary>
+    /// The counterpart, and the reason the binding is narrow. On a discovery turn no authority is
+    /// resolved, the planner's query IS the contribution, and binding it would answer a question
+    /// nobody asked.
+    /// </summary>
+    [Fact]
+    public async Task A_discovery_search_keeps_the_query_the_planner_wrote()
+    {
+        var planner = new StaticPlanner("en", new JsonArray(new JsonObject
+        {
+            ["tool"] = "search",
+            ["arguments"] = new JsonObject
+            {
+                ["query"] = "operational resilience requirements zebrafalcon",
+                ["jurisdiction"] = "EU",
+            },
+        }));
+        var service = new AskService(_core, planner);
+
+        var response = await service.AskAsync(
+            History("What does Lex hold about operational resilience requirements?"),
+            Guid.NewGuid().ToString(), "law.test", CancellationToken.None);
+
+        Assert.Equal(200, response.Status);
+        var primary = Assert.Single(Assert.IsType<JsonArray>(response.Body["trace"])
+            .OfType<JsonObject>(), item => item["phase"]?.GetValue<string>() == "primary");
+        Assert.Equal("operational resilience requirements zebrafalcon",
+            primary["args"]?["query"]?.GetValue<string>());
     }
 
     private static JsonArray History(string question) =>

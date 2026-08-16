@@ -97,15 +97,32 @@ public interface IAssistantEvaluationGrader
         CancellationToken cancellationToken);
 }
 
+/// <summary>What the separate judge measured on the one dimension code cannot decide.</summary>
+/// <remarks>
+/// Relevance asks whether the answer addressed the question that was asked, at the right scope.
+/// It is recorded beside each repetition and contributes nothing to
+/// <see cref="AssistantEvaluationReport.ActivationGatePassed"/>: the deterministic assertions
+/// decide promotion, and a judged score that could deny it would be a model's opinion holding a
+/// veto over evidence.
+///
+/// Exactly one of the two is present. A grader that failed leaves <see cref="Score"/> null and
+/// names <see cref="UnavailableCause"/>, because a measurement that did not happen must not read
+/// as a good one; the alternative, recording the failure as a passing score, is the only reading
+/// certain to be wrong. The cause is the same short machine token the failure list carries and
+/// never a message, since this report is published.
+/// </remarks>
+public sealed record AssistantEvaluationRelevance(
+    int? Score,
+    string? UnavailableCause);
+
 public sealed record AssistantEvaluationCaseResult(
     string CaseId,
     int Repetition,
     string PromptSha256,
     string GradingMode,
-    int GradingThreshold,
     bool Passed,
     IReadOnlyList<string> Failures,
-    int? Grade,
+    AssistantEvaluationRelevance Relevance,
     AssistantModelUsage CandidateUsage,
     AssistantModelUsage GraderUsage,
     AssistantEvaluationTimings Timings);
@@ -249,10 +266,11 @@ public static class AssistantEvaluationRunner
                 {
                     throw;
                 }
-                catch
+                catch (Exception exception)
                 {
                     elapsed.Stop();
-                    failures.Add("assistant evaluation target unavailable");
+                    failures.Add(
+                        $"assistant evaluation target unavailable: {StageCause(exception)}");
                 }
 
                 pending.Add(new PendingResult(
@@ -272,10 +290,14 @@ public static class AssistantEvaluationRunner
             var failures = item.Failures;
             var candidateUsage = item.CandidateUsage;
             AssistantModelUsage graderUsage = new(0, 0);
-            int? score = null;
+            var relevance = new AssistantEvaluationRelevance(null, null);
 
             if (item.GradeEligible && evaluationCase.Grading.Mode == "llm")
             {
+                // A run wired to no grader is not one call that failed. It is a run that never
+                // brought the separate judge at all, which is a property of the run and stays a
+                // release failure: the score reports rather than gates, but the instrument that
+                // produces it has to be present and independently authenticated.
                 if (grader is null)
                     failures.Add("required separate LLM release grader was not configured");
                 else
@@ -284,23 +306,23 @@ public static class AssistantEvaluationRunner
                     {
                         var grade = await grader.GradeAsync(
                             evaluationCase, item.Response!, cancellationToken);
-                        score = grade.Score;
-                        if (grade.Score is < 1 or > 5)
-                            failures.Add("grader returned a score outside 1..5");
-                        else if (grade.Score < evaluationCase.Grading.Threshold)
-                            failures.Add(
-                                $"grader score {grade.Score} was below {evaluationCase.Grading.Threshold}");
-                        if (grade.Usage.InputTokens <= 0 || grade.Usage.OutputTokens <= 0)
-                            failures.Add("grader returned missing token usage");
                         graderUsage = grade.Usage;
+                        // An out-of-band score or a call that billed nothing is the grader
+                        // malfunctioning, not the candidate answering badly, so it lands where
+                        // every other grader malfunction lands: no measurement, and why.
+                        relevance = grade.Score is < 1 or > 5
+                            ? new(null, "grader_score_out_of_range")
+                            : grade.Usage.InputTokens <= 0 || grade.Usage.OutputTokens <= 0
+                                ? new(null, "grader_usage_absent")
+                                : new(grade.Score, null);
                     }
                     catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
                     {
                         throw;
                     }
-                    catch
+                    catch (Exception exception)
                     {
-                        failures.Add("required separate release grader unavailable");
+                        relevance = new(null, StageCause(exception));
                     }
                 }
             }
@@ -330,8 +352,8 @@ public static class AssistantEvaluationRunner
             totalGraderUsage = totalGraderUsage.Add(graderUsage);
             results.Add(new AssistantEvaluationCaseResult(
                 evaluationCase.Id, item.Repetition, PromptSha256(evaluationCase),
-                evaluationCase.Grading.Mode, evaluationCase.Grading.Threshold,
-                failures.Count == 0, failures, score,
+                evaluationCase.Grading.Mode,
+                failures.Count == 0, failures, relevance,
                 candidateUsage, graderUsage,
                 item.MeasuredTimings ?? new AssistantEvaluationTimings(
                     0, 0, 0, item.ElapsedMilliseconds, null,
@@ -348,6 +370,11 @@ public static class AssistantEvaluationRunner
         if (totalCandidateUsage.InputTokens > caseSet.Catalog.Budget.MaximumCandidateInputTokens
             || totalCandidateUsage.OutputTokens > caseSet.Catalog.Budget.MaximumCandidateOutputTokens)
             gateFailures.Add("measured candidate token budget exceeded");
+        // One repetition may honestly report zero, a whole run may not: a report claiming the
+        // candidate spent nothing across every case measured nothing. The release verifier refuses
+        // the same report, but the run that produced it should say so itself.
+        if (totalCandidateUsage.InputTokens <= 0 || totalCandidateUsage.OutputTokens <= 0)
+            gateFailures.Add("measured candidate token usage was zero across the whole run");
         if (totalGraderUsage.InputTokens > caseSet.Catalog.Budget.MaximumGraderInputTokens
             || totalGraderUsage.OutputTokens > caseSet.Catalog.Budget.MaximumGraderOutputTokens)
             gateFailures.Add("measured grader token budget exceeded");
@@ -376,6 +403,20 @@ public static class AssistantEvaluationRunner
             actualCost, latency, results, gateFailures,
             ActivationGatePassed: gateFailures.Count == 0);
     }
+
+    // A signed report has to name the cause. Both stage catches used to record one string, so a
+    // local shape rejection, a zero-usage turn, a bounded-read overflow and a dead candidate read
+    // identically, and every grader refusal read as an unavailable grader. Exception MESSAGES stay
+    // out: this list is published, and a message can carry an endpoint or the candidate's own
+    // answer. What is left is a machine token, a status code, or the exception's own type name.
+    private static string StageCause(Exception exception) => exception switch
+    {
+        AssistantEvaluationStageException staged => staged.Cause,
+        HttpRequestException { StatusCode: { } status } => $"http_{(int)status}",
+        HttpRequestException transport => $"transport_{transport.HttpRequestError}",
+        OperationCanceledException => "timeout",
+        _ => exception.GetType().Name,
+    };
 
     internal static string PromptSha256(AssistantEvaluationCase evaluationCase)
     {
@@ -583,10 +624,19 @@ public static class AssistantEvaluationRunner
     private static AssistantModelUsage ReadUsage(JsonObject response, List<string> failures)
     {
         var usage = response["model_usage"] as JsonObject;
+        // Zero is admitted, absence is not. A deterministic clarification turn legitimately reports
+        // 0/0/0 with the rest of its evidence envelope attached, and a repetition is the only place
+        // that can be true; the report as a whole still has to show spend, which the gate below and
+        // the release verifier enforce on the sum.
         if (usage?["input_tokens"] is not JsonValue inputValue
-            || !TryLong(inputValue, out var input) || input <= 0
+            || !TryLong(inputValue, out var input) || input < 0
             || usage["output_tokens"] is not JsonValue outputValue
-            || !TryLong(outputValue, out var output) || output <= 0
+            || !TryLong(outputValue, out var output) || output < 0
+            // Only an all-zero reading is a turn that called no model. A turn reporting no input
+            // beside real output did call one and is understating the axis
+            // MaximumCandidateInputTokens is enforced on, so the mixed reading stays refused
+            // exactly as it was.
+            || (input == 0) != (output == 0)
             || usage["total_tokens"] is not JsonValue totalValue
             || !TryLong(totalValue, out var total)
             || total != input + output)
@@ -884,7 +934,8 @@ public sealed class AssistantEvaluationHttpTarget : IAssistantEvaluationTarget
                     threadToken,
                     cancellationToken);
                 if (setupInvocation.StatusCode != 200)
-                    throw new InvalidDataException(
+                    throw new AssistantEvaluationStageException(
+                        $"candidate_setup_http_{setupInvocation.StatusCode}",
                         $"Assistant evaluation setup turn returned HTTP {setupInvocation.StatusCode}.");
                 timings.Add(setupInvocation.Timings);
                 setupInvocations.Add(new AssistantEvaluationSetupInvocation(
@@ -1205,13 +1256,20 @@ public sealed class AssistantEvaluationHttpTarget : IAssistantEvaluationTarget
         ref long outputTokens)
     {
         var usage = response["model_usage"] as JsonObject
-            ?? throw new InvalidDataException(
+            ?? throw new AssistantEvaluationStageException("candidate_usage_absent",
                 "Assistant evaluation turn has no model usage.");
         var input = Long(usage["input_tokens"]);
         var output = Long(usage["output_tokens"]);
         var total = Long(usage["total_tokens"]);
-        if (input <= 0 || output <= 0 || total != input + output)
-            throw new InvalidDataException(
+        // A deterministic clarification turn calls no model and reports 0/0/0 beside a complete
+        // evidence envelope. That is a measurement, not a missing one, so zero is admitted here and
+        // only negatives, non-numbers and a total that does not add up are refused. Long() returns
+        // -1 for an absent or non-numeric field, so absence still lands in the refusal. Zero has to
+        // be all-zero for the same reason: a turn reporting no input beside real output did call a
+        // model, and that mixed reading is what the old input <= 0 check was there to catch.
+        if (input < 0 || output < 0 || (input == 0) != (output == 0)
+            || total != input + output)
+            throw new AssistantEvaluationStageException("candidate_usage_invalid",
                 "Assistant evaluation turn has invalid model usage.");
         inputTokens = checked(inputTokens + input);
         outputTokens = checked(outputTokens + output);
@@ -1228,7 +1286,7 @@ public sealed class AssistantEvaluationHttpTarget : IAssistantEvaluationTarget
 
     private static string RequiredThreadToken(JsonObject response) =>
         OptionalThreadToken(response)
-        ?? throw new InvalidDataException(
+        ?? throw new AssistantEvaluationStageException("candidate_thread_token_absent",
             "Assistant evaluation setup turn did not return a server thread capability.");
 
     private static string? OptionalThreadToken(JsonObject response)
@@ -1237,7 +1295,7 @@ public sealed class AssistantEvaluationHttpTarget : IAssistantEvaluationTarget
         var token = response["thread_token"]?.GetValue<string>();
         return ValidOpaqueToken(token)
             ? token
-            : throw new InvalidDataException(
+            : throw new AssistantEvaluationStageException("candidate_thread_token_invalid",
                 "Assistant evaluation returned an invalid server thread capability.");
     }
 
@@ -1332,11 +1390,58 @@ public sealed class AssistantEvaluationHttpTarget : IAssistantEvaluationTarget
 public sealed record AssistantTargetAttestation(
     IReadOnlyList<string> IndexManifestIds);
 
+/// <summary>Names why one evaluation stage refused.</summary>
+/// <remarks>
+/// The runner's two stage catches used to record one string each, so a local shape rejection, a
+/// zero-usage turn and a dead candidate were indistinguishable in a signed report, and every
+/// grader refusal read as an unavailable grader. <see cref="Cause"/> is a short machine token the
+/// report can carry; the message is for a developer and never reaches the report, because that
+/// list is published and a message can carry an endpoint or the candidate's own answer. Every
+/// existing filter that classified these refusals through <see cref="InvalidDataException"/>
+/// names this type beside it, so the diagnostic report keeps the categories it already had.
+/// </remarks>
+public sealed class AssistantEvaluationStageException(
+    string cause, string message, Exception? innerException = null)
+    : Exception(message, innerException)
+{
+    public string Cause { get; } = cause;
+}
+
 public sealed class AssistantEvaluationHttpGrader :
     IAssistantEvaluationGrader,
     IAssistantEvaluationDiagnosticGrader
 {
     private const int MaximumResponseBytes = 256 * 1024;
+
+    // Transport hygiene, not a budget: it stops a runaway body reaching the socket and sits far
+    // above any prompt the token ceiling below can admit.
+    private const int MaximumRequestBytes = 512 * 1024;
+
+    // Both grader ceilings used to be expressed in the wrong unit. BuildPrompt halved a character
+    // count, (20000 - 2048) / 2 = 8,976 characters, and SendAsync compared UTF-8 request bytes to a
+    // token budget. Tokenizing the projection of all 25 signed cases replayed against the
+    // candidate's index set puts the evidence at 2.2 to 3.3 characters per token, and the largest
+    // prompt at 50,882 characters for 19,357 tokens: the halved count refused 12 of those 25 before
+    // any call, and the byte comparison refuses whatever JSON escaping inflates, which is not what
+    // the grader bills. Both now convert through one measured ratio.
+
+    /// <summary>What the service bills as input for the fixed part of every grader request.</summary>
+    /// <remarks>
+    /// Measured at 59 tokens for the system message and 67 for the strict schema, with the chat
+    /// template taking the rest. Reserved out of the case budget so a prompt admitted here cannot
+    /// then trip the runner's "measured grader usage exceeded the case token ceiling" gate, which
+    /// enforces the same number against what the service actually reports.
+    /// </remarks>
+    public const int FixedPromptTokens = 512;
+
+    /// <summary>Characters per token for the projected typed evidence, at the measured median.</summary>
+    /// <remarks>
+    /// Higher admits prompts the grader then bills over the case ceiling; lower refuses the largest
+    /// real case, which is the refusal this replaces. The 2.2 floor only appears on dense date and
+    /// number JSON, which is never the largest projection.
+    /// </remarks>
+    public const double CharactersPerToken = 2.7;
+
     private readonly HttpClient _http;
     private readonly Uri _endpoint;
     private readonly string _apiKey;
@@ -1363,6 +1468,19 @@ public sealed class AssistantEvaluationHttpGrader :
         _endpoint = parsedEndpoint;
     }
 
+    /// <summary>The most prompt characters a case's declared grader input budget can pay for.</summary>
+    public static int PromptCharacterCeiling(int maximumInputTokens)
+    {
+        var promptTokens = (double)maximumInputTokens - FixedPromptTokens;
+        return promptTokens <= 0
+            ? 0
+            : (int)Math.Min(int.MaxValue, promptTokens * CharactersPerToken);
+    }
+
+    /// <summary>What the service will bill as input for a prompt of this length.</summary>
+    public static long EstimatedPromptTokens(int promptCharacters) =>
+        FixedPromptTokens + (long)Math.Ceiling(promptCharacters / CharactersPerToken);
+
     public async Task<AssistantEvaluationGrade> GradeAsync(
         AssistantEvaluationCase evaluationCase,
         JsonObject response,
@@ -1371,6 +1489,15 @@ public sealed class AssistantEvaluationHttpGrader :
         var parsed = await SendAsync(
             evaluationCase, response, evaluationCase.Grading.MaximumOutputTokens,
             cancellationToken);
+        // The official path used to read the grade and ignore why the model stopped, so a truncated
+        // or filtered completion arrived as "returned no grade". This mirrors GradeDiagnosticAsync,
+        // except that an absent finish_reason stays tolerated: refusing it would fail cases the
+        // official path accepts today, and this change is meant to rename failures, not create them.
+        var finishReason = OptionalFinishReason(parsed);
+        if (finishReason is "length" or "content_filter")
+            throw new AssistantEvaluationStageException(
+                $"grader_finish_reason_{finishReason}",
+                "Assistant evaluation grader returned an unusable completion.");
         return ParseGrade(parsed);
     }
 
@@ -1397,7 +1524,8 @@ public sealed class AssistantEvaluationHttpGrader :
             return new AssistantEvaluationDiagnosticGrade(
                 grade.Score, grade.Usage, finishReason);
         }
-        catch (Exception exception) when (exception is InvalidDataException or JsonException)
+        catch (Exception exception) when (exception
+            is InvalidDataException or JsonException or AssistantEvaluationStageException)
         {
             throw new AssistantEvaluationDiagnosticResponseException(
                 "invalid_response", finishReason, usage);
@@ -1455,10 +1583,19 @@ public sealed class AssistantEvaluationHttpGrader :
                 },
             },
         };
-        var requestBytes = JsonSerializer.SerializeToUtf8Bytes(body);
-        if (requestBytes.Length + 256 > evaluationCase.Grading.MaximumInputTokens)
-            throw new InvalidDataException(
+        // The service bills the message content, not the envelope that escapes it, so the input
+        // ceiling reads the prompt and the serialized size answers only to the transport bound.
+        // BuildPrompt already holds the prompt under PromptCharacterCeiling, so this cannot refuse
+        // what it admitted; it guards a caller that reaches SendAsync another way.
+        if (EstimatedPromptTokens(prompt.Length) > evaluationCase.Grading.MaximumInputTokens)
+            throw new AssistantEvaluationStageException(
+                "grader_prompt_over_input_ceiling",
                 "Assistant evaluation grader request exceeds its reserved input ceiling.");
+        var requestBytes = JsonSerializer.SerializeToUtf8Bytes(body);
+        if (requestBytes.Length > MaximumRequestBytes)
+            throw new AssistantEvaluationStageException(
+                "grader_request_over_transport_bound",
+                "Assistant evaluation grader request exceeds its transport bound.");
         using var request = new HttpRequestMessage(HttpMethod.Post, _endpoint)
         {
             Content = new ByteArrayContent(requestBytes),
@@ -1468,18 +1605,23 @@ public sealed class AssistantEvaluationHttpGrader :
         using var upstream = await _http.SendAsync(
             request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
         if (!upstream.IsSuccessStatusCode)
-            throw new HttpRequestException("Assistant evaluation grader rejected the request.");
+            // Carries the status so the runner can record which rejection this was; it stays an
+            // HttpRequestException because the diagnostic runner classifies that as transport.
+            throw new HttpRequestException(
+                "Assistant evaluation grader rejected the request.", null, upstream.StatusCode);
         var bytes = await AssistantEvaluationHttpTarget.ReadBoundedAsync(
             upstream.Content, MaximumResponseBytes, cancellationToken);
         JsonNode parsed;
         try
         {
             parsed = JsonNode.Parse(bytes)
-                ?? throw new InvalidDataException("Assistant evaluation grader returned an empty response.");
+                ?? throw new AssistantEvaluationStageException("grader_empty_response",
+                    "Assistant evaluation grader returned an empty response.");
         }
         catch (JsonException exception)
         {
-            throw new InvalidDataException("Assistant evaluation grader returned malformed JSON.", exception);
+            throw new AssistantEvaluationStageException("grader_malformed_json",
+                "Assistant evaluation grader returned malformed JSON.", exception);
         }
         return parsed;
     }
@@ -1487,30 +1629,39 @@ public sealed class AssistantEvaluationHttpGrader :
     private static AssistantEvaluationGrade ParseGrade(JsonNode parsed)
     {
         var content = parsed["choices"]?[0]?["message"]?["content"]?.GetValue<string>()
-            ?? throw new InvalidDataException("Assistant evaluation grader returned no grade.");
+            ?? throw new AssistantEvaluationStageException("grader_no_content",
+                "Assistant evaluation grader returned no grade.");
         var grade = JsonNode.Parse(content) as JsonObject
-            ?? throw new InvalidDataException("Assistant evaluation grader returned no grade object.");
+            ?? throw new AssistantEvaluationStageException("grader_no_grade_object",
+                "Assistant evaluation grader returned no grade object.");
         var score = grade["score"]?.GetValue<int>()
-            ?? throw new InvalidDataException("Assistant evaluation grader returned no score.");
+            ?? throw new AssistantEvaluationStageException("grader_no_score",
+                "Assistant evaluation grader returned no score.");
         var reason = grade["reason"]?.GetValue<string>()
-            ?? throw new InvalidDataException("Assistant evaluation grader returned no reason.");
+            ?? throw new AssistantEvaluationStageException("grader_no_reason",
+                "Assistant evaluation grader returned no reason.");
         var usage = parsed["usage"] as JsonObject
-            ?? throw new InvalidDataException("Assistant evaluation grader returned no usage.");
+            ?? throw new AssistantEvaluationStageException("grader_no_usage",
+                "Assistant evaluation grader returned no usage.");
         return new AssistantEvaluationGrade(score, reason, new AssistantModelUsage(
             ReadLong(usage, "prompt_tokens"), ReadLong(usage, "completion_tokens")));
     }
 
-    private static string ReadDiagnosticFinishReason(JsonNode parsed)
+    private static string? OptionalFinishReason(JsonNode parsed)
     {
-        string? finishReason;
         try
         {
-            finishReason = parsed["choices"]?[0]?["finish_reason"]?.GetValue<string>();
+            return parsed["choices"]?[0]?["finish_reason"]?.GetValue<string>();
         }
         catch (InvalidOperationException)
         {
-            finishReason = null;
+            return null;
         }
+    }
+
+    private static string ReadDiagnosticFinishReason(JsonNode parsed)
+    {
+        var finishReason = OptionalFinishReason(parsed);
         if (finishReason is not ("stop" or "length" or "content_filter"))
             throw new InvalidDataException(
                 "Diagnostic assistant grader returned an invalid finish reason.");
@@ -1545,19 +1696,40 @@ public sealed class AssistantEvaluationHttpGrader :
             ["trace"] = response["trace"]?.DeepClone(),
         };
         RedactLargeText(compact);
-        var maximumCharacters = Math.Min(
-            60_000, Math.Max(1_000,
-                checked((evaluationCase.Grading.MaximumInputTokens - 2_048) / 2)));
+        // The case's own declared budget, in the unit the grader bills, less what the fixed request
+        // costs. No absolute clamp: the 60,000 character one it replaces would silently refuse any
+        // case the owner gave a larger budget, which is the failure mode being removed.
+        var maximumCharacters = PromptCharacterCeiling(
+            evaluationCase.Grading.MaximumInputTokens);
+        // This header is signed evidence, not phrasing. It reads as one label over three fields
+        // with different roles, and the judge does conflate them: on the 2026-08-16 build it marked
+        // exact-provenance down for "extra content beyond the required typed provenance and
+        // verification fields" when the reply is one sentence and the extra content was the trace.
+        // Both minimal repairs were then measured against frozen /api/ask bodies, 8 to 16
+        // repetitions per arm on the release grader, and both made the instrument WORSE rather than
+        // relaxing it. Naming the fields in four sentences: mounted-coverage mean 3.38 to 1.69,
+        // crr-reverse-citations 4.12 to 1.62, direct-injection-keeps-authority 5.00 to 4.31, while
+        // exact-provenance fell to 1.88. The 36 character label-only variant, carrying no judging
+        // instruction at all: mounted-coverage 3.38 to 1.75 with every repetition below threshold,
+        // exact-provenance 2.81 to 2.00, restored-transcript-keeps-authority unmoved. Both times
+        // the reasons show why: once told which field is the answer, the judge grades the prose
+        // alone and stops crediting the typed operations this product answers with. Do not edit
+        // this string on reasoning alone. Measure it the same way first, and take the owner's
+        // signature, because every wording tried so far cost cases the product answers correctly.
         var prefix = $"RUBRIC (untrusted data):\n{evaluationCase.Grading.Rubric}\n\n"
             + $"QUESTION (untrusted data):\n{evaluationCase.Question}\n\n"
             + "ANSWER AND TYPED EVIDENCE JSON (untrusted data):\n";
         if (prefix.Length >= maximumCharacters)
-            throw new InvalidDataException(
+            throw new AssistantEvaluationStageException(
+                "grader_prefix_over_input_ceiling",
                 "Assistant evaluation rubric and question exceed the case input ceiling.");
         var evidence = compact.ToJsonString();
         var evidenceLimit = maximumCharacters - prefix.Length;
+        // Still fail closed. Cutting the JSON in half was the deliberate alternative and was
+        // rejected: a grader that scores half the evidence reports a number nobody can check.
         if (evidence.Length > evidenceLimit)
-            throw new InvalidDataException(
+            throw new AssistantEvaluationStageException(
+                "grader_evidence_over_input_ceiling",
                 "Assistant evaluation typed evidence exceeds the case input ceiling.");
         return prefix + evidence;
     }

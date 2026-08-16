@@ -240,8 +240,6 @@ public sealed record AssistantEvaluationCatalog(
             ValidateExpected(item.Expected, item.Id);
             if (item.Grading is null
                 || item.Grading.Mode is not ("deterministic" or "llm")
-                || item.Grading.Threshold is < 1 or > 5
-                || item.Grading.Mode == "deterministic" && item.Grading.Threshold != 5
                 || item.Grading.Mode == "llm" && string.IsNullOrWhiteSpace(item.Grading.Rubric)
                 || item.Grading.Mode == "llm" && item.Grading.MaximumInputTokens < 4_096
                 || item.Grading.Rubric?.Length > 4_000
@@ -403,9 +401,15 @@ public sealed record AssistantEvaluationExpectedOperation(
     IReadOnlyDictionary<string, string> Arguments,
     IReadOnlyList<IReadOnlyDictionary<string, string>>? ArgumentAlternatives = null);
 
+/// <summary>How a case is judged, and what that judgement is allowed to cost.</summary>
+/// <remarks>
+/// There is no threshold. A pass mark that nothing compares against is worse in a signed,
+/// published catalog than in code: a reviewer reading "threshold": 4 beside a score of 3 would
+/// reasonably conclude the release was denied, and it was not. Relevance is reported per
+/// repetition and the deterministic assertions decide promotion.
+/// </remarks>
 public sealed record AssistantEvaluationGrading(
     string Mode,
-    int Threshold,
     int MaximumInputTokens,
     int MaximumOutputTokens,
     string? Rubric = null);

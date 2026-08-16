@@ -146,11 +146,15 @@ public sealed record ProvisionView(Subject Subject, string ValidFrom, string? Va
 public sealed record ProvisionItem(string Anchor, string? Num, string? Heading, string Text, string? Sha,
     bool TextOmitted = false, string? TextOmittedReason = null, string? Permalink = null);
 
+/// <param name="Changed">Whether the two dates resolved to different publisher versions, or for an
+/// anchored comparison whether that provision moved. Carried because the whole-work comparison has
+/// no other outcome to report: without it a reader is told a comparison happened and left to guess
+/// how it came out.</param>
 public sealed record DiffView(Subject Subject, string FromDate, string ToDate,
     string? FromPermalink, string? ToPermalink, string? Note, string? Status = null,
     IReadOnlyList<EvidenceContext>? Evidence = null, bool? AnchorFromPresent = null,
     bool? AnchorToPresent = null, bool? AnchorTextEqual = null,
-    bool ProvisionLevelComparable = false);
+    bool ProvisionLevelComparable = false, bool? Changed = null);
 
 public sealed record HistoryView(Subject Subject, string Anchor, int DistinctTexts,
     IReadOnlyList<HistoryState> States, IReadOnlyList<EvidenceContext>? Evidence = null);

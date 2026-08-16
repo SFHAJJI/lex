@@ -210,9 +210,10 @@ public static class BuiltEndpoints
                 <p><span class="badge ok">Verified release</span> <b>Exact runtime match.</b>
                 Signed report verdict: <b>passed</b>. Signed catalog: {evidence.CaseCount:n0} cases /
                 {evidence.RepetitionCount:n0} repetitions. The canonical release verifier checked the
-                case, grade, budget and timing semantics before signing; this page authenticates that
-                immutable report and its runtime bindings. No mutable <span class="mono">latest</span>
-                pointer is trusted.</p>
+                case, budget and timing semantics before signing; this page authenticates that
+                immutable report and its runtime bindings. The separate grader's relevance score is
+                recorded per repetition in that report and gates nothing. No mutable
+                <span class="mono">latest</span> pointer is trusted.</p>
                 <div class="dossier-table" tabindex="0" role="region" aria-label="Latest signed assistant evaluation"><table class="kv">
                 <tr><th>evaluated at</th><td class="mono">{H(evidence.RunAt)}</td></tr>
                 <tr><th>running and evaluated revision</th><td class="mono">{H(evidence.Revision)}</td></tr>

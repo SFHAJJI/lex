@@ -1495,11 +1495,40 @@ public sealed class LexIndexReader : IDisposable
     private static bool ContainsPhrase(string normalized, string phrase) =>
         (" " + normalized + " ").Contains(" " + phrase + " ", StringComparison.Ordinal);
 
+    /// <summary>
+    /// The spellings of one article number that denote the same ordinal position.
+    ///
+    /// <para>Article lookup is an equality against a stored token, so it is spelling-sensitive
+    /// where the corpus is not. A first article is numbered "1er" wherever the drafting language
+    /// puts an ordinal suffix on it and "1" everywhere else, and the same provision of the same
+    /// work is therefore stored under both, one per expression. Without the pair, "Article 1" of
+    /// such an expression is unreachable and a dated question about it retrieves nothing at all.
+    /// </para>
+    ///
+    /// <para>The suffix is dropped only when everything before it is digits. "42ter" and
+    /// "108quater" end in the same two letters and are articles inserted between existing ones,
+    /// not spellings of 42 and 108, and serving one for the other would be a legal error. This is
+    /// widening, never merging: an expression that genuinely holds both spellings returns both
+    /// rows, and the caller decides whether two candidates are an answer.</para>
+    /// </summary>
+    private static string[] OrdinalSpellings(string number) =>
+        number.Length > 2
+        && (number.EndsWith("er", StringComparison.Ordinal)
+            || number.EndsWith("re", StringComparison.Ordinal))
+        && number[..^2].All(char.IsAsciiDigit)
+            ? [number, number[..^2]]
+            : number.Length > 0 && number.All(char.IsAsciiDigit)
+                ? [number, number + "er", number + "re"]
+                : [number];
+
     private List<(DocRow Doc, ProvisionRow Prov, string Snippet)> SearchArticleIntent(
         string articleNumber, FilterSet filters, int limit, string? residualQuery = null)
     {
-        var compact = articleNumber.Replace(" ", "", StringComparison.Ordinal);
-        var anchor = "art_" + articleNumber.Replace(' ', '_');
+        var numbers = OrdinalSpellings(articleNumber.Replace(" ", "", StringComparison.Ordinal));
+        var anchors = OrdinalSpellings(articleNumber.Replace(' ', '_'))
+            .Select(spelling => "art_" + spelling).ToArray();
+        var numberList = string.Join(",", numbers.Select((_, i) => $"$number{i}"));
+        var anchorList = string.Join(",", anchors.Select((_, i) => $"$anchor{i}"));
         var (where, parameters) = WithFilters("1=1", filters, excludeAsOf: false, alias: "d");
         var hasResidual = !string.IsNullOrWhiteSpace(residualQuery);
         // FTS5 ranking functions cannot be evaluated in the same SELECT as a window function.
@@ -1521,8 +1550,8 @@ public sealed class LexIndexReader : IDisposable
               JOIN docs d ON d.rid=p.rid
               WHERE {where} AND p.ptype='article'
                 AND (
-                  lower(replace(replace(replace(p.num,' ',''),'.',''),'-',''))=$number
-                  OR lower(replace(replace(p.anchor,'.',''),'-','_'))=$anchor
+                  lower(replace(replace(replace(p.num,' ',''),'.',''),'-','')) IN ({numberList})
+                  OR lower(replace(replace(p.anchor,'.',''),'-','_')) IN ({anchorList})
                 )
             )
             SELECT {SelectDocCols("d")},
@@ -1534,8 +1563,10 @@ public sealed class LexIndexReader : IDisposable
             ORDER BY e.score,d.valid_from DESC,e.seq,e.rid
             LIMIT $limit
             """, parameters);
-        command.Parameters.AddWithValue("$number", compact);
-        command.Parameters.AddWithValue("$anchor", anchor);
+        for (var i = 0; i < numbers.Length; i++)
+            command.Parameters.AddWithValue($"$number{i}", numbers[i]);
+        for (var i = 0; i < anchors.Length; i++)
+            command.Parameters.AddWithValue($"$anchor{i}", anchors[i]);
         command.Parameters.AddWithValue("$limit", limit);
         if (hasResidual) command.Parameters.AddWithValue("$residual", Fts5Escape(residualQuery!));
         var result = new List<(DocRow, ProvisionRow, string)>();

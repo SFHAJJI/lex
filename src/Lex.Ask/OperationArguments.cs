@@ -240,6 +240,7 @@ internal static class OperationArguments
     /// is refused, an unusable integer drops to its default.</item>
     /// <item>closed sets, <em>before</em> the defaults: a value that has to be dropped must be
     /// gone before <c>??=</c> can refill it.</item>
+    /// <item>the unservable retrieval mode, in the same window and for the same reason.</item>
     /// <item>defaults, including the point in time.</item>
     /// <item>validate: every surviving check is still a hard failure.</item>
     /// </list>
@@ -338,6 +339,7 @@ internal static class OperationArguments
         }
 
         RecoverClosedSets(action, normalized, repaired);
+        QuarantineUnservableRetrievalMode(action, normalized, vocabulary, repaired);
         ApplyDefaults(action, normalized, today ?? DateOnly.FromDateTime(DateTime.UtcNow), repaired);
         Validate(action, normalized);
         return normalized;
@@ -428,6 +430,48 @@ internal static class OperationArguments
             arguments.Remove(name);
             repaired.Add(Repair(action, name, "dropped"));
         }
+    }
+
+    /// <summary>The one value dropped here for being unservable rather than for being wrong, and
+    /// the only repair in this gate that is not a planner mistake.
+    ///
+    /// <para>hybrid is advertised. The catalogue offers "keyword or hybrid" to the planner and the
+    /// schema lists both, so a model asked a concept question plans hybrid and is right to. What
+    /// the model cannot know is whether semantic retrieval was activated on the artifacts this
+    /// process actually mounted: activation is decided per publisher at startup, against a signed
+    /// retrieval benchmark, and today it holds for no publisher this product ships. MCP then
+    /// answers every selected publisher with retrieval_mode_unavailable, which leaves the operation
+    /// with no execution and reports not_available for a question the keyword index answers
+    /// well.</para>
+    ///
+    /// <para>The refusal is not the defect and is not repaired here. A caller of the MCP tool asked
+    /// for a retrieval mode and must be told plainly that it cannot be served, rather than quietly
+    /// served a different one; that typed refusal is contract, and scripts/deploy/candidate_gates.py
+    /// asserts it against the candidate on every deploy. This boundary is the other side of the
+    /// same fact: the assistant chooses which operations to plan, so it is the one that must not
+    /// plan an operation the mounted corpus cannot execute.</para>
+    ///
+    /// <para>Dropping it is safe for exactly the reason the rest of <see cref="RecoverableValues"/>
+    /// is: retrieval_mode picks a matching strategy over the same corpus at the same instant, so
+    /// keyword can rank the same law differently but can never answer with a different law, a
+    /// different provision or a different point in time. The drop happens before the defaults so
+    /// keyword refills the slot, and the verb is its own: a rising <c>dropped</c> count means the
+    /// model is inventing values, a rising <c>quarantined</c> count means the model is asking
+    /// correctly for a mode this corpus cannot serve, which is an activation signal rather than
+    /// anyone's mistake.</para>
+    ///
+    /// <para>Servability is asked of the running server (see
+    /// <c>AskService.HybridRetrievalServable</c>) rather than assumed here, so the day activation
+    /// passes for every mounted publisher this quarantine stops firing on its own and the planner's
+    /// hybrid survives. Nothing in this file has to change for that, and nothing may be added here
+    /// that would have to.</para></summary>
+    private static void QuarantineUnservableRetrievalMode(
+        string action, JsonObject arguments, CorpusVocabulary vocabulary, List<string> repaired)
+    {
+        if (vocabulary.HybridRetrievalServable) return;
+        if (Text(arguments, "retrieval_mode") != "hybrid") return;
+        arguments.Remove("retrieval_mode");
+        repaired.Add(Repair(action, "retrieval_mode", "quarantined"));
     }
 
     private static void ApplyDefaults(

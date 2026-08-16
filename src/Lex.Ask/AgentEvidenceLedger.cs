@@ -56,6 +56,16 @@ internal sealed class AgentEvidenceLedger
                 Add(tool, call, ordinal++, AgentEvidenceKind.Ranking, null, null, null, null, null,
                     false, $"{aggregate.Publisher} aggregate ranking result",
                     EvidencePayload(aggregate.Payload, status));
+        // For a ranking the counts are the evidence; for a comparison the OUTCOME is, and it sits
+        // on the result object rather than on either dated document. Without this row a synthesis
+        // asked what changed receives two versions and no comparison between them, so it correctly
+        // refuses; and the polarity contract that exists to stop it inverting a change is handed
+        // zero change facts and passes everything.
+        if (tool == "diff" && result is JsonObject comparison)
+            Add(tool, call, ordinal++, AgentEvidenceKind.Change,
+                WorkKey(comparison["work"]?.GetValue<string>()),
+                comparison["anchor"]?.GetValue<string>(), null, null, null, false,
+                "verified comparison outcome", ComparisonOutcome(comparison, arguments, status));
         foreach (var doc in docs.OfType<JsonObject>())
         {
             var work = WorkKey(doc["lex_id"]?.GetValue<string>());
@@ -149,6 +159,42 @@ internal sealed class AgentEvidenceLedger
         if (result is null) return fallback;
         var json = result.ToJsonString();
         return json.Length <= 8_000 ? json : json[..8_000];
+    }
+
+    /// <summary>
+    /// The verified comparison, carried as the typed fields rather than the whole tool response.
+    ///
+    /// <para>Both resolved documents already travel as their own evidence rows, so repeating them
+    /// here would spend the ledger's budget on text the synthesis has twice. What is added is the
+    /// part nothing else carries: which dates were asked for, which publisher versions answered,
+    /// and how the comparison came out. The requested dates are named because the served version
+    /// is legitimately older than the date asked about, and a synthesis that cites only
+    /// <c>valid_from</c> reads as an answer about the wrong day.</para>
+    /// </summary>
+    private static string ComparisonOutcome(
+        JsonObject result,
+        JsonObject? arguments,
+        string? status)
+    {
+        var payload = new JsonObject
+        {
+            ["status"] = status,
+            ["work"] = result["work"]?.DeepClone(),
+            ["requested_from_date"] = arguments?["from_date"]?.DeepClone(),
+            ["requested_to_date"] = arguments?["to_date"]?.DeepClone(),
+            ["from_valid_from"] = (result["from"] as JsonObject)?["valid_from"]?.DeepClone(),
+            ["to_valid_from"] = (result["to"] as JsonObject)?["valid_from"]?.DeepClone(),
+        };
+        // Copied only when present. An absent anchor_text_equal means the wording was not
+        // compared, and writing an explicit null would offer the synthesis a fact to read as
+        // "not equal".
+        foreach (var key in new[]
+                 {
+                     "changed", "provision_level_comparable", "anchor", "anchor_from_present",
+                     "anchor_to_present", "anchor_text_equal", "note",
+                 })
+            if (result[key] is { } value) payload[key] = value.DeepClone();
+        return payload.ToJsonString();
     }
 
     private static string AsOfBindingPayload(

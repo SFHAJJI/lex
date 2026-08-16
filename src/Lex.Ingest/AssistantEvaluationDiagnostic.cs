@@ -128,7 +128,10 @@ public static class AssistantEvaluationDiagnosticRunner
                 {
                     targetFailure = "transport";
                 }
-                catch (InvalidDataException)
+                // A named stage refusal is the same category as the InvalidDataException it
+                // replaced; only the official report reads its cause.
+                catch (Exception exception) when (exception
+                    is InvalidDataException or AssistantEvaluationStageException)
                 {
                     targetFailure = "invalid_response";
                 }
@@ -209,7 +212,10 @@ public static class AssistantEvaluationDiagnosticRunner
                     {
                         graderFailure = "transport";
                     }
-                    catch (InvalidDataException)
+                    // Same category as the InvalidDataException it replaced; the diagnostic report
+                    // classifies, the official report is the one that records the cause.
+                    catch (Exception exception) when (exception
+                        is InvalidDataException or AssistantEvaluationStageException)
                     {
                         graderFailure = "invalid_response";
                     }

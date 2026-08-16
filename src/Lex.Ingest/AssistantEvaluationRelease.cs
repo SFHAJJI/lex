@@ -30,6 +30,8 @@ public static class AssistantEvaluationReleaseVerifier
         "^[0-9a-f]{16}$", RegexOptions.CultureInvariant);
     private static readonly Regex Digest = new(
         "^[0-9a-f]{64}$", RegexOptions.CultureInvariant);
+    private static readonly Regex RelevanceCause = new(
+        "^[A-Za-z0-9_]{1,64}$", RegexOptions.CultureInvariant);
     private static readonly JsonSerializerOptions Json = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
@@ -235,16 +237,26 @@ public static class AssistantEvaluationReleaseVerifier
                 || results.Any(item => !FixedEquals(item.PromptSha256,
                         AssistantEvaluationRunner.PromptSha256(evaluationCase))
                     || item.GradingMode != evaluationCase.Grading.Mode
-                    || item.GradingThreshold != evaluationCase.Grading.Threshold
-                    || item.CandidateUsage.InputTokens <= 0
-                    || item.CandidateUsage.OutputTokens <= 0
+                    // A deterministic turn that called no model reports zero, so a repetition may
+                    // read zero here, but only as an all-zero reading: no input beside real output
+                    // is a model call understating the axis the candidate input budget is enforced
+                    // on. The run-wide sum below is where a report claiming no spend at all fails.
+                    || item.CandidateUsage.InputTokens < 0
+                    || item.CandidateUsage.OutputTokens < 0
+                    || (item.CandidateUsage.InputTokens == 0)
+                        != (item.CandidateUsage.OutputTokens == 0)
+                    // Relevance reports, so no score is refused here for being low. What is
+                    // refused is an incoherent measurement: a judged case that is silent about
+                    // both the score and why it has none, a score that arrived with a reason it
+                    // is missing, a score outside the scale the grader is constrained to, or a
+                    // cause that is free text rather than the machine token this published list
+                    // is allowed to carry.
                     || evaluationCase.Grading.Mode == "llm"
-                        && (item.Grade is null || item.Grade < evaluationCase.Grading.Threshold
-                            || item.Grade > 5
-                            || item.GraderUsage.InputTokens <= 0
-                            || item.GraderUsage.OutputTokens <= 0)
+                        && !CoherentRelevance(item.Relevance)
                     || evaluationCase.Grading.Mode == "deterministic"
-                        && (item.Grade is not null
+                        && (item.Relevance is null
+                            || item.Relevance.Score is not null
+                            || item.Relevance.UnavailableCause is not null
                             || item.GraderUsage.InputTokens != 0
                             || item.GraderUsage.OutputTokens != 0)
                     || !ValidTimings(item.Timings)
@@ -265,6 +277,11 @@ public static class AssistantEvaluationReleaseVerifier
         var graderUsage = Sum(report.Results.Select(item => item.GraderUsage));
         if (candidateUsage != report.ActualCandidateUsage
             || graderUsage != report.ActualGraderUsage
+            // Recomputed from the per-result usages just above, so a report cannot declare spend it
+            // did not measure: a run whose every repetition read zero fails here, which is where
+            // the per-result check used to stop it before deterministic turns could report honestly.
+            || candidateUsage.InputTokens <= 0
+            || candidateUsage.OutputTokens <= 0
             || candidateUsage.InputTokens > caseSet.Catalog.Budget.MaximumCandidateInputTokens
             || candidateUsage.OutputTokens > caseSet.Catalog.Budget.MaximumCandidateOutputTokens
             || graderUsage.InputTokens > caseSet.Catalog.Budget.MaximumGraderInputTokens
@@ -292,6 +309,14 @@ public static class AssistantEvaluationReleaseVerifier
             throw new InvalidDataException("Assistant evaluation latency evidence is invalid.");
         return report;
     }
+
+    /// <summary>A judged repetition carries a score, or the machine token for why it has none.</summary>
+    private static bool CoherentRelevance(AssistantEvaluationRelevance? relevance) =>
+        relevance is not null
+        && (relevance.Score is null) != (relevance.UnavailableCause is null)
+        && relevance.Score is null or (>= 1 and <= 5)
+        && (relevance.UnavailableCause is null
+            || RelevanceCause.IsMatch(relevance.UnavailableCause));
 
     private static void VerifyAdmission(
         string admissionPath,
