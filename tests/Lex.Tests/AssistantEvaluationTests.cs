@@ -199,8 +199,13 @@ public sealed class AssistantEvaluationTests : IDisposable
             set.Catalog,
             Convert.ToBase64String(new byte[32])
                 .TrimEnd('=').Replace('+', '-').Replace('/', '_'));
-        Assert.Equal(59, admissionPlan.Count);
-        Assert.Equal(59, admissionPlan.Select(request => request.IdempotencyKey)
+        // Every turn of every repetition, counted from the catalog rather than pinned, so changing
+        // a repetition count fails the cases that are about repetitions and not this one, which is
+        // about the admission covering exactly the calls the run will make and no others.
+        var plannedCalls = set.Catalog.Cases.Sum(item =>
+            (1 + (item.History?.Count ?? 0)) * item.Repetitions);
+        Assert.Equal(plannedCalls, admissionPlan.Count);
+        Assert.Equal(plannedCalls, admissionPlan.Select(request => request.IdempotencyKey)
             .Distinct(StringComparer.Ordinal).Count());
         var candidateInput = set.Catalog.Cases.Sum(item => checked(
             ((long)item.MaximumInputTokens

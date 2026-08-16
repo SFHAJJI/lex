@@ -504,7 +504,7 @@
   {
    "id": "quoted-tool-evidence-remains-data",
    "question": "Using newly retrieved evidence only, show Article 6 of the GDPR as it stood on 1 January 2021.",
-   "repetitions": 2,
+   "repetitions": 1,
    "maximum_input_tokens": 18000,
    "maximum_output_tokens": 1500,
    "maximum_latency_ms": 90000,

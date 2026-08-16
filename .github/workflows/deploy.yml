@@ -276,8 +276,8 @@ jobs:
           set -eu
           . scripts/deploy/az-retry.sh
           . scripts/deploy/az-reauth.sh
-          runtime_id=$(az identity show -g "$RESOURCE_GROUP" -n "$RUNTIME_IDENTITY" --query id -o tsv)
-          runtime_client=$(az identity show -g "$RESOURCE_GROUP" -n "$RUNTIME_IDENTITY" --query clientId -o tsv)
+          runtime_id=$(az_retry az identity show -g "$RESOURCE_GROUP" -n "$RUNTIME_IDENTITY" --query id -o tsv)
+          runtime_client=$(az_retry az identity show -g "$RESOURCE_GROUP" -n "$RUNTIME_IDENTITY" --query clientId -o tsv)
           # These two writes land on the same container app microseconds apart, and the second
           # is the one Azure rejected in run 31633793807 while the first was still propagating.
           az_write az containerapp identity assign -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
@@ -298,7 +298,17 @@ jobs:
           BOOTSTRAP_CLEANUP_PLAN_SHA256: ${{ inputs.bootstrap_cleanup_plan_sha256 }}
           GH_TOKEN: ${{ github.token }}
         run: |
-          set -euo pipefail
+          # -E so the ERR trap below is inherited by the dozen functions this step defines. Without
+          # errtrace a failure inside verify_revision_set or revision_get exits on set -e without
+          # ever reaching the trap, which is precisely the silence being fixed, and the trap would
+          # then be worse than nothing: it would look like proof the functions were not at fault.
+          set -eEuo pipefail
+          # Every guard in this step reports through ::error::, but set -e also kills it on any
+          # unguarded command, and then the only thing in the log is the cleanup handler's own
+          # message. Run 31949774175 minted a healthy R and C and died with nothing but
+          # "bootstrap failed safely", which cost half an hour of reading Azure to rule out causes
+          # the runner already knew. The line number is the cheapest thing this step can say.
+          trap 'status=$?; [ "$status" = 0 ] || echo "::error::candidate step failed at line ${BASH_LINENO[0]:-?} with status $status"' ERR
           . scripts/deploy/az-retry.sh
           . scripts/deploy/az-reauth.sh
           bootstrap="${BOOTSTRAP_FIRST_OFFICIAL:-false}"
@@ -314,7 +324,7 @@ jobs:
           [ "${#traffic_bearers[@]}" -eq 1 ] \
             || { echo "::error::expected exactly one traffic-bearing revision before candidate creation"; exit 1; }
           previous="${traffic_bearers[0]}"
-          app_id=$(az containerapp show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" --query id -o tsv)
+          app_id=$(az_retry az containerapp show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" --query id -o tsv)
           rollback="$previous"
           candidate=''
           bootstrap_fallback=''
@@ -336,7 +346,7 @@ jobs:
           cleanup_survivor_image=''
           cleanup_survivor_template=''
           cleanup_handoff_latest_ready=''
-          previous_inactive_limit=$(az containerapp show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+          previous_inactive_limit=$(az_retry az containerapp show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
             --query properties.configuration.maxInactiveRevisions -o tsv)
           if [ "$bootstrap" = "true" ]; then
             [[ "${BOOTSTRAP_CLEANUP_RUN_ID:-}" =~ ^[1-9][0-9]*$ ]] \
@@ -456,11 +466,25 @@ jobs:
           else
             [ "$previous_inactive_limit" = "1" ] \
               || { echo "::error::steady state must retain exactly one inactive rollback"; exit 1; }
-            mapfile -t inactive_before < <(az containerapp revision list \
+            # Newest first, because the rollback is the most recent retired revision and any older
+            # ones are leftovers. Azure removes a superseded inactive revision on its own schedule
+            # and can decline for hours: maxInactiveRevisions was 1 with four inactive revisions
+            # present, a throwaway revision was created to trigger the sweep, and six reads over two
+            # minutes found all four still there. Requiring exactly one was requiring the platform to
+            # have swept, which is not a property this workflow can establish. What it can establish
+            # is that a rollback exists, that it is not production, and that nothing retired is
+            # routing, and those are asserted here and in the traffic checks that follow.
+            mapfile -t inactive_before < <(az_retry az containerapp revision list \
               -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" --all \
-              --query "[?properties.active==\`false\`].name" -o tsv)
-            [ "${#inactive_before[@]}" -eq 1 ] \
-              || { echo "::error::an unresolved candidate or legacy inactive revision exists"; exit 1; }
+              --query "reverse(sort_by([?properties.active==\`false\`], &properties.createdTime))[].name" \
+              -o tsv)
+            [ "${#inactive_before[@]}" -ge 1 ] \
+              || { echo "::error::steady state has no inactive rollback to retain"; exit 1; }
+            routing_retired=$(az_retry az containerapp revision list \
+              -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" --all \
+              --query "length([?properties.active==\`false\` && properties.trafficWeight>\`0\`])" -o tsv)
+            [ "$routing_retired" = "0" ] \
+              || { echo "::error::a retired revision still carries traffic"; exit 1; }
             prior_rollback="${inactive_before[0]}"
             [ "$prior_rollback" != "$previous" ] \
               || { echo "::error::production and retained rollback identities must differ"; exit 1; }
@@ -842,8 +866,11 @@ jobs:
             [ "$candidate_exists" = false ] || expected=$(printf '%s\n%s\n' \
               "$prior_rollback" "$candidate" | sort | paste -sd, -)
             for attempt in $(seq 1 24); do
-              actual=$(az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
-                --all --query "[?properties.active==\`false\`].name" -o tsv 2>/dev/null \
+              # Deliberately not az_retry: this loop already retries and verifies the end state, and
+              # az-retry.sh's own header warns that nesting its exponential backoff inside such a
+              # loop turns a five second race into minutes.
+              actual=$({ az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+                --all --query "[?properties.active==\`false\`].name" -o tsv 2>/dev/null || true; } \
                 | sort | paste -sd, -)
               [ "$actual" = "$expected" ] && return 0
               sleep 5
@@ -902,7 +929,7 @@ jobs:
             az_write az rest --method patch --uri "$app_id?api-version=2025-01-01" \
               --headers 'Content-Type=application/json' --body "$retention_body" --output none
             for attempt in $(seq 1 12); do
-              inactive_limit=$(az containerapp show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+              inactive_limit=$(az_retry az containerapp show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
                 --query properties.configuration.maxInactiveRevisions -o tsv)
               [ "$inactive_limit" = "2" ] && break
               sleep 5
@@ -988,7 +1015,7 @@ jobs:
             done
             { [ "$fallback_state" = "Running" ] || [ "$fallback_state" = "RunningAtMaxScale" ]; } \
               || { echo "::error::bootstrap fallback revision did not become ready"; exit 1; }
-            fallback=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+            fallback=$(az_retry az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
               --revision "$bootstrap_fallback" -o json)
             fallback_image=$(printf '%s' "$fallback" | jq -r .properties.template.containers[0].image)
             fallback_template_digest=$(printf '%s' "$fallback" \
@@ -1060,7 +1087,7 @@ jobs:
             | jq -e '.minReplicas == 1 and .maxReplicas == 1' >/dev/null \
             || { echo "::error::public assistant must run on exactly one application replica"; exit 1; }
           if [ "$bootstrap" = "true" ]; then
-            candidate_observed=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+            candidate_observed=$(az_retry az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
               --revision "$candidate" -o json)
             candidate_image=$(printf '%s' "$candidate_observed" \
               | jq -r .properties.template.containers[0].image)
@@ -1103,7 +1130,7 @@ jobs:
             verify_bootstrap_forward_topology candidate-prepared \
               || { echo "::error::bootstrap candidate routes did not converge to exact A100/C0"; exit 1; }
           fi
-          fqdn=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+          fqdn=$(az_retry az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
             --revision "$candidate" --query properties.fqdn -o tsv)
           revision_get "https://$fqdn/healthz"
           readiness=$(revision_get "https://$fqdn/readyz")
@@ -1398,7 +1425,7 @@ jobs:
           . scripts/deploy/az-retry.sh
           . scripts/deploy/az-reauth.sh
           az_reauth
-          current=$(az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+          current=$(az_retry az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
             --all --query "[?properties.trafficWeight > \`0\`].name" -o tsv)
           [ "$(printf '%s\n' "$current" | sed '/^$/d' | wc -l)" -eq 1 ] \
             || { echo "::error::expected exactly one traffic-bearing revision"; exit 1; }
@@ -1435,7 +1462,7 @@ jobs:
               || { echo "::error::bootstrap candidate preparation drifted from the reviewed inventory"; exit 1; }
             exit 0
           fi
-          active=$(az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+          active=$(az_retry az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
             --all --query "[?properties.active].name" -o tsv)
           [ "$active" = "$current" ] \
             || { echo "::error::expected exactly one active public quota authority"; exit 1; }
