@@ -140,7 +140,7 @@ FOUNDATION  Lex.Temporal (interval algebra)   Lex.Index (SQLite: filter-first, v
   zero-traffic candidate. The catalog records author `Lex release engineering`;
   Evaluation reviewer Soufien Hajji uses a separate signing authority. This
   project-owner review is not a third-party audit. Candidate and release-grader tokens are budgeted
-  separately. The current maximum reservation is EUR 0.3820232 under an outer
+  separately. The current maximum reservation is EUR 0.5325316 under an outer
   EUR 10 preflight and measured-use ceiling, not a live billing cutoff. The
   [release dossier](https://law.soufien.lu/built/release) shows the CI/CD flow and
   [evaluation mechanics](docs/assistant-evaluation.md).

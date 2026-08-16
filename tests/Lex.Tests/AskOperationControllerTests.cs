@@ -625,6 +625,33 @@ public sealed class AskOperationControllerTests : IDisposable
     }
 
     [Fact]
+    public async Task A_single_server_resolved_subject_cannot_be_vetoed_by_a_bad_opaque_ref()
+    {
+        var requests = 0;
+        Task<JsonNode?> Send(JsonObject request, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            requests++;
+            return Task.FromResult<JsonNode?>(PlannerEnvelope("timeline", new JsonObject
+            {
+                [LegalOperationCatalog.SubjectReferenceArgument] = "invented_subject_ref",
+            }));
+        }
+        var service = new AskService(_core, planner: null, plannerSend: Send);
+
+        var response = await service.AskAsync(
+            History("Show the CRR timeline."), Guid.NewGuid().ToString(), "law.test",
+            CancellationToken.None);
+
+        Assert.Equal(200, response.Status);
+        Assert.Equal(1, requests);
+        var primary = Assert.Single(
+            Assert.IsType<JsonArray>(response.Body["trace"]).OfType<JsonObject>(),
+            item => item["phase"]?.GetValue<string>() == "primary");
+        Assert.Equal("eu-eurlex:32013r0575", primary["args"]?["work"]?.GetValue<string>());
+    }
+
+    [Fact]
     public async Task Same_thread_anaphora_uses_structured_authority_not_restored_prose()
     {
         var searches = new List<JsonObject>();

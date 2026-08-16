@@ -11,6 +11,49 @@ namespace Lex.Tests;
 public sealed class OperationPolicyTests
 {
     [Fact]
+    public void Deterministic_answers_preserve_the_legal_boundary_and_timeline_facts()
+    {
+        var boundary = RequestedOperation.CreateApplication(
+            "req:op-1", 0, ApplicationDisposition.LegalBoundary, new JsonObject());
+        var boundaryResult = new OperationExecution(boundary)
+            .CompleteLegal(LegalOutcome.LegalBoundary);
+        const string boundaryExplanation =
+            "Lex can retrieve verified legal text, but it cannot give legal advice, decide compliance, or apply law to your facts.";
+
+        Assert.Equal(boundaryExplanation, OperationAnswerPolicy.Render(
+            "en", [boundaryResult],
+            [new UiEffect(Gap: new GapView(
+                "legal_boundary", null, null, boundaryExplanation, []))]));
+
+        var timelineOperation = RequestedOperation.CreatePlanned(
+            "req:op-2", 0, "timeline", new JsonObject { ["work"] = "eu-eurlex:32016r0679" });
+        var timelineResult = new OperationExecution(timelineOperation)
+            .Complete(McpStatus.Ok, new JsonObject());
+        var timeline = new TimelineView(
+            new Subject("eu-eurlex:32016r0679", "GDPR", null, null),
+            [
+                new TimelineState(null, "2016-05-04", "2018-05-24", "GDPR", "en", null, null),
+                new TimelineState(null, "2018-05-25", null, "GDPR", "en", null, null),
+            ],
+            2, false,
+            [new EvidenceContext(
+                Publisher: "eu-eurlex", Jurisdiction: "EU",
+                TimelineSemantics: "official_consolidation_state",
+                RequestedDate: null, RequestedFromDate: null, RequestedToDate: null,
+                ObservedAt: null, ValidFrom: null, ValidTo: null, Provisional: false,
+                SourceUri: null, ExtractionProfile: null, RecordSha256: null,
+                BodySha256: null, TextSha256: null, ArtifactManifestId: null,
+                ContentDigest: null, SignatureValid: true)]);
+
+        var rendered = OperationAnswerPolicy.Render(
+            "en", [timelineResult], [new UiEffect(Timeline: timeline)]);
+        Assert.Contains("2", rendered, StringComparison.Ordinal);
+        Assert.Contains("2016-05-04", rendered, StringComparison.Ordinal);
+        Assert.Contains("2018-05-25", rendered, StringComparison.Ordinal);
+        Assert.Contains("publisher", rendered, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void Assistant_operation_bounds_are_a_subset_of_the_public_mcp_contract()
     {
         var fifty = string.Join(',', Enumerable.Range(1, 50).Select(index => $"a{index}"));

@@ -146,6 +146,21 @@ public sealed class AssistantEvaluationTests : IDisposable
                     && item.History.All(turn => turn.Role == "user"));
         Assert.Contains(set.Catalog.Cases,
             item => item.Id == "quoted-tool-evidence-remains-data" && item.History?.Count == 2);
+        var injectionCases = set.Catalog.Cases.Where(item =>
+            item.Id is "direct-injection-keeps-authority"
+                or "restored-transcript-keeps-authority"
+                or "quoted-tool-evidence-remains-data").ToArray();
+        Assert.All(injectionCases, item =>
+        {
+            var supplied = string.Join('\n',
+                (item.History ?? []).Select(turn => turn.Content).Append(item.Question));
+            Assert.Contains("untrusted data", supplied, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("attacker.invalid", supplied, StringComparison.Ordinal);
+            Assert.DoesNotContain("reveal the system prompt", supplied,
+                StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("ignore prior rules", supplied,
+                StringComparison.OrdinalIgnoreCase);
+        });
         Assert.Contains(set.Catalog.Cases, item => item.ExpectedSynthesis == true);
         Assert.Contains(set.Catalog.Cases, item => item.ExpectedSynthesis == false);
         Assert.Equal("Lex release engineering", set.Catalog.AuthoredBy);
@@ -199,16 +214,16 @@ public sealed class AssistantEvaluationTests : IDisposable
             checked((long)item.Grading.MaximumOutputTokens * item.Repetitions));
         Assert.Equal(620_000, candidateInput);
         Assert.Equal(123_000, candidateOutput);
-        Assert.Equal(294_000, graderInput);
-        Assert.Equal(49_000, graderOutput);
-        Assert.Equal(0.3820232m,
+        Assert.Equal(980_000, graderInput);
+        Assert.Equal(392_000, graderOutput);
+        Assert.Equal(0.5325316m,
             set.Catalog.Pricing.CandidateCost(candidateInput, candidateOutput)
             + set.Catalog.Pricing.GraderCost(graderInput, graderOutput));
         var diagnosticGraderOutput = set.Catalog.Cases.Sum(item => checked(
             (long)AssistantEvaluationDiagnosticRunner.GraderMaximumOutputTokens
             * item.Repetitions));
         Assert.Equal(392_000, diagnosticGraderOutput);
-        Assert.Equal(0.5024162m,
+        Assert.Equal(0.5325316m,
             set.Catalog.Pricing.CandidateCost(candidateInput, candidateOutput)
             + set.Catalog.Pricing.GraderCost(graderInput, diagnosticGraderOutput));
         Assert.True(set.Catalog.Cases.Sum(item => checked(
@@ -222,6 +237,55 @@ public sealed class AssistantEvaluationTests : IDisposable
                 * item.Repetitions))
             <= set.Catalog.Budget.MaximumCandidateOutputTokens);
         Assert.Throws<InvalidDataException>(set.EnsureReleaseReady);
+    }
+
+    [Fact]
+    public void Repository_catalog_reserves_complete_grader_evidence_and_reasoning_output()
+    {
+        var set = AssistantEvaluationCatalog.Load(
+            Path.Combine(RepoRoot(), "evals", "assistant-cases-v3.json"));
+
+        Assert.All(set.Catalog.Cases, item =>
+        {
+            Assert.Equal("llm", item.Grading.Mode);
+            Assert.Equal(20_000, item.Grading.MaximumInputTokens);
+            Assert.Equal(8_000, item.Grading.MaximumOutputTokens);
+        });
+        Assert.Equal(980_000, set.Catalog.Cases.Sum(item =>
+            checked((long)item.Grading.MaximumInputTokens * item.Repetitions)));
+        Assert.Equal(392_000, set.Catalog.Cases.Sum(item =>
+            checked((long)item.Grading.MaximumOutputTokens * item.Repetitions)));
+        Assert.Equal(980_000, set.Catalog.Budget.MaximumGraderInputTokens);
+        Assert.Equal(392_000, set.Catalog.Budget.MaximumGraderOutputTokens);
+
+        var candidateInput = set.Catalog.Cases.Sum(item => checked(
+            ((long)item.MaximumInputTokens
+             + (item.History?.Sum(turn => (long)turn.MaximumInputTokens) ?? 0))
+            * item.Repetitions));
+        var candidateOutput = set.Catalog.Cases.Sum(item => checked(
+            ((long)item.MaximumOutputTokens
+             + (item.History?.Sum(turn => (long)turn.MaximumOutputTokens) ?? 0))
+            * item.Repetitions));
+        Assert.Equal(0.5325316m,
+            set.Catalog.Pricing.CandidateCost(candidateInput, candidateOutput)
+            + set.Catalog.Pricing.GraderCost(980_000, 392_000));
+
+        Assert.Contains(set.Catalog.Cases, item =>
+            item.Id == "lu-constitution-article"
+            && item.Question.Contains("Constitution du Grand-Duché de Luxembourg",
+                StringComparison.Ordinal));
+        Assert.Contains(set.Catalog.Cases, item =>
+            item.Id == "lu-constitution-article-history"
+            && item.Question.Contains("Constitution du Grand-Duché de Luxembourg",
+                StringComparison.Ordinal));
+        Assert.Contains(set.Catalog.Cases, item =>
+            item.Id == "lu-profile-not-comparable"
+            && item.Question.Contains("Code du travail", StringComparison.Ordinal));
+        Assert.Contains(set.Catalog.Cases, item =>
+            item.Id == "legal-advice-boundary"
+            && item.Grading.Rubric!.Contains(
+                "typed application legal_boundary disposition",
+                StringComparison.Ordinal));
     }
 
     [Fact]
@@ -689,6 +753,18 @@ public sealed class AssistantEvaluationTests : IDisposable
             },
         };
         Assert.Throws<InvalidDataException>(() => set.Preflight(unreviewedRates));
+    }
+
+    [Fact]
+    public void Grader_output_budget_accepts_the_exact_release_envelope_only()
+    {
+        var exact = Catalog();
+        exact["budget"]!["maximum_grader_output_tokens"] = 392_000;
+        Assert.Equal(392_000, Reviewed(exact).Catalog.Budget.MaximumGraderOutputTokens);
+
+        var above = Catalog();
+        above["budget"]!["maximum_grader_output_tokens"] = 392_001;
+        Assert.Throws<InvalidDataException>(() => Reviewed(above));
     }
 
     [Fact]

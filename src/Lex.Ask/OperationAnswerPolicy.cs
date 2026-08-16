@@ -103,8 +103,9 @@ internal static class OperationAnswerPolicy
             return fr ? "Cette demande ne correspond pas à une opération juridique valide."
                 : "This request does not map to a valid legal operation.";
         if (result.LegalOutcome == LegalOutcome.LegalBoundary)
-            return fr ? "Lex peut fournir le texte vérifié, mais pas un avis juridique."
-                : "Lex can provide verified text, but it cannot provide legal advice.";
+            return Describe(locale, effect) ?? (fr
+                ? "Lex peut fournir le texte vérifié, mais pas un avis juridique."
+                : "Lex can provide verified text, but it cannot provide legal advice.");
         return Describe(locale, effect) ?? (fr ? "L'opération est terminée." : "The operation is complete.");
     }
 
@@ -167,9 +168,34 @@ internal static class OperationAnswerPolicy
                 ? $"L'historique vérifié de {history.Anchor} dans {Name(history.Subject)} contient {history.DistinctTexts:n0} texte(s) distinct(s)."
                 : $"The verified history of {history.Anchor} in {Name(history.Subject)} contains {history.DistinctTexts:n0} distinct text(s).";
         if (effect.Timeline is { } timeline)
+        {
+            var first = timeline.Rows.Select(row => row.ValidFrom)
+                .Where(value => value.Length > 0).Order(StringComparer.Ordinal).FirstOrDefault();
+            var last = timeline.Rows.Select(row => row.ValidFrom)
+                .Where(value => value.Length > 0).Order(StringComparer.Ordinal).LastOrDefault();
+            var semantics = timeline.Evidence?.Select(item => item.TimelineSemantics)
+                .FirstOrDefault(value => value is { Length: > 0 });
+            var kind = semantics switch
+            {
+                "official_consolidation_state" => fr
+                    ? "états de consolidation de l'éditeur"
+                    : "publisher consolidation states",
+                "publisher_applicability" => fr
+                    ? "états d'applicabilité de l'éditeur"
+                    : "publisher applicability states",
+                _ => fr ? "états de version de l'éditeur" : "publisher version states",
+            };
+            var dates = first is null ? "" : first == last
+                ? (fr ? $", daté du {first}" : $", dated {first}")
+                : (fr ? $", du {first} au dernier état commençant le {last}"
+                    : $", from {first} through the latest state beginning {last}");
+            var bounded = timeline.Truncated
+                ? (fr ? " Cette vue bornée est tronquée." : " This bounded view is truncated.")
+                : "";
             return fr
-                ? $"La chronologie des versions de {Name(timeline.Subject)} est affichée ci-dessous."
-                : $"The version timeline for {Name(timeline.Subject)} is open below.";
+                ? $"Lex détient {timeline.TotalCount:n0} {kind} pour {Name(timeline.Subject)}{dates}. Ce sont des dates éditeur, pas une conclusion sur l'effet juridique.{bounded}"
+                : $"Lex holds {timeline.TotalCount:n0} {kind} for {Name(timeline.Subject)}{dates}. These are publisher dates, not a conclusion about legal effect.{bounded}";
+        }
         if (effect.Coverage is { } coverage)
         {
             var works = coverage.Publishers.Sum(item => item.Works);

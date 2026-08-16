@@ -543,8 +543,8 @@ The release candidate smoke must assert semantic outcomes for representative exa
 comparison-gap, and clarification cases. Checking only that a JSON `reply` exists is forbidden.
 
 One live release run is limited to 25 frozen cases, 620,000 candidate input tokens, 123,000
-candidate output tokens, 294,000 grader input tokens and 49,000 grader output tokens. The catalog's
-current maximum-token reservation is EUR 0.3820232 under an outer EUR 10 ceiling. The runner
+candidate output tokens, 980,000 grader input tokens and 392,000 grader output tokens. The catalog's
+current maximum-token reservation is EUR 0.5325316 under an outer EUR 10 ceiling. The runner
 calculates the estimate before inference and aborts if any envelope would be exceeded. Production
 audit calls use a separately signed, release-bound capability and do not consume either public daily
 counter. The
