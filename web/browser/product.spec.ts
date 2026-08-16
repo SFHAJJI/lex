@@ -27,6 +27,21 @@ async function expectNoSeriousAxeViolation(page: Page) {
     .toEqual([]);
 }
 
+// The assistant opens on a first arrival, so the launcher is present only after a reader closes it.
+// Opening is therefore "make sure it is open", not "click the launcher", and the launcher-specific
+// tests close it first rather than assuming a closed starting state.
+async function openAssistant(page: Page) {
+  const launcher = page.getByRole("button", { name: "Open Ask Lex legal research assistant" });
+  if (await launcher.count() > 0) await launcher.click();
+  await expect(page.locator(".askpanel")).toBeVisible();
+}
+
+async function closeAssistant(page: Page) {
+  const close = page.getByRole("button", { name: "Close assistant" });
+  if (await close.count() > 0) await close.click();
+  await expect(page.locator(".asklaunch")).toBeVisible();
+}
+
 test("the browser-facing route set stays navigable, bounded and accessible", async ({ page }) => {
   const consoleErrors: string[] = [];
   const pageErrors: string[] = [];
@@ -152,7 +167,7 @@ test("Check the work uses native touch disclosure semantics", async ({ browser }
 test("the assistant crosses from complementary dock to a true modal at the frozen boundary", async ({ page }) => {
   await page.setViewportSize({ width: 1100, height: 800 });
   await page.goto("/");
-  await page.getByRole("button", { name: "Open Ask Lex legal research assistant" }).click();
+  await openAssistant(page);
   const dock = page.locator("aside.askpanel");
   await expect(dock).toBeVisible();
   await expect(page.getByRole("dialog")).toHaveCount(0);
@@ -218,7 +233,7 @@ test("a typed assistant operation is presented within the local browser budget",
     };
   }, { requestId, operation });
   await page.goto("/");
-  await page.getByRole("button", { name: "Open Ask Lex legal research assistant" }).click();
+  await openAssistant(page);
   await page.getByRole("textbox", { name: "Ask Lex" }).fill("Can Lex advise me?");
   await page.getByRole("button", { name: "Ask", exact: true }).click();
 
@@ -279,7 +294,7 @@ test("each assistant answer discloses its safe typed plan and execution evidence
   }, { requestId, operation });
 
   await page.goto("/");
-  await page.getByRole("button", { name: "Open Ask Lex legal research assistant" }).click();
+  await openAssistant(page);
   await page.getByRole("textbox", { name: "Ask Lex" }).fill("Show GDPR Article 6 in 2021.");
   await page.getByRole("button", { name: "Ask", exact: true }).click();
   await expect(page.locator(".said")).toContainText("Verified Article 6.");
@@ -328,7 +343,7 @@ test("an operation without a typed view is never counted as presented", async ({
   }, { requestId, operation });
 
   await page.goto("/");
-  await page.getByRole("button", { name: "Open Ask Lex legal research assistant" }).click();
+  await openAssistant(page);
   await page.getByRole("textbox", { name: "Ask Lex" }).fill("Can Lex advise me?");
   await page.getByRole("button", { name: "Ask", exact: true }).click();
   await expect(page.locator(".said")).toContainText("No typed result was available.");
@@ -392,7 +407,7 @@ test("the first renderable operation is measured after bounded layout retries", 
   }, { requestId, hidden, visible });
 
   await page.goto("/");
-  await page.getByRole("button", { name: "Open Ask Lex legal research assistant" }).click();
+  await openAssistant(page);
   await page.getByRole("textbox", { name: "Ask Lex" }).fill("Can Lex advise me?");
   await page.getByRole("button", { name: "Ask", exact: true }).click();
 
@@ -434,7 +449,8 @@ test("the launcher clears interactive content at the smallest supported viewport
   for (const route of assistantRoutes) {
     await page.goto(route, { waitUntil: "networkidle" });
     await expect(page.locator("body")).toHaveClass(/assistant-enabled/);
-    await expect(page.getByRole("button", { name: "Open Ask Lex legal research assistant" })).toBeVisible();
+    // This test is about the launcher, which only exists once the assistant is closed.
+    await closeAssistant(page);
     await page.evaluate(() => scrollTo(0, 0));
     const top = await intersections();
     if (top.length > 0) collisions.push(`${route} at top: ${top.join(", ")}`);
