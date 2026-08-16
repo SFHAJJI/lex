@@ -1,4 +1,6 @@
+using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 using Lex.Ask;
 using Lex.Mcp;
 
@@ -225,6 +227,48 @@ public class UiEffectTests
 
         Assert.Equal("de", eff.Workspace!.Language);
         Assert.Null(eff.Workspace.SourceClass);
+    }
+
+    [Fact]
+    public void Search_facts_exclude_title_fallbacks_and_are_source_bound_and_capped()
+    {
+        var hits = new JsonArray(new JsonObject
+        {
+            ["lex_id"] = "eu-eurlex:title-only:2024-01-01",
+            ["match"] = "work_identifier_or_title",
+        });
+        foreach (var hit in Enumerable.Range(0, 10).Select(index => (JsonNode)new JsonObject
+        {
+            ["lex_id"] = $"eu-eurlex:work-{index}:2024-01-01",
+            ["anchor"] = $"art_{index}",
+            ["provision_num"] = $"Article {index}",
+            ["snippet"] = new string('x', 700),
+            ["source_uri"] = $"https://example.test/work-{index}",
+        })) hits.Add(hit);
+
+        var effect = UiMapper.From("search", Args(("query", "officer")), new JsonObject
+        {
+            ["envelope"] = new JsonObject { ["status"] = "ok" },
+            ["hits"] = hits,
+        });
+
+        Assert.InRange(effect.Workspace!.Results?.Count ?? 0, 1, 8);
+        Assert.DoesNotContain(effect.Workspace.Results!, fact => fact.Work.Contains("title-only"));
+        Assert.All(effect.Workspace.Results!, fact =>
+        {
+            Assert.StartsWith("eu-eurlex:work-", fact.Work, StringComparison.Ordinal);
+            Assert.StartsWith("art_", fact.Anchor, StringComparison.Ordinal);
+            Assert.Equal(240, fact.Snippet?.Length);
+            Assert.EndsWith("…", fact.Snippet, StringComparison.Ordinal);
+            Assert.StartsWith("https://example.test/", fact.SourceUri, StringComparison.Ordinal);
+        });
+        var json = JsonSerializer.Serialize(effect.Workspace.Results,
+            new JsonSerializerOptions
+            {
+                PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+                DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+            });
+        Assert.InRange(json.Length, 1, UiMapper.MaximumSearchFactsJsonCharacters);
     }
 
     [Fact]

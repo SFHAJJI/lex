@@ -2053,7 +2053,8 @@ public sealed class AskService
         SubjectAuthority? Authority,
         WorkResolutionGuard.GuardClarification? Clarification,
         JsonObject? Trace,
-        double DurationMilliseconds)
+        double DurationMilliseconds,
+        string? RequestedTimelineWorkQuery = null)
     {
         public static SubjectPreflight None { get; } = new(null, null, null, 0);
     }
@@ -2091,6 +2092,7 @@ public sealed class AskService
         CancellationToken cancellationToken)
     {
         var raw = userQueries[^1];
+        var requestedTimelineWork = ExplicitTimelineWorkQuery(raw);
         var watch = Stopwatch.StartNew();
         var guard = new WorkResolutionGuard(raw);
         guard.ObserveUserConfirmation(raw);
@@ -2149,7 +2151,7 @@ public sealed class AskService
                 watch.Stop();
                 return new SubjectPreflight(null, choice,
                     SubjectResolutionTrace(result, [], article, "ambiguous", locale),
-                    watch.Elapsed.TotalMilliseconds);
+                    watch.Elapsed.TotalMilliseconds, requestedTimelineWork);
             }
         }
         if (authority is null && guard.IdentityResolutionRequested)
@@ -2161,7 +2163,14 @@ public sealed class AskService
             return new SubjectPreflight(null, choice,
                 SubjectResolutionTrace(result, [], article,
                     guard.UnresolvedIdentityObserved ? "unresolved" : "ambiguous", locale),
-                watch.Elapsed.TotalMilliseconds);
+                watch.Elapsed.TotalMilliseconds, requestedTimelineWork);
+        }
+        if (authority is null && requestedTimelineWork is not null)
+        {
+            watch.Stop();
+            return new SubjectPreflight(null, UnresolvedSubjectClarification(locale),
+                SubjectResolutionTrace(result, [], article, "unresolved", locale),
+                watch.Elapsed.TotalMilliseconds, requestedTimelineWork);
         }
 
         watch.Stop();
@@ -2170,6 +2179,27 @@ public sealed class AskService
                 authority?.Members.Select(member => member.Work).ToArray() ?? [], article,
                 authority is null ? "none" : "resolved", locale, authority?.Members),
             watch.Elapsed.TotalMilliseconds);
+    }
+
+    private static readonly System.Text.RegularExpressions.Regex ExplicitTimelineRequest = new(
+        @"^\s*(?:show|give|list)(?:\s+me)?\s+(?:the\s+)?(?:complete\s+)?timeline\s+(?:for|of)\s+(?:the\s+)?(?<work>.+?)\s*$",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase
+        | System.Text.RegularExpressions.RegexOptions.CultureInvariant
+        | System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    private static readonly System.Text.RegularExpressions.Regex TimelineInstrumentTitle = new(
+        @"^(?:[\p{Lu}\p{Lt}\d][\p{L}\p{M}\d'’()-]*\s+)*(?:Regulation|Directive|Constitution|Law|Act|Code|Loi|Règlement|Reglement|Décret|Decret|Ordonnance|Convention|Treaty)$",
+        System.Text.RegularExpressions.RegexOptions.CultureInvariant
+        | System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    private static string? ExplicitTimelineWorkQuery(string query)
+    {
+        var match = ExplicitTimelineRequest.Match(query);
+        if (!match.Success) return null;
+        var work = match.Groups["work"].Value.Trim().TrimEnd('.', '?', '!').Trim();
+        return work is { Length: > 0 and <= LegalOperationCatalog.MaximumStringLength }
+            && TimelineInstrumentTitle.IsMatch(work)
+            ? work : null;
     }
 
     private static SubjectAuthority? CarriedAuthority(
@@ -2412,9 +2442,26 @@ public sealed class AskService
                 await NotifyProgress(() => progress.Phase(
                     new PhaseUpdate(AskPhase.Planning, AskPhaseStatus.Started), planner.Token));
             var planningWatch = Stopwatch.StartNew();
-            var (plan, planningUsage, plannerRepaired) = await PlanOperationsAsync(
-                history, host, requestId, requestLocale, rawUserQuery,
-                subject.Authority, planner.Token);
+            OperationPlan plan;
+            ModelTokenUsage planningUsage;
+            bool plannerRepaired;
+            if (subject.RequestedTimelineWorkQuery is { } workQuery)
+            {
+                plan = OperationPlan.Create(requestId, requestLocale,
+                [
+                    RequestedOperation.CreatePlanned(
+                        $"{requestId}:op-1", 0, "timeline",
+                        new JsonObject { ["work_query"] = workQuery }),
+                ]);
+                planningUsage = default;
+                plannerRepaired = false;
+            }
+            else
+            {
+                (plan, planningUsage, plannerRepaired) = await PlanOperationsAsync(
+                    history, host, requestId, requestLocale, rawUserQuery,
+                    subject.Authority, planner.Token);
+            }
             planningWatch.Stop();
             plan = AuthorizeInstants(plan, rawUserQuery, requestLocale);
             if (progress?.Phase is not null)
