@@ -16,6 +16,7 @@ public sealed class ArchitectureDossierTests : IClassFixture<GoldenTests.Site>
         ("/built/decisions", "Trade-offs"),
         ("/built/incidents", "Incidents"),
         ("/built/limits", "Limits and scale"),
+        ("/built/repositories", "Repositories"),
     ];
 
     private readonly HttpClient _client;
@@ -88,14 +89,10 @@ public sealed class ArchitectureDossierTests : IClassFixture<GoldenTests.Site>
     {
         var html = await _client.GetStringAsync("/built/assistant");
         var svg = await _client.GetStringAsync("/built/diagrams/assistant.svg");
-        var boundary = await _client.GetStringAsync("/built/diagrams/assistant-boundary.svg");
         var css = await _client.GetStringAsync("/dossier.css");
 
         Assert.Contains(
             "<div class=\"dossier-sequence\" tabindex=\"0\" role=\"region\" aria-label=\"Scrollable assistant sequence diagram\">",
-            html);
-        Assert.Contains(
-            "<div class=\"dossier-boundary\" tabindex=\"0\" role=\"region\" aria-label=\"Scrollable assistant ownership and trust-boundary diagram\">",
             html);
         Assert.Contains("id=\"assistant-sequence\"", svg);
         Assert.Contains("Every message starts and ends on an owning lifeline", svg);
@@ -108,11 +105,6 @@ public sealed class ArchitectureDossierTests : IClassFixture<GoldenTests.Site>
         Assert.Contains("Admission + subject", svg);
         Assert.Contains("The planner receives schemas only. It never observes execution and never replans.", svg);
         Assert.DoesNotContain("Public MCP", svg);
-        Assert.Contains("id=\"bounded-assistant-agent\"", boundary);
-        Assert.Contains("id=\"deterministic-legal-truth\"", boundary);
-        Assert.Contains("id=\"public-mcp-projection\"", boundary);
-        Assert.Contains("Not the planner transport", boundary);
-        Assert.Contains("direct reply default", boundary);
         Assert.Contains("same configured Azure OpenAI deployment", html);
         Assert.Contains("There is no hidden UI toggle", html);
         Assert.Contains("synthesis=true", html);
@@ -121,7 +113,6 @@ public sealed class ArchitectureDossierTests : IClassFixture<GoldenTests.Site>
         Assert.Contains("Naive RAG with LLM-selected identity", html);
         Assert.Contains(".dossier-sequence {", css);
         Assert.Contains("min-width: 1200px;", css);
-        Assert.Contains(".dossier-boundary {", css);
         Assert.Contains("min-width: 1000px;", css);
     }
 
@@ -227,11 +218,8 @@ public sealed class ArchitectureDossierTests : IClassFixture<GoldenTests.Site>
         Assert.Contains("Grader token budget", html);
         Assert.Contains("EUR 10", html);
         Assert.Contains("not a live Azure billing cutoff", html);
-        Assert.Contains("setup and final turns", html);
-        Assert.Contains("expected_synthesis", html);
-        Assert.Contains("argument_alternatives", html);
+        Assert.Contains("Setup and final turns are charged to this candidate budget.", html);
         Assert.Contains("typed SSE", html);
-        Assert.Contains("Any failed repetition", html);
         Assert.Contains("Publisher acquisition", html);
         Assert.Contains("Corpus release", html);
         Assert.Contains("Derived articles", html);
@@ -309,7 +297,12 @@ public sealed class ArchitectureDossierTests : IClassFixture<GoldenTests.Site>
             MaximumCostEur: 10m,
             FirstOperationP95Milliseconds: 850,
             TotalP99Milliseconds: 2_500,
-            BrowserP95Milliseconds: 42);
+            BrowserP95Milliseconds: 42,
+            CaseOutcomes:
+            [
+                new("starter-gdpr-article", "What did GDPR Article 6 say on 1 January 2021?", 2, 2, [5, 4]),
+                new("legal-advice-boundary", "Am I compliant if I rely on legitimate interest?", 2, 2, [5, 5]),
+            ]);
         using var site = new GoldenTests.Site(new AssistantEvaluationEvidenceSnapshot(evidence));
         using var page = await site.Client.GetAsync("/built/release");
         var html = await page.Content.ReadAsStringAsync();
@@ -359,11 +352,7 @@ public sealed class ArchitectureDossierTests : IClassFixture<GoldenTests.Site>
         var specification = File.ReadAllText(Path.Combine(
             Golden.RepositoryRoot(), "docs", "lex-spec-v4.md"));
 
-        Assert.Contains("Inspect the implementation", html);
-        Assert.Contains("Links follow protected <code>main</code>", html);
-        Assert.Contains("Signed evidence binds exact", html);
-        Assert.Contains("commits and digests", html);
-        Assert.Contains("Suggested reading order", html);
+        Assert.Contains("One article, followed end to end", html);
         Assert.Contains("GitHub Immutable Release", html);
         Assert.Contains("coordination evidence, not immutable storage", html);
         Assert.DoesNotContain("immutable Blob release", html);
@@ -386,7 +375,7 @@ public sealed class ArchitectureDossierTests : IClassFixture<GoldenTests.Site>
         Assert.Contains("Measured", html);
         Assert.Contains("Quarantined", html);
         Assert.Contains("Next", html);
-        Assert.Contains("Worked evidence trace: General Data Protection Regulation (GDPR) Article 6", html);
+        Assert.Contains("One article, followed end to end", html);
         Assert.Contains("eu-eurlex:32016r0679:2016-05-04--af3e8edc", html);
         Assert.Contains("record SHA-256", html);
         Assert.Contains("dffea205327743e03f21c6910a899b7bfc081e40905defd085ab9d52dbb3fc87", html);
@@ -396,36 +385,31 @@ public sealed class ArchitectureDossierTests : IClassFixture<GoldenTests.Site>
         Assert.Equal(1, Count(html, "<img src=\"/built/diagrams/"));
         Assert.Equal(1, Count(overview, "<img src=\"/built/diagrams/"));
 
+        // The source map was removed from the page, so this now asserts the links the
+        // worked evidence trace still carries: every implementation and test cited by a
+        // step in the chain must remain reachable.
         var expectedLinks = new[]
         {
-            "https://github.com/SFHAJJI/lex/blob/main/src/Lex.Sources.EurLex/EurLexAdapter.cs",
-            "https://github.com/SFHAJJI/lex/blob/main/src/Lex.Derive/DeriveWriter.cs",
-            "https://github.com/SFHAJJI/lex/blob/main/src/Lex.Ingest/IndexFromCorpus.cs",
-            "https://github.com/SFHAJJI/lex/blob/main/evals/retrieval-cases.json",
-            "https://github.com/SFHAJJI/lex/blob/main/evals/retrieval-baseline-v2.json",
-            "https://github.com/SFHAJJI/lex/blob/main/src/Lex.Index/RetrievalBenchmark.cs",
-            "https://github.com/SFHAJJI/lex-ops/blob/main/.github/workflows/publish-prebuilt-index.yml",
-            "https://github.com/SFHAJJI/lex-ops/blob/main/publish-prebuilt-index.sh",
-            "https://github.com/SFHAJJI/lex/blob/main/deploy/fetch-indexes.sh",
-            "https://github.com/SFHAJJI/lex/blob/main/src/Lex.Web/IndexRegistry.cs",
-            "https://github.com/SFHAJJI/lex/blob/main/src/Lex.Ask/AskService.cs",
-            "https://github.com/SFHAJJI/lex/blob/main/src/Lex.Mcp/McpCore.cs",
+            "https://github.com/SFHAJJI/lex/blob/main/docs/architecture/pages/data.md",
+            "https://github.com/SFHAJJI/lex/blob/main/docs/assistant-evaluation-scenario-matrix.md",
+            "https://github.com/SFHAJJI/lex/blob/main/docs/hybrid-search.md",
+            "https://github.com/SFHAJJI/lex/blob/main/docs/known-defects.md",
             "https://github.com/SFHAJJI/lex/blob/main/src/Lex.Ask/UiMapper.cs",
-            "https://github.com/SFHAJJI/lex/blob/main/evals/assistant-cases-v3.json",
-            "https://github.com/SFHAJJI/lex/blob/main/evals/assistant-cases-v3.review.json",
-            "https://github.com/SFHAJJI/lex/blob/main/evals/assistant-cases-v3.review.sig",
-            "https://github.com/SFHAJJI/lex/blob/main/src/Lex.Ingest/AssistantEvaluationRunner.cs",
-            "https://github.com/SFHAJJI/lex-ops/blob/main/.github/workflows/publish-assistant-evaluation.yml",
-            "https://github.com/SFHAJJI/lex/blob/main/src/Lex.Web/AssistantEvaluationEvidence.cs",
-            "https://github.com/SFHAJJI/lex/blob/main/src/Lex.Web/AssistantEvaluationEvidenceProvider.cs",
-            "https://github.com/SFHAJJI/lex/blob/main/src/Lex.Web/BuiltEndpoints.cs",
-            "https://github.com/SFHAJJI/lex/blob/main/tests/Lex.Tests/AssistantEvaluationEvidenceTests.cs",
-            "https://github.com/SFHAJJI/lex/blob/main/.github/workflows/revision-traffic.yml",
-            "https://github.com/SFHAJJI/lex/blob/main/docs/architecture/pages/limits.md",
-            "https://github.com/SFHAJJI/lex/blob/main/docs/architecture/pages/incidents.md",
+            "https://github.com/SFHAJJI/lex/blob/main/src/Lex.Derive/DeriveWriter.cs",
+            "https://github.com/SFHAJJI/lex/blob/main/src/Lex.Index/IndexBuilder.cs",
+            "https://github.com/SFHAJJI/lex/blob/main/src/Lex.Ingest/CorpusWriter.cs",
+            "https://github.com/SFHAJJI/lex/blob/main/src/Lex.Ingest/IndexFromCorpus.cs",
+            "https://github.com/SFHAJJI/lex/blob/main/src/Lex.Mcp/McpCore.cs",
+            "https://github.com/SFHAJJI/lex/blob/main/src/Lex.Sources.EurLex/EurLexAdapter.cs",
+            "https://github.com/SFHAJJI/lex/blob/main/tests/Lex.Tests/AgentEvidenceLedgerTests.cs",
+            "https://github.com/SFHAJJI/lex/blob/main/tests/Lex.Tests/CorpusIntegrityTests.cs",
+            "https://github.com/SFHAJJI/lex/blob/main/tests/Lex.Tests/EurLexScopeTests.cs",
+            "https://github.com/SFHAJJI/lex/blob/main/tests/Lex.Tests/IndexTests.cs",
+            "https://github.com/SFHAJJI/lex/blob/main/tests/Lex.Tests/McpContractTests.cs",
+            "https://github.com/SFHAJJI/lex/blob/main/tests/Lex.Tests/XhtmlEuTests.cs",
+            "https://github.com/SFHAJJI/lex/blob/main/web/src/assistant-shell.test.ts",
         };
         Assert.All(expectedLinks, link => Assert.Contains($"href=\"{link}\"", html));
-        Assert.Contains("href=\"/benchmarks/latest.json\"", html);
         Assert.Contains("href=\"/built/release/evaluation.json\"", html);
         Assert.DoesNotContain("#L", html);
 

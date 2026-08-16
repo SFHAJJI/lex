@@ -299,6 +299,17 @@ button.pick { cursor: pointer; }
   max-height:min(76vh,720px);display:flex;flex-direction:column;background:var(--card);
   border:1px solid var(--line);border-radius:14px;box-shadow:0 18px 52px rgba(0,0,0,.26);overflow:hidden}
 .askpanel.min{width:240px;max-height:none}
+/* The panel used to appear and disappear on one frame. It now enters from the closed state and
+   stays mounted for its own exit, so opening and closing read as one movement. */
+.askpanel{transform-origin:100% 100%;will-change:transform;
+  transition:transform .22s cubic-bezier(.2,.8,.25,1)}
+/* Position only, never opacity: text mid-fade composites against whatever is behind it, which
+   measures as a contrast failure and is one for anyone reading during the transition. */
+.askpanel.is-entering,.askpanel.is-closing{transform:translateY(calc(100% + 24px))}
+.askpanel.is-open{transform:none}
+@media (prefers-reduced-motion:reduce){
+  .askpanel{transition:none}
+  .askpanel.is-entering,.askpanel.is-closing{transform:none}}
 .askbackdrop{display:none}
 body.assistant-open main,body.assistant-open footer{margin-right:452px}
 body.assistant-open main{max-width:960px}

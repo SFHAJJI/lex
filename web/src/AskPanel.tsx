@@ -27,17 +27,28 @@ function ExecutionDetails({ value }: { value?: AskExecutionDetails }) {
 
 const PANEL_KEY = "lex.ask.panel.v1";
 const MODAL_QUERY = "(width < 1100px)";
+const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
+// Kept in step with the .askpanel transition in styles.css.
+const PANEL_MOTION_MS = 220;
+const prefersReducedMotion = () =>
+  typeof matchMedia === "function" && matchMedia(REDUCED_MOTION_QUERY).matches;
 const modalViewport = () => typeof matchMedia === "function" && matchMedia(MODAL_QUERY).matches;
 
-function initialPanelState() {
-  try { return parseAssistantPanelState(sessionStorage.getItem(PANEL_KEY)); }
-  catch { return parseAssistantPanelState(null); }
-}
-
 export default function AskPanel(p: AskPanelProps) {
-  const initial = useRef(initialPanelState()).current;
+  // Default-open applies only where the panel docks beside the content. Below the modal boundary it
+  // would cover the whole page before a first-time reader has seen anything, so there it waits to be
+  // asked. A stored choice always wins over both.
+  const initial = useRef((() => {
+    let raw: string | null = null;
+    try { raw = sessionStorage.getItem(PANEL_KEY); } catch { raw = null; }
+    const stored = parseAssistantPanelState(raw);
+    return raw === null && modalViewport() ? { open: false, minimized: false } : stored;
+  })()).current;
   const [open, setOpen] = useState(initial.open);
   const [minimized, setMinimized] = useState(initial.minimized);
+  const [closing, setClosing] = useState(false);
+  const [entered, setEntered] = useState(false);
+  const reducedMotion = useRef(prefersReducedMotion()).current;
   const [modal, setModal] = useState(modalViewport);
   const body = useRef<HTMLDivElement>(null);
   const panel = useRef<HTMLElement | null>(null);
@@ -107,19 +118,45 @@ export default function AskPanel(p: AskPanelProps) {
   }, [open, minimized, modal]);
 
   useEffect(() => {
+    if (!open || entered) return;
+    // No animation frame outside a browser, and none wanted when motion is reduced. Both land on
+    // the open state directly rather than leaving the panel stuck in its entering transform.
+    if (reducedMotion || typeof requestAnimationFrame !== "function") {
+      setEntered(true);
+      return;
+    }
+    const frame = requestAnimationFrame(() => setEntered(true));
+    return () => cancelAnimationFrame(frame);
+  }, [open, entered, reducedMotion]);
+
+  useEffect(() => {
     body.current?.scrollTo({ top: body.current.scrollHeight, behavior: "smooth" });
   }, [p.conversation.length, p.activeQuestion, p.steps.length, p.said]);
 
   const show = () => { setOpen(true); setMinimized(false); };
+  // The panel used to appear and vanish on the same frame it mounted and unmounted, so opening the
+  // assistant read as a jump-cut. It now stays mounted for the length of its own exit transition and
+  // enters from the closed state on the first frame, which is also what makes the default-open panel
+  // animate in on arrival instead of being there already.
   const close = () => {
-    setOpen(false);
-    setMinimized(false);
-    requestAnimationFrame(() => launcher.current?.focus());
+    if (reducedMotion) {
+      setOpen(false);
+      setMinimized(false);
+      requestAnimationFrame(() => launcher.current?.focus());
+      return;
+    }
+    setClosing(true);
+    window.setTimeout(() => {
+      setClosing(false);
+      setOpen(false);
+      setMinimized(false);
+      requestAnimationFrame(() => launcher.current?.focus());
+    }, PANEL_MOTION_MS);
   };
 
   const rememberPanel = (element: HTMLElement | null) => { panel.current = element; };
 
-  if (!open) return (
+  if (!open && !closing) return (
     <div className="askslot">
       <button ref={launcher} className="asklaunch" onClick={show}
         aria-label="Open Ask Lex legal research assistant">
@@ -203,7 +240,7 @@ export default function AskPanel(p: AskPanelProps) {
   if (!minimized && modal) return createPortal(
     <div className="askslot">
       <div className="askbackdrop" aria-hidden="true" onMouseDown={close} />
-      <div ref={rememberPanel} className="askpanel" role="dialog" aria-modal="true"
+      <div ref={rememberPanel} className={`askpanel${closing ? " is-closing" : entered ? " is-open" : " is-entering"}`} role="dialog" aria-modal="true"
            aria-label="Lex legal research assistant">
         {panelContent}
       </div>
@@ -213,7 +250,7 @@ export default function AskPanel(p: AskPanelProps) {
 
   return (
     <div className="askslot">
-      <aside ref={rememberPanel} className={`askpanel${minimized ? " min" : ""}`}
+      <aside ref={rememberPanel} className={`askpanel${minimized ? " min" : ""}${closing ? " is-closing" : entered ? " is-open" : " is-entering"}`}
              aria-label="Lex legal research assistant">
         {panelContent}
       </aside>

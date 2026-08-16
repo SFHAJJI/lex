@@ -88,20 +88,16 @@ typed execution and bounded final responses.
 > hit or protected branch can move after a build starts. Navigation may follow `main`; release
 > authority comes only from the immutable identities recorded in signed evidence.
 
-## Inspect the implementation
+## One article, followed end to end
 
-Links follow protected `main` so the map stays useful as code evolves. Signed evidence binds exact
-commits and digests, so a `main` link is navigation, never proof that those bytes were released.
-The dossier keeps one system overview and one release/evidence overview; specialized legal,
-retrieval and assistant diagrams remain only when they explain a materially different relationship.
-That is the anti-bloat rule, not a reason to delete useful contract diagrams.
+This is the whole claim of the product in one table. It follows a single provision, Article 6 of the
+General Data Protection Regulation, from the bytes the publisher served through to the citation the
+interface renders. Every step carries the SHA-256 of what it produced, so any link in the chain can
+be recomputed instead of believed, and the right-hand column states what that step does not prove.
 
-### Worked evidence trace: General Data Protection Regulation (GDPR) Article 6
-
-This trace was reproduced from the frozen EU database whose file SHA-256
-is `f827e089bddff64709926af4341bc0ddbfbef829a5c3e29400754aec3b649fd9`. It is
-**Measured** local evidence for the exact build below, not a claim that the pending signed release or
-25-case live evaluation has completed.
+It was reproduced from the frozen EU database whose file SHA-256 is
+`f827e089bddff64709926af4341bc0ddbfbef829a5c3e29400754aec3b649fd9`. It is measured local evidence
+for that exact build, not a claim about any signed release.
 
 | Trace step | Status and exact evidence | Source and test | Limitation |
 |---|---|---|---|
@@ -111,36 +107,6 @@ is `f827e089bddff64709926af4341bc0ddbfbef829a5c3e29400754aec3b649fd9`. It is
 | Index row and text blob | **Measured.** Builder commit `27f0e02cb0da8e0fdf9f8322d3eef3b3ae09c776`, content digest `158bf28e9cfe5facefe5b728ba221f6d00162b101f79b5d59b937695d4ea20f1`, record SHA-256 `44d09ee49e187e02cf8649106b90badc16600d8227eb1f6f851b2054775bcf84`; the `art_6` row addresses the text blob by the article digest above. | [`IndexFromCorpus.Build`](https://github.com/SFHAJJI/lex/blob/main/src/Lex.Ingest/IndexFromCorpus.cs) and [`IndexBuilder.Build`](https://github.com/SFHAJJI/lex/blob/main/src/Lex.Index/IndexBuilder.cs); [`IndexTests`](https://github.com/SFHAJJI/lex/blob/main/tests/Lex.Tests/IndexTests.cs) | The database stamp is verified build provenance; the first detached release-signature boundary is final artifact publication. |
 | Typed legal operation | **Measured.** `as_of(work=eu-eurlex:32016r0679, date=2021-01-01, language=en, mode=select, anchors=art_6)` returned `ok`, the exact version above and one provision at `art_6`. | [`McpCore.CallToolAsync`](https://github.com/SFHAJJI/lex/blob/main/src/Lex.Mcp/McpCore.cs); [`McpContractTests`](https://github.com/SFHAJJI/lex/blob/main/tests/Lex.Tests/McpContractTests.cs); [frozen-data evaluation evidence](https://github.com/SFHAJJI/lex/blob/main/docs/assistant-evaluation-scenario-matrix.md) | EUR-Lex intervals are official consolidated-wording states, not an independent conclusion about entry into force or applicability. |
 | User-interface citation | **Built; Measured.** `UiMapper.From` maps only typed fields into a provision view and preserves `/eu-eurlex/32016r0679/2016-05-04--af3e8edcc8aeb9b8c10e891880377cb0b363a8fa7005a1b45557d21afa592de5#art_6` as the citation target. | [`UiMapper.From`](https://github.com/SFHAJJI/lex/blob/main/src/Lex.Ask/UiMapper.cs); [`AgentEvidenceLedgerTests`](https://github.com/SFHAJJI/lex/blob/main/tests/Lex.Tests/AgentEvidenceLedgerTests.cs) and [`assistant-shell.test.ts`](https://github.com/SFHAJJI/lex/blob/main/web/src/assistant-shell.test.ts) | A user-interface (UI) citation proves the result's source coordinate and hashes; it does not turn model prose into legal authority or advice. |
-
-### Source map
-
-Each row keeps implementation, test/evidence and the relevant boundary together. Symbol labels are
-orientation aids; links omit line numbers so normal refactors do not rot the map.
-
-| Boundary | Status | Implementation | Test, evidence and limitation |
-|---|---|---|---|
-| Publisher ingest | **Built** | [`EurLexAdapter.EnumerateWorks/FetchBody`](https://github.com/SFHAJJI/lex/blob/main/src/Lex.Sources.EurLex/EurLexAdapter.cs), [`LegiluxAdapter.EnumerateWorks/FetchBody`](https://github.com/SFHAJJI/lex/blob/main/src/Lex.Sources.Legilux/LegiluxAdapter.cs), [`CorpusWriter.WriteAsync`](https://github.com/SFHAJJI/lex/blob/main/src/Lex.Ingest/CorpusWriter.cs); bounded orchestration starts in [`fresh-corpus-v4.yml`](https://github.com/SFHAJJI/lex-ops/blob/main/.github/workflows/fresh-corpus-v4.yml). | [`EurLexScopeTests`](https://github.com/SFHAJJI/lex/blob/main/tests/Lex.Tests/EurLexScopeTests.cs), [`CorpusWriterTests`](https://github.com/SFHAJJI/lex/blob/main/tests/Lex.Tests/CorpusWriterTests.cs); incomplete enumeration cannot publish or manufacture removals. |
-| Deterministic derive | **Built; Measured** | [`DeriveWriter.Derive`](https://github.com/SFHAJJI/lex/blob/main/src/Lex.Derive/DeriveWriter.cs) and profile-owned extraction. | [`DeriveTests`](https://github.com/SFHAJJI/lex/blob/main/tests/Lex.Tests/DeriveTests.cs), worked trace above; unsafe structure remains a typed gap, not guessed text. |
-| Index and signing boundary | **Built; Measured** | [`IndexFromCorpus.Build`](https://github.com/SFHAJJI/lex/blob/main/src/Lex.Ingest/IndexFromCorpus.cs), [`IndexBuilder.Build`](https://github.com/SFHAJJI/lex/blob/main/src/Lex.Index/IndexBuilder.cs), [`ArtifactManifests.VerifyDirectory`](https://github.com/SFHAJJI/lex/blob/main/src/Lex.Index/ArtifactManifest.cs). | [`IndexTests`](https://github.com/SFHAJJI/lex/blob/main/tests/Lex.Tests/IndexTests.cs), [`ArtifactManifestTests`](https://github.com/SFHAJJI/lex/blob/main/tests/Lex.Tests/ArtifactManifestTests.cs); local stamps are not the detached public-release signature. |
-| Retrieval cases and benchmark | **Built**; hybrid is **Quarantined** for LU and **Next** for EU | [`retrieval-cases.json`](https://github.com/SFHAJJI/lex/blob/main/evals/retrieval-cases.json), [`retrieval-baseline-v2.json`](https://github.com/SFHAJJI/lex/blob/main/evals/retrieval-baseline-v2.json), [`RetrievalBenchmarkRunner.Run`](https://github.com/SFHAJJI/lex/blob/main/src/Lex.Index/RetrievalBenchmark.cs). When compatible signed reports are mounted, the generated report is served at [`/benchmarks/latest.json`](/benchmarks/latest.json); it is not a hand-edited source file. | [`RetrievalBenchmarkTests`](https://github.com/SFHAJJI/lex/blob/main/tests/Lex.Tests/RetrievalBenchmarkTests.cs), [hybrid activation contract](https://github.com/SFHAJJI/lex/blob/main/docs/hybrid-search.md); no accepted exact-release report means keyword stays active and the latest-report endpoint fails closed. |
-| Exact-byte publication | **Built**; exact release is **Next** | [`publish-prebuilt-index.yml`](https://github.com/SFHAJJI/lex-ops/blob/main/.github/workflows/publish-prebuilt-index.yml) owns the reviewed dispatch boundary; [`publish-prebuilt-index.sh`](https://github.com/SFHAJJI/lex-ops/blob/main/publish-prebuilt-index.sh) owns create-only staging, provenance, signing, read-back and recovery. | [`test_prebuilt_publication_contracts.py`](https://github.com/SFHAJJI/lex-ops/blob/main/tests/test_prebuilt_publication_contracts.py); the workflow commit is part of evidence, and links to `main` are not release authority. |
-| Exact-tag fetch, deploy and runtime activation | **Built**; candidate is **Next** | [`deploy.yml`](https://github.com/SFHAJJI/lex/blob/main/.github/workflows/deploy.yml), [`fetch-indexes.sh`](https://github.com/SFHAJJI/lex/blob/main/deploy/fetch-indexes.sh), [`IndexRegistry`](https://github.com/SFHAJJI/lex/blob/main/src/Lex.Web/IndexRegistry.cs). | [`ReleaseWorkflowTests`](https://github.com/SFHAJJI/lex/blob/main/tests/Lex.Tests/ReleaseWorkflowTests.cs), [`ArtifactManifestTests`](https://github.com/SFHAJJI/lex/blob/main/tests/Lex.Tests/ArtifactManifestTests.cs); a tag alone cannot authorize bytes, and a mismatch refuses activation. |
-| Plan, one correction and freeze | **Built** | [`AskService.PlanWithOneRepairAsync`](https://github.com/SFHAJJI/lex/blob/main/src/Lex.Ask/AskService.cs), [`OperationPlan.FromPlannerOutput`](https://github.com/SFHAJJI/lex/blob/main/src/Lex.Ask/OperationContracts.cs). | [`AskOperationControllerTests`](https://github.com/SFHAJJI/lex/blob/main/tests/Lex.Tests/AskOperationControllerTests.cs); one pre-freeze correction is allowed, no execution observation returns to the planner. |
-| MCP execution and UI effects | **Built; Measured** | [`McpCore.CallToolAsync`](https://github.com/SFHAJJI/lex/blob/main/src/Lex.Mcp/McpCore.cs), [`UiMapper.From`](https://github.com/SFHAJJI/lex/blob/main/src/Lex.Ask/UiMapper.cs). | [`McpContractTests`](https://github.com/SFHAJJI/lex/blob/main/tests/Lex.Tests/McpContractTests.cs), worked trace above; operations are read-only and typed gaps survive to the UI. |
-| Assistant catalog, runner and publication | Runner **Built**; 25-case catalog **Measured**; live run **Next** | [`assistant-cases-v3.json`](https://github.com/SFHAJJI/lex/blob/main/evals/assistant-cases-v3.json), [`AssistantEvaluationRunner.RunAsync`](https://github.com/SFHAJJI/lex/blob/main/src/Lex.Ingest/AssistantEvaluationRunner.cs), [`AssistantEvaluationReleaseVerifier`](https://github.com/SFHAJJI/lex/blob/main/src/Lex.Ingest/AssistantEvaluationRelease.cs), [`publish-assistant-evaluation.ps1`](https://github.com/SFHAJJI/lex/blob/main/deploy/publish-assistant-evaluation.ps1), [`publish-assistant-evaluation.yml`](https://github.com/SFHAJJI/lex-ops/blob/main/.github/workflows/publish-assistant-evaluation.yml). | [`AssistantEvaluationTests`](https://github.com/SFHAJJI/lex/blob/main/tests/Lex.Tests/AssistantEvaluationTests.cs), [25-case matrix](https://github.com/SFHAJJI/lex/blob/main/docs/assistant-evaluation-scenario-matrix.md), [owner review](https://github.com/SFHAJJI/lex/blob/main/evals/assistant-cases-v3.review.json) and [detached signature](https://github.com/SFHAJJI/lex/blob/main/evals/assistant-cases-v3.review.sig); the exact catalog is owner-signed but has not yet been run live. |
-| Latest signed assistant evaluation | Card **Built**; signed result **Next** | [`AssistantEvaluationEvidenceVerifier`](https://github.com/SFHAJJI/lex/blob/main/src/Lex.Web/AssistantEvaluationEvidence.cs), [`GitHubAssistantEvaluationEvidenceProvider`](https://github.com/SFHAJJI/lex/blob/main/src/Lex.Web/AssistantEvaluationEvidenceProvider.cs), [`BuiltEndpoints`](https://github.com/SFHAJJI/lex/blob/main/src/Lex.Web/BuiltEndpoints.cs) and the machine-readable [`/built/release/evaluation.json`](/built/release/evaluation.json). | [`AssistantEvaluationReleaseVerifier`](https://github.com/SFHAJJI/lex/blob/main/src/Lex.Ingest/AssistantEvaluationRelease.cs) is the canonical pre-signing semantic authority. [`AssistantEvaluationEvidenceTests`](https://github.com/SFHAJJI/lex/blob/main/tests/Lex.Tests/AssistantEvaluationEvidenceTests.cs) and [`ArchitectureDossierTests`](https://github.com/SFHAJJI/lex/blob/main/tests/Lex.Tests/ArchitectureDossierTests.cs) authenticate the immutable release, signed bytes and exact runtime binding, then label bounded fields as signed report claims; they do not duplicate or independently rescore the evaluation. Otherwise the card says no verified evaluation is published. |
-| Traffic promotion and rollback | **Built**; this promotion is **Next** | [`revision-traffic.yml`](https://github.com/SFHAJJI/lex/blob/main/.github/workflows/revision-traffic.yml). | [`ReleaseWorkflowTests`](https://github.com/SFHAJJI/lex/blob/main/tests/Lex.Tests/ReleaseWorkflowTests.cs); exact identities and one-replica state are rechecked immediately before the single traffic mutation. |
-| Limits and incidents | **Built** evidence surface | [`limits.md`](https://github.com/SFHAJJI/lex/blob/main/docs/architecture/pages/limits.md), [`incidents.md`](https://github.com/SFHAJJI/lex/blob/main/docs/architecture/pages/incidents.md). | [`ArchitectureDossierTests`](https://github.com/SFHAJJI/lex/blob/main/tests/Lex.Tests/ArchitectureDossierTests.cs); a limit remains visible until the named replacement evidence exists. |
-
-### Suggested reading order
-
-1. [Overview and system boundary](https://github.com/SFHAJJI/lex/blob/main/docs/architecture/pages/overview.md)
-2. [Data authority](https://github.com/SFHAJJI/lex/blob/main/docs/architecture/pages/data.md)
-3. [Frozen retrieval cases](https://github.com/SFHAJJI/lex/blob/main/evals/retrieval-cases.json)
-4. [Deterministic benchmark runner](https://github.com/SFHAJJI/lex/blob/main/src/Lex.Index/RetrievalBenchmark.cs)
-5. [Bounded assistant architecture](https://github.com/SFHAJJI/lex/blob/main/docs/architecture/pages/assistant.md)
-6. [Release and evidence contract](https://github.com/SFHAJJI/lex/blob/main/docs/architecture/pages/release.md)
-7. [Verified limits and scale triggers](https://github.com/SFHAJJI/lex/blob/main/docs/architecture/pages/limits.md)
 
 ## Assistant evaluation gate
 
@@ -178,34 +144,6 @@ tool arguments, legal and transport outcomes, UI effect, model identity, tokens,
 equality. It reads typed SSE plus the matching terminal object—not Azure logs or model
 chain-of-thought—and the signed report omits prompts, legal text, raw tool payloads and free-form
 grader reasons.
-
-### Frozen catalog field glossary
-
-| Catalog field | What it controls | Where the evaluator reads the result |
-|---|---|---|
-| `id`, `question`, `history` | Stable scenario identity, final user input and up to eight server-owned setup turns | Catalog bytes bind the inputs; only an opaque thread token crosses between real HTTP turns. A setup turn with its own `expected` contract is checked from its typed terminal response before continuation. |
-| `repetitions` | Re-runs the whole plan, freeze and execute path to expose nondeterministic planning or answers | Every repetition has its own signed request coordinates and result. Any failed repetition deterministically fails the release gate. |
-| `maximum_input_tokens`, `maximum_output_tokens` | Per-turn candidate ceilings; setup messages declare their own ceilings | Candidate terminal `model_usage`, aggregated across setup and final turns, is checked per case and against the candidate budget. |
-| `maximum_latency_ms` | Maximum wall time for the complete case invocation | Total duration sums all successful setup and final turns. Planner, MCP, first-result and residual fields retain the slowest turn, so setup latency cannot disappear. Thread reset is cleanup, not inference. |
-| `expected_synthesis` | Whether the final turn must run optional generated prose | Presence of the final stream's measured synthesis segment must match exactly; absence is not treated as zero latency. |
-| `expected.tool` | The authorized legal operation for a single-operation case | The terminal typed operation and its equal `operation_result` SSE payload. |
-| `expected.operations` | Two to eight authorized operations whose order is part of the contract | Ordered terminal operations, equal streamed copies and ordered primary-call traces. Clarification and legal-boundary operations stay single-operation because they deliberately make no primary call. |
-| `expected.legal_outcome` | Closed legal result such as `succeeded`, `needs_clarification` or `legal_boundary` | Terminal operation contract, not answer wording. |
-| `expected.transport_outcome` | Whether execution completed or ended in a typed transport state | Terminal operation contract and streamed copy. The current signed catalog requires `completed`; controlled failure branches belong in deterministic and chaos tests. |
-| `expected.effect` | Required UI contract such as provision, diff, timeline, coverage or gap | Typed `effects` on the terminal operation. Browser tests separately prove presentation. |
-| `expected.arguments` | Reviewed argument values that every acceptable plan must contain | Primary-call trace, or the frozen operation-plan trace when clarification correctly prevents execution. Values are exact; additional bounded tuning arguments may vary. |
-| `expected.argument_alternatives` | Complete reviewed alternative argument sets, of which one must match | The same typed trace. The EU cases accept exact `publisher=eu-eurlex` or exact `jurisdiction=EU`; an unscoped plan fails. Redundant scope is accepted only when every alternative-owned value is reviewed, so `jurisdiction=EU` plus `publisher=lu-legilux` fails. |
-| `gap_status`, `clarification` | Required typed gap or clarification behavior when a case declares it | Typed UI gap and top-level clarification objects. |
-| `population_minimum`, `population_path` | A lower bound on a specific typed result population | Bounded JavaScript Object Notation (JSON) pointer into the terminal response, never a prose count. |
-| `forbidden_reply_contains` | Injection canaries and prohibited disclosure markers | Bounded final reply, case-insensitively; it is a negative safety check, not the accuracy grader. |
-| `grading.mode`, `rubric` | Selects deterministic-only or separate LLM grading, and states the one relevance question the judge is asked | The separate grader sees the question, rubric, bounded reply, operations and trace and returns a relevance score of 1 to 5. That score is recorded per repetition and gates nothing: promotion is decided entirely by the deterministic contract checks. There is no threshold, because a pass mark nothing compares against would be a published claim the code does not keep. |
-| `grading.maximum_input_tokens`, `grading.maximum_output_tokens` | Per-call Release grader ceilings, separate from candidate use | Authenticated grader application programming interface (API) usage and aggregate grader budget. A grader call that fails is recorded as an absent measurement naming its cause, never as a passing score; a run configured with no separate grader at all still fails closed. |
-| Aggregate budget and pricing | Candidate tokens, grader tokens, latency percentiles, exact model deployment meter snapshot and outer euro limit | Reserved maxima are checked before the first call; measured typed usage and timings are checked after every run. |
-
-The detailed evaluator mechanics and the owner-signed live catalog's layered coverage map are in
-[assistant release evaluation](https://github.com/SFHAJJI/lex/blob/main/docs/assistant-evaluation.md)
-and the
-[assistant evaluation scenario matrix](https://github.com/SFHAJJI/lex/blob/main/docs/assistant-evaluation-scenario-matrix.md).
 
 ## Verified limits
 

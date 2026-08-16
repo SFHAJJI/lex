@@ -180,6 +180,12 @@ public sealed class AssistantEvaluationTests : IDisposable
             + "release-grader requests",
             release,
             StringComparison.Ordinal);
+        // README quotes the reservation in EUR and nothing else from the catalog, and it was the one
+        // published file left stale when the three documents above were corrected, because it was
+        // not in this list.
+        var readme = Flat(Path.Combine(RepoRoot(), "README.md"));
+        Assert.True(readme.Contains($"EUR {money} under an outer", StringComparison.Ordinal),
+            $"README.md does not state EUR {money} from the signed catalog.");
     }
 
     [Fact]
@@ -2756,6 +2762,63 @@ public sealed class AssistantEvaluationTests : IDisposable
             new AssistantEvaluationLatency(12, 14, 14),
             500,
             true);
+
+    [Theory]
+    [InlineData("1")]
+    [InlineData("1.0")]
+    [InlineData("1.000")]
+    [InlineData("1.00000")]
+    public void One_revision_has_one_evidence_digest_whatever_scale_azure_renders_cpu_with(
+        string rendered)
+    {
+        // Azure Resource Manager returned "cpu": 1.000 during one evaluation and "cpu": 1.0 for the
+        // identical revision minutes later. The digest is derived from this value by formatting, and
+        // decimal preserves scale, so one unchanged revision produced two identities and its signed
+        // report could never be published against itself. decimal equality ignores scale, so the
+        // evidence records still compared equal on CpuCores and only the derived digest disagreed.
+        var baseline = new AssistantCandidateRuntimeEvidence(
+            "/subscriptions/11111111-1111-1111-1111-111111111111/resourceGroups/rg-platform/providers/Microsoft.App/containerApps/ca-lex-candidate",
+            "ca-lex-candidate--release", "candidate.example",
+            "registry.example/lex:sha-aaaaaaaaaaaa", 1m, 2_147_483_648,
+            1, 1, 0, new string('a', 40), new string('d', 64),
+            "candidate-models.example", "candidate-release", "");
+        var scaled = baseline with
+        {
+            CpuCores = decimal.Parse(rendered, CultureInfo.InvariantCulture),
+        };
+
+        Assert.Equal(
+            AzureModelDeploymentResolver.TargetEvidenceSha256(baseline),
+            AzureModelDeploymentResolver.TargetEvidenceSha256(scaled));
+    }
+
+    [Fact]
+    public void One_revision_has_one_evidence_digest_whatever_culture_the_verifier_runs_in()
+    {
+        // The digest is built by formatting numbers with the ambient culture. Digits themselves stay
+        // ASCII for non-negative integers, so the exposure is the negative sign: the parser records
+        // an absent replica count or traffic weight as -1, and a culture whose negative sign is
+        // U+2212 rather than the hyphen renders that differently. A verifier running under such a
+        // culture would compute a second identity for an unchanged revision. Reported in review.
+        var absentFields = new AssistantCandidateRuntimeEvidence(
+            "/subscriptions/11111111-1111-1111-1111-111111111111/resourceGroups/rg-platform/providers/Microsoft.App/containerApps/ca-lex-candidate",
+            "ca-lex-candidate--release", "candidate.example",
+            "registry.example/lex:sha-aaaaaaaaaaaa", 1m, 2_147_483_648,
+            -1, -1, -1, new string('a', 40), new string('d', 64),
+            "candidate-models.example", "candidate-release", "");
+        var invariantDigest = AzureModelDeploymentResolver.TargetEvidenceSha256(absentFields);
+        var hostile = (CultureInfo)CultureInfo.InvariantCulture.Clone();
+        hostile.NumberFormat.NegativeSign = "−";
+
+        var previous = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = hostile;
+            Assert.Equal(invariantDigest,
+                AzureModelDeploymentResolver.TargetEvidenceSha256(absentFields));
+        }
+        finally { CultureInfo.CurrentCulture = previous; }
+    }
 
     private static AssistantCandidateRuntimeEvidence TargetEvidence()
     {

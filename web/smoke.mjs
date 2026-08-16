@@ -83,8 +83,11 @@ for (const [re, want, why] of [
   [/class="door"/, true, "the suggested starting points are gone"],
   [/Code penal/, true, "the doors did not come from the server-emitted block"],
   [/class="asof"/, true, "the as-of date control is gone; the date IS the product"],
-  [/class="asklaunch"/, true, "the assistant launcher is gone"],
-  [/<span>Ask Lex<\/span>/, true, "the assistant launcher's visible and accessible label is gone"],
+  // The panel opens on a first arrival, so the launcher is deliberately absent here: it renders
+  // only once a reader has closed the assistant. What must never be absent is the panel itself.
+  [/class="askpanel/, true, "the assistant panel is gone"],
+  [/class="ap-title"/, true, "the assistant panel's visible label is gone"],
+  [/class="asklaunch"/, false, "the launcher rendered beside an open panel"],
   [/class="fin-tab/, false, "the query-type tabs are back; one box decides for the reader"],
   [/>\s*A topic\s*</, false, "the old topic tab is back"],
   [/>\s*History\s*</, false, "the History tab is back; the rail is meant to replace it"],
@@ -111,8 +114,8 @@ catch (error) {
 }
 await new Promise((resolve) => setTimeout(resolve, 250));
 const standalone = standaloneDom.window.document.getElementById("assistant-root").innerHTML;
-if (!/class="asklaunch"/.test(standalone) || /class="ws"/.test(standalone)) {
-  console.error("FAIL - standalone research page did not mount exactly the assistant launcher");
+if (!/class="askpanel/.test(standalone) || /class="ws"/.test(standalone)) {
+  console.error("FAIL - standalone research page did not mount exactly the assistant, without the workspace");
   process.exit(1);
 }
 // The report is a second surface, not a tab of the first: it must bring its own window, its own

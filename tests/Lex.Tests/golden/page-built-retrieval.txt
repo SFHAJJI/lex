@@ -231,7 +231,6 @@ HTTP 200
       <a href="/how-it-works">How it works</a>
       <a href="/coverage">Coverage</a>
       <a href="/built" aria-current="page">Architecture dossier</a>
-      <a href="/decisions">Decisions and trade-offs</a>
       <a href="/benchmarks">Benchmarks</a>
       <a href="/verify">Verify artifacts</a>
       <a href="/about">About</a>
@@ -243,7 +242,7 @@ HTTP 200
 <main>
 <h1>Retrieval</h1>
 <p class="sub">Identity before ranking, measured modes and explicit failure classes.</p>
-<nav class="dossier-tabs" aria-label="Architecture dossier"><a href="/built">Overview</a><a href="/built/model">Legal model</a><a href="/built/data">Data authority</a><a href="/built/retrieval" aria-current="page">Retrieval</a><a href="/built/assistant">Assistant</a><a href="/built/release">Release</a><a href="/built/decisions">Trade-offs</a><a href="/built/incidents">Incidents</a><a href="/built/limits">Limits and scale</a><a class="dossier-print" href="/architecture/dossier">Complete dossier</a></nav><article class="architecture-dossier"><p>Most apparent RAG hallucinations begin before generation. Lex therefore treats legal identity as
+<nav class="dossier-tabs" aria-label="Architecture dossier"><a href="/built">Overview</a><a href="/built/model">Legal model</a><a href="/built/data">Data authority</a><a href="/built/retrieval" aria-current="page">Retrieval</a><a href="/built/assistant">Assistant</a><a href="/built/release">Release</a><a href="/built/decisions">Trade-offs</a><a href="/built/incidents">Incidents</a><a href="/built/limits">Limits and scale</a><a href="/built/repositories">Repositories</a><a class="dossier-print" href="/architecture/dossier">Complete dossier</a></nav><article class="architecture-dossier"><p>Most apparent RAG hallucinations begin before generation. Lex therefore treats legal identity as
 an authorization step and ranking as a later discovery step.</p>
 <p><img src="/built/diagrams/retrieval.svg" alt="A query passes through subject resolution, temporal and scope filters, keyword or gated hybrid retrieval, bounded top-k selection and typed evidence before any optional generation." /></p>
 <p><a href="/built/diagrams/retrieval.svg">Open the retrieval diagram at full size</a></p>
@@ -299,48 +298,6 @@ discovery signal and an explicit match reason.</li>
 <li>Deduplicate text states and anchors, apply bounded per-work fairness only for unscoped discovery,
 then return typed rows and provenance.</li>
 </ol>
-<h2>Top-1 and top-k are different product decisions</h2>
-<div class="dossier-table" tabindex="0" role="region" aria-label="Scrollable architecture table"><table>
-<thead>
-<tr>
-<th>Question shape</th>
-<th>Selection</th>
-<th>Why</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Exact official identifier plus date</td>
-<td>One deterministic work and interval</td>
-<td>Similarity would weaken an exact coordinate</td>
-</tr>
-<tr>
-<td>Unique exact official short title</td>
-<td>One work, with its source literal</td>
-<td>Identity comes from publisher data, not rank</td>
-</tr>
-<tr>
-<td>Theme or conceptual discovery</td>
-<td>Bounded top-k works or provisions</td>
-<td>Several results are the useful answer</td>
-</tr>
-<tr>
-<td>One theme matches several laws</td>
-<td>Clarification or result set</td>
-<td>Metadata must not silently authorize one law</td>
-</tr>
-<tr>
-<td>Answer requires several provisions</td>
-<td>Bounded top-k evidence, then deterministic assembly</td>
-<td>Top-1 would bury necessary context</td>
-</tr>
-<tr>
-<td>No credible evidence</td>
-<td>Typed gap or refusal</td>
-<td>Expanding until something looks plausible is unsafe</td>
-</tr>
-</tbody>
-</table></div>
 <p>There is no generation loop that reads page one, asks the model whether it is satisfied and keeps
 searching. The application decides the evidence budget before execution. This makes latency,
 population and failure behavior testable.</p>
@@ -400,7 +357,7 @@ architecture result, not a failed demo.</p>
     <a href="/find">Plain pages, without JavaScript</a></div>
   <div><b>Check the work</b>
     <a href="/how-it-works">How it works</a><a href="/coverage">What Lex holds, and lacks</a>
-    <a href="/decisions">Decisions, and what they cost</a>
+    <a href="/built/decisions">Decisions, and what they cost</a>
     <a href="/benchmarks">Benchmarks</a><a href="/verify">Verify it yourself</a>
     <a href="/built">Architecture dossier</a>
     <a href="/about">About</a></div>

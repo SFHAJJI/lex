@@ -231,7 +231,6 @@ HTTP 200
       <a href="/how-it-works">How it works</a>
       <a href="/coverage">Coverage</a>
       <a href="/built" aria-current="page">Architecture dossier</a>
-      <a href="/decisions">Decisions and trade-offs</a>
       <a href="/benchmarks">Benchmarks</a>
       <a href="/verify">Verify artifacts</a>
       <a href="/about">About</a>
@@ -243,7 +242,7 @@ HTTP 200
 <main>
 <h1>Legal model</h1>
 <p class="sub">Identity, legal time, observation time and honest gaps.</p>
-<nav class="dossier-tabs" aria-label="Architecture dossier"><a href="/built">Overview</a><a href="/built/model" aria-current="page">Legal model</a><a href="/built/data">Data authority</a><a href="/built/retrieval">Retrieval</a><a href="/built/assistant">Assistant</a><a href="/built/release">Release</a><a href="/built/decisions">Trade-offs</a><a href="/built/incidents">Incidents</a><a href="/built/limits">Limits and scale</a><a class="dossier-print" href="/architecture/dossier">Complete dossier</a></nav><article class="architecture-dossier"><p>The core modeling choice is to keep a law, a dated legal state, a language expression and the
+<nav class="dossier-tabs" aria-label="Architecture dossier"><a href="/built">Overview</a><a href="/built/model" aria-current="page">Legal model</a><a href="/built/data">Data authority</a><a href="/built/retrieval">Retrieval</a><a href="/built/assistant">Assistant</a><a href="/built/release">Release</a><a href="/built/decisions">Trade-offs</a><a href="/built/incidents">Incidents</a><a href="/built/limits">Limits and scale</a><a href="/built/repositories">Repositories</a><a class="dossier-print" href="/architecture/dossier">Complete dossier</a></nav><article class="architecture-dossier"><p>The core modeling choice is to keep a law, a dated legal state, a language expression and the
 publisher file as different things. Collapsing them into one document would make a date lookup
 ambiguous and make provenance impossible to state precisely.</p>
 <p><img src="/built/diagrams/legal-model.svg" alt="A legal work contains dated consolidations, language expressions and publisher manifestations, with separate applicability and observation clocks." /></p>
@@ -334,7 +333,7 @@ applicability or legal wording.</p>
     <a href="/find">Plain pages, without JavaScript</a></div>
   <div><b>Check the work</b>
     <a href="/how-it-works">How it works</a><a href="/coverage">What Lex holds, and lacks</a>
-    <a href="/decisions">Decisions, and what they cost</a>
+    <a href="/built/decisions">Decisions, and what they cost</a>
     <a href="/benchmarks">Benchmarks</a><a href="/verify">Verify it yourself</a>
     <a href="/built">Architecture dossier</a>
     <a href="/about">About</a></div>

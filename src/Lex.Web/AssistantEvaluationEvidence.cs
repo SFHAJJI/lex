@@ -36,6 +36,16 @@ internal sealed record AssistantEvaluationRelease(
     bool Prerelease,
     IReadOnlyDictionary<string, AssistantEvaluationReleaseAsset> Assets);
 
+/// <summary>One frozen case as the signed report scored it: how many repetitions ran, how many
+/// passed the deterministic contract, and the relevance score each repetition received. Relevance
+/// is reported and gates nothing.</summary>
+internal sealed record AssistantEvaluationCaseOutcome(
+    string CaseId,
+    string Question,
+    int Repetitions,
+    int Passed,
+    IReadOnlyList<int> RelevanceScores);
+
 internal sealed record VerifiedAssistantEvaluationEvidence(
     string Repository,
     string ReleaseTag,
@@ -70,7 +80,8 @@ internal sealed record VerifiedAssistantEvaluationEvidence(
     decimal MaximumCostEur,
     double FirstOperationP95Milliseconds,
     double TotalP99Milliseconds,
-    double BrowserP95Milliseconds)
+    double BrowserP95Milliseconds,
+    IReadOnlyList<AssistantEvaluationCaseOutcome> CaseOutcomes)
 {
     internal bool Matches(AssistantEvaluationRuntimeIdentity runtime) =>
         Fixed(CodeCommit, runtime.CodeCommit)
@@ -207,7 +218,7 @@ internal static class AssistantEvaluationEvidenceVerifier
             if (repetitions is < 1 or > 10)
                 throw new InvalidDataException(
                     "Assistant evaluation repetition count is outside display bounds.");
-            return (Id: id, Repetitions: repetitions);
+            return (Id: id, Question: BoundedString(item, 500, "question"), Repetitions: repetitions);
         }).ToArray();
         var repetitionCount = cases.Sum(item => item.Repetitions);
         if (cases.Length is < 1 or > 100 || repetitionCount > 500
@@ -333,6 +344,32 @@ internal static class AssistantEvaluationEvidenceVerifier
             throw new InvalidDataException(
                 "Signed assistant evaluation manifest identity is invalid.");
 
+        // Per-case outcomes come from the signed report and are matched to the signed catalog by id,
+        // so the page can show which questions were asked and how each one scored rather than only a
+        // verdict a reader has to take on trust. A result naming a case the catalog does not contain,
+        // or a case the report never ran, is a mismatch rather than a row to render.
+        var outcomes = RequiredArray(report, "results").EnumerateArray().Select(item => (
+            CaseId: BoundedString(item, 100, "case_id"),
+            Passed: RequiredBoolean(item, "passed"),
+            Relevance: RequiredInt(Path(item, "relevance"), "score")))
+            .ToArray();
+        if (outcomes.Any(item => item.Relevance is < 1 or > 5))
+            throw new InvalidDataException("Assistant evaluation relevance score is out of range.");
+        var byCase = outcomes.GroupBy(item => item.CaseId, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
+        if (outcomes.Length != repetitionCount
+            || byCase.Count != cases.Length
+            || cases.Any(item => !byCase.TryGetValue(item.Id, out var rows)
+                || rows.Length != item.Repetitions))
+            throw new InvalidDataException(
+                "Signed assistant evaluation results do not cover the signed catalog exactly.");
+        var caseOutcomes = cases.Select(item => new AssistantEvaluationCaseOutcome(
+            item.Id,
+            item.Question,
+            item.Repetitions,
+            byCase[item.Id].Count(row => row.Passed),
+            [.. byCase[item.Id].Select(row => row.Relevance)])).ToArray();
+
         return new(release.Repository, release.Tag, release.HtmlUrl,
             release.Assets[ReportFile].BrowserDownloadUrl,
             release.Assets[ManifestFile].BrowserDownloadUrl,
@@ -342,7 +379,7 @@ internal static class AssistantEvaluationEvidenceVerifier
             candidateModelName, candidateModelVersion, graderDeployment, graderModelName,
             graderModelVersion, indexIds, cases.Length, repetitionCount, candidateInput,
             candidateOutput, graderInput, graderOutput, totalCost, maximumCost, firstP95,
-            totalP99, browserP95);
+            totalP99, browserP95, caseOutcomes);
     }
 
     private static void VerifyAssets(

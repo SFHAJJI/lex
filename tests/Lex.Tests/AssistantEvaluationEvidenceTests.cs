@@ -235,8 +235,8 @@ public sealed class AssistantEvaluationEvidenceTests : IDisposable
               "frozen_at":"2026-08-15T10:00:00Z",
               "budget":{"maximum_cost_eur":10},
               "cases":[
-                {"id":"one","repetitions":2},
-                {"id":"two","repetitions":1}
+                {"id":"one","question":"What did Article 6 say on 1 January 2021?","repetitions":2},
+                {"id":"two","question":"Which laws changed in 2024?","repetitions":1}
               ]
             }
             """)!.AsObject();
@@ -327,9 +327,9 @@ public sealed class AssistantEvaluationEvidenceTests : IDisposable
                 "total":{"p50_milliseconds":360,"p95_milliseconds":420,"p99_milliseconds":420}
               },
               "results":[
-                {"case_id":"one","repetition":1,"passed":true,"failures":[],"candidate_usage":{"input_tokens":300,"output_tokens":30},"grader_usage":{"input_tokens":200,"output_tokens":20},"timings":{"submit_to_first_operation_result_milliseconds":180,"total_milliseconds":360}},
-                {"case_id":"one","repetition":2,"passed":true,"failures":[],"candidate_usage":{"input_tokens":300,"output_tokens":30},"grader_usage":{"input_tokens":200,"output_tokens":20},"timings":{"submit_to_first_operation_result_milliseconds":210,"total_milliseconds":420}},
-                {"case_id":"two","repetition":1,"passed":true,"failures":[],"candidate_usage":{"input_tokens":400,"output_tokens":40},"grader_usage":{"input_tokens":200,"output_tokens":20},"timings":{"submit_to_first_operation_result_milliseconds":170,"total_milliseconds":350}}
+                {"case_id":"one","repetition":1,"passed":true,"relevance":{"score":5},"failures":[],"candidate_usage":{"input_tokens":300,"output_tokens":30},"grader_usage":{"input_tokens":200,"output_tokens":20},"timings":{"submit_to_first_operation_result_milliseconds":180,"total_milliseconds":360}},
+                {"case_id":"one","repetition":2,"passed":true,"relevance":{"score":4},"failures":[],"candidate_usage":{"input_tokens":300,"output_tokens":30},"grader_usage":{"input_tokens":200,"output_tokens":20},"timings":{"submit_to_first_operation_result_milliseconds":210,"total_milliseconds":420}},
+                {"case_id":"two","repetition":1,"passed":true,"relevance":{"score":5},"failures":[],"candidate_usage":{"input_tokens":400,"output_tokens":40},"grader_usage":{"input_tokens":200,"output_tokens":20},"timings":{"submit_to_first_operation_result_milliseconds":170,"total_milliseconds":350}}
               ],
               "gate_failures":[],
               "activation_gate_passed":true

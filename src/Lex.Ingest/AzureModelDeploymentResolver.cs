@@ -378,14 +378,27 @@ public sealed class AzureModelDeploymentResolver
         return evidence with { EvidenceSha256 = TargetEvidenceSha256(evidence) };
     }
 
-    internal static string TargetEvidenceSha256(AssistantCandidateRuntimeEvidence evidence)
+    public static string TargetEvidenceSha256(AssistantCandidateRuntimeEvidence evidence)
     {
+        // A scale-stripping format, because Azure Resource Manager renders the same CPU
+        // allocation with different trailing zeros between responses. One evaluation recorded
+        // "cpu": 1.000 and the next request for the identical revision returned "cpu": 1.0, which
+        // produced two digests for one unchanged revision and made the signed report permanently
+        // unpublishable. decimal equality ignores scale, so CpuCores itself compared equal and only
+        // this derived string disagreed, which is why the failure surfaced as wrong evidence.
+        // Every number is formatted invariantly, not just the decimal. string.Join calls ToString()
+        // with the ambient culture, and a culture with non-ASCII digits renders the same replica
+        // count and byte size differently, which is the same defect one field over: an unchanged
+        // revision hashing to two identities depending on where the verifier happens to run.
+        var invariant = System.Globalization.CultureInfo.InvariantCulture;
         var canonical = string.Join('\n',
             evidence.ResourceId.TrimEnd('/').ToLowerInvariant(), evidence.RevisionName,
             evidence.RevisionFqdn.ToLowerInvariant(), evidence.Image,
-            evidence.CpuCores.ToString(System.Globalization.CultureInfo.InvariantCulture),
-            evidence.MemoryLimitBytes, evidence.MinimumReplicas, evidence.MaximumReplicas,
-            evidence.TrafficWeight,
+            evidence.CpuCores.ToString("0.############################", invariant),
+            evidence.MemoryLimitBytes.ToString(invariant),
+            evidence.MinimumReplicas.ToString(invariant),
+            evidence.MaximumReplicas.ToString(invariant),
+            evidence.TrafficWeight.ToString(invariant),
             evidence.CodeCommit, evidence.ArtifactManifestSet,
             evidence.CandidateModelHost.ToLowerInvariant(), evidence.CandidateDeployment);
         return Convert.ToHexStringLower(

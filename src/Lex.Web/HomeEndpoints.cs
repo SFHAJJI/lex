@@ -77,7 +77,6 @@ public static class HomeEndpoints
             var doors = new (string Publisher, string Work, string Label)[]
             {
                 ("lu-legilux", "constitution-1868-10-17-n1", "The Constitution"),
-                ("lu-legilux", "loi-2006-07-31-n2", "Code du travail"),
                 ("eu-eurlex", "32016R0679", "GDPR"),
                 ("eu-eurlex", "32013R0575", "Capital Requirements Regulation"),
             };

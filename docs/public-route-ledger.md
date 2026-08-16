@@ -31,13 +31,14 @@ Dynamic publisher routes accept only mounted publisher IDs and validated work/da
 | GET | `/built/decisions` | Explainers | evaluator | canonical | HTML | public index | curated trade-offs link to the complete decision register |
 | GET | `/built/incidents` | Explainers | evaluator | canonical | HTML | public index | incidents connect root causes to permanent guards |
 | GET | `/built/limits` | Explainers | evaluator | canonical | HTML | public index | current limits and observable scaling triggers |
+| GET | `/built/repositories` | Explainers | evaluator | canonical | HTML | public index | what each published repository holds and why authority is split |
 | GET | `/built/diagrams/{name}.svg` | Explainers | evaluator | owned allowlist | SVG | machine | accessible static diagrams; unknown names 404 |
 | GET | `/about` | Explainers | reader, evaluator | canonical | HTML | public index | project and author context; reachable from navigation |
 | GET | `/stories` | Explainers | reader | canonical | HTML | public index | examples avoid applicability and advice claims |
 | GET | `/architecture` | Explainers | evaluator | permanent redirect to `/built` | redirect | no index | old backlinks reach the canonical dossier in one hop |
 | GET | `/architecture/next` | Explainers | evaluator | permanent redirect to `/built/limits` | redirect | no index | old roadmap backlinks reach the limits and delivery registry in one hop |
 | GET | `/architecture/dossier` | Explainers | evaluator | self-canonical print utility | HTML | noindex, follow | print view reuses the nine canonical dossier sources |
-| GET | `/decisions` | Explainers | evaluator | canonical | HTML | public index | accepted and rejected alternatives |
+| GET | `/decisions` | Explainers | evaluator | permanent redirect to `/built/decisions` | redirect | no index | one decisions page, reached from either address |
 | GET | `/benchmarks` | Explainers | evaluator | canonical | HTML | public index | compatible reports or explicit not measured state |
 | GET | `/benchmarks/latest.json` | Explainers | machine, evaluator | canonical artifact | JSON | machine | complete compatible collection set; malformed report fails closed |
 | GET | `/benchmarks/cases.json` | Explainers | machine, evaluator | canonical artifact | JSON | machine | frozen cases with declared digest |

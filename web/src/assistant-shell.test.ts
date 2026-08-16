@@ -39,8 +39,10 @@ test("navigating from an assistant reply never retains stale publisher text", ()
   } }), undefined);
 });
 
-test("first visit is closed and only valid tab-scoped state is restored", () => {
-  assert.deepEqual(parseAssistantPanelState(null), { open: false, minimized: false });
+test("first visit opens and only valid tab-scoped state is restored", () => {
+  // Absent state means the reader has never chosen, and the assistant is the product, so it
+  // opens. Unparseable state is not the same thing: it could be tampering, so it stays closed.
+  assert.deepEqual(parseAssistantPanelState(null), { open: true, minimized: false });
   assert.deepEqual(parseAssistantPanelState("garbage"), { open: false, minimized: false });
   assert.deepEqual(parseAssistantPanelState('{"open":true,"minimized":false}'),
     { open: true, minimized: false });
