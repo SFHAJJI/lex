@@ -160,7 +160,7 @@ jobs:
         shell: bash
         run: |
           set -eu
-          workspace=$(az_retry az monitor app-insights component show -g "$RESOURCE_GROUP" \
+          workspace=$(az monitor app-insights component show -g "$RESOURCE_GROUP" \
             -a "$APPLICATION_INSIGHTS_NAME" \
             --query workspaceResourceId -o tsv)
           [ -n "$workspace" ] || { echo "::error::Application Insights has no workspace"; exit 1; }
@@ -866,8 +866,11 @@ jobs:
             [ "$candidate_exists" = false ] || expected=$(printf '%s\n%s\n' \
               "$prior_rollback" "$candidate" | sort | paste -sd, -)
             for attempt in $(seq 1 24); do
-              actual=$(az_retry az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
-                --all --query "[?properties.active==\`false\`].name" -o tsv 2>/dev/null \
+              # Deliberately not az_retry: this loop already retries and verifies the end state, and
+              # az-retry.sh's own header warns that nesting its exponential backoff inside such a
+              # loop turns a five second race into minutes.
+              actual=$({ az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+                --all --query "[?properties.active==\`false\`].name" -o tsv 2>/dev/null || true; } \
                 | sort | paste -sd, -)
               [ "$actual" = "$expected" ] && return 0
               sleep 5

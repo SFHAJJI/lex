@@ -2050,18 +2050,28 @@ public sealed class AskOperationControllerTests : IDisposable
             ["Que prévoyait la loi du 21 septembre 2006 sur le bail à usage d'habitation ?",
              "lu-legilux:loi_2006_09_21"]));
 
+    // The operation here is a stand-in for "a legal operation the composer runs over", and it is a
+    // comparison rather than the inventory it used to be only because an inventory plan no longer
+    // reaches the composer at all. What is under test is unchanged: the language the request was
+    // asked in reaches the synthesizer and comes back in the refusal.
     [Fact]
     public async Task A_french_asker_gets_a_french_refusal_from_the_synthesizer()
     {
         var synthesizer = new LocaleRecordingSynthesizer();
         var service = new AskService(_core, new StaticPlanner("en", new JsonArray(new JsonObject
         {
-            ["tool"] = "coverage",
-            ["arguments"] = new JsonObject(),
+            ["tool"] = "diff",
+            ["arguments"] = new JsonObject
+            {
+                ["work_query"] = "CRR",
+                ["article_number"] = "92",
+                ["from_date"] = "2020-01-01",
+                ["to_date"] = "2024-12-31",
+            },
         }), synthesis: true), synthesizer);
 
         var response = await service.AskAsync(
-            History("Que couvre exactement le corpus que vous détenez ?"),
+            History("Comparez l'article 92 du CRR entre 2020 et 2024 et résumez les différences."),
             Guid.NewGuid().ToString(), "law.test", CancellationToken.None);
 
         Assert.Equal("fr", response.Body["trace"]?[0]?["locale"]?.GetValue<string>());
@@ -2154,6 +2164,70 @@ public sealed class AskOperationControllerTests : IDisposable
         Assert.Equal(150, response.Body["model_usage"]?["total_tokens"]?.GetValue<long>());
     }
 
+    // The flag is a raw model boolean, so the same question can arrive with it set and unset on
+    // two consecutive draws, and a coverage lookup did in fact do exactly that: no prose on one
+    // run, a composer and sixteen times the output tokens on the next. The reconciliation is
+    // typed on purpose. An inventory operation answers "what does Lex hold", and the whole of
+    // that answer is the typed inventory the reader is already looking at, so prose over it can
+    // only restate a list. Deciding it from the plan rather than from the user's own words is not
+    // a convenience: reading the raw turn to choose whether to compose would hand quoted attacker
+    // text a lever in precisely the injection cases whose whole point is that it has none.
+    [Fact]
+    public async Task An_inventory_lookup_never_composes_however_the_planner_set_the_flag()
+    {
+        var synthesizer = new RecordingSynthesizer();
+        var service = new AskService(_core, new StaticPlanner("en", new JsonArray(new JsonObject
+        {
+            ["tool"] = "coverage",
+            ["arguments"] = new JsonObject(),
+        }), synthesis: true), synthesizer);
+
+        var response = await service.AskAsync(
+            History("What legal sources and time ranges are mounted in Lex?"),
+            Guid.NewGuid().ToString(), "law.test", CancellationToken.None);
+
+        Assert.Equal(0, synthesizer.Calls);
+        Assert.Null(response.Body["timing"]?["synthesis_ms"]);
+        // The typed answer is untouched: the reconciliation removes the prose, not the inventory.
+        Assert.NotNull(response.Body["ui"]?["coverage"]);
+    }
+
+    // The rule is about the plan, not about a single operation in it. A reader who asked for one
+    // law's text alongside the inventory asked for something a synthesis can describe, so the
+    // presence of an inventory operation must not silently cancel the prose that was requested.
+    [Fact]
+    public async Task An_inventory_beside_authoritative_text_still_composes()
+    {
+        var synthesizer = new RecordingSynthesizer();
+        var service = new AskService(_core, new StaticPlanner("en", new JsonArray(
+            new JsonObject
+            {
+                ["tool"] = "coverage",
+                ["arguments"] = new JsonObject(),
+            },
+            new JsonObject
+            {
+                ["tool"] = "diff",
+                ["arguments"] = new JsonObject
+                {
+                    ["work_query"] = "CRR",
+                    ["article_number"] = "92",
+                    ["from_date"] = "2020-01-01",
+                    ["to_date"] = "2024-12-31",
+                },
+            }), synthesis: true), synthesizer);
+
+        var response = await service.AskAsync(
+            History("Show coverage, compare Article 92 of CRR and summarize the differences."),
+            Guid.NewGuid().ToString(), "law.test", CancellationToken.None);
+
+        Assert.Equal(1, synthesizer.Calls);
+        Assert.NotNull(response.Body["timing"]?["synthesis_ms"]);
+    }
+
+    // As above, a comparison stands in for the inventory this used to plan: the ordering under
+    // test is that the typed result reaches the reader before the optional prose starts, and only
+    // a plan the composer may run over can show that ordering at all.
     [Fact]
     public async Task Stream_reports_each_typed_operation_before_optional_synthesis()
     {
@@ -2162,8 +2236,14 @@ public sealed class AskOperationControllerTests : IDisposable
         JsonObject? streamedOperation = null;
         var service = new AskService(_core, new StaticPlanner("en", new JsonArray(new JsonObject
         {
-            ["tool"] = "coverage",
-            ["arguments"] = new JsonObject(),
+            ["tool"] = "diff",
+            ["arguments"] = new JsonObject
+            {
+                ["work_query"] = "CRR",
+                ["article_number"] = "92",
+                ["from_date"] = "2020-01-01",
+                ["to_date"] = "2024-12-31",
+            },
         }), synthesis: true), synthesizer);
         var progress = new AskService.AskProgressCallbacks(
             OperationResult: (operation, _) =>
@@ -2179,13 +2259,14 @@ public sealed class AskOperationControllerTests : IDisposable
             });
 
         var response = await service.AskAsync(
-            History("Show coverage and summarize it."), Guid.NewGuid().ToString(),
+            History("Compare Article 92 of CRR and summarize the differences."),
+            Guid.NewGuid().ToString(),
             "law.test", CancellationToken.None, progress, "stream-request");
 
         Assert.Equal(200, response.Status);
         Assert.Equal("stream-request:op-1", streamedOperation?["operation_id"]?.GetValue<string>());
         Assert.Equal("succeeded", streamedOperation?["legal_outcome"]?.GetValue<string>());
-        Assert.NotNull(streamedOperation?["ui"]?["coverage"]);
+        Assert.NotNull(streamedOperation?["ui"]?["diff"]);
         Assert.Equal(
             ["operation_result", "synthesis_started", "synthesizer", "synthesis_completed"], order);
     }

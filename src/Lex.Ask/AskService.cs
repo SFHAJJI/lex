@@ -843,6 +843,7 @@ public sealed class AskService
     private static OperationPlan AuthorizePlanIntent(
         OperationPlan plan, string rawUserQuery)
     {
+        plan = AuthorizeSynthesisIntent(plan);
         var query = Lex.Index.WorkSearch.Normalize(rawUserQuery);
         if (IsWorkspaceNavigationOnly(query)
             && plan.Operations.Any(operation => operation.Tool == "as_of"))
@@ -880,6 +881,46 @@ public sealed class AskService
         combined = combined.WithRepair("changes_in_period.jurisdiction collapsed");
         return OperationPlan.Create(
             plan.RequestId, plan.Locale, [combined], plan.SynthesisRequested);
+    }
+
+    /// <summary>The requested synthesis, reconciled against the frozen plan instead of trusted.
+    ///
+    /// <para>synthesis is a raw model boolean, and two draws on one question have already
+    /// disagreed about it: the same coverage lookup served 294 output tokens with no prose on one
+    /// run and 4,973 with a composer on the next. The flag is a claim about what the reader asked
+    /// for, so it is checked against the only typed record of what the reader asked for that an
+    /// injected instruction cannot rewrite, which is the plan itself.</para>
+    ///
+    /// <para>An inventory operation answers what Lex holds rather than what a law says. coverage,
+    /// cited_by and in_force_on return closed typed lists that the deterministic reply and the
+    /// result card already render in full, and they carry no publisher text a composer could
+    /// describe, so prose over them can only restate a list the reader is looking at. Only a plan
+    /// whose legal operations are ALL inventories is reconciled: one text, comparison, timeline,
+    /// ranking or search beside it is something a synthesis can genuinely describe, and prose the
+    /// reader asked for there still runs.</para>
+    ///
+    /// <para>Decided from the frozen typed plan, which is the resolved subject and the validated
+    /// operations, and never from the raw turn. The user's prose is what quoted attacker content
+    /// controls when it is restored into a transcript, and the injection cases
+    /// exist to prove that content cannot move this authority; reading the turn to decide whether
+    /// to compose would hand it back the lever those cases deny it. Every later plan rewrite
+    /// carries SynthesisRequested forward unchanged and none of them raises it, so reconciling
+    /// once here settles it for the request.</para></summary>
+    private static OperationPlan AuthorizeSynthesisIntent(OperationPlan plan)
+    {
+        if (!plan.SynthesisRequested) return plan;
+        var legal = plan.Operations
+            .Where(operation => operation.Disposition is null).ToArray();
+        // Length 0 cannot reach here: OperationPlan.Create already refuses a synthesis with no
+        // authoritative operation under it. Written out anyway so the All below is never a
+        // vacuous true if that rule ever moves.
+        if (legal.Length == 0
+            || legal.Any(operation => operation.ResultClass != LegalResultClass.Inventory))
+            return plan;
+        Diagnostic("planner_synthesis_declined",
+            string.Join(' ', legal.Select(operation => operation.Tool)));
+        return OperationPlan.Create(
+            plan.RequestId, plan.Locale, plan.Operations, synthesisRequested: false);
     }
 
     private static bool IsWorkspaceNavigationOnly(string normalized)

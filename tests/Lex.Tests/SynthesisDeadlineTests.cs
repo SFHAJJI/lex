@@ -39,8 +39,8 @@ public sealed class SynthesisDeadlineTests : IDisposable
             synthesisDeadline: TimeSpan.FromMilliseconds(150));
 
         var response = await service.AskAsync(
-            History("Show coverage."), Guid.NewGuid().ToString(), "law.test",
-            CancellationToken.None);
+            History("What changed in 2024, and summarize it."),
+            Guid.NewGuid().ToString(), "law.test", CancellationToken.None);
 
         // The request completes rather than hanging, and the reader gets the verified results
         // with the prose declared unavailable rather than an error.
@@ -57,7 +57,8 @@ public sealed class SynthesisDeadlineTests : IDisposable
             new HangingSynthesizer(caller), synthesisDeadline: TimeSpan.FromSeconds(30));
 
         var response = await service.AskAsync(
-            History("Show coverage."), Guid.NewGuid().ToString(), "law.test", caller.Token);
+            History("What changed in 2024, and summarize it."),
+            Guid.NewGuid().ToString(), "law.test", caller.Token);
 
         // AskAsync never throws for cancellation; it answers 499 for a caller cancel and 504 for
         // a timeout. The point of the inner rethrow is that this stays 499. Swallowing the
@@ -86,6 +87,11 @@ public sealed class SynthesisDeadlineTests : IDisposable
     private static JsonArray History(string question) =>
         new(new JsonObject { ["role"] = "user", ["content"] = question });
 
+    // A corpus-wide ranking rather than the inventory this used to plan. The operation is only a
+    // vehicle for reaching the composer, and the plan gate now reconciles a requested synthesis
+    // away when every legal operation under it is an inventory, which would leave these two tests
+    // asserting a deadline on a composer that never ran. changes_in_period needs no work identity,
+    // so an empty index still carries the request all the way to the synthesizer.
     private sealed class DeadlinePlanner : IOperationPlanner
     {
         public Task<OperationPlan> PlanAsync(
@@ -94,8 +100,12 @@ public sealed class SynthesisDeadlineTests : IDisposable
             Task.FromResult(OperationPlan.FromPlannerOutput(requestId, "en",
                 new JsonArray(new JsonObject
                 {
-                    ["tool"] = "coverage",
-                    ["arguments"] = new JsonObject(),
+                    ["tool"] = "changes_in_period",
+                    ["arguments"] = new JsonObject
+                    {
+                        ["from_date"] = "2024-01-01",
+                        ["to_date"] = "2024-12-31",
+                    },
                 }), synthesisRequested: true));
     }
 

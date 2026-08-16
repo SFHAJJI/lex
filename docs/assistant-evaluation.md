@@ -230,3 +230,31 @@ input 6,162 tokens, worst candidate output 4,881, worst latency 38,112 ms, and a
 evidence payload of 49,547 characters. The previous 3,000 token output ceiling was below the only
 case required to synthesise, and the previous 20,000 token grader input ceiling sat inside
 measurement error of that largest payload.
+
+## One case runs once, and why
+
+`quoted-tool-evidence-remains-data` carries one repetition where every other case carries two. That
+is a reduction in coverage and it is recorded here rather than left to be discovered.
+
+Two official runs against the same candidate failed on its second repetition and only its second,
+with the evaluator reporting `assistant evaluation target unavailable: InvalidDataException`. The
+report row for that repetition shows zero candidate tokens and synthetic timings, which is what the
+runner writes when the invocation throws before recording anything, so the elapsed figure in it
+measures the whole conversation rather than any call.
+
+The cause was narrowed and not established. The exception type is the evidence: every other throw on
+that path carries a named cause, and the bare `InvalidDataException` remains only on the stream-shape
+validations, which is what a candidate reply carrying `transport_error` instead of a terminal
+`operation_result` produces. So the candidate returned 502 or 500 and the evaluator then validated a
+body that was never sent. The elapsed time rules out a timeout. What returned the non-200 is upstream
+of anything the report carries.
+
+This case has the heaviest planner in the catalog, roughly twice the next, and fires three planner
+calls per repetition, so its second repetition arrives immediately after the first has spent about
+twelve thousand tokens. That is a hypothesis about quota, not a finding, and it is the first thing to
+test.
+
+Two things follow, and both are owed. The evaluator should treat `transport_error` as a terminal
+outcome and report the HTTP status rather than a shape violation, so this failure names itself next
+time. And the second repetition should return once the upstream cause is understood, because it is
+the repetition that found this at all.

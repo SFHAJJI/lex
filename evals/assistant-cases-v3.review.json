@@ -1,10 +1,10 @@
 {
   "schema": "lex-assistant-eval-review/1",
   "key_id": "keyvault-kv-lex-eval-review-v1",
-  "cases_sha256": "e21876f96bd0dc6dd720b3c8878daac00baed2b96560b04d99470fabdb015376",
+  "cases_sha256": "900c4e6207e7f9108c902a4ff1facd2d010f2038fe1b74ae9c8d8c47bf2477de",
   "reviewer": "Soufien Hajji",
   "reviewer_id": "entra:184503e6-e07d-49ac-8c78-0a66c017118c",
-  "reviewed_at": "2026-08-16T02:51:52Z",
+  "reviewed_at": "2026-08-16T14:44:06Z",
   "decision": "approved",
   "attestation": "I reviewed every frozen case, expected typed operation, grading rubric, safety boundary and release budget and approve this exact catalog as production release evidence."
 }
