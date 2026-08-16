@@ -140,6 +140,25 @@ public sealed class OperationPolicyTests
     }
 
     [Fact]
+    public void Deterministic_search_facts_are_fully_localized_in_french()
+    {
+        var operation = RequestedOperation.CreatePlanned(
+            "req:op-1", 0, "search", new JsonObject { ["query"] = "délégué" });
+        var result = new OperationExecution(operation).Complete(McpStatus.Ok, new JsonObject());
+        var fact = new SearchFact(
+            "eu-eurlex:32016r0679", "eu-eurlex:32016r0679:2018-05-25", "art_39",
+            "Article 39", "Missions du délégué", "Le délégué informe le responsable.",
+            "Règlement général sur la protection des données", "2018-05-25", null, null);
+
+        var rendered = OperationAnswerPolicy.Render(
+            "fr", [result], [new UiEffect(Workspace: new WorkspaceView(
+                Query: "délégué", Results: [fact]))]);
+
+        Assert.Contains(" dans Règlement général", rendered, StringComparison.Ordinal);
+        Assert.DoesNotContain(" in ", rendered, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Assistant_operation_bounds_are_a_subset_of_the_public_mcp_contract()
     {
         var fifty = string.Join(',', Enumerable.Range(1, 50).Select(index => $"a{index}"));

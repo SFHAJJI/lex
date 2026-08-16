@@ -2188,7 +2188,7 @@ public sealed class AskService
         | System.Text.RegularExpressions.RegexOptions.Compiled);
 
     private static readonly System.Text.RegularExpressions.Regex TimelineInstrumentTitle = new(
-        @"^(?:[\p{Lu}\p{Lt}\d][\p{L}\p{M}\d'’()-]*\s+)*(?:Regulation|Directive|Constitution|Law|Act|Code|Loi|Règlement|Reglement|Décret|Decret|Ordonnance|Convention|Treaty)$",
+        @"^[\p{Lu}\p{Lt}\d][\p{L}\p{M}\d'’()-]*\s+(?:Regulation|Directive|Constitution|Law|Act|Code|Loi|Règlement|Reglement|Décret|Decret|Ordonnance|Convention|Treaty)$",
         System.Text.RegularExpressions.RegexOptions.CultureInvariant
         | System.Text.RegularExpressions.RegexOptions.Compiled);
 
