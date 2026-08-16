@@ -2184,7 +2184,7 @@ public sealed class AskService
         foreach (System.Text.RegularExpressions.Match match in
                  System.Text.RegularExpressions.Regex.Matches(
                      query,
-                     @"(?<![\p{L}\p{N}_-])(?<lex>[a-z0-9-]+:[a-z0-9._-]+:\d{4}-\d{2}-\d{2})(?![\p{L}\p{N}_-])",
+                     @"(?<![\p{L}\p{N}_-])(?<lex>[a-z0-9-]+:[a-z0-9._-]+:\d{4}-\d{2}-\d{2}(?:--(?-i:[0-9a-f]{64}))?)(?![\p{L}\p{N}_-])",
                      System.Text.RegularExpressions.RegexOptions.IgnoreCase
                      | System.Text.RegularExpressions.RegexOptions.CultureInvariant))
         {

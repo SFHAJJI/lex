@@ -454,7 +454,15 @@ public static class ApiEndpoints
             using var ownedEvaluationUse = evaluationUse;
 
             var steps = 0;
+            var operationResults = 0;
             double? firstOperationEmittedMilliseconds = null;
+            async ValueTask ReportOperation(JsonNode operation)
+            {
+                Interlocked.Increment(ref operationResults);
+                firstOperationEmittedMilliseconds ??= streamWatch.Elapsed.TotalMilliseconds;
+                claim.ReportOperation(operation.ToJsonString());
+                await Send("operation_result", operation);
+            }
             var progress = new AskService.AskProgressCallbacks(
                 Step: (step, _) =>
                 {
@@ -468,12 +476,7 @@ public static class ApiEndpoints
                         ["anchor"] = step.Anchor,
                     }));
                 },
-                OperationResult: async (operation, _) =>
-                {
-                    firstOperationEmittedMilliseconds ??= streamWatch.Elapsed.TotalMilliseconds;
-                    claim.ReportOperation(operation.ToJsonString());
-                    await Send("operation_result", operation);
-                },
+                OperationResult: (operation, _) => ReportOperation(operation),
                 Synthesis: (status, _) => new ValueTask(Send("synthesis", new JsonObject
                 {
                     ["status"] = status,
@@ -527,6 +530,11 @@ public static class ApiEndpoints
                 return;
             }
             var (status, bodyJson) = outcome;
+            if (status == 200 && Volatile.Read(ref operationResults) == 0
+                && bodyJson["operations"] is JsonArray terminalOperations)
+                foreach (var operation in terminalOperations)
+                    if (operation is not null)
+                        await ReportOperation(operation.DeepClone());
 
             // Outcome-aware (the labor illusion REVERSES on a weak result): a transparent wait ending
             // in a poor answer scored below delivering that same answer instantly. A refusal therefore
@@ -534,6 +542,11 @@ public static class ApiEndpoints
             bodyJson["narrated"] = status == 200 && bodyJson["ui"]?["gap"] is null && steps > 0;
             if (bodyJson["timing"] is JsonObject timing)
                 timing["operation_result_emitted_ms"] = firstOperationEmittedMilliseconds;
+            else if (firstOperationEmittedMilliseconds is not null)
+                bodyJson["timing"] = new JsonObject
+                {
+                    ["operation_result_emitted_ms"] = firstOperationEmittedMilliseconds,
+                };
             var stored = status == 200 && bodyJson["error"] is null
                 && AssistantReply(bodyJson) is { } assistant
                 && ownedThread.Commit(
