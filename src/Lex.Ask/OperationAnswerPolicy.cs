@@ -250,10 +250,31 @@ internal static class OperationAnswerPolicy
             return fr
                 ? $"La chaîne de preuve de {verification.LexId} est affichée ci-dessous. Signature: {Signature(fr, verification.SignatureValid)}."
                 : $"The proof chain for {verification.LexId} is open below. Signature: {Signature(fr, verification.SignatureValid)}.";
+        if (effect.Workspace is { Results.Count: > 0 } search)
+        {
+            var facts = string.Join("; ", search.Results.Take(3).Select(SearchFactLine));
+            return fr
+                ? $"Lex a trouvé {search.Results.Count:n0} correspondance(s) bornée(s) dans des dispositions publiées : {facts}."
+                : $"Lex found {search.Results.Count:n0} bounded publisher-provision match(es): {facts}.";
+        }
         if (effect.Workspace is not null)
             return fr ? "Les résultats correspondants sont affichés dans l'espace de recherche."
                 : "The matching results are open in the search workspace.";
         return null;
+    }
+
+    private static string SearchFactLine(SearchFact fact)
+    {
+        var provision = fact.Number is { Length: > 0 } number ? number : fact.Anchor;
+        if (fact.Heading is { Length: > 0 } heading) provision += $" — {heading}";
+        var work = fact.Title is { Length: > 0 } title
+            ? $"{title} ({fact.Work})" : fact.Work;
+        if (fact.Snippet is not { Length: > 0 } snippet)
+            return $"{provision} in {work}";
+        snippet = string.Join(' ', snippet.Split(
+            (char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+        if (snippet.Length > 240) snippet = snippet[..239] + "…";
+        return $"{provision} in {work}: {snippet}";
     }
 
     /// <summary>The requested instant and the served one, whenever they differ. A version that

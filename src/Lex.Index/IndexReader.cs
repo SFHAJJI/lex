@@ -1191,6 +1191,7 @@ public sealed class LexIndexReader : IDisposable
         var role = RolePhrases.FirstOrDefault(item => ContainsPhrase(normalized, item.Phrase)).Role;
         residual = RemoveRoleIntent(residual, role);
         residual = RemoveConversationalReferences(residual);
+        residual = RemoveProfessionalConceptRequest(residual);
         var filtered = string.Join(' ', residual.Split(' ', StringSplitOptions.RemoveEmptyEntries)
             .Where(token => !ConversationalSearchWords.Contains(token)));
         if (article is null && role is null && filtered == normalized)
@@ -1238,6 +1239,7 @@ public sealed class LexIndexReader : IDisposable
         residual = RemoveArticleIntent(residual.Trim(), basic.ArticleNumber);
         residual = RemoveRoleIntent(residual, role);
         residual = RemoveConversationalReferences(residual);
+        residual = RemoveProfessionalConceptRequest(residual);
         residual = string.Join(' ', residual.Split(' ', StringSplitOptions.RemoveEmptyEntries)
             .Where(token => !ConversationalSearchWords.Contains(token)));
         var works = resolved.SelectMany(item => item.Candidates)
@@ -1251,6 +1253,27 @@ public sealed class LexIndexReader : IDisposable
             WorkResolutionStatus = ResolutionStatus(resolutions),
             WorkResolutions = resolutions,
         };
+    }
+
+    private static string RemoveProfessionalConceptRequest(string query)
+    {
+        var tokens = query.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (tokens.Length < 7 || tokens[0] != "find") return query;
+        var provision = Array.FindIndex(tokens, 1,
+            token => token is "provision" or "provisions");
+        if (provision < 0 || provision + 4 >= tokens.Length
+            || tokens[provision + 1] != "that"
+            || tokens[provision + 2] != "describe")
+            return query;
+        var relation = provision + 3;
+        if (tokens[relation] == "the") relation++;
+        if (relation + 1 >= tokens.Length
+            || tokens[relation] != "responsibilities"
+            || tokens[relation + 1] != "of")
+            return query;
+        var concept = tokens[(relation + 2)..];
+        if (concept.FirstOrDefault() is "a" or "an" or "the") concept = concept[1..];
+        return concept.Length == 0 ? query : string.Join(' ', concept);
     }
 
     /// <summary>

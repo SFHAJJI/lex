@@ -7,6 +7,7 @@ using System.Diagnostics;
 using Lex.Ingest;
 using Lex.Index;
 using Lex.Evaluation;
+using Lex.Ask;
 using Azure.Core;
 
 namespace Lex.Tests;
@@ -1098,6 +1099,77 @@ public sealed class AssistantEvaluationTests : IDisposable
         Assert.Null(evidence["untyped_root_state"]);
         Assert.InRange(handler.RequestBytes, 1,
             evaluationCase.Grading.MaximumInputTokens - 256);
+    }
+
+    [Fact]
+    public async Task Maximum_search_facts_fit_official_grader_evidence_without_truncation()
+    {
+        var hits = new JsonArray(Enumerable.Range(0, 12).Select(index => (JsonNode)new JsonObject
+        {
+            ["lex_id"] = $"eu-eurlex:32016r{index:D4}:2018-05-25",
+            ["anchor"] = $"art_{index}",
+            ["provision_num"] = $"Article {index}",
+            ["provision_heading"] = new string('h', 200),
+            ["snippet"] = new string('s', 300),
+            ["title"] = new string('t', 240),
+            ["valid_from"] = "2018-05-25",
+            ["source_uri"] = "https://publisher.example/" + new string('u', 300),
+            ["permalink"] = "https://lex.example/" + new string('p', 300),
+        }).ToArray());
+        var effect = UiMapper.From("search", new JsonObject { ["query"] = "officer" },
+            new JsonObject
+            {
+                ["envelope"] = new JsonObject { ["status"] = "ok" },
+                ["hits"] = hits,
+            });
+        var uiOptions = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+            DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
+        };
+        var ui = JsonNode.Parse(JsonSerializer.Serialize(effect, uiOptions));
+        var factsJson = JsonSerializer.Serialize(effect.Workspace!.Results, uiOptions);
+        Assert.InRange(factsJson.Length, 1_000, UiMapper.MaximumSearchFactsJsonCharacters);
+
+        var response = Response();
+        response["reply"] = new string('r', UiMapper.MaximumSearchFactsJsonCharacters);
+        response["operations"] = new JsonArray(new JsonObject
+        {
+            ["tool"] = "search",
+            ["result_class"] = "search",
+            ["legal_outcome"] = "succeeded",
+            ["transport_outcome"] = "completed",
+            ["effects"] = new JsonArray("workspace"),
+            ["ui"] = ui,
+        });
+        response["trace"] = new JsonArray(new JsonObject
+        {
+            ["phase"] = "primary",
+            ["tool"] = "search",
+            ["args"] = new JsonObject { ["query"] = new string('q', 1_000) },
+        });
+        var compact = new JsonObject
+        {
+            ["reply"] = response["reply"]!.DeepClone(),
+            ["operations"] = response["operations"]!.DeepClone(),
+            ["trace"] = response["trace"]!.DeepClone(),
+        }.ToJsonString();
+        var catalog = Catalog();
+        catalog["cases"]![0]!["grading"]!["mode"] = "llm";
+        catalog["cases"]![0]!["grading"]!["rubric"] = "Judge grounded evidence.";
+        catalog["cases"]![0]!["grading"]!["maximum_input_tokens"] = 20_000;
+        catalog["budget"]!["maximum_grader_input_tokens"] = 40_000;
+        var evaluationCase = Reviewed(catalog).Catalog.Cases[0];
+        var handler = new GraderHandler();
+        using var http = new HttpClient(handler);
+        var grader = new AssistantEvaluationHttpGrader(
+            http, "https://independent-grader.example", "test-key", "grader-release");
+
+        await grader.GradeAsync(evaluationCase, response, CancellationToken.None);
+
+        var prompt = handler.RequestBody!["messages"]?[1]?["content"]?.GetValue<string>() ?? "";
+        Assert.EndsWith(compact, prompt, StringComparison.Ordinal);
+        Assert.InRange(prompt.Length, 1, (20_000 - 2_048) / 2);
     }
 
     [Fact]

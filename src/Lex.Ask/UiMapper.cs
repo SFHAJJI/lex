@@ -1,4 +1,6 @@
+using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 using Lex.Mcp;
 
 namespace Lex.Ask;
@@ -14,6 +16,13 @@ namespace Lex.Ask;
 /// asked for to what the workspace does is a contract, and an untested contract is a promise.
 public static class UiMapper
 {
+    internal const int MaximumSearchFactsJsonCharacters = 1_800;
+    private static readonly JsonSerializerOptions SearchFactJson = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+    };
+
     public static UiEffect From(RequestedOperation operation, JsonNode result)
     {
         ArgumentNullException.ThrowIfNull(operation);
@@ -103,7 +112,7 @@ public static class UiMapper
                     ["total_works_in_force"] = 0,
                     ["works"] = new JsonArray(),
                 }, args),
-                "search" => Workspace(args),
+                "search" => SearchWorkspace(args, result),
                 _ => new UiEffect(),
             };
             return WithEvidence(empty, evidence);
@@ -139,7 +148,7 @@ public static class UiMapper
             "in_force_on" => InForce(node, args),
             "cited_by" => Cited(node),
             "provenance" => Verification(node),
-            "search" => Workspace(args),
+            "search" => SearchWorkspace(args, result),
             _ => new UiEffect(),
         };
         return WithEvidence(mapped, evidence);
@@ -478,6 +487,59 @@ public static class UiMapper
             ? new UiEffect()
             : new UiEffect(Workspace: view);
     }
+
+    private static UiEffect SearchWorkspace(JsonObject args, JsonNode result)
+    {
+        var workspace = Workspace(args).Workspace;
+        if (workspace is null) return new UiEffect();
+        var facts = new List<SearchFact>(8);
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var rows = result is JsonArray array
+            ? array.OfType<JsonObject>()
+            : result is JsonObject item ? [item] : [];
+        foreach (var hit in rows.SelectMany(row =>
+                     (row["hits"] as JsonArray)?.OfType<JsonObject>() ?? []))
+        {
+            if (facts.Count == 8) break;
+            var lexId = S(hit, "lex_id");
+            var anchor = S(hit, "anchor");
+            var work = WorkOf(lexId);
+            if (lexId is null || work is null || anchor is null
+                || lexId.Length > LegalOperationCatalog.MaximumStringLength
+                || anchor.Length > LegalOperationCatalog.MaximumAnchorLength)
+                continue;
+            var identity = $"{lexId}#{anchor}";
+            if (seen.Contains(identity)) continue;
+            var fact = new SearchFact(
+                Work: work,
+                LexId: lexId,
+                Anchor: anchor,
+                Number: Bounded(S(hit, "provision_num"), 64),
+                Heading: Bounded(S(hit, "provision_heading"), 160),
+                Snippet: Bounded(S(hit, "snippet"), 240),
+                Title: Bounded(S(hit, "title"), 200),
+                ValidFrom: Within(S(hit, "valid_from"), 10),
+                SourceUri: Within(S(hit, "source_uri"), 384),
+                Permalink: Within(S(hit, "permalink"), 384));
+            facts.Add(fact);
+            if (JsonSerializer.Serialize(facts, SearchFactJson).Length
+                > MaximumSearchFactsJsonCharacters)
+                facts.RemoveAt(facts.Count - 1);
+            else
+                seen.Add(identity);
+        }
+        return new UiEffect(Workspace: workspace with { Results = facts });
+    }
+
+    private static string? Bounded(string? value, int maximum) => value switch
+    {
+        null => null,
+        { Length: var length } when length <= maximum => value,
+        _ => value[..(maximum - 1)] + "…",
+    };
+
+    private static string? Within(string? value, int maximum) =>
+        value is { Length: > 0 } && value.Length <= maximum ? value : null;
 
     private static UiEffect Cited(JsonObject o)
     {

@@ -257,7 +257,20 @@ public sealed record WorkspaceView(
     IReadOnlyList<EvidenceContext>? Evidence = null,
     string? Work = null,
     string? Date = null,
-    string? Anchor = null);
+    string? Anchor = null,
+    IReadOnlyList<SearchFact>? Results = null);
+
+public sealed record SearchFact(
+    string Work,
+    string LexId,
+    string Anchor,
+    string? Number,
+    string? Heading,
+    string? Snippet,
+    string? Title,
+    string? ValidFrom,
+    string? SourceUri,
+    string? Permalink);
 
 public sealed record InForceRow(string Work, string? Title, string? Kind, string ValidFrom,
                                 string? Permalink, string? Jurisdiction = null,

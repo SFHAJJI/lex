@@ -23,6 +23,8 @@ public sealed class AskOperationControllerTests : IDisposable
             Doc("2024-01-01", null, "new capital requirement"), "CRR");
         var gdpr = WithShortTitle(Doc("32016r0679", "2018-05-25", null,
             "lawful processing of personal data"), "GDPR");
+        const string dpoTasks = "The data protection officer shall have at least the following tasks: "
+            + "to inform and advise the controller and the processor.";
         var dora = WithShortTitle(Doc("32022r2554", "2024-01-01", null,
             "operational resilience requirements zebrafalcon"), "DORA");
         var whole = WithShortTitle(Doc("32024r0001", "2024-01-01", null,
@@ -40,6 +42,8 @@ public sealed class AskOperationControllerTests : IDisposable
             Provision(first, "old capital requirement"),
             Provision(second, "new capital requirement"),
             Provision(gdpr, "lawful processing of personal data", "art_6", "Article 6"),
+            Provision(gdpr, dpoTasks, "art_39", "Article 39",
+                "Tasks of the data protection officer", seq: 1),
             Provision(dora, "operational resilience requirements zebrafalcon"),
         ], [], [], StampSigner.CreateKeyPem(),
         provisionStates:
@@ -484,6 +488,120 @@ public sealed class AskOperationControllerTests : IDisposable
         Assert.Equal("ranking", operation!["result_class"]!.GetValue<string>());
         Assert.Equal("succeeded", operation["legal_outcome"]!.GetValue<string>());
         Assert.Null(response.Body["clarification"]);
+    }
+
+    [Fact]
+    public async Task Unknown_explicit_timeline_is_a_typed_clarification_without_planner_guessing()
+    {
+        const string question = "Show the timeline for the Atlantis Regulation.";
+        var planner = new StaticPlanner("en", new JsonArray(new JsonObject
+        {
+            ["tool"] = "coverage",
+            ["arguments"] = new JsonObject(),
+        }));
+        var service = new AskService(_core, planner);
+
+        var response = await service.AskAsync(
+            History(question), Guid.NewGuid().ToString(), "law.test", CancellationToken.None);
+
+        Assert.Equal(200, response.Status);
+        Assert.Equal(0, planner.Calls);
+        var operation = Assert.IsType<JsonObject>(Assert.Single(
+            Assert.IsType<JsonArray>(response.Body["operations"])));
+        Assert.Equal("timeline", operation["tool"]?.GetValue<string>());
+        Assert.Equal("timeline", operation["result_class"]?.GetValue<string>());
+        Assert.Equal("needs_clarification", operation["legal_outcome"]?.GetValue<string>());
+        Assert.Contains(Assert.IsType<JsonArray>(operation["effects"]).OfType<JsonValue>(),
+            effect => effect.GetValue<string>() == "gap");
+        Assert.NotNull(response.Body["clarification"]);
+        var trace = Assert.IsType<JsonArray>(response.Body["trace"]).OfType<JsonObject>().ToArray();
+        Assert.DoesNotContain(trace, item => item["phase"]?.GetValue<string>() == "primary");
+        var plan = Assert.Single(trace,
+            item => item["phase"]?.GetValue<string>() == "operation_plan");
+        Assert.Equal("Atlantis Regulation",
+            plan["operations"]?[0]?["arguments"]?["work_query"]?.GetValue<string>());
+    }
+
+    [Theory]
+    [InlineData("Show the timeline for the Atlantis Regulation and quote Article 5.")]
+    [InlineData("Show the timeline for the Atlantis Regulation and summarize Article 5.")]
+    [InlineData("Show the timeline for the Atlantis Regulation / summarize Article 5.")]
+    [InlineData("Show the timeline for the Atlantis Regulation including Article 5 text.")]
+    [InlineData("Show the timeline for the Atlantis Regulation; summarize Article 5.")]
+    public async Task Compound_timeline_request_is_not_swallowed_by_the_deterministic_shortcut(
+        string question)
+    {
+        var planner = new StaticPlanner("en", new JsonArray(new JsonObject
+        {
+            ["tool"] = "coverage",
+            ["arguments"] = new JsonObject(),
+        }));
+        var service = new AskService(_core, planner);
+
+        var response = await service.AskAsync(
+            History(question),
+            Guid.NewGuid().ToString(), "law.test", CancellationToken.None);
+
+        Assert.Equal(1, planner.Calls);
+        Assert.Equal("coverage", response.Body["operations"]?[0]?["tool"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task Professional_concept_search_returns_bounded_anchored_provision_facts()
+    {
+        const string question =
+            "Find EU provisions that describe the responsibilities of a data protection officer.";
+        JsonNode? primarySearch = null;
+        async ValueTask<JsonNode> LegalTool(
+            string tool, JsonObject arguments, CancellationToken cancellationToken)
+        {
+            var result = await _core.CallToolAsync(tool, arguments, cancellationToken);
+            if (tool == "search"
+                && arguments["jurisdiction"]?.GetValue<string>() == "EU")
+                primarySearch = result.DeepClone();
+            return result;
+        }
+        var planner = new StaticPlanner("en", new JsonArray(new JsonObject
+        {
+            ["tool"] = "search",
+            ["arguments"] = new JsonObject
+            {
+                ["query"] = question,
+                ["jurisdiction"] = "EU",
+                ["retrieval_mode"] = "keyword",
+                ["fuzzy"] = "off",
+                ["limit"] = 8,
+            },
+        }));
+        var service = new AskService(_core, planner, legalTool: LegalTool);
+
+        var response = await service.AskAsync(
+            History(question), Guid.NewGuid().ToString(), "law.test", CancellationToken.None);
+
+        Assert.Equal(200, response.Status);
+        Assert.Equal("data protection officer",
+            primarySearch?[0]?["query_plan"]?["provision_query"]?.GetValue<string>());
+        var hit = Assert.Single(primarySearch?[0]?["hits"]?.AsArray().OfType<JsonObject>() ?? [],
+            item => item["anchor"]?.GetValue<string>() == "art_39");
+        Assert.Equal("art_39", hit["anchor"]?.GetValue<string>());
+        Assert.Contains("data protection officer", hit["snippet"]?.GetValue<string>(),
+            StringComparison.OrdinalIgnoreCase);
+        var operation = Assert.IsType<JsonObject>(Assert.Single(
+            Assert.IsType<JsonArray>(response.Body["operations"])));
+        var facts = Assert.IsType<JsonArray>(operation["ui"]?["workspace"]?["results"]);
+        var fact = Assert.IsType<JsonObject>(Assert.Single(facts));
+        Assert.Equal("eu-eurlex:32016r0679", fact["work"]?.GetValue<string>());
+        Assert.Equal("eu-eurlex:32016r0679:2018-05-25",
+            fact["lex_id"]?.GetValue<string>());
+        Assert.Equal("art_39", fact["anchor"]?.GetValue<string>());
+        Assert.Equal("https://example.test/32016r0679",
+            fact["source_uri"]?.GetValue<string>());
+        Assert.Contains("data protection officer", fact["snippet"]?.GetValue<string>(),
+            StringComparison.OrdinalIgnoreCase);
+        var reply = response.Body["reply"]?.GetValue<string>() ?? "";
+        Assert.Contains("Article 39", reply, StringComparison.Ordinal);
+        Assert.Contains("eu-eurlex:32016r0679", reply, StringComparison.Ordinal);
+        Assert.Contains("data protection officer", reply, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -2192,9 +2310,10 @@ public sealed class AskOperationControllerTests : IDisposable
         }, null, from, null);
 
     private static ProvisionRow Provision(
-        DocRow document, string text, string anchor = "art_92", string num = "Article 92") => new(
-        $"{document.Key}|{document.Language}|{document.ValidFrom}", 0, anchor,
-        $"{document.Key}#{anchor}", "article", num, null, null, null,
+        DocRow document, string text, string anchor = "art_92", string num = "Article 92",
+        string? heading = null, int seq = 0) => new(
+        $"{document.Key}|{document.Language}|{document.ValidFrom}", seq, anchor,
+        $"{document.Key}#{anchor}", "article", num, heading, null, null,
         document.Title, text, Hash(text));
 
     private static string Hash(string value) =>

@@ -284,6 +284,10 @@ export interface Citation { work: string; href: string; text?: string }
 export interface ProvisionItem { anchor: string; num?: string; heading?: string; text?: string; text_sha256?: string; path?: string;
                                  citations?: Citation[]; text_omitted?: boolean;
                                  text_omitted_reason?: string; permalink?: string }
+export interface SearchFact {
+  work: string; lex_id: string; anchor: string; number?: string; heading?: string;
+  snippet?: string; title?: string; valid_from?: string; source_uri?: string; permalink?: string;
+}
 export interface UiEffect {
   provision?: { subject: Subject; valid_from: string; valid_to?: string; provisions: ProvisionItem[]; permalink?: string;
                 evidence?: EvidenceContext[]; total_provisions?: number; truncated?: boolean;
@@ -326,6 +330,7 @@ export interface UiEffect {
     jurisdiction?: string; hierarchy?: string; domain?: string; source_class?: string;
     act_form?: string; binding_status?: string; page?: number; language?: string;
     work?: string; date?: string; anchor?: string;
+    results?: SearchFact[];
     evidence?: EvidenceContext[];
   };
   gap?: { status: string; work?: string; date?: string; explanation: string; available: string[]; evidence?: EvidenceContext[] };
