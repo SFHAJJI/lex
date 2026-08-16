@@ -245,10 +245,12 @@ public sealed class ArchitectureDossierTests : IClassFixture<GoldenTests.Site>
         Assert.Contains("EU hybrid", html);
         Assert.Contains("image-only EU annex", html);
         Assert.Contains("25 frozen cases", productReview);
-        Assert.Contains("620,000 candidate input tokens", productReview);
-        Assert.Contains("980,000 grader input tokens", productReview);
-        Assert.Contains("392,000 grader output tokens", productReview);
         Assert.DoesNotContain("20 frozen cases", productReview);
+        // The reservation figures used to be pinned here as literals, which is how all three
+        // documents came to state a plan of 59 candidate requests that the catalog had long since
+        // resized to 56: the test enforced the stale numbers rather than the signed ones.
+        // AssistantEvaluationTests.Published_documents_quote_the_signed_catalog_s_own_reservation_and_call_plan
+        // now derives them from the catalog, so drift fails there instead of being frozen here.
     }
 
     [Fact]

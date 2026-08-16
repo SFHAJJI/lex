@@ -542,9 +542,9 @@ promoted commit and manifest set. Existing v2 reports remain public historical e
 The release candidate smoke must assert semantic outcomes for representative exact, aggregate,
 comparison-gap, and clarification cases. Checking only that a JSON `reply` exists is forbidden.
 
-One live release run is limited to 25 frozen cases, 620,000 candidate input tokens, 123,000
-candidate output tokens, 980,000 grader input tokens and 392,000 grader output tokens. The catalog's
-current maximum-token reservation is EUR 0.5325316 under an outer EUR 10 ceiling. The runner
+One live release run is limited to 25 frozen cases, 928,000 candidate input tokens, 92,000
+candidate output tokens, 815,104 grader input tokens and 384,000 grader output tokens. The catalog's
+current maximum-token reservation is EUR 0.5356487 under an outer EUR 10 ceiling. The runner
 calculates the estimate before inference and aborts if any envelope would be exceeded. Production
 audit calls use a separately signed, release-bound capability and do not consume either public daily
 counter. The

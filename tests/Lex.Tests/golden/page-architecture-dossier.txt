@@ -1315,19 +1315,19 @@ orientation aids; links omit line numbers so normal refactors do not rot the map
 </tr>
 <tr>
 <td>Frozen set</td>
-<td>25 frozen scenarios, 49 final candidate HTTP requests, ten same-thread setup HTTP requests, 59 total candidate HTTP requests and 49 release-grader requests</td>
+<td>25 frozen scenarios, 48 final candidate HTTP requests, 8 same-thread setup HTTP requests, 56 total candidate HTTP requests and 48 release-grader requests</td>
 </tr>
 <tr>
 <td>Candidate token budget</td>
-<td>The current reservation is 620,000 input and 123,000 output tokens. Setup and final turns are charged to this candidate budget.</td>
+<td>The current reservation is 928,000 input and 92,000 output tokens. Setup and final turns are charged to this candidate budget.</td>
 </tr>
 <tr>
 <td>Grader token budget</td>
-<td>The current reservation is 294,000 input and 49,000 output tokens on a separately authenticated <code>gpt-5-nano</code> deployment.</td>
+<td>The current reservation is 815,104 input and 384,000 output tokens on a separately authenticated <code>gpt-5-nano</code> deployment.</td>
 </tr>
 <tr>
 <td>Cost control</td>
-<td>The catalog has an outer EUR 10 ceiling, where <code>EUR</code> is the standard currency code for euros. The current maximum-token reservation prices at EUR 0.5325316 before inference, then measured use is gated again. This is not a live Azure billing cutoff and cannot interrupt an in-flight model call. Signed call counts and per-call token ceilings bound the run instead.</td>
+<td>The catalog has an outer EUR 10 ceiling, where <code>EUR</code> is the standard currency code for euros. The current maximum-token reservation prices at EUR 0.5356487 before inference, then measured use is gated again. This is not a live Azure billing cutoff and cannot interrupt an in-flight model call. Signed call counts and per-call token ceilings bound the run instead.</td>
 </tr>
 <tr>
 <td>CI/CD</td>
