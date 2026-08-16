@@ -33,7 +33,8 @@ public sealed record AssistantCandidateRuntimeEvidence(
 {
     /// <summary>
     /// Whether two records name the same running candidate. Every field is compared exactly except
-    /// the Azure resource id and the revision hostname, which are compared without case.
+    /// the Azure resource id, the revision hostname and the candidate model host, which are
+    /// compared without case because ARM ids and DNS names are case-insensitive.
     /// </summary>
     /// <remarks>
     /// Azure Resource Manager does not preserve the casing of the type segment: asking for

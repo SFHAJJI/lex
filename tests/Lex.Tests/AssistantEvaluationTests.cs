@@ -2854,6 +2854,7 @@ public sealed class AssistantEvaluationTests : IDisposable
         Assert.False(fromOperator.DescribesSameCandidateAs(fromAzure with { TrafficWeight = 100 }));
         Assert.False(fromOperator.DescribesSameCandidateAs(
             fromAzure with { CandidateDeployment = "GPT-5-MINI" }));
+        Assert.Throws<ArgumentNullException>(() => fromOperator.DescribesSameCandidateAs(null!));
     }
 
     private static AssistantCandidateRuntimeEvidence TargetEvidence()
