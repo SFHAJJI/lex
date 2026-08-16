@@ -160,7 +160,7 @@ jobs:
         shell: bash
         run: |
           set -eu
-          workspace=$(az monitor app-insights component show -g "$RESOURCE_GROUP" \
+          workspace=$(az_retry az monitor app-insights component show -g "$RESOURCE_GROUP" \
             -a "$APPLICATION_INSIGHTS_NAME" \
             --query workspaceResourceId -o tsv)
           [ -n "$workspace" ] || { echo "::error::Application Insights has no workspace"; exit 1; }
@@ -276,8 +276,8 @@ jobs:
           set -eu
           . scripts/deploy/az-retry.sh
           . scripts/deploy/az-reauth.sh
-          runtime_id=$(az identity show -g "$RESOURCE_GROUP" -n "$RUNTIME_IDENTITY" --query id -o tsv)
-          runtime_client=$(az identity show -g "$RESOURCE_GROUP" -n "$RUNTIME_IDENTITY" --query clientId -o tsv)
+          runtime_id=$(az_retry az identity show -g "$RESOURCE_GROUP" -n "$RUNTIME_IDENTITY" --query id -o tsv)
+          runtime_client=$(az_retry az identity show -g "$RESOURCE_GROUP" -n "$RUNTIME_IDENTITY" --query clientId -o tsv)
           # These two writes land on the same container app microseconds apart, and the second
           # is the one Azure rejected in run 31633793807 while the first was still propagating.
           az_write az containerapp identity assign -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
@@ -320,7 +320,7 @@ jobs:
           [ "${#traffic_bearers[@]}" -eq 1 ] \
             || { echo "::error::expected exactly one traffic-bearing revision before candidate creation"; exit 1; }
           previous="${traffic_bearers[0]}"
-          app_id=$(az containerapp show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" --query id -o tsv)
+          app_id=$(az_retry az containerapp show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" --query id -o tsv)
           rollback="$previous"
           candidate=''
           bootstrap_fallback=''
@@ -342,7 +342,7 @@ jobs:
           cleanup_survivor_image=''
           cleanup_survivor_template=''
           cleanup_handoff_latest_ready=''
-          previous_inactive_limit=$(az containerapp show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+          previous_inactive_limit=$(az_retry az containerapp show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
             --query properties.configuration.maxInactiveRevisions -o tsv)
           if [ "$bootstrap" = "true" ]; then
             [[ "${BOOTSTRAP_CLEANUP_RUN_ID:-}" =~ ^[1-9][0-9]*$ ]] \
@@ -848,7 +848,7 @@ jobs:
             [ "$candidate_exists" = false ] || expected=$(printf '%s\n%s\n' \
               "$prior_rollback" "$candidate" | sort | paste -sd, -)
             for attempt in $(seq 1 24); do
-              actual=$(az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+              actual=$(az_retry az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
                 --all --query "[?properties.active==\`false\`].name" -o tsv 2>/dev/null \
                 | sort | paste -sd, -)
               [ "$actual" = "$expected" ] && return 0
@@ -908,7 +908,7 @@ jobs:
             az_write az rest --method patch --uri "$app_id?api-version=2025-01-01" \
               --headers 'Content-Type=application/json' --body "$retention_body" --output none
             for attempt in $(seq 1 12); do
-              inactive_limit=$(az containerapp show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+              inactive_limit=$(az_retry az containerapp show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
                 --query properties.configuration.maxInactiveRevisions -o tsv)
               [ "$inactive_limit" = "2" ] && break
               sleep 5
@@ -994,7 +994,7 @@ jobs:
             done
             { [ "$fallback_state" = "Running" ] || [ "$fallback_state" = "RunningAtMaxScale" ]; } \
               || { echo "::error::bootstrap fallback revision did not become ready"; exit 1; }
-            fallback=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+            fallback=$(az_retry az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
               --revision "$bootstrap_fallback" -o json)
             fallback_image=$(printf '%s' "$fallback" | jq -r .properties.template.containers[0].image)
             fallback_template_digest=$(printf '%s' "$fallback" \
@@ -1066,7 +1066,7 @@ jobs:
             | jq -e '.minReplicas == 1 and .maxReplicas == 1' >/dev/null \
             || { echo "::error::public assistant must run on exactly one application replica"; exit 1; }
           if [ "$bootstrap" = "true" ]; then
-            candidate_observed=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+            candidate_observed=$(az_retry az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
               --revision "$candidate" -o json)
             candidate_image=$(printf '%s' "$candidate_observed" \
               | jq -r .properties.template.containers[0].image)
@@ -1109,7 +1109,7 @@ jobs:
             verify_bootstrap_forward_topology candidate-prepared \
               || { echo "::error::bootstrap candidate routes did not converge to exact A100/C0"; exit 1; }
           fi
-          fqdn=$(az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+          fqdn=$(az_retry az containerapp revision show -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
             --revision "$candidate" --query properties.fqdn -o tsv)
           revision_get "https://$fqdn/healthz"
           readiness=$(revision_get "https://$fqdn/readyz")
@@ -1404,7 +1404,7 @@ jobs:
           . scripts/deploy/az-retry.sh
           . scripts/deploy/az-reauth.sh
           az_reauth
-          current=$(az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+          current=$(az_retry az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
             --all --query "[?properties.trafficWeight > \`0\`].name" -o tsv)
           [ "$(printf '%s\n' "$current" | sed '/^$/d' | wc -l)" -eq 1 ] \
             || { echo "::error::expected exactly one traffic-bearing revision"; exit 1; }
@@ -1441,7 +1441,7 @@ jobs:
               || { echo "::error::bootstrap candidate preparation drifted from the reviewed inventory"; exit 1; }
             exit 0
           fi
-          active=$(az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
+          active=$(az_retry az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
             --all --query "[?properties.active].name" -o tsv)
           [ "$active" = "$current" ] \
             || { echo "::error::expected exactly one active public quota authority"; exit 1; }
