@@ -678,6 +678,42 @@ public sealed class ReleaseWorkflowTests
     }
 
     [Fact]
+    public void Evaluation_publication_and_consumers_require_the_offline_admission_assets()
+    {
+        var script = File.ReadAllText(Path.Combine(
+            RepoRoot(), "deploy", "publish-assistant-evaluation.ps1"));
+        var program = File.ReadAllText(Path.Combine(
+            RepoRoot(), "src", "Lex.Ingest", "Program.cs"));
+        var documentation = File.ReadAllText(Path.Combine(
+            RepoRoot(), "docs", "assistant-evaluation.md"));
+
+        Assert.Contains("[string]$Admission", script);
+        Assert.Contains("[string]$AdmissionSignature", script);
+        Assert.Contains("$reportJson.admission_sha256", script);
+        Assert.Contains("assistant-eval-admission.json", script);
+        Assert.Contains("assistant-eval-admission.sig", script);
+        Assert.True(script.IndexOf("$reportJson.admission_sha256", StringComparison.Ordinal)
+                    < script.IndexOf("gh release create", StringComparison.Ordinal));
+        Assert.Contains(
+            "verify-report --report FILE --cases FILE --review-attestation FILE " +
+            "--review-signature FILE --admission FILE --admission-signature FILE",
+            program);
+        Assert.Contains("assistant-eval verify-report", documentation);
+
+        foreach (var workflowName in new[]
+                 {
+                     "revision-traffic.yml",
+                     "bootstrap-release-state.yml",
+                 })
+        {
+            var workflow = File.ReadAllText(Path.Combine(
+                RepoRoot(), ".github", "workflows", workflowName));
+            Assert.Contains("assistant-eval-admission.json", workflow);
+            Assert.Contains("assistant-eval-admission.sig", workflow);
+        }
+    }
+
+    [Fact]
     public void Diagnostic_evaluation_schema_cannot_reach_the_publication_mutation()
     {
         var script = File.ReadAllText(Path.Combine(
@@ -1357,6 +1393,7 @@ public sealed class ReleaseWorkflowTests
             "-NoProfile", "-NonInteractive", "-File", script,
             "-Report", missing, "-Cases", missing,
             "-ReviewAttestation", missing, "-ReviewSignature", missing,
+            "-Admission", missing, "-AdmissionSignature", missing,
         };
         if (!extraArguments.Contains("-CandidateRevision", StringComparer.OrdinalIgnoreCase))
             arguments.AddRange(["-CandidateRevision", "ca-lex-web--candidate"]);

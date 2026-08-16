@@ -2,6 +2,8 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
+using Lex.Evaluation;
 using Lex.Index;
 
 namespace Lex.Ingest;
@@ -17,10 +19,17 @@ public static class AssistantEvaluationReleaseVerifier
     public const string CasesFile = "assistant-cases-v3.json";
     public const string ReviewFile = "assistant-cases-v3.review.json";
     public const string ReviewSignatureFile = "assistant-cases-v3.review.sig";
+    public const string AdmissionFile = "assistant-eval-admission.json";
+    public const string AdmissionSignatureFile = "assistant-eval-admission.sig";
     public const string BrowserEvidenceFile = "assistant-browser-evidence.json";
     public const string ArtifactKeyId = "keyvault-lex-v2";
     public static readonly IReadOnlyList<string> RequiredFiles =
-        [ReportFile, CasesFile, ReviewFile, ReviewSignatureFile, BrowserEvidenceFile];
+        [ReportFile, CasesFile, ReviewFile, ReviewSignatureFile,
+            AdmissionFile, AdmissionSignatureFile, BrowserEvidenceFile];
+    private static readonly Regex RunIdentity = new(
+        "^[0-9a-f]{16}$", RegexOptions.CultureInvariant);
+    private static readonly Regex Digest = new(
+        "^[0-9a-f]{64}$", RegexOptions.CultureInvariant);
     private static readonly JsonSerializerOptions Json = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
@@ -46,6 +55,8 @@ public static class AssistantEvaluationReleaseVerifier
         var expectedSources = new SortedDictionary<string, string>(StringComparer.Ordinal)
         {
             ["artifact_manifest_set"] = expectedTarget.ArtifactManifestSet,
+            ["admission_run_identity"] = report.AdmissionRunIdentity,
+            ["admission_sha256"] = report.AdmissionSha256,
             ["browser_evidence_sha256"] = Convert.ToHexStringLower(SHA256.HashData(
                 File.ReadAllBytes(Path.Combine(rootDirectory, BrowserEvidenceFile)))),
             ["candidate_evidence_sha256"] = expectedTarget.EvidenceSha256,
@@ -127,11 +138,41 @@ public static class AssistantEvaluationReleaseVerifier
 
     public static AssistantEvaluationReport VerifyReport(
         string reportPath,
+        string admissionPath,
+        string admissionSignaturePath,
         AssistantEvaluationSet caseSet,
         AssistantCandidateRuntimeEvidence expectedTarget,
         AssistantTargetAttestation targetAttestation,
         DateTimeOffset verifiedAt,
-        bool allowOlderPreviouslyPromotedEvidence = false)
+        bool allowOlderPreviouslyPromotedEvidence = false) => VerifyReportCore(
+            reportPath, admissionPath, admissionSignaturePath, caseSet,
+            expectedTarget, targetAttestation, verifiedAt,
+            AdmissionAuthority(), allowOlderPreviouslyPromotedEvidence);
+
+    internal static AssistantEvaluationReport VerifyReportForTest(
+        string reportPath,
+        string admissionPath,
+        string admissionSignaturePath,
+        AssistantEvaluationSet caseSet,
+        AssistantCandidateRuntimeEvidence expectedTarget,
+        AssistantTargetAttestation targetAttestation,
+        DateTimeOffset verifiedAt,
+        EvaluationAdmissionAuthority admissionAuthority,
+        bool allowOlderPreviouslyPromotedEvidence = false) => VerifyReportCore(
+            reportPath, admissionPath, admissionSignaturePath, caseSet,
+            expectedTarget, targetAttestation, verifiedAt, admissionAuthority,
+            allowOlderPreviouslyPromotedEvidence);
+
+    private static AssistantEvaluationReport VerifyReportCore(
+        string reportPath,
+        string admissionPath,
+        string admissionSignaturePath,
+        AssistantEvaluationSet caseSet,
+        AssistantCandidateRuntimeEvidence expectedTarget,
+        AssistantTargetAttestation targetAttestation,
+        DateTimeOffset verifiedAt,
+        EvaluationAdmissionAuthority admissionAuthority,
+        bool allowOlderPreviouslyPromotedEvidence)
     {
         ArgumentNullException.ThrowIfNull(caseSet);
         ArgumentNullException.ThrowIfNull(expectedTarget);
@@ -156,6 +197,8 @@ public static class AssistantEvaluationReleaseVerifier
             || report.FrozenAt != caseSet.Catalog.FrozenAt
             || !DateTimeOffset.TryParse(report.RunAt, out var runAt)
             || runAt.Offset != TimeSpan.Zero
+            || !RunIdentity.IsMatch(report.AdmissionRunIdentity ?? "")
+            || !Digest.IsMatch(report.AdmissionSha256 ?? "")
             || runAt > verifiedAt.AddMinutes(5)
             || !allowOlderPreviouslyPromotedEvidence
                 && verifiedAt - runAt > TimeSpan.FromDays(7))
@@ -172,6 +215,8 @@ public static class AssistantEvaluationReleaseVerifier
         if (report.Preflight != expectedPreflight)
             throw new InvalidDataException(
                 "Assistant evaluation preflight or model pricing evidence is invalid.");
+        VerifyAdmission(admissionPath, admissionSignaturePath, caseSet,
+            expectedTarget, report, runAt, admissionAuthority);
 
         var expectedResults = caseSet.Catalog.Cases.Sum(item => item.Repetitions);
         if (report.Results is null || report.Results.Count != expectedResults
@@ -246,6 +291,49 @@ public static class AssistantEvaluationReleaseVerifier
                 > caseSet.Catalog.Budget.MaximumTotalP99LatencyMs)
             throw new InvalidDataException("Assistant evaluation latency evidence is invalid.");
         return report;
+    }
+
+    private static void VerifyAdmission(
+        string admissionPath,
+        string admissionSignaturePath,
+        AssistantEvaluationSet caseSet,
+        AssistantCandidateRuntimeEvidence expectedTarget,
+        AssistantEvaluationReport report,
+        DateTimeOffset runAt,
+        EvaluationAdmissionAuthority authority)
+    {
+        var bytes = EvalAdmissionCli.ReadBounded(
+            admissionPath, EvaluationAdmissionContract.MaximumBytes);
+        var sha256 = Convert.ToHexStringLower(SHA256.HashData(bytes));
+        if (!FixedEquals(report.AdmissionSha256, sha256))
+            throw new InvalidDataException(
+                "Assistant evaluation report does not bind the signed admission bytes.");
+        var identity = new EvaluationAdmissionIdentity(
+            expectedTarget.RevisionName,
+            expectedTarget.Image,
+            expectedTarget.CodeCommit,
+            expectedTarget.ArtifactManifestSet,
+            caseSet.Sha256);
+        var capability = EvaluationAdmissionContract.Verify(
+            bytes, EvalAdmissionCli.ReadBoundedSignature(admissionSignaturePath),
+            authority, identity, runAt);
+        var expected = EvalAdmissionCli.Create(
+            caseSet, authority, identity, capability.IssuedAt, capability.Nonce);
+        var expectedBytes = EvaluationAdmissionContract.Serialize(expected);
+        var runIdentity = EvaluationAdmissionContract.RunIdentity(capability);
+        if (bytes.Length != expectedBytes.Length
+            || !CryptographicOperations.FixedTimeEquals(bytes, expectedBytes)
+            || !FixedEquals(report.AdmissionRunIdentity, runIdentity))
+            throw new InvalidDataException(
+                "Signed evaluation admission drifted from the reviewed request plan.");
+    }
+
+    private static EvaluationAdmissionAuthority AdmissionAuthority()
+    {
+        var authority = EvaluationReviewTrustStore.Load();
+        return new EvaluationAdmissionAuthority(
+            authority.ReviewerId, authority.KeyId,
+            authority.FingerprintSha256, authority.PublicKeyPem);
     }
 
     private static bool ValidTimings(AssistantEvaluationTimings? timings) =>

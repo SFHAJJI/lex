@@ -366,6 +366,8 @@ jobs:
               assistant-cases-v3.json \
               assistant-cases-v3.review.json \
               assistant-cases-v3.review.sig \
+              assistant-eval-admission.json \
+              assistant-eval-admission.sig \
                assistant-browser-evidence.json \
                assistant-eval.manifest.json \
                assistant-eval.manifest.sig; do
@@ -401,6 +403,7 @@ jobs:
             mkdir "$source_dir"
             for asset in assistant-eval-report.json assistant-cases-v3.json \
                 assistant-cases-v3.review.json assistant-cases-v3.review.sig \
+                assistant-eval-admission.json assistant-eval-admission.sig \
                 assistant-browser-evidence.json assistant-eval.manifest.json \
                 assistant-eval.manifest.sig bootstrap-equivalence.json \
                 bootstrap-equivalence.manifest.json bootstrap-equivalence.manifest.sig; do
@@ -523,6 +526,7 @@ jobs:
             observed_package_sha=$({
               for asset in assistant-eval-report.json assistant-cases-v3.json \
                   assistant-cases-v3.review.json assistant-cases-v3.review.sig \
+                  assistant-eval-admission.json assistant-eval-admission.sig \
                   assistant-browser-evidence.json assistant-eval.manifest.json \
                   assistant-eval.manifest.sig bootstrap-equivalence.json \
                   bootstrap-equivalence.manifest.json bootstrap-equivalence.manifest.sig; do

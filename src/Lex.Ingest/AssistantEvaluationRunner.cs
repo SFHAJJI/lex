@@ -77,6 +77,7 @@ public sealed record AssistantEvaluationGrade(
 public interface IAssistantEvaluationTarget
 {
     string? AdmissionRunIdentity => null;
+    string? AdmissionSha256 => null;
 
     Task VerifyReleaseIdentityAsync(
         AssistantEvaluationIdentity identity,
@@ -127,6 +128,8 @@ public sealed record AssistantEvaluationReport(
     string CasesSha256,
     string FrozenAt,
     string RunAt,
+    string AdmissionRunIdentity,
+    string AdmissionSha256,
     AssistantEvaluationIdentity Identity,
     AssistantEvaluationPreflight Preflight,
     AssistantEvaluationPricing Pricing,
@@ -148,6 +151,18 @@ public static class AssistantEvaluationRunner
         "^[0-9a-f]{40}$", RegexOptions.CultureInvariant);
     private static readonly Regex Digest = new(
         "^[0-9a-f]{64}$", RegexOptions.CultureInvariant);
+    private static readonly Regex RunIdentity = new(
+        "^[0-9a-f]{16}$", RegexOptions.CultureInvariant);
+
+    private sealed record PendingResult(
+        AssistantEvaluationCase Case,
+        int Repetition,
+        List<string> Failures,
+        AssistantModelUsage CandidateUsage,
+        AssistantEvaluationTimings? MeasuredTimings,
+        JsonObject? Response,
+        bool GradeEligible,
+        double ElapsedMilliseconds);
 
     public static async Task<AssistantEvaluationReport> RunAsync(
         AssistantEvaluationSet caseSet,
@@ -163,14 +178,16 @@ public static class AssistantEvaluationRunner
         ValidateIdentity(identity);
         pricing.ValidateFor(identity, runAt);
         await target.VerifyReleaseIdentityAsync(identity, cancellationToken);
+        var runIdentity = target.AdmissionRunIdentity;
+        var admissionSha256 = target.AdmissionSha256;
+        if (runIdentity is null || !RunIdentity.IsMatch(runIdentity)
+            || admissionSha256 is null || !Digest.IsMatch(admissionSha256))
+            throw new InvalidDataException(
+                "Official assistant evaluation requires a successfully exchanged signed admission.");
         var preflight = caseSet.Preflight(pricing);
-        var runIdentity = target.AdmissionRunIdentity
-            ?? Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(
-                $"{caseSet.Sha256}\n{identity.Target.EvidenceSha256}\n{runAt.ToUniversalTime():O}")))[..16];
-        var results = new List<AssistantEvaluationCaseResult>();
-        var totalCandidateUsage = new AssistantModelUsage(0, 0);
-        var totalGraderUsage = new AssistantModelUsage(0, 0);
-
+        // Consume every admission-authorized candidate request before grader calls can
+        // age the short-lived capability. Grading still follows catalog/repetition order.
+        var pending = new List<PendingResult>();
         foreach (var evaluationCase in caseSet.Catalog.Cases)
         {
             for (var repetition = 1; repetition <= evaluationCase.Repetitions; repetition++)
@@ -178,11 +195,10 @@ public static class AssistantEvaluationRunner
                 cancellationToken.ThrowIfCancellationRequested();
                 var failures = new List<string>();
                 AssistantModelUsage candidateUsage = new(0, 0);
-                AssistantModelUsage graderUsage = new(0, 0);
-                int? score = null;
                 var elapsed = Stopwatch.StartNew();
                 AssistantEvaluationTimings? measuredTimings = null;
                 JsonObject? response = null;
+                var gradeEligible = false;
                 try
                 {
                     var invocation = await target.InvokeAsync(
@@ -227,37 +243,7 @@ public static class AssistantEvaluationRunner
                     failures.AddRange(ContractFailures(
                         evaluationCase.Expected, response, identity));
                     candidateUsage = ReadUsage(response, failures);
-
-                    if (evaluationCase.Grading.Mode == "llm")
-                    {
-                        if (grader is null)
-                            failures.Add("required separate LLM release grader was not configured");
-                        else
-                        {
-                            try
-                            {
-                                var grade = await grader.GradeAsync(
-                                    evaluationCase, response, cancellationToken);
-                                score = grade.Score;
-                                if (grade.Score is < 1 or > 5)
-                                    failures.Add("grader returned a score outside 1..5");
-                                else if (grade.Score < evaluationCase.Grading.Threshold)
-                                    failures.Add(
-                                        $"grader score {grade.Score} was below {evaluationCase.Grading.Threshold}");
-                                if (grade.Usage.InputTokens <= 0 || grade.Usage.OutputTokens <= 0)
-                                    failures.Add("grader returned missing token usage");
-                                graderUsage = grade.Usage;
-                            }
-                            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-                            {
-                                throw;
-                            }
-                            catch
-                            {
-                                failures.Add("required separate release grader unavailable");
-                            }
-                        }
-                    }
+                    gradeEligible = true;
                 }
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
                 {
@@ -269,38 +255,87 @@ public static class AssistantEvaluationRunner
                     failures.Add("assistant evaluation target unavailable");
                 }
 
-                var candidateInputCeiling = checked(
-                    (long)evaluationCase.MaximumInputTokens
-                    + (evaluationCase.History?.Sum(turn =>
-                        (long)turn.MaximumInputTokens) ?? 0));
-                var candidateOutputCeiling = checked(
-                    (long)evaluationCase.MaximumOutputTokens
-                    + (evaluationCase.History?.Sum(turn =>
-                        (long)turn.MaximumOutputTokens) ?? 0));
-                if (candidateUsage.InputTokens > candidateInputCeiling
-                    || candidateUsage.OutputTokens > candidateOutputCeiling)
-                    failures.Add("measured candidate usage exceeded the case token ceiling");
-                if (graderUsage.InputTokens > evaluationCase.Grading.MaximumInputTokens
-                    || graderUsage.OutputTokens > evaluationCase.Grading.MaximumOutputTokens)
-                    failures.Add("measured grader usage exceeded the case token ceiling");
-                if (measuredTimings?.SubmitToFirstOperationResultMilliseconds
-                        > caseSet.Catalog.Budget.MaximumFirstOperationHardLatencyMs)
-                    failures.Add("assistant first operation_result exceeded the hard deadline");
-                if (measuredTimings?.PlannerMilliseconds > MaximumPlannerCallMilliseconds)
-                    failures.Add("assistant planner call exceeded its hard deadline");
-                if (measuredTimings?.TotalMilliseconds > evaluationCase.MaximumLatencyMs)
-                    failures.Add("assistant latency exceeded the case ceiling");
-                totalCandidateUsage = totalCandidateUsage.Add(candidateUsage);
-                totalGraderUsage = totalGraderUsage.Add(graderUsage);
-                results.Add(new AssistantEvaluationCaseResult(
-                    evaluationCase.Id, repetition, PromptSha256(evaluationCase),
-                    evaluationCase.Grading.Mode, evaluationCase.Grading.Threshold,
-                    failures.Count == 0, failures, score,
-                    candidateUsage, graderUsage,
-                    measuredTimings ?? new AssistantEvaluationTimings(
-                        0, 0, 0, elapsed.Elapsed.TotalMilliseconds, null,
-                        elapsed.Elapsed.TotalMilliseconds)));
+                pending.Add(new PendingResult(
+                    evaluationCase, repetition, failures, candidateUsage,
+                    measuredTimings, response, gradeEligible,
+                    elapsed.Elapsed.TotalMilliseconds));
             }
+        }
+
+        var results = new List<AssistantEvaluationCaseResult>(pending.Count);
+        var totalCandidateUsage = new AssistantModelUsage(0, 0);
+        var totalGraderUsage = new AssistantModelUsage(0, 0);
+        foreach (var item in pending)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var evaluationCase = item.Case;
+            var failures = item.Failures;
+            var candidateUsage = item.CandidateUsage;
+            AssistantModelUsage graderUsage = new(0, 0);
+            int? score = null;
+
+            if (item.GradeEligible && evaluationCase.Grading.Mode == "llm")
+            {
+                if (grader is null)
+                    failures.Add("required separate LLM release grader was not configured");
+                else
+                {
+                    try
+                    {
+                        var grade = await grader.GradeAsync(
+                            evaluationCase, item.Response!, cancellationToken);
+                        score = grade.Score;
+                        if (grade.Score is < 1 or > 5)
+                            failures.Add("grader returned a score outside 1..5");
+                        else if (grade.Score < evaluationCase.Grading.Threshold)
+                            failures.Add(
+                                $"grader score {grade.Score} was below {evaluationCase.Grading.Threshold}");
+                        if (grade.Usage.InputTokens <= 0 || grade.Usage.OutputTokens <= 0)
+                            failures.Add("grader returned missing token usage");
+                        graderUsage = grade.Usage;
+                    }
+                    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                    {
+                        throw;
+                    }
+                    catch
+                    {
+                        failures.Add("required separate release grader unavailable");
+                    }
+                }
+            }
+
+            var candidateInputCeiling = checked(
+                (long)evaluationCase.MaximumInputTokens
+                + (evaluationCase.History?.Sum(turn =>
+                    (long)turn.MaximumInputTokens) ?? 0));
+            var candidateOutputCeiling = checked(
+                (long)evaluationCase.MaximumOutputTokens
+                + (evaluationCase.History?.Sum(turn =>
+                    (long)turn.MaximumOutputTokens) ?? 0));
+            if (candidateUsage.InputTokens > candidateInputCeiling
+                || candidateUsage.OutputTokens > candidateOutputCeiling)
+                failures.Add("measured candidate usage exceeded the case token ceiling");
+            if (graderUsage.InputTokens > evaluationCase.Grading.MaximumInputTokens
+                || graderUsage.OutputTokens > evaluationCase.Grading.MaximumOutputTokens)
+                failures.Add("measured grader usage exceeded the case token ceiling");
+            if (item.MeasuredTimings?.SubmitToFirstOperationResultMilliseconds
+                    > caseSet.Catalog.Budget.MaximumFirstOperationHardLatencyMs)
+                failures.Add("assistant first operation_result exceeded the hard deadline");
+            if (item.MeasuredTimings?.PlannerMilliseconds > MaximumPlannerCallMilliseconds)
+                failures.Add("assistant planner call exceeded its hard deadline");
+            if (item.MeasuredTimings?.TotalMilliseconds > evaluationCase.MaximumLatencyMs)
+                failures.Add("assistant latency exceeded the case ceiling");
+            totalCandidateUsage = totalCandidateUsage.Add(candidateUsage);
+            totalGraderUsage = totalGraderUsage.Add(graderUsage);
+            results.Add(new AssistantEvaluationCaseResult(
+                evaluationCase.Id, item.Repetition, PromptSha256(evaluationCase),
+                evaluationCase.Grading.Mode, evaluationCase.Grading.Threshold,
+                failures.Count == 0, failures, score,
+                candidateUsage, graderUsage,
+                item.MeasuredTimings ?? new AssistantEvaluationTimings(
+                    0, 0, 0, item.ElapsedMilliseconds, null,
+                    item.ElapsedMilliseconds)));
         }
 
         var candidateCost = pricing.CandidateCost(
@@ -335,7 +370,8 @@ public static class AssistantEvaluationRunner
 
         return new AssistantEvaluationReport(
             ReportSchema, caseSet.Sha256, caseSet.Catalog.FrozenAt,
-            runAt.ToUniversalTime().ToString("O"), identity, preflight, pricing,
+            runAt.ToUniversalTime().ToString("O"), runIdentity, admissionSha256,
+            identity, preflight, pricing,
             totalCandidateUsage, totalGraderUsage, candidateCost, graderCost,
             actualCost, latency, results, gateFailures,
             ActivationGatePassed: gateFailures.Count == 0);
@@ -710,6 +746,8 @@ public sealed class AssistantEvaluationHttpTarget : IAssistantEvaluationTarget
     private readonly string? _admissionSignature;
     private readonly EvaluationAdmissionCapability? _admission;
     private string? _evaluationToken;
+    private string? _admissionRunIdentity;
+    private string? _admissionSha256;
 
     public AssistantEvaluationHttpTarget(
         HttpClient http,
@@ -743,9 +781,8 @@ public sealed class AssistantEvaluationHttpTarget : IAssistantEvaluationTarget
         }
     }
 
-    public string? AdmissionRunIdentity => _admission is null
-        ? null
-        : EvaluationAdmissionContract.RunIdentity(_admission);
+    public string? AdmissionRunIdentity => _admissionRunIdentity;
+    public string? AdmissionSha256 => _admissionSha256;
 
     public async Task<AssistantTargetAttestation> ReadAttestationAsync(
         AssistantCandidateRuntimeEvidence target,
@@ -1111,11 +1148,23 @@ public sealed class AssistantEvaluationHttpTarget : IAssistantEvaluationTarget
                 "Signed evaluation admission response is malformed.", exception);
         }
         var token = body["evaluation_token"]?.GetValue<string>();
+        var runIdentity = body["run_identity"]?.GetValue<string>();
+        var expectedRunIdentity = _admission is null
+            ? null : EvaluationAdmissionContract.RunIdentity(_admission);
         if (!ValidOpaqueToken(token)
-            || body["max_calls"]?.GetValue<int>() != _admission?.MaxCalls)
+            || body["max_calls"]?.GetValue<int>() != _admission?.MaxCalls
+            || runIdentity is null || expectedRunIdentity is null
+            || runIdentity.Length != expectedRunIdentity.Length
+            || !CryptographicOperations.FixedTimeEquals(
+                Encoding.ASCII.GetBytes(runIdentity),
+                Encoding.ASCII.GetBytes(expectedRunIdentity)))
             throw new InvalidDataException(
                 "Signed evaluation admission response is incomplete.");
         _evaluationToken = token;
+        _admissionRunIdentity = runIdentity;
+        _admissionSha256 = Convert.ToHexStringLower(SHA256.HashData(
+            _admissionBytes ?? throw new InvalidOperationException(
+                "Evaluation admission bytes are absent.")));
     }
 
     private async Task ResetThreadAsync(

@@ -40,7 +40,8 @@ public sealed class AssistantEvaluationEvidenceTests : IDisposable
         var fixture = Package();
 
         var evidence = AssistantEvaluationEvidenceVerifier.Verify(
-            fixture.Release, fixture.Files, [fixture.ArtifactRoot], fixture.Now);
+            fixture.Release, fixture.Files, [fixture.ArtifactRoot], fixture.Now,
+            fixture.AdmissionAuthority);
 
         Assert.True(evidence.Matches(fixture.Runtime));
         Assert.Equal(2, evidence.CaseCount);
@@ -60,7 +61,8 @@ public sealed class AssistantEvaluationEvidenceTests : IDisposable
     {
         var fixture = Package();
         var evidence = AssistantEvaluationEvidenceVerifier.Verify(
-            fixture.Release, fixture.Files, [fixture.ArtifactRoot], fixture.Now);
+            fixture.Release, fixture.Files, [fixture.ArtifactRoot], fixture.Now,
+            fixture.AdmissionAuthority);
 
         Assert.False(evidence.Matches(fixture.Runtime with { CodeCommit = new string('9', 40) }));
         Assert.False(evidence.Matches(fixture.Runtime with { Revision = "ca-lex-web--different" }));
@@ -77,6 +79,7 @@ public sealed class AssistantEvaluationEvidenceTests : IDisposable
     [InlineData("report-bytes")]
     [InlineData("release-digest")]
     [InlineData("manifest-signature")]
+    [InlineData("admission-signature")]
     [InlineData("signed-verdict-failed")]
     [InlineData("browser-failed")]
     [InlineData("browser-contract")]
@@ -105,6 +108,12 @@ public sealed class AssistantEvaluationEvidenceTests : IDisposable
                 break;
             case "manifest-signature":
                 files[AssistantEvaluationEvidenceVerifier.ManifestSignatureFile][0] ^= 1;
+                break;
+            case "admission-signature":
+                files[AssistantEvaluationEvidenceVerifier.AdmissionSignatureFile][0] ^= 1;
+                ResignManifest(files, fixture.ArtifactKey);
+                release = ReleaseFor(files, fixture.ReportSha256,
+                    fixture.Runtime.CodeCommit);
                 break;
             case "signed-verdict-failed":
                 MutateJson(files, AssistantEvaluationEvidenceVerifier.ReportFile,
@@ -139,7 +148,8 @@ public sealed class AssistantEvaluationEvidenceTests : IDisposable
         }
 
         Assert.ThrowsAny<Exception>(() => AssistantEvaluationEvidenceVerifier.Verify(
-            release, files, [fixture.ArtifactRoot], fixture.Now));
+            release, files, [fixture.ArtifactRoot], fixture.Now,
+            fixture.AdmissionAuthority));
     }
 
     [Fact]
@@ -155,7 +165,8 @@ public sealed class AssistantEvaluationEvidenceTests : IDisposable
         };
 
         Assert.Throws<InvalidDataException>(() => AssistantEvaluationEvidenceVerifier.Verify(
-            extra, fixture.Files, [fixture.ArtifactRoot], fixture.Now));
+            extra, fixture.Files, [fixture.ArtifactRoot], fixture.Now,
+            fixture.AdmissionAuthority));
     }
 
     [Fact]
@@ -171,7 +182,7 @@ public sealed class AssistantEvaluationEvidenceTests : IDisposable
         Assert.All(snapshots, snapshot => Assert.True(snapshot.Verified));
         Assert.All(snapshots, snapshot => Assert.Equal(
             fixture.ReportSha256, snapshot.Evidence!.ReportSha256));
-        Assert.Equal(9, handler.Requests);
+        Assert.Equal(11, handler.Requests);
     }
 
     [Fact]
@@ -237,12 +248,44 @@ public sealed class AssistantEvaluationEvidenceTests : IDisposable
             "registry.example/lex@sha256:" + new string('f', 64),
             artifactSet, catalogSha, "candidate-models.example", "gpt-5-mini",
             indexIds);
+        var reviewKey = ECDsa.Create();
+        var reviewPem = reviewKey.ExportECPrivateKeyPem();
+        var admissionRoot = ArtifactManifests.TrustRoot("review-key", reviewPem);
+        var admissionAuthority = new Lex.Evaluation.EvaluationAdmissionAuthority(
+            "entra:test-owner", admissionRoot.KeyId,
+            admissionRoot.FingerprintSha256, admissionRoot.PublicKeyPem);
+        var admission = new Lex.Evaluation.EvaluationAdmissionCapability(
+            Lex.Evaluation.EvaluationAdmissionContract.Schema,
+            admissionAuthority.KeyId,
+            admissionAuthority.ReviewerId,
+            runtime.Revision,
+            runtime.Image,
+            runtime.CodeCommit,
+            runtime.ArtifactManifestSet,
+            catalogSha,
+            DateTimeOffset.Parse("2026-08-15T11:25:00Z"),
+            DateTimeOffset.Parse("2026-08-15T11:45:00Z"),
+            Convert.ToBase64String(Enumerable.Repeat((byte)9, 32).ToArray())
+                .TrimEnd('=').Replace('+', '-').Replace('/', '_'),
+            1,
+            1_000,
+            200,
+            0.10m,
+            [new Lex.Evaluation.EvaluationAdmissionRequest(
+                "eval-admission-case-1", new string('1', 64),
+                "eval-admission-case-1", 1, 1_000, 200, 0.10m)]);
+        var admissionBytes = Lex.Evaluation.EvaluationAdmissionContract.Serialize(admission);
+        var admissionSha = Sha(admissionBytes);
+        var admissionRunIdentity =
+            Lex.Evaluation.EvaluationAdmissionContract.RunIdentity(admission);
         var report = JsonNode.Parse($$$"""
             {
               "schema":"lex-assistant-eval-report/3",
               "cases_sha256":"{{{catalogSha}}}",
               "frozen_at":"2026-08-15T10:00:00Z",
               "run_at":"2026-08-15T11:30:00Z",
+              "admission_run_identity":"{{{admissionRunIdentity}}}",
+              "admission_sha256":"{{{admissionSha}}}",
               "identity":{
                 "target":{
                   "revision_name":"{{{runtime.Revision}}}",
@@ -327,8 +370,6 @@ public sealed class AssistantEvaluationEvidenceTests : IDisposable
             }
             """)!.AsObject();
         var reviewBytes = Bytes(review);
-        var reviewKey = ECDsa.Create();
-        var reviewPem = reviewKey.ExportECPrivateKeyPem();
         var artifactKey = ECDsa.Create();
         var artifactPem = artifactKey.ExportECPrivateKeyPem();
         var artifactRoot = ArtifactManifests.TrustRoot("keyvault-lex-v2", artifactPem);
@@ -339,12 +380,16 @@ public sealed class AssistantEvaluationEvidenceTests : IDisposable
             [AssistantEvaluationEvidenceVerifier.ReviewFile] = reviewBytes,
             [AssistantEvaluationEvidenceVerifier.ReviewSignatureFile] = Encoding.UTF8.GetBytes(
                 ArtifactManifests.SignBase64(reviewBytes, reviewPem)),
+            [AssistantEvaluationEvidenceVerifier.AdmissionFile] = admissionBytes,
+            [AssistantEvaluationEvidenceVerifier.AdmissionSignatureFile] = Encoding.UTF8.GetBytes(
+                ArtifactManifests.SignBase64(admissionBytes, reviewPem)),
             [AssistantEvaluationEvidenceVerifier.BrowserEvidenceFile] = Bytes(browser),
         };
         WriteManifest(files, artifactPem, code, artifactSet, runtime.Revision,
             catalogSha, targetEvidenceSha);
         var release = ReleaseFor(files, reportSha, code);
-        return new(now, runtime, release, files, artifactRoot, artifactPem, reportSha);
+        return new(now, runtime, release, files, artifactRoot, artifactPem, reportSha,
+            admissionAuthority);
     }
 
     private void WriteManifest(
@@ -358,12 +403,18 @@ public sealed class AssistantEvaluationEvidenceTests : IDisposable
     {
         foreach (var item in files)
             File.WriteAllBytes(Path.Combine(_dir, item.Key), item.Value);
+        var report = JsonNode.Parse(
+            files[AssistantEvaluationEvidenceVerifier.ReportFile])!.AsObject();
         var manifest = ArtifactManifests.Create(_dir,
             AssistantEvaluationEvidenceVerifier.SignedPayloadFiles,
             "keyvault-lex-v2", "2026-08-15T11:40:00Z", code,
             new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 ["artifact_manifest_set"] = artifactSet,
+                ["admission_run_identity"] =
+                    report["admission_run_identity"]!.GetValue<string>(),
+                ["admission_sha256"] = Sha(
+                    files[AssistantEvaluationEvidenceVerifier.AdmissionFile]),
                 ["browser_evidence_sha256"] = Sha(files[AssistantEvaluationEvidenceVerifier.BrowserEvidenceFile]),
                 ["candidate_evidence_sha256"] = targetEvidenceSha,
                 ["candidate_revision"] = revision,
@@ -424,7 +475,7 @@ public sealed class AssistantEvaluationEvidenceTests : IDisposable
         var http = new HttpClient(handler) { BaseAddress = new Uri("https://api.github.com/") };
         return new(http, runtime, new FixedTimeProvider(fixture.Now),
             NullLogger<GitHubAssistantEvaluationEvidenceProvider>.Instance,
-            [fixture.ArtifactRoot]);
+            [fixture.ArtifactRoot], fixture.AdmissionAuthority);
     }
 
     private static StubHandler GitHub(Fixture fixture) => new(request =>
@@ -488,7 +539,8 @@ public sealed class AssistantEvaluationEvidenceTests : IDisposable
         Dictionary<string, byte[]> Files,
         ArtifactTrustRoot ArtifactRoot,
         string ArtifactKey,
-        string ReportSha256);
+        string ReportSha256,
+        Lex.Evaluation.EvaluationAdmissionAuthority AdmissionAuthority);
 
     private sealed class StubHandler(
         Func<HttpRequestMessage, HttpResponseMessage> respond) : HttpMessageHandler

@@ -931,12 +931,58 @@ public sealed class AssistantEvaluationTests : IDisposable
         Assert.Equal(200, invocation.StatusCode);
         Assert.Equal(EvaluationAdmissionContract.RunIdentity(capability),
             target.AdmissionRunIdentity);
+        Assert.Equal(Convert.ToHexStringLower(SHA256.HashData(bytes)),
+            target.AdmissionSha256);
         Assert.Equal(1, handler.ExchangeCalls);
         Assert.Equal(1, handler.AskCalls);
         Assert.Equal(1, handler.ResetCalls);
         Assert.Equal(handler.Token, handler.AskAdmissionHeaders.Single());
         Assert.DoesNotContain(Convert.ToBase64String(bytes),
             handler.AskAdmissionHeaders.Single(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Evaluation_target_accepts_only_the_server_confirmed_admission_run_identity()
+    {
+        var set = Reviewed(Catalog());
+        var identity = Identity();
+        var privateKey = StampSigner.CreateKeyPem();
+        var root = ArtifactManifests.TrustRoot("review-key", privateKey);
+        var authority = new EvaluationAdmissionAuthority(
+            "entra:test-reviewer", root.KeyId,
+            root.FingerprintSha256, root.PublicKeyPem);
+        var capability = EvalAdmissionCli.Create(
+            set, authority, new EvaluationAdmissionIdentity(
+                identity.Target.RevisionName, identity.Target.Image,
+                identity.Target.CodeCommit, identity.Target.ArtifactManifestSet,
+                set.Sha256),
+            DateTimeOffset.Parse("2026-08-11T02:00:00Z"),
+            Convert.ToBase64String(new byte[32])
+                .TrimEnd('=').Replace('+', '-').Replace('/', '_'));
+        var bytes = EvaluationAdmissionContract.Serialize(capability);
+        var signature = ArtifactManifests.SignBase64(bytes, privateKey);
+        var handler = new AdmittedEvaluationHandler(
+            identity, bytes, signature, returnedRunIdentity: "fedcba9876543210");
+        using var http = new HttpClient(handler);
+        var target = new AssistantEvaluationHttpTarget(
+            http, "https://candidate.example", bytes, signature);
+
+        Assert.Null(target.AdmissionRunIdentity);
+        await Assert.ThrowsAsync<InvalidDataException>(() =>
+            target.VerifyReleaseIdentityAsync(identity, CancellationToken.None));
+        Assert.Null(target.AdmissionRunIdentity);
+    }
+
+    [Fact]
+    public async Task Official_evaluation_requires_a_successfully_exchanged_signed_admission()
+    {
+        await Assert.ThrowsAsync<InvalidDataException>(() =>
+            AssistantEvaluationRunner.RunAsync(
+                Reviewed(Catalog()), new StubTarget(
+                    Response(), admissionRunIdentity: null), null,
+                Identity(), Pricing(),
+                DateTimeOffset.Parse("2026-08-11T02:00:00Z"),
+                CancellationToken.None));
     }
 
     [Fact]
@@ -995,17 +1041,21 @@ public sealed class AssistantEvaluationTests : IDisposable
     [Fact]
     public async Task Evaluation_run_identity_prevents_cross_run_idempotency_replay()
     {
-        var target = new StubTarget(Response());
+        var firstTarget = new StubTarget(Response(),
+            admissionRunIdentity: "0123456789abcdef");
+        var secondTarget = new StubTarget(Response(),
+            admissionRunIdentity: "fedcba9876543210");
         var set = Reviewed(Catalog());
         await AssistantEvaluationRunner.RunAsync(
-            set, target, null, Identity(), Pricing(),
+            set, firstTarget, null, Identity(), Pricing(),
             DateTimeOffset.Parse("2026-08-11T02:00:00Z"), CancellationToken.None);
         await AssistantEvaluationRunner.RunAsync(
-            set, target, null, Identity(), Pricing(),
+            set, secondTarget, null, Identity(), Pricing(),
             DateTimeOffset.Parse("2026-08-11T02:01:00Z"), CancellationToken.None);
 
-        Assert.Equal(4, target.Keys.Count);
-        Assert.Equal(4, target.Keys.Distinct(StringComparer.Ordinal).Count());
+        var keys = firstTarget.Keys.Concat(secondTarget.Keys).ToArray();
+        Assert.Equal(4, keys.Length);
+        Assert.Equal(4, keys.Distinct(StringComparer.Ordinal).Count());
     }
 
     [Fact]
@@ -1244,13 +1294,14 @@ public sealed class AssistantEvaluationTests : IDisposable
         await File.WriteAllBytesAsync(reportPath, bytes);
         Assert.Throws<InvalidDataException>(() =>
             AssistantEvaluationReleaseVerifier.VerifyReport(
-                reportPath, set, Identity().Target,
+                reportPath, reportPath, reportPath, set, Identity().Target,
                 new AssistantTargetAttestation(Identity().IndexManifestIds),
                 DateTimeOffset.Parse("2026-08-11T03:00:00Z")));
 
         await Assert.ThrowsAsync<InvalidDataException>(() =>
             AssistantEvaluationDiagnosticRunner.RunAsync(
-                set, new StubTarget(Response()), null, Identity(), Pricing(),
+                set, new StubTarget(
+                    Response(), admissionRunIdentity: null), null, Identity(), Pricing(),
                 DateTimeOffset.Parse("2026-08-11T02:00:00Z"),
                 CancellationToken.None));
         await Assert.ThrowsAsync<InvalidDataException>(() =>
@@ -1323,6 +1374,38 @@ public sealed class AssistantEvaluationTests : IDisposable
                 Identity(), Pricing(), DateTimeOffset.Parse("2026-08-11T02:00:00Z"),
                 CancellationToken.None));
         Assert.Equal(0, untouchedTarget.Calls);
+    }
+
+    [Fact]
+    public async Task Official_run_consumes_every_admitted_candidate_request_before_grading()
+    {
+        var llm = Catalog();
+        foreach (var item in llm["cases"]!.AsArray())
+        {
+            item!["grading"]!["mode"] = "llm";
+            item["grading"]!["rubric"] = "Judge only grounded accuracy.";
+            item["grading"]!["maximum_input_tokens"] = 4_096;
+            item["grading"]!["maximum_output_tokens"] = 1_000;
+        }
+        llm["budget"]!["maximum_grader_input_tokens"] = 8_192;
+        llm["budget"]!["maximum_grader_output_tokens"] = 2_000;
+        var events = new List<string>();
+
+        var report = await AssistantEvaluationRunner.RunAsync(
+            Reviewed(llm), new OrderedDiagnosticTarget(events, Response()),
+            new OrderedOfficialGrader(events), Identity(), Pricing(),
+            DateTimeOffset.Parse("2026-08-11T02:00:00Z"), CancellationToken.None);
+
+        Assert.Equal(
+            [
+                "target:gdpr-as-of",
+                "target:gdpr-as-of-synthesis",
+                "grader:gdpr-as-of",
+                "grader:gdpr-as-of-synthesis",
+            ],
+            events);
+        Assert.True(report.ActivationGatePassed);
+        Assert.All(report.Results, result => Assert.Equal(5, result.Grade));
     }
 
     [Fact]
@@ -1432,8 +1515,12 @@ public sealed class AssistantEvaluationTests : IDisposable
         var approval = SignedReview(Review(unreviewed.Sha256));
         var set = LoadWithRoots(
             catalogPath, approval.Review, approval.Signature, approval.Roots);
+        var admission = SignedAdmission(
+            set, DateTimeOffset.Parse("2026-08-11T02:00:00Z"));
         var report = await AssistantEvaluationRunner.RunAsync(
-            set, new StubTarget(Response()), null, Identity(), Pricing(),
+            set, new StubTarget(Response(),
+                admissionRunIdentity: admission.RunIdentity,
+                admissionSha256: admission.Sha256), null, Identity(), Pricing(),
             DateTimeOffset.Parse("2026-08-11T02:00:00Z"), CancellationToken.None);
         var reportPath = Path.Combine(_dir, "assistant-eval-report.json");
         File.WriteAllBytes(reportPath, JsonSerializer.SerializeToUtf8Bytes(report,
@@ -1466,6 +1553,8 @@ public sealed class AssistantEvaluationTests : IDisposable
             new SortedDictionary<string, string>(StringComparer.Ordinal)
             {
                 ["artifact_manifest_set"] = Identity().Target.ArtifactManifestSet,
+                ["admission_run_identity"] = admission.RunIdentity,
+                ["admission_sha256"] = admission.Sha256,
                 ["browser_evidence_sha256"] = Convert.ToHexStringLower(
                     SHA256.HashData(File.ReadAllBytes(browserPath))),
                 ["candidate_evidence_sha256"] = Identity().Target.EvidenceSha256,
@@ -1481,12 +1570,15 @@ public sealed class AssistantEvaluationTests : IDisposable
         File.WriteAllText(signaturePath,
             ArtifactManifests.SignBase64(manifestBytes, artifactKey));
 
-        var verified = AssistantEvaluationReleaseVerifier.VerifyReport(
-            reportPath, set, Identity().Target,
+        var verified = VerifyReportForTest(
+            reportPath, admission.Path, admission.SignaturePath,
+            set, Identity().Target,
             new AssistantTargetAttestation(Identity().IndexManifestIds),
-            DateTimeOffset.Parse("2026-08-11T03:00:00Z"));
+            DateTimeOffset.Parse("2026-08-11T03:00:00Z"), admission.Authority);
 
         Assert.True(verified.ActivationGatePassed);
+        Assert.Equal(admission.RunIdentity, verified.AdmissionRunIdentity);
+        Assert.Equal(admission.Sha256, verified.AdmissionSha256);
         var verifiedBrowser = AssistantEvaluationReleaseVerifier.VerifyBrowserEvidence(
             browserPath, Identity().Target, verified,
             DateTimeOffset.Parse("2026-08-11T03:00:00Z"));
@@ -1495,20 +1587,65 @@ public sealed class AssistantEvaluationTests : IDisposable
             verified, verifiedBrowser);
         var other = Identity().Target with { RevisionName = "ca-lex-candidate--other" };
         Assert.Throws<InvalidDataException>(() =>
-            AssistantEvaluationReleaseVerifier.VerifyReport(
-                reportPath, set, other,
+            VerifyReportForTest(
+                reportPath, admission.Path, admission.SignaturePath,
+                set, other,
                 new AssistantTargetAttestation(Identity().IndexManifestIds),
-                DateTimeOffset.Parse("2026-08-11T03:00:00Z")));
+                DateTimeOffset.Parse("2026-08-11T03:00:00Z"), admission.Authority));
 
         var tampered = JsonNode.Parse(File.ReadAllBytes(reportPath))!.AsObject();
         tampered["activation_gate_passed"] = true;
         tampered["results"]![0]!["prompt_sha256"] = new string('0', 64);
         File.WriteAllText(reportPath, tampered.ToJsonString());
         Assert.Throws<InvalidDataException>(() =>
-            AssistantEvaluationReleaseVerifier.VerifyReport(
-                reportPath, set, Identity().Target,
+            VerifyReportForTest(
+                reportPath, admission.Path, admission.SignaturePath,
+                set, Identity().Target,
                 new AssistantTargetAttestation(Identity().IndexManifestIds),
-                DateTimeOffset.Parse("2026-08-11T03:00:00Z")));
+                DateTimeOffset.Parse("2026-08-11T03:00:00Z"), admission.Authority));
+    }
+
+    [Fact]
+    public async Task Promotion_rejects_a_freshly_signed_admission_with_catalog_plan_drift()
+    {
+        var set = Reviewed(Catalog());
+        var runAt = DateTimeOffset.Parse("2026-08-11T02:00:00Z");
+        var admission = SignedAdmission(set, runAt);
+        var driftedRequest = admission.Capability.AllowedRequests[0] with
+        {
+            MaximumOutputTokens =
+                admission.Capability.AllowedRequests[0].MaximumOutputTokens - 1,
+        };
+        var driftedCapability = admission.Capability with
+        {
+            AllowedRequests = [driftedRequest,
+                .. admission.Capability.AllowedRequests.Skip(1)],
+        };
+        var driftedBytes = EvaluationAdmissionContract.Serialize(driftedCapability);
+        File.WriteAllBytes(admission.Path, driftedBytes);
+        File.WriteAllText(admission.SignaturePath,
+            ArtifactManifests.SignBase64(driftedBytes, admission.PrivateKey));
+        var driftedSha = Convert.ToHexStringLower(SHA256.HashData(driftedBytes));
+        var report = await AssistantEvaluationRunner.RunAsync(
+            set, new StubTarget(Response(),
+                admissionRunIdentity: admission.RunIdentity,
+                admissionSha256: driftedSha), null, Identity(), Pricing(),
+            runAt, CancellationToken.None);
+        var reportPath = Path.Combine(_dir, "drifted-admission-report.json");
+        File.WriteAllBytes(reportPath, JsonSerializer.SerializeToUtf8Bytes(report,
+            new JsonSerializerOptions
+            {
+                PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+            }));
+
+        Assert.Throws<InvalidDataException>(() =>
+            VerifyReportForTest(
+                reportPath, admission.Path, admission.SignaturePath,
+                set, Identity().Target,
+                new AssistantTargetAttestation(Identity().IndexManifestIds),
+                DateTimeOffset.Parse("2026-08-20T03:00:00Z"),
+                admission.Authority,
+                allowOlderPreviouslyPromotedEvidence: true));
     }
 
     [Fact]
@@ -1547,8 +1684,12 @@ public sealed class AssistantEvaluationTests : IDisposable
         catalog["cases"]![0]!["grading"]!["maximum_input_tokens"] = 4_096;
         catalog["budget"]!["maximum_grader_input_tokens"] = 8_192;
         var set = Reviewed(catalog);
+        var admission = SignedAdmission(
+            set, DateTimeOffset.Parse("2026-08-11T02:00:00Z"));
         var report = await AssistantEvaluationRunner.RunAsync(
-            set, new StubTarget(Response()), new EchoGrader("grounded"),
+            set, new StubTarget(Response(),
+                admissionRunIdentity: admission.RunIdentity,
+                admissionSha256: admission.Sha256), new EchoGrader("grounded"),
             Identity(), Pricing(), DateTimeOffset.Parse("2026-08-11T02:00:00Z"),
             CancellationToken.None);
         var reportPath = Path.Combine(_dir, "tampered-grade-report.json");
@@ -1558,19 +1699,21 @@ public sealed class AssistantEvaluationTests : IDisposable
             WriteIndented = true,
         };
         File.WriteAllBytes(reportPath, JsonSerializer.SerializeToUtf8Bytes(report, options));
-        AssistantEvaluationReleaseVerifier.VerifyReport(
-            reportPath, set, Identity().Target,
+        VerifyReportForTest(
+            reportPath, admission.Path, admission.SignaturePath,
+            set, Identity().Target,
             new AssistantTargetAttestation(Identity().IndexManifestIds),
-            DateTimeOffset.Parse("2026-08-11T03:00:00Z"));
+            DateTimeOffset.Parse("2026-08-11T03:00:00Z"), admission.Authority);
 
         var tampered = JsonNode.Parse(File.ReadAllBytes(reportPath))!.AsObject();
         tampered["results"]![0]!["grade"] = null;
         File.WriteAllText(reportPath, tampered.ToJsonString());
         Assert.Throws<InvalidDataException>(() =>
-            AssistantEvaluationReleaseVerifier.VerifyReport(
-                reportPath, set, Identity().Target,
+            VerifyReportForTest(
+                reportPath, admission.Path, admission.SignaturePath,
+                set, Identity().Target,
                 new AssistantTargetAttestation(Identity().IndexManifestIds),
-                DateTimeOffset.Parse("2026-08-11T03:00:00Z")));
+                DateTimeOffset.Parse("2026-08-11T03:00:00Z"), admission.Authority));
     }
 
     [Fact]
@@ -1583,8 +1726,12 @@ public sealed class AssistantEvaluationTests : IDisposable
         catalog["cases"]![0]!["grading"]!["maximum_input_tokens"] = 4_096;
         catalog["budget"]!["maximum_grader_input_tokens"] = 8_192;
         var set = Reviewed(catalog);
+        var admission = SignedAdmission(
+            set, DateTimeOffset.Parse("2026-08-11T02:00:00Z"));
         var report = await AssistantEvaluationRunner.RunAsync(
-            set, new StubTarget(Response()), new EchoGrader("grounded"),
+            set, new StubTarget(Response(),
+                admissionRunIdentity: admission.RunIdentity,
+                admissionSha256: admission.Sha256), new EchoGrader("grounded"),
             Identity(), Pricing(), DateTimeOffset.Parse("2026-08-11T02:00:00Z"),
             CancellationToken.None);
         var reportPath = Path.Combine(_dir, "invalid-usage-report.json");
@@ -1606,10 +1753,11 @@ public sealed class AssistantEvaluationTests : IDisposable
         File.WriteAllBytes(reportPath,
             JsonSerializer.SerializeToUtf8Bytes(zeroCandidate, options));
         Assert.Throws<InvalidDataException>(() =>
-            AssistantEvaluationReleaseVerifier.VerifyReport(
-                reportPath, set, Identity().Target,
+            VerifyReportForTest(
+                reportPath, admission.Path, admission.SignaturePath,
+                set, Identity().Target,
                 new AssistantTargetAttestation(Identity().IndexManifestIds),
-                DateTimeOffset.Parse("2026-08-11T03:00:00Z")));
+                DateTimeOffset.Parse("2026-08-11T03:00:00Z"), admission.Authority));
 
         var invalidGraderUsage = new AssistantModelUsage(-1, -1);
         var invalidGraderCost = report.Pricing.GraderCost(
@@ -1627,10 +1775,11 @@ public sealed class AssistantEvaluationTests : IDisposable
         File.WriteAllBytes(reportPath,
             JsonSerializer.SerializeToUtf8Bytes(negativeGrader, options));
         Assert.Throws<InvalidDataException>(() =>
-            AssistantEvaluationReleaseVerifier.VerifyReport(
-                reportPath, set, Identity().Target,
+            VerifyReportForTest(
+                reportPath, admission.Path, admission.SignaturePath,
+                set, Identity().Target,
                 new AssistantTargetAttestation(Identity().IndexManifestIds),
-                DateTimeOffset.Parse("2026-08-11T03:00:00Z")));
+                DateTimeOffset.Parse("2026-08-11T03:00:00Z"), admission.Authority));
     }
 
     [Fact]
@@ -1640,8 +1789,12 @@ public sealed class AssistantEvaluationTests : IDisposable
         catalog["pricing"]!["retrieved_at"] = "2026-07-31T00:30:00Z";
         catalog["pricing"]!["valid_until"] = "2026-08-07T00:30:00Z";
         var set = Reviewed(catalog);
+        var admission = SignedAdmission(
+            set, DateTimeOffset.Parse("2026-08-01T02:00:00Z"));
         var report = await AssistantEvaluationRunner.RunAsync(
-            set, new StubTarget(Response()), null, Identity(), set.Catalog.Pricing,
+            set, new StubTarget(Response(),
+                admissionRunIdentity: admission.RunIdentity,
+                admissionSha256: admission.Sha256), null, Identity(), set.Catalog.Pricing,
             DateTimeOffset.Parse("2026-08-01T02:00:00Z"), CancellationToken.None);
         var reportPath = Path.Combine(_dir, "older-assistant-eval-report.json");
         File.WriteAllBytes(reportPath, JsonSerializer.SerializeToUtf8Bytes(report,
@@ -1649,13 +1802,17 @@ public sealed class AssistantEvaluationTests : IDisposable
         var verifiedAt = DateTimeOffset.Parse("2026-08-11T03:00:00Z");
 
         Assert.Throws<InvalidDataException>(() =>
-            AssistantEvaluationReleaseVerifier.VerifyReport(
-                reportPath, set, Identity().Target,
-                new AssistantTargetAttestation(Identity().IndexManifestIds), verifiedAt));
+            VerifyReportForTest(
+                reportPath, admission.Path, admission.SignaturePath,
+                set, Identity().Target,
+                new AssistantTargetAttestation(Identity().IndexManifestIds), verifiedAt,
+                admission.Authority));
 
-        var verified = AssistantEvaluationReleaseVerifier.VerifyReport(
-            reportPath, set, Identity().Target,
+        var verified = VerifyReportForTest(
+            reportPath, admission.Path, admission.SignaturePath,
+            set, Identity().Target,
             new AssistantTargetAttestation(Identity().IndexManifestIds), verifiedAt,
+            admission.Authority,
             allowOlderPreviouslyPromotedEvidence: true);
 
         Assert.True(verified.ActivationGatePassed);
@@ -1857,7 +2014,8 @@ public sealed class AssistantEvaluationTests : IDisposable
             path, approval.Review, approval.Signature, approval.Roots);
     }
 
-    private (string Review, string Signature, IReadOnlyList<ArtifactTrustRoot> Roots)
+    private (string Review, string Signature, IReadOnlyList<ArtifactTrustRoot> Roots,
+        string Key)
         SignedReview(JsonObject review)
     {
         var key = StampSigner.CreateKeyPem();
@@ -1866,8 +2024,46 @@ public sealed class AssistantEvaluationTests : IDisposable
         var signaturePath = Path.Combine(_dir, $"{Guid.NewGuid():N}.sig");
         File.WriteAllText(signaturePath,
             ArtifactManifests.SignBase64(File.ReadAllBytes(reviewPath), key));
-        return (reviewPath, signaturePath, [root]);
+        return (reviewPath, signaturePath, [root], key);
     }
+
+    private SignedAdmissionEvidence SignedAdmission(
+        AssistantEvaluationSet set, DateTimeOffset runAt)
+    {
+        var privateKey = StampSigner.CreateKeyPem();
+        var root = ArtifactManifests.TrustRoot("independent-reviewer", privateKey);
+        var authority = new EvaluationAdmissionAuthority(
+            "entra:test-reviewer", root.KeyId,
+            root.FingerprintSha256, root.PublicKeyPem);
+        var capability = EvalAdmissionCli.Create(
+            set, authority, new EvaluationAdmissionIdentity(
+                Identity().Target.RevisionName, Identity().Target.Image,
+                Identity().Target.CodeCommit, Identity().Target.ArtifactManifestSet,
+                set.Sha256), runAt.AddMinutes(-1),
+            Convert.ToBase64String(Enumerable.Repeat((byte)7, 32).ToArray())
+                .TrimEnd('=').Replace('+', '-').Replace('/', '_'));
+        var bytes = EvaluationAdmissionContract.Serialize(capability);
+        var path = Path.Combine(
+            _dir, AssistantEvaluationReleaseVerifier.AdmissionFile);
+        var signaturePath = Path.Combine(
+            _dir, AssistantEvaluationReleaseVerifier.AdmissionSignatureFile);
+        File.WriteAllBytes(path, bytes);
+        File.WriteAllText(signaturePath,
+            ArtifactManifests.SignBase64(bytes, privateKey));
+        return new(path, signaturePath,
+            Convert.ToHexStringLower(SHA256.HashData(bytes)),
+            EvaluationAdmissionContract.RunIdentity(capability),
+            capability, authority, privateKey);
+    }
+
+    private sealed record SignedAdmissionEvidence(
+        string Path,
+        string SignaturePath,
+        string Sha256,
+        string RunIdentity,
+        EvaluationAdmissionCapability Capability,
+        EvaluationAdmissionAuthority Authority,
+        string PrivateKey);
 
     private static JsonObject Review(string casesSha256) => new()
     {
@@ -2024,6 +2220,37 @@ public sealed class AssistantEvaluationTests : IDisposable
             .GetMethod("LoadForTest", BindingFlags.Static | BindingFlags.NonPublic)
             ?? throw new InvalidOperationException("Evaluation test verifier is absent."))
         .Invoke(null, [path, review, signature, roots, "entra:test-reviewer"])!;
+
+    private static AssistantEvaluationReport VerifyReportForTest(
+        string reportPath,
+        string admissionPath,
+        string admissionSignaturePath,
+        AssistantEvaluationSet set,
+        AssistantCandidateRuntimeEvidence target,
+        AssistantTargetAttestation attestation,
+        DateTimeOffset verifiedAt,
+        EvaluationAdmissionAuthority authority,
+        bool allowOlderPreviouslyPromotedEvidence = false)
+    {
+        var method = typeof(AssistantEvaluationReleaseVerifier).GetMethod(
+            "VerifyReportForTest", BindingFlags.Static | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException(
+                "Evaluation admission release verifier is absent.");
+        try
+        {
+            return (AssistantEvaluationReport)method.Invoke(null,
+            [
+                reportPath, admissionPath, admissionSignaturePath, set, target,
+                attestation, verifiedAt, authority,
+                allowOlderPreviouslyPromotedEvidence,
+            ])!;
+        }
+        catch (TargetInvocationException exception)
+            when (exception.InnerException is InvalidDataException inner)
+        {
+            throw inner;
+        }
+    }
 
     private static (ArtifactTrustRoot Root, string ReviewerId) EmbeddedReviewAuthority()
     {
@@ -2229,11 +2456,15 @@ public sealed class AssistantEvaluationTests : IDisposable
         double elapsedMilliseconds = 20,
         bool invertSynthesis = false,
         JsonObject? setupResponse = null,
-        string? admissionRunIdentity = null) : IAssistantEvaluationTarget
+        string? admissionRunIdentity = "0123456789abcdef",
+        string? admissionSha256 =
+            "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+        : IAssistantEvaluationTarget
     {
         public int Calls { get; private set; }
         public List<string> Keys { get; } = [];
         public string? AdmissionRunIdentity => admissionRunIdentity;
+        public string? AdmissionSha256 => admissionSha256;
 
         public Task VerifyReleaseIdentityAsync(
             AssistantEvaluationIdentity identity,
@@ -2288,6 +2519,8 @@ public sealed class AssistantEvaluationTests : IDisposable
         int statusCode = 200) : IAssistantEvaluationTarget
     {
         public string? AdmissionRunIdentity => "0123456789abcdef";
+        public string? AdmissionSha256 =>
+            "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
         public Task VerifyReleaseIdentityAsync(
             AssistantEvaluationIdentity identity,
@@ -2301,7 +2534,24 @@ public sealed class AssistantEvaluationTests : IDisposable
             events.Add($"target:{evaluationCase.Id}");
             return Task.FromResult(new AssistantEvaluationInvocation(
                 statusCode, response.DeepClone().AsObject(),
-                new AssistantEvaluationTimings(1, 1, 1, 1, null, 4)));
+                new AssistantEvaluationTimings(
+                    1, 1, 1, 1,
+                    evaluationCase.ExpectedSynthesis == true ? 1 : null,
+                    4)));
+        }
+    }
+
+    private sealed class OrderedOfficialGrader(List<string> events)
+        : IAssistantEvaluationGrader
+    {
+        public Task<AssistantEvaluationGrade> GradeAsync(
+            AssistantEvaluationCase evaluationCase,
+            JsonObject response,
+            CancellationToken cancellationToken)
+        {
+            events.Add($"grader:{evaluationCase.Id}");
+            return Task.FromResult(new AssistantEvaluationGrade(
+                5, "grounded", new AssistantModelUsage(100, 20)));
         }
     }
 
@@ -2505,7 +2755,8 @@ public sealed class AssistantEvaluationTests : IDisposable
     private sealed class AdmittedEvaluationHandler(
         AssistantEvaluationIdentity identity,
         byte[] expectedAdmission,
-        string expectedSignature) : HttpMessageHandler
+        string expectedSignature,
+        string? returnedRunIdentity = null) : HttpMessageHandler
     {
         public string Token { get; } = Convert.ToBase64String(
                 Enumerable.Repeat((byte)1, 32).ToArray())
@@ -2547,6 +2798,9 @@ public sealed class AssistantEvaluationTests : IDisposable
                     {
                         ["evaluation_token"] = Token,
                         ["max_calls"] = 2,
+                        ["run_identity"] = returnedRunIdentity
+                            ?? EvaluationAdmissionContract.RunIdentity(
+                                EvaluationAdmissionContract.Parse(expectedAdmission)),
                     });
                     response.Headers.CacheControl = new()
                     {
