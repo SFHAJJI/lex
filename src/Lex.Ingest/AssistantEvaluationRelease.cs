@@ -206,7 +206,7 @@ public static class AssistantEvaluationReleaseVerifier
                 && verifiedAt - runAt > TimeSpan.FromDays(7))
             throw new InvalidDataException("Assistant evaluation report identity or freshness is invalid.");
         if (report.Identity is null || report.Pricing is null || report.Preflight is null
-            || report.Identity.Target != expectedTarget
+            || !report.Identity.Target.DescribesSameCandidateAs(expectedTarget)
             || report.Pricing != caseSet.Catalog.Pricing
             || !SameSet(report.Identity.IndexManifestIds, targetAttestation.IndexManifestIds))
             throw new InvalidDataException(
