@@ -29,7 +29,40 @@ public sealed record AssistantCandidateRuntimeEvidence(
     string ArtifactManifestSet,
     string CandidateModelHost,
     string CandidateDeployment,
-    string EvidenceSha256);
+    string EvidenceSha256)
+{
+    /// <summary>
+    /// Whether two records name the same running candidate. Every field is compared exactly except
+    /// the Azure resource id, the revision hostname and the candidate model host, which are
+    /// compared without case because ARM ids and DNS names are case-insensitive.
+    /// </summary>
+    /// <remarks>
+    /// Azure Resource Manager does not preserve the casing of the type segment: asking for
+    /// <c>.../Microsoft.App/containerApps/ca-lex-web</c> returns <c>.../containerapps/ca-lex-web</c>.
+    /// Record equality is ordinal, so a report whose id came from an operator's argument and live
+    /// evidence whose id came from ARM differed by one letter and the publisher reported that the
+    /// report did not describe the candidate. It did. The evidence digest already lowercases both
+    /// fields, so the format had settled this question in one place and not the other; DNS names and
+    /// ARM ids are case-insensitive and are now treated that way wherever they are compared.
+    /// </remarks>
+    public bool DescribesSameCandidateAs(AssistantCandidateRuntimeEvidence other)
+    {
+        ArgumentNullException.ThrowIfNull(other);
+        return string.Equals(ResourceId.TrimEnd('/'), other.ResourceId.TrimEnd('/'),
+                   StringComparison.OrdinalIgnoreCase)
+            && string.Equals(RevisionFqdn, other.RevisionFqdn, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(CandidateModelHost, other.CandidateModelHost,
+                   StringComparison.OrdinalIgnoreCase)
+            && (this with
+                {
+                    ResourceId = "", RevisionFqdn = "", CandidateModelHost = "",
+                })
+                == (other with
+                {
+                    ResourceId = "", RevisionFqdn = "", CandidateModelHost = "",
+                });
+    }
+}
 
 public sealed record AssistantModelDeploymentEvidence(
     string ResourceId,

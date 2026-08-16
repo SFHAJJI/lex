@@ -205,8 +205,12 @@ public static class AssistantEvaluationReleaseVerifier
             || !allowOlderPreviouslyPromotedEvidence
                 && verifiedAt - runAt > TimeSpan.FromDays(7))
             throw new InvalidDataException("Assistant evaluation report identity or freshness is invalid.");
+        // Target is checked for null explicitly: the annotation is not enforced by the deserializer,
+        // and this call would raise a null reference rather than the typed refusal a tampered report
+        // must produce. Reported in review.
         if (report.Identity is null || report.Pricing is null || report.Preflight is null
-            || report.Identity.Target != expectedTarget
+            || report.Identity.Target is null
+            || !report.Identity.Target.DescribesSameCandidateAs(expectedTarget)
             || report.Pricing != caseSet.Catalog.Pricing
             || !SameSet(report.Identity.IndexManifestIds, targetAttestation.IndexManifestIds))
             throw new InvalidDataException(

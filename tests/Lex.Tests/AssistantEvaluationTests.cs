@@ -2820,6 +2820,43 @@ public sealed class AssistantEvaluationTests : IDisposable
         finally { CultureInfo.CurrentCulture = previous; }
     }
 
+    [Fact]
+    public void Azure_resource_id_casing_does_not_change_which_candidate_a_report_describes()
+    {
+        // Asking ARM for .../Microsoft.App/containerApps/ca-lex-web returns
+        // .../containerapps/ca-lex-web. Record equality is ordinal, so a report whose id came from
+        // an operator argument and live evidence whose id came from ARM differed by one letter, and
+        // publication refused a report that described the candidate exactly. Hostnames are
+        // case-insensitive for the same reason.
+        var fromOperator = new AssistantCandidateRuntimeEvidence(
+            "/subscriptions/11111111-1111-1111-1111-111111111111/resourceGroups/rg-platform/providers/Microsoft.App/containerApps/ca-lex-web",
+            "ca-lex-web--release", "Ca-Lex-Web--Release.Example",
+            "registry.example/lex:sha-aaaaaaaaaaaa", 1m, 2_147_483_648,
+            1, 1, 0, new string('a', 40), new string('d', 64),
+            "OAI-Soufien-Dev.openai.azure.com", "gpt-5-mini", "");
+        var fromAzure = fromOperator with
+        {
+            ResourceId = fromOperator.ResourceId.Replace("containerApps", "containerapps"),
+            RevisionFqdn = fromOperator.RevisionFqdn.ToLowerInvariant(),
+            CandidateModelHost = fromOperator.CandidateModelHost.ToLowerInvariant(),
+        };
+
+        Assert.NotEqual(fromOperator, fromAzure);
+        Assert.True(fromOperator.DescribesSameCandidateAs(fromAzure));
+        Assert.True(fromAzure.DescribesSameCandidateAs(fromOperator));
+
+        // Case insensitivity is scoped: a different revision, image or replica count is still a
+        // different candidate, and the deployment name is a literal Azure preserves.
+        Assert.False(fromOperator.DescribesSameCandidateAs(
+            fromAzure with { RevisionName = "ca-lex-web--other" }));
+        Assert.False(fromOperator.DescribesSameCandidateAs(
+            fromAzure with { Image = "registry.example/lex:sha-bbbbbbbbbbbb" }));
+        Assert.False(fromOperator.DescribesSameCandidateAs(fromAzure with { TrafficWeight = 100 }));
+        Assert.False(fromOperator.DescribesSameCandidateAs(
+            fromAzure with { CandidateDeployment = "GPT-5-MINI" }));
+        Assert.Throws<ArgumentNullException>(() => fromOperator.DescribesSameCandidateAs(null!));
+    }
+
     private static AssistantCandidateRuntimeEvidence TargetEvidence()
     {
         var evidence = new AssistantCandidateRuntimeEvidence(
