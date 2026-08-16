@@ -299,6 +299,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          # Every guard in this step reports through ::error::, but set -e also kills it on any
+          # unguarded command, and then the only thing in the log is the cleanup handler's own
+          # message. Run 31949774175 minted a healthy R and C and died with nothing but
+          # "bootstrap failed safely", which cost half an hour of reading Azure to rule out causes
+          # the runner already knew. The line number is the cheapest thing this step can say.
+          trap 'status=$?; [ "$status" = 0 ] || echo "::error::candidate step failed at line ${BASH_LINENO[0]:-?} with status $status"' ERR
           . scripts/deploy/az-retry.sh
           . scripts/deploy/az-reauth.sh
           bootstrap="${BOOTSTRAP_FIRST_OFFICIAL:-false}"
