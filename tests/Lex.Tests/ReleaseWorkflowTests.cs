@@ -211,7 +211,12 @@ public sealed class ReleaseWorkflowTests
         Assert.Contains("Luxembourg hybrid activation smoke contradicted readiness", workflow);
         Assert.Contains("current-user injection escaped its authorized boundary", workflow);
         Assert.Contains("restored-transcript injection escaped its authorized boundary", workflow);
-        Assert.Contains("set -euo pipefail", candidateBlock);
+        // errtrace as well, so the ERR trap reaches the dozen functions this step defines. Asserted
+        // on the property rather than the exact flag string: a step that stops on the first error,
+        // refuses an unset variable, fails a pipeline on any member and reports where it broke is
+        // what this line protects, and pinning the spelling is what made a stronger form fail.
+        Assert.Contains("set -eEuo pipefail", candidateBlock);
+        Assert.Contains("trap 'status=$?;", candidateBlock);
         Assert.Contains("candidate MCP response did not contain a text result", workflow);
         Assert.Contains("--revision \"$candidate\" --query properties.template.scale", workflow);
         Assert.DoesNotContain("| grep -q '\"reply\"'", workflow);
