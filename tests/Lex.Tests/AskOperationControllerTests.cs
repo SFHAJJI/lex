@@ -528,6 +528,8 @@ public sealed class AskOperationControllerTests : IDisposable
     [InlineData("Show the timeline for the Atlantis Regulation / summarize Article 5.")]
     [InlineData("Show the timeline for the Atlantis Regulation including Article 5 text.")]
     [InlineData("Show the timeline for the Atlantis Regulation; summarize Article 5.")]
+    [InlineData("Show the timeline for the Atlantis Regulation And DORA Regulation.")]
+    [InlineData("Show the timeline for the Atlantis Regulation And Summarize Article 5 Regulation.")]
     public async Task Compound_timeline_request_is_not_swallowed_by_the_deterministic_shortcut(
         string question)
     {

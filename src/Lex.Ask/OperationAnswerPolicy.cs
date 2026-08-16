@@ -252,7 +252,8 @@ internal static class OperationAnswerPolicy
                 : $"The proof chain for {verification.LexId} is open below. Signature: {Signature(fr, verification.SignatureValid)}.";
         if (effect.Workspace is { Results.Count: > 0 } search)
         {
-            var facts = string.Join("; ", search.Results.Take(3).Select(SearchFactLine));
+            var facts = string.Join("; ", search.Results.Take(3)
+                .Select(fact => SearchFactLine(fact, fr)));
             return fr
                 ? $"Lex a trouvé {search.Results.Count:n0} correspondance(s) bornée(s) dans des dispositions publiées : {facts}."
                 : $"Lex found {search.Results.Count:n0} bounded publisher-provision match(es): {facts}.";
@@ -263,18 +264,19 @@ internal static class OperationAnswerPolicy
         return null;
     }
 
-    private static string SearchFactLine(SearchFact fact)
+    private static string SearchFactLine(SearchFact fact, bool french)
     {
         var provision = fact.Number is { Length: > 0 } number ? number : fact.Anchor;
         if (fact.Heading is { Length: > 0 } heading) provision += $" — {heading}";
         var work = fact.Title is { Length: > 0 } title
             ? $"{title} ({fact.Work})" : fact.Work;
+        var separator = french ? "dans" : "in";
         if (fact.Snippet is not { Length: > 0 } snippet)
-            return $"{provision} in {work}";
+            return $"{provision} {separator} {work}";
         snippet = string.Join(' ', snippet.Split(
             (char[]?)null, StringSplitOptions.RemoveEmptyEntries));
         if (snippet.Length > 240) snippet = snippet[..239] + "…";
-        return $"{provision} in {work}: {snippet}";
+        return $"{provision} {separator} {work}: {snippet}";
     }
 
     /// <summary>The requested instant and the served one, whenever they differ. A version that
