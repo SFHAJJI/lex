@@ -337,8 +337,9 @@ public sealed class RetrievalAgentContractTests
             [new ProvisionItem("art_6", "6", "Lawfulness", "Held legal text", "abc")], null));
 
         Assert.Equal(
-            refused + " The exact publisher text for GDPR (eu-eurlex:32016r0679) at 2016-05-04 is "
-            + "open below. You asked about 2021-01-01; this is the state in force from 2016-05-04.",
+            refused + " The verified publisher text of 6 — Lawfulness in GDPR "
+            + "(eu-eurlex:32016r0679), state from 2016-05-04, is: “Held legal text” "
+            + "You asked about 2021-01-01; this is the state in force from 2016-05-04.",
             AskService.ReplyFor(fallback, [text], "en", synthesisFailed: true));
 
         var comparison = new UiEffect(Diff: new DiffView(
