@@ -80,8 +80,13 @@ deterministic typed results need no LLM judge.
 9. The planner may set `synthesis=true` only when the reader explicitly asks to explain, describe
    or summarise the accepted results. There is no hidden UI toggle. For example: "Show Article 6
    on 1 Jan 2021 and explain it."
-10. Runtime additionally requires no displayed clarification, no `NeedsClarification` result and no
-    transport failure. The grounded composer and conditional judge are two separate logical
+10. Runtime additionally requires no displayed clarification, no `NeedsClarification` result, no
+    transport failure, and at least one accepted operation that is not an inventory. `coverage`,
+    `cited_by` and `in_force_on` return closed typed lists the deterministic reply already renders
+    in full and carry no publisher text to describe, so the same coverage question once served 294
+    output tokens and once 4,973 with a composer; the flag is now reconciled against the frozen
+    plan rather than trusted, and never against the reader's words, which quoted content controls.
+    The grounded composer and conditional judge are two separate logical
     Microsoft Agent Framework agents with separate sessions over the same configured Azure OpenAI
     chat client and deployment used by Ask. They are roles, not a second deployment or an
     autonomous observation loop.
