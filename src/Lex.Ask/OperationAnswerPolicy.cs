@@ -129,9 +129,19 @@ internal static class OperationAnswerPolicy
                 ? $"Dans un périmètre sélectionné de {ranking.PopulationWorks:n0} instruments, Lex en a trouvé {ranking.WorksChanged:n0} ayant reçu {ranking.NewVersions:n0} dates de version éditeur entre le {ranking.FromDate} et le {ranking.ToDate}. Le classement vérifié est affiché ci-dessous."
                 : $"Within a selected population of {ranking.PopulationWorks:n0} works, Lex found {ranking.WorksChanged:n0} instruments with {ranking.NewVersions:n0} publisher version dates between {ranking.FromDate} and {ranking.ToDate}. The verified ranking is open below.";
         if (effect.InForce is { } inForce)
+        {
+            var jurisdictions = string.Join(", ", (inForce.Evidence ?? [])
+                .Select(item => item.Jurisdiction)
+                .Where(value => value is { Length: > 0 })
+                .Distinct(StringComparer.Ordinal)
+                .Order(StringComparer.Ordinal));
+            var scope = jurisdictions.Length == 0 ? "" : fr
+                ? $" pour {jurisdictions}"
+                : $" across {jurisdictions}";
             return fr
-                ? $"Lex a trouvé {inForce.Total:n0} états éditeur couvrant le {inForce.Date}. La liste est affichée ci-dessous."
-                : $"Lex found {inForce.Total:n0} publisher states covering {inForce.Date}. The list is open below.";
+                ? $"Lex a trouvé {inForce.Total:n0} états observés par les éditeurs{scope} couvrant le {inForce.Date}. Il ne s'agit pas d'un inventaire exhaustif de l'effet juridique."
+                : $"Lex found {inForce.Total:n0} publisher-observed states{scope} covering {inForce.Date}. This is not an exhaustive legal-effect inventory.";
+        }
         if (effect.CitedBy is { } cited)
             return fr
                 ? $"Lex a trouvé {cited.CitingArticles:n0} article(s) faisant référence à {cited.CitedWork}."
@@ -149,6 +159,16 @@ internal static class OperationAnswerPolicy
                 return fr
                     ? $"Lex détient le texte publié de {Name(provision.Subject)} au {provision.ValidFrom}, mais cette réponse bornée n'en affiche qu'une partie. Les liens officiels sont disponibles ci-dessous." + served
                     : $"Lex holds the publisher text for {Name(provision.Subject)} at {provision.ValidFrom}, but this bounded response shows only part of it. The official links are available below." + served;
+            if (provision.Provisions.Count == 1
+                && provision.Provisions[0] is { TextOmitted: false, Text.Length: > 0 } item)
+            {
+                var label = item.Num is { Length: > 0 } ? item.Num : item.Anchor;
+                var heading = item.Heading is { Length: > 0 } ? $" — {item.Heading}" : "";
+                var excerpt = Excerpt(item.Text, 600);
+                return fr
+                    ? $"Le texte éditeur vérifié de {label}{heading} dans {Name(provision.Subject)}, état du {provision.ValidFrom}, est : « {excerpt} »" + served
+                    : $"The verified publisher text of {label}{heading} in {Name(provision.Subject)}, state from {provision.ValidFrom}, is: “{excerpt}”" + served;
+            }
             return fr
                 ? $"Le texte exact publié pour {Name(provision.Subject)} à la date du {provision.ValidFrom} est affiché ci-dessous." + served
                 : $"The exact publisher text for {Name(provision.Subject)} at {provision.ValidFrom} is open below." + served;
@@ -164,9 +184,31 @@ internal static class OperationAnswerPolicy
                     ? $"La comparaison vérifiée de {Name(diff.Subject)} entre le {diff.FromDate} et le {diff.ToDate} est affichée ci-dessous."
                     : $"The verified comparison of {Name(diff.Subject)} between {diff.FromDate} and {diff.ToDate} is open below.";
         if (effect.History is { } history)
+        {
+            var first = history.States.Select(state => state.ValidFrom)
+                .Where(value => value.Length > 0).Order(StringComparer.Ordinal).FirstOrDefault();
+            var last = history.States.Select(state => state.ValidFrom)
+                .Where(value => value.Length > 0).Order(StringComparer.Ordinal).LastOrDefault();
+            var dates = first is null ? "" : first == last
+                ? (fr ? $", daté du {first}" : $", dated {first}")
+                : (fr ? $", du {first} au dernier état commençant le {last}"
+                    : $", from {first} through the latest state beginning {last}");
+            var semantics = history.Evidence?.Select(item => item.TimelineSemantics)
+                .FirstOrDefault(value => value is { Length: > 0 });
+            var kind = semantics switch
+            {
+                "official_consolidation_state" => fr
+                    ? "états de consolidation de l'éditeur"
+                    : "publisher consolidation states",
+                "publisher_applicability" => fr
+                    ? "états d'applicabilité de l'éditeur"
+                    : "publisher applicability states",
+                _ => fr ? "états de version de l'éditeur" : "publisher version states",
+            };
             return fr
-                ? $"L'historique vérifié de {history.Anchor} dans {Name(history.Subject)} contient {history.DistinctTexts:n0} texte(s) distinct(s)."
-                : $"The verified history of {history.Anchor} in {Name(history.Subject)} contains {history.DistinctTexts:n0} distinct text(s).";
+                ? $"L'historique vérifié de {history.Anchor} dans {Name(history.Subject)} contient {history.DistinctTexts:n0} texte(s) distinct(s){dates}. Ce sont des {kind}, pas des conclusions sur l'effet juridique."
+                : $"The verified history of {history.Anchor} in {Name(history.Subject)} contains {history.DistinctTexts:n0} distinct text(s){dates}. These are {kind}, not conclusions about legal effect.";
+        }
         if (effect.Timeline is { } timeline)
         {
             var first = timeline.Rows.Select(row => row.ValidFrom)
@@ -238,6 +280,14 @@ internal static class OperationAnswerPolicy
         subject.Title is { Length: > 0 } title && !string.Equals(title, subject.Work, StringComparison.Ordinal)
             ? $"{title} ({subject.Work})"
             : subject.Work;
+
+    private static string Excerpt(string text, int maximumCharacters)
+    {
+        var normalized = text.Replace('\r', ' ').Replace('\n', ' ').Trim();
+        return normalized.Length <= maximumCharacters
+            ? normalized
+            : normalized[..maximumCharacters].TrimEnd() + " …";
+    }
 
     private static string Signature(bool fr, bool? valid) => (fr, valid) switch
     {

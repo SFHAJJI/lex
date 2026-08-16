@@ -11,6 +11,92 @@ namespace Lex.Tests;
 public sealed class OperationPolicyTests
 {
     [Fact]
+    public void Deterministic_answers_surface_bounded_provision_history_and_in_force_facts()
+    {
+        var evidence = new[]
+        {
+            new EvidenceContext(
+                Publisher: "eu-eurlex", Jurisdiction: "EU",
+                TimelineSemantics: "official_consolidation_state",
+                RequestedDate: "2021-01-01", RequestedFromDate: null,
+                RequestedToDate: null, ObservedAt: null, ValidFrom: "2018-05-25",
+                ValidTo: null, Provisional: false, SourceUri: null,
+                ExtractionProfile: null, RecordSha256: null, BodySha256: null,
+                TextSha256: null, ArtifactManifestId: null, ContentDigest: null,
+                SignatureValid: true),
+        };
+        var provisionOperation = RequestedOperation.CreatePlanned(
+            "req:op-1", 0, "as_of", new JsonObject
+            {
+                ["work"] = "eu-eurlex:32016r0679",
+                ["date"] = "2021-01-01",
+                ["mode"] = "select",
+                ["anchors"] = "art_6",
+            });
+        var provision = new ProvisionView(
+            new Subject("eu-eurlex:32016r0679", "GDPR", "2021-01-01", "art_6", "en"),
+            "2018-05-25", null,
+            [new ProvisionItem("art_6", "Article 6", "Lawfulness of processing",
+                "Processing shall be lawful only if and to the extent that at least one condition applies.",
+                new string('a', 64))],
+            "https://law.example/gdpr#art_6", evidence);
+
+        var provisionReply = OperationAnswerPolicy.Render(
+            "en", [new OperationExecution(provisionOperation).Complete(McpStatus.Ok, new JsonObject())],
+            [new UiEffect(Provision: provision)]);
+
+        Assert.Contains("Article 6", provisionReply, StringComparison.Ordinal);
+        Assert.Contains("Lawfulness of processing", provisionReply, StringComparison.Ordinal);
+        Assert.Contains("Processing shall be lawful", provisionReply, StringComparison.Ordinal);
+        Assert.Contains("2021-01-01", provisionReply, StringComparison.Ordinal);
+
+        var historyOperation = RequestedOperation.CreatePlanned(
+            "req:op-2", 0, "article_history", new JsonObject
+            {
+                ["work"] = "lu-legilux:constitution-1868-10-17-n1",
+                ["anchor"] = "art_11",
+                ["language"] = "fr",
+            });
+        var history = new HistoryView(
+            new Subject("lu-legilux:constitution-1868-10-17-n1", "Constitution", null,
+                "art_11", "fr"),
+            "art_11", 6,
+            [
+                new HistoryState("1919-05-20", "1948-06-01", new string('b', 64), null),
+                new HistoryState("2023-07-01", null, new string('c', 64), null),
+            ],
+            [evidence[0] with { Publisher = "lu-legilux", Jurisdiction = "LU",
+                TimelineSemantics = "publisher_applicability" }]);
+
+        var historyReply = OperationAnswerPolicy.Render(
+            "en", [new OperationExecution(historyOperation).Complete(McpStatus.Ok, new JsonObject())],
+            [new UiEffect(History: history)]);
+
+        Assert.Contains("6", historyReply, StringComparison.Ordinal);
+        Assert.Contains("1919-05-20", historyReply, StringComparison.Ordinal);
+        Assert.Contains("2023-07-01", historyReply, StringComparison.Ordinal);
+        Assert.Contains("publisher", historyReply, StringComparison.OrdinalIgnoreCase);
+
+        var inForceOperation = RequestedOperation.CreatePlanned(
+            "req:op-3", 0, "in_force_on", new JsonObject
+            {
+                ["date"] = "2024-06-01",
+                ["jurisdiction"] = "EU",
+            });
+        var inForce = new InForceView(
+            "2024-06-01", 12, [], "ok", evidence);
+        var inForceReply = OperationAnswerPolicy.Render(
+            "en", [new OperationExecution(inForceOperation).Complete(McpStatus.Ok, new JsonObject())],
+            [new UiEffect(InForce: inForce)]);
+
+        Assert.Contains("12", inForceReply, StringComparison.Ordinal);
+        Assert.Contains("2024-06-01", inForceReply, StringComparison.Ordinal);
+        Assert.Contains("publisher-observed", inForceReply, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("not an exhaustive legal-effect", inForceReply,
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void Deterministic_answers_preserve_the_legal_boundary_and_timeline_facts()
     {
         var boundary = RequestedOperation.CreateApplication(
