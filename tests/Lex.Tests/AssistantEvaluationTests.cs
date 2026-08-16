@@ -46,6 +46,46 @@ public sealed class AssistantEvaluationTests : IDisposable
         Assert.Empty(await output);
     }
 
+    [Fact]
+    public async Task Ingest_entrypoint_requires_and_reads_signed_admission_files()
+    {
+        var executable = typeof(EvalAdmissionCli).Assembly.Location;
+        var admission = Path.Combine(_dir, "admission.json");
+        var missingSignature = Path.Combine(_dir, "missing-admission.sig");
+        await File.WriteAllTextAsync(admission, "{}");
+
+        async Task<string> Error(params string[] arguments)
+        {
+            using var process = new Process
+            {
+                StartInfo = new ProcessStartInfo("dotnet")
+                {
+                    WorkingDirectory = Path.GetDirectoryName(executable)!,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                },
+            };
+            process.StartInfo.ArgumentList.Add(executable);
+            foreach (var argument in arguments)
+                process.StartInfo.ArgumentList.Add(argument);
+            Assert.True(process.Start());
+            var error = process.StandardError.ReadToEndAsync();
+            await process.WaitForExitAsync();
+            Assert.NotEqual(0, process.ExitCode);
+            return await error;
+        }
+
+        Assert.Contains("--admission required", await Error("assistant-eval"));
+        Assert.Contains("--admission-signature required", await Error(
+            "assistant-eval", "--admission", admission));
+        var unreadable = await Error(
+            "assistant-eval", "--admission", admission,
+            "--admission-signature", missingSignature);
+        Assert.Contains(missingSignature, unreadable, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("--out required", unreadable, StringComparison.Ordinal);
+    }
+
     private readonly string _dir = Path.Combine(
         Path.GetTempPath(), $"lex-assistant-eval-{Guid.NewGuid():N}");
 

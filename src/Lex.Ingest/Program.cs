@@ -1,3 +1,4 @@
+using Lex.Evaluation;
 using Lex.Index;
 using Lex.Ingest;
 
@@ -343,6 +344,15 @@ switch (args0[0])
             }));
             return 0;
         }
+        var admissionPath = Path.GetFullPath(
+            Get("--admission") ?? throw new ArgumentException("--admission required"));
+        var admissionSignaturePath = Path.GetFullPath(
+            Get("--admission-signature")
+                ?? throw new ArgumentException("--admission-signature required"));
+        var admissionBytes = EvalAdmissionCli.ReadBounded(
+            admissionPath, EvaluationAdmissionContract.MaximumBytes);
+        var admissionSignature = EvalAdmissionCli.ReadBoundedSignature(
+            admissionSignaturePath);
         var output = Get("--out") ?? throw new ArgumentException("--out required");
         var caseSet = AssistantEvaluationCatalog.Load(
             Get("--cases") ?? Path.Combine(AppContext.BaseDirectory, "assistant-cases-v3.json"),
@@ -374,7 +384,8 @@ switch (args0[0])
             CancellationToken.None);
         using var targetHttp = new HttpClient { Timeout = TimeSpan.FromSeconds(90) };
         var target = new AssistantEvaluationHttpTarget(targetHttp,
-            Get("--base-url") ?? throw new ArgumentException("--base-url required"));
+            Get("--base-url") ?? throw new ArgumentException("--base-url required"),
+            admissionBytes, admissionSignature);
         var targetAttestation = await target.ReadAttestationAsync(
             targetEvidence, CancellationToken.None);
         var identity = new AssistantEvaluationIdentity(
@@ -878,7 +889,7 @@ static void Usage() => Console.Error.WriteLine("""
                  --corpus-manifest FILE --articles-generation FILE
       lex repair checkout-line-endings --corpus PATH
       lex artifact manifest --root DIR --file RELATIVE [--file RELATIVE] --manifest FILE --signature FILE --keyfile KEY.pem --key-id ID --code-commit SHA [--source KEY=VALUE]
-      lex assistant-eval --base-url REVISION_URL --candidate-container-app-resource-id AZURE_ID --candidate-revision NAME --cases FILE --review-attestation FILE --review-signature FILE --out FILE --candidate-model-resource-id AZURE_ID --candidate-deployment ID --grader-model-resource-id AZURE_ID --grader-deployment ID [--grader-key-env NAME]
+      lex assistant-eval --admission FILE --admission-signature FILE --base-url REVISION_URL --candidate-container-app-resource-id AZURE_ID --candidate-revision NAME --cases FILE --review-attestation FILE --review-signature FILE --out FILE --candidate-model-resource-id AZURE_ID --candidate-deployment ID --grader-model-resource-id AZURE_ID --grader-deployment ID [--grader-key-env NAME]
       lex assistant-eval verify-cases --cases FILE --review-attestation FILE --review-signature FILE
       lex assistant-eval verify-report --report FILE --cases FILE --review-attestation FILE --review-signature FILE --base-url REVISION_URL --candidate-container-app-resource-id AZURE_ID --candidate-revision NAME
       lex assistant-eval verify-release --root DIR --manifest FILE --signature FILE --trust-roots FILE --base-url REVISION_URL --candidate-container-app-resource-id AZURE_ID --candidate-revision NAME

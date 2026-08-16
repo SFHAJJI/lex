@@ -62,12 +62,9 @@ public static class EvalAdmissionCli
         var admissionPath = Path.GetFullPath(Required("--admission"));
         var signaturePath = Path.GetFullPath(Required("--signature"));
         var bytes = ReadBounded(admissionPath, EvaluationAdmissionContract.MaximumBytes);
-        var signature = File.ReadAllText(signaturePath);
-        if (signature.Length > EvaluationAdmissionContract.MaximumSignatureCharacters + 2)
-            throw new InvalidDataException(
-                "Evaluation admission signature exceeds its byte limit.");
+        var signature = ReadBoundedSignature(signaturePath);
         var verified = EvaluationAdmissionContract.Verify(
-            bytes, signature.Trim(), admissionAuthority, identity, now);
+            bytes, signature, admissionAuthority, identity, now);
         caseSet.EnsureReleaseReady();
         Console.WriteLine(JsonSerializer.Serialize(new
         {
@@ -143,13 +140,28 @@ public static class EvalAdmissionCli
             .Replace('+', '-').Replace('/', '_');
     }
 
-    private static byte[] ReadBounded(string path, int maximumBytes)
+    internal static byte[] ReadBounded(string path, int maximumBytes)
     {
         var info = new FileInfo(path);
         if (!info.Exists || info.Length is <= 0 || info.Length > maximumBytes)
             throw new InvalidDataException(
                 "Evaluation admission file is absent or outside its byte limit.");
         return File.ReadAllBytes(path);
+    }
+
+    internal static string ReadBoundedSignature(string path)
+    {
+        var info = new FileInfo(path);
+        if (!info.Exists || info.Length is <= 0
+            or > EvaluationAdmissionContract.MaximumSignatureCharacters + 2)
+            throw new InvalidDataException(
+                $"Evaluation admission signature file '{path}' is absent or outside its character limit.");
+        var signature = File.ReadAllText(path).Trim();
+        if (signature.Length is <= 0
+            or > EvaluationAdmissionContract.MaximumSignatureCharacters)
+            throw new InvalidDataException(
+                "Evaluation admission signature is outside its character limit.");
+        return signature;
     }
 
     private static void AtomicWrite(string output, byte[] bytes)
