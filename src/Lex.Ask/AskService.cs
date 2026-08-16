@@ -2470,13 +2470,19 @@ public sealed class AskService
             if (subject.Clarification is not null
                 && plan.Operations.All(operation =>
                     operation.Disposition == ApplicationDisposition.Clarification))
-                return SubjectClarificationOutcome(
-                    requestId, requestLocale, subject.Clarification, subject.Trace) with
+            {
+                var outcome = SubjectClarificationOutcome(
+                    requestId, requestLocale, subject.Clarification, subject.Trace);
+                AttachExecutionEvidence(
+                    outcome.Body, planningUsage, planningWatch.Elapsed.TotalMilliseconds,
+                    subject.DurationMilliseconds, synthesisMilliseconds: null);
+                return outcome with
                 {
                     ContextDisposition = IsAnaphoricWorkReference(rawUserQuery)
                         ? AskConversationContextDisposition.Preserve
                         : AskConversationContextDisposition.Clear,
                 };
+            }
             run = OperationRun.Start(plan);
             var (status, body) = await ExecutePlanAsync(
                 plan, run, userQueries, rawUserQuery, planningUsage,
@@ -3133,6 +3139,31 @@ public sealed class AskService
         }
         var body = Body(reply, plan.Locale, trace, effects,
             displayedClarification, clarification?.Choices);
+        AttachExecutionEvidence(
+            body, modelUsage, planningMilliseconds, mcpMilliseconds, synthesisMilliseconds);
+        body["operations"] = new JsonArray(results.Select(result =>
+        {
+            var effect = effects[result.UserOrder];
+            return (JsonNode)OperationReply(
+                plan.Operations[result.UserOrder], result, effect);
+        }).ToArray());
+        if (terminalTransportStatus is { } failedStatus)
+            body["error"] = failedStatus switch
+            {
+                499 => "The assistant request was cancelled.",
+                504 => "The operation timed out. Try a narrower question.",
+                _ => "A legal operation failed upstream.",
+            };
+        return (terminalTransportStatus ?? 200, body);
+    }
+
+    private void AttachExecutionEvidence(
+        JsonObject body,
+        ModelTokenUsage modelUsage,
+        double planningMilliseconds,
+        double mcpMilliseconds,
+        double? synthesisMilliseconds)
+    {
         body["model_usage"] = new JsonObject
         {
             ["input_tokens"] = modelUsage.InputTokens,
@@ -3151,20 +3182,6 @@ public sealed class AskService
             ["mcp_ms"] = mcpMilliseconds,
             ["synthesis_ms"] = synthesisMilliseconds,
         };
-        body["operations"] = new JsonArray(results.Select(result =>
-        {
-            var effect = effects[result.UserOrder];
-            return (JsonNode)OperationReply(
-                plan.Operations[result.UserOrder], result, effect);
-        }).ToArray());
-        if (terminalTransportStatus is { } failedStatus)
-            body["error"] = failedStatus switch
-            {
-                499 => "The assistant request was cancelled.",
-                504 => "The operation timed out. Try a narrower question.",
-                _ => "A legal operation failed upstream.",
-            };
-        return (terminalTransportStatus ?? 200, body);
     }
 
     private static JsonObject OperationReply(
@@ -3251,8 +3268,9 @@ public sealed class AskService
             ?? String(plannedArguments, "article_number");
         if (article is not null && operation.Tool is "as_of" or "diff" or "article_history")
         {
+            var requestedLanguage = String(actual, "language");
             var anchor = member.ArticleAnchor;
-            if (anchor is null)
+            if (anchor is null || requestedLanguage is not null)
             {
                 var searchArguments = new JsonObject
                 {
@@ -3262,6 +3280,8 @@ public sealed class AskService
                     ["fuzzy"] = "auto",
                     ["limit"] = 8,
                 };
+                if (requestedLanguage is not null)
+                    searchArguments["language"] = requestedLanguage;
                 var watch = Stopwatch.StartNew();
                 var result = await _legalTool("search", searchArguments, cancellationToken);
                 watch.Stop();
@@ -3392,6 +3412,11 @@ public sealed class AskService
         var token = new string(value.ToLowerInvariant().Where(char.IsLetterOrDigit).ToArray());
         if (token.StartsWith("article", StringComparison.Ordinal)) token = token[7..];
         else if (token.StartsWith("art", StringComparison.Ordinal)) token = token[3..];
+        if (token.Length > 2
+            && (token.EndsWith("er", StringComparison.Ordinal)
+                || token.EndsWith("re", StringComparison.Ordinal))
+            && token[..^2].All(char.IsDigit))
+            token = token[..^2];
         return token;
     }
 
