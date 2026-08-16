@@ -231,7 +231,6 @@ HTTP 200
       <a href="/how-it-works">How it works</a>
       <a href="/coverage">Coverage</a>
       <a href="/built" aria-current="page">Architecture dossier</a>
-      <a href="/decisions">Decisions and trade-offs</a>
       <a href="/benchmarks">Benchmarks</a>
       <a href="/verify">Verify artifacts</a>
       <a href="/about">About</a>
@@ -310,10 +309,21 @@ The next activation can be category-specific rather than a global switch.</p>
 <p><strong>Why not unify taxonomies?</strong> EuroVoc and Legilux classifications have different authorities,
 languages and semantics. Preserving the source scheme makes a match explainable. A unified label
 would be a new assertion owned by Lex and would need its own governance and evaluation.</p>
+<p><strong>Why is the legislative history not the git log?</strong> Because they answer different questions. The
+corpus tree carries what the law said and when it said it, which is the publisher's timeline. The
+commit history carries when Lex observed and wrote it, which is ours. Collapsing them would be
+convenient and wrong: re-ingesting a work would appear to amend it, a correction we fetched late
+would date from the day we noticed, and no reader could separate a change in the law from a change
+in our knowledge of it. Keeping both axes is what makes a point-in-time answer defensible and a
+publisher correction visible as its own event rather than a silent overwrite.</p>
 <p>Status vocabulary records implementation maturity, not current traffic: <code>shipped</code> means included in
 the release line, <code>gated</code> means activation still depends on evidence, and <code>planned</code> means no product
 claim yet. Mounted identities and signed promotion receipts separately establish what a running
 revision serves.</p>
+<p>The decisions above are the ones worth arguing with. The complete register, every decision from D1
+onward with its rejected alternative and admitted cost, is in
+<a href="https://github.com/SFHAJJI/lex/blob/main/docs/lex-spec-v4.md">the specification</a>; this page does
+not reprint it, because a register nobody finishes reading persuades nobody.</p>
 </article>
 </main>
 <footer>
@@ -325,7 +335,7 @@ revision serves.</p>
     <a href="/find">Plain pages, without JavaScript</a></div>
   <div><b>Check the work</b>
     <a href="/how-it-works">How it works</a><a href="/coverage">What Lex holds, and lacks</a>
-    <a href="/decisions">Decisions, and what they cost</a>
+    <a href="/built/decisions">Decisions, and what they cost</a>
     <a href="/benchmarks">Benchmarks</a><a href="/verify">Verify it yourself</a>
     <a href="/built">Architecture dossier</a>
     <a href="/about">About</a></div>

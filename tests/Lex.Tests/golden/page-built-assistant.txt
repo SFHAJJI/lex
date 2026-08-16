@@ -231,7 +231,6 @@ HTTP 200
       <a href="/how-it-works">How it works</a>
       <a href="/coverage">Coverage</a>
       <a href="/built" aria-current="page">Architecture dossier</a>
-      <a href="/decisions">Decisions and trade-offs</a>
       <a href="/benchmarks">Benchmarks</a>
       <a href="/verify">Verify artifacts</a>
       <a href="/about">About</a>
@@ -247,50 +246,6 @@ HTTP 200
 ReWOO-inspired reasoning without an observation loop, not adaptive ReAct. Retrieval constrains what the
 model can know, so exact identity and time resolution happen before planning; the planner proposes a
 typed operation plan, while application code authorizes, executes and returns the normal cited result.</p>
-<h2>Ownership and trust boundary</h2>
-<div class="dossier-boundary" tabindex="0" role="region" aria-label="Scrollable assistant ownership and trust-boundary diagram"><img src="/built/diagrams/assistant-boundary.svg" alt="A clean component view: the bounded assistant agent owns thread context, subject authority, planning and validation, the canonical catalog and frozen executor, and typed outcomes with evidence. The deterministic legal core and signed index stay outside. Public MCP is a separate projection of the same canonical operations, while composer and judge are optional prose roles." /></div>
-<p><a href="/built/diagrams/assistant-boundary.svg">Open the ownership diagram at full size</a></p>
-<h2>Boundary at a glance</h2>
-<div class="dossier-table" tabindex="0" role="region" aria-label="Scrollable architecture table"><table>
-<thead>
-<tr>
-<th>Concern</th>
-<th>Inside the bounded assistant agent</th>
-<th>Outside the agent boundary</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Conversation</td>
-<td>Server-owned bounded thread context and deterministic subject authority</td>
-<td>Browser-visible transcript, opaque token and request admission</td>
-</tr>
-<tr>
-<td>Planning</td>
-<td>Planner LLM, canonical tool catalog, typed adapter and frozen executor</td>
-<td>No model can call the index or legal core directly</td>
-</tr>
-<tr>
-<td>Legal truth</td>
-<td>Closed tool calls and outcome routing only</td>
-<td>Shared deterministic <code>McpCore</code> and signed <code>Lex.Index</code> own dates, text, hashes, retrieval and gaps</td>
-</tr>
-<tr>
-<td>Normal answer</td>
-<td>Typed outcome router builds direct replies, cards, citations and disclosures</td>
-<td>Web app renders typed effects without asking a model to rewrite them</td>
-</tr>
-<tr>
-<td>Optional prose</td>
-<td>Bounded evidence ledger supplies accepted evidence</td>
-<td>Composer and judge are separate logical Agent Framework roles on the same configured Azure OpenAI deployment</td>
-</tr>
-</tbody>
-</table></div>
-<p>The canonical <code>LegalOperationCatalog</code> is the shared contract. The planner receives its closed typed
-schemas but never calls MCP, SQL, vectors or the index. After validation and freeze, the executor
-calls the deterministic legal core. Public MCP projects the same operations independently for
-external clients; it is not the assistant's internal transport.</p>
 <h2>One bounded turn, time downward</h2>
 <div class="dossier-sequence" tabindex="0" role="region" aria-label="Scrollable assistant sequence diagram"><img src="/built/diagrams/assistant.svg" alt="A conventional sequence diagram with continuous lifelines for reader, web, deterministic admission and subject authority, planner and plan gate, executor and outcome routing, the legal core and signed index, and separate optional composer and judge roles. Time runs downward through deterministic resolution, one plan, one possible correction, freeze, execution without observations, a direct typed result and optional prose." /></div>
 <p><a href="/built/diagrams/assistant.svg">Open the sequence diagram at full size</a></p>
@@ -335,6 +290,47 @@ external clients; it is not the assistant's internal transport.</p>
 </tr>
 </tbody>
 </table></div>
+<h2>Boundary at a glance</h2>
+<div class="dossier-table" tabindex="0" role="region" aria-label="Scrollable architecture table"><table>
+<thead>
+<tr>
+<th>Concern</th>
+<th>Inside the bounded assistant agent</th>
+<th>Outside the agent boundary</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Conversation</td>
+<td>Server-owned bounded thread context and deterministic subject authority</td>
+<td>Browser-visible transcript, opaque token and request admission</td>
+</tr>
+<tr>
+<td>Planning</td>
+<td>Planner LLM, canonical tool catalog, typed adapter and frozen executor</td>
+<td>No model can call the index or legal core directly</td>
+</tr>
+<tr>
+<td>Legal truth</td>
+<td>Closed tool calls and outcome routing only</td>
+<td>Shared deterministic <code>McpCore</code> and signed <code>Lex.Index</code> own dates, text, hashes, retrieval and gaps</td>
+</tr>
+<tr>
+<td>Normal answer</td>
+<td>Typed outcome router builds direct replies, cards, citations and disclosures</td>
+<td>Web app renders typed effects without asking a model to rewrite them</td>
+</tr>
+<tr>
+<td>Optional prose</td>
+<td>Bounded evidence ledger supplies accepted evidence</td>
+<td>Composer and judge are separate logical Agent Framework roles on the same configured Azure OpenAI deployment</td>
+</tr>
+</tbody>
+</table></div>
+<p>The canonical <code>LegalOperationCatalog</code> is the shared contract. The planner receives its closed typed
+schemas but never calls MCP, SQL, vectors or the index. After validation and freeze, the executor
+calls the deterministic legal core. Public MCP projects the same operations independently for
+external clients; it is not the assistant's internal transport.</p>
 <h2>Why this design</h2>
 <div class="dossier-table" tabindex="0" role="region" aria-label="Scrollable architecture table"><table>
 <thead>
@@ -503,7 +499,7 @@ per UTC day. Those process-local controls are honest cost and abuse limits, not 
     <a href="/find">Plain pages, without JavaScript</a></div>
   <div><b>Check the work</b>
     <a href="/how-it-works">How it works</a><a href="/coverage">What Lex holds, and lacks</a>
-    <a href="/decisions">Decisions, and what they cost</a>
+    <a href="/built/decisions">Decisions, and what they cost</a>
     <a href="/benchmarks">Benchmarks</a><a href="/verify">Verify it yourself</a>
     <a href="/built">Architecture dossier</a>
     <a href="/about">About</a></div>

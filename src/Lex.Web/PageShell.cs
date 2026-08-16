@@ -317,7 +317,6 @@ public static class PageShell
               {{ProofLink("/how-it-works", "How it works", canonicalPath)}}
               {{ProofLink("/coverage", "Coverage", canonicalPath)}}
               {{ProofLink("/built", "Architecture dossier", canonicalPath)}}
-              {{ProofLink("/decisions", "Decisions and trade-offs", canonicalPath)}}
               {{ProofLink("/benchmarks", "Benchmarks", canonicalPath)}}
               {{ProofLink("/verify", "Verify artifacts", canonicalPath)}}
               {{ProofLink("/about", "About", canonicalPath)}}
@@ -340,7 +339,7 @@ public static class PageShell
             <a href="/find">Plain pages, without JavaScript</a></div>
           <div><b>Check the work</b>
             <a href="/how-it-works">How it works</a><a href="/coverage">What Lex holds, and lacks</a>
-            <a href="/decisions">Decisions, and what they cost</a>
+            <a href="/built/decisions">Decisions, and what they cost</a>
             <a href="/benchmarks">Benchmarks</a><a href="/verify">Verify it yourself</a>
             <a href="/built">Architecture dossier</a>
             <a href="/about">About</a></div>

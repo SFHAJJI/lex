@@ -231,7 +231,6 @@ HTTP 200
       <a href="/how-it-works">How it works</a>
       <a href="/coverage">Coverage</a>
       <a href="/built">Architecture dossier</a>
-      <a href="/decisions">Decisions and trade-offs</a>
       <a href="/benchmarks">Benchmarks</a>
       <a href="/verify">Verify artifacts</a>
       <a href="/about" aria-current="page">About</a>
@@ -269,7 +268,7 @@ instead of guessing.</p>
 3 dated versions, a public MCP server, open datasets, and a signed index
 whose stamp commits to a digest of its own content. The hard part was never the AI; it was
 that a law has no single text, only a text per date.
-<a href="/decisions">The decision that shaped it, and what it cost →</a></p>
+<a href="/built/decisions">The decision that shaped it, and what it cost →</a></p>
 </div>
 
 <div class="card">
@@ -288,14 +287,14 @@ claim is cited, and it declines rather than guessing.</p>
 
 <h2>How I work, if that is what you are here for</h2>
 <p>The clearest evidence is not a CV. It is
-<a href="/decisions">the decisions page</a>, which states each choice, the alternative it
+<a href="/built/decisions">the decisions page</a>, which states each choice, the alternative it
 was taken over, and the bill; <a href="/coverage">the coverage page</a>, which exists to
 say what this service does <i>not</i> hold; and
 <a href="/verify">the verification page</a>, which tells you how to check the answers
 without trusting me. A system that cannot say what it lacks is not finished.</p>
 
 <p class="sub"><a href="/built"><b>How this was built →</b></a> &middot;
-<a href="/decisions"><b>Why it is built this way →</b></a> &middot;
+<a href="/built/decisions"><b>Why it is built this way →</b></a> &middot;
 <a href="https://github.com/SFHAJJI" rel="noopener"><b>GitHub →</b></a></p>
 </main>
 <footer>
@@ -307,7 +306,7 @@ without trusting me. A system that cannot say what it lacks is not finished.</p>
     <a href="/find">Plain pages, without JavaScript</a></div>
   <div><b>Check the work</b>
     <a href="/how-it-works">How it works</a><a href="/coverage">What Lex holds, and lacks</a>
-    <a href="/decisions">Decisions, and what they cost</a>
+    <a href="/built/decisions">Decisions, and what they cost</a>
     <a href="/benchmarks">Benchmarks</a><a href="/verify">Verify it yourself</a>
     <a href="/built">Architecture dossier</a>
     <a href="/about">About</a></div>

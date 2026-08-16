@@ -38,7 +38,7 @@ Dynamic publisher routes accept only mounted publisher IDs and validated work/da
 | GET | `/architecture` | Explainers | evaluator | permanent redirect to `/built` | redirect | no index | old backlinks reach the canonical dossier in one hop |
 | GET | `/architecture/next` | Explainers | evaluator | permanent redirect to `/built/limits` | redirect | no index | old roadmap backlinks reach the limits and delivery registry in one hop |
 | GET | `/architecture/dossier` | Explainers | evaluator | self-canonical print utility | HTML | noindex, follow | print view reuses the nine canonical dossier sources |
-| GET | `/decisions` | Explainers | evaluator | canonical | HTML | public index | accepted and rejected alternatives |
+| GET | `/decisions` | Explainers | evaluator | permanent redirect to `/built/decisions` | redirect | no index | one decisions page, reached from either address |
 | GET | `/benchmarks` | Explainers | evaluator | canonical | HTML | public index | compatible reports or explicit not measured state |
 | GET | `/benchmarks/latest.json` | Explainers | machine, evaluator | canonical artifact | JSON | machine | complete compatible collection set; malformed report fails closed |
 | GET | `/benchmarks/cases.json` | Explainers | machine, evaluator | canonical artifact | JSON | machine | frozen cases with declared digest |

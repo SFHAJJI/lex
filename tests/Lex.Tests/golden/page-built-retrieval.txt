@@ -231,7 +231,6 @@ HTTP 200
       <a href="/how-it-works">How it works</a>
       <a href="/coverage">Coverage</a>
       <a href="/built" aria-current="page">Architecture dossier</a>
-      <a href="/decisions">Decisions and trade-offs</a>
       <a href="/benchmarks">Benchmarks</a>
       <a href="/verify">Verify artifacts</a>
       <a href="/about">About</a>
@@ -358,7 +357,7 @@ architecture result, not a failed demo.</p>
     <a href="/find">Plain pages, without JavaScript</a></div>
   <div><b>Check the work</b>
     <a href="/how-it-works">How it works</a><a href="/coverage">What Lex holds, and lacks</a>
-    <a href="/decisions">Decisions, and what they cost</a>
+    <a href="/built/decisions">Decisions, and what they cost</a>
     <a href="/benchmarks">Benchmarks</a><a href="/verify">Verify it yourself</a>
     <a href="/built">Architecture dossier</a>
     <a href="/about">About</a></div>

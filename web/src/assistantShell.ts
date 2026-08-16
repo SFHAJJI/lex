@@ -47,7 +47,10 @@ export function assistantTimelineRows(ui?: UiEffect) {
 }
 
 export function parseAssistantPanelState(raw: string | null): AssistantPanelState {
-  if (!raw) return { open: false, minimized: false };
+  // No stored state means a first arrival, and the assistant is the product. It opens, and it
+  // animates in rather than being there already. A reader who closes it is remembered, because
+  // the stored state is then an explicit false rather than an absent value.
+  if (!raw) return { open: true, minimized: false };
   try {
     const value = JSON.parse(raw) as Partial<AssistantPanelState>;
     const open = value.open === true;

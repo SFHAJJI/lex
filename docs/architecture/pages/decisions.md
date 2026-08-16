@@ -28,7 +28,20 @@ The next activation can be category-specific rather than a global switch.
 languages and semantics. Preserving the source scheme makes a match explainable. A unified label
 would be a new assertion owned by Lex and would need its own governance and evaluation.
 
+**Why is the legislative history not the git log?** Because they answer different questions. The
+corpus tree carries what the law said and when it said it, which is the publisher's timeline. The
+commit history carries when Lex observed and wrote it, which is ours. Collapsing them would be
+convenient and wrong: re-ingesting a work would appear to amend it, a correction we fetched late
+would date from the day we noticed, and no reader could separate a change in the law from a change
+in our knowledge of it. Keeping both axes is what makes a point-in-time answer defensible and a
+publisher correction visible as its own event rather than a silent overwrite.
+
 Status vocabulary records implementation maturity, not current traffic: `shipped` means included in
 the release line, `gated` means activation still depends on evidence, and `planned` means no product
 claim yet. Mounted identities and signed promotion receipts separately establish what a running
 revision serves.
+
+The decisions above are the ones worth arguing with. The complete register, every decision from D1
+onward with its rejected alternative and admitted cost, is in
+[the specification](https://github.com/SFHAJJI/lex/blob/main/docs/lex-spec-v4.md); this page does
+not reprint it, because a register nobody finishes reading persuades nobody.

@@ -89,14 +89,10 @@ public sealed class ArchitectureDossierTests : IClassFixture<GoldenTests.Site>
     {
         var html = await _client.GetStringAsync("/built/assistant");
         var svg = await _client.GetStringAsync("/built/diagrams/assistant.svg");
-        var boundary = await _client.GetStringAsync("/built/diagrams/assistant-boundary.svg");
         var css = await _client.GetStringAsync("/dossier.css");
 
         Assert.Contains(
             "<div class=\"dossier-sequence\" tabindex=\"0\" role=\"region\" aria-label=\"Scrollable assistant sequence diagram\">",
-            html);
-        Assert.Contains(
-            "<div class=\"dossier-boundary\" tabindex=\"0\" role=\"region\" aria-label=\"Scrollable assistant ownership and trust-boundary diagram\">",
             html);
         Assert.Contains("id=\"assistant-sequence\"", svg);
         Assert.Contains("Every message starts and ends on an owning lifeline", svg);
@@ -109,11 +105,6 @@ public sealed class ArchitectureDossierTests : IClassFixture<GoldenTests.Site>
         Assert.Contains("Admission + subject", svg);
         Assert.Contains("The planner receives schemas only. It never observes execution and never replans.", svg);
         Assert.DoesNotContain("Public MCP", svg);
-        Assert.Contains("id=\"bounded-assistant-agent\"", boundary);
-        Assert.Contains("id=\"deterministic-legal-truth\"", boundary);
-        Assert.Contains("id=\"public-mcp-projection\"", boundary);
-        Assert.Contains("Not the planner transport", boundary);
-        Assert.Contains("direct reply default", boundary);
         Assert.Contains("same configured Azure OpenAI deployment", html);
         Assert.Contains("There is no hidden UI toggle", html);
         Assert.Contains("synthesis=true", html);
@@ -122,7 +113,6 @@ public sealed class ArchitectureDossierTests : IClassFixture<GoldenTests.Site>
         Assert.Contains("Naive RAG with LLM-selected identity", html);
         Assert.Contains(".dossier-sequence {", css);
         Assert.Contains("min-width: 1200px;", css);
-        Assert.Contains(".dossier-boundary {", css);
         Assert.Contains("min-width: 1000px;", css);
     }
 

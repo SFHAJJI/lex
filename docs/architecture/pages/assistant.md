@@ -5,11 +5,20 @@ ReWOO-inspired reasoning without an observation loop, not adaptive ReAct. Retrie
 model can know, so exact identity and time resolution happen before planning; the planner proposes a
 typed operation plan, while application code authorizes, executes and returns the normal cited result.
 
-## Ownership and trust boundary
+## One bounded turn, time downward
 
-![A clean component view: the bounded assistant agent owns thread context, subject authority, planning and validation, the canonical catalog and frozen executor, and typed outcomes with evidence. The deterministic legal core and signed index stay outside. Public MCP is a separate projection of the same canonical operations, while composer and judge are optional prose roles.](/built/diagrams/assistant-boundary.svg)
+![A conventional sequence diagram with continuous lifelines for reader, web, deterministic admission and subject authority, planner and plan gate, executor and outcome routing, the legal core and signed index, and separate optional composer and judge roles. Time runs downward through deterministic resolution, one plan, one possible correction, freeze, execution without observations, a direct typed result and optional prose.](/built/diagrams/assistant.svg)
 
-[Open the ownership diagram at full size](/built/diagrams/assistant-boundary.svg)
+[Open the sequence diagram at full size](/built/diagrams/assistant.svg)
+
+| Phase | Authority crossing | Closed result |
+|---|---|---|
+| Resolve deterministically | Official catalog identity, date semantics and bounded thread context enter planning | One authorized subject reference, clarification context, or no subject authority |
+| Plan once | Planner sees only the question, bounded history and canonical typed operation schemas | A proposed plan; no tool or index access |
+| Validate, correct once, freeze | Application code checks names and typed arguments; at most one contract correction | An immutable plan capped at eight operations, or typed invalid request |
+| Execute without observations | Frozen executor calls the deterministic legal core, which queries the signed index | Closed outcomes, rows, hashes, publisher links and typed gaps |
+| Typed result | Outcome router assembles cards, citations, disclosures and the bounded evidence ledger | Direct usable answer, `NeedsClarification`, gap or refusal without generated prose |
+| Optional compose and judge | Explicit prose request may activate two separate logical Agent Framework roles | Composer draft; judge only factual Answer or Gap claims; fallback keeps the deterministic result |
 
 ## Boundary at a glance
 
@@ -25,21 +34,6 @@ The canonical `LegalOperationCatalog` is the shared contract. The planner receiv
 schemas but never calls MCP, SQL, vectors or the index. After validation and freeze, the executor
 calls the deterministic legal core. Public MCP projects the same operations independently for
 external clients; it is not the assistant's internal transport.
-
-## One bounded turn, time downward
-
-![A conventional sequence diagram with continuous lifelines for reader, web, deterministic admission and subject authority, planner and plan gate, executor and outcome routing, the legal core and signed index, and separate optional composer and judge roles. Time runs downward through deterministic resolution, one plan, one possible correction, freeze, execution without observations, a direct typed result and optional prose.](/built/diagrams/assistant.svg)
-
-[Open the sequence diagram at full size](/built/diagrams/assistant.svg)
-
-| Phase | Authority crossing | Closed result |
-|---|---|---|
-| Resolve deterministically | Official catalog identity, date semantics and bounded thread context enter planning | One authorized subject reference, clarification context, or no subject authority |
-| Plan once | Planner sees only the question, bounded history and canonical typed operation schemas | A proposed plan; no tool or index access |
-| Validate, correct once, freeze | Application code checks names and typed arguments; at most one contract correction | An immutable plan capped at eight operations, or typed invalid request |
-| Execute without observations | Frozen executor calls the deterministic legal core, which queries the signed index | Closed outcomes, rows, hashes, publisher links and typed gaps |
-| Typed result | Outcome router assembles cards, citations, disclosures and the bounded evidence ledger | Direct usable answer, `NeedsClarification`, gap or refusal without generated prose |
-| Optional compose and judge | Explicit prose request may activate two separate logical Agent Framework roles | Composer draft; judge only factual Answer or Gap claims; fallback keeps the deterministic result |
 
 ## Why this design
 

@@ -56,7 +56,6 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
         { "built-limits",    "/built/limits" },
         { "built-repositories", "/built/repositories" },
         { "architecture-dossier", "/architecture/dossier" },
-        { "decisions",       "/decisions" },
         { "about",           "/about" },
         { "stories",         "/stories" },
         { "find",            "/find" },
@@ -123,12 +122,14 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
         Assert.Contains("<summary aria-expanded=\"false\">Check the work</summary>", home);
         foreach (var path in new[]
                  {
-                     "/how-it-works", "/coverage", "/built", "/decisions",
+                     "/how-it-works", "/coverage", "/built",
                      "/benchmarks", "/verify", "/about",
                  })
             Assert.Contains($"href=\"{path}\"", home);
         Assert.Contains("href=\"/built\">Architecture dossier</a>", home);
-        Assert.Contains("href=\"/decisions\">Decisions and trade-offs</a>", home);
+        // One decisions page. The dossier tab is canonical and /decisions redirects to it,
+        // so the navigation no longer offers two items with almost the same name.
+        Assert.DoesNotContain("href=\"/decisions\">", home);
         Assert.DoesNotContain("href=\"/architecture\"", home);
         Assert.DoesNotContain("How I built it", home);
         Assert.Contains("href=\"/built\"><b>I want to inspect the engineering</b>", home);
@@ -153,6 +154,10 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
         using var nextRedirect = await _site.Client.GetAsync("/architecture/next");
         Assert.Equal(HttpStatusCode.MovedPermanently, nextRedirect.StatusCode);
         Assert.Equal("/built/limits", nextRedirect.Headers.Location?.OriginalString);
+
+        using var decisionsRedirect = await _site.Client.GetAsync("/decisions");
+        Assert.Equal(HttpStatusCode.MovedPermanently, decisionsRedirect.StatusCode);
+        Assert.Equal("/built/decisions", decisionsRedirect.Headers.Location?.OriginalString);
     }
 
     [Fact]
@@ -273,7 +278,6 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
         var expected = new Dictionary<string, string[]>
         {
             ["/built/limits"] = ["aria-label=\"Architecture delivery milestones\""],
-            ["/decisions"] = ["<table tabindex=\"0\" aria-label=\"Architecture decision register\">"],
             ["/built"] = ["<div class=\"dossier-table\" tabindex=\"0\" role=\"region\" aria-label=\"Scrollable architecture table\"><table>"],
         };
         foreach (var (path, fragments) in expected)
@@ -643,7 +647,7 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
 
         foreach (var path in new[]
         {
-            "/about", "/decisions", "/verify",
+            "/about", "/verify",
             "/developers", "/built", "/built/model", "/built/data", "/built/retrieval",
             "/built/assistant", "/built/release", "/built/decisions", "/built/incidents",
             "/built/limits", "/architecture/dossier", "/how-it-works", "/coverage", "/benchmarks",

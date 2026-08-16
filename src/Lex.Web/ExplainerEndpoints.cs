@@ -400,7 +400,7 @@ public static class ExplainerEndpoints
                 {{versions:n0}} dated versions, a public MCP server, open datasets, and a signed index
                 whose stamp commits to a digest of its own content. The hard part was never the AI; it was
                 that a law has no single text, only a text per date.
-                <a href="/decisions">The decision that shaped it, and what it cost →</a></p>
+                <a href="/built/decisions">The decision that shaped it, and what it cost →</a></p>
                 </div>
 
                 <div class="card">
@@ -419,14 +419,14 @@ public static class ExplainerEndpoints
 
                 <h2>How I work, if that is what you are here for</h2>
                 <p>The clearest evidence is not a CV. It is
-                <a href="/decisions">the decisions page</a>, which states each choice, the alternative it
+                <a href="/built/decisions">the decisions page</a>, which states each choice, the alternative it
                 was taken over, and the bill; <a href="/coverage">the coverage page</a>, which exists to
                 say what this service does <i>not</i> hold; and
                 <a href="/verify">the verification page</a>, which tells you how to check the answers
                 without trusting me. A system that cannot say what it lacks is not finished.</p>
 
                 <p class="sub"><a href="/built"><b>How this was built →</b></a> &middot;
-                <a href="/decisions"><b>Why it is built this way →</b></a> &middot;
+                <a href="/built/decisions"><b>Why it is built this way →</b></a> &middot;
                 <a href="https://github.com/SFHAJJI" rel="noopener"><b>GitHub →</b></a></p>
                 """;
             return Results.Content(Page("About", body,
@@ -440,134 +440,10 @@ public static class ExplainerEndpoints
         // /built says how the system works. This says why it is that way and what the alternative would
         // have been, which is the part a reader can actually argue with. One entry per decision that had
         // a defensible other answer; a page of choices with no cost attached is marketing.
-        app.MapGet("/decisions", () =>
-        {
-            var cov = readers.Values.Select(r => r.Coverage()).ToList();
-            var latest = cov.Select(c => c.LatestValidFrom).Where(x => x is not null).Max();
-            var programRows = string.Join("", architecture.Decisions.Select(d => $"""
-                <tr><td class="mono">{H(d.Id)}</td><td><b>{H(d.Title)}</b><br>
-                <span class="sub"><b>Choice:</b> {H(d.Choice)}<br><b>Alternative:</b> {H(d.Alternative)}<br>
-                <b>Why:</b> {H(d.Reason)}<br><b>Cost:</b> {H(d.Cost)}</span></td><td>{StatusBadge(d.Status)}</td></tr>
-                """));
-            var body = $"""
-                <p class="lede">Every program decision records the chosen path, a credible alternative, the
-                reason and the bill. Status comes from the architecture registry.</p>
-                <div class="card"><table tabindex="0" aria-label="Architecture decision register"><tr><th>decision</th><th>choice, alternative and cost</th><th>status</th></tr>
-                {programRows}</table></div>
-                <h2>Deep dive: why the legislative timeline is not the git log</h2>
-                """ + $$"""
-                <p class="lede">Every entry here had a reasonable alternative that other people chose. What
-                follows is the choice, the road not taken, and the bill.</p>
-
-                <h2>The history is not the git log</h2>
-
-                <div class="card">
-                <p><b>The choice.</b> The corpus is append-only git. The history is not.</p>
-                <p>Every consolidated file a publisher issues is stored verbatim, under its sha256, in a
-                repository that only ever gains commits. That is the evidence, and anyone can audit it with
-                <span class="mono">git clone</span>. But no query walks it. Point-in-time answers come from
-                a signed SQLite index carrying three separate time axes, rebuilt from the corpus every
-                night. The only <span class="mono">git</span> call anywhere in the engine is
-                <span class="mono">rev-parse HEAD</span>, which stamps the index with the exact commit it
-                was built from.</p>
-                </div>
-
-                <h3>The alternative</h3>
-                <p>Store each law as a file and let git be the history: a commit per version,
-                <span class="mono">git log</span> for the timeline, <span class="mono">git diff</span>
-                between two dates. It is elegant, it is nearly free, and it arrives with a browsable web
-                interface that somebody else operates. Independent projects run on exactly this.
-                <a href="https://github.com/Legilibre/Archeo-Lex" rel="noopener nofollow">Archeo-Lex</a>,
-                by Legilibre, replays French law from the LEGI database as Git and Markdown, one commit
-                per consolidated version. <a href="https://github.com/bundestag/gesetze" rel="noopener nofollow">bundestag/gesetze</a>
-                does the same for German federal law from gesetze-im-internet.de; it is a community
-                project rather than the parliament, despite the organisation name. It was the obvious
-                thing to do, and I did not do it.</p>
-
-                <p>The German project is worth reading on its own commits: they aim to follow
-                publication in the <i>Bundesgesetzblatt</i>, and, in its words,
-                &#8220;das funktioniert nicht immer problemlos&#8221;, this does not always work
-                smoothly. That is the same wall met from the other side. Nothing is wrong with their
-                engineering; a commit graph is simply not shaped like a legislative timeline.</p>
-
-                <h3>Why not</h3>
-                <p>Five reasons. Each is a fact about legislation rather than a preference about tools.</p>
-                <div class="card">
-                <p><b>1. Git's clock is the wrong clock.</b> A commit records when <i>I</i> learned
-                something, never the publisher's legal-time coordinate. Legilux supplies applicability
-                dates; EUR-Lex supplies dates for official consolidated wording states. Git timestamps
-                both with the observation time. <span class="mono">git log</span> answers "when did we find
-                out", which is a real question, but not either publisher timeline.</p>
-
-                <p><b>2. Luxembourg law is dated into the future.</b> The mounted corpus holds Legilux applicability dates to
-                <span class="mono">{{H(latest)}}</span>. Publishers routinely issue today a text that
-                becomes binding years from now. Git cannot express a commit that becomes true later, so a
-                git-as-history model must either publish future law as if it were current, or drop it.
-                Both are wrong answers to "what is in force today".</p>
-
-                <p><b>3. Publishers backfill.</b> A consolidation covering 2019 can be issued in 2026.
-                Under git-as-history that arrives as a 2026 change to the law, which is simply false. The
-                fix is to record two things separately: the publisher's stated wording coordinate, with
-                its declared semantics, and when we observed it. That is structured bitemporal evidence,
-                and it is not something a commit graph can carry.</p>
-
-                <p><b>4. <span class="mono">git diff</span> cannot see a renumbering.</b> When Article 7
-                becomes Article 7-1 with its wording untouched, that is a rename <i>inside</i> a file, not
-                a file rename, and a textual diff reports one deletion and one insertion. Lex detects it
-                mechanically instead: a renumbering event is emitted only when the text hash matches across
-                the change of anchor. None of that is inferable from a diff.</p>
-
-                <p><b>5. There is no per-article axis.</b> "When did Article L. 111-1 last change" needs
-                either one file per article, which no publisher provides, or a table keyed on
-                (work, anchor, valid_from). Lex has the table. A repository of whole documents cannot
-                answer the question at all.</p>
-                </div>
-
-                <h3>What it cost</h3>
-                <p>Four things. An argument that omits them is not worth reading.</p>
-                <div class="card">
-                <p><b>A build step, every night.</b> Git-as-history is free: commit, and you are finished.
-                Lex has to ingest, derive, catalog, index and sign before anything is answerable, and that
-                pipeline is the largest part of the codebase.</p>
-                <p><b>Duplication.</b> The same facts now exist twice, as bytes in the corpus and as rows
-                in an index, and two copies can disagree. That is exactly why the index stamp binds a
-                digest of its own content and names the corpus commit it came from: the duplication is
-                allowed, drifting silently is not.</p>
-                <p><b>Schema drift.</b> A column was once added to the index without changing the schema
-                string, so an index built the day before opened cleanly and then failed inside a request
-                with a raw SQL error. A repository of files has no schema to drift. Opening an index now
-                checks that every column the reader needs is present, and refuses with a message naming
-                what is missing.</p>
-                <p><b>The free interface.</b> GitHub hands a git-as-history project a browsable, diffable,
-                permalinked view that somebody else maintains. Choosing a data layer meant building all of
-                it, and the reading, comparing and searching on this site is the bill for that decision.</p>
-                </div>
-
-                <h3>What it bought</h3>
-                <p>A point-in-time answer is one indexed lookup rather than a walk backwards through
-                history. Future-dated law is representable. Every record separates what the publisher
-                asserts from what Lex observed, so "what did it say" and "what did we know" stay different
-                questions. Articles have their own lifetimes, renumbering included. And because an answer
-                comes from a single artifact rather than a traversal, that artifact can be signed: the
-                stamp commits to a digest of the content, so an index that was altered fails verification
-                instead of serving quietly.</p>
-
-                <h3>Check it yourself</h3>
-                <p class="sub">
-                <a href="/verify"><b>Verify a build &rarr;</b></a> &middot;
-                <a href="/built/model"><b>The data model &rarr;</b></a> &middot;
-                <a href="https://github.com/SFHAJJI/lex-corpus-lu-legilux" rel="noopener"><b>The evidence repo &rarr;</b></a> &middot;
-                <a href="/coverage"><b>What is missing &rarr;</b></a></p>
-
-                <p class="sub" style="margin-top:26px">More entries as they are written. If you disagree
-                with one of these, that is the point of publishing them:
-                <a href="https://github.com/SFHAJJI/lex/issues" rel="noopener">open an issue</a>.</p>
-                """;
-            return Results.Content(Page("Decisions", body,
-                "The choices that shaped Lex, each with the alternative it was chosen over and what it cost.",
-                "how", canonicalPath: "/decisions",
-                description: "The complete Lex architecture decision register, with chosen paths, credible alternatives, reasons and admitted costs."), "text/html");
-        });
+        // One decisions page, not two. This served the complete register plus a deep dive, while
+        // the dossier tab served a curated set, and the two sat in the navigation under almost the
+        // same name. The dossier page is canonical; the full register lives in the spec.
+        app.MapGet("/decisions", () => Results.Redirect("/built/decisions", permanent: true));
 
         // ---- /developers: everything an engineer needs — every tool, four ways to connect,
         // the datasets, the repos. /ai kept as an alias so older links survive.
