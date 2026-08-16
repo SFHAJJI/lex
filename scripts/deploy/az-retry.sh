@@ -50,7 +50,7 @@ az_retry() {
           return 1
         fi
         ;;
-      *ConflictingConcurrentWriteNotAllowed*|*'conflicting concurrent write'*|*TooManyRequests*|*ServiceUnavailable*|*InternalServerError*|*GatewayTimeout*|*'Connection reset'*|*'timed out'*)
+      *ContainerAppOperationInProgress*|*'active provisioning operation in progress'*|*ConflictingConcurrentWriteNotAllowed*|*'conflicting concurrent write'*|*TooManyRequests*|*ServiceUnavailable*|*InternalServerError*|*GatewayTimeout*|*'Connection reset'*|*'timed out'*)
         ;;
       *)
         printf '%s\n' "$_azt_output" >&2
