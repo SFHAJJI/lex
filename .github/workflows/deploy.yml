@@ -466,11 +466,25 @@ jobs:
           else
             [ "$previous_inactive_limit" = "1" ] \
               || { echo "::error::steady state must retain exactly one inactive rollback"; exit 1; }
-            mapfile -t inactive_before < <(az containerapp revision list \
+            # Newest first, because the rollback is the most recent retired revision and any older
+            # ones are leftovers. Azure removes a superseded inactive revision on its own schedule
+            # and can decline for hours: maxInactiveRevisions was 1 with four inactive revisions
+            # present, a throwaway revision was created to trigger the sweep, and six reads over two
+            # minutes found all four still there. Requiring exactly one was requiring the platform to
+            # have swept, which is not a property this workflow can establish. What it can establish
+            # is that a rollback exists, that it is not production, and that nothing retired is
+            # routing, and those are asserted here and in the traffic checks that follow.
+            mapfile -t inactive_before < <(az_retry az containerapp revision list \
               -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" --all \
-              --query "[?properties.active==\`false\`].name" -o tsv)
-            [ "${#inactive_before[@]}" -eq 1 ] \
-              || { echo "::error::an unresolved candidate or legacy inactive revision exists"; exit 1; }
+              --query "reverse(sort_by([?properties.active==\`false\`], &properties.createdTime))[].name" \
+              -o tsv)
+            [ "${#inactive_before[@]}" -ge 1 ] \
+              || { echo "::error::steady state has no inactive rollback to retain"; exit 1; }
+            routing_retired=$(az_retry az containerapp revision list \
+              -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" --all \
+              --query "length([?properties.active==\`false\` && properties.trafficWeight>\`0\`])" -o tsv)
+            [ "$routing_retired" = "0" ] \
+              || { echo "::error::a retired revision still carries traffic"; exit 1; }
             prior_rollback="${inactive_before[0]}"
             [ "$prior_rollback" != "$previous" ] \
               || { echo "::error::production and retained rollback identities must differ"; exit 1; }

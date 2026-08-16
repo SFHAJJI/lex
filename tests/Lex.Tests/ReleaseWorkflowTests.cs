@@ -825,7 +825,13 @@ public sealed class ReleaseWorkflowTests
 
         Assert.DoesNotContain("maxInactiveRevisions:0", deploy);
         Assert.Contains("maxInactiveRevisions:2", deploy);
-        Assert.Contains("an unresolved candidate or legacy inactive revision exists", deploy);
+        // The steady state used to demand exactly one inactive revision, which demanded that Azure
+        // had already swept the superseded ones. It declines to on its own schedule, so that was a
+        // requirement on the platform rather than on this deployment. What the step owes is a
+        // rollback that exists, is not production, and is not routing; those are what is asserted.
+        Assert.Contains("steady state has no inactive rollback to retain", deploy);
+        Assert.Contains("a retired revision still carries traffic", deploy);
+        Assert.Contains("production and retained rollback identities must differ", deploy);
         Assert.Contains("candidate retention state was not reconciled", deploy);
         Assert.Contains("trap finish_cleanup EXIT", deploy);
         var cleanupTrap = deploy.IndexOf("trap finish_cleanup EXIT", StringComparison.Ordinal);
