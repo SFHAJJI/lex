@@ -23,7 +23,7 @@ cannot know.
 **[Verify it yourself](https://law.soufien.lu/verify)** ·
 **[Program](docs/hybrid-eu-roadmap.md)** ·
 **[Retrieval + agent plan](docs/retrieval-agent-enrichment-plan.md)** ·
-**[Spec (D1-D77)](docs/lex-spec-v4.md)**
+**[Spec (D1-D82)](docs/lex-spec-v4.md)**
 
 ## 74-second engineering demo
 
@@ -72,9 +72,10 @@ Or ask the [live site](https://law.soufien.lu). A real answer, verbatim:
 >, `eu-eurlex:32013r0575:2019-12-25` (valid 2019-12-25 → 2020-06-26),
 > [permalink](https://law.soufien.lu/eu-eurlex/32013r0575/2019-12-25#art_92).
 >
-> Article 92 has had **four distinct texts** since 2013-06-28 → 2021-06-28,
-> 2021-06-29 → 2022-12-31, 2023-01-01 → 2024-12-31, 2025-01-01 onward, each with
-> its own permalink and sha256.
+> Article 92 has had **seven distinct texts**: 2013-06-26 → 2013-06-27,
+> 2013-06-28 → 2019-12-24, 2019-12-25 → 2020-06-26, 2020-06-27 → 2021-06-28,
+> 2021-06-29 → 2022-12-31, 2023-01-01 → 2024-12-31 and 2025-01-01 onward, each
+> with its own permalink and sha256.
 
 Every claim in that answer came from a deterministic tool call (the trace is
 shown under each reply); the model never answers from its own memory.
@@ -140,7 +141,7 @@ FOUNDATION  Lex.Temporal (interval algebra)   Lex.Index (SQLite: filter-first, v
   zero-traffic candidate. The catalog records author `Lex release engineering`;
   Evaluation reviewer Soufien Hajji uses a separate signing authority. This
   project-owner review is not a third-party audit. Candidate and release-grader tokens are budgeted
-  separately. The current maximum reservation is EUR 0.5325316 under an outer
+  separately. The current maximum reservation is EUR 0.5356487 under an outer
   EUR 10 preflight and measured-use ceiling, not a live billing cutoff. The
   [release dossier](https://law.soufien.lu/built/release) shows the CI/CD flow and
   [evaluation mechanics](docs/assistant-evaluation.md).

@@ -54,6 +54,7 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
         { "built-decisions", "/built/decisions" },
         { "built-incidents", "/built/incidents" },
         { "built-limits",    "/built/limits" },
+        { "built-repositories", "/built/repositories" },
         { "architecture-dossier", "/architecture/dossier" },
         { "decisions",       "/decisions" },
         { "about",           "/about" },

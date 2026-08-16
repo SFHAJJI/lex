@@ -31,6 +31,7 @@ Dynamic publisher routes accept only mounted publisher IDs and validated work/da
 | GET | `/built/decisions` | Explainers | evaluator | canonical | HTML | public index | curated trade-offs link to the complete decision register |
 | GET | `/built/incidents` | Explainers | evaluator | canonical | HTML | public index | incidents connect root causes to permanent guards |
 | GET | `/built/limits` | Explainers | evaluator | canonical | HTML | public index | current limits and observable scaling triggers |
+| GET | `/built/repositories` | Explainers | evaluator | canonical | HTML | public index | what each published repository holds and why authority is split |
 | GET | `/built/diagrams/{name}.svg` | Explainers | evaluator | owned allowlist | SVG | machine | accessible static diagrams; unknown names 404 |
 | GET | `/about` | Explainers | reader, evaluator | canonical | HTML | public index | project and author context; reachable from navigation |
 | GET | `/stories` | Explainers | reader | canonical | HTML | public index | examples avoid applicability and advice claims |

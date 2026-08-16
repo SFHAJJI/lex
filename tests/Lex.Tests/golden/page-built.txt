@@ -243,7 +243,7 @@ HTTP 200
 <main>
 <h1>Overview</h1>
 <p class="sub">The system in sixty seconds and the decisions it enables.</p>
-<nav class="dossier-tabs" aria-label="Architecture dossier"><a href="/built" aria-current="page">Overview</a><a href="/built/model">Legal model</a><a href="/built/data">Data authority</a><a href="/built/retrieval">Retrieval</a><a href="/built/assistant">Assistant</a><a href="/built/release">Release</a><a href="/built/decisions">Trade-offs</a><a href="/built/incidents">Incidents</a><a href="/built/limits">Limits and scale</a><a class="dossier-print" href="/architecture/dossier">Complete dossier</a></nav><article class="architecture-dossier"><p>Lex answers a narrow business question: <strong>what did this rule say on this date?</strong> It turns dated
+<nav class="dossier-tabs" aria-label="Architecture dossier"><a href="/built" aria-current="page">Overview</a><a href="/built/model">Legal model</a><a href="/built/data">Data authority</a><a href="/built/retrieval">Retrieval</a><a href="/built/assistant">Assistant</a><a href="/built/release">Release</a><a href="/built/decisions">Trade-offs</a><a href="/built/incidents">Incidents</a><a href="/built/limits">Limits and scale</a><a href="/built/repositories">Repositories</a><a class="dossier-print" href="/architecture/dossier">Complete dossier</a></nav><article class="architecture-dossier"><p>Lex answers a narrow business question: <strong>what did this rule say on this date?</strong> It turns dated
 Luxembourg and EU publisher material into article-level research with an official link, an exact
 version and a verifiable evidence chain. It does not decide legal applicability or advise a reader
 what to do.</p>

@@ -378,12 +378,19 @@ public sealed class AzureModelDeploymentResolver
         return evidence with { EvidenceSha256 = TargetEvidenceSha256(evidence) };
     }
 
-    internal static string TargetEvidenceSha256(AssistantCandidateRuntimeEvidence evidence)
+    public static string TargetEvidenceSha256(AssistantCandidateRuntimeEvidence evidence)
     {
+        // A scale-stripping format, because Azure Resource Manager renders the same CPU
+        // allocation with different trailing zeros between responses. One evaluation recorded
+        // "cpu": 1.000 and the next request for the identical revision returned "cpu": 1.0, which
+        // produced two digests for one unchanged revision and made the signed report permanently
+        // unpublishable. decimal equality ignores scale, so CpuCores itself compared equal and only
+        // this derived string disagreed, which is why the failure surfaced as wrong evidence.
         var canonical = string.Join('\n',
             evidence.ResourceId.TrimEnd('/').ToLowerInvariant(), evidence.RevisionName,
             evidence.RevisionFqdn.ToLowerInvariant(), evidence.Image,
-            evidence.CpuCores.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            evidence.CpuCores.ToString(
+                "0.############################", System.Globalization.CultureInfo.InvariantCulture),
             evidence.MemoryLimitBytes, evidence.MinimumReplicas, evidence.MaximumReplicas,
             evidence.TrafficWeight,
             evidence.CodeCommit, evidence.ArtifactManifestSet,

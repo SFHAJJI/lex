@@ -41,6 +41,8 @@ public static class BuiltEndpoints
             "Architecture incidents, root causes, safeguards and lessons from Lex."),
         new("limits", "/built/limits", "Limits and scale", "Known constraints, scaling triggers and deliberately deferred work.",
             "The current limits, capacity triggers and next architecture moves for Lex."),
+        new("repositories", "/built/repositories", "Repositories", "Five published repositories, and why evidence, dataset, product and release authority are kept apart.",
+            "What each Lex repository holds and the separation of authority between them."),
     ];
 
     private static readonly MarkdownPipeline MarkdownPipeline = new MarkdownPipelineBuilder()

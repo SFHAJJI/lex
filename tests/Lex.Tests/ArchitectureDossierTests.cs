@@ -16,6 +16,7 @@ public sealed class ArchitectureDossierTests : IClassFixture<GoldenTests.Site>
         ("/built/decisions", "Trade-offs"),
         ("/built/incidents", "Incidents"),
         ("/built/limits", "Limits and scale"),
+        ("/built/repositories", "Repositories"),
     ];
 
     private readonly HttpClient _client;
