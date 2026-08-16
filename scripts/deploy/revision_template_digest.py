@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Hash one Container Apps revision template, excluding only revisionSuffix."""
+"""Hash one Container Apps revision template after narrow Azure normalization."""
 
 import copy
 import hashlib
@@ -22,6 +22,11 @@ def template_from(value):
 def digest(value):
     canonical = copy.deepcopy(template_from(value))
     canonical.pop("revisionSuffix", None)
+    scale = canonical.get("scale")
+    if isinstance(scale, dict):
+        for name in ("rules", "cooldownPeriod", "pollingInterval"):
+            if scale.get(name) is None:
+                scale.pop(name, None)
     encoded = json.dumps(
         canonical,
         ensure_ascii=False,

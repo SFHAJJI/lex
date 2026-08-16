@@ -948,7 +948,7 @@ jobs:
               | .revisionSuffix = $suffix
               | .containers[0].image = $image
               | .containers[0].resources = {cpu:1.0,memory:"2Gi"}
-              | .scale = {minReplicas:1,maxReplicas:1,rules:null}
+              | .scale = {minReplicas:1,maxReplicas:1}
               | .containers[0].env = ((.containers[0].env // [])
                   | map(select(.name != "AOAI_KEY" and .name != "AZURE_CLIENT_ID"
                       and .name != "AOAI_USE_MANAGED_IDENTITY"
