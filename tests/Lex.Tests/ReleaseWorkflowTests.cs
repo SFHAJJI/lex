@@ -604,6 +604,26 @@ public sealed class ReleaseWorkflowTests
     }
 
     [Fact]
+    public void Diagnostic_evaluation_schema_cannot_reach_the_publication_mutation()
+    {
+        var script = File.ReadAllText(Path.Combine(
+                RepoRoot(), "deploy", "publish-assistant-evaluation.ps1"))
+            .Replace("\r\n", "\n", StringComparison.Ordinal);
+
+        var schemaGate = script.IndexOf(
+            "$reportJson.schema -ne \"lex-assistant-eval-report/3\"",
+            StringComparison.Ordinal);
+        var activationGate = script.IndexOf(
+            "$reportJson.activation_gate_passed -ne $true",
+            StringComparison.Ordinal);
+        var mutation = script.IndexOf("gh release create", StringComparison.Ordinal);
+
+        Assert.True(schemaGate >= 0 && activationGate > schemaGate && mutation > activationGate);
+        Assert.DoesNotContain("lex-assistant-eval-diagnostic/1", script,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Evaluation_publication_rejects_a_partial_bootstrap_tuple_before_reading_files()
     {
         var result = RunEvaluationPublicationValidation(
