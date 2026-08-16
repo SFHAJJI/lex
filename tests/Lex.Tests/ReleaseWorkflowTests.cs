@@ -536,6 +536,80 @@ public sealed class ReleaseWorkflowTests
     }
 
     [Fact]
+    public async Task Evaluation_admission_signer_handles_optional_environment_properties_under_strict_mode()
+    {
+        var signer = Path.Combine(RepoRoot(), "evals", "sign-assistant-admission.ps1");
+        var start = new ProcessStartInfo("pwsh")
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+        };
+        start.Environment["LEX_ADMISSION_SIGNER"] = signer;
+        foreach (var argument in new[]
+                 {
+                     "-NoProfile", "-NonInteractive", "-Command",
+                     """
+                     $tokens = $null
+                     $parseErrors = $null
+                     $ast = [System.Management.Automation.Language.Parser]::ParseFile(
+                         $env:LEX_ADMISSION_SIGNER, [ref]$tokens, [ref]$parseErrors)
+                     if ($parseErrors.Count -ne 0) { throw "Admission signer did not parse." }
+                     $definition = $ast.Find({
+                         param($node)
+                         $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+                             $node.Name -ceq "Get-ExactEnvironmentValue"
+                     }, $true)
+                     if ($null -eq $definition) { throw "Environment reader function is absent." }
+                     . ([scriptblock]::Create($definition.Extent.Text))
+                     Set-StrictMode -Version Latest
+
+                     $container = [pscustomobject]@{ env = @(
+                         [pscustomobject]@{ name = "LEX_CODE_COMMIT"; value = "exact-value" }
+                     ) }
+                     if ((Get-ExactEnvironmentValue "LEX_CODE_COMMIT") -cne "exact-value") {
+                         throw "A non-secret value without secretRef was not returned."
+                     }
+
+                     $container = [pscustomobject]@{ env = @(
+                         [pscustomobject]@{ name = "LEX_CODE_COMMIT"; secretRef = "code-commit" }
+                     ) }
+                     try {
+                         $null = Get-ExactEnvironmentValue "LEX_CODE_COMMIT"
+                         throw "A secretRef-only value was accepted."
+                     }
+                     catch {
+                         if ($_.Exception.Message -cne
+                             "Candidate revision must expose one non-secret LEX_CODE_COMMIT value.") {
+                             throw
+                         }
+                     }
+                     exit 0
+                     """,
+                 })
+            start.ArgumentList.Add(argument);
+
+        using var process = Process.Start(start)
+                            ?? throw new InvalidOperationException("PowerShell did not start.");
+        var standardOutput = process.StandardOutput.ReadToEndAsync();
+        var standardError = process.StandardError.ReadToEndAsync();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        try
+        {
+            await process.WaitForExitAsync(timeout.Token);
+        }
+        catch (OperationCanceledException) when (timeout.IsCancellationRequested)
+        {
+            if (!process.HasExited) process.Kill(entireProcessTree: true);
+            await process.WaitForExitAsync();
+            Assert.Fail("PowerShell signer test timed out after 30 seconds.\n"
+                        + await standardOutput + await standardError);
+        }
+        Assert.True(process.ExitCode == 0,
+            $"PowerShell exited {process.ExitCode}.\n" + await standardOutput + await standardError);
+    }
+
+    [Fact]
     public void Signed_evaluation_review_files_are_byte_preserved_by_git()
     {
         var attributes = File.ReadAllLines(Path.Combine(RepoRoot(), ".gitattributes"));
@@ -1143,12 +1217,13 @@ public sealed class ReleaseWorkflowTests
     }
 
     [Fact]
-    public void Bootstrap_template_request_matches_the_server_scale_shape_and_reports_exact_mismatches()
+    public void Bootstrap_template_request_uses_native_scale_shape_and_reports_exact_mismatches()
     {
         var deploy = File.ReadAllText(
             Path.Combine(RepoRoot(), ".github", "workflows", "deploy.yml"));
 
-        Assert.Contains(".scale = {minReplicas:1,maxReplicas:1,rules:null}", deploy);
+        Assert.Contains(".scale = {minReplicas:1,maxReplicas:1}", deploy);
+        Assert.DoesNotContain(".scale = {minReplicas:1,maxReplicas:1,rules:null}", deploy);
         Assert.Contains("bootstrap fallback image differs from the requested immutable image", deploy);
         Assert.Contains("bootstrap fallback template digest differs from the canonical template", deploy);
         Assert.DoesNotContain("bootstrap fallback differs from the immutable candidate image", deploy);

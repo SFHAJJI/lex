@@ -42,12 +42,17 @@ if ($image -notmatch
 
 function Get-ExactEnvironmentValue([string]$Name) {
     $matches = @($container.env | Where-Object { $_.name -ceq $Name })
-    if ($matches.Count -ne 1 -or
-        [string]::IsNullOrWhiteSpace([string]$matches[0].value) -or
-        $matches[0].secretRef) {
+    if ($matches.Count -ne 1) {
         throw "Candidate revision must expose one non-secret $Name value."
     }
-    return [string]$matches[0].value
+    $value = $matches[0].PSObject.Properties["value"]
+    $secretRef = $matches[0].PSObject.Properties["secretRef"]
+    if ($null -eq $value -or
+        [string]::IsNullOrWhiteSpace([string]$value.Value) -or
+        ($null -ne $secretRef -and [bool]$secretRef.Value)) {
+        throw "Candidate revision must expose one non-secret $Name value."
+    }
+    return [string]$value.Value
 }
 
 $codeCommit = Get-ExactEnvironmentValue "LEX_CODE_COMMIT"

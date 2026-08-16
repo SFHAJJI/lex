@@ -1,3 +1,4 @@
+import copy
 import json
 from pathlib import Path
 import subprocess
@@ -10,7 +11,7 @@ SCRIPT = ROOT / "scripts" / "deploy" / "revision_template_digest.py"
 
 
 class RevisionTemplateDigestTests(unittest.TestCase):
-    def test_only_revision_suffix_is_excluded(self):
+    def test_revision_suffix_is_excluded_but_other_template_drift_is_material(self):
         first = self.digest(self.revision("fallback", "abc"))
         second = self.digest(self.revision("candidate", "abc"))
         drifted = self.digest(self.revision("candidate", "different"))
@@ -18,6 +19,32 @@ class RevisionTemplateDigestTests(unittest.TestCase):
         self.assertEqual(first, second)
         self.assertNotEqual(first, drifted)
         self.assertRegex(first, r"^sha256:[0-9a-f]{64}$")
+
+    def test_only_null_azure_scale_defaults_are_absent_equivalent(self):
+        requested = self.revision("candidate", "abc")
+        requested_digest = self.digest(requested)
+        readback = copy.deepcopy(requested)
+        readback["properties"]["template"]["scale"].update({
+            "rules": None,
+            "cooldownPeriod": None,
+            "pollingInterval": None,
+        })
+
+        self.assertEqual(requested_digest, self.digest(readback))
+        for name, value in (
+            ("rules", []),
+            ("cooldownPeriod", 0),
+            ("pollingInterval", 30),
+        ):
+            drifted = copy.deepcopy(requested)
+            drifted["properties"]["template"]["scale"][name] = value
+            self.assertNotEqual(requested_digest, self.digest(drifted))
+
+        unrelated_null = copy.deepcopy(requested)
+        unrelated_null["properties"]["template"]["containers"][0]["env"][0][
+            "secretRef"
+        ] = None
+        self.assertNotEqual(requested_digest, self.digest(unrelated_null))
 
     def test_accepts_a_template_or_an_arm_revision_but_refuses_invalid_json_shape(self):
         revision = self.revision("candidate", "abc")
