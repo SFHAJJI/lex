@@ -301,13 +301,15 @@ button.pick { cursor: pointer; }
 .askpanel.min{width:240px;max-height:none}
 /* The panel used to appear and disappear on one frame. It now enters from the closed state and
    stays mounted for its own exit, so opening and closing read as one movement. */
-.askpanel{transform-origin:100% 100%;will-change:transform,opacity;
-  transition:transform .22s cubic-bezier(.2,.8,.25,1),opacity .18s ease}
-.askpanel.is-entering,.askpanel.is-closing{transform:translateY(14px) scale(.97);opacity:0}
-.askpanel.is-open{transform:none;opacity:1}
+.askpanel{transform-origin:100% 100%;will-change:transform;
+  transition:transform .22s cubic-bezier(.2,.8,.25,1)}
+/* Position only, never opacity: text mid-fade composites against whatever is behind it, which
+   measures as a contrast failure and is one for anyone reading during the transition. */
+.askpanel.is-entering,.askpanel.is-closing{transform:translateY(calc(100% + 24px))}
+.askpanel.is-open{transform:none}
 @media (prefers-reduced-motion:reduce){
   .askpanel{transition:none}
-  .askpanel.is-entering,.askpanel.is-closing{transform:none;opacity:1}}
+  .askpanel.is-entering,.askpanel.is-closing{transform:none}}
 .askbackdrop{display:none}
 body.assistant-open main,body.assistant-open footer{margin-right:452px}
 body.assistant-open main{max-width:960px}
