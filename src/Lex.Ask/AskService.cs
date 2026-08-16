@@ -1285,7 +1285,9 @@ public sealed class AskService
                     throw new InvalidDataException(
                         $"{tool}.{identity} is server-owned; use subject_ref.");
             var reference = String(arguments, LegalOperationCatalog.SubjectReferenceArgument);
-            var member = authority?.MemberForReference(reference)
+            var member = authority?.Members is [var only]
+                ? only
+                : authority?.MemberForReference(reference)
                 ?? throw new InvalidDataException(
                     $"{tool}.subject_ref must name one resolved subject reference.");
             arguments.Remove(LegalOperationCatalog.SubjectReferenceArgument);

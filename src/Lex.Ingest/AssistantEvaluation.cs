@@ -185,7 +185,7 @@ public sealed record AssistantEvaluationCatalog(
         if (Budget.MaximumCandidateInputTokens is < 1 or > 1_000_000
             || Budget.MaximumCandidateOutputTokens is < 1 or > 125_000
             || Budget.MaximumGraderInputTokens is < 1 or > 1_000_000
-            || Budget.MaximumGraderOutputTokens is < 1 or > 100_000
+            || Budget.MaximumGraderOutputTokens is < 1 or > 392_000
             || Budget.MaximumCostEur is <= 0 or > 10
             || Budget.MaximumFirstOperationP95LatencyMs is < 1_000 or > 25_000
             || Budget.MaximumFirstOperationHardLatencyMs

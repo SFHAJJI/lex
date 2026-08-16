@@ -246,7 +246,8 @@ public sealed class ArchitectureDossierTests : IClassFixture<GoldenTests.Site>
         Assert.Contains("image-only EU annex", html);
         Assert.Contains("25 frozen cases", productReview);
         Assert.Contains("620,000 candidate input tokens", productReview);
-        Assert.Contains("294,000 grader input tokens", productReview);
+        Assert.Contains("980,000 grader input tokens", productReview);
+        Assert.Contains("392,000 grader output tokens", productReview);
         Assert.DoesNotContain("20 frozen cases", productReview);
     }
 
@@ -448,7 +449,7 @@ public sealed class ArchitectureDossierTests : IClassFixture<GoldenTests.Site>
             Golden.RepositoryRoot(), "docs", "assistant-evaluation-scenario-matrix.md"));
 
         Assert.Contains("Owner-reviewed and signed", matrix);
-        Assert.Contains("cd8aae6fcbf45d0a60f8ce488854499060e73774fd158a5aaf6434e75362ec5b", matrix);
+        Assert.Contains("e21876f96bd0dc6dd720b3c8878daac00baed2b96560b04d99470fabdb015376", matrix);
         Assert.Contains("candidate has already passed the live run", matrix);
         Assert.Contains("Live LLM release evaluation", matrix);
         Assert.Contains("Deterministic integration", matrix);

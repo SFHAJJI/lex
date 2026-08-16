@@ -649,7 +649,7 @@ orientation aids; links omit line numbers so normal refactors do not rot the map
 </tr>
 <tr>
 <td>Cost control</td>
-<td>The catalog has an outer EUR 10 ceiling, where <code>EUR</code> is the standard currency code for euros. The current maximum-token reservation prices at EUR 0.3820232 before inference, then measured use is gated again. This is not a live Azure billing cutoff and cannot interrupt an in-flight model call. Signed call counts and per-call token ceilings bound the run instead.</td>
+<td>The catalog has an outer EUR 10 ceiling, where <code>EUR</code> is the standard currency code for euros. The current maximum-token reservation prices at EUR 0.5325316 before inference, then measured use is gated again. This is not a live Azure billing cutoff and cannot interrupt an in-flight model call. Signed call counts and per-call token ceilings bound the run instead.</td>
 </tr>
 <tr>
 <td>CI/CD</td>
