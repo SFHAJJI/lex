@@ -36,12 +36,22 @@ FATAL = [
 ]
 
 
-def run(message: str, fail_times: int) -> subprocess.CompletedProcess:
+def resolve_bash() -> str | None:
+    """Match the resolution the other deploy tests use, including Git Bash on Windows agents."""
+    bash = shutil.which("bash")
+    git_bash = Path(os.environ.get("ProgramFiles", "C:/Program Files")) / "Git/bin/bash.exe"
+    if os.name == "nt" and git_bash.exists():
+        return str(git_bash)
+    return bash
+
+
+def run(bash: str, message: str, fail_times: int) -> subprocess.CompletedProcess:
     """Run a command through az_retry that fails `fail_times` times, then succeeds."""
     script = f"""
     set -u
     . "{HELPER.as_posix()}"
     attempts_file=$(mktemp)
+    trap 'rm -f "$attempts_file"' EXIT
     printf '0' > "$attempts_file"
     fake() {{
       count=$(cat "$attempts_file")
@@ -57,7 +67,6 @@ def run(message: str, fail_times: int) -> subprocess.CompletedProcess:
     status=$?
     printf 'attempts=%s exit=%s\n' "$(cat "$attempts_file")" "$status"
     """
-    bash = shutil.which("bash")
     return subprocess.run(
         [bash, "-c", script], capture_output=True, text=True, timeout=180,
         # A real backoff starts at ten seconds and doubles. The classification is what is under
@@ -66,17 +75,22 @@ def run(message: str, fail_times: int) -> subprocess.CompletedProcess:
 
 
 class AzRetryClassificationTests(unittest.TestCase):
+    def setUp(self):
+        self.bash = resolve_bash()
+        if not self.bash:
+            self.skipTest("bash is unavailable")
+
     def test_a_condition_azure_calls_transient_is_retried_until_it_clears(self):
         for message in RETRYABLE:
             with self.subTest(message=message[:60]):
-                result = run(message, fail_times=1)
+                result = run(self.bash, message, fail_times=1)
                 self.assertIn("exit=0", result.stdout, result.stderr)
                 self.assertIn("attempts=2", result.stdout, result.stderr)
 
     def test_a_condition_that_will_not_clear_stops_on_its_first_attempt(self):
         for message in FATAL:
             with self.subTest(message=message[:60]):
-                result = run(message, fail_times=1)
+                result = run(self.bash, message, fail_times=1)
                 self.assertNotIn("exit=0", result.stdout, result.stderr)
                 self.assertIn("attempts=1", result.stdout, result.stderr)
 
