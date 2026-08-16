@@ -261,6 +261,8 @@ public sealed class EvaluationAdmissionTests
         Assert.True(exchangeResponse.Headers.CacheControl?.NoStore);
         Assert.True(exchangeResponse.Headers.CacheControl?.Private);
         Assert.True(EvaluationAdmissionRegistry.IsValidToken(token));
+        Assert.Equal(EvaluationAdmissionContract.RunIdentity(capability),
+            exchangeBody?["run_identity"]?.GetValue<string>());
         Assert.DoesNotContain(capability.Nonce,
             await exchangeResponse.Content.ReadAsStringAsync(), StringComparison.Ordinal);
 

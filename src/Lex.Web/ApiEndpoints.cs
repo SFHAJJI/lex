@@ -97,6 +97,7 @@ public static class ApiEndpoints
                     evaluation_token = registered.Token,
                     expires_at = registered.ExpiresAt,
                     max_calls = capability.MaxCalls,
+                    run_identity = EvaluationAdmissionContract.RunIdentity(capability),
                 }),
                 EvaluationAdmissionRegistrationKind.Replayed => Results.Json(
                     new { error = "Evaluation admission was already exchanged." },

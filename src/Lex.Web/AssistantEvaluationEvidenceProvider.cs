@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Lex.Evaluation;
 using Lex.Index;
 
 namespace Lex.Web;
@@ -70,6 +71,7 @@ internal sealed class GitHubAssistantEvaluationEvidenceProvider
     private readonly TimeProvider _clock;
     private readonly ILogger<GitHubAssistantEvaluationEvidenceProvider> _logger;
     private readonly IReadOnlyList<ArtifactTrustRoot> _artifactRoots;
+    private readonly EvaluationAdmissionAuthority _admissionAuthority;
     private CacheEntry? _cache;
 
     public GitHubAssistantEvaluationEvidenceProvider(
@@ -80,7 +82,8 @@ internal sealed class GitHubAssistantEvaluationEvidenceProvider
         ILogger<GitHubAssistantEvaluationEvidenceProvider> logger)
         : this(http,
             () => TryRuntimeIdentity(options.Value, registry, out var identity) ? identity : null,
-            clock, logger, ArtifactTrustStore.Roots)
+            clock, logger, ArtifactTrustStore.Roots,
+            EvaluationAdmissionTrustStore.Load())
     {
     }
 
@@ -89,13 +92,15 @@ internal sealed class GitHubAssistantEvaluationEvidenceProvider
         Func<AssistantEvaluationRuntimeIdentity?> runtimeIdentity,
         TimeProvider clock,
         ILogger<GitHubAssistantEvaluationEvidenceProvider> logger,
-        IReadOnlyList<ArtifactTrustRoot> artifactRoots)
+        IReadOnlyList<ArtifactTrustRoot> artifactRoots,
+        EvaluationAdmissionAuthority admissionAuthority)
     {
         _http = http;
         _runtimeIdentity = runtimeIdentity;
         _clock = clock;
         _logger = logger;
         _artifactRoots = artifactRoots;
+        _admissionAuthority = admissionAuthority;
     }
 
     public async Task<AssistantEvaluationEvidenceSnapshot> GetAsync(
@@ -128,7 +133,7 @@ internal sealed class GitHubAssistantEvaluationEvidenceProvider
                         if (release is null) continue;
                         var files = await DownloadStandardAssetsAsync(release, timeout.Token);
                         var evidence = AssistantEvaluationEvidenceVerifier.Verify(
-                            release, files, _artifactRoots, now);
+                            release, files, _artifactRoots, now, _admissionAuthority);
                         if (evidence.Matches(runtime)) exact.Add(evidence);
                     }
                     catch (Exception exception) when (exception is not OperationCanceledException)

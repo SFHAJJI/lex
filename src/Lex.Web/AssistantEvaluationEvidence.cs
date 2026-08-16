@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Lex.Evaluation;
 using Lex.Index;
 
 namespace Lex.Web;
@@ -107,13 +108,16 @@ internal static class AssistantEvaluationEvidenceVerifier
     internal const string CasesFile = "assistant-cases-v3.json";
     internal const string ReviewFile = "assistant-cases-v3.review.json";
     internal const string ReviewSignatureFile = "assistant-cases-v3.review.sig";
+    internal const string AdmissionFile = "assistant-eval-admission.json";
+    internal const string AdmissionSignatureFile = "assistant-eval-admission.sig";
     internal const string BrowserEvidenceFile = "assistant-browser-evidence.json";
     internal const string ManifestFile = "assistant-eval.manifest.json";
     internal const string ManifestSignatureFile = "assistant-eval.manifest.sig";
     private const string ArtifactKeyId = "keyvault-lex-v2";
 
     internal static readonly IReadOnlyList<string> SignedPayloadFiles =
-        [ReportFile, CasesFile, ReviewFile, ReviewSignatureFile, BrowserEvidenceFile];
+        [ReportFile, CasesFile, ReviewFile, ReviewSignatureFile,
+            AdmissionFile, AdmissionSignatureFile, BrowserEvidenceFile];
 
     private static readonly HashSet<string> StandardAssets =
         [.. SignedPayloadFiles, ManifestFile, ManifestSignatureFile];
@@ -122,6 +126,8 @@ internal static class AssistantEvaluationEvidenceVerifier
             "bootstrap-equivalence.manifest.json", "bootstrap-equivalence.manifest.sig"];
     private static readonly Regex Digest = new("^[0-9a-f]{64}$", RegexOptions.CultureInvariant);
     private static readonly Regex Commit = new("^[0-9a-f]{40}$", RegexOptions.CultureInvariant);
+    private static readonly Regex RunIdentity = new(
+        "^[0-9a-f]{16}$", RegexOptions.CultureInvariant);
     private static readonly Regex Revision = new(
         "^ca-lex-web--[a-z0-9-]+$", RegexOptions.CultureInvariant);
     private static readonly Regex Tag = new(
@@ -131,7 +137,16 @@ internal static class AssistantEvaluationEvidenceVerifier
         AssistantEvaluationRelease release,
         IReadOnlyDictionary<string, byte[]> files,
         IReadOnlyList<ArtifactTrustRoot> artifactRoots,
-        DateTimeOffset verifiedAt)
+        DateTimeOffset verifiedAt) => Verify(
+            release, files, artifactRoots, verifiedAt,
+            EvaluationAdmissionTrustStore.Load());
+
+    internal static VerifiedAssistantEvaluationEvidence Verify(
+        AssistantEvaluationRelease release,
+        IReadOnlyDictionary<string, byte[]> files,
+        IReadOnlyList<ArtifactTrustRoot> artifactRoots,
+        DateTimeOffset verifiedAt,
+        EvaluationAdmissionAuthority admissionAuthority)
     {
         ArgumentNullException.ThrowIfNull(release);
         ArgumentNullException.ThrowIfNull(files);
@@ -202,9 +217,13 @@ internal static class AssistantEvaluationEvidenceVerifier
 
         var runAtText = RequiredString(report, "run_at");
         var runAt = Utc(runAtText, "run_at");
+        var admissionRunIdentity = RequiredString(report, "admission_run_identity");
+        var admissionSha256 = RequiredString(report, "admission_sha256");
         if (RequiredString(report, "schema") != "lex-assistant-eval-report/3"
             || !Fixed(RequiredString(report, "cases_sha256"), catalogSha)
             || RequiredString(report, "frozen_at") != frozenAtText
+            || !RunIdentity.IsMatch(admissionRunIdentity)
+            || !Digest.IsMatch(admissionSha256)
             || runAt < frozenAt || runAt > verifiedAt.AddMinutes(5)
             || !RequiredBoolean(report, "activation_gate_passed")
             || RequiredArray(report, "gate_failures").GetArrayLength() != 0)
@@ -259,6 +278,22 @@ internal static class AssistantEvaluationEvidenceVerifier
             throw new InvalidDataException(
                 "Assistant evaluation candidate model route is inconsistent.");
 
+        var admissionBytes = files[AdmissionFile];
+        if (!Fixed(admissionSha256, Sha(admissionBytes)))
+            throw new InvalidDataException(
+                "Signed assistant evaluation report does not bind the admission bytes.");
+        var admission = EvaluationAdmissionContract.Verify(
+            admissionBytes,
+            Encoding.UTF8.GetString(files[AdmissionSignatureFile]).Trim(),
+            admissionAuthority,
+            new EvaluationAdmissionIdentity(
+                revision, image, codeCommit, artifactSet, catalogSha),
+            runAt);
+        if (!Fixed(admissionRunIdentity,
+                EvaluationAdmissionContract.RunIdentity(admission)))
+            throw new InvalidDataException(
+                "Signed assistant evaluation admission run identity is invalid.");
+
         using var browserDocument = Parse(files[BrowserEvidenceFile], BrowserEvidenceFile);
         var browser = browserDocument.RootElement;
         var browserP95 = NonnegativeDouble(
@@ -283,6 +318,8 @@ internal static class AssistantEvaluationEvidenceVerifier
         var expectedSources = new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["artifact_manifest_set"] = artifactSet,
+            ["admission_run_identity"] = admissionRunIdentity,
+            ["admission_sha256"] = admissionSha256,
             ["browser_evidence_sha256"] = Sha(files[BrowserEvidenceFile]),
             ["candidate_evidence_sha256"] = candidateEvidenceSha,
             ["candidate_revision"] = revision,
@@ -330,8 +367,10 @@ internal static class AssistantEvaluationEvidenceVerifier
             var limit = name switch
             {
                 ReportFile or CasesFile => 4L * 1024 * 1024,
+                AdmissionFile => EvaluationAdmissionContract.MaximumBytes,
                 BrowserEvidenceFile or ReviewFile or ManifestFile => 256L * 1024,
-                ReviewSignatureFile or ManifestSignatureFile => 16L * 1024,
+                ReviewSignatureFile or AdmissionSignatureFile or ManifestSignatureFile
+                    => 16L * 1024,
                 _ => 0,
             };
             totalBytes = checked(totalBytes + bytes.LongLength);

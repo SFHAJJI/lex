@@ -241,6 +241,8 @@ jobs:
               assistant-cases-v3.json \
               assistant-cases-v3.review.json \
               assistant-cases-v3.review.sig \
+              assistant-eval-admission.json \
+              assistant-eval-admission.sig \
               assistant-browser-evidence.json \
               assistant-eval.manifest.json \
               assistant-eval.manifest.sig; do
@@ -289,6 +291,7 @@ jobs:
           package_sha=$({
             for asset in assistant-eval-report.json assistant-cases-v3.json \
                 assistant-cases-v3.review.json assistant-cases-v3.review.sig \
+                assistant-eval-admission.json assistant-eval-admission.sig \
                 assistant-browser-evidence.json assistant-eval.manifest.json \
                 assistant-eval.manifest.sig; do
               printf '%s  %s\n' "$(sha256sum "$eval_dir/$asset" | cut -d' ' -f1)" "$asset"

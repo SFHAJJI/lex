@@ -141,7 +141,16 @@ evaluation-review public key is embedded in the evaluator release; callers canno
 trust root. The matching non-exportable private key is
 `kv-lex-eval-review/lex-evaluation-review-v1`. Its RBAC-enabled vault grants no access to the
 artifact publisher identity, so case approval and artifact publication are separate authorities.
-After a passing run, `deploy/publish-assistant-evaluation.ps1` uploads a four-file draft evidence
+The candidate returns the admission run identity during the signed-envelope exchange; the runner
+records that server-confirmed identity and the exact admission SHA-256 in report schema `/3`.
+Publication retains `assistant-eval-admission.json` and its detached signature as required assets.
+Offline verification checks the owner signature and short-lived window at the report's historical
+`run_at`, then reconstructs the complete request plan from the reviewed catalog and rejects any
+drift in calls, request hashes, turns, token or cost budgets, or expiry. Report freshness remains a
+separate check at promotion time.
+The offline CLI contract is `lex assistant-eval verify-report --report FILE --cases FILE
+--review-attestation FILE --review-signature FILE --admission FILE --admission-signature FILE ...`.
+After a passing run, `deploy/publish-assistant-evaluation.ps1` uploads a six-file draft evidence
 set, then dispatches the public `lex-ops` publication workflow. For a normal release that workflow
 temporarily activates the zero-traffic candidate, revalidates the report, runs the exact-code
 Chromium presentation gate, adds `assistant-browser-evidence.json`, and returns the candidate to
@@ -156,6 +165,8 @@ three equivalence arguments are supplied together:
   -Cases ./evals/assistant-cases-v3.json `
   -ReviewAttestation ./evals/assistant-cases-v3.review.json `
   -ReviewSignature ./evals/assistant-cases-v3.review.sig `
+  -Admission ./artifacts/assistant-eval-admission.json `
+  -AdmissionSignature ./artifacts/assistant-eval-admission.sig `
   -CandidateRevision ca-lex-web--<candidate> `
   -BootstrapRollbackRevision ca-lex-web--<fallback> `
   -BootstrapCanonicalTemplateDigest sha256:<64-lowercase-hex> `
@@ -163,9 +174,10 @@ three equivalence arguments are supplied together:
 ```
 
 Only the OIDC
-publisher can bind the resulting five-file set to the candidate revision, code, index-manifest set,
-catalog and browser-evidence digests, sign its whole-artifact manifest with `keyvault-lex-v2`,
-reverify it, and publish the release. The standard public package has those five evidence files
+publisher can bind the resulting seven-file set to the candidate revision, code, index-manifest set,
+catalog, signed-admission run identity and digest, and browser-evidence digest, sign its
+whole-artifact manifest with `keyvault-lex-v2`,
+reverify it, and publish the release. The standard public package has those seven evidence files
 plus its manifest and signature. The one-time bootstrap adds a separate three-file equivalence
 package: `bootstrap-equivalence.json`, its dedicated one-file manifest and its signature. The
 publisher re-reads the complete exact A/R/C Azure state, signs that package independently, invokes

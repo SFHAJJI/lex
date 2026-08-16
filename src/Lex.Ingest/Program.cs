@@ -268,6 +268,9 @@ switch (args0[0])
                 verifiedTarget, CancellationToken.None);
             var verifiedReport = AssistantEvaluationReleaseVerifier.VerifyReport(
                 Get("--report") ?? throw new ArgumentException("--report required"),
+                Get("--admission") ?? throw new ArgumentException("--admission required"),
+                Get("--admission-signature")
+                    ?? throw new ArgumentException("--admission-signature required"),
                 verifiedCaseSet, verifiedTarget, verifiedAttestation, now);
             await AssistantEvaluationReleaseVerifier.VerifyModelDeploymentsAsync(
                 verificationResolver, verifiedReport, CancellationToken.None);
@@ -322,6 +325,8 @@ switch (args0[0])
                 verifiedTarget, CancellationToken.None);
             var verifiedReport = AssistantEvaluationReleaseVerifier.VerifyReport(
                 EvidencePath(AssistantEvaluationReleaseVerifier.ReportFile),
+                EvidencePath(AssistantEvaluationReleaseVerifier.AdmissionFile),
+                EvidencePath(AssistantEvaluationReleaseVerifier.AdmissionSignatureFile),
                 verifiedCaseSet, verifiedTarget, verifiedAttestation, now,
                 allowOlderPreviouslyPromotedEvidence:
                     Array.IndexOf(args0, "--allow-older-previously-promoted-evidence") >= 0);
@@ -932,7 +937,7 @@ static void Usage() => Console.Error.WriteLine("""
       lex assistant-eval --admission FILE --admission-signature FILE --base-url REVISION_URL --candidate-container-app-resource-id AZURE_ID --candidate-revision NAME --cases FILE --review-attestation FILE --review-signature FILE --out FILE --candidate-model-resource-id AZURE_ID --candidate-deployment ID --grader-model-resource-id AZURE_ID --grader-deployment ID [--grader-key-env NAME]
       lex assistant-eval diagnostic --admission FILE --admission-signature FILE --base-url REVISION_URL --candidate-container-app-resource-id AZURE_ID --candidate-revision NAME --cases FILE --review-attestation FILE --review-signature FILE --out FILE --candidate-model-resource-id AZURE_ID --candidate-deployment ID --grader-model-resource-id AZURE_ID --grader-deployment ID [--grader-key-env NAME]  # non-publishable; grader max_completion_tokens=8000
       lex assistant-eval verify-cases --cases FILE --review-attestation FILE --review-signature FILE
-      lex assistant-eval verify-report --report FILE --cases FILE --review-attestation FILE --review-signature FILE --base-url REVISION_URL --candidate-container-app-resource-id AZURE_ID --candidate-revision NAME
+      lex assistant-eval verify-report --report FILE --cases FILE --review-attestation FILE --review-signature FILE --admission FILE --admission-signature FILE --base-url REVISION_URL --candidate-container-app-resource-id AZURE_ID --candidate-revision NAME
       lex assistant-eval verify-release --root DIR --manifest FILE --signature FILE --trust-roots FILE --base-url REVISION_URL --candidate-container-app-resource-id AZURE_ID --candidate-revision NAME
       lex assistant-eval verify-bootstrap-equivalence --root DIR --manifest FILE --signature FILE --trust-roots FILE --equivalence FILE --candidate-container-app-resource-id AZURE_ID --legacy-authority-revision NAME --candidate-revision NAME --rollback-revision NAME --evaluation-release TAG --canonical-template-digest SHA256 --image-digest SHA256 --cases-sha256 SHA256 [--established-release-state | --historical-source-package --expected-code-commit FULL_SHA]
       lex assistant-eval create-admission --cases FILE --review-attestation FILE --review-signature FILE --candidate-revision NAME --candidate-image IMAGE_DIGEST --code-commit FULL_SHA --artifact-manifest-set SHA256 --out FILE

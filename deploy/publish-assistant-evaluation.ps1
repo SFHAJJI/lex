@@ -5,6 +5,8 @@ param(
     [Parameter(Mandatory = $true)][string]$Cases,
     [Parameter(Mandatory = $true)][string]$ReviewAttestation,
     [Parameter(Mandatory = $true)][string]$ReviewSignature,
+    [Parameter(Mandatory = $true)][string]$Admission,
+    [Parameter(Mandatory = $true)][string]$AdmissionSignature,
     [Parameter(Mandatory = $true)][string]$CandidateRevision,
     [string]$BootstrapRollbackRevision,
     [string]$BootstrapCanonicalTemplateDigest,
@@ -45,7 +47,10 @@ $sourceReport = (Resolve-Path -LiteralPath $Report).Path
 $sourceCases = (Resolve-Path -LiteralPath $Cases).Path
 $sourceReview = (Resolve-Path -LiteralPath $ReviewAttestation).Path
 $sourceReviewSignature = (Resolve-Path -LiteralPath $ReviewSignature).Path
+$sourceAdmission = (Resolve-Path -LiteralPath $Admission).Path
+$sourceAdmissionSignature = (Resolve-Path -LiteralPath $AdmissionSignature).Path
 $reportJson = Get-Content -LiteralPath $sourceReport -Raw | ConvertFrom-Json
+$admissionJson = Get-Content -LiteralPath $sourceAdmission -Raw | ConvertFrom-Json
 $target = $reportJson.identity.target
 if ($reportJson.schema -ne "lex-assistant-eval-report/3" -or
     $reportJson.activation_gate_passed -ne $true -or
@@ -54,6 +59,22 @@ if ($reportJson.schema -ne "lex-assistant-eval-report/3" -or
 }
 if ($target.revision_name -ne $CandidateRevision) {
     throw "The report does not describe the requested candidate revision."
+}
+$admissionDigest = (Get-FileHash -LiteralPath $sourceAdmission -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($reportJson.admission_sha256 -cnotmatch '\A[0-9a-f]{64}\z' -or
+    $reportJson.admission_sha256 -cne $admissionDigest -or
+    $reportJson.admission_run_identity -cnotmatch '\A[0-9a-f]{16}\z' -or
+    $admissionJson.schema -ne "lex-assistant-eval-admission/1" -or
+    $admissionJson.catalog_sha256 -cne $reportJson.cases_sha256 -or
+    $admissionJson.candidate_revision -cne $target.revision_name -or
+    $admissionJson.candidate_image -cne $target.image -or
+    $admissionJson.code_commit -cne $target.code_commit -or
+    $admissionJson.artifact_manifest_set -cne $target.artifact_manifest_set) {
+    throw "The report does not bind the exact signed evaluation admission."
+}
+$admissionSignatureInfo = Get-Item -LiteralPath $sourceAdmissionSignature
+if ($admissionSignatureInfo.Length -le 0 -or $admissionSignatureInfo.Length -gt 514) {
+    throw "The evaluation admission signature is outside its byte limit."
 }
 
 $reportDigest = (Get-FileHash -LiteralPath $sourceReport -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -65,6 +86,8 @@ gh release create $tag `
     "$sourceCases#assistant-cases-v3.json" `
     "$sourceReview#assistant-cases-v3.review.json" `
     "$sourceReviewSignature#assistant-cases-v3.review.sig" `
+    "$sourceAdmission#assistant-eval-admission.json" `
+    "$sourceAdmissionSignature#assistant-eval-admission.sig" `
     --repo $Repository --target main --draft `
     --title "Pending Lex assistant evaluation $($target.code_commit.Substring(0, 12))" `
     --notes "Unsigned staging evidence for candidate revision $CandidateRevision. The production OIDC publisher must authenticate, sign, verify and publish it."
