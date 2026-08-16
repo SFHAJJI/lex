@@ -1283,7 +1283,9 @@ public sealed class AssistantEvaluationHttpTarget : IAssistantEvaluationTarget
 public sealed record AssistantTargetAttestation(
     IReadOnlyList<string> IndexManifestIds);
 
-public sealed class AssistantEvaluationHttpGrader : IAssistantEvaluationGrader
+public sealed class AssistantEvaluationHttpGrader :
+    IAssistantEvaluationGrader,
+    IAssistantEvaluationDiagnosticGrader
 {
     private const int MaximumResponseBytes = 256 * 1024;
     private readonly HttpClient _http;
@@ -1317,6 +1319,48 @@ public sealed class AssistantEvaluationHttpGrader : IAssistantEvaluationGrader
         JsonObject response,
         CancellationToken cancellationToken)
     {
+        var parsed = await SendAsync(
+            evaluationCase, response, evaluationCase.Grading.MaximumOutputTokens,
+            cancellationToken);
+        return ParseGrade(parsed);
+    }
+
+    public async Task<AssistantEvaluationDiagnosticGrade> GradeDiagnosticAsync(
+        AssistantEvaluationCase evaluationCase,
+        JsonObject response,
+        CancellationToken cancellationToken)
+    {
+        var parsed = await SendAsync(
+            evaluationCase, response,
+            AssistantEvaluationDiagnosticRunner.GraderMaximumOutputTokens,
+            cancellationToken);
+        var finishReason = ReadDiagnosticFinishReason(parsed);
+        var usage = TryReadUsage(parsed);
+        if (finishReason == "length")
+            throw new AssistantEvaluationDiagnosticResponseException(
+                "truncated", finishReason, usage);
+        if (finishReason == "content_filter")
+            throw new AssistantEvaluationDiagnosticResponseException(
+                "content_filtered", finishReason, usage);
+        try
+        {
+            var grade = ParseGrade(parsed);
+            return new AssistantEvaluationDiagnosticGrade(
+                grade.Score, grade.Usage, finishReason);
+        }
+        catch (Exception exception) when (exception is InvalidDataException or JsonException)
+        {
+            throw new AssistantEvaluationDiagnosticResponseException(
+                "invalid_response", finishReason, usage);
+        }
+    }
+
+    private async Task<JsonNode> SendAsync(
+        AssistantEvaluationCase evaluationCase,
+        JsonObject response,
+        int maximumOutputTokens,
+        CancellationToken cancellationToken)
+    {
         var prompt = BuildPrompt(evaluationCase, response);
         var body = new JsonObject
         {
@@ -1330,7 +1374,7 @@ public sealed class AssistantEvaluationHttpGrader : IAssistantEvaluationGrader
                         + "Judge only the supplied rubric against the supplied evidence. Return strict JSON with integer score 1..5 and a one-sentence reason.",
                 },
                 new JsonObject { ["role"] = "user", ["content"] = prompt }),
-            ["max_completion_tokens"] = evaluationCase.Grading.MaximumOutputTokens,
+            ["max_completion_tokens"] = maximumOutputTokens,
             ["reasoning_effort"] = "medium",
             ["response_format"] = new JsonObject
             {
@@ -1388,6 +1432,11 @@ public sealed class AssistantEvaluationHttpGrader : IAssistantEvaluationGrader
         {
             throw new InvalidDataException("Assistant evaluation grader returned malformed JSON.", exception);
         }
+        return parsed;
+    }
+
+    private static AssistantEvaluationGrade ParseGrade(JsonNode parsed)
+    {
         var content = parsed["choices"]?[0]?["message"]?["content"]?.GetValue<string>()
             ?? throw new InvalidDataException("Assistant evaluation grader returned no grade.");
         var grade = JsonNode.Parse(content) as JsonObject
@@ -1400,6 +1449,40 @@ public sealed class AssistantEvaluationHttpGrader : IAssistantEvaluationGrader
             ?? throw new InvalidDataException("Assistant evaluation grader returned no usage.");
         return new AssistantEvaluationGrade(score, reason, new AssistantModelUsage(
             ReadLong(usage, "prompt_tokens"), ReadLong(usage, "completion_tokens")));
+    }
+
+    private static string ReadDiagnosticFinishReason(JsonNode parsed)
+    {
+        string? finishReason;
+        try
+        {
+            finishReason = parsed["choices"]?[0]?["finish_reason"]?.GetValue<string>();
+        }
+        catch (InvalidOperationException)
+        {
+            finishReason = null;
+        }
+        if (finishReason is not ("stop" or "length" or "content_filter"))
+            throw new InvalidDataException(
+                "Diagnostic assistant grader returned an invalid finish reason.");
+        return finishReason;
+    }
+
+    private static AssistantModelUsage TryReadUsage(JsonNode parsed)
+    {
+        try
+        {
+            var usage = parsed["usage"] as JsonObject;
+            return usage is null
+                ? new AssistantModelUsage(0, 0)
+                : new AssistantModelUsage(
+                    ReadLong(usage, "prompt_tokens"),
+                    ReadLong(usage, "completion_tokens"));
+        }
+        catch (InvalidDataException)
+        {
+            return new AssistantModelUsage(0, 0);
+        }
     }
 
     private static string BuildPrompt(

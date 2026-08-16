@@ -113,6 +113,7 @@ switch (args0[0])
     }
     case "assistant-eval":
     {
+        var diagnostic = args0.Length > 1 && args0[1] == "diagnostic";
         if (args0.Length > 1 && EvalAdmissionCli.IsCommand(args0[1]))
             return EvalAdmissionCli.Run(args0[1..], now);
         if (args0.Length > 1 && args0[1] == "verify-cases")
@@ -407,6 +408,45 @@ switch (args0[0])
                     graderModel.Endpoint,
                     graderKey,
                     graderModel.Deployment);
+            }
+            if (diagnostic)
+            {
+                var diagnosticReport = await AssistantEvaluationDiagnosticRunner.RunAsync(
+                    caseSet, target, grader, identity,
+                    caseSet.Catalog.Pricing,
+                    now, CancellationToken.None);
+                var postDiagnosticTarget = await resolver.ResolveContainerAppRevisionAsync(
+                    candidateContainerAppResourceId, candidateRevision,
+                    CancellationToken.None);
+                AssistantEvaluationRunner.EnsureStableTarget(
+                    targetEvidence, postDiagnosticTarget);
+                var diagnosticBytes =
+                    System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(
+                        diagnosticReport,
+                        new System.Text.Json.JsonSerializerOptions
+                        {
+                            PropertyNamingPolicy =
+                                System.Text.Json.JsonNamingPolicy.SnakeCaseLower,
+                            WriteIndented = true,
+                        });
+                var absoluteDiagnosticOutput = Path.GetFullPath(output);
+                Directory.CreateDirectory(
+                    Path.GetDirectoryName(absoluteDiagnosticOutput)!);
+                var diagnosticTemporary = absoluteDiagnosticOutput
+                    + $".{Guid.NewGuid():N}.tmp";
+                try
+                {
+                    File.WriteAllBytes(diagnosticTemporary, diagnosticBytes);
+                    File.Move(
+                        diagnosticTemporary, absoluteDiagnosticOutput, overwrite: true);
+                }
+                finally
+                {
+                    try { File.Delete(diagnosticTemporary); } catch { }
+                }
+                Console.WriteLine(
+                    System.Text.Json.JsonSerializer.Serialize(diagnosticReport));
+                return diagnosticReport.MeasurementCompleted ? 0 : 5;
             }
             var report = await AssistantEvaluationRunner.RunAsync(
                 caseSet, target, grader, identity,
@@ -890,6 +930,7 @@ static void Usage() => Console.Error.WriteLine("""
       lex repair checkout-line-endings --corpus PATH
       lex artifact manifest --root DIR --file RELATIVE [--file RELATIVE] --manifest FILE --signature FILE --keyfile KEY.pem --key-id ID --code-commit SHA [--source KEY=VALUE]
       lex assistant-eval --admission FILE --admission-signature FILE --base-url REVISION_URL --candidate-container-app-resource-id AZURE_ID --candidate-revision NAME --cases FILE --review-attestation FILE --review-signature FILE --out FILE --candidate-model-resource-id AZURE_ID --candidate-deployment ID --grader-model-resource-id AZURE_ID --grader-deployment ID [--grader-key-env NAME]
+      lex assistant-eval diagnostic --admission FILE --admission-signature FILE --base-url REVISION_URL --candidate-container-app-resource-id AZURE_ID --candidate-revision NAME --cases FILE --review-attestation FILE --review-signature FILE --out FILE --candidate-model-resource-id AZURE_ID --candidate-deployment ID --grader-model-resource-id AZURE_ID --grader-deployment ID [--grader-key-env NAME]  # non-publishable; grader max_completion_tokens=8000
       lex assistant-eval verify-cases --cases FILE --review-attestation FILE --review-signature FILE
       lex assistant-eval verify-report --report FILE --cases FILE --review-attestation FILE --review-signature FILE --base-url REVISION_URL --candidate-container-app-resource-id AZURE_ID --candidate-revision NAME
       lex assistant-eval verify-release --root DIR --manifest FILE --signature FILE --trust-roots FILE --base-url REVISION_URL --candidate-container-app-resource-id AZURE_ID --candidate-revision NAME
