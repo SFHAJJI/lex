@@ -145,19 +145,19 @@ public sealed class AssistantEvaluationTests : IDisposable
         // existed: they still claimed 59 candidate requests when the plan had become 56.
         static string Flat(string path) =>
             Regex.Replace(File.ReadAllText(path), @"\s+", " ");
-        var assistantEvaluation = Flat(
-            Path.Combine(RepoRoot(), "docs", "assistant-evaluation.md"));
-        var release = Flat(
-            Path.Combine(RepoRoot(), "docs", "architecture", "pages", "release.md"));
-        var productReview = Flat(
-            Path.Combine(RepoRoot(), "docs", "product-architecture-review.md"));
+        var assistantEvaluationPath = Path.Combine("docs", "assistant-evaluation.md");
+        var releasePath = Path.Combine("docs", "architecture", "pages", "release.md");
+        var productReviewPath = Path.Combine("docs", "product-architecture-review.md");
+        var assistantEvaluation = Flat(Path.Combine(RepoRoot(), assistantEvaluationPath));
+        var release = Flat(Path.Combine(RepoRoot(), releasePath));
+        var productReview = Flat(Path.Combine(RepoRoot(), productReviewPath));
         string Tokens(long value) => value.ToString("N0", CultureInfo.InvariantCulture);
         var money = estimate.ToString("0.#######", CultureInfo.InvariantCulture);
-        foreach (var (name, text) in new[]
+        foreach (var (path, text) in new[]
                  {
-                     ("assistant-evaluation.md", assistantEvaluation),
-                     ("release.md", release),
-                     ("product-architecture-review.md", productReview),
+                     (assistantEvaluationPath, assistantEvaluation),
+                     (releasePath, release),
+                     (productReviewPath, productReview),
                  })
         {
             foreach (var value in new[]
@@ -166,7 +166,7 @@ public sealed class AssistantEvaluationTests : IDisposable
                          Tokens(graderInput), Tokens(graderOutput), money,
                      })
                 Assert.True(text.Contains(value, StringComparison.Ordinal),
-                    $"docs/{name} does not state {value} from the signed catalog.");
+                    $"{path} does not state {value} from the signed catalog.");
         }
         Assert.Contains(
             $"contains {totalCalls} candidate HTTP requests, {setupCalls} same-thread setup "
