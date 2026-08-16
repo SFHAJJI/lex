@@ -118,11 +118,11 @@ a bounded inactive-to-active-to-inactive candidate lifecycle and verifies that e
 production quota authority remains afterward, including on failure. It also obtains both deployments' resource,
 endpoint, model name, immutable model version and SKU from Azure Resource Manager before inference.
 Candidate and grader usage and EUR prices are reserved, measured and gated separately. The current
-25-case catalog reserves at most 620,000 candidate input tokens, 123,000 candidate output tokens,
-980,000 grader input tokens and 392,000 grader output tokens. At the frozen meter prices that is
-EUR 0.5325316, below the outer EUR 10 limit. Its signed admission plan contains 59 candidate HTTP
-requests—ten setup and 49 final requests—and a passing run makes 49 separate release-grader
-requests. Preflight stops before inference when the reservation
+25-case catalog reserves at most 928,000 candidate input tokens, 92,000 candidate output tokens,
+815,104 grader input tokens and 384,000 grader output tokens. At the frozen meter prices that is
+EUR 0.5356487, below the outer EUR 10 limit. Its signed admission plan contains 56 candidate HTTP
+requests, 8 same-thread setup requests and 48 final requests, and a passing run makes 48 separate
+release-grader requests. Preflight stops before inference when the reservation
 cannot fit, and measured use is gated again afterward. The limit is not a live Azure billing
 listener and cannot interrupt an in-flight model call; the signed call plan and per-call token
 ceilings provide the hard execution bound. The

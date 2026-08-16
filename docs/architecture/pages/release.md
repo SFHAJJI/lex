@@ -149,10 +149,10 @@ orientation aids; links omit line numbers so normal refactors do not rot the map
 | Catalog author | `Lex release engineering`, identified as `system:lex-release-engineering` |
 | Evaluation reviewer | Soufien Hajji, using a separate non-exportable evaluation-review signing key |
 | Review claim | The project owner reviews the catalog produced by the release-engineering identity. This is separation from the catalog author, not third-party review, external audit or legal review. |
-| Frozen set | 25 frozen scenarios, 49 final candidate HTTP requests, ten same-thread setup HTTP requests, 59 total candidate HTTP requests and 49 release-grader requests |
-| Candidate token budget | The current reservation is 620,000 input and 123,000 output tokens. Setup and final turns are charged to this candidate budget. |
-| Grader token budget | The current reservation is 294,000 input and 49,000 output tokens on a separately authenticated `gpt-5-nano` deployment. |
-| Cost control | The catalog has an outer EUR 10 ceiling, where `EUR` is the standard currency code for euros. The current maximum-token reservation prices at EUR 0.5325316 before inference, then measured use is gated again. This is not a live Azure billing cutoff and cannot interrupt an in-flight model call. Signed call counts and per-call token ceilings bound the run instead. |
+| Frozen set | 25 frozen scenarios, 48 final candidate HTTP requests, 8 same-thread setup HTTP requests, 56 total candidate HTTP requests and 48 release-grader requests |
+| Candidate token budget | The current reservation is 928,000 input and 92,000 output tokens. Setup and final turns are charged to this candidate budget. |
+| Grader token budget | The current reservation is 815,104 input and 384,000 output tokens on a separately authenticated `gpt-5-nano` deployment. |
+| Cost control | The catalog has an outer EUR 10 ceiling, where `EUR` is the standard currency code for euros. The current maximum-token reservation prices at EUR 0.5356487 before inference, then measured use is gated again. This is not a live Azure billing cutoff and cannot interrupt an in-flight model call. Signed call counts and per-call token ceilings bound the run instead. |
 | CI/CD | GitHub Actions creates an immutable zero-traffic candidate, verifies the signed artifact manifest and both jurisdictions, runs HTTP and browser evaluation, publishes signed evidence, then a separate protected workflow revalidates it before promotion or exact rollback. |
 
 ### Evaluation flow

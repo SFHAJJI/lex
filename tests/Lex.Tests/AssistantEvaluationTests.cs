@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
@@ -113,6 +114,72 @@ public sealed class AssistantEvaluationTests : IDisposable
         Assert.Equal(400, preflight.ReservedCandidateOutputTokens);
         Assert.Equal(0, preflight.ReservedGraderInputTokens);
         Assert.Equal(0.0072m, preflight.EstimatedTotalCostEur);
+    }
+
+    [Fact]
+    public void Published_documents_quote_the_signed_catalog_s_own_reservation_and_call_plan()
+    {
+        var catalog = AssistantEvaluationCatalog.Load(
+            Path.Combine(RepoRoot(), "evals", "assistant-cases-v3.json")).Catalog;
+        var finalCalls = catalog.Cases.Sum(item => (long)item.Repetitions);
+        var totalCalls = catalog.Cases.Sum(item =>
+            checked((long)(1 + (item.History?.Count ?? 0)) * item.Repetitions));
+        var setupCalls = totalCalls - finalCalls;
+        var candidateInput = catalog.Cases.Sum(item => checked(
+            ((long)item.MaximumInputTokens
+             + (item.History?.Sum(turn => (long)turn.MaximumInputTokens) ?? 0))
+            * item.Repetitions));
+        var candidateOutput = catalog.Cases.Sum(item => checked(
+            ((long)item.MaximumOutputTokens
+             + (item.History?.Sum(turn => (long)turn.MaximumOutputTokens) ?? 0))
+            * item.Repetitions));
+        var graderInput = catalog.Cases.Sum(item => item.Grading.Mode == "llm"
+            ? checked((long)item.Grading.MaximumInputTokens * item.Repetitions) : 0);
+        var graderOutput = catalog.Cases.Sum(item => item.Grading.Mode == "llm"
+            ? checked((long)item.Grading.MaximumOutputTokens * item.Repetitions) : 0);
+        var estimate = catalog.Pricing.CandidateCost(candidateInput, candidateOutput)
+            + catalog.Pricing.GraderCost(graderInput, graderOutput);
+        // Three published documents quote the reservation and the call plan as prose, which is what
+        // a reader checks a run against. Nothing but this test keeps that prose equal to the catalog
+        // that is actually signed, and all three were stale by a whole ceiling resize before it
+        // existed: they still claimed 59 candidate requests when the plan had become 56.
+        static string Flat(string path) =>
+            Regex.Replace(File.ReadAllText(path), @"\s+", " ");
+        var assistantEvaluationPath = Path.Combine("docs", "assistant-evaluation.md");
+        var releasePath = Path.Combine("docs", "architecture", "pages", "release.md");
+        var productReviewPath = Path.Combine("docs", "product-architecture-review.md");
+        var assistantEvaluation = Flat(Path.Combine(RepoRoot(), assistantEvaluationPath));
+        var release = Flat(Path.Combine(RepoRoot(), releasePath));
+        var productReview = Flat(Path.Combine(RepoRoot(), productReviewPath));
+        string Tokens(long value) => value.ToString("N0", CultureInfo.InvariantCulture);
+        var money = estimate.ToString("0.#######", CultureInfo.InvariantCulture);
+        foreach (var (path, text) in new[]
+                 {
+                     (assistantEvaluationPath, assistantEvaluation),
+                     (releasePath, release),
+                     (productReviewPath, productReview),
+                 })
+        {
+            foreach (var value in new[]
+                     {
+                         Tokens(candidateInput), Tokens(candidateOutput),
+                         Tokens(graderInput), Tokens(graderOutput), money,
+                     })
+                Assert.True(text.Contains(value, StringComparison.Ordinal),
+                    $"{path} does not state {value} from the signed catalog.");
+        }
+        Assert.Contains(
+            $"contains {totalCalls} candidate HTTP requests, {setupCalls} same-thread setup "
+            + $"requests and {finalCalls} final requests, and a passing run makes {finalCalls} "
+            + "separate release-grader requests",
+            assistantEvaluation,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            $"{finalCalls} final candidate HTTP requests, {setupCalls} same-thread setup HTTP "
+            + $"requests, {totalCalls} total candidate HTTP requests and {finalCalls} "
+            + "release-grader requests",
+            release,
+            StringComparison.Ordinal);
     }
 
     [Fact]
