@@ -34,13 +34,16 @@ const prefersReducedMotion = () =>
   typeof matchMedia === "function" && matchMedia(REDUCED_MOTION_QUERY).matches;
 const modalViewport = () => typeof matchMedia === "function" && matchMedia(MODAL_QUERY).matches;
 
-function initialPanelState() {
-  try { return parseAssistantPanelState(sessionStorage.getItem(PANEL_KEY)); }
-  catch { return parseAssistantPanelState(null); }
-}
-
 export default function AskPanel(p: AskPanelProps) {
-  const initial = useRef(initialPanelState()).current;
+  // Default-open applies only where the panel docks beside the content. Below the modal boundary it
+  // would cover the whole page before a first-time reader has seen anything, so there it waits to be
+  // asked. A stored choice always wins over both.
+  const initial = useRef((() => {
+    let raw: string | null = null;
+    try { raw = sessionStorage.getItem(PANEL_KEY); } catch { raw = null; }
+    const stored = parseAssistantPanelState(raw);
+    return raw === null && modalViewport() ? { open: false, minimized: false } : stored;
+  })()).current;
   const [open, setOpen] = useState(initial.open);
   const [minimized, setMinimized] = useState(initial.minimized);
   const [closing, setClosing] = useState(false);

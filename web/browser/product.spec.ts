@@ -474,7 +474,7 @@ test("reflow, color and motion preferences keep the page usable", async ({ page 
   await page.goto("/");
   await expectNoHorizontalOverflow(page);
   await expect(page.getByRole("button", { name: "Search", exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Open Ask Lex legal research assistant" })).toBeVisible();
+  await closeAssistant(page);
 });
 
 test("workspace state follows browser back and forward navigation", async ({ page }) => {
