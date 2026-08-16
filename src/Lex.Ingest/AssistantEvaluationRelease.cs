@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using Lex.Evaluation;
@@ -354,8 +355,73 @@ public static class AssistantEvaluationReleaseVerifier
             || !CryptographicOperations.FixedTimeEquals(bytes, expectedBytes)
             || !FixedEquals(report.AdmissionRunIdentity, runIdentity))
             throw new InvalidDataException(
-                "Signed evaluation admission drifted from the reviewed request plan.");
+                "Signed evaluation admission drifted from the reviewed request plan. "
+                + DescribeAdmissionDrift(bytes, expectedBytes,
+                    report.AdmissionRunIdentity, runIdentity));
     }
+
+    /// <summary>
+    /// Names what differs between the signed admission and the plan re-derived from the reviewed
+    /// catalog, so a refusal can be acted on instead of reconstructed.
+    /// </summary>
+    /// <remarks>
+    /// The refusal used to report only that the two disagreed. Diagnosing one instance meant
+    /// redeploying and re-running a 56-call evaluation to add a print statement, because the
+    /// verifier is compiled from the evaluated commit. Only the top-level member and, for the
+    /// request plan, the first differing request index are named: enough to act on, and nothing that
+    /// is not already in evidence the reader holds.
+    /// </remarks>
+    private static string DescribeAdmissionDrift(
+        ReadOnlySpan<byte> signed,
+        ReadOnlySpan<byte> derived,
+        string? signedRunIdentity,
+        string derivedRunIdentity)
+    {
+        if (!FixedEquals(signedRunIdentity, derivedRunIdentity))
+            return $"The report names run identity {Bounded(signedRunIdentity)} and the signed "
+                + $"admission derives {Bounded(derivedRunIdentity)}.";
+        JsonObject? left, right;
+        try
+        {
+            left = JsonNode.Parse(signed.ToArray()) as JsonObject;
+            right = JsonNode.Parse(derived.ToArray()) as JsonObject;
+        }
+        catch (JsonException)
+        {
+            return $"Signed admission is {signed.Length} bytes and the re-derived plan is "
+                + $"{derived.Length} bytes; neither could be compared as JSON.";
+        }
+        if (left is null || right is null)
+            return "One of the two admissions is not a JSON object.";
+        var differing = left
+            .Where(member => !JsonNode.DeepEquals(member.Value, right[member.Key]))
+            .Select(member => member.Key)
+            .Concat(right.Select(member => member.Key).Where(key => !left.ContainsKey(key)))
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        if (differing.Length == 0)
+            return $"Members compare equal, so the difference is in encoding: signed is "
+                + $"{signed.Length} bytes and re-derived is {derived.Length} bytes.";
+        var detail = string.Join(", ", differing);
+        if (differing.Contains("requests", StringComparer.Ordinal)
+            && left["requests"] is JsonArray signedRequests
+            && right["requests"] is JsonArray derivedRequests)
+        {
+            if (signedRequests.Count != derivedRequests.Count)
+                return $"Differing members: {detail}. The signed plan has {signedRequests.Count} "
+                    + $"requests and the reviewed catalog derives {derivedRequests.Count}.";
+            for (var index = 0; index < signedRequests.Count; index++)
+                if (!JsonNode.DeepEquals(signedRequests[index], derivedRequests[index]))
+                    return $"Differing members: {detail}. First differing request is index "
+                        + $"{index} of {signedRequests.Count}.";
+        }
+        return $"Differing members: {detail}.";
+    }
+
+    private static string Bounded(string? value) =>
+        string.IsNullOrEmpty(value) ? "nothing"
+            : value.Length <= 32 ? value : value[..32] + "...";
 
     private static EvaluationAdmissionAuthority AdmissionAuthority()
     {
