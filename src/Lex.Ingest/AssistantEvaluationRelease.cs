@@ -404,17 +404,29 @@ public static class AssistantEvaluationReleaseVerifier
             return $"Members compare equal, so the difference is in encoding: signed is "
                 + $"{signed.Length} bytes and re-derived is {derived.Length} bytes.";
         var detail = string.Join(", ", differing);
-        if (differing.Contains("requests", StringComparer.Ordinal)
-            && left["requests"] is JsonArray signedRequests
-            && right["requests"] is JsonArray derivedRequests)
+        const string RequestsMember = "allowed_requests";
+        if (differing.Contains(RequestsMember, StringComparer.Ordinal)
+            && left[RequestsMember] is JsonArray signedRequests
+            && right[RequestsMember] is JsonArray derivedRequests)
         {
             if (signedRequests.Count != derivedRequests.Count)
                 return $"Differing members: {detail}. The signed plan has {signedRequests.Count} "
                     + $"requests and the reviewed catalog derives {derivedRequests.Count}.";
             for (var index = 0; index < signedRequests.Count; index++)
-                if (!JsonNode.DeepEquals(signedRequests[index], derivedRequests[index]))
-                    return $"Differing members: {detail}. First differing request is index "
-                        + $"{index} of {signedRequests.Count}.";
+            {
+                if (JsonNode.DeepEquals(signedRequests[index], derivedRequests[index])) continue;
+                // Name the fields rather than dump the request: the whole plan is 56 entries and the
+                // useful fact is which property of one entry moved.
+                var fields = signedRequests[index] is JsonObject signedRequest
+                    && derivedRequests[index] is JsonObject derivedRequest
+                    ? string.Join(", ", signedRequest
+                        .Where(member => !JsonNode.DeepEquals(member.Value, derivedRequest[member.Key]))
+                        .Select(member => member.Key)
+                        .DefaultIfEmpty("none"))
+                    : "the whole entry";
+                return $"Differing members: {detail}. Request {index} of {signedRequests.Count} "
+                    + $"differs in: {fields}.";
+            }
         }
         return $"Differing members: {detail}.";
     }
