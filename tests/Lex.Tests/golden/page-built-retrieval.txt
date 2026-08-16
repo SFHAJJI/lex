@@ -299,48 +299,6 @@ discovery signal and an explicit match reason.</li>
 <li>Deduplicate text states and anchors, apply bounded per-work fairness only for unscoped discovery,
 then return typed rows and provenance.</li>
 </ol>
-<h2>Top-1 and top-k are different product decisions</h2>
-<div class="dossier-table" tabindex="0" role="region" aria-label="Scrollable architecture table"><table>
-<thead>
-<tr>
-<th>Question shape</th>
-<th>Selection</th>
-<th>Why</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Exact official identifier plus date</td>
-<td>One deterministic work and interval</td>
-<td>Similarity would weaken an exact coordinate</td>
-</tr>
-<tr>
-<td>Unique exact official short title</td>
-<td>One work, with its source literal</td>
-<td>Identity comes from publisher data, not rank</td>
-</tr>
-<tr>
-<td>Theme or conceptual discovery</td>
-<td>Bounded top-k works or provisions</td>
-<td>Several results are the useful answer</td>
-</tr>
-<tr>
-<td>One theme matches several laws</td>
-<td>Clarification or result set</td>
-<td>Metadata must not silently authorize one law</td>
-</tr>
-<tr>
-<td>Answer requires several provisions</td>
-<td>Bounded top-k evidence, then deterministic assembly</td>
-<td>Top-1 would bury necessary context</td>
-</tr>
-<tr>
-<td>No credible evidence</td>
-<td>Typed gap or refusal</td>
-<td>Expanding until something looks plausible is unsafe</td>
-</tr>
-</tbody>
-</table></div>
 <p>There is no generation loop that reads page one, asks the model whether it is satisfied and keeps
 searching. The application decides the evidence budget before execution. This makes latency,
 population and failure behavior testable.</p>

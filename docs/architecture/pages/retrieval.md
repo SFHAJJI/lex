@@ -27,17 +27,6 @@ an authorization step and ranking as a later discovery step.
 6. Deduplicate text states and anchors, apply bounded per-work fairness only for unscoped discovery,
    then return typed rows and provenance.
 
-## Top-1 and top-k are different product decisions
-
-| Question shape | Selection | Why |
-|---|---|---|
-| Exact official identifier plus date | One deterministic work and interval | Similarity would weaken an exact coordinate |
-| Unique exact official short title | One work, with its source literal | Identity comes from publisher data, not rank |
-| Theme or conceptual discovery | Bounded top-k works or provisions | Several results are the useful answer |
-| One theme matches several laws | Clarification or result set | Metadata must not silently authorize one law |
-| Answer requires several provisions | Bounded top-k evidence, then deterministic assembly | Top-1 would bury necessary context |
-| No credible evidence | Typed gap or refusal | Expanding until something looks plausible is unsafe |
-
 There is no generation loop that reads page one, asks the model whether it is satisfied and keeps
 searching. The application decides the evidence budget before execution. This makes latency,
 population and failure behavior testable.

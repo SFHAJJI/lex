@@ -120,16 +120,21 @@ public static class BuiltEndpoints
         + "<a class=\"dossier-print\" href=\"/architecture/dossier\">Complete dossier</a>"
         + "</nav>";
 
-    private static string Article(DossierPage page, string addendum) =>
+    // The signed evaluation result leads the release page instead of trailing it. It was the last
+    // section of fifteen, so the one fact a reader comes to check sat below every explanation of how
+    // it is produced.
+    private static string Article(DossierPage page, string lead, string addendum) =>
         $"{Tabs(page.Slug)}<article class=\"architecture-dossier\">"
+        + lead
         + RenderMarkdown(MarkdownBySlug[page.Slug], full: false)
         + addendum
         + "</article>";
 
-    private static string FullArticle(Func<string, string> addendum) =>
+    private static string FullArticle(Func<string, string> lead, Func<string, string> addendum) =>
         "<article class=\"architecture-dossier architecture-dossier-full\">"
         + string.Join("", Pages.Select(page =>
-            RenderMarkdown(MarkdownBySlug[page.Slug], full: true) + addendum(page.Slug)))
+            lead(page.Slug) + RenderMarkdown(MarkdownBySlug[page.Slug], full: true)
+            + addendum(page.Slug)))
         + "</article>";
 
     public static IEndpointRouteBuilder MapBuilt(this IEndpointRouteBuilder app, WebContext ctx)
@@ -189,6 +194,34 @@ public static class BuiltEndpoints
                 """;
         }
 
+        // The verdict alone asks the reader to trust a boolean. The frozen questions and their
+        // per-repetition scores are already inside the signed report, so the page shows them rather
+        // than making a reader download JSON to learn what was actually asked.
+        static string CaseOutcomeTable(VerifiedAssistantEvaluationEvidence evidence)
+        {
+            var rows = string.Join("", evidence.CaseOutcomes.Select(item =>
+            {
+                var contract = item.Passed == item.Repetitions
+                    ? $"<span class=\"badge ok\">{item.Passed:n0} of {item.Repetitions:n0}</span>"
+                    : $"<span class=\"badge\">{item.Passed:n0} of {item.Repetitions:n0}</span>";
+                var relevance = string.Join(", ",
+                    item.RelevanceScores.Select(score => $"{score:n0}/5"));
+                return $"<tr><td class=\"mono\">{H(item.CaseId)}</td><td>{H(item.Question)}</td>"
+                    + $"<td>{contract}</td><td class=\"mono\">{H(relevance)}</td></tr>";
+            }));
+            return $"""
+                <h3>Every frozen case, and how it scored</h3>
+                <p class="sub">Read from the signed report above. The contract column is the gate:
+                it counts repetitions whose typed plan, arguments, outcomes, effects and latency all
+                held. The relevance column is the separate grader's opinion of whether the answer
+                addressed the question, recorded per repetition and gating nothing.</p>
+                <div class="dossier-table" tabindex="0" role="region" aria-label="Signed assistant evaluation results by case"><table>
+                <thead><tr><th>Case</th><th>Question</th><th>Contract</th><th>Relevance</th></tr></thead>
+                <tbody>{rows}</tbody>
+                </table></div>
+                """;
+        }
+
         static string EvaluationEvidenceCard(AssistantEvaluationEvidenceSnapshot snapshot)
         {
             if (snapshot.Evidence is not { } evidence)
@@ -233,6 +266,7 @@ public static class BuiltEndpoints
                 <tr><th>measured latency</th><td class="mono">first result p95 {evidence.FirstOperationP95Milliseconds:n0} ms;
                 total p99 {evidence.TotalP99Milliseconds:n0} ms; browser presentation p95 {evidence.BrowserP95Milliseconds:n0} ms</td></tr>
                 </table></div>
+                {CaseOutcomeTable(evidence)}
                 <p><a href="{H(evidence.ReleaseUrl)}">Immutable GitHub release</a> ·
                 <a href="{H(evidence.ReportUrl)}">report</a> ·
                 <a href="{H(evidence.ManifestUrl)}">signed manifest</a> ·
@@ -269,9 +303,15 @@ public static class BuiltEndpoints
                 """;
         }
 
+        static string Lead(string slug, AssistantEvaluationEvidenceSnapshot evaluation) => slug switch
+        {
+            "release" => EvaluationEvidenceCard(evaluation),
+            _ => "",
+        };
+
         string Addendum(string slug, AssistantEvaluationEvidenceSnapshot evaluation) => slug switch
         {
-            "release" => EvaluationEvidenceCard(evaluation) + MountedReleaseEvidence(),
+            "release" => MountedReleaseEvidence(),
             "limits" => DeliveryRegistry(),
             _ => "",
         };
@@ -289,7 +329,7 @@ public static class BuiltEndpoints
                 if (page.Slug == "release") http.Response.Headers.CacheControl = "no-store";
                 return Results.Content(Page(
                     page.Label,
-                    Article(page, Addendum(page.Slug, evidence)),
+                    Article(page, Lead(page.Slug, evidence), Addendum(page.Slug, evidence)),
                     page.Subtitle,
                     page.Path,
                     page.Description), "text/html");
@@ -304,7 +344,7 @@ public static class BuiltEndpoints
             http.Response.Headers.CacheControl = "no-store";
             return Results.Content(Page(
                 "Architecture dossier",
-                FullArticle(slug => Addendum(slug, evidence)),
+                FullArticle(slug => Lead(slug, evidence), slug => Addendum(slug, evidence)),
                 "The complete interview and print view, generated from the same nine source pages.",
                 "/architecture/dossier",
                 "The complete solution and AI architecture dossier for Lex.",

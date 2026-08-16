@@ -580,48 +580,6 @@ discovery signal and an explicit match reason.</li>
 <li>Deduplicate text states and anchors, apply bounded per-work fairness only for unscoped discovery,
 then return typed rows and provenance.</li>
 </ol>
-<h3>Top-1 and top-k are different product decisions</h3>
-<div class="dossier-table" tabindex="0" role="region" aria-label="Scrollable architecture table"><table>
-<thead>
-<tr>
-<th>Question shape</th>
-<th>Selection</th>
-<th>Why</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Exact official identifier plus date</td>
-<td>One deterministic work and interval</td>
-<td>Similarity would weaken an exact coordinate</td>
-</tr>
-<tr>
-<td>Unique exact official short title</td>
-<td>One work, with its source literal</td>
-<td>Identity comes from publisher data, not rank</td>
-</tr>
-<tr>
-<td>Theme or conceptual discovery</td>
-<td>Bounded top-k works or provisions</td>
-<td>Several results are the useful answer</td>
-</tr>
-<tr>
-<td>One theme matches several laws</td>
-<td>Clarification or result set</td>
-<td>Metadata must not silently authorize one law</td>
-</tr>
-<tr>
-<td>Answer requires several provisions</td>
-<td>Bounded top-k evidence, then deterministic assembly</td>
-<td>Top-1 would bury necessary context</td>
-</tr>
-<tr>
-<td>No credible evidence</td>
-<td>Typed gap or refusal</td>
-<td>Expanding until something looks plausible is unsafe</td>
-</tr>
-</tbody>
-</table></div>
 <p>There is no generation loop that reads page one, asks the model whether it is satisfied and keeps
 searching. The application decides the evidence budget before execution. This makes latency,
 population and failure behavior testable.</p>
@@ -920,7 +878,13 @@ Only the token's SHA-256 digest is retained server-side. Restart, expiry, evicti
 the thread safely; an unknown token never falls through to another conversation.</p>
 <p>The public default admits 200 accepted turns per ingress-derived client address and 400 globally
 per UTC day. Those process-local controls are honest cost and abuse limits, not user identity.</p>
-<h2>Release</h2>
+<h2 id="latest-signed-evaluation">Latest signed assistant evaluation</h2>
+<div class="notice"><b>No verified evaluation published.</b> This revision exposes no
+cryptographically verified immutable evaluation package that matches its exact code,
+image, artifact set, mounted indexes and signed catalog. Legal search and readiness do
+not depend on this optional evidence view.</div>
+<p class="sub">Machine-readable status: <a href="/built/release/evaluation.json">evaluation.json</a>.
+Running identities: <a href="/attestation.json">attestation.json</a>.</p><h2>Release</h2>
 <p>Code, legal data, retrieval artifacts and assistant behavior are one release unit. A deployment is
 not production merely because a container started.</p>
 <p><img src="/built/diagrams/release.svg" alt="A signed artifact set becomes a zero-traffic candidate, passes health, retrieval, assistant and browser gates, then a separate signed promotion moves traffic while retaining the exact former production revision." /></p>
@@ -1136,17 +1100,14 @@ the capability quarantined without weakening deterministic search.</p>
 hit or protected branch can move after a build starts. Navigation may follow <code>main</code>; release
 authority comes only from the immutable identities recorded in signed evidence.</p>
 </blockquote>
-<h3>Inspect the implementation</h3>
-<p>Links follow protected <code>main</code> so the map stays useful as code evolves. Signed evidence binds exact
-commits and digests, so a <code>main</code> link is navigation, never proof that those bytes were released.
-The dossier keeps one system overview and one release/evidence overview; specialized legal,
-retrieval and assistant diagrams remain only when they explain a materially different relationship.
-That is the anti-bloat rule, not a reason to delete useful contract diagrams.</p>
-<h4>Worked evidence trace: General Data Protection Regulation (GDPR) Article 6</h4>
-<p>This trace was reproduced from the frozen EU database whose file SHA-256
-is <code>f827e089bddff64709926af4341bc0ddbfbef829a5c3e29400754aec3b649fd9</code>. It is
-<strong>Measured</strong> local evidence for the exact build below, not a claim that the pending signed release or
-25-case live evaluation has completed.</p>
+<h3>One article, followed end to end</h3>
+<p>This is the whole claim of the product in one table. It follows a single provision, Article 6 of the
+General Data Protection Regulation, from the bytes the publisher served through to the citation the
+interface renders. Every step carries the SHA-256 of what it produced, so any link in the chain can
+be recomputed instead of believed, and the right-hand column states what that step does not prove.</p>
+<p>It was reproduced from the frozen EU database whose file SHA-256 is
+<code>f827e089bddff64709926af4341bc0ddbfbef829a5c3e29400754aec3b649fd9</code>. It is measured local evidence
+for that exact build, not a claim about any signed release.</p>
 <div class="dossier-table" tabindex="0" role="region" aria-label="Scrollable architecture table"><table>
 <thead>
 <tr>
@@ -1195,103 +1156,6 @@ is <code>f827e089bddff64709926af4341bc0ddbfbef829a5c3e29400754aec3b649fd9</code>
 </tr>
 </tbody>
 </table></div>
-<h4>Source map</h4>
-<p>Each row keeps implementation, test/evidence and the relevant boundary together. Symbol labels are
-orientation aids; links omit line numbers so normal refactors do not rot the map.</p>
-<div class="dossier-table" tabindex="0" role="region" aria-label="Scrollable architecture table"><table>
-<thead>
-<tr>
-<th>Boundary</th>
-<th>Status</th>
-<th>Implementation</th>
-<th>Test, evidence and limitation</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Publisher ingest</td>
-<td><strong>Built</strong></td>
-<td><a href="https://github.com/SFHAJJI/lex/blob/main/src/Lex.Sources.EurLex/EurLexAdapter.cs"><code>EurLexAdapter.EnumerateWorks/FetchBody</code></a>, <a href="https://github.com/SFHAJJI/lex/blob/main/src/Lex.Sources.Legilux/LegiluxAdapter.cs"><code>LegiluxAdapter.EnumerateWorks/FetchBody</code></a>, <a href="https://github.com/SFHAJJI/lex/blob/main/src/Lex.Ingest/CorpusWriter.cs"><code>CorpusWriter.WriteAsync</code></a>; bounded orchestration starts in <a href="https://github.com/SFHAJJI/lex-ops/blob/main/.github/workflows/fresh-corpus-v4.yml"><code>fresh-corpus-v4.yml</code></a>.</td>
-<td><a href="https://github.com/SFHAJJI/lex/blob/main/tests/Lex.Tests/EurLexScopeTests.cs"><code>EurLexScopeTests</code></a>, <a href="https://github.com/SFHAJJI/lex/blob/main/tests/Lex.Tests/CorpusWriterTests.cs"><code>CorpusWriterTests</code></a>; incomplete enumeration cannot publish or manufacture removals.</td>
-</tr>
-<tr>
-<td>Deterministic derive</td>
-<td><strong>Built; Measured</strong></td>
-<td><a href="https://github.com/SFHAJJI/lex/blob/main/src/Lex.Derive/DeriveWriter.cs"><code>DeriveWriter.Derive</code></a> and profile-owned extraction.</td>
-<td><a href="https://github.com/SFHAJJI/lex/blob/main/tests/Lex.Tests/DeriveTests.cs"><code>DeriveTests</code></a>, worked trace above; unsafe structure remains a typed gap, not guessed text.</td>
-</tr>
-<tr>
-<td>Index and signing boundary</td>
-<td><strong>Built; Measured</strong></td>
-<td><a href="https://github.com/SFHAJJI/lex/blob/main/src/Lex.Ingest/IndexFromCorpus.cs"><code>IndexFromCorpus.Build</code></a>, <a href="https://github.com/SFHAJJI/lex/blob/main/src/Lex.Index/IndexBuilder.cs"><code>IndexBuilder.Build</code></a>, <a href="https://github.com/SFHAJJI/lex/blob/main/src/Lex.Index/ArtifactManifest.cs"><code>ArtifactManifests.VerifyDirectory</code></a>.</td>
-<td><a href="https://github.com/SFHAJJI/lex/blob/main/tests/Lex.Tests/IndexTests.cs"><code>IndexTests</code></a>, <a href="https://github.com/SFHAJJI/lex/blob/main/tests/Lex.Tests/ArtifactManifestTests.cs"><code>ArtifactManifestTests</code></a>; local stamps are not the detached public-release signature.</td>
-</tr>
-<tr>
-<td>Retrieval cases and benchmark</td>
-<td><strong>Built</strong>; hybrid is <strong>Quarantined</strong> for LU and <strong>Next</strong> for EU</td>
-<td><a href="https://github.com/SFHAJJI/lex/blob/main/evals/retrieval-cases.json"><code>retrieval-cases.json</code></a>, <a href="https://github.com/SFHAJJI/lex/blob/main/evals/retrieval-baseline-v2.json"><code>retrieval-baseline-v2.json</code></a>, <a href="https://github.com/SFHAJJI/lex/blob/main/src/Lex.Index/RetrievalBenchmark.cs"><code>RetrievalBenchmarkRunner.Run</code></a>. When compatible signed reports are mounted, the generated report is served at <a href="/benchmarks/latest.json"><code>/benchmarks/latest.json</code></a>; it is not a hand-edited source file.</td>
-<td><a href="https://github.com/SFHAJJI/lex/blob/main/tests/Lex.Tests/RetrievalBenchmarkTests.cs"><code>RetrievalBenchmarkTests</code></a>, <a href="https://github.com/SFHAJJI/lex/blob/main/docs/hybrid-search.md">hybrid activation contract</a>; no accepted exact-release report means keyword stays active and the latest-report endpoint fails closed.</td>
-</tr>
-<tr>
-<td>Exact-byte publication</td>
-<td><strong>Built</strong>; exact release is <strong>Next</strong></td>
-<td><a href="https://github.com/SFHAJJI/lex-ops/blob/main/.github/workflows/publish-prebuilt-index.yml"><code>publish-prebuilt-index.yml</code></a> owns the reviewed dispatch boundary; <a href="https://github.com/SFHAJJI/lex-ops/blob/main/publish-prebuilt-index.sh"><code>publish-prebuilt-index.sh</code></a> owns create-only staging, provenance, signing, read-back and recovery.</td>
-<td><a href="https://github.com/SFHAJJI/lex-ops/blob/main/tests/test_prebuilt_publication_contracts.py"><code>test_prebuilt_publication_contracts.py</code></a>; the workflow commit is part of evidence, and links to <code>main</code> are not release authority.</td>
-</tr>
-<tr>
-<td>Exact-tag fetch, deploy and runtime activation</td>
-<td><strong>Built</strong>; candidate is <strong>Next</strong></td>
-<td><a href="https://github.com/SFHAJJI/lex/blob/main/.github/workflows/deploy.yml"><code>deploy.yml</code></a>, <a href="https://github.com/SFHAJJI/lex/blob/main/deploy/fetch-indexes.sh"><code>fetch-indexes.sh</code></a>, <a href="https://github.com/SFHAJJI/lex/blob/main/src/Lex.Web/IndexRegistry.cs"><code>IndexRegistry</code></a>.</td>
-<td><a href="https://github.com/SFHAJJI/lex/blob/main/tests/Lex.Tests/ReleaseWorkflowTests.cs"><code>ReleaseWorkflowTests</code></a>, <a href="https://github.com/SFHAJJI/lex/blob/main/tests/Lex.Tests/ArtifactManifestTests.cs"><code>ArtifactManifestTests</code></a>; a tag alone cannot authorize bytes, and a mismatch refuses activation.</td>
-</tr>
-<tr>
-<td>Plan, one correction and freeze</td>
-<td><strong>Built</strong></td>
-<td><a href="https://github.com/SFHAJJI/lex/blob/main/src/Lex.Ask/AskService.cs"><code>AskService.PlanWithOneRepairAsync</code></a>, <a href="https://github.com/SFHAJJI/lex/blob/main/src/Lex.Ask/OperationContracts.cs"><code>OperationPlan.FromPlannerOutput</code></a>.</td>
-<td><a href="https://github.com/SFHAJJI/lex/blob/main/tests/Lex.Tests/AskOperationControllerTests.cs"><code>AskOperationControllerTests</code></a>; one pre-freeze correction is allowed, no execution observation returns to the planner.</td>
-</tr>
-<tr>
-<td>MCP execution and UI effects</td>
-<td><strong>Built; Measured</strong></td>
-<td><a href="https://github.com/SFHAJJI/lex/blob/main/src/Lex.Mcp/McpCore.cs"><code>McpCore.CallToolAsync</code></a>, <a href="https://github.com/SFHAJJI/lex/blob/main/src/Lex.Ask/UiMapper.cs"><code>UiMapper.From</code></a>.</td>
-<td><a href="https://github.com/SFHAJJI/lex/blob/main/tests/Lex.Tests/McpContractTests.cs"><code>McpContractTests</code></a>, worked trace above; operations are read-only and typed gaps survive to the UI.</td>
-</tr>
-<tr>
-<td>Assistant catalog, runner and publication</td>
-<td>Runner <strong>Built</strong>; 25-case catalog <strong>Measured</strong>; live run <strong>Next</strong></td>
-<td><a href="https://github.com/SFHAJJI/lex/blob/main/evals/assistant-cases-v3.json"><code>assistant-cases-v3.json</code></a>, <a href="https://github.com/SFHAJJI/lex/blob/main/src/Lex.Ingest/AssistantEvaluationRunner.cs"><code>AssistantEvaluationRunner.RunAsync</code></a>, <a href="https://github.com/SFHAJJI/lex/blob/main/src/Lex.Ingest/AssistantEvaluationRelease.cs"><code>AssistantEvaluationReleaseVerifier</code></a>, <a href="https://github.com/SFHAJJI/lex/blob/main/deploy/publish-assistant-evaluation.ps1"><code>publish-assistant-evaluation.ps1</code></a>, <a href="https://github.com/SFHAJJI/lex-ops/blob/main/.github/workflows/publish-assistant-evaluation.yml"><code>publish-assistant-evaluation.yml</code></a>.</td>
-<td><a href="https://github.com/SFHAJJI/lex/blob/main/tests/Lex.Tests/AssistantEvaluationTests.cs"><code>AssistantEvaluationTests</code></a>, <a href="https://github.com/SFHAJJI/lex/blob/main/docs/assistant-evaluation-scenario-matrix.md">25-case matrix</a>, <a href="https://github.com/SFHAJJI/lex/blob/main/evals/assistant-cases-v3.review.json">owner review</a> and <a href="https://github.com/SFHAJJI/lex/blob/main/evals/assistant-cases-v3.review.sig">detached signature</a>; the exact catalog is owner-signed but has not yet been run live.</td>
-</tr>
-<tr>
-<td>Latest signed assistant evaluation</td>
-<td>Card <strong>Built</strong>; signed result <strong>Next</strong></td>
-<td><a href="https://github.com/SFHAJJI/lex/blob/main/src/Lex.Web/AssistantEvaluationEvidence.cs"><code>AssistantEvaluationEvidenceVerifier</code></a>, <a href="https://github.com/SFHAJJI/lex/blob/main/src/Lex.Web/AssistantEvaluationEvidenceProvider.cs"><code>GitHubAssistantEvaluationEvidenceProvider</code></a>, <a href="https://github.com/SFHAJJI/lex/blob/main/src/Lex.Web/BuiltEndpoints.cs"><code>BuiltEndpoints</code></a> and the machine-readable <a href="/built/release/evaluation.json"><code>/built/release/evaluation.json</code></a>.</td>
-<td><a href="https://github.com/SFHAJJI/lex/blob/main/src/Lex.Ingest/AssistantEvaluationRelease.cs"><code>AssistantEvaluationReleaseVerifier</code></a> is the canonical pre-signing semantic authority. <a href="https://github.com/SFHAJJI/lex/blob/main/tests/Lex.Tests/AssistantEvaluationEvidenceTests.cs"><code>AssistantEvaluationEvidenceTests</code></a> and <a href="https://github.com/SFHAJJI/lex/blob/main/tests/Lex.Tests/ArchitectureDossierTests.cs"><code>ArchitectureDossierTests</code></a> authenticate the immutable release, signed bytes and exact runtime binding, then label bounded fields as signed report claims; they do not duplicate or independently rescore the evaluation. Otherwise the card says no verified evaluation is published.</td>
-</tr>
-<tr>
-<td>Traffic promotion and rollback</td>
-<td><strong>Built</strong>; this promotion is <strong>Next</strong></td>
-<td><a href="https://github.com/SFHAJJI/lex/blob/main/.github/workflows/revision-traffic.yml"><code>revision-traffic.yml</code></a>.</td>
-<td><a href="https://github.com/SFHAJJI/lex/blob/main/tests/Lex.Tests/ReleaseWorkflowTests.cs"><code>ReleaseWorkflowTests</code></a>; exact identities and one-replica state are rechecked immediately before the single traffic mutation.</td>
-</tr>
-<tr>
-<td>Limits and incidents</td>
-<td><strong>Built</strong> evidence surface</td>
-<td><a href="https://github.com/SFHAJJI/lex/blob/main/docs/architecture/pages/limits.md"><code>limits.md</code></a>, <a href="https://github.com/SFHAJJI/lex/blob/main/docs/architecture/pages/incidents.md"><code>incidents.md</code></a>.</td>
-<td><a href="https://github.com/SFHAJJI/lex/blob/main/tests/Lex.Tests/ArchitectureDossierTests.cs"><code>ArchitectureDossierTests</code></a>; a limit remains visible until the named replacement evidence exists.</td>
-</tr>
-</tbody>
-</table></div>
-<h4>Suggested reading order</h4>
-<ol>
-<li><a href="https://github.com/SFHAJJI/lex/blob/main/docs/architecture/pages/overview.md">Overview and system boundary</a></li>
-<li><a href="https://github.com/SFHAJJI/lex/blob/main/docs/architecture/pages/data.md">Data authority</a></li>
-<li><a href="https://github.com/SFHAJJI/lex/blob/main/evals/retrieval-cases.json">Frozen retrieval cases</a></li>
-<li><a href="https://github.com/SFHAJJI/lex/blob/main/src/Lex.Index/RetrievalBenchmark.cs">Deterministic benchmark runner</a></li>
-<li><a href="https://github.com/SFHAJJI/lex/blob/main/docs/architecture/pages/assistant.md">Bounded assistant architecture</a></li>
-<li><a href="https://github.com/SFHAJJI/lex/blob/main/docs/architecture/pages/release.md">Release and evidence contract</a></li>
-<li><a href="https://github.com/SFHAJJI/lex/blob/main/docs/architecture/pages/limits.md">Verified limits and scale triggers</a></li>
-</ol>
 <h3>Assistant evaluation gate</h3>
 <div class="dossier-table" tabindex="0" role="region" aria-label="Scrollable architecture table"><table>
 <thead>
@@ -1354,112 +1218,6 @@ tool arguments, legal and transport outcomes, UI effect, model identity, tokens,
 equality. It reads typed SSE plus the matching terminal object—not Azure logs or model
 chain-of-thought—and the signed report omits prompts, legal text, raw tool payloads and free-form
 grader reasons.</p>
-<h4>Frozen catalog field glossary</h4>
-<div class="dossier-table" tabindex="0" role="region" aria-label="Scrollable architecture table"><table>
-<thead>
-<tr>
-<th>Catalog field</th>
-<th>What it controls</th>
-<th>Where the evaluator reads the result</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>id</code>, <code>question</code>, <code>history</code></td>
-<td>Stable scenario identity, final user input and up to eight server-owned setup turns</td>
-<td>Catalog bytes bind the inputs; only an opaque thread token crosses between real HTTP turns. A setup turn with its own <code>expected</code> contract is checked from its typed terminal response before continuation.</td>
-</tr>
-<tr>
-<td><code>repetitions</code></td>
-<td>Re-runs the whole plan, freeze and execute path to expose nondeterministic planning or answers</td>
-<td>Every repetition has its own signed request coordinates and result. Any failed repetition deterministically fails the release gate.</td>
-</tr>
-<tr>
-<td><code>maximum_input_tokens</code>, <code>maximum_output_tokens</code></td>
-<td>Per-turn candidate ceilings; setup messages declare their own ceilings</td>
-<td>Candidate terminal <code>model_usage</code>, aggregated across setup and final turns, is checked per case and against the candidate budget.</td>
-</tr>
-<tr>
-<td><code>maximum_latency_ms</code></td>
-<td>Maximum wall time for the complete case invocation</td>
-<td>Total duration sums all successful setup and final turns. Planner, MCP, first-result and residual fields retain the slowest turn, so setup latency cannot disappear. Thread reset is cleanup, not inference.</td>
-</tr>
-<tr>
-<td><code>expected_synthesis</code></td>
-<td>Whether the final turn must run optional generated prose</td>
-<td>Presence of the final stream's measured synthesis segment must match exactly; absence is not treated as zero latency.</td>
-</tr>
-<tr>
-<td><code>expected.tool</code></td>
-<td>The authorized legal operation for a single-operation case</td>
-<td>The terminal typed operation and its equal <code>operation_result</code> SSE payload.</td>
-</tr>
-<tr>
-<td><code>expected.operations</code></td>
-<td>Two to eight authorized operations whose order is part of the contract</td>
-<td>Ordered terminal operations, equal streamed copies and ordered primary-call traces. Clarification and legal-boundary operations stay single-operation because they deliberately make no primary call.</td>
-</tr>
-<tr>
-<td><code>expected.legal_outcome</code></td>
-<td>Closed legal result such as <code>succeeded</code>, <code>needs_clarification</code> or <code>legal_boundary</code></td>
-<td>Terminal operation contract, not answer wording.</td>
-</tr>
-<tr>
-<td><code>expected.transport_outcome</code></td>
-<td>Whether execution completed or ended in a typed transport state</td>
-<td>Terminal operation contract and streamed copy. The current signed catalog requires <code>completed</code>; controlled failure branches belong in deterministic and chaos tests.</td>
-</tr>
-<tr>
-<td><code>expected.effect</code></td>
-<td>Required UI contract such as provision, diff, timeline, coverage or gap</td>
-<td>Typed <code>effects</code> on the terminal operation. Browser tests separately prove presentation.</td>
-</tr>
-<tr>
-<td><code>expected.arguments</code></td>
-<td>Reviewed argument values that every acceptable plan must contain</td>
-<td>Primary-call trace, or the frozen operation-plan trace when clarification correctly prevents execution. Values are exact; additional bounded tuning arguments may vary.</td>
-</tr>
-<tr>
-<td><code>expected.argument_alternatives</code></td>
-<td>Complete reviewed alternative argument sets, of which one must match</td>
-<td>The same typed trace. The EU cases accept exact <code>publisher=eu-eurlex</code> or exact <code>jurisdiction=EU</code>; an unscoped plan fails. Redundant scope is accepted only when every alternative-owned value is reviewed, so <code>jurisdiction=EU</code> plus <code>publisher=lu-legilux</code> fails.</td>
-</tr>
-<tr>
-<td><code>gap_status</code>, <code>clarification</code></td>
-<td>Required typed gap or clarification behavior when a case declares it</td>
-<td>Typed UI gap and top-level clarification objects.</td>
-</tr>
-<tr>
-<td><code>population_minimum</code>, <code>population_path</code></td>
-<td>A lower bound on a specific typed result population</td>
-<td>Bounded JavaScript Object Notation (JSON) pointer into the terminal response, never a prose count.</td>
-</tr>
-<tr>
-<td><code>forbidden_reply_contains</code></td>
-<td>Injection canaries and prohibited disclosure markers</td>
-<td>Bounded final reply, case-insensitively; it is a negative safety check, not the accuracy grader.</td>
-</tr>
-<tr>
-<td><code>grading.mode</code>, <code>rubric</code></td>
-<td>Selects deterministic-only or separate LLM grading, and states the one relevance question the judge is asked</td>
-<td>The separate grader sees the question, rubric, bounded reply, operations and trace and returns a relevance score of 1 to 5. That score is recorded per repetition and gates nothing: promotion is decided entirely by the deterministic contract checks. There is no threshold, because a pass mark nothing compares against would be a published claim the code does not keep.</td>
-</tr>
-<tr>
-<td><code>grading.maximum_input_tokens</code>, <code>grading.maximum_output_tokens</code></td>
-<td>Per-call Release grader ceilings, separate from candidate use</td>
-<td>Authenticated grader application programming interface (API) usage and aggregate grader budget. A grader call that fails is recorded as an absent measurement naming its cause, never as a passing score; a run configured with no separate grader at all still fails closed.</td>
-</tr>
-<tr>
-<td>Aggregate budget and pricing</td>
-<td>Candidate tokens, grader tokens, latency percentiles, exact model deployment meter snapshot and outer euro limit</td>
-<td>Reserved maxima are checked before the first call; measured typed usage and timings are checked after every run.</td>
-</tr>
-</tbody>
-</table></div>
-<p>The detailed evaluator mechanics and the owner-signed live catalog's layered coverage map are in
-<a href="https://github.com/SFHAJJI/lex/blob/main/docs/assistant-evaluation.md">assistant release evaluation</a>
-and the
-<a href="https://github.com/SFHAJJI/lex/blob/main/docs/assistant-evaluation-scenario-matrix.md">assistant evaluation scenario matrix</a>.</p>
 <h3>Verified limits</h3>
 <p>These are present release boundaries, not generic risks. A limit stays visible until the named
 evidence exists; a model answer cannot waive it.</p>
@@ -1530,13 +1288,7 @@ has been reconciled. Canonical GitHub release tags and assets are outside Blob c
 Moving the canonical boundary to Azure immutable write-once, read-many (WORM) storage is a future
 option only when retention or compliance requirements justify a separate architecture decision
 and migration evidence.</p>
-<h2 id="latest-signed-evaluation">Latest signed assistant evaluation</h2>
-<div class="notice"><b>No verified evaluation published.</b> This revision exposes no
-cryptographically verified immutable evaluation package that matches its exact code,
-image, artifact set, mounted indexes and signed catalog. Legal search and readiness do
-not depend on this optional evidence view.</div>
-<p class="sub">Machine-readable status: <a href="/built/release/evaluation.json">evaluation.json</a>.
-Running identities: <a href="/attestation.json">attestation.json</a>.</p><h2 id="mounted-release">Mounted release evidence</h2>
+<h2 id="mounted-release">Mounted release evidence</h2>
 <p>The release model above is the invariant. This table reads process configuration and
 verified mounted indexes at request time. It reports the revision's identities and
 capabilities; signed promotion receipts separately prove whether traffic was authorized.</p>
