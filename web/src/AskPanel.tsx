@@ -116,7 +116,12 @@ export default function AskPanel(p: AskPanelProps) {
 
   useEffect(() => {
     if (!open || entered) return;
-    if (reducedMotion) { setEntered(true); return; }
+    // No animation frame outside a browser, and none wanted when motion is reduced. Both land on
+    // the open state directly rather than leaving the panel stuck in its entering transform.
+    if (reducedMotion || typeof requestAnimationFrame !== "function") {
+      setEntered(true);
+      return;
+    }
     const frame = requestAnimationFrame(() => setEntered(true));
     return () => cancelAnimationFrame(frame);
   }, [open, entered, reducedMotion]);
