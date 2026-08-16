@@ -790,6 +790,83 @@ public sealed class AskService
             args["source_class"] = "!RECUEIL,!CODE_RECUEIL";
     }
 
+    private static OperationPlan AuthorizePlanIntent(
+        OperationPlan plan, string rawUserQuery)
+    {
+        var query = Lex.Index.WorkSearch.Normalize(rawUserQuery);
+        if (IsWorkspaceNavigationOnly(query)
+            && plan.Operations.Any(operation => operation.Tool == "as_of"))
+            throw new InvalidDataException(
+                "A workspace-only navigation request must use search rather than as_of.");
+
+        if (!IsCrossCorpusRequest(query) || ExplicitSeparateRankings(query)
+            || plan.Operations.Length != 2
+            || plan.Operations[0].Tool != "changes_in_period"
+            || plan.Operations[1].Tool != "changes_in_period")
+            return plan;
+
+        var first = plan.Operations[0];
+        var second = plan.Operations[1];
+        var firstArguments = JsonNode.Parse(first.Arguments.GetRawText())!.AsObject();
+        var secondArguments = JsonNode.Parse(second.Arguments.GetRawText())!.AsObject();
+        var jurisdictions = new[]
+        {
+            String(firstArguments, "jurisdiction"),
+            String(secondArguments, "jurisdiction"),
+        };
+        if (!jurisdictions.Contains("LU", StringComparer.OrdinalIgnoreCase)
+            || !jurisdictions.Contains("EU", StringComparer.OrdinalIgnoreCase))
+            return plan;
+
+        firstArguments.Remove("jurisdiction");
+        secondArguments.Remove("jurisdiction");
+        if (!JsonNode.DeepEquals(firstArguments, secondArguments)) return plan;
+
+        var combined = RequestedOperation.CreatePlanned(
+            first.OperationId, 0, first.Tool, firstArguments);
+        foreach (var repair in first.Repairs.Concat(second.Repairs)
+                     .Distinct(StringComparer.Ordinal))
+            combined = combined.WithRepair(repair);
+        combined = combined.WithRepair("changes_in_period.jurisdiction collapsed");
+        return OperationPlan.Create(
+            plan.RequestId, plan.Locale, [combined], plan.SynthesisRequested);
+    }
+
+    private static bool IsWorkspaceNavigationOnly(string normalized)
+    {
+        if (!normalized.Contains("workspace", StringComparison.Ordinal)
+            && !normalized.Contains("navigation only", StringComparison.Ordinal))
+            return false;
+        if (normalized.Contains("workspace only", StringComparison.Ordinal)
+            || normalized.Contains("navigation only", StringComparison.Ordinal))
+            return true;
+        var tokens = normalized.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var without = Array.FindIndex(tokens, token => token is "without" or "sans");
+        if (without < 0) return false;
+        var exclusions = tokens.Skip(without + 1).Take(12).ToArray();
+        return exclusions.Any(token => token.StartsWith("quot", StringComparison.Ordinal)
+                || token.StartsWith("cit", StringComparison.Ordinal))
+            && exclusions.Any(token => token.StartsWith("summar", StringComparison.Ordinal)
+                || token.StartsWith("resum", StringComparison.Ordinal));
+    }
+
+    private static bool ExplicitSeparateRankings(string normalized) =>
+        normalized.Split(' ', StringSplitOptions.RemoveEmptyEntries).Any(token => token is
+            "separate" or "separately" or "individually" or "respectively"
+            or "each" or "then" or "rankings" or "separe" or "separement"
+            or "individuellement" or "respectivement" or "chaque" or "classements");
+
+    private static bool IsCrossCorpusRequest(string normalized)
+    {
+        var tokens = normalized.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return (tokens.Contains("luxembourg", StringComparer.Ordinal)
+                || tokens.Contains("lu", StringComparer.Ordinal))
+            && tokens.Contains("eu", StringComparer.Ordinal)
+            || normalized.Contains("whole corpus", StringComparison.Ordinal)
+            || normalized.Contains("across the corpus", StringComparison.Ordinal)
+            || normalized.Contains("corpus wide", StringComparison.Ordinal);
+    }
+
 
     private static string AdmissionReason(AskAdmissionFailure failure) => failure switch
     {
@@ -1093,6 +1170,7 @@ public sealed class AskService
         string host,
         string requestId,
         string locale,
+        string rawUserQuery,
         SubjectAuthority? authority,
         CancellationToken ct)
     {
@@ -1102,7 +1180,7 @@ public sealed class AskService
                 PlannerHistory(history, authority), host, requestId, ct);
             var validated = OperationPlan.Create(
                 requestId, locale, proposed.Operations, proposed.SynthesisRequested);
-            return (BindSubjectAuthority(validated, authority),
+            return (AuthorizePlanIntent(BindSubjectAuthority(validated, authority), rawUserQuery),
                 default, false);
         }
 
@@ -1176,6 +1254,7 @@ public sealed class AskService
 
         return await PlanWithOneRepairAsync(
             req, _plannerSend ?? Post, _plannerDeadline, requestId, locale, _vocabulary, today, ct,
+            planGate: plan => AuthorizePlanIntent(plan, rawUserQuery),
             operationGate: operations => BindPlannerSubjectReferences(operations, authority));
     }
 
@@ -2334,7 +2413,8 @@ public sealed class AskService
                     new PhaseUpdate(AskPhase.Planning, AskPhaseStatus.Started), planner.Token));
             var planningWatch = Stopwatch.StartNew();
             var (plan, planningUsage, plannerRepaired) = await PlanOperationsAsync(
-                history, host, requestId, requestLocale, subject.Authority, planner.Token);
+                history, host, requestId, requestLocale, rawUserQuery,
+                subject.Authority, planner.Token);
             planningWatch.Stop();
             plan = AuthorizeInstants(plan, rawUserQuery, requestLocale);
             if (progress?.Phase is not null)
