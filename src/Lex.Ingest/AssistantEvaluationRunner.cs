@@ -1507,7 +1507,9 @@ public sealed class AssistantEvaluationHttpGrader :
                 "Assistant evaluation rubric and question exceed the case input ceiling.");
         var evidence = compact.ToJsonString();
         var evidenceLimit = maximumCharacters - prefix.Length;
-        if (evidence.Length > evidenceLimit) evidence = evidence[..evidenceLimit];
+        if (evidence.Length > evidenceLimit)
+            throw new InvalidDataException(
+                "Assistant evaluation typed evidence exceeds the case input ceiling.");
         return prefix + evidence;
     }
 

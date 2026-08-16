@@ -1029,6 +1029,78 @@ public sealed class AssistantEvaluationTests : IDisposable
     }
 
     [Fact]
+    public async Task Grader_evidence_fails_closed_instead_of_slicing_json_at_six_thousand()
+    {
+        var evaluationCase = GraderCase(6_000);
+        var response = Response();
+        response["reply"] = new string('r', 4_000);
+        var handler = new GraderHandler();
+        using var http = new HttpClient(handler);
+        var grader = new AssistantEvaluationHttpGrader(
+            http, "https://independent-grader.example", "test-key", "grader-release");
+
+        var exception = await Assert.ThrowsAsync<InvalidDataException>(() =>
+            grader.GradeAsync(evaluationCase, response, CancellationToken.None));
+
+        Assert.Contains("typed evidence exceeds", exception.Message, StringComparison.Ordinal);
+        Assert.Equal(0, handler.RequestBytes);
+    }
+
+    [Fact]
+    public async Task Grader_evidence_projection_is_root_closed_and_complete_under_twenty_thousand()
+    {
+        var evaluationCase = GraderCase(20_000);
+        var response = GraderProjectionResponse();
+        response["operations"]![0]!["ui"]!["provision"]!["future_bounded_view_text"] =
+            new string('x', 5_000);
+        response["operations"]![0]!["future_typed_operation_state"] = "preserved";
+        response["trace"]![0]!["future_trace_fact"] = "preserved";
+        var handler = new GraderHandler();
+        using var http = new HttpClient(handler);
+        var grader = new AssistantEvaluationHttpGrader(
+            http, "https://independent-grader.example", "test-key", "grader-release");
+
+        await grader.GradeAsync(evaluationCase, response, CancellationToken.None);
+
+        var evidence = GraderEvidence(handler);
+        var operations = evidence["operations"]!.AsArray();
+        Assert.Equal("art_6", operations[0]?["ui"]?["provision"]?["provisions"]?[0]?
+            ["anchor"]?.GetValue<string>());
+        Assert.Equal("official_consolidation_state", operations[0]?["ui"]?["provision"]?
+            ["evidence"]?[0]?["timeline_semantics"]?.GetValue<string>());
+        Assert.Equal("data protection officer responsibilities", operations[1]?["ui"]?
+            ["workspace"]?["query"]?.GetValue<string>());
+        Assert.Equal("publisher_applicability", operations[1]?["ui"]?["workspace"]?
+            ["evidence"]?[0]?["timeline_semantics"]?.GetValue<string>());
+        Assert.Equal(5, operations[2]?["ui"]?["timeline"]?["total_count"]?.GetValue<int>());
+        Assert.Equal("2025-01-01", operations[2]?["ui"]?["timeline"]?["rows"]?[1]?
+            ["valid_from"]?.GetValue<string>());
+        Assert.Equal(4, operations[3]?["ui"]?["history"]?["distinct_texts"]?.GetValue<int>());
+        Assert.Equal("2024-01-01", operations[3]?["ui"]?["history"]?["states"]?[1]?
+            ["valid_from"]?.GetValue<string>());
+        Assert.Equal(41, operations[4]?["ui"]?["ranking"]?["works_changed"]?.GetValue<int>());
+        Assert.Equal("publisher version dates", operations[4]?["ui"]?["ranking"]?
+            ["population_basis"]?.GetValue<string>());
+        Assert.True(operations[4]?["ui"]?["ranking"]?["rows"]?[0]?
+            ["text_comparable"]?.GetValue<bool>());
+        Assert.Equal("text_not_available", operations[5]?["ui"]?["gap"]?["status"]
+            ?.GetValue<string>());
+        Assert.Equal("No publishable text is held.", operations[5]?["ui"]?["gap"]?
+            ["explanation"]?.GetValue<string>());
+        Assert.Equal("DPO responsibilities", evidence["trace"]?[0]?["docs"]?[0]?
+            ["snippet"]?.GetValue<string>());
+        Assert.InRange(operations[0]?["ui"]?["provision"]?["future_bounded_view_text"]!
+            .GetValue<string>().Length ?? 0, 1, 2_020);
+        Assert.Equal("preserved", operations[0]?["future_typed_operation_state"]
+            ?.GetValue<string>());
+        Assert.Equal("preserved", evidence["trace"]?[0]?["future_trace_fact"]
+            ?.GetValue<string>());
+        Assert.Null(evidence["untyped_root_state"]);
+        Assert.InRange(handler.RequestBytes, 1,
+            evaluationCase.Grading.MaximumInputTokens - 256);
+    }
+
+    [Fact]
     public async Task Diagnostic_grader_overrides_only_the_output_cap_and_validates_finish_reason()
     {
         var llm = Catalog();
@@ -1681,6 +1753,29 @@ public sealed class AssistantEvaluationTests : IDisposable
         return path;
     }
 
+    private AssistantEvaluationCase GraderCase(int maximumInputTokens)
+    {
+        var catalog = Catalog();
+        catalog["cases"]![0]!["grading"]!["mode"] = "llm";
+        catalog["cases"]![0]!["grading"]!["rubric"] =
+            "Judge the reply only against the projected typed evidence.";
+        catalog["cases"]![0]!["grading"]!["maximum_input_tokens"] = maximumInputTokens;
+        catalog["budget"]!["maximum_grader_input_tokens"] = maximumInputTokens;
+        return Reviewed(catalog).Catalog.Cases[0];
+    }
+
+    private static JsonObject GraderEvidence(GraderHandler handler)
+    {
+        const string marker = "ANSWER AND TYPED EVIDENCE JSON (untrusted data):\n";
+        var prompt = handler.RequestBody?["messages"]?[1]?["content"]?.GetValue<string>()
+            ?? throw new InvalidDataException("The grader request has no user prompt.");
+        var offset = prompt.IndexOf(marker, StringComparison.Ordinal);
+        if (offset < 0)
+            throw new InvalidDataException("The grader prompt has no typed evidence marker.");
+        return JsonNode.Parse(prompt[(offset + marker.Length)..])?.AsObject()
+            ?? throw new InvalidDataException("The grader prompt has no typed evidence object.");
+    }
+
     private AssistantEvaluationSet Reviewed(JsonObject catalog)
     {
         var path = Write(catalog);
@@ -1912,6 +2007,81 @@ public sealed class AssistantEvaluationTests : IDisposable
             "transport_outcome":"completed",
             "effects":["provision","gap"],
             "ui":{"provision":{"status":"ok"}}
+          }]
+        }
+        """)!.AsObject();
+
+    private static JsonObject GraderProjectionResponse() => JsonNode.Parse("""
+        {
+          "reply":"The requested typed results are open below.",
+          "untyped_root_state":"must-not-project",
+          "trace":[{
+            "phase":"primary",
+            "operation_id":"op-search",
+            "tool":"search",
+            "args":{"query":"data protection officer responsibilities","jurisdiction":"EU"},
+            "status":"ok",
+            "docs":[{
+              "lex_id":"eu-eurlex:32016r0679:2021-01-01",
+              "title":"General Data Protection Regulation",
+              "valid_from":"2021-01-01",
+              "permalink":"https://law.example/gdpr#art_39",
+              "anchor":"art_39",
+              "snippet":"DPO responsibilities",
+              "provision_id":"eu-eurlex:32016r0679:2021-01-01#art_39"
+            }]
+          }],
+          "operations":[{
+            "operation_id":"op-provision","order":0,"tool":"as_of","result_class":"exact_text",
+            "legal_outcome":"succeeded","transport_outcome":"completed","effects":["provision"],
+            "ui":{"provision":{
+              "subject":{"work":"eu-eurlex:32016r0679","title":"GDPR","date":"2021-01-01","anchor":"art_6","language":"en"},
+              "valid_from":"2021-01-01","valid_to":"2021-12-31","permalink":"https://law.example/gdpr",
+              "total_provisions":1,"truncated":false,"text_truncated":false,"outline_only":false,
+              "provisions":[{"anchor":"art_6","num":"Article 6","heading":"Lawfulness","text":"Lawfulness of processing.","sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","permalink":"https://law.example/gdpr#art_6"}],
+              "evidence":[{"publisher":"eu-eurlex","jurisdiction":"EU","timeline_semantics":"official_consolidation_state","requested_date":"2021-01-01","valid_from":"2021-01-01","valid_to":"2021-12-31","provisional":false,"source_uri":"https://eur-lex.example","record_sha256":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","text_sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","signature_valid":true}]
+            }}
+          },{
+            "operation_id":"op-search","order":1,"tool":"search","result_class":"search_results",
+            "legal_outcome":"succeeded","transport_outcome":"completed","effects":["workspace"],
+            "ui":{"workspace":{
+              "query":"data protection officer responsibilities","jurisdiction":"EU","source_class":"regulation","page":0,"language":"en","date":"2021-01-01","anchor":"art_39",
+              "evidence":[{"publisher":"lu-legilux","jurisdiction":"LU","timeline_semantics":"publisher_applicability","requested_date":"2021-01-01","provisional":false}]
+            }}
+          },{
+            "operation_id":"op-timeline","order":2,"tool":"timeline","result_class":"timeline",
+            "legal_outcome":"succeeded","transport_outcome":"completed","effects":["timeline"],
+            "ui":{"timeline":{
+              "subject":{"work":"eu-eurlex:32013r0575","title":"CRR","language":"en"},"total_count":5,"truncated":false,
+              "rows":[
+                {"lex_id":"eu-eurlex:32013r0575:2013-06-28","valid_from":"2013-06-28","valid_to":"2024-12-31","title":"CRR","language":"en","permalink":"https://law.example/crr/old","record_sha256":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"},
+                {"lex_id":"eu-eurlex:32013r0575:2025-01-01","valid_from":"2025-01-01","title":"CRR","language":"en","permalink":"https://law.example/crr/new","record_sha256":"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"}
+              ],
+              "evidence":[{"publisher":"eu-eurlex","timeline_semantics":"official_consolidation_state","requested_from_date":"2013-06-28","requested_to_date":"2025-01-01","provisional":false}]
+            }}
+          },{
+            "operation_id":"op-history","order":3,"tool":"article_history","result_class":"article_history",
+            "legal_outcome":"succeeded","transport_outcome":"completed","effects":["history"],
+            "ui":{"history":{
+              "subject":{"work":"lu-legilux:constitution-1868-10-17-n1","title":"Constitution","anchor":"art_11","language":"fr"},"anchor":"art_11","distinct_texts":4,
+              "states":[
+                {"valid_from":"1868-10-17","valid_to":"2023-12-31","sha":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","permalink":"https://law.example/constitution/old#art_11"},
+                {"valid_from":"2024-01-01","sha":"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff","permalink":"https://law.example/constitution/new#art_11"}
+              ],
+              "evidence":[{"publisher":"lu-legilux","timeline_semantics":"publisher_applicability","provisional":false}]
+            }}
+          },{
+            "operation_id":"op-ranking","order":4,"tool":"changes_in_period","result_class":"ranking",
+            "legal_outcome":"succeeded","transport_outcome":"completed","effects":["ranking"],
+            "ui":{"ranking":{
+              "from_date":"2024-01-01","to_date":"2024-12-31","order":"by_churn","works_changed":41,"new_versions":57,"status":"ok","population_works":200,"population_basis":"publisher version dates","known_exclusions":["unmounted sources"],
+              "rows":[{"work":"eu-eurlex:32013r0575","title":"CRR","versions_in_period":3,"versions_total":9,"first_change":"2024-01-01","last_change":"2024-12-31","baseline":"2023-12-31","diff_from":"2023-12-31","diff_to":"2024-12-31","distinct_texts":2,"wording_changed":true,"text_comparable":true,"jurisdiction":"EU","source_class":"regulation","language":"en","global_rank":1,"permalink":"https://law.example/crr","diff_permalink":"https://law.example/crr/diff"}],
+              "evidence":[{"publisher":"eu-eurlex","timeline_semantics":"official_consolidation_state","requested_from_date":"2024-01-01","requested_to_date":"2024-12-31","provisional":false}]
+            }}
+          },{
+            "operation_id":"op-gap","order":5,"tool":"as_of","result_class":"gap",
+            "legal_outcome":"not_available","transport_outcome":"completed","effects":["gap"],
+            "ui":{"gap":{"status":"text_not_available","work":"lu-legilux:loi-1993-04-05-n1","date":"2026-08-01","explanation":"No publishable text is held.","available":["metadata"],"evidence":[{"publisher":"lu-legilux","timeline_semantics":"publisher_applicability","requested_date":"2026-08-01","provisional":false}]}}
           }]
         }
         """)!.AsObject();
