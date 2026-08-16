@@ -1212,9 +1212,12 @@ public sealed class ReleaseWorkflowTests
         Assert.Contains("from bootstrap_plan import timestamp", deploy);
         Assert.DoesNotContain("value.endswith(\"Z\")", deploy);
         Assert.Contains("bootstrap_fallback", deploy);
-        Assert.Contains("R deactivation did not converge to exact A + R", deploy);
+        // The exact-set wording went with the exact-set gate, but the settle-then-reverify
+        // step it named is unchanged: nothing proceeds until R is proved inactive at zero
+        // traffic beside A at one hundred.
+        Assert.Contains("R did not settle to inactive at zero traffic beside A", deploy);
         var retainedFallback = deploy[deactivateFallback..deploy.IndexOf(
-            "R deactivation did not converge to exact A + R", deactivateFallback,
+            "R did not settle to inactive at zero traffic beside A", deactivateFallback,
             StringComparison.Ordinal)];
         Assert.Contains("for attempt in $(seq 1 60)", retainedFallback);
         Assert.Contains("sleep 10", retainedFallback);
@@ -1225,8 +1228,15 @@ public sealed class ReleaseWorkflowTests
         Assert.Contains("for attempt in $(seq 1 60)", fallbackActive);
         Assert.Contains("verify_bootstrap_forward_topology fallback-active", fallbackActive);
         Assert.Contains("verify_bootstrap_forward_topology candidate-active", deploy);
-        Assert.Contains("Exact A + R; superseded O/S must be absent", deploy);
-        Assert.Contains("Exact A + R + C", deploy);
+        // The A + R and A + R + C stages were pinned by exact-set equality. They are still
+        // pinned by name; the only extra name either admits is one the reviewed receipt
+        // supplied, and that one is re-proved inactive at zero traffic before it is tolerated.
+        Assert.Contains("verify_revision_set \"$previous\" \"$bootstrap_fallback\" || return 1",
+            deploy);
+        Assert.Contains("verify_revision_set \"$previous\" \"$bootstrap_fallback\" "
+            + "\"$candidate\" || return 1", deploy);
+        Assert.Contains("verify_reviewed_handoff_retention || return 1", deploy);
+        Assert.DoesNotContain("([.[].name] | sort) ==", deploy);
         Assert.Contains(".properties.template | {properties:{template:.}}", deploy);
         Assert.Contains("(.latestRevision // false) == false", deploy);
         Assert.Contains("(.label // null) == null", deploy);
@@ -1242,11 +1252,16 @@ public sealed class ReleaseWorkflowTests
         Assert.True(enforcement >= 0 && summary > enforcement);
         var enforcementBlock = deploy[enforcement..summary];
         var preserveBootstrap = enforcementBlock.IndexOf(
-            "bootstrap candidate preparation did not remain exact", StringComparison.Ordinal);
+            "bootstrap candidate preparation drifted from the reviewed inventory",
+            StringComparison.Ordinal);
         var genericAssertion = enforcementBlock.IndexOf(
             "expected exactly one active public quota authority", StringComparison.Ordinal);
         Assert.True(preserveBootstrap >= 0 && genericAssertion > preserveBootstrap);
         Assert.Contains("CANDIDATE_OUTCOME", enforcementBlock);
+        // The bootstrap arm exits before the generic one-active-authority check below, so it
+        // has to refuse a second traffic bearer on its own terms rather than inherit a refusal.
+        Assert.Contains("([.[] | select((.properties.trafficWeight // 0) > 0)] | length) == 1",
+            enforcementBlock);
         Assert.DoesNotContain("revision deactivate", enforcementBlock);
         Assert.DoesNotContain("maxInactiveRevisions:0", deploy);
         Assert.DoesNotContain("maxInactiveRevisions:100", deploy);

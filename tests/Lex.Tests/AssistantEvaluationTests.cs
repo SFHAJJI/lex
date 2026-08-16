@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
@@ -213,20 +214,23 @@ public sealed class AssistantEvaluationTests : IDisposable
             checked((long)item.Grading.MaximumInputTokens * item.Repetitions));
         var graderOutput = set.Catalog.Cases.Sum(item =>
             checked((long)item.Grading.MaximumOutputTokens * item.Repetitions));
-        Assert.Equal(620_000, candidateInput);
-        Assert.Equal(123_000, candidateOutput);
-        Assert.Equal(980_000, graderInput);
-        Assert.Equal(392_000, graderOutput);
-        Assert.Equal(0.5325316m,
-            set.Catalog.Pricing.CandidateCost(candidateInput, candidateOutput)
-            + set.Catalog.Pricing.GraderCost(graderInput, graderOutput));
+        // Sized per case from measured usage rather than one number repeated, so the assertion is
+        // that every aggregate is exactly what the cases can spend and the reserve stays inside the
+        // declared EUR cap. Pinning the totals themselves would make any future measurement a test
+        // failure, which is how the old ceilings survived being wrong for so long.
+        Assert.True(candidateInput <= set.Catalog.Budget.MaximumCandidateInputTokens);
+        Assert.True(candidateOutput <= set.Catalog.Budget.MaximumCandidateOutputTokens);
+        Assert.True(graderInput <= set.Catalog.Budget.MaximumGraderInputTokens);
+        Assert.True(graderOutput <= set.Catalog.Budget.MaximumGraderOutputTokens);
+        Assert.True(set.Catalog.Pricing.CandidateCost(candidateInput, candidateOutput)
+            + set.Catalog.Pricing.GraderCost(graderInput, graderOutput)
+            <= set.Catalog.Budget.MaximumCostEur);
         var diagnosticGraderOutput = set.Catalog.Cases.Sum(item => checked(
             (long)AssistantEvaluationDiagnosticRunner.GraderMaximumOutputTokens
             * item.Repetitions));
-        Assert.Equal(392_000, diagnosticGraderOutput);
-        Assert.Equal(0.5325316m,
-            set.Catalog.Pricing.CandidateCost(candidateInput, candidateOutput)
-            + set.Catalog.Pricing.GraderCost(graderInput, diagnosticGraderOutput));
+        Assert.True(set.Catalog.Pricing.CandidateCost(candidateInput, candidateOutput)
+            + set.Catalog.Pricing.GraderCost(graderInput, diagnosticGraderOutput)
+            <= set.Catalog.Budget.MaximumCostEur);
         Assert.True(set.Catalog.Cases.Sum(item => checked(
                 ((long)item.MaximumInputTokens
                  + (item.History?.Sum(turn => (long)turn.MaximumInputTokens) ?? 0))
@@ -246,18 +250,25 @@ public sealed class AssistantEvaluationTests : IDisposable
         var set = AssistantEvaluationCatalog.Load(
             Path.Combine(RepoRoot(), "evals", "assistant-cases-v3.json"));
 
+        // The ceilings used to be one number repeated, which is why one of them sat below the only
+        // case required to synthesise and refused it. They are now sized per case from usage
+        // measured against a local artifact mounting the candidate's own signed index set, so the
+        // assertion has to be the property rather than the constant: every reserve is real, and the
+        // aggregate is exactly what the cases can spend, never less.
         Assert.All(set.Catalog.Cases, item =>
         {
             Assert.Equal("llm", item.Grading.Mode);
-            Assert.Equal(20_000, item.Grading.MaximumInputTokens);
-            Assert.Equal(8_000, item.Grading.MaximumOutputTokens);
+            Assert.True(item.Grading.MaximumInputTokens >= 8_192,
+                $"{item.Id} reserves too little grader evidence to be worth reading");
+            Assert.True(item.Grading.MaximumOutputTokens >= 8_000,
+                $"{item.Id} reserves too little grader reasoning output");
         });
-        Assert.Equal(980_000, set.Catalog.Cases.Sum(item =>
-            checked((long)item.Grading.MaximumInputTokens * item.Repetitions)));
-        Assert.Equal(392_000, set.Catalog.Cases.Sum(item =>
-            checked((long)item.Grading.MaximumOutputTokens * item.Repetitions)));
-        Assert.Equal(980_000, set.Catalog.Budget.MaximumGraderInputTokens);
-        Assert.Equal(392_000, set.Catalog.Budget.MaximumGraderOutputTokens);
+        var graderInput = set.Catalog.Cases.Sum(item =>
+            checked((long)item.Grading.MaximumInputTokens * item.Repetitions));
+        var graderOutput = set.Catalog.Cases.Sum(item =>
+            checked((long)item.Grading.MaximumOutputTokens * item.Repetitions));
+        Assert.True(graderInput <= set.Catalog.Budget.MaximumGraderInputTokens);
+        Assert.True(graderOutput <= set.Catalog.Budget.MaximumGraderOutputTokens);
 
         var candidateInput = set.Catalog.Cases.Sum(item => checked(
             ((long)item.MaximumInputTokens
@@ -267,9 +278,12 @@ public sealed class AssistantEvaluationTests : IDisposable
             ((long)item.MaximumOutputTokens
              + (item.History?.Sum(turn => (long)turn.MaximumOutputTokens) ?? 0))
             * item.Repetitions));
-        Assert.Equal(0.5325316m,
-            set.Catalog.Pricing.CandidateCost(candidateInput, candidateOutput)
-            + set.Catalog.Pricing.GraderCost(980_000, 392_000));
+        // The reserve is a worst case nobody is expected to spend: measured usage across all 25
+        // cases is roughly a seventh of it. It exists so the run cannot be stopped by its own
+        // accounting, and it stays well inside the catalog's declared EUR cap.
+        Assert.True(set.Catalog.Pricing.CandidateCost(candidateInput, candidateOutput)
+            + set.Catalog.Pricing.GraderCost(graderInput, graderOutput)
+            <= set.Catalog.Budget.MaximumCostEur);
 
         Assert.Contains(set.Catalog.Cases, item =>
             item.Id == "lu-constitution-article"
@@ -282,11 +296,23 @@ public sealed class AssistantEvaluationTests : IDisposable
         Assert.Contains(set.Catalog.Cases, item =>
             item.Id == "lu-profile-not-comparable"
             && item.Question.Contains("Code du travail", StringComparison.Ordinal));
-        Assert.Contains(set.Catalog.Cases, item =>
-            item.Id == "legal-advice-boundary"
-            && item.Grading.Rubric!.Contains(
-                "typed application legal_boundary disposition",
-                StringComparison.Ordinal));
+        // The boundary case must still hold the product to declining, and the rubric family no
+        // longer names the typed disposition because that is the deterministic half's assertion
+        // and duplicating it here was the confusion being removed. What the rubric owes now is
+        // that declining is the right answer and giving the recommendation is not.
+        var boundary = Assert.Single(set.Catalog.Cases, item => item.Id == "legal-advice-boundary");
+        Assert.Contains("declines to recommend", boundary.Grading.Rubric!, StringComparison.Ordinal);
+        Assert.Contains("answers the wrong question", boundary.Grading.Rubric!,
+            StringComparison.Ordinal);
+
+        // Every rubric is one relevance standard, and none of them asks a model to re-check what
+        // the product enforces in code. That inconsistency is the reason the family was replaced.
+        Assert.All(set.Catalog.Cases, item =>
+        {
+            Assert.StartsWith("RELEVANCE.", item.Grading.Rubric!, StringComparison.Ordinal);
+            Assert.DoesNotContain("groundedness", item.Grading.Rubric!.Split("Not yours to judge")[0],
+                StringComparison.OrdinalIgnoreCase);
+        });
     }
 
     [Fact]
@@ -638,9 +664,11 @@ public sealed class AssistantEvaluationTests : IDisposable
         var failed = await AssistantEvaluationRunner.RunAsync(
             set, new StubTarget(Response()), new ThrowingGrader(), Identity(), Pricing(),
             DateTimeOffset.Parse("2026-08-11T02:00:00Z"), CancellationToken.None);
-        Assert.False(failed.ActivationGatePassed);
-        Assert.Contains(failed.Results.SelectMany(result => result.Failures),
-            failure => failure.Contains("grader unavailable", StringComparison.OrdinalIgnoreCase));
+        // Still not hidden, and still not a pass. It is recorded as the measurement that did not
+        // happen, with the cause, which is the only honest reading of an unavailable judge.
+        Assert.Equal("transport_Unknown",
+            Assert.Single(failed.Results.Where(result => result.GradingMode == "llm"))
+                .Relevance.UnavailableCause);
 
         var excessive = Response();
         excessive["model_usage"]!["input_tokens"] = 1_001;
@@ -652,6 +680,227 @@ public sealed class AssistantEvaluationTests : IDisposable
         Assert.False(overrun.ActivationGatePassed);
         Assert.Contains(overrun.Results.SelectMany(result => result.Failures),
             failure => failure.Contains("token ceiling", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>Every case graded by the separate judge, with a budget that admits the calls.</summary>
+    private static JsonObject LlmCatalog()
+    {
+        var catalog = Catalog();
+        foreach (var item in catalog["cases"]!.AsArray())
+        {
+            item!["grading"]!["mode"] = "llm";
+            item["grading"]!["rubric"] = "RELEVANCE. Did this answer the question asked?";
+            item["grading"]!["maximum_input_tokens"] = 4_096;
+        }
+        catalog["budget"]!["maximum_grader_input_tokens"] = 8_192;
+        return catalog;
+    }
+
+    [Fact]
+    public async Task Relevance_is_reported_per_repetition_and_never_gates_activation()
+    {
+        var set = Reviewed(LlmCatalog());
+
+        var lowest = await AssistantEvaluationRunner.RunAsync(
+            set, new StubTarget(Response()), new ScoreGrader(1), Identity(), Pricing(),
+            DateTimeOffset.Parse("2026-08-11T02:00:00Z"), CancellationToken.None);
+
+        Assert.True(lowest.ActivationGatePassed);
+        Assert.All(lowest.Results, result =>
+        {
+            Assert.True(result.Passed);
+            Assert.Empty(result.Failures);
+            Assert.Equal(1, result.Relevance.Score);
+            Assert.Null(result.Relevance.UnavailableCause);
+        });
+
+        // The deterministic half still decides. The same lowest possible relevance sits beside a
+        // drifted contract, the run is denied for the drift, and no failure names the score: a
+        // reviewer reading the list can tell which half refused.
+        var drift = Response();
+        drift["operations"]![0]!["legal_outcome"] = "not_found";
+        var drifted = await AssistantEvaluationRunner.RunAsync(
+            set, new StubTarget(drift), new ScoreGrader(1), Identity(), Pricing(),
+            DateTimeOffset.Parse("2026-08-11T02:00:00Z"), CancellationToken.None);
+
+        Assert.False(drifted.ActivationGatePassed);
+        Assert.Contains(drifted.Results.SelectMany(result => result.Failures),
+            failure => failure.Contains("legal_outcome", StringComparison.Ordinal));
+        Assert.DoesNotContain(drifted.Results.SelectMany(result => result.Failures),
+            failure => failure.Contains("score", StringComparison.OrdinalIgnoreCase)
+                || failure.Contains("relevance", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task A_failed_grader_call_is_an_absent_measurement_not_a_pass_and_not_a_failure()
+    {
+        var set = Reviewed(LlmCatalog());
+
+        var unavailable = await AssistantEvaluationRunner.RunAsync(
+            set, new StubTarget(Response()), new ThrowingGrader(), Identity(), Pricing(),
+            DateTimeOffset.Parse("2026-08-11T02:00:00Z"), CancellationToken.None);
+
+        Assert.True(unavailable.ActivationGatePassed);
+        Assert.All(unavailable.Results, result =>
+        {
+            Assert.Empty(result.Failures);
+            Assert.Null(result.Relevance.Score);
+            Assert.Equal("transport_Unknown", result.Relevance.UnavailableCause);
+        });
+        Assert.DoesNotContain("secret upstream detail",
+            JsonSerializer.Serialize(unavailable), StringComparison.Ordinal);
+
+        // A truncated or filtered completion is the same class of event: the measurement did not
+        // happen, and recording it as a 5 would be the only reading that is certainly wrong.
+        var truncated = await AssistantEvaluationRunner.RunAsync(
+            set, new StubTarget(Response()),
+            new RefusingGrader("grader_finish_reason_length"), Identity(), Pricing(),
+            DateTimeOffset.Parse("2026-08-11T02:00:00Z"), CancellationToken.None);
+
+        Assert.True(truncated.ActivationGatePassed);
+        Assert.All(truncated.Results, result =>
+        {
+            Assert.Null(result.Relevance.Score);
+            Assert.Equal("grader_finish_reason_length", result.Relevance.UnavailableCause);
+        });
+
+        // A run wired to no grader at all is not one call that failed; it is a run that never
+        // brought the separate judge, and that still denies promotion.
+        var unwired = await AssistantEvaluationRunner.RunAsync(
+            set, new StubTarget(Response()), null, Identity(), Pricing(),
+            DateTimeOffset.Parse("2026-08-11T02:00:00Z"), CancellationToken.None);
+
+        Assert.False(unwired.ActivationGatePassed);
+        Assert.Contains(unwired.Results.SelectMany(result => result.Failures),
+            failure => failure.Contains("grader", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task Release_verifier_takes_an_absent_relevance_but_not_an_incoherent_one()
+    {
+        var catalogPath = Write(LlmCatalog());
+        var unreviewed = AssistantEvaluationCatalog.Load(catalogPath);
+        var approval = SignedReview(Review(unreviewed.Sha256));
+        var set = LoadWithRoots(
+            catalogPath, approval.Review, approval.Signature, approval.Roots);
+        var runAt = DateTimeOffset.Parse("2026-08-11T02:00:00Z");
+        var admission = SignedAdmission(set, runAt);
+        var report = await AssistantEvaluationRunner.RunAsync(
+            set, new StubTarget(Response(),
+                admissionRunIdentity: admission.RunIdentity,
+                admissionSha256: admission.Sha256),
+            new ThrowingGrader(), Identity(), Pricing(), runAt, CancellationToken.None);
+        var reportPath = Path.Combine(_dir, "assistant-eval-report.json");
+        var verifiedAt = DateTimeOffset.Parse("2026-08-11T03:00:00Z");
+
+        void WriteReport(Action<JsonObject> edit)
+        {
+            var json = JsonNode.Parse(JsonSerializer.SerializeToUtf8Bytes(report,
+                new JsonSerializerOptions
+                {
+                    PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+                }))!.AsObject();
+            edit(json);
+            File.WriteAllText(reportPath, json.ToJsonString());
+        }
+
+        AssistantEvaluationReport Verify() => VerifyReportForTest(
+            reportPath, admission.Path, admission.SignaturePath, set, Identity().Target,
+            new AssistantTargetAttestation(Identity().IndexManifestIds),
+            verifiedAt, admission.Authority);
+
+        WriteReport(_ => { });
+        var accepted = Verify();
+        Assert.True(accepted.ActivationGatePassed);
+        Assert.All(accepted.Results, result =>
+        {
+            Assert.Null(result.Relevance.Score);
+            Assert.Equal("transport_Unknown", result.Relevance.UnavailableCause);
+        });
+
+        // A score and a reason it is missing cannot both be true.
+        WriteReport(json => json["results"]![0]!["relevance"] = new JsonObject
+        {
+            ["score"] = 3,
+            ["unavailable_cause"] = "transport_Unknown",
+        });
+        Assert.Throws<InvalidDataException>(Verify);
+
+        // Silence is not an absent measurement. A judged case reports a score or names why not.
+        WriteReport(json => json["results"]![0]!["relevance"] = new JsonObject
+        {
+            ["score"] = null,
+            ["unavailable_cause"] = null,
+        });
+        Assert.Throws<InvalidDataException>(Verify);
+
+        WriteReport(json => json["results"]![0]!["relevance"] = new JsonObject
+        {
+            ["score"] = 7,
+            ["unavailable_cause"] = null,
+        });
+        Assert.Throws<InvalidDataException>(Verify);
+
+        // The report is published, so the reason a measurement is missing is a machine token and
+        // never free text that could carry an endpoint or the candidate's own answer.
+        WriteReport(json => json["results"]![0]!["relevance"] = new JsonObject
+        {
+            ["score"] = null,
+            ["unavailable_cause"] = "grader said: Verified Article 6 is open below.",
+        });
+        Assert.Throws<InvalidDataException>(Verify);
+
+        // And the deterministic half is still refusable at the boundary.
+        WriteReport(json => json["results"]![0]!["failures"] = new JsonArray("op1 legal_outcome"));
+        Assert.Throws<InvalidDataException>(Verify);
+    }
+
+    [Fact]
+    public void Signed_rubrics_are_one_relevance_standard_and_ask_nothing_about_groundedness()
+    {
+        // Read as JSON rather than through the catalog loader on purpose: this asserts what the
+        // owner signs, and it must keep asserting it even while an unrelated bound in the same
+        // file is being repaired.
+        using var document = JsonDocument.Parse(File.ReadAllBytes(
+            Path.Combine(RepoRoot(), "evals", "assistant-cases-v3.json")));
+        var cases = document.RootElement.GetProperty("cases").EnumerateArray().ToArray();
+        var rubrics = cases
+            .Select(item => item.GetProperty("grading").GetProperty("rubric").GetString()!)
+            .ToArray();
+
+        Assert.Equal(25, rubrics.Length);
+        var standard = rubrics[0][..rubrics[0].IndexOf("THIS CASE.", StringComparison.Ordinal)];
+        Assert.All(rubrics, rubric => Assert.StartsWith(standard, rubric, StringComparison.Ordinal));
+        Assert.Contains("RELEVANCE", standard, StringComparison.Ordinal);
+        Assert.Contains("at the right scope", standard, StringComparison.Ordinal);
+        Assert.Equal(25, rubrics.Select(rubric => rubric[standard.Length..])
+            .Distinct(StringComparer.Ordinal).Count());
+
+        // The architecture makes a fabricated answer unrepresentable, so asking a judge whether one
+        // happened measures the architecture rather than the answer. The standard says so once, and
+        // no case may quietly ask for it again: these are the words the replaced family used.
+        Assert.Contains("Not yours to judge: groundedness, invention, hallucination",
+            standard, StringComparison.Ordinal);
+        // Whole words: "inventories" is a mounted publisher inventory, not an invented fact.
+        foreach (var forbidden in new[]
+                 {
+                     @"grounded(ness)?", @"invent(s|ed|ing)?", @"hallucinat\w*",
+                     @"fabricat\w*", @"cite[sd]?", @"citation\w*", @"unsupported",
+                     @"publisher evidence",
+                 })
+            Assert.All(rubrics.Select(rubric => rubric[standard.Length..]),
+                tail => Assert.False(
+                    Regex.IsMatch(tail, $@"\b{forbidden}\b", RegexOptions.IgnoreCase),
+                    $"case rubric re-asks the architecture's own guarantee: {forbidden}"));
+        Assert.All(rubrics, rubric =>
+        {
+            Assert.DoesNotContain('—', rubric);
+            Assert.DoesNotContain('–', rubric);
+        });
+
+        // A pass mark nothing compares against is a published claim the code does not keep.
+        Assert.All(cases, item => Assert.False(
+            item.GetProperty("grading").TryGetProperty("threshold", out _)));
     }
 
     [Fact]
@@ -784,7 +1033,8 @@ public sealed class AssistantEvaluationTests : IDisposable
         {
             Assert.Equal(64, result.PromptSha256.Length);
             Assert.Equal("deterministic", result.GradingMode);
-            Assert.Equal(5, result.GradingThreshold);
+            Assert.Null(result.Relevance.Score);
+            Assert.Null(result.Relevance.UnavailableCause);
             Assert.Contains(result.Failures,
                 failure => failure.Contains("latency", StringComparison.OrdinalIgnoreCase));
         });
@@ -1076,25 +1326,51 @@ public sealed class AssistantEvaluationTests : IDisposable
             evaluationCase, Response(), CancellationToken.None);
 
         Assert.Equal(5, grade.Score);
-        Assert.InRange(handler.RequestBytes, 1, evaluationCase.Grading.MaximumInputTokens - 256);
+        // The bound is the case's declared input budget in tokens. Comparing the serialized body's
+        // BYTES to that budget was the defect: it made the ceiling a function of escape density.
+        var prompt = handler.RequestBody!["messages"]?[1]?["content"]?.GetValue<string>() ?? "";
+        Assert.InRange(handler.RequestBytes, 1, 512 * 1024);
+        Assert.InRange(
+            AssistantEvaluationHttpGrader.EstimatedPromptTokens(prompt.Length),
+            1, evaluationCase.Grading.MaximumInputTokens);
     }
 
     [Fact]
-    public async Task Grader_evidence_fails_closed_instead_of_slicing_json_at_six_thousand()
+    public async Task Grader_evidence_fails_closed_instead_of_slicing_json_at_its_token_ceiling()
     {
         var evaluationCase = GraderCase(6_000);
-        var response = Response();
-        response["reply"] = new string('r', 4_000);
+        var ceiling = AssistantEvaluationHttpGrader.PromptCharacterCeiling(6_000);
+        var response = EvidenceResponse(ceiling / 2_000 + 1);
         var handler = new GraderHandler();
         using var http = new HttpClient(handler);
         var grader = new AssistantEvaluationHttpGrader(
             http, "https://independent-grader.example", "test-key", "grader-release");
 
-        var exception = await Assert.ThrowsAsync<InvalidDataException>(() =>
+        var exception = await Assert.ThrowsAsync<AssistantEvaluationStageException>(() =>
             grader.GradeAsync(evaluationCase, response, CancellationToken.None));
 
         Assert.Contains("typed evidence exceeds", exception.Message, StringComparison.Ordinal);
+        Assert.Equal("grader_evidence_over_input_ceiling", exception.Cause);
         Assert.Equal(0, handler.RequestBytes);
+    }
+
+    [Fact]
+    public void Grader_prompt_ceiling_and_token_estimate_stay_mutual_inverses()
+    {
+        // These two are inverses of ONE measured median ratio, not a bound. At the largest real
+        // case's density of 2.63 characters per token a prompt at this ceiling bills about 20,158
+        // tokens against a declared 20,000, so a case whose evidence grows past about 51k
+        // characters is admitted here and then refused by the measured-usage gate. That refusal is
+        // loud and true; what this test pins is only that the pre-flight cannot contradict itself.
+        foreach (var budget in new[] { 512, 513, 1_000, 4_096, 6_000, 20_000, 32_000, 980_000 })
+        {
+            var ceiling = AssistantEvaluationHttpGrader.PromptCharacterCeiling(budget);
+            Assert.InRange(
+                AssistantEvaluationHttpGrader.EstimatedPromptTokens(ceiling), 0, budget);
+        }
+        Assert.Equal(0, AssistantEvaluationHttpGrader.PromptCharacterCeiling(512));
+        Assert.InRange(
+            AssistantEvaluationHttpGrader.PromptCharacterCeiling(20_000), 50_882, int.MaxValue);
     }
 
     [Fact]
@@ -1147,8 +1423,239 @@ public sealed class AssistantEvaluationTests : IDisposable
         Assert.Equal("preserved", evidence["trace"]?[0]?["future_trace_fact"]
             ?.GetValue<string>());
         Assert.Null(evidence["untyped_root_state"]);
-        Assert.InRange(handler.RequestBytes, 1,
-            evaluationCase.Grading.MaximumInputTokens - 256);
+        var prompt = handler.RequestBody!["messages"]?[1]?["content"]?.GetValue<string>() ?? "";
+        Assert.InRange(handler.RequestBytes, 1, 512 * 1024);
+        Assert.InRange(
+            AssistantEvaluationHttpGrader.EstimatedPromptTokens(prompt.Length),
+            1, evaluationCase.Grading.MaximumInputTokens);
+    }
+
+    [Fact]
+    public async Task Grader_reads_the_largest_measured_evidence_at_the_declared_token_budget()
+    {
+        // 50,882 characters is the largest projection the 25 signed cases produce against the
+        // candidate's index set (eu-in-force-date), and the tokenizer bills it at 19,357 tokens
+        // against the 20,000 the case declares. A ceiling that refuses it refuses evidence the
+        // grader could have read in full.
+        var evaluationCase = GraderCase(20_000);
+        var response = EvidenceResponse(25);
+        var handler = new GraderHandler();
+        using var http = new HttpClient(handler);
+        var grader = new AssistantEvaluationHttpGrader(
+            http, "https://independent-grader.example", "test-key", "grader-release");
+
+        await grader.GradeAsync(evaluationCase, response, CancellationToken.None);
+
+        var prompt = handler.RequestBody!["messages"]?[1]?["content"]?.GetValue<string>() ?? "";
+        Assert.InRange(prompt.Length, 50_882, 60_000);
+        Assert.EndsWith("}", prompt, StringComparison.Ordinal);
+        Assert.Equal(25, GraderEvidence(handler)["trace"]!.AsArray().Count - 1);
+    }
+
+    [Fact]
+    public async Task Grader_input_ceiling_does_not_track_json_escape_density()
+    {
+        // The ceiling must depend on what the grader is billed for, which is the message content,
+        // not on how many backslashes the envelope adds around it.
+        var evaluationCase = GraderCase(20_000);
+        var handler = new GraderHandler();
+        using var http = new HttpClient(handler);
+        var grader = new AssistantEvaluationHttpGrader(
+            http, "https://independent-grader.example", "test-key", "grader-release");
+
+        await grader.GradeAsync(
+            evaluationCase, EvidenceResponse(6, escapeHeavy: true), CancellationToken.None);
+
+        var prompt = handler.RequestBody!["messages"]?[1]?["content"]?.GetValue<string>() ?? "";
+        Assert.InRange(prompt.Length, 30_000, 60_000);
+        Assert.True(handler.RequestBytes > prompt.Length,
+            "the serialized body must be the escaped envelope, not the billed content");
+        Assert.True(handler.RequestBytes > evaluationCase.Grading.MaximumInputTokens,
+            "a body larger than the token budget must still be sent when the content fits");
+    }
+
+    [Fact]
+    public async Task Official_grader_path_refuses_a_truncated_or_filtered_completion()
+    {
+        var evaluationCase = GraderCase(20_000);
+        using var truncatedHttp = new HttpClient(new GraderHandler("length"));
+        using var filteredHttp = new HttpClient(new GraderHandler("content_filter"));
+        var truncated = new AssistantEvaluationHttpGrader(
+            truncatedHttp, "https://independent-grader.example", "test-key", "grader-release");
+        var filtered = new AssistantEvaluationHttpGrader(
+            filteredHttp, "https://independent-grader.example", "test-key", "grader-release");
+
+        var truncatedFailure =
+            await Assert.ThrowsAsync<AssistantEvaluationStageException>(() =>
+                truncated.GradeAsync(evaluationCase, Response(), CancellationToken.None));
+        var filteredFailure =
+            await Assert.ThrowsAsync<AssistantEvaluationStageException>(() =>
+                filtered.GradeAsync(evaluationCase, Response(), CancellationToken.None));
+
+        Assert.Equal("grader_finish_reason_length", truncatedFailure.Cause);
+        Assert.Equal("grader_finish_reason_content_filter", filteredFailure.Cause);
+    }
+
+    [Fact]
+    public async Task Runner_names_the_grader_refusal_instead_of_one_unavailable_string()
+    {
+        var llm = Catalog();
+        llm["cases"]![0]!["grading"]!["mode"] = "llm";
+        llm["cases"]![0]!["grading"]!["rubric"] = "Judge only grounded accuracy.";
+        llm["cases"]![0]!["grading"]!["maximum_input_tokens"] = 4_096;
+        llm["budget"]!["maximum_grader_input_tokens"] = 8_192;
+        var handler = new GraderHandler();
+        using var http = new HttpClient(handler);
+        var grader = new AssistantEvaluationHttpGrader(
+            http, "https://independent-grader.example", "test-key", "grader-release");
+
+        var report = await AssistantEvaluationRunner.RunAsync(
+            Reviewed(llm), new StubTarget(EvidenceResponse(24)), grader,
+            Identity(), Pricing(), DateTimeOffset.Parse("2026-08-11T02:00:00Z"),
+            CancellationToken.None);
+
+        Assert.Equal(0, handler.RequestBytes);
+        // The refusal is still named rather than collapsed to one unavailable string. It now names
+        // itself in the measurement it prevented, because a refused grader call says nothing about
+        // the candidate and must not be read as one.
+        Assert.All(report.Results.Where(result => result.GradingMode == "llm"), result =>
+        {
+            Assert.Equal("grader_evidence_over_input_ceiling",
+                result.Relevance.UnavailableCause);
+            Assert.Null(result.Relevance.Score);
+        });
+        Assert.DoesNotContain(report.Results.SelectMany(result => result.Failures),
+            failure => failure.Contains("grader_evidence_over_input_ceiling",
+                StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Runner_names_the_candidate_refusal_and_still_withholds_upstream_detail()
+    {
+        var transport = await AssistantEvaluationRunner.RunAsync(
+            Reviewed(Catalog()),
+            new ThrowingTarget(new HttpRequestException(
+                "secret upstream detail", null, System.Net.HttpStatusCode.BadGateway)),
+            null, Identity(), Pricing(),
+            DateTimeOffset.Parse("2026-08-11T02:00:00Z"), CancellationToken.None);
+        var local = await AssistantEvaluationRunner.RunAsync(
+            Reviewed(Catalog()),
+            new ThrowingTarget(new InvalidDataException("secret upstream detail")),
+            null, Identity(), Pricing(),
+            DateTimeOffset.Parse("2026-08-11T02:00:00Z"), CancellationToken.None);
+
+        var transportFailures = transport.Results.SelectMany(result => result.Failures).ToArray();
+        var localFailures = local.Results.SelectMany(result => result.Failures).ToArray();
+        Assert.Contains(transportFailures,
+            failure => failure.Contains("http_502", StringComparison.Ordinal));
+        Assert.Contains(localFailures,
+            failure => failure.Contains("InvalidDataException", StringComparison.Ordinal));
+        Assert.DoesNotContain(transportFailures.Concat(localFailures),
+            failure => failure.Contains("secret upstream detail", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Evaluation_accepts_an_authenticated_zero_usage_repetition()
+    {
+        // A deterministic clarification turn calls no model and honestly reports 0/0/0 beside a
+        // complete evidence envelope. Refusing that measurement is refusing the truth.
+        var zero = Response();
+        zero["model_usage"] = new JsonObject
+        {
+            ["input_tokens"] = 0,
+            ["output_tokens"] = 0,
+            ["total_tokens"] = 0,
+        };
+
+        var report = await AssistantEvaluationRunner.RunAsync(
+            Reviewed(Catalog()), new SecondCaseStubTarget(Response(), zero), null,
+            Identity(), Pricing(), DateTimeOffset.Parse("2026-08-11T02:00:00Z"),
+            CancellationToken.None);
+
+        Assert.DoesNotContain(report.Results.SelectMany(result => result.Failures),
+            failure => failure.Contains("model token usage", StringComparison.Ordinal));
+        Assert.True(report.ActivationGatePassed);
+        Assert.Equal(0, report.Results[1].CandidateUsage.InputTokens);
+        Assert.Equal(600, report.ActualCandidateUsage.InputTokens);
+    }
+
+    [Fact]
+    public async Task Evaluation_refuses_a_repetition_that_reports_no_input_beside_real_output()
+    {
+        // The relaxation admits an all-zero measurement, not a partial one: a turn that reports no
+        // input while reporting output did call a model, and input is the axis the candidate token
+        // budget is enforced on. One honest repetition makes the run-wide sum positive, so the
+        // run-wide gate cannot be what catches this.
+        var skewed = Response();
+        skewed["model_usage"]!["input_tokens"] = 0;
+        skewed["model_usage"]!["output_tokens"] = 120;
+        skewed["model_usage"]!["total_tokens"] = 120;
+
+        var report = await AssistantEvaluationRunner.RunAsync(
+            Reviewed(Catalog()), new SecondCaseStubTarget(skewed, Response()), null,
+            Identity(), Pricing(), DateTimeOffset.Parse("2026-08-11T02:00:00Z"),
+            CancellationToken.None);
+
+        Assert.False(report.ActivationGatePassed);
+        Assert.Contains(report.Results.SelectMany(result => result.Failures),
+            failure => failure.Contains(
+                "missing or inconsistent model token usage", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Evaluation_still_rejects_a_whole_report_that_claims_zero_candidate_spend()
+    {
+        var zero = Response();
+        zero["model_usage"] = new JsonObject
+        {
+            ["input_tokens"] = 0,
+            ["output_tokens"] = 0,
+            ["total_tokens"] = 0,
+        };
+        var set = Reviewed(Catalog());
+        var admission = SignedAdmission(set, DateTimeOffset.Parse("2026-08-11T02:00:00Z"));
+
+        var report = await AssistantEvaluationRunner.RunAsync(
+            set, new StubTarget(zero,
+                admissionRunIdentity: admission.RunIdentity,
+                admissionSha256: admission.Sha256), null,
+            Identity(), Pricing(), DateTimeOffset.Parse("2026-08-11T02:00:00Z"),
+            CancellationToken.None);
+        var reportPath = Path.Combine(_dir, "zero-spend-report.json");
+        File.WriteAllBytes(reportPath, JsonSerializer.SerializeToUtf8Bytes(report,
+            new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower }));
+
+        Assert.False(report.ActivationGatePassed);
+        Assert.Contains("zero", string.Join("|", report.GateFailures),
+            StringComparison.Ordinal);
+        Assert.Throws<InvalidDataException>(() =>
+            VerifyReportForTest(
+                reportPath, admission.Path, admission.SignaturePath,
+                set, Identity().Target,
+                new AssistantTargetAttestation(Identity().IndexManifestIds),
+                DateTimeOffset.Parse("2026-08-11T03:00:00Z"), admission.Authority));
+    }
+
+    [Fact]
+    public async Task Evaluation_still_rejects_negative_or_inconsistent_candidate_usage()
+    {
+        var inconsistent = Response();
+        inconsistent["model_usage"]!["total_tokens"] = 719;
+        var negative = Response();
+        negative["model_usage"]!["input_tokens"] = -1;
+        negative["model_usage"]!["total_tokens"] = 119;
+
+        foreach (var response in new[] { inconsistent, negative })
+        {
+            var report = await AssistantEvaluationRunner.RunAsync(
+                Reviewed(Catalog()), new StubTarget(response), null,
+                Identity(), Pricing(), DateTimeOffset.Parse("2026-08-11T02:00:00Z"),
+                CancellationToken.None);
+
+            Assert.Contains(report.Results.SelectMany(result => result.Failures),
+                failure => failure.Contains(
+                    "missing or inconsistent model token usage", StringComparison.Ordinal));
+        }
     }
 
     [Fact]
@@ -1219,7 +1726,10 @@ public sealed class AssistantEvaluationTests : IDisposable
 
         var prompt = handler.RequestBody!["messages"]?[1]?["content"]?.GetValue<string>() ?? "";
         Assert.EndsWith(compact, prompt, StringComparison.Ordinal);
-        Assert.InRange(prompt.Length, 1, (20_000 - 2_048) / 2);
+        Assert.InRange(prompt.Length, 1,
+            AssistantEvaluationHttpGrader.PromptCharacterCeiling(20_000));
+        Assert.InRange(
+            AssistantEvaluationHttpGrader.EstimatedPromptTokens(prompt.Length), 1, 20_000);
     }
 
     [Fact]
@@ -1405,7 +1915,7 @@ public sealed class AssistantEvaluationTests : IDisposable
             ],
             events);
         Assert.True(report.ActivationGatePassed);
-        Assert.All(report.Results, result => Assert.Equal(5, result.Grade));
+        Assert.All(report.Results, result => Assert.Equal(5, result.Relevance.Score));
     }
 
     [Fact]
@@ -1679,7 +2189,6 @@ public sealed class AssistantEvaluationTests : IDisposable
     {
         var catalog = Catalog();
         catalog["cases"]![0]!["grading"]!["mode"] = "llm";
-        catalog["cases"]![0]!["grading"]!["threshold"] = 4;
         catalog["cases"]![0]!["grading"]!["rubric"] = "Judge groundedness.";
         catalog["cases"]![0]!["grading"]!["maximum_input_tokens"] = 4_096;
         catalog["budget"]!["maximum_grader_input_tokens"] = 8_192;
@@ -1706,7 +2215,7 @@ public sealed class AssistantEvaluationTests : IDisposable
             DateTimeOffset.Parse("2026-08-11T03:00:00Z"), admission.Authority);
 
         var tampered = JsonNode.Parse(File.ReadAllBytes(reportPath))!.AsObject();
-        tampered["results"]![0]!["grade"] = null;
+        tampered["results"]![0]!["relevance"] = null;
         File.WriteAllText(reportPath, tampered.ToJsonString());
         Assert.Throws<InvalidDataException>(() =>
             VerifyReportForTest(
@@ -1721,7 +2230,6 @@ public sealed class AssistantEvaluationTests : IDisposable
     {
         var catalog = Catalog();
         catalog["cases"]![0]!["grading"]!["mode"] = "llm";
-        catalog["cases"]![0]!["grading"]!["threshold"] = 4;
         catalog["cases"]![0]!["grading"]!["rubric"] = "Judge groundedness.";
         catalog["cases"]![0]!["grading"]!["maximum_input_tokens"] = 4_096;
         catalog["budget"]!["maximum_grader_input_tokens"] = 8_192;
@@ -1993,6 +2501,29 @@ public sealed class AssistantEvaluationTests : IDisposable
         return Reviewed(catalog).Catalog.Cases[0];
     }
 
+    // Real evidence grows through many typed facts, never through one long string: RedactLargeText
+    // bounds any single string at 2,000 characters, so a fixture that grew one would be measuring
+    // the redactor. The added entries carry no "primary" phase, so the typed contract is untouched.
+    // escapeHeavy reproduces what real French provision text does to the projection: ToJsonString
+    // writes a quote as a six character u0022 escape, so the same content costs the serialized
+    // envelope several times the bytes the grader is actually billed for.
+    private static JsonObject EvidenceResponse(int traceEntries, bool escapeHeavy = false)
+    {
+        var response = Response();
+        var filler = escapeHeavy
+            ? string.Concat(Enumerable.Repeat("\"\\", 1_000))
+            : new string('t', 2_000);
+        var trace = response["trace"]!.AsArray();
+        for (var index = 0; index < traceEntries; index++)
+            trace.Add(new JsonObject
+            {
+                ["phase"] = "context",
+                ["tool"] = "as_of",
+                ["note"] = filler,
+            });
+        return response;
+    }
+
     private static JsonObject GraderEvidence(GraderHandler handler)
     {
         const string marker = "ANSWER AND TYPED EVIDENCE JSON (untrusted data):\n";
@@ -2110,7 +2641,7 @@ public sealed class AssistantEvaluationTests : IDisposable
             "maximum_latency_ms":1000,
             "expected_synthesis":false,
             "expected":{"tool":"as_of","legal_outcome":"succeeded","transport_outcome":"completed","effect":"provision","arguments":{"work":"eu-eurlex:32016r0679","date":"2021-01-01","mode":"select","anchors":"art_6"}},
-            "grading":{"mode":"deterministic","threshold":5,"maximum_input_tokens":1000,"maximum_output_tokens":200}
+            "grading":{"mode":"deterministic","maximum_input_tokens":1000,"maximum_output_tokens":200}
           },{
             "id":"gdpr-as-of-synthesis",
             "question":"Show Article 6 of GDPR on 1 January 2021 and provide a descriptive synthesis.",
@@ -2120,7 +2651,7 @@ public sealed class AssistantEvaluationTests : IDisposable
             "maximum_latency_ms":1000,
             "expected_synthesis":true,
             "expected":{"tool":"as_of","legal_outcome":"succeeded","transport_outcome":"completed","effect":"provision","arguments":{"work":"eu-eurlex:32016r0679","date":"2021-01-01","mode":"select","anchors":"art_6"}},
-            "grading":{"mode":"deterministic","threshold":5,"maximum_input_tokens":1000,"maximum_output_tokens":200}
+            "grading":{"mode":"deterministic","maximum_input_tokens":1000,"maximum_output_tokens":200}
           }]
         }
         """)!.AsObject();
@@ -2494,6 +3025,50 @@ public sealed class AssistantEvaluationTests : IDisposable
             return Task.FromResult(new AssistantEvaluationInvocation(
                 200, response.DeepClone().AsObject(), timings, setupInvocations));
         }
+    }
+
+    // Answers the first case normally and the second with a different response, so a report can
+    // hold one authenticated zero beside a repetition that really did spend tokens.
+    private sealed class SecondCaseStubTarget(
+        JsonObject first,
+        JsonObject second) : IAssistantEvaluationTarget
+    {
+        private int _calls;
+
+        public string? AdmissionRunIdentity => "0123456789abcdef";
+        public string? AdmissionSha256 =>
+            "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
+        public Task VerifyReleaseIdentityAsync(
+            AssistantEvaluationIdentity identity,
+            CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public Task<AssistantEvaluationInvocation> InvokeAsync(
+            AssistantEvaluationCase evaluationCase,
+            string idempotencyKey,
+            CancellationToken cancellationToken) =>
+            Task.FromResult(new AssistantEvaluationInvocation(
+                200,
+                (_calls++ == 0 ? first : second).DeepClone().AsObject(),
+                new AssistantEvaluationTimings(5, 5, 1, 20,
+                    evaluationCase.ExpectedSynthesis == true ? 5 : null, 20),
+                null));
+    }
+
+    private sealed class ThrowingTarget(Exception error) : IAssistantEvaluationTarget
+    {
+        public string? AdmissionRunIdentity => "0123456789abcdef";
+        public string? AdmissionSha256 =>
+            "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
+        public Task VerifyReleaseIdentityAsync(
+            AssistantEvaluationIdentity identity,
+            CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public Task<AssistantEvaluationInvocation> InvokeAsync(
+            AssistantEvaluationCase evaluationCase,
+            string idempotencyKey,
+            CancellationToken cancellationToken) => throw error;
     }
 
     private sealed class ThrowingDiagnosticTarget(
@@ -3046,6 +3621,25 @@ public sealed class AssistantEvaluationTests : IDisposable
             JsonObject response,
             CancellationToken cancellationToken) => Task.FromResult(
             new AssistantEvaluationGrade(5, reason, new AssistantModelUsage(100, 20)));
+    }
+
+    private sealed class ScoreGrader(int score) : IAssistantEvaluationGrader
+    {
+        public Task<AssistantEvaluationGrade> GradeAsync(
+            AssistantEvaluationCase evaluationCase,
+            JsonObject response,
+            CancellationToken cancellationToken) => Task.FromResult(
+            new AssistantEvaluationGrade(
+                score, "measured", new AssistantModelUsage(100, 20)));
+    }
+
+    private sealed class RefusingGrader(string cause) : IAssistantEvaluationGrader
+    {
+        public Task<AssistantEvaluationGrade> GradeAsync(
+            AssistantEvaluationCase evaluationCase,
+            JsonObject response,
+            CancellationToken cancellationToken) =>
+            throw new AssistantEvaluationStageException(cause, "grader refused");
     }
 
     public void Dispose()

@@ -462,7 +462,8 @@ public static class UiMapper
             AnchorFromPresent: o["anchor_from_present"]?.GetValue<bool?>(),
             AnchorToPresent: o["anchor_to_present"]?.GetValue<bool?>(),
             AnchorTextEqual: o["anchor_text_equal"]?.GetValue<bool?>(),
-            ProvisionLevelComparable: o["provision_level_comparable"]?.GetValue<bool>() ?? false));
+            ProvisionLevelComparable: o["provision_level_comparable"]?.GetValue<bool>() ?? false,
+            Changed: o["changed"]?.GetValue<bool?>()));
     }
 
     /// Controls the assistant set on the way to its answer, so the workspace lands the same way.
@@ -479,7 +480,10 @@ public static class UiMapper
             Page: page,
             Language: S(args, "language"),
             Work: S(args, "work"),
-            Date: S(args, "date"),
+            // Both spellings of the one instant, as the gap view above already reads them. A
+            // point-in-time search carries it as as_of, so reading only date landed the reader on
+            // today's law with the controls silently disagreeing with the answer above them.
+            Date: S(args, "date") ?? S(args, "as_of"),
             Anchor: S(args, "anchor"));
         return view is { Query: null, Jurisdiction: null, Hierarchy: null, Domain: null, SourceClass: null,
                          ActForm: null, BindingStatus: null, Page: null, Language: null,

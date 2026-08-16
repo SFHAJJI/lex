@@ -28,6 +28,11 @@ internal sealed record AnswerDisclosure(
 
 internal static class OperationAnswerPolicy
 {
+    /// <summary>How many state dates a history line may name before the span is the kinder
+    /// summary. Chosen so the two histories a reader asks for most, a consolidated EU regulation
+    /// and a constitutional article, are answered with their dates rather than their bounds.</summary>
+    private const int MaximumListedHistoryDates = 12;
+
     public static string Render(
         string locale,
         IReadOnlyList<OperationResult> results,
@@ -180,19 +185,28 @@ internal static class OperationAnswerPolicy
                 ? fr
                     ? $"Lex ne peut pas produire de comparaison fiable de {Name(diff.Subject)} entre le {diff.FromDate} et le {diff.ToDate}, car les deux versions utilisent des profils d'extraction incompatibles. Le motif et les deux versions vérifiées de l'éditeur sont ouverts ci-dessous."
                     : $"Lex cannot produce a reliable comparison of {Name(diff.Subject)} between {diff.FromDate} and {diff.ToDate} because the two versions use incompatible extraction profiles. The reason and both verified publisher versions are open below."
-                : fr
-                    ? $"La comparaison vérifiée de {Name(diff.Subject)} entre le {diff.FromDate} et le {diff.ToDate} est affichée ci-dessous."
-                    : $"The verified comparison of {Name(diff.Subject)} between {diff.FromDate} and {diff.ToDate} is open below.";
+                : Comparison(fr, diff);
         if (effect.History is { } history)
         {
-            var first = history.States.Select(state => state.ValidFrom)
-                .Where(value => value.Length > 0).Order(StringComparer.Ordinal).FirstOrDefault();
-            var last = history.States.Select(state => state.ValidFrom)
-                .Where(value => value.Length > 0).Order(StringComparer.Ordinal).LastOrDefault();
-            var dates = first is null ? "" : first == last
-                ? (fr ? $", daté du {first}" : $", dated {first}")
-                : (fr ? $", du {first} au dernier état commençant le {last}"
-                    : $", from {first} through the latest state beginning {last}");
+            // The change dates themselves, because they are the answer to "when did this change?"
+            // and a count with an outer span is not one: the same six states between 1919 and 2023
+            // describe a different history for every distribution of dates inside them. Listed
+            // only when the view holds every state the publisher counted, so a bounded history
+            // never reads as the whole set; then the span says what it honestly is.
+            var starts = history.States.Select(state => state.ValidFrom)
+                .Where(value => value.Length > 0)
+                .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+            var dates = starts.Length switch
+            {
+                0 => "",
+                1 => fr ? $", daté du {starts[0]}" : $", dated {starts[0]}",
+                <= MaximumListedHistoryDates when starts.Length >= history.DistinctTexts => fr
+                    ? $", avec des états débutant les {string.Join(", ", starts)}"
+                    : $", with states beginning {string.Join(", ", starts)}",
+                _ => fr
+                    ? $", du {starts[0]} au dernier état commençant le {starts[^1]}"
+                    : $", from {starts[0]} through the latest state beginning {starts[^1]}",
+            };
             var semantics = history.Evidence?.Select(item => item.TimelineSemantics)
                 .FirstOrDefault(value => value is { Length: > 0 });
             var kind = semantics switch
@@ -205,9 +219,17 @@ internal static class OperationAnswerPolicy
                     : "publisher applicability states",
                 _ => fr ? "états de version de l'éditeur" : "publisher version states",
             };
+            // The expression, because this is the one named line whose subject carries no text.
+            // article_history filters to a single language and returns dates and digests only, so
+            // a reader who asked for the French article cannot see from the answer which of the
+            // work's expressions was read; art_11 of the Constitution exists in three, and they
+            // do not share a history.
+            var expression = history.Subject.Language is { Length: > 0 } language
+                ? (fr ? $"l'expression {language} de " : $"the {language} expression of ")
+                : "";
             return fr
-                ? $"L'historique vérifié de {history.Anchor} dans {Name(history.Subject)} contient {history.DistinctTexts:n0} texte(s) distinct(s){dates}. Ce sont des {kind}, pas des conclusions sur l'effet juridique."
-                : $"The verified history of {history.Anchor} in {Name(history.Subject)} contains {history.DistinctTexts:n0} distinct text(s){dates}. These are {kind}, not conclusions about legal effect.";
+                ? $"L'historique vérifié de {history.Anchor} dans {expression}{Name(history.Subject)} contient {history.DistinctTexts:n0} texte(s) distinct(s){dates}. Ce sont des {kind}, pas des conclusions sur l'effet juridique."
+                : $"The verified history of {history.Anchor} in {expression}{Name(history.Subject)} contains {history.DistinctTexts:n0} distinct text(s){dates}. These are {kind}, not conclusions about legal effect.";
         }
         if (effect.Timeline is { } timeline)
         {
@@ -255,14 +277,139 @@ internal static class OperationAnswerPolicy
             var facts = string.Join("; ", search.Results.Take(3)
                 .Select(fact => SearchFactLine(fact, fr)));
             return fr
-                ? $"Lex a trouvé {search.Results.Count:n0} correspondance(s) bornée(s) dans des dispositions publiées : {facts}."
-                : $"Lex found {search.Results.Count:n0} bounded publisher-provision match(es): {facts}.";
+                ? $"Lex a trouvé {search.Results.Count:n0} correspondance(s) bornée(s) dans des dispositions publiées{Scope(fr, search)} : {facts}."
+                : $"Lex found {search.Results.Count:n0} bounded publisher-provision match(es){Scope(fr, search)}: {facts}.";
         }
-        if (effect.Workspace is not null)
-            return fr ? "Les résultats correspondants sont affichés dans l'espace de recherche."
-                : "The matching results are open in the search workspace.";
+        if (effect.Workspace is { } navigation)
+            return fr
+                ? $"Lex a ouvert l'espace de recherche{Scope(fr, navigation)}. Les résultats correspondants y sont affichés."
+                : $"Lex opened the search workspace{Scope(fr, navigation)}. The matching results are open there.";
         return null;
     }
+
+    /// <summary>
+    /// Where a navigation navigated, under the same rule as <see cref="Name"/>.
+    ///
+    /// <para>This is the one effect that shows no law of its own, so the scope is the whole of its
+    /// identity. "The matching results are open" is unfalsifiable: a workspace opened on the wrong
+    /// query, in the wrong corpus, over the wrong expression or at the wrong instant reads exactly
+    /// like the one the reader asked for, and the reader has no second copy of their own question
+    /// to check it against. Every coordinate the directive actually sets is named, including the
+    /// filters Lex chose rather than the reader, because a silently narrowed population is the
+    /// selection error this clause exists to make correctable in one turn.</para>
+    ///
+    /// <para>Coordinates only, and never in quotation marks. A navigation quotes nothing, and the
+    /// query is the assistant's own words rather than a publisher's; the curly quotes the
+    /// provision line uses are the reader's one typographic signal of verified text, so a search
+    /// term wearing them would be model output dressed as law.</para>
+    /// </summary>
+    private static string Scope(bool fr, WorkspaceView workspace)
+    {
+        var terms = new List<string>(6);
+        void Add(string? value, string english, string french)
+        {
+            if (value is { Length: > 0 })
+                terms.Add($"{(fr ? french : english)} {Excerpt(value, 160)}");
+        }
+
+        if (workspace.Work is { Length: > 0 } work)
+            terms.Add(workspace.Anchor is { Length: > 0 } anchor
+                ? (fr ? $"{anchor} dans {work}" : $"{anchor} in {work}")
+                : work);
+        if (workspace.Query is { Length: > 0 } query)
+            terms.Add((fr ? "requête [" : "query [") + Excerpt(query, 160) + "]");
+        Add(workspace.Jurisdiction, "jurisdiction", "juridiction");
+        Add(workspace.Hierarchy, "hierarchy", "hiérarchie");
+        Add(workspace.Domain, "domain", "domaine");
+        Add(workspace.SourceClass, "source class", "classe source");
+        Add(workspace.ActForm, "act form", "forme");
+        Add(workspace.BindingStatus, "binding status", "statut");
+        Add(workspace.Language, "language", "langue");
+        if (workspace.Date is { Length: > 0 } date)
+            terms.Add(fr ? $"au {date}" : $"at {date}");
+        return terms.Count == 0 ? "" : (fr ? " pour " : " for ") + string.Join(", ", terms);
+    }
+
+    /// <summary>
+    /// How one comparison came out, in the reader's language, off the fields <c>diff</c> verified.
+    ///
+    /// <para>Every other effect states its result: the provision line quotes the text, the ranking
+    /// line gives the counts, the history line gives the span. This one used to announce that a
+    /// comparison existed and stop, which answers "did you compare?" rather than the question
+    /// actually asked. A reader given no outcome reads the silence as "nothing moved", and that is
+    /// the single reading Lex must never license.</para>
+    ///
+    /// <para>What is stated here is exactly what the tool verified and no more. Lex compares the
+    /// two stored provision texts by hash, so it can prove THAT the wording differs; it does not
+    /// compute the wording delta, and the sentence therefore never characterises the change. The
+    /// two publisher versions are named so the reader can go read it.</para>
+    /// </summary>
+    private static string Comparison(bool fr, DiffView diff)
+    {
+        var name = Name(diff.Subject);
+        var window = fr
+            ? $"entre le {diff.FromDate} et le {diff.ToDate}"
+            : $"between {diff.FromDate} and {diff.ToDate}";
+        var below = fr ? " Les deux versions vérifiées de l'éditeur sont ouvertes ci-dessous."
+            : " Both verified publisher versions are open below.";
+
+        if (diff.Subject.Anchor is { Length: > 0 } anchor)
+        {
+            var provision = ProvisionLabel(anchor);
+            // Presence is checked before wording because a provision absent on one side has no
+            // wording to compare, and "changed" would be the wrong word for an article that was
+            // introduced or repealed.
+            if (diff.AnchorFromPresent == true && diff.AnchorToPresent == false)
+                return (fr
+                    ? $"{provision} de {name} est présent uniquement à la date antérieure ({diff.FromDate}), et non au {diff.ToDate}."
+                    : $"{provision} of {name} is present only on the earlier date ({diff.FromDate}), not on {diff.ToDate}.") + below;
+            if (diff.AnchorFromPresent == false && diff.AnchorToPresent == true)
+                return (fr
+                    ? $"{provision} de {name} est présent uniquement à la date ultérieure ({diff.ToDate}), et non au {diff.FromDate}."
+                    : $"{provision} of {name} is present only on the later date ({diff.ToDate}), not on {diff.FromDate}.") + below;
+            if (diff.AnchorTextEqual == true)
+                return (fr
+                    ? $"{provision} de {name} a le même libellé au {diff.FromDate} et au {diff.ToDate}."
+                    : $"{provision} of {name} has the same wording on {diff.FromDate} and on {diff.ToDate}.") + below;
+            if (diff.AnchorTextEqual == false)
+                return (fr
+                    ? $"{provision} de {name} a un libellé différent au {diff.FromDate} et au {diff.ToDate}. Lex vérifie que les deux textes publiés diffèrent; il ne caractérise pas la modification."
+                    : $"{provision} of {name} has different wording on {diff.FromDate} and on {diff.ToDate}. Lex verifies that the two publisher texts differ; it does not characterise the change.") + below;
+            // Both sides held the provision but the texts could not be compared, which is a
+            // coverage limit rather than an outcome, and saying "changed" here would invent one.
+            return (fr
+                ? $"Lex ne peut pas comparer le libellé de {provision} de {name} {window}, car le texte publié n'est pas comparable des deux côtés."
+                : $"Lex cannot compare the wording of {provision} of {name} {window} because the publisher text is not comparable on both sides.") + below;
+        }
+
+        if (diff.Changed == false)
+            return (fr
+                ? $"La même version éditeur de {name} s'applique au {diff.FromDate} et au {diff.ToDate}."
+                : $"The same publisher version of {name} applies on {diff.FromDate} and on {diff.ToDate}.") + below;
+        if (diff.Changed == true)
+            return (fr
+                ? $"Une version éditeur différente de {name} s'applique au {diff.FromDate} et au {diff.ToDate}. Lex n'a pas comparé de disposition précise; indiquez un article pour obtenir un résultat au niveau de la disposition."
+                : $"A different publisher version of {name} applies on {diff.FromDate} and on {diff.ToDate}. Lex compared no single provision here; name an article for a provision-level outcome.") + below;
+        return fr
+            ? $"La comparaison vérifiée de {name} {window} est affichée ci-dessous."
+            : $"The verified comparison of {name} {window} is open below.";
+    }
+
+    /// <summary>
+    /// A reader's name for a provision anchor, and the anchor itself when there is no safe reading.
+    ///
+    /// <para>Anchors are minted per extraction profile, so only the plain <c>art_92</c> shape can
+    /// be turned into "Article 92" without guessing. Anything else is printed verbatim: it is what
+    /// <c>search</c> returned and what the reader can check, and inventing a prettier label for a
+    /// scheme this code does not own is how a comparison starts describing the parser.</para>
+    /// </summary>
+    internal static string ProvisionLabel(string anchor) =>
+        anchor.StartsWith("art_", StringComparison.Ordinal)
+        && System.Text.RegularExpressions.Regex.IsMatch(
+            anchor["art_".Length..], "^[0-9]+[a-z]?$",
+            System.Text.RegularExpressions.RegexOptions.CultureInvariant)
+            ? $"Article {anchor["art_".Length..]}"
+            : anchor;
 
     private static string SearchFactLine(SearchFact fact, bool french)
     {

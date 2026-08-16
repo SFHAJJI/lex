@@ -2352,6 +2352,72 @@ public sealed class AskOperationControllerTests : IDisposable
         try { File.Delete(_db); } catch { }
     }
 
+    /// <summary>
+    /// `search` is the one tool whose schema still lets the planner write the subject as free
+    /// text, and left alone it does: one unchanging question about the CRR produced four different
+    /// queries across six live runs, so the same question reached the index four different ways
+    /// and the case passed roughly one time in six. Once the preflight has identified the
+    /// instrument, the term that identified it is both the least invented thing available and the
+    /// one already proven to retrieve the work, so a paraphrase can only add variance.
+    /// </summary>
+    [Fact]
+    public async Task A_resolved_subject_is_searched_by_the_reader_s_own_term()
+    {
+        var planner = new StaticPlanner("en", new JsonArray(new JsonObject
+        {
+            ["tool"] = "search",
+            ["arguments"] = new JsonObject
+            {
+                ["query"] = "Capital Requirements Regulation (CRR)",
+                ["jurisdiction"] = "EU",
+                ["time_scope"] = "as_of",
+                ["as_of"] = "2021-01-01",
+            },
+        }));
+        var service = new AskService(_core, planner);
+
+        var response = await service.AskAsync(
+            History("Open the CRR workspace at 1 January 2021 without quoting or summarising it."),
+            Guid.NewGuid().ToString(), "law.test", CancellationToken.None);
+
+        Assert.Equal(200, response.Status);
+        var primary = Assert.Single(Assert.IsType<JsonArray>(response.Body["trace"])
+            .OfType<JsonObject>(), item => item["phase"]?.GetValue<string>() == "primary");
+        Assert.Equal("CRR", primary["args"]?["query"]?.GetValue<string>());
+        // The rest of the planner's arguments are untouched: only the subject was server-owned.
+        Assert.Equal("2021-01-01", primary["args"]?["as_of"]?.GetValue<string>());
+    }
+
+    /// <summary>
+    /// The counterpart, and the reason the binding is narrow. On a discovery turn no authority is
+    /// resolved, the planner's query IS the contribution, and binding it would answer a question
+    /// nobody asked.
+    /// </summary>
+    [Fact]
+    public async Task A_discovery_search_keeps_the_query_the_planner_wrote()
+    {
+        var planner = new StaticPlanner("en", new JsonArray(new JsonObject
+        {
+            ["tool"] = "search",
+            ["arguments"] = new JsonObject
+            {
+                ["query"] = "operational resilience requirements zebrafalcon",
+                ["jurisdiction"] = "EU",
+            },
+        }));
+        var service = new AskService(_core, planner);
+
+        var response = await service.AskAsync(
+            History("What does Lex hold about operational resilience requirements?"),
+            Guid.NewGuid().ToString(), "law.test", CancellationToken.None);
+
+        Assert.Equal(200, response.Status);
+        var primary = Assert.Single(Assert.IsType<JsonArray>(response.Body["trace"])
+            .OfType<JsonObject>(), item => item["phase"]?.GetValue<string>() == "primary");
+        Assert.Equal("operational resilience requirements zebrafalcon",
+            primary["args"]?["query"]?.GetValue<string>());
+    }
+
     private static JsonArray History(string question) =>
     [
         new JsonObject { ["role"] = "user", ["content"] = question },

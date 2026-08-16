@@ -428,7 +428,7 @@ These labels describe the evidence cited here, not a claim about an uninspected 
 <td>25-case live assistant evaluation</td>
 <td><strong>Next</strong></td>
 <td>Frozen reviewed catalog, exact candidate, Azure candidate deployment and separate grader deployment</td>
-<td>Real plan/freeze/execute requests, typed result checks, grader score, token/cost/latency and browser gates</td>
+<td>Real plan/freeze/execute requests, typed result checks, token/cost/latency and browser gates, with a reported relevance score beside each repetition</td>
 <td>Catalog review is separately signed; report and browser-evidence hashes are bound by the signed evaluation release</td>
 <td>Any repetition or budget failure denies promotion and returns the candidate to zero traffic.</td>
 </tr>
@@ -762,14 +762,14 @@ grader reasons.</p>
 <td>Bounded final reply, case-insensitively; it is a negative safety check, not the accuracy grader.</td>
 </tr>
 <tr>
-<td><code>grading.mode</code>, <code>threshold</code>, <code>rubric</code></td>
-<td>Selects deterministic-only or separate LLM grading and defines the pass score</td>
-<td>Deterministic contract failures are evaluated first. For LLM mode, the separate grader sees the question, rubric, bounded reply, operations and trace and returns a 1 to 5 score.</td>
+<td><code>grading.mode</code>, <code>rubric</code></td>
+<td>Selects deterministic-only or separate LLM grading, and states the one relevance question the judge is asked</td>
+<td>The separate grader sees the question, rubric, bounded reply, operations and trace and returns a relevance score of 1 to 5. That score is recorded per repetition and gates nothing: promotion is decided entirely by the deterministic contract checks. There is no threshold, because a pass mark nothing compares against would be a published claim the code does not keep.</td>
 </tr>
 <tr>
 <td><code>grading.maximum_input_tokens</code>, <code>grading.maximum_output_tokens</code></td>
 <td>Per-call Release grader ceilings, separate from candidate use</td>
-<td>Authenticated grader application programming interface (API) usage and aggregate grader budget. An unavailable or malformed grader fails closed.</td>
+<td>Authenticated grader application programming interface (API) usage and aggregate grader budget. A grader call that fails is recorded as an absent measurement naming its cause, never as a passing score; a run configured with no separate grader at all still fails closed.</td>
 </tr>
 <tr>
 <td>Aggregate budget and pricing</td>

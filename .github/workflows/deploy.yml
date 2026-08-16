@@ -431,6 +431,13 @@ jobs:
             cleanup_handoff_latest_ready=$(jq -r \
               '.handoff_latest_ready_revision // .remaining_inactive_revision' \
               "$cleanup_receipt")
+            # Both names become jq arguments and one of them becomes a $GITHUB_OUTPUT line. S is
+            # proved to be a live Azure revision by being a required member of every reviewed
+            # set; O is only ever tolerated, so a receipt could carry a newline through every
+            # gate unused and then inject a second output key, and the later key would win.
+            [[ "$cleanup_predecessor" =~ ^([a-z0-9][a-z0-9-]*)?$ ]] \
+              && [[ "$cleanup_survivor" =~ ^[a-z0-9][a-z0-9-]*$ ]] \
+              || { echo "::error::reviewed handoff revision names are not Azure revision names"; exit 2; }
             python3 - "$legacy_created" "$cleanup_predecessor_created" \
                 "$cleanup_survivor_created" <<'PY'
           import sys
@@ -508,6 +515,46 @@ jobs:
               || [ "$observed_running" = "RunningAtMaxScale" ]
           }
 
+          # Azure removes a superseded inactive revision on its own schedule. Run 31926644551
+          # held the reviewed A + S + R shape for 875 seconds and had still not removed S when it
+          # was cancelled, so a gate that waits for removal is waiting on something nobody
+          # controls. Require the revisions that carry the invariants, tolerate a reviewed handoff
+          # revision the platform has not removed yet, and keep the set closed: a name that is
+          # neither required nor named by the reviewed receipt is still a hard failure.
+          verify_revision_set() {
+            printf '%s' "$revisions" | jq -e \
+              --arg predecessor "$cleanup_predecessor" --arg survivor "$cleanup_survivor" '
+                ($ARGS.positional | sort) as $required
+                | ([$predecessor,$survivor] | map(select(. != "")) - $required) as $tolerated
+                | ([.[].name] | sort) as $observed
+                | ($required | unique) == $required
+                and ($observed | unique) == $observed
+                and (($required - $observed) | length) == 0
+                and ((($observed - $required) - $tolerated) | length) == 0' \
+              --args "$@" >/dev/null
+          }
+
+          # Tolerating a retained revision is only safe while it is still the reviewed one, so
+          # whichever of O and S Azure has kept is re-proved inactive at zero traffic against the
+          # receipt's createdTime, image and canonical template digest. Retention can then never
+          # become a live route back into an unreviewed template.
+          verify_reviewed_handoff_retention() {
+            if [ -n "$cleanup_predecessor" ] && printf '%s' "$revisions" \
+                | jq -e --arg name "$cleanup_predecessor" 'any(.[]; .name == $name)' \
+                  >/dev/null; then
+              verify_bootstrap_handoff_identity "$cleanup_predecessor" false 0 \
+                "$cleanup_predecessor_created" "$cleanup_predecessor_image" \
+                "$cleanup_predecessor_template" false || return 1
+            fi
+            if printf '%s' "$revisions" \
+                | jq -e --arg name "$cleanup_survivor" 'any(.[]; .name == $name)' >/dev/null; then
+              verify_bootstrap_handoff_identity "$cleanup_survivor" false 0 \
+                "$cleanup_survivor_created" "$cleanup_survivor_image" \
+                "$cleanup_survivor_template" false || return 1
+            fi
+            return 0
+          }
+
           verify_created_after() {
             python3 - "$1" "$2" <<'PY'
           import sys
@@ -535,119 +582,58 @@ jobs:
                 latestReadyRevisionName:properties.latestReadyRevisionName}' -o json) || return 1
             case "$expected" in
               before-fallback)
-                # Exact A + predecessor + survivor, or reviewed A + survivor when O is absent.
-                if [ -n "$cleanup_predecessor" ]; then
-                  printf '%s' "$revisions" | jq -e --arg authority "$previous" \
-                    --arg predecessor "$cleanup_predecessor" --arg survivor "$cleanup_survivor" '
-                      ([.[].name] | sort) == ([$authority,$predecessor,$survivor] | sort)' \
-                    >/dev/null || return 1
-                else
-                  printf '%s' "$revisions" | jq -e --arg authority "$previous" \
-                    --arg survivor "$cleanup_survivor" '
-                      ([.[].name] | sort) == ([$authority,$survivor] | sort)' \
-                    >/dev/null || return 1
-                fi
+                # Reviewed A + S. S is required because it is the only rollback until R exists,
+                # and maxInactiveRevisions=1 keeps the newest inactive revision. O is whichever
+                # revision the receipt already recorded as the one being removed.
+                verify_revision_set "$previous" "$cleanup_survivor" || return 1
                 verify_bootstrap_handoff_identity "$previous" true 100 "$legacy_created" \
                   "$legacy_image" "$legacy_template_digest" true || return 1
-                if [ -n "$cleanup_predecessor" ]; then
-                  verify_bootstrap_handoff_identity "$cleanup_predecessor" false 0 \
-                    "$cleanup_predecessor_created" "$cleanup_predecessor_image" \
-                    "$cleanup_predecessor_template" false || return 1
-                fi
-                verify_bootstrap_handoff_identity "$cleanup_survivor" false 0 \
-                  "$cleanup_survivor_created" "$cleanup_survivor_image" \
-                  "$cleanup_survivor_template" false || return 1
+                verify_reviewed_handoff_retention || return 1
                 expected_latest="$cleanup_survivor"
                 expected_ready="$cleanup_handoff_latest_ready"
+                # The receipt may record O as the last ready revision and Azure may remove O at
+                # any moment. Both handoff revisions are proved inactive at zero traffic above,
+                # so either name is an acceptable value for a pointer that routes nothing.
+                expected_previous_ready="$cleanup_survivor"
                 ;;
               fallback-active|fallback-recoverable)
-                # Receipt-exact A + optional predecessor + survivor + R.
-                if [ -n "$cleanup_predecessor" ]; then
-                  printf '%s' "$revisions" | jq -e --arg authority "$previous" \
-                    --arg predecessor "$cleanup_predecessor" --arg survivor "$cleanup_survivor" \
-                    --arg fallback "$bootstrap_fallback" '
-                      ([.[].name] | sort)
-                        == ([$authority,$predecessor,$survivor,$fallback] | sort)' \
-                    >/dev/null || return 1
-                  verify_bootstrap_handoff_identity "$cleanup_predecessor" false 0 \
-                    "$cleanup_predecessor_created" "$cleanup_predecessor_image" \
-                    "$cleanup_predecessor_template" false || return 1
-                else
-                  printf '%s' "$revisions" | jq -e --arg authority "$previous" \
-                    --arg survivor "$cleanup_survivor" --arg fallback "$bootstrap_fallback" '
-                      ([.[].name] | sort) == ([$authority,$survivor,$fallback] | sort)' \
-                    >/dev/null || return 1
-                fi
+                # Reviewed A + R, with either handoff revision tolerated while Azure holds it.
+                # R itself carries the rollback from here on: it is proved below against the same
+                # immutable image and canonical template digest as the candidate.
+                verify_revision_set "$previous" "$bootstrap_fallback" || return 1
                 verify_bootstrap_handoff_identity "$previous" true 100 "$legacy_created" \
                   "$legacy_image" "$legacy_template_digest" true || return 1
-                verify_bootstrap_handoff_identity "$cleanup_survivor" false 0 \
-                  "$cleanup_survivor_created" "$cleanup_survivor_image" \
-                  "$cleanup_survivor_template" false || return 1
                 ready_requirement=false
                 [ "$expected" != "fallback-active" ] || ready_requirement=true
                 verify_bootstrap_handoff_identity "$bootstrap_fallback" true 0 \
                   "$fallback_created" "$IMAGE" "$canonical_template_digest" \
                   "$ready_requirement" || return 1
+                verify_reviewed_handoff_retention || return 1
                 expected_latest="$bootstrap_fallback"
                 [ "$expected" != "fallback-recoverable" ] \
                   || expected_previous_ready="$cleanup_survivor"
                 ;;
-              fallback-pruning)
-                # R is inactive while Azure removes receipt-bound O/S oldest first.
-                if [ -n "$cleanup_predecessor" ]; then
-                  printf '%s' "$revisions" | jq -e --arg authority "$previous" \
-                    --arg predecessor "$cleanup_predecessor" --arg survivor "$cleanup_survivor" \
-                    --arg fallback "$bootstrap_fallback" '
-                      (([.[].name] | sort)
-                          == ([$authority,$predecessor,$survivor,$fallback] | sort))
-                      or (([.[].name] | sort)
-                          == ([$authority,$survivor,$fallback] | sort))' \
-                    >/dev/null || return 1
-                  if printf '%s' "$revisions" | jq -e --arg predecessor "$cleanup_predecessor" \
-                      'any(.[]; .name == $predecessor)' >/dev/null; then
-                    verify_bootstrap_handoff_identity "$cleanup_predecessor" false 0 \
-                      "$cleanup_predecessor_created" "$cleanup_predecessor_image" \
-                      "$cleanup_predecessor_template" false || return 1
-                  fi
-                else
-                  printf '%s' "$revisions" | jq -e --arg authority "$previous" \
-                    --arg survivor "$cleanup_survivor" --arg fallback "$bootstrap_fallback" '
-                      ([.[].name] | sort) == ([$authority,$survivor,$fallback] | sort)' \
-                    >/dev/null || return 1
-                fi
-                verify_bootstrap_handoff_identity "$previous" true 100 "$legacy_created" \
-                  "$legacy_image" "$legacy_template_digest" true || return 1
-                verify_bootstrap_handoff_identity "$cleanup_survivor" false 0 \
-                  "$cleanup_survivor_created" "$cleanup_survivor_image" \
-                  "$cleanup_survivor_template" false || return 1
-                verify_bootstrap_handoff_identity "$bootstrap_fallback" false 0 \
-                  "$fallback_created" "$IMAGE" "$canonical_template_digest" false || return 1
-                expected_latest="$bootstrap_fallback"
-                ;;
               fallback-inactive|fallback-inactive-recovery)
-                # Exact A + R; superseded O/S must be absent.
-                printf '%s' "$revisions" | jq -e --arg authority "$previous" \
-                  --arg fallback "$bootstrap_fallback" '
-                    ([.[].name] | sort) == ([$authority,$fallback] | sort)' \
-                  >/dev/null || return 1
+                # Reviewed A + R with R inactive. This is where run 31926644551 stalled: the
+                # state it demanded was A + R alone, which Azure alone decides when to produce.
+                verify_revision_set "$previous" "$bootstrap_fallback" || return 1
                 verify_bootstrap_handoff_identity "$previous" true 100 "$legacy_created" \
                   "$legacy_image" "$legacy_template_digest" true || return 1
                 verify_bootstrap_handoff_identity "$bootstrap_fallback" false 0 \
                   "$fallback_created" "$IMAGE" "$canonical_template_digest" false || return 1
+                verify_reviewed_handoff_retention || return 1
                 expected_latest="$bootstrap_fallback"
                 [ "$expected" != "fallback-inactive-recovery" ] \
                   || expected_previous_ready="$cleanup_survivor"
                 ;;
               candidate-active|candidate-recoverable|candidate-retained|candidate-prepared)
-                # Exact A + R + C.
-                printf '%s' "$revisions" | jq -e --arg authority "$previous" \
-                  --arg fallback "$bootstrap_fallback" --arg candidate "$candidate" '
-                    ([.[].name] | sort) == ([$authority,$fallback,$candidate] | sort)' \
-                  >/dev/null || return 1
+                # Reviewed A + R + C, with either handoff revision tolerated while Azure holds it.
+                verify_revision_set "$previous" "$bootstrap_fallback" "$candidate" || return 1
                 verify_bootstrap_handoff_identity "$previous" true 100 "$legacy_created" \
                   "$legacy_image" "$legacy_template_digest" true || return 1
                 verify_bootstrap_handoff_identity "$bootstrap_fallback" false 0 \
                   "$fallback_created" "$IMAGE" "$canonical_template_digest" false || return 1
+                verify_reviewed_handoff_retention || return 1
                 ready_requirement=false
                 { [ "$expected" != "candidate-active" ] \
                   && [ "$expected" != "candidate-prepared" ]; } || ready_requirement=true
@@ -661,16 +647,14 @@ jobs:
                 [ "$expected" != "candidate-retained" ] || expected_limit=2
                 ;;
               candidate-inactive)
-                printf '%s' "$revisions" | jq -e --arg authority "$previous" \
-                  --arg fallback "$bootstrap_fallback" --arg candidate "$candidate" '
-                    ([.[].name] | sort) == ([$authority,$fallback,$candidate] | sort)' \
-                  >/dev/null || return 1
+                verify_revision_set "$previous" "$bootstrap_fallback" "$candidate" || return 1
                 verify_bootstrap_handoff_identity "$previous" true 100 "$legacy_created" \
                   "$legacy_image" "$legacy_template_digest" true || return 1
                 verify_bootstrap_handoff_identity "$bootstrap_fallback" false 0 \
                   "$fallback_created" "$IMAGE" "$canonical_template_digest" false || return 1
                 verify_bootstrap_handoff_identity "$candidate" false 0 \
                   "$candidate_created" "$IMAGE" "$canonical_template_digest" false || return 1
+                verify_reviewed_handoff_retention || return 1
                 expected_latest="$candidate"
                 expected_previous_ready="$bootstrap_fallback"
                 expected_limit=2
@@ -761,7 +745,7 @@ jobs:
                 fi
                 verify_created_after "$fallback_created" "$candidate_created" || return 1
                 if verify_bootstrap_forward_topology candidate-inactive; then
-                  echo "exact C was already inactive"
+                  echo "C is already inactive at zero traffic"
                   echo "bootstrap failed safely; a fresh reviewed resume receipt is required"
                   return 0
                 fi
@@ -811,7 +795,7 @@ jobs:
                 for attempt in $(seq 1 60); do
                   if verify_bootstrap_forward_topology fallback-inactive-recovery \
                       >/dev/null 2>&1; then
-                    echo "exact R was already inactive"
+                    echo "R is already inactive at zero traffic"
                     echo "bootstrap failed safely; a fresh reviewed resume receipt is required"
                     return 0
                   fi
@@ -820,19 +804,13 @@ jobs:
                     fallback_active=true
                     break
                   fi
-                  verify_bootstrap_forward_topology fallback-pruning \
-                    >/dev/null 2>&1 || return 1
                   sleep 10
                 done
                 [ "$fallback_active" = true ] || return 1
                 deactivate_revision "$bootstrap_fallback" || return 1
                 for attempt in $(seq 1 30); do
-                  if verify_bootstrap_forward_topology fallback-inactive-recovery \
-                      >/dev/null 2>&1; then
-                    break
-                  fi
-                  verify_bootstrap_forward_topology fallback-pruning \
-                    >/dev/null 2>&1 || return 1
+                  verify_bootstrap_forward_topology fallback-inactive-recovery \
+                    >/dev/null 2>&1 && break
                   sleep 10
                 done
                 verify_bootstrap_forward_topology fallback-inactive-recovery || return 1
@@ -895,13 +873,19 @@ jobs:
             local state
             state=$(az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \
               --all -o json) || return 1
+            # The active set and the inactive set are each pinned by name, so the inventory stays
+            # closed without counting revisions: only a reviewed handoff revision Azure has not
+            # removed yet may appear beyond A, R and C, and the sole traffic bearer below proves
+            # every one of them routes nothing.
             printf '%s' "$state" | jq -e \
               --arg current "$previous" --arg rollback "$bootstrap_fallback" \
-              --arg candidate "$candidate" '
-                length == 3
-                and ([.[] | select(.properties.active == true) | .name] | sort)
+              --arg candidate "$candidate" \
+              --arg predecessor "$cleanup_predecessor" --arg survivor "$cleanup_survivor" '
+                ([$predecessor,$survivor] | map(select(. != ""))) as $tolerated
+                | ([.[] | select(.properties.active == true) | .name] | sort)
                   == ([$current,$candidate] | sort)
-                and ([.[] | select(.properties.active == false) | .name] == [$rollback])
+                and (([.[] | select(.properties.active == false) | .name] | sort) - $tolerated)
+                  == [$rollback]
                 and ([.[] | select((.properties.trafficWeight // 0) > 0)] | length) == 1
                 and (any(.[]; .name == $current and .properties.active == true
                   and (.properties.trafficWeight // 0) == 100))
@@ -928,7 +912,7 @@ jobs:
           else
             verify_bootstrap_legacy_inventory
             verify_bootstrap_forward_topology before-fallback \
-              || { echo "::error::bootstrap preparation requires exact reviewed A + O + S"; exit 1; }
+              || { echo "::error::bootstrap preparation requires the reviewed A + S inventory"; exit 1; }
           fi
           # A revision is immutable and its inputs are code plus the complete artifact set.
           # Include the run identity as well so an exact deployment can be retried safely.
@@ -1035,18 +1019,21 @@ jobs:
             verify_bootstrap_forward_topology fallback-active \
               || { echo "::error::reviewed bootstrap topology changed before R deactivation"; exit 1; }
             deactivate_revision "$bootstrap_fallback"
+            # Only R's own deactivation has to become visible here, and the call above already
+            # read it back on the revision itself. The one tolerated interim reading is the list
+            # still reporting R active; anything else is drift and fails immediately.
             for attempt in $(seq 1 60); do
               if verify_bootstrap_forward_topology fallback-inactive \
                   >/dev/null 2>&1; then
                 break
               fi
-              verify_bootstrap_forward_topology fallback-pruning \
+              verify_bootstrap_forward_topology fallback-recoverable \
                 >/dev/null 2>&1 \
-                || { echo "::error::bootstrap topology drifted while R retention converged"; exit 1; }
+                || { echo "::error::bootstrap topology drifted while R deactivation settled"; exit 1; }
               sleep 10
             done
             verify_bootstrap_forward_topology fallback-inactive \
-              || { echo "::error::R deactivation did not converge to exact A + R"; exit 1; }
+              || { echo "::error::R did not settle to inactive at zero traffic beside A"; exit 1; }
           fi
           if [ "$bootstrap" = "true" ]; then
             verify_bootstrap_forward_topology fallback-inactive \
@@ -1390,6 +1377,9 @@ jobs:
           echo "retained_rollback=$prior_rollback" >> "$GITHUB_OUTPUT"
           echo "candidate=$candidate" >> "$GITHUB_OUTPUT"
           echo "bootstrap_fallback=$bootstrap_fallback" >> "$GITHUB_OUTPUT"
+          # The final gate has to tolerate the same reviewed leftovers this step does, and it can
+          # only do that without loosening if it is told their exact names.
+          echo "bootstrap_retained=$cleanup_predecessor $cleanup_survivor" >> "$GITHUB_OUTPUT"
           echo "canonical_template_digest=$canonical_template_digest" >> "$GITHUB_OUTPUT"
           echo "bootstrap_cleanup_run_id=${BOOTSTRAP_CLEANUP_RUN_ID:-}" >> "$GITHUB_OUTPUT"
           echo "bootstrap_cleanup_plan_sha256=${BOOTSTRAP_CLEANUP_PLAN_SHA256:-}" >> "$GITHUB_OUTPUT"
@@ -1402,6 +1392,7 @@ jobs:
           CANDIDATE_OUTCOME: ${{ steps.candidate.outcome }}
           CANDIDATE_REVISION: ${{ steps.candidate.outputs.candidate }}
           BOOTSTRAP_FALLBACK: ${{ steps.candidate.outputs.bootstrap_fallback }}
+          BOOTSTRAP_RETAINED: ${{ steps.candidate.outputs.bootstrap_retained }}
         run: |
           set -u
           . scripts/deploy/az-retry.sh
@@ -1419,20 +1410,29 @@ jobs:
               -n "$CONTAINER_APP" --query properties.configuration.maxInactiveRevisions -o tsv)
             prepared=$(az_retry az containerapp revision list -g "$RESOURCE_GROUP" \
               -n "$CONTAINER_APP" --all -o json)
+            # Naming both sets closes the inventory without counting revisions: the only names
+            # that may appear beyond A, C and R are the reviewed handoff revisions this run was
+            # authorized against. The shell counter above already refuses two traffic bearers,
+            # but this filter is read on its own as the definition of a prepared bootstrap, so
+            # it carries the single-authority clause itself rather than inheriting it.
             printf '%s' "$prepared" | jq -e --arg current "$current" \
                 --arg candidate "$CANDIDATE_REVISION" --arg fallback "$BOOTSTRAP_FALLBACK" \
+                --arg retained "$BOOTSTRAP_RETAINED" \
                 --argjson limit "$inactive_limit" '
-                  $limit == 1 and length == 3
+                  ($retained | split(" ") | map(select(. != ""))) as $tolerated
+                  | $limit == 1
                   and ([.[] | select(.properties.active == true) | .name] | sort)
                     == ([$current,$candidate] | sort)
-                  and ([.[] | select(.properties.active == false) | .name] == [$fallback])
+                  and (([.[] | select(.properties.active == false) | .name] | sort) - $tolerated)
+                    == [$fallback]
+                  and ([.[] | select((.properties.trafficWeight // 0) > 0)] | length) == 1
                   and any(.[]; .name == $current
                     and (.properties.trafficWeight // 0) == 100)
                   and any(.[]; .name == $candidate
                     and (.properties.trafficWeight // 0) == 0)
                   and any(.[]; .name == $fallback
                     and (.properties.trafficWeight // 0) == 0)' >/dev/null \
-              || { echo "::error::bootstrap candidate preparation did not remain exact"; exit 1; }
+              || { echo "::error::bootstrap candidate preparation drifted from the reviewed inventory"; exit 1; }
             exit 0
           fi
           active=$(az containerapp revision list -g "$RESOURCE_GROUP" -n "$CONTAINER_APP" \

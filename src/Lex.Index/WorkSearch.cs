@@ -130,6 +130,44 @@ public static class WorkSearch
         Normalize(value).Split(' ', StringSplitOptions.RemoveEmptyEntries)
             is [var first, ..] && ActFormDesignations.Contains(first);
 
+    /// <summary>
+    /// Whether the sentence cites an instrument the way a reader actually cites one here: an act
+    /// form, an optional amendment qualifier, and a full day-month-year date. A Luxembourg statute
+    /// carries no short title in this index, so this is the only citation shape available.
+    ///
+    /// <para>A DETECTOR, never a selector. 93 of the 401 loi dates that look unique in this index
+    /// are provably not unique in the statute book, by the index's own citation graph, so a date
+    /// may never CHOOSE a work. It may only establish that the turn named one, which is enough to
+    /// turn an unresolved turn into a clarification instead of a search for different words.</para>
+    ///
+    /// <para>The date must sit against the act form. "laws in Lex were in force on 1 June 2024"
+    /// names no instrument, and a pattern loose enough to catch that would refuse genuine
+    /// discovery.</para>
+    /// </summary>
+    public static bool CitesInstrumentByDate(string query)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        return InstrumentByDate.IsMatch(Normalize(query));
+    }
+
+    // The adjective that qualifies an act form sits between the form and the date, and in this
+    // corpus it usually does: reglement grand-ducal is the largest category by far, 656 of 1402
+    // works against 594 for loi. A closed list rather than a wildcard, because widening this to
+    // "any word" would let a coverage question that merely mentions laws and a date read as a
+    // citation, and the whole value of the detector is that it does not.
+    private static readonly string[] ActFormAdjectives =
+        ["grand ducal", "ministeriel", "ministerielle", "communal", "communale"];
+
+    private static readonly Regex InstrumentByDate = new(
+        @"\b(?:loi|lois|reglement|reglements|arrete|arretes|decret|decrets|ordonnance"
+        + @"|law|laws|act|acts)\s+(?:(?:" + string.Join('|', ActFormAdjectives) + @")\s+)?"
+        + @"(?:(?:" + string.Join('|', CitationQualifiers)
+        + @"|amended)\s+)?(?:of|du|de|des|dated)\s+(?:the\s+)?\d{1,2}(?:er)?\s+"
+        + @"(?:janvier|fevrier|mars|avril|mai|juin|juillet|aout|septembre|octobre|novembre"
+        + @"|decembre|january|february|march|april|may|june|july|august|september|october"
+        + @"|november|december)\s+\d{4}\b",
+        RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
     internal static void Populate(
         SqliteConnection connection,
         IReadOnlyList<DocRow> docs,

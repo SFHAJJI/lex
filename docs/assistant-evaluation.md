@@ -50,11 +50,15 @@ alternative. The EU in-force case therefore accepts `publisher=eu-eurlex` or `ju
 never an unscoped call. Alternative-owned values must also be consistent: exact redundant EU scope
 is permitted, but `jurisdiction=EU` together with `publisher=lu-legilux` fails. A compound case
 checks every typed operation and primary call in reviewed order. A setup turn that declares its own
-expected contract is checked before the final continuation is allowed. Every frozen case also
-requires the configured separate release grader; an
-unavailable or malformed grader fails the case. The grader compares the question and rubric with
-the bounded final reply, typed operations and trace. It does not replace deterministic plan,
-argument, outcome, effect or stream checks. Publisher-text, metadata and tool-output injection are additionally exercised at the
+expected contract is checked before the final continuation is allowed. Every frozen case is also
+measured by the configured separate release grader, which compares the question and one relevance
+rubric with the bounded final reply, typed operations and trace and returns a score of 1 to 5. That
+score asks the only thing code cannot decide, whether the answer addressed the question that was
+asked at the right scope, and it is reported rather than gated: the deterministic checks above
+decide promotion on their own. Groundedness is deliberately not asked, because it is enforced
+structurally and a judge re-checking it would measure the architecture rather than the answer. A
+grader call that fails is recorded as an absent measurement naming its cause, never as a passing
+score, while a run configured with no separate grader at all still fails closed. Publisher-text, metadata and tool-output injection are additionally exercised at the
 code-enforced evidence boundary by the release test suite; the black-box cases exercise
 same-thread user and quoted-evidence channels through the production opaque-thread API.
 Measured assistant and grader usage must remain within both the per-case ceilings and aggregate
@@ -200,3 +204,29 @@ integration, browser and controlled transport coverage are recorded in
 [`assistant-evaluation-scenario-matrix.md`](assistant-evaluation-scenario-matrix.md). Only the exact
 catalog digest covered by `assistant-cases-v3.review.json` and its detached signature may authorize
 inference; any catalog-byte change requires a new owner review and signature.
+
+## One verdict is doing two jobs
+
+`activation_gate_passed` currently answers two different questions at once: were the answers right,
+and were they produced within budget. Both are legitimate release gates and neither should be
+dropped, but they are not the same gate. A wrong law and an expensive answer fail identically today,
+so the verdict cannot be diagnosed from the outside without reading the per-result reasons.
+
+That is the same category error the runner made one layer down, where two bare catches collapsed
+local validation rejections, contract-shape assertions and genuine network faults into one string
+and 22 of 34 failures became unexplainable. For a product whose claim is that an answer can be
+checked rather than trusted, a verdict you cannot check is off message.
+
+The intended shape is two verdicts. Correctness answers whether every repetition met its typed
+contract and its reviewed rubric. Budget answers what the run cost in tokens, latency and euros,
+against its own thresholds and its own owner. Then a cost regression is visible without being
+mistaken for a legal error, and a legal error is never excused by having been cheap.
+
+Until that split lands, the per-case ceilings are sized at three times the worst value measured on
+code whose typed contract passes, so that no ceiling can decide a correctness result. They remain
+runaway guards, which is the only job a ceiling should have. The measurements behind those numbers
+were taken against a local artifact mounting the candidate's exact signed index set: worst candidate
+input 6,162 tokens, worst candidate output 4,881, worst latency 38,112 ms, and a largest grader
+evidence payload of 49,547 characters. The previous 3,000 token output ceiling was below the only
+case required to synthesise, and the previous 20,000 token grader input ceiling sat inside
+measurement error of that largest payload.

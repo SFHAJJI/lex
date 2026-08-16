@@ -68,10 +68,33 @@ public sealed class BootstrapLegacyRecoveryWorkflowTests
         Assert.Contains("verify_bootstrap_forward_topology fallback-inactive", deploy);
         Assert.Contains("verify_bootstrap_forward_topology candidate-active", deploy);
         Assert.Contains("verify_bootstrap_forward_topology candidate-prepared", deploy);
-        Assert.Contains("A + predecessor + survivor", deploy);
-        Assert.Contains("A + optional predecessor + survivor + R", deploy);
-        Assert.Contains("Exact A + R; superseded O/S must be absent", deploy);
-        Assert.Contains("A + R + C", deploy);
+        // Those stages used to be pinned by an exact revision set, which is what stalled run
+        // 31926644551 waiting on a prune only Azure can schedule. The inventory is still closed
+        // by name at every stage: the roles this run owns are required, and no other name is
+        // admitted unless the reviewed receipt itself supplied it.
+        Assert.Contains("verify_revision_set \"$previous\" \"$cleanup_survivor\" || return 1",
+            deploy);
+        Assert.Contains("verify_revision_set \"$previous\" \"$bootstrap_fallback\" || return 1",
+            deploy);
+        Assert.Contains("verify_revision_set \"$previous\" \"$bootstrap_fallback\" "
+            + "\"$candidate\" || return 1", deploy);
+        Assert.Contains("--arg predecessor \"$cleanup_predecessor\" "
+            + "--arg survivor \"$cleanup_survivor\"", deploy);
+        Assert.Contains("(($required - $observed) | length) == 0", deploy);
+        Assert.Contains("((($observed - $required) - $tolerated) | length) == 0", deploy);
+        Assert.DoesNotContain("([.[].name] | sort) ==", deploy);
+        // Tolerating O or S is only safe while they are still the identities that were reviewed,
+        // so wherever either survives it is re-proved inactive at zero traffic against the
+        // receipt's own createdTime, image and canonical template digest.
+        Assert.Contains("verify_reviewed_handoff_retention || return 1", deploy);
+        Assert.Contains("verify_bootstrap_handoff_identity \"$cleanup_predecessor\" false 0",
+            deploy);
+        Assert.Contains("verify_bootstrap_handoff_identity \"$cleanup_survivor\" false 0",
+            deploy);
+        // O is never a required set member, so nothing else proves it is a live revision name.
+        // It reaches $GITHUB_OUTPUT, where an embedded newline would inject a second key.
+        Assert.Contains("[[ \"$cleanup_predecessor\" =~ ^([a-z0-9][a-z0-9-]*)?$ ]] \\\n"
+            + "              && [[ \"$cleanup_survivor\" =~ ^[a-z0-9][a-z0-9-]*$ ]]", deploy);
         Assert.Contains("60); do", deploy);
     }
 
@@ -137,7 +160,25 @@ public sealed class BootstrapLegacyRecoveryWorkflowTests
             recovery);
         Assert.Contains("verify_bootstrap_forward_topology fallback-inactive-recovery",
             recovery);
-        Assert.Contains("verify_bootstrap_forward_topology fallback-pruning", recovery);
+        // fallback-pruning meant "the invariants already hold but Azure has not removed O or S
+        // yet". The target states now tolerate a receipt-named leftover themselves, so that
+        // wait state has no shape left of its own and is gone. What it guarded is asserted here.
+        Assert.DoesNotContain("fallback-pruning", deploy);
+        // It gated a wait loop, so recovery may still only leave the loop through a verified
+        // topology, may only deactivate R after one reported R active, and may only report a
+        // safe failure after re-verifying the settled topology unconditionally.
+        Assert.Contains("[ \"$fallback_active\" = true ] || return 1\n"
+            + "                deactivate_revision \"$bootstrap_fallback\" || return 1",
+            recovery);
+        Assert.Contains(
+            "verify_bootstrap_forward_topology fallback-inactive-recovery || return 1",
+            recovery);
+        // On the forward path the guard survives literally: while R settles, the one tolerated
+        // interim reading is R still active, and any other reading exits at once.
+        Assert.Contains("verify_bootstrap_forward_topology fallback-recoverable \\\n"
+            + "                >/dev/null 2>&1 \\\n"
+            + "                || { echo \"::error::bootstrap topology drifted while "
+            + "R deactivation settled\"; exit 1; }", deploy);
         var fallbackRecovery = recovery[recovery.IndexOf(
             "elif [ \"$fallback_patch_attempted\" = true ]; then",
             StringComparison.Ordinal)..];

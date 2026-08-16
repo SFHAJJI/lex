@@ -158,6 +158,125 @@ public sealed class OperationPolicyTests
         Assert.DoesNotContain(" in ", rendered, StringComparison.Ordinal);
     }
 
+    // A navigation is the one answer that shows no law of its own, so its scope IS its identity.
+    // Told only that "the matching results are open", a reader cannot tell the workspace Lex
+    // opened on the wrong query, in the wrong corpus or at the wrong instant from the one they
+    // asked for, which is the same blindness the named provision and diff lines exist to remove.
+    [Fact]
+    public void A_navigation_that_shows_no_law_still_names_its_scope_and_its_instant()
+    {
+        var arguments = new JsonObject
+        {
+            ["query"] = "CRR",
+            ["jurisdiction"] = "EU",
+            ["language"] = "en",
+            ["time_scope"] = "as_of",
+            ["as_of"] = "2021-01-01",
+        };
+        var effect = UiMapper.From("search", arguments, new JsonArray(new JsonObject
+        {
+            ["envelope"] = new JsonObject { ["status"] = McpStatus.Ok },
+            ["hits"] = new JsonArray(),
+        }));
+        var operation = RequestedOperation.CreatePlanned("req:op-1", 0, "search", arguments);
+        var result = new OperationExecution(operation).Complete(McpStatus.Ok, new JsonObject());
+
+        // The instant reaches the workspace directive, so the controls land where the prose says.
+        Assert.Equal("2021-01-01", effect.Workspace?.Date);
+
+        var rendered = OperationAnswerPolicy.Render("en", [result], [effect]);
+
+        Assert.Contains("CRR", rendered, StringComparison.Ordinal);
+        Assert.Contains("EU", rendered, StringComparison.Ordinal);
+        Assert.Contains("2021-01-01", rendered, StringComparison.Ordinal);
+        // Navigation quotes nothing, and the query is the assistant's own words rather than a
+        // publisher's. The typography has to say so: the quotation marks the provision line uses
+        // for verified text are the reader's only signal of what came from the publisher, so a
+        // model-authored search term may never wear them.
+        Assert.Contains("[CRR]", rendered, StringComparison.Ordinal);
+        Assert.DoesNotContain('“', rendered);
+        Assert.DoesNotContain('”', rendered);
+
+        var french = OperationAnswerPolicy.Render("fr", [result], [effect]);
+
+        Assert.Contains("[CRR]", french, StringComparison.Ordinal);
+        Assert.Contains("2021-01-01", french, StringComparison.Ordinal);
+        Assert.DoesNotContain('«', french);
+        Assert.DoesNotContain(" in ", french, StringComparison.Ordinal);
+    }
+
+    // article_history filters to ONE language expression and returns no text at all, so the
+    // expression is the only part of its identity a reader can check and the only part a wrong
+    // selection still gets plausibly right: art_11 of this Constitution exists in French, German
+    // and Luxembourgish, and the three do not share a history.
+    [Fact]
+    public void A_provision_history_names_the_language_expression_it_describes()
+    {
+        var arguments = new JsonObject
+        {
+            ["work"] = "lu-legilux:constitution-1868-10-17-n1",
+            ["anchor"] = "art_11",
+            ["language"] = "fr",
+        };
+        var effect = UiMapper.From("article_history", arguments, new JsonObject
+        {
+            ["envelope"] = new JsonObject
+            {
+                ["status"] = McpStatus.Ok,
+                ["timeline_semantics"] = "publisher_applicability",
+            },
+            ["work"] = "lu-legilux:constitution-1868-10-17-n1",
+            ["anchor"] = "art_11",
+            ["language"] = "fr",
+            ["distinct_texts"] = 6,
+            ["states"] = new JsonArray(
+                new JsonObject { ["valid_from"] = "1919-05-20", ["valid_to"] = "1948-06-01" },
+                new JsonObject { ["valid_from"] = "1948-06-02", ["valid_to"] = "2004-11-28" },
+                new JsonObject { ["valid_from"] = "2004-11-29", ["valid_to"] = "2006-07-22" },
+                new JsonObject { ["valid_from"] = "2006-07-23", ["valid_to"] = "2007-04-02" },
+                new JsonObject { ["valid_from"] = "2007-04-03", ["valid_to"] = "2023-06-30" },
+                new JsonObject { ["valid_from"] = "2023-07-01" }),
+        });
+        var operation = RequestedOperation.CreatePlanned(
+            "req:op-1", 0, "article_history", arguments);
+        var result = new OperationExecution(operation).Complete(McpStatus.Ok, new JsonObject());
+
+        var rendered = OperationAnswerPolicy.Render("en", [result], [effect]);
+
+        Assert.Contains("fr expression", rendered, StringComparison.Ordinal);
+        Assert.Contains("lu-legilux:constitution-1868-10-17-n1", rendered, StringComparison.Ordinal);
+        Assert.Contains("art_11", rendered, StringComparison.Ordinal);
+        // "When did this change?" is answered by the dates, not by their outer bounds: the same
+        // count and span describe a different history for every distribution of dates inside it.
+        Assert.Contains("1919-05-20", rendered, StringComparison.Ordinal);
+        Assert.Contains("1948-06-02", rendered, StringComparison.Ordinal);
+        Assert.Contains("2023-07-01", rendered, StringComparison.Ordinal);
+
+        var french = OperationAnswerPolicy.Render("fr", [result], [effect]);
+
+        Assert.Contains("l'expression fr", french, StringComparison.Ordinal);
+
+        // A view that holds fewer states than the publisher counted may not read as the whole
+        // list, so a bounded history keeps its span rather than listing part of the set.
+        var bounded = OperationAnswerPolicy.Render("en", [result],
+            [effect with { History = effect.History! with
+            {
+                States = [effect.History.States[0], effect.History.States[^1]],
+            } }]);
+
+        Assert.DoesNotContain("2004-11-29", bounded, StringComparison.Ordinal);
+        Assert.Contains("latest state beginning 2023-07-01", bounded, StringComparison.Ordinal);
+
+        // A history the publisher holds in no stated language invents one nowhere.
+        var unstated = OperationAnswerPolicy.Render("en", [result],
+            [effect with { History = effect.History! with
+            {
+                Subject = effect.History.Subject with { Language = null },
+            } }]);
+
+        Assert.DoesNotContain("expression", unstated, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void Assistant_operation_bounds_are_a_subset_of_the_public_mcp_contract()
     {
