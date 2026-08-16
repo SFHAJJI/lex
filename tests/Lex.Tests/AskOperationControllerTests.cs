@@ -704,6 +704,107 @@ public sealed class AskOperationControllerTests : IDisposable
     }
 
     [Fact]
+    public async Task Raw_planner_corrects_dated_workspace_navigation_before_text_is_retrieved()
+    {
+        var requests = new List<JsonObject>();
+        var responses = new[]
+        {
+            PlannerEnvelope("as_of", new JsonObject
+            {
+                [LegalOperationCatalog.SubjectReferenceArgument] = "subject_1",
+                ["date"] = "2021-01-01",
+            }),
+            PlannerEnvelope("search", new JsonObject
+            {
+                ["query"] = "CRR",
+                ["time_scope"] = "as_of",
+                ["as_of"] = "2021-01-01",
+                ["jurisdiction"] = "EU",
+            }),
+        };
+        Task<JsonNode?> Send(JsonObject request, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            requests.Add(request.DeepClone().AsObject());
+            return Task.FromResult<JsonNode?>(responses[requests.Count - 1].DeepClone());
+        }
+        var service = new AskService(_core, planner: null, plannerSend: Send);
+
+        var response = await service.AskAsync(History(
+                "Open the CRR workspace at 1 January 2021 without quoting or summarising it."),
+            Guid.NewGuid().ToString(), "law.test", CancellationToken.None);
+
+        Assert.Equal(200, response.Status);
+        Assert.Equal(2, requests.Count);
+        var plan = Assert.Single(Assert.IsType<JsonArray>(response.Body["trace"])
+            .OfType<JsonObject>(), item => item["phase"]?.GetValue<string>() == "operation_plan");
+        Assert.True(plan["planner_retry"]?.GetValue<bool>());
+        var operation = Assert.Single(Assert.IsType<JsonArray>(plan["operations"]));
+        Assert.Equal("search", operation!["tool"]?.GetValue<string>());
+        Assert.Equal("CRR", operation["arguments"]?["query"]?.GetValue<string>());
+        Assert.Equal("as_of", operation["arguments"]?["time_scope"]?.GetValue<string>());
+        Assert.Equal("2021-01-01", operation["arguments"]?["as_of"]?.GetValue<string>());
+        Assert.Equal("EU", operation["arguments"]?["jurisdiction"]?.GetValue<string>());
+        Assert.Null(response.Body["ui"]?["provision"]);
+    }
+
+    [Fact]
+    public async Task Split_LU_and_EU_scopes_collapse_for_one_cross_corpus_ranking()
+    {
+        var requests = new List<JsonObject>();
+        Task<JsonNode?> Send(JsonObject request, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            requests.Add(request.DeepClone().AsObject());
+            return Task.FromResult<JsonNode?>(PlannerEnvelope(SplitChurnOperations()).DeepClone());
+        }
+        var service = new AskService(_core, planner: null, plannerSend: Send);
+
+        var response = await service.AskAsync(
+            History("Which Luxembourg and EU laws changed most during 2024?"),
+            Guid.NewGuid().ToString(), "law.test", CancellationToken.None);
+
+        Assert.Equal(200, response.Status);
+        Assert.Single(requests);
+        var plan = Assert.Single(Assert.IsType<JsonArray>(response.Body["trace"])
+            .OfType<JsonObject>(), item => item["phase"]?.GetValue<string>() == "operation_plan");
+        var operation = Assert.Single(Assert.IsType<JsonArray>(plan["operations"]));
+        Assert.Equal("changes_in_period", operation!["tool"]?.GetValue<string>());
+        Assert.Null(operation["arguments"]?["jurisdiction"]);
+        Assert.Equal("2024-01-01", operation["arguments"]?["from_date"]?.GetValue<string>());
+        Assert.Equal("2024-12-31", operation["arguments"]?["to_date"]?.GetValue<string>());
+        Assert.Equal("by_churn", operation["arguments"]?["order"]?.GetValue<string>());
+        Assert.Equal("!RECUEIL,!CODE_RECUEIL",
+            operation["arguments"]?["source_class"]?.GetValue<string>());
+        Assert.Contains("changes_in_period.jurisdiction collapsed",
+            Assert.IsType<JsonArray>(operation["repairs"]).Select(item => item!.GetValue<string>()));
+    }
+
+    [Fact]
+    public async Task Explicit_separate_LU_and_EU_rankings_remain_separate()
+    {
+        Task<JsonNode?> Send(JsonObject request, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult<JsonNode?>(PlannerEnvelope(SplitChurnOperations()).DeepClone());
+        }
+        var service = new AskService(_core, planner: null, plannerSend: Send);
+
+        var response = await service.AskAsync(
+            History("Show separate rankings for Luxembourg and EU laws changed most during 2024."),
+            Guid.NewGuid().ToString(), "law.test", CancellationToken.None);
+
+        Assert.Equal(200, response.Status);
+        var plan = Assert.Single(Assert.IsType<JsonArray>(response.Body["trace"])
+            .OfType<JsonObject>(), item => item["phase"]?.GetValue<string>() == "operation_plan");
+        var operations = Assert.IsType<JsonArray>(plan["operations"]);
+        Assert.Equal(["LU", "EU"], operations.Select(operation =>
+            operation!["arguments"]!["jurisdiction"]!.GetValue<string>()));
+        Assert.All(operations, operation => Assert.DoesNotContain("collapsed",
+            operation!["repairs"]!.ToJsonString(), StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task Same_thread_anaphora_uses_structured_authority_not_restored_prose()
     {
         var searches = new List<JsonObject>();
@@ -1440,15 +1541,42 @@ public sealed class AskOperationControllerTests : IDisposable
             ? (arguments["query"]?.GetValue<string>() == rawQuery ? raw : focused).DeepClone()
             : await _core.CallToolAsync(tool, arguments, cancellationToken);
 
-    private static JsonNode PlannerEnvelope(string tool, JsonObject arguments)
+    private static JsonArray SplitChurnOperations() => new(
+        new JsonObject
+        {
+            ["tool"] = "changes_in_period",
+            ["arguments"] = new JsonObject
+            {
+                ["from_date"] = "2024-01-01",
+                ["to_date"] = "2024-12-31",
+                ["jurisdiction"] = "LU",
+                ["order"] = "by_churn",
+            },
+        },
+        new JsonObject
+        {
+            ["tool"] = "changes_in_period",
+            ["arguments"] = new JsonObject
+            {
+                ["from_date"] = "2024-01-01",
+                ["to_date"] = "2024-12-31",
+                ["jurisdiction"] = "EU",
+                ["order"] = "by_churn",
+            },
+        });
+
+    private static JsonNode PlannerEnvelope(string tool, JsonObject arguments) =>
+        PlannerEnvelope(new JsonArray(new JsonObject
+        {
+            ["tool"] = tool,
+            ["arguments"] = arguments,
+        }));
+
+    private static JsonNode PlannerEnvelope(JsonArray operations)
     {
         var plan = new JsonObject
         {
-            ["operations"] = new JsonArray(new JsonObject
-            {
-                ["tool"] = tool,
-                ["arguments"] = arguments,
-            }),
+            ["operations"] = operations.DeepClone(),
         };
         return new JsonObject
         {
