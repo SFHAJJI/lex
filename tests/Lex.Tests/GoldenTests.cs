@@ -379,8 +379,15 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
     public async Task Public_retrieval_judgments_are_downloadable_and_complete()
     {
         var json = await _site.Client.GetStringAsync("/benchmarks/cases.json");
-        var cases = System.Text.Json.Nodes.JsonNode.Parse(json)!.AsArray();
+        var document = System.Text.Json.Nodes.JsonNode.Parse(json)!.AsObject();
+        // The payload describes itself, because a reader who lands on the raw endpoint has no other
+        // way to learn that these judgments are document-level, or that this is the retrieval
+        // benchmark rather than the signed assistant evaluation.
+        Assert.False(string.IsNullOrWhiteSpace(document["what"]!.GetValue<string>()));
+        Assert.Contains("holdout", document["splits"]!.GetValue<string>(), StringComparison.Ordinal);
+        var cases = document["cases"]!.AsArray();
         Assert.Equal(200, cases.Count);
+        Assert.Equal(cases.Count, document["count"]!.GetValue<int>());
         Assert.All(cases, c =>
         {
             Assert.Equal("engineer-reviewed", c!["review_status"]!.GetValue<string>());

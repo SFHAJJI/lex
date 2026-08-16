@@ -135,6 +135,15 @@ public static class ExplainerEndpoints
                 reports.Select(item => item.Report!).ToArray(), collections.Length);
             return Results.Json(new
             {
+                what = "measured retrieval quality over the public engineer-reviewed judgments in "
+                    + "/benchmarks/cases.json, scored deterministically with no language model "
+                    + "involved at any point",
+                not_this = "this is the retrieval benchmark and is unrelated to the signed "
+                    + "assistant evaluation, which is published at /built/release/evaluation.json",
+                activation_gate_meaning = "activation_gate_passed reports whether the measured "
+                    + "hybrid retrieval candidate met every published activation threshold on the "
+                    + "holdout split. While it is false, hybrid stays disabled and production "
+                    + "serves deterministic keyword retrieval.",
                 schema = "lex-retrieval-benchmark-set/1",
                 activation_gate_passed = compatible && reports.All(item => item.Report!.ActivationGatePassed),
                 expected_collections = collections,
@@ -143,7 +152,19 @@ public static class ExplainerEndpoints
         });
 
         app.MapGet("/benchmarks/cases.json", () => Results.Json(
-            retrievalCases, new System.Text.Json.JsonSerializerOptions
+            new
+            {
+                what = "the public relevance judgments the retrieval benchmark is scored against, "
+                    + "written and reviewed by the project owner before any measurement",
+                judgment_level = "each case names the works that answer the query, not the "
+                    + "articles, so a run is never credited for finding the right document by "
+                    + "way of the wrong provision",
+                splits = "tuning cases may inform changes; holdout cases decide activation and "
+                    + "are never tuned against",
+                count = retrievalCases.Count,
+                cases = retrievalCases,
+            },
+            new System.Text.Json.JsonSerializerOptions
             {
                 PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.SnakeCaseLower,
                 WriteIndented = true,
