@@ -2857,6 +2857,22 @@ public sealed class AssistantEvaluationTests : IDisposable
         Assert.Throws<ArgumentNullException>(() => fromOperator.DescribesSameCandidateAs(null!));
     }
 
+    [Fact]
+    public void An_admission_request_body_hashes_the_same_on_every_platform()
+    {
+        // The body is serialised indented, and indented output writes newlines with
+        // Environment.NewLine unless pinned. The digests are taken over that exact serialisation, so
+        // an admission signed on Windows could never be verified by a Linux runner: publication
+        // refused saying the request plan had drifted, when only the line separator had.
+        var body = EvaluationAdmissionContract.RequestBody("Show Article 6 on 1 January 2021.");
+        var text = Encoding.UTF8.GetString(body);
+
+        Assert.Contains('\n', text);
+        Assert.DoesNotContain('\r', text);
+        Assert.Matches("^[0-9a-f]{64}$",
+            EvaluationAdmissionContract.RequestBodySha256("anything"));
+    }
+
     private static AssistantCandidateRuntimeEvidence TargetEvidence()
     {
         var evidence = new AssistantCandidateRuntimeEvidence(

@@ -58,11 +58,19 @@ public static partial class EvaluationAdmissionContract
     public const int MaximumRequests = 64;
     public static readonly TimeSpan MaximumLifetime = TimeSpan.FromMinutes(30);
 
+    // Indented output writes newlines with Environment.NewLine unless told otherwise, so the same
+    // admission serialised on Windows and on Linux differed by one byte per line, the carriage
+    // return CRLF adds ahead of LF. The request body digests are taken over this exact
+    // serialisation, so an admission signed on a Windows
+    // workstation could never be verified by a Linux runner: publication refused with the plan
+    // having drifted, when only the line separator had. A signed canonical form cannot depend on
+    // the machine that produced it.
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
     {
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
         UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
         WriteIndented = true,
+        NewLine = "\n",
     };
 
     [GeneratedRegex("^[0-9a-f]{40}$", RegexOptions.CultureInvariant)]
