@@ -15,7 +15,12 @@ test("the exact candidate presents accepted operations within the browser budget
   const baseUrl = required("LEX_BROWSER_BASE_URL").replace(/\/$/, "");
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(baseUrl);
-  await page.getByRole("button", { name: "Open Ask Lex legal research assistant" }).click();
+  // The assistant opens on a first arrival, so the launcher exists only after a reader closes it.
+  // Opening is therefore "make sure it is open" rather than "click the launcher", which is what this
+  // measurement needs either way: it times presentation, not the act of opening.
+  const launcher = page.getByRole("button", { name: "Open Ask Lex legal research assistant" });
+  if (await launcher.count() > 0) await launcher.click();
+  await expect(page.locator(".askpanel")).toBeVisible();
   const question = page.getByRole("textbox", { name: "Ask Lex" });
   const ask = page.getByRole("button", { name: "Ask", exact: true });
   const samples: number[] = [];
