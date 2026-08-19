@@ -342,8 +342,8 @@ numbers and article names are checked in code; the judge returns Pass, Repair or
 four concurrent; idempotency key and evaluation admission checked at the web boundary.</li>
 <li>Deadlines: planner 12 s, first typed result 25 s, optional synthesis 45 s; on expiry the
 deterministic result is returned as is.</li>
-<li>Synthesis activates only when the planner set <code>synthesis=true</code> because the reader explicitly
-asked to explain, and the flag is reconciled against the frozen plan, never against the
+<li>Synthesis activates only when the planner sets <code>synthesis=true</code> because the reader explicitly
+asks to explain, and the flag is reconciled against the frozen plan, never against the
 reader's words, which quoted content controls: a plan of inventories alone (<code>coverage</code>,
 <code>cited_by</code>, <code>in_force_on</code>) has it cleared, because those lists are already rendered in full.
 There is no hidden UI toggle.</li>

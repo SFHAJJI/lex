@@ -48,8 +48,8 @@ Code owns these through `WorkResolutionGuard`, `WorkSubjectRule`, `OperationPlan
   four concurrent; idempotency key and evaluation admission checked at the web boundary.
 - Deadlines: planner 12 s, first typed result 25 s, optional synthesis 45 s; on expiry the
   deterministic result is returned as is.
-- Synthesis activates only when the planner set `synthesis=true` because the reader explicitly
-  asked to explain, and the flag is reconciled against the frozen plan, never against the
+- Synthesis activates only when the planner sets `synthesis=true` because the reader explicitly
+  asks to explain, and the flag is reconciled against the frozen plan, never against the
   reader's words, which quoted content controls: a plan of inventories alone (`coverage`,
   `cited_by`, `in_force_on`) has it cleared, because those lists are already rendered in full.
   There is no hidden UI toggle.
