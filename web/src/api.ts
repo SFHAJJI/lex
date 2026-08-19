@@ -60,6 +60,14 @@ export interface OperationReply {
 }
 
 export interface AskExecutionDetails {
+  /** Deterministic identity resolution, decided in code before any model was called. */
+  subject_resolution?: {
+    status: string;
+    works: string[];
+    article_number?: string;
+    authority_sources?: { work: string; kind: string }[];
+    runner_up?: string;
+  };
   /** The exact server-validated operation_plan trace object returned by /api/ask/stream. */
   operation_plan: Record<string, unknown> | null;
   /** Compact terminal outcomes; the potentially large legal/UI payload remains in the answer. */
@@ -73,6 +81,14 @@ export interface AskExecutionDetails {
     transport_outcome: string;
     effects: string[];
   }[];
+  /** What the optional prose layer committed to, never the prose itself. */
+  synthesis?: {
+    status: string;
+    draft_status?: string;
+    claims: { kind: string; evidence_ids: string[] }[];
+    permalink_count: number;
+    judge?: { disposition: string; issue_count: number };
+  };
   model_usage?: { input_tokens: number; output_tokens: number; total_tokens: number };
   model_identity?: { resource_host: string; deployment: string };
   timing?: { planner_ms: number; mcp_ms: number; synthesis_ms?: number };
@@ -84,16 +100,66 @@ const boundedNumber = (value: unknown) =>
   typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : undefined;
 const boundedInteger = (value: unknown) =>
   typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : undefined;
+const asArray = (value: unknown): unknown[] => (Array.isArray(value) ? value : []);
+const asObject = (value: unknown): Record<string, unknown> | undefined =>
+  value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown> : undefined;
+const boundedStrings = (value: unknown, cap: number) => asArray(value)
+  .map((item) => boundedText(item))
+  .filter((item): item is string => item !== undefined).slice(0, cap);
+const tracePhase = (reply: AskReply, phase: string) => asArray(reply.trace)
+  .map((entry) => asObject(entry))
+  .find((entry) => entry?.phase === phase);
 
 /**
- * Exposes the exact frozen operation plan already returned to this browser, plus a deliberately
- * compact terminal outcome summary. The other trace phases, reply prose, legal/UI payloads and
+ * Exposes the subject resolution decided in code, the exact frozen operation plan with the
+ * repairs that froze it, a deliberately compact terminal outcome summary, and the contract
+ * outcome of the optional prose layer. Reply prose, claim text, legal/UI payloads and the
  * thread capability are not duplicated in the disclosure.
  */
 export function executionDetails(reply: AskReply): AskExecutionDetails | undefined {
-  const rawPlan = Array.isArray(reply.trace)
-    ? reply.trace.find((entry) => entry && typeof entry === "object" && !Array.isArray(entry)
-      && entry.phase === "operation_plan") : undefined;
+  const rawPlan = tracePhase(reply, "operation_plan");
+  const rawSubject = tracePhase(reply, "subject_resolution");
+  const subjectStatus = boundedText(rawSubject?.status);
+  const articleNumber = boundedText(rawSubject?.article_number);
+  const runnerUp = boundedText(rawSubject?.runner_up);
+  const authoritySources = asArray(rawSubject?.authority_sources).slice(0, 8).flatMap((value) => {
+    const source = asObject(value);
+    const work = boundedText(source?.work);
+    const kind = boundedText(source?.kind);
+    return work && kind ? [{ work, kind }] : [];
+  });
+  const subjectResolution = subjectStatus ? {
+    status: subjectStatus,
+    works: boundedStrings(rawSubject?.works, 8),
+    ...(articleNumber ? { article_number: articleNumber } : {}),
+    ...(authoritySources.length > 0 ? { authority_sources: authoritySources } : {}),
+    ...(runnerUp ? { runner_up: runnerUp } : {}),
+  } : undefined;
+  const rawSynthesis = tracePhase(reply, "synthesis");
+  const synthesisStatus = boundedText(rawSynthesis?.status);
+  const draftStatus = boundedText(rawSynthesis?.draft_status);
+  const rawJudge = asObject(rawSynthesis?.judge);
+  const judgeDisposition = boundedText(rawJudge?.disposition);
+  const synthesis = synthesisStatus ? {
+    status: synthesisStatus,
+    ...(draftStatus ? { draft_status: draftStatus } : {}),
+    claims: asArray(rawSynthesis?.claims).slice(0, 32).flatMap((value) => {
+      const claim = asObject(value);
+      const kind = boundedText(claim?.kind);
+      return kind ? [{ kind, evidence_ids: boundedStrings(claim?.evidence_ids, 8) }] : [];
+    }),
+    // Counted, never rendered. The answer contract bounds a permalink at 2,000 characters, so
+    // the 200-character bound the label fields use would undercount long ones to zero.
+    permalink_count: asArray(rawSynthesis?.permalinks).slice(0, 64)
+      .filter((link) => boundedText(link, 2_000) !== undefined).length,
+    ...(judgeDisposition ? {
+      judge: {
+        disposition: judgeDisposition,
+        issue_count: boundedInteger(rawJudge?.issue_count) ?? 0,
+      },
+    } : {}),
+  } : undefined;
   const replyOperations: unknown[] = Array.isArray(reply.operations) ? reply.operations : [];
   const outcomes = replyOperations.slice(0, 8).flatMap((value) => {
     if (!value || typeof value !== "object" || Array.isArray(value)) return [];
@@ -129,8 +195,10 @@ export function executionDetails(reply: AskReply): AskExecutionDetails | undefin
   const synthesisMs = boundedNumber(reply.timing?.synthesis_ms);
   if (!rawPlan && outcomes.length === 0) return undefined;
   return {
+    ...(subjectResolution ? { subject_resolution: subjectResolution } : {}),
     operation_plan: rawPlan ?? null,
     operation_outcomes: outcomes,
+    ...(synthesis ? { synthesis } : {}),
     model_usage: inputTokens !== undefined && outputTokens !== undefined
       && totalTokens !== undefined
       ? { input_tokens: inputTokens, output_tokens: outputTokens, total_tokens: totalTokens }

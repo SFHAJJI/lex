@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
 import type { AskExecutionDetails, AskMessage, Step } from "./api";
 import { STARTER_PROMPTS, parseAssistantPanelState } from "./assistantShell";
@@ -18,11 +19,118 @@ export interface AskPanelProps {
   followUps?: { label: string; run: () => void }[];
 }
 
+const compactJson = (value: unknown, maximum: number) => {
+  const text = JSON.stringify(value) ?? "";
+  return text.length > maximum ? `${text.slice(0, maximum)}...` : text;
+};
+
+// The plan object is the server's own trace entry, so it is read the way every other server
+// value in this file is read: one known field at a time, with a shape check before each. An
+// unrecognised plan falls back to bounded JSON rather than pretending it parsed.
+function planOperations(plan: Record<string, unknown> | null) {
+  const operations: unknown[] = plan && Array.isArray(plan.operations) ? plan.operations : [];
+  return operations
+    .slice(0, 8).flatMap((entry: unknown) => {
+      if (!entry || typeof entry !== "object" || Array.isArray(entry)) return [];
+      const operation = entry as Record<string, unknown>;
+      if (typeof operation.tool !== "string" || !("arguments" in operation)) return [];
+      return [{
+        tool: operation.tool,
+        args: compactJson(operation.arguments, 400),
+        repairs: (Array.isArray(operation.repairs) ? operation.repairs : [])
+          .filter((repair: unknown): repair is string => typeof repair === "string").slice(0, 8),
+      }];
+    });
+}
+
+function AuditCard({ title, children }: { title: string; children: ReactNode }) {
+  return <details className="ap-audit-card"><summary>{title}</summary>{children}</details>;
+}
+
 function ExecutionDetails({ value }: { value?: AskExecutionDetails }) {
-  return value ? <details className="ap-execution">
-    <summary>Plan and execution details</summary>
-    <pre tabIndex={0} aria-label="Plan and execution details JSON">{JSON.stringify(value, null, 2)}</pre>
-  </details> : null;
+  if (!value) return null;
+  const subject = value.subject_resolution;
+  const plan = planOperations(value.operation_plan);
+  const synthesis = value.synthesis;
+  const usage = value.model_usage;
+  const timing = value.timing;
+  const evidenceIds = new Set(synthesis?.claims.flatMap((claim) => claim.evidence_ids) ?? []);
+  return <details className="ap-execution">
+    <summary>How this answer was produced</summary>
+
+    {subject ? <AuditCard title="Subject">
+      <dl>
+        <dt>status</dt><dd>{subject.status}</dd>
+        {subject.works.length > 0 ? <><dt>works</dt><dd>{subject.works.join(", ")}</dd></> : null}
+        {subject.article_number
+          ? <><dt>article</dt><dd>{subject.article_number}</dd></> : null}
+        {subject.authority_sources?.length ? <>
+          <dt>authority</dt>
+          <dd>{subject.authority_sources.map((source) => source.kind).join(", ")}</dd>
+        </> : null}
+        {subject.runner_up
+          ? <><dt>disclosure</dt><dd>{`runner-up disclosed: ${subject.runner_up}`}</dd></> : null}
+      </dl>
+    </AuditCard> : null}
+
+    {value.operation_plan ? <AuditCard title="Plan">
+      {plan.length > 0 ? <>
+        <p>{`${plan.length} operation${plan.length === 1 ? "" : "s"}, frozen before the first ran.`}</p>
+        <ul>
+          {plan.map((operation, index) => <li key={index}>
+            <code>{operation.tool}</code> {operation.args}
+            {operation.repairs.length > 0 ? <ul>
+              {operation.repairs.map((repair, position) =>
+                <li key={position}>{`repaired: ${repair}`}</li>)}
+            </ul> : null}
+          </li>)}
+        </ul>
+      </> : <pre tabIndex={0} aria-label="Frozen operation plan">
+        {compactJson(value.operation_plan, 2000)}
+      </pre>}
+    </AuditCard> : null}
+
+    <AuditCard title="Results">
+      <ul>
+        {value.operation_outcomes.map((outcome) => <li key={outcome.operation_id}>
+          <code>{outcome.tool ?? "operation"}</code>
+          {` #${outcome.order + 1}: ${outcome.legal_outcome}, ${outcome.transport_outcome}`}
+          {outcome.effects.length > 0 ? ` (${outcome.effects.join(", ")})` : ""}
+        </li>)}
+      </ul>
+    </AuditCard>
+
+    {synthesis ? <AuditCard title="Prose contract">
+      <dl>
+        <dt>status</dt><dd>{synthesis.status}</dd>
+        {synthesis.draft_status
+          ? <><dt>draft</dt><dd>{synthesis.draft_status}</dd></> : null}
+        <dt>claims</dt>
+        <dd>{`${synthesis.claims.length} claim${synthesis.claims.length === 1 ? "" : "s"}`
+          + ` over ${evidenceIds.size} evidence id${evidenceIds.size === 1 ? "" : "s"}`}</dd>
+        <dt>judge</dt>
+        <dd>{synthesis.judge
+          ? `${synthesis.judge.disposition}, ${synthesis.judge.issue_count} issues`
+          : "judge did not run"}</dd>
+      </dl>
+    </AuditCard> : null}
+
+    <AuditCard title="Model and timing">
+      <dl>
+        {value.model_identity
+          ? <><dt>deployment</dt><dd>{value.model_identity.deployment}</dd></> : null}
+        {usage ? <>
+          <dt>tokens</dt>
+          <dd>{`${usage.input_tokens} in, ${usage.output_tokens} out, ${usage.total_tokens} total`}</dd>
+        </> : null}
+        {timing ? <>
+          <dt>timing</dt>
+          <dd>{`planner ${timing.planner_ms} ms, operations ${timing.mcp_ms} ms`
+            + (timing.synthesis_ms !== undefined ? `, synthesis ${timing.synthesis_ms} ms` : "")}</dd>
+        </> : null}
+      </dl>
+    </AuditCard>
+  </details>;
 }
 
 const PANEL_KEY = "lex.ask.panel.v1";

@@ -11,7 +11,8 @@ namespace Lex.Ask;
 internal sealed record AgentFinalization(
     AgentAnswerDraft Draft,
     bool SynthesisFailed,
-    ModelTokenUsage Usage = default);
+    ModelTokenUsage Usage = default,
+    AgentGroundingJudgment? Judgment = null);
 
 internal sealed class AgentAnswerFinalizer
 {
@@ -164,7 +165,8 @@ internal sealed class AgentAnswerFinalizer
             };
             return new(finalized,
                 SynthesisFailed: judgment.Disposition == AgentJudgmentDisposition.Refuse,
-                usage);
+                usage,
+                judgment);
         }
         catch (InvalidDataException)
         {

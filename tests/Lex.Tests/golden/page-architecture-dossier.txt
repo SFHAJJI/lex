@@ -781,6 +781,57 @@ are explicit application code.</li>
 </tr>
 </tbody>
 </table></div>
+<h3>The objects, expanded</h3>
+<p>Each object that crosses a boundary, with its fields as declared in code. Click a name to expand.</p>
+<details class="dossier-object" open><summary><code>SubjectAuthority</code></summary><pre tabindex="0" aria-label="Object shape">Members        : List&lt;SubjectAuthorityMember&gt;
+ArticleNumber  : string, optional
+Disclosure     : AnswerDisclosure, optional
+References     : subject_1 .. subject_N, derived, N at most eight</pre></details>
+<details class="dossier-object" open><summary><code>SubjectAuthorityMember</code></summary><pre tabindex="0" aria-label="Object shape">Work            : string, for example eu-eurlex:32016r0679
+Title           : string, optional
+Mentions        : List&lt;string&gt;, the reader's words that matched
+ArticleAnchor   : string, optional, for example art_33
+ExactLexId      : string, optional, when a full version key was named
+AuthoritySource : identifier, title, short_title or provision</pre></details>
+<details class="dossier-object" open><summary><code>AnswerDisclosure</code></summary><pre tabindex="0" aria-label="Object shape">RunnerUpWork  : string, optional
+RunnerUpTitle : string, optional
+Instant       : Stated, DefaultedToToday or WidenedFromYear</pre></details>
+<details class="dossier-object" open><summary><code>OperationPlan</code></summary><pre tabindex="0" aria-label="Object shape">RequestId          : string
+Locale             : string
+Operations         : RequestedOperation[1..8], value-copied, sealed
+SynthesisRequested : bool, reconciled against the plan at freeze</pre></details>
+<details class="dossier-object" open><summary><code>RequestedOperation</code></summary><pre tabindex="0" aria-label="Object shape">OperationId            : string
+UserOrder              : int
+Tool                   : one of the ten legal operations, legal_boundary or clarification
+Arguments              : typed JSON, at most 32,768 bytes
+ResultClass            : LegalResultClass, optional
+Disposition            : ApplicationDisposition, optional
+Effects                : declared OperationEffect list; an effect outside it throws
+Repairs                : &quot;action.argument outcome&quot; lines recorded by the gate and the date guard</pre></details>
+<details class="dossier-object" open><summary><code>OperationResult</code></summary><pre tabindex="0" aria-label="Object shape">OperationId      : string
+LegalOutcome     : one of nine closed outcomes
+TransportOutcome : one of five closed outcomes
+Effects          : within the frozen declaration
+Payload          : rows, hashes, permalinks, or a typed gap</pre></details>
+<details class="dossier-object" open><summary><code>AgentEvidence</code></summary><pre tabindex="0" aria-label="Object shape">Id                         : tool:call:ordinal
+Kind                       : one of seven evidence kinds, no pointer kind
+Work, Anchor, Date         : identity of the evidence
+TextSha256, Permalink      : what the claim can be checked against
+RequiresCoverageDisclosure : bool
+Title, Excerpt             : bounded text</pre></details>
+<details class="dossier-object" open><summary><code>AgentAnswerDraft</code></summary><pre tabindex="0" aria-label="Object shape">Status             : answer, gap, clarify or refusal
+Answer             : string, at most 6,000 characters
+Claims             : AgentClaim[], each with Text, Kind and EvidenceIds
+Permalinks         : must be byte-identical to used evidence
+CoverageDisclosure : string, optional</pre></details>
+<details class="dossier-object" open><summary><code>AgentGroundingJudgment</code></summary><pre tabindex="0" aria-label="Object shape">Disposition : pass, repair or refuse
+Issues      : at most five
+Replacement : string, only with repair</pre></details>
+<details class="dossier-object" open><summary><code>AskOutcome</code></summary><pre tabindex="0" aria-label="Object shape">Status              : HTTP status
+Body                : reply, trace, clarification, ui, operations, model_usage, model_identity, timing
+RetainForReplay     : bool
+ContextDisposition  : Preserve, Replace or Clear
+UiEffect slots      : Provision, Diff, History, Timeline, Ranking, InForce, CitedBy, Coverage, Verification, Workspace, Gap</pre></details>
 <h2 id="latest-signed-evaluation">Latest signed assistant evaluation</h2>
 <div class="notice"><b>No verified evaluation published.</b> This revision exposes no
 cryptographically verified immutable evaluation package that matches its exact code,
