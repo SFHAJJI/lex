@@ -121,7 +121,7 @@ for that exact build, not a claim about any signed release.
 | Frozen set | 25 frozen scenarios, 48 final candidate HTTP requests, 8 same-thread setup HTTP requests, 56 total candidate HTTP requests and 48 release-grader requests |
 | Candidate token budget | The current reservation is 928,000 input and 92,000 output tokens. Setup and final turns are charged to this candidate budget. |
 | Grader token budget | The current reservation is 815,104 input and 384,000 output tokens on a separately authenticated `gpt-5-nano` deployment. |
-| Cost control | The catalog has an outer EUR 10 ceiling, where `EUR` is the standard currency code for euros. The current maximum-token reservation prices at EUR 0.5356487 before inference, then measured use is gated again. This is not a live Azure billing cutoff and cannot interrupt an in-flight model call. Signed call counts and per-call token ceilings bound the run instead. |
+| Cost control | The catalog has an outer EUR 10 ceiling, where `EUR` is the standard currency code for euros. The current maximum-token reservation prices at EUR 0.5362647 before inference, then measured use is gated again. This is not a live Azure billing cutoff and cannot interrupt an in-flight model call. Signed call counts and per-call token ceilings bound the run instead. |
 | CI/CD | GitHub Actions creates an immutable zero-traffic candidate and verifies the signed artifact manifest, both jurisdictions, prompt-injection probes and load behavior; a local signed runner executes the HTTP and browser evaluation, bounded `lex-ops` publication signs and publishes the evidence, then a separate protected workflow revalidates it before promotion or exact rollback. |
 
 ### Evaluation flow

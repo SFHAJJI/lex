@@ -435,7 +435,7 @@ public sealed class ArchitectureDossierTests : IClassFixture<GoldenTests.Site>
             Golden.RepositoryRoot(), "docs", "assistant-evaluation-scenario-matrix.md"));
 
         Assert.Contains("Owner-reviewed and signed", matrix);
-        Assert.Contains("10fa9bb2246f387b1bde204cea0deededaf4c5834fb3d7fadd1d165c0f853f8a", matrix);
+        Assert.Contains("e9f60c0af2ddab7d8468bebd0b1be37c5299c63929a0409bbf99fb3622e1ceaf", matrix);
         Assert.Contains("candidate has already passed the live run", matrix);
         Assert.Contains("Live LLM release evaluation", matrix);
         Assert.Contains("Deterministic integration", matrix);
