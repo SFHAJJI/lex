@@ -82,7 +82,7 @@ public static class BuiltEndpoints
             lines[0] = "";
         }
 
-        var html = Markdown.ToHtml(string.Join('\n', lines), MarkdownPipeline)
+        var html = ExpandObjectShapes(Markdown.ToHtml(string.Join('\n', lines), MarkdownPipeline), full)
             .Replace("<table>",
                 "<div class=\"dossier-table\" tabindex=\"0\" role=\"region\" aria-label=\"Scrollable architecture table\"><table>",
                 StringComparison.Ordinal)
@@ -96,6 +96,42 @@ public static class BuiltEndpoints
                 "Scrollable assistant ownership and trust-boundary diagram"),
             "assistant.svg", "dossier-sequence",
             "Scrollable assistant sequence diagram");
+    }
+
+    // A fenced block tagged `object` whose first line names a type becomes a native
+    // click-to-expand shape: the page stays HTML-free at the source and script-free in the
+    // browser, and the renderer remains the only producer of markup. The print dossier
+    // renders every shape open, so paper loses nothing.
+    private static string ExpandObjectShapes(string html, bool full)
+    {
+        const string open = "<pre><code class=\"language-object\">";
+        const string close = "</code></pre>";
+        var builder = new StringBuilder(html.Length);
+        var cursor = 0;
+        while (true)
+        {
+            var start = html.IndexOf(open, cursor, StringComparison.Ordinal);
+            if (start < 0) break;
+            var bodyStart = start + open.Length;
+            var end = html.IndexOf(close, bodyStart, StringComparison.Ordinal);
+            if (end < 0)
+                throw new InvalidOperationException("An object shape block has no closing fence.");
+            var body = html[bodyStart..end];
+            var newline = body.IndexOf('\n');
+            var name = (newline < 0 ? body : body[..newline]).Trim();
+            var fields = newline < 0 ? "" : body[(newline + 1)..].TrimEnd('\n');
+            if (name.Length == 0 || name.Contains('<', StringComparison.Ordinal))
+                throw new InvalidOperationException("An object shape block must start with a type name.");
+
+            builder.Append(html, cursor, start - cursor);
+            builder.Append("<details class=\"dossier-object\"")
+                .Append(full ? " open" : "")
+                .Append("><summary><code>").Append(name).Append("</code></summary><pre tabindex=\"0\" aria-label=\"Object shape\">")
+                .Append(fields).Append("</pre></details>");
+            cursor = end + close.Length;
+        }
+        builder.Append(html, cursor, html.Length - cursor);
+        return builder.ToString();
     }
 
     private static string WrapDiagram(string html, string diagram, string cssClass, string label)

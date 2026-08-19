@@ -2197,7 +2197,8 @@ public sealed class AskService
                 null,
                 SubjectResolutionTrace(
                     new JsonArray(), carried.Members.Select(member => member.Work).ToArray(),
-                    carried.ArticleNumber, "carried", locale, carried.Members),
+                    carried.ArticleNumber, "carried", locale, carried.Members,
+                    carried.Disclosure?.RunnerUpWork),
                 watch.Elapsed.TotalMilliseconds);
         }
 
@@ -2282,7 +2283,8 @@ public sealed class AskService
         return new SubjectPreflight(authority, null,
             SubjectResolutionTrace(result,
                 authority?.Members.Select(member => member.Work).ToArray() ?? [], article,
-                authority is null ? "none" : "resolved", locale, authority?.Members),
+                authority is null ? "none" : "resolved", locale, authority?.Members,
+                authority?.Disclosure?.RunnerUpWork),
             watch.Elapsed.TotalMilliseconds);
     }
 
@@ -2419,7 +2421,8 @@ public sealed class AskService
     private static JsonObject SubjectResolutionTrace(
         JsonNode result, IReadOnlyList<string> works, string? article, string status,
         string locale,
-        IReadOnlyList<SubjectAuthorityMember>? members = null)
+        IReadOnlyList<SubjectAuthorityMember>? members = null,
+        string? runnerUp = null)
     {
         var (_, docs) = Summarize(result);
         var trace = new JsonObject
@@ -2443,6 +2446,9 @@ public sealed class AskService
                 ["source_uri"] = member.AuthoritySource.SourceUri,
             }).ToArray();
         if (sources.Length > 0) trace["authority_sources"] = new JsonArray(sources);
+        // Absent unless a runner-up was actually set aside, so an unambiguous turn keeps the
+        // trace it already had.
+        if (runnerUp is { Length: > 0 }) trace["runner_up"] = runnerUp;
         return trace;
     }
 
@@ -3220,6 +3226,33 @@ public sealed class AskService
                 // correctable in a single turn. Enforced here rather than trusted to the model.
                 reply = WithDisclosures(reply, plan.Locale, disclosures);
                 modelUsage = modelUsage.Add(finalized.Usage);
+                // The frozen plan and every terminal outcome were already disclosed; what the
+                // optional prose layer then did with them was not. This closes that gap with the
+                // contract only: claim kinds bound to their evidence ids, the permalinks that had
+                // to match that evidence, and the judge's verdict. Never claim text and never the
+                // answer, which the reader is looking at and which no audit view should restate.
+                trace.Add(new JsonObject
+                {
+                    ["phase"] = "synthesis",
+                    ["status"] = finalized.SynthesisFailed ? "failed" : "completed",
+                    ["draft_status"] = ContractName(finalized.Draft.Status),
+                    ["claims"] = new JsonArray(finalized.Draft.Claims.Select(claim =>
+                        (JsonNode)new JsonObject
+                        {
+                            ["kind"] = ContractName(claim.Kind),
+                            ["evidence_ids"] = new JsonArray(claim.EvidenceIds
+                                .Select(id => (JsonNode)id).ToArray()),
+                        }).ToArray()),
+                    ["permalinks"] = new JsonArray(finalized.Draft.Permalinks
+                        .Select(link => (JsonNode)link).ToArray()),
+                    ["judge"] = finalized.Judgment is { } judgment
+                        ? new JsonObject
+                        {
+                            ["disposition"] = ContractName(judgment.Disposition),
+                            ["issue_count"] = judgment.Issues.Count,
+                        }
+                        : null,
+                });
                 if (progress?.Synthesis is not null)
                     await NotifyProgress(() => progress.Synthesis("completed", ct));
                 if (progress?.Phase is not null)

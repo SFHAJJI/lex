@@ -16,12 +16,27 @@ import {
   validAskThreadToken,
 } from "./api.ts";
 
-test("execution details expose only the frozen typed plan and bounded outcome metadata", () => {
+test("execution details expose only the typed audit contract and bounded outcome metadata", () => {
   const details = executionDetails({
     reply: "publisher text must not be copied into diagnostics",
     thread_token: "A".repeat(43),
     trace: [
-      { phase: "subject_resolution", works: ["secret future field"] },
+      {
+        phase: "subject_resolution",
+        status: "resolved",
+        locale: "en",
+        docs: 3,
+        works: ["eu-eurlex:32016r0679"],
+        article_number: "6",
+        runner_up: "eu-eurlex:32018r1725",
+        authority_sources: [{
+          work: "eu-eurlex:32016r0679",
+          kind: "identifier",
+          identifier: "secret future field",
+          segment: "secret future field",
+          source_uri: "https://publisher.example/unbounded",
+        }],
+      },
       {
         phase: "operation_plan",
         request_id: "request-1",
@@ -41,6 +56,14 @@ test("execution details expose only the frozen typed plan and bounded outcome me
         }],
       },
       { phase: "primary", args: { unbounded: "payload" } },
+      {
+        phase: "synthesis",
+        status: "completed",
+        draft_status: "answer",
+        claims: [{ kind: "legal_text", evidence_ids: ["as_of:1:1"] }],
+        permalinks: ["https://law.soufien.lu/a", "https://law.soufien.lu/b"],
+        judge: { disposition: "pass", issue_count: 0 },
+      },
     ],
     operations: [{
       operation_id: "request-1:op-1",
@@ -63,6 +86,13 @@ test("execution details expose only the frozen typed plan and bounded outcome me
   });
 
   assert.deepEqual(details, {
+    subject_resolution: {
+      status: "resolved",
+      works: ["eu-eurlex:32016r0679"],
+      article_number: "6",
+      authority_sources: [{ work: "eu-eurlex:32016r0679", kind: "identifier" }],
+      runner_up: "eu-eurlex:32018r1725",
+    },
     operation_plan: {
       phase: "operation_plan",
       request_id: "request-1",
@@ -89,6 +119,13 @@ test("execution details expose only the frozen typed plan and bounded outcome me
       transport_outcome: "completed",
       effects: ["provision"],
     }],
+    synthesis: {
+      status: "completed",
+      draft_status: "answer",
+      claims: [{ kind: "legal_text", evidence_ids: ["as_of:1:1"] }],
+      permalink_count: 2,
+      judge: { disposition: "pass", issue_count: 0 },
+    },
     model_usage: { input_tokens: 120, output_tokens: 30, total_tokens: 150 },
     model_identity: { resource_host: "example.openai.azure.com", deployment: "planner" },
     timing: { planner_ms: 42, mcp_ms: 8 },
@@ -104,6 +141,65 @@ test("malformed terminal operation metadata is ignored instead of hiding the ans
   } as unknown as Parameters<typeof executionDetails>[0];
 
   assert.deepEqual(executionDetails(malformed)?.operation_outcomes, []);
+  assert.equal(executionDetails(malformed)?.subject_resolution, undefined);
+  assert.equal(executionDetails(malformed)?.synthesis, undefined);
+});
+
+test("the audit disclosure caps every extracted array and never carries claim text", () => {
+  const details = executionDetails({
+    reply: "The verified answer remains visible.",
+    trace: [
+      {
+        phase: "subject_resolution",
+        status: "resolved",
+        works: Array.from({ length: 12 }, (_, index) => `lu-legilux:work-${index}`),
+        authority_sources: Array.from({ length: 12 }, (_, index) => ({
+          work: `lu-legilux:work-${index}`, kind: "title",
+        })),
+      },
+      { phase: "operation_plan", operations: [] },
+      {
+        phase: "synthesis",
+        status: "completed",
+        draft_status: "answer",
+        claims: Array.from({ length: 40 }, () => ({
+          kind: "legal_text",
+          text: "claim prose must never reach the browser",
+          evidence_ids: Array.from({ length: 12 }, (_, index) => `as_of:1:${index}`),
+        })),
+        permalinks: ["https://law.soufien.lu/a"],
+        judge: { disposition: "repair", issue_count: 2 },
+      },
+    ],
+    operations: [],
+  } as unknown as Parameters<typeof executionDetails>[0]);
+
+  assert.equal(details?.subject_resolution?.works.length, 8);
+  assert.equal(details?.subject_resolution?.authority_sources?.length, 8);
+  assert.equal(details?.subject_resolution?.runner_up, undefined);
+  assert.equal(details?.synthesis?.claims.length, 32);
+  assert.equal(details?.synthesis?.claims[0].evidence_ids.length, 8);
+  assert.equal(details?.synthesis?.permalink_count, 1);
+  assert.deepEqual(details?.synthesis?.judge, { disposition: "repair", issue_count: 2 });
+  assert.doesNotMatch(JSON.stringify(details), /claim prose/);
+});
+
+test("a synthesis that ran without the judge reports the judge as absent, not as passing", () => {
+  const details = executionDetails({
+    reply: "Verified results only.",
+    trace: [
+      { phase: "operation_plan", operations: [] },
+      {
+        phase: "synthesis", status: "failed", draft_status: "refusal",
+        claims: [], permalinks: [], judge: null,
+      },
+    ],
+    operations: [],
+  } as unknown as Parameters<typeof executionDetails>[0]);
+
+  assert.deepEqual(details?.synthesis, {
+    status: "failed", draft_status: "refusal", claims: [], permalink_count: 0,
+  });
 });
 
 test("a pre-plan clarification honestly shows that no operation plan was frozen", () => {
@@ -115,6 +211,7 @@ test("a pre-plan clarification honestly shows that no operation plan was frozen"
       transport_outcome: "completed", effects: ["gap"], disposition: "clarification",
     }],
   }), {
+    subject_resolution: { status: "unresolved", works: [] },
     operation_plan: null,
     operation_outcomes: [{
       operation_id: "request-2:subject", order: 0, disposition: "clarification",

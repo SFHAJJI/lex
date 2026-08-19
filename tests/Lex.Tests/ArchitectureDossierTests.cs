@@ -115,6 +115,20 @@ public sealed class ArchitectureDossierTests : IClassFixture<GoldenTests.Site>
     }
 
     [Fact]
+    public async Task Assistant_page_expands_object_shapes_without_raw_html()
+    {
+        var html = await _client.GetStringAsync("/built/assistant");
+        var full = await _client.GetStringAsync("/architecture/dossier");
+
+        Assert.Contains("<details class=\"dossier-object\"><summary><code>SubjectAuthority</code></summary>", html);
+        Assert.Contains("<details class=\"dossier-object\"><summary><code>AskOutcome</code></summary>", html);
+        Assert.Contains("Each object that crosses a boundary", html);
+        Assert.DoesNotContain("language-object", html);
+        Assert.Contains("<details class=\"dossier-object\" open>", full);
+        Assert.DoesNotContain("language-object", full);
+    }
+
+    [Fact]
     public async Task Every_dossier_diagram_is_followed_by_an_explanatory_table()
     {
         foreach (var (path, _) in Tabs)

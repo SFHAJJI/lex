@@ -72,3 +72,96 @@ Code owns these through `WorkResolutionGuard`, `WorkSubjectRule`, `OperationPlan
 | Browser | The visible transcript and the opaque token, in component memory, never local storage | Lost on reload; an unknown token never falls through to another conversation |
 | Server thread registry | Accepted turns and deterministic subject context, keyed by the token's SHA-256 digest only | 1,024 threads, six turns, 32 KiB per thread, 16 MiB globally, two waiters, 30-minute idle lifetime |
 | Planner request | The restored bounded transcript and the authorized subject refs | Nothing persistent; restart, expiry, eviction or reset loses the thread safely |
+
+## The objects, expanded
+
+Each object that crosses a boundary, with its fields as declared in code. Click a name to expand.
+
+```object
+SubjectAuthority
+Members        : List<SubjectAuthorityMember>
+ArticleNumber  : string, optional
+Disclosure     : AnswerDisclosure, optional
+References     : subject_1 .. subject_N, derived, N at most eight
+```
+
+```object
+SubjectAuthorityMember
+Work            : string, for example eu-eurlex:32016r0679
+Title           : string, optional
+Mentions        : List<string>, the reader's words that matched
+ArticleAnchor   : string, optional, for example art_33
+ExactLexId      : string, optional, when a full version key was named
+AuthoritySource : identifier, title, short_title or provision
+```
+
+```object
+AnswerDisclosure
+RunnerUpWork  : string, optional
+RunnerUpTitle : string, optional
+Instant       : Stated, DefaultedToToday or WidenedFromYear
+```
+
+```object
+OperationPlan
+RequestId          : string
+Locale             : string
+Operations         : RequestedOperation[1..8], value-copied, sealed
+SynthesisRequested : bool, reconciled against the plan at freeze
+```
+
+```object
+RequestedOperation
+OperationId            : string
+UserOrder              : int
+Tool                   : one of the ten legal operations, legal_boundary or clarification
+Arguments              : typed JSON, at most 32,768 bytes
+ResultClass            : LegalResultClass, optional
+Disposition            : ApplicationDisposition, optional
+Effects                : declared OperationEffect list; an effect outside it throws
+Repairs                : "action.argument outcome" lines recorded by the gate and the date guard
+```
+
+```object
+OperationResult
+OperationId      : string
+LegalOutcome     : one of nine closed outcomes
+TransportOutcome : one of five closed outcomes
+Effects          : within the frozen declaration
+Payload          : rows, hashes, permalinks, or a typed gap
+```
+
+```object
+AgentEvidence
+Id                         : tool:call:ordinal
+Kind                       : one of seven evidence kinds, no pointer kind
+Work, Anchor, Date         : identity of the evidence
+TextSha256, Permalink      : what the claim can be checked against
+RequiresCoverageDisclosure : bool
+Title, Excerpt             : bounded text
+```
+
+```object
+AgentAnswerDraft
+Status             : answer, gap, clarify or refusal
+Answer             : string, at most 6,000 characters
+Claims             : AgentClaim[], each with Text, Kind and EvidenceIds
+Permalinks         : must be byte-identical to used evidence
+CoverageDisclosure : string, optional
+```
+
+```object
+AgentGroundingJudgment
+Disposition : pass, repair or refuse
+Issues      : at most five
+Replacement : string, only with repair
+```
+
+```object
+AskOutcome
+Status              : HTTP status
+Body                : reply, trace, clarification, ui, operations, model_usage, model_identity, timing
+RetainForReplay     : bool
+ContextDisposition  : Preserve, Replace or Clear
+UiEffect slots      : Provision, Diff, History, Timeline, Ranking, InForce, CitedBy, Coverage, Verification, Workspace, Gap
+```

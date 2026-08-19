@@ -128,6 +128,40 @@
   background: var(--card);
 }
 
+.dossier-object {
+  margin: 10px 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+}
+
+.dossier-object > summary {
+  cursor: pointer;
+  padding: 10px 14px;
+  font-weight: 600;
+  list-style: none;
+}
+
+.dossier-object > summary::before {
+  content: "+ ";
+  color: var(--muted);
+}
+
+.dossier-object[open] > summary::before {
+  content: "- ";
+}
+
+.dossier-object > summary::-webkit-details-marker {
+  display: none;
+}
+
+.dossier-object > pre {
+  margin: 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0 0 8px 8px;
+}
+
 .architecture-dossier-full > h2 {
   padding-top: 24px;
   border-top: 1px solid var(--line);

@@ -277,8 +277,13 @@ test("each assistant answer discloses its safe typed plan and execution evidence
             operation_id: operation.operation_id, order: 0, tool: "as_of",
             result_class: "provision", disposition: "display",
             arguments: { work: "eu-eurlex:32016r0679", date: "2021-01-01", anchors: "art_6" },
-            repairs: [],
+            repairs: ["as_of.page dropped"],
           }],
+        }, {
+          phase: "synthesis", status: "completed", draft_status: "answer",
+          claims: [{ kind: "legal_text", evidence_ids: ["as_of:1:1"] }],
+          permalinks: ["https://law.soufien.lu/a"],
+          judge: { disposition: "pass", issue_count: 0 },
         }],
         operations: [operation],
         model_usage: { input_tokens: 120, output_tokens: 30, total_tokens: 150 },
@@ -300,13 +305,19 @@ test("each assistant answer discloses its safe typed plan and execution evidence
   await expect(page.locator(".said")).toContainText("Verified Article 6.");
 
   const disclosure = page.locator("details.ap-execution");
+  const cards = disclosure.locator("details.ap-audit-card");
   await expect(disclosure).toHaveCount(1);
-  await expect(disclosure.locator("pre")).toBeHidden();
-  await disclosure.getByText("Plan and execution details", { exact: true }).click();
-  await expect(disclosure.locator("pre")).toBeVisible();
-  await expect(disclosure.locator("pre")).toContainText('"tool": "as_of"');
-  await expect(disclosure.locator("pre")).toContainText('"anchors": "art_6"');
-  await expect(disclosure.locator("pre")).toContainText('"legal_outcome": "succeeded"');
+  await expect(cards.first()).toBeHidden();
+  await disclosure.getByText("How this answer was produced", { exact: true }).click();
+  await expect(cards).toHaveCount(4);
+  await expect(cards.first()).toBeVisible();
+  await expect(disclosure).toContainText("1 operation, frozen before the first ran.");
+  await expect(disclosure).toContainText("as_of");
+  await expect(disclosure).toContainText("art_6");
+  await expect(disclosure).toContainText("repaired: as_of.page dropped");
+  await expect(disclosure).toContainText("succeeded");
+  await expect(disclosure).toContainText("1 claim over 1 evidence id");
+  await expect(disclosure).toContainText("pass, 0 issues");
   await expect(disclosure).not.toContainText("thread_token");
   await expect(disclosure).not.toContainText("provisions");
   await expectNoHorizontalOverflow(page);
