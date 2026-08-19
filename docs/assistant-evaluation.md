@@ -120,7 +120,7 @@ endpoint, model name, immutable model version and SKU from Azure Resource Manage
 Candidate and grader usage and EUR prices are reserved, measured and gated separately. The current
 25-case catalog reserves at most 928,000 candidate input tokens, 92,000 candidate output tokens,
 815,104 grader input tokens and 384,000 grader output tokens. At the frozen meter prices that is
-EUR 0.5356487, below the outer EUR 10 limit. Its signed admission plan contains 56 candidate HTTP
+EUR 0.5362647, below the outer EUR 10 limit. Its signed admission plan contains 56 candidate HTTP
 requests, 8 same-thread setup requests and 48 final requests, and a passing run makes 48 separate
 release-grader requests. Preflight stops before inference when the reservation
 cannot fit, and measured use is gated again afterward. The limit is not a live Azure billing

@@ -2,7 +2,7 @@
 
 Status: **Owner-reviewed and signed: 25 live cases; execution Next.** Evaluation reviewer Soufien
 Hajji approved the exact `evals/assistant-cases-v3.json` SHA-256
-`10fa9bb2246f387b1bde204cea0deededaf4c5834fb3d7fadd1d165c0f853f8a`; the digest-bound review and
+`e9f60c0af2ddab7d8468bebd0b1be37c5299c63929a0409bbf99fb3622e1ceaf`; the digest-bound review and
 detached signature are `evals/assistant-cases-v3.review.json` and
 `evals/assistant-cases-v3.review.sig`. This is project-owner review, not an external, third-party or
 legal audit. The signature authorizes only those exact catalog bytes; it is not evidence that a

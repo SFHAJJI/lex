@@ -7,8 +7,8 @@
   "schema": "lex-assistant-eval-pricing/1",
   "currency": "EUR",
   "source_uri": "https://prices.azure.com/api/retail/prices",
-  "retrieved_at": "2026-08-11T02:31:42Z",
-  "valid_until": "2026-08-18T02:31:42Z",
+  "retrieved_at": "2026-08-19T11:36:41Z",
+  "valid_until": "2026-08-26T11:36:41Z",
   "candidate": {
    "model_name": "gpt-5-mini",
    "model_version": "2025-08-07",
@@ -17,13 +17,13 @@
     "meter_id": "36e7a3c4-0c96-52ef-a8fc-a0c69f28ac0e",
     "meter_name": "GPT 5 Mini Inpt Glbl 1M Tokens",
     "effective_start_date": "2025-08-01T00:00:00Z",
-    "euros_per_million": 0.2194
+    "euros_per_million": 0.2197
    },
    "output": {
     "meter_id": "e375e72c-8c4e-58d1-bb7a-32797a64d49b",
     "meter_name": "GPT 5 Mini outpt Glbl 1M Tokens",
     "effective_start_date": "2025-08-01T00:00:00Z",
-    "euros_per_million": 1.7552
+    "euros_per_million": 1.7572
    }
   },
   "grader": {
@@ -40,7 +40,7 @@
     "meter_id": "af8d03ba-b147-5885-9140-b78f86cf62ca",
     "meter_name": "GPT 5 Nano outpt Glbl 1M Tokens",
     "effective_start_date": "2025-08-01T00:00:00Z",
-    "euros_per_million": 0.351
+    "euros_per_million": 0.3514
    }
   }
  },
