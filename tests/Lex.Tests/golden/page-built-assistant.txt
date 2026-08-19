@@ -280,7 +280,7 @@ code authorizes, executes and returns the normal cited result.</p>
 <td>Closed outcomes, rows, hashes, publisher links and typed gaps</td>
 </tr>
 <tr>
-<td>Typed result</td>
+<td>Typed response contract</td>
 <td>Outcome router fills closed typed effect slots, then assembles cards, citations, disclosures and the bounded evidence ledger</td>
 <td>Direct usable answer, <code>NeedsClarification</code>, gap or refusal without generated prose</td>
 </tr>

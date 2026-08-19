@@ -67,8 +67,7 @@ mounted collections at `/benchmarks`. The combined activation gate is false: hol
 thresholds are not met while latency passes. EU holdout hybrid measures 75.5 percent of keyword
 nDCG@10 and answers even the engineered no-answer cases, so keyword remains the production default.
 
-The
-reviewed EU enrichment artifact currently contains no model-derived discovery records, so weak FTS
+The reviewed EU enrichment artifact currently contains no model-derived discovery records, so weak FTS
 and concept-vector fields are not eligible for ablation and remain excluded from every public search
 default. Any future candidate artifact is capped per work and kind, and every evidence anchor and
 text hash is revalidated against the held index during each immutable rebuild before benchmarking.

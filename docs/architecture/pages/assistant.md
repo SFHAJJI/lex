@@ -18,7 +18,7 @@ code authorizes, executes and returns the normal cited result.
 | Plan once | Planner sees only the question, bounded history and canonical typed operation schemas | A proposed plan; no tool or index access |
 | Validate, guard dates, freeze | Application code checks names and typed arguments, then re-derives instants from the question; at most one contract correction | An immutable plan capped at eight operations, a widened or clarified instant, or typed invalid request |
 | Execute without observations | Frozen executor calls the deterministic legal core, which queries the signed index | Closed outcomes, rows, hashes, publisher links and typed gaps |
-| Typed result | Outcome router fills closed typed effect slots, then assembles cards, citations, disclosures and the bounded evidence ledger | Direct usable answer, `NeedsClarification`, gap or refusal without generated prose |
+| Typed response contract | Outcome router fills closed typed effect slots, then assembles cards, citations, disclosures and the bounded evidence ledger | Direct usable answer, `NeedsClarification`, gap or refusal without generated prose |
 | Optional compose and judge | Explicit prose request may activate two separate logical Agent Framework roles | Composer draft; judge only factual Answer or Gap claims; fallback keeps the deterministic result |
 
 ## Boundary at a glance
