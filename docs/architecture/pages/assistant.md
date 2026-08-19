@@ -1,119 +1,65 @@
 # Assistant
 
-**Architectural decision: bounded plan -> validate and correct once -> freeze -> execute.** This is
-ReWOO-inspired reasoning without an observation loop, not adaptive ReAct. Retrieval constrains what the
-model can know, so exact identity resolves before planning and a date guard re-derives every planned
-instant from the question before freeze; the planner proposes a typed operation plan, while application
-code authorizes, executes and returns the normal cited result.
-
-## One bounded turn, time downward
+**Architectural decision: bounded plan -> validate and correct once -> guard dates -> freeze -> execute.**
+ReWOO-inspired reasoning without an observation loop, not adaptive ReAct. Identity resolves in
+code before any model runs; the planner proposes one typed plan over a closed catalog; code
+validates, freezes and executes it; optional prose is composed and judged only on explicit
+request and can only lose to the typed reply, never replace it.
 
 ![A conventional sequence diagram with continuous lifelines for reader, web, deterministic admission and subject authority, planner and plan gate, executor and outcome routing, the legal core and signed index, and separate optional composer and judge roles. Time runs downward through deterministic resolution, one plan, one possible correction, a date guard, freeze, execution without observations, a typed response contract and optional prose.](/built/diagrams/assistant.svg)
 
 [Open the sequence diagram at full size](/built/diagrams/assistant.svg)
 
-| Phase | Authority crossing | Closed result |
-|---|---|---|
-| Resolve deterministically | Official catalog identity, date semantics and bounded thread context enter planning | Up to eight authorized subject references, clarification context, or no subject authority |
-| Plan once | Planner sees only the question, bounded history and canonical typed operation schemas | A proposed plan; no tool or index access |
-| Validate, guard dates, freeze | Application code checks names and typed arguments, then re-derives instants from the question; at most one contract correction | An immutable plan capped at eight operations, a widened or clarified instant, or typed invalid request |
-| Execute without observations | Frozen executor calls the deterministic legal core, which queries the signed index | Closed outcomes, rows, hashes, publisher links and typed gaps |
-| Typed response contract | Outcome router fills closed typed effect slots, then assembles cards, citations, disclosures and the bounded evidence ledger | Direct usable answer, `NeedsClarification`, gap or refusal without generated prose |
-| Optional compose and judge | Explicit prose request may activate two separate logical Agent Framework roles | Composer draft; judge only factual Answer or Gap claims; fallback keeps the deterministic result |
+## What crosses each boundary
 
-## Boundary at a glance
+Every component hands the next one a typed object, never prose. **Code** marks deterministic
+application code; **model** marks a bounded Azure OpenAI call with a typed output. Cards reach
+the reader as each operation completes, but the plan is frozen before the first one runs and the
+reply is assembled once at the end.
 
-| Concern | Inside the bounded assistant agent | Outside the agent boundary |
-|---|---|---|
-| Conversation | Server-owned bounded thread context and deterministic subject authority | Browser-visible transcript, opaque token and request admission |
-| Planning | Planner LLM, canonical tool catalog, typed adapter and frozen executor | No model can call the index or legal core directly |
-| Legal truth | Closed tool calls and outcome routing only | Shared deterministic `McpCore` and signed `Lex.Index` own dates, text, hashes, retrieval and gaps |
-| Normal answer | Typed outcome router builds direct replies, cards, citations and disclosures | Web app renders typed effects without asking a model to rewrite them |
-| Optional prose | Bounded evidence ledger supplies accepted evidence | Composer and judge are separate logical Agent Framework roles on the same configured Azure OpenAI deployment |
+| From | To | Object | Carries | Cannot carry |
+|---|---|---|---|---|
+| Subject preflight, code | Planner, model | `SubjectAuthority` | opaque `subject_1..N` refs, up to eight, with the works they stand for; an optional article number; an optional runner-up disclosure; or a clarification that ends the turn | a law name or identifier the planner could rewrite |
+| Planner, model | Plan gate, code | proposed plan | tool names from the closed catalog and typed arguments; `work` may only be an offered ref | anything outside the schema: one correction, then a typed invalid request |
+| Plan gate and date guard, code | Executor, code | `OperationPlan` | one to eight frozen operations, value-copied, each with its declared effects and recorded repairs; a bare year widened to its window or turned into a clarification | a later change; the plan is sealed |
+| Executor, code | Outcome router, code | execution results | per operation a closed legal outcome, transport outcome, rows, hashes, permalinks or a typed gap; the evidence ledger, 64 entries and 96,000 characters | an effect outside the frozen declaration, which throws |
+| Outcome router, code | Composer, model, optional | draft and ledger | the already final typed reply and its evidence items with ids | text the ledger does not hold |
+| Composer, model | Judge, model | `AgentAnswerDraft` | claims bound to evidence ids kind to kind, permalinks byte-identical to evidence, already validated in code | a number or article absent from the cited excerpts |
+| Judge, model | Outcome router, code | `AgentGroundingJudgment` | Pass, Repair or Refuse | a replacement reply; anything but Pass keeps the typed result |
+| Outcome router, code | Web | `AskOutcome` | the named reply, per-operation results, closed effect cards, forced disclosures, trace, timings | model prose without its typed result underneath |
 
-The canonical `LegalOperationCatalog` is the shared contract. The planner receives its closed typed
-schemas but never calls MCP, SQL, vectors or the index. After validation and freeze, the executor
-calls the deterministic legal core. Public MCP projects the same operations independently for
-external clients; it is not the assistant's internal transport.
+## What the model may never do
 
-## Why this design
+- Choose the law. Identity is resolved against the signed catalog before planning; a decided
+  ambiguity proceeds with the runner-up disclosed, an undecidable one asks.
+- Observe a result and replan. One correction before freeze for a contract-shape error; nothing after.
+- Pick a date by itself. The date guard re-derives every planned instant from the question.
+- Call the index, the legal core or public MCP. The executor calls the in-process core; MCP is a
+  separate projection of the same operations, not the planner's transport.
+- Emit a confidence number or an unchecked claim. Prose claims cite evidence ids; permalinks,
+  numbers and article names are checked in code; the judge returns Pass, Repair or Refuse.
 
-| Approach | Decision | Product consequence |
-|---|---|---|
-| Bounded plan, freeze and execute | Chosen | Identity and time resolve first; typed and cited outcomes stay useful even without generated prose. |
-| Open-ended ReAct | Rejected | Observing refusals and replanning can drift to another law while adding unbounded latency and model cost. |
-| Naive RAG with LLM-selected identity | Rejected | Ambiguous retrieval can silently choose the wrong instrument and turn missing evidence into unsupported claims. |
+Code owns these through `WorkResolutionGuard`, `WorkSubjectRule`, `OperationPlan`,
+`OperationArguments`, `DateIntentGuard`, `UiMapper`, `AgentAnswerContract` and `AgentAnswerFinalizer`.
 
-The catalog, plan schema, executor, outcomes and evidence contracts are explicit application code;
-no LangChain or LlamaIndex loop hides chunking, tool selection or retry behavior. The planner cannot
-observe tool results and replan. The judge verifies only optional generated factual prose;
-deterministic typed results need no LLM judge.
+## Bounds
 
-## Control flow
-
-1. The web boundary validates the bounded request, idempotency key and evaluation admission when
-   present, then acquires one server thread lease. Admission applies request ownership,
-   concurrency, daily turn quotas and first-result deadline limits.
-2. The thread registry restores at most six accepted turns and deterministic subject context from
-   a SHA-256 token digest. The browser presents the opaque token but owns no durable memory.
-3. Subject preflight queries the signed work catalog before the planning model is called. Exact
-   identifiers and exact publisher-provided short titles may authorize a work. Weaker official
-   classifications remain discovery evidence only. Ambiguity is never converted into a silently
-   selected law: a decidable ambiguity proceeds with the runner-up disclosed in the reply, and an
-   undecidable one is kept as clarification context.
-4. The bounded planning agent receives the question, bounded history, closed operation schemas and
-   only opaque `subject_ref` values authorized by preflight. Without authority, work-specific
-   operations receive no subject reference.
-5. The canonical plan gate validates operation names and typed arguments. One bounded corrective
-   turn is allowed for a contract-shape error; a second invalid plan becomes a typed invalid request.
-6. The plan is frozen at no more than eight operations. There is no model observation or replanning
-   after this point.
-7. The shared legal core executes each operation against the signed index and returns a closed
-   outcome, rows, hashes and publisher links. `NeedsClarification`, legal-boundary and transport
-   gaps stay typed rather than being rewritten as apparent answers.
-8. The outcome router builds the normal answer, result cards and citations deterministically. Its
-   evidence ledger is bounded to 64 entries and 96,000 characters.
-9. The planner may set `synthesis=true` only when the reader explicitly asks to explain, describe
-   or summarise the accepted results. There is no hidden UI toggle. For example: "Show Article 6
-   on 1 Jan 2021 and explain it."
-10. Runtime additionally requires no displayed clarification, no `NeedsClarification` result and
-    no transport failure; a plan whose legal operations are all inventories has synthesis cleared
-    at plan time. `coverage`,
-    `cited_by` and `in_force_on` return closed typed lists the deterministic reply already renders
-    in full and carry no publisher text to describe, so the same coverage question once served 294
-    output tokens and once 4,973 with a composer; the flag is now reconciled against the frozen
-    plan rather than trusted, and never against the reader's words, which quoted content controls.
-    The grounded composer and conditional judge are two separate logical
-    Microsoft Agent Framework agents with separate sessions over the same configured Azure OpenAI
-    chat client and deployment used by Ask. They are roles, not a second deployment or an
-    autonomous observation loop.
-11. The composer receives the deterministic draft plus typed evidence and gets at most one format
-    or evidence-contract correction. The judge runs only for Answer or Gap drafts with factual
-    claims, then returns Pass, Repair or Refuse. A synthesis deadline or outage preserves the
-    deterministic verified result.
-
-## Authority matrix
-
-| Concern | Model may | Deterministic code owns | Implementation |
-|---|---|---|---|
-| Subject | Receive the resolution state and reason over the remaining wording | Catalog candidates, official short-title authority, ambiguity and opaque authorization refs | `WorkSearch`, `WorkResolutionGuard` and `WorkSubjectRule` |
-| Plan | Choose among offered operations and fill typed arguments | Canonical operation catalog, validation, one correction, cap and freeze | `AskService`, `OperationPlan` and `OperationArguments` |
-| Execution | Nothing | Dates, SQL, FTS, vectors, comparisons and closed outcomes | shared `McpCore` and `Lex.Index` |
-| Presentation | Draft optional prose and cite evidence ids | Direct result cards, links, citations and UI effects | `OperationAnswerPolicy` and `UiMapper` |
-| Optional prose | Compose or judge only after authoritative results exist | Activation condition, evidence-kind validation, fallback and budgets | two `AIAgent` roles in `AgentAnswerFinalizer` |
-| Safety | Propose one correction before plan freeze or one prose repair | No post-freeze replanning, typed refusal and deadlines | `OperationPlan` and `AgentAnswerFinalizer` |
-
-## The reply is a contract
-
-The web layer renders a typed outcome, not prose: the named reply, per-operation results and view
-cards drawn from closed effect slots (provision, diff, history, timeline, ranking, in-force,
-cited-by, coverage, verification, workspace, gap). An operation may only emit the effects its
-frozen plan declared; an effect outside that declaration throws rather than renders. Optional
-prose passes a deterministic answer contract before the judge: every claim cites ledger evidence
-ids kind to kind, every permalink in the text must match used evidence exactly, and numeric or
-article-numbered facts must appear in the cited excerpts. Two prompt-injection canaries, a
-current-turn and a restored-transcript probe, run against every candidate revision before
-promotion.
+- Admission: 200 accepted turns per client address and 400 globally per UTC day by default,
+  four concurrent; idempotency key and evaluation admission checked at the web boundary.
+- Deadlines: planner 12 s, first typed result 25 s, optional synthesis 45 s; on expiry the
+  deterministic result is returned as is.
+- Synthesis activates only when the planner set `synthesis=true` because the reader explicitly
+  asked to explain, and the flag is reconciled against the frozen plan, never against the
+  reader's words, which quoted content controls: a plan of inventories alone (`coverage`,
+  `cited_by`, `in_force_on`) has it cleared, because those lists are already rendered in full.
+  There is no hidden UI toggle.
+- Composer and judge are two logical Microsoft Agent Framework roles with separate sessions on
+  the same configured Azure OpenAI deployment used by Ask; one format or evidence correction for
+  the composer; the judge runs only for Answer or Gap drafts with factual claims.
+- Two prompt-injection canaries, a current-turn and a restored-transcript probe, run against
+  every candidate revision before promotion.
+- No LangChain or LlamaIndex: catalog, plan schema, executor, outcomes and evidence contracts
+  are explicit application code.
 
 ## Conversation memory
 
@@ -121,17 +67,8 @@ promotion.
 
 [Open the memory boundary diagram at full size](/built/diagrams/memory.svg)
 
-| Boundary | Responsibility | Implementation |
+| Boundary | Holds | Bound |
 |---|---|---|
-| Browser component memory | Keep the visible transcript and opaque capability for this tab only | `web/src/AssistantController.tsx` |
-| Server thread registry | Bound accepted turns, deterministic subject context, waiters, expiry and eviction | `Lex.Web/AskThreadRegistry` |
-| Planner request | Receive only the restored bounded transcript and authorized subject references | `Lex.Ask` operation planning |
-
-Conversation memory is server-owned and ephemeral: at most 1,024 threads, six accepted turns,
-32 KiB per thread, 16 MiB globally, two waiters per thread and a 30-minute idle lifetime. The
-browser holds the visible transcript and opaque capability in component memory, not local storage.
-Only the token's SHA-256 digest is retained server-side. Restart, expiry, eviction or reset loses
-the thread safely; an unknown token never falls through to another conversation.
-
-The public default admits 200 accepted turns per ingress-derived client address and 400 globally
-per UTC day. Those process-local controls are honest cost and abuse limits, not user identity.
+| Browser | The visible transcript and the opaque token, in component memory, never local storage | Lost on reload; an unknown token never falls through to another conversation |
+| Server thread registry | Accepted turns and deterministic subject context, keyed by the token's SHA-256 digest only | 1,024 threads, six turns, 32 KiB per thread, 16 MiB globally, two waiters, 30-minute idle lifetime |
+| Planner request | The restored bounded transcript and the authorized subject refs | Nothing persistent; restart, expiry, eviction or reset loses the thread safely |
