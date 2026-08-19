@@ -263,7 +263,7 @@ an authorization step and ranking as a later discovery step.</p>
 <tr>
 <td>Time and scope</td>
 <td>Apply publisher, work, language and closed date-interval constraints</td>
-<td><code>Lex.Temporal</code>, <code>Lex.Index</code> and typed operation arguments</td>
+<td><code>Lex.Index</code> interval predicates and typed operation arguments</td>
 </tr>
 <tr>
 <td>Exact coordinate</td>
@@ -289,14 +289,17 @@ an authorization step and ranking as a later discovery step.</p>
 </table></div>
 <h2>Retrieval funnel</h2>
 <ol>
-<li>Parse explicit dates, identifiers, article numbers and comparison intent.</li>
+<li>Parse identifiers, article numbers and comparison intent; dates arrive as typed arguments
+guarded upstream.</li>
 <li>Resolve the named subject against official work identity before asking the planner.</li>
-<li>Clarify zero or several credible subjects instead of letting rank silently choose one.</li>
+<li>In the assistant, clarify zero or several credible subjects instead of letting rank silently
+choose one; direct MCP callers receive ranked hits labeled ambiguous.</li>
 <li>Apply publisher, work, language and point-in-time scope.</li>
-<li>Search article text with FTS5/BM25 by default; official metadata contributes a weaker work
-discovery signal and an explicit match reason.</li>
+<li>Serve an exactly named coordinate without similarity when the question names one.</li>
+<li>Search article text with FTS5/BM25 by default, weighted title 10, number 4, heading 6, text 1;
+official metadata contributes a weaker work discovery signal and an explicit match reason.</li>
 <li>Deduplicate text states and anchors, apply bounded per-work fairness only for unscoped discovery,
-then return typed rows and provenance.</li>
+cut snippets from the content-addressed text store, then return typed rows and provenance.</li>
 </ol>
 <p>There is no generation loop that reads page one, asks the model whether it is satisfied and keeps
 searching. The application decides the evidence budget before execution. This makes latency,
@@ -341,11 +344,14 @@ population and failure behavior testable.</p>
 <h2>Why keyword remains the default</h2>
 <p>The semantic encoder, local vectors and rank fusion exist, but activation is evidence-gated.
 Offline signed benchmarks authorize vector mounting during deployment and startup; benchmark logic never switches an individual query.
-The user or API caller explicitly chooses keyword or hybrid, and an
+An API caller explicitly chooses keyword or hybrid; the shipped surfaces default
+to keyword and the assistant planner's hybrid choice is quarantined until signed activation. An
 explicit hybrid request receives a typed unavailable result for any publisher whose exact signed
 candidate did not pass. A compatible signed report binds relevance, latency, memory and size to that
 candidate before its vectors may mount. Keyword remains the default. A measured rejection is a valid
-architecture result, not a failed demo.</p>
+architecture result, not a failed demo: the current signed holdout reports measure hybrid at 75.5
+percent of keyword nDCG@10 on the EU corpus, answering even the engineered no-answer cases, so the
+gate holds vectors off for relevance while latency passes.</p>
 </article>
 </main>
 <footer>

@@ -76,7 +76,7 @@ public sealed class ArchitectureDossierTests : IClassFixture<GoldenTests.Site>
         Assert.Contains("Open the retrieval diagram at full size", html);
         Assert.Contains("Offline signed benchmarks authorize vector mounting", html);
         Assert.Contains("never switches an individual query", html);
-        Assert.Contains("user or API caller explicitly chooses", html);
+        Assert.Contains("API caller explicitly chooses", html);
 
         var css = await _client.GetStringAsync("/dossier.css");
         Assert.Contains(".dossier-table {", css);
@@ -100,10 +100,10 @@ public sealed class ArchitectureDossierTests : IClassFixture<GoldenTests.Site>
         Assert.Contains("PLAN ONCE", svg);
         Assert.Contains("VALIDATE, CORRECT ONCE,", svg);
         Assert.Contains("EXECUTE WITHOUT", svg);
-        Assert.Contains("TYPED RESULT", svg);
+        Assert.Contains("TYPED RESPONSE CONTRACT", svg);
         Assert.Contains("OPTIONAL PROSE", svg);
         Assert.Contains("Admission + subject", svg);
-        Assert.Contains("The planner receives schemas only. It never observes execution and never replans.", svg);
+        Assert.Contains("The planner receives the question, bounded history and typed schemas. It never observes execution and never replans.", svg);
         Assert.DoesNotContain("Public MCP", svg);
         Assert.Contains("same configured Azure OpenAI deployment", html);
         Assert.Contains("There is no hidden UI toggle", html);
@@ -435,7 +435,7 @@ public sealed class ArchitectureDossierTests : IClassFixture<GoldenTests.Site>
             Golden.RepositoryRoot(), "docs", "assistant-evaluation-scenario-matrix.md"));
 
         Assert.Contains("Owner-reviewed and signed", matrix);
-        Assert.Contains("e21876f96bd0dc6dd720b3c8878daac00baed2b96560b04d99470fabdb015376", matrix);
+        Assert.Contains("10fa9bb2246f387b1bde204cea0deededaf4c5834fb3d7fadd1d165c0f853f8a", matrix);
         Assert.Contains("candidate has already passed the live run", matrix);
         Assert.Contains("Live LLM release evaluation", matrix);
         Assert.Contains("Deterministic integration", matrix);

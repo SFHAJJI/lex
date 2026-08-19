@@ -279,7 +279,7 @@ ambiguous and make provenance impossible to state precisely.</p>
 <tr>
 <td>Manifestation</td>
 <td>The file the publisher served</td>
-<td>Media type, URL, bytes and SHA-256</td>
+<td>URL, bytes and SHA-256, with a format field on alternative members</td>
 <td>evidence repositories and manifestation records</td>
 </tr>
 </tbody>

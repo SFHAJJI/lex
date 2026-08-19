@@ -19,8 +19,8 @@ bottleneck is bounded, and each next move names the capability it buys and the c
 | Boundary | Current design | Consequence |
 |---|---|---|
 | Runtime | One always-on Container Apps replica with local immutable indexes | Fast in-process calls; process-local quotas and thread memory are authoritative |
-| Assistant | Four concurrent turns, 200 accepted turns per client address and 400 globally per day | Predictable public cost; NAT and rotating addresses are not identities |
-| MCP | Eight executing, sixteen queued and a two-second queue deadline | Overload becomes a typed refusal rather than unbounded latency |
+| Assistant | Defaults of four concurrent turns, 200 accepted turns per client address and 400 globally per day | Predictable public cost; NAT and rotating addresses are not identities |
+| MCP | Eight executing, sixteen queued, a two-second queue deadline, two hybrid slots, and rolling 120 per client and 600 global calls per minute | Overload becomes a typed refusal rather than unbounded latency |
 | Agent | Eight frozen operations, 64 evidence items and 96,000 evidence characters | A large research request must be decomposed by the reader |
 | Retrieval | Keyword default; hybrid available only behind signed evidence gates | Conceptual recall improvements do not outrank measured precision |
 | Release | One current revision, one exact rollback, one transient candidate | No unlimited artifact or revision accumulation |
@@ -33,7 +33,7 @@ candidate promotion. Older figures are historical observations and are not prese
 | Observable trigger | Next move | Cost introduced |
 |---|---|---|
 | MCP queue-deadline refusals | Narrow the gate to encoder and vector work before adding infrastructure | More concurrency paths to test |
-| Global daily cap or Azure OpenAI 429s on three sustained days | Raise model quota and public budget together; consider provisioned throughput only after utilization proves it | Higher fixed or variable model cost |
+| Global daily cap saturation or repeated Azure OpenAI 429s, observed manually today since no alert rule exists yet | Raise model quota and public budget together; consider provisioned throughput only after utilization proves it | Higher fixed or variable model cost |
 | Sustained served p95 above the release threshold | Externalize quota, idempotency and thread state, then add replicas | A shared state dependency and distributed coordination |
 | Working set approaches the container memory gate | Move signed artifacts to verified VM-local disk under D55 | A second deployment path and OS operations |
 | Third publisher admitted | Make the required-publisher set one source and remeasure fan-out | More vocabulary and latency variance |

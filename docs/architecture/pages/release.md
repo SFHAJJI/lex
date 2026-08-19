@@ -12,7 +12,7 @@ not production merely because a container started.
 | Signed artifacts | Bind code, indexes, vectors, encoder and scope to exact hashes | local builder plus bounded `lex-ops` publication |
 | Candidate | Start an immutable revision while production traffic remains unchanged | `deploy.yml` and Azure Container Apps |
 | Separated gates | Verify readiness, retrieval, assistant behavior, browser behavior and human review | candidate scripts, signed evaluation release and protected environments |
-| Promote or restore | Revalidate identities before one traffic change or exact rollback | `revision-traffic.yml` and Key Vault receipts |
+| Promote or restore | Revalidate identities before one traffic change or exact rollback | `revision-traffic.yml` and protected release-state receipts |
 | Retention boundary | Preserve production and one rollback without deleting unproven shared artifacts | Container Apps revision policy and `lex-ops` private-staging cleanup |
 
 ## State machine
@@ -42,8 +42,11 @@ creation order rather than age.
 The deploy workflow creates a zero-traffic revision from the exact image and signed artifact set,
 then checks readiness, Model Context Protocol (MCP), Luxembourg and European Union (EU) search. The
 assistant evaluation binds the frozen cases, candidate, typed outcomes, latency and cost to a
-signed report under separate project-owner review. Only the traffic workflow may revalidate those
-records and promote; no automated actor approves its own output.
+signed report under separate project-owner review. The run itself is admitted by a signed
+single-use capability that pre-declares every allowed request by idempotency key and body digest,
+expires after thirty minutes and cannot be replayed. Outside the gated first-official-release
+bootstrap, only the traffic workflow may revalidate those records and promote; no automated actor
+approves its own output.
 
 This page does not hard-code mounted state: runtime evidence supplies the active identities and
 capabilities. The traffic workflow also requires target and rollback to remain at `min=max=1`;
@@ -66,12 +69,12 @@ These labels describe the evidence cited here, not a claim about an uninspected 
 | Corpus release | **Measured** | Immutable raw records plus the exact adapter/code commit | Integrity, expected inventory, provenance and publisher-specific completeness checks | Protected corpus Git commit/ref plus its integrity manifest binding files, hashes and source coordinates | Refuse the corpus release and retain its predecessor. |
 | Derived articles | **Measured** | Exact corpus commit, immutable extraction profile and deriver commit | Deterministic re-derive, schema checks and extraction-quality guards | Protected articles Git commit/ref plus its integrity manifest binding corpus, profile, code and derived-file hashes | Refuse the article layer; source evidence is never rewritten to hide a gap. |
 | SQLite and vectors | **Measured** | Exact articles commit, index code, encoder/tokenizer and build configuration | Stamp verification, content/ordinal checks, required publishers and reproducible artifact hashes | Build tickets, index stamps and hashes bind database, vectors, model bundle, scope and commits; no detached release signature exists yet | Do not mount or stage a mismatched artifact set. |
-| 200-case deterministic retrieval benchmark | **Quarantined** for Luxembourg (LU); **Next** for EU | Frozen engineer-reviewed cases, exact index/vector/model identities and machine envelope | Exactness, temporal, relevance, latency, memory and regression thresholds; **no large language model (LLM) grader** | Benchmark report and digest become inputs to the later signed artifact release | Keyword remains the default: LU hybrid failed its accepted evidence gate and exact-release EU hybrid remains unproven. |
+| 200-case deterministic retrieval benchmark | **Quarantined** for both publishers | Frozen engineer-reviewed cases, exact index/vector/model identities and machine envelope | Exactness, temporal, relevance, latency, memory and regression thresholds; **no large language model (LLM) grader** | Benchmark report and digest become inputs to the later signed artifact release | Keyword remains the default: both signed holdout reports fail their relevance gates while latency passes. |
 | Private staging | **Next** | The exact locally verified release bytes, hashes and create-only destination names | Create each private object once, then bind its entity tag (ETag), hash and byte length; this is coordination evidence, not immutable storage | Draft inventory and storage ETags record the exact staged objects; staging is not public signed evidence | Delete only the exact failed draft objects the publisher created; never a canonical release. |
 | Signed release | **Next** | Exact staged bytes, artifact identities and publication workflow commit | An **exact-byte publication transaction** signs the manifest, publishes once, downloads every public asset and compares the Secure Hash Algorithm 256-bit (SHA-256) digest plus length | This final artifact publication is the first detached-signature boundary: immutable public release, whole-artifact manifest and signature | Ambiguous read-back requires reconciliation; retry never overwrites an existing public release. |
 | Zero-traffic candidate | **Next** | Exact code commit, immutable image digest and signed artifact set | Readiness, attestation, both jurisdictions, Hypertext Transfer Protocol (HTTP) contract and one-replica invariant | Azure Resource Manager plus runtime attestation bind revision, image, code and the already signed mounted manifest set | Candidate remains at zero traffic; production and exact rollback are unchanged. |
 | 25-case live assistant evaluation | **Next** | Frozen reviewed catalog, exact candidate, Azure candidate deployment and separate grader deployment | Real plan/freeze/execute requests, typed result checks, token/cost/latency and browser gates, with a reported relevance score beside each repetition | Catalog review is separately signed; report and browser-evidence hashes are bound by the signed evaluation release | Any repetition or budget failure denies promotion and returns the candidate to zero traffic. |
-| Promotion or rollback | **Next** | Exact candidate evidence release plus current production/rollback identities | Protected workflow revalidates every identity immediately before one traffic mutation | Signed promotion and release-state receipts | No identity match means no traffic change; rollback selects the exact retained former production revision. |
+| Promotion or rollback | **Next** | Exact candidate evidence release plus current production/rollback identities | Protected workflow revalidates every identity immediately before one traffic mutation | Release-state receipts recorded as protected deployment records; the bootstrap fallback receipt is additionally attested | No identity match means no traffic change; rollback selects the exact retained former production revision. |
 
 The offline retrieval benchmark and live assistant evaluation answer different questions. The first
 uses 200 fixed judgments and deterministic metrics to decide whether hybrid retrieval may activate;
@@ -119,7 +122,7 @@ for that exact build, not a claim about any signed release.
 | Candidate token budget | The current reservation is 928,000 input and 92,000 output tokens. Setup and final turns are charged to this candidate budget. |
 | Grader token budget | The current reservation is 815,104 input and 384,000 output tokens on a separately authenticated `gpt-5-nano` deployment. |
 | Cost control | The catalog has an outer EUR 10 ceiling, where `EUR` is the standard currency code for euros. The current maximum-token reservation prices at EUR 0.5356487 before inference, then measured use is gated again. This is not a live Azure billing cutoff and cannot interrupt an in-flight model call. Signed call counts and per-call token ceilings bound the run instead. |
-| CI/CD | GitHub Actions creates an immutable zero-traffic candidate, verifies the signed artifact manifest and both jurisdictions, runs HTTP and browser evaluation, publishes signed evidence, then a separate protected workflow revalidates it before promotion or exact rollback. |
+| CI/CD | GitHub Actions creates an immutable zero-traffic candidate and verifies the signed artifact manifest, both jurisdictions, prompt-injection probes and load behavior; a local signed runner executes the HTTP and browser evaluation, bounded `lex-ops` publication signs and publishes the evidence, then a separate protected workflow revalidates it before promotion or exact rollback. |
 
 ### Evaluation flow
 
@@ -141,8 +144,8 @@ The Runtime grounding judge checks only optional generated factual prose during 
 and falls back to the typed result. The separate Release grader receives the frozen question,
 rubric, bounded reply, typed operations and trace. Before grading, the deterministic runner checks
 tool arguments, legal and transport outcomes, UI effect, model identity, tokens, latency and stream
-equality. It reads typed SSE plus the matching terminal object—not Azure logs or model
-chain-of-thought—and the signed report omits prompts, legal text, raw tool payloads and free-form
+equality. It reads typed SSE plus the matching terminal object, not Azure logs or model
+chain-of-thought, and the signed report omits prompts, legal text, raw tool payloads and free-form
 grader reasons.
 
 ## Verified limits
@@ -153,10 +156,10 @@ evidence exists; a model answer cannot waive it.
 | Limitation | User impact | Current containment | Next evidence needed |
 |---|---|---|---|
 | Publisher and jurisdiction coverage is limited to EUR-Lex/EU and Legilux/Luxembourg. | Lex cannot establish coverage or absence for another publisher or jurisdiction. | Coverage responses disclose the mounted set and known gaps; required publishers are release-gated. | A new immutable source adapter, corpus/articles/index evidence and the same retrieval and release gates for that publisher. |
-| Luxembourg hybrid retrieval remains quarantined because the accepted relevance and latency gate has not passed. | Luxembourg search uses deterministic keyword retrieval; conceptual recall may be lower. | Keyword is the production default and hybrid cannot activate from configuration alone. | A fresh signed holdout report meeting relevance, warm-latency, memory and regression thresholds. |
-| EU hybrid retrieval is currently unproven for this release. | EU search also remains keyword-first; no semantic improvement is claimed. | The signed activation flag stays false unless the exact EU artifacts and model pass the frozen benchmark. | An accepted exact-release EU benchmark report, including holdout and cold/warm operational measurements. |
+| Luxembourg hybrid retrieval remains quarantined because the accepted relevance gate has not passed. | Luxembourg search uses deterministic keyword retrieval; conceptual recall may be lower. | Keyword is the production default and hybrid cannot activate from configuration alone. | A fresh signed holdout report meeting relevance, warm-latency, memory and regression thresholds. |
+| EU hybrid retrieval failed its current signed benchmark for this release. | EU search also remains keyword-first; no semantic improvement is claimed. | The signed activation flag stays false unless the exact EU artifacts and model pass the frozen benchmark. | An accepted exact-release EU benchmark report, including holdout and cold/warm operational measurements. |
 | Current image-only EU annex wording is not derived through optical character recognition (OCR) or searchable. | A reader may see the official record and source but cannot search or quote annex text Lex does not safely hold. | Source identity, source address and byte evidence are retained; the text state remains explicitly unavailable rather than guessed. | An additive, reviewed acquisition/extraction profile with fidelity measurements, protected corpus/articles commits and a rebuilt signed artifact release. |
-| The exact 25-case assistant catalog is owner-reviewed and signed, but has not yet been executed against a candidate. | No claim is made yet that a candidate passed the new LU, language, empty, refusal, compound and continuation cases. | Preflight verifies the digest-bound owner review and trusted signature before inference; any catalog-byte change invalidates approval. | Live signed report, browser evidence and promotion verification for the same candidate identities. |
+| The exact 25-case assistant catalog is owner-reviewed and signed after its latest revision, and no published signed run yet matches a serving revision. | No claim is made yet that a serving revision passed the new LU, language, empty, refusal, compound and continuation cases. | Preflight verifies the digest-bound owner review and trusted signature before inference; any catalog-byte change invalidates approval until the owner re-signs. | Live signed report, browser evidence and promotion verification for the same candidate identities. |
 | Runtime quotas, idempotency and assistant thread state are process-local. | The service cannot safely scale to multiple active replicas today. | Release verification pins production, rollback and candidate revisions to one replica each. | Externalized shared state plus concurrency, failover and latency evidence before a multi-replica release. |
 
 Operational thresholds are detailed under [limits and scale](/built/limits), retrieval activation

@@ -244,10 +244,11 @@ HTTP 200
 <p class="sub">A bounded agent around a deterministic legal core.</p>
 <nav class="dossier-tabs" aria-label="Architecture dossier"><a href="/built">Overview</a><a href="/built/model">Legal model</a><a href="/built/data">Data authority</a><a href="/built/retrieval">Retrieval</a><a href="/built/assistant" aria-current="page">Assistant</a><a href="/built/release">Release</a><a href="/built/decisions">Trade-offs</a><a href="/built/incidents">Incidents</a><a href="/built/limits">Limits and scale</a><a href="/built/repositories">Repositories</a><a class="dossier-print" href="/architecture/dossier">Complete dossier</a></nav><article class="architecture-dossier"><p><strong>Architectural decision: bounded plan -&gt; validate and correct once -&gt; freeze -&gt; execute.</strong> This is
 ReWOO-inspired reasoning without an observation loop, not adaptive ReAct. Retrieval constrains what the
-model can know, so exact identity and time resolution happen before planning; the planner proposes a
-typed operation plan, while application code authorizes, executes and returns the normal cited result.</p>
+model can know, so exact identity resolves before planning and a date guard re-derives every planned
+instant from the question before freeze; the planner proposes a typed operation plan, while application
+code authorizes, executes and returns the normal cited result.</p>
 <h2>One bounded turn, time downward</h2>
-<div class="dossier-sequence" tabindex="0" role="region" aria-label="Scrollable assistant sequence diagram"><img src="/built/diagrams/assistant.svg" alt="A conventional sequence diagram with continuous lifelines for reader, web, deterministic admission and subject authority, planner and plan gate, executor and outcome routing, the legal core and signed index, and separate optional composer and judge roles. Time runs downward through deterministic resolution, one plan, one possible correction, freeze, execution without observations, a direct typed result and optional prose." /></div>
+<div class="dossier-sequence" tabindex="0" role="region" aria-label="Scrollable assistant sequence diagram"><img src="/built/diagrams/assistant.svg" alt="A conventional sequence diagram with continuous lifelines for reader, web, deterministic admission and subject authority, planner and plan gate, executor and outcome routing, the legal core and signed index, and separate optional composer and judge roles. Time runs downward through deterministic resolution, one plan, one possible correction, a date guard, freeze, execution without observations, a typed response contract and optional prose." /></div>
 <p><a href="/built/diagrams/assistant.svg">Open the sequence diagram at full size</a></p>
 <div class="dossier-table" tabindex="0" role="region" aria-label="Scrollable architecture table"><table>
 <thead>
@@ -261,7 +262,7 @@ typed operation plan, while application code authorizes, executes and returns th
 <tr>
 <td>Resolve deterministically</td>
 <td>Official catalog identity, date semantics and bounded thread context enter planning</td>
-<td>One authorized subject reference, clarification context, or no subject authority</td>
+<td>Up to eight authorized subject references, clarification context, or no subject authority</td>
 </tr>
 <tr>
 <td>Plan once</td>
@@ -269,9 +270,9 @@ typed operation plan, while application code authorizes, executes and returns th
 <td>A proposed plan; no tool or index access</td>
 </tr>
 <tr>
-<td>Validate, correct once, freeze</td>
-<td>Application code checks names and typed arguments; at most one contract correction</td>
-<td>An immutable plan capped at eight operations, or typed invalid request</td>
+<td>Validate, guard dates, freeze</td>
+<td>Application code checks names and typed arguments, then re-derives instants from the question; at most one contract correction</td>
+<td>An immutable plan capped at eight operations, a widened or clarified instant, or typed invalid request</td>
 </tr>
 <tr>
 <td>Execute without observations</td>
@@ -280,7 +281,7 @@ typed operation plan, while application code authorizes, executes and returns th
 </tr>
 <tr>
 <td>Typed result</td>
-<td>Outcome router assembles cards, citations, disclosures and the bounded evidence ledger</td>
+<td>Outcome router fills closed typed effect slots, then assembles cards, citations, disclosures and the bounded evidence ledger</td>
 <td>Direct usable answer, <code>NeedsClarification</code>, gap or refusal without generated prose</td>
 </tr>
 <tr>
@@ -366,13 +367,14 @@ deterministic typed results need no LLM judge.</p>
 <ol>
 <li>The web boundary validates the bounded request, idempotency key and evaluation admission when
 present, then acquires one server thread lease. Admission applies request ownership,
-concurrency, daily cost and first-result deadline limits.</li>
+concurrency, daily turn quotas and first-result deadline limits.</li>
 <li>The thread registry restores at most six accepted turns and deterministic subject context from
 a SHA-256 token digest. The browser presents the opaque token but owns no durable memory.</li>
 <li>Subject preflight queries the signed work catalog before the planning model is called. Exact
 identifiers and exact publisher-provided short titles may authorize a work. Weaker official
-classifications remain discovery evidence only. Ambiguity is kept as clarification context,
-never converted into a silently selected law.</li>
+classifications remain discovery evidence only. Ambiguity is never converted into a silently
+selected law: a decidable ambiguity proceeds with the runner-up disclosed in the reply, and an
+undecidable one is kept as clarification context.</li>
 <li>The bounded planning agent receives the question, bounded history, closed operation schemas and
 only opaque <code>subject_ref</code> values authorized by preflight. Without authority, work-specific
 operations receive no subject reference.</li>
@@ -388,8 +390,9 @@ evidence ledger is bounded to 64 entries and 96,000 characters.</li>
 <li>The planner may set <code>synthesis=true</code> only when the reader explicitly asks to explain, describe
 or summarise the accepted results. There is no hidden UI toggle. For example: &quot;Show Article 6
 on 1 Jan 2021 and explain it.&quot;</li>
-<li>Runtime additionally requires no displayed clarification, no <code>NeedsClarification</code> result, no
-transport failure, and at least one accepted operation that is not an inventory. <code>coverage</code>,
+<li>Runtime additionally requires no displayed clarification, no <code>NeedsClarification</code> result and
+no transport failure; a plan whose legal operations are all inventories has synthesis cleared
+at plan time. <code>coverage</code>,
 <code>cited_by</code> and <code>in_force_on</code> return closed typed lists the deterministic reply already renders
 in full and carry no publisher text to describe, so the same coverage question once served 294
 output tokens and once 4,973 with a composer; the flag is now reconciled against the frozen
@@ -452,6 +455,16 @@ deterministic verified result.</li>
 </tr>
 </tbody>
 </table></div>
+<h2>The reply is a contract</h2>
+<p>The web layer renders a typed outcome, not prose: the named reply, per-operation results and view
+cards drawn from closed effect slots (provision, diff, history, timeline, ranking, in-force,
+cited-by, coverage, verification, workspace, gap). An operation may only emit the effects its
+frozen plan declared; an effect outside that declaration throws rather than renders. Optional
+prose passes a deterministic answer contract before the judge: every claim cites ledger evidence
+ids kind to kind, every permalink in the text must match used evidence exactly, and numeric or
+article-numbered facts must appear in the cited excerpts. Two prompt-injection canaries, a
+current-turn and a restored-transcript probe, run against every candidate revision before
+promotion.</p>
 <h2>Conversation memory</h2>
 <p><img src="/built/diagrams/memory.svg" alt="The browser keeps only a visible transcript and opaque token while bounded server memory stores six accepted turns and deterministic subject context, expiring after thirty idle minutes." /></p>
 <p><a href="/built/diagrams/memory.svg">Open the memory boundary diagram at full size</a></p>

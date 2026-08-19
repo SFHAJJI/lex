@@ -266,12 +266,12 @@ what to do.</p>
 <tr>
 <td>Evidence and derivation</td>
 <td>Preserve publisher bytes, then extract articles or typed gaps reproducibly</td>
-<td><code>lex-corpus-*</code>, <code>Lex.Sources.*</code> and <code>Lex.Derive</code></td>
+<td><code>lex-corpus-*</code>, <code>Lex.Sources.*</code>, <code>Lex.Law</code> and <code>Lex.Derive</code></td>
 </tr>
 <tr>
 <td>Signed index</td>
 <td>Bind time, text, metadata, vectors and provenance into local immutable artifacts</td>
-<td><code>Lex.Index</code>, built by <code>Lex.Ingest</code></td>
+<td><code>Lex.Index</code> and <code>Lex.Temporal</code> version identity, built by <code>Lex.Ingest</code></td>
 </tr>
 <tr>
 <td>Legal core</td>
@@ -334,8 +334,8 @@ explain but cannot choose legal identity, dates, evidence or actions.</p>
 <h3>How to read this dossier</h3>
 <p>The first four tabs explain the legal and retrieval product. <strong>Assistant</strong> shows where the agent is
 useful and where it has no authority. <strong>Release</strong> shows how evaluated code and data become one
-rollback-safe revision. The final three tabs expose decisions, incidents and limits instead of
-hiding them behind a feature list.</p>
+rollback-safe revision. The final four tabs expose decisions, incidents, limits and the repository
+split instead of hiding them behind a feature list.</p>
 <p>The pages describe durable contracts, not a moment in one rollout. Mounted corpus identities,
 coverage and retrieval capabilities are read from the running revision, while latency, relevance,
 memory and promotion claims appear only when a signed report binds them to that exact artifact set.</p>
@@ -382,7 +382,7 @@ ambiguous and make provenance impossible to state precisely.</p>
 <tr>
 <td>Manifestation</td>
 <td>The file the publisher served</td>
-<td>Media type, URL, bytes and SHA-256</td>
+<td>URL, bytes and SHA-256, with a format field on alternative members</td>
 <td>evidence repositories and manifestation records</td>
 </tr>
 </tbody>
@@ -479,6 +479,11 @@ disposable. That split lets an extraction improve without rewriting what the pub
 </tr>
 </tbody>
 </table></div>
+<p>Extraction profiles are versioned and their fingerprints are frozen by test; an improvement ships
+as a new profile version, and the Memorial fallback ladder promotes the successor only when it
+recovers strictly more wording. Evidence is fetched once per address: a later silent edit behind
+the same address is structurally invisible, which is exactly why every observation binds what Lex
+saw and when it saw it.</p>
 <h3>Official discovery metadata</h3>
 <p>Luxembourg acquisition mirrors Legilux <code>subjectLevel1</code> and <code>subjectLevel2</code> assertions with the
 concept URI, French label, level, language and source. EU acquisition mirrors official short-title
@@ -544,7 +549,7 @@ an authorization step and ranking as a later discovery step.</p>
 <tr>
 <td>Time and scope</td>
 <td>Apply publisher, work, language and closed date-interval constraints</td>
-<td><code>Lex.Temporal</code>, <code>Lex.Index</code> and typed operation arguments</td>
+<td><code>Lex.Index</code> interval predicates and typed operation arguments</td>
 </tr>
 <tr>
 <td>Exact coordinate</td>
@@ -570,14 +575,17 @@ an authorization step and ranking as a later discovery step.</p>
 </table></div>
 <h3>Retrieval funnel</h3>
 <ol>
-<li>Parse explicit dates, identifiers, article numbers and comparison intent.</li>
+<li>Parse identifiers, article numbers and comparison intent; dates arrive as typed arguments
+guarded upstream.</li>
 <li>Resolve the named subject against official work identity before asking the planner.</li>
-<li>Clarify zero or several credible subjects instead of letting rank silently choose one.</li>
+<li>In the assistant, clarify zero or several credible subjects instead of letting rank silently
+choose one; direct MCP callers receive ranked hits labeled ambiguous.</li>
 <li>Apply publisher, work, language and point-in-time scope.</li>
-<li>Search article text with FTS5/BM25 by default; official metadata contributes a weaker work
-discovery signal and an explicit match reason.</li>
+<li>Serve an exactly named coordinate without similarity when the question names one.</li>
+<li>Search article text with FTS5/BM25 by default, weighted title 10, number 4, heading 6, text 1;
+official metadata contributes a weaker work discovery signal and an explicit match reason.</li>
 <li>Deduplicate text states and anchors, apply bounded per-work fairness only for unscoped discovery,
-then return typed rows and provenance.</li>
+cut snippets from the content-addressed text store, then return typed rows and provenance.</li>
 </ol>
 <p>There is no generation loop that reads page one, asks the model whether it is satisfied and keeps
 searching. The application decides the evidence budget before execution. This makes latency,
@@ -622,18 +630,22 @@ population and failure behavior testable.</p>
 <h3>Why keyword remains the default</h3>
 <p>The semantic encoder, local vectors and rank fusion exist, but activation is evidence-gated.
 Offline signed benchmarks authorize vector mounting during deployment and startup; benchmark logic never switches an individual query.
-The user or API caller explicitly chooses keyword or hybrid, and an
+An API caller explicitly chooses keyword or hybrid; the shipped surfaces default
+to keyword and the assistant planner's hybrid choice is quarantined until signed activation. An
 explicit hybrid request receives a typed unavailable result for any publisher whose exact signed
 candidate did not pass. A compatible signed report binds relevance, latency, memory and size to that
 candidate before its vectors may mount. Keyword remains the default. A measured rejection is a valid
-architecture result, not a failed demo.</p>
+architecture result, not a failed demo: the current signed holdout reports measure hybrid at 75.5
+percent of keyword nDCG@10 on the EU corpus, answering even the engineered no-answer cases, so the
+gate holds vectors off for relevance while latency passes.</p>
 <h2>Assistant</h2>
 <p><strong>Architectural decision: bounded plan -&gt; validate and correct once -&gt; freeze -&gt; execute.</strong> This is
 ReWOO-inspired reasoning without an observation loop, not adaptive ReAct. Retrieval constrains what the
-model can know, so exact identity and time resolution happen before planning; the planner proposes a
-typed operation plan, while application code authorizes, executes and returns the normal cited result.</p>
+model can know, so exact identity resolves before planning and a date guard re-derives every planned
+instant from the question before freeze; the planner proposes a typed operation plan, while application
+code authorizes, executes and returns the normal cited result.</p>
 <h3>One bounded turn, time downward</h3>
-<div class="dossier-sequence" tabindex="0" role="region" aria-label="Scrollable assistant sequence diagram"><img src="/built/diagrams/assistant.svg" alt="A conventional sequence diagram with continuous lifelines for reader, web, deterministic admission and subject authority, planner and plan gate, executor and outcome routing, the legal core and signed index, and separate optional composer and judge roles. Time runs downward through deterministic resolution, one plan, one possible correction, freeze, execution without observations, a direct typed result and optional prose." /></div>
+<div class="dossier-sequence" tabindex="0" role="region" aria-label="Scrollable assistant sequence diagram"><img src="/built/diagrams/assistant.svg" alt="A conventional sequence diagram with continuous lifelines for reader, web, deterministic admission and subject authority, planner and plan gate, executor and outcome routing, the legal core and signed index, and separate optional composer and judge roles. Time runs downward through deterministic resolution, one plan, one possible correction, a date guard, freeze, execution without observations, a typed response contract and optional prose." /></div>
 <p><a href="/built/diagrams/assistant.svg">Open the sequence diagram at full size</a></p>
 <div class="dossier-table" tabindex="0" role="region" aria-label="Scrollable architecture table"><table>
 <thead>
@@ -647,7 +659,7 @@ typed operation plan, while application code authorizes, executes and returns th
 <tr>
 <td>Resolve deterministically</td>
 <td>Official catalog identity, date semantics and bounded thread context enter planning</td>
-<td>One authorized subject reference, clarification context, or no subject authority</td>
+<td>Up to eight authorized subject references, clarification context, or no subject authority</td>
 </tr>
 <tr>
 <td>Plan once</td>
@@ -655,9 +667,9 @@ typed operation plan, while application code authorizes, executes and returns th
 <td>A proposed plan; no tool or index access</td>
 </tr>
 <tr>
-<td>Validate, correct once, freeze</td>
-<td>Application code checks names and typed arguments; at most one contract correction</td>
-<td>An immutable plan capped at eight operations, or typed invalid request</td>
+<td>Validate, guard dates, freeze</td>
+<td>Application code checks names and typed arguments, then re-derives instants from the question; at most one contract correction</td>
+<td>An immutable plan capped at eight operations, a widened or clarified instant, or typed invalid request</td>
 </tr>
 <tr>
 <td>Execute without observations</td>
@@ -666,7 +678,7 @@ typed operation plan, while application code authorizes, executes and returns th
 </tr>
 <tr>
 <td>Typed result</td>
-<td>Outcome router assembles cards, citations, disclosures and the bounded evidence ledger</td>
+<td>Outcome router fills closed typed effect slots, then assembles cards, citations, disclosures and the bounded evidence ledger</td>
 <td>Direct usable answer, <code>NeedsClarification</code>, gap or refusal without generated prose</td>
 </tr>
 <tr>
@@ -752,13 +764,14 @@ deterministic typed results need no LLM judge.</p>
 <ol>
 <li>The web boundary validates the bounded request, idempotency key and evaluation admission when
 present, then acquires one server thread lease. Admission applies request ownership,
-concurrency, daily cost and first-result deadline limits.</li>
+concurrency, daily turn quotas and first-result deadline limits.</li>
 <li>The thread registry restores at most six accepted turns and deterministic subject context from
 a SHA-256 token digest. The browser presents the opaque token but owns no durable memory.</li>
 <li>Subject preflight queries the signed work catalog before the planning model is called. Exact
 identifiers and exact publisher-provided short titles may authorize a work. Weaker official
-classifications remain discovery evidence only. Ambiguity is kept as clarification context,
-never converted into a silently selected law.</li>
+classifications remain discovery evidence only. Ambiguity is never converted into a silently
+selected law: a decidable ambiguity proceeds with the runner-up disclosed in the reply, and an
+undecidable one is kept as clarification context.</li>
 <li>The bounded planning agent receives the question, bounded history, closed operation schemas and
 only opaque <code>subject_ref</code> values authorized by preflight. Without authority, work-specific
 operations receive no subject reference.</li>
@@ -774,8 +787,9 @@ evidence ledger is bounded to 64 entries and 96,000 characters.</li>
 <li>The planner may set <code>synthesis=true</code> only when the reader explicitly asks to explain, describe
 or summarise the accepted results. There is no hidden UI toggle. For example: &quot;Show Article 6
 on 1 Jan 2021 and explain it.&quot;</li>
-<li>Runtime additionally requires no displayed clarification, no <code>NeedsClarification</code> result, no
-transport failure, and at least one accepted operation that is not an inventory. <code>coverage</code>,
+<li>Runtime additionally requires no displayed clarification, no <code>NeedsClarification</code> result and
+no transport failure; a plan whose legal operations are all inventories has synthesis cleared
+at plan time. <code>coverage</code>,
 <code>cited_by</code> and <code>in_force_on</code> return closed typed lists the deterministic reply already renders
 in full and carry no publisher text to describe, so the same coverage question once served 294
 output tokens and once 4,973 with a composer; the flag is now reconciled against the frozen
@@ -838,6 +852,16 @@ deterministic verified result.</li>
 </tr>
 </tbody>
 </table></div>
+<h3>The reply is a contract</h3>
+<p>The web layer renders a typed outcome, not prose: the named reply, per-operation results and view
+cards drawn from closed effect slots (provision, diff, history, timeline, ranking, in-force,
+cited-by, coverage, verification, workspace, gap). An operation may only emit the effects its
+frozen plan declared; an effect outside that declaration throws rather than renders. Optional
+prose passes a deterministic answer contract before the judge: every claim cites ledger evidence
+ids kind to kind, every permalink in the text must match used evidence exactly, and numeric or
+article-numbered facts must appear in the cited excerpts. Two prompt-injection canaries, a
+current-turn and a restored-transcript probe, run against every candidate revision before
+promotion.</p>
 <h3>Conversation memory</h3>
 <p><img src="/built/diagrams/memory.svg" alt="The browser keeps only a visible transcript and opaque token while bounded server memory stores six accepted turns and deterministic subject context, expiring after thirty idle minutes." /></p>
 <p><a href="/built/diagrams/memory.svg">Open the memory boundary diagram at full size</a></p>
@@ -912,7 +936,7 @@ not production merely because a container started.</p>
 <tr>
 <td>Promote or restore</td>
 <td>Revalidate identities before one traffic change or exact rollback</td>
-<td><code>revision-traffic.yml</code> and Key Vault receipts</td>
+<td><code>revision-traffic.yml</code> and protected release-state receipts</td>
 </tr>
 <tr>
 <td>Retention boundary</td>
@@ -973,8 +997,11 @@ creation order rather than age.</p>
 <p>The deploy workflow creates a zero-traffic revision from the exact image and signed artifact set,
 then checks readiness, Model Context Protocol (MCP), Luxembourg and European Union (EU) search. The
 assistant evaluation binds the frozen cases, candidate, typed outcomes, latency and cost to a
-signed report under separate project-owner review. Only the traffic workflow may revalidate those
-records and promote; no automated actor approves its own output.</p>
+signed report under separate project-owner review. The run itself is admitted by a signed
+single-use capability that pre-declares every allowed request by idempotency key and body digest,
+expires after thirty minutes and cannot be replayed. Outside the gated first-official-release
+bootstrap, only the traffic workflow may revalidate those records and promote; no automated actor
+approves its own output.</p>
 <p>This page does not hard-code mounted state: runtime evidence supplies the active identities and
 capabilities. The traffic workflow also requires target and rollback to remain at <code>min=max=1</code>;
 quotas, idempotency and thread state must be externalized before multiple replicas are allowed.</p>
@@ -1032,11 +1059,11 @@ These labels describe the evidence cited here, not a claim about an uninspected 
 </tr>
 <tr>
 <td>200-case deterministic retrieval benchmark</td>
-<td><strong>Quarantined</strong> for Luxembourg (LU); <strong>Next</strong> for EU</td>
+<td><strong>Quarantined</strong> for both publishers</td>
 <td>Frozen engineer-reviewed cases, exact index/vector/model identities and machine envelope</td>
 <td>Exactness, temporal, relevance, latency, memory and regression thresholds; <strong>no large language model (LLM) grader</strong></td>
 <td>Benchmark report and digest become inputs to the later signed artifact release</td>
-<td>Keyword remains the default: LU hybrid failed its accepted evidence gate and exact-release EU hybrid remains unproven.</td>
+<td>Keyword remains the default: both signed holdout reports fail their relevance gates while latency passes.</td>
 </tr>
 <tr>
 <td>Private staging</td>
@@ -1075,7 +1102,7 @@ These labels describe the evidence cited here, not a claim about an uninspected 
 <td><strong>Next</strong></td>
 <td>Exact candidate evidence release plus current production/rollback identities</td>
 <td>Protected workflow revalidates every identity immediately before one traffic mutation</td>
-<td>Signed promotion and release-state receipts</td>
+<td>Release-state receipts recorded as protected deployment records; the bootstrap fallback receipt is additionally attested</td>
 <td>No identity match means no traffic change; rollback selects the exact retained former production revision.</td>
 </tr>
 </tbody>
@@ -1191,7 +1218,7 @@ for that exact build, not a claim about any signed release.</p>
 </tr>
 <tr>
 <td>CI/CD</td>
-<td>GitHub Actions creates an immutable zero-traffic candidate, verifies the signed artifact manifest and both jurisdictions, runs HTTP and browser evaluation, publishes signed evidence, then a separate protected workflow revalidates it before promotion or exact rollback.</td>
+<td>GitHub Actions creates an immutable zero-traffic candidate and verifies the signed artifact manifest, both jurisdictions, prompt-injection probes and load behavior; a local signed runner executes the HTTP and browser evaluation, bounded <code>lex-ops</code> publication signs and publishes the evidence, then a separate protected workflow revalidates it before promotion or exact rollback.</td>
 </tr>
 </tbody>
 </table></div>
@@ -1211,8 +1238,8 @@ freeze(plan); execute_in_user_order(plan) // no observation, no replan
 and falls back to the typed result. The separate Release grader receives the frozen question,
 rubric, bounded reply, typed operations and trace. Before grading, the deterministic runner checks
 tool arguments, legal and transport outcomes, UI effect, model identity, tokens, latency and stream
-equality. It reads typed SSE plus the matching terminal object—not Azure logs or model
-chain-of-thought—and the signed report omits prompts, legal text, raw tool payloads and free-form
+equality. It reads typed SSE plus the matching terminal object, not Azure logs or model
+chain-of-thought, and the signed report omits prompts, legal text, raw tool payloads and free-form
 grader reasons.</p>
 <h3>Verified limits</h3>
 <p>These are present release boundaries, not generic risks. A limit stays visible until the named
@@ -1234,13 +1261,13 @@ evidence exists; a model answer cannot waive it.</p>
 <td>A new immutable source adapter, corpus/articles/index evidence and the same retrieval and release gates for that publisher.</td>
 </tr>
 <tr>
-<td>Luxembourg hybrid retrieval remains quarantined because the accepted relevance and latency gate has not passed.</td>
+<td>Luxembourg hybrid retrieval remains quarantined because the accepted relevance gate has not passed.</td>
 <td>Luxembourg search uses deterministic keyword retrieval; conceptual recall may be lower.</td>
 <td>Keyword is the production default and hybrid cannot activate from configuration alone.</td>
 <td>A fresh signed holdout report meeting relevance, warm-latency, memory and regression thresholds.</td>
 </tr>
 <tr>
-<td>EU hybrid retrieval is currently unproven for this release.</td>
+<td>EU hybrid retrieval failed its current signed benchmark for this release.</td>
 <td>EU search also remains keyword-first; no semantic improvement is claimed.</td>
 <td>The signed activation flag stays false unless the exact EU artifacts and model pass the frozen benchmark.</td>
 <td>An accepted exact-release EU benchmark report, including holdout and cold/warm operational measurements.</td>
@@ -1252,9 +1279,9 @@ evidence exists; a model answer cannot waive it.</p>
 <td>An additive, reviewed acquisition/extraction profile with fidelity measurements, protected corpus/articles commits and a rebuilt signed artifact release.</td>
 </tr>
 <tr>
-<td>The exact 25-case assistant catalog is owner-reviewed and signed, but has not yet been executed against a candidate.</td>
-<td>No claim is made yet that a candidate passed the new LU, language, empty, refusal, compound and continuation cases.</td>
-<td>Preflight verifies the digest-bound owner review and trusted signature before inference; any catalog-byte change invalidates approval.</td>
+<td>The exact 25-case assistant catalog is owner-reviewed and signed after its latest revision, and no published signed run yet matches a serving revision.</td>
+<td>No claim is made yet that a serving revision passed the new LU, language, empty, refusal, compound and continuation cases.</td>
+<td>Preflight verifies the digest-bound owner review and trusted signature before inference; any catalog-byte change invalidates approval until the owner re-signs.</td>
 <td>Live signed report, browser evidence and promotion verification for the same candidate identities.</td>
 </tr>
 <tr>
@@ -1304,8 +1331,12 @@ capabilities; signed promotion receipts separately prove whether traffic was aut
 3 dated versions. Artifact verification remains
 a distinct job on <a href="/verify">Verify artifacts</a>.</p><h2>Trade-offs</h2>
 <p>An architecture decision is useful only when it names the alternative, the reason and the cost.
-The complete machine-readable register is rendered at <a href="/decisions">Architecture decisions</a>. This
-page is the interview path through the choices with the largest product consequences.</p>
+The complete register spans
+<a href="https://github.com/SFHAJJI/lex/blob/main/docs/lex-spec-v4.md">the specification</a> for D1 to D82 and
+the machine-readable
+<a href="https://github.com/SFHAJJI/lex/blob/main/docs/architecture-program.json">architecture program</a>
+from D52 onward, including D83 and D84. This page is the interview path through the choices with
+the largest product consequences.</p>
 <div class="dossier-table" tabindex="0" role="region" aria-label="Scrollable architecture table"><table>
 <thead>
 <tr>
@@ -1378,13 +1409,13 @@ would date from the day we noticed, and no reader could separate a change in the
 in our knowledge of it. Keeping both axes is what makes a point-in-time answer defensible and a
 publisher correction visible as its own event rather than a silent overwrite.</p>
 <p>Status vocabulary records implementation maturity, not current traffic: <code>shipped</code> means included in
-the release line, <code>gated</code> means activation still depends on evidence, and <code>planned</code> means no product
-claim yet. Mounted identities and signed promotion receipts separately establish what a running
+the release line, <code>gated</code> means activation still depends on evidence, <code>building</code> means the
+implementation is in progress, and <code>planned</code> means no product claim yet. Mounted identities and signed promotion receipts separately establish what a running
 revision serves.</p>
-<p>The decisions above are the ones worth arguing with. The complete register, every decision from D1
-onward with its rejected alternative and admitted cost, is in
-<a href="https://github.com/SFHAJJI/lex/blob/main/docs/lex-spec-v4.md">the specification</a>; this page does
-not reprint it, because a register nobody finishes reading persuades nobody.</p>
+<p>The decisions above are the ones worth arguing with. The specification carries D1 to D82 with each
+rejected alternative and admitted cost, and the program register carries the recent decisions in
+machine-readable form; this page does not reprint them, because a register nobody finishes reading
+persuades nobody.</p>
 <h2>Incidents</h2>
 <p>The useful story is not that a defect existed. It is which assumption failed, why ordinary tests
 missed it and which permanent guard changed the system.</p>
@@ -1422,7 +1453,7 @@ missed it and which permanent guard changed the system.</p>
 <tr>
 <td>Proof</td>
 <td>A deliberate break that turns the guard red</td>
-<td>automated test or release-gate evidence</td>
+<td>recorded per change in the commit that adds the guard; an automated break harness is planned, not built</td>
 </tr>
 </tbody>
 </table></div>
@@ -1531,12 +1562,12 @@ bottleneck is bounded, and each next move names the capability it buys and the c
 </tr>
 <tr>
 <td>Assistant</td>
-<td>Four concurrent turns, 200 accepted turns per client address and 400 globally per day</td>
+<td>Defaults of four concurrent turns, 200 accepted turns per client address and 400 globally per day</td>
 <td>Predictable public cost; NAT and rotating addresses are not identities</td>
 </tr>
 <tr>
 <td>MCP</td>
-<td>Eight executing, sixteen queued and a two-second queue deadline</td>
+<td>Eight executing, sixteen queued, a two-second queue deadline, two hybrid slots, and rolling 120 per client and 600 global calls per minute</td>
 <td>Overload becomes a typed refusal rather than unbounded latency</td>
 </tr>
 <tr>
@@ -1574,7 +1605,7 @@ candidate promotion. Older figures are historical observations and are not prese
 <td>More concurrency paths to test</td>
 </tr>
 <tr>
-<td>Global daily cap or Azure OpenAI 429s on three sustained days</td>
+<td>Global daily cap saturation or repeated Azure OpenAI 429s, observed manually today since no alert rule exists yet</td>
 <td>Raise model quota and public budget together; consider provisioned throughput only after utilization proves it</td>
 <td>Higher fixed or variable model cost</td>
 </tr>
@@ -1619,7 +1650,7 @@ is not described as live until its registry status and release evidence agree.</
 <p class="sub">Program <span class="mono">hybrid-eu/1</span>, updated
 <span class="mono">2026-08-14</span>, review status
 <span class="mono">engineer-reviewed</span>.</p><h2>Repositories</h2>
-<p>Lex is five published repositories, not one. The split is deliberate: publisher evidence, the
+<p>Lex is six published repositories, not one. The split is deliberate: publisher evidence, the
 derived dataset, the product and the authority that signs releases have different lifetimes,
 different licences and different people who may write to them.</p>
 <h3>What is published</h3>
@@ -1657,20 +1688,24 @@ different licences and different people who may write to them.</p>
 <td>Publication workflows, the fleet scripts and the assistant evaluation publisher.</td>
 <td>Release authority, held apart from the product it releases. The signing key lives here on disk and is never committed.</td>
 </tr>
+<tr>
+<td><code>lex-git-lu</code></td>
+<td>A generated demonstration artifact: the Luxembourg corpus replayed as one markdown file per work with its history.</td>
+<td>A downstream derivative, regenerated from the corpus. It is a demonstration of the data, not an evidence source, and is never cited as one.</td>
+</tr>
 </tbody>
 </table></div>
 <h3>Why the product repository holds no data</h3>
 <p>The corpus is evidence and the index is a build output, so neither belongs beside the code that
-reads them. The index is roughly 947 MB, is gitignored, and is baked into the container image at
-build time. A container built from this repository alone therefore mounts zero indexes and must
+reads them. The index pair is roughly 1.25 GiB, is gitignored, and is baked into the container
+image at build time from the verified release assets. A container built from this repository alone therefore mounts zero indexes and must
 answer <code>no_corpus_mounted</code> rather than an empty list, which is the difference between saying
 nothing is held and saying nothing exists.</p>
 <h3>Working directories that are not repositories</h3>
-<p>Several sibling directories look like repositories and are not. Four are git worktrees of <code>lex</code>
-checked out on feature branches, so their contents are branches of the product, not separate
-history. Two more are local build outputs with no remote: one holds a built index database, the
-other holds compressed provision exports. None of the six is published, and none should be cited
-as a source.</p>
+<p>Several sibling directories look like repositories and are not: git worktrees of <code>lex</code> and of the
+operations repositories checked out on feature branches, plus local build outputs with no remote,
+index databases, provision exports and release staging. None of them is published, and none should
+be cited as a source.</p>
 <h3>Separation of authority</h3>
 <p>The evaluation that gates a release is authored in <code>lex</code> and published from <code>lex-ops</code>, by a
 different identity, against a catalog whose exact bytes the project owner has signed. That is

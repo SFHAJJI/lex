@@ -265,12 +265,12 @@ what to do.</p>
 <tr>
 <td>Evidence and derivation</td>
 <td>Preserve publisher bytes, then extract articles or typed gaps reproducibly</td>
-<td><code>lex-corpus-*</code>, <code>Lex.Sources.*</code> and <code>Lex.Derive</code></td>
+<td><code>lex-corpus-*</code>, <code>Lex.Sources.*</code>, <code>Lex.Law</code> and <code>Lex.Derive</code></td>
 </tr>
 <tr>
 <td>Signed index</td>
 <td>Bind time, text, metadata, vectors and provenance into local immutable artifacts</td>
-<td><code>Lex.Index</code>, built by <code>Lex.Ingest</code></td>
+<td><code>Lex.Index</code> and <code>Lex.Temporal</code> version identity, built by <code>Lex.Ingest</code></td>
 </tr>
 <tr>
 <td>Legal core</td>
@@ -333,8 +333,8 @@ explain but cannot choose legal identity, dates, evidence or actions.</p>
 <h2>How to read this dossier</h2>
 <p>The first four tabs explain the legal and retrieval product. <strong>Assistant</strong> shows where the agent is
 useful and where it has no authority. <strong>Release</strong> shows how evaluated code and data become one
-rollback-safe revision. The final three tabs expose decisions, incidents and limits instead of
-hiding them behind a feature list.</p>
+rollback-safe revision. The final four tabs expose decisions, incidents, limits and the repository
+split instead of hiding them behind a feature list.</p>
 <p>The pages describe durable contracts, not a moment in one rollout. Mounted corpus identities,
 coverage and retrieval capabilities are read from the running revision, while latency, relevance,
 memory and promotion claims appear only when a signed report binds them to that exact artifact set.</p>

@@ -12,8 +12,8 @@ what to do.
 | Box | Responsibility | Lives in |
 |---|---|---|
 | Official publishers | Authoritative catalogues, classifications and source files | Legilux and EUR-Lex/Cellar |
-| Evidence and derivation | Preserve publisher bytes, then extract articles or typed gaps reproducibly | `lex-corpus-*`, `Lex.Sources.*` and `Lex.Derive` |
-| Signed index | Bind time, text, metadata, vectors and provenance into local immutable artifacts | `Lex.Index`, built by `Lex.Ingest` |
+| Evidence and derivation | Preserve publisher bytes, then extract articles or typed gaps reproducibly | `lex-corpus-*`, `Lex.Sources.*`, `Lex.Law` and `Lex.Derive` |
+| Signed index | Bind time, text, metadata, vectors and provenance into local immutable artifacts | `Lex.Index` and `Lex.Temporal` version identity, built by `Lex.Ingest` |
 | Legal core | Execute the same closed read-only operations for every channel | `Lex.Mcp` |
 | Bounded agent | Plan against closed schemas and optionally explain an accepted evidence ledger | `Lex.Ask` |
 | Reader channels | Render the workspace and expose HTTP or stdio MCP without duplicating legal logic | `Lex.Web` and `Lex.Mcp.Stdio` |
@@ -38,8 +38,8 @@ explain but cannot choose legal identity, dates, evidence or actions.
 
 The first four tabs explain the legal and retrieval product. **Assistant** shows where the agent is
 useful and where it has no authority. **Release** shows how evaluated code and data become one
-rollback-safe revision. The final three tabs expose decisions, incidents and limits instead of
-hiding them behind a feature list.
+rollback-safe revision. The final four tabs expose decisions, incidents, limits and the repository
+split instead of hiding them behind a feature list.
 
 The pages describe durable contracts, not a moment in one rollout. Mounted corpus identities,
 coverage and retrieval capabilities are read from the running revision, while latency, relevance,

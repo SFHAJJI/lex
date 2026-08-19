@@ -1,8 +1,12 @@
 # Trade-offs
 
 An architecture decision is useful only when it names the alternative, the reason and the cost.
-The complete machine-readable register is rendered at [Architecture decisions](/decisions). This
-page is the interview path through the choices with the largest product consequences.
+The complete register spans
+[the specification](https://github.com/SFHAJJI/lex/blob/main/docs/lex-spec-v4.md) for D1 to D82 and
+the machine-readable
+[architecture program](https://github.com/SFHAJJI/lex/blob/main/docs/architecture-program.json)
+from D52 onward, including D83 and D84. This page is the interview path through the choices with
+the largest product consequences.
 
 | ID | Choice | Rejected alternative | Cost admitted |
 |---|---|---|---|
@@ -37,11 +41,11 @@ in our knowledge of it. Keeping both axes is what makes a point-in-time answer d
 publisher correction visible as its own event rather than a silent overwrite.
 
 Status vocabulary records implementation maturity, not current traffic: `shipped` means included in
-the release line, `gated` means activation still depends on evidence, and `planned` means no product
-claim yet. Mounted identities and signed promotion receipts separately establish what a running
+the release line, `gated` means activation still depends on evidence, `building` means the
+implementation is in progress, and `planned` means no product claim yet. Mounted identities and signed promotion receipts separately establish what a running
 revision serves.
 
-The decisions above are the ones worth arguing with. The complete register, every decision from D1
-onward with its rejected alternative and admitted cost, is in
-[the specification](https://github.com/SFHAJJI/lex/blob/main/docs/lex-spec-v4.md); this page does
-not reprint it, because a register nobody finishes reading persuades nobody.
+The decisions above are the ones worth arguing with. The specification carries D1 to D82 with each
+rejected alternative and admitted cost, and the program register carries the recent decisions in
+machine-readable form; this page does not reprint them, because a register nobody finishes reading
+persuades nobody.

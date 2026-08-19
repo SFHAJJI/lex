@@ -1,6 +1,6 @@
 # Repositories
 
-Lex is five published repositories, not one. The split is deliberate: publisher evidence, the
+Lex is six published repositories, not one. The split is deliberate: publisher evidence, the
 derived dataset, the product and the authority that signs releases have different lifetimes,
 different licences and different people who may write to them.
 
@@ -13,22 +13,22 @@ different licences and different people who may write to them.
 | `lex-corpus-eu-eurlex` | The same structure for EUR-Lex. | Keeping publishers apart means a bad ingest from one can never rewrite the other, and each carries its own licence and attribution. |
 | `lex-articles` | The per-article dataset with `catalog.json`, `generation.json`, a schema and worked examples. | The consumable output, published under CC-BY for retrieval systems that must filter by validity before similarity. |
 | `lex-ops` | Publication workflows, the fleet scripts and the assistant evaluation publisher. | Release authority, held apart from the product it releases. The signing key lives here on disk and is never committed. |
+| `lex-git-lu` | A generated demonstration artifact: the Luxembourg corpus replayed as one markdown file per work with its history. | A downstream derivative, regenerated from the corpus. It is a demonstration of the data, not an evidence source, and is never cited as one. |
 
 ## Why the product repository holds no data
 
 The corpus is evidence and the index is a build output, so neither belongs beside the code that
-reads them. The index is roughly 947 MB, is gitignored, and is baked into the container image at
-build time. A container built from this repository alone therefore mounts zero indexes and must
+reads them. The index pair is roughly 1.25 GiB, is gitignored, and is baked into the container
+image at build time from the verified release assets. A container built from this repository alone therefore mounts zero indexes and must
 answer `no_corpus_mounted` rather than an empty list, which is the difference between saying
 nothing is held and saying nothing exists.
 
 ## Working directories that are not repositories
 
-Several sibling directories look like repositories and are not. Four are git worktrees of `lex`
-checked out on feature branches, so their contents are branches of the product, not separate
-history. Two more are local build outputs with no remote: one holds a built index database, the
-other holds compressed provision exports. None of the six is published, and none should be cited
-as a source.
+Several sibling directories look like repositories and are not: git worktrees of `lex` and of the
+operations repositories checked out on feature branches, plus local build outputs with no remote,
+index databases, provision exports and release staging. None of them is published, and none should
+be cited as a source.
 
 ## Separation of authority
 

@@ -278,7 +278,7 @@ missed it and which permanent guard changed the system.</p>
 <tr>
 <td>Proof</td>
 <td>A deliberate break that turns the guard red</td>
-<td>automated test or release-gate evidence</td>
+<td>recorded per change in the commit that adds the guard; an automated break harness is planned, not built</td>
 </tr>
 </tbody>
 </table></div>

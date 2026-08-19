@@ -17,7 +17,7 @@ date, work, anchor and validity interval remains queryable.
 - Contentless FTS5 stores terms only. Search joins a state back to an eligible dated occurrence,
   preventing repeated versions from producing duplicate hits.
 - Hierarchy, act form, binding status and consolidation status are columns on document
-  occurrences. The legacy generic `domain` column remains empty in current v4 builds. Official
+  occurrences. The legacy generic `domain` column remains empty in current builds. Official
   classifications are typed publisher metadata, returned as `matched_publisher_metadata` and
   selected again only by their exact official URI. These are filters, not database boundaries.
 
