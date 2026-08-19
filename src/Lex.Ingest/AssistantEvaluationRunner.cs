@@ -448,8 +448,26 @@ public static class AssistantEvaluationRunner
         HttpRequestException { StatusCode: { } status } => $"http_{(int)status}",
         HttpRequestException transport => $"transport_{transport.HttpRequestError}",
         OperationCanceledException => "timeout",
+        InvalidDataException malformed when StreamCauses.TryGetValue(malformed.Message, out var cause)
+            => cause,
         _ => exception.GetType().Name,
     };
+
+    // The runner's own stream checks throw InvalidDataException with one of these exact messages.
+    // Naming the check in the report is what makes an intermittent shape failure diagnosable;
+    // mapping only these messages keeps any other exception text out of the signed report.
+    private static readonly IReadOnlyDictionary<string, string> StreamCauses =
+        new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["Assistant evaluation target did not return the versioned event stream."] = "stream_content_type_invalid",
+            ["Assistant evaluation stream has no valid request identity."] = "stream_request_identity_invalid",
+            ["Assistant evaluation event stream is malformed."] = "stream_event_bound_exceeded",
+            ["Assistant evaluation event is not an object."] = "stream_event_not_object",
+            ["Assistant evaluation event sequence is invalid."] = "stream_event_sequence_invalid",
+            ["Assistant evaluation event has no authenticated server timing."] = "stream_server_timing_absent",
+            ["Assistant evaluation event server timing is invalid."] = "stream_server_timing_invalid",
+            ["Assistant evaluation event payload is invalid."] = "stream_event_payload_invalid",
+        };
 
     internal static string PromptSha256(AssistantEvaluationCase evaluationCase)
     {
@@ -1050,8 +1068,7 @@ public sealed class AssistantEvaluationHttpTarget : IAssistantEvaluationTarget
         }
         if (!string.Equals(response.Content.Headers.ContentType?.MediaType,
                 "text/event-stream", StringComparison.OrdinalIgnoreCase))
-            throw new InvalidDataException(
-                "Assistant evaluation target did not return the versioned event stream.");
+            throw new InvalidDataException("Assistant evaluation target did not return the versioned event stream.");
         var responseRequestIds = response.Headers.TryGetValues(
                 "X-Lex-Request-Id", out var requestIds)
             ? requestIds.Take(2).ToArray()
@@ -1060,8 +1077,7 @@ public sealed class AssistantEvaluationHttpTarget : IAssistantEvaluationTarget
             || responseRequestIds[0] is not { } responseRequestId
             || !Regex.IsMatch(responseRequestId, "^[a-f0-9]{32}$",
                 RegexOptions.CultureInvariant))
-            throw new InvalidDataException(
-                "Assistant evaluation stream has no valid request identity.");
+            throw new InvalidDataException("Assistant evaluation stream has no valid request identity.");
 
         await using var source = await response.Content.ReadAsStreamAsync(cancellationToken);
         await using var boundedSource = new MaximumBytesReadStream(
@@ -1094,15 +1110,12 @@ public sealed class AssistantEvaluationHttpTarget : IAssistantEvaluationTarget
             if (envelope["version"]?.GetValue<string>() != "1"
                 || envelope["request_id"]?.GetValue<string>() != responseRequestId
                 || envelope["sequence"]?.GetValue<int>() != expectedSequence++)
-                throw new InvalidDataException(
-                    "Assistant evaluation event sequence is invalid.");
+                throw new InvalidDataException("Assistant evaluation event sequence is invalid.");
             var received = watch.Elapsed.TotalMilliseconds;
             var serverElapsed = envelope["server_elapsed_ms"]?.GetValue<double>()
-                ?? throw new InvalidDataException(
-                    "Assistant evaluation event has no authenticated server timing.");
+                ?? throw new InvalidDataException("Assistant evaluation event has no authenticated server timing.");
             if (serverElapsed < 0 || serverElapsed > received + 1_000)
-                throw new InvalidDataException(
-                    "Assistant evaluation event server timing is invalid.");
+                throw new InvalidDataException("Assistant evaluation event server timing is invalid.");
             var payload = envelope["payload"] as JsonObject
                 ?? throw new InvalidDataException("Assistant evaluation event payload is invalid.");
             switch (eventName)

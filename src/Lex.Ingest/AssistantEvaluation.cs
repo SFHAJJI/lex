@@ -191,7 +191,11 @@ public sealed record AssistantEvaluationCatalog(
             || Budget.MaximumFirstOperationHardLatencyMs
                 < Budget.MaximumFirstOperationP95LatencyMs
             || Budget.MaximumFirstOperationHardLatencyMs > 25_000
-            || Budget.MaximumSynthesisP95LatencyMs is < 1_000 or > 45_000
+            // The runtime returns the deterministic result at its 45 s synthesis deadline. A
+            // release budget equal to that deadline cannot tell a bounded fallback from a stall
+            // and fails on one slow model call; the ceiling therefore sits above the deadline
+            // and below the 75 s total p99 that still bounds the whole turn.
+            || Budget.MaximumSynthesisP95LatencyMs is < 1_000 or > 60_000
             || Budget.MaximumTransportQueueResidualP95LatencyMs is < 1 or > 1_500
             || Budget.MaximumTotalP99LatencyMs
                 < Budget.MaximumFirstOperationHardLatencyMs

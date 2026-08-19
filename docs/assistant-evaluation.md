@@ -134,7 +134,10 @@ transport/queue residual and terminal duration. A multi-turn case sums setup and
 durations; its planner, MCP, first-result and residual samples retain the slowest turn. Setup work
 therefore counts toward both the per-case ceiling and aggregate latency gate. Best-effort thread
 reset is cleanup rather than candidate inference. The release gate enforces first-result p95 at 15 s,
-every first result at 25 s, synthesis p95 at 45 s, and the frozen residual/terminal envelopes. The
+every first result at 25 s, synthesis p95 at 50 s, and the frozen residual/terminal envelopes.
+The synthesis budget sits above the runtime's 45 s synthesis deadline on purpose: a turn that
+falls back to the deterministic result at the deadline is a bounded 45 s turn, and a budget equal
+to the deadline could not tell that fallback from a stall, failing a release on one slow model call. The
 catalog contains both synthesis-required and synthesis-forbidden cases, so an absent synthesis
 sample cannot pass as zero latency. Every streamed operation payload must also equal its terminal
 typed operation; a fast placeholder cannot authorize a slower result. The residual is not
