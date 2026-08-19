@@ -17,6 +17,12 @@ disposable. That split lets an extraction improve without rewriting what the pub
 | Index | Hash-pinned corpora and article release | SQLite FTS, temporal tables and optional vectors | `Lex.Ingest` and `Lex.Index` on the local build machine | Incomplete or mismatched inputs fail the build |
 | Sign | Canonical artifact manifest | Signature and public verification material | bounded `lex-ops` publication with Key Vault | Runtime rejects a manifest outside pinned trust |
 
+Extraction profiles are versioned and their fingerprints are frozen by test; an improvement ships
+as a new profile version, and the Memorial fallback ladder promotes the successor only when it
+recovers strictly more wording. Evidence is fetched once per address: a later silent edit behind
+the same address is structurally invisible, which is exactly why every observation binds what Lex
+saw and when it saw it.
+
 ## Official discovery metadata
 
 Luxembourg acquisition mirrors Legilux `subjectLevel1` and `subjectLevel2` assertions with the

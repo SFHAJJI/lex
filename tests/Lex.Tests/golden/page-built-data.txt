@@ -295,6 +295,11 @@ disposable. That split lets an extraction improve without rewriting what the pub
 </tr>
 </tbody>
 </table></div>
+<p>Extraction profiles are versioned and their fingerprints are frozen by test; an improvement ships
+as a new profile version, and the Memorial fallback ladder promotes the successor only when it
+recovers strictly more wording. Evidence is fetched once per address: a later silent edit behind
+the same address is structurally invisible, which is exactly why every observation binds what Lex
+saw and when it saw it.</p>
 <h2>Official discovery metadata</h2>
 <p>Luxembourg acquisition mirrors Legilux <code>subjectLevel1</code> and <code>subjectLevel2</code> assertions with the
 concept URI, French label, level, language and source. EU acquisition mirrors official short-title

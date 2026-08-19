@@ -189,6 +189,23 @@ public sealed class AssistantEvaluationTests : IDisposable
     }
 
     [Fact]
+    public void Checked_in_owner_review_binds_the_checked_in_catalog_digest()
+    {
+        // The review and the catalog drifted once: a commit edited the catalog while the review
+        // kept binding the previous digest, so every admission and evaluation release failed
+        // preflight while the whole build stayed green. This test makes that drift red.
+        var root = RepoRoot();
+        var catalog = AssistantEvaluationCatalog.Load(
+            Path.Combine(root, "evals", "assistant-cases-v3.json"));
+        using var review = JsonDocument.Parse(File.ReadAllText(
+            Path.Combine(root, "evals", "assistant-cases-v3.review.json")));
+
+        Assert.Equal(
+            catalog.Sha256,
+            review.RootElement.GetProperty("cases_sha256").GetString());
+    }
+
+    [Fact]
     public void Repository_catalog_is_bounded_and_blocked_until_separate_author_owner_review()
     {
         var path = Path.Combine(RepoRoot(), "evals", "assistant-cases-v3.json");

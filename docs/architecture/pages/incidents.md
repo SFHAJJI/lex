@@ -13,7 +13,7 @@ missed it and which permanent guard changed the system.
 | Detection gap | Why ordinary build, unit or health checks remained green | postmortem and missing-case analysis |
 | Root cause | The failed system assumption, not the last visible exception | source diff, trace or artifact inspection |
 | Permanent guard | The smallest code, contract, evaluation or operational boundary that prevents recurrence | owning module plus focused regression |
-| Proof | A deliberate break that turns the guard red | automated test or release-gate evidence |
+| Proof | A deliberate break that turns the guard red | recorded per change in the commit that adds the guard; an automated break harness is planned, not built |
 
 ## Case studies
 

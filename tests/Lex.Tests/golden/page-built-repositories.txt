@@ -241,8 +241,8 @@ HTTP 200
 </header>
 <main>
 <h1>Repositories</h1>
-<p class="sub">Five published repositories, and why evidence, dataset, product and release authority are kept apart.</p>
-<nav class="dossier-tabs" aria-label="Architecture dossier"><a href="/built">Overview</a><a href="/built/model">Legal model</a><a href="/built/data">Data authority</a><a href="/built/retrieval">Retrieval</a><a href="/built/assistant">Assistant</a><a href="/built/release">Release</a><a href="/built/decisions">Trade-offs</a><a href="/built/incidents">Incidents</a><a href="/built/limits">Limits and scale</a><a href="/built/repositories" aria-current="page">Repositories</a><a class="dossier-print" href="/architecture/dossier">Complete dossier</a></nav><article class="architecture-dossier"><p>Lex is five published repositories, not one. The split is deliberate: publisher evidence, the
+<p class="sub">Six published repositories, and why evidence, dataset, product and release authority are kept apart.</p>
+<nav class="dossier-tabs" aria-label="Architecture dossier"><a href="/built">Overview</a><a href="/built/model">Legal model</a><a href="/built/data">Data authority</a><a href="/built/retrieval">Retrieval</a><a href="/built/assistant">Assistant</a><a href="/built/release">Release</a><a href="/built/decisions">Trade-offs</a><a href="/built/incidents">Incidents</a><a href="/built/limits">Limits and scale</a><a href="/built/repositories" aria-current="page">Repositories</a><a class="dossier-print" href="/architecture/dossier">Complete dossier</a></nav><article class="architecture-dossier"><p>Lex is six published repositories, not one. The split is deliberate: publisher evidence, the
 derived dataset, the product and the authority that signs releases have different lifetimes,
 different licences and different people who may write to them.</p>
 <h2>What is published</h2>
@@ -280,20 +280,24 @@ different licences and different people who may write to them.</p>
 <td>Publication workflows, the fleet scripts and the assistant evaluation publisher.</td>
 <td>Release authority, held apart from the product it releases. The signing key lives here on disk and is never committed.</td>
 </tr>
+<tr>
+<td><code>lex-git-lu</code></td>
+<td>A generated demonstration artifact: the Luxembourg corpus replayed as one markdown file per work with its history.</td>
+<td>A downstream derivative, regenerated from the corpus. It is a demonstration of the data, not an evidence source, and is never cited as one.</td>
+</tr>
 </tbody>
 </table></div>
 <h2>Why the product repository holds no data</h2>
 <p>The corpus is evidence and the index is a build output, so neither belongs beside the code that
-reads them. The index is roughly 947 MB, is gitignored, and is baked into the container image at
-build time. A container built from this repository alone therefore mounts zero indexes and must
+reads them. The index pair is roughly 1.25 GiB, is gitignored, and is baked into the container
+image at build time from the verified release assets. A container built from this repository alone therefore mounts zero indexes and must
 answer <code>no_corpus_mounted</code> rather than an empty list, which is the difference between saying
 nothing is held and saying nothing exists.</p>
 <h2>Working directories that are not repositories</h2>
-<p>Several sibling directories look like repositories and are not. Four are git worktrees of <code>lex</code>
-checked out on feature branches, so their contents are branches of the product, not separate
-history. Two more are local build outputs with no remote: one holds a built index database, the
-other holds compressed provision exports. None of the six is published, and none should be cited
-as a source.</p>
+<p>Several sibling directories look like repositories and are not: git worktrees of <code>lex</code> and of the
+operations repositories checked out on feature branches, plus local build outputs with no remote,
+index databases, provision exports and release staging. None of them is published, and none should
+be cited as a source.</p>
 <h2>Separation of authority</h2>
 <p>The evaluation that gates a release is authored in <code>lex</code> and published from <code>lex-ops</code>, by a
 different identity, against a catalog whose exact bytes the project owner has signed. That is

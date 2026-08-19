@@ -10,7 +10,7 @@ an authorization step and ranking as a later discovery step.
 | Box | Responsibility | Implementation |
 |---|---|---|
 | Subject preflight | Resolve official work identity or return ambiguity before rank can choose | `Lex.Index/WorkSearch` and `Lex.Ask` subject rules |
-| Time and scope | Apply publisher, work, language and closed date-interval constraints | `Lex.Temporal`, `Lex.Index` and typed operation arguments |
+| Time and scope | Apply publisher, work, language and closed date-interval constraints | `Lex.Index` interval predicates and typed operation arguments |
 | Exact coordinate | Return one known instrument, state or provision without similarity | shared `Lex.Mcp` legal operations |
 | Bounded discovery | Search FTS by default; add weak official metadata and only gated hybrid vectors | `Lex.Index/WorkSearch`, FTS5 and the pinned local encoder |
 | Result shaping | Deduplicate, enforce fairness and stop at the fixed evidence budget | `Lex.Index` query and response contracts |
@@ -18,14 +18,17 @@ an authorization step and ranking as a later discovery step.
 
 ## Retrieval funnel
 
-1. Parse explicit dates, identifiers, article numbers and comparison intent.
+1. Parse identifiers, article numbers and comparison intent; dates arrive as typed arguments
+   guarded upstream.
 2. Resolve the named subject against official work identity before asking the planner.
-3. Clarify zero or several credible subjects instead of letting rank silently choose one.
+3. In the assistant, clarify zero or several credible subjects instead of letting rank silently
+   choose one; direct MCP callers receive ranked hits labeled ambiguous.
 4. Apply publisher, work, language and point-in-time scope.
-5. Search article text with FTS5/BM25 by default; official metadata contributes a weaker work
-   discovery signal and an explicit match reason.
-6. Deduplicate text states and anchors, apply bounded per-work fairness only for unscoped discovery,
-   then return typed rows and provenance.
+5. Serve an exactly named coordinate without similarity when the question names one.
+6. Search article text with FTS5/BM25 by default, weighted title 10, number 4, heading 6, text 1;
+   official metadata contributes a weaker work discovery signal and an explicit match reason.
+7. Deduplicate text states and anchors, apply bounded per-work fairness only for unscoped discovery,
+   cut snippets from the content-addressed text store, then return typed rows and provenance.
 
 There is no generation loop that reads page one, asks the model whether it is satisfied and keeps
 searching. The application decides the evidence budget before execution. This makes latency,
@@ -45,8 +48,11 @@ population and failure behavior testable.
 
 The semantic encoder, local vectors and rank fusion exist, but activation is evidence-gated.
 Offline signed benchmarks authorize vector mounting during deployment and startup; benchmark logic never switches an individual query.
-The user or API caller explicitly chooses keyword or hybrid, and an
+An API caller explicitly chooses keyword or hybrid; the shipped surfaces default
+to keyword and the assistant planner's hybrid choice is quarantined until signed activation. An
 explicit hybrid request receives a typed unavailable result for any publisher whose exact signed
 candidate did not pass. A compatible signed report binds relevance, latency, memory and size to that
 candidate before its vectors may mount. Keyword remains the default. A measured rejection is a valid
-architecture result, not a failed demo.
+architecture result, not a failed demo: the current signed holdout reports measure hybrid at 75.5
+percent of keyword nDCG@10 on the EU corpus, answering even the engineered no-answer cases, so the
+gate holds vectors off for relevance while latency passes.

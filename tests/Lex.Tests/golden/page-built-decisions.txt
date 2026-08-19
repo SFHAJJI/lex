@@ -243,8 +243,12 @@ HTTP 200
 <h1>Trade-offs</h1>
 <p class="sub">The choices worth challenging and the costs they admit.</p>
 <nav class="dossier-tabs" aria-label="Architecture dossier"><a href="/built">Overview</a><a href="/built/model">Legal model</a><a href="/built/data">Data authority</a><a href="/built/retrieval">Retrieval</a><a href="/built/assistant">Assistant</a><a href="/built/release">Release</a><a href="/built/decisions" aria-current="page">Trade-offs</a><a href="/built/incidents">Incidents</a><a href="/built/limits">Limits and scale</a><a href="/built/repositories">Repositories</a><a class="dossier-print" href="/architecture/dossier">Complete dossier</a></nav><article class="architecture-dossier"><p>An architecture decision is useful only when it names the alternative, the reason and the cost.
-The complete machine-readable register is rendered at <a href="/decisions">Architecture decisions</a>. This
-page is the interview path through the choices with the largest product consequences.</p>
+The complete register spans
+<a href="https://github.com/SFHAJJI/lex/blob/main/docs/lex-spec-v4.md">the specification</a> for D1 to D82 and
+the machine-readable
+<a href="https://github.com/SFHAJJI/lex/blob/main/docs/architecture-program.json">architecture program</a>
+from D52 onward, including D83 and D84. This page is the interview path through the choices with
+the largest product consequences.</p>
 <div class="dossier-table" tabindex="0" role="region" aria-label="Scrollable architecture table"><table>
 <thead>
 <tr>
@@ -317,13 +321,13 @@ would date from the day we noticed, and no reader could separate a change in the
 in our knowledge of it. Keeping both axes is what makes a point-in-time answer defensible and a
 publisher correction visible as its own event rather than a silent overwrite.</p>
 <p>Status vocabulary records implementation maturity, not current traffic: <code>shipped</code> means included in
-the release line, <code>gated</code> means activation still depends on evidence, and <code>planned</code> means no product
-claim yet. Mounted identities and signed promotion receipts separately establish what a running
+the release line, <code>gated</code> means activation still depends on evidence, <code>building</code> means the
+implementation is in progress, and <code>planned</code> means no product claim yet. Mounted identities and signed promotion receipts separately establish what a running
 revision serves.</p>
-<p>The decisions above are the ones worth arguing with. The complete register, every decision from D1
-onward with its rejected alternative and admitted cost, is in
-<a href="https://github.com/SFHAJJI/lex/blob/main/docs/lex-spec-v4.md">the specification</a>; this page does
-not reprint it, because a register nobody finishes reading persuades nobody.</p>
+<p>The decisions above are the ones worth arguing with. The specification carries D1 to D82 with each
+rejected alternative and admitted cost, and the program register carries the recent decisions in
+machine-readable form; this page does not reprint them, because a register nobody finishes reading
+persuades nobody.</p>
 </article>
 </main>
 <footer>

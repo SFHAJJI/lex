@@ -279,7 +279,7 @@ not production merely because a container started.</p>
 <tr>
 <td>Promote or restore</td>
 <td>Revalidate identities before one traffic change or exact rollback</td>
-<td><code>revision-traffic.yml</code> and Key Vault receipts</td>
+<td><code>revision-traffic.yml</code> and protected release-state receipts</td>
 </tr>
 <tr>
 <td>Retention boundary</td>
@@ -340,8 +340,11 @@ creation order rather than age.</p>
 <p>The deploy workflow creates a zero-traffic revision from the exact image and signed artifact set,
 then checks readiness, Model Context Protocol (MCP), Luxembourg and European Union (EU) search. The
 assistant evaluation binds the frozen cases, candidate, typed outcomes, latency and cost to a
-signed report under separate project-owner review. Only the traffic workflow may revalidate those
-records and promote; no automated actor approves its own output.</p>
+signed report under separate project-owner review. The run itself is admitted by a signed
+single-use capability that pre-declares every allowed request by idempotency key and body digest,
+expires after thirty minutes and cannot be replayed. Outside the gated first-official-release
+bootstrap, only the traffic workflow may revalidate those records and promote; no automated actor
+approves its own output.</p>
 <p>This page does not hard-code mounted state: runtime evidence supplies the active identities and
 capabilities. The traffic workflow also requires target and rollback to remain at <code>min=max=1</code>;
 quotas, idempotency and thread state must be externalized before multiple replicas are allowed.</p>
@@ -399,11 +402,11 @@ These labels describe the evidence cited here, not a claim about an uninspected 
 </tr>
 <tr>
 <td>200-case deterministic retrieval benchmark</td>
-<td><strong>Quarantined</strong> for Luxembourg (LU); <strong>Next</strong> for EU</td>
+<td><strong>Quarantined</strong> for both publishers</td>
 <td>Frozen engineer-reviewed cases, exact index/vector/model identities and machine envelope</td>
 <td>Exactness, temporal, relevance, latency, memory and regression thresholds; <strong>no large language model (LLM) grader</strong></td>
 <td>Benchmark report and digest become inputs to the later signed artifact release</td>
-<td>Keyword remains the default: LU hybrid failed its accepted evidence gate and exact-release EU hybrid remains unproven.</td>
+<td>Keyword remains the default: both signed holdout reports fail their relevance gates while latency passes.</td>
 </tr>
 <tr>
 <td>Private staging</td>
@@ -442,7 +445,7 @@ These labels describe the evidence cited here, not a claim about an uninspected 
 <td><strong>Next</strong></td>
 <td>Exact candidate evidence release plus current production/rollback identities</td>
 <td>Protected workflow revalidates every identity immediately before one traffic mutation</td>
-<td>Signed promotion and release-state receipts</td>
+<td>Release-state receipts recorded as protected deployment records; the bootstrap fallback receipt is additionally attested</td>
 <td>No identity match means no traffic change; rollback selects the exact retained former production revision.</td>
 </tr>
 </tbody>
@@ -558,7 +561,7 @@ for that exact build, not a claim about any signed release.</p>
 </tr>
 <tr>
 <td>CI/CD</td>
-<td>GitHub Actions creates an immutable zero-traffic candidate, verifies the signed artifact manifest and both jurisdictions, runs HTTP and browser evaluation, publishes signed evidence, then a separate protected workflow revalidates it before promotion or exact rollback.</td>
+<td>GitHub Actions creates an immutable zero-traffic candidate and verifies the signed artifact manifest, both jurisdictions, prompt-injection probes and load behavior; a local signed runner executes the HTTP and browser evaluation, bounded <code>lex-ops</code> publication signs and publishes the evidence, then a separate protected workflow revalidates it before promotion or exact rollback.</td>
 </tr>
 </tbody>
 </table></div>
@@ -578,8 +581,8 @@ freeze(plan); execute_in_user_order(plan) // no observation, no replan
 and falls back to the typed result. The separate Release grader receives the frozen question,
 rubric, bounded reply, typed operations and trace. Before grading, the deterministic runner checks
 tool arguments, legal and transport outcomes, UI effect, model identity, tokens, latency and stream
-equality. It reads typed SSE plus the matching terminal object—not Azure logs or model
-chain-of-thought—and the signed report omits prompts, legal text, raw tool payloads and free-form
+equality. It reads typed SSE plus the matching terminal object, not Azure logs or model
+chain-of-thought, and the signed report omits prompts, legal text, raw tool payloads and free-form
 grader reasons.</p>
 <h2>Verified limits</h2>
 <p>These are present release boundaries, not generic risks. A limit stays visible until the named
@@ -601,13 +604,13 @@ evidence exists; a model answer cannot waive it.</p>
 <td>A new immutable source adapter, corpus/articles/index evidence and the same retrieval and release gates for that publisher.</td>
 </tr>
 <tr>
-<td>Luxembourg hybrid retrieval remains quarantined because the accepted relevance and latency gate has not passed.</td>
+<td>Luxembourg hybrid retrieval remains quarantined because the accepted relevance gate has not passed.</td>
 <td>Luxembourg search uses deterministic keyword retrieval; conceptual recall may be lower.</td>
 <td>Keyword is the production default and hybrid cannot activate from configuration alone.</td>
 <td>A fresh signed holdout report meeting relevance, warm-latency, memory and regression thresholds.</td>
 </tr>
 <tr>
-<td>EU hybrid retrieval is currently unproven for this release.</td>
+<td>EU hybrid retrieval failed its current signed benchmark for this release.</td>
 <td>EU search also remains keyword-first; no semantic improvement is claimed.</td>
 <td>The signed activation flag stays false unless the exact EU artifacts and model pass the frozen benchmark.</td>
 <td>An accepted exact-release EU benchmark report, including holdout and cold/warm operational measurements.</td>
@@ -619,9 +622,9 @@ evidence exists; a model answer cannot waive it.</p>
 <td>An additive, reviewed acquisition/extraction profile with fidelity measurements, protected corpus/articles commits and a rebuilt signed artifact release.</td>
 </tr>
 <tr>
-<td>The exact 25-case assistant catalog is owner-reviewed and signed, but has not yet been executed against a candidate.</td>
-<td>No claim is made yet that a candidate passed the new LU, language, empty, refusal, compound and continuation cases.</td>
-<td>Preflight verifies the digest-bound owner review and trusted signature before inference; any catalog-byte change invalidates approval.</td>
+<td>The exact 25-case assistant catalog is owner-reviewed and signed after its latest revision, and no published signed run yet matches a serving revision.</td>
+<td>No claim is made yet that a serving revision passed the new LU, language, empty, refusal, compound and continuation cases.</td>
+<td>Preflight verifies the digest-bound owner review and trusted signature before inference; any catalog-byte change invalidates approval until the owner re-signs.</td>
 <td>Live signed report, browser evidence and promotion verification for the same candidate identities.</td>
 </tr>
 <tr>

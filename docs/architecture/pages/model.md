@@ -15,7 +15,7 @@ ambiguous and make provenance impossible to state precisely.
 | Work | The legal instrument across its life | Stable publisher identity and title | `Lex.Law` corpus records and index work catalog |
 | Dated consolidation | One publisher-asserted state | `valid_from`, `valid_to` and stable v4 version key | corpus states and `Lex.Temporal` interval selection |
 | Expression | One language of that state | Language-specific title and availability | corpus expression records and index version rows |
-| Manifestation | The file the publisher served | Media type, URL, bytes and SHA-256 | evidence repositories and manifestation records |
+| Manifestation | The file the publisher served | URL, bytes and SHA-256, with a format field on alternative members | evidence repositories and manifestation records |
 
 The v4 version key is based on the full publisher version identifier, not its position in a list.
 The key combines `valid_from` with SHA-256 of that full identifier. A same-day reordering can no

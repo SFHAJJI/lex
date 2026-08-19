@@ -2,22 +2,23 @@
 
 **Architectural decision: bounded plan -> validate and correct once -> freeze -> execute.** This is
 ReWOO-inspired reasoning without an observation loop, not adaptive ReAct. Retrieval constrains what the
-model can know, so exact identity and time resolution happen before planning; the planner proposes a
-typed operation plan, while application code authorizes, executes and returns the normal cited result.
+model can know, so exact identity resolves before planning and a date guard re-derives every planned
+instant from the question before freeze; the planner proposes a typed operation plan, while application
+code authorizes, executes and returns the normal cited result.
 
 ## One bounded turn, time downward
 
-![A conventional sequence diagram with continuous lifelines for reader, web, deterministic admission and subject authority, planner and plan gate, executor and outcome routing, the legal core and signed index, and separate optional composer and judge roles. Time runs downward through deterministic resolution, one plan, one possible correction, freeze, execution without observations, a direct typed result and optional prose.](/built/diagrams/assistant.svg)
+![A conventional sequence diagram with continuous lifelines for reader, web, deterministic admission and subject authority, planner and plan gate, executor and outcome routing, the legal core and signed index, and separate optional composer and judge roles. Time runs downward through deterministic resolution, one plan, one possible correction, a date guard, freeze, execution without observations, a typed response contract and optional prose.](/built/diagrams/assistant.svg)
 
 [Open the sequence diagram at full size](/built/diagrams/assistant.svg)
 
 | Phase | Authority crossing | Closed result |
 |---|---|---|
-| Resolve deterministically | Official catalog identity, date semantics and bounded thread context enter planning | One authorized subject reference, clarification context, or no subject authority |
+| Resolve deterministically | Official catalog identity, date semantics and bounded thread context enter planning | Up to eight authorized subject references, clarification context, or no subject authority |
 | Plan once | Planner sees only the question, bounded history and canonical typed operation schemas | A proposed plan; no tool or index access |
-| Validate, correct once, freeze | Application code checks names and typed arguments; at most one contract correction | An immutable plan capped at eight operations, or typed invalid request |
+| Validate, guard dates, freeze | Application code checks names and typed arguments, then re-derives instants from the question; at most one contract correction | An immutable plan capped at eight operations, a widened or clarified instant, or typed invalid request |
 | Execute without observations | Frozen executor calls the deterministic legal core, which queries the signed index | Closed outcomes, rows, hashes, publisher links and typed gaps |
-| Typed result | Outcome router assembles cards, citations, disclosures and the bounded evidence ledger | Direct usable answer, `NeedsClarification`, gap or refusal without generated prose |
+| Typed response contract | Outcome router fills closed typed effect slots, then assembles cards, citations, disclosures and the bounded evidence ledger | Direct usable answer, `NeedsClarification`, gap or refusal without generated prose |
 | Optional compose and judge | Explicit prose request may activate two separate logical Agent Framework roles | Composer draft; judge only factual Answer or Gap claims; fallback keeps the deterministic result |
 
 ## Boundary at a glance
@@ -52,13 +53,14 @@ deterministic typed results need no LLM judge.
 
 1. The web boundary validates the bounded request, idempotency key and evaluation admission when
    present, then acquires one server thread lease. Admission applies request ownership,
-   concurrency, daily cost and first-result deadline limits.
+   concurrency, daily turn quotas and first-result deadline limits.
 2. The thread registry restores at most six accepted turns and deterministic subject context from
    a SHA-256 token digest. The browser presents the opaque token but owns no durable memory.
 3. Subject preflight queries the signed work catalog before the planning model is called. Exact
    identifiers and exact publisher-provided short titles may authorize a work. Weaker official
-   classifications remain discovery evidence only. Ambiguity is kept as clarification context,
-   never converted into a silently selected law.
+   classifications remain discovery evidence only. Ambiguity is never converted into a silently
+   selected law: a decidable ambiguity proceeds with the runner-up disclosed in the reply, and an
+   undecidable one is kept as clarification context.
 4. The bounded planning agent receives the question, bounded history, closed operation schemas and
    only opaque `subject_ref` values authorized by preflight. Without authority, work-specific
    operations receive no subject reference.
@@ -74,8 +76,9 @@ deterministic typed results need no LLM judge.
 9. The planner may set `synthesis=true` only when the reader explicitly asks to explain, describe
    or summarise the accepted results. There is no hidden UI toggle. For example: "Show Article 6
    on 1 Jan 2021 and explain it."
-10. Runtime additionally requires no displayed clarification, no `NeedsClarification` result, no
-    transport failure, and at least one accepted operation that is not an inventory. `coverage`,
+10. Runtime additionally requires no displayed clarification, no `NeedsClarification` result and
+    no transport failure; a plan whose legal operations are all inventories has synthesis cleared
+    at plan time. `coverage`,
     `cited_by` and `in_force_on` return closed typed lists the deterministic reply already renders
     in full and carry no publisher text to describe, so the same coverage question once served 294
     output tokens and once 4,973 with a composer; the flag is now reconciled against the frozen
@@ -99,6 +102,18 @@ deterministic typed results need no LLM judge.
 | Presentation | Draft optional prose and cite evidence ids | Direct result cards, links, citations and UI effects | `OperationAnswerPolicy` and `UiMapper` |
 | Optional prose | Compose or judge only after authoritative results exist | Activation condition, evidence-kind validation, fallback and budgets | two `AIAgent` roles in `AgentAnswerFinalizer` |
 | Safety | Propose one correction before plan freeze or one prose repair | No post-freeze replanning, typed refusal and deadlines | `OperationPlan` and `AgentAnswerFinalizer` |
+
+## The reply is a contract
+
+The web layer renders a typed outcome, not prose: the named reply, per-operation results and view
+cards drawn from closed effect slots (provision, diff, history, timeline, ranking, in-force,
+cited-by, coverage, verification, workspace, gap). An operation may only emit the effects its
+frozen plan declared; an effect outside that declaration throws rather than renders. Optional
+prose passes a deterministic answer contract before the judge: every claim cites ledger evidence
+ids kind to kind, every permalink in the text must match used evidence exactly, and numeric or
+article-numbered facts must appear in the cited excerpts. Two prompt-injection canaries, a
+current-turn and a restored-transcript probe, run against every candidate revision before
+promotion.
 
 ## Conversation memory
 

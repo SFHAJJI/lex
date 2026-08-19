@@ -2,7 +2,7 @@
 
 Status: **Owner-reviewed and signed: 25 live cases; execution Next.** Evaluation reviewer Soufien
 Hajji approved the exact `evals/assistant-cases-v3.json` SHA-256
-`e21876f96bd0dc6dd720b3c8878daac00baed2b96560b04d99470fabdb015376`; the digest-bound review and
+`10fa9bb2246f387b1bde204cea0deededaf4c5834fb3d7fadd1d165c0f853f8a`; the digest-bound review and
 detached signature are `evals/assistant-cases-v3.review.json` and
 `evals/assistant-cases-v3.review.sig`. This is project-owner review, not an external, third-party or
 legal audit. The signature authorizes only those exact catalog bytes; it is not evidence that a
@@ -15,7 +15,7 @@ user input to the real zero-traffic candidate, then checks what the candidate ac
 row first requires the reviewed typed plan, exact arguments or reviewed alternatives, ordered
 operations, legal and transport outcomes, UI effect, equal SSE and terminal operation payloads,
 synthesis presence, model identity, token use and latency. It then sends the bounded final reply,
-typed operations and trace—not chain-of-thought—to a separate release grader with the frozen
+typed operations and trace, not chain-of-thought, to a separate release grader with the frozen
 rubric. A low score, malformed or unavailable grader, or any deterministic failure fails that
 repetition. Any failed repetition fails the complete release gate.
 

@@ -63,11 +63,11 @@ can authorize a default change.
 
 `evals/retrieval-baseline-v2.json` binds this pre-tuning case set and split by SHA-256. Signed
 production reports now publish measured artifact, machine, resource and commit identities for both
-mounted collections at `/benchmarks`. The combined activation gate is false: holdout relevance and
-latency thresholds are not met, so keyword remains the production default.
+mounted collections at `/benchmarks`. The combined activation gate is false: holdout relevance
+thresholds are not met while latency passes. EU holdout hybrid measures 75.5 percent of keyword
+nDCG@10 and answers even the engineered no-answer cases, so keyword remains the production default.
 
-`evals/weak-enrichment-decision.json` records the separate weak-discovery activation decision. The
-reviewed EU enrichment artifact currently contains no model-derived discovery records, so weak FTS
+The reviewed EU enrichment artifact currently contains no model-derived discovery records, so weak FTS
 and concept-vector fields are not eligible for ablation and remain excluded from every public search
 default. Any future candidate artifact is capped per work and kind, and every evidence anchor and
 text hash is revalidated against the held index during each immutable rebuild before benchmarking.

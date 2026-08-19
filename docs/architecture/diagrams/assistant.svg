@@ -1,6 +1,6 @@
-<svg id="assistant-sequence" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1900 1720" role="img" aria-labelledby="title desc">
+<svg id="assistant-sequence" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1900 1980" role="img" aria-labelledby="title desc">
   <title id="title">One bounded assistant turn, time downward</title>
-  <desc id="desc">A conventional sequence diagram with continuous lifelines shows deterministic admission and subject resolution, one typed plan, one possible contract correction, plan freeze, execution against the legal core without model observations, a direct typed result, and separate optional composer and judge roles only for requested prose.</desc>
+  <desc id="desc">A conventional sequence diagram with continuous lifelines shows deterministic admission and subject resolution, one typed plan, one possible contract correction, a date guard that re-derives instants from the reader's words, plan freeze, execution against the legal core without model observations, a typed response contract routed through closed effect slots, and separate optional composer and judge roles bound by a typed answer contract.</desc>
   <defs>
     <marker id="arrow" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto">
       <path d="M0 0L9 3.5L0 7Z" fill="#445568"/>
@@ -14,25 +14,25 @@
   <text x="36" y="70" class="copy">Time moves downward. Every message starts and ends on an owning lifeline.</text>
 
   <!-- Boundaries are ownership, not execution phases. -->
-  <rect x="625" y="96" width="690" height="1584" rx="18" class="agent"/>
+  <rect x="625" y="96" width="690" height="1810" rx="18" class="agent"/>
   <text x="648" y="126" class="group-title">Bounded assistant agent</text>
   <text x="648" y="148" class="small">deterministic authority around one bounded planning role</text>
 
-  <rect x="1340" y="96" width="200" height="1584" rx="18" class="truth"/>
+  <rect x="1340" y="96" width="200" height="1810" rx="18" class="truth"/>
   <text x="1440" y="126" text-anchor="middle" class="group-title">Legal truth</text>
   <text x="1440" y="148" text-anchor="middle" class="small">outside the agent</text>
 
-  <rect x="1555" y="96" width="330" height="1584" rx="18" class="optional"/>
+  <rect x="1555" y="96" width="330" height="1810" rx="18" class="optional"/>
   <text x="1720" y="126" text-anchor="middle" class="group-title">Optional prose roles</text>
   <text x="1720" y="148" text-anchor="middle" class="small">separate logical agents</text>
 
-  <line x1="286" y1="250" x2="286" y2="1680" class="separator"/>
+  <line x1="286" y1="250" x2="286" y2="1900" class="separator"/>
   <line x1="20" y1="258" x2="1880" y2="258" class="separator"/>
   <line x1="20" y1="590" x2="1880" y2="590" class="separator"/>
   <line x1="20" y1="760" x2="1880" y2="760" class="separator"/>
-  <line x1="20" y1="995" x2="1880" y2="995" class="separator"/>
-  <line x1="20" y1="1235" x2="1880" y2="1235" class="separator"/>
-  <line x1="20" y1="1405" x2="1880" y2="1405" class="separator"/>
+  <line x1="20" y1="1115" x2="1880" y2="1115" class="separator"/>
+  <line x1="20" y1="1355" x2="1880" y2="1355" class="separator"/>
+  <line x1="20" y1="1580" x2="1880" y2="1580" class="separator"/>
 
   <!-- Participants. -->
   <g aria-label="sequence participants">
@@ -67,13 +67,14 @@
 
   <!-- Continuous lifelines stay in the foreground. -->
   <g aria-hidden="true">
-    <path d="M320 242V1660M500 242V1660M735 242V1660M970 242V1660M1205 242V1660M1440 242V1660M1640 242V1660M1820 242V1660" class="lifeline"/>
+    <path d="M320 242V1900M500 242V1900M735 242V1900M970 242V1900M1205 242V1900M1440 242V1900M1640 242V1900M1820 242V1900" class="lifeline"/>
   </g>
 
   <!-- Phase 1. -->
-  <rect x="26" y="278" width="240" height="76" rx="9" class="phase-box"/>
+  <rect x="26" y="278" width="240" height="96" rx="9" class="phase-box"/>
   <text x="42" y="304" class="phase">RESOLVE DETERMINISTICALLY</text>
   <text x="42" y="329" class="phase-copy">Official catalog authority first.</text>
+  <text x="42" y="351" class="phase-copy">Decided ambiguity: runner-up disclosed.</text>
   <path d="M320 315H500" class="arrow"/>
   <circle cx="344" cy="315" r="12" class="badge"/><text x="344" y="319" text-anchor="middle" class="number">1</text>
   <text x="410" y="302" text-anchor="middle" class="copy">question + opaque token</text>
@@ -84,14 +85,14 @@
 
   <path d="M735 440H1440" class="arrow"/>
   <circle cx="759" cy="440" r="12" class="badge"/><text x="759" y="444" text-anchor="middle" class="number">3</text>
-  <text x="1088" y="427" text-anchor="middle" class="copy">resolve identity and time against the official catalog</text>
+  <text x="1088" y="427" text-anchor="middle" class="copy">resolve official identity against the signed work catalog</text>
 
   <path d="M1440 505H735" class="return"/>
   <circle cx="1416" cy="505" r="12" class="badge"/><text x="1416" y="509" text-anchor="middle" class="number">4</text>
-  <text x="1088" y="492" text-anchor="middle" class="copy">one authorized work, bounded candidates, or none</text>
+  <text x="1088" y="492" text-anchor="middle" class="copy">up to eight authorized works, bounded candidates, or none</text>
 
   <path d="M735 556H500" class="return"/>
-  <text x="618" y="543" text-anchor="middle" class="small">ambiguity -&gt; NeedsClarification; stop before planning</text>
+  <text x="618" y="543" text-anchor="middle" class="small">undecidable ambiguity -&gt; NeedsClarification; stop before planning</text>
   <path d="M500 578H320" class="return"/>
   <text x="410" y="567" text-anchor="middle" class="small">ask the reader; terminal</text>
 
@@ -108,10 +109,11 @@
   <text x="1088" y="702" text-anchor="middle" class="copy">canonical typed operation schemas</text>
 
   <!-- Phase 3. -->
-  <rect x="26" y="780" width="240" height="94" rx="9" class="phase-box"/>
+  <rect x="26" y="780" width="240" height="118" rx="9" class="phase-box"/>
   <text x="42" y="806" class="phase">VALIDATE, CORRECT ONCE,</text>
-  <text x="42" y="827" class="phase">THEN FREEZE</text>
+  <text x="42" y="827" class="phase">GUARD DATES, THEN FREEZE</text>
   <text x="42" y="853" class="phase-copy">Second invalid plan = typed refusal.</text>
+  <text x="42" y="875" class="phase-copy">Instants re-derived from the question.</text>
   <path d="M970 815h72v42h-72" class="arrow"/>
   <circle cx="1000" cy="815" r="12" class="badge"/><text x="1000" y="819" text-anchor="middle" class="number">7</text>
   <text x="1058" y="806" class="copy">typed plan proposal</text>
@@ -120,59 +122,73 @@
   <circle cx="1000" cy="880" r="12" class="badge"/><text x="1000" y="884" text-anchor="middle" class="number">8</text>
   <text x="1058" y="872" class="copy">if invalid: one bounded correction</text>
 
-  <path d="M970 955H1205" class="arrow"/>
-  <circle cx="994" cy="955" r="12" class="badge"/><text x="994" y="959" text-anchor="middle" class="number">9</text>
-  <text x="1088" y="942" text-anchor="middle" class="copy">valid plan value-copied, capped and frozen</text>
+  <path d="M970 945h72v42h-72" class="return"/>
+  <circle cx="1000" cy="945" r="12" class="badge"/><text x="1000" y="949" text-anchor="middle" class="number">9</text>
+  <text x="1058" y="937" class="copy">date guard: widen the year or clarify</text>
+
+  <path d="M970 1075H1205" class="arrow"/>
+  <circle cx="994" cy="1075" r="12" class="badge"/><text x="994" y="1079" text-anchor="middle" class="number">10</text>
+  <text x="1088" y="1062" text-anchor="middle" class="copy">valid plan value-copied, capped at eight and frozen</text>
 
   <!-- Phase 4. -->
-  <rect x="26" y="1015" width="240" height="75" rx="9" class="phase-box"/>
-  <text x="42" y="1041" class="phase">EXECUTE WITHOUT</text>
-  <text x="42" y="1062" class="phase">OBSERVATIONS</text>
-  <text x="42" y="1084" class="phase-copy">Planner is not called again.</text>
-  <path d="M1205 1060H1440" class="arrow"/>
-  <circle cx="1229" cy="1060" r="12" class="badge"/><text x="1229" y="1064" text-anchor="middle" class="number">10</text>
-  <text x="1322" y="1047" text-anchor="middle" class="copy">for each operation: typed call</text>
+  <rect x="26" y="1135" width="240" height="75" rx="9" class="phase-box"/>
+  <text x="42" y="1161" class="phase">EXECUTE WITHOUT</text>
+  <text x="42" y="1182" class="phase">OBSERVATIONS</text>
+  <text x="42" y="1204" class="phase-copy">Planner is not called again.</text>
+  <path d="M1205 1180H1440" class="arrow"/>
+  <circle cx="1229" cy="1180" r="12" class="badge"/><text x="1229" y="1184" text-anchor="middle" class="number">11</text>
+  <text x="1322" y="1167" text-anchor="middle" class="copy">for each operation: typed call</text>
 
-  <path d="M1440 1120h70v42h-70" class="arrow"/>
-  <circle cx="1464" cy="1120" r="12" class="badge"/><text x="1464" y="1124" text-anchor="middle" class="number">11</text>
-  <text x="1420" y="1111" text-anchor="end" class="copy">SQL / FTS / vectors; dates / compare / gaps</text>
+  <path d="M1440 1240h70v42h-70" class="arrow"/>
+  <circle cx="1464" cy="1240" r="12" class="badge"/><text x="1464" y="1244" text-anchor="middle" class="number">12</text>
+  <text x="1420" y="1231" text-anchor="end" class="copy">SQL / FTS / vectors; dates / compare / gaps</text>
 
-  <path d="M1440 1190H1205" class="return"/>
-  <circle cx="1416" cy="1190" r="12" class="badge"/><text x="1416" y="1194" text-anchor="middle" class="number">12</text>
-  <text x="1322" y="1177" text-anchor="middle" class="copy">closed outcome + rows + hashes + links</text>
+  <path d="M1440 1310H1205" class="return"/>
+  <circle cx="1416" cy="1310" r="12" class="badge"/><text x="1416" y="1314" text-anchor="middle" class="number">13</text>
+  <text x="1322" y="1297" text-anchor="middle" class="copy">closed outcome + rows + hashes + links</text>
 
   <!-- Phase 5. -->
-  <rect x="26" y="1255" width="240" height="66" rx="9" class="phase-box"/>
-  <text x="42" y="1281" class="phase">TYPED RESULT</text>
-  <text x="42" y="1305" class="phase-copy">Direct, cited and usable by default.</text>
-  <path d="M1205 1300H500" class="return"/>
-  <circle cx="1181" cy="1300" r="12" class="badge"/><text x="1181" y="1304" text-anchor="middle" class="number">13</text>
-  <text x="852" y="1287" text-anchor="middle" class="copy">cards + citations, or typed NeedsClarification / gap / refusal</text>
+  <rect x="26" y="1375" width="240" height="96" rx="9" class="phase-box"/>
+  <text x="42" y="1401" class="phase">TYPED RESPONSE CONTRACT</text>
+  <text x="42" y="1425" class="phase-copy">AskOutcome: reply + operations + cards.</text>
+  <text x="42" y="1447" class="phase-copy">Effects match the frozen plan.</text>
+  <path d="M1205 1420h70v42h-70" class="arrow"/>
+  <circle cx="1235" cy="1420" r="12" class="badge"/><text x="1235" y="1424" text-anchor="middle" class="number">14</text>
+  <text x="1195" y="1411" text-anchor="end" class="copy">route to closed effect slots; out-of-plan effects throw</text>
 
-  <path d="M500 1360H320" class="return"/>
-  <circle cx="476" cy="1360" r="12" class="badge"/><text x="476" y="1364" text-anchor="middle" class="number">14</text>
-  <text x="410" y="1347" text-anchor="middle" class="copy">render deterministic result</text>
+  <path d="M1205 1480H500" class="return"/>
+  <circle cx="1181" cy="1480" r="12" class="badge"/><text x="1181" y="1484" text-anchor="middle" class="number">15</text>
+  <text x="852" y="1467" text-anchor="middle" class="copy">AskOutcome: named reply, cards, citations, disclosures, or typed gap / refusal</text>
+
+  <path d="M500 1540H320" class="return"/>
+  <circle cx="476" cy="1540" r="12" class="badge"/><text x="476" y="1544" text-anchor="middle" class="number">16</text>
+  <text x="410" y="1527" text-anchor="middle" class="copy">render deterministic result</text>
 
   <!-- Phase 6. -->
-  <rect x="26" y="1425" width="240" height="94" rx="9" class="phase-box"/>
-  <text x="42" y="1451" class="phase">OPTIONAL PROSE</text>
-  <text x="42" y="1475" class="phase-copy">Only explicit explain / summarise.</text>
-  <text x="42" y="1498" class="phase-copy">Same deployment, separate roles.</text>
-  <path d="M1205 1475H1640" class="arrow"/>
-  <circle cx="1229" cy="1475" r="12" class="badge"/><text x="1229" y="1479" text-anchor="middle" class="number">15</text>
-  <text x="1422" y="1462" text-anchor="middle" class="copy">accepted deterministic draft + typed evidence</text>
+  <rect x="26" y="1600" width="240" height="130" rx="9" class="phase-box"/>
+  <text x="42" y="1626" class="phase">OPTIONAL PROSE</text>
+  <text x="42" y="1650" class="phase-copy">Explicit explain / summarise only,</text>
+  <text x="42" y="1672" class="phase-copy">reconciled against the frozen plan.</text>
+  <text x="42" y="1694" class="phase-copy">Same deployment, separate roles.</text>
+  <path d="M1205 1650H1640" class="arrow"/>
+  <circle cx="1229" cy="1650" r="12" class="badge"/><text x="1229" y="1654" text-anchor="middle" class="number">17</text>
+  <text x="1422" y="1637" text-anchor="middle" class="copy">accepted deterministic draft + bounded typed evidence</text>
 
-  <path d="M1640 1535H1820" class="arrow"/>
-  <circle cx="1664" cy="1535" r="12" class="badge"/><text x="1664" y="1539" text-anchor="middle" class="number">16</text>
-  <text x="1730" y="1522" text-anchor="middle" class="copy">factual Answer / Gap claims only</text>
+  <path d="M1640 1705h64v40h-64" class="return"/>
+  <circle cx="1668" cy="1705" r="12" class="badge"/><text x="1668" y="1709" text-anchor="middle" class="number">18</text>
+  <text x="1672" y="1692" text-anchor="middle" class="copy">answer contract; one correction</text>
 
-  <path d="M1820 1595H1205" class="return"/>
-  <circle cx="1796" cy="1595" r="12" class="badge"/><text x="1796" y="1599" text-anchor="middle" class="number">17</text>
-  <text x="1512" y="1582" text-anchor="middle" class="copy">Pass / Repair / Refuse</text>
+  <path d="M1640 1775H1820" class="arrow"/>
+  <circle cx="1664" cy="1775" r="12" class="badge"/><text x="1664" y="1779" text-anchor="middle" class="number">19</text>
+  <text x="1730" y="1762" text-anchor="middle" class="copy">factual Answer / Gap claims only</text>
 
-  <path d="M1205 1650H500" class="return"/>
-  <circle cx="1181" cy="1650" r="12" class="badge"/><text x="1181" y="1654" text-anchor="middle" class="number">18</text>
-  <text x="852" y="1637" text-anchor="middle" class="copy">grounded prose, or the preserved deterministic fallback</text>
+  <path d="M1820 1830H1205" class="return"/>
+  <circle cx="1796" cy="1830" r="12" class="badge"/><text x="1796" y="1834" text-anchor="middle" class="number">20</text>
+  <text x="1512" y="1817" text-anchor="middle" class="copy">Pass / Repair / Refuse</text>
 
-  <text x="950" y="1703" text-anchor="middle" class="copy">The planner receives schemas only. It never observes execution and never replans.</text>
+  <path d="M1205 1885H500" class="return"/>
+  <circle cx="1181" cy="1885" r="12" class="badge"/><text x="1181" y="1889" text-anchor="middle" class="number">21</text>
+  <text x="852" y="1872" text-anchor="middle" class="copy">grounded prose prefixed to the named line, or the preserved fallback</text>
+
+  <text x="950" y="1950" text-anchor="middle" class="copy">The planner receives the question, bounded history and typed schemas. It never observes execution and never replans.</text>
 </svg>
