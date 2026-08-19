@@ -3236,14 +3236,18 @@ public sealed class AskService
                     ["phase"] = "synthesis",
                     ["status"] = finalized.SynthesisFailed ? "failed" : "completed",
                     ["draft_status"] = ContractName(finalized.Draft.Status),
-                    ["claims"] = new JsonArray(finalized.Draft.Claims.Select(claim =>
+                    // The answer contract bounds every one of these strings but not how many of
+                    // them there are, so a model that returns five hundred claims would put its
+                    // whole excess on the wire. These are the transport bounds, and they are the
+                    // same ones the browser applies to what it received.
+                    ["claims"] = new JsonArray(finalized.Draft.Claims.Take(32).Select(claim =>
                         (JsonNode)new JsonObject
                         {
                             ["kind"] = ContractName(claim.Kind),
-                            ["evidence_ids"] = new JsonArray(claim.EvidenceIds
+                            ["evidence_ids"] = new JsonArray(claim.EvidenceIds.Take(8)
                                 .Select(id => (JsonNode)id).ToArray()),
                         }).ToArray()),
-                    ["permalinks"] = new JsonArray(finalized.Draft.Permalinks
+                    ["permalinks"] = new JsonArray(finalized.Draft.Permalinks.Take(64)
                         .Select(link => (JsonNode)link).ToArray()),
                     ["judge"] = finalized.Judgment is { } judgment
                         ? new JsonObject

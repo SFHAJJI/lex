@@ -149,7 +149,10 @@ export function executionDetails(reply: AskReply): AskExecutionDetails | undefin
       const kind = boundedText(claim?.kind);
       return kind ? [{ kind, evidence_ids: boundedStrings(claim?.evidence_ids, 8) }] : [];
     }),
-    permalink_count: boundedStrings(rawSynthesis?.permalinks, 64).length,
+    // Counted, never rendered. The answer contract bounds a permalink at 2,000 characters, so
+    // the 200-character bound the label fields use would undercount long ones to zero.
+    permalink_count: asArray(rawSynthesis?.permalinks).slice(0, 64)
+      .filter((link) => boundedText(link, 2_000) !== undefined).length,
     ...(judgeDisposition ? {
       judge: {
         disposition: judgeDisposition,

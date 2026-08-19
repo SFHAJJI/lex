@@ -80,7 +80,8 @@ function ExecutionDetails({ value }: { value?: AskExecutionDetails }) {
           {plan.map((operation, index) => <li key={index}>
             <code>{operation.tool}</code> {operation.args}
             {operation.repairs.length > 0 ? <ul>
-              {operation.repairs.map((repair) => <li key={repair}>{`repaired: ${repair}`}</li>)}
+              {operation.repairs.map((repair, position) =>
+                <li key={position}>{`repaired: ${repair}`}</li>)}
             </ul> : null}
           </li>)}
         </ul>

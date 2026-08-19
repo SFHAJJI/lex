@@ -167,7 +167,9 @@ test("the audit disclosure caps every extracted array and never carries claim te
           text: "claim prose must never reach the browser",
           evidence_ids: Array.from({ length: 12 }, (_, index) => `as_of:1:${index}`),
         })),
-        permalinks: ["https://law.soufien.lu/a"],
+        // A permalink is longer than any label this panel renders, and it is only counted here,
+        // so the label bound must not silently drop it.
+        permalinks: [`https://law.soufien.lu/${"a".repeat(400)}`],
         judge: { disposition: "repair", issue_count: 2 },
       },
     ],
