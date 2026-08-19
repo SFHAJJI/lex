@@ -109,8 +109,6 @@ public sealed class ArchitectureDossierTests : IClassFixture<GoldenTests.Site>
         Assert.Contains("There is no hidden UI toggle", html);
         Assert.Contains("synthesis=true", html);
         Assert.Contains("ReWOO-inspired reasoning without an observation loop", html);
-        Assert.Contains("Open-ended ReAct", html);
-        Assert.Contains("Naive RAG with LLM-selected identity", html);
         Assert.Contains(".dossier-sequence {", css);
         Assert.Contains("min-width: 1200px;", css);
         Assert.Contains("min-width: 1000px;", css);
