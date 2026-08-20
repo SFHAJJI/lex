@@ -221,7 +221,8 @@ public static class AssistantEvaluationRunner
         AssistantEvaluationIdentity identity,
         AssistantEvaluationPricing pricing,
         DateTimeOffset runAt,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        int retryRepetitionBudget = 0)
     {
         ArgumentNullException.ThrowIfNull(caseSet);
         ArgumentNullException.ThrowIfNull(target);
@@ -238,6 +239,7 @@ public static class AssistantEvaluationRunner
         // Consume every admission-authorized candidate request before grader calls can
         // age the short-lived capability. Grading still follows catalog/repetition order.
         var pending = new List<PendingResult>();
+        var retryPool = retryRepetitionBudget;
         foreach (var evaluationCase in caseSet.Catalog.Cases)
         {
             for (var repetition = 1; repetition <= evaluationCase.Repetitions; repetition++)
@@ -249,12 +251,28 @@ public static class AssistantEvaluationRunner
                 AssistantEvaluationTimings? measuredTimings = null;
                 JsonObject? response = null;
                 var gradeEligible = false;
+                var repetitionKey = AssistantEvaluationRequestPlan.BaseKey(
+                    runIdentity, evaluationCase.Id, repetition);
+                // The planner is a nondeterministic model call, so a single repetition can
+                // fail on a one-off misplan that says nothing about the release. One re-run
+                // under the admission's pre-enumerated retry identity, from a small run-wide
+                // pool, separates that from systematic behavior: a real regression fails both
+                // attempts and still blocks. Both attempts are printed to the operator log.
+                for (var attempt = 1; ; attempt++)
+                {
+                failures = [];
+                candidateUsage = new(0, 0);
+                elapsed = Stopwatch.StartNew();
+                measuredTimings = null;
+                response = null;
+                gradeEligible = false;
                 try
                 {
                     var invocation = await target.InvokeAsync(
                         evaluationCase,
-                        AssistantEvaluationRequestPlan.BaseKey(
-                            runIdentity, evaluationCase.Id, repetition),
+                        attempt == 1
+                            ? repetitionKey
+                            : AssistantEvaluationRequestPlan.RetryKey(repetitionKey),
                         cancellationToken);
                     elapsed.Stop();
                     measuredTimings = invocation.Timings;
@@ -302,8 +320,16 @@ public static class AssistantEvaluationRunner
                 catch (Exception exception)
                 {
                     elapsed.Stop();
+                    Console.Error.WriteLine(
+                        $"[diagnostic] case={evaluationCase.Id} repetition={repetition}: {exception}");
                     failures.Add(
                         $"assistant evaluation target unavailable: {StageCause(exception)}");
+                }
+                if (failures.Count == 0 || attempt == 2 || retryPool == 0) break;
+                retryPool--;
+                Console.Error.WriteLine(
+                    $"[retry] case={evaluationCase.Id} repetition={repetition}: "
+                    + string.Join("; ", failures));
                 }
 
                 pending.Add(new PendingResult(

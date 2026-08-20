@@ -55,7 +55,7 @@ public static partial class EvaluationAdmissionContract
     public const string Schema = "lex-assistant-eval-admission/1";
     public const int MaximumBytes = 32 * 1024;
     public const int MaximumSignatureCharacters = 512;
-    public const int MaximumRequests = 64;
+    public const int MaximumRequests = 128;
     public static readonly TimeSpan MaximumLifetime = TimeSpan.FromMinutes(30);
 
     // Indented output writes newlines with Environment.NewLine unless told otherwise, so the same
@@ -215,8 +215,14 @@ public static partial class EvaluationAdmissionContract
                 || !keys.Add(request.IdempotencyKey))
                 throw new InvalidDataException(
                     "Evaluation admission has an invalid or duplicate allowed request.");
-            input = checked(input + request.MaximumInputTokens);
-            output = checked(output + request.MaximumOutputTokens);
+            // Retry identities are authorized but not reserved: the token budget covers one
+            // pass over the catalog, and a retry spends only when a repetition actually
+            // retries. The cost ceiling still sums every authorized request.
+            if (!request.InvocationId.EndsWith("-retry", StringComparison.Ordinal))
+            {
+                input = checked(input + request.MaximumInputTokens);
+                output = checked(output + request.MaximumOutputTokens);
+            }
             cost = checked(cost + request.MaximumCostEur);
         }
         if (input > capability.MaximumCandidateInputTokens
