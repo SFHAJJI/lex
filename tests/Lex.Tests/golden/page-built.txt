@@ -246,8 +246,47 @@ HTTP 200
 Luxembourg and EU publisher material into article-level research with an official link, an exact
 version and a verifiable evidence chain. It does not decide legal applicability or advise a reader
 what to do.</p>
-<p><img src="/built/diagrams/system.svg" alt="Official publishers flow through a deterministic corpus and signed index into one legal core used by the web app, public MCP server and bounded assistant." /></p>
-<p><a href="/built/diagrams/system.svg">Open the system diagram at full size</a></p>
+<p><img src="/built/diagrams/three-planes.svg" alt="Three planes: a nightly data plane from publishers through an append-only corpus, gated derivation and index build to signed artifacts; a per-release plane from an immutable image through a zero-traffic candidate, gates and a signed evaluation to one promotion; a per-question runtime plane from reader through admission, subject preflight, planner, gate and freeze, executor and the legal core to a typed reply with an optional composer and judge." /></p>
+<p><a href="/built/diagrams/three-planes.svg">Open the three-plane diagram at full size</a></p>
+<p>The whole system is three planes that meet at exactly two artifacts. The data plane runs nightly
+and turns publisher bytes into an append-only corpus, deterministic derivations and a signed
+index. The release plane runs per release and turns code plus verified indexes into one immutable
+image that must pass its gates and a signed evaluation before a single promotion. The runtime
+plane runs per question and answers from the signed index alone, resolving identity before any
+model, freezing one typed plan, and returning typed, cited results. The planes never share state
+except the two signed artifacts: the index manifest binds the data plane to the release plane,
+and the evaluation report binds the release plane to the exact revision that serves.</p>
+<div class="dossier-table" tabindex="0" role="region" aria-label="Scrollable architecture table"><table>
+<thead>
+<tr>
+<th>Plane</th>
+<th>Cadence</th>
+<th>Produces</th>
+<th>Hands the next plane</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Data</td>
+<td>Nightly, per publisher</td>
+<td>Append-only corpus, derived articles, SQLite index</td>
+<td>Signed artifact manifests</td>
+</tr>
+<tr>
+<td>Release</td>
+<td>Per release</td>
+<td>Immutable image, zero-traffic candidate, gates, signed evaluation</td>
+<td>One promotion, rollback retained</td>
+</tr>
+<tr>
+<td>Runtime</td>
+<td>Per question</td>
+<td>Identity in code, one frozen plan, typed cited reply, optional judged prose</td>
+<td>Nothing; it only reads the two signed artifacts</td>
+</tr>
+</tbody>
+</table></div>
+<h2>Where each responsibility lives</h2>
 <div class="dossier-table" tabindex="0" role="region" aria-label="Scrollable architecture table"><table>
 <thead>
 <tr>
