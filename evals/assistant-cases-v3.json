@@ -52,7 +52,7 @@
   "maximum_cost_eur": 10.0,
   "maximum_first_operation_p95_latency_ms": 15000,
   "maximum_first_operation_hard_latency_ms": 25000,
-  "maximum_synthesis_p95_latency_ms": 45000,
+  "maximum_synthesis_p95_latency_ms": 50000,
   "maximum_transport_queue_residual_p95_latency_ms": 1500,
   "maximum_total_p99_latency_ms": 75000
  },

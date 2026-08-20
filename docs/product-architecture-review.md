@@ -561,7 +561,8 @@ limits; it is never a static bypass secret.
 - After MCP returns an accepted result, the browser displays its `operation_result` within 500 ms
   locally and 1.5 s production p95.
 - Model synthesis latency is reported separately and cannot block display of a completed workspace
-  operation. Its production p95 envelope is 45 s.
+  operation. Its runtime deadline is 45 s and the release budget for its p95 is 50 s, above the
+  deadline so a bounded fallback is not read as a stall.
 - Candidate and memory bounds remain independent of corpus size for a fixed query limit.
 - Retrieval activation retains the numeric limits in section 7.2.
 
