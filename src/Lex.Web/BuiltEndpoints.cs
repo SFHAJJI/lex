@@ -52,8 +52,8 @@ public static class BuiltEndpoints
 
     private static readonly HashSet<string> DiagramNames =
     [
-        "system", "legal-model", "data-authority", "retrieval", "assistant-boundary", "assistant",
-        "memory", "release", "incident", "scale",
+        "system", "three-planes", "legal-model", "data-authority", "retrieval",
+        "assistant-boundary", "assistant", "memory", "release", "incident", "scale",
     ];
 
     private static readonly IReadOnlyDictionary<string, string> MarkdownBySlug = Pages

@@ -456,7 +456,8 @@ switch (args0[0])
             var report = await AssistantEvaluationRunner.RunAsync(
                 caseSet, target, grader, identity,
                 caseSet.Catalog.Pricing,
-                now, CancellationToken.None);
+                now, CancellationToken.None,
+                retryRepetitionBudget: 4);
             var postRunTarget = await resolver.ResolveContainerAppRevisionAsync(
                 candidateContainerAppResourceId, candidateRevision, CancellationToken.None);
             AssistantEvaluationRunner.EnsureStableTarget(targetEvidence, postRunTarget);

@@ -106,11 +106,21 @@ public static class EvalAdmissionCli
                 request.MaximumInputTokens, request.MaximumOutputTokens)))
             .ToArray();
         var maximumCost = requests.Sum(request => request.MaximumCostEur);
+        // The reviewed preflight budget reserves one pass over the catalog. Retry identities
+        // are authorized but not reserved: they spend only when a repetition actually retries,
+        // and the run-time EUR ceiling still bounds the whole run. The drift check therefore
+        // compares the single-pass subset of the plan, not the enumerated capability.
+        var primaryRequests = planned
+            .Where(request => !AssistantEvaluationRequestPlan.IsRetryIdentity(
+                request.InvocationId))
+            .ToArray();
         if (preflight.ReservedCandidateInputTokens
-                != requests.Sum(request => (long)request.MaximumInputTokens)
+                != primaryRequests.Sum(request => (long)request.MaximumInputTokens)
             || preflight.ReservedCandidateOutputTokens
-                != requests.Sum(request => (long)request.MaximumOutputTokens)
-            || maximumCost != preflight.EstimatedCandidateCostEur)
+                != primaryRequests.Sum(request => (long)request.MaximumOutputTokens)
+            || primaryRequests.Sum(request => caseSet.Catalog.Pricing.CandidateCost(
+                    request.MaximumInputTokens, request.MaximumOutputTokens))
+                != preflight.EstimatedCandidateCostEur)
             throw new InvalidDataException(
                 "Evaluation admission request plan drifted from the reviewed preflight budget.");
         return new EvaluationAdmissionCapability(
@@ -215,9 +225,35 @@ public static class AssistantEvaluationRequestPlan
                 baseKey, turn,
                 evaluationCase.MaximumInputTokens,
                 evaluationCase.MaximumOutputTokens));
+
+            // The planner is a nondeterministic model call, so a repetition can fail on a
+            // one-off misplan that says nothing about the release. The runner may re-run a
+            // failed repetition exactly once under these pre-enumerated retry identities;
+            // enumerating them here keeps the admission a closed list rather than an allowance.
+            var retryKey = RetryKey(baseKey);
+            var retryTurn = 0;
+            foreach (var setup in evaluationCase.History ?? [])
+            {
+                retryTurn++;
+                requests.Add(new AssistantEvaluationPlannedRequest(
+                    SetupKey(retryKey, retryTurn), setup.Content,
+                    retryKey, retryTurn,
+                    setup.MaximumInputTokens, setup.MaximumOutputTokens));
+            }
+            retryTurn++;
+            requests.Add(new AssistantEvaluationPlannedRequest(
+                retryKey, evaluationCase.Question,
+                retryKey, retryTurn,
+                evaluationCase.MaximumInputTokens,
+                evaluationCase.MaximumOutputTokens));
         }
         return requests;
     }
+
+    public static string RetryKey(string baseKey) => $"{baseKey}-retry";
+
+    public static bool IsRetryIdentity(string invocationId) =>
+        invocationId.EndsWith("-retry", StringComparison.Ordinal);
 
     public static string BaseKey(
         string runIdentity,

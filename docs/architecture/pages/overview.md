@@ -5,9 +5,26 @@ Luxembourg and EU publisher material into article-level research with an officia
 version and a verifiable evidence chain. It does not decide legal applicability or advise a reader
 what to do.
 
-![Official publishers flow through a deterministic corpus and signed index into one legal core used by the web app, public MCP server and bounded assistant.](/built/diagrams/system.svg)
+![Three planes: a nightly data plane from publishers through an append-only corpus, gated derivation and index build to signed artifacts; a per-release plane from an immutable image through a zero-traffic candidate, gates and a signed evaluation to one promotion; a per-question runtime plane from reader through admission, subject preflight, planner, gate and freeze, executor and the legal core to a typed reply with an optional composer and judge.](/built/diagrams/three-planes.svg)
 
-[Open the system diagram at full size](/built/diagrams/system.svg)
+[Open the three-plane diagram at full size](/built/diagrams/three-planes.svg)
+
+The whole system is three planes that meet at exactly two artifacts. The data plane runs nightly
+and turns publisher bytes into an append-only corpus, deterministic derivations and a signed
+index. The release plane runs per release and turns code plus verified indexes into one immutable
+image that must pass its gates and a signed evaluation before a single promotion. The runtime
+plane runs per question and answers from the signed index alone, resolving identity before any
+model, freezing one typed plan, and returning typed, cited results. The planes never share state
+except the two signed artifacts: the index manifest binds the data plane to the release plane,
+and the evaluation report binds the release plane to the exact revision that serves.
+
+| Plane | Cadence | Produces | Hands the next plane |
+|---|---|---|---|
+| Data | Nightly, per publisher | Append-only corpus, derived articles, SQLite index | Signed artifact manifests |
+| Release | Per release | Immutable image, zero-traffic candidate, gates, signed evaluation | One promotion, rollback retained |
+| Runtime | Per question | Identity in code, one frozen plan, typed cited reply, optional judged prose | Nothing; it only reads the two signed artifacts |
+
+## Where each responsibility lives
 
 | Box | Responsibility | Lives in |
 |---|---|---|
