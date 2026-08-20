@@ -53,7 +53,11 @@ public sealed record EvaluationAdmissionAuthority(
 public static partial class EvaluationAdmissionContract
 {
     public const string Schema = "lex-assistant-eval-admission/1";
-    public const int MaximumBytes = 32 * 1024;
+    // 25 cases and 48 repetitions enumerate 56 request identities; doubling them for the
+    // runner's single pre-authorized retry per repetition serializes to about 41 KiB, so the
+    // 32 KiB cap rejected the very admission the retry design produces. The cap exists to
+    // bound parsing, not to price identities: 64 KiB keeps that bound with headroom.
+    public const int MaximumBytes = 64 * 1024;
     public const int MaximumSignatureCharacters = 512;
     public const int MaximumRequests = 128;
     public static readonly TimeSpan MaximumLifetime = TimeSpan.FromMinutes(30);
