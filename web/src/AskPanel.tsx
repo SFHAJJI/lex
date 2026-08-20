@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
 import type { AskExecutionDetails, AskMessage, Step } from "./api";
@@ -62,6 +62,7 @@ function ExecutionDetails({ value }: { value?: AskExecutionDetails }) {
   const usage = value.model_usage;
   const timing = value.timing;
   const evidenceIds = new Set(synthesis?.claims.flatMap((claim) => claim.evidence_ids) ?? []);
+  const rawJson = useMemo(() => JSON.stringify(value, null, 2), [value]);
   const rawRequestId = value.operation_plan?.request_id;
   const requestId = typeof rawRequestId === "string" && rawRequestId.length <= 64
     ? rawRequestId : undefined;
@@ -148,7 +149,7 @@ function ExecutionDetails({ value }: { value?: AskExecutionDetails }) {
 
     <details className="ap-audit-raw">
       <summary>Raw object <code className="ap-audit-type">AskExecutionDetails</code></summary>
-      <pre tabIndex={0} aria-label="Execution details JSON">{JSON.stringify(value, null, 2)}</pre>
+      <pre tabIndex={0} aria-label="Execution details JSON">{rawJson}</pre>
     </details>
   </details>;
 }
