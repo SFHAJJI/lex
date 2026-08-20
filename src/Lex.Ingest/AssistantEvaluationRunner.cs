@@ -461,7 +461,8 @@ public static class AssistantEvaluationRunner
         {
             ["Assistant evaluation target did not return the versioned event stream."] = "stream_content_type_invalid",
             ["Assistant evaluation stream has no valid request identity."] = "stream_request_identity_invalid",
-            ["Assistant evaluation event stream is malformed."] = "stream_event_bound_exceeded",
+            ["Assistant evaluation event stream exceeded its event bound."] = "stream_event_bound_exceeded",
+            ["Assistant evaluation event arrived without an event name."] = "stream_event_name_absent",
             ["Assistant evaluation event is not an object."] = "stream_event_not_object",
             ["Assistant evaluation event sequence is invalid."] = "stream_event_sequence_invalid",
             ["Assistant evaluation event has no authenticated server timing."] = "stream_server_timing_absent",
@@ -1103,8 +1104,12 @@ public sealed class AssistantEvaluationHttpTarget : IAssistantEvaluationTarget
                 continue;
             }
             if (!line.StartsWith("data: ", StringComparison.Ordinal)) continue;
-            if (++eventsRead > 128 || eventName is null)
-                throw new InvalidDataException("Assistant evaluation event stream is malformed.");
+            if (++eventsRead > 128)
+                throw new InvalidDataException(
+                    "Assistant evaluation event stream exceeded its event bound.");
+            if (eventName is null)
+                throw new InvalidDataException(
+                    "Assistant evaluation event arrived without an event name.");
             var envelope = JsonNode.Parse(line[6..]) as JsonObject
                 ?? throw new InvalidDataException("Assistant evaluation event is not an object.");
             if (envelope["version"]?.GetValue<string>() != "1"
