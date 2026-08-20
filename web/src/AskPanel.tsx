@@ -43,8 +43,14 @@ function planOperations(plan: Record<string, unknown> | null) {
     });
 }
 
-function AuditCard({ title, children }: { title: string; children: ReactNode }) {
-  return <details className="ap-audit-card"><summary>{title}</summary>{children}</details>;
+function AuditCard({ title, type, children }:
+  { title: string; type: string; children: ReactNode }) {
+  // The summary names the typed object that crossed this boundary, with the same nouns the
+  // architecture dossier uses, so a reader can hold the page and the panel side by side.
+  return <details className="ap-audit-card">
+    <summary>{title} <code className="ap-audit-type">{type}</code></summary>
+    {children}
+  </details>;
 }
 
 function ExecutionDetails({ value }: { value?: AskExecutionDetails }) {
@@ -58,7 +64,7 @@ function ExecutionDetails({ value }: { value?: AskExecutionDetails }) {
   return <details className="ap-execution">
     <summary>How this answer was produced</summary>
 
-    {subject ? <AuditCard title="Subject">
+    {subject ? <AuditCard title="Subject" type="SubjectAuthority">
       <dl>
         <dt>status</dt><dd>{subject.status}</dd>
         {subject.works.length > 0 ? <><dt>works</dt><dd>{subject.works.join(", ")}</dd></> : null}
@@ -73,7 +79,7 @@ function ExecutionDetails({ value }: { value?: AskExecutionDetails }) {
       </dl>
     </AuditCard> : null}
 
-    {value.operation_plan ? <AuditCard title="Plan">
+    {value.operation_plan ? <AuditCard title="Plan" type="OperationPlan">
       {plan.length > 0 ? <>
         <p>{`${plan.length} operation${plan.length === 1 ? "" : "s"}, frozen before the first ran.`}</p>
         <ul>
@@ -90,7 +96,7 @@ function ExecutionDetails({ value }: { value?: AskExecutionDetails }) {
       </pre>}
     </AuditCard> : null}
 
-    <AuditCard title="Results">
+    <AuditCard title="Results" type="OperationResult">
       <ul>
         {value.operation_outcomes.map((outcome) => <li key={outcome.operation_id}>
           <code>{outcome.tool ?? "operation"}</code>
@@ -100,7 +106,7 @@ function ExecutionDetails({ value }: { value?: AskExecutionDetails }) {
       </ul>
     </AuditCard>
 
-    {synthesis ? <AuditCard title="Prose contract">
+    {synthesis ? <AuditCard title="Prose contract" type="AgentAnswerDraft + AgentGroundingJudgment">
       <dl>
         <dt>status</dt><dd>{synthesis.status}</dd>
         {synthesis.draft_status
@@ -115,7 +121,7 @@ function ExecutionDetails({ value }: { value?: AskExecutionDetails }) {
       </dl>
     </AuditCard> : null}
 
-    <AuditCard title="Model and timing">
+    <AuditCard title="Model and timing" type="AskOutcome">
       <dl>
         {value.model_identity
           ? <><dt>deployment</dt><dd>{value.model_identity.deployment}</dd></> : null}
