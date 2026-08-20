@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
 import type { AskExecutionDetails, AskMessage, Step } from "./api";
@@ -37,6 +37,7 @@ function planOperations(plan: Record<string, unknown> | null) {
       return [{
         tool: operation.tool,
         args: compactJson(operation.arguments, 400),
+        resultClass: typeof operation.result_class === "string" ? operation.result_class : undefined,
         repairs: (Array.isArray(operation.repairs) ? operation.repairs : [])
           .filter((repair: unknown): repair is string => typeof repair === "string").slice(0, 8),
       }];
@@ -61,6 +62,10 @@ function ExecutionDetails({ value }: { value?: AskExecutionDetails }) {
   const usage = value.model_usage;
   const timing = value.timing;
   const evidenceIds = new Set(synthesis?.claims.flatMap((claim) => claim.evidence_ids) ?? []);
+  const rawJson = useMemo(() => JSON.stringify(value, null, 2), [value]);
+  const rawRequestId = value.operation_plan?.request_id;
+  const requestId = typeof rawRequestId === "string" && rawRequestId.length <= 64
+    ? rawRequestId : undefined;
   return <details className="ap-execution">
     <summary>How this answer was produced</summary>
 
@@ -85,6 +90,7 @@ function ExecutionDetails({ value }: { value?: AskExecutionDetails }) {
         <ul>
           {plan.map((operation, index) => <li key={index}>
             <code>{operation.tool}</code> {operation.args}
+            {operation.resultClass ? <> <code>{operation.resultClass}</code></> : null}
             {operation.repairs.length > 0 ? <ul>
               {operation.repairs.map((repair, position) =>
                 <li key={position}>{`repaired: ${repair}`}</li>)}
@@ -102,6 +108,7 @@ function ExecutionDetails({ value }: { value?: AskExecutionDetails }) {
           <code>{outcome.tool ?? "operation"}</code>
           {` #${outcome.order + 1}: ${outcome.legal_outcome}, ${outcome.transport_outcome}`}
           {outcome.effects.length > 0 ? ` (${outcome.effects.join(", ")})` : ""}
+          {outcome.result_class ? <> <code>{outcome.result_class}</code></> : null}
         </li>)}
       </ul>
     </AuditCard>
@@ -125,6 +132,9 @@ function ExecutionDetails({ value }: { value?: AskExecutionDetails }) {
       <dl>
         {value.model_identity
           ? <><dt>deployment</dt><dd>{value.model_identity.deployment}</dd></> : null}
+        {value.model_identity?.resource_host
+          ? <><dt>host</dt><dd>{value.model_identity.resource_host}</dd></> : null}
+        {requestId ? <><dt>request</dt><dd><code>{requestId}</code></dd></> : null}
         {usage ? <>
           <dt>tokens</dt>
           <dd>{`${usage.input_tokens} in, ${usage.output_tokens} out, ${usage.total_tokens} total`}</dd>
@@ -136,6 +146,11 @@ function ExecutionDetails({ value }: { value?: AskExecutionDetails }) {
         </> : null}
       </dl>
     </AuditCard>
+
+    <details className="ap-audit-raw">
+      <summary>Raw object <code className="ap-audit-type">AskExecutionDetails</code></summary>
+      <pre tabIndex={0} aria-label="Execution details JSON">{rawJson}</pre>
+    </details>
   </details>;
 }
 
