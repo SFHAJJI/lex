@@ -1,0 +1,28 @@
+{
+  "profile_id": "fmx4-eu/1",
+  "provisions": [
+    {
+      "anchor": "art_1",
+      "eli": null,
+      "type": "article",
+      "num": "Article 1",
+      "heading": null,
+      "path": [
+        "CHAPTER SYNTHETIC"
+      ],
+      "article_valid_from": null,
+      "text_md": "**1.** The invented register contains seven entries.",
+      "text_sha256": "4a2788ce85b3576baa81837b801602edafc0b4bd59c7ce51df096d0144047b7f",
+      "md_span": {
+        "start": 58,
+        "end": 110
+      },
+      "citations": []
+    }
+  ],
+  "markdown": "\n## CHAPTER SYNTHETIC\n\n<a id=\"art_1\"></a>\n\n### Article 1\n\n**1.** The invented register contains seven entries.\n",
+  "notes": [
+    "boundaries: Formex ARTICLE / CONS.ANNEX elements (publisher structural markup)"
+  ],
+  "publisher_structural_empty_articles": []
+}

@@ -1,0 +1,38 @@
+{
+  "schema": "lex-canon-freeze/1",
+  "canon": "canon/1",
+  "application_baseline": "addc13b07ea5ce83c2ab1c4c7b5f5d8b4bc43c9f",
+  "lex_derive_tree": "69f0bef039a569f897e7ea81cefa6850d65606db",
+  "profile_ids": [
+    "akn-lu-document/1",
+    "akn-lu-identical-scl-duplicate/1",
+    "akn-lu/1",
+    "akn-lu/2",
+    "fmx4-eu/1",
+    "html-eu-tolerant/1",
+    "pdf-lu/1",
+    "pdf-memorial-lu/1",
+    "pdf-memorial-lu/2",
+    "xhtml-eu-xlink-context/1",
+    "xhtml-eu/1"
+  ],
+  "target_framework": "net10.0",
+  "sdk": "10.0.400",
+  "dependencies": [
+    {
+      "name": "HtmlAgilityPack",
+      "version": "1.12.4"
+    },
+    {
+      "name": "PdfPig",
+      "version": "0.1.11"
+    }
+  ],
+  "invariants": {
+    "culture": "InvariantCulture",
+    "encoding": "UTF-8 without BOM",
+    "line_endings": "LF",
+    "path_order": "ordinal",
+    "hash": "SHA-256 lowercase hexadecimal"
+  }
+}
