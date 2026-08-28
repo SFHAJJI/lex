@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
-  populationCoverageLabel, populationScopeLabel, safeHttpsUrl, signatureStatusLabel,
+  changeCountLabels, populationCoverageLabel, populationScopeLabel, safeHttpsUrl,
+  signatureStatusLabel,
   type ProvisionItem, type RankingRow, type UiEffect,
 } from "./api";
 import { facetLabel, jurisdictionLabel } from "./facets";
@@ -426,12 +427,9 @@ export function Ranking({ rows, worksChanged, newVersions, populationWorks, know
       {/* One row, not three. The layer's meaning belongs beside its counts, because "820 changed"
           only means anything once you know 820 of what. */}
       <div className="cnt">
-        {worksChanged !== undefined ? (
-          <span className="tag">{worksChanged.toLocaleString()} received publisher versions</span>
-        ) : null}
-        {newVersions !== undefined ? (
-          <span className="tag">{newVersions.toLocaleString()} publisher version dates</span>
-        ) : null}
+        {changeCountLabels(worksChanged, newVersions).map((label) => (
+          <span className="tag" key={label}>{label}</span>
+        ))}
         {populationLabel ? <span className="tag">{populationLabel}</span> : null}
         <span className="tag mono">{from} → {to}</span>
         <span className="layers-hint">Every selected jurisdiction shares one dated ranking</span>

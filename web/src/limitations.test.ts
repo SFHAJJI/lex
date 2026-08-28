@@ -166,6 +166,52 @@ test("only impossible count/row directions are contradictions", () => {
   }).kind, "invalid");
 });
 
+test("a count outside the producer's own integer range is malformed, not merely large", () => {
+  // O19. The authoritative chain is C# int end to end, checked rather than assumed:
+  // IndexReader.ChangeTotals is declared `(int Works, int Versions)` and reads its columns with
+  // GetInt32; Rows.InForcePage.TotalGroups is `int` and InForceOn computes it into a local
+  // `int total`; McpCore publishes exactly those values as works_changed, new_versions and
+  // total_works_in_force; UiMapper reads them back with GetValue<int>(). No long anywhere.
+  //
+  // Number.isFinite plus Number.isInteger is not that range. 1e20 and 2^53 are exact doubles,
+  // both answer true to Number.isInteger, and both passed the count/row coherence checks
+  // untouched: a legal count nothing could have minted then reached the screen as fact.
+  const unmintable = [1e20, 2147483648, Number.MAX_SAFE_INTEGER, 2 ** 53, 1e308];
+  for (const count of unmintable) {
+    assert.equal(classifyEnvelope("in_force_on", {
+      envelope: { status: "ok", publisher: "lu-legilux" }, works: [{ work: "a" }],
+      total_works_in_force: count,
+    }).kind, "invalid", `in_force_on accepted total_works_in_force ${count}`);
+    assert.equal(classifyEnvelope("changes_in_period", {
+      envelope: { status: "ok", publisher: "lu-legilux" }, changes: [{ work: "w" }],
+      works_changed: count, new_versions: 1,
+    }).kind, "invalid", `changes_in_period accepted works_changed ${count}`);
+    // The secondary aggregate rides the same producer type, so it carries the same bound.
+    assert.equal(classifyEnvelope("changes_in_period", {
+      envelope: { status: "ok", publisher: "lu-legilux" }, changes: [{ work: "w" }],
+      works_changed: 1, new_versions: count,
+    }).kind, "invalid", `changes_in_period accepted new_versions ${count}`);
+  }
+  // Int32.MaxValue itself is a count the producer can mint, so this is a bound, not a narrowing.
+  assert.equal(classifyEnvelope("in_force_on", {
+    envelope: { status: "ok", publisher: "lu-legilux" }, works: [{ work: "a" }],
+    total_works_in_force: 2147483647,
+  }).kind, "ran", "the producer's own maximum was refused");
+  assert.equal(classifyEnvelope("changes_in_period", {
+    envelope: { status: "ok", publisher: "lu-legilux" }, changes: [{ work: "w" }],
+    works_changed: 2147483647, new_versions: 2147483647,
+  }).kind, "ran", "the producer's own maximum was refused");
+  // Fail closed, exactly as a malformed shape does: no rows, no count, no absence claim.
+  const projected = projectGovernedEmptiness("in_force_on", [{
+    envelope: { status: "ok", publisher: "lu-legilux" }, works: [{ work: "a" }],
+    total_works_in_force: 1e20,
+  }], 0);
+  assert.deepEqual(projected.partition.ran, [], "an unmintable count authorized rows");
+  assert.equal(projected.partition.invalidCount, 1);
+  assert.equal(projected.empty, "incomplete_response",
+    "an unmintable count was allowed to speak for the corpus");
+});
+
 test("a paged publisher with zero rows beside a positive count is legitimate", () => {
   // Self-attack finding, round 6: the producer shares ONE remaining limit across publishers
   // (in_force_on) and slices ONE globally merged page (changes_in_period) while each
@@ -1003,6 +1049,16 @@ test("a genuinely unknown filter is still dropped", () => {
 // A conflicted publisher is not merely missing from the answer. Every claim it made was withheld,
 // so a reader deciding whether this answer covers what they care about needs to know which
 // publisher it was. "These results are incomplete" alone does not tell them that.
+//
+// The copy used to say the publisher answered in ways that contradict each other. That was true
+// while a conflict meant its units disagreed about kind, and it is false now: a publisher is
+// conflicted on the unit COUNT alone, so a second unit that is byte-identical to the first is
+// withheld while contradicting the first in no way whatever. These tests pin the wording that
+// holds for BOTH causes and forbid the one that holds for only one of them.
+
+/** Every phrasing that asserts the units disagreed, which is the reading being retired. */
+const DISAGREEMENT_CLAIMS =
+  ["contradict", "conflict", "disagree", "inconsisten", "each other", "differ"];
 
 test("no conflicted publisher says nothing at all", () => {
   assert.equal(conflictedPublishersSentence([]), undefined);
@@ -1013,17 +1069,60 @@ test("a conflicted publisher is named, not counted", () => {
   assert.ok(sentence !== undefined);
   assert.ok(sentence.includes("lu-legilux"), "the publisher was not named");
   assert.ok(!sentence.includes("1 publisher"), "named, not counted");
+  assert.ok(!/\bone publisher\b/.test(sentence), "named, not counted");
+  for (const claim of DISAGREEMENT_CLAIMS) {
+    assert.ok(!sentence.toLowerCase().includes(claim),
+      `the copy asserts disagreement with "${claim}"`);
+  }
 });
 
 test("several conflicted publishers are all named", () => {
   const sentence = conflictedPublishersSentence(["eu-eurlex", "lu-legilux"]) ?? "";
   assert.ok(sentence.includes("eu-eurlex") && sentence.includes("lu-legilux"));
+  assert.ok(!sentence.includes("2 publishers"), "named, not counted");
+  // The list can carry several, so singular copy about "that publisher" misreads on screen.
+  assert.ok(!sentence.includes("that publisher"), "singular copy about a list of publishers");
+  for (const claim of DISAGREEMENT_CLAIMS) {
+    assert.ok(!sentence.toLowerCase().includes(claim),
+      `the copy asserts disagreement with "${claim}"`);
+  }
 });
 
-test("the cause stays neutral between the two ways a publisher contradicts itself", () => {
-  // A status conflict and a population conflict are different facts. Naming either one would be
-  // a specific false claim in the other case, which is worse than the vague true one.
+test("the copy states the one fact both causes share and asserts no disagreement", () => {
   const sentence = conflictedPublishersSentence(["lu-legilux"]) ?? "";
-  assert.ok(!sentence.includes("scope figure"), "a status conflict relabelled as a population one");
-  assert.ok(sentence.includes("contradict"), "the cause is not stated at all");
+  // The shared fact: more than one answer arrived. True whether the extra unit disagreed with
+  // the first or repeated it exactly, because the producer can send only one either way.
+  assert.ok(sentence.includes("more than one"),
+    "the sentence no longer states what is true in both cases");
+  for (const claim of DISAGREEMENT_CLAIMS) {
+    assert.ok(!sentence.toLowerCase().includes(claim),
+      `the copy asserts disagreement with "${claim}"`);
+  }
+  // "scope figure" belongs to a different conflict entirely and must not be borrowed here.
+  assert.ok(!sentence.includes("scope figure"), "a unit-count conflict relabelled as a scope one");
+  assert.ok(!sentence.includes("{") && !sentence.includes("$"),
+    "fixed copy beyond the publisher names");
+});
+
+test("the copy is true when the second unit is byte-identical to the first", () => {
+  // The case that made the old wording false. Two refusals from one publisher with identical
+  // bytes are still withheld, because the reader registry is keyed by collection and the producer
+  // can emit at most one unit per publisher. They contradict each other in no way whatever, so a
+  // sentence saying they did was a specific falsehood on screen.
+  const first = refused("lu-legilux", ["domain"]);
+  const second = refused("lu-legilux", ["domain"]);
+  assert.equal(JSON.stringify(first), JSON.stringify(second),
+    "the fixture is not actually a byte-identical duplicate");
+
+  const partition = partitionGovernedResponse("search", [first, second]);
+  assert.deepEqual(partition.conflictedPublishers, ["lu-legilux"],
+    "an identical duplicate stopped being withheld, so this copy has no subject left");
+  const sentence = conflictedPublishersSentence(partition.conflictedPublishers) ?? "";
+  assert.ok(sentence.includes("lu-legilux"), "the publisher was not named");
+  assert.ok(sentence.includes("more than one"),
+    "the sentence must state what is actually true of two identical answers");
+  for (const claim of DISAGREEMENT_CLAIMS) {
+    assert.ok(!sentence.toLowerCase().includes(claim),
+      `two identical answers were described as "${claim}"`);
+  }
 });

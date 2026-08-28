@@ -305,6 +305,31 @@ function populationCount(value: unknown): number | undefined {
  * The producer's own range is enforced upstream at classification, so this guards the arithmetic
  * rather than restating a bound that belongs with the shape.
  */
+/**
+ * The two change counts, each labelled with the grain the producer actually measured.
+ *
+ * `IndexReader.ChangeTotals` returns `(int Works, int Versions)` and `McpCore` publishes the first
+ * as `works_changed` and the second as `new_versions`. The ranking header rendered the work count
+ * as "received publisher versions", which puts a version label on a work count. That is a false
+ * dimension rather than a wording preference: a reader comparing the two numbers was comparing
+ * versions to versions, and one of them was works.
+ *
+ * Neutral about what a version means, because that differs between publishers and the timeline
+ * semantics are disclosed separately. It says a version was dated in the window, not that any
+ * wording changed, which the producer does not claim.
+ */
+export function changeCountLabels(
+  worksChanged: number | undefined, newVersions: number | undefined): string[] {
+  const labels: string[] = [];
+  if (worksChanged !== undefined)
+    labels.push(`${worksChanged.toLocaleString()} work${worksChanged === 1 ? "" : "s"} `
+      + "with a new publisher version");
+  if (newVersions !== undefined)
+    labels.push(`${newVersions.toLocaleString()} publisher version`
+      + `${newVersions === 1 ? "" : "s"} dated in this window`);
+  return labels;
+}
+
 export function summedCount(entries: any[], field: string): number | undefined {
   let total = 0;
   let seen = false;

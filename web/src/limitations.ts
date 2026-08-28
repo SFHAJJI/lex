@@ -10,7 +10,8 @@
  *
  * Round-4 contract (Codex O1/O2): classification is CLOSED. An envelope enters `ran` only when
  * it carries an allowed terminal success status for its operation AND a valid response shape
- * whose counts are finite, nonnegative and coherent with its rows. A refusal without its typed
+ * whose counts sit inside the producer's own integer range and cohere with its rows. A count the
+ * producer cannot mint is malformed, not merely large. A refusal without its typed
  * limitation is invalid, not an evidence-free refusal. Missing, unknown, misspelled or
  * malformed envelopes are `invalid`: they authorize neither rows nor absence claims, and their
  * presence makes an otherwise empty response `incomplete_response`, never `no_match`.
@@ -123,18 +124,30 @@ export const PARTIAL_RESPONSE_SENTENCE =
   + "it holds for this request.";
 
 /**
- * Names the publishers whose own response contradicted itself, or nothing when there are none.
+ * Names the publishers whose every claim was withheld, or nothing when there are none.
  *
  * Named rather than counted. A conflicted publisher is not merely missing: every claim it made
  * was withheld, and a reader deciding whether this answer covers what they care about needs to
- * know which publisher that was. The cause stays neutral between the two ways a publisher can
- * contradict itself, because a status conflict and a population conflict are different facts and
- * naming the wrong one is a specific false claim rather than a vague one.
+ * know which publisher that was.
+ *
+ * The copy states only the fact both causes share, that more than one answer arrived from that
+ * publisher, and says nothing about whether those answers agreed. It used to say the publisher
+ * answered in ways that contradict each other, which was true while a conflict meant its units
+ * disagreed about kind. A publisher is now conflicted on the unit COUNT alone: the reader registry
+ * is keyed by collection, so the producer can emit at most one unit per publisher and a second one
+ * is illegitimate even when it is byte-identical to the first. In that case the two units
+ * contradict each other in no way whatever, and the old sentence asserted a specific falsehood on
+ * screen. As with the population wording before it, a specific cause that is wrong in half the
+ * cases is worse than a general one that holds in all of them.
+ *
+ * "Each publisher named" rather than "that publisher": the list can carry several, and the
+ * function's contract is to name them rather than count them.
  */
 export function conflictedPublishersSentence(conflicted: string[]): string | undefined {
   return conflicted.length === 0 ? undefined
-    : `Nothing from ${conflicted.join(", ")} is shown here, because that publisher answered `
-      + "this query in ways that contradict each other.";
+    : `Nothing from ${conflicted.join(", ")} is shown here. This response carried more than one `
+      + "answer from each publisher named, and Lex stands behind a publisher's claims only when "
+      + "exactly one answer arrives from it.";
 }
 
 /** The fixed sentence for a response that cannot support results or absence claims. */
@@ -159,10 +172,30 @@ const boundedIdentifier = (value: unknown): string | undefined =>
     ? value
     : undefined;
 
-/** A count the projection consumes: it must be PRESENT and a nonnegative integer. Treating
-    a missing count as zero is the fail-open pattern this contract exists to close. */
+/**
+ * The producer's own numeric range, verified against the authoritative chain rather than assumed.
+ * Every count this module consumes is minted as a C# `int` end to end: `IndexReader.ChangeTotals`
+ * is declared `(int Works, int Versions)` and reads its two columns with `GetInt32`,
+ * `Rows.InForcePage.TotalGroups` is `int` and `IndexReader.InForceOn` computes it into a local
+ * `int total`, and `McpCore` publishes exactly those values as `works_changed`, `new_versions` and
+ * `total_works_in_force`. Nothing in that chain is a `long`, and the assistant-side combiner reads
+ * them back with `GetValue<int>()`. A count above this is therefore not merely imprecise, it is a
+ * number the producer cannot mint.
+ */
+const MAX_PRODUCER_COUNT = 2147483647;
+
+/**
+ * A count the projection consumes: it must be PRESENT, a nonnegative integer, and inside the
+ * producer's range. Treating a missing count as zero is the fail-open pattern this contract
+ * exists to close, and `Number.isFinite` plus `Number.isInteger` is not that range: it admits
+ * 1e20 and 2^53, which are exact doubles and "integers" and legal counts nothing can have sent.
+ * Such a value passed the count/row coherence checks unchanged and then reached the screen as a
+ * legal figure. Out of range fails closed exactly as a malformed shape does: null authorizes
+ * neither rows nor a count.
+ */
 const requiredCount = (value: unknown): number | null =>
-  typeof value === "number" && Number.isFinite(value) && Number.isInteger(value) && value >= 0
+  typeof value === "number" && Number.isSafeInteger(value)
+    && value >= 0 && value <= MAX_PRODUCER_COUNT
     ? value
     : null;
 

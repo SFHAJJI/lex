@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { fuzzyModeFor, populationCoverageLabel, populationScopeLabel, retainedForQuery,
-  summedCount, summedPopulation,
+  changeCountLabels, summedCount, summedPopulation,
   unionKnownExclusions } from "./api.ts";
 
 // Trust rule 6 is about a denominator the reader can check. These bind the exact presentation of
@@ -208,4 +208,41 @@ test("two valid counts that overflow the safe range refuse a total", () => {
 test("refusing a count does not depend on arrival order", () => {
   assert.equal(summedCount([count(-1), count(40)], "works_changed"),
     summedCount([count(40), count(-1)], "works_changed"));
+});
+
+// The two change counts measure different things. ChangeTotals returns (int Works, int Versions),
+// and the header rendered the WORK count as "received publisher versions", so a reader comparing
+// the two numbers was comparing versions to versions and one of them was works. A false dimension
+// is not a wording problem.
+
+test("each change count keeps the grain the producer measured", () => {
+  const [works, versions] = changeCountLabels(12, 40);
+  assert.ok(works!.includes("12") && works!.includes("work"), works);
+  assert.ok(!works!.includes("40"), "the work label carried the version count");
+  assert.ok(versions!.includes("40") && versions!.includes("version"), versions);
+  assert.ok(!versions!.includes("12"), "the version label carried the work count");
+});
+
+test("swapping the two inputs swaps the two numbers and nothing else", () => {
+  // The discriminating case. If either label read from the wrong argument, one of these two
+  // assertions would still pass and the other would not.
+  const [worksA, versionsA] = changeCountLabels(12, 40);
+  const [worksB, versionsB] = changeCountLabels(40, 12);
+  assert.ok(worksA!.includes("12") && worksB!.includes("40"));
+  assert.ok(versionsA!.includes("40") && versionsB!.includes("12"));
+});
+
+test("a count that could not be stated contributes no label at all", () => {
+  assert.deepEqual(changeCountLabels(undefined, undefined), []);
+  assert.equal(changeCountLabels(12, undefined).length, 1);
+  assert.equal(changeCountLabels(undefined, 40).length, 1);
+});
+
+test("the labels say a version was dated, never that wording changed", () => {
+  // The producer does not claim a textual change, only that a version carries this date, and the
+  // meaning of a version differs between publishers. Timeline semantics are disclosed separately.
+  const labels = changeCountLabels(1, 1).join(" ");
+  assert.ok(!labels.includes("amend") && !labels.includes("chang"), labels);
+  assert.ok(labels.includes("1 work with a new publisher version"), labels);
+  assert.ok(labels.includes("1 publisher version dated"), labels);
 });
