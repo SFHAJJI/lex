@@ -83,6 +83,9 @@ public static class BuiltEndpoints
         }
 
         var html = ExpandObjectShapes(Markdown.ToHtml(string.Join('\n', lines), MarkdownPipeline), full)
+            .Replace("<p>{lex-transport-evidence}</p>",
+                "<div data-testid=\"transport-evidence\">", StringComparison.Ordinal)
+            .Replace("<p>{/lex-transport-evidence}</p>\n", "</div>", StringComparison.Ordinal)
             .Replace("<table>",
                 "<div class=\"dossier-table\" tabindex=\"0\" role=\"region\" aria-label=\"Scrollable architecture table\"><table>",
                 StringComparison.Ordinal)

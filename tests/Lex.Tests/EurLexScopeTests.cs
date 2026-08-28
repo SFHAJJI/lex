@@ -780,8 +780,8 @@ public sealed class EurLexScopeTests : IDisposable
         Assert.False(exact.LimitExceeded);
         Assert.Equal(8, exact.Bytes?.Length);
         Assert.True(over.LimitExceeded);
-        Assert.Null(over.Bytes);
-        Assert.Equal(9, over.BytesRead);
+        Assert.Equal(8, over.Bytes?.Length);
+        Assert.True(over.BytesRead > 8);
     }
 
     [Fact]

@@ -10,8 +10,16 @@ public sealed class CorpusIntegrityTests : IDisposable
 {
     private const string CodeCommit = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     private const string BuilderCommit = "dddddddddddddddddddddddddddddddddddddddd";
+    private const string EffectiveBodyUri = "https://publisher.example/effective/body";
     private readonly string _dir = Path.Combine(
         Path.GetTempPath(), $"lex-corpus-integrity-{Guid.NewGuid():N}");
+
+    private static SourceBodyFetch RetrievedBody(string text) =>
+        SourceBodyFetch.Retrieved(
+            Encoding.UTF8.GetBytes(text),
+            new SourceHttpEvidence(
+                200, "text/html", "utf-8", null, null,
+                DateTimeOffset.Parse("2026-08-06T00:00:00Z"), EffectiveBodyUri));
 
     public CorpusIntegrityTests() => Directory.CreateDirectory(_dir);
 
@@ -28,12 +36,18 @@ public sealed class CorpusIntegrityTests : IDisposable
         Assert.Equal(2, valid.Expressions);
         Assert.Equal(2, valid.Observations);
 
-        var body = Path.Combine(VersionDirectory, "en.html");
+        var meta = JsonSerializer.Deserialize<VersionMeta>(
+            await File.ReadAllTextAsync(Path.Combine(VersionDirectory, "meta.json")),
+            CorpusJson.Options)!;
+        var bodyFile = meta.Expressions.Single(expression => expression.Language == "en")
+            .Observations.Single(observation => observation.Format is null).File!;
+        var body = Path.Combine(VersionDirectory, bodyFile);
         await File.AppendAllTextAsync(body, "tampered");
 
         var invalid = CorpusIntegrity.Verify(_dir);
         Assert.False(invalid.IsValid);
-        Assert.Contains(invalid.Errors, error => error.EndsWith("en.html sha256 mismatch", StringComparison.Ordinal));
+        Assert.Contains(invalid.Errors, error => error.EndsWith(
+            $"{bodyFile} sha256 mismatch", StringComparison.Ordinal));
 
         var beforeRepair = await File.ReadAllBytesAsync(body);
         var repair = CheckoutLineEndings.Repair(_dir);
@@ -48,7 +62,12 @@ public sealed class CorpusIntegrityTests : IDisposable
         await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-06T00:00:00Z"), CodeCommit)
             .WriteAsync(new TextAdapter(multiline: true), default);
 
-        var body = Path.Combine(VersionDirectory, "en.html");
+        var meta = JsonSerializer.Deserialize<VersionMeta>(
+            await File.ReadAllTextAsync(Path.Combine(VersionDirectory, "meta.json")),
+            CorpusJson.Options)!;
+        var bodyFile = meta.Expressions.Single(expression => expression.Language == "en")
+            .Observations.Single(observation => observation.Format is null).File!;
+        var body = Path.Combine(VersionDirectory, bodyFile);
         var publisherBytes = await File.ReadAllBytesAsync(body);
         var checkoutBytes = Encoding.UTF8.GetBytes(
             Encoding.UTF8.GetString(publisherBytes).Replace("\n", "\r\n", StringComparison.Ordinal));
@@ -56,7 +75,7 @@ public sealed class CorpusIntegrityTests : IDisposable
 
         var invalid = CorpusIntegrity.Verify(_dir);
         Assert.Contains(invalid.Errors, error => error.EndsWith(
-            "en.html sha256 mismatch (LF-normalized bytes match; checkout line endings changed)",
+            $"{bodyFile} sha256 mismatch (LF-normalized bytes match; checkout line endings changed)",
             StringComparison.Ordinal));
 
         var repair = CheckoutLineEndings.Repair(_dir);
@@ -67,7 +86,7 @@ public sealed class CorpusIntegrityTests : IDisposable
     }
 
     [Fact]
-    public async Task V3_ingestion_rejects_a_stale_record_hash_without_rewriting_it()
+    public async Task V3_contract_ingestion_rejects_a_stale_record_hash_without_rewriting_it()
     {
         var adapter = new TextAdapter();
         await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-06T00:00:00Z"), CodeCommit)
@@ -84,13 +103,14 @@ public sealed class CorpusIntegrityTests : IDisposable
             new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-07T00:00:00Z"), CodeCommit)
                 .WriteAsync(adapter, default));
 
-        Assert.Contains("record_sha256 mismatch", error.Message, StringComparison.Ordinal);
+        Assert.Contains("record_sha256 mismatch", error.Message,
+            StringComparison.Ordinal);
         Assert.Equal(before, await File.ReadAllBytesAsync(metaPath));
         Assert.False(CorpusIntegrity.Verify(_dir).IsValid);
     }
 
     [Fact]
-    public async Task Record_hash_uses_one_cross_platform_canonical_serialization()
+    public async Task V3_contract_record_hash_uses_one_cross_platform_canonical_serialization()
     {
         await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-06T00:00:00Z"), CodeCommit)
             .WriteAsync(new TextAdapter(), default);
@@ -100,8 +120,122 @@ public sealed class CorpusIntegrityTests : IDisposable
             await File.ReadAllTextAsync(metaPath), CorpusJson.Options)!;
 
         Assert.Equal(
-            "f6fc09887eb7783f3ff1d2fa902e650a9d92988dc3e26597646037d693693d30",
+            "ec3e6cc0737f60445f8f3cd8a6236d690de6ca3264972667f26c86d06ada2583",
             meta.RecordSha256);
+    }
+
+    [Fact]
+    public async Task V3_contract_verification_rejects_unknown_http_outcome_even_with_a_fresh_record_hash()
+    {
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-06T00:00:00Z"), CodeCommit)
+            .WriteAsync(new TextAdapter(), default);
+
+        var metaPath = Path.Combine(VersionDirectory, "meta.json");
+        var meta = JsonSerializer.Deserialize<VersionMeta>(
+            await File.ReadAllTextAsync(metaPath), CorpusJson.Options)!;
+        var observation = meta.Expressions[0].Observations[0];
+        Assert.NotNull(observation.Http);
+        observation.Http.AttemptOutcome = "unbounded-publisher-detail";
+        meta.RecordSha256 = null;
+        meta.RecordSha256 = Convert.ToHexStringLower(
+            System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(
+                JsonSerializer.Serialize(meta, CorpusJson.Options))));
+        await File.WriteAllTextAsync(metaPath,
+            JsonSerializer.Serialize(meta, CorpusJson.Options) + "\n");
+
+        var report = CorpusIntegrity.Verify(_dir);
+        Assert.Contains(report.Errors, error => error.EndsWith(
+            "bounded HTTP evidence is invalid", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task V3_contract_verification_rejects_http_evidence_disguised_as_a_legacy_primary()
+    {
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-06T00:00:00Z"), CodeCommit)
+            .WriteAsync(new TextAdapter(), default);
+
+        var metaPath = Path.Combine(VersionDirectory, "meta.json");
+        var meta = JsonSerializer.Deserialize<VersionMeta>(
+            await File.ReadAllTextAsync(metaPath), CorpusJson.Options)!;
+        var observation = meta.Expressions[0].Observations[0];
+        var oldPath = Path.Combine(VersionDirectory, observation.File!);
+        var legacyName = $"{meta.Expressions[0].Language}.html";
+        File.Move(oldPath, Path.Combine(VersionDirectory, legacyName));
+        observation.File = legacyName;
+        meta.RecordSha256 = null;
+        meta.RecordSha256 = Convert.ToHexStringLower(
+            System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(
+                JsonSerializer.Serialize(meta, CorpusJson.Options))));
+        await File.WriteAllTextAsync(metaPath,
+            JsonSerializer.Serialize(meta, CorpusJson.Options) + "\n");
+
+        var report = CorpusIntegrity.Verify(_dir);
+        Assert.Contains(report.Errors, error => error.Contains(
+            "legacy primary observation carries retroactive HTTP evidence",
+            StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    public async Task V3_contract_verification_rejects_incoherent_primary_observation_times(
+        bool observedAfterFetch)
+    {
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-06T00:00:00Z"), CodeCommit)
+            .WriteAsync(new TextAdapter(), default);
+
+        var metaPath = Path.Combine(VersionDirectory, "meta.json");
+        var meta = JsonSerializer.Deserialize<VersionMeta>(
+            await File.ReadAllTextAsync(metaPath), CorpusJson.Options)!;
+        var observation = meta.Expressions[0].Observations[0];
+        if (observedAfterFetch)
+            observation.ObservedFrom = "2026-08-06T00:00:01Z";
+        else
+            observation.RetrievedAt = "2026-08-06T00:00:01Z";
+        meta.RecordSha256 = null;
+        meta.RecordSha256 = Convert.ToHexStringLower(
+            System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(
+                JsonSerializer.Serialize(meta, CorpusJson.Options))));
+        await File.WriteAllTextAsync(metaPath,
+            JsonSerializer.Serialize(meta, CorpusJson.Options) + "\n");
+
+        var report = CorpusIntegrity.Verify(_dir);
+        Assert.Contains(report.Errors, error => error.Contains(
+            "primary observation times are incoherent", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task V3_contract_verification_rejects_noncanonical_primary_observation_paths(
+        bool nested)
+    {
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-06T00:00:00Z"), CodeCommit)
+            .WriteAsync(new TextAdapter(), default);
+
+        var metaPath = Path.Combine(VersionDirectory, "meta.json");
+        var meta = JsonSerializer.Deserialize<VersionMeta>(
+            await File.ReadAllTextAsync(metaPath), CorpusJson.Options)!;
+        var observation = meta.Expressions[0].Observations[0];
+        var oldPath = Path.Combine(VersionDirectory, observation.File!);
+        var newRelative = nested
+            ? $"nested/{observation.File}"
+            : Path.ChangeExtension(observation.File!, ".exe");
+        var newPath = Path.Combine(
+            VersionDirectory,
+            newRelative.Replace('/', Path.DirectorySeparatorChar));
+        Directory.CreateDirectory(Path.GetDirectoryName(newPath)!);
+        File.Move(oldPath, newPath);
+        observation.File = newRelative;
+        meta.RecordSha256 = null;
+        meta.RecordSha256 = Convert.ToHexStringLower(
+            System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(
+                JsonSerializer.Serialize(meta, CorpusJson.Options))));
+        await File.WriteAllTextAsync(metaPath,
+            JsonSerializer.Serialize(meta, CorpusJson.Options) + "\n");
+
+        var report = CorpusIntegrity.Verify(_dir);
+        Assert.Contains(report.Errors, error => error.Contains(
+            "primary observation path is not canonical", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -136,7 +270,7 @@ public sealed class CorpusIntegrityTests : IDisposable
     }
 
     [Fact]
-    public async Task Version_four_manifest_rejects_a_tampered_ingester_identity()
+    public async Task V3_contract_current_manifest_rejects_a_tampered_ingester_identity()
     {
         await new CorpusWriter(_dir,
                 DateTimeOffset.Parse("2026-08-06T00:00:00Z"), CodeCommit)
@@ -194,10 +328,13 @@ public sealed class CorpusIntegrityTests : IDisposable
         await new CorpusWriter(_dir,
                 DateTimeOffset.Parse("2026-08-06T00:00:00Z"), CodeCommit)
             .WriteAsync(new TextAdapter(), default);
+        await ConvertTransportObservationsToLegacyAsync();
         var path = Path.Combine(_dir, "manifest.json");
         var manifest = JsonSerializer.Deserialize<ManifestDoc>(
             await File.ReadAllTextAsync(path), CorpusJson.Options)!;
         manifest.Schema = "lex-corpus/3";
+        manifest.Canon = null;
+        manifest.ObservationRun = null;
         manifest.IngesterCodeCommit = null;
         await File.WriteAllTextAsync(path,
             JsonSerializer.Serialize(manifest, CorpusJson.Options) + "\n");
@@ -207,6 +344,60 @@ public sealed class CorpusIntegrityTests : IDisposable
         Assert.True(report.IsValid, string.Join(Environment.NewLine, report.Errors));
         Assert.Equal("lex-corpus/3", report.Schema);
         Assert.Null(report.IngesterCodeCommit);
+    }
+
+    [Fact]
+    public async Task V3_contract_version_four_keeps_its_publisher_identity_integrity_contract()
+    {
+        await new CorpusWriter(_dir,
+                DateTimeOffset.Parse("2026-08-06T00:00:00Z"), CodeCommit)
+            .WriteAsync(new TextAdapter(), default);
+        var manifestPath = Path.Combine(_dir, "manifest.json");
+        var manifest = JsonSerializer.Deserialize<ManifestDoc>(
+            await File.ReadAllTextAsync(manifestPath), CorpusJson.Options)!;
+        manifest.Schema = "lex-corpus/4";
+        manifest.Canon = null;
+        manifest.ObservationRun = null;
+        await File.WriteAllTextAsync(manifestPath,
+            JsonSerializer.Serialize(manifest, CorpusJson.Options) + "\n");
+
+        var metaPath = Path.Combine(VersionDirectory, "meta.json");
+        var meta = JsonSerializer.Deserialize<VersionMeta>(
+            await File.ReadAllTextAsync(metaPath), CorpusJson.Options)!;
+        meta.PublisherVersionIdentifier = "official:substituted";
+        meta.RecordSha256 = null;
+        meta.RecordSha256 = Convert.ToHexStringLower(
+            System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(
+                JsonSerializer.Serialize(meta, CorpusJson.Options))));
+        await File.WriteAllTextAsync(metaPath,
+            JsonSerializer.Serialize(meta, CorpusJson.Options) + "\n");
+
+        var report = CorpusIntegrity.Verify(_dir);
+
+        Assert.Contains(report.Errors, error => error.Contains(
+            "identity mismatch", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task V3_contract_version_four_rejects_a_transport_layout_relabel()
+    {
+        await new CorpusWriter(_dir,
+                DateTimeOffset.Parse("2026-08-06T00:00:00Z"), CodeCommit)
+            .WriteAsync(new TextAdapter(), default);
+        var manifestPath = Path.Combine(_dir, "manifest.json");
+        var manifest = JsonSerializer.Deserialize<ManifestDoc>(
+            await File.ReadAllTextAsync(manifestPath), CorpusJson.Options)!;
+        manifest.Schema = "lex-corpus/4";
+        manifest.Canon = null;
+        manifest.ObservationRun = null;
+        await File.WriteAllTextAsync(manifestPath,
+            JsonSerializer.Serialize(manifest, CorpusJson.Options) + "\n");
+
+        var report = CorpusIntegrity.Verify(_dir);
+
+        Assert.Contains(report.Errors, error => error.Contains(
+            "content-addressed primary observation requires lex-corpus/5",
+            StringComparison.Ordinal));
     }
 
     [Fact]
@@ -377,6 +568,31 @@ public sealed class CorpusIntegrityTests : IDisposable
         try { Directory.Delete(_dir, true); } catch { }
     }
 
+    private async Task ConvertTransportObservationsToLegacyAsync()
+    {
+        var metaPath = Path.Combine(VersionDirectory, "meta.json");
+        var meta = JsonSerializer.Deserialize<VersionMeta>(
+            await File.ReadAllTextAsync(metaPath), CorpusJson.Options)!;
+        foreach (var expression in meta.Expressions)
+        foreach (var observation in expression.Observations
+                     .Where(item => item.Format is null))
+        {
+            var extension = Path.GetExtension(observation.File);
+            var legacyName = expression.Language + extension;
+            File.Move(
+                Path.Combine(VersionDirectory, observation.File!),
+                Path.Combine(VersionDirectory, legacyName));
+            observation.File = legacyName;
+            observation.Http = null;
+        }
+        meta.RecordSha256 = null;
+        meta.RecordSha256 = Convert.ToHexStringLower(
+            System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(
+                JsonSerializer.Serialize(meta, CorpusJson.Options))));
+        await File.WriteAllTextAsync(metaPath,
+            JsonSerializer.Serialize(meta, CorpusJson.Options) + "\n");
+    }
+
     private string VersionDirectory => Path.Combine(
         _dir, "works", "w1", "versions", "2024-01-01--" +
         Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(
@@ -417,7 +633,7 @@ public sealed class CorpusIntegrityTests : IDisposable
 
         public Task<SourceBodyFetch> FetchBody(
             VersionRecord version, ExpressionRecord expression, CancellationToken ct) =>
-            Task.FromResult(SourceBodyFetch.Retrieved(multiline
+            Task.FromResult(RetrievedBody(multiline
                 ? $"<html lang=\"{expression.Language}\">\nofficial\n</html>"
                 : $"<html lang=\"{expression.Language}\">official</html>"));
     }

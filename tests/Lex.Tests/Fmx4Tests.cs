@@ -156,7 +156,7 @@ public class Fmx4Tests
         {
             Directory.CreateDirectory(corpus);
             File.WriteAllText(Path.Combine(corpus, "manifest.json"), $$"""
-                { "schema": "lex-corpus/4", "ingester_code_commit": "{{IngesterCommit}}" }
+                { "schema": "lex-corpus/5", "canon": "canon/1", "build_issues": [], "ingester_code_commit": "{{IngesterCommit}}" }
                 """);
             var work = Path.Combine(corpus, "works", "32000r0001");
             Directory.CreateDirectory(work);
@@ -212,7 +212,11 @@ public class Fmx4Tests
           "expressions": [{
             "language": "en",
             "source_uri": "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32000R0001",
-            "observations": [{ "file": "{{observationFile}}", "sha256": "fixture" }]
+            "observations": [{
+              "file": "{{observationFile}}",
+              "sha256": "fixture",
+              "source_uri": "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32000R0001"
+            }]
           }]
         }
         """;

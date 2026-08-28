@@ -127,15 +127,7 @@ public static class LegacyXlinkEuProfile
             var namespaces = new XmlNamespaceManager(nameTable);
             namespaces.AddNamespace("xlink", XlinkUri);
             var context = new XmlParserContext(nameTable, namespaces, null, XmlSpace.None);
-            var settings = new XmlReaderSettings
-            {
-                DtdProcessing = DtdProcessing.Parse,
-                XmlResolver = null,
-            };
-
-            using var input = new StringReader(xhtml);
-            using var reader = XmlReader.Create(input, settings, context);
-            var document = System.Xml.Linq.XDocument.Load(reader, System.Xml.Linq.LoadOptions.None);
+            var document = StrictPublisherXml.Parse(xhtml, context);
             NormalizeXlinkHref(document);
             var structured = XhtmlEuProfile.Extract(document, lexIdBase);
             if (structured.Provisions.Count > 0) return structured;

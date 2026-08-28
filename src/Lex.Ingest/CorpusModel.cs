@@ -57,6 +57,41 @@ public sealed class ObservationEntry
     public required string ObservedFrom { get; set; }
     /// <summary>D48: manifestation format for alternative-format members (e.g. "fmx4"); null for the primary body.</summary>
     public string? Format { get; set; }
+    /// <summary>Bounded response facts for a primary transport observation only.</summary>
+    public HttpObservationEvidence? Http { get; set; }
+}
+
+public sealed class HttpObservationEvidence
+{
+    public required int StatusCode { get; set; }
+    public string? ContentType { get; set; }
+    public string? Charset { get; set; }
+    public string? EntityTag { get; set; }
+    public string? LastModified { get; set; }
+    public required string FetchedAt { get; set; }
+    public required string AttemptOutcome { get; set; }
+    public required int Attempts { get; set; }
+    /// <summary>False only when File is a bounded prefix; omitted means a complete response.</summary>
+    public bool? BodyComplete { get; set; }
+}
+
+internal static class PrimaryObservationName
+{
+    // The version directory already carries a full SHA-256 identity. A second full digest in the
+    // filename crosses Git for Windows' path limit for otherwise valid corpus coordinates. The
+    // full body digest remains in metadata and integrity verification; a prefix collision is
+    // detected before an existing file can be reused.
+    internal const int DigestPrefixLength = 24;
+
+    internal static string Create(string language, string digest, string extension) =>
+        $"{language}--{digest[..DigestPrefixLength]}.{extension}";
+
+    internal static bool Matches(string fileStem, string language, string digest) =>
+        digest.Length >= DigestPrefixLength
+        && string.Equals(
+            fileStem,
+            $"{language}--{digest[..DigestPrefixLength]}",
+            StringComparison.Ordinal);
 }
 
 public sealed class ExpressionMeta
@@ -95,8 +130,11 @@ public sealed class VersionMeta
 
 public sealed class ManifestDoc
 {
-    public const string CurrentSchema = "lex-corpus/4";
+    public const string CurrentSchema = "lex-corpus/5";
+    public const string CurrentCanon = "canon/1";
     public string Schema { get; set; } = CurrentSchema;
+    public string? Canon { get; set; }
+    public string? ObservationRun { get; set; }
     public required Dictionary<string, string> Publisher { get; set; }
     public required string Tier { get; set; }
     public string? SourceEndpoint { get; set; }

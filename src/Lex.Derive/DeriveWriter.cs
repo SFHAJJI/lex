@@ -166,10 +166,9 @@ public static class DeriveWriter
             // exactly that version.
             var pdfByVersion = versionDirs.Select(PdfMains).ToList();
             var gazByVersion = versionDirs.Select(GazetteMains).ToList();
-            var bodyLangsByVersion = versionDirs.Select(vd => Directory.EnumerateFiles(vd, "*.*")
-                .Where(f => Path.GetExtension(f) is ".xml" or ".html")
-                .Select(f => Path.GetFileNameWithoutExtension(f)!)
-                .ToHashSet(StringComparer.Ordinal)).ToList();
+            var bodiesByVersion = versionDirs.Select(PrimaryBodies).ToList();
+            var bodyLangsByVersion = bodiesByVersion
+                .Select(bodies => bodies.Keys.ToHashSet(StringComparer.Ordinal)).ToList();
             var fmx4Langs = fmxByVersion.SelectMany(m => m.Keys).Distinct()
                 .Where(l => !bodyLangsByVersion.Where((langs, vi) => langs.Contains(l) && !fmxByVersion[vi].ContainsKey(l)).Any())
                 .ToHashSet(StringComparer.Ordinal);
@@ -213,29 +212,37 @@ public static class DeriveWriter
                     vMeta["lex_id"]?.GetValue<string>() ?? "",
                     $"{publisher}:{slug}");
 
-                var units = new List<(string Lang, string FilePath, string Kind, string ObsFile)>();
-                foreach (var f in Directory.EnumerateFiles(versionDirs[i], "*.*")
-                             .Where(f => Path.GetExtension(f) is ".xml" or ".html")
-                             .OrderBy(f => f, StringComparer.Ordinal))
+                var units = new List<(
+                    string Lang,
+                    string FilePath,
+                    string Kind,
+                    string ObsFile,
+                    string? Charset)>();
+                foreach (var (language, body) in bodiesByVersion[i]
+                             .OrderBy(item => item.Key, StringComparer.Ordinal))
                 {
-                    var l = Path.GetFileNameWithoutExtension(f);
-                    if (fmx4Langs.Contains(l) && fmxByVersion[i].ContainsKey(l)) continue;   // superseded by fmx4 unit
-                    units.Add((l, f, "structured-text", Path.GetFileName(f)));
+                    if (fmx4Langs.Contains(language)
+                        && fmxByVersion[i].ContainsKey(language)) continue;
+                    units.Add((language, body.FilePath, "structured-text",
+                        body.ObservationFile, body.Charset));
                 }
                 foreach (var (l, mainPath) in fmxByVersion[i].OrderBy(kv => kv.Key, StringComparer.Ordinal))
                     if (fmx4Langs.Contains(l) || !units.Any(u => u.Lang == l))
-                        units.Add((l, mainPath, "fmx4", $"{l}.fmx4/{Path.GetFileName(mainPath)}"));
+                        units.Add((l, mainPath, "fmx4",
+                            $"{l}.fmx4/{Path.GetFileName(mainPath)}", null));
                 // Only where the publisher served no structural body for that language on that
                 // date. Deriving a version twice, once from its XML and once from its PDF, would
                 // put two texts of the same article in the corpus and invent a diff between them.
                 foreach (var (l, pdfPath) in pdfByVersion[i].OrderBy(kv => kv.Key, StringComparer.Ordinal))
                     if (!units.Any(u => u.Lang == l))
-                        units.Add((l, pdfPath, "pdf", $"{l}.pdf/{Path.GetFileName(pdfPath)}"));
+                        units.Add((l, pdfPath, "pdf",
+                            $"{l}.pdf/{Path.GetFileName(pdfPath)}", null));
                 // Last resort, and only when nothing better exists for that language: the act cut
                 // out of a gazette issue.
                 foreach (var (l, gazPath) in gazByVersion[i].OrderBy(kv => kv.Key, StringComparer.Ordinal))
                     if (!units.Any(u => u.Lang == l))
-                        units.Add((l, gazPath, "pdf-memorial", $"{l}.pdf-memorial/{Path.GetFileName(gazPath)}"));
+                        units.Add((l, gazPath, "pdf-memorial",
+                            $"{l}.pdf-memorial/{Path.GetFileName(gazPath)}", null));
 
                 foreach (var unit in units.OrderBy(u => u.ObsFile, StringComparer.Ordinal))
                 {
@@ -245,10 +252,17 @@ public static class DeriveWriter
                         var expr = (vMeta["expressions"] as JsonArray)?.OfType<JsonObject>()
                             .FirstOrDefault(e => e["language"]?.GetValue<string>() == lang);
                         var obs = (expr?["observations"] as JsonArray)?.OfType<JsonObject>()
-                            .FirstOrDefault(o => o["file"]?.GetValue<string>() == unit.ObsFile);
+                            .LastOrDefault(o =>
+                                o["file"]?.GetValue<string>() == unit.ObsFile
+                                && (o["http"] is null
+                                    || o["http"]?["attempt_outcome"]?.GetValue<string>()
+                                        == "retrieved"));
                         var sourceSha = obs?["sha256"]?.GetValue<string>() ?? "";
-                        var sourceUri = expr?["source_uri"]?.GetValue<string>()
-                                        ?? vMeta["work_identifier"]?.GetValue<string>() ?? "";
+                        var sourceUri = obs?["source_uri"]?.GetValue<string>() ?? "";
+                        if (!Uri.TryCreate(sourceUri, UriKind.Absolute, out var parsedSource)
+                            || parsedSource.Scheme is not ("http" or "https"))
+                            throw new InvalidDataException(
+                                "The selected publisher observation has no effective HTTP(S) source URI.");
                         var lexId = $"{publisher}:{slug}:{versionKey}";
 
                         Extraction extraction;
@@ -275,12 +289,17 @@ public static class DeriveWriter
                                 }
                                 break;
                             case "fmx4":
-                                extraction = Fmx4EuProfile.Extract(File.ReadAllText(unit.FilePath, Encoding.UTF8), lexId);
+                                extraction = Fmx4EuProfile.Extract(
+                                    StrictPublisherText.Decode(
+                                        File.ReadAllBytes(unit.FilePath), unit.Charset),
+                                    lexId);
                                 profileId = Fmx4EuProfile.ProfileId;
                                 break;
                             default:
                                 var result = StructuredTextExtractor.Extract(
-                                    File.ReadAllText(unit.FilePath, Encoding.UTF8), lexId);
+                                    StrictPublisherText.Decode(
+                                        File.ReadAllBytes(unit.FilePath), unit.Charset),
+                                    lexId);
                                 extraction = result.Extraction;
                                 profileId = result.ProfileId;
                                 break;
@@ -498,9 +517,18 @@ public static class DeriveWriter
             throw new InvalidDataException("Corpus manifest.json is required before derivation.");
         var manifest = JsonNode.Parse(File.ReadAllText(manifestPath)) as JsonObject
             ?? throw new InvalidDataException("Corpus manifest.json is not an object.");
-        if (manifest["schema"]?.GetValue<string>() != "lex-corpus/4")
+        if (manifest["schema"]?.GetValue<string>() != "lex-corpus/5")
             throw new InvalidDataException(
-                "Derivation requires a fresh lex-corpus/4 input; migrate legacy corpus data first.");
+                "Derivation requires a fresh lex-corpus/5 input; migrate legacy corpus data first.");
+        if (manifest["canon"]?.GetValue<string>() != "canon/1")
+            throw new InvalidDataException(
+                "Derivation requires the frozen canon/1 identity.");
+        if (manifest["build_issues"] is not JsonArray buildIssues)
+            throw new InvalidDataException(
+                "Derivation requires a bounded build_issues array.");
+        if (buildIssues.Count > 0)
+            throw new InvalidDataException(
+                "Derivation is blocked while the corpus contains rejected acquisition evidence.");
         var ingester = CodeIdentity.RequireFullCommit(
             manifest["ingester_code_commit"]?.GetValue<string>(),
             "manifest ingester_code_commit");
@@ -636,6 +664,55 @@ public static class DeriveWriter
     private static void Increment(Dictionary<string, int> counts, string value)
         => counts[value] = counts.GetValueOrDefault(value) + 1;
 
+    private sealed record PrimaryBody(
+        string FilePath,
+        string ObservationFile,
+        string? Charset);
+
+    private static Dictionary<string, PrimaryBody> PrimaryBodies(string versionDir)
+    {
+        var result = new Dictionary<string, PrimaryBody>(StringComparer.Ordinal);
+        var metaPath = Path.Combine(versionDir, "meta.json");
+        if (!File.Exists(metaPath)) return result;
+        var metadata = JsonNode.Parse(File.ReadAllText(metaPath)) as JsonObject
+            ?? throw new InvalidDataException("Corpus version metadata is not an object.");
+        foreach (var expression in (metadata["expressions"] as JsonArray)
+                     ?.OfType<JsonObject>() ?? [])
+        {
+            var language = expression["language"]?.GetValue<string>();
+            if (string.IsNullOrWhiteSpace(language))
+                throw new InvalidDataException(
+                    "Corpus expression has no language identity.");
+            var observation = (expression["observations"] as JsonArray)
+                ?.OfType<JsonObject>()
+                .LastOrDefault(item => item["format"] is null
+                    && item["file"]?.GetValue<string>() is { } candidateFile
+                    && !candidateFile.Contains('/')
+                    && !candidateFile.Contains('\\')
+                    && (item["http"] is null
+                        || item["http"]?["attempt_outcome"]?.GetValue<string>()
+                            == "retrieved"));
+            if (observation is null) continue;
+            var file = observation["file"]?.GetValue<string>();
+            if (string.IsNullOrWhiteSpace(file)
+                || Path.GetExtension(file) is not (".xml" or ".html" or ".body"))
+                throw new InvalidDataException(
+                    "Primary publisher observation has an unsupported file shape.");
+            var path = ProtectedPath.RequireExisting(
+                versionDir,
+                Path.Combine(versionDir,
+                    file.Replace('/', Path.DirectorySeparatorChar)),
+                "Publisher observation");
+            if (!result.TryAdd(language, new PrimaryBody(
+                    path,
+                    file,
+                    observation["http"]?["charset"]?.GetValue<string>())))
+                throw new InvalidDataException(
+                    $"Corpus version has duplicate expression language '{language}'.");
+        }
+        return result;
+    }
+
     /// <summary>
     /// D48: map language -> Formex main-member path for a version dir. Members live under
     /// {lang}.fmx4/; the main member is the only non-.doc.xml file, or the one the .doc.xml
@@ -687,7 +764,8 @@ public static class DeriveWriter
                 if (docXml is not null)
                 {
                     var m = System.Text.RegularExpressions.Regex.Match(
-                        File.ReadAllText(docXml, Encoding.UTF8),
+                        StrictPublisherText.Decode(
+                            File.ReadAllBytes(docXml), charset: null),
                         "REF\\.PHYS FILE=\"([^\"]+)\" TYPE=\"DOC\\.XML\"");
                     if (m.Success)
                         pick = xmls.FirstOrDefault(f => Path.GetFileName(f) == m.Groups[1].Value);

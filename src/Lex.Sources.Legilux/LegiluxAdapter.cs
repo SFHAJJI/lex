@@ -236,30 +236,42 @@ public sealed class LegiluxAdapter : ISourceAdapter, ISourceBuildInventory,
         var sent = await SourceHttp.SendAsync(BodyHttp,
             () => new HttpRequestMessage(HttpMethod.Get, url), RetryPolicy, ct);
         using var resp = sent.Response;
-        if (resp is null || sent.RetryExhausted)
+        if (resp is null)
             return new(SourceBodyStatus.RetryExhausted,
                 Detail: sent.FailureDetail ?? "The official XML endpoint exhausted the retry policy.",
                 Attempts: sent.Attempts);
+        var effectiveSourceUri = RequireOfficialResponseUri(resp);
         if (!resp.IsSuccessStatusCode)
         {
             Console.Error.WriteLine($"  [legilux] body fetch failed ({(int)resp.StatusCode}): {url}");
+            await using var rejectedStream = await resp.Content.ReadAsStreamAsync(ct);
+            var rejected = await ReadBoundedBody(rejectedStream, BodyCapBytes, ct);
+            var rejectedHttp = new SourceHttpEvidence(
+                (int)resp.StatusCode,
+                resp.Content.Headers.ContentType?.MediaType,
+                resp.Content.Headers.ContentType?.CharSet,
+                resp.Headers.ETag?.ToString(),
+                resp.Content.Headers.LastModified,
+                DateTimeOffset.UtcNow,
+                effectiveSourceUri,
+                !rejected.LimitExceeded);
+            SourceBodyFetch Failure(SourceBodyStatus status, string detail) =>
+                new(status, rejected.Bytes, rejectedHttp, detail, sent.Attempts);
             return resp.StatusCode switch
             {
-                System.Net.HttpStatusCode.NotFound => new(SourceBodyStatus.PermanentNotFound,
-                    Detail: "The official XML manifestation returned HTTP 404.", Attempts: sent.Attempts),
-                System.Net.HttpStatusCode.Gone => new(SourceBodyStatus.Gone,
-                    Detail: "The official XML manifestation returned HTTP 410.", Attempts: sent.Attempts),
+                System.Net.HttpStatusCode.NotFound => Failure(SourceBodyStatus.PermanentNotFound,
+                    "The official XML manifestation returned HTTP 404."),
+                System.Net.HttpStatusCode.Gone => Failure(SourceBodyStatus.Gone,
+                    "The official XML manifestation returned HTTP 410."),
                 System.Net.HttpStatusCode.RequestTimeout
                     or System.Net.HttpStatusCode.TooManyRequests
                     or System.Net.HttpStatusCode.InternalServerError
                     or System.Net.HttpStatusCode.BadGateway
                     or System.Net.HttpStatusCode.ServiceUnavailable
-                    or System.Net.HttpStatusCode.GatewayTimeout => new(SourceBodyStatus.RetryExhausted,
-                        Detail: $"Retryable publisher response {(int)resp.StatusCode} exhausted the acquisition policy.",
-                        Attempts: sent.Attempts),
-                _ => new(SourceBodyStatus.ParserFailure,
-                    Detail: $"Official XML acquisition failed with HTTP {(int)resp.StatusCode}.",
-                    Attempts: sent.Attempts),
+                    or System.Net.HttpStatusCode.GatewayTimeout => Failure(SourceBodyStatus.RetryExhausted,
+                        $"Retryable publisher response {(int)resp.StatusCode} exhausted the acquisition policy."),
+                _ => Failure(SourceBodyStatus.ParserFailure,
+                    $"Official XML acquisition failed with HTTP {(int)resp.StatusCode}."),
             };
         }
         await using var stream = await resp.Content.ReadAsStreamAsync(ct);
@@ -268,16 +280,68 @@ public sealed class LegiluxAdapter : ISourceAdapter, ISourceBuildInventory,
         int read;
         while ((read = await stream.ReadAsync(buf, ct)) > 0)
         {
-            ms.Write(buf, 0, read);
-            if (ms.Length > BodyCapBytes)
+            var remaining = BodyCapBytes - checked((int)ms.Length);
+            if (read > remaining)
             {
+                if (remaining > 0) ms.Write(buf, 0, remaining);
                 Console.Error.WriteLine($"  [legilux] body exceeds {BodyCapBytes / 1024 / 1024} MB cap: {url}");
+                var rejectedHttp = new SourceHttpEvidence(
+                    (int)resp.StatusCode,
+                    resp.Content.Headers.ContentType?.MediaType,
+                    resp.Content.Headers.ContentType?.CharSet,
+                    resp.Headers.ETag?.ToString(),
+                    resp.Content.Headers.LastModified,
+                    DateTimeOffset.UtcNow,
+                    effectiveSourceUri,
+                    BodyComplete: false);
                 return new(SourceBodyStatus.Oversized,
+                    ms.ToArray(), rejectedHttp,
                     Detail: $"Official XML exceeded the {BodyCapBytes}-byte acquisition limit.",
                     Attempts: sent.Attempts);
             }
+            ms.Write(buf, 0, read);
         }
-        return SourceBodyFetch.Retrieved(System.Text.Encoding.UTF8.GetString(ms.ToArray()), sent.Attempts);
+        var bytes = ms.ToArray();
+        var http = new SourceHttpEvidence(
+            (int)resp.StatusCode,
+            resp.Content.Headers.ContentType?.MediaType,
+            resp.Content.Headers.ContentType?.CharSet,
+            resp.Headers.ETag?.ToString(),
+            resp.Content.Headers.LastModified,
+            DateTimeOffset.UtcNow,
+            effectiveSourceUri);
+        return SourceBodyFetch.Retrieved(bytes, http, sent.Attempts);
+    }
+
+    private static string RequireOfficialResponseUri(HttpResponseMessage response)
+    {
+        var value = response.RequestMessage?.RequestUri?.AbsoluteUri;
+        if (!Uri.TryCreate(value, UriKind.Absolute, out var uri)
+            || !string.Equals(uri.Scheme, Uri.UriSchemeHttps,
+                StringComparison.OrdinalIgnoreCase)
+            || uri.Host is not ("legilux.public.lu" or "data.legilux.public.lu"))
+            throw new InvalidDataException(
+                "The publisher response URI is missing or outside the official Legilux host allowlist.");
+        return uri.AbsoluteUri;
+    }
+
+    private static async Task<(byte[] Bytes, bool LimitExceeded)> ReadBoundedBody(
+        Stream stream, int capBytes, CancellationToken ct)
+    {
+        using var body = new MemoryStream(Math.Min(capBytes, 1024 * 1024));
+        var buffer = new byte[64 * 1024];
+        int read;
+        while ((read = await stream.ReadAsync(buffer, ct)) > 0)
+        {
+            var remaining = capBytes - checked((int)body.Length);
+            if (read > remaining)
+            {
+                if (remaining > 0) body.Write(buffer, 0, remaining);
+                return (body.ToArray(), true);
+            }
+            body.Write(buffer, 0, read);
+        }
+        return (body.ToArray(), false);
     }
 
     private async Task EnsureLoadedAsync(CancellationToken ct)

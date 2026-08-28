@@ -96,7 +96,7 @@ public sealed class OfficialMetadataPolicyTests : IDisposable
     }
 
     [Fact]
-    public async Task Engineering_scope_labels_fail_before_corpus_publication_and_never_reach_index_or_MCP()
+    public async Task V3_contract_engineering_scope_labels_fail_before_publication_and_index()
     {
         var rejectedCorpus = Path.Combine(_root, "rejected-corpus");
         Directory.CreateDirectory(rejectedCorpus);
@@ -147,28 +147,15 @@ public sealed class OfficialMetadataPolicyTests : IDisposable
             error.Contains("engineering_scope", StringComparison.Ordinal)
             && error.Contains("scope_reasons", StringComparison.Ordinal));
 
-        IndexFromCorpus.Build(corpus, null, db, null,
-            DateTimeOffset.Parse("2026-08-14T00:00:00Z"),
-            codeCommit: new string('d', 40));
-
-        using var reader = LexIndexReader.Open(db);
-        Assert.Empty(reader.SearchFacets().Domains);
-        Assert.Empty(reader.SearchKeyword(
-            "financial services", FilterSet.All, 10, fuzzyAuto: false).Hits);
-        using (var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={db}"))
-        {
-            connection.Open();
-            using var command = connection.CreateCommand();
-            command.CommandText = "SELECT facets || ' ' || publisher || ' ' || discovery FROM work_fts";
-            Assert.DoesNotContain("financial-services",
-                Convert.ToString(command.ExecuteScalar()) ?? "", StringComparison.Ordinal);
-        }
-
-        var response = new McpCore(
-            new Dictionary<string, LexIndexReader> { [reader.Collection] = reader })
-            .CallTool("search", new JsonObject { ["query"] = "financial services" });
-        Assert.DoesNotContain("financial-services", response.ToJsonString(),
+        var indexRejection = Assert.Throws<InvalidDataException>(() =>
+            IndexFromCorpus.Build(corpus, null, db, null,
+                DateTimeOffset.Parse("2026-08-14T00:00:00Z"),
+                codeCommit: new string('d', 40)));
+        Assert.Contains("integrity-valid corpus", indexRejection.Message,
             StringComparison.Ordinal);
+        Assert.Contains("engineering_scope", indexRejection.Message,
+            StringComparison.Ordinal);
+        Assert.False(File.Exists(db));
     }
 
     private static string RepoRoot()

@@ -24,7 +24,7 @@ public static class Fmx4EuProfile
 
     public static Extraction Extract(string xml, string lexIdBase)
     {
-        var doc = XDocument.Parse(xml, LoadOptions.None);
+        var doc = StrictPublisherXml.Parse(xml);
         var root = doc.Root ?? throw new InvalidDataException("empty Formex document");
         var notes = new List<string>
         {

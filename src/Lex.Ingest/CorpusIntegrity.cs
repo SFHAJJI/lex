@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text.Json;
+using System.Globalization;
 using Lex.Temporal;
 
 namespace Lex.Ingest;
@@ -46,12 +47,25 @@ public static class CorpusIntegrity
         }
 
         var currentSchema = manifest.Schema == ManifestDoc.CurrentSchema;
+        var identitySchema = currentSchema || manifest.Schema == "lex-corpus/4";
         IReadOnlyDictionary<string, string> completedRuns =
             new Dictionary<string, string>(StringComparer.Ordinal);
-        if (!currentSchema && manifest.Schema != "lex-corpus/3")
-            errors.Add($"manifest schema is '{manifest.Schema}', expected 'lex-corpus/3' or "
+        if (!currentSchema
+            && manifest.Schema is not ("lex-corpus/3" or "lex-corpus/4"))
+            errors.Add($"manifest schema is '{manifest.Schema}', expected 'lex-corpus/3', "
+                + "'lex-corpus/4' or "
                 + $"'{ManifestDoc.CurrentSchema}'");
-        if (currentSchema)
+        if (currentSchema && manifest.Canon != ManifestDoc.CurrentCanon)
+            errors.Add($"{ManifestDoc.CurrentSchema} requires canon "
+                + $"'{ManifestDoc.CurrentCanon}'");
+        if (currentSchema && (manifest.ObservationRun is null
+            || !UtcTimestamp(manifest.ObservationRun)))
+            errors.Add($"{ManifestDoc.CurrentSchema} requires a UTC observation_run");
+        if (!currentSchema && manifest.Canon is not null)
+            errors.Add("historical corpus schemas cannot claim a canon identity retroactively");
+        if (!currentSchema && manifest.ObservationRun is not null)
+            errors.Add("historical corpus schemas cannot claim an observation run retroactively");
+        if (identitySchema)
             try
             {
                 CodeIdentity.RequireFullCommit(
@@ -122,9 +136,15 @@ public static class CorpusIntegrity
 
         var worksRoot = Path.Combine(corpusRoot, "works");
         if (!Directory.Exists(worksRoot))
+        {
+            if (manifest.Works == 0 && manifest.Versions == 0
+                && manifest.Expressions == 0)
+                return new(manifest.Schema, manifest.IngesterCodeCommit,
+                    0, 0, 0, 0, 0, 0, 0, errors);
             return new(manifest.Schema, manifest.IngesterCodeCommit,
                 manifest.Works, 0, manifest.Versions, 0, 0, 0, 0,
                 [.. errors, "works directory is missing"]);
+        }
 
         var workIds = new HashSet<string>(StringComparer.Ordinal);
         var publisherWorkIds = new HashSet<string>(StringComparer.Ordinal);
@@ -233,7 +253,7 @@ public static class CorpusIntegrity
                     errors.Add($"{relativeVersion}/meta.json work_identifier does not match its work");
                 try
                 {
-                    if (currentSchema)
+                    if (identitySchema)
                         VersionIdentity.RequireCanonical(
                             Path.GetFileName(versionDir), version.ValidFrom,
                             version.PublisherVersionIdentifier, version.LexId,
@@ -243,7 +263,7 @@ public static class CorpusIntegrity
                 {
                     errors.Add($"{relativeVersion}/meta.json identity mismatch: {ex.Message}");
                 }
-                if (currentSchema)
+                if (identitySchema)
                     try
                     {
                         var canonicalMetadata = PublisherMetadataValidation.Canonicalize(
@@ -257,7 +277,7 @@ public static class CorpusIntegrity
                         errors.Add(
                             $"{relativeVersion}/meta.json publisher_metadata is invalid: {ex.Message}");
                     }
-                if (currentSchema)
+                if (identitySchema)
                     try
                     {
                         CorpusWriter.ValidateVersionRawForSourceConfiguration(
@@ -267,7 +287,7 @@ public static class CorpusIntegrity
                     {
                         errors.Add($"{relativeVersion}/meta.json source boundary is invalid: {ex.Message}");
                     }
-                if (currentSchema)
+                if (identitySchema)
                     VerifyAbsenceLifecycle(version, relativeVersion,
                         manifest.MigrationBaselineWorks is not null,
                         completedRuns, errors);
@@ -289,8 +309,29 @@ public static class CorpusIntegrity
                     foreach (var observation in expression.Observations)
                     {
                         observations++;
-                        VerifyObservation(versionDir, relativeVersion, observation, errors);
+                        VerifyObservation(versionDir, relativeVersion,
+                            expression.Language, observation, currentSchema, errors);
                     }
+                    var freshPrimaryCount = currentSchema
+                        ? expression.Observations.Count(observation =>
+                            observation.Format is null
+                            && observation.Http is not null
+                            && observation.ObservedFrom == manifest.ObservationRun)
+                        : 0;
+                    if (freshPrimaryCount > 1)
+                        errors.Add($"{relativeVersion}/{expression.Language} has multiple fresh "
+                            + "primary observations for manifest observation_run");
+                    if (currentSchema
+                        && lifecycle?.Event is not (
+                            "absent_unconfirmed" or "withdrawn_from_source")
+                        && expression.Text.Available
+                        && (expression.Observations.Any(observation =>
+                                observation.Format is null)
+                            || !expression.Observations.Any(observation =>
+                                observation.Format is not null))
+                        && freshPrimaryCount == 0)
+                        errors.Add($"{relativeVersion}/{expression.Language} has no fresh "
+                            + "primary observation for manifest observation_run");
                 }
             }
         }
@@ -485,7 +526,9 @@ public static class CorpusIntegrity
     private static void VerifyObservation(
         string versionDir,
         string relativeVersion,
+        string language,
         ObservationEntry observation,
+        bool transportSchema,
         ICollection<string> errors)
     {
         if (string.IsNullOrWhiteSpace(observation.File) || string.IsNullOrWhiteSpace(observation.Sha256))
@@ -515,7 +558,82 @@ public static class CorpusIntegrity
                 : "";
             errors.Add($"{relativeVersion}/{observation.File} sha256 mismatch{suffix}");
         }
+
+        if (observation.Format is not null)
+        {
+            if (observation.Http is not null)
+                errors.Add($"{relativeVersion}/{observation.File} alternative manifestation has primary HTTP evidence");
+            return;
+        }
+
+        var fileStem = Path.GetFileNameWithoutExtension(observation.File);
+        var appendSafe = PrimaryObservationName.Matches(
+            fileStem, language, observation.Sha256);
+        var extension = Path.GetExtension(observation.File);
+        var topLevel = !observation.File.Contains('/')
+            && !observation.File.Contains('\\');
+        var supportedExtension = extension is ".xml" or ".html"
+            || appendSafe && extension == ".body";
+        if (!topLevel || !supportedExtension)
+            errors.Add($"{relativeVersion}/{observation.File} primary observation path is not canonical");
+        if (!string.Equals(fileStem, language, StringComparison.Ordinal)
+            && !appendSafe)
+            errors.Add($"{relativeVersion}/{observation.File} primary observation name is not append-safe");
+        if (!appendSafe)
+        {
+            if (observation.Http is not null)
+                errors.Add($"{relativeVersion}/{observation.File} legacy primary observation carries retroactive HTTP evidence");
+            return;
+        }
+        if (!transportSchema)
+        {
+            errors.Add($"{relativeVersion}/{observation.File} content-addressed primary observation requires {ManifestDoc.CurrentSchema}");
+            return;
+        }
+
+        var http = observation.Http;
+        if (http is null)
+        {
+            errors.Add($"{relativeVersion}/{observation.File} has no bounded HTTP evidence");
+            return;
+        }
+        var completeOutcome = http.AttemptOutcome is
+            "retrieved" or "body_empty" or "body_parser_failure";
+        var rejectedOutcome = http.AttemptOutcome is
+            "body_oversized" or "body_not_found" or "body_gone"
+            or "body_retry_exhausted";
+        if (http.StatusCode is < 100 or > 599
+            || http.Attempts is < 1 or > 10
+            || !completeOutcome && !rejectedOutcome
+            || completeOutcome && http.BodyComplete == false
+            || http.AttemptOutcome == "body_oversized" && http.BodyComplete is not false
+            || http.AttemptOutcome == "retrieved" && http.StatusCode is not (>= 200 and <= 299)
+            || !UtcTimestamp(http.FetchedAt)
+            || http.LastModified is not null && !UtcTimestamp(http.LastModified)
+            || !Bounded(http.ContentType, 128)
+            || !Bounded(http.Charset, 64)
+            || !Bounded(http.EntityTag, 512))
+            errors.Add($"{relativeVersion}/{observation.File} bounded HTTP evidence is invalid");
+        if (!string.Equals(
+                observation.RetrievedAt, http.FetchedAt, StringComparison.Ordinal)
+            || !UtcTimestamp(observation.ObservedFrom))
+            errors.Add($"{relativeVersion}/{observation.File} primary observation times are incoherent");
+        if (!Bounded(observation.SourceUri, 2048)
+            || !Uri.TryCreate(observation.SourceUri, UriKind.Absolute, out var sourceUri)
+            || sourceUri.Scheme is not ("http" or "https"))
+            errors.Add($"{relativeVersion}/{observation.File} effective source URI is invalid");
     }
+
+    private static bool Bounded(string? value, int maximumLength) =>
+        value is null || !string.IsNullOrWhiteSpace(value)
+            && value.Length <= maximumLength
+            && !value.Any(char.IsControl);
+
+    private static bool UtcTimestamp(string value) =>
+        DateTimeOffset.TryParseExact(value, "yyyy-MM-ddTHH:mm:ssZ",
+            CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal,
+            out var parsed)
+        && parsed.Offset == TimeSpan.Zero;
 
     private static string? TryVerifiedPath(
         string root, string candidate, string description, ICollection<string> errors)

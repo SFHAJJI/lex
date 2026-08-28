@@ -183,7 +183,7 @@ public class DeriveTests
         {
             Directory.CreateDirectory(corpus);
             File.WriteAllText(Path.Combine(corpus, "manifest.json"), $$"""
-                { "schema": "lex-corpus/4", "ingester_code_commit": "{{IngesterCommit}}" }
+                { "schema": "lex-corpus/5", "canon": "canon/1", "build_issues": [], "ingester_code_commit": "{{IngesterCommit}}" }
                 """);
             var work = Path.Combine(corpus, "works", "w1");
             Directory.CreateDirectory(work);
@@ -257,6 +257,7 @@ public class DeriveTests
                 {
                     ["file"] = "fr.xml",
                     ["sha256"] = marker,
+                    ["source_uri"] = $"https://publisher.example/{marker}",
                 }),
             }),
         }.ToJsonString());
