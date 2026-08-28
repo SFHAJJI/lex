@@ -166,6 +166,22 @@ export function limitationsForTool(
   return items.filter((item) => item.tool === tool);
 }
 
+/**
+ * The scoping decision the renderer actually applies (round-5 O5). Production called a
+ * duplicate of this logic inline, so the tested helper proved nothing about what shipped:
+ * a mutation of limitationsForTool left the rendered output identical. The component now
+ * calls this, and this calls the helper, so one seam governs both.
+ *
+ * An undefined tool means the surface is genuinely multi-operation (the assistant can issue
+ * any tool), which the review sanctions provided each row labels its own authority visibly.
+ */
+export function scopedLimitations(
+  items: PublisherLimitation[],
+  tool: string | undefined,
+): PublisherLimitation[] {
+  return tool === undefined ? items : limitationsForTool(items, tool);
+}
+
 /** One classified envelope of a governed call (round 4, O1). */
 export type EnvelopeClass =
   | { kind: "ran"; entry: unknown }

@@ -17,7 +17,7 @@ import {
 import { extractionDisclosure } from "./extractionProfile";
 import { HISTORICAL_DENSITY, historicalDensityApplies } from "./notices";
 import { gapBadgeStatus, LIMITATION_EXPLANATION, limitationsFromEffect,
-  type PublisherLimitation } from "./limitations";
+  scopedLimitations, type PublisherLimitation } from "./limitations";
 
 const permalink = (work: string, date: string, anchor?: string) =>
   `/${publisherOf(work)}/${workSlug(work)}/${date}${anchor ? `#${anchor}` : ""}`;
@@ -647,7 +647,7 @@ export function PublisherLimitations({ items, tool }: {
    */
   tool?: string;
 }) {
-  const scoped = tool === undefined ? items : items.filter((item) => item.tool === tool);
+  const scoped = scopedLimitations(items, tool);
   if (scoped.length === 0) return null;
   return (
     <div className="trust-notice" role="note" aria-label="Publisher limitation">

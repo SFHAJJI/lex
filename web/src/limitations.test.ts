@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   classifyEnvelope, clearedSearchResults, gapBadgeStatus, INCOMPLETE_RESPONSE_SENTENCE,
-  LIMITATION_CAP, NO_CORPUS_SENTENCE, NO_CORPUS_STATUS,
+  LIMITATION_CAP, NO_CORPUS_SENTENCE, NO_CORPUS_STATUS, scopedLimitations,
   LIMITATION_EXPLANATION, LIMITATION_STATUS, limitationsForTool, limitationsFromEffect,
   MIXED_ZERO_SENTENCES, partitionGovernedResponse, projectGovernedEmptiness,
   projectSearchResponse, searchAbsenceState, searchEmptyPresentation, searchResultsFromError,
@@ -417,6 +417,15 @@ test("a single-tool surface accepts only its own operation's limitations", () =>
   assert.equal(limitationsForTool(items, "search")[0].tool, "search");
   assert.equal(limitationsForTool(items, "in_force_on").length, 1);
   assert.equal(limitationsForTool(items, "changes_in_period").length, 0);
+
+  // Round-5 O5: the renderer must call the tested seam, not a private copy of it. This is
+  // the exact function views.tsx invokes, so a mutation here changes what ships.
+  assert.equal(scopedLimitations(items, "search").length, 1);
+  assert.equal(scopedLimitations(items, "search")[0].tool, "search");
+  assert.equal(scopedLimitations(items, "changes_in_period").length, 0);
+  // An undefined tool is the sanctioned multi-operation surface: nothing is filtered out,
+  // and the component labels each row's authority instead.
+  assert.equal(scopedLimitations(items, undefined).length, 2);
 });
 
 // ---------------------------------------------------------------------------
