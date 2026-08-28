@@ -141,7 +141,8 @@ public static class UiMapper
                 Work: S(node, "work") ?? S(node, "lex_id"),
                 Date: S(args, "date") ?? S(args, "as_of"),
                 Explanation: Explain(status, locale, tool),
-                Available: GapChoices(tool, node)));
+                Available: GapChoices(tool, node),
+                Candidates: WorkCandidates(node)));
             var refused = outcome == LegalOutcome.NotComparable && tool == "diff"
                 ? UiEffect.Merge([Diff(node, args), gap])
                 : gap;
@@ -748,6 +749,29 @@ public static class UiMapper
         if (lexId is null) return null;
         var p = lexId.Split(':');
         return p.Length >= 2 ? $"{p[0]}:{p[1]}" : lexId;
+    }
+
+    /// <summary>
+    /// Bounded passthrough of the tool's additive work_candidates field: at most five entries,
+    /// each with a plausible identifier grammar. The tool computed them from the mounted
+    /// indexes; this mapper never invents, reorders or rephrases them.
+    /// </summary>
+    private static IReadOnlyList<WorkCandidateView>? WorkCandidates(JsonNode? node)
+    {
+        if (node?["work_candidates"] is not JsonArray raw) return null;
+        var result = new List<WorkCandidateView>();
+        foreach (var entry in raw)
+        {
+            if (result.Count >= 5) break;
+            if (entry is not JsonObject item) continue;
+            var work = S(item, "work");
+            var publisher = S(item, "publisher");
+            if (work is null or { Length: > 200 } || publisher is null or { Length: > 64 }) continue;
+            var title = S(item, "title");
+            result.Add(new WorkCandidateView(
+                work, title is { Length: > 300 } ? title[..300] : title, publisher));
+        }
+        return result.Count > 0 ? result : null;
     }
 
     private static IReadOnlyList<string> GapChoices(string tool, JsonObject result)

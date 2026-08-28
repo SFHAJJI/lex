@@ -57,6 +57,41 @@ public class UiEffectTests
     }
 
     [Fact]
+    public void Unknown_work_gap_carries_bounded_candidates_and_drops_malformed_entries()
+    {
+        var node = new JsonObject
+        {
+            ["status"] = "unknown_work",
+            ["work"] = "t-pub:nope",
+            ["work_candidates"] = new JsonArray(
+                new JsonObject { ["work"] = "w1", ["title"] = "Work one", ["publisher"] = "t-pub" },
+                new JsonObject { ["work"] = "w2", ["publisher"] = "t-pub" },
+                new JsonObject { ["title"] = "no coordinates" },
+                new JsonObject { ["work"] = new string('x', 300), ["publisher"] = "t-pub" },
+                "garbage"),
+        };
+        var eff = UiMapper.From("timeline", new JsonObject(), node);
+
+        Assert.NotNull(eff.Gap);
+        Assert.Equal("unknown_work", eff.Gap!.Status);
+        var candidates = eff.Gap.Candidates;
+        Assert.NotNull(candidates);
+        Assert.Equal(2, candidates!.Count);
+        Assert.Equal("w1", candidates[0].Work);
+        Assert.Equal("Work one", candidates[0].Title);
+        Assert.Equal("t-pub", candidates[0].Publisher);
+        Assert.Equal("w2", candidates[1].Work);
+
+        // Without the field the gap stays exactly as before: no empty list, no invented data.
+        var bare = UiMapper.From("timeline", new JsonObject(), new JsonObject
+        {
+            ["status"] = "unknown_work", ["work"] = "t-pub:nope",
+        });
+        Assert.NotNull(bare.Gap);
+        Assert.Null(bare.Gap!.Candidates);
+    }
+
+    [Fact]
     public void An_unfiltered_ranking_has_no_filter_directive()
     {
         // The ranking itself owns navigation. No workspace filter means the complete corpus;

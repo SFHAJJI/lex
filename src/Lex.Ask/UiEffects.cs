@@ -289,7 +289,13 @@ public sealed record InForceRow(string Work, string? Title, string? Kind, string
 
 /// <summary>An honest gap: what was asked for, and why Lex cannot show it.</summary>
 public sealed record GapView(string Status, string? Work, string? Date, string Explanation,
-    IReadOnlyList<string> Available, IReadOnlyList<EvidenceContext>? Evidence = null);
+    IReadOnlyList<string> Available, IReadOnlyList<EvidenceContext>? Evidence = null,
+    // Additive (Decision 41, unknown_work): nearest held records carried as coordinates only.
+    // The rendering surfaces own the frozen copy; this view never carries prose.
+    IReadOnlyList<WorkCandidateView>? Candidates = null);
+
+/// <summary>One nearest held record beside an unknown-work refusal: coordinates, never prose.</summary>
+public sealed record WorkCandidateView(string Work, string? Title, string Publisher);
 
 /// <summary>
 /// One publisher-specific capability refusal retained beside successful rows from another

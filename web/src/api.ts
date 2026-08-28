@@ -401,7 +401,9 @@ export interface UiEffect {
     results?: SearchFact[];
     evidence?: EvidenceContext[];
   };
-  gap?: { status: string; work?: string; date?: string; explanation: string; available: string[]; evidence?: EvidenceContext[] };
+  gap?: { status: string; work?: string; date?: string; explanation: string; available: string[]; evidence?: EvidenceContext[];
+          /** Additive: nearest held records beside unknown_work, validated fail closed in the browser. */
+          candidates?: unknown };
 }
 export interface RankingRow {
   work: string; title?: string; versions_in_period: number; versions_total: number;

@@ -16,6 +16,7 @@ import {
 } from "./temporal";
 import { extractionDisclosure } from "./extractionProfile";
 import { HISTORICAL_DENSITY, historicalDensityApplies } from "./notices";
+import { UNKNOWN_WORK_BOUNDARY, UNKNOWN_WORK_CANDIDATES_HEADING, workCandidateHref, workCandidatesFrom } from "./workCandidates";
 
 const permalink = (work: string, date: string, anchor?: string) =>
   `/${publisherOf(work)}/${workSlug(work)}/${date}${anchor ? `#${anchor}` : ""}`;
@@ -559,10 +560,14 @@ export function InForce({ date, total, rows, page, hasMore, onOpen, onPage }: {
  * textless, say THAT, once, and then show what Lex does hold, because dated versions with sources
  * and hashes are a real answer to a real question, just not to the question about wording.
  */
-export function Gap({ status, explanation, available, held }: {
+export function Gap({ status, explanation, available, held, candidates }: {
   status: string; explanation: string; available: string[];
   held?: { text: number; total: number; official?: string; kind?: string };
+  candidates?: unknown;
 }) {
+  // Decision 41: nearest held records beside an unknown-work refusal, validated fail closed;
+  // links are rebuilt from validated coordinates, never read from the payload.
+  const heldCandidates = status === "unknown_work" ? workCandidatesFrom(candidates) : [];
   const whole = held && held.total > 0 && held.text === 0;
   const collection = whole && (held?.kind === "RECUEIL" || held?.kind === "CODE_RECUEIL");
   return (
@@ -604,6 +609,20 @@ export function Gap({ status, explanation, available, held }: {
       ) : (
         <>
           <p>{explanation}</p>
+          {heldCandidates.length > 0 ? (
+            <div className="trust-notice" role="note" aria-label={UNKNOWN_WORK_CANDIDATES_HEADING}>
+              <b>{UNKNOWN_WORK_CANDIDATES_HEADING}</b>
+              <p className="sub">{UNKNOWN_WORK_BOUNDARY}</p>
+              <ul>
+                {heldCandidates.map((candidate) => (
+                  <li key={`${candidate.publisher}:${candidate.work}`}>
+                    <a href={workCandidateHref(candidate)}>{candidate.title ?? candidate.work}</a>{" "}
+                    <span className="sub mono">{candidate.work} · {candidate.publisher}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
           {available.length > 0 ? (
             <p className="sub">What does exist: {available.slice(0, 10).join(" · ")}</p>
           ) : null}
