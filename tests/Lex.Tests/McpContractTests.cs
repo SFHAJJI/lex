@@ -31,6 +31,7 @@ public class McpContractTests : IDisposable
             ["collection"] = "t-pub", ["tier"] = "A", ["history_begins"] = "publisher",
             ["built_at"] = "2026-08-01T00:00:00Z", ["corpus_commit"] = "test",
             ["jurisdiction"] = "XX",
+            ["index_format"] = "caller-spoof-must-not-serve",
             ["scope_expected_works"] = "3",
             ["build_issues_json"] = buildIssues,
             ["build_issues_digest"] = Convert.ToHexStringLower(
@@ -1356,6 +1357,73 @@ public class McpContractTests : IDisposable
         Assert.Equal("t-pub", env["publisher"]!.GetValue<string>());
         Assert.NotNull(env["freshness"]!["built_at"]);
         Assert.True(env["freshness"]!["stamp_signature_valid"]!.GetValue<bool>());
+        Assert.Equal(IndexBuilder.SchemaVersion,
+            env["artifact"]!["index_format"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void Invalid_signature_never_authenticates_a_public_index_format()
+    {
+        var db = Path.Combine(Path.GetTempPath(), $"lex-mcp-schema-tamper-{Guid.NewGuid():N}.db");
+        try
+        {
+            var document = ContractDoc("tampered", "work", "2024-01-01", "en");
+            var key = StampSigner.CreateKeyPem();
+            IndexBuilder.Build(db, new Dictionary<string, string>
+            {
+                ["collection"] = "tampered", ["tier"] = "A",
+                ["history_begins"] = "publisher", ["built_at"] = "2026-08-01T00:00:00Z",
+                ["corpus_commit"] = "test",
+            }, [document], [ContractProvision(document, "tamper test")], [], [], key);
+            RewriteSchema(db, IndexBuilder.PreviousSchemaVersion);
+
+            using var reader = LexIndexReader.Open(db);
+            Assert.False(reader.SignatureValid);
+            var core = new McpCore(
+                new Dictionary<string, LexIndexReader> { ["tampered"] = reader });
+            var result = Assert.IsType<JsonObject>(core.CallTool("timeline", new JsonObject
+            {
+                ["work"] = "tampered:work",
+            }));
+            var envelope = result["envelope"]!.AsObject();
+
+            Assert.False(envelope["freshness"]!["stamp_signature_valid"]!.GetValue<bool>());
+            Assert.Null(envelope["artifact"]!["index_format"]);
+        }
+        finally { try { File.Delete(db); } catch { } }
+    }
+
+    [Fact]
+    public void Valid_previous_schema_is_reported_from_its_signed_stamp()
+    {
+        var db = Path.Combine(Path.GetTempPath(), $"lex-mcp-schema-previous-{Guid.NewGuid():N}.db");
+        try
+        {
+            var document = ContractDoc("previous", "work", "2024-01-01", "en");
+            var key = StampSigner.CreateKeyPem();
+            IndexBuilder.Build(db, new Dictionary<string, string>
+            {
+                ["collection"] = "previous", ["tier"] = "A",
+                ["history_begins"] = "publisher", ["built_at"] = "2026-08-01T00:00:00Z",
+                ["corpus_commit"] = "test",
+            }, [document], [ContractProvision(document, "previous schema test")], [], [], key);
+            RewriteSchema(db, IndexBuilder.PreviousSchemaVersion, key);
+
+            using var reader = LexIndexReader.Open(db);
+            Assert.True(reader.SignatureValid);
+            var core = new McpCore(
+                new Dictionary<string, LexIndexReader> { ["previous"] = reader });
+            var result = Assert.IsType<JsonObject>(core.CallTool("timeline", new JsonObject
+            {
+                ["work"] = "previous:work",
+            }));
+            var envelope = result["envelope"]!.AsObject();
+
+            Assert.True(envelope["freshness"]!["stamp_signature_valid"]!.GetValue<bool>());
+            Assert.Equal(IndexBuilder.PreviousSchemaVersion,
+                envelope["artifact"]!["index_format"]!.GetValue<string>());
+        }
+        finally { try { File.Delete(db); } catch { } }
     }
 
     [Fact]
@@ -1834,6 +1902,37 @@ public class McpContractTests : IDisposable
             ["built_at"] = "2026-08-01T00:00:00Z", ["corpus_commit"] = "test",
         }, docs, provisions?.ToArray() ?? [], [], [], StampSigner.CreateKeyPem(),
             provisionStates: states, anchorEvents: anchorEvents);
+
+    private static void RewriteSchema(string db, string schema, string? signingKey = null)
+    {
+        using var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={db}");
+        connection.Open();
+        using (var update = connection.CreateCommand())
+        {
+            update.CommandText = "UPDATE stamp SET v=$schema WHERE k='schema'";
+            update.Parameters.AddWithValue("$schema", schema);
+            Assert.Equal(1, update.ExecuteNonQuery());
+        }
+        if (signingKey is null) return;
+
+        var stamp = new Dictionary<string, string>(StringComparer.Ordinal);
+        using (var read = connection.CreateCommand())
+        {
+            read.CommandText = "SELECT k,v FROM stamp";
+            using var rows = read.ExecuteReader();
+            while (rows.Read()) stamp[rows.GetString(0)] = rows.GetString(1);
+        }
+        var (signature, publicKey) = StampSigner.Sign(stamp, signingKey);
+        foreach (var (name, value) in new[]
+                 { (Name: "signature", Value: signature), (Name: "public_key", Value: publicKey) })
+        {
+            using var update = connection.CreateCommand();
+            update.CommandText = "UPDATE stamp SET v=$value WHERE k=$name";
+            update.Parameters.AddWithValue("$name", name);
+            update.Parameters.AddWithValue("$value", value);
+            Assert.Equal(1, update.ExecuteNonQuery());
+        }
+    }
 
     private static void BuildChurnIndex(string db, string collection,
         params (string Work, int Versions)[] works)

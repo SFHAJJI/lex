@@ -250,7 +250,11 @@ public sealed class McpCore
             ["manifest_set_id"] = artifactManifestIdentity,
             ["content_digest"] = r.Stamp.GetValueOrDefault("content_digest"),
             ["code_commit"] = r.Stamp.GetValueOrDefault("code_commit"),
-            ["index_format"] = r.Stamp.GetValueOrDefault("index_format"),
+            // Publish only the schema authenticated by the stamp signature. Do not serve an
+            // unvalidated caller alias or a supported-but-tampered schema as index_format.
+            ["index_format"] = r.SignatureValid
+                ? r.Stamp.GetValueOrDefault("schema")
+                : null,
         };
         return envelope;
     }
