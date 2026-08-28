@@ -8,7 +8,7 @@ import {
   type PublisherMetadata,
 } from "./publisherMetadata";
 import { ScopeFilters } from "./ScopeFilters";
-import { anyRowSetTruncated, metadataOnlyResponse, responsePopulation,
+import { anyRowSetTruncated, metadataOnlyFromResponse,
   type PopulationEntry } from "./matchLanes";
 import { MetadataOnlyNotice } from "./metadataOnlyNotice";
 import type { State } from "./state";
@@ -176,10 +176,10 @@ export default function Search(p: SearchProps) {
         // The decision reads the AUTHORITATIVE population off the raw envelopes: successful
         // statuses only, reasons unioned per logical work before fusion can discard them,
         // and the whole population rather than the display slice (O2, O3, O5).
-        const population = responsePopulation(res);
-        setMetadataPopulation(population);
+        const decision = metadataOnlyFromResponse(res);
+        setMetadataPopulation(decision.population);
         setResponseTruncated(anyRowSetTruncated(res));
-        setMetadataOnly(metadataOnlyResponse(population));
+        setMetadataOnly(decision.metadataOnly);
         const byWork = new Map<string, WorkHit>();
         const arts: ArticleHit[] = [];
         for (const h of hits) {

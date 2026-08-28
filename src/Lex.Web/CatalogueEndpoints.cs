@@ -539,11 +539,14 @@ public static class CatalogueEndpoints
                 // positively metadata does the one notice speak, with the matches disclosed
                 // beneath it, never presented as results. Any text, identity or unclassified
                 // hit anywhere keeps the old rendering path byte-for-byte for every publisher.
-                var population = MatchLanes.ResponsePopulation(envelopes);
+                var (population, populationComplete) =
+                    MatchLanes.ResponsePopulation(envelopes);
                 static string HitText(JsonObject hit, string key) =>
                     hit[key] is JsonValue value && value.TryGetValue<string>(out var text)
                         ? text : "";
-                if (population.Count > 0 && MatchLanes.MetadataOnly(
+                // An incomplete population cannot support the positive claim: suppressing
+                // real answers on partial evidence is the failure this gate exists to stop.
+                if (populationComplete && population.Count > 0 && MatchLanes.MetadataOnly(
                         population.Select(item => MatchLanes.ReasonsOf(item.Hit)).ToArray()))
                 {
                     sb.Append(MatchLanes.NoticeHtml(

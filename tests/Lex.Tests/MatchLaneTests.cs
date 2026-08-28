@@ -282,9 +282,88 @@ public sealed class MatchLaneTests : IDisposable
                     ["work"] = "real", ["match_reasons"] = new JsonArray("work_metadata"),
                 }),
             });
-        var population = MatchLanes.ResponsePopulation(envelopes);
+        var (population, complete) = MatchLanes.ResponsePopulation(envelopes);
         Assert.Single(population);
         Assert.Equal("real", population[0].Hit["work"]!.GetValue<string>());
+        Assert.False(complete, "the status-less envelope makes the population incomplete");
+    }
+
+    [Fact]
+    public void Search_never_emits_no_result_so_it_cannot_authorize_suppression()
+    {
+        // Verified against the producer: the search case emits ok,
+        // retrieval_mode_unavailable, unknown_work, unknown_anchor and no_provision_history.
+        var crossOperation = new JsonArray(new JsonObject
+        {
+            ["envelope"] = new JsonObject
+            {
+                ["publisher"] = "lu-legilux", ["status"] = "no_result",
+            },
+            ["hits"] = new JsonArray(new JsonObject
+            {
+                ["work"] = "w1", ["match_reasons"] = new JsonArray("work_metadata"),
+            }),
+        });
+        var (rows, complete) = MatchLanes.ResponsePopulation(crossOperation);
+        Assert.Empty(rows);
+        Assert.True(complete, "a non-success status is skipped, not malformed");
+        Assert.False(MatchLanes.MetadataOnly(
+            rows.Select(item => MatchLanes.ReasonsOf(item.Hit)).ToArray()));
+    }
+
+    [Fact]
+    public void An_incomplete_population_can_never_authorize_the_positive_claim()
+    {
+        // A successful envelope with a malformed hits field was read as empty in round 1, so
+        // a sibling metadata-only response still suppressed real answers.
+        var malformed = new JsonArray(
+            new JsonObject
+            {
+                ["envelope"] = new JsonObject
+                {
+                    ["publisher"] = "eu-eurlex", ["status"] = "ok",
+                },
+                ["hits"] = "not-an-array",
+            },
+            new JsonObject
+            {
+                ["envelope"] = new JsonObject
+                {
+                    ["publisher"] = "lu-legilux", ["status"] = "ok",
+                },
+                ["hits"] = new JsonArray(new JsonObject
+                {
+                    ["work"] = "w1", ["match_reasons"] = new JsonArray("work_metadata"),
+                }),
+            });
+        var (rows, complete) = MatchLanes.ResponsePopulation(malformed);
+        Assert.Single(rows);
+        Assert.False(complete);
+
+        // A present but wrong-typed reasons field is malformed evidence, not absent evidence.
+        var badReason = new JsonArray(new JsonObject
+        {
+            ["envelope"] = new JsonObject { ["publisher"] = "lu-legilux", ["status"] = "ok" },
+            ["hits"] = new JsonArray(new JsonObject
+            {
+                ["work"] = "w1", ["match_reasons"] = new JsonArray(42),
+            }),
+        });
+        Assert.False(MatchLanes.ResponsePopulation(badReason).Complete);
+
+        // The clean case stays complete so suppression remains reachable.
+        var clean = new JsonArray(new JsonObject
+        {
+            ["envelope"] = new JsonObject { ["publisher"] = "lu-legilux", ["status"] = "ok" },
+            ["hits"] = new JsonArray(new JsonObject
+            {
+                ["work"] = "w1", ["match_reasons"] = new JsonArray("work_metadata"),
+            }),
+        });
+        var (cleanRows, cleanComplete) = MatchLanes.ResponsePopulation(clean);
+        Assert.True(cleanComplete);
+        Assert.True(MatchLanes.MetadataOnly(
+            cleanRows.Select(item => MatchLanes.ReasonsOf(item.Hit)).ToArray()));
     }
 
     [Fact]
@@ -335,9 +414,10 @@ public sealed class MatchLaneTests : IDisposable
                     ["match_reasons"] = new JsonArray("work_metadata"),
                 }),
             });
-        var population = MatchLanes.ResponsePopulation(envelopes);
+        var (population, complete) = MatchLanes.ResponsePopulation(envelopes);
         Assert.Single(population);
         Assert.Equal("lu-legilux", population[0].Publisher);
+        Assert.True(complete, "a refused sibling is skipped, not malformed");
         Assert.True(MatchLanes.MetadataOnly(
             population.Select(item => MatchLanes.ReasonsOf(item.Hit)).ToArray()));
     }

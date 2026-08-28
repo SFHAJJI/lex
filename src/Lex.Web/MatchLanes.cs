@@ -103,25 +103,57 @@ public static class MatchLanes
     /// Refused envelopes carry no hits array and simply contribute nothing, so a refusal
     /// beside metadata hits neither blocks nor fakes the response-level state.
     /// </summary>
-    /// <summary>Statuses under which a search envelope actually executed and may contribute.</summary>
-    private static readonly HashSet<string> SearchSuccessStatuses = ["ok", "no_result"];
+    /// <summary>
+    /// The only status under which a search envelope actually executed. Verified against the
+    /// producer: the search case emits ok, retrieval_mode_unavailable, unknown_work,
+    /// unknown_anchor and no_provision_history, and never no_result. Round 1 admitted
+    /// no_result, so a cross-operation envelope carrying metadata hits could authorize
+    /// suppression (B1+B2 round 2 review, O1).
+    /// </summary>
+    private static readonly HashSet<string> SearchSuccessStatuses = ["ok"];
 
-    public static IReadOnlyList<(string Publisher, JsonObject Hit)> ResponsePopulation(
-        JsonArray envelopes) =>
-        envelopes.OfType<JsonObject>().SelectMany(result =>
+    /// <summary>
+    /// The authoritative population plus whether it is COMPLETE. Round 1 discarded response
+    /// invalidity: a successful envelope whose hits field was malformed was read as empty, so
+    /// a sibling metadata-only response could still authorize suppression (B1+B2 round 2
+    /// review, O2). An incomplete population makes the positive claim unreachable.
+    /// </summary>
+    public static (IReadOnlyList<(string Publisher, JsonObject Hit)> Rows, bool Complete)
+        ResponsePopulation(JsonArray envelopes)
+    {
+        var rows = new List<(string, JsonObject)>();
+        var complete = true;
+        foreach (var node in envelopes)
         {
+            if (node is not JsonObject result) { complete = false; continue; }
             var envelope = result["envelope"] as JsonObject;
             var status = envelope?["status"] is JsonValue statusValue
                 && statusValue.TryGetValue<string>(out var statusText) ? statusText : null;
-            // O5: only an authoritative successful envelope may contribute to the positive
-            // metadata_only claim. A refused or malformed envelope's rows are not evidence,
-            // and letting them in would suppress real answers behind the notice.
-            if (status is null || !SearchSuccessStatuses.Contains(status)) return [];
+            if (status is null) { complete = false; continue; }
+            // Only an authoritative successful envelope may contribute to the positive
+            // metadata_only claim; a refusal's rows are not evidence.
+            if (!SearchSuccessStatuses.Contains(status)) continue;
+            if (result["hits"] is not JsonArray hits) { complete = false; continue; }
             var publisher = envelope!["publisher"] is JsonValue value
                 && value.TryGetValue<string>(out var text) ? text : "";
-            return (result["hits"] as JsonArray ?? []).OfType<JsonObject>()
-                .Select(hit => (publisher, hit));
-        }).ToArray();
+            foreach (var hitNode in hits)
+            {
+                if (hitNode is not JsonObject hit) { complete = false; continue; }
+                // A reasons field that is present but not an array of strings is malformed
+                // evidence, not absent evidence.
+                if (hit["match_reasons"] is { } reasonsNode
+                    && (reasonsNode is not JsonArray reasons
+                        || reasons.Any(reason => reason is not JsonValue member
+                            || !member.TryGetValue<string>(out _))))
+                {
+                    complete = false;
+                    continue;
+                }
+                rows.Add((publisher, hit));
+            }
+        }
+        return (rows, complete);
+    }
 
     /// <summary>
     /// True when any envelope reports a truncated row set (B1+B2 review, O4). The producer

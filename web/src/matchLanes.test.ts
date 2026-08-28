@@ -5,8 +5,8 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import {
   anyRowSetTruncated, classifyMatchLane, laneOfServedReasons, METADATA_ONLY_BODY,
-  METADATA_ONLY_DISCLOSURE, METADATA_ONLY_HEADING, metadataOnlyResponse, metadataOnlyState,
-  officialSearchHref, responsePopulation,
+  METADATA_ONLY_DISCLOSURE, METADATA_ONLY_HEADING, metadataOnlyFromResponse,
+  metadataOnlyResponse, metadataOnlyState, officialSearchHref, responsePopulation,
 } from "./matchLanes.ts";
 
 // The one normative case table shared with the C# classifier: parity is proven by both
@@ -116,34 +116,81 @@ const hit = (work: string, reasons: unknown, title = "A law") => ({
 test("only a successful envelope contributes to the population", () => {
   // O5: a refused or malformed envelope's rows are not evidence. Admitting them lets a
   // refusal suppress a real answer behind the metadata-only notice.
-  const population = responsePopulation([
+  const { entries } = responsePopulation([
     envelope("lu-legilux", "filter_not_supported_by_index",
       [hit("lu-legilux:refused", ["work_metadata"])]),
-    envelope("eu-eurlex", "made_up", [hit("eu-eurlex:bogus", ["work_metadata"])]),
-    { hits: [hit("no-envelope:x", ["work_metadata"])] },
     envelope("lu-legilux", "ok", [hit("lu-legilux:real", ["work_metadata"])]),
   ]);
-  assert.deepEqual(population.map((entry) => entry.work), ["lu-legilux:real"]);
-  assert.equal(metadataOnlyResponse(population), true);
+  assert.deepEqual(entries.map((entry) => entry.work), ["lu-legilux:real"]);
+  assert.equal(metadataOnlyResponse(entries), true);
+});
+
+test("search never emits no_result, so it cannot authorize suppression", () => {
+  // Verified against the producer: the search case emits ok, retrieval_mode_unavailable,
+  // unknown_work, unknown_anchor and no_provision_history. Round 1 admitted no_result, so a
+  // cross-operation envelope carrying metadata hits could suppress real answers.
+  const crossOperation = metadataOnlyFromResponse([
+    envelope("lu-legilux", "no_result", [hit("lu-legilux:w1", ["work_metadata"])]),
+  ]);
+  assert.deepEqual(crossOperation.population, [], "its rows are not search evidence");
+  assert.equal(crossOperation.metadataOnly, false);
+});
+
+test("an incomplete population can never authorize the positive claim", () => {
+  // Round 1 read a malformed successful hits field as empty, so a sibling metadata-only
+  // response still suppressed; and a wrong-typed reasons field vanished when a duplicate
+  // work later contributed work_metadata.
+  const malformedSibling = metadataOnlyFromResponse([
+    { envelope: { publisher: "eu-eurlex", status: "ok" }, hits: "not-an-array" },
+    envelope("lu-legilux", "ok", [hit("lu-legilux:w1", ["work_metadata"])]),
+  ]);
+  assert.equal(malformedSibling.metadataOnly, false,
+    "a malformed sibling makes suppression unreachable");
+
+  const missingStatus = metadataOnlyFromResponse([
+    { envelope: { publisher: "eu-eurlex" }, hits: [] },
+    envelope("lu-legilux", "ok", [hit("lu-legilux:w1", ["work_metadata"])]),
+  ]);
+  assert.equal(missingStatus.metadataOnly, false);
+
+  const badReason = metadataOnlyFromResponse([
+    envelope("lu-legilux", "ok", [
+      hit("lu-legilux:w1", [42]),
+      hit("lu-legilux:w1", ["work_metadata"]),
+    ]),
+  ]);
+  assert.equal(badReason.metadataOnly, false,
+    "a wrong-typed reason cannot be washed out by a later duplicate");
+
+  const nullHit = metadataOnlyFromResponse([
+    { envelope: { publisher: "lu-legilux", status: "ok" }, hits: [null] },
+  ]);
+  assert.equal(nullHit.metadataOnly, false);
+
+  // The clean case still suppresses.
+  const clean = metadataOnlyFromResponse([
+    envelope("lu-legilux", "ok", [hit("lu-legilux:w1", ["work_metadata"])]),
+  ]);
+  assert.equal(clean.metadataOnly, true);
 });
 
 test("reasons union per logical work before fusion can discard them", () => {
   // O2: the workspace fusion step deduplicates by identity and drops the losing hit's
   // match_reasons. A work matched by metadata in one publisher and by keyword in another
   // must never read as metadata-only.
-  const population = responsePopulation([
+  const { entries } = responsePopulation([
     envelope("lu-legilux", "ok", [hit("lu-legilux:w1", ["work_metadata"])]),
     envelope("eu-eurlex", "ok", [hit("lu-legilux:w1", ["keyword"])]),
   ]);
-  assert.equal(population.length, 1, "one logical work");
-  assert.equal(metadataOnlyResponse(population), false,
+  assert.equal(entries.length, 1, "one logical work");
+  assert.equal(metadataOnlyResponse(entries), false,
     "the keyword reason survives the union and forbids suppression");
 
   // Reverse arrival order must give the same answer.
   const reversed = responsePopulation([
     envelope("eu-eurlex", "ok", [hit("lu-legilux:w1", ["keyword"])]),
     envelope("lu-legilux", "ok", [hit("lu-legilux:w1", ["work_metadata"])]),
-  ]);
+  ]).entries;
   assert.equal(metadataOnlyResponse(reversed), false);
 });
 
@@ -152,7 +199,7 @@ test("the population is the whole response, not the display slice", () => {
   // eight rows, no overflow line, and no official action for a publisher past slot eight.
   const many = Array.from({ length: 11 }, (_, index) =>
     hit(`lu-legilux:w${index}`, ["work_metadata"]));
-  const population = responsePopulation([
+  const { entries: population } = responsePopulation([
     envelope("lu-legilux", "ok", many),
     envelope("eu-eurlex", "ok", [hit("eu-eurlex:late", ["work_metadata"])]),
   ]);
@@ -175,12 +222,11 @@ test("a truncated row set is detected so no exact overflow total is invented", (
 });
 
 test("hostile reason members never throw and never authorize suppression", () => {
-  const population = responsePopulation([
+  assert.equal(metadataOnlyFromResponse([
     envelope("lu-legilux", "ok", [hit("lu-legilux:w1", [42])]),
-  ]);
-  assert.equal(metadataOnlyResponse(population), false,
+  ]).metadataOnly, false,
     "a numeric reason is unclassified, so the hit renders instead of being suppressed");
-  assert.equal(metadataOnlyResponse(responsePopulation([
+  assert.equal(metadataOnlyFromResponse([
     envelope("lu-legilux", "ok", [hit("lu-legilux:w1", "work_metadata")]),
-  ])), false, "a non-array reasons field is not evidence either");
+  ]).metadataOnly, false, "a non-array reasons field is not evidence either");
 });
