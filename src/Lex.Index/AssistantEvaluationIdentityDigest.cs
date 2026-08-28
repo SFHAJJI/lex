@@ -149,7 +149,7 @@ public static class AssistantEvaluationIdentityDigest
         return Sha256(canonical);
     }
 
-    /// <summary>Hashes the complete Azure OpenAI deployment identity in its stable wire order.</summary>
+    /// <summary>Hashes the complete Azure model deployment identity in its stable wire order.</summary>
     public static string ModelSha256(
         string resourceId,
         string endpoint,
