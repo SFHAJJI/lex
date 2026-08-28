@@ -684,6 +684,11 @@ export function searchAbsenceState(
  * publishers that could apply the filters; all-refused speaks only about coverage; an
  * incomplete response claims nothing at all. The component renders exactly this decision.
  */
+/** A state nobody handled must not compile, let alone reach a reader as a corpus-wide claim. */
+function assertNever(value: never): never {
+  throw new Error(`unhandled absence state: ${String(value)}`);
+}
+
 export function searchEmptyPresentation(
   state: "all_refused" | "no_corpus" | "mixed_no_match" | "no_match"
     | "incomplete_response",
@@ -700,9 +705,15 @@ export function searchEmptyPresentation(
       };
     case "incomplete_response":
       return { kind: "incomplete_response", sentence: INCOMPLETE_RESPONSE_SENTENCE };
-    default:
+    case "no_match":
       return { kind: "no_match", sentence: "Nothing in the corpus matches that." };
   }
+  // No default branch, deliberately. The sentence below is the strongest legal absence
+  // claim this product makes: nothing in the whole corpus matches. A default handed that
+  // claim to every state nobody had thought about yet, and noFallthroughCasesInSwitch does
+  // not catch a default, so adding an absence state would silently have made the widest
+  // possible assertion about the corpus. This turns that into a compile error instead.
+  return assertNever(state);
 }
 
 /**
