@@ -54,7 +54,7 @@ public class FitnessTests
     }
 
     [Fact]
-    public void Telemetry_processor_removes_query_text_and_ingress_addresses()
+    public void Telemetry_processor_removes_every_non_allowlisted_field()
     {
         using var activity = new Activity("privacy-test").Start();
         activity.SetTag("url.query", "?q=TRACE_CANARY");
@@ -84,36 +84,125 @@ public class FitnessTests
         Assert.DoesNotContain("EVALUATION_BAGGAGE_CANARY", exported, StringComparison.Ordinal);
         Assert.DoesNotContain("BODY_CANARY", exported, StringComparison.Ordinal);
         Assert.DoesNotContain("BAGGAGE_CANARY", exported, StringComparison.Ordinal);
-        Assert.Contains("https://law.soufien.lu/", exported, StringComparison.Ordinal);
+        Assert.Empty(exported);
     }
 
     private static readonly string[] PublisherWords = ["jolux", "cdm:", "legilux", "eurlex", "cellar", "cssf"];
 
     [Fact]
-    public void Assistant_telemetry_has_a_closed_metadata_only_allowlist()
+    public void Telemetry_policy_is_not_ignored_from_a_clean_clone()
     {
-        var askSource = File.ReadAllText(
-            Path.Combine(RepoRoot(), "src", "Lex.Ask", "AskService.cs"));
-        var tags = Regex.Matches(askSource, "SetTag\\(\"([^\"]+)\"")
+        var root = RepoRoot();
+        var policy = Path.Combine(root, "deploy", "telemetry-policy.json");
+        Assert.True(File.Exists(policy),
+            "The source-controlled telemetry policy must exist in a clean clone.");
+        using var process = Process.Start(new ProcessStartInfo("git")
+        {
+            WorkingDirectory = root,
+            UseShellExecute = false,
+            ArgumentList =
+            {
+                "check-ignore", "--no-index", "--quiet", "--",
+                "deploy/telemetry-policy.json",
+            },
+        });
+        Assert.NotNull(process);
+        process.WaitForExit();
+        Assert.Equal(1, process.ExitCode);
+    }
+
+    [Fact]
+    public void Telemetry_sources_and_exporter_have_a_closed_trace_only_contract()
+    {
+        var root = RepoRoot();
+        var telemetryPolicy = Path.Combine(root, "deploy", "telemetry-policy.json");
+        Assert.True(File.Exists(telemetryPolicy),
+            "The source-controlled telemetry policy must exist in a clean clone.");
+        var ignores = File.ReadAllText(Path.Combine(root, ".gitignore"));
+        Assert.Contains("!deploy/telemetry-policy.json", ignores, StringComparison.Ordinal);
+        var sourceFiles = Directory.EnumerateFiles(
+                Path.Combine(root, "src"), "*.cs", SearchOption.AllDirectories)
+            .Where(path => !path.Contains(
+                $"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}",
+                StringComparison.OrdinalIgnoreCase))
+            .Where(path => !path.Contains(
+                $"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}",
+                StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        var sources = string.Join('\n', sourceFiles.Select(File.ReadAllText));
+        var tags = Regex.Matches(sources, "SetTag\\(\"([^\"]+)\"")
             .Select(match => match.Groups[1].Value)
             .Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal)
             .ToArray();
 
-        // gen_ai.request.model and lex.docs used to appear here, but only LegacyAskAsync ever
-        // emitted them, so the served path never carried either one and this list was pinning
-        // telemetry that no request could produce. Deleting the dead agent removed both. Worth
-        // noting for the observability work rather than fixing here: the live planner records
-        // no model tag at all, so the deployment that chose a plan is not recoverable from a
-        // span. That is a pre-existing gap this deletion exposed, not one it created.
         Assert.Equal([
-            "gen_ai.tool.name", "lex.operation.id", "lex.status",
+            "http.response.status_code", "lex.digest", "lex.hit_count_bucket", "lex.language",
+            "lex.plan_shape", "lex.response_class", "lex.retrieval_mode", "lex.status",
+            "lex.surface", "lex.tool", "lex.zero_hit",
         ], tags);
-        Assert.DoesNotContain("ex.Message", askSource, StringComparison.Ordinal);
-        Assert.DoesNotContain("respText[..", askSource, StringComparison.Ordinal);
-        Assert.DoesNotContain("SetTag(\"lex.question", askSource, StringComparison.Ordinal);
-        Assert.DoesNotContain("SetTag(\"client", askSource, StringComparison.Ordinal);
-        Assert.DoesNotContain("SetTag(\"ip", askSource, StringComparison.Ordinal);
+        Assert.Equal(3, Regex.Matches(sources,
+            @"ActivitySource Source = new\(ActivitySourceName\)").Count);
+        foreach (var forbidden in new[]
+                 {
+                     "lex.operation.id", "gen_ai.", "SetTag(\"query_expansions",
+                     "SetTag(\"retrieval_account",
+                     ".AddEvent(", "ActivityLink", "RecordException",
+                 })
+            Assert.DoesNotContain(forbidden, sources, StringComparison.Ordinal);
+
+        var project = File.ReadAllText(
+            Path.Combine(root, "src", "Lex.Web", "Lex.Web.csproj"));
+        Assert.Contains(
+            "Azure.Monitor.OpenTelemetry.Exporter\" Version=\"1.8.3\"", project);
+        Assert.Contains("OpenTelemetry.Extensions.Hosting\" Version=\"1.15.3\"", project);
+        Assert.DoesNotContain("Azure.Monitor.OpenTelemetry.AspNetCore", project);
+
+        var ask = File.ReadAllText(Path.Combine(root, "src", "Lex.Ask", "AskService.cs"));
+        var startPlan = ask.IndexOf("using var planActivity = AskTelemetry.StartPlan()",
+            StringComparison.Ordinal);
+        var plannerCall = ask.IndexOf("PlanOperationsAsync(", startPlan, StringComparison.Ordinal);
+        var authorization = ask.IndexOf("plan = AuthorizeInstants(", plannerCall,
+            StringComparison.Ordinal);
+        var shape = ask.IndexOf("AskTelemetry.SetPlanTags(planActivity, plan)", authorization,
+            StringComparison.Ordinal);
+        var stop = ask.IndexOf("planActivity?.Stop()", shape, StringComparison.Ordinal);
+        Assert.True(startPlan >= 0 && plannerCall > startPlan
+                    && authorization > plannerCall && shape > authorization && stop > shape);
+        Assert.DoesNotContain("StartActivity(\"legal-operation\")", ask,
+            StringComparison.Ordinal);
+
+        var program = File.ReadAllText(Path.Combine(root, "src", "Lex.Web", "Program.cs"));
+        Assert.Equal(3, Regex.Matches(program, @"\.AddSource\(").Count);
+        Assert.Contains(".AddSource(LexRequestTelemetry.ActivitySourceName)", program);
+        Assert.Contains(".AddSource(McpCore.ActivitySourceName)", program);
+        Assert.Contains(".AddSource(AskService.ActivitySourceName)", program);
+        Assert.Contains("ResourceBuilder.CreateEmpty().AddService(\"lex-web\")", program);
+        Assert.Contains(".AddAzureMonitorTraceExporter(", program);
+        Assert.Contains(".AddProcessor(new PrivacyActivityProcessor())", program);
+        Assert.Contains(".SetSampler(LexTraceConfiguration.TraceSampler)", program);
+        var processor = File.ReadAllText(
+            Path.Combine(root, "src", "Lex.Web", "PrivacyActivityProcessor.cs"));
+        Assert.Contains("TraceSampler { get; } = new AlwaysOnSampler()", processor);
+        Assert.True(
+            program.IndexOf(".AddProcessor(new PrivacyActivityProcessor())",
+                StringComparison.Ordinal)
+            < program.IndexOf(".AddAzureMonitorTraceExporter(", StringComparison.Ordinal),
+            "Privacy sanitization must be registered before the Azure exporter processor.");
+        Assert.Contains("exporter.TracesPerSecond = null", program);
+        Assert.Contains("exporter.SamplingRatio = 1.0F", program);
+        Assert.Contains("exporter.EnableLiveMetrics = false", program);
+        Assert.Contains("exporter.EnableStandardMetrics = false", program);
+        Assert.Contains("exporter.EnablePerformanceCounters = false", program);
+        Assert.Contains("exporter.DisableOfflineStorage = true", program);
+        foreach (var forbidden in new[]
+                 {
+                     "UseAzureMonitor", "UseAzureMonitorExporter", "AddAspNetCoreInstrumentation",
+                     "AddHttpClientInstrumentation", "AddSqlClientInstrumentation",
+                     "AddAzureMonitorLogExporter", "AddAzureMonitorMetricExporter", "WithMetrics",
+                     "WithLogging",
+                 })
+            Assert.DoesNotContain(forbidden, program, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -10,6 +10,7 @@ namespace Lex.Mcp;
 /// </summary>
 public sealed class McpCore
 {
+    public const string ActivitySourceName = McpTelemetry.ActivitySourceName;
     private readonly IReadOnlyDictionary<string, LexIndexReader> readers;
     private readonly string? artifactManifestIdentity;
     private readonly bool _corpusMounted;
@@ -698,71 +699,98 @@ public sealed class McpCore
         JsonObject a,
         CancellationToken cancellationToken)
     {
-        // Reject malformed work before waiting on any publisher or allocating an execution
-        // session. Invalid public input must not queue behind a valid long-running search.
-        McpInputPolicy.Validate(name, a);
-        if (UnmountedFilter(a) is { } unmounted) return UnmountedFilterResult(name, unmounted);
-        var selection = ReadersFor(name, a);
-        var selected = selection.Readers;
-        var held = new List<SemaphoreSlim>(selected.Count);
+        using var activity = McpTelemetry.StartTool(name, artifactManifestIdentity);
         try
         {
-            foreach (var (_, semaphore, _) in selected)
+            // Reject malformed work before waiting on any publisher or allocating an execution
+            // session. Invalid public input must not queue behind a valid long-running search.
+            McpInputPolicy.Validate(name, a);
+            McpTelemetry.SetLanguageTag(activity, a);
+            if (UnmountedFilter(a) is { } unmounted)
             {
-                await semaphore.WaitAsync(cancellationToken);
-                held.Add(semaphore);
+                var unmountedResult = UnmountedFilterResult(name, unmounted);
+                McpTelemetry.SetResultTags(activity, unmountedResult);
+                return unmountedResult;
             }
+            var selection = ReadersFor(name, a);
+            var selected = selection.Readers;
+            var held = new List<SemaphoreSlim>(selected.Count);
+            try
+            {
+                foreach (var (_, semaphore, _) in selected)
+                {
+                    await semaphore.WaitAsync(cancellationToken);
+                    held.Add(semaphore);
+                }
+            }
+            catch
+            {
+                foreach (var semaphore in held) semaphore.Release();
+                throw;
+            }
+            var execution = Task.Run(() =>
+            {
+                var sessions = new Dictionary<string, LexIndexReader>(StringComparer.Ordinal);
+                CancellationTokenRegistration[] registrations = [];
+                try
+                {
+                    // Citation targets can cross publisher boundaries. Give the execution core
+                    // isolated, read-only sessions for every mounted publisher so forward citation
+                    // canonicalisation can prove that the target is actually held. The callback
+                    // still reports only publishers selected for the requested operation.
+                    var selectedPublishers = selected
+                        .Select(item => item.Publisher)
+                        .ToHashSet(StringComparer.Ordinal);
+                    foreach (var item in readers.OrderBy(item => item.Key, StringComparer.Ordinal))
+                    {
+                        sessions.Add(item.Key, item.Value.CreateIsolatedSession());
+                        if (selectedPublishers.Contains(item.Key))
+                            _sessionOpened?.Invoke(item.Key);
+                    }
+                    registrations = sessions.Values
+                        .Select(reader => cancellationToken.Register(reader.Interrupt)).ToArray();
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var result = new McpCore(
+                        sessions, artifactManifestIdentity, _corpusMounted, null,
+                        selection.Total, _publicBase, _hybridStatuses).CallToolCore(name, a);
+                    cancellationToken.ThrowIfCancellationRequested();
+                    return result;
+                }
+                catch (Exception) when (cancellationToken.IsCancellationRequested)
+                {
+                    throw new OperationCanceledException(cancellationToken);
+                }
+                finally
+                {
+                    foreach (var registration in registrations) registration.Dispose();
+                    foreach (var session in sessions.Values) session.Dispose();
+                    foreach (var semaphore in held) semaphore.Release();
+                }
+            }, CancellationToken.None);
+
+            // SQLite is interrupted cooperatively. An encoder cannot be pre-empted safely, so the
+            // timed-out caller leaves that one bounded worker holding its selected-reader semaphores
+            // until it exits. No request keeps waiting for it and no second call can touch the same
+            // reader concurrently; calls pinned to different publishers can still run in parallel.
+            var completed = await execution.WaitAsync(cancellationToken);
+            McpTelemetry.SetResultTags(activity, completed);
+            return completed;
+        }
+        catch (OperationCanceledException)
+        {
+            McpTelemetry.SetFailure(activity, "cancelled");
+            throw;
+        }
+        catch (Exception error) when (error is ArgumentException or InvalidDataException)
+        {
+            McpTelemetry.SetFailure(activity, "invalid_request");
+            throw;
         }
         catch
         {
-            foreach (var semaphore in held) semaphore.Release();
+            McpTelemetry.SetFailure(activity, "failed");
             throw;
         }
-        var execution = Task.Run(() =>
-        {
-            var sessions = new Dictionary<string, LexIndexReader>(StringComparer.Ordinal);
-            CancellationTokenRegistration[] registrations = [];
-            try
-            {
-                // Citation targets can cross publisher boundaries. Give the execution core
-                // isolated, read-only sessions for every mounted publisher so forward citation
-                // canonicalisation can prove that the target is actually held. The callback
-                // still reports only publishers selected for the requested operation.
-                var selectedPublishers = selected
-                    .Select(item => item.Publisher)
-                    .ToHashSet(StringComparer.Ordinal);
-                foreach (var item in readers.OrderBy(item => item.Key, StringComparer.Ordinal))
-                {
-                    sessions.Add(item.Key, item.Value.CreateIsolatedSession());
-                    if (selectedPublishers.Contains(item.Key))
-                        _sessionOpened?.Invoke(item.Key);
-                }
-                registrations = sessions.Values
-                    .Select(reader => cancellationToken.Register(reader.Interrupt)).ToArray();
-                cancellationToken.ThrowIfCancellationRequested();
-                var result = new McpCore(
-                    sessions, artifactManifestIdentity, _corpusMounted, null,
-                    selection.Total, _publicBase, _hybridStatuses).CallToolCore(name, a);
-                cancellationToken.ThrowIfCancellationRequested();
-                return result;
-            }
-            catch (Exception) when (cancellationToken.IsCancellationRequested)
-            {
-                throw new OperationCanceledException(cancellationToken);
-            }
-            finally
-            {
-                foreach (var registration in registrations) registration.Dispose();
-                foreach (var session in sessions.Values) session.Dispose();
-                foreach (var semaphore in held) semaphore.Release();
-            }
-        }, CancellationToken.None);
-
-        // SQLite is interrupted cooperatively. An encoder cannot be pre-empted safely, so the
-        // timed-out caller leaves that one bounded worker holding its selected-reader semaphores
-        // until it exits. No request keeps waiting for it and no second call can touch the same
-        // reader concurrently; calls pinned to different publishers can still run in parallel.
-        return await execution.WaitAsync(cancellationToken);
     }
 
     private (

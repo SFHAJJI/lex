@@ -6,6 +6,7 @@ obj/
 deploy/*
 !deploy/fetch-indexes.sh
 !deploy/publish-assistant-evaluation.ps1
+!deploy/telemetry-policy.json
 !deploy/trusted-artifact-roots.json
 !deploy/trusted-evaluation-review-roots.json
 !deploy/embedding-model/

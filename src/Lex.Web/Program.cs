@@ -1,9 +1,10 @@
-using Azure.Monitor.OpenTelemetry.AspNetCore;
+using Azure.Monitor.OpenTelemetry.Exporter;
 using Lex.Ask;
 using Lex.Evaluation;
 using Lex.Mcp;
 using Lex.Web;
 using Microsoft.AspNetCore.ResponseCompression;
+using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 
 // Lex.Web: the composition root, and nothing else.
@@ -64,23 +65,28 @@ builder.Services.AddMcpServer(McpSdkBridge.Configure)
     .WithLexTools();
 builder.Services.AddResponseCompression(options => options.EnableForHttps = true);
 
-// Foundry-hybrid observability (D45 posture: keep the loop, adopt the platform's tracing):
-// OpenTelemetry via the Azure Monitor distro, exporting to the App Insights resource a Foundry
-// project can attach to. Enabled only when configured; the app is fully functional without it.
+// Trace-only, allowlisted observability. Enabled only when configured; the app is fully
+// functional without it.
 if (!string.IsNullOrWhiteSpace(options.AppInsightsConnectionString))
 {
-    // The Azure Monitor distro collects URL queries unless these switches are explicitly false.
-    // Search terms are user text, so redact both inbound and outbound queries before the
-    // instrumentation is constructed, then scrub address attributes again at the export edge.
-    Environment.SetEnvironmentVariable(
-        "OTEL_DOTNET_EXPERIMENTAL_ASPNETCORE_DISABLE_URL_QUERY_REDACTION", "false");
-    Environment.SetEnvironmentVariable(
-        "OTEL_DOTNET_EXPERIMENTAL_HTTPCLIENT_DISABLE_URL_QUERY_REDACTION", "false");
     builder.Services.AddOpenTelemetry()
         .WithTracing(b => b
+            .SetSampler(LexTraceConfiguration.TraceSampler)
+            .SetResourceBuilder(ResourceBuilder.CreateEmpty().AddService("lex-web"))
+            .AddSource(LexRequestTelemetry.ActivitySourceName)
+            .AddSource(McpCore.ActivitySourceName)
             .AddSource(AskService.ActivitySourceName)
-            .AddProcessor(new PrivacyActivityProcessor()))
-        .UseAzureMonitor();
+            .AddProcessor(new PrivacyActivityProcessor())
+            .AddAzureMonitorTraceExporter(exporter =>
+            {
+                exporter.ConnectionString = options.AppInsightsConnectionString;
+                exporter.EnableLiveMetrics = false;
+                exporter.EnableStandardMetrics = false;
+                exporter.EnablePerformanceCounters = false;
+                exporter.DisableOfflineStorage = true;
+                exporter.TracesPerSecond = null;
+                exporter.SamplingRatio = 1.0F;
+            }));
 }
 
 var app = builder.Build();
@@ -93,11 +99,12 @@ app.Use(async (context, next) =>
     headers.StrictTransportSecurity = "max-age=10886400; includeSubDomains; preload";
     headers.XContentTypeOptions = "nosniff";
     headers.XFrameOptions = "DENY";
-    headers["Referrer-Policy"] = "same-origin";
+    headers["Referrer-Policy"] = "no-referrer";
     headers.Append("Permissions-Policy", "camera=(), geolocation=(), microphone=(), payment=(), usb=()");
     await next();
 });
 app.UseResponseCompression();
+app.UseLexRequestTelemetry();
 app.UseMcpRequestBoundaries();
 app.UseStaticFiles(new StaticFileOptions
 {

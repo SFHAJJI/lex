@@ -685,8 +685,7 @@ public sealed class AskService
     }
 
     /// <summary>OTel source for the agent loop; registered by the host when tracing is configured.</summary>
-    public const string ActivitySourceName = "Lex.Ask";
-    private static readonly System.Diagnostics.ActivitySource Activity = new(ActivitySourceName);
+    public const string ActivitySourceName = AskTelemetry.ActivitySourceName;
 
     private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(90) };
     private readonly string? _endpoint = Environment.GetEnvironmentVariable("AOAI_ENDPOINT")?.TrimEnd('/');
@@ -2556,25 +2555,36 @@ public sealed class AskService
             OperationPlan plan;
             ModelTokenUsage planningUsage;
             bool plannerRepaired;
-            if (subject.RequestedTimelineWorkQuery is { } workQuery)
+            using var planActivity = AskTelemetry.StartPlan();
+            try
             {
-                plan = OperationPlan.Create(requestId, requestLocale,
-                [
-                    RequestedOperation.CreatePlanned(
-                        $"{requestId}:op-1", 0, "timeline",
-                        new JsonObject { ["work_query"] = workQuery }),
-                ]);
-                planningUsage = default;
-                plannerRepaired = false;
+                if (subject.RequestedTimelineWorkQuery is { } workQuery)
+                {
+                    plan = OperationPlan.Create(requestId, requestLocale,
+                    [
+                        RequestedOperation.CreatePlanned(
+                            $"{requestId}:op-1", 0, "timeline",
+                            new JsonObject { ["work_query"] = workQuery }),
+                    ]);
+                    planningUsage = default;
+                    plannerRepaired = false;
+                }
+                else
+                {
+                    (plan, planningUsage, plannerRepaired) = await PlanOperationsAsync(
+                        history, host, requestId, requestLocale, rawUserQuery,
+                        subject.Authority, planner.Token);
+                }
+                planningWatch.Stop();
+                plan = AuthorizeInstants(plan, rawUserQuery, requestLocale);
+                AskTelemetry.SetPlanTags(planActivity, plan);
             }
-            else
+            catch
             {
-                (plan, planningUsage, plannerRepaired) = await PlanOperationsAsync(
-                    history, host, requestId, requestLocale, rawUserQuery,
-                    subject.Authority, planner.Token);
+                AskTelemetry.SetFailure(planActivity);
+                throw;
             }
-            planningWatch.Stop();
-            plan = AuthorizeInstants(plan, rawUserQuery, requestLocale);
+            planActivity?.Stop();
             if (progress?.Phase is not null)
                 await NotifyProgress(() => progress.Phase(
                     new PhaseUpdate(AskPhase.Planning, AskPhaseStatus.Completed), firstResult.Token));
@@ -3080,15 +3090,11 @@ public sealed class AskService
                 JsonNode result;
                 string status;
                 executedArguments[operation.UserOrder] = arguments.DeepClone().AsObject();
-                using var span = Activity.StartActivity("legal-operation");
-                span?.SetTag("lex.operation.id", operation.OperationId);
-                span?.SetTag("gen_ai.tool.name", operation.Tool);
                 var mcpWatch = Stopwatch.StartNew();
                 result = await _legalTool(operation.Tool, arguments, ct);
                 mcpWatch.Stop();
                 mcpMilliseconds += mcpWatch.Elapsed.TotalMilliseconds;
                 status = LegalOperationPolicy.StatusForResult(result);
-                span?.SetTag("lex.status", status);
 
                 var effect = UiMapper.From(operation, arguments, result, plan.Locale);
                 effects[operation.UserOrder] = effect;

@@ -27,9 +27,27 @@ data "azurerm_application_insights" "web" {
 locals {
   container_app_id             = "${data.azurerm_resource_group.platform.id}/providers/Microsoft.App/containerApps/${var.container_app_name}"
   container_app_environment_id = "${data.azurerm_resource_group.platform.id}/providers/Microsoft.App/managedEnvironments/${var.container_app_environment_name}"
+  telemetry_policy             = jsondecode(file("${path.module}/../deploy/telemetry-policy.json"))
+  telemetry_container_apps_workspace = one([
+    for workspace in local.telemetry_policy.workspaces : workspace
+    if workspace.purpose == "container_apps"
+  ])
+  telemetry_application_insights_workspace = one([
+    for workspace in local.telemetry_policy.workspaces : workspace
+    if workspace.purpose == "application_insights"
+  ])
+  telemetry_container_apps_workspace_id       = "/subscriptions/${data.azurerm_client_config.current.subscription_id}/resourceGroups/${local.telemetry_container_apps_workspace.resource_group_name}/providers/Microsoft.OperationalInsights/workspaces/${local.telemetry_container_apps_workspace.name}"
+  telemetry_application_insights_workspace_id = "/subscriptions/${data.azurerm_client_config.current.subscription_id}/resourceGroups/${local.telemetry_application_insights_workspace.resource_group_name}/providers/Microsoft.OperationalInsights/workspaces/${local.telemetry_application_insights_workspace.name}"
   tags = {
     app       = "lex"
     managedBy = "terraform"
+  }
+}
+
+check "telemetry_application_insights_workspace_pin" {
+  assert {
+    condition     = lower(data.azurerm_application_insights.web.workspace_id) == lower(local.telemetry_application_insights_workspace_id)
+    error_message = "Application Insights is not linked to the exact source-controlled workspace."
   }
 }
 
@@ -125,12 +143,15 @@ resource "azurerm_role_assignment" "deploy_runtime_identity" {
 }
 
 resource "azurerm_role_definition" "deploy_application_insights_metadata_reader" {
-  name        = "Lex Application Insights Metadata Reader"
+  name        = "Lex Application Insights Query Reader"
   scope       = data.azurerm_resource_group.platform.id
-  description = "Lets the Lex deployment identity resolve only the published Application Insights component."
+  description = "Lets the Lex deployment identity resolve and count-query only the published Application Insights component."
 
   permissions {
-    actions = ["Microsoft.Insights/components/read"]
+    actions = [
+      "Microsoft.Insights/components/read",
+      "Microsoft.Insights/components/query/read",
+    ]
   }
 
   assignable_scopes = [data.azurerm_resource_group.platform.id]
@@ -158,8 +179,91 @@ resource "azurerm_role_definition" "deploy_log_analytics_table_policy_reader" {
 }
 
 resource "azurerm_role_assignment" "deploy_log_analytics_table_reader" {
-  scope              = data.azurerm_application_insights.web.workspace_id
+  scope              = local.telemetry_application_insights_workspace_id
   role_definition_id = azurerm_role_definition.deploy_log_analytics_table_policy_reader.role_definition_resource_id
+  principal_id       = azurerm_user_assigned_identity.deploy.principal_id
+}
+
+resource "azurerm_role_definition" "deploy_telemetry_configuration_reader" {
+  name        = "Lex Telemetry Configuration Reader"
+  scope       = data.azurerm_resource_group.platform.id
+  description = "Lets the Lex deployment identity verify the exact telemetry configuration without changing it."
+
+  permissions {
+    actions = [
+      "Microsoft.App/managedEnvironments/read",
+      "Microsoft.App/containerApps/read",
+      "Microsoft.Insights/components/read",
+      "Microsoft.Insights/diagnosticSettings/read",
+      "Microsoft.Insights/diagnosticSettingsCategories/read",
+    ]
+  }
+
+  assignable_scopes = [data.azurerm_resource_group.platform.id]
+}
+
+resource "azurerm_role_assignment" "deploy_telemetry_environment_reader" {
+  scope              = local.container_app_environment_id
+  role_definition_id = azurerm_role_definition.deploy_telemetry_configuration_reader.role_definition_resource_id
+  principal_id       = azurerm_user_assigned_identity.deploy.principal_id
+}
+
+resource "azurerm_role_assignment" "deploy_telemetry_container_app_reader" {
+  scope              = local.container_app_id
+  role_definition_id = azurerm_role_definition.deploy_telemetry_configuration_reader.role_definition_resource_id
+  principal_id       = azurerm_user_assigned_identity.deploy.principal_id
+}
+
+resource "azurerm_role_assignment" "deploy_telemetry_application_insights_reader" {
+  scope              = data.azurerm_application_insights.web.id
+  role_definition_id = azurerm_role_definition.deploy_telemetry_configuration_reader.role_definition_resource_id
+  principal_id       = azurerm_user_assigned_identity.deploy.principal_id
+}
+
+resource "azurerm_role_definition" "deploy_telemetry_workspace_reader" {
+  name        = "Lex Telemetry Workspace Metadata Reader"
+  scope       = "/subscriptions/${var.subscription_id}"
+  description = "Lets the Lex deployment identity verify the exact telemetry workspace metadata."
+
+  permissions {
+    actions = ["Microsoft.OperationalInsights/workspaces/read"]
+  }
+
+  assignable_scopes = ["/subscriptions/${var.subscription_id}"]
+}
+
+resource "azurerm_role_assignment" "deploy_telemetry_container_apps_workspace_reader" {
+  scope              = local.telemetry_container_apps_workspace_id
+  role_definition_id = azurerm_role_definition.deploy_telemetry_workspace_reader.role_definition_resource_id
+  principal_id       = azurerm_user_assigned_identity.deploy.principal_id
+}
+
+resource "azurerm_role_assignment" "deploy_telemetry_application_insights_workspace_reader" {
+  scope              = local.telemetry_application_insights_workspace_id
+  role_definition_id = azurerm_role_definition.deploy_telemetry_workspace_reader.role_definition_resource_id
+  principal_id       = azurerm_user_assigned_identity.deploy.principal_id
+}
+
+resource "azurerm_role_definition" "deploy_container_apps_privacy_query_reader" {
+  name        = "Lex Container Apps Privacy Query Reader"
+  scope       = "/subscriptions/${var.subscription_id}"
+  description = "Lets the Lex deployment identity run count-only privacy checks over the three Container Apps log tables."
+
+  permissions {
+    actions = [
+      "Microsoft.OperationalInsights/workspaces/query/read",
+      "Microsoft.OperationalInsights/workspaces/query/ContainerAppHTTPLogs/read",
+      "Microsoft.OperationalInsights/workspaces/query/ContainerAppSystemLogs/read",
+      "Microsoft.OperationalInsights/workspaces/query/ContainerAppConsoleLogs/read",
+    ]
+  }
+
+  assignable_scopes = ["/subscriptions/${var.subscription_id}"]
+}
+
+resource "azurerm_role_assignment" "deploy_container_apps_privacy_query_reader" {
+  scope              = local.telemetry_container_apps_workspace_id
+  role_definition_id = azurerm_role_definition.deploy_container_apps_privacy_query_reader.role_definition_resource_id
   principal_id       = azurerm_user_assigned_identity.deploy.principal_id
 }
 
