@@ -287,6 +287,23 @@ export function fuzzyModeFor(
   return exactQuery !== undefined && exactQuery === query.trim() ? "off" : "auto";
 }
 
+/**
+ * What the stored override becomes once `submittedQuery` is the question on screen.
+ *
+ * The override is cleared on a change of question, not merely ignored while a different one is
+ * displayed. A dormant override is not a reset: returning to the earlier question later would
+ * silently reapply a narrowing the reader authorised once, on a visit they never authorised.
+ *
+ * This is deliberately the ONE transition the effect in `Search.tsx` performs, exported so a
+ * test drives the shipped rule instead of a copy of it. A test that reimplements the transition
+ * stays green when the effect is deleted, which makes it a description of the intent rather
+ * than a proof of the behaviour.
+ */
+export function nextExactQuery(
+  current: string | undefined, submittedQuery: string): string | undefined {
+  return current !== undefined && current !== submittedQuery.trim() ? undefined : current;
+}
+
 export function populationCoverageLabel(
   works: number | undefined,
   basis: string | undefined,

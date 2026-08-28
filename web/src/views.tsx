@@ -5,7 +5,7 @@ import {
 } from "./api";
 import { facetLabel, jurisdictionLabel } from "./facets";
 import { indexFreshnessLabel, type EnvelopeStripRow } from "./envelopeStrip";
-import { populationExclusions, queriedPopulationTotal, unqueriedPopulations,
+import { populationExclusions, queriedDenominator, unqueriedPopulations,
   type PublisherPopulation } from "./searchPopulation";
 import { publisherOf, workSlug } from "./state";
 import { shorten } from "./pickers";
@@ -527,17 +527,25 @@ export function Ranking({ rows, worksChanged, newVersions, populationWorks, know
  */
 export function PopulationFooter({ rows }: { rows: PublisherPopulation[] }) {
   if (rows.length === 0) return null;
-  const searched = queriedPopulationTotal(rows);
+  // Three states, not two. A missing total means either that no publisher ran the query or
+  // that the disclosed scopes cannot be added into one honest number, and the sentence for
+  // one is false for the other. Reading the number alone loses that distinction.
+  const denominator = queriedDenominator(rows);
   const unqueried = unqueriedPopulations(rows);
   const exclusions = populationExclusions(rows);
   return (
     <div className="population-footer" data-testid="population-footer">
-      {searched === undefined
+      {denominator.kind === "total"
+        ? <p data-testid="population-searched">
+            Searched {denominator.works.toLocaleString()} works in the selected scope.
+          </p>
+        : denominator.kind === "none_ran"
         ? <p data-testid="population-searched">
             No publisher ran this query, so no works were searched.
           </p>
         : <p data-testid="population-searched">
-            Searched {searched.toLocaleString()} works in the selected scope.
+            The publishers that ran this query disclosed scopes that cannot be added into one
+            number, so no total is shown.
           </p>}
       {unqueried.map((r) => (
         <p key={r.publisher ?? "unnamed"} className="sub" data-testid="population-not-queried">

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { safeHttpsUrl, tool } from "./api";
 import { facetLabel as label, jurisdictionForPublisher, jurisdictionLabel } from "./facets";
 import {
@@ -9,8 +9,8 @@ import {
 } from "./publisherMetadata";
 import { ScopeFilters } from "./ScopeFilters";
 import { envelopeStripRows, type EnvelopeStripRow } from "./envelopeStrip";
-import { searchPopulations, type PublisherPopulation } from "./searchPopulation";
-import { fuzzyModeFor } from "./api";
+import { normalizeSearchResponse, type PublisherPopulation } from "./searchPopulation";
+import { fuzzyModeFor, nextExactQuery } from "./api";
 import { classifyEnvelope, clearedSearchResults, LIMITATION_EXPLANATION, projectSearchResponse,
   searchEmptyPresentation, searchResultsFromError,
   type SearchResultsState } from "./limitations";
@@ -92,6 +92,25 @@ const DOORS: Door[] = (() => {
 
 const INITIAL_ARTICLES = 8;
 
+/**
+ * What to say when a response was narrowed. Named publishers are named, because a reader who
+ * knows which publisher is missing can judge the gap; unattributable entries can only be counted,
+ * because there is nobody to name.
+ */
+function withholdingSentence(
+  withheld: { publishers: string[]; unattributed: number }): string {
+  const named = withheld.publishers.length > 0
+    ? `Results from ${withheld.publishers.join(", ")} are not shown, because the scope figure `
+      + "reported for this query did not hold together and those results cannot be checked "
+      + "against it."
+    : "";
+  const unnamed = withheld.unattributed > 0
+    ? `${withheld.unattributed} further result set${withheld.unattributed === 1 ? " was" : "s were"}`
+      + " not shown, because they arrived without a publisher to attribute them to."
+    : "";
+  return [named, unnamed].filter((part) => part.length > 0).join(" ");
+}
+
 export default function Search(p: SearchProps) {
   const [text, setText] = useState(p.state.q ?? "");
   const [results, setResults] =
@@ -103,12 +122,35 @@ export default function Search(p: SearchProps) {
   // footer can never describe a different query than the one on screen.
   const [populations, setPopulations] = useState<PublisherPopulation[]>([]);
   /**
+   * What this response could not attribute. A publisher whose population authority is void
+   * loses its rows as well as its denominator, and rows the reader cannot check against a
+   * denominator are the exact claim this lane exists to stop. Withholding them silently would
+   * trade one wrong answer for a quieter one, so it is disclosed and it suppresses the
+   * confident empty sentence, which would otherwise report "nothing matched" for a response
+   * that was cut down.
+   */
+  const [withheld, setWithheld] =
+    useState<{ publishers: string[]; unattributed: number }>();
+  /**
    * Trust rule 9: a reader told their query was rewritten must be able to undo it. The override
    * stores the exact query it was chosen for, so it can never silently apply to a different one.
    * Typing a new question restores the default rather than carrying a decision the reader made
    * about words they are no longer searching for.
    */
   const [exactQuery, setExactQuery] = useState<string>();
+
+  /**
+   * Every piece of state derived from a response, cleared together. Rows, limitations, the
+   * denominator and the index identity all describe one query; clearing them in separate places
+   * is how a screen ends up showing three different answers at once.
+   */
+  const clearResponseState = useCallback(() => {
+    setResults(clearedSearchResults);
+    setPopulations([]);
+    setWithheld(undefined);
+    p.onEnvelopes([]);
+  }, [p.onEnvelopes]);
+
 
 
   const [articleLimit, setArticleLimit] = useState(INITIAL_ARTICLES);
@@ -129,6 +171,14 @@ export default function Search(p: SearchProps) {
   // Bound to the exact submitted query. Any other query resolves to the default, so the override
   // cannot outlive the words it was chosen for.
   const fuzzyMode = fuzzyModeFor(exactQuery, q);
+  /**
+   * The override is cleared when the question changes, not merely ignored. Leaving it stored made
+   * it dormant rather than reset: returning to the earlier question later would silently reapply
+   * a narrowing the reader never asked for a second time. Codex found this at exact head.
+   */
+  useEffect(() => {
+    setExactQuery((current) => nextExactQuery(current, q));
+  }, [q]);
   const asOf = p.state.asOf;
   const retrieval = p.state.retrieval ?? "keyword";
   const jurisdiction = p.state.jurisdiction ?? "";
@@ -146,18 +196,12 @@ export default function Search(p: SearchProps) {
     : undefined;
   const metadataIdentifier = metadataArguments?.publisher_metadata_identifier;
 
-  // One cleared tuple for the empty-query and request-start transitions (review O2): a state
-  // added to one and forgotten in the other is exactly how a stale limitation strands on an
-  // empty workspace.
-  const applyCleared = () =>
-    setResults(clearedSearchResults<WorkHit, ArticleHit>());
-
   useEffect(() => {
-    if (!q.trim()) { applyCleared(); return; }
+    if (!q.trim()) { clearResponseState(); return; }
     let live = true;
     setArticleLimit(INITIAL_ARTICLES);
     setBusy(true);
-    applyCleared();
+    clearResponseState();
     tool<any>("search", { query: q.trim(), limit: 40, time_scope: "as_of", as_of: asOf ?? p.today,
                           retrieval_mode: retrieval, fuzzy: fuzzyMode,
                           ...(jurisdiction ? { jurisdiction } : {}),
@@ -170,11 +214,21 @@ export default function Search(p: SearchProps) {
       .then((res) => {
         if (!live) return;
         p.onEnvelopes(envelopeStripRows(res));
-        setPopulations(searchPopulations(res, classifyEnvelope));
+        // One normalized set feeds rows, the denominator and absence authority. Two passes
+        // over two sets is how a footer ends up describing a different population than the
+        // rows above it, and how rows survive a publisher whose denominator was refused.
+        const answer = normalizeSearchResponse(res, classifyEnvelope);
+        setPopulations(answer.populations);
+        setWithheld(answer.complete ? undefined : {
+          publishers: answer.withheldPublishers,
+          unattributed: answer.unattributedEntries,
+        });
         // Round 4 (O3/O4): the ONE production projector partitions the response closed,
         // derives mode and expansion facts from the validated ran envelopes only, and types
         // the absence state; the callback below is presentation mapping, not decision.
-        setResults(projectSearchResponse<WorkHit, ArticleHit>(res, (ranEnvelopes) => {
+        setResults(projectSearchResponse<WorkHit, ArticleHit>(
+          answer.complete ? answer.entries : answer.entriesAfterWithholding,
+          (ranEnvelopes) => {
           const hits = fusePublisherHits<any>(ranEnvelopes as any[]);
           // The same hits answer two different questions, so they are split rather than
           // ranked together: "which law is this" and "where is this said".
@@ -216,7 +270,7 @@ export default function Search(p: SearchProps) {
       .finally(() => { if (live) setBusy(false); });
     return () => { live = false; };
   }, [q, asOf, retrieval, jurisdiction, hierarchy, domain, sourceClass, actForm, bindingStatus,
-      language, metadataIdentifier, fuzzyMode]);
+      language, metadataIdentifier, fuzzyMode, clearResponseState]);
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -333,9 +387,7 @@ export default function Search(p: SearchProps) {
                         // Clear before the rerun, not after it: rows, limitations and the
                         // denominator all describe the relaxed query, and leaving them on screen
                         // during the refetch shows results attributed to a query no longer running.
-                        setResults(clearedSearchResults);
-                        setPopulations([]);
-                        p.onEnvelopes([]);
+                        clearResponseState();
                         setExactQuery(q.trim());
                       }}>
                 Search these exact words instead
@@ -346,7 +398,14 @@ export default function Search(p: SearchProps) {
             <p className="sub expansion" data-testid="exact-words-notice">
               Searching these exact words. No spelling fallback was applied.{" "}
               <button type="button" className="linklike" data-testid="relaxation-restore"
-                      onClick={() => setExactQuery(undefined)}>
+                      onClick={() => {
+                        // Both directions of this control clear, not just one. Restoring the
+                        // fallback reruns the query exactly as reverting to exact words does,
+                        // so leaving the exact-words rows and denominator on screen during the
+                        // rerun would attribute them to a search that is no longer running.
+                        clearResponseState();
+                        setExactQuery(undefined);
+                      }}>
                 Allow spelling fallback again
               </button>
             </p>
@@ -420,10 +479,22 @@ export default function Search(p: SearchProps) {
             </button>
           ) : null}
 
-          {!busy && !error && works.length === 0 && articles.length === 0 ? (
+          {!busy && !error && withheld !== undefined ? (
+            // Disclosed, never silent. A publisher whose population authority is void loses its
+            // rows along with its denominator, so this response is narrower than the scope the
+            // reader asked for, and nothing left in it can support an absence claim.
+            <div className="sub expansion" role="note" data-testid="withholding-notice">
+              <p>{withholdingSentence(withheld)}</p>
+            </div>
+          ) : null}
+
+          {!busy && !error && withheld === undefined
+           && works.length === 0 && articles.length === 0 ? (
             // The empty sentence is a typed truth claim scoped by searchEmptyPresentation
             // (review round 2, O1): corpus-wide only when every publisher ran; scoped to the
-            // publishers that ran when one refused; coverage-only when all refused.
+            // publishers that ran when one refused; coverage-only when all refused. It is
+            // withdrawn entirely when anything was withheld, because a narrowed response cannot
+            // support a claim about the scope the reader actually asked about.
             <div className="empty" data-search-empty={emptyPresentation.kind}>
               <p>{emptyPresentation.sentence}</p>
               {allRefused ? (

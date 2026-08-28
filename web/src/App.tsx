@@ -153,6 +153,9 @@ export default function App() {
   // reader say it once, and lets the chips stop offering text that does not exist.
   useEffect(() => {
     chosenAnchor.current = false;
+    // The index identity belongs to the response that produced the view. Opening a law after a
+    // search would otherwise leave the search's strip above a law it never described.
+    setStrip([]);
     if (!s.work) { setVersions([]); setLangs([]); setServedLang(undefined); setTimelineSemantics(undefined); setHeld(undefined); return; }
     // Never carry one publisher's time semantics across a work switch while the next timeline
     // is loading. The work-id fallback remains correct for currently mounted legacy artifacts.
@@ -262,6 +265,11 @@ export default function App() {
   useEffect(() => {
     if (s.work || !s.from || !s.until) return;
     let live = true;
+    // Before the request, not after it. The previous window's ranking and index identity
+    // describe a period the reader has already left, and leaving the rows up also kept
+    // ReportSkeleton unreachable, so the stale table was the entire loading state.
+    setUi(undefined);
+    setStrip([]);
     tool<any>("changes_in_period", {
       from_date: s.from, to_date: s.until, order: s.order ?? "by_churn",
       source_class: s.sourceClass ?? "!RECUEIL,!CODE_RECUEIL",
@@ -353,6 +361,10 @@ export default function App() {
     // an empty search means once a date is set.
     if (s.work || s.q || !s.asOf || s.space === "time") return;
     let live = true;
+    // Before the request. A reader who changes the date must never see the previous date's
+    // list, or its index identity, presented as the answer for the new one.
+    setUi(undefined);
+    setStrip([]);
     tool<any>("in_force_on", {
       date: s.asOf, limit: (page + 1) * PAGE, offset: 0,
       ...(s.jurisdiction ? { jurisdiction: s.jurisdiction } : {}),
@@ -535,6 +547,9 @@ export default function App() {
 
   const clearAssistantView = useCallback(() => {
     setUi(undefined);
+    // The strip describes the response that produced the view being cleared. Leaving it up
+    // across a route or space change states an index identity for an answer that is gone.
+    setStrip([]);
     setOperationViews([]);
     pendingPresentations.current.clear();
     setAssistantPresentationId(undefined);
