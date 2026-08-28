@@ -168,6 +168,41 @@ public sealed class TrustNoticeTests : IDisposable
         Assert.Null(TrustNotices.FindPreApplicationFact(reader, doc!));
     }
 
+    [Fact]
+    public async Task Unknown_work_page_offers_nearest_held_candidates_with_frozen_copy()
+    {
+        using var site = new NoticeSite(Path.Combine(_root, "candidates"), includeAct: true);
+        // A near-miss slug: one ordinal off the held loi-2020-12-19-a1039.
+        var response = await site.Client.GetAsync("/lu-legilux/loi-2020-12-19-a1040/2024-01-01");
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        var page = await response.Content.ReadAsStringAsync();
+
+        Assert.Contains("Instrument not found in held records", page, StringComparison.Ordinal);
+        Assert.Contains("This is not evidence that the instrument or law does not exist",
+            page, StringComparison.Ordinal);
+        Assert.Contains("Possible held records", page, StringComparison.Ordinal);
+        Assert.Contains("/lu-legilux/loi-2020-12-19-a1039", page, StringComparison.Ordinal);
+        Assert.Contains("https://legilux.public.lu", page, StringComparison.Ordinal);
+        Assert.Contains("unknown_work", page, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Unknown_work_page_keeps_the_frozen_copy_without_candidates()
+    {
+        using var site = new NoticeSite(Path.Combine(_root, "no-candidates"), includeAct: false);
+        var response = await site.Client.GetAsync(
+            "/lu-legilux/zzz-completely-unrelated-9999/2024-01-01");
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        var page = await response.Content.ReadAsStringAsync();
+
+        // Missing evidence never becomes prose: no candidate list is offered, the honest
+        // boundary sentence and both search actions remain.
+        Assert.Contains("Instrument not found in held records", page, StringComparison.Ordinal);
+        Assert.DoesNotContain("Possible held records", page, StringComparison.Ordinal);
+        Assert.Contains("This is not evidence that the instrument or law does not exist",
+            page, StringComparison.Ordinal);
+    }
+
     private static string ExtractNotice(string page)
     {
         var start = page.IndexOf(DerogationHeading, StringComparison.Ordinal);
