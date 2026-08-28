@@ -69,6 +69,19 @@ export default function App() {
    * start of each governed request. Every completion compares the generation it captured.
    */
   const governedGeneration = useRef(0);
+  /**
+   * The accepted view already applied, so one turn applies once.
+   *
+   * The assistant delivers a turn twice, once as the streamed operation result and once in the
+   * final reply, and both run through the callback captured when the reader asked. Applying the
+   * same accepted view a second time rewrites state that no effect will re-run to repair, since
+   * the request tuple did not change between the two applies.
+   *
+   * Written and read by the same function on purpose. A ref one function sets and another
+   * consumes is not stale-closure safe, which is exactly how the one-shot design considered
+   * here would have stranded on its first turn.
+   */
+  const appliedReply = useRef<string>();
   const [operationViews, setOperationViews] = useState<OperationReply[]>([]);
   const [assistantPresentationId, setAssistantPresentationId] = useState<string>();
   const pendingPresentations = useRef(new Set<string>());
@@ -527,6 +540,13 @@ export default function App() {
   }, [s.work, s.anchor]);
 
   const applyAssistantReply = useCallback((r: AskReply) => {
+      // Operation ids as well as the view, so two identical questions stay distinguishable.
+      // If the two payloads ever serialise differently this fails open to applying twice,
+      // which is the behaviour it replaces rather than a new one.
+      const identity = JSON.stringify(
+        [r.operations?.map((operation) => operation.operation_id) ?? [], r.ui ?? null]);
+      if (identity === appliedReply.current) return;
+      appliedReply.current = identity;
       // An accepted view is a new answer on this route, so anything still outstanding from
       // before it is no longer allowed to write. The request tuple may not have changed, so
       // nothing else would invalidate them.
