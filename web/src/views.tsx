@@ -17,7 +17,7 @@ import {
 import { extractionDisclosure } from "./extractionProfile";
 import { HISTORICAL_DENSITY, historicalDensityApplies } from "./notices";
 import { gapBadgeStatus, LIMITATION_EXPLANATION, limitationsFromEffect,
-  scopedLimitations, type PublisherLimitation } from "./limitations";
+  PARTIAL_RESPONSE_SENTENCE, scopedLimitations, type PublisherLimitation } from "./limitations";
 
 const permalink = (work: string, date: string, anchor?: string) =>
   `/${publisherOf(work)}/${workSlug(work)}/${date}${anchor ? `#${anchor}` : ""}`;
@@ -638,6 +638,22 @@ export const hasView = (ui?: UiEffect) =>
  * did not run the query and for which governed filters. Input is validated fail closed by the
  * caller or here; malformed entries never render and never suppress the primary view.
  */
+/**
+ * Disclosed beside verified rows when a sibling publisher response could not be read
+ * (PR293 review, O1). Round 6 computed this state and rendered nothing, so an incomplete
+ * answer presented itself as the complete holding.
+ */
+export function PartialResponseNotice({ partial }: { partial?: boolean }) {
+  if (!partial) return null;
+  return (
+    <div className="trust-notice" role="note" data-testid="partial-response-notice"
+         aria-label="Incomplete response">
+      <b>These results are incomplete</b>
+      <p className="sub">{PARTIAL_RESPONSE_SENTENCE}</p>
+    </div>
+  );
+}
+
 export function PublisherLimitations({ items, tool }: {
   items: PublisherLimitation[];
   /**

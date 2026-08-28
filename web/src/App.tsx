@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { compoundOperationViews, first, tool, type AskReply, type OperationReply,
   type ProvisionItem, type UiEffect } from "./api";
 import { publisherOf, useWorkspace, workSlug, type Space, type State } from "./state";
-import { CitedBy, CoveragePanel, Empty, EvidenceCoordinates, Gap, InForce, Provision, PublisherLimitations, Ranking, Timeline,
+import { CitedBy, CoveragePanel, Empty, EvidenceCoordinates, Gap, InForce, PartialResponseNotice, Provision, PublisherLimitations, Ranking, Timeline,
   VerificationPanel, VersionRail, hasView } from "./views";
 import { limitationsFromEffect } from "./limitations";
 import { Compare } from "./Compare";
@@ -15,8 +15,8 @@ import Coach, { COACH_KEY } from "./Coach";
 import { CompareSkeleton, LawSkeleton, ReportSkeleton } from "./Skeleton";
 import { jurisdictionForPublisher, jurisdictionLabel } from "./facets";
 import { latestStateLabel, temporalStatusLabel } from "./temporal";
-import { INCOMPLETE_RESPONSE_SENTENCE, LIMITATION_EXPLANATION, MIXED_ZERO_SENTENCES,
-  NO_CORPUS_SENTENCE, projectGovernedEmptiness } from "./limitations";
+import { AMBIGUOUS_ONLY_SENTENCE, INCOMPLETE_RESPONSE_SENTENCE, LIMITATION_EXPLANATION,
+  MIXED_ZERO_SENTENCES, NO_CORPUS_SENTENCE, projectGovernedEmptiness } from "./limitations";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -305,7 +305,8 @@ export default function App() {
                          known_exclusions: [...new Set(ran.map(e => e?.population?.known_exclusions)
                            .filter(Boolean))] as string[],
                          rows: visibleRows },
-              publisher_limitations: partition.limitations }
+              publisher_limitations: partition.limitations,
+              partial_response: decision.partial }
           : decision.empty === "all_refused"
           ? { gap: { status: "filter_not_supported_by_index",
                      explanation: LIMITATION_EXPLANATION, available: [] },
@@ -316,6 +317,10 @@ export default function App() {
           : decision.empty === "no_corpus"
           ? { gap: { status: "no_corpus_mounted",
                      explanation: NO_CORPUS_SENTENCE, available: [] },
+              publisher_limitations: partition.limitations }
+          : decision.empty === "ambiguous_only"
+          ? { gap: { status: "ambiguous_only",
+                     explanation: AMBIGUOUS_ONLY_SENTENCE, available: [] },
               publisher_limitations: partition.limitations }
           : decision.empty === "incomplete_response"
           ? { gap: { status: "incomplete_response",
@@ -374,7 +379,8 @@ export default function App() {
         const decision = projectGovernedEmptiness("in_force_on", res, visibleRows.length);
         setUi(decision.empty === null
           ? { in_force: { date: s.asOf!, total: ran.reduce((n, e) => n + (e?.total_works_in_force ?? 0), 0), rows: visibleRows },
-              publisher_limitations: partition.limitations }
+              publisher_limitations: partition.limitations,
+              partial_response: decision.partial }
           : decision.empty === "all_refused"
           ? { gap: { status: "filter_not_supported_by_index",
                      explanation: LIMITATION_EXPLANATION, available: [] },
@@ -382,6 +388,10 @@ export default function App() {
           : decision.empty === "no_corpus"
           ? { gap: { status: "no_corpus_mounted",
                      explanation: NO_CORPUS_SENTENCE, available: [] },
+              publisher_limitations: partition.limitations }
+          : decision.empty === "ambiguous_only"
+          ? { gap: { status: "ambiguous_only",
+                     explanation: AMBIGUOUS_ONLY_SENTENCE, available: [] },
               publisher_limitations: partition.limitations }
           : decision.empty === "incomplete_response"
           ? { gap: { status: "incomplete_response",
@@ -706,6 +716,7 @@ export default function App() {
           </div>
         ) : <>
         <PublisherLimitations items={limitationsFromEffect(ui?.publisher_limitations)} />
+        <PartialResponseNotice partial={ui?.partial_response} />
         {ui?.gap ? <Gap {...ui.gap} held={s.work ? held : undefined} /> :
          ui?.ranking ? <Ranking rows={ui.ranking.rows} worksChanged={ui.ranking.works_changed}
                                 newVersions={ui.ranking.new_versions} from={ui.ranking.from_date}

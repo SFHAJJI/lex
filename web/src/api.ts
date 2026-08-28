@@ -360,6 +360,8 @@ export interface UiEffect {
   /** Additive: typed per-publisher capability refusals beside a primary view. Validated fail
       closed in the browser; malformed entries are ignored and never suppress a view. */
   publisher_limitations?: unknown;
+  /** Verified rows rendered while a sibling publisher response was unusable (PR293 O1). */
+  partial_response?: boolean;
   provision?: { subject: Subject; valid_from: string; valid_to?: string; provisions: ProvisionItem[]; permalink?: string;
                 evidence?: EvidenceContext[]; total_provisions?: number; truncated?: boolean;
                 text_truncated?: boolean; outline_only?: boolean };

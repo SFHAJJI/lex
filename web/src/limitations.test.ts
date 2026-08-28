@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   classifyEnvelope, clearedSearchResults, gapBadgeStatus, INCOMPLETE_RESPONSE_SENTENCE,
-  LIMITATION_CAP, NO_CORPUS_SENTENCE, NO_CORPUS_STATUS, scopedLimitations,
+  AMBIGUOUS_ONLY_SENTENCE, LIMITATION_CAP, NO_CORPUS_SENTENCE, NO_CORPUS_STATUS,
+  PARTIAL_RESPONSE_SENTENCE, scopedLimitations,
   LIMITATION_EXPLANATION, LIMITATION_STATUS, limitationsForTool, limitationsFromEffect,
   MIXED_ZERO_SENTENCES, partitionGovernedResponse, projectGovernedEmptiness,
   projectSearchResponse, searchAbsenceState, searchEmptyPresentation, searchResultsFromError,
@@ -28,6 +29,7 @@ const changesOk = (publisher: string, rows: number) => ({
 /** A coherent search success. */
 const searchOk = (publisher: string, hits: number, extra: Record<string, unknown> = {}) => ({
   envelope: { status: "ok", publisher },
+  retrieval_mode: "keyword",
   hits: Array.from({ length: hits }, (_, index) => ({
     lex_id: `${publisher}:w${index}:2024-01-01`, title: `Work ${index}`,
     valid_from: "2024-01-01",
@@ -64,6 +66,19 @@ test("only an allowed terminal success status with a valid shape enters ran", ()
     ["search", searchOk("lu-legilux", 2), "ran"],
     ["search", { envelope: { status: "ok", publisher: "p" } }, "invalid"],
     ["search", { envelope: { publisher: "p" }, hits: [] }, "invalid"],
+    // O3: a successful search must declare the producer's actual retrieval mode.
+    ["search", { envelope: { status: "ok" }, hits: [] }, "invalid"],
+    ["search", { envelope: { status: "ok" }, hits: [], retrieval_mode: "guess" }, "invalid"],
+    ["search", { envelope: { status: "ok" }, hits: [], retrieval_mode: "keyword" }, "ran"],
+    // O4: a null row is not a row. Round 6 admitted it and then threw on lex_id.
+    ["search", { envelope: { status: "ok" }, hits: [null], retrieval_mode: "keyword" },
+      "invalid"],
+    ["changes_in_period", { envelope: { status: "ok" }, changes: [null], works_changed: 1 },
+      "invalid"],
+    ["in_force_on", { envelope: { status: "ok" }, works: [null], total_works_in_force: 1 },
+      "invalid"],
+    ["in_force_on", { envelope: { status: "ambiguous_version" }, works: [],
+      ambiguous_works: [null], total_works_in_force: 1 }, "invalid"],
     ["search", { envelope: { status: null }, hits: [] }, "invalid"],
     ["search", { envelope: { status: "OK" }, hits: [] }, "invalid"],
     ["search", { envelope: { status: "okay" }, hits: [] }, "invalid"],
@@ -183,8 +198,33 @@ test("an all-ambiguity in-force page is content, never an absence claim", () => 
   assert.equal(classifyEnvelope("in_force_on", ambiguousOnly).kind, "ran");
   const decision = projectGovernedEmptiness("in_force_on", [ambiguousOnly], 0);
   assert.equal(decision.partition.ambiguityUnits, 2);
-  assert.equal(decision.empty, null,
-    "ambiguity units are held content; claiming nothing covers the date would be false");
+  // Not absence, and not a result either. Round 6 returned null here, which let the caller
+  // render a positive total beside an empty list (PR293 review, O2).
+  assert.equal(decision.empty, "ambiguous_only");
+  assert.ok(!AMBIGUOUS_ONLY_SENTENCE.toLowerCase().includes("nothing"),
+    "the copy never claims absence");
+  assert.ok(AMBIGUOUS_ONLY_SENTENCE.includes("Choose an exact publisher version"),
+    "the copy asks for the clarification the publisher requires");
+});
+
+test("partiality is disclosed, not merely computed", () => {
+  // Round 6 computed partial_results and decision.partial and rendered neither, so an
+  // incomplete answer presented itself as complete (PR293 review, O1).
+  const searchPartial = projectSearch([
+    searchOk("lu-legilux", 2),
+    { envelope: { status: "made_up" }, hits: [] },
+  ]);
+  assert.equal(searchPartial.absence, "partial_results");
+  assert.ok(PARTIAL_RESPONSE_SENTENCE.includes("not everything"),
+    "the disclosure states the answer is incomplete");
+  assert.ok(!PARTIAL_RESPONSE_SENTENCE.includes("{"), "fixed copy, no interpolation");
+
+  const governedPartial = projectGovernedEmptiness("in_force_on", [
+    inForceOk("lu-legilux", 2),
+    { envelope: { status: "made_up" }, works: [] },
+  ], 2);
+  assert.equal(governedPartial.empty, null);
+  assert.equal(governedPartial.partial, true);
 });
 
 test("no_corpus_mounted is a terminal refusal, not a malformed response", () => {

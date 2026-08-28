@@ -45,6 +45,9 @@ const GOVERNED_FILTERS = new Set(["act_form", "binding_status", "domain", "hiera
  * `no_changes_in_period`; in_force_on as `ok`, `no_result` or `ambiguous_version`. Search's
  * `retrieval_mode_unavailable` is its own non-ran class. Everything else is invalid.
  */
+/** The retrieval modes a successful search envelope must declare. */
+const RETRIEVAL_MODES = new Set(["keyword", "hybrid"]);
+
 const SUCCESS_STATUSES: Record<string, ReadonlySet<string>> = {
   search: new Set(["ok"]),
   changes_in_period: new Set(["ok", "no_changes_in_period"]),
@@ -53,7 +56,7 @@ const SUCCESS_STATUSES: Record<string, ReadonlySet<string>> = {
 
 /** Client-only presentation states; never rendered as a wire status badge (Codex O5). */
 export const CLIENT_GAP_STATES: ReadonlySet<string> = new Set([
-  "mixed_no_match", "incomplete_response", "error", "partial_response",
+  "mixed_no_match", "incomplete_response", "error", "partial_response", "ambiguous_only",
 ]);
 
 /**
@@ -78,6 +81,20 @@ export const NO_CORPUS_STATUS = "no_corpus_mounted";
 export const NO_CORPUS_SENTENCE =
   "This server has no verified legal index mounted, so it holds no law and cannot answer "
   + "legal questions. This is a deployment state, not a statement about the law.";
+
+/**
+ * Fixed copy for a page made entirely of ambiguity units. The publisher holds states covering
+ * the date but exposes several identified versions, so Lex can neither list them as one result
+ * nor claim nothing covers the date.
+ */
+export const AMBIGUOUS_ONLY_SENTENCE =
+  "The publisher exposes several identified versions covering this date, so Lex cannot list a "
+  + "single set of states for it. Choose an exact publisher version to continue.";
+
+/** Fixed copy disclosed beside verified rows when a sibling response was unusable. */
+export const PARTIAL_RESPONSE_SENTENCE =
+  "Some publishers returned a response Lex could not read, so these results are not everything "
+  + "it holds for this request.";
 
 /** The fixed sentence for a response that cannot support results or absence claims. */
 export const INCOMPLETE_RESPONSE_SENTENCE =
@@ -201,12 +218,27 @@ const record = (value: unknown): Record<string, unknown> | null =>
  * contradiction, as are rows exceeding their count or rows beside a zero count. A
  * contradictory envelope is invalid: it never becomes results or corpus absence.
  */
+/**
+ * Every row in a successful response must be a non-null object (PR293 review, O4). Round 6
+ * validated only the outer array, so a single null row was admitted and then threw inside
+ * fusePublisherHits while reading lex_id, taking the workspace down on a malformed response
+ * instead of degrading.
+ */
+function rowsValid(value: unknown): value is Record<string, unknown>[] {
+  return Array.isArray(value)
+    && value.every((row) => typeof row === "object" && row !== null && !Array.isArray(row));
+}
+
 function ranShapeValid(tool: string, entry: Record<string, unknown>, status: string): boolean {
   if (tool === "search") {
-    return Array.isArray(entry.hits);
+    // O3: the producer always declares its actual retrieval mode on a successful search.
+    // Admitting an envelope without one lets a response of unknown provenance render.
+    return rowsValid(entry.hits)
+      && typeof entry.retrieval_mode === "string"
+      && RETRIEVAL_MODES.has(entry.retrieval_mode);
   }
   if (tool === "changes_in_period") {
-    if (!Array.isArray(entry.changes)) return false;
+    if (!rowsValid(entry.changes)) return false;
     const worksChanged = requiredCount(entry.works_changed);
     const newVersions = optionalCount(entry.new_versions);
     if (worksChanged === null || newVersions === null) return false;
@@ -222,9 +254,10 @@ function ranShapeValid(tool: string, entry: Record<string, unknown>, status: str
     return true;
   }
   if (tool === "in_force_on") {
-    if (!Array.isArray(entry.works)) return false;
+    if (!rowsValid(entry.works)) return false;
     const total = requiredCount(entry.total_works_in_force);
     if (total === null) return false;
+    if (entry.ambiguous_works !== undefined && !rowsValid(entry.ambiguous_works)) return false;
     const ambiguities = Array.isArray(entry.ambiguous_works)
       ? entry.ambiguous_works.length : 0;
     // As above: one remainingLimit is shared across publishers, so an exhausted page returns
@@ -474,7 +507,7 @@ export interface GovernedProjection {
   partition: GovernedPartition;
   /** The typed empty state; null while rows or ambiguity units exist. */
   empty: "all_refused" | "no_corpus" | "mixed_no_match" | "none_matched"
-    | "incomplete_response" | null;
+    | "incomplete_response" | "ambiguous_only" | null;
   /** Rows rendered, but a sibling response was unusable and must be disclosed. */
   partial: boolean;
 }
@@ -492,10 +525,13 @@ export function projectGovernedEmptiness(
   const envelopes = Array.isArray(raw) ? raw : [raw];
   const partition = partitionGovernedResponse(tool, envelopes);
   const partial = partition.invalidCount > 0;
-  // Ambiguity units are held content the reader must be told about, so a page made only of
-  // them is not an empty result and must never say nothing covers the date.
-  if (visibleRowCount > 0 || partition.ambiguityUnits > 0) {
-    return { partition, empty: null, partial };
+  if (visibleRowCount > 0) return { partition, empty: null, partial };
+  // Ambiguity units are held content, so this is not absence. But it is not a result either:
+  // round 6 returned null here, which let the caller render a positive total beside an empty
+  // list (PR293 review, O2). It is its own state, and the surface must ask for clarification
+  // rather than report a count it cannot itemise.
+  if (partition.ambiguityUnits > 0) {
+    return { partition, empty: "ambiguous_only", partial };
   }
   if (partition.noCorpus) return { partition, empty: "no_corpus", partial };
   if (partial) return { partition, empty: "incomplete_response", partial };

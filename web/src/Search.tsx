@@ -11,7 +11,7 @@ import { ScopeFilters } from "./ScopeFilters";
 import { clearedSearchResults, LIMITATION_EXPLANATION, projectSearchResponse,
   searchEmptyPresentation, searchResultsFromError,
   type SearchResultsState } from "./limitations";
-import { PublisherLimitations } from "./views";
+import { PartialResponseNotice, PublisherLimitations } from "./views";
 import type { State } from "./state";
 import { shorten } from "./pickers";
 import { ResultsSkeleton } from "./Skeleton";
@@ -287,6 +287,9 @@ export default function Search(p: SearchProps) {
           <ScopeFilters values={p.state} onChange={p.onRefine} />
 
           <PublisherLimitations items={limitations} tool="search" />
+          {/* Rows rendered, but a sibling response was unusable: say so rather than
+              letting an incomplete answer look complete (PR293 review, O1). */}
+          <PartialResponseNotice partial={results.absence === "partial_results"} />
 
           {activeMetadata ? (
             <div className="metadata-filter" role="status">
