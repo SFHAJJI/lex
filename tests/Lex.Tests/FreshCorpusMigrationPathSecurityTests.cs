@@ -525,7 +525,10 @@ public sealed partial class CorpusWriterTests
 
         Assert.Contains("reparse point or symbolic link", error.Message,
             StringComparison.Ordinal);
-        Assert.Equal(1, current.BodyFetchCount);
+        // The attack changes only the protected baseline. Both planned publisher bodies may be
+        // fetched before the migration revalidates that baseline, but no protected byte may be
+        // imported or published after the link swap.
+        Assert.Equal(2, current.BodyFetchCount);
         Assert.True((File.GetAttributes(versions) & FileAttributes.ReparsePoint) != 0);
     }
 
