@@ -81,6 +81,76 @@ export function metadataOnlyResponse(
     .every((reasons) => classifyMatchLane(reasons) === "metadata");
 }
 
+/** One logical work in the authoritative response population. */
+export interface PopulationEntry {
+  work: string;
+  title: string;
+  reasons: unknown;
+}
+
+/** Statuses under which a search envelope actually executed and may contribute evidence. */
+const SEARCH_SUCCESS_STATUSES = new Set(["ok", "no_result"]);
+
+/**
+ * The authoritative response population, read from the RAW envelopes (B1+B2 review, O2 and
+ * O5). Three things must all be true here and cannot be recovered later:
+ *
+ * 1. Only an envelope with a successful status contributes. A refused or malformed envelope's
+ *    rows are not evidence, and admitting them can suppress real answers behind the notice.
+ * 2. Reasons are unioned per logical work BEFORE any fusion. The workspace's fusion step
+ *    deduplicates by identity and discards the losing hit's match_reasons, so a work matched
+ *    by metadata in one publisher and by keyword in another would otherwise read as
+ *    metadata-only and be suppressed.
+ * 3. The full population is retained, not the display slice, so the disclosure and its
+ *    overflow count describe the whole response.
+ */
+export function responsePopulation(raw: unknown): PopulationEntry[] {
+  const envelopes = Array.isArray(raw) ? raw : [raw];
+  const byWork = new Map<string, PopulationEntry>();
+  for (const envelope of envelopes) {
+    if (typeof envelope !== "object" || envelope === null) continue;
+    const record = envelope as Record<string, unknown>;
+    const meta = record.envelope as Record<string, unknown> | undefined;
+    const status = typeof meta?.status === "string" ? meta.status : undefined;
+    if (status === undefined || !SEARCH_SUCCESS_STATUSES.has(status)) continue;
+    const hits = Array.isArray(record.hits) ? record.hits : [];
+    for (const hit of hits) {
+      if (typeof hit !== "object" || hit === null) continue;
+      const row = hit as Record<string, unknown>;
+      const work = String(row.lex_id ?? "").split(":").slice(0, 2).join(":");
+      if (!work) continue;
+      const reasons = Array.isArray(row.match_reasons) ? row.match_reasons : [];
+      const existing = byWork.get(work);
+      if (existing) {
+        // Union, never replace: a later hit's reasons are as authoritative as the first's.
+        existing.reasons = [
+          ...(existing.reasons as unknown[]),
+          ...reasons,
+        ];
+        if (!existing.title && typeof row.title === "string") existing.title = row.title;
+        continue;
+      }
+      byWork.set(work, {
+        work,
+        title: typeof row.title === "string" ? row.title : work,
+        reasons: [...reasons],
+      });
+    }
+  }
+  return [...byWork.values()];
+}
+
+/** True when any envelope reports a truncated row set, so no exact overflow total exists. */
+export function anyRowSetTruncated(raw: unknown): boolean {
+  const envelopes = Array.isArray(raw) ? raw : [raw];
+  return envelopes.some((envelope) => {
+    if (typeof envelope !== "object" || envelope === null) return false;
+    const rowSet = (envelope as Record<string, unknown>).response_row_set;
+    return typeof rowSet === "object" && rowSet !== null
+      && (rowSet as Record<string, unknown>).truncated === true;
+  });
+}
+
 /**
  * The official publisher search entry per collection, exact reviewed hosts only; an unknown
  * collection falls back to the internal search page rather than guessing a URL. Mirrors the

@@ -552,7 +552,8 @@ public static class CatalogueEndpoints
                             item.Publisher,
                             HitText(item.Hit, "work"),
                             HitText(item.Hit, "valid_from"),
-                            HitText(item.Hit, "title"))).ToArray()));
+                            HitText(item.Hit, "title"))).ToArray(),
+                        MatchLanes.AnyRowSetTruncated(envelopes)));
                 }
                 else
                 foreach (var result in envelopes.OfType<JsonObject>())

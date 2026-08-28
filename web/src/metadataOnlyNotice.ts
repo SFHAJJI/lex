@@ -43,7 +43,11 @@ function validateRow(candidate: MetadataOnlyWork): DisclosedRow | null {
  * workspace mounts, not a copy.
  */
 export function MetadataOnlyNotice(
-  { works }: { works: readonly MetadataOnlyWork[] },
+  { works, truncated = false }: {
+    works: readonly MetadataOnlyWork[];
+    /** The response reported a truncated row set, so no exact overflow total exists. */
+    truncated?: boolean;
+  },
 ): ReactNode {
   const seen = new Set<string>();
   const rows: DisclosedRow[] = [];
@@ -77,8 +81,12 @@ export function MetadataOnlyNotice(
                 `${row.group} · ${row.publisher} · matched in metadata`),
             ))),
           // C3 ruling: the count covers only valid deduplicated rows in this bounded
-          // response, minus the ten shown; identical wording to the server surface.
-          rows.length > 10
+          // response, minus the ten shown; identical wording to the server surface. A
+          // truncated response holds no exact total, so it uses the fallback sentence
+          // rather than inventing one (B1+B2 review, O4).
+          truncated
+            ? h("span", { className: "sub" }, "additional returned matches are not shown")
+            : rows.length > 10
             ? h("span", { className: "sub" }, `and ${rows.length - 10} more returned matches`)
             : null,
         )

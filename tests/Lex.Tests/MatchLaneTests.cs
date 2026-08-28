@@ -234,6 +234,88 @@ public sealed class MatchLaneTests : IDisposable
     }
 
     [Fact]
+    public void Served_reasons_never_throw_on_a_hostile_member()
+    {
+        // B1+B2 review, O5: GetValue<string> throws on a number or object, which would take
+        // the whole page down. A non-string member is an unknown reason, so the hit renders.
+        var hostile = new JsonObject
+        {
+            ["match_reasons"] = new JsonArray(42, "work_metadata", new JsonObject()),
+        };
+        var reasons = MatchLanes.ReasonsOf(hostile);
+        Assert.Equal(3, reasons.Count);
+        Assert.Null(reasons[0]);
+        Assert.Equal("work_metadata", reasons[1]);
+        Assert.Null(reasons[2]);
+        Assert.Equal(MatchLanes.UnclassifiedRender, MatchLanes.Classify(reasons));
+        Assert.False(MatchLanes.MetadataOnly([reasons]),
+            "an unclassifiable hit must never authorize suppression");
+    }
+
+    [Fact]
+    public void Response_population_admits_only_authoritative_successful_envelopes()
+    {
+        // B1+B2 review, O5: a refused or malformed envelope's rows are not evidence, and
+        // admitting them lets a refusal suppress a real answer behind the notice.
+        var envelopes = new JsonArray(
+            new JsonObject
+            {
+                ["envelope"] = new JsonObject
+                {
+                    ["publisher"] = "lu-legilux", ["status"] = "filter_not_supported_by_index",
+                },
+                ["hits"] = new JsonArray(new JsonObject
+                {
+                    ["work"] = "refused", ["match_reasons"] = new JsonArray("work_metadata"),
+                }),
+            },
+            new JsonObject
+            {
+                ["envelope"] = new JsonObject { ["publisher"] = "eu-eurlex" },
+                ["hits"] = new JsonArray(new JsonObject { ["work"] = "no-status" }),
+            },
+            new JsonObject
+            {
+                ["envelope"] = new JsonObject { ["publisher"] = "lu-legilux", ["status"] = "ok" },
+                ["hits"] = new JsonArray(new JsonObject
+                {
+                    ["work"] = "real", ["match_reasons"] = new JsonArray("work_metadata"),
+                }),
+            });
+        var population = MatchLanes.ResponsePopulation(envelopes);
+        Assert.Single(population);
+        Assert.Equal("real", population[0].Hit["work"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void A_truncated_row_set_uses_the_fallback_sentence_instead_of_a_count()
+    {
+        // B1+B2 review, O4: response_row_set.truncated exists on the wire. I had asserted in
+        // writing that it did not, without checking.
+        var truncated = new JsonArray(new JsonObject
+        {
+            ["envelope"] = new JsonObject { ["publisher"] = "lu-legilux", ["status"] = "ok" },
+            ["response_row_set"] = new JsonObject { ["truncated"] = true },
+        });
+        Assert.True(MatchLanes.AnyRowSetTruncated(truncated));
+        Assert.False(MatchLanes.AnyRowSetTruncated(new JsonArray(new JsonObject
+        {
+            ["envelope"] = new JsonObject { ["publisher"] = "lu-legilux", ["status"] = "ok" },
+            ["response_row_set"] = new JsonObject { ["truncated"] = false },
+        })));
+
+        var twelve = Enumerable.Range(0, 12).Select(index => new MatchLanes.DisclosureRow(
+            "lu-legilux", $"w-{index}", "2024-01-01", $"Work {index}")).ToArray();
+        var withCount = MatchLanes.NoticeHtml(["lu-legilux"], twelve);
+        Assert.Contains("and 2 more returned matches", withCount, StringComparison.Ordinal);
+
+        var withoutCount = MatchLanes.NoticeHtml(["lu-legilux"], twelve, truncated: true);
+        Assert.Contains("additional returned matches are not shown", withoutCount,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain("more returned matches", withoutCount, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Response_population_skips_refused_envelopes_without_blocking_the_state()
     {
         var envelopes = new JsonArray(

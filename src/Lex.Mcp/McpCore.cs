@@ -29,13 +29,21 @@ public sealed class McpCore
     /// ReadersFor and candidate discovery both use this, so an unmounted prefix selects zero
     /// readers in both places and a typo in a publisher prefix never becomes cross-publisher
     /// discovery without a recorded product ruling.
+    ///
+    /// cited_by is the one deliberate exception (B1+B2 review, O1): a citation target is
+    /// addressed by its own publisher prefix while the SEARCH for citing works legitimately
+    /// spans every mounted publisher. Deriving scope from that prefix would acquire one
+    /// publisher's semaphore, let the inner operation read all of them, and then describe the
+    /// wrong selection in publisher_result_set. For that tool only an explicit publisher
+    /// argument scopes anything.
     /// </summary>
-    private static string? PublisherScopeOf(JsonObject arguments)
+    private static string? PublisherScopeOf(JsonObject arguments, string? tool = null)
     {
         static string? Text(JsonNode? node) => node is JsonValue value
             && value.TryGetValue<string>(out var text) ? text : null;
         var publisher = Text(arguments["publisher"]);
         if (publisher is not null) return publisher;
+        if (string.Equals(tool, "cited_by", StringComparison.Ordinal)) return null;
         var work = Text(arguments["work"]) ?? Text(arguments["lex_id"]);
         return work is not null && work.Contains(':') && !work.Contains("://")
             ? work.Split(':', 2)[0]
@@ -881,7 +889,7 @@ public sealed class McpCore
     {
         static string? Text(JsonNode? node) => node is JsonValue value
             && value.TryGetValue<string>(out var text) ? text : null;
-        var publisher = PublisherScopeOf(arguments);
+        var publisher = PublisherScopeOf(arguments, tool);
         var work = Text(arguments["work"]) ?? Text(arguments["lex_id"]);
         if (publisher is null && tool != "cited_by" && work is not null)
             throw new ArgumentException(

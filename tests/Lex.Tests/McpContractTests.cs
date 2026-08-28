@@ -569,6 +569,45 @@ public class McpContractTests : IDisposable
         }
     }
 
+    [Fact]
+    public async Task Cited_by_keeps_its_global_publisher_selection()
+    {
+        // B1+B2 review, O1: a citation TARGET is addressed by its own publisher prefix while
+        // the search for citing works legitimately spans every mounted publisher. My scope
+        // repair derived selection from that prefix, which acquired one publisher's semaphore
+        // while the inner operation read all of them, and then described the wrong selection.
+        var (db, second) = BuildSecondPublisher();
+        try
+        {
+            var opened = new List<string>();
+            var core = new McpCore(new Dictionary<string, LexIndexReader>(StringComparer.Ordinal)
+            {
+                ["t-pub"] = _reader, ["z-oth"] = second,
+            }, publisher => opened.Add(publisher));
+
+            await core.CallToolAsync("cited_by", new JsonObject
+            {
+                ["work"] = "t-pub:w1",
+            }, CancellationToken.None);
+            Assert.Equal(["t-pub", "z-oth"], opened.Order(StringComparer.Ordinal));
+
+            // The input policy rejects a publisher argument for this tool outright, so the
+            // address prefix was the ONLY way scope could have leaked in. There is no
+            // explicit-publisher variant to preserve.
+            var rejected = await Assert.ThrowsAsync<ArgumentException>(() =>
+                core.CallToolAsync("cited_by", new JsonObject
+                {
+                    ["work"] = "t-pub:w1", ["publisher"] = "z-oth",
+                }, CancellationToken.None).AsTask());
+            Assert.Equal("publisher", rejected.ParamName);
+        }
+        finally
+        {
+            second.Dispose();
+            try { File.Delete(db); } catch { /* the OS will reclaim it */ }
+        }
+    }
+
     /// <summary>A second real publisher: distinct collection stamp, works w1 and w9order.</summary>
     private static (string Db, LexIndexReader Reader) BuildSecondPublisher()
     {

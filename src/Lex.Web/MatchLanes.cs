@@ -103,15 +103,35 @@ public static class MatchLanes
     /// Refused envelopes carry no hits array and simply contribute nothing, so a refusal
     /// beside metadata hits neither blocks nor fakes the response-level state.
     /// </summary>
+    /// <summary>Statuses under which a search envelope actually executed and may contribute.</summary>
+    private static readonly HashSet<string> SearchSuccessStatuses = ["ok", "no_result"];
+
     public static IReadOnlyList<(string Publisher, JsonObject Hit)> ResponsePopulation(
         JsonArray envelopes) =>
         envelopes.OfType<JsonObject>().SelectMany(result =>
         {
-            var publisher = (result["envelope"] as JsonObject)?["publisher"] is JsonValue value
+            var envelope = result["envelope"] as JsonObject;
+            var status = envelope?["status"] is JsonValue statusValue
+                && statusValue.TryGetValue<string>(out var statusText) ? statusText : null;
+            // O5: only an authoritative successful envelope may contribute to the positive
+            // metadata_only claim. A refused or malformed envelope's rows are not evidence,
+            // and letting them in would suppress real answers behind the notice.
+            if (status is null || !SearchSuccessStatuses.Contains(status)) return [];
+            var publisher = envelope!["publisher"] is JsonValue value
                 && value.TryGetValue<string>(out var text) ? text : "";
             return (result["hits"] as JsonArray ?? []).OfType<JsonObject>()
                 .Select(hit => (publisher, hit));
         }).ToArray();
+
+    /// <summary>
+    /// True when any envelope reports a truncated row set (B1+B2 review, O4). The producer
+    /// carries response_row_set.truncated; an exact overflow count would be a claim the
+    /// response cannot support, so the countersigned fallback sentence is used instead.
+    /// </summary>
+    public static bool AnyRowSetTruncated(JsonArray envelopes) =>
+        envelopes.OfType<JsonObject>().Any(result =>
+            (result["response_row_set"] as JsonObject)?["truncated"] is JsonValue value
+            && value.TryGetValue<bool>(out var truncated) && truncated);
 
     /// <summary>
     /// The server-page notice plus the subordinate disclosure list, for the ONE response-level
@@ -123,7 +143,8 @@ public static class MatchLanes
     /// </summary>
     public static string NoticeHtml(
         IReadOnlyList<string> collections,
-        IReadOnlyList<DisclosureRow> rows)
+        IReadOnlyList<DisclosureRow> rows,
+        bool truncated = false)
     {
         var seen = new HashSet<string>(StringComparer.Ordinal);
         var valid = rows.Where(row =>
@@ -143,8 +164,13 @@ public static class MatchLanes
         // C3 ruling: N counts only valid, logically deduplicated suppressed matches present
         // in this bounded response, minus the rows shown; never a corpus-wide claim. Search
         // envelopes carry no truncation marker today, so the exact count always exists.
-        var overflow = valid.Length <= 10 ? "" :
-            $"<span class=\"sub\">and {valid.Length - 10} more returned matches</span>";
+        // C3: an exact N is only honest when the response is complete. A truncated row set
+        // holds no exact total, so the countersigned fallback sentence is used instead of
+        // inventing one.
+        var overflow = truncated
+            ? "<span class=\"sub\">additional returned matches are not shown</span>"
+            : valid.Length <= 10 ? ""
+            : $"<span class=\"sub\">and {valid.Length - 10} more returned matches</span>";
         var disclosure = valid.Length == 0 ? "" :
             $"<details><summary>{H(DisclosureLabel)}</summary><ul>{items}</ul>{overflow}</details>";
         var officials = string.Join("", collections
@@ -165,9 +191,16 @@ public static class MatchLanes
             + "</div>";
     }
 
-    /// <summary>Served reasons for one hit, read fail-open: a missing array is unclassified.</summary>
+    /// <summary>
+    /// Served reasons for one hit, read fail-closed (B1+B2 review, O5). A missing array is
+    /// unclassified. A member that is not a JSON string is mapped to null rather than read
+    /// through GetValue&lt;string&gt;, which throws on a number or object and would take the
+    /// whole page down; null is an unknown reason, so the hit renders and is never suppressed.
+    /// </summary>
     public static IReadOnlyList<string?> ReasonsOf(JsonObject hit) =>
         hit["match_reasons"] is JsonArray reasons
-            ? reasons.Select(reason => reason?.GetValue<string>()).ToArray()
+            ? reasons.Select(reason =>
+                reason is JsonValue value && value.TryGetValue<string>(out var text)
+                    ? text : null).ToArray()
             : [];
 }

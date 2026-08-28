@@ -8,7 +8,8 @@ import {
   type PublisherMetadata,
 } from "./publisherMetadata";
 import { ScopeFilters } from "./ScopeFilters";
-import { metadataOnlyResponse } from "./matchLanes";
+import { anyRowSetTruncated, metadataOnlyResponse, responsePopulation,
+  type PopulationEntry } from "./matchLanes";
 import { MetadataOnlyNotice } from "./metadataOnlyNotice";
 import type { State } from "./state";
 import { shorten } from "./pickers";
@@ -87,6 +88,10 @@ export default function Search(p: SearchProps) {
   // B2 (Codex O2): decided in the fetch from the COMPLETE fused population, before the
   // eight-work display cap and the passage filter, never derived from visible arrays.
   const [metadataOnly, setMetadataOnly] = useState(false);
+  // The COMPLETE logical population and its truncation marker, kept apart from the eight-work
+  // display slice so the disclosure and its overflow describe the whole response (O3, O4).
+  const [metadataPopulation, setMetadataPopulation] = useState<PopulationEntry[]>([]);
+  const [responseTruncated, setResponseTruncated] = useState(false);
   const [articles, setArticles] = useState<ArticleHit[]>([]);
   const [busy, setBusy] = useState(false);
   const [modeUsed, setModeUsed] = useState<"keyword" | "hybrid" | "unavailable">("keyword");
@@ -126,7 +131,8 @@ export default function Search(p: SearchProps) {
   const metadataIdentifier = metadataArguments?.publisher_metadata_identifier;
 
   useEffect(() => {
-    if (!q.trim()) { setWorks([]); setArticles([]); setMetadataOnly(false); setError(undefined); return; }
+    if (!q.trim()) { setWorks([]); setArticles([]); setMetadataOnly(false); setMetadataPopulation([]);
+      setResponseTruncated(false); setError(undefined); return; }
     let live = true;
     setArticleLimit(INITIAL_ARTICLES);
     setBusy(true);
@@ -136,6 +142,8 @@ export default function Search(p: SearchProps) {
     setWorks([]);
     setArticles([]);
     setMetadataOnly(false);
+    setMetadataPopulation([]);
+    setResponseTruncated(false);
     tool<any>("search", { query: q.trim(), limit: 40, time_scope: "as_of", as_of: asOf ?? p.today,
                           retrieval_mode: retrieval, fuzzy: "auto",
                           ...(jurisdiction ? { jurisdiction } : {}),
@@ -165,12 +173,13 @@ export default function Search(p: SearchProps) {
         // The same hits answer two different questions, so they are split rather than ranked
         // together: "which law is this" and "where is this said". A reader almost always wants
         // the first when they typed a name, and the second when they typed words.
-        // The response-level lane decision reads every fused hit with its RAW served
-        // reasons; validation and the union rule live in metadataOnlyResponse.
-        setMetadataOnly(metadataOnlyResponse(hits.map((h: any) => ({
-          work: String(h.lex_id ?? "").split(":").slice(0, 2).join(":"),
-          reasons: h.match_reasons,
-        }))));
+        // The decision reads the AUTHORITATIVE population off the raw envelopes: successful
+        // statuses only, reasons unioned per logical work before fusion can discard them,
+        // and the whole population rather than the display slice (O2, O3, O5).
+        const population = responsePopulation(res);
+        setMetadataPopulation(population);
+        setResponseTruncated(anyRowSetTruncated(res));
+        setMetadataOnly(metadataOnlyResponse(population));
         const byWork = new Map<string, WorkHit>();
         const arts: ArticleHit[] = [];
         for (const h of hits) {
@@ -201,7 +210,8 @@ export default function Search(p: SearchProps) {
         // result inventory and must never introduce a ninth law after the work cap was applied.
         setArticles(arts.filter((article) => visibleWorkIds.has(article.work)).slice(0, 25));
       })
-      .catch(() => { if (live) { setWorks([]); setArticles([]); setMetadataOnly(false); setError("Search could not be reached. Try again."); } })
+      .catch(() => { if (live) { setWorks([]); setArticles([]); setMetadataOnly(false); setMetadataPopulation([]);
+        setResponseTruncated(false); setError("Search could not be reached. Try again."); } })
       .finally(() => { if (live) setBusy(false); });
     return () => { live = false; };
   }, [q, asOf, retrieval, jurisdiction, hierarchy, domain, sourceClass, actForm, bindingStatus,
@@ -369,7 +379,9 @@ export default function Search(p: SearchProps) {
             </button>
           ) : null}
 
-          {!busy && !error && metadataOnly ? <MetadataOnlyNotice works={works} /> : null}
+          {!busy && !error && metadataOnly
+            ? <MetadataOnlyNotice works={metadataPopulation} truncated={responseTruncated} />
+            : null}
 
           {!busy && !error && !metadataOnly && works.length === 0 && articles.length === 0 ? (
             <div className="empty">
