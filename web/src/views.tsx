@@ -15,6 +15,7 @@ import {
   futureStateLabel, intervalLabel, usesPublisherVersionDates,
 } from "./temporal";
 import { extractionDisclosure } from "./extractionProfile";
+import { HISTORICAL_DENSITY, historicalDensityApplies } from "./notices";
 
 const permalink = (work: string, date: string, anchor?: string) =>
   `/${publisherOf(work)}/${workSlug(work)}/${date}${anchor ? `#${anchor}` : ""}`;
@@ -394,10 +395,10 @@ function labelled(dates: string[], xs: number[], width: number, cur: number, cmp
  * server before ranking, and every mixed-corpus row keeps the jurisdiction that owns its work.
  */
 export function Ranking({ rows, worksChanged, newVersions, populationWorks, knownExclusions,
-                          from, to, page, hasMore,
+                          from, to, page, hasMore, jurisdiction,
                           onOpen, onOpenRecord, onPage }: {
   rows: RankingRow[]; worksChanged: number; newVersions: number; from: string; to: string;
-  populationWorks?: number; knownExclusions?: string[];
+  populationWorks?: number; knownExclusions?: string[]; jurisdiction?: string;
   page: number; hasMore: boolean;
   onOpen: (work: string, from: string, to: string) => void;
   onOpenRecord: (work: string, date: string) => void;
@@ -405,6 +406,10 @@ export function Ranking({ rows, worksChanged, newVersions, populationWorks, know
 }) {
   const max = Math.max(1, ...rows.map((r) => r.versions_in_period));
   const populationLabel = populationScopeLabel(populationWorks);
+  // Phase 0 trust notice (Decision 41): a pre-2017 Luxembourg window counts held states, not
+  // legal change. The condition reads only server-provided facts (the echoed window and the
+  // rows' own jurisdictions); the browser never infers legal state.
+  const density = historicalDensityApplies(from, jurisdiction, rows.map((r) => r.jurisdiction));
 
   // Scope controls stay above the rows, so a filter that matches nothing never removes its own
   // escape hatch.
@@ -422,6 +427,18 @@ export function Ranking({ rows, worksChanged, newVersions, populationWorks, know
       {knownExclusions && knownExclusions.length > 0
         ? <p className="sub">Known exclusions: {knownExclusions.join(" · ")}</p>
         : null}
+      {density ? (
+        <div className="trust-notice" role="note" aria-label={HISTORICAL_DENSITY.heading}>
+          <b>{HISTORICAL_DENSITY.heading}</b>
+          {HISTORICAL_DENSITY.body}
+          <div className="actions">
+            {HISTORICAL_DENSITY.actions.map((a) => (
+              <a key={a.href} href={a.href}
+                 {...(a.href.startsWith("https://") ? { rel: "noopener" } : {})}>{a.label}</a>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       <div className="bars">
         {rows.map((r) => {

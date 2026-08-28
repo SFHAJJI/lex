@@ -478,7 +478,7 @@ export default function App() {
     if (view.ranking) return <Ranking rows={view.ranking.rows}
       worksChanged={view.ranking.works_changed} newVersions={view.ranking.new_versions}
       populationWorks={view.ranking.population_works}
-      knownExclusions={view.ranking.known_exclusions}
+      knownExclusions={view.ranking.known_exclusions} jurisdiction={s.jurisdiction}
       from={view.ranking.from_date} to={view.ranking.to_date} onOpen={openDiff}
       onOpenRecord={openLaw} page={0} hasMore={false} onPage={() => {}} />;
     if (view.cited_by) return <CitedBy view={view.cited_by}
@@ -649,6 +649,7 @@ export default function App() {
         ) : ui?.gap ? <Gap {...ui.gap} held={s.work ? held : undefined} /> :
          ui?.ranking ? <Ranking rows={ui.ranking.rows} worksChanged={ui.ranking.works_changed}
                                 newVersions={ui.ranking.new_versions} from={ui.ranking.from_date}
+                                jurisdiction={s.jurisdiction}
                                 populationWorks={ui.ranking.population_works}
                                 knownExclusions={ui.ranking.known_exclusions}
                                 to={ui.ranking.to_date} onOpen={openDiff} onOpenRecord={openLaw}
