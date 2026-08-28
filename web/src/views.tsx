@@ -404,7 +404,8 @@ function labelled(dates: string[], xs: number[], width: number, cur: number, cmp
 export function Ranking({ rows, worksChanged, newVersions, populationWorks, knownExclusions,
                           from, to, page, hasMore, jurisdiction,
                           onOpen, onOpenRecord, onPage }: {
-  rows: RankingRow[]; worksChanged: number; newVersions: number; from: string; to: string;
+  rows: RankingRow[]; worksChanged: number | undefined; newVersions: number | undefined;
+  from: string; to: string;
   populationWorks?: number; knownExclusions?: string[]; jurisdiction?: string;
   page: number; hasMore: boolean;
   onOpen: (work: string, from: string, to: string) => void;
@@ -425,8 +426,12 @@ export function Ranking({ rows, worksChanged, newVersions, populationWorks, know
       {/* One row, not three. The layer's meaning belongs beside its counts, because "820 changed"
           only means anything once you know 820 of what. */}
       <div className="cnt">
-        <span className="tag">{worksChanged.toLocaleString()} received publisher versions</span>
-        <span className="tag">{newVersions.toLocaleString()} publisher version dates</span>
+        {worksChanged !== undefined ? (
+          <span className="tag">{worksChanged.toLocaleString()} received publisher versions</span>
+        ) : null}
+        {newVersions !== undefined ? (
+          <span className="tag">{newVersions.toLocaleString()} publisher version dates</span>
+        ) : null}
         {populationLabel ? <span className="tag">{populationLabel}</span> : null}
         <span className="tag mono">{from} → {to}</span>
         <span className="layers-hint">Every selected jurisdiction shares one dated ranking</span>
@@ -504,7 +509,8 @@ export function Ranking({ rows, worksChanged, newVersions, populationWorks, know
           <button className="ghost" disabled={page === 0} onClick={() => onPage(page - 1)}>
             ← previous
           </button>
-          <span className="sub mono">{page * 25 + 1}–{page * 25 + rows.length} of {worksChanged.toLocaleString()}</span>
+          <span className="sub mono">{page * 25 + 1}–{page * 25 + rows.length}
+            {worksChanged !== undefined ? ` of ${worksChanged.toLocaleString()}` : ""}</span>
           <button className="ghost" disabled={!hasMore} onClick={() => onPage(page + 1)}>
             next →
           </button>
@@ -618,7 +624,7 @@ export function EnvelopeStrip({ rows }: { rows: EnvelopeStripRow[] }) {
 export function InForce({ date, total, rows, populationWorks, populationBasis,
                           populationScopeFiltersApplied, knownExclusions,
                           page, hasMore, onOpen, onPage }: {
-  date: string; total: number;
+  date: string; total: number | undefined;
   populationWorks?: number; populationBasis?: string;
   populationScopeFiltersApplied?: boolean; knownExclusions?: string[];
   rows: { work: string; title?: string; kind?: string; valid_from: string;
@@ -635,7 +641,9 @@ export function InForce({ date, total, rows, populationWorks, populationBasis,
   return (
     <>
       <div className="cnt">
-        <span className="tag">{total.toLocaleString()} publisher states</span>
+        {total !== undefined ? (
+          <span className="tag">{total.toLocaleString()} publisher states</span>
+        ) : null}
         {populationLabel
           ? <span className="tag" data-testid="in-force-population">{populationLabel}</span>
           : null}
@@ -675,7 +683,8 @@ export function InForce({ date, total, rows, populationWorks, populationBasis,
       {(page > 0 || hasMore) ? (
         <div className="pager">
           <button className="ghost" disabled={page === 0} onClick={() => onPage(page - 1)}>← previous</button>
-          <span className="sub mono">{page * 25 + 1}–{page * 25 + rows.length} of {total.toLocaleString()}</span>
+          <span className="sub mono">{page * 25 + 1}–{page * 25 + rows.length}
+            {total !== undefined ? ` of ${total.toLocaleString()}` : ""}</span>
           <button className="ghost" disabled={!hasMore} onClick={() => onPage(page + 1)}>next →</button>
         </div>
       ) : null}

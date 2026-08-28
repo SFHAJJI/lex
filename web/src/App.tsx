@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { compoundOperationViews, first, summedPopulation, tool, unionKnownExclusions,
+import { compoundOperationViews, first, summedCount, summedPopulation, tool,
+  unionKnownExclusions,
   type AskReply,
   type OperationReply, type ProvisionItem, type UiEffect } from "./api";
 import { envelopeStripRows, type EnvelopeStripRow } from "./envelopeStrip";
@@ -327,8 +328,8 @@ export default function App() {
         setStrip(envelopeStripRows(res));
         setUi(decision.empty === null
           ? { ranking: { from_date: s.from!, to_date: s.until!, order: by,
-                         works_changed: ran.reduce((n, e) => n + (e?.works_changed ?? 0), 0),
-                         new_versions: ran.reduce((n, e) => n + (e?.new_versions ?? 0), 0),
+                         works_changed: summedCount(ran, "works_changed"),
+                         new_versions: summedCount(ran, "new_versions"),
                          // Refuses rather than coerces. A string, a fraction, a negative or
                          // an overflowing sum yields no figure at all, because a denominator
                          // the reader is invited to check against must be one the producer
@@ -343,14 +344,18 @@ export default function App() {
           : decision.empty === "all_refused"
           ? { gap: { status: "filter_not_supported_by_index",
                      explanation: LIMITATION_EXPLANATION, available: [] },
-              publisher_limitations: partition.limitations }
+              publisher_limitations: partition.limitations,
+              partial_response: decision.partial,
+              conflicted_publishers: partition.conflictedPublishers }
           // An incomplete response claims nothing at all (round 4, O1/O2).
           // A server with no mounted index is a terminal deployment state; retrying
           // cannot help, so the copy never suggests it.
           : decision.empty === "no_corpus"
           ? { gap: { status: "no_corpus_mounted",
                      explanation: NO_CORPUS_SENTENCE, available: [] },
-              publisher_limitations: partition.limitations }
+              publisher_limitations: partition.limitations,
+              partial_response: decision.partial,
+              conflicted_publishers: partition.conflictedPublishers }
           : decision.empty === "ambiguous_only"
           ? { gap: { status: "ambiguous_only",
                      explanation: AMBIGUOUS_ONLY_SENTENCE, available: [] },
@@ -361,15 +366,21 @@ export default function App() {
           : decision.empty === "incomplete_response"
           ? { gap: { status: "incomplete_response",
                      explanation: INCOMPLETE_RESPONSE_SENTENCE, available: [] },
-              publisher_limitations: partition.limitations }
+              publisher_limitations: partition.limitations,
+              partial_response: decision.partial,
+              conflicted_publishers: partition.conflictedPublishers }
           // Mixed zero: a publisher refused, so a whole-scope absence claim is unprovable;
           // the copy names only the publishers that ran.
           : decision.empty === "mixed_no_match"
           ? { gap: { status: "mixed_no_match",
                      explanation: MIXED_ZERO_SENTENCES.changes_in_period, available: [] },
-              publisher_limitations: partition.limitations }
+              publisher_limitations: partition.limitations,
+              partial_response: decision.partial,
+              conflicted_publishers: partition.conflictedPublishers }
           : { gap: { status: "no_changes_in_period", explanation: "Nothing changed in that window.", available: [] },
-              publisher_limitations: partition.limitations });
+              publisher_limitations: partition.limitations,
+              partial_response: decision.partial,
+              conflicted_publishers: partition.conflictedPublishers });
       })
       .catch(() => { if (live()) setUi({ gap: { status: "error", explanation: "The change report could not be loaded. Try again.", available: [] } }); });
   }, [s.work, s.from, s.until, s.order, s.jurisdiction, s.hierarchy, s.domain,
@@ -450,7 +461,7 @@ export default function App() {
         const scopeFiltersApplied = !(s.jurisdiction || s.hierarchy || s.domain || s.sourceClass
           || s.actForm || s.bindingStatus || s.language);
         setUi(decision.empty === null
-          ? { in_force: { date: s.asOf!, total: ran.reduce((n, e) => n + (e?.total_works_in_force ?? 0), 0),
+          ? { in_force: { date: s.asOf!, total: summedCount(ran, "total_works_in_force"),
                           population_works: covered,
                           population_basis: bases.length === 1 ? bases[0] : undefined,
                           population_scope_filters_applied: scopeFiltersApplied,
@@ -462,11 +473,15 @@ export default function App() {
           : decision.empty === "all_refused"
           ? { gap: { status: "filter_not_supported_by_index",
                      explanation: LIMITATION_EXPLANATION, available: [] },
-              publisher_limitations: partition.limitations }
+              publisher_limitations: partition.limitations,
+              partial_response: decision.partial,
+              conflicted_publishers: partition.conflictedPublishers }
           : decision.empty === "no_corpus"
           ? { gap: { status: "no_corpus_mounted",
                      explanation: NO_CORPUS_SENTENCE, available: [] },
-              publisher_limitations: partition.limitations }
+              publisher_limitations: partition.limitations,
+              partial_response: decision.partial,
+              conflicted_publishers: partition.conflictedPublishers }
           : decision.empty === "ambiguous_only"
           ? { gap: { status: "ambiguous_only",
                      explanation: AMBIGUOUS_ONLY_SENTENCE, available: [] },
@@ -477,13 +492,19 @@ export default function App() {
           : decision.empty === "incomplete_response"
           ? { gap: { status: "incomplete_response",
                      explanation: INCOMPLETE_RESPONSE_SENTENCE, available: [] },
-              publisher_limitations: partition.limitations }
+              publisher_limitations: partition.limitations,
+              partial_response: decision.partial,
+              conflicted_publishers: partition.conflictedPublishers }
           : decision.empty === "mixed_no_match"
           ? { gap: { status: "mixed_no_match",
                      explanation: MIXED_ZERO_SENTENCES.in_force_on, available: [] },
-              publisher_limitations: partition.limitations }
+              publisher_limitations: partition.limitations,
+              partial_response: decision.partial,
+              conflicted_publishers: partition.conflictedPublishers }
           : { gap: { status: "no_result", explanation: `No publisher state covers ${s.asOf} in this scope.`, available: [] },
-              publisher_limitations: partition.limitations });
+              publisher_limitations: partition.limitations,
+              partial_response: decision.partial,
+              conflicted_publishers: partition.conflictedPublishers });
       })
       .catch(() => { if (live()) setUi({ gap: { status: "error", explanation: "The in-force list could not be loaded. Try again.", available: [] } }); });
   }, [s.space, s.asOf, s.work, s.q, s.jurisdiction, s.hierarchy, s.domain,
@@ -850,7 +871,8 @@ export default function App() {
                                 knownExclusions={ui.ranking.known_exclusions}
                                 to={ui.ranking.to_date} onOpen={openDiff} onOpenRecord={openLaw}
                                 page={page}
-                                hasMore={(page * PAGE) + ui.ranking.rows.length < ui.ranking.works_changed}
+                                hasMore={ui.ranking.works_changed !== undefined
+                                  && (page * PAGE) + ui.ranking.rows.length < ui.ranking.works_changed}
                                 onPage={(p) => { setPage(Math.max(0, p)); clearAssistantView(); }} /> :
          ui?.cited_by ? <CitedBy view={ui.cited_by}
                                  onOpen={(w, d, a) => { clearAssistantView(); go({ work: w, date: d, anchor: a, mode: "read", space: "law" }); }} /> :
@@ -861,7 +883,8 @@ export default function App() {
                                   populationBasis={ui.in_force.population_basis}
                                   populationScopeFiltersApplied={ui.in_force.population_scope_filters_applied}
                                   knownExclusions={ui.in_force.known_exclusions}
-                                  page={page} hasMore={(page * PAGE) + ui.in_force.rows.length < ui.in_force.total}
+                                  page={page} hasMore={ui.in_force.total !== undefined
+                                    && (page * PAGE) + ui.in_force.rows.length < ui.in_force.total}
                                   onPage={(p) => { setPage(Math.max(0, p)); clearAssistantView(); }} onOpen={openLaw} /> :
          s.work && s.mode === "compare" ? <Compare work={s.work} title={title ?? s.work} from={s.date ?? today()} to={s.to ?? today()} anchor={s.anchor} /> :
          s.work && loaded ? <Provision items={loaded.items} toc={toc} validFrom={loaded.from} validTo={loaded.to}

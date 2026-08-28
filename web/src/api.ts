@@ -293,6 +293,32 @@ function populationCount(value: unknown): number | undefined {
  * invited to check an answer against. Overflow refuses too: two individually valid counts can sum
  * past the safe integer range, and a number that has lost precision is not a denominator.
  */
+/**
+ * The summed value of a top-level count across publishers, or undefined if it cannot be stated.
+ *
+ * Same refusal as summedPopulation and for the same reason, but for the counts that sit beside the
+ * rows rather than inside the population object: works changed, new versions, total works in
+ * force. Adding with a zero default let a string, a fraction, a negative or a missing value become
+ * a silently smaller legal count, and two individually valid counts can still sum past the safe
+ * integer range, where a number has lost precision and is no longer a count.
+ *
+ * The producer's own range is enforced upstream at classification, so this guards the arithmetic
+ * rather than restating a bound that belongs with the shape.
+ */
+export function summedCount(entries: any[], field: string): number | undefined {
+  let total = 0;
+  let seen = false;
+  for (const entry of entries) {
+    const raw = (entry as any)?.[field];
+    if (raw === undefined) continue;
+    if (typeof raw !== "number" || !Number.isSafeInteger(raw) || raw < 0) return undefined;
+    if (raw > Number.MAX_SAFE_INTEGER - total) return undefined;
+    total += raw;
+    seen = true;
+  }
+  return seen ? total : undefined;
+}
+
 export function summedPopulation(
   entries: any[], field: "works_in_scope" | "works_covered"): number | undefined {
   let total = 0;
@@ -494,10 +520,15 @@ export interface UiEffect {
                 title?: string; language?: string; permalink?: string; record_sha256?: string }[];
                 total_count: number; truncated: boolean;
                 evidence?: EvidenceContext[] };
-  ranking?: { from_date: string; to_date: string; order: string; works_changed: number; new_versions: number;
+  ranking?: { from_date: string; to_date: string; order: string;
+              // Absent when the producer's counts could not be summed honestly. A count that
+              // has lost precision, or that was assembled from a malformed value, is not a
+              // smaller truth: it is no count, and the surface must say nothing rather than a
+              // number nothing stands behind.
+              works_changed: number | undefined; new_versions: number | undefined;
               population_works?: number; population_basis?: string; known_exclusions?: string[];
               rows: RankingRow[]; status?: string; evidence?: EvidenceContext[] };
-  in_force?: { date: string; total: number; status?: string; evidence?: EvidenceContext[];
+  in_force?: { date: string; total: number | undefined; status?: string; evidence?: EvidenceContext[];
                population_works?: number; population_basis?: string;
                population_scope_filters_applied?: boolean; known_exclusions?: string[]; rows: {
     work: string; title?: string; kind?: string; valid_from: string; permalink?: string;

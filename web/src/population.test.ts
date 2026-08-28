@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { fuzzyModeFor, populationCoverageLabel, populationScopeLabel, retainedForQuery,
-  summedPopulation,
+  summedCount, summedPopulation,
   unionKnownExclusions } from "./api.ts";
 
 // Trust rule 6 is about a denominator the reader can check. These bind the exact presentation of
@@ -176,4 +176,36 @@ test("an oversized or overlong exclusions set is refused, not truncated", () => 
   assert.deepEqual(unionKnownExclusions([long]), []);
   const ok = { population: { known_exclusions: ["withdrawn acts", "withdrawn acts"] } };
   assert.deepEqual(unionKnownExclusions([ok]), ["withdrawn acts"]);
+});
+
+// The counts beside the rows, rather than inside the population object: works changed, new
+// versions, total works in force. Same refusal, same reason. These are legal counts a reader is
+// invited to check an answer against, and the producers are C# int, so a value outside that range
+// is not merely unsafe, it is one the producer could not have sent.
+
+const count = (works: unknown) => ({ works_changed: works });
+
+test("counts sum across the publishers that stated one", () => {
+  assert.equal(summedCount([count(40), count(2)], "works_changed"), 42);
+});
+
+test("an entry with no count contributes nothing rather than a zero", () => {
+  assert.equal(summedCount([count(40), {}], "works_changed"), 40);
+  assert.equal(summedCount([{}, {}], "works_changed"), undefined);
+});
+
+test("a count the producer could not have sent refuses the whole total", () => {
+  for (const bad of ["40", 4.5, -1, Number.NaN, 1e20, null, {}])
+    assert.equal(summedCount([count(40), count(bad)], "works_changed"), undefined, String(bad));
+});
+
+test("two valid counts that overflow the safe range refuse a total", () => {
+  const max = Number.MAX_SAFE_INTEGER;
+  assert.equal(summedCount([count(max), count(1)], "works_changed"), undefined);
+  assert.equal(summedCount([count(max), count(0)], "works_changed"), max);
+});
+
+test("refusing a count does not depend on arrival order", () => {
+  assert.equal(summedCount([count(-1), count(40)], "works_changed"),
+    summedCount([count(40), count(-1)], "works_changed"));
 });
