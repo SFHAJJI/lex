@@ -8,8 +8,8 @@ import {
   type PublisherMetadata,
 } from "./publisherMetadata";
 import { ScopeFilters } from "./ScopeFilters";
-import { clearedSearchResults, LIMITATION_EXPLANATION, partitionGovernedResponse,
-  searchEmptyPresentation, searchResultsFromError, searchResultsFromResponse,
+import { clearedSearchResults, LIMITATION_EXPLANATION, projectSearchResponse,
+  searchEmptyPresentation, searchResultsFromError,
   type SearchResultsState } from "./limitations";
 import { PublisherLimitations } from "./views";
 import type { State } from "./state";
@@ -90,7 +90,6 @@ export default function Search(p: SearchProps) {
   const { works, articles, error, modeUnavailable, expansions, limitations } = results;
   const allRefused = results.absence === "all_refused";
   const [busy, setBusy] = useState(false);
-  const [modeUsed, setModeUsed] = useState<"keyword" | "hybrid" | "unavailable">("keyword");
 
 
   const [articleLimit, setArticleLimit] = useState(INITIAL_ARTICLES);
@@ -148,66 +147,45 @@ export default function Search(p: SearchProps) {
                           ...(metadataArguments ?? {}) })
       .then((res) => {
         if (!live) return;
-        const envelopes = Array.isArray(res) ? res : [res];
-        // Row authority (round 3, O1): rows are projected only from envelopes that actually
-        // ran the governed operation. A refusal's rows are malformed data, never results.
-        const partition = partitionGovernedResponse("search", envelopes);
-        const hits = fusePublisherHits<any>(partition.ran as any[]);
-        const unavailable = envelopes.filter((e: any) =>
-          e?.envelope?.status === "retrieval_mode_unavailable");
-        // Capability refusals are kept and shown beside the fused hits, never instead of
-        // them and never silently dropped: a coverage statement is not an empty result.
-
-        const usedHybrid = envelopes.some((e: any) => e?.retrieval_mode === "hybrid");
-        const usedKeyword = envelopes.some((e: any) => e?.retrieval_mode === "keyword");
-        setModeUsed(usedHybrid ? "hybrid" : usedKeyword ? "keyword" : "unavailable");
-        let nextModeUnavailable: string | undefined;
-        if (unavailable.length > 0) {
-          const publishers = unavailable
-            .map((e: any) => String(e?.envelope?.publisher ?? ""))
-            .filter(Boolean)
-            .join(", ");
-          nextModeUnavailable = `Words + meaning is unavailable${publishers ? ` for ${publishers}` : ""}: its signed retrieval benchmark has not authorized it. Choose Exact words.`;
-        }
-        const nextExpansions = [...new Set(envelopes.flatMap(
-          (e: any) => e?.query_expansions ?? []))] as string[];
-        // The same hits answer two different questions, so they are split rather than ranked
-        // together: "which law is this" and "where is this said". A reader almost always wants
-        // the first when they typed a name, and the second when they typed words.
-        const byWork = new Map<string, WorkHit>();
-        const arts: ArticleHit[] = [];
-        for (const h of hits) {
-          const work = String(h.lex_id ?? "").split(":").slice(0, 2).join(":");
-          if (!work) continue;
-          const title = shorten(h.title) ?? work;
-          const meta: HitMeta = {
-            jurisdiction: h._jurisdiction ?? jurisdictionForPublisher(work.split(":")[0]),
-            timelineSemantics: h._timelineSemantics,
-            validFrom: h.valid_from, validTo: h.valid_to, hierarchy: h.hierarchy,
-            language: h.language, domains: Array.isArray(h.domains) ? h.domains : [],
-            consolidationStatus: h.consolidation_status,
-            matchReasons: Array.isArray(h.match_reasons) ? h.match_reasons : [],
-            publisherMetadata: parsePublisherMetadata(h.matched_publisher_metadata),
+        // Round 4 (O3/O4): the ONE production projector partitions the response closed,
+        // derives mode and expansion facts from the validated ran envelopes only, and types
+        // the absence state; the callback below is presentation mapping, not decision.
+        setResults(projectSearchResponse<WorkHit, ArticleHit>(res, (ranEnvelopes) => {
+          const hits = fusePublisherHits<any>(ranEnvelopes as any[]);
+          // The same hits answer two different questions, so they are split rather than
+          // ranked together: "which law is this" and "where is this said".
+          const byWork = new Map<string, WorkHit>();
+          const arts: ArticleHit[] = [];
+          for (const h of hits) {
+            const work = String(h.lex_id ?? "").split(":").slice(0, 2).join(":");
+            if (!work) continue;
+            const title = shorten(h.title) ?? work;
+            const meta: HitMeta = {
+              jurisdiction: h._jurisdiction ?? jurisdictionForPublisher(work.split(":")[0]),
+              timelineSemantics: h._timelineSemantics,
+              validFrom: h.valid_from, validTo: h.valid_to, hierarchy: h.hierarchy,
+              language: h.language, domains: Array.isArray(h.domains) ? h.domains : [],
+              consolidationStatus: h.consolidation_status,
+              matchReasons: Array.isArray(h.match_reasons) ? h.match_reasons : [],
+              publisherMetadata: parsePublisherMetadata(h.matched_publisher_metadata),
+            };
+            const existing = byWork.get(work);
+            if (!existing) byWork.set(work, { work, title, ...meta });
+            else if (!existing.publisherMetadata && meta.publisherMetadata)
+              byWork.set(work, { ...existing, publisherMetadata: meta.publisherMetadata });
+            if (h.anchor)
+              arts.push({ work, title, anchor: h.anchor, num: h.provision_num,
+                          snippet: h.snippet, ...meta, validFrom: String(h.valid_from) });
+          }
+          const visibleWorks = [...byWork.values()].slice(0, 8);
+          const visibleWorkIds = new Set(visibleWorks.map((work) => work.work));
+          // Passages explain why one of the visible laws matched; they never introduce a
+          // ninth law after the work cap.
+          return {
+            works: visibleWorks,
+            articles: arts.filter((article) => visibleWorkIds.has(article.work)).slice(0, 25),
+            ranHitCount: hits.length,
           };
-          const existing = byWork.get(work);
-          if (!existing) byWork.set(work, { work, title, ...meta });
-          else if (!existing.publisherMetadata && meta.publisherMetadata)
-            byWork.set(work, { ...existing, publisherMetadata: meta.publisherMetadata });
-          if (h.anchor)
-            arts.push({ work, title, anchor: h.anchor, num: h.provision_num,
-                        snippet: h.snippet, ...meta, validFrom: String(h.valid_from) });
-        }
-        const visibleWorks = [...byWork.values()].slice(0, 8);
-        const visibleWorkIds = new Set(visibleWorks.map((work) => work.work));
-        // Passages explain why one of the visible laws matched. They are not an independent
-        // result inventory and must never introduce a ninth law after the work cap was applied.
-        // Everything a response sets travels through ONE transition, so no key can be set on
-        // one path and forgotten on another (review round 2, O2).
-        setResults(searchResultsFromResponse(partition, hits.length, {
-          works: visibleWorks,
-          articles: arts.filter((article) => visibleWorkIds.has(article.work)).slice(0, 25),
-          expansions: nextExpansions,
-          modeUnavailable: nextModeUnavailable,
         }));
       })
       .catch(() => { if (live) setResults(searchResultsFromError("Search could not be reached. Try again.")); })
@@ -274,8 +252,8 @@ export default function Search(p: SearchProps) {
         <div className="results">
           <div className="res-head">
             <span className="sub">{busy ? "Searching…" : `${resultLawCount} law${resultLawCount === 1 ? "" : "s"}, ${articles.length} matching passage${articles.length === 1 ? "" : "s"}`}</span>
-            <span className="badge">{modeUsed === "hybrid" ? "words + meaning"
-              : modeUsed === "unavailable" ? "meaning unavailable" : "exact words"}</span>
+            <span className="badge">{results.modeUsed === "hybrid" ? "words + meaning"
+              : results.modeUsed === "keyword" ? "exact words" : "meaning unavailable"}</span>
             <span className="grow" />
             <div className="search-mode" role="group" aria-label="Search method">
               <button className={retrieval === "keyword" ? "on" : ""}
@@ -297,7 +275,7 @@ export default function Search(p: SearchProps) {
 
           <ScopeFilters values={p.state} onChange={p.onRefine} />
 
-          <PublisherLimitations items={limitations} />
+          <PublisherLimitations items={limitations} tool="search" />
 
           {activeMetadata ? (
             <div className="metadata-filter" role="status">

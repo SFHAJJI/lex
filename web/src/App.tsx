@@ -15,7 +15,8 @@ import Coach, { COACH_KEY } from "./Coach";
 import { CompareSkeleton, LawSkeleton, ReportSkeleton } from "./Skeleton";
 import { jurisdictionForPublisher, jurisdictionLabel } from "./facets";
 import { latestStateLabel, temporalStatusLabel } from "./temporal";
-import { LIMITATION_EXPLANATION, MIXED_ZERO_SENTENCES, partitionGovernedResponse } from "./limitations";
+import { INCOMPLETE_RESPONSE_SENTENCE, LIMITATION_EXPLANATION, MIXED_ZERO_SENTENCES,
+  projectGovernedEmptiness } from "./limitations";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -275,9 +276,11 @@ export default function App() {
         // publishers, not the first one that happens to reply. Taking the first envelope with
         // rows reported 3 EU acts for the pandemic and silently dropped the hundreds of
         // Luxembourg ones behind it, because the EU index answers first.
-        const envs = (Array.isArray(res) ? res : [res]) as any[];
-        // Row authority (round 3, O1): only envelopes that ran contribute rows or counts.
-        const partition = partitionGovernedResponse("changes_in_period", envs);
+        // Row authority: only envelopes that ran a coherent response contribute rows or
+        // counts. The closed classification and the typed empty decision both come from the
+        // one shared projector the tests call (round 4, O1/O2/O4).
+        const first = projectGovernedEmptiness("changes_in_period", res, 1);
+        const partition = first.partition;
         const ran = partition.ran as any[];
         const rows = ran.flatMap((e) => (e?.changes ?? []).map((row: any) => ({
           ...row,
@@ -290,8 +293,10 @@ export default function App() {
           : String(b.last_change ?? "").localeCompare(String(a.last_change ?? "")));
         const visibleRows = rows.slice(page * PAGE, (page + 1) * PAGE);
         // Supported rows and typed refusals coexist: rows render, the limitation renders
-        // beside them, and only an all-refused call keeps the full typed gap.
-        setUi(visibleRows.length
+        // beside them, and only the typed empty states speak for absence.
+        const decision = projectGovernedEmptiness(
+          "changes_in_period", res, visibleRows.length);
+        setUi(decision.empty === null
           ? { ranking: { from_date: s.from!, to_date: s.until!, order: by,
                          works_changed: ran.reduce((n, e) => n + (e?.works_changed ?? 0), 0),
                          new_versions: ran.reduce((n, e) => n + (e?.new_versions ?? 0), 0),
@@ -301,13 +306,18 @@ export default function App() {
                            .filter(Boolean))] as string[],
                          rows: visibleRows },
               publisher_limitations: partition.limitations }
-          : partition.allRefused
+          : decision.empty === "all_refused"
           ? { gap: { status: "filter_not_supported_by_index",
                      explanation: LIMITATION_EXPLANATION, available: [] },
               publisher_limitations: partition.limitations }
-          // Mixed zero (round 3, O2): a publisher refused, so a whole-scope absence claim is
-          // unprovable; the copy names only the publishers that ran.
-          : partition.anyRefused
+          // An incomplete response claims nothing at all (round 4, O1/O2).
+          : decision.empty === "incomplete_response"
+          ? { gap: { status: "incomplete_response",
+                     explanation: INCOMPLETE_RESPONSE_SENTENCE, available: [] },
+              publisher_limitations: partition.limitations }
+          // Mixed zero: a publisher refused, so a whole-scope absence claim is unprovable;
+          // the copy names only the publishers that ran.
+          : decision.empty === "mixed_no_match"
           ? { gap: { status: "mixed_no_match",
                      explanation: MIXED_ZERO_SENTENCES.changes_in_period, available: [] },
               publisher_limitations: partition.limitations }
@@ -338,8 +348,8 @@ export default function App() {
     })
       .then((res) => {
         if (!live) return;
-        const envs = (Array.isArray(res) ? res : [res]) as any[];
-        const partition = partitionGovernedResponse("in_force_on", envs);
+        const first = projectGovernedEmptiness("in_force_on", res, 1);
+        const partition = first.partition;
         const ran = partition.ran as any[];
         // in_force_on returns `works` with a `total_works_in_force` count, and its rows carry
         // work/title/document_type/valid_from. Mapped here to the shape the view already speaks.
@@ -355,14 +365,19 @@ export default function App() {
         })));
         rows.sort((a: any, b: any) => String(a.title ?? a.work).localeCompare(String(b.title ?? b.work)));
         const visibleRows = rows.slice(page * PAGE, (page + 1) * PAGE);
-        setUi(visibleRows.length
+        const decision = projectGovernedEmptiness("in_force_on", res, visibleRows.length);
+        setUi(decision.empty === null
           ? { in_force: { date: s.asOf!, total: ran.reduce((n, e) => n + (e?.total_works_in_force ?? 0), 0), rows: visibleRows },
               publisher_limitations: partition.limitations }
-          : partition.allRefused
+          : decision.empty === "all_refused"
           ? { gap: { status: "filter_not_supported_by_index",
                      explanation: LIMITATION_EXPLANATION, available: [] },
               publisher_limitations: partition.limitations }
-          : partition.anyRefused
+          : decision.empty === "incomplete_response"
+          ? { gap: { status: "incomplete_response",
+                     explanation: INCOMPLETE_RESPONSE_SENTENCE, available: [] },
+              publisher_limitations: partition.limitations }
+          : decision.empty === "mixed_no_match"
           ? { gap: { status: "mixed_no_match",
                      explanation: MIXED_ZERO_SENTENCES.in_force_on, available: [] },
               publisher_limitations: partition.limitations }

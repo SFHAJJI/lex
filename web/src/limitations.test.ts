@@ -1,258 +1,378 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  clearedSearchResults, everyPublisherRefused, LIMITATION_CAP, LIMITATION_EXPLANATION,
-  LIMITATION_STATUS, limitationsFromEffect, limitationsFromEnvelopes, MIXED_ZERO_SENTENCES,
-  partitionGovernedResponse, searchAbsenceState, searchEmptyPresentation,
-  searchResultsFromError, searchResultsFromResponse, validateLimitation,
+  classifyEnvelope, clearedSearchResults, gapBadgeStatus, INCOMPLETE_RESPONSE_SENTENCE,
+  LIMITATION_CAP,
+  LIMITATION_EXPLANATION, LIMITATION_STATUS, limitationsForTool, limitationsFromEffect,
+  MIXED_ZERO_SENTENCES, partitionGovernedResponse, projectGovernedEmptiness,
+  projectSearchResponse, searchAbsenceState, searchEmptyPresentation, searchResultsFromError,
+  validateLimitation,
 } from "./limitations.ts";
 
 const refused = (publisher: string, filters: string[]) => ({
-  envelope: { status: LIMITATION_STATUS, publisher, jurisdiction: publisher === "eu-eurlex" ? "eu" : "lu" },
+  envelope: {
+    status: LIMITATION_STATUS, publisher,
+    jurisdiction: publisher === "eu-eurlex" ? "eu" : "lu",
+  },
   unsupported_filters: filters,
 });
-const supported = (publisher: string, rows: number) => ({
+
+/** A coherent changes_in_period success: rows and counts agree. */
+const changesOk = (publisher: string, rows: number) => ({
   envelope: { status: "ok", publisher },
   changes: Array.from({ length: rows }, (_, index) => ({ work: `w${index}` })),
+  works_changed: rows,
+  new_versions: rows,
 });
 
-test("mixed search response keeps one limitation per refusing publisher", () => {
-  const out = limitationsFromEnvelopes("search", [
-    supported("lu-legilux", 3), refused("eu-eurlex", ["domain"]),
+/** A coherent search success. */
+const searchOk = (publisher: string, hits: number, extra: Record<string, unknown> = {}) => ({
+  envelope: { status: "ok", publisher },
+  hits: Array.from({ length: hits }, (_, index) => ({
+    lex_id: `${publisher}:w${index}:2024-01-01`, title: `Work ${index}`,
+    valid_from: "2024-01-01",
+  })),
+  ...extra,
+});
+
+/** A coherent in_force_on success. */
+const inForceOk = (publisher: string, rows: number) => ({
+  envelope: { status: "ok", publisher },
+  works: Array.from({ length: rows }, (_, index) => ({
+    work: `w${index}`, title: `Work ${index}`, valid_from: "2024-01-01",
+  })),
+  total_works_in_force: rows,
+});
+
+/** The production search projection, with the component's own mapping shape. */
+const projectSearch = (raw: unknown) =>
+  projectSearchResponse<{ work: string }, { work: string }>(raw, (ran) => {
+    const hits = (ran as any[]).flatMap((entry) => entry?.hits ?? []);
+    const works = [...new Map(hits.map((hit: any) => {
+      const work = String(hit.lex_id ?? "").split(":").slice(0, 2).join(":");
+      return [work, { work }];
+    })).values()];
+    return { works, articles: [], ranHitCount: hits.length };
+  });
+
+// ---------------------------------------------------------------------------
+// Closed status classification (round 4, O1)
+// ---------------------------------------------------------------------------
+
+test("only an allowed terminal success status with a valid shape enters ran", () => {
+  const cases: [string, unknown, string][] = [
+    ["search", searchOk("lu-legilux", 2), "ran"],
+    ["search", { envelope: { status: "ok", publisher: "p" } }, "invalid"],
+    ["search", { envelope: { publisher: "p" }, hits: [] }, "invalid"],
+    ["search", { envelope: { status: null }, hits: [] }, "invalid"],
+    ["search", { envelope: { status: "OK" }, hits: [] }, "invalid"],
+    ["search", { envelope: { status: "okay" }, hits: [] }, "invalid"],
+    ["search", { envelope: { status: "no_result" }, hits: [] }, "invalid"],
+    ["search", { hits: [] }, "invalid"],
+    ["search", null, "invalid"],
+    ["search", "ok", "invalid"],
+    ["search", { envelope: { status: "retrieval_mode_unavailable", publisher: "p" } },
+      "mode_unavailable"],
+    ["changes_in_period", changesOk("lu-legilux", 1), "ran"],
+    ["changes_in_period",
+      { envelope: { status: "no_changes_in_period" }, changes: [], works_changed: 0 }, "ran"],
+    ["changes_in_period", { envelope: { status: "ok" }, changes: [] }, "invalid"],
+    ["in_force_on", inForceOk("lu-legilux", 1), "ran"],
+    ["in_force_on",
+      { envelope: { status: "no_result" }, works: [], total_works_in_force: 0 }, "ran"],
+    ["in_force_on", { envelope: { status: "unknown_work" }, works: [] }, "invalid"],
+  ];
+  for (const [tool, value, kind] of cases) {
+    assert.equal(classifyEnvelope(tool, value).kind, kind,
+      `${tool} ${JSON.stringify(value)?.slice(0, 60)}`);
+  }
+});
+
+test("a refusal without its typed limitation is invalid, not evidence-free", () => {
+  assert.equal(classifyEnvelope("search", {
+    envelope: { status: LIMITATION_STATUS, publisher: "lu-legilux" },
+  }).kind, "invalid");
+  assert.equal(classifyEnvelope("search", {
+    envelope: { status: LIMITATION_STATUS, publisher: "lu-legilux" },
+    unsupported_filters: ["not_a_governed_filter"],
+  }).kind, "invalid");
+  assert.equal(classifyEnvelope("search", refused("lu-legilux", ["domain"])).kind, "refused");
+});
+
+test("an empty response never becomes a successful no-match response", () => {
+  assert.equal(searchAbsenceState(partitionGovernedResponse("search", []), 0),
+    "incomplete_response");
+  assert.equal(projectSearch([]).absence, "incomplete_response");
+  assert.equal(projectGovernedEmptiness("changes_in_period", [], 0).empty,
+    "incomplete_response");
+  assert.equal(projectGovernedEmptiness("in_force_on", [], 0).empty, "incomplete_response");
+});
+
+test("an unknown or missing status authorizes neither rows nor absence claims", () => {
+  const sneaky = {
+    envelope: { publisher: "lu-legilux" },
+    hits: [{ lex_id: "lu-legilux:w1:2024-01-01" }],
+  };
+  const projected = projectSearch([sneaky]);
+  assert.deepEqual(projected.works, [], "no rows from an unclassifiable envelope");
+  assert.equal(projected.absence, "incomplete_response");
+  assert.notEqual(projected.absence, "no_match");
+});
+
+// ---------------------------------------------------------------------------
+// Count and row coherence (round 4, O2)
+// ---------------------------------------------------------------------------
+
+test("counts and rows are validated as one response", () => {
+  // Positive count with zero rows would emit a false whole-scope absence claim.
+  assert.equal(classifyEnvelope("changes_in_period", {
+    envelope: { status: "ok" }, changes: [], works_changed: 7, new_versions: 7,
+  }).kind, "invalid");
+  // Zero count beside retained rows is internally contradictory evidence.
+  assert.equal(classifyEnvelope("changes_in_period", {
+    envelope: { status: "ok" }, changes: [{ work: "w1" }], works_changed: 0, new_versions: 0,
+  }).kind, "invalid");
+  // Rows exceeding their count cannot both be true.
+  assert.equal(classifyEnvelope("in_force_on", {
+    envelope: { status: "ok" }, works: [{ work: "a" }, { work: "b" }],
+    total_works_in_force: 1,
+  }).kind, "invalid");
+  // Non-finite, negative, fractional and wrong-typed counts are all invalid.
+  for (const total of [Number.NaN, Number.POSITIVE_INFINITY, -1, 1.5, "3", {}, []]) {
+    assert.equal(classifyEnvelope("in_force_on", {
+      envelope: { status: "ok" }, works: [{ work: "a" }], total_works_in_force: total,
+    }).kind, "invalid", `total ${String(total)}`);
+  }
+  // A no_changes_in_period envelope must actually be empty.
+  assert.equal(classifyEnvelope("changes_in_period", {
+    envelope: { status: "no_changes_in_period" }, changes: [{ work: "w" }], works_changed: 1,
+  }).kind, "invalid");
+});
+
+test("a contradictory envelope becomes incomplete, never results or absence", () => {
+  const contradictory = {
+    envelope: { status: "ok", publisher: "lu-legilux" },
+    changes: [], works_changed: 4, new_versions: 4,
+  };
+  const decision = projectGovernedEmptiness("changes_in_period", [contradictory], 0);
+  assert.equal(decision.empty, "incomplete_response");
+  assert.deepEqual(decision.partition.ran, []);
+});
+
+// ---------------------------------------------------------------------------
+// Retrieval disclosures ride the validated partition (round 4, O3)
+// ---------------------------------------------------------------------------
+
+test("a refused response cannot claim that meaning search ran", () => {
+  const lying = {
+    envelope: { status: LIMITATION_STATUS, publisher: "eu-eurlex" },
+    unsupported_filters: ["domain"],
+    retrieval_mode: "hybrid",
+    query_expansions: ["invented"],
+  };
+  const projected = projectSearch([lying]);
+  assert.equal(projected.modeUsed, undefined, "no mode claim from a refusal");
+  assert.deepEqual(projected.expansions, [], "no expansion claim from a refusal");
+  assert.equal(projected.absence, "all_refused");
+  assert.equal(projected.limitations.length, 1);
+});
+
+test("an invalid envelope cannot claim a fallback was tried", () => {
+  const projected = projectSearch([
+    { envelope: { status: "made_up" }, hits: [], retrieval_mode: "keyword",
+      query_expansions: ["ghost"] },
   ]);
-  assert.equal(out.length, 1);
-  assert.equal(out[0].publisher, "eu-eurlex");
-  assert.deepEqual(out[0].unsupported_filters, ["domain"]);
-  assert.equal(out[0].tool, "search");
+  assert.equal(projected.modeUsed, undefined);
+  assert.deepEqual(projected.expansions, []);
 });
 
-test("mixed period response derives the limitation and never touches supported rows", () => {
-  const envs = [refused("lu-legilux", ["binding_status", "act_form"]), supported("eu-eurlex", 2)];
-  const out = limitationsFromEnvelopes("changes_in_period", envs);
-  assert.equal(out.length, 1);
-  assert.deepEqual(out[0].unsupported_filters, ["act_form", "binding_status"]);
-  // Derivation is read-only: the envelopes, including supported rows, are unchanged.
-  assert.equal((envs[1] as { changes: unknown[] }).changes.length, 2);
-});
-
-test("mixed in-force response derives the limitation with the right tool name", () => {
-  const out = limitationsFromEnvelopes("in_force_on", [
-    supported("eu-eurlex", 1), refused("lu-legilux", ["hierarchy"]),
+test("mode and expansions come from ran envelopes and are bounded", () => {
+  const projected = projectSearch([
+    searchOk("lu-legilux", 1, {
+      retrieval_mode: "hybrid",
+      query_expansions: ["travail", "x".repeat(200), 42, "travail"],
+    }),
+    refused("eu-eurlex", ["domain"]),
   ]);
-  assert.equal(out.length, 1);
-  assert.equal(out[0].tool, "in_force_on");
+  assert.equal(projected.modeUsed, "hybrid");
+  assert.deepEqual(projected.expansions, ["travail"], "over-long and non-string dropped");
+  assert.equal(projected.absence, "has_results");
 });
 
-test("an all-refused call is detected so the caller keeps its full typed gap", () => {
-  assert.equal(everyPublisherRefused(
-    [refused("lu-legilux", ["domain"]), refused("eu-eurlex", ["domain"])]), true);
-  assert.equal(everyPublisherRefused(
-    [refused("lu-legilux", ["domain"]), supported("eu-eurlex", 0)]), false);
-  assert.equal(everyPublisherRefused([]), false);
+test("actual mode lives in the state, so every transition clears it structurally", () => {
+  const ran = projectSearch([searchOk("lu-legilux", 1, { retrieval_mode: "hybrid" })]);
+  assert.equal(ran.modeUsed, "hybrid");
+  assert.equal(clearedSearchResults().modeUsed, undefined, "cleared query clears the badge");
+  assert.equal(searchResultsFromError("boom").modeUsed, undefined, "an error clears it too");
+  // A later response with no ran envelope cannot retain the earlier hybrid badge.
+  assert.equal(projectSearch([refused("lu-legilux", ["domain"])]).modeUsed, undefined);
 });
+
+test("the retrieval-mode notice names only the unavailable publishers", () => {
+  const projected = projectSearch([
+    { envelope: { status: "retrieval_mode_unavailable", publisher: "eu-eurlex" } },
+    searchOk("lu-legilux", 1, { retrieval_mode: "keyword" }),
+  ]);
+  assert.ok(projected.modeUnavailable?.includes("eu-eurlex"));
+  assert.equal(projected.modeUsed, "keyword");
+  assert.equal(projected.absence, "has_results");
+});
+
+// ---------------------------------------------------------------------------
+// Row authority and typed absence through the production seams (O4)
+// ---------------------------------------------------------------------------
+
+test("row authority: refused envelopes contribute no rows on any governed path", () => {
+  const searchProjection = projectSearch([
+    { ...refused("eu-eurlex", ["domain"]),
+      hits: [{ lex_id: "eu-eurlex:smuggled:2024-01-01" }] },
+    searchOk("lu-legilux", 1),
+  ]);
+  assert.equal(searchProjection.works.length, 1);
+  assert.equal(searchProjection.works[0].work, "lu-legilux:w0");
+
+  const changes = projectGovernedEmptiness("changes_in_period", [
+    { ...refused("eu-eurlex", ["domain"]), changes: [{ work: "smuggled" }], works_changed: 1 },
+  ], 0);
+  assert.deepEqual(changes.partition.ran, []);
+  assert.equal(changes.empty, "all_refused");
+
+  const inForce = projectGovernedEmptiness("in_force_on", [
+    { ...refused("lu-legilux", ["hierarchy"]), works: [{ work: "smuggled" }],
+      total_works_in_force: 1 },
+    inForceOk("eu-eurlex", 2),
+  ], 2);
+  assert.equal(inForce.partition.ran.length, 1);
+  assert.equal(inForce.empty, null);
+  assert.equal(inForce.partition.limitations.length, 1);
+});
+
+test("empty-state truth scope stays distinct across every governed path", () => {
+  assert.equal(projectSearch([refused("lu-legilux", ["domain"])]).absence, "all_refused");
+  assert.equal(projectSearch([
+    refused("eu-eurlex", ["domain"]), searchOk("lu-legilux", 0),
+  ]).absence, "mixed_no_match");
+  assert.equal(projectSearch([searchOk("lu-legilux", 0)]).absence, "no_match");
+  assert.equal(projectSearch([searchOk("lu-legilux", 2)]).absence, "has_results");
+
+  assert.equal(projectGovernedEmptiness("changes_in_period",
+    [refused("lu-legilux", ["domain"])], 0).empty, "all_refused");
+  assert.equal(projectGovernedEmptiness("changes_in_period",
+    [refused("eu-eurlex", ["domain"]), changesOk("lu-legilux", 0)], 0).empty,
+    "mixed_no_match");
+  assert.equal(projectGovernedEmptiness("changes_in_period",
+    [changesOk("lu-legilux", 0)], 0).empty, "none_matched");
+});
+
+test("the production presentation maps each empty state to its scoped sentence", () => {
+  assert.equal(searchEmptyPresentation("all_refused").sentence,
+    "No selected publisher ran this query.");
+  assert.equal(searchEmptyPresentation("mixed_no_match").sentence,
+    MIXED_ZERO_SENTENCES.search);
+  assert.equal(searchEmptyPresentation("no_match").sentence,
+    "Nothing in the corpus matches that.");
+  assert.equal(searchEmptyPresentation("incomplete_response").sentence,
+    INCOMPLETE_RESPONSE_SENTENCE);
+  // The incomplete sentence claims nothing about the corpus.
+  assert.ok(!INCOMPLETE_RESPONSE_SENTENCE.includes("corpus"));
+});
+
+test("out-of-order and repeated transitions leave nothing stale", () => {
+  const withEverything = projectSearch([
+    searchOk("lu-legilux", 1, { retrieval_mode: "hybrid", query_expansions: ["travail"] }),
+    refused("eu-eurlex", ["domain"]),
+  ]);
+  assert.equal(withEverything.limitations.length, 1);
+  assert.equal(withEverything.expansions.length, 1);
+
+  const cleared = clearedSearchResults() as unknown as Record<string, unknown>;
+  for (const [key, value] of Object.entries({
+    works: [], articles: [], error: undefined, modeUsed: undefined,
+    modeUnavailable: undefined, expansions: [], limitations: [],
+  })) {
+    assert.deepEqual(cleared[key], value, key);
+  }
+  // Every key the response path can set is cleared by the shared tuple.
+  assert.deepEqual(Object.keys(cleared).sort(), Object.keys(withEverything).sort());
+});
+
+// ---------------------------------------------------------------------------
+// Client presentation states are not wire statuses (round 4, O5)
+// ---------------------------------------------------------------------------
+
+test("a client-only presentation state never wears the wire status badge", () => {
+  assert.equal(gapBadgeStatus("mixed_no_match"), null);
+  assert.equal(gapBadgeStatus("incomplete_response"), null);
+  // Real publisher statuses keep their badge.
+  assert.equal(gapBadgeStatus("filter_not_supported_by_index"),
+    "filter_not_supported_by_index");
+  assert.equal(gapBadgeStatus("no_changes_in_period"), "no_changes_in_period");
+  assert.equal(gapBadgeStatus("no_result"), "no_result");
+  assert.equal(gapBadgeStatus("unknown_work"), "unknown_work");
+});
+
+// ---------------------------------------------------------------------------
+// Tool authority (round 4, O6)
+// ---------------------------------------------------------------------------
+
+test("a single-tool surface accepts only its own operation's limitations", () => {
+  const items = limitationsFromEffect([
+    { status: LIMITATION_STATUS, tool: "search", publisher: "lu-legilux",
+      unsupported_filters: ["domain"] },
+    { status: LIMITATION_STATUS, tool: "in_force_on", publisher: "lu-legilux",
+      unsupported_filters: ["domain"] },
+  ]);
+  assert.equal(items.length, 2, "same shape, different tools, both survive dedup");
+  assert.equal(limitationsForTool(items, "search").length, 1);
+  assert.equal(limitationsForTool(items, "search")[0].tool, "search");
+  assert.equal(limitationsForTool(items, "in_force_on").length, 1);
+  assert.equal(limitationsForTool(items, "changes_in_period").length, 0);
+});
+
+// ---------------------------------------------------------------------------
+// Validation surface retained from earlier rounds
+// ---------------------------------------------------------------------------
 
 test("malformed limitation objects are ignored and never render", () => {
   assert.equal(validateLimitation(null), null);
   assert.equal(validateLimitation("x"), null);
-  assert.equal(validateLimitation({ status: "ok", tool: "search", unsupported_filters: ["domain"] }), null);
-  assert.equal(validateLimitation({ status: LIMITATION_STATUS, tool: "drop_tables", unsupported_filters: ["domain"] }), null);
-  assert.equal(validateLimitation({ status: LIMITATION_STATUS, tool: "search", unsupported_filters: [] }), null);
-  assert.equal(validateLimitation({ status: LIMITATION_STATUS, tool: "search", unsupported_filters: ["made_up"] }), null);
-  assert.equal(validateLimitation({ status: LIMITATION_STATUS, tool: "search", unsupported_filters: "domain" }), null);
-  // Unbounded identifiers are dropped, the entry survives with the field absent.
-  const oversized = validateLimitation({
-    status: LIMITATION_STATUS, tool: "search", publisher: "x".repeat(65),
+  assert.equal(validateLimitation({ status: "ok", tool: "search" }), null);
+  assert.equal(validateLimitation({ status: LIMITATION_STATUS, tool: "evil" }), null);
+  assert.equal(validateLimitation({
+    status: LIMITATION_STATUS, tool: "search", unsupported_filters: [],
+  }), null);
+  assert.equal(validateLimitation({
+    status: LIMITATION_STATUS, tool: "search", unsupported_filters: ["not_governed"],
+  }), null);
+  const hostilePublisher = validateLimitation({
+    status: LIMITATION_STATUS, tool: "search", publisher: "../../etc",
     unsupported_filters: ["domain"],
   });
-  assert.ok(oversized);
-  assert.equal(oversized!.publisher, undefined);
+  assert.equal(hostilePublisher?.publisher, undefined, "hostile ids drop to anonymous");
 });
 
 test("more than eight refusal envelopes are capped, never summarized into prose", () => {
-  const envs = Array.from({ length: 12 }, (_, index) => refused(`p${index}`, ["domain"]));
-  assert.equal(limitationsFromEnvelopes("search", envs).length, LIMITATION_CAP);
-  const effect = Array.from({ length: 12 }, (_, index) => ({
-    status: LIMITATION_STATUS, tool: "search", publisher: `p${index}`,
-    unsupported_filters: ["domain"],
-  }));
-  assert.equal(limitationsFromEffect(effect).length, LIMITATION_CAP);
+  const many = Array.from({ length: 12 }, (_, index) => refused(`pub-${index}`, ["domain"]));
+  assert.equal(partitionGovernedResponse("search", many).limitations.length, LIMITATION_CAP);
 });
 
-test("the assistant effect field validates fail closed entry by entry", () => {
-  const out = limitationsFromEffect([
-    { status: LIMITATION_STATUS, tool: "search", unsupported_filters: ["domain"] },
-    { status: LIMITATION_STATUS, tool: "search", unsupported_filters: ["nope"] },
-    "garbage",
-    null,
+test("two separately allocated identical limitations render once", () => {
+  const duplicated = partitionGovernedResponse("search", [
+    refused("lu-legilux", ["domain", "hierarchy"]),
+    refused("lu-legilux", ["hierarchy", "domain"]),
   ]);
-  assert.equal(out.length, 1);
-  assert.equal(limitationsFromEffect(undefined).length, 0);
-  assert.equal(limitationsFromEffect("not-a-list").length, 0);
+  assert.equal(duplicated.limitations.length, 1, "logical identity, not reference identity");
 });
 
 test("the fixed explanation carries no interpolation and no query placeholder", () => {
-  assert.ok(LIMITATION_EXPLANATION.length > 40);
   assert.ok(!LIMITATION_EXPLANATION.includes("{"));
-  assert.ok(!LIMITATION_EXPLANATION.includes("%s"));
+  assert.ok(!LIMITATION_EXPLANATION.includes("$"));
+  assert.ok(LIMITATION_EXPLANATION.includes("not evidence that"));
 });
 
 test("an ungoverned tool derives nothing even from a refusing envelope", () => {
-  assert.equal(limitationsFromEnvelopes("as_of", [refused("lu-legilux", ["domain"])]).length, 0);
-});
-
-test("two separately allocated identical limitations render once (O3 dedup)", () => {
-  const one = () => ({
-    status: LIMITATION_STATUS, tool: "search", publisher: "lu-legilux",
-    jurisdiction: "lu", unsupported_filters: ["domain", "act_form"],
-  });
-  const out = limitationsFromEffect([one(), one()]);
-  assert.equal(out.length, 1);
-  // Filter order is part of normalization, not identity: reversed order is the same object.
-  const reversed = { ...one(), unsupported_filters: ["act_form", "domain"] };
-  assert.equal(limitationsFromEffect([one(), reversed]).length, 1);
-  // The envelope route dedups too: the same publisher refusing twice is one limitation.
-  const envs = [
-    { envelope: { status: LIMITATION_STATUS, publisher: "lu-legilux", jurisdiction: "lu" },
-      unsupported_filters: ["domain"] },
-    { envelope: { status: LIMITATION_STATUS, publisher: "lu-legilux", jurisdiction: "lu" },
-      unsupported_filters: ["domain"] },
-  ];
-  assert.equal(limitationsFromEnvelopes("search", envs).length, 1);
-  // Distinct publishers stay distinct.
-  const distinct = [
-    { envelope: { status: LIMITATION_STATUS, publisher: "lu-legilux" }, unsupported_filters: ["domain"] },
-    { envelope: { status: LIMITATION_STATUS, publisher: "eu-eurlex" }, unsupported_filters: ["domain"] },
-  ];
-  assert.equal(limitationsFromEnvelopes("search", distinct).length, 2);
-});
-
-test("empty-state truth scope: all-refused, mixed, and corpus-wide are distinct (O1)", () => {
-  const refusedEnv = { envelope: { status: LIMITATION_STATUS, publisher: "lu-legilux" },
-    unsupported_filters: ["domain"] };
-  const okEnv = { envelope: { status: "ok", publisher: "eu-eurlex" }, hits: [] };
-  const p = (envs: unknown[]) => partitionGovernedResponse("search", envs);
-  // All refused, zero hits: coverage, never absence.
-  assert.equal(searchAbsenceState(p([refusedEnv, refusedEnv]), 0), "all_refused");
-  // One publisher ran and found nothing while another refused: mixed state.
-  assert.equal(searchAbsenceState(p([refusedEnv, okEnv]), 0), "mixed_no_match");
-  // Only when every selected publisher ran is the corpus-wide sentence true.
-  assert.equal(searchAbsenceState(p([okEnv, okEnv]), 0), "no_match");
-  // Hits from publishers that ran render results regardless of refusals beside them.
-  assert.equal(searchAbsenceState(p([refusedEnv, okEnv]), 3), "has_results");
-  // No envelopes at all is not an all-refused claim.
-  assert.equal(searchAbsenceState(p([]), 0), "no_match");
-  // Round 3, O1: a refused envelope's rows never produce has_results. The partition strips
-  // the contradictory envelope before any row can be counted, so the all-refused state wins
-  // even when the refusal smuggles a row.
-  const contradictory = { envelope: { status: LIMITATION_STATUS, publisher: "lu-legilux" },
-    unsupported_filters: ["domain"],
-    hits: [{ lex_id: "lu-legilux:contradiction", title: "MUST NOT RENDER" }] };
-  const part = p([contradictory]);
-  assert.equal(part.ran.length, 0);
-  assert.equal(part.allRefused, true);
-  assert.equal(searchAbsenceState(part, part.ran.length), "all_refused");
-});
-
-test("row authority: refused envelopes contribute no rows on any path (round 3, O1)", () => {
-  const contradictorySearch = { envelope: { status: LIMITATION_STATUS, publisher: "lu-legilux" },
-    unsupported_filters: ["domain"], hits: [{ lex_id: "x", title: "MUST NOT RENDER" }] };
-  const contradictoryPeriod = { envelope: { status: LIMITATION_STATUS, publisher: "lu-legilux" },
-    unsupported_filters: ["domain"], changes: [{ work: "refused-row", versions_in_period: 1 }] };
-  const contradictoryForce = { envelope: { status: LIMITATION_STATUS, publisher: "lu-legilux" },
-    unsupported_filters: ["domain"], works: [{ work: "refused-row" }] };
-  // This mirrors the production projection exactly: rows come from partition.ran only.
-  for (const [tool, env, key] of [
-    ["search", contradictorySearch, "hits"],
-    ["changes_in_period", contradictoryPeriod, "changes"],
-    ["in_force_on", contradictoryForce, "works"],
-  ] as const) {
-    const part = partitionGovernedResponse(tool, [env]);
-    const rows = (part.ran as Record<string, unknown>[]).flatMap(
-      (e) => (e?.[key] as unknown[]) ?? []);
-    assert.equal(rows.length, 0, `${tool}: refused rows must not project`);
-    assert.equal(part.limitations.length, 1, `${tool}: the refusal must remain typed`);
-    assert.equal(part.allRefused, true);
-  }
-  // A mixed call still projects the supported publisher's rows, and only those.
-  const okPeriod = { envelope: { status: "ok", publisher: "eu-eurlex" },
-    changes: [{ work: "real-row", versions_in_period: 2 }] };
-  const mixed = partitionGovernedResponse("changes_in_period", [contradictoryPeriod, okPeriod]);
-  const mixedRows = (mixed.ran as Record<string, unknown>[]).flatMap(
-    (e) => (e?.changes as unknown[]) ?? []);
-  assert.equal(mixedRows.length, 1);
-  assert.equal((mixedRows[0] as Record<string, unknown>).work, "real-row");
-});
-
-test("mixed zero on the direct paths never claims whole-scope absence (round 3, O2)", () => {
-  const refused = { envelope: { status: LIMITATION_STATUS, publisher: "lu-legilux" },
-    unsupported_filters: ["domain"] };
-  const okEmptyPeriod = { envelope: { status: "ok", publisher: "eu-eurlex" }, changes: [] };
-  const okEmptyForce = { envelope: { status: "ok", publisher: "eu-eurlex" }, works: [] };
-  // The production branch decision: rows empty, not all refused, one refusal -> mixed gap
-  // with the operation's scoped sentence, never the whole-scope claim.
-  for (const [tool, envs] of [
-    ["changes_in_period", [okEmptyPeriod, refused]],
-    ["in_force_on", [okEmptyForce, refused]],
-  ] as const) {
-    const part = partitionGovernedResponse(tool, [...envs]);
-    assert.equal(part.allRefused, false);
-    assert.equal(part.anyRefused, true);
-    const sentence = MIXED_ZERO_SENTENCES[tool];
-    assert.ok(sentence.includes("publishers that could apply these filters"));
-    assert.ok(!sentence.includes("Nothing changed"));
-    assert.ok(!sentence.includes("No publisher state covers"));
-  }
-  // Both publishers ran and found nothing: the whole-scope sentences are then true and the
-  // mixed sentence must NOT be selected.
-  const clean = partitionGovernedResponse("changes_in_period", [okEmptyPeriod, okEmptyPeriod]);
-  assert.equal(clean.anyRefused, false);
-});
-
-test("the production presentation maps each empty state to its scoped sentence (O1)", () => {
-  // This IS the render decision: Search.tsx passes results.absence into this presenter and
-  // prints the returned sentence, so a wrong mapping here is the production surface lying.
-  assert.equal(searchEmptyPresentation("no_match").sentence,
-    "Nothing in the corpus matches that.");
-  assert.equal(searchEmptyPresentation("mixed_no_match").sentence,
-    "No match was returned by the publishers that could apply these filters.");
-  assert.equal(searchEmptyPresentation("all_refused").sentence,
-    "No selected publisher ran this query.");
-  // The corpus-wide sentence must be unreachable from the two refusal-bearing states.
-  assert.notEqual(searchEmptyPresentation("mixed_no_match").sentence,
-    searchEmptyPresentation("no_match").sentence);
-  assert.notEqual(searchEmptyPresentation("all_refused").sentence,
-    searchEmptyPresentation("no_match").sentence);
-});
-
-test("state transitions: a refused response then a cleared query leaves nothing behind (O2)", () => {
-  const refusedEnv = { envelope: { status: LIMITATION_STATUS, publisher: "lu-legilux" },
-    unsupported_filters: ["domain"] };
-  // The exact production wiring: Search.tsx builds its state through these transitions.
-  const after = searchResultsFromResponse(
-    partitionGovernedResponse("search", [refusedEnv]), 0,
-    { works: [], articles: [], expansions: [], modeUnavailable: undefined });
-  assert.equal(after.limitations.length, 1);
-  assert.equal(after.absence, "all_refused");
-  const cleared = clearedSearchResults();
-  assert.deepEqual(cleared.limitations, []);
-  assert.equal(cleared.absence, "no_match");
-  // The error transition clears result state too, carrying only its sentence.
-  const failed = searchResultsFromError("Search could not be reached. Try again.");
-  assert.deepEqual(failed.limitations, []);
-  assert.equal(failed.error, "Search could not be reached. Try again.");
-  assert.equal(failed.absence, "no_match");
-});
-
-test("the cleared search tuple clears the limitation state (O2)", () => {
-  const cleared = clearedSearchResults();
-  assert.deepEqual(cleared.limitations, []);
-  assert.deepEqual(cleared.works, []);
-  assert.deepEqual(cleared.articles, []);
-  assert.equal(cleared.error, undefined);
-  assert.equal(cleared.modeUnavailable, undefined);
-  assert.deepEqual(cleared.expansions, []);
-  // The tuple is the union of every result-bearing key the search surface sets; a key added
-  // to the surface without joining this tuple is the exact stale-state defect of review O2.
-  assert.deepEqual(Object.keys(cleared).sort(),
-    ["absence", "articles", "error", "expansions", "limitations", "modeUnavailable", "works"]);
+  assert.equal(classifyEnvelope("provenance", refused("lu-legilux", ["domain"])).kind,
+    "invalid");
+  assert.equal(partitionGovernedResponse("provenance",
+    [refused("lu-legilux", ["domain"])]).limitations.length, 0);
 });

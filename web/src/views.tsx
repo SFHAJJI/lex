@@ -16,7 +16,8 @@ import {
 } from "./temporal";
 import { extractionDisclosure } from "./extractionProfile";
 import { HISTORICAL_DENSITY, historicalDensityApplies } from "./notices";
-import { LIMITATION_EXPLANATION, limitationsFromEffect, type PublisherLimitation } from "./limitations";
+import { gapBadgeStatus, LIMITATION_EXPLANATION, limitationsFromEffect,
+  type PublisherLimitation } from "./limitations";
 
 const permalink = (work: string, date: string, anchor?: string) =>
   `/${publisherOf(work)}/${workSlug(work)}/${date}${anchor ? `#${anchor}` : ""}`;
@@ -568,7 +569,10 @@ export function Gap({ status, explanation, available, held }: {
   const collection = whole && (held?.kind === "RECUEIL" || held?.kind === "CODE_RECUEIL");
   return (
     <div className="gap">
-      <div className="cnt"><span className="tag warn mono">{status}</span></div>
+      {/* Client presentation states are not wire statuses and never wear the badge (O5);
+          the decision lives in the tested seam, not in this markup. */}
+      {gapBadgeStatus(status) === null ? null
+        : <div className="cnt"><span className="tag warn mono">{gapBadgeStatus(status)}</span></div>}
       {whole ? (
         <>
           {collection ? (
@@ -634,18 +638,30 @@ export const hasView = (ui?: UiEffect) =>
  * did not run the query and for which governed filters. Input is validated fail closed by the
  * caller or here; malformed entries never render and never suppress the primary view.
  */
-export function PublisherLimitations({ items }: { items: PublisherLimitation[] }) {
-  if (items.length === 0) return null;
+export function PublisherLimitations({ items, tool }: {
+  items: PublisherLimitation[];
+  /**
+   * The operation this surface renders (round 4, O6). When given, only limitations carrying
+   * this tool render here; when absent the surface is multi-tool and every row labels its
+   * operation visibly, so a search limitation can never masquerade as in-force evidence.
+   */
+  tool?: string;
+}) {
+  const scoped = tool === undefined ? items : items.filter((item) => item.tool === tool);
+  if (scoped.length === 0) return null;
   return (
     <div className="trust-notice" role="note" aria-label="Publisher limitation">
       <b>Some publishers did not run this query</b>
-      {items.map((item, index) => (
+      {scoped.map((item, index) => (
         <p key={index} className="limitation-row">
           {(item.publisher ?? item.jurisdiction ?? "One selected publisher")}
           {": the filter"}{item.unsupported_filters.length > 1 ? "s" : ""}{" "}
           <code>{item.unsupported_filters.join(", ")}</code>
           {" "}{item.unsupported_filters.length > 1 ? "are" : "is"} not described by its index
           for this scope.
+          {tool === undefined
+            ? <span className="sub mono"> ({item.tool})</span>
+            : null}
         </p>
       ))}
       <p className="limitation-row sub">{LIMITATION_EXPLANATION}</p>
