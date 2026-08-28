@@ -605,10 +605,6 @@ export default function App() {
         [r.operations?.map((operation) => operation.operation_id) ?? [], r.ui ?? null]);
       if (identity === appliedReply.current) return;
       appliedReply.current = identity;
-      // An accepted view is a new answer on this route, so anything still outstanding from
-      // before it is no longer allowed to write. The request tuple may not have changed, so
-      // nothing else would invalidate them.
-      governedGeneration.current += 1;
       setOperationViews(compoundOperationViews(r));
       const presentation = r.operations?.find((operation) => hasView(operation.ui));
       if (presentation
@@ -639,6 +635,13 @@ export default function App() {
       }
       let navigated = false;
       if (hasView(r.ui)) {
+        // Invalidate only once there is an accepted view to replace with. This used to run for
+        // every callback, including a streaming one carrying no view, which invalidated an
+        // outstanding governed request without installing a replacement and without changing
+        // any dependency, so nothing re-ran and the held completion was stranded. The comment
+        // above it said an accepted view is a new answer on this route, which was the intent
+        // and not what the code did.
+        governedGeneration.current += 1;
         setUi(r.ui);
         const timeline = assistantTimelineSeed(r.ui);
         if (timeline) {
