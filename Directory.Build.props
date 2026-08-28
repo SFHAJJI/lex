@@ -1,0 +1,9 @@
+<Project>
+  <PropertyGroup>
+    <RuntimeFrameworkVersion>10.0.11</RuntimeFrameworkVersion>
+    <RollForward>Disable</RollForward>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <RestoreLockedMode>true</RestoreLockedMode>
+    <NuGetLockFilePath Condition="'$(UseDirectML)' == 'true'">$(MSBuildProjectDirectory)/packages.directml.lock.json</NuGetLockFilePath>
+  </PropertyGroup>
+</Project>

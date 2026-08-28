@@ -1,0 +1,31 @@
+{
+  "profile_id": "akn-lu/2",
+  "provisions": [
+    {
+      "anchor": "art_real",
+      "eli": null,
+      "type": "article",
+      "num": "Art. 2.",
+      "heading": "Non-BMP span",
+      "path": [],
+      "article_valid_from": null,
+      "text_md": "The synthetic compass \uD83E\uDDED points north.",
+      "text_sha256": "b936a59404bd641f6b81010090b2673ff8da3c870691937cc14eb545089154dd",
+      "md_span": {
+        "start": 50,
+        "end": 87
+      },
+      "citations": []
+    }
+  ],
+  "markdown": "\n<a id=\"art_real\"></a>\n\n### Art. 2. Non-BMP span\n\nThe synthetic compass \uD83E\uDDED points north.\n",
+  "notes": [
+    "1 official publisher-structural empty article(s) preserved outside searchable provisions"
+  ],
+  "publisher_structural_empty_articles": [
+    {
+      "anchor": "art_empty",
+      "w_id": "/eli/etat/leg/loi/2099/01/01/n99/art_empty"
+    }
+  ]
+}

@@ -14,13 +14,17 @@ on:
 
 jobs:
   dotnet:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
         with:
-          dotnet-version: 10.0.x
-      - run: dotnet build -c Release --nologo
+          dotnet-version: 10.0.400
+      - name: verify exact SDK
+        shell: bash
+        run: test "$(dotnet --version)" = "10.0.400"
+      - run: dotnet restore Lex.slnx --locked-mode --nologo
+      - run: dotnet build -c Release --no-restore --nologo
       - name: test (fitness rules + frozen profile fingerprints)
         shell: bash
         run: |
@@ -48,6 +52,30 @@ jobs:
       - name: deploy contract tests
         run: python3 -m unittest discover -s tests/deploy -p 'test_*.py'
 
+  canon-windows:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+        with:
+          dotnet-version: 10.0.400
+      - name: verify exact SDK
+        shell: pwsh
+        run: |
+          if ((dotnet --version).Trim() -ne "10.0.400") {
+            throw "canon/1 requires .NET SDK 10.0.400"
+          }
+      - name: canon/1 byte contract
+        shell: pwsh
+        run: |
+          dotnet restore tests/Lex.Tests/Lex.Tests.csproj --locked-mode --nologo
+          dotnet test tests/Lex.Tests/Lex.Tests.csproj -c Release --no-restore --nologo --filter FullyQualifiedName~Canon1FreezeTests
+      - name: DirectML locked dependency graph
+        shell: pwsh
+        run: |
+          dotnet restore Lex.slnx --locked-mode --nologo -p:UseDirectML=true
+          dotnet build src/Lex.Ingest/Lex.Ingest.csproj -c Release --no-restore --nologo -p:UseDirectML=true
+
   web:
     runs-on: ubuntu-latest
     steps:
@@ -59,7 +87,7 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
         with:
-          dotnet-version: 10.0.x
+          dotnet-version: 10.0.400
       - run: npm ci --no-audit --no-fund
         working-directory: web
       - name: tooling contract tests
@@ -68,7 +96,8 @@ jobs:
       # a bundle can typecheck and serve correctly and still throw on its first line.
       - run: npm run build
         working-directory: web
-      - run: dotnet build src/Lex.Web/Lex.Web.csproj -c Release --nologo
+      - run: dotnet restore src/Lex.Web/Lex.Web.csproj --locked-mode --nologo
+      - run: dotnet build src/Lex.Web/Lex.Web.csproj -c Release --no-restore --nologo
       - run: npx playwright install --with-deps chromium
         working-directory: web
       - name: browser contracts and performance budgets

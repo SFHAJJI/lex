@@ -1,0 +1,31 @@
+{
+  "profile_id": "akn-lu/1",
+  "provisions": [
+    {
+      "anchor": "art_one",
+      "eli": "https://example.test/eli/synthetic/art1",
+      "type": "article",
+      "num": "Art. 1.",
+      "heading": "Compass rule",
+      "path": [
+        "Invented chapter"
+      ],
+      "article_valid_from": "2099-01-02",
+      "text_md": "The blue compass points to the synthetic register.",
+      "text_sha256": "00ccbb6ee3c8dca658a1ed447843b3f8da1dc91272da13df705b6406cc8a1444",
+      "md_span": {
+        "start": 70,
+        "end": 120
+      },
+      "citations": [
+        {
+          "href": "https://example.test/reference",
+          "text": "the synthetic register"
+        }
+      ]
+    }
+  ],
+  "markdown": "\n## Invented chapter\n\n<a id=\"art_one\"></a>\n\n### Art. 1. Compass rule\n\nThe blue compass points to the synthetic register.\n",
+  "notes": [],
+  "publisher_structural_empty_articles": []
+}

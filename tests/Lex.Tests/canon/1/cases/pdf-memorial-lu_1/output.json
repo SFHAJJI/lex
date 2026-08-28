@@ -1,0 +1,42 @@
+{
+  "profile_id": "pdf-memorial-lu/1",
+  "provisions": [
+    {
+      "anchor": "art_1er",
+      "eli": null,
+      "type": "article",
+      "num": "Art. 1er.",
+      "heading": null,
+      "path": [],
+      "article_valid_from": null,
+      "text_md": "Le jardin bleu contient sept arbres fictifs.",
+      "text_sha256": "cb6ad065d3f468429507e0c65ca7af32ce7983ee334f3ac4e7b0811eac836930",
+      "md_span": {
+        "start": 38,
+        "end": 82
+      },
+      "citations": []
+    },
+    {
+      "anchor": "art_2",
+      "eli": null,
+      "type": "article",
+      "num": "Art. 2.",
+      "heading": null,
+      "path": [],
+      "article_valid_from": null,
+      "text_md": "La boussole synthetique indique le nord.",
+      "text_sha256": "f83e1612915925fbb887557074e89ca2446eb09919a7055696c852c2cf49e3b4",
+      "md_span": {
+        "start": 117,
+        "end": 157
+      },
+      "citations": []
+    }
+  ],
+  "markdown": "\n<a id=\"art_1er\"></a>\n\n### Art. 1er.\n\nLe jardin bleu contient sept arbres fictifs.\n\n<a id=\"art_2\"></a>\n\n### Art. 2.\n\nLa boussole synthetique indique le nord.\n",
+  "notes": [
+    "took lines 4..8 of 8 from the gazette issue"
+  ],
+  "publisher_structural_empty_articles": []
+}

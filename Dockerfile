@@ -7,11 +7,12 @@ RUN npm ci --no-audit --no-fund
 COPY web/ ./
 RUN npm run build
 
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0.400@sha256:e1ffd2a92ae84c1291bc1b6887501f8af98e6331e7af6d4c8d37168c5e87a64c AS build
 WORKDIR /src
 COPY . .
 COPY --from=web /src/Lex.Web/wwwroot/app ./src/Lex.Web/wwwroot/app
-RUN dotnet publish src/Lex.Web -c Release -o /app
+RUN dotnet restore Lex.slnx --locked-mode --nologo
+RUN dotnet publish src/Lex.Web -c Release -o /app --no-restore --nologo
 
 # The indexes come from the nightly's own published output, not from a developer's disk.
 # See deploy/fetch-indexes.sh for why. Kept as a separate stage so the ~950 MB never enters
@@ -38,7 +39,7 @@ RUN set -eu; found=0; \
     for manifest in /indexes/*.manifest.json; do \
       [ -f "$manifest" ] || continue; found=1; \
       signature="${manifest%.json}.sig"; \
-      dotnet run --project src/Lex.Ingest -c Release -- artifact verify \
+      dotnet run --project src/Lex.Ingest -c Release --no-restore -- artifact verify \
         --root /indexes --manifest "$manifest" --signature "$signature" \
         --trust-roots /trust/trusted-artifact-roots.json; \
     done; \
@@ -55,7 +56,7 @@ RUN set -eu; found=0; \
       }; \
     fi
 
-FROM mcr.microsoft.com/dotnet/aspnet:10.0
+FROM mcr.microsoft.com/dotnet/aspnet:10.0.11@sha256:a4556ed033fa96f984bb7a8d348851cb2d36b1281dd2420070045f664fbb5f94
 WORKDIR /app
 COPY --from=build /app .
 COPY --from=verified-indexes /indexes ./indexes
