@@ -358,8 +358,10 @@ public static class LegalOperationCatalog
             1, 0,
             "The state of one document as it stood on one date. Pure lookup, no ranking. "
             + "mode=outline lists provisions without text and may be narrowed with anchors; "
-            + "mode=select returns only the named anchors' text; mode=full (default) returns the "
-            + "whole text. Every provision carries its own permalink and hash.",
+            + "mode=select returns only the named anchors; mode=full (default) returns all "
+            + "certified text within the bounded response and discloses typed text gaps. "
+            + "Text-bearing provisions carry a permalink and hash; structural gaps carry no "
+            + "text or hash and report why text is unavailable.",
             LegalResultKind.ExactText, LegalEffectKind.Provision, true,
             [
                 S("work", WorkDescription),

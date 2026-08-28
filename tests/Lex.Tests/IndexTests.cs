@@ -4,6 +4,10 @@ namespace Lex.Tests;
 
 public class IndexTests : IDisposable
 {
+    private const string V4GenerationSha256 =
+        "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
+    private const string V4ArticlesCommit =
+        "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
     private readonly string _db = Path.Combine(Path.GetTempPath(), $"lex-test-{Guid.NewGuid():N}.db");
 
     private sealed class FakeEncoder : ITextEncoder
@@ -155,6 +159,37 @@ public class IndexTests : IDisposable
         };
         IndexBuilder.Build(_db, stamp, docs, provisions, [], [], StampSigner.CreateKeyPem());
         return LexIndexReader.Open(_db);
+    }
+
+    private LexIndexReader BuildV4(bool textPublic = true) =>
+        BuildV4At(_db, textPublic);
+
+    private static LexIndexReader BuildV4At(
+        string databasePath,
+        bool textPublic = true,
+        string? citationsJson = null)
+    {
+        var stamp = new Dictionary<string, string>
+        {
+            ["collection"] = "t-pub", ["tier"] = "A", ["history_begins"] = "publisher",
+            ["built_at"] = "2026-08-01T00:00:00Z", ["corpus_commit"] = "test",
+            ["generation_sha256"] = V4GenerationSha256,
+            ["articles_commit"] = V4ArticlesCommit,
+        };
+        var document = Row(
+            "t-pub:w1:2020-01-01", "w1", "2020-01-01", null,
+            title: "first thing", text: true) with { TextPublic = textPublic };
+        var provision = Prov(document, 0, "art_1", "held wording") with
+        {
+            CitationsJson = citationsJson,
+        };
+        IndexBuilder.Build(
+            databasePath, stamp, [document], [provision],
+            [], [], StampSigner.CreateKeyPem(),
+            provisionGaps: ProvisionGapIndexInput.FromGenerationEvidence(
+                ProvisionGapIndexInput.RequiredArticlesCanon,
+                V4GenerationSha256, V4ArticlesCommit, []));
+        return LexIndexReader.Open(databasePath);
     }
 
     [Fact]
@@ -321,6 +356,448 @@ public class IndexTests : IDisposable
 
         using var tampered = LexIndexReader.Open(_db);
         Assert.ThrowsAny<Exception>(() => tampered.ComputeContentDigest());
+    }
+
+    [Fact]
+    public void Version_three_digest_retains_its_legacy_stored_size_behavior()
+    {
+        string signed;
+        using (var reader = Build())
+            signed = reader.Stamp["content_digest"];
+
+        using (var connection = new Microsoft.Data.Sqlite.SqliteConnection(
+                   $"Data Source={_db}"))
+        {
+            connection.Open();
+            using var mutate = connection.CreateCommand();
+            mutate.CommandText = "UPDATE text_blobs SET stored_size=stored_size+1";
+            Assert.True(mutate.ExecuteNonQuery() > 0);
+        }
+
+        using var legacy = LexIndexReader.Open(_db);
+        Assert.Equal(signed, legacy.ComputeContentDigest());
+    }
+
+    [Fact]
+    public void Version_four_signature_authenticates_text_public_before_serving()
+    {
+        using (var reader = BuildV4(textPublic: false))
+            Assert.True(reader.SignatureValid);
+
+        using (var connection = new Microsoft.Data.Sqlite.SqliteConnection(
+                   $"Data Source={_db}"))
+        {
+            connection.Open();
+            using var mutate = connection.CreateCommand();
+            mutate.CommandText = "UPDATE docs SET text_public=1";
+            Assert.Equal(1, mutate.ExecuteNonQuery());
+        }
+
+        using var tampered = LexIndexReader.Open(_db);
+        Assert.False(tampered.SignatureValid);
+        Assert.NotEqual(tampered.Stamp["content_digest"], tampered.ComputeContentDigest());
+    }
+
+    [Fact]
+    public void Version_four_finalization_blocks_a_competing_writer_before_signing()
+    {
+        var vectors = Path.Combine(
+            Path.GetTempPath(), $"lex-v4-finalize-{Guid.NewGuid():N}.vec");
+        _extra.Add(vectors);
+        using var encoder = new FakeEncoder();
+        var document = Row(
+            "t-pub:w1:2020-01-01", "w1", "2020-01-01", null,
+            title: "first thing", text: true);
+        var provision = Prov(document, 0, "art_1", "held wording");
+        var attempted = 0;
+        var writerWasBlocked = false;
+        var progress = new Action<SemanticBuildProgress>(value =>
+        {
+            if (value.Stage != SemanticBuildStage.Finalization
+                || value.Completed != 1
+                || Interlocked.Exchange(ref attempted, 1) != 0)
+                return;
+
+            var directory = Path.GetDirectoryName(_db)!;
+            var prefix = Path.GetFileName(_db) + ".tmp-";
+            var privatePath = Assert.Single(
+                Directory.GetFiles(directory),
+                path => Path.GetFileName(path).StartsWith(prefix, StringComparison.Ordinal)
+                    && !path.EndsWith("-journal", StringComparison.Ordinal)
+                    && !path.EndsWith("-wal", StringComparison.Ordinal)
+                    && !path.EndsWith("-shm", StringComparison.Ordinal));
+            try
+            {
+                using var competing = new Microsoft.Data.Sqlite.SqliteConnection(
+                    $"Data Source={privatePath};Default Timeout=1;Pooling=False");
+                competing.Open();
+                using var mutate = competing.CreateCommand();
+                mutate.CommandText = "UPDATE docs SET title='unsigned mutation'";
+                mutate.ExecuteNonQuery();
+            }
+            catch (Microsoft.Data.Sqlite.SqliteException)
+            {
+                writerWasBlocked = true;
+            }
+        });
+
+        IndexBuilder.Build(
+            _db, V4Stamp(), [document], [provision], [], [],
+            StampSigner.CreateKeyPem(),
+            semantic: new SemanticBuildOptions(
+                encoder, vectors, "model-sha", "tokenizer-sha", Progress: progress),
+            provisionGaps: ProvisionGapIndexInput.FromGenerationEvidence(
+                ProvisionGapIndexInput.RequiredArticlesCanon,
+                V4GenerationSha256, V4ArticlesCommit, []));
+
+        Assert.Equal(1, attempted);
+        Assert.True(writerWasBlocked);
+        using var reader = LexIndexReader.Open(_db, encoder, vectors);
+        Assert.True(reader.SignatureValid);
+        Assert.Equal("first thing", reader.AsOf(
+            "w1", new DateOnly(2020, 1, 2), FilterSet.All)!.Title);
+    }
+
+    [Fact]
+    public void Version_four_reader_disposal_is_idempotent_with_an_integrity_lease()
+    {
+        var reader = BuildV4();
+
+        Assert.True(reader.SignatureValid);
+
+        reader.Dispose();
+        reader.Dispose();
+
+        using var connection = new Microsoft.Data.Sqlite.SqliteConnection(
+            $"Data Source={_db};Default Timeout=1");
+        connection.Open();
+        using var update = connection.CreateCommand();
+        update.CommandTimeout = 1;
+        update.CommandText = "UPDATE docs SET title='writer-after-reader-release'";
+        Assert.Equal(1, update.ExecuteNonQuery());
+    }
+
+    [Theory]
+    [InlineData("docs", "title", "changed title")]
+    [InlineData("docs", "source_uri", "https://other.example/work")]
+    [InlineData("docs", "profile", "changed/profile")]
+    [InlineData("provisions", "seq", 7)]
+    [InlineData("provisions", "anchor", "art_changed")]
+    [InlineData("provisions", "ptype", "section")]
+    [InlineData("provisions", "heading", "Changed heading")]
+    [InlineData("provisions", "path", "Chapter II")]
+    [InlineData("provisions", "article_valid_from", "2020-02-01")]
+    public void Version_four_digest_binds_every_served_document_and_provision_field(
+        string table, string column, object changedValue)
+    {
+        using (var reader = BuildV4())
+            Assert.True(reader.SignatureValid);
+
+        using (var connection = new Microsoft.Data.Sqlite.SqliteConnection(
+                   $"Data Source={_db}"))
+        {
+            connection.Open();
+            using var mutate = connection.CreateCommand();
+            mutate.CommandText = table == "provisions" && column == "anchor"
+                ? "UPDATE provisions SET anchor=$value, "
+                    + "provision_id='t-pub:w1:2020-01-01#art_changed'"
+                : $"UPDATE {table} SET {column}=$value";
+            mutate.Parameters.AddWithValue("$value", changedValue);
+            Assert.Equal(1, mutate.ExecuteNonQuery());
+        }
+
+        using var tampered = LexIndexReader.Open(_db);
+        Assert.False(tampered.SignatureValid);
+        Assert.NotEqual(tampered.Stamp["content_digest"], tampered.ComputeContentDigest());
+    }
+
+    [Fact]
+    public void Version_four_content_digest_is_reproducible_across_independent_builds()
+    {
+        var secondPath = Path.Combine(
+            Path.GetTempPath(), $"lex-v4-repeat-{Guid.NewGuid():N}.db");
+        _extra.Add(secondPath);
+
+        using var first = BuildV4At(_db);
+        using var second = BuildV4At(secondPath);
+
+        Assert.Equal(first.Stamp["content_digest"], second.Stamp["content_digest"]);
+        Assert.Equal(first.ComputeContentDigest(), second.ComputeContentDigest());
+    }
+
+    [Fact]
+    public void Version_four_schema_digest_is_invariant_to_source_line_endings()
+    {
+        const string lfSql =
+            "CREATE TABLE sample(\n"
+            + "  id INTEGER PRIMARY KEY,\n"
+            + "  value TEXT\n"
+            + ");";
+        var crlfSql = lfSql.ReplaceLineEndings("\r\n");
+
+        using var lf = OpenMemory();
+        using var crlf = OpenMemory();
+
+        IndexBuilder.ExecuteSchema(lf, lfSql, canonicalLineEndings: true);
+        IndexBuilder.ExecuteSchema(crlf, crlfSql, canonicalLineEndings: true);
+
+        var lfStored = StoredSchema(lf);
+        var crlfStored = StoredSchema(crlf);
+
+        Assert.Equal(lfStored, crlfStored);
+        Assert.DoesNotContain("\r", crlfStored);
+        Assert.Equal(
+            IndexBuilder.ContentDigestV4(lf),
+            IndexBuilder.ContentDigestV4(crlf));
+
+        static Microsoft.Data.Sqlite.SqliteConnection OpenMemory()
+        {
+            var connection = new Microsoft.Data.Sqlite.SqliteConnection(
+                "Data Source=:memory:");
+            connection.Open();
+            return connection;
+        }
+
+        static string StoredSchema(
+            Microsoft.Data.Sqlite.SqliteConnection connection)
+        {
+            using var command = connection.CreateCommand();
+            command.CommandText =
+                "SELECT sql FROM sqlite_schema WHERE name='sample'";
+            return Assert.IsType<string>(command.ExecuteScalar());
+        }
+    }
+
+    [Fact]
+    public void Version_four_digest_is_independent_of_caller_enumeration_order()
+    {
+        var secondPath = Path.Combine(
+            Path.GetTempPath(), $"lex-v4-order-{Guid.NewGuid():N}.db");
+        _extra.Add(secondPath);
+        var firstDocument = Row(
+            "t-pub:w1:2020-01-01", "w1", "2020-01-01", null,
+            title: "first thing", text: true);
+        var secondDocument = Row(
+            "t-pub:w2:2020-01-01", "w2", "2020-01-01", null,
+            title: "second thing", text: true);
+        var firstProvision = Prov(firstDocument, 0, "art_1", "first wording");
+        var secondProvision = Prov(secondDocument, 0, "art_1", "second wording");
+
+        void BuildOrdered(
+            string path,
+            IReadOnlyList<DocRow> documents,
+            IReadOnlyList<ProvisionRow> provisions)
+        {
+            IndexBuilder.Build(
+                path, V4Stamp(), documents, provisions, [], [],
+                StampSigner.CreateKeyPem(),
+                provisionGaps: ProvisionGapIndexInput.FromGenerationEvidence(
+                    ProvisionGapIndexInput.RequiredArticlesCanon,
+                    V4GenerationSha256, V4ArticlesCommit, []));
+        }
+
+        BuildOrdered(_db,
+            [firstDocument, secondDocument],
+            [firstProvision, secondProvision]);
+        BuildOrdered(secondPath,
+            [secondDocument, firstDocument],
+            [secondProvision, firstProvision]);
+
+        using var first = LexIndexReader.Open(_db);
+        using var second = LexIndexReader.Open(secondPath);
+        Assert.Equal(first.Stamp["content_digest"], second.Stamp["content_digest"]);
+    }
+
+    [Fact]
+    public void Version_four_digest_binds_fts_shadow_bytes()
+    {
+        using (var reader = BuildV4())
+            Assert.True(reader.SignatureValid);
+        using (var connection = new Microsoft.Data.Sqlite.SqliteConnection(
+                   $"Data Source={_db}"))
+        {
+            connection.Open();
+            using var mutate = connection.CreateCommand();
+            mutate.CommandText = "UPDATE fts_data SET block=zeroblob(length(block))";
+            Assert.True(mutate.ExecuteNonQuery() > 0);
+        }
+
+        var error = Assert.Throws<InvalidDataException>(() =>
+            LexIndexReader.Open(_db));
+        Assert.Contains("SQLite integrity", error.Message, StringComparison.Ordinal);
+
+        using var writable = new Microsoft.Data.Sqlite.SqliteConnection(
+            $"Data Source={_db};Default Timeout=1");
+        writable.Open();
+        using var update = writable.CreateCommand();
+        update.CommandTimeout = 1;
+        update.CommandText = "UPDATE docs SET title='writer-after-failed-integrity-open'";
+        Assert.True(update.ExecuteNonQuery() > 0);
+    }
+
+    [Fact]
+    public void Version_four_reader_rejects_blob_length_metadata_tampering()
+    {
+        using (var reader = BuildV4())
+            Assert.True(reader.SignatureValid);
+        using (var connection = new Microsoft.Data.Sqlite.SqliteConnection(
+                   $"Data Source={_db}"))
+        {
+            connection.Open();
+            using var mutate = connection.CreateCommand();
+            mutate.CommandText = "UPDATE text_blobs SET stored_size=stored_size+1";
+            Assert.Equal(1, mutate.ExecuteNonQuery());
+        }
+
+        Assert.Throws<InvalidDataException>(() => LexIndexReader.Open(_db));
+
+        using var writable = new Microsoft.Data.Sqlite.SqliteConnection(
+            $"Data Source={_db};Default Timeout=1");
+        writable.Open();
+        using var update = writable.CreateCommand();
+        update.CommandTimeout = 1;
+        update.CommandText = "UPDATE docs SET title='writer-after-failed-open'";
+        Assert.Equal(1, update.ExecuteNonQuery());
+    }
+
+    [Fact]
+    public void Version_four_digest_binds_rowids_used_for_bounded_serving_order()
+    {
+        const string citations = """
+            [
+              {"href":"/eli/etat/leg/loi/2099/01/01/a1/jo","text":"one"},
+              {"href":"/eli/etat/leg/loi/2099/01/01/a2/jo","text":"two"},
+              {"href":"/eli/etat/leg/loi/2099/01/01/a3/jo","text":"three"}
+            ]
+            """;
+        string firstSlug;
+        using (var original = BuildV4At(_db, citationsJson: citations))
+        {
+            Assert.True(original.SignatureValid);
+            firstSlug = Assert.Single(original.CitationsOf(
+                "t-pub:w1:2020-01-01|en|2020-01-01", "art_1", 1)).Slug;
+        }
+
+        using (var connection = new Microsoft.Data.Sqlite.SqliteConnection(
+                   $"Data Source={_db}"))
+        {
+            connection.Open();
+            using var mutate = connection.CreateCommand();
+            mutate.CommandText = """
+                UPDATE citations SET rowid=rowid+100;
+                UPDATE citations SET rowid=CASE rowid
+                  WHEN 101 THEN 203 WHEN 102 THEN 202 WHEN 103 THEN 201 END;
+                """;
+            Assert.Equal(6, mutate.ExecuteNonQuery());
+        }
+
+        using var tampered = LexIndexReader.Open(_db);
+        Assert.NotEqual(firstSlug, Assert.Single(tampered.CitationsOf(
+            "t-pub:w1:2020-01-01|en|2020-01-01", "art_1", 1)).Slug);
+        Assert.False(tampered.SignatureValid);
+    }
+
+    [Fact]
+    public void Version_four_mount_holds_an_integrity_lease_for_isolated_sessions()
+    {
+        using var mounted = BuildV4(textPublic: false);
+        Assert.True(mounted.SignatureValid);
+
+        using var connection = new Microsoft.Data.Sqlite.SqliteConnection(
+            $"Data Source={_db};Default Timeout=1");
+        connection.Open();
+        using var mutate = connection.CreateCommand();
+        mutate.CommandTimeout = 1;
+        mutate.CommandText = "UPDATE docs SET text_public=1";
+        Assert.Throws<Microsoft.Data.Sqlite.SqliteException>(() => mutate.ExecuteNonQuery());
+
+        using var isolated = mounted.CreateIsolatedSession();
+        Assert.True(isolated.SignatureValid);
+        Assert.Equal(isolated.Stamp["content_digest"], isolated.ComputeContentDigest());
+    }
+
+    [Fact]
+    public void Version_three_keeps_legacy_non_http_source_uri_compatibility()
+    {
+        var document = Row(
+            "t-pub:w1:2020-01-01", "w1", "2020-01-01", null, text: true) with
+        {
+            SourceUri = "legacy-relative-source",
+        };
+        IndexBuilder.Build(
+            _db, new Dictionary<string, string>
+            {
+                ["collection"] = "t-pub",
+                ["built_at"] = "2026-08-01T00:00:00Z",
+                ["corpus_commit"] = "test",
+            }, [document], [], [], [], StampSigner.CreateKeyPem());
+
+        using var legacy = LexIndexReader.Open(_db);
+        Assert.True(legacy.SignatureValid);
+        Assert.Equal("legacy-relative-source", legacy.AsOf(
+            "w1", new DateOnly(2020, 1, 2), FilterSet.All)!.SourceUri);
+    }
+
+    [Fact]
+    public void Builder_and_version_four_reader_both_reject_mixed_collections()
+    {
+        var mismatched = Row(
+            "other:w1:2020-01-01", "w1", "2020-01-01", null, text: true) with
+        {
+            Collection = "other",
+        };
+        var builderError = Assert.Throws<InvalidDataException>(() => IndexBuilder.Build(
+            _db, V4Stamp(),
+            [mismatched], [], [], [], StampSigner.CreateKeyPem(),
+            provisionGaps: ProvisionGapIndexInput.FromGenerationEvidence(
+                ProvisionGapIndexInput.RequiredArticlesCanon,
+                V4GenerationSha256, V4ArticlesCommit, [])));
+        Assert.Contains("collection", builderError.Message, StringComparison.OrdinalIgnoreCase);
+
+        using (var reader = BuildV4())
+            Assert.True(reader.SignatureValid);
+        using (var connection = new Microsoft.Data.Sqlite.SqliteConnection(
+                   $"Data Source={_db}"))
+        {
+            connection.Open();
+            using var mutate = connection.CreateCommand();
+            mutate.CommandText = "UPDATE docs SET collection='other'";
+            Assert.Equal(1, mutate.ExecuteNonQuery());
+        }
+
+        var readerError = Assert.Throws<InvalidDataException>(() => LexIndexReader.Open(_db));
+        Assert.Contains("collection", readerError.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Builder_and_reader_reject_non_http_document_source_uris()
+    {
+        var invalid = Row(
+            "t-pub:w1:2020-01-01", "w1", "2020-01-01", null, text: true) with
+        {
+            SourceUri = "javascript:alert(1)",
+        };
+        var builderError = Assert.Throws<InvalidDataException>(() => IndexBuilder.Build(
+            _db, V4Stamp(),
+            [invalid], [], [], [], StampSigner.CreateKeyPem(),
+            provisionGaps: ProvisionGapIndexInput.FromGenerationEvidence(
+                ProvisionGapIndexInput.RequiredArticlesCanon,
+                V4GenerationSha256, V4ArticlesCommit, [])));
+        Assert.Contains("source_uri", builderError.Message, StringComparison.Ordinal);
+
+        using (var reader = BuildV4())
+            Assert.True(reader.SignatureValid);
+        using (var connection = new Microsoft.Data.Sqlite.SqliteConnection(
+                   $"Data Source={_db}"))
+        {
+            connection.Open();
+            using var mutate = connection.CreateCommand();
+            mutate.CommandText = "UPDATE docs SET source_uri='javascript:alert(1)'";
+            Assert.Equal(1, mutate.ExecuteNonQuery());
+        }
+
+        var readerError = Assert.Throws<InvalidDataException>(() => LexIndexReader.Open(_db));
+        Assert.Contains("source_uri", readerError.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -1421,6 +1898,13 @@ public class IndexTests : IDisposable
     }
 
     private readonly List<string> _extra = [];
+
+    private static Dictionary<string, string> V4Stamp() => new()
+    {
+        ["collection"] = "t-pub",
+        ["generation_sha256"] = V4GenerationSha256,
+        ["articles_commit"] = V4ArticlesCommit,
+    };
 
     public void Dispose()
     {

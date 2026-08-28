@@ -42,7 +42,8 @@ public sealed class OfficialMetadataPolicyTests : IDisposable
     [Fact]
     public void Generation_v3_binds_corpus_manifest_without_an_unused_reviewed_configuration()
     {
-        DerivationGeneration.UpdatePublisher(
+        Directory.CreateDirectory(Path.Combine(_root, "eu-eurlex"));
+        DerivationGeneration.UpdatePublisherWithLocksHeld(
             _root, "eu-eurlex", new string('c', 40), new string('a', 64),
             new string('b', 40), new string('d', 40), new string('e', 40),
             ["akn-eu/1"]);

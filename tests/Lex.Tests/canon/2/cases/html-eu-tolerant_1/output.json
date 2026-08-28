@@ -1,0 +1,26 @@
+{
+  "profile_id": "html-eu-tolerant/1",
+  "provisions": [
+    {
+      "anchor": "art_1",
+      "eli": null,
+      "type": "article",
+      "num": "Article 1",
+      "heading": null,
+      "path": [],
+      "article_valid_from": null,
+      "text_md": "The blue orchard keeps seven tokens.A second synthetic line follows.",
+      "text_sha256": "26788c319d30a7ded10152662c381ee2c99b5be686abf36c44e0366326ff7e26",
+      "md_span": {
+        "start": 36,
+        "end": 104
+      },
+      "citations": []
+    }
+  ],
+  "markdown": "\n<a id=\"art_1\"></a>\n\n### Article 1\n\nThe blue orchard keeps seven tokens.A second synthetic line follows.\n",
+  "notes": [
+    "boundaries: flat format segmented on title-article-norm / title-annex-1; anchors derived from publisher numbering (art_N / anx_N)"
+  ],
+  "publisher_structural_empty_articles": []
+}

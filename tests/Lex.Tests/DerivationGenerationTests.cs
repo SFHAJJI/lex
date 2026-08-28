@@ -27,7 +27,7 @@ public sealed class DerivationGenerationTests : IDisposable
         Write("eu-eurlex", ["xhtml-eu/1", "fmx4-eu/1"]);
 
         var root = JsonNode.Parse(File.ReadAllText(path))!;
-        Assert.Equal(DerivationGeneration.SchemaId,
+        Assert.Equal(DerivationGeneration.PreviousSchemaId,
             root["schema"]!.GetValue<string>());
         Assert.Equal(["eu-eurlex", "lu-legilux"],
             root["publishers"]!.AsObject().Select(item => item.Key));
@@ -72,23 +72,64 @@ public sealed class DerivationGenerationTests : IDisposable
     public void Provenance_identities_require_exact_full_digests()
     {
         Assert.Throws<InvalidDataException>(() =>
-            DerivationGeneration.UpdatePublisher(
+            UpdatePublisher(
                 _root, "eu-eurlex", "short", ManifestDigest,
                 IngesterCommit, DeriverCommit, DeriverTree,
                 ["xhtml-eu/1"]));
         Assert.Throws<InvalidDataException>(() =>
-            DerivationGeneration.UpdatePublisher(
+            UpdatePublisher(
                 _root, "eu-eurlex", CorpusCommit, ManifestDigest,
                 IngesterCommit, DeriverCommit,
                 "DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD",
                 ["xhtml-eu/1"]));
     }
 
+    [Fact]
+    public void Canon_two_publisher_cannot_be_silently_downgraded_to_canon_one()
+    {
+        UpdatePublisher(
+            _root, "lu-legilux", CorpusCommit, ManifestDigest,
+            IngesterCommit, DeriverCommit, DeriverTree,
+            [AknLuProfileV3.ProfileId], DerivationGeneration.Canon2);
+        var path = Path.Combine(_root, DerivationGeneration.FileName);
+        var before = File.ReadAllBytes(path);
+
+        var error = Assert.Throws<InvalidDataException>(() =>
+            UpdatePublisher(
+                _root, "lu-legilux", CorpusCommit, ManifestDigest,
+                IngesterCommit, DeriverCommit, DeriverTree,
+                [AknLuProfileV2.ProfileId]));
+
+        Assert.Contains("canon/2", error.Message, StringComparison.Ordinal);
+        Assert.Contains("canon/1", error.Message, StringComparison.Ordinal);
+        Assert.Equal(before, File.ReadAllBytes(path));
+        Assert.Equal(DerivationGeneration.Canon2,
+            DerivationGeneration.ReadPublisher(_root, "lu-legilux").ArticlesCanon);
+    }
+
     private void Write(string publisher, IEnumerable<string> profiles) =>
-        DerivationGeneration.UpdatePublisher(
+        UpdatePublisher(
             _root, publisher, CorpusCommit, ManifestDigest,
             IngesterCommit, DeriverCommit, DeriverTree,
             profiles);
+
+    private static void UpdatePublisher(
+        string root,
+        string publisher,
+        string corpusCommit,
+        string corpusManifestSha256,
+        string ingesterCodeCommit,
+        string deriverCodeCommit,
+        string deriverTreeId,
+        IEnumerable<string> profiles,
+        string articlesCanon = DerivationGeneration.Canon1)
+    {
+        Directory.CreateDirectory(Path.Combine(root, publisher));
+        DerivationGeneration.UpdatePublisherWithLocksHeld(
+            root, publisher, corpusCommit, corpusManifestSha256,
+            ingesterCodeCommit, deriverCodeCommit, deriverTreeId,
+            profiles, articlesCanon);
+    }
 
     public void Dispose()
     {

@@ -1,0 +1,28 @@
+{
+  "schema": "lex-canon-freeze/2",
+  "canon": "canon/2",
+  "canon1_reviewed_manifest_sha256": "6655f4c0d5e8c970fe3ab99e82896105da60b7b0ac24c84b1e13c519ad729beb",
+  "profile_ids": [
+    "akn-lu-document/1",
+    "akn-lu-identical-scl-duplicate/1",
+    "akn-lu/1",
+    "akn-lu/2",
+    "akn-lu/3",
+    "fmx4-eu/1",
+    "html-eu-tolerant/1",
+    "pdf-lu/1",
+    "pdf-memorial-lu/1",
+    "pdf-memorial-lu/2",
+    "xhtml-eu-xlink-context/1",
+    "xhtml-eu/1"
+  ],
+  "target_framework": "net10.0",
+  "sdk": "10.0.400",
+  "invariants": {
+    "culture": "InvariantCulture",
+    "encoding": "UTF-8 without BOM",
+    "line_endings": "LF",
+    "path_order": "ordinal",
+    "hash": "SHA-256 lowercase hexadecimal"
+  }
+}

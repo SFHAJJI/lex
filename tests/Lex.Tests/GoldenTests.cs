@@ -333,7 +333,7 @@ public class GoldenTests : IClassFixture<GoldenTests.Site>
     {
         var current = await _site.Client.GetStringAsync("/built/release");
         Assert.Contains("2</td>", current);              // mounted fixture works, not a hand-written live count
-        Assert.Contains(IndexBuilder.SchemaVersion, current); // mounted fixture schema, not roadmap prose
+        Assert.Contains(IndexBuilder.PreviousSchemaVersion, current); // ordinary mounted fixture schema
         Assert.DoesNotContain("local compact semantic candidates", current);
 
         var next = await _site.Client.GetStringAsync("/built/limits");

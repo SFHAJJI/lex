@@ -98,7 +98,18 @@ public static class DocumentEndpoints
                 <span class="sub">matched by provision anchor when continuity is sufficient; otherwise Lex refuses rather than inventing changes</span></p>
                 """);
 
-            if (a.Key == b.Key)
+            var typedGap = r.ProvisionGapCount(LexIndexReader.RidOf(a)) > 0
+                           || r.ProvisionGapCount(LexIndexReader.RidOf(b)) > 0;
+            if (typedGap)
+                sb.Append($"""
+                    <div class="notice"><b>A text diff is unavailable here</b>
+                    (status <span class="mono">{ComparisonTextStatus(r, a, b)}</span>).
+                    One or both selected versions contain a typed text gap, so Lex will not compare
+                    a partial body as if it were complete. Compare at the official source:
+                    <a href="{H(a.SourceUri)}">version of {H(a.ValidFrom)}</a> vs
+                    <a href="{H(b.SourceUri)}">version of {H(b.ValidFrom)}</a>.</div>
+                    """);
+            else if (a.Key == b.Key)
                 sb.Append("<div class=\"notice\"><b>No change.</b> The same publisher version covers both selected dates.</div>");
             else if (a.TextPublic && b.TextPublic
                      && r.BuildBody(a) is { } bodyA && r.BuildBody(b) is { } bodyB)
@@ -107,7 +118,8 @@ public static class DocumentEndpoints
             {
                 sb.Append($"""
                     <div class="notice"><b>Different versions applied</b>, but a text diff is unavailable here
-                    (status <span class="mono">{ComparisonTextStatus(r, a, b)}</span>). Compare at the official source:
+                    (status <span class="mono">{ComparisonTextStatus(r, a, b)}</span>).
+                    Compare at the official source:
                     <a href="{H(a.SourceUri)}">version of {H(a.ValidFrom)}</a> vs
                     <a href="{H(b.SourceUri)}">version of {H(b.ValidFrom)}</a>.</div>
                     """);
@@ -332,6 +344,10 @@ public static class DocumentEndpoints
             // dates land, so this line is inert today by design, not by accident.
             sb.Append(TrustNotices.PreApplicationState(
                 doc, TrustNotices.FindPreApplicationFact(r, doc)) ?? "");
+            var rid = LexIndexReader.RidOf(doc);
+            var provisions = doc.TextPublic ? r.Provisions(rid) : [];
+            var gaps = r.ProvisionGaps(rid);
+
             // Most readers arrive from a search engine straight onto this page and never see the
             // homepage. The two things they must know — what a consolidated text is, and that it
             // carries no legal force — belong here, in plain words, not only on the front door.
@@ -361,6 +377,11 @@ public static class DocumentEndpoints
                 Each displayed provision carries its own hash so you can prove it was not tampered with,
                 <a href="/verify">here is how</a>.</p></details>
                 """;
+            if (gaps.Count > 0)
+                primer = primer.Replace(
+                    "Each displayed provision carries its own hash",
+                    "Each displayed publisher-text provision carries its own hash; a typed gap carries no text hash because no wording was certified",
+                    StringComparison.Ordinal);
             var record = $"""
                 <table class="kv">
                 <tr><td>as of</td><td><b>{d:yyyy-MM-dd}</b> → {(publisherVersionDates ? "this publisher state was selected" : "this version applied")}</td></tr>
@@ -373,44 +394,119 @@ public static class DocumentEndpoints
                 </table>
                 """;
 
-            var provisions = doc.TextPublic ? r.Provisions(LexIndexReader.RidOf(doc)) : [];
-            if (provisions.Count > 0)
+            if (gaps.Count == 0)
             {
+                if (provisions.Count > 0)
+                {
+                    sb.Append($"""
+                        <div class="notice" style="border-left-color:var(--ok)"><b>Text included, per-article reading view.</b>
+                        Deterministic extraction of the verbatim retrieved document; each displayed provision carries its own hash and anchor.
+                        {H(r.Stamp.GetValueOrDefault("attribution"))}</div>
+                        <details class="card"><summary><b>Outline, {provisions.Count} provisions</b></summary><p>
+                        """);
+                    foreach (var p in provisions)
+                        sb.Append($"<a href=\"#{H(p.Anchor)}\" class=\"badge\">{RenderLegalInline(p.Num ?? p.Heading ?? p.Anchor)}</a> ");
+                    sb.Append("</p></details>");
+
+                    string? lastPath = null;
+                    var shown = 0;
+                    foreach (var p in provisions)
+                    {
+                        if (p.Path is not null && p.Path != lastPath)
+                        {
+                            sb.Append($"<h2 style=\"margin-top:26px\">{RenderLegalInline(PlainLegalLabel(p.Path))}</h2>");
+                            lastPath = p.Path;
+                        }
+                        var title = p.Num is null && p.Heading is null ? p.Anchor
+                            : string.Join(", ", new[] { p.Num, p.Heading }.Where(s => !string.IsNullOrEmpty(s)));
+                        var derogation = TrustNotices.TemporaryDerogation(
+                            r, publisher, doc.GroupKey, p.Anchor);
+                        sb.Append($"""
+                            <div class="card" id="{H(p.Anchor)}">
+                            <b>{RenderLegalInline(title)}</b>
+                            <a class="sub mono" href="#{H(p.Anchor)}" title="permalink to this provision">#{H(p.Anchor)}</a>
+                            {(p.ArticleValidFrom is not null && p.ArticleValidFrom != doc.ValidFrom ? $"<span class=\"badge\">applicable {H(p.ArticleValidFrom)}</span>" : "")}{derogation ?? ""}
+                            <div class="lawbody legal-markdown">{RenderLegalMarkdown(p.TextMd)}</div>
+                            </div>
+                            """);
+                        shown++;
+                        if (shown >= 400) { sb.Append($"<p class=\"sub\">,  {provisions.Count - shown:n0} further provisions omitted from this view; retrieve them via the MCP tools , </p>"); break; }
+                    }
+                    sb.Append($"""
+                        <details class="card"><summary><b>Provenance and validity</b>
+                        <span class="sub">dates, identifier, hash</span></summary>{record}</details>
+                        """);
+                }
+                else
+                {
+                    sb.Append(MissingTextBox(doc, PublisherTextGateOpen(r)));
+                    sb.Append($"""<div class="card">{record}</div>""");
+                }
+            }
+            else
+            {
+                var displayRows = provisions
+                    .Select(provision => (
+                        provision.Seq, provision.Anchor, provision.Num, provision.Heading,
+                        provision.Path, provision.ArticleValidFrom,
+                        Text: (ProvisionRow?)provision, Gap: (ProvisionGapRow?)null))
+                    .Concat(gaps.Select(gap => (
+                        gap.Seq, gap.Anchor, gap.Num, gap.Heading,
+                        gap.Path, gap.ArticleValidFrom,
+                        Text: (ProvisionRow?)null, Gap: (ProvisionGapRow?)gap)))
+                    .OrderBy(row => row.Seq)
+                    .ToList();
                 sb.Append($"""
-                    <div class="notice" style="border-left-color:var(--ok)"><b>Text included, per-article reading view.</b>
-                    Deterministic extraction of the verbatim retrieved document; each displayed provision carries its own hash and anchor.
+                    <div class="notice"><b>{(provisions.Count == 0 ? "Publisher text unavailable." : "Partial publisher text.")}</b>
+                    Lex holds verified wording for {provisions.Count:n0} provision(s) and {gaps.Count:n0} typed coordinate(s) whose wording could not be certified.
+                    Gap cards preserve publisher order, anchor, reason and official source without inventing text or a text hash.
                     {H(r.Stamp.GetValueOrDefault("attribution"))}</div>
-                    <details class="card"><summary><b>Outline, {provisions.Count} provisions</b></summary><p>
+                    <details class="card"><summary><b>Outline, {displayRows.Count} provisions</b></summary><p>
                     """);
-                foreach (var p in provisions)
-                    sb.Append($"<a href=\"#{H(p.Anchor)}\" class=\"badge\">{RenderLegalInline(p.Num ?? p.Heading ?? p.Anchor)}</a> ");
+                foreach (var row in displayRows)
+                    sb.Append($"<a href=\"#{H(row.Anchor)}\" class=\"badge{(row.Gap is null ? "" : " warn")}\">{RenderLegalInline(row.Num ?? row.Heading ?? row.Anchor)}</a> ");
                 sb.Append("</p></details>");
 
                 string? lastPath = null;
                 var shown = 0;
-                foreach (var p in provisions)
+                foreach (var row in displayRows)
                 {
-                    if (p.Path is not null && p.Path != lastPath)
+                    if (row.Path is not null && row.Path != lastPath)
                     {
-                        sb.Append($"<h2 style=\"margin-top:26px\">{RenderLegalInline(PlainLegalLabel(p.Path))}</h2>");
-                        lastPath = p.Path;
+                        sb.Append($"<h2 style=\"margin-top:26px\">{RenderLegalInline(PlainLegalLabel(row.Path))}</h2>");
+                        lastPath = row.Path;
                     }
-                    var title = p.Num is null && p.Heading is null ? p.Anchor
-                        : string.Join(", ", new[] { p.Num, p.Heading }.Where(s => !string.IsNullOrEmpty(s)));
+                    var title = row.Num is null && row.Heading is null ? row.Anchor
+                        : string.Join(", ", new[] { row.Num, row.Heading }.Where(s => !string.IsNullOrEmpty(s)));
                     // Phase 0 trust notice (Decisions 41 and 44): rendered inside the provision
                     // card it concerns, only when its typed evidence condition holds.
                     var derogation = TrustNotices.TemporaryDerogation(
-                        r, publisher, doc.GroupKey, p.Anchor);
-                    sb.Append($"""
-                        <div class="card" id="{H(p.Anchor)}">
-                        <b>{RenderLegalInline(title)}</b>
-                        <a class="sub mono" href="#{H(p.Anchor)}" title="permalink to this provision">#{H(p.Anchor)}</a>
-                        {(p.ArticleValidFrom is not null && p.ArticleValidFrom != doc.ValidFrom ? $"<span class=\"badge\">applicable {H(p.ArticleValidFrom)}</span>" : "")}{derogation ?? ""}
-                        <div class="lawbody legal-markdown">{RenderLegalMarkdown(p.TextMd)}</div>
-                        </div>
-                        """);
+                        r, publisher, doc.GroupKey, row.Anchor);
+                    if (row.Text is { } text)
+                        sb.Append($"""
+                            <div class="card" id="{H(row.Anchor)}">
+                            <b>{RenderLegalInline(title)}</b>
+                            <a class="sub mono" href="#{H(row.Anchor)}" title="permalink to this provision">#{H(row.Anchor)}</a>
+                            {(row.ArticleValidFrom is not null && row.ArticleValidFrom != doc.ValidFrom ? $"<span class=\"badge\">applicable {H(row.ArticleValidFrom)}</span>" : "")}{derogation ?? ""}
+                            <div class="lawbody legal-markdown">{RenderLegalMarkdown(text.TextMd)}</div>
+                            </div>
+                            """);
+                    else if (row.Gap is { } gap)
+                    {
+                        var official = gap.Eli ?? doc.SourceUri;
+                        sb.Append($"""
+                            <div class="card" id="{H(row.Anchor)}">
+                            <b>{RenderLegalInline(title)}</b>
+                            <a class="sub mono" href="#{H(row.Anchor)}" title="permalink to this provision">#{H(row.Anchor)}</a>
+                            {(row.ArticleValidFrom is not null && row.ArticleValidFrom != doc.ValidFrom ? $"<span class=\"badge\">applicable {H(row.ArticleValidFrom)}</span>" : "")}{derogation ?? ""}
+                            <div class="notice"><b>Text unavailable.</b> Lex preserved this publisher coordinate but could not certify wording for it
+                            (status <span class="mono">{H(gap.TextUnavailableReason)}</span>).
+                            <a href="{H(official)}" rel="noopener">Open the official publisher source</a>.</div>
+                            </div>
+                            """);
+                    }
                     shown++;
-                    if (shown >= 400) { sb.Append($"<p class=\"sub\">,  {provisions.Count - shown:n0} further provisions omitted from this view; retrieve them via the MCP tools , </p>"); break; }
+                    if (shown >= 400) { sb.Append($"<p class=\"sub\">,  {displayRows.Count - shown:n0} further provisions omitted from this view; retrieve them via the MCP tools , </p>"); break; }
                 }
                 // The receipt, after the goods. This table was the first thing on the page, above the law
                 // it describes, which is backwards for the nineteen readers in twenty who came to read the
@@ -419,13 +515,6 @@ public static class DocumentEndpoints
                     <details class="card"><summary><b>Provenance and validity</b>
                     <span class="sub">dates, identifier, hash</span></summary>{record}</details>
                     """);
-            }
-            else
-            {
-                // No wording is held, so the record is not a receipt for the answer, it IS the answer.
-                // Hiding it here would leave the page with nothing on it.
-                sb.Append(MissingTextBox(doc, PublisherTextGateOpen(r)));
-                sb.Append($"""<div class="card">{record}</div>""");
             }
             sb.Append(primer);
             sb.Append("<p>");

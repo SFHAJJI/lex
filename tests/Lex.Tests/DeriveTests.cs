@@ -1,5 +1,6 @@
 using Lex.Derive;
 using Lex.Temporal;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Xunit;
 
@@ -235,8 +236,391 @@ public class DeriveTests
         }
     }
 
+    [Fact]
+    public void Canon_two_to_canon_one_is_refused_before_any_work_is_staged_or_replaced()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"lex-derive-downgrade-{Guid.NewGuid():N}");
+        var corpus = Path.Combine(root, "corpus");
+        var output = Path.Combine(root, "output");
+        try
+        {
+            Directory.CreateDirectory(corpus);
+            File.WriteAllText(Path.Combine(corpus, "manifest.json"), $$"""
+                { "schema": "lex-corpus/5", "canon": "canon/1", "build_issues": [], "ingester_code_commit": "{{IngesterCommit}}" }
+                """);
+            var work = Path.Combine(corpus, "works", "w1");
+            Directory.CreateDirectory(work);
+            File.WriteAllText(Path.Combine(work, "meta.json"),
+                new JsonObject { ["title"] = "Work one" }.ToJsonString());
+            var key = VersionIdentity.Create(new DateOnly(2025, 7, 28), "official:first");
+            WriteVersion(work, key, "official:first", "first");
+
+            var initial = DeriveWriter.Derive(
+                corpus, output, "lu-legilux", DeriverCommit, DeriverTree,
+                CorpusCommit, stagedFileWritten: null, enableAknLuV3: true);
+            Assert.Empty(initial.Errors);
+            Assert.Equal(DerivationGeneration.Canon2,
+                DerivationGeneration.ReadPublisher(output, "lu-legilux").ArticlesCanon);
+            var before = Directory.EnumerateFiles(output, "*", SearchOption.AllDirectories)
+                .ToDictionary(Path.GetFullPath, File.ReadAllBytes, StringComparer.Ordinal);
+
+            var staged = new List<string>();
+            Assert.Throws<InvalidDataException>(() => DeriveWriter.Derive(
+                corpus, output, "lu-legilux", DeriverCommit, DeriverTree,
+                CorpusCommit, staged.Add, enableAknLuV3: false));
+
+            Assert.Empty(staged);
+            Assert.Equal(before.Keys.Order(StringComparer.Ordinal),
+                Directory.EnumerateFiles(output, "*", SearchOption.AllDirectories)
+                    .Select(Path.GetFullPath).Order(StringComparer.Ordinal));
+            Assert.All(before, item => Assert.Equal(item.Value, File.ReadAllBytes(item.Key)));
+        }
+        finally
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Concurrent_canon_one_cannot_pass_the_guard_while_canon_two_is_staged()
+    {
+        var root = Path.Combine(Path.GetTempPath(),
+            $"lex-derive-lock-{Guid.NewGuid():N}");
+        var firstCorpus = Path.Combine(root, "corpus-first");
+        var secondCorpus = Path.Combine(root, "corpus-second");
+        var output = Path.Combine(root, "output");
+        using var staged = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        try
+        {
+            PrepareCorpus(firstCorpus, "w1", "official:first", "first");
+            PrepareCorpus(secondCorpus, "w2", "official:second", "second");
+
+            var initial = DeriveWriter.Derive(
+                firstCorpus, output, "lu-legilux", DeriverCommit, DeriverTree,
+                CorpusCommit);
+            Assert.Empty(initial.Errors);
+
+            var upgrade = Task.Run(() => DeriveWriter.Derive(
+                firstCorpus, output, "lu-legilux", DeriverCommit, DeriverTree,
+                CorpusCommit,
+                _ =>
+                {
+                    staged.Set();
+                    Assert.True(release.Wait(TimeSpan.FromSeconds(15)));
+                },
+                enableAknLuV3: true));
+
+            Assert.True(staged.Wait(TimeSpan.FromSeconds(15)));
+            var beforeBlockedAttempt = Snapshot(output);
+            var blockedStageCount = 0;
+            var active = Assert.Throws<InvalidOperationException>(() =>
+                DeriveWriter.Derive(
+                    secondCorpus, output, "lu-legilux", DeriverCommit,
+                    DeriverTree, CorpusCommit,
+                    _ => blockedStageCount++, enableAknLuV3: false));
+            Assert.Contains("already active", active.Message,
+                StringComparison.Ordinal);
+            Assert.Equal(0, blockedStageCount);
+            AssertSnapshot(beforeBlockedAttempt, output);
+
+            release.Set();
+            Assert.Empty((await upgrade).Errors);
+            Assert.Equal(DerivationGeneration.Canon2,
+                DerivationGeneration.ReadPublisher(output, "lu-legilux").ArticlesCanon);
+
+            var afterUpgrade = Snapshot(output);
+            var rejectedStageCount = 0;
+            Assert.Throws<InvalidDataException>(() => DeriveWriter.Derive(
+                secondCorpus, output, "lu-legilux", DeriverCommit, DeriverTree,
+                CorpusCommit,
+                _ => rejectedStageCount++, enableAknLuV3: false));
+            Assert.Equal(0, rejectedStageCount);
+            AssertSnapshot(afterUpgrade, output);
+        }
+        finally
+        {
+            release.Set();
+            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+        }
+
+        static void PrepareCorpus(
+            string corpus,
+            string slug,
+            string publisherVersionIdentifier,
+            string marker)
+        {
+            Directory.CreateDirectory(corpus);
+            File.WriteAllText(Path.Combine(corpus, "manifest.json"), $$"""
+                { "schema": "lex-corpus/5", "canon": "canon/1", "build_issues": [], "ingester_code_commit": "{{IngesterCommit}}" }
+                """);
+            var work = Path.Combine(corpus, "works", slug);
+            Directory.CreateDirectory(work);
+            File.WriteAllText(Path.Combine(work, "meta.json"),
+                new JsonObject { ["title"] = $"Work {slug}" }.ToJsonString());
+            var key = VersionIdentity.Create(
+                new DateOnly(2025, 7, 28), publisherVersionIdentifier);
+            WriteVersion(work, key, publisherVersionIdentifier, marker, slug);
+        }
+
+        static Dictionary<string, byte[]> Snapshot(string path) =>
+            Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories)
+                .ToDictionary(
+                    file => Path.GetRelativePath(path, file),
+                    File.ReadAllBytes,
+                    StringComparer.Ordinal);
+
+        static void AssertSnapshot(
+            IReadOnlyDictionary<string, byte[]> expected,
+            string path)
+        {
+            var actual = Snapshot(path);
+            Assert.Equal(expected.Keys.Order(StringComparer.Ordinal),
+                actual.Keys.Order(StringComparer.Ordinal));
+            Assert.All(expected, item => Assert.Equal(item.Value, actual[item.Key]));
+        }
+    }
+
+    [Fact]
+    public async Task Different_publishers_cannot_replace_output_before_the_generation_lock()
+    {
+        var root = Path.Combine(Path.GetTempPath(),
+            $"lex-derive-generation-lock-{Guid.NewGuid():N}");
+        var firstCorpus = Path.Combine(root, "corpus-first");
+        var secondCorpus = Path.Combine(root, "corpus-second");
+        var output = Path.Combine(root, "output");
+        using var staged = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        Task<DeriveWriter.Stats>? first = null;
+        try
+        {
+            PrepareCorpus(firstCorpus, "lu-legilux", "w1",
+                "official:first", "first");
+            PrepareCorpus(secondCorpus, "eu-eurlex", "w2",
+                "official:second", "second");
+
+            first = Task.Run(() => DeriveWriter.Derive(
+                firstCorpus, output, "lu-legilux", DeriverCommit, DeriverTree,
+                CorpusCommit,
+                _ =>
+                {
+                    staged.Set();
+                    Assert.True(release.Wait(TimeSpan.FromSeconds(15)));
+                },
+                enableAknLuV3: true));
+
+            Assert.True(staged.Wait(TimeSpan.FromSeconds(15)));
+            var beforeBlockedAttempt = Snapshot(output);
+            var blockedStageCount = 0;
+            var active = Assert.Throws<InvalidOperationException>(() =>
+                DeriveWriter.Derive(
+                    secondCorpus, output, "eu-eurlex", DeriverCommit,
+                    DeriverTree, CorpusCommit,
+                    _ => blockedStageCount++, enableAknLuV3: false));
+            Assert.Contains("already active", active.Message,
+                StringComparison.Ordinal);
+            Assert.Equal(0, blockedStageCount);
+            AssertSnapshot(beforeBlockedAttempt, output);
+
+            release.Set();
+            Assert.Empty((await first).Errors);
+        }
+        finally
+        {
+            release.Set();
+            if (first is not null)
+            {
+                try { await first; } catch { }
+            }
+            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+        }
+
+        static void PrepareCorpus(
+            string corpus,
+            string publisher,
+            string slug,
+            string publisherVersionIdentifier,
+            string marker)
+        {
+            Directory.CreateDirectory(corpus);
+            File.WriteAllText(Path.Combine(corpus, "manifest.json"), $$"""
+                { "schema": "lex-corpus/5", "canon": "canon/1", "build_issues": [], "ingester_code_commit": "{{IngesterCommit}}" }
+                """);
+            var work = Path.Combine(corpus, "works", slug);
+            Directory.CreateDirectory(work);
+            File.WriteAllText(Path.Combine(work, "meta.json"),
+                new JsonObject { ["title"] = $"Work {slug}" }.ToJsonString());
+            var key = VersionIdentity.Create(
+                new DateOnly(2025, 7, 28), publisherVersionIdentifier);
+            WriteVersion(work, key, publisherVersionIdentifier, marker, slug,
+                publisher);
+        }
+
+        static Dictionary<string, byte[]> Snapshot(string path) =>
+            Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories)
+                .ToDictionary(
+                    file => Path.GetRelativePath(path, file),
+                    File.ReadAllBytes,
+                    StringComparer.Ordinal);
+
+        static void AssertSnapshot(
+            IReadOnlyDictionary<string, byte[]> expected,
+            string path)
+        {
+            var actual = Snapshot(path);
+            Assert.Equal(expected.Keys.Order(StringComparer.Ordinal),
+                actual.Keys.Order(StringComparer.Ordinal));
+            Assert.All(expected, item => Assert.Equal(item.Value, actual[item.Key]));
+        }
+    }
+
+    [Theory]
+    [InlineData((int)DerivedPublisherTransaction.Step.CandidatePrepared, false)]
+    [InlineData((int)DerivedPublisherTransaction.Step.JournalPublished, true)]
+    [InlineData((int)DerivedPublisherTransaction.Step.PublisherSaved, true)]
+    [InlineData((int)DerivedPublisherTransaction.Step.PublisherInstalled, true)]
+    [InlineData((int)DerivedPublisherTransaction.Step.GenerationSaved, true)]
+    [InlineData((int)DerivedPublisherTransaction.Step.GenerationInstalled, true)]
+    public void Publisher_transaction_recovery_obeys_the_journal_commit_point(
+        int failAfterValue,
+        bool expectNew)
+    {
+        var failAfter = (DerivedPublisherTransaction.Step)failAfterValue;
+        var root = Path.Combine(Path.GetTempPath(),
+            $"lex-derived-publish-recovery-{Guid.NewGuid():N}", "articles");
+        var publisher = Path.Combine(root, "lu-legilux");
+        var generation = Path.Combine(root, DerivationGeneration.FileName);
+        try
+        {
+            Directory.CreateDirectory(publisher);
+            File.WriteAllText(Path.Combine(publisher, "identity.txt"), "old publisher");
+            File.WriteAllText(generation, "old generation");
+            using var publisherLock = DerivationGeneration.AcquirePublisherLock(
+                root, "lu-legilux");
+            using var generationLock = DerivationGeneration.AcquireGenerationLock(root);
+
+            using (var transaction = new DerivedPublisherTransaction(root, "lu-legilux"))
+            {
+                File.WriteAllText(Path.Combine(
+                    transaction.PublisherCandidateRoot, "identity.txt"), "new publisher");
+                transaction.WriteGenerationCandidate(
+                    System.Text.Encoding.UTF8.GetBytes("new generation"));
+                Assert.Throws<InvalidOperationException>(() => transaction.Commit(step =>
+                {
+                    if (step == failAfter)
+                        throw new InvalidOperationException("synthetic crash");
+                }));
+            }
+
+            if (expectNew)
+                Assert.Throws<InvalidDataException>(() =>
+                    DerivedPublisherTransaction.RequireNoCommittedTransaction(root));
+            DerivedPublisherTransaction.RecoverUnderLocks(root);
+            DerivedPublisherTransaction.RecoverUnderLocks(root);
+
+            Assert.Equal(expectNew ? "new publisher" : "old publisher",
+                File.ReadAllText(Path.Combine(publisher, "identity.txt")));
+            Assert.Equal(expectNew ? "new generation" : "old generation",
+                File.ReadAllText(generation));
+            Assert.False(File.Exists(DerivedPublisherTransaction.JournalPathFor(root)));
+            Assert.Empty(Directory.EnumerateDirectories(
+                root, ".lex-derived-publish-*", SearchOption.TopDirectoryOnly));
+        }
+        finally
+        {
+            if (Directory.Exists(Directory.GetParent(root)!.FullName))
+                Directory.Delete(Directory.GetParent(root)!.FullName, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Derived_evidence_comes_from_the_exact_selected_primary_observation()
+    {
+        var root = Path.Combine(Path.GetTempPath(),
+            $"lex-derive-primary-evidence-{Guid.NewGuid():N}");
+        var corpus = Path.Combine(root, "corpus");
+        var output = Path.Combine(root, "output");
+        try
+        {
+            Directory.CreateDirectory(corpus);
+            File.WriteAllText(Path.Combine(corpus, "manifest.json"), $$"""
+                { "schema": "lex-corpus/5", "canon": "canon/1", "build_issues": [], "ingester_code_commit": "{{IngesterCommit}}" }
+                """);
+            var work = Path.Combine(corpus, "works", "w1");
+            Directory.CreateDirectory(work);
+            File.WriteAllText(Path.Combine(work, "meta.json"),
+                new JsonObject { ["title"] = "Work one" }.ToJsonString());
+            var key = VersionIdentity.Create(
+                new DateOnly(2025, 7, 28), "official:first");
+            WriteVersion(work, key, "official:first", "first");
+
+            var metaPath = Path.Combine(work, "versions", key, "meta.json");
+            var meta = JsonNode.Parse(File.ReadAllText(metaPath))!.AsObject();
+            var observations = meta["expressions"]![0]!["observations"]!.AsArray();
+            var selected = observations[0]!.AsObject();
+            selected["source_uri"] = "https://publisher.example/selected";
+            observations.Add(new JsonObject
+            {
+                ["file"] = selected["file"]!.GetValue<string>(),
+                ["sha256"] = selected["sha256"]!.GetValue<string>(),
+                ["source_uri"] = "https://publisher.example/non-primary",
+                ["format"] = "fmx4",
+            });
+            File.WriteAllText(metaPath, meta.ToJsonString());
+
+            var stats = DeriveWriter.Derive(
+                corpus, output, "lu-legilux", DeriverCommit, DeriverTree,
+                CorpusCommit);
+            Assert.Empty(stats.Errors);
+            using var derived = JsonDocument.Parse(File.ReadAllText(Path.Combine(
+                output, "lu-legilux", "works", "w1", "versions", key, "fr.json")));
+            Assert.Equal("https://publisher.example/selected",
+                derived.RootElement.GetProperty("derived_from")
+                    .GetProperty("source_uri").GetString());
+        }
+        finally
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData(".")]
+    [InlineData("..")]
+    [InlineData("foo.")]
+    [InlineData("foo ")]
+    [InlineData("Foo")]
+    [InlineData("con")]
+    public void Publisher_lock_identity_must_resolve_to_a_direct_child(string publisher)
+    {
+        var root = Path.Combine(Path.GetTempPath(),
+            $"lex-derive-lock-identity-{Guid.NewGuid():N}", "articles");
+        FileStream? acquired = null;
+        try
+        {
+            var error = Assert.Throws<InvalidDataException>(() =>
+            {
+                acquired = DerivationGeneration.AcquirePublisherLock(root, publisher);
+            });
+            Assert.Contains("path segment", error.Message,
+                StringComparison.Ordinal);
+        }
+        finally
+        {
+            acquired?.Dispose();
+            var parent = Directory.GetParent(root)?.FullName;
+            if (parent is not null && Directory.Exists(parent))
+                Directory.Delete(parent, recursive: true);
+        }
+    }
+
     private static void WriteVersion(
-        string work, string key, string publisherVersionIdentifier, string marker)
+        string work,
+        string key,
+        string publisherVersionIdentifier,
+        string marker,
+        string slug = "w1",
+        string publisher = "lu-legilux")
     {
         var version = Path.Combine(work, "versions", key);
         Directory.CreateDirectory(version);
@@ -244,11 +628,11 @@ public class DeriveTests
         File.WriteAllText(Path.Combine(version, "fr.xml"), xml);
         File.WriteAllText(Path.Combine(version, "meta.json"), new JsonObject
         {
-            ["lex_id"] = $"lu-legilux:w1:{key}",
-            ["publisher"] = "lu-legilux",
+            ["lex_id"] = $"{publisher}:{slug}:{key}",
+            ["publisher"] = publisher,
             ["publisher_version_identifier"] = publisherVersionIdentifier,
             ["valid_from"] = "2025-07-28",
-            ["work_identifier"] = "official:w1",
+            ["work_identifier"] = $"official:{slug}",
             ["expressions"] = new JsonArray(new JsonObject
             {
                 ["language"] = "fr",

@@ -1,0 +1,31 @@
+{
+  "profile_id": "xhtml-eu/1",
+  "provisions": [
+    {
+      "anchor": "art_1",
+      "eli": null,
+      "type": "article",
+      "num": "Article 1",
+      "heading": null,
+      "path": [],
+      "article_valid_from": null,
+      "text_md": "**1.** The compass \uD83E\uDDED points to the blue orchard.",
+      "text_sha256": "b4ac7f5f20e8a2497f4afe9aa66ab18724fe0def9ee74d51d80db7be0a8c52d6",
+      "md_span": {
+        "start": 36,
+        "end": 84
+      },
+      "citations": [
+        {
+          "href": "https://example.test/change",
+          "text": "Synthetic change record"
+        }
+      ]
+    }
+  ],
+  "markdown": "\n<a id=\"art_1\"></a>\n\n### Article 1\n\n**1.** The compass \uD83E\uDDED points to the blue orchard.\n",
+  "notes": [
+    "boundaries: publisher eli-subdivision fragment identifiers (structural-in-presentation)"
+  ],
+  "publisher_structural_empty_articles": []
+}

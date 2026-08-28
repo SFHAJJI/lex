@@ -61,7 +61,8 @@ public sealed record IndexStampVerificationInputs(
     string? ExpectedGenerationSha256 = null,
     string? ExpectedProfilesSha256 = null,
     string? CapabilityPolicyPath = null,
-    bool RequireDerivedProvenance = false);
+    bool RequireDerivedProvenance = false,
+    string? ExpectedArticlesCanon = null);
 
 public static class IndexStampVerifier
 {
@@ -142,21 +143,28 @@ public static class IndexStampVerifier
             inputs.ExpectedGenerationSha256, generationFileDigest);
         var expectedProfiles = Consistent("profiles digest",
             inputs.ExpectedProfilesSha256, generation?.ProfilesSha256);
+        var expectedArticlesCanon = Consistent("articles canon",
+            inputs.ExpectedArticlesCanon, generation?.ArticlesCanon);
 
         var corpusCommit = reader.Stamp.GetValueOrDefault("corpus_commit");
         var codeCommit = reader.Stamp.GetValueOrDefault("code_commit");
         var articlesCommit = reader.Stamp.GetValueOrDefault("articles_commit");
+        var requiresCanonTwoPromotionEvidence =
+            requireCapabilityPolicy && reader.HasProvisionGapCapability;
+        var requireDerivedProvenance = inputs.RequireDerivedProvenance
+            || requiresCanonTwoPromotionEvidence;
         var strict = expectedCollection is not null || expectedCorpusCommit is not null
                      || inputs.ExpectedCodeCommit is not null
                      || inputs.ExpectedArticlesCommit is not null
+                     || inputs.ExpectedArticlesCanon is not null
                      || inputs.CapabilityPolicyPath is not null
                      || requireCapabilityPolicy
-                     || inputs.RequireDerivedProvenance;
-        var provenanceErrors = VerifyProvenance(reader.Stamp, inputs.RequireDerivedProvenance,
+                     || requireDerivedProvenance;
+        var provenanceErrors = VerifyProvenance(reader.Stamp, requireDerivedProvenance,
             inputs.ExpectedCodeCommit, inputs.ExpectedCorpusCommit,
             inputs.ExpectedArticlesCommit, expectedCorpusManifest, expectedIngester,
             expectedDeriver, expectedDeriverTree, externalGeneration,
-            expectedProfiles);
+            expectedProfiles, expectedArticlesCanon);
         var capabilityPolicyMatches = VerifyCapabilityPolicy(
             reader, capabilityExpectation, provenanceErrors);
         if (requireCapabilityPolicy && inputs.CapabilityPolicyPath is null)
@@ -164,7 +172,16 @@ public static class IndexStampVerifier
             provenanceErrors.Add("no external capability policy was supplied");
             capabilityPolicyMatches = false;
         }
-        if (inputs.RequireDerivedProvenance)
+        if (requiresCanonTwoPromotionEvidence)
+        {
+            if (inputs.ArticlesGenerationPath is null)
+                provenanceErrors.Add(
+                    "no external articles generation file was supplied");
+            if (generation?.ArticlesCanon != DerivationGeneration.Canon2)
+                provenanceErrors.Add(
+                    "external articles generation publisher entry is not canon/2");
+        }
+        if (requireDerivedProvenance)
         {
             RequireExternal(inputs.ExpectedCollection ?? manifest?.Publisher.GetValueOrDefault("id"),
                 "collection", provenanceErrors);
@@ -173,6 +190,7 @@ public static class IndexStampVerifier
             RequireExternal(externalCorpusManifest, "corpus manifest digest", provenanceErrors);
             RequireExternal(externalIngester, "ingester code commit", provenanceErrors);
             RequireExternal(externalGeneration, "generation digest", provenanceErrors);
+            RequireExternal(expectedArticlesCanon, "articles canon", provenanceErrors);
         }
         return new IndexStampVerification(
             reader.Collection,
@@ -277,7 +295,8 @@ public static class IndexStampVerifier
         string? expectedDeriver,
         string? expectedDeriverTree,
         string? expectedGeneration,
-        string? expectedProfiles)
+        string? expectedProfiles,
+        string? expectedArticlesCanon)
     {
         var errors = new List<string>();
         void Match(string field, string? expected, Func<string, string, string>? validate = null)
@@ -326,6 +345,24 @@ public static class IndexStampVerifier
         Match("deriver_tree_id", expectedDeriverTree, CodeIdentity.RequireFullGitObjectId);
         Match("generation_sha256", expectedGeneration, CodeIdentity.RequireSha256);
         Match("profiles_sha256", expectedProfiles, CodeIdentity.RequireSha256);
+        if (expectedArticlesCanon is not null)
+        {
+            try
+            {
+                expectedArticlesCanon = DerivationGeneration.RequireArticlesCanon(
+                    expectedArticlesCanon, "expected articles_canon");
+                if (expectedArticlesCanon == DerivationGeneration.Canon2)
+                    Match("articles_canon", expectedArticlesCanon,
+                        DerivationGeneration.RequireArticlesCanon);
+                else if (stamp.ContainsKey("articles_canon"))
+                    errors.Add(
+                        "stamp articles_canon does not match external canon/1 evidence");
+            }
+            catch (InvalidDataException error)
+            {
+                errors.Add(error.Message);
+            }
+        }
         return errors;
     }
 

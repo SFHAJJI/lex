@@ -62,7 +62,10 @@ public static class Fragments
 
     public static string ComparisonTextStatus(
         LexIndexReader reader, DocRow first, DocRow second) =>
-        !first.TextAvailable || !second.TextAvailable
+        reader.ProvisionGapCount(LexIndexReader.RidOf(first)) > 0
+        || reader.ProvisionGapCount(LexIndexReader.RidOf(second)) > 0
+            ? "typed_text_gap"
+        : !first.TextAvailable || !second.TextAvailable
         || PublisherTextGateOpen(reader) && (!first.TextPublic || !second.TextPublic)
             ? "text_not_available"
             : "text_withheld";

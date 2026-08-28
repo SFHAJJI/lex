@@ -73,12 +73,15 @@ public sealed class LexIndexReader : IDisposable
     private const int MaximumStampValueLength = 4_096;
     private const int MaximumBuildIssuesJsonLength = 2_750_000;
     private readonly SqliteConnection _conn;
+    private readonly SqliteConnection? _integrityLease;
+    private int _disposeState;
     private readonly string _schema;
     private readonly ITextEncoder? _encoder;
     private readonly SemanticVectorReader? _vectors;
     private readonly bool _hasWorkSearch;
     private readonly bool _hasEvents;
     private readonly bool _hasEventLifecycleFields;
+    private readonly bool _hasProvisionGaps;
     private readonly int _workCatalogVersion;
     private readonly long _provisionVectorCount;
     private readonly IReadOnlyList<CoverageBuildIssue> _buildIssues;
@@ -92,6 +95,7 @@ public sealed class LexIndexReader : IDisposable
     public string Collection => Stamp.GetValueOrDefault("collection", "?");
     public bool SignatureValid { get; }
     public bool HybridReady => _encoder is not null && _vectors is not null;
+    public bool HasProvisionGapCapability => SupportsProvisionGaps;
 
     public void Interrupt() => SQLitePCL.raw.sqlite3_interrupt(_conn.Handle);
 
@@ -99,11 +103,14 @@ public sealed class LexIndexReader : IDisposable
                            ITextEncoder? encoder, SemanticVectorReader? vectors, bool hasWorkSearch,
                            bool hasEvents,
                            bool hasEventLifecycleFields,
+                           bool hasProvisionGaps,
                            int workCatalogVersion, long provisionVectorCount,
                            IReadOnlyList<CoverageBuildIssue> buildIssues, int? expectedWorks,
                            IReadOnlyList<CapabilityManifestEntry> capabilityManifest,
                            bool legacyCapabilityManifest,
-                           bool ownsVectors)
+                           bool ownsVectors,
+                           SqliteConnection? integrityLease,
+                           bool signatureValid)
     {
         _conn = conn;
         Stamp = stamp;
@@ -113,6 +120,7 @@ public sealed class LexIndexReader : IDisposable
         _hasWorkSearch = hasWorkSearch;
         _hasEvents = hasEvents;
         _hasEventLifecycleFields = hasEventLifecycleFields;
+        _hasProvisionGaps = hasProvisionGaps;
         _workCatalogVersion = workCatalogVersion;
         _provisionVectorCount = provisionVectorCount;
         _buildIssues = buildIssues;
@@ -120,14 +128,21 @@ public sealed class LexIndexReader : IDisposable
         CapabilityManifest = capabilityManifest;
         _legacyCapabilityManifest = legacyCapabilityManifest;
         _ownsVectors = ownsVectors;
-        SignatureValid = stamp.ContainsKey("signature") && StampSigner.Verify(stamp);
+        _integrityLease = integrityLease;
+        SignatureValid = signatureValid;
     }
 
-    private bool IsV3 => _schema == IndexBuilder.SchemaVersion;
+    private bool HasContentAddressedLayout =>
+        _schema is IndexBuilder.SchemaVersion or IndexBuilder.PreviousSchemaVersion;
+    private bool SupportsProvisionGaps => _schema == IndexBuilder.SchemaVersion;
 
     public static LexIndexReader Open(string dbPath, ITextEncoder? encoder = null, string? vectorPath = null)
     {
         var conn = new SqliteConnection($"Data Source={dbPath};Mode=ReadOnly");
+        SemanticVectorReader? vectors = null;
+        SqliteConnection? integrityLease = null;
+        try
+        {
         conn.Open();
         ValidateStampBounds(conn, dbPath);
         var stamp = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -166,9 +181,24 @@ public sealed class LexIndexReader : IDisposable
         }
         // §8.4 — refuse unknown schemas explicitly; never guess, never migrate silently.
         var schema = stamp.GetValueOrDefault("schema");
-        if (schema is not (IndexBuilder.SchemaVersion or IndexBuilder.PreviousSchemaVersion))
+        if (schema is not (IndexBuilder.SchemaVersion
+            or IndexBuilder.PreviousSchemaVersion
+            or IndexBuilder.LegacySchemaVersion))
             throw new InvalidOperationException(
-                $"Index schema '{schema}' is not a supported schema. Expected '{IndexBuilder.PreviousSchemaVersion}' or '{IndexBuilder.SchemaVersion}'. Refusing to open {dbPath}.");
+                $"Index schema '{schema}' is not supported. Expected "
+                + $"'{IndexBuilder.LegacySchemaVersion}', '{IndexBuilder.PreviousSchemaVersion}' "
+                + $"or '{IndexBuilder.SchemaVersion}'. Refusing to open {dbPath}.");
+
+        // Every V4 validation and the serving connection must observe one immutable SQLite
+        // snapshot. Acquiring the lease after schema/row validation lets a same-stamp file swap
+        // split those checks from the signed content digest.
+        if (schema == IndexBuilder.SchemaVersion)
+        {
+            integrityLease = AcquireVersionFourIntegrityLease(dbPath, stamp);
+            conn.Dispose();
+            conn = integrityLease;
+            ValidateSqliteIntegrity(conn, dbPath);
+        }
 
         // The stamp is a claim, not a check. `profile` was added to docs without the schema string
         // changing, so an index built the day before opened cleanly and then threw a raw
@@ -185,10 +215,12 @@ public sealed class LexIndexReader : IDisposable
                              .Where(c => !present.Contains(c)).ToList();
         if (missing.Count > 0)
             throw new InvalidOperationException(
-                $"Index {dbPath} claims schema '{IndexBuilder.SchemaVersion}' but docs is missing " +
+                $"Index {dbPath} claims schema '{schema}' but docs is missing " +
                 $"[{string.Join(", ", missing)}]. It predates a column the reader needs; rebuild it.");
 
-        if (schema == IndexBuilder.SchemaVersion)
+        var hasContentAddressedLayout = schema is IndexBuilder.SchemaVersion
+            or IndexBuilder.PreviousSchemaVersion;
+        if (hasContentAddressedLayout)
         {
             var missingV3Docs = new[]
                 { "hierarchy", "domains", "act_form", "binding_status", "consolidation_status" }
@@ -222,6 +254,62 @@ public sealed class LexIndexReader : IDisposable
             }
         }
 
+        var hasProvisionGaps = IndexBuilder.TableExists(conn, "provision_gaps");
+        var provisionGapSchema = stamp.GetValueOrDefault("provision_gap_schema");
+        var provisionGapRowsValue = stamp.GetValueOrDefault("provision_gap_rows");
+        var provisionGapDigest = stamp.GetValueOrDefault("provision_gap_sha256");
+        var articlesCanon = stamp.GetValueOrDefault("articles_canon");
+        var hasAnyProvisionGapStamp = provisionGapSchema is not null
+            || provisionGapRowsValue is not null || provisionGapDigest is not null
+            || articlesCanon is not null;
+        var supportsProvisionGaps = schema == IndexBuilder.SchemaVersion;
+        if (!supportsProvisionGaps && (hasProvisionGaps || hasAnyProvisionGapStamp))
+            throw new InvalidDataException(
+                $"Index {dbPath} schema '{schema}' cannot carry provision-gap capability.");
+        if (supportsProvisionGaps && !hasProvisionGaps)
+            throw new InvalidDataException(
+                $"Index {dbPath} schema '{schema}' is missing its provision_gaps table.");
+        if (supportsProvisionGaps)
+        {
+            ValidateProvisionGapSchema(conn, dbPath);
+
+            var expectedCollection = stamp.GetValueOrDefault("collection");
+            if (string.IsNullOrWhiteSpace(expectedCollection))
+                throw new InvalidDataException(
+                    $"Index {dbPath} has no V4 collection identity.");
+            using (var collectionRows = conn.CreateCommand())
+            {
+                collectionRows.CommandText = """
+                    SELECT 1 FROM docs
+                    WHERE typeof(collection)<>'text' OR collection<>$collection
+                    LIMIT 1
+                    """;
+                collectionRows.Parameters.AddWithValue("$collection", expectedCollection);
+                if (collectionRows.ExecuteScalar() is not null)
+                    throw new InvalidDataException(
+                        $"Index {dbPath} contains a document outside its signed collection.");
+            }
+
+            using var countCommand = conn.CreateCommand();
+            countCommand.CommandText = "SELECT COUNT(*) FROM provision_gaps";
+            var actualRows = Convert.ToInt64(countCommand.ExecuteScalar());
+            if (provisionGapSchema != "lex-provision-gap/1"
+                || articlesCanon != ProvisionGapIndexInput.RequiredArticlesCanon
+                || !long.TryParse(provisionGapRowsValue,
+                    System.Globalization.NumberStyles.None,
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    out var stampedRows)
+                || stampedRows != actualRows
+                || provisionGapDigest is null
+                || !string.Equals(provisionGapDigest,
+                    IndexBuilder.ProvisionGapDigest(conn),
+                    StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException(
+                    $"Index {dbPath} has invalid provision-gap stamp evidence.");
+            IndexBuilder.ValidatePersistedProvisionGaps(conn);
+            ValidateProvisionGapRows(conn, dbPath);
+        }
+
         var eventColumns = new HashSet<string>(StringComparer.Ordinal);
         using (var eventColumnCommand = conn.CreateCommand())
         {
@@ -231,7 +319,7 @@ public sealed class LexIndexReader : IDisposable
                 eventColumns.Add(eventColumnReader.GetString(0));
         }
         var hasEvents = eventColumns.Count != 0;
-        if (schema == IndexBuilder.SchemaVersion && !hasEvents)
+        if (hasContentAddressedLayout && !hasEvents)
             throw new InvalidOperationException(
                 $"Index {dbPath} claims schema '{schema}' but is missing events.");
         var baseEventColumns = new[]
@@ -363,7 +451,6 @@ public sealed class LexIndexReader : IDisposable
             conn, dbPath, schema, hasWorkSearch, hasEventLifecycleFields);
         var capabilityManifest = Lex.Index.CapabilityManifest.Read(conn, stamp, dbPath);
 
-        SemanticVectorReader? vectors = null;
         long provisionVectorCount = 0;
         if (encoder is not null || vectorPath is not null)
         {
@@ -443,11 +530,135 @@ public sealed class LexIndexReader : IDisposable
             if (provisionVectorCount + workVectorCount != vectors.Count)
                 throw new InvalidDataException("The semantic vector file contains an unmapped record.");
         }
+        var signatureValid = stamp.ContainsKey("signature") && StampSigner.Verify(stamp);
+        if (schema == IndexBuilder.SchemaVersion)
+        {
+            ValidateContentAddressedBlobs(conn);
+            signatureValid = signatureValid
+                && stamp.TryGetValue("content_digest", out var signedContentDigest)
+                && string.Equals(
+                    signedContentDigest, IndexBuilder.ContentDigestV4(conn),
+                    StringComparison.OrdinalIgnoreCase);
+        }
+        if (!signatureValid)
+        {
+            if (schema == IndexBuilder.SchemaVersion)
+            {
+                EndIntegritySnapshot(conn);
+                integrityLease = null;
+            }
+        }
         return new LexIndexReader(
             conn, stamp, schema!, encoder, vectors, hasWorkSearch, hasEvents,
-            hasEventLifecycleFields, workCatalogVersion,
+            hasEventLifecycleFields, hasProvisionGaps, workCatalogVersion,
             provisionVectorCount, buildIssues, expectedWorks,
-            capabilityManifest.Rows, capabilityManifest.Legacy, ownsVectors: true);
+            capabilityManifest.Rows, capabilityManifest.Legacy, ownsVectors: true,
+            integrityLease: integrityLease,
+            signatureValid: signatureValid);
+        }
+        catch
+        {
+            ReleaseIntegrityLease(integrityLease);
+            vectors?.Dispose();
+            if (!ReferenceEquals(conn, integrityLease)) conn.Dispose();
+            throw;
+        }
+    }
+
+    private static SqliteConnection AcquireVersionFourIntegrityLease(
+        string dbPath,
+        IReadOnlyDictionary<string, string> expectedStamp)
+    {
+        var lease = new SqliteConnection(
+            $"Data Source={dbPath};Mode=ReadOnly;Default Timeout=0");
+        try
+        {
+            lease.Open();
+            using (var begin = lease.CreateCommand())
+            {
+                begin.CommandText = "BEGIN";
+                begin.ExecuteNonQuery();
+            }
+            using (var journal = lease.CreateCommand())
+            {
+                journal.CommandText = "PRAGMA journal_mode";
+                if (!string.Equals(journal.ExecuteScalar() as string, "delete",
+                        StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidDataException(
+                        $"Index {dbPath} V4 requires delete-journal immutable serving.");
+            }
+
+            var observedStamp = new Dictionary<string, string>(StringComparer.Ordinal);
+            using (var command = lease.CreateCommand())
+            {
+                command.CommandText = "SELECT k,v FROM stamp";
+                using var rows = command.ExecuteReader();
+                while (rows.Read()) observedStamp[rows.GetString(0)] = rows.GetString(1);
+            }
+            if (observedStamp.Count != expectedStamp.Count
+                || observedStamp.Any(pair =>
+                    !expectedStamp.TryGetValue(pair.Key, out var expected)
+                    || !string.Equals(pair.Value, expected, StringComparison.Ordinal)))
+                throw new InvalidDataException(
+                    $"Index {dbPath} changed while its V4 integrity lease was acquired.");
+            return lease;
+        }
+        catch
+        {
+            ReleaseIntegrityLease(lease);
+            throw;
+        }
+    }
+
+    private static void EndIntegritySnapshot(SqliteConnection connection)
+    {
+        using var rollback = connection.CreateCommand();
+        rollback.CommandText = "ROLLBACK";
+        rollback.ExecuteNonQuery();
+    }
+
+    private static void ValidateSqliteIntegrity(
+        SqliteConnection connection, string dbPath)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = "PRAGMA integrity_check(10)";
+        using var rows = command.ExecuteReader();
+        var count = 0;
+        var valid = false;
+        while (rows.Read())
+        {
+            count++;
+            valid = count == 1
+                && rows.GetValue(0) is string value
+                && string.Equals(value, "ok", StringComparison.Ordinal);
+            if (!valid) break;
+        }
+        if (!valid || count != 1 || rows.Read())
+            throw new InvalidDataException(
+                $"Index {dbPath} failed its SQLite integrity check.");
+    }
+
+    private static void ReleaseIntegrityLease(SqliteConnection? lease)
+    {
+        if (lease is null) return;
+        try
+        {
+            if (lease.State == System.Data.ConnectionState.Open)
+            {
+                using var rollback = lease.CreateCommand();
+                rollback.CommandText = "ROLLBACK";
+                rollback.ExecuteNonQuery();
+            }
+        }
+        catch (SqliteException)
+        {
+            // Closing the connection is the final lock release if acquisition failed before BEGIN
+            // or SQLite has already ended the read transaction.
+        }
+        finally
+        {
+            lease.Dispose();
+        }
     }
 
     /// <summary>
@@ -469,13 +680,126 @@ public sealed class LexIndexReader : IDisposable
             _hasWorkSearch,
             _hasEvents,
             _hasEventLifecycleFields,
+            _hasProvisionGaps,
             _workCatalogVersion,
             _provisionVectorCount,
             _buildIssues,
             _expectedWorks,
             CapabilityManifest,
             _legacyCapabilityManifest,
-            ownsVectors: false);
+            ownsVectors: false,
+            integrityLease: null,
+            signatureValid: SignatureValid);
+    }
+
+    private static void ValidateProvisionGapSchema(
+        SqliteConnection connection, string dbPath)
+    {
+        (string Name, string Type, long NotNull, long PrimaryKey, long Hidden)[] expected =
+        [
+            ("rid", "TEXT", 1, 1, 0),
+            ("seq", "INTEGER", 1, 2, 0),
+            ("anchor", "TEXT", 1, 0, 0),
+            ("provision_id", "TEXT", 1, 0, 0),
+            ("eli", "TEXT", 0, 0, 0),
+            ("ptype", "TEXT", 1, 0, 0),
+            ("num", "TEXT", 0, 0, 0),
+            ("heading", "TEXT", 0, 0, 0),
+            ("path", "TEXT", 0, 0, 0),
+            ("article_valid_from", "TEXT", 0, 0, 0),
+            ("text_unavailable_reason", "TEXT", 1, 0, 0),
+        ];
+        var actual = new List<(string, string, long, long, long)>();
+        using (var columns = connection.CreateCommand())
+        {
+            columns.CommandText = """
+                SELECT name,type,"notnull",pk,hidden
+                FROM pragma_table_xinfo('provision_gaps') ORDER BY cid
+                """;
+            using var rows = columns.ExecuteReader();
+            while (rows.Read())
+                actual.Add((rows.GetString(0), rows.GetString(1),
+                    rows.GetInt64(2), rows.GetInt64(3), rows.GetInt64(4)));
+        }
+        if (!actual.SequenceEqual(expected))
+            throw new InvalidDataException(
+                $"Index {dbPath} provision_gaps has an invalid column contract.");
+
+        var uniqueIndexes = new List<string>();
+        using (var indexes = connection.CreateCommand())
+        {
+            indexes.CommandText = "PRAGMA index_list('provision_gaps')";
+            using var rows = indexes.ExecuteReader();
+            while (rows.Read())
+                if (rows.GetInt64(2) == 1 && rows.GetInt64(4) == 0)
+                    uniqueIndexes.Add(rows.GetString(1));
+        }
+        var hasUniqueCoordinate = false;
+        foreach (var index in uniqueIndexes)
+        {
+            using var columns = connection.CreateCommand();
+            columns.CommandText =
+                "SELECT name FROM pragma_index_info($index) ORDER BY seqno";
+            columns.Parameters.AddWithValue("$index", index);
+            using var rows = columns.ExecuteReader();
+            var names = new List<string>();
+            while (rows.Read()) names.Add(rows.GetString(0));
+            if (names.SequenceEqual(["rid", "anchor"], StringComparer.Ordinal))
+                hasUniqueCoordinate = true;
+        }
+        if (!hasUniqueCoordinate)
+            throw new InvalidDataException(
+                $"Index {dbPath} provision_gaps is missing its unique coordinate contract.");
+    }
+
+    private static void ValidateProvisionGapRows(
+        SqliteConnection connection, string dbPath)
+    {
+        using var invalid = connection.CreateCommand();
+        invalid.CommandText = """
+            SELECT CASE WHEN
+              EXISTS (
+                SELECT 1 FROM provision_gaps g
+                WHERE typeof(g.seq)<>'integer' OR g.seq<0 OR g.seq>2147483647
+                   OR typeof(g.rid)<>'text' OR trim(g.rid)=''
+                   OR typeof(g.anchor)<>'text' OR trim(g.anchor)=''
+                   OR typeof(g.provision_id)<>'text' OR trim(g.provision_id)=''
+                   OR typeof(g.ptype)<>'text' OR trim(g.ptype)=''
+                   OR typeof(g.eli) NOT IN ('null','text')
+                   OR typeof(g.num) NOT IN ('null','text')
+                   OR typeof(g.heading) NOT IN ('null','text')
+                   OR typeof(g.path) NOT IN ('null','text')
+                   OR typeof(g.article_valid_from) NOT IN ('null','text')
+                   OR typeof(g.text_unavailable_reason)<>'text'
+                   OR g.text_unavailable_reason NOT IN ('marker_only','marker_suspicious')
+                   OR NOT EXISTS (
+                     SELECT 1 FROM docs d
+                     WHERE d.rid=g.rid
+                       AND d.rid=d.key || '|' || d.language || '|' || d.valid_from
+                       AND g.provision_id=d.key || '#' || g.anchor))
+              OR EXISTS (
+                SELECT 1 FROM provision_gaps GROUP BY rid,seq HAVING COUNT(*)<>1)
+              OR EXISTS (
+                SELECT 1 FROM provision_gaps GROUP BY rid,anchor HAVING COUNT(*)<>1)
+              OR EXISTS (
+                SELECT 1 FROM provisions GROUP BY rid,seq HAVING COUNT(*)<>1)
+              OR EXISTS (
+                SELECT 1 FROM provisions GROUP BY rid,anchor HAVING COUNT(*)<>1)
+              OR EXISTS (
+                SELECT 1 FROM provisions p
+                WHERE NOT EXISTS (
+                  SELECT 1 FROM docs d
+                  WHERE d.rid=p.rid
+                    AND d.rid=d.key || '|' || d.language || '|' || d.valid_from
+                    AND p.provision_id=d.key || '#' || p.anchor))
+              OR EXISTS (
+                SELECT 1 FROM provision_gaps g JOIN provisions p
+                  ON p.rid=g.rid AND (p.seq=g.seq OR p.anchor=g.anchor))
+              THEN 1 ELSE 0 END
+            """;
+        if (Convert.ToInt32(invalid.ExecuteScalar()) != 0)
+            throw new InvalidDataException(
+                $"Index {dbPath} violates the provision-gap identity or ordering contract.");
     }
 
     private static void ValidateStampBounds(SqliteConnection connection, string dbPath)
@@ -564,7 +888,7 @@ public sealed class LexIndexReader : IDisposable
     {
         var p = string.IsNullOrEmpty(alias) ? "" : alias + ".";
         var core = string.Join(", ", DocCols.Split(',').Select(c => p + c.Trim()));
-        return IsV3
+        return HasContentAddressedLayout
             ? core + $", {p}hierarchy, {p}domains, {p}act_form, {p}binding_status, {p}consolidation_status"
             : core + ", NULL, NULL, NULL, NULL, NULL";
     }
@@ -597,7 +921,7 @@ public sealed class LexIndexReader : IDisposable
 
         var languages = Distinct(
             "SELECT DISTINCT lower(language) FROM docs WHERE language <> '' ORDER BY lower(language)");
-        if (!IsV3)
+        if (!HasContentAddressedLayout)
             return new SearchFacetInfo(languages, [], [], [], []);
 
         var domains = Distinct(
@@ -709,6 +1033,17 @@ public sealed class LexIndexReader : IDisposable
             + $"OR length(title_short)>{MaximumPublicTitleLength} OR length(status_note)>4096 "
             + "OR length(profile)>128", "document metadata");
         if (schema == IndexBuilder.SchemaVersion)
+        {
+            using var sourceUris = connection.CreateCommand();
+            sourceUris.CommandText = "SELECT source_uri FROM docs";
+            using var rows = sourceUris.ExecuteReader();
+            while (rows.Read())
+                if (rows.IsDBNull(0)
+                    || !IndexBuilder.IsAbsoluteHttpUri(rows.GetString(0)))
+                    throw new InvalidDataException(
+                        $"Index {dbPath} contains an invalid document source_uri.");
+        }
+        if (schema is IndexBuilder.SchemaVersion or IndexBuilder.PreviousSchemaVersion)
             Reject("docs", "length(hierarchy)>512 OR length(domains)>4096 "
                 + "OR length(act_form)>512 OR length(binding_status)>512 "
                 + "OR length(consolidation_status)>512", "document legal metadata");
@@ -716,6 +1051,29 @@ public sealed class LexIndexReader : IDisposable
             + "OR length(ptype)>128 OR length(num)>512 OR length(heading)>4096 "
             + $"OR length(path)>4096 OR length(work_title)>{MaximumPublicTitleLength}",
             "provision metadata");
+        Reject("provision_gaps", $"length(rid)>512 OR length(anchor)>{MaximumPublicAnchorLength} "
+            + "OR length(provision_id)>1000 OR length(eli)>4096 OR length(ptype)>128 "
+            + "OR length(num)>512 OR length(heading)>4096 OR length(path)>4096 "
+            + "OR length(article_valid_from)>64 "
+            + "OR text_unavailable_reason NOT IN ('marker_only','marker_suspicious')",
+            "provision-gap metadata");
+        if (IndexBuilder.TableExists(connection, "provision_gaps"))
+        {
+            using var gapMetadata = connection.CreateCommand();
+            gapMetadata.CommandText = "SELECT eli,article_valid_from FROM provision_gaps";
+            using var gaps = gapMetadata.ExecuteReader();
+            while (gaps.Read())
+            {
+                var eli = gaps.IsDBNull(0) ? null : gaps.GetString(0);
+                var validFrom = gaps.IsDBNull(1) ? null : gaps.GetString(1);
+                if (eli is not null && !IndexBuilder.IsAbsoluteHttpUri(eli)
+                    || validFrom is not null && !DateOnly.TryParseExact(
+                        validFrom, "yyyy-MM-dd", CultureInfo.InvariantCulture,
+                        DateTimeStyles.None, out _))
+                    throw new InvalidDataException(
+                        $"Index {dbPath} contains invalid provision-gap metadata.");
+            }
+        }
         Reject("citations", "length(cited_slug)>512 OR length(href)>4096 OR length(label)>4096",
             "citation metadata");
         var eventBounds = "length(event)>128 OR length(scope)>128 OR length(detail)>4096";
@@ -761,7 +1119,8 @@ public sealed class LexIndexReader : IDisposable
                     var sourceUri = rows.GetString(4);
                     var citationIdentity = rows.GetInt64(5) == 1;
                     if (string.IsNullOrWhiteSpace(kind)
-                        || !HttpUri(identifier) || !HttpUri(sourceUri)
+                        || !IndexBuilder.IsAbsoluteHttpUri(identifier)
+                        || !IndexBuilder.IsAbsoluteHttpUri(sourceUri)
                         || !citationIdentity && (rows.IsDBNull(2) || rows.IsDBNull(3))
                         || citationIdentity && !rows.IsDBNull(3))
                         throw new InvalidDataException(
@@ -770,9 +1129,6 @@ public sealed class LexIndexReader : IDisposable
             }
         }
 
-        static bool HttpUri(string value) =>
-            Uri.TryCreate(value, UriKind.Absolute, out var uri)
-            && uri.Scheme is "http" or "https";
     }
 
     /// <summary>A bounded timeline page plus its exact row count.</summary>
@@ -944,7 +1300,7 @@ public sealed class LexIndexReader : IDisposable
 
     public List<(DocRow Doc, ProvisionRow Prov, string Snippet)> Search(string query, FilterSet filters, int limit)
     {
-        if (IsV3) return SearchV3(query, filters, limit);
+        if (HasContentAddressedLayout) return SearchV3(query, filters, limit);
         // Filters first (F5): SQL predicates restrict the candidate set; only survivors are
         // ranked by bm25 (weights: work title > heading > num > body text). Hits are
         // provision-level: the retrieval unit is the article, not the document.
@@ -1106,11 +1462,11 @@ public sealed class LexIndexReader : IDisposable
     {
         if (!_hasWorkSearch)
         {
-            var legacyPlan = (IsV3 ? BasicQueryPlan(query) : new SearchQueryPlan(
+            var legacyPlan = (HasContentAddressedLayout ? BasicQueryPlan(query) : new SearchQueryPlan(
                 query, query, [], null, null, false)) with { WorkCatalogAvailable = false };
             if (HasRoleConflict(filters, legacyPlan))
                 return new SearchExecution("keyword", [], [], legacyPlan);
-            if (IsV3 && legacyPlan.ArticleNumber is not null)
+            if (HasContentAddressedLayout && legacyPlan.ArticleNumber is not null)
             {
                 var legacyArticleRows = SearchArticleIntent(
                     legacyPlan.ArticleNumber, filters, limit, legacyPlan.ProvisionQuery);
@@ -1211,7 +1567,7 @@ public sealed class LexIndexReader : IDisposable
             if (works.Count > 0) return new SearchExecution("keyword", works, []);
         }
         var exact = Search(query, filters, limit);
-        if (!fuzzyAuto || exact.Count >= 5 || !IsV3)
+        if (!fuzzyAuto || exact.Count >= 5 || !HasContentAddressedLayout)
             return new SearchExecution("keyword", exact.Select((h, rank) =>
                 new RetrievalHit(h.Doc, h.Prov, h.Snippet, 1d / (rank + 1), ["keyword"])).ToList(), []);
 
@@ -1971,7 +2327,7 @@ public sealed class LexIndexReader : IDisposable
         var order = byChurn
             ? "versions DESC, last_change DESC, d.group_key"
             : "last_change DESC, versions DESC, d.group_key";
-        var metadata = IsV3
+        var metadata = HasContentAddressedLayout
             ? "MAX(d.kind), MAX(d.hierarchy), MAX(d.domains), MAX(d.act_form), MAX(d.binding_status), MAX(d.language)"
             : "MAX(d.kind), NULL, NULL, NULL, NULL, MAX(d.language)";
         using var cmd = Cmd($"""
@@ -2132,13 +2488,13 @@ public sealed class LexIndexReader : IDisposable
     /// </summary>
     public string ComputeContentDigest()
     {
-        if (IsV3)
+        if (_schema == IndexBuilder.SchemaVersion)
         {
-            using var blobs = Cmd("SELECT text_sha, encoding, original_size, payload FROM text_blobs ORDER BY text_sha", []);
-            using var br = blobs.ExecuteReader();
-            while (br.Read())
-                _ = DecodeAndVerify(br.GetString(1), br.GetInt32(2), (byte[])br.GetValue(3), br.GetString(0));
+            ValidateContentAddressedBlobs(_conn);
+            return IndexBuilder.ContentDigestV4(_conn);
         }
+        if (_schema == IndexBuilder.PreviousSchemaVersion)
+            ValidateLegacyContentAddressedBlobs(_conn);
         var sb = new System.Text.StringBuilder();
         using (var cmd = Cmd($"SELECT key, language, valid_from, valid_to, record_sha FROM docs ORDER BY key, language", []))
         using (var r = cmd.ExecuteReader())
@@ -2150,10 +2506,44 @@ public sealed class LexIndexReader : IDisposable
         using (var r = cmd.ExecuteReader())
             while (r.Read())
                 sb.Append(r.GetString(0)).Append('|').Append(r.GetString(1)).Append('\n');
+        IndexBuilder.AppendProvisionGapContentDigest(_conn, sb);
         if (_workCatalogVersion >= 2)
             IndexBuilder.AppendPublisherMetadataDigest(_conn, sb);
         return Convert.ToHexStringLower(
             System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(sb.ToString())));
+    }
+
+    private static void ValidateContentAddressedBlobs(SqliteConnection connection)
+    {
+        using var blobs = connection.CreateCommand();
+        blobs.CommandText = """
+            SELECT text_sha,encoding,original_size,stored_size,payload
+            FROM text_blobs ORDER BY text_sha
+            """;
+        using var rows = blobs.ExecuteReader();
+        while (rows.Read())
+        {
+            var payload = (byte[])rows.GetValue(4);
+            if (payload.Length != rows.GetInt64(3))
+                throw new InvalidDataException(
+                    $"Text blob '{rows.GetString(0)}' failed its stored-size check.");
+            _ = DecodeAndVerify(
+                rows.GetString(1), rows.GetInt32(2), payload, rows.GetString(0));
+        }
+    }
+
+    private static void ValidateLegacyContentAddressedBlobs(SqliteConnection connection)
+    {
+        using var blobs = connection.CreateCommand();
+        blobs.CommandText = """
+            SELECT text_sha,encoding,original_size,payload
+            FROM text_blobs ORDER BY text_sha
+            """;
+        using var rows = blobs.ExecuteReader();
+        while (rows.Read())
+            _ = DecodeAndVerify(
+                rows.GetString(1), rows.GetInt32(2),
+                (byte[])rows.GetValue(3), rows.GetString(0));
     }
 
     public List<EventRow> Events(string key) => Events(key, int.MaxValue);
@@ -2601,7 +2991,7 @@ public sealed class LexIndexReader : IDisposable
         if (f.Hierarchy is not null || f.ActForm is not null || f.BindingStatus is not null
             || f.Domain is not null || f.DocumentRole is not null)
         {
-            if (!IsV3) return (sql + " AND 0=1", ps);
+            if (!HasContentAddressedLayout) return (sql + " AND 0=1", ps);
             if (f.Hierarchy is not null) { sql += $" AND {Column("hierarchy")}=$fhier"; ps.Add(new SqliteParameter("$fhier", f.Hierarchy)); }
             if (f.ActForm is not null) { sql += $" AND {Column("act_form")}=$fform"; ps.Add(new SqliteParameter("$fform", f.ActForm)); }
             if (f.BindingStatus is not null) { sql += $" AND {Column("binding_status")}=$fbind"; ps.Add(new SqliteParameter("$fbind", f.BindingStatus)); }
@@ -2700,9 +3090,84 @@ public sealed class LexIndexReader : IDisposable
 
     public int ProvisionCount(string rid)
     {
-        using var cmd = Cmd("SELECT COUNT(*) FROM provisions WHERE rid=$rid", []);
+        using var cmd = Cmd(_hasProvisionGaps
+            ? "SELECT (SELECT COUNT(*) FROM provisions WHERE rid=$rid) + "
+              + "(SELECT COUNT(*) FROM provision_gaps WHERE rid=$rid)"
+            : "SELECT COUNT(*) FROM provisions WHERE rid=$rid", []);
         cmd.Parameters.AddWithValue("$rid", rid);
         return Convert.ToInt32(cmd.ExecuteScalar());
+    }
+
+    public int ProvisionTextCount(string rid)
+    {
+        using var command = Cmd(
+            "SELECT COUNT(*) FROM provisions WHERE rid=$rid", []);
+        command.Parameters.AddWithValue("$rid", rid);
+        return Convert.ToInt32(command.ExecuteScalar());
+    }
+
+    public int ProvisionGapCount(string rid)
+    {
+        if (!_hasProvisionGaps) return 0;
+        using var command = Cmd(
+            "SELECT COUNT(*) FROM provision_gaps WHERE rid=$rid", []);
+        command.Parameters.AddWithValue("$rid", rid);
+        return Convert.ToInt32(command.ExecuteScalar());
+    }
+
+    public List<ProvisionGapRow> ProvisionGaps(string rid, int limit = int.MaxValue)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(limit);
+        if (!_hasProvisionGaps) return [];
+        return ProvisionGapsCore(rid, limit, null);
+    }
+
+    public List<ProvisionGapRow> ProvisionGapsByAnchors(
+        string rid,
+        IReadOnlyCollection<string> anchors)
+    {
+        if (anchors.Count == 0 || !_hasProvisionGaps) return [];
+        if (anchors.Count > 50)
+            throw new ArgumentOutOfRangeException(nameof(anchors),
+                "At most 50 anchors are allowed.");
+        return ProvisionGapsCore(rid, anchors.Count, anchors);
+    }
+
+    private List<ProvisionGapRow> ProvisionGapsCore(
+        string rid,
+        int limit,
+        IReadOnlyCollection<string>? anchors)
+    {
+        var names = anchors?.Select((_, index) => $"$ga{index}").ToArray() ?? [];
+        var anchorWhere = names.Length == 0
+            ? ""
+            : $" AND anchor IN ({string.Join(',', names)})";
+        using var command = Cmd($"""
+            SELECT rid,seq,anchor,provision_id,eli,ptype,num,heading,path,
+                   article_valid_from,text_unavailable_reason
+            FROM provision_gaps
+            WHERE rid=$rid{anchorWhere}
+            ORDER BY seq LIMIT $lim
+            """, []);
+        command.Parameters.AddWithValue("$rid", rid);
+        command.Parameters.AddWithValue("$lim", limit);
+        if (anchors is not null)
+        {
+            var index = 0;
+            foreach (var anchor in anchors)
+                command.Parameters.AddWithValue(names[index++], anchor);
+        }
+        var gaps = new List<ProvisionGapRow>();
+        using var rows = command.ExecuteReader();
+        while (rows.Read())
+            gaps.Add(new ProvisionGapRow(
+                rows.GetString(0), rows.GetInt32(1), rows.GetString(2), rows.GetString(3),
+                rows.IsDBNull(4) ? null : rows.GetString(4), rows.GetString(5),
+                rows.IsDBNull(6) ? null : rows.GetString(6),
+                rows.IsDBNull(7) ? null : rows.GetString(7),
+                rows.IsDBNull(8) ? null : rows.GetString(8),
+                rows.IsDBNull(9) ? null : rows.GetString(9), rows.GetString(10)));
+        return gaps;
     }
 
     public List<ProvisionRow> ProvisionOutlines(string rid, int limit)
@@ -2746,7 +3211,7 @@ public sealed class LexIndexReader : IDisposable
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(limit);
         var names = anchors?.Select((_, index) => $"$a{index}").ToArray() ?? [];
         var anchorWhere = names.Length == 0 ? "" : $" AND p.anchor IN ({string.Join(',', names)})";
-        using var cmd = Cmd(IsV3 ? $"""
+        using var cmd = Cmd(HasContentAddressedLayout ? $"""
             SELECT p.rid,p.seq,p.anchor,p.provision_id,p.ptype,p.num,p.heading,p.path,
                    p.article_valid_from,p.work_title,p.text_sha,b.original_size,NULL
             FROM provisions p JOIN text_blobs b ON b.text_sha=p.text_sha
@@ -2793,7 +3258,7 @@ public sealed class LexIndexReader : IDisposable
             var size = row.StoredTextBytes ?? int.MaxValue;
             if (size > remaining) continue;
             string text;
-            if (IsV3)
+            if (HasContentAddressedLayout)
             {
                 using var command = Cmd(
                     "SELECT encoding,original_size,payload FROM text_blobs WHERE text_sha=$sha LIMIT 1", []);
@@ -2826,7 +3291,7 @@ public sealed class LexIndexReader : IDisposable
 
     private List<ProvisionRow> ProvisionsCore(string rid, int? limit)
     {
-        if (IsV3) return ProvisionsV3(rid, limit);
+        if (HasContentAddressedLayout) return ProvisionsV3(rid, limit);
         using var cmd = Cmd("""
             SELECT rid, seq, anchor, provision_id, ptype, num, heading, path, article_valid_from,
                    work_title, text_md, text_sha
@@ -3003,7 +3468,7 @@ public sealed class LexIndexReader : IDisposable
         if (anchors.Count > 50)
             throw new ArgumentOutOfRangeException(nameof(anchors), "At most 50 anchors are allowed.");
         var names = anchors.Select((_, index) => $"$a{index}").ToArray();
-        using var cmd = Cmd(IsV3 ? $"""
+        using var cmd = Cmd(HasContentAddressedLayout ? $"""
             SELECT p.rid, p.seq, p.anchor, p.provision_id, p.ptype, p.num, p.heading, p.path,
                    p.article_valid_from, p.work_title, p.text_sha,
                    b.encoding, b.original_size, b.payload
@@ -3022,7 +3487,7 @@ public sealed class LexIndexReader : IDisposable
         using var reader = cmd.ExecuteReader();
         while (reader.Read())
         {
-            if (IsV3)
+            if (HasContentAddressedLayout)
             {
                 var text = DecodeAndVerify(reader.GetString(11), reader.GetInt32(12),
                     (byte[])reader.GetValue(13), reader.GetString(10));
@@ -3062,6 +3527,25 @@ public sealed class LexIndexReader : IDisposable
         return anchors;
     }
 
+    public List<string> ServingProvisionAnchors(string rid, int limit)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(limit);
+        if (!_hasProvisionGaps) return ProvisionAnchors(rid, limit);
+        using var command = Cmd("""
+            SELECT anchor FROM (
+              SELECT seq,anchor FROM provisions WHERE rid=$rid
+              UNION ALL
+              SELECT seq,anchor FROM provision_gaps WHERE rid=$rid)
+            ORDER BY seq LIMIT $lim
+            """, []);
+        command.Parameters.AddWithValue("$rid", rid);
+        command.Parameters.AddWithValue("$lim", limit);
+        var anchors = new List<string>(limit);
+        using var rows = command.ExecuteReader();
+        while (rows.Read()) anchors.Add(rows.GetString(0));
+        return anchors;
+    }
+
     /// <summary>Every distinct text a provision has had, as validity intervals (the time axis).</summary>
     public List<ProvisionStateRow> ProvisionStates(
         string work,
@@ -3073,8 +3557,8 @@ public sealed class LexIndexReader : IDisposable
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(limit);
         var normalizedWork = NormalizeWork(work);
-        if (IsV3) language ??= PreferredHistoryLanguage(normalizedWork, anchor);
-        using var cmd = Cmd(IsV3 ? """
+        if (HasContentAddressedLayout) language ??= PreferredHistoryLanguage(normalizedWork, anchor);
+        using var cmd = Cmd(HasContentAddressedLayout ? """
             SELECT group_key, language, is_primary_language, anchor, valid_from, valid_to, text_sha, in_version,
                    article_valid_from, validity_conflict
             FROM provision_states
@@ -3092,7 +3576,7 @@ public sealed class LexIndexReader : IDisposable
             """, []);
         cmd.Parameters.AddWithValue("$w", normalizedWork);
         cmd.Parameters.AddWithValue("$a", anchor);
-        if (IsV3) cmd.Parameters.AddWithValue("$lang", language ?? "und");
+        if (HasContentAddressedLayout) cmd.Parameters.AddWithValue("$lang", language ?? "und");
         cmd.Parameters.AddWithValue("$from", (object?)windowFrom ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$to", (object?)windowTo ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$lim", limit);
@@ -3100,10 +3584,10 @@ public sealed class LexIndexReader : IDisposable
         using var r = cmd.ExecuteReader();
         while (r.Read())
         {
-            var offset = IsV3 ? 2 : 0;
+            var offset = HasContentAddressedLayout ? 2 : 0;
             list.Add(new ProvisionStateRow(
-                r.GetString(0), IsV3 ? r.GetString(1) : "und",
-                !IsV3 || r.GetInt64(2) == 1, r.GetString(1 + offset),
+                r.GetString(0), HasContentAddressedLayout ? r.GetString(1) : "und",
+                !HasContentAddressedLayout || r.GetInt64(2) == 1, r.GetString(1 + offset),
                 r.GetString(2 + offset), r.IsDBNull(3 + offset) ? null : r.GetString(3 + offset),
                 r.GetString(4 + offset), r.IsDBNull(5 + offset) ? null : r.GetString(5 + offset),
                 r.IsDBNull(6 + offset) ? null : r.GetString(6 + offset),
@@ -3116,8 +3600,8 @@ public sealed class LexIndexReader : IDisposable
         string? windowFrom = null, string? windowTo = null)
     {
         var normalizedWork = NormalizeWork(work);
-        if (IsV3) language ??= PreferredHistoryLanguage(normalizedWork, anchor);
-        using var cmd = Cmd(IsV3
+        if (HasContentAddressedLayout) language ??= PreferredHistoryLanguage(normalizedWork, anchor);
+        using var cmd = Cmd(HasContentAddressedLayout
             ? "SELECT COUNT(*) FROM provision_states WHERE group_key=$w AND anchor=$a AND language=$lang "
               + "AND ($to IS NULL OR valid_from <= $to) "
               + "AND ($from IS NULL OR valid_to IS NULL OR valid_to >= $from)"
@@ -3126,7 +3610,7 @@ public sealed class LexIndexReader : IDisposable
               + "AND ($from IS NULL OR valid_to IS NULL OR valid_to >= $from)", []);
         cmd.Parameters.AddWithValue("$w", normalizedWork);
         cmd.Parameters.AddWithValue("$a", anchor);
-        if (IsV3) cmd.Parameters.AddWithValue("$lang", language ?? "und");
+        if (HasContentAddressedLayout) cmd.Parameters.AddWithValue("$lang", language ?? "und");
         cmd.Parameters.AddWithValue("$from", (object?)windowFrom ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$to", (object?)windowTo ?? DBNull.Value);
         return Convert.ToInt32(cmd.ExecuteScalar());
@@ -3143,8 +3627,8 @@ public sealed class LexIndexReader : IDisposable
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(limit);
         var normalizedWork = NormalizeWork(work);
-        if (IsV3) language ??= PreferredHistoryLanguage(normalizedWork, anchor);
-        using var cmd = Cmd(IsV3 ? """
+        if (HasContentAddressedLayout) language ??= PreferredHistoryLanguage(normalizedWork, anchor);
+        using var cmd = Cmd(HasContentAddressedLayout ? """
             SELECT e.group_key, e.language, e.is_primary_language, e.etype, e.from_anchor,
                    e.to_anchor, e.anchor, e.text_sha, e.at_version
             FROM anchor_events e JOIN docs d ON d.key=e.at_version AND d.language=e.language
@@ -3164,7 +3648,7 @@ public sealed class LexIndexReader : IDisposable
             """, []);
         cmd.Parameters.AddWithValue("$w", normalizedWork);
         cmd.Parameters.AddWithValue("$a", (object?)anchor ?? DBNull.Value);
-        if (IsV3) cmd.Parameters.AddWithValue("$lang", language ?? "und");
+        if (HasContentAddressedLayout) cmd.Parameters.AddWithValue("$lang", language ?? "und");
         cmd.Parameters.AddWithValue("$from", (object?)windowFrom ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$to", (object?)windowTo ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$lim", limit);
@@ -3172,10 +3656,10 @@ public sealed class LexIndexReader : IDisposable
         using var r = cmd.ExecuteReader();
         while (r.Read())
         {
-            var offset = IsV3 ? 2 : 0;
+            var offset = HasContentAddressedLayout ? 2 : 0;
             list.Add(new AnchorEventRow(
-                r.GetString(0), IsV3 ? r.GetString(1) : "und",
-                !IsV3 || r.GetInt64(2) == 1, r.GetString(1 + offset),
+                r.GetString(0), HasContentAddressedLayout ? r.GetString(1) : "und",
+                !HasContentAddressedLayout || r.GetInt64(2) == 1, r.GetString(1 + offset),
                 r.IsDBNull(2 + offset) ? null : r.GetString(2 + offset),
                 r.IsDBNull(3 + offset) ? null : r.GetString(3 + offset),
                 r.IsDBNull(4 + offset) ? null : r.GetString(4 + offset),
@@ -3189,8 +3673,8 @@ public sealed class LexIndexReader : IDisposable
         string? windowFrom = null, string? windowTo = null)
     {
         var normalizedWork = NormalizeWork(work);
-        if (IsV3) language ??= PreferredHistoryLanguage(normalizedWork, anchor);
-        using var cmd = Cmd(IsV3 ? """
+        if (HasContentAddressedLayout) language ??= PreferredHistoryLanguage(normalizedWork, anchor);
+        using var cmd = Cmd(HasContentAddressedLayout ? """
             SELECT COUNT(*) FROM anchor_events e
             JOIN docs d ON d.key=e.at_version AND d.language=e.language
             WHERE e.group_key=$w AND e.language=$lang
@@ -3206,7 +3690,7 @@ public sealed class LexIndexReader : IDisposable
             """, []);
         cmd.Parameters.AddWithValue("$w", normalizedWork);
         cmd.Parameters.AddWithValue("$a", (object?)anchor ?? DBNull.Value);
-        if (IsV3) cmd.Parameters.AddWithValue("$lang", language ?? "und");
+        if (HasContentAddressedLayout) cmd.Parameters.AddWithValue("$lang", language ?? "und");
         cmd.Parameters.AddWithValue("$from", (object?)windowFrom ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$to", (object?)windowTo ?? DBNull.Value);
         return Convert.ToInt32(cmd.ExecuteScalar());
@@ -3270,7 +3754,11 @@ public sealed class LexIndexReader : IDisposable
 
     public void Dispose()
     {
+        if (System.Threading.Interlocked.Exchange(ref _disposeState, 1) != 0) return;
         if (_ownsVectors) _vectors?.Dispose();
-        _conn.Dispose();
+        if (_integrityLease is not null)
+            ReleaseIntegrityLease(_integrityLease);
+        else
+            _conn.Dispose();
     }
 }

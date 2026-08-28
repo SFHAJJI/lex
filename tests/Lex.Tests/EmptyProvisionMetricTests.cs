@@ -412,12 +412,38 @@ public sealed class EmptyProvisionMetricTests
             Directory.CreateDirectory(acceptedWork);
             File.WriteAllText(Path.Combine(acceptedWork, "history.json"),
                 """{ "schema": "lex-articles/1", "anchors": {} }""");
+            var articles = Path.Combine(root, "articles");
+            var manifest = Path.Combine(root, "corpus", "manifest.json");
+            DerivationGeneration.UpdatePublisherWithLocksHeld(
+                articles, "eu-eurlex", CorpusCommit,
+                DerivationGeneration.Sha256File(manifest), IngesterCommit,
+                DeriverCommit, DeriverTree, []);
 
             var stats = DeriveRoot(root);
 
             var error = Assert.Single(stats.Errors);
             Assert.Contains("has no derived versions directory", error,
                 StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Existing_publisher_output_without_generation_evidence_is_rejected()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"lex-empty-prov-{Guid.NewGuid():N}");
+        try
+        {
+            WriteWork(root, "32000r0001", Html);
+            Directory.CreateDirectory(Path.Combine(root, "articles", "eu-eurlex", "works"));
+
+            var error = Assert.Throws<InvalidDataException>(() => DeriveRoot(root));
+
+            Assert.Contains("output exists without derivation generation evidence",
+                error.Message, StringComparison.Ordinal);
         }
         finally
         {
@@ -459,6 +485,59 @@ public sealed class EmptyProvisionMetricTests
             Assert.False(File.Exists(stale));
             Assert.Contains("Accepted replacement.", File.ReadAllText(acceptedOutput));
             Assert.Equal(rejectedBytes, File.ReadAllBytes(rejectedOutput));
+        }
+        finally
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Canon_two_failed_publisher_rebuild_publishes_neither_work_nor_generation()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"lex-empty-prov-{Guid.NewGuid():N}");
+        try
+        {
+            WriteWork(root, "accepted", TextFor("Accepted original."));
+            WriteWork(root, "rejected", Html);
+            Assert.Empty(DeriveRoot(root, canonTwo: true).Errors);
+
+            var articles = Path.Combine(root, "articles");
+            var stale = Path.Combine(
+                articles, "eu-eurlex", "works", "accepted", "stale.txt");
+            File.WriteAllText(stale, "accepted old output");
+            var before = Directory.EnumerateFiles(
+                    articles, "*", SearchOption.AllDirectories)
+                .ToDictionary(
+                    path => Path.GetRelativePath(articles, path),
+                    File.ReadAllBytes,
+                    StringComparer.Ordinal);
+
+            WriteWork(root, "accepted", TextFor("Unpublished replacement."));
+            WriteWork(root, "rejected", """
+                <html><body>
+                <p class="title-article-norm">Article 1</p>
+                <p class="title-article-norm">Article 2</p>
+                </body></html>
+                """);
+            var failed = DeriveRoot(root, canonTwo: true);
+
+            Assert.Single(failed.Errors);
+            Assert.Equal(0, failed.Works);
+            Assert.Equal(0, failed.Versions);
+            Assert.Equal(0, failed.Provisions);
+            var after = Directory.EnumerateFiles(
+                    articles, "*", SearchOption.AllDirectories)
+                .ToDictionary(
+                    path => Path.GetRelativePath(articles, path),
+                    File.ReadAllBytes,
+                    StringComparer.Ordinal);
+            Assert.Equal(before.Keys.Order(StringComparer.Ordinal),
+                after.Keys.Order(StringComparer.Ordinal));
+            Assert.All(before, item => Assert.Equal(item.Value, after[item.Key]));
+            Assert.False(File.Exists(DerivedPublisherTransaction.JournalPathFor(articles)));
+            Assert.Empty(Directory.EnumerateDirectories(
+                articles, ".lex-derived-publish-*", SearchOption.TopDirectoryOnly));
         }
         finally
         {
@@ -656,9 +735,10 @@ public sealed class EmptyProvisionMetricTests
         return DeriveRoot(root);
     }
 
-    private static DeriveWriter.Stats DeriveRoot(string root) => DeriveWriter.Derive(
+    private static DeriveWriter.Stats DeriveRoot(string root, bool canonTwo = false) => DeriveWriter.Derive(
         Path.Combine(root, "corpus"), Path.Combine(root, "articles"), "eu-eurlex",
-        DeriverCommit, DeriverTree, CorpusCommit);
+        DeriverCommit, DeriverTree, CorpusCommit,
+        stagedFileWritten: null, enableAknLuV3: canonTwo);
 
     private static void WriteWork(string root, string slug, string html)
     {

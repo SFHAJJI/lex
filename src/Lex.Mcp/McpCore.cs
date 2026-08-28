@@ -411,11 +411,19 @@ public sealed class McpCore
     }
 
     private JsonObject ProvisionJson(DocRow d, ProvisionRow p, bool withText)
+        => ProvisionJson(d, p, withText, includeDocumentOrder: false);
+
+    private JsonObject ProvisionJson(
+        DocRow d,
+        ProvisionRow p,
+        bool withText,
+        bool includeDocumentOrder)
     {
         var remainingTextCharacters = MaximumLegalTextChars;
         var remainingCitationRows = MaximumCitationRows;
         var citationsTruncated = false;
-        return ProvisionJson(d, p, withText, ref remainingTextCharacters,
+        return ProvisionJson(d, p, withText, includeDocumentOrder,
+            ref remainingTextCharacters,
             ref remainingCitationRows, ref citationsTruncated);
     }
 
@@ -423,6 +431,7 @@ public sealed class McpCore
         DocRow d,
         ProvisionRow p,
         bool withText,
+        bool includeDocumentOrder,
         ref int remainingTextCharacters,
         ref int remainingCitationRows,
         ref bool citationsTruncated)
@@ -442,6 +451,8 @@ public sealed class McpCore
             ["text_sha256"] = p.TextSha,
             ["text"] = includeText ? p.TextMd : null,
         };
+        if (includeDocumentOrder)
+            o.Insert(0, "document_order", p.Seq);
         if (includeText)
             remainingTextCharacters -= p.TextMd.Length;
         else if (withText)
@@ -476,6 +487,43 @@ public sealed class McpCore
         if (_publicBase is not null)
             o["permalink"] = $"{_publicBase}/{d.Collection}/{d.GroupKey}/{VersionCoordinate(d)}#{p.Anchor}";
         return o;
+    }
+
+    private static JsonObject ProvisionGapJson(DocRow document, ProvisionGapRow gap)
+    {
+        var output = new JsonObject
+        {
+            ["schema"] = "lex-provision-gap/1",
+            ["document_order"] = gap.Seq,
+            ["anchor"] = gap.Anchor,
+            ["provision_id"] = gap.ProvisionId,
+            ["eli"] = gap.Eli,
+            ["type"] = gap.PType,
+            ["num"] = gap.Num,
+            ["heading"] = gap.Heading,
+            ["path"] = gap.Path,
+            ["article_valid_from"] = gap.ArticleValidFrom,
+            ["text_available"] = false,
+            ["text_unavailable_reason"] = gap.TextUnavailableReason,
+            ["source_uri"] = document.SourceUri,
+        };
+        return output;
+    }
+
+    private static void AddTextCompleteness(
+        JsonObject output,
+        bool gapCapability,
+        int textProvisionCount,
+        int provisionGapCount)
+    {
+        if (!gapCapability) return;
+        output["total_text_provisions"] = textProvisionCount;
+        output["total_provision_gaps"] = provisionGapCount;
+        output["text_completeness"] = provisionGapCount == 0
+            ? "complete"
+            : textProvisionCount == 0
+            ? "unavailable"
+            : "partial";
     }
 
     private static string KnownExclusions(LexIndexReader r) =>
@@ -532,7 +580,9 @@ public sealed class McpCore
     /// valuable answer anyway: it shows the scheme in use. The Code du travail has no Article 1
     /// under any spelling, and seeing "art_l_010-1, art_l_111-1" says why in one line.
     /// </summary>
-    private static List<string> NearestAnchors(IEnumerable<string> wanted, IReadOnlyList<ProvisionRow> all)
+    private static List<string> NearestAnchors(
+        IEnumerable<string> wanted,
+        IReadOnlyList<string> all)
     {
         static string Digits(string s) => new string(s.Where(char.IsAsciiDigit).ToArray()).TrimStart('0');
         static string Kind(string s)
@@ -543,14 +593,14 @@ public sealed class McpCore
 
         var want = wanted.ToList();
         var kinds = want.Select(Kind).Where(k => k.Length > 0).ToHashSet(StringComparer.Ordinal);
-        var family = kinds.Count > 0 ? all.Where(p => kinds.Contains(Kind(p.Anchor))).ToList() : [];
+        var family = kinds.Count > 0 ? all.Where(anchor => kinds.Contains(Kind(anchor))).ToList() : [];
         if (family.Count == 0) family = [.. all];
 
         var keys = want.Select(Digits).Where(x => x.Length > 0).ToHashSet(StringComparer.Ordinal);
         var hit = keys.Count > 0
-            ? family.Where(p => keys.Contains(Digits(p.Anchor))).Select(p => p.Anchor).Take(10).ToList()
+            ? family.Where(anchor => keys.Contains(Digits(anchor))).Take(10).ToList()
             : [];
-        return hit.Count > 0 ? hit : family.Take(6).Select(p => p.Anchor).ToList();
+        return hit.Count > 0 ? hit : family.Take(6).ToList();
     }
 
     private static IReadOnlyList<ProvisionRow> SelectionPool(
@@ -571,37 +621,65 @@ public sealed class McpCore
             .ToArray();
     }
 
+    private static IReadOnlyList<ProvisionGapRow> GapSelectionPool(
+        LexIndexReader reader,
+        string rid,
+        IReadOnlyList<string> wanted)
+    {
+        if (wanted.Count > 50)
+            throw new ArgumentException("anchors accepts at most 50 comma-separated values");
+        return reader.ProvisionGapsByAnchors(rid, wanted)
+            .Concat(reader.ProvisionGaps(rid, 100))
+            .GroupBy(gap => gap.Anchor, StringComparer.Ordinal)
+            .Select(group => group.First())
+            .ToArray();
+    }
+
     private void AddSelectedProvisions(JsonObject output, DocRow document,
-        IReadOnlyList<ProvisionRow> all, IReadOnlyList<string> wanted, bool withText,
+        IReadOnlyList<ProvisionRow> textProvisions,
+        IReadOnlyList<ProvisionGapRow> gaps,
+        IReadOnlyList<string> allAnchors,
+        IReadOnlyList<string> wanted,
+        bool withText,
+        bool includeDocumentOrder,
         int? totalProvisions = null)
     {
         var found = new JsonArray();
+        var foundGaps = new JsonArray();
         var missing = new JsonArray();
         var remainingTextCharacters = MaximumLegalTextChars;
         var remainingCitationRows = MaximumCitationRows;
         var citationsTruncated = false;
         foreach (var anchorName in wanted)
         {
-            var provision = all.FirstOrDefault(x => x.Anchor == anchorName);
-            if (provision is null) missing.Add((JsonNode)anchorName);
-            else found.Add((JsonNode)ProvisionJson(
-                document, provision, withText, ref remainingTextCharacters,
-                ref remainingCitationRows, ref citationsTruncated));
+            var provision = textProvisions.FirstOrDefault(x => x.Anchor == anchorName);
+            var gap = gaps.FirstOrDefault(x => x.Anchor == anchorName);
+            if (provision is not null)
+                found.Add((JsonNode)ProvisionJson(
+                    document, provision, withText, includeDocumentOrder,
+                    ref remainingTextCharacters,
+                    ref remainingCitationRows, ref citationsTruncated));
+            else if (gap is not null)
+                foundGaps.Add((JsonNode)ProvisionGapJson(document, gap));
+            else
+                missing.Add((JsonNode)anchorName);
         }
 
         output["provisions"] = found;
+        if (foundGaps.Count > 0) output["provision_gaps"] = foundGaps;
         MarkBoundedCitations(output, remainingCitationRows, citationsTruncated);
         if (missing.Count == 0) return;
 
         output["anchors_not_in_version"] = missing;
-        if (found.Count == 0) output["envelope"]!["status"] = McpStatus.AnchorNotInVersion;
-        var near = NearestAnchors(wanted, all);
+        if (found.Count == 0 && foundGaps.Count == 0)
+            output["envelope"]!["status"] = McpStatus.AnchorNotInVersion;
+        var near = NearestAnchors(wanted, allAnchors);
         if (near.Count > 0)
             output["nearest_anchors"] = new JsonArray(near.Select(x => (JsonNode)x).ToArray());
-        output["anchors_in_version"] = totalProvisions ?? all.Count;
+        output["anchors_in_version"] = totalProvisions ?? allAnchors.Count;
         output["anchor_note"] = near.Count > 0
             ? "This work numbers its provisions in its own scheme. nearest_anchors are anchors it actually has; call as_of mode=select with one of those, or mode=outline without anchors for the full list. Do NOT fall back to full-text search for a provision of a known work."
-            : $"This version holds {all.Count} provisions under other anchors. Call as_of mode=outline without anchors to list them, then select from that list. Do NOT fall back to full-text search for a provision of a known work.";
+            : $"This version holds {totalProvisions ?? allAnchors.Count} provisions under other anchors. Call as_of mode=outline without anchors to list them, then select from that list. Do NOT fall back to full-text search for a provision of a known work.";
     }
 
     private static void MarkBoundedText(JsonObject output, bool rowsOmitted = false)
@@ -978,25 +1056,51 @@ public sealed class McpCore
                     ["envelope"] = Envelope(r, status, ProvisionalFor(r, date)),
                 };
                 var rid = LexIndexReader.RidOf(doc);
+                var total = r.ProvisionCount(rid);
+                var textProvisionCount = r.ProvisionTextCount(rid);
+                var provisionGapCount = r.ProvisionGapCount(rid);
+                var textRowsOmittedByCombinedCap = false;
+                AddTextCompleteness(o, r.HasProvisionGapCapability,
+                    textProvisionCount, provisionGapCount);
                 switch (mode)
                 {
                     case "outline":
                     {
                         o["document"] = DocJson(doc, withText: false);
-                        var total = r.ProvisionCount(rid);
                         var wanted = (Str("anchors") ?? "").Split(',',
                             StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
                         if (wanted.Length == 0)
                         {
                             var page = r.ProvisionOutlines(rid, MaximumProvisionRows);
+                            var gaps = r.ProvisionGaps(rid, MaximumProvisionRows);
+                            var includedOrders = page.Select(value => value.Seq)
+                                .Concat(gaps.Select(value => value.Seq))
+                                .Order().Take(MaximumProvisionRows).ToHashSet();
                             o["total_provisions"] = total;
                             o["truncated"] = total > MaximumProvisionRows;
                             o["provisions"] = new JsonArray(page
-                                .Select(p => (JsonNode)ProvisionJson(doc, p, withText: false)).ToArray());
+                                .Where(p => includedOrders.Contains(p.Seq)).OrderBy(p => p.Seq)
+                                .Select(p => (JsonNode)ProvisionJson(
+                                    doc, p, withText: false,
+                                    includeDocumentOrder: r.HasProvisionGapCapability)).ToArray());
+                            var gapPage = gaps.OrderBy(gap => gap.Seq)
+                                .Where(gap => includedOrders.Contains(gap.Seq)).ToArray();
+                            if (gapPage.Length > 0)
+                                o["provision_gaps"] = new JsonArray(gapPage
+                                    .Select(gap => (JsonNode)ProvisionGapJson(doc, gap)).ToArray());
                         }
                         else
-                            AddSelectedProvisions(o, doc, SelectionPool(r, rid, wanted, withText: false), wanted,
-                                withText: false, total);
+                        {
+                            if (r.HasProvisionGapCapability)
+                                o["total_provisions"] = total;
+                            AddSelectedProvisions(o, doc,
+                                SelectionPool(r, rid, wanted, withText: false),
+                                GapSelectionPool(r, rid, wanted),
+                                r.ServingProvisionAnchors(rid, 100), wanted,
+                                withText: false,
+                                includeDocumentOrder: r.HasProvisionGapCapability,
+                                total);
+                        }
                         break;
                     }
                     case "select":
@@ -1004,11 +1108,25 @@ public sealed class McpCore
                         var wanted = (Str("anchors") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
                         if (wanted.Length == 0) throw new ArgumentException("mode=select requires anchors");
                         o["document"] = DocJson(doc, withText: false);
-                        var total = r.ProvisionCount(rid);
+                        if (r.HasProvisionGapCapability)
+                            o["total_provisions"] = total;
                         // Keep refusal metadata identical in outline and select so a client can
                         // narrow a comparison without losing the honest next step.
-                        AddSelectedProvisions(o, doc, SelectionPool(r, rid, wanted, withText: doc.TextPublic), wanted,
-                            withText: doc.TextPublic, total);
+                        AddSelectedProvisions(o, doc,
+                            SelectionPool(r, rid, wanted, withText: doc.TextPublic),
+                            GapSelectionPool(r, rid, wanted),
+                            r.ServingProvisionAnchors(rid, 100), wanted,
+                            withText: doc.TextPublic,
+                            includeDocumentOrder: r.HasProvisionGapCapability,
+                            total);
+                        if (o["provisions"] is JsonArray selectedText
+                            && selectedText.Count == 0
+                            && o["provision_gaps"] is JsonArray selectedGaps
+                            && selectedGaps.Count > 0)
+                        {
+                            status = McpStatus.TextNotAvailable;
+                            o["envelope"] = Envelope(r, status, ProvisionalFor(r, date));
+                        }
                         break;
                     }
                     default:
@@ -1024,11 +1142,14 @@ public sealed class McpCore
                         // The text is returned exactly once, in the most structured form
                         // available: as provisions when the version is split into them, and as
                         // document.text when it is not.
-                        var total = r.ProvisionCount(rid);
                         if (total > 0)
                         {
                             var page = r.ProvisionsForMcp(
                                 rid, MaximumProvisionRows, MaximumLegalTextChars);
+                            var gaps = r.ProvisionGaps(rid, MaximumProvisionRows);
+                            var includedOrders = page.Select(value => value.Seq)
+                                .Concat(gaps.Select(value => value.Seq))
+                                .Order().Take(MaximumProvisionRows).ToHashSet();
                             o["document"] = DocJson(doc, withText: false);
                             o["total_provisions"] = total;
                             o["truncated"] = total > MaximumProvisionRows;
@@ -1036,11 +1157,21 @@ public sealed class McpCore
                             var remainingTextCharacters = MaximumLegalTextChars;
                             var remainingCitationRows = MaximumCitationRows;
                             var citationsTruncated = false;
-                            foreach (var provision in page)
+                            foreach (var provision in page
+                                         .Where(value => includedOrders.Contains(value.Seq)))
                                 provisions.Add(ProvisionJson(doc, provision,
-                                    withText: doc.TextPublic, ref remainingTextCharacters,
+                                    withText: doc.TextPublic,
+                                    includeDocumentOrder: r.HasProvisionGapCapability,
+                                    ref remainingTextCharacters,
                                     ref remainingCitationRows, ref citationsTruncated));
                             o["provisions"] = provisions;
+                            var gapPage = gaps.OrderBy(gap => gap.Seq)
+                                .Where(gap => includedOrders.Contains(gap.Seq)).ToArray();
+                            textRowsOmittedByCombinedCap = page.Count(value =>
+                                includedOrders.Contains(value.Seq)) < textProvisionCount;
+                            if (gapPage.Length > 0)
+                                o["provision_gaps"] = new JsonArray(gapPage
+                                    .Select(gap => (JsonNode)ProvisionGapJson(doc, gap)).ToArray());
                             MarkBoundedCitations(o, remainingCitationRows, citationsTruncated);
                         }
                         else
@@ -1059,9 +1190,10 @@ public sealed class McpCore
                 if (status == McpStatus.TextWithheld)
                     o["text_withheld_reason"] = "publisher text gate pending; read the official text at source_uri";
                 else if (status == McpStatus.TextNotAvailable)
-                    o["text_unavailable_reason"] = "publisher record held; no safely derived provision text is available; read source_uri";
-                MarkBoundedText(o, mode == "full"
-                    && o["total_provisions"]?.GetValue<int>() > MaximumProvisionRows);
+                    o["text_unavailable_reason"] = o["text_completeness"]?.GetValue<string>() == "partial"
+                        ? "publisher record held; no safely derived provision text is available for the requested coordinate or coordinates; safe sibling provision text remains available; read source_uri"
+                        : "publisher record held; no safely derived provision text is available; read source_uri";
+                MarkBoundedText(o, mode == "full" && textRowsOmittedByCombinedCap);
                 return o;
             }
             case "timeline":
@@ -1231,15 +1363,22 @@ public sealed class McpCore
                     throw new ArgumentException("anchor must be a provision anchor returned by search, e.g. art_92");
                 ProvisionRow? fromProvision = null;
                 ProvisionRow? toProvision = null;
+                ProvisionGapRow? fromGap = null;
+                ProvisionGapRow? toGap = null;
+                var fromRid = LexIndexReader.RidOf(a1);
+                var toRid = LexIndexReader.RidOf(b1);
+                var fromGapCount = r.ProvisionGapCount(fromRid);
+                var toGapCount = r.ProvisionGapCount(toRid);
                 if (anchor is { Length: > 0 })
                 {
-                    var fromRid = LexIndexReader.RidOf(a1);
-                    var toRid = LexIndexReader.RidOf(b1);
                     fromProvision = r.Provision(fromRid, anchor);
                     toProvision = r.Provision(toRid, anchor);
-                    var exists = fromProvision is not null || toProvision is not null;
-                    var anchors = r.ProvisionAnchors(fromRid, 100)
-                        .Concat(r.ProvisionAnchors(toRid, 100))
+                    fromGap = r.ProvisionGapsByAnchors(fromRid, [anchor]).FirstOrDefault();
+                    toGap = r.ProvisionGapsByAnchors(toRid, [anchor]).FirstOrDefault();
+                    var exists = fromProvision is not null || toProvision is not null
+                        || fromGap is not null || toGap is not null;
+                    var anchors = r.ServingProvisionAnchors(fromRid, 100)
+                        .Concat(r.ServingProvisionAnchors(toRid, 100))
                         .Where(value => !string.IsNullOrWhiteSpace(value))
                         .Distinct(StringComparer.Ordinal)
                         .Order(StringComparer.Ordinal)
@@ -1257,14 +1396,19 @@ public sealed class McpCore
                 var pa = a1.Profile;
                 var pb = b1.Profile;
                 var profilesDiffer = pa is not null && pb is not null && pa != pb;
-                var anchorTextEqual = !profilesDiffer
+                var comparisonHasTypedGap = anchor is { Length: > 0 }
+                    ? fromGap is not null || toGap is not null
+                    : fromGapCount > 0 || toGapCount > 0;
+                var anchorTextEqual = !profilesDiffer && !comparisonHasTypedGap
                     && fromProvision is not null && toProvision is not null
                     ? string.Equals(fromProvision.TextSha, toProvision.TextSha,
                         StringComparison.Ordinal)
                     : (bool?)null;
-                var changed = anchor is { Length: > 0 }
-                    ? (fromProvision is null) != (toProvision is null)
-                      || anchorTextEqual == false
+                bool? changed = anchor is { Length: > 0 }
+                    ? comparisonHasTypedGap
+                        ? null
+                        : (fromProvision is null) != (toProvision is null)
+                          || anchorTextEqual == false
                     : a1.Key != b1.Key;
 
                 // Two versions of the same work are only comparable provision by provision when
@@ -1280,10 +1424,17 @@ public sealed class McpCore
                 // version carries no text at all, and two unknowns are not evidence of a
                 // mismatch: claiming one would be the same overreach in the other direction,
                 // and that case is already told the truth by text_not_available/text_withheld.
-                var comparable = !profilesDiffer && a1.TextPublic && b1.TextPublic;
+                var comparable = !profilesDiffer && !comparisonHasTypedGap
+                    && a1.TextPublic && b1.TextPublic;
+                var comparisonLimitations = new JsonArray();
+                if (profilesDiffer)
+                    comparisonLimitations.Add("profiles_differ");
+                if (comparisonHasTypedGap)
+                    comparisonLimitations.Add("typed_text_gap");
                 var output = new JsonObject
                 {
                     ["envelope"] = Envelope(r, profilesDiffer ? McpStatus.ProfilesDiffer
+                                               : comparisonHasTypedGap ? McpStatus.TextNotAvailable
                                                : ComparisonTextStatus(r, a1, b1),
                         ProvisionalFor(r, from) || ProvisionalFor(r, to)),
                     ["work"] = w,
@@ -1291,25 +1442,39 @@ public sealed class McpCore
                     ["provision_level_comparable"] = comparable,
                     ["from"] = DocJson(a1, false),
                     ["to"] = DocJson(b1, false),
-                    ["note"] = profilesDiffer
+                    ["note"] = profilesDiffer && comparisonHasTypedGap
+                        ? $"the two versions were extracted by different profiles ({pa ?? "unknown"} vs "
+                          + $"{pb ?? "unknown"}), and one or both coordinates also contain typed text gaps; "
+                          + "neither anchor pairing nor complete wording comparison is certified, so compare "
+                          + "the full texts or official source URIs instead."
+                        : profilesDiffer
                         ? $"the two versions were extracted by different profiles ({pa ?? "unknown"} vs "
                           + $"{pb ?? "unknown"}), so their provisions carry different anchor schemes and "
                           + "cannot be paired: any provision-level diff between them would report "
                           + "differences created by the extraction, not by the legislator. Compare the "
                           + "full texts, or the official source URIs on each side, instead."
-                        : changed
+                        : comparisonHasTypedGap
+                            ? "one or both compared coordinates contain typed text gaps; Lex cannot certify a complete text comparison, so compare the official source URIs"
+                        : changed == true
                             ? (a1.TextPublic && b1.TextPublic
                                 ? "different versions applied; retrieve both via as_of (text included) to compare, or use the web diff permalink /{publisher}/{work}/diff/{from}/{to}"
                                 : "different versions applied; text diff unavailable here — compare at the official source URIs")
                             : "the same version applied on both dates",
                 };
+                if (comparisonLimitations.Count > 0)
+                    output["comparison_limitations"] = comparisonLimitations;
                 if (anchor is { Length: > 0 })
                 {
                     output["anchor"] = anchor;
-                    output["anchor_from_present"] = fromProvision is not null;
-                    output["anchor_to_present"] = toProvision is not null;
+                    output["anchor_from_present"] = fromProvision is not null || fromGap is not null;
+                    output["anchor_to_present"] = toProvision is not null || toGap is not null;
+                    output["anchor_from_text_available"] = fromProvision is not null;
+                    output["anchor_to_text_available"] = toProvision is not null;
                     output["anchor_text_equal"] = anchorTextEqual;
-                    if (!profilesDiffer)
+                    if (!profilesDiffer && comparisonHasTypedGap)
+                        output["note"] =
+                            "typed text gaps affect the requested coordinate on one or both dates; wording comparison is unavailable, so compare the official source URIs";
+                    else if (!profilesDiffer)
                         output["note"] = (fromProvision is not null, toProvision is not null,
                             anchorTextEqual) switch
                         {

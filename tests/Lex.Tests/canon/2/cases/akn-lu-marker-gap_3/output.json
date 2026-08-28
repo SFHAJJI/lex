@@ -1,0 +1,23 @@
+{
+  "profile_id": "akn-lu/3",
+  "text_completeness": "unavailable",
+  "provisions": [],
+  "provision_gaps": [
+    {
+      "document_order": 0,
+      "anchor": "art_marker",
+      "eli": null,
+      "type": "article",
+      "num": "Art. 9.",
+      "heading": null,
+      "path": [],
+      "article_valid_from": null,
+      "text_unavailable_reason": "marker_only"
+    }
+  ],
+  "markdown": "",
+  "notes": [
+    "1 provision(s) withheld as typed marker gaps"
+  ],
+  "publisher_structural_empty_articles": []
+}

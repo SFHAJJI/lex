@@ -13,19 +13,22 @@ public static class StructuredTextExtractor
 {
     public sealed record Result(Extraction Extraction, string ProfileId);
 
-    public static Result Extract(string source, string lexIdBase)
+    public static Result Extract(
+        string source,
+        string lexIdBase,
+        bool enableAknLuV3 = false)
     {
         if (LooksLikeAkomaNtoso(source))
         {
             try
             {
-                return ExtractAkn(source, lexIdBase);
+                return ExtractAkn(source, lexIdBase, enableAknLuV3);
             }
             catch (XmlException)
             {
                 var repaired = RemoveOneByteIdenticalDuplicateSclAttribute(source);
                 if (ReferenceEquals(repaired, source)) throw;
-                var result = ExtractAkn(repaired, lexIdBase);
+                var result = ExtractAkn(repaired, lexIdBase, enableAknLuV3);
                 if (result.ProfileId != AknLuProfileV2.ProfileId)
                     throw new InvalidDataException(
                         "the bounded duplicate scl:* repair is not combined with another extraction profile");
@@ -71,8 +74,17 @@ public static class StructuredTextExtractor
             TolerantHtmlEuProfile.ProfileId);
     }
 
-    private static Result ExtractAkn(string source, string lexIdBase)
+    private static Result ExtractAkn(
+        string source,
+        string lexIdBase,
+        bool enableAknLuV3)
     {
+        if (enableAknLuV3)
+        {
+            var candidate = AknLuProfileV3.Extract(source, lexIdBase);
+            if ((candidate.ProvisionGaps?.Count ?? 0) > 0)
+                return new Result(candidate, AknLuProfileV3.ProfileId);
+        }
         var articles = AknLuProfileV2.Extract(source, lexIdBase);
         if (articles.Provisions.Count > 0
             || (articles.PublisherStructuralEmptyArticles?.Count ?? 0) > 0)

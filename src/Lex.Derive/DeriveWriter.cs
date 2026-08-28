@@ -32,7 +32,8 @@ public static class DeriveWriter
     /// not work on that document. Reported rather than rejected, because rejecting would discard
     /// the provisions that did extract and would abort the run over a pre-existing backlog.</param>
     public sealed record Stats(int Works, int Versions, int Provisions, int Skipped, List<string> Errors,
-        int EmptyProvisions = 0, IReadOnlyList<string>? MostlyEmpty = null);
+        int EmptyProvisions = 0, IReadOnlyList<string>? MostlyEmpty = null,
+        int ProvisionGaps = 0);
 
     /// <summary>The share of empty provisions at which a version stops being a document with gaps
     /// and becomes a failed extraction. Half is deliberately far above the 1.2 percent corpus rate,
@@ -77,25 +78,40 @@ public static class DeriveWriter
         string deriverCodeCommit, string deriverTreeId,
         string corpusCommit) =>
         DeriveCore(corpusRoot, outRoot, publisher, deriverCodeCommit, deriverTreeId,
-            corpusCommit, stagedFileWritten: null);
+            corpusCommit, stagedFileWritten: null, enableAknLuV3: false);
 
     internal static Stats Derive(
         string corpusRoot, string outRoot, string publisher,
         string deriverCodeCommit, string deriverTreeId,
         string corpusCommit,
-        Action<string>? stagedFileWritten) =>
+        Action<string>? stagedFileWritten,
+        bool enableAknLuV3 = false) =>
         DeriveCore(corpusRoot, outRoot, publisher, deriverCodeCommit, deriverTreeId,
-            corpusCommit, stagedFileWritten);
+            corpusCommit, stagedFileWritten, enableAknLuV3);
 
     private static Stats DeriveCore(
         string corpusRoot, string outRoot, string publisher,
         string deriverCodeCommit, string deriverTreeId,
         string corpusCommit,
-        Action<string>? stagedFileWritten)
+        Action<string>? stagedFileWritten,
+        bool enableAknLuV3)
     {
         var buildIdentity = ReadBuildIdentity(
             corpusRoot, deriverCodeCommit, deriverTreeId,
             corpusCommit);
+        var targetCanon = enableAknLuV3
+            ? DerivationGeneration.Canon2
+            : DerivationGeneration.Canon1;
+        using var publisherLock = DerivationGeneration.AcquirePublisherLock(
+            outRoot, publisher);
+        using var generationLock = DerivationGeneration.AcquireGenerationLock(
+            outRoot);
+        DerivedPublisherTransaction.RecoverUnderLocks(outRoot);
+        DerivationGeneration.EnsurePublisherTransition(
+            outRoot, publisher, targetCanon);
+        using var publisherTransaction = enableAknLuV3
+            ? new DerivedPublisherTransaction(outRoot, publisher)
+            : null;
         var worksDir = Path.Combine(corpusRoot, "works");
         if (!Directory.Exists(worksDir)) throw new DirectoryNotFoundException(worksDir);
 
@@ -106,7 +122,8 @@ public static class DeriveWriter
             ? "CC-BY-4.0"
             : "EU reuse-with-attribution (Commission Decision 2011/833/EU)";
 
-        int works = 0, versions = 0, provisionCount = 0, skipped = 0, emptyProvisions = 0;
+        int works = 0, versions = 0, provisionCount = 0, skipped = 0, emptyProvisions = 0,
+            provisionGaps = 0;
         var errors = new List<string>();
         var mostlyEmpty = new List<string>();
         var acceptedProfiles = new SortedSet<string>(StringComparer.Ordinal);
@@ -123,6 +140,9 @@ public static class DeriveWriter
             var workMeta = JsonNode.Parse(File.ReadAllText(workMetaPath))!;
             var workTitle = workMeta["title"]?.GetValue<string>();
             var outputWorkDir = Path.Combine(outRoot, publisher, "works", slug);
+            var candidateWorkDir = publisherTransaction is null
+                ? outputWorkDir
+                : Path.Combine(publisherTransaction.PublisherCandidateRoot, "works", slug);
             Dictionary<string, int>? acceptedEmptyBaseline;
             try
             {
@@ -136,11 +156,12 @@ public static class DeriveWriter
                 continue;
             }
             var errorsBeforeWork = errors.Count;
-            using var candidate = new DerivedWorkCandidate(outputWorkDir, stagedFileWritten);
+            using var candidate = new DerivedWorkCandidate(candidateWorkDir, stagedFileWritten);
             var versionsForWork = 0;
             var provisionsForWork = 0;
             var skippedForWork = 0;
             var emptyForWork = 0;
+            var gapsForWork = 0;
             var extractionEmptySignatures = new Dictionary<string, int>(StringComparer.Ordinal);
             var mostlyEmptyForWork = new List<string>();
             var profilesForWork = new SortedSet<string>(StringComparer.Ordinal);
@@ -217,32 +238,38 @@ public static class DeriveWriter
                     string FilePath,
                     string Kind,
                     string ObsFile,
-                    string? Charset)>();
+                    string? Charset,
+                    string? SourceSha,
+                    string? SourceUri)>();
                 foreach (var (language, body) in bodiesByVersion[i]
                              .OrderBy(item => item.Key, StringComparer.Ordinal))
                 {
                     if (fmx4Langs.Contains(language)
                         && fmxByVersion[i].ContainsKey(language)) continue;
                     units.Add((language, body.FilePath, "structured-text",
-                        body.ObservationFile, body.Charset));
+                        body.ObservationFile, body.Charset,
+                        body.SourceSha256, body.SourceUri));
                 }
                 foreach (var (l, mainPath) in fmxByVersion[i].OrderBy(kv => kv.Key, StringComparer.Ordinal))
                     if (fmx4Langs.Contains(l) || !units.Any(u => u.Lang == l))
                         units.Add((l, mainPath, "fmx4",
-                            $"{l}.fmx4/{Path.GetFileName(mainPath)}", null));
+                            $"{l}.fmx4/{Path.GetFileName(mainPath)}", null,
+                            null, null));
                 // Only where the publisher served no structural body for that language on that
                 // date. Deriving a version twice, once from its XML and once from its PDF, would
                 // put two texts of the same article in the corpus and invent a diff between them.
                 foreach (var (l, pdfPath) in pdfByVersion[i].OrderBy(kv => kv.Key, StringComparer.Ordinal))
                     if (!units.Any(u => u.Lang == l))
                         units.Add((l, pdfPath, "pdf",
-                            $"{l}.pdf/{Path.GetFileName(pdfPath)}", null));
+                            $"{l}.pdf/{Path.GetFileName(pdfPath)}", null,
+                            null, null));
                 // Last resort, and only when nothing better exists for that language: the act cut
                 // out of a gazette issue.
                 foreach (var (l, gazPath) in gazByVersion[i].OrderBy(kv => kv.Key, StringComparer.Ordinal))
                     if (!units.Any(u => u.Lang == l))
                         units.Add((l, gazPath, "pdf-memorial",
-                            $"{l}.pdf-memorial/{Path.GetFileName(gazPath)}", null));
+                            $"{l}.pdf-memorial/{Path.GetFileName(gazPath)}", null,
+                            null, null));
 
                 foreach (var unit in units.OrderBy(u => u.ObsFile, StringComparer.Ordinal))
                 {
@@ -251,14 +278,25 @@ public static class DeriveWriter
                     {
                         var expr = (vMeta["expressions"] as JsonArray)?.OfType<JsonObject>()
                             .FirstOrDefault(e => e["language"]?.GetValue<string>() == lang);
-                        var obs = (expr?["observations"] as JsonArray)?.OfType<JsonObject>()
-                            .LastOrDefault(o =>
-                                o["file"]?.GetValue<string>() == unit.ObsFile
-                                && (o["http"] is null
-                                    || o["http"]?["attempt_outcome"]?.GetValue<string>()
-                                        == "retrieved"));
-                        var sourceSha = obs?["sha256"]?.GetValue<string>() ?? "";
-                        var sourceUri = obs?["source_uri"]?.GetValue<string>() ?? "";
+                        var sourceSha = unit.SourceSha;
+                        var sourceUri = unit.SourceUri;
+                        if (unit.Kind != "structured-text")
+                        {
+                            var observations = (expr?["observations"] as JsonArray)
+                                ?.OfType<JsonObject>()
+                                .Where(observation =>
+                                    observation["file"]?.GetValue<string>() == unit.ObsFile
+                                    && observation["format"]?.GetValue<string>() == unit.Kind
+                                    && observation["http"] is null)
+                                .ToArray() ?? [];
+                            if (observations.Length != 1)
+                                throw new InvalidDataException(
+                                    "The selected alternative publisher manifestation has an ambiguous evidence binding.");
+                            sourceSha = observations[0]["sha256"]?.GetValue<string>();
+                            sourceUri = observations[0]["source_uri"]?.GetValue<string>();
+                        }
+                        sourceSha ??= "";
+                        sourceUri ??= "";
                         if (!Uri.TryCreate(sourceUri, UriKind.Absolute, out var parsedSource)
                             || parsedSource.Scheme is not ("http" or "https"))
                             throw new InvalidDataException(
@@ -299,7 +337,8 @@ public static class DeriveWriter
                                 var result = StructuredTextExtractor.Extract(
                                     StrictPublisherText.Decode(
                                         File.ReadAllBytes(unit.FilePath), unit.Charset),
-                                    lexId);
+                                    lexId,
+                                    enableAknLuV3);
                                 extraction = result.Extraction;
                                 profileId = result.ProfileId;
                                 break;
@@ -318,14 +357,16 @@ public static class DeriveWriter
                         };
 
                         if (extraction.Provisions.Count == 0
-                            && (extraction.PublisherStructuralEmptyArticles?.Count ?? 0) == 0)
+                            && (extraction.PublisherStructuralEmptyArticles?.Count ?? 0) == 0
+                            && (extraction.ProvisionGaps?.Count ?? 0) == 0)
                         {
                             skippedForWork++;
                             Console.Error.WriteLine($"  [derive] skipped (no provisions): {slug}/{validFrom}/{unit.ObsFile}");
                             continue;
                         }
                         if (extraction.Provisions.Count == 0
-                            && (extraction.PublisherStructuralEmptyArticles?.Count ?? 0) > 0)
+                            && (extraction.PublisherStructuralEmptyArticles?.Count ?? 0) > 0
+                            && (extraction.ProvisionGaps?.Count ?? 0) == 0)
                             throw new InvalidDataException(
                                 "publisher-structural empty coverage has no searchable provision; "
                                 + "refusing a derived expression that would falsely appear text-public");
@@ -367,11 +408,35 @@ public static class DeriveWriter
                                 ["md_span"] = new JsonObject { ["start"] = headerCp + p.MdStart, ["end"] = headerCp + p.MdEnd },
                                 ["citations"] = cites,
                             });
+                            if (p.DocumentOrder is { } documentOrder)
+                                (provisions[^1] as JsonObject)!["document_order"] = documentOrder;
                         }
+                        var provisionGapsForExpression = extraction.ProvisionGaps ?? [];
+                        ValidateProvisionGaps(
+                            provisionGapsForExpression, extraction.Provisions);
+                        var provisionGapsJson = new JsonArray(
+                            provisionGapsForExpression
+                                .OrderBy(value => value.DocumentOrder)
+                                .Select(value => (JsonNode)new JsonObject
+                                {
+                                    ["schema"] = "lex-provision-gap/1",
+                                    ["document_order"] = value.DocumentOrder,
+                                    ["anchor"] = value.Anchor,
+                                    ["provision_id"] = $"{lexId}#{value.Anchor}",
+                                    ["eli"] = value.Eli,
+                                    ["type"] = value.Type,
+                                    ["num"] = value.Num,
+                                    ["heading"] = value.Heading,
+                                    ["path"] = new JsonArray(value.Path
+                                        .Select(item => (JsonNode)item).ToArray()),
+                                    ["article_valid_from"] = value.ArticleValidFrom,
+                                    ["text_unavailable_reason"] = value.TextUnavailableReason,
+                                }).ToArray());
                         var structuralEmptyArticles =
                             extraction.PublisherStructuralEmptyArticles ?? [];
                         ValidateStructuralEmptyArticles(
-                            structuralEmptyArticles, extraction.Provisions);
+                            structuralEmptyArticles, extraction.Provisions,
+                            provisionGapsForExpression);
                         var json = new JsonObject
                         {
                             ["schema"] = SchemaId,
@@ -400,6 +465,11 @@ public static class DeriveWriter
                             ["provisions"] = provisions,
                             ["notes"] = new JsonArray(extraction.Notes.Select(n => (JsonNode)n).ToArray()),
                         };
+                        if (provisionGapsForExpression.Count > 0)
+                        {
+                            json["text_completeness"] = extraction.TextCompleteness;
+                            json["provision_gaps"] = provisionGapsJson;
+                        }
                         if (structuralEmptyArticles.Count > 0)
                             json["publisher_structural_empty_articles"] = new JsonArray(
                                 structuralEmptyArticles.Select(value => (JsonNode)new JsonObject
@@ -413,6 +483,7 @@ public static class DeriveWriter
                         profilesForWork.Add(profileId);
                         versionsForWork++;
                         provisionsForWork += extraction.Provisions.Count;
+                        gapsForWork += provisionGapsForExpression.Count;
 
                         var emptyHere = extraction.Provisions.Count(p => string.IsNullOrWhiteSpace(p.TextMd));
                         var publisherStructuralEmptyHere = structuralEmptyArticles.Count;
@@ -483,6 +554,7 @@ public static class DeriveWriter
             works++;
             versions += versionsForWork;
             provisionCount += provisionsForWork;
+            provisionGaps += gapsForWork;
             skipped += skippedForWork;
             emptyProvisions += emptyForWork;
             mostlyEmpty.AddRange(mostlyEmptyForWork);
@@ -490,15 +562,38 @@ public static class DeriveWriter
         }
         if (errors.Count == 0)
         {
-            DerivationGeneration.UpdatePublisher(
-                outRoot, publisher, buildIdentity.CorpusCommit,
-                buildIdentity.CorpusManifestSha256,
-                buildIdentity.IngesterCodeCommit,
-                buildIdentity.DeriverCodeCommit,
-                buildIdentity.DeriverTreeId,
-                acceptedProfiles);
+            if (publisherTransaction is null)
+                DerivationGeneration.UpdatePublisherWithLocksHeld(
+                    outRoot, publisher, buildIdentity.CorpusCommit,
+                    buildIdentity.CorpusManifestSha256,
+                    buildIdentity.IngesterCodeCommit,
+                    buildIdentity.DeriverCodeCommit,
+                    buildIdentity.DeriverTreeId,
+                    acceptedProfiles,
+                    targetCanon);
+            else
+            {
+                publisherTransaction.WriteGenerationCandidate(
+                    DerivationGeneration.RenderPublisherUpdate(
+                        outRoot, publisher, buildIdentity.CorpusCommit,
+                        buildIdentity.CorpusManifestSha256,
+                        buildIdentity.IngesterCodeCommit,
+                        buildIdentity.DeriverCodeCommit,
+                        buildIdentity.DeriverTreeId,
+                        acceptedProfiles,
+                        targetCanon));
+                publisherTransaction.Commit();
+            }
         }
-        return new Stats(works, versions, provisionCount, skipped, errors, emptyProvisions, mostlyEmpty);
+        else if (publisherTransaction is not null)
+        {
+            // Canon/2 publishes a complete publisher or nothing. Counts describe accepted live
+            // output, not files that existed only in an aborted candidate tree.
+            works = versions = provisionCount = provisionGaps = skipped = emptyProvisions = 0;
+            mostlyEmpty.Clear();
+        }
+        return new Stats(works, versions, provisionCount, skipped, errors, emptyProvisions,
+            mostlyEmpty, provisionGaps);
     }
 
     private sealed record BuildIdentity(
@@ -571,6 +666,7 @@ public static class DeriveWriter
             if (string.IsNullOrWhiteSpace(validFrom) || string.IsNullOrWhiteSpace(language))
                 throw new InvalidDataException($"{path} has no valid_from/language identity");
             var provisionAnchors = new HashSet<string>(StringComparer.Ordinal);
+            var provisionOrders = new HashSet<int>();
             foreach (var provision in provisions)
             {
                 if (provision is not JsonObject value)
@@ -578,6 +674,13 @@ public static class DeriveWriter
                 var anchor = value["anchor"]?.GetValue<string>();
                 if (string.IsNullOrWhiteSpace(anchor) || !provisionAnchors.Add(anchor))
                     throw new InvalidDataException($"{path} contains an invalid or duplicate provision anchor");
+                if (value.TryGetPropertyValue("document_order", out var orderNode)
+                    && (orderNode is not JsonValue orderValue
+                        || !orderValue.TryGetValue<int>(out var order)
+                        || order < 0
+                        || !provisionOrders.Add(order)))
+                    throw new InvalidDataException(
+                        $"{path} contains an invalid or duplicate provision document_order");
                 var text = value["text_md"]?.GetValue<string>()
                     ?? throw new InvalidDataException($"{path} provision {anchor} has no text_md string");
                 if (string.IsNullOrWhiteSpace(text))
@@ -596,19 +699,24 @@ public static class DeriveWriter
                         value["heading"]?.GetValue<string>(), stablePath));
                 }
             }
-            ValidateAcceptedStructuralEmptyArticles(root, path, provisionAnchors);
+            var gapAnchors = ValidateAcceptedProvisionGaps(
+                root, path, provisionAnchors, provisionOrders, provisions.Count);
+            ValidateAcceptedStructuralEmptyArticles(
+                root, path, provisionAnchors, gapAnchors);
         }
         return signatures;
     }
 
     private static void ValidateStructuralEmptyArticles(
         IReadOnlyList<PublisherStructuralEmptyArticle> structural,
-        IReadOnlyList<Provision> provisions)
+        IReadOnlyList<Provision> provisions,
+        IReadOnlyList<ProvisionGap> gaps)
     {
         var anchors = new HashSet<string>(StringComparer.Ordinal);
         var wIds = new HashSet<string>(StringComparer.Ordinal);
         var provisionAnchors = provisions.Select(value => value.Anchor)
             .ToHashSet(StringComparer.Ordinal);
+        provisionAnchors.UnionWith(gaps.Select(value => value.Anchor));
         foreach (var value in structural)
         {
             if (string.IsNullOrWhiteSpace(value.Anchor) || string.IsNullOrWhiteSpace(value.WId)
@@ -620,8 +728,43 @@ public static class DeriveWriter
         }
     }
 
+    private static void ValidateProvisionGaps(
+        IReadOnlyList<ProvisionGap> gaps,
+        IReadOnlyList<Provision> provisions)
+    {
+        var anchors = provisions.Select(value => value.Anchor)
+            .ToHashSet(StringComparer.Ordinal);
+        var documentOrders = new HashSet<int>();
+        if (gaps.Count > 0)
+        {
+            foreach (var provision in provisions)
+            {
+                if (provision.DocumentOrder is not { } order
+                    || order < 0
+                    || !documentOrders.Add(order))
+                    throw new InvalidDataException(
+                        "typed provision gaps require a unique document order on every text provision");
+            }
+        }
+        foreach (var gap in gaps)
+        {
+            if (gap.DocumentOrder < 0
+                || !documentOrders.Add(gap.DocumentOrder)
+                || string.IsNullOrWhiteSpace(gap.Anchor)
+                || !anchors.Add(gap.Anchor)
+                || string.IsNullOrWhiteSpace(gap.Type)
+                || gap.TextUnavailableReason is not (
+                    ProvisionGapReason.MarkerOnly or ProvisionGapReason.MarkerSuspicious))
+                throw new InvalidDataException(
+                    "typed provision-gap coordinates are invalid or duplicated");
+        }
+    }
+
     private static void ValidateAcceptedStructuralEmptyArticles(
-        JsonObject root, string path, IReadOnlySet<string> provisionAnchors)
+        JsonObject root,
+        string path,
+        IReadOnlySet<string> provisionAnchors,
+        IReadOnlySet<string> gapAnchors)
     {
         if (!root.TryGetPropertyValue("publisher_structural_empty_articles", out var node)) return;
         if (node is not JsonArray values)
@@ -642,10 +785,75 @@ public static class DeriveWriter
                 || !anchors.Add(anchor) || !wIds.Add(wId))
                 throw new InvalidDataException(
                     $"{path} publisher_structural_empty_articles contains an invalid or duplicate identity");
-            if (provisionAnchors.Contains(anchor))
+            if (provisionAnchors.Contains(anchor) || gapAnchors.Contains(anchor))
                 throw new InvalidDataException(
-                    $"{path} publisher structural-empty anchor {anchor} is also a provision");
+                    $"{path} publisher structural-empty anchor {anchor} is also a provision coordinate");
         }
+    }
+
+    private static IReadOnlySet<string> ValidateAcceptedProvisionGaps(
+        JsonObject root,
+        string path,
+        IReadOnlySet<string> provisionAnchors,
+        IReadOnlySet<int> provisionOrders,
+        int provisionCount)
+    {
+        if (!root.TryGetPropertyValue("provision_gaps", out var node))
+        {
+            if (root.ContainsKey("text_completeness"))
+                throw new InvalidDataException(
+                    $"{path} has text_completeness without provision_gaps");
+            return new HashSet<string>(StringComparer.Ordinal);
+        }
+        if (node is not JsonArray values || values.Count == 0)
+            throw new InvalidDataException(
+                $"{path} provision_gaps must be a non-empty array");
+        if (provisionOrders.Count != provisionCount)
+            throw new InvalidDataException(
+                $"{path} provision gaps require document_order on every text provision");
+        var expectedCompleteness = provisionAnchors.Count == 0 ? "unavailable" : "partial";
+        if (root["text_completeness"]?.GetValue<string>() != expectedCompleteness)
+            throw new InvalidDataException(
+                $"{path} has invalid text_completeness for its provision gaps");
+
+        string[] exactKeys =
+        [
+            "schema", "document_order", "anchor", "provision_id", "eli", "type",
+            "num", "heading", "path", "article_valid_from", "text_unavailable_reason",
+        ];
+        var anchors = new HashSet<string>(StringComparer.Ordinal);
+        var orders = new HashSet<int>(provisionOrders);
+        foreach (var nodeValue in values)
+        {
+            if (nodeValue is not JsonObject value
+                || value.Count != exactKeys.Length
+                || exactKeys.Any(key => !value.ContainsKey(key)))
+                throw new InvalidDataException(
+                    $"{path} provision gap has invalid keys");
+            var anchor = value["anchor"]?.GetValue<string>();
+            var provisionId = value["provision_id"]?.GetValue<string>();
+            var type = value["type"]?.GetValue<string>();
+            var reason = value["text_unavailable_reason"]?.GetValue<string>();
+            if (value["schema"]?.GetValue<string>() != "lex-provision-gap/1"
+                || value["document_order"] is not JsonValue orderValue
+                || !orderValue.TryGetValue<int>(out var order)
+                || order < 0
+                || !orders.Add(order)
+                || string.IsNullOrWhiteSpace(anchor)
+                || !anchors.Add(anchor)
+                || provisionAnchors.Contains(anchor)
+                || string.IsNullOrWhiteSpace(provisionId)
+                || !provisionId.EndsWith($"#{anchor}", StringComparison.Ordinal)
+                || string.IsNullOrWhiteSpace(type)
+                || reason is not (
+                    ProvisionGapReason.MarkerOnly or ProvisionGapReason.MarkerSuspicious)
+                || value["path"] is not JsonArray gapPath
+                || gapPath.Any(item => item is not JsonValue pathValue
+                    || !pathValue.TryGetValue<string>(out _)))
+                throw new InvalidDataException(
+                    $"{path} provision gap has invalid coordinates or reason");
+        }
+        return anchors;
     }
 
     private static string EmptyProvisionSignature(
@@ -667,6 +875,8 @@ public static class DeriveWriter
     private sealed record PrimaryBody(
         string FilePath,
         string ObservationFile,
+        string SourceSha256,
+        string SourceUri,
         string? Charset);
 
     private static Dictionary<string, PrimaryBody> PrimaryBodies(string versionDir)
@@ -683,15 +893,13 @@ public static class DeriveWriter
             if (string.IsNullOrWhiteSpace(language))
                 throw new InvalidDataException(
                     "Corpus expression has no language identity.");
-            var observation = (expression["observations"] as JsonArray)
-                ?.OfType<JsonObject>()
-                .LastOrDefault(item => item["format"] is null
-                    && item["file"]?.GetValue<string>() is { } candidateFile
-                    && !candidateFile.Contains('/')
-                    && !candidateFile.Contains('\\')
-                    && (item["http"] is null
-                        || item["http"]?["attempt_outcome"]?.GetValue<string>()
-                            == "retrieved"));
+            var observation = PrimaryBodyObservationSelector.Select(
+                (expression["observations"] as JsonArray)?.OfType<JsonObject>() ?? [],
+                item => new PrimaryBodyObservationShape(
+                    item["file"]?.GetValue<string>(),
+                    item["format"]?.GetValue<string>(),
+                    item["http"] is not null,
+                    item["http"]?["attempt_outcome"]?.GetValue<string>()));
             if (observation is null) continue;
             var file = observation["file"]?.GetValue<string>();
             if (string.IsNullOrWhiteSpace(file)
@@ -706,6 +914,8 @@ public static class DeriveWriter
             if (!result.TryAdd(language, new PrimaryBody(
                     path,
                     file,
+                    observation["sha256"]?.GetValue<string>() ?? "",
+                    observation["source_uri"]?.GetValue<string>() ?? "",
                     observation["http"]?["charset"]?.GetValue<string>())))
                 throw new InvalidDataException(
                     $"Corpus version has duplicate expression language '{language}'.");

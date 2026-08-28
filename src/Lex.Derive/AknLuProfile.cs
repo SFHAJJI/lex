@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Xml.Linq;
 
 namespace Lex.Derive;
@@ -22,14 +23,23 @@ public static class AknLuProfile
     private const string OfficialLegiluxWIdPrefix = "/eli/etat/leg/";
 
     public static Extraction Extract(string xml, string lexIdBase) =>
-        ExtractCore(xml, lexIdBase, preservePublisherStructuralEmpties: false);
+        ExtractCore(xml, lexIdBase, preservePublisherStructuralEmpties: false,
+            classifyMarkerGaps: false);
 
     internal static Extraction ExtractWithPublisherStructuralEmpties(
         string xml, string lexIdBase) =>
-        ExtractCore(xml, lexIdBase, preservePublisherStructuralEmpties: true);
+        ExtractCore(xml, lexIdBase, preservePublisherStructuralEmpties: true,
+            classifyMarkerGaps: false);
+
+    internal static Extraction ExtractWithMarkerGaps(string xml, string lexIdBase) =>
+        ExtractCore(xml, lexIdBase, preservePublisherStructuralEmpties: true,
+            classifyMarkerGaps: true);
 
     private static Extraction ExtractCore(
-        string xml, string lexIdBase, bool preservePublisherStructuralEmpties)
+        string xml,
+        string lexIdBase,
+        bool preservePublisherStructuralEmpties,
+        bool classifyMarkerGaps)
     {
         var doc = StrictPublisherXml.Parse(xml);
         var root = doc.Root ?? throw new InvalidDataException("empty XML document");
@@ -81,6 +91,7 @@ public static class AknLuProfile
         var seenAnchors = new HashSet<string>(StringComparer.Ordinal);
         List<PublisherStructuralEmptyArticle>? publisherStructuralEmptyArticles =
             preservePublisherStructuralEmpties ? [] : null;
+        List<ProvisionGap>? provisionGaps = classifyMarkerGaps ? [] : null;
         var ordinal = 0;
 
         foreach (var (el, type) in provisionSources)
@@ -108,6 +119,25 @@ public static class AknLuProfile
 
             var citations = new List<Citation>();
             var body = RenderBody(el, akn, citations, type);
+            var markerClassification = classifyMarkerGaps
+                ? ClassifyMarkerGap(el, akn)
+                : MarkerClassification.Ordinary;
+            if (markerClassification is not MarkerClassification.Ordinary)
+            {
+                provisionGaps!.Add(new ProvisionGap(
+                    DocumentOrder: ordinal - 1,
+                    Anchor: anchor,
+                    Eli: scl.VersionedEli ?? scl.Eli,
+                    Type: type,
+                    Num: num,
+                    Heading: heading,
+                    Path: path,
+                    ArticleValidFrom: scl.DateApplicability,
+                    TextUnavailableReason: markerClassification == MarkerClassification.MarkerOnly
+                        ? ProvisionGapReason.MarkerOnly
+                        : ProvisionGapReason.MarkerSuspicious));
+                continue;
+            }
             var publisherStructuralEmpty = preservePublisherStructuralEmpties
                 && type == "article"
                 && !string.IsNullOrWhiteSpace(officialAnchor)
@@ -159,19 +189,137 @@ public static class AknLuProfile
                 TextSha256: Sha256Hex(body),
                 MdStart: start,
                 MdEnd: end,
-                Citations: citations));
+                Citations: citations)
+            {
+                DocumentOrder = classifyMarkerGaps ? ordinal - 1 : null,
+            });
         }
 
         if (publisherStructuralEmptyArticles?.Count > 0)
             notes.Add($"{publisherStructuralEmptyArticles.Count} official publisher-structural empty article(s) preserved outside searchable provisions");
 
-        if (provisions.Count == 0 && (publisherStructuralEmptyArticles?.Count ?? 0) == 0)
+        if (provisionGaps?.Count > 0)
+            notes.Add($"{provisionGaps.Count} provision(s) withheld as typed marker gaps");
+
+        if (provisions.Count == 0
+            && (publisherStructuralEmptyArticles?.Count ?? 0) == 0
+            && (provisionGaps?.Count ?? 0) == 0)
             notes.Add("no article/annex elements found; document not extracted (profile coverage gap)");
 
         var markdown = md.ToString();
         // spans as Unicode codepoint offsets (portable for non-.NET consumers)
         var converted = ToCodepointSpans(markdown, provisions);
-        return new Extraction(converted, markdown, notes, publisherStructuralEmptyArticles);
+        return new Extraction(converted, markdown, notes, publisherStructuralEmptyArticles,
+            provisionGaps);
+    }
+
+    private enum MarkerClassification
+    {
+        Ordinary,
+        MarkerOnly,
+        Suspicious,
+    }
+
+    private static readonly Regex AmendmentSourceNote = new(
+        "^(?:\\(?[0-9]+[.)]\\s*)?"
+        + "(?:loi|r[èe]glement(?:\\s+grand-ducal)?|arr[êe]t[ée](?:\\s+grand-ducal)?|directive|d[ée]cision)"
+        + "(?:\\s+modifi(?:é|ée|és|ées|e|ee|es))?\\s+du\\s+"
+        + "(?:[1-9]|[12][0-9]|3[01])\\s+"
+        + "(?:janvier|f[ée]vrier|mars|avril|mai|juin|juillet|ao[uû]t|septembre|octobre|novembre|d[ée]cembre)"
+        + "\\s+[0-9]{4}[.;]?$",
+        RegexOptions.CultureInvariant | RegexOptions.IgnoreCase | RegexOptions.NonBacktracking);
+
+    /// <summary>
+    /// Classification is structural before it is textual. A simple list item containing the
+    /// publisher's suppressed modification marker is a candidate. Rich modification markup is
+    /// ordinary legal structure. Only then may the bounded source-note grammar prove marker-only;
+    /// every other simple candidate is quarantined as suspicious.
+    /// </summary>
+    private static MarkerClassification ClassifyMarkerGap(XElement provision, XNamespace akn)
+    {
+        var proven = false;
+        foreach (var item in provision.Descendants().Where(element =>
+                     element.Name.Namespace == akn && element.Name.LocalName == "li"))
+        {
+            var descendants = item.Descendants().Where(element =>
+                element.Name.Namespace == akn).ToArray();
+            var modificationMarkers = descendants
+                .Where(element => element.Name.LocalName == "mod").ToArray();
+            if (modificationMarkers.Length == 0) continue;
+
+            var simpleSourceNote = descendants.All(element => element.Name.LocalName is
+                "mod" or "noteRef" or "ref" or "docNumber");
+            if (!simpleSourceNote)
+            {
+                if (modificationMarkers.Any(element => string.Equals(
+                        element.Attribute("class")?.Value, "source",
+                        StringComparison.Ordinal)))
+                    return MarkerClassification.Suspicious;
+                continue;
+            }
+
+            // The observed publisher marker is a bounded pair, not the mere existence of a
+            // legal-AKN <mod> token. A bare <mod/> can occur in arbitrary markup and must never
+            // upgrade matching prose into a proven absence. It remains quarantined as suspicious.
+            var direct = item.Elements().Where(element =>
+                element.Name.Namespace == akn).ToArray();
+            var sourceLinks = direct.Where(element =>
+                element.Name.LocalName == "ref").ToArray();
+            var noteReferences = direct.Where(element =>
+                element.Name.LocalName == "noteRef").ToArray();
+            var directMarkers = direct.Where(element =>
+                element.Name.LocalName == "mod").ToArray();
+            var publisherMarker = modificationMarkers.Length == 1
+                && directMarkers.Length == 1
+                && ReferenceEquals(modificationMarkers[0], directMarkers[0])
+                && IsPublisherSourceMarker(directMarkers[0])
+                && sourceLinks.Length == 1
+                && IsPublisherSourceLink(sourceLinks[0])
+                && noteReferences.Length == 1
+                && IsPublisherNoteReference(noteReferences[0])
+                && Array.IndexOf(direct, sourceLinks[0])
+                    < Array.IndexOf(direct, directMarkers[0])
+                && Array.IndexOf(direct, directMarkers[0])
+                    < Array.IndexOf(direct, noteReferences[0]);
+            if (!publisherMarker) return MarkerClassification.Suspicious;
+
+            var rendered = InlineText(item, akn, citations: null, plain: true);
+            if (!AmendmentSourceNote.IsMatch(rendered))
+                return MarkerClassification.Suspicious;
+            proven = true;
+        }
+        return proven ? MarkerClassification.MarkerOnly : MarkerClassification.Ordinary;
+    }
+
+    private static bool IsPublisherSourceMarker(XElement marker) =>
+        marker.Name.LocalName == "mod"
+        && HasOnlyAttributes(marker, "class", "for")
+        && string.Equals(marker.Attribute("class")?.Value, "source",
+            StringComparison.Ordinal)
+        && !string.IsNullOrWhiteSpace(marker.Attribute("for")?.Value)
+        && !marker.Elements().Any()
+        && string.IsNullOrWhiteSpace(marker.Value);
+
+    private static bool IsPublisherSourceLink(XElement link) =>
+        HasOnlyAttributes(link, "href")
+        && Uri.TryCreate(link.Attribute("href")?.Value, UriKind.Absolute,
+            out var uri)
+        && uri.Scheme is "http" or "https";
+
+    private static bool IsPublisherNoteReference(XElement noteReference)
+    {
+        if (!HasOnlyAttributes(noteReference, "href", "marker")
+            || noteReference.HasElements
+            || !string.IsNullOrWhiteSpace(noteReference.Value))
+            return false;
+        var href = noteReference.Attribute("href")?.Value ?? "";
+        var marker = noteReference.Attribute("marker")?.Value ?? "";
+        return href.Length > 2
+            && href.StartsWith("#M", StringComparison.Ordinal)
+            && !href.AsSpan(2).ContainsAnyExceptInRange('0', '9')
+            && marker.Length > 0
+            && !marker.AsSpan().ContainsAnyExceptInRange('0', '9')
+            && href.AsSpan(2).SequenceEqual(marker);
     }
 
     // ---------------------------------------------------------------- scl metadata
@@ -496,4 +644,12 @@ public static class AknLuProfileV2
 
     public static Extraction Extract(string xml, string lexIdBase) =>
         AknLuProfile.ExtractWithPublisherStructuralEmpties(xml, lexIdBase);
+}
+
+public static class AknLuProfileV3
+{
+    public const string ProfileId = "akn-lu/3";
+
+    public static Extraction Extract(string xml, string lexIdBase) =>
+        AknLuProfile.ExtractWithMarkerGaps(xml, lexIdBase);
 }

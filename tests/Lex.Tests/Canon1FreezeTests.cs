@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json.Nodes;
+using Lex.Derive;
 
 namespace Lex.Tests;
 
@@ -331,10 +332,13 @@ public sealed class Canon1FreezeTests
     }
 
     [Fact]
-    public void Registry_is_exactly_every_public_Lex_Derive_profile_id()
+    public void Registry_remains_frozen_when_later_canons_add_profiles()
     {
-        Assert.Equal(Canon1FixtureRunner.ProfileIds,
-            Canon1FixtureRunner.DiscoverProductionProfileIds());
+        var production = Canon1FixtureRunner.DiscoverProductionProfileIds();
+        Assert.All(Canon1FixtureRunner.ProfileIds,
+            profile => Assert.Contains(profile, production));
+        Assert.DoesNotContain(AknLuProfileV3.ProfileId, Canon1FixtureRunner.ProfileIds);
+        Assert.Contains(AknLuProfileV3.ProfileId, production);
     }
 
     [Fact]
