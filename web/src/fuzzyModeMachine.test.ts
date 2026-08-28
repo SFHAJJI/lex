@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { fuzzyModeFor, nextExactQuery } from "./api.ts";
+import { fuzzyModeFor } from "./api.ts";
 
 /**
  * Review O1: the exact-word override was dormant, not reset. `fuzzyModeFor` already ignores a
@@ -34,11 +34,12 @@ class SearchFuzzyMode {
 
   /** Search.tsx:237 -> searchSubmission.ts:9 -> App.tsx:647. Nothing on that path trims. */
   submit(text: string): Fuzzy {
-    const previous = this.q;
+    // App.tsx keys Search by the submitted question, so a different question remounts the
+    // component and every locally held authorization goes with it, during render. That is why
+    // this is an assignment rather than a clearing rule: there is no surviving value to clear,
+    // and no window in which one could be observed.
+    if (text.trim() !== this.q.trim()) this.exactQuery = undefined;
     this.q = text;
-    // Search.tsx:151 `}, [q]`: the effect runs only when the question string actually changed.
-    // Search.tsx:150 `setExactQuery((current) => nextExactQuery(current, q))`.
-    if (this.q !== previous) this.exactQuery = nextExactQuery(this.exactQuery, this.q);
     return this.fuzzy();
   }
 

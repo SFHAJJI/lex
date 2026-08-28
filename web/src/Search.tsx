@@ -10,7 +10,7 @@ import {
 import { ScopeFilters } from "./ScopeFilters";
 import { envelopeStripRows, type EnvelopeStripRow } from "./envelopeStrip";
 import { normalizeSearchResponse, type PublisherPopulation } from "./searchPopulation";
-import { fuzzyModeFor, nextExactQuery } from "./api";
+import { fuzzyModeFor, retainedForQuery } from "./api";
 import { classifyEnvelope, clearedSearchResults, LIMITATION_EXPLANATION, projectSearchResponse,
   searchEmptyPresentation, searchResultsFromError,
   type SearchResultsState } from "./limitations";
@@ -171,14 +171,6 @@ export default function Search(p: SearchProps) {
   // Bound to the exact submitted query. Any other query resolves to the default, so the override
   // cannot outlive the words it was chosen for.
   const fuzzyMode = fuzzyModeFor(exactQuery, q);
-  /**
-   * The override is cleared when the question changes, not merely ignored. Leaving it stored made
-   * it dormant rather than reset: returning to the earlier question later would silently reapply
-   * a narrowing the reader never asked for a second time. Codex found this at exact head.
-   */
-  useEffect(() => {
-    setExactQuery((current) => nextExactQuery(current, q));
-  }, [q]);
   const asOf = p.state.asOf;
   const retrieval = p.state.retrieval ?? "keyword";
   const jurisdiction = p.state.jurisdiction ?? "";
@@ -190,7 +182,7 @@ export default function Search(p: SearchProps) {
   const language = p.state.language ?? "";
   // Bind the component-memory filter to the exact submitted query that produced its server row.
   // A new query drops it synchronously, without putting an opaque publisher URI in URL state.
-  const activeMetadata = metadataFilter?.query === q ? metadataFilter.metadata : undefined;
+  const activeMetadata = retainedForQuery(metadataFilter, q)?.metadata;
   const metadataArguments = activeMetadata
     ? publisherMetadataFilterArguments(activeMetadata)
     : undefined;
@@ -285,6 +277,13 @@ export default function Search(p: SearchProps) {
   const groupedResults = groupSearchResults(works, articles);
   const visiblePassages = new Set(articles.slice(0, articleLimit));
   const resultLawCount = groupedResults.reduce((count, section) => count + section.works.length, 0);
+  const laws = `${resultLawCount} law${resultLawCount === 1 ? "" : "s"}`;
+  const passages =
+    `${articles.length} matching passage${articles.length === 1 ? "" : "s"}`;
+  // Authoritative only when the whole selected scope answered and nothing was withheld.
+  const countedResults = error !== undefined || withheld !== undefined
+    ? `Showing ${laws}, ${passages}`
+    : `${laws}, ${passages}`;
 
   return (
     <section className="finder" aria-label="Search the corpus">
@@ -334,7 +333,11 @@ export default function Search(p: SearchProps) {
       {q ? (
         <div className="results">
           <div className="res-head">
-            <span className="sub">{busy ? "Searching…" : `${resultLawCount} law${resultLawCount === 1 ? "" : "s"}, ${articles.length} matching passage${articles.length === 1 ? "" : "s"}`}</span>
+            {/* A bare count is a claim about the answer. It is only that when the response
+                was authoritative and complete: after a transport error, or when a
+                publisher's rows were withheld, "0 laws" reads as an absence the response
+                cannot support. In those states the header says only what is on screen. */}
+            <span className="sub">{busy ? "Searching…" : countedResults}</span>
             {/* An unknown mode is not an unavailable mode: in flight and after a transport
                 error the badge states nothing rather than a false capability claim. */}
             {results.modeUsed === undefined
@@ -512,7 +515,9 @@ export default function Search(p: SearchProps) {
 
           {/* Rule 6: the population behind the list, the zero, or the refusal alike. Rendered
               from validated envelopes only, so an invalid sibling contributes nothing. */}
-          {!busy && !error ? <PopulationFooter rows={populations} /> : null}
+          {!busy && !error
+            ? <PopulationFooter rows={populations} incomplete={withheld !== undefined} />
+            : null}
         </div>
       ) : null}
     </section>

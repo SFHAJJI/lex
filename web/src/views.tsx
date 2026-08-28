@@ -525,7 +525,8 @@ export function Ranking({ rows, worksChanged, newVersions, populationWorks, know
  * query covered ground it never touched. When nothing ran at all there is no denominator rather
  * than a zero, because zero asserts that an empty corpus was searched.
  */
-export function PopulationFooter({ rows }: { rows: PublisherPopulation[] }) {
+export function PopulationFooter(
+  { rows, incomplete }: { rows: PublisherPopulation[]; incomplete?: boolean }) {
   if (rows.length === 0) return null;
   // Three states, not two. A missing total means either that no publisher ran the query or
   // that the disclosed scopes cannot be added into one honest number, and the sentence for
@@ -537,7 +538,11 @@ export function PopulationFooter({ rows }: { rows: PublisherPopulation[] }) {
     <div className="population-footer" data-testid="population-footer">
       {denominator.kind === "total"
         ? <p data-testid="population-searched">
-            Searched {denominator.works.toLocaleString()} works in the selected scope.
+            {incomplete
+              ? `Searched ${denominator.works.toLocaleString()} works across the publishers `
+                + "shown above. This is not the whole scope you selected, because another "
+                + "publisher was withheld."
+              : `Searched ${denominator.works.toLocaleString()} works in the selected scope.`}
           </p>
         : denominator.kind === "none_ran"
         ? <p data-testid="population-searched">

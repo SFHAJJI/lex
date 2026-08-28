@@ -555,6 +555,27 @@ export default function App() {
     setAssistantPresentationId(undefined);
   }, []);
 
+  /**
+   * Back and Forward reach the same destinations the controls do, and must leave the same
+   * state behind.
+   *
+   * Every in-app transition routes through `clearAssistantView`, so the parent view never
+   * outlives the route that produced it. History navigation bypasses all of them: `popstate`
+   * only re-reads the URL, and the effects below return early when the destination no longer
+   * qualifies, so nothing clears. Going back from a change report, an in-force list or a law
+   * gap to a search URL left the previous ranking, list or gap rendered in the work area
+   * indefinitely, describing a route the reader had already left.
+   *
+   * Clearing here cannot destroy a newly accepted assistant view. The assistant navigates by
+   * pushing a history entry, which does not fire `popstate`; only the reader moving through
+   * history does, and at that point the accepted view describes the destination being left.
+   */
+  useEffect(() => {
+    const onPop = () => clearAssistantView();
+    addEventListener("popstate", onPop);
+    return () => removeEventListener("popstate", onPop);
+  }, [clearAssistantView]);
+
   // Open on the text in force TODAY, never on the oldest version — the oldest is the one most
   // likely to have no stored text, so the old behaviour greeted every visitor with a refusal.
   const pickLaw = (h: { work: string; title: string }) => {
@@ -654,6 +675,16 @@ export default function App() {
     <div className="ws">
       {front ? (
         <Search
+          // Keyed by the submitted question on purpose. Authorizations a reader gives for
+          // one question, the exact-words override and the publisher metadata filter, are
+          // held in this component, and a clearing effect could not discard them safely:
+          // it only clears when it observes the intervening question, so a fast
+          // q1, q2, Back to q1 never observed q2 and left the override armed. Remounting
+          // discards them during render, so there is no window and nothing to observe.
+          // Trimmed, because that is the identity fuzzyModeFor already compares. Keying on the
+          // raw string would make "x" and "  x  " two questions and drop an authorization the
+          // reader gave for what is visibly one.
+          key={(s.q ?? "").trim()}
           state={s} today={today()}
           onSubmit={({ query, asOf }) => { setPage(0); clearAssistantView(); go({
             q: query || undefined,
