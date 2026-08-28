@@ -195,6 +195,12 @@ public sealed class CapabilityManifestTests : IDisposable
             aggregate["envelope"]!["status"]!.GetValue<string>());
         Assert.Equal("hierarchy", aggregate["unsupported_filters"]![0]!.GetValue<string>());
         Assert.Empty(aggregate["hits"]!.AsArray());
+        var refusedPopulation = Assert.IsType<JsonObject>(aggregate["population"]);
+        Assert.Equal("mounted_scope_before_unsupported_filters",
+            refusedPopulation["basis"]!.GetValue<string>());
+        Assert.Equal(1, refusedPopulation["works_in_scope"]!.GetValue<int>());
+        Assert.False(refusedPopulation["scope_filters_applied"]!.GetValue<bool>());
+        Assert.False(refusedPopulation["query_ran"]!.GetValue<bool>());
 
         var englishAtDate = Result(core.CallTool("search", new JsonObject
         {
@@ -207,6 +213,9 @@ public sealed class CapabilityManifestTests : IDisposable
         Assert.Equal(McpStatus.Ok,
             englishAtDate["envelope"]!["status"]!.GetValue<string>());
         Assert.NotEmpty(englishAtDate["hits"]!.AsArray());
+        Assert.Equal(1, englishAtDate["population"]!["works_in_scope"]!.GetValue<int>());
+        Assert.True(englishAtDate["population"]!["scope_filters_applied"]!.GetValue<bool>());
+        Assert.True(englishAtDate["population"]!["query_ran"]!.GetValue<bool>());
 
         var frenchAtDate = Result(core.CallTool("search", new JsonObject
         {
@@ -486,6 +495,50 @@ public sealed class CapabilityManifestTests : IDisposable
         }));
         Assert.Equal(McpStatus.FilterNotSupportedByIndex,
             result["envelope"]!["status"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void Search_refuses_publisher_metadata_filter_when_legacy_catalog_cannot_apply_it()
+    {
+        var db = Path();
+        var key = StampSigner.CreateKeyPem();
+        var document = Doc("legacy-metadata", "en", "2024-01-01", null);
+        IndexBuilder.Build(db, Stamp("legacy-metadata"), [document], [], [], [], key);
+
+        using (var connection = new SqliteConnection($"Data Source={db}"))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = """
+                DROP TABLE work_publisher_metadata;
+                DROP TABLE document_roles;
+                DELETE FROM stamp
+                WHERE k IN ('work_catalog_version', 'publisher_metadata_records',
+                            'document_role_records');
+                """;
+            command.ExecuteNonQuery();
+            Resign(connection, key);
+        }
+
+        using var reader = LexIndexReader.Open(db);
+        var core = new McpCore(new Dictionary<string, LexIndexReader>
+            { ["legacy-metadata"] = reader });
+        var result = Result(core.CallTool("search", new JsonObject
+        {
+            ["query"] = "synthetic",
+            ["publisher_metadata_identifier"] = "https://example.test/concept/1",
+        }));
+
+        Assert.Equal(McpStatus.FilterNotSupportedByIndex,
+            result["envelope"]!["status"]!.GetValue<string>());
+        Assert.Equal(["publisher_metadata_identifier"], result["unsupported_filters"]!.AsArray()
+            .Select(filter => filter!.GetValue<string>()));
+        var population = Assert.IsType<JsonObject>(result["population"]);
+        Assert.Equal("mounted_scope_before_unsupported_filters",
+            population["basis"]!.GetValue<string>());
+        Assert.Equal(1, population["works_in_scope"]!.GetValue<int>());
+        Assert.False(population["scope_filters_applied"]!.GetValue<bool>());
+        Assert.False(population["query_ran"]!.GetValue<bool>());
     }
 
     public void Dispose()
