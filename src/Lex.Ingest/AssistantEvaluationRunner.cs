@@ -1528,48 +1528,16 @@ public sealed class AssistantEvaluationGraderException(
 
 internal static class AssistantEvaluationGraderCause
 {
-    private static readonly HashSet<string> Billed = new(StringComparer.Ordinal)
-    {
-        "grader_finish_reason_absent", "grader_finish_reason_invalid_type",
-        "grader_finish_reason_unknown", "grader_finish_reason_length",
-        "grader_finish_reason_content_filter", "grader_grade_malformed",
-        "grader_response_malformed", "grader_no_content", "grader_no_score", "grader_no_reason",
-        "grader_score_out_of_range", "grader_unknown_billed_failure",
-    };
-
-    private static readonly HashSet<string> Unbilled = new(StringComparer.Ordinal)
-    {
-        "grader_not_configured", "grader_usage_absent", "grader_usage_invalid",
-        "grader_prefix_over_input_ceiling", "grader_evidence_over_input_ceiling",
-        "grader_prompt_over_input_ceiling", "grader_request_over_transport_bound",
-        "grader_not_executed_target_failure", "grader_empty_response", "grader_malformed_json",
-        "grader_http_rejected", "grader_transport_unavailable", "grader_timeout",
-        "grader_unknown_failure",
-    };
-
     internal static bool ValidUsage(AssistantModelUsage? usage)
-    {
-        if (usage is null
-            || usage.InputTokens < 0 || usage.OutputTokens < 0
-            || (usage.InputTokens == 0) != (usage.OutputTokens == 0))
-            return false;
-        try
-        {
-            _ = usage.TotalTokens;
-            return true;
-        }
-        catch (OverflowException)
-        {
-            return false;
-        }
-    }
+        => usage is not null && AssistantEvaluationRelevanceContract.IsValidUsage(
+            usage.InputTokens, usage.OutputTokens);
 
     internal static bool Coherent(string? cause, AssistantModelUsage? usage) =>
-        cause is not null && usage is not null && ValidUsage(usage)
-        && (usage.InputTokens > 0 ? Billed.Contains(cause) : Unbilled.Contains(cause));
+        usage is not null && AssistantEvaluationRelevanceContract.IsCoherent(
+            null, cause, usage.InputTokens, usage.OutputTokens);
 
     internal static bool IsKnown(string? cause) =>
-        cause is not null && (Billed.Contains(cause) || Unbilled.Contains(cause));
+        AssistantEvaluationRelevanceContract.IsKnownCause(cause);
 
     internal static string Normalize(Exception exception) => exception switch
     {

@@ -50,6 +50,57 @@ public sealed record EvaluationAdmissionAuthority(
     internal ArtifactTrustRoot Root => new(KeyId, FingerprintSha256, PublicKeyPem);
 }
 
+/// <summary>Closed coherence rules for the published assistant relevance measurement.</summary>
+public static class AssistantEvaluationRelevanceContract
+{
+    private static readonly HashSet<string> BilledCauses = new(StringComparer.Ordinal)
+    {
+        "grader_finish_reason_absent", "grader_finish_reason_invalid_type",
+        "grader_finish_reason_unknown", "grader_finish_reason_length",
+        "grader_finish_reason_content_filter", "grader_grade_malformed",
+        "grader_response_malformed", "grader_no_content", "grader_no_score", "grader_no_reason",
+        "grader_score_out_of_range", "grader_unknown_billed_failure",
+    };
+
+    private static readonly HashSet<string> UnbilledCauses = new(StringComparer.Ordinal)
+    {
+        "grader_not_configured", "grader_usage_absent", "grader_usage_invalid",
+        "grader_prefix_over_input_ceiling", "grader_evidence_over_input_ceiling",
+        "grader_prompt_over_input_ceiling", "grader_request_over_transport_bound",
+        "grader_not_executed_target_failure", "grader_empty_response", "grader_malformed_json",
+        "grader_http_rejected", "grader_transport_unavailable", "grader_timeout",
+        "grader_unknown_failure",
+    };
+
+    public static bool IsKnownCause(string? cause) =>
+        cause is not null && (BilledCauses.Contains(cause) || UnbilledCauses.Contains(cause));
+
+    public static bool IsValidUsage(long inputTokens, long outputTokens)
+    {
+        if (inputTokens < 0 || outputTokens < 0
+            || (inputTokens == 0) != (outputTokens == 0)) return false;
+        try
+        {
+            _ = checked(inputTokens + outputTokens);
+            return true;
+        }
+        catch (OverflowException)
+        {
+            return false;
+        }
+    }
+
+    public static bool IsCoherent(
+        int? score, string? unavailableCause, long inputTokens, long outputTokens) =>
+        IsValidUsage(inputTokens, outputTokens)
+        && (score is >= 1 and <= 5
+            ? unavailableCause is null && inputTokens > 0
+            : score is null && unavailableCause is not null
+                && (inputTokens > 0
+                    ? BilledCauses.Contains(unavailableCause)
+                    : UnbilledCauses.Contains(unavailableCause)));
+}
+
 public static partial class EvaluationAdmissionContract
 {
     public const string Schema = "lex-assistant-eval-admission/1";

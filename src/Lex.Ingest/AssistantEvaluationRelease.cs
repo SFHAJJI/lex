@@ -322,12 +322,9 @@ public static class AssistantEvaluationReleaseVerifier
     private static bool CoherentRelevance(
         AssistantEvaluationRelevance? relevance, AssistantModelUsage? usage) =>
         relevance is not null && usage is not null
-        && AssistantEvaluationGraderCause.ValidUsage(usage)
-        && (relevance.Score is >= 1 and <= 5
-            ? relevance.UnavailableCause is null && usage.InputTokens > 0
-            : relevance.Score is null && relevance.UnavailableCause is not null
-                && AssistantEvaluationGraderCause.Coherent(
-                    relevance.UnavailableCause, usage));
+        && AssistantEvaluationRelevanceContract.IsCoherent(
+            relevance.Score, relevance.UnavailableCause,
+            usage.InputTokens, usage.OutputTokens);
 
     private static void VerifyAdmission(
         string admissionPath,

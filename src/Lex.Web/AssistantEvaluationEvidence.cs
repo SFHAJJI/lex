@@ -348,13 +348,23 @@ internal static class AssistantEvaluationEvidenceVerifier
         // so the page can show which questions were asked and how each one scored rather than only a
         // verdict a reader has to take on trust. A result naming a case the catalog does not contain,
         // or a case the report never ran, is a mismatch rather than a row to render.
-        var outcomes = RequiredArray(report, "results").EnumerateArray().Select(item => (
-            CaseId: BoundedString(item, 100, "case_id"),
-            Passed: RequiredBoolean(item, "passed"),
-            Relevance: NullableInt(Path(item, "relevance"), "score")))
-            .ToArray();
-        if (outcomes.Any(item => item.Relevance is < 1 or > 5))
-            throw new InvalidDataException("Assistant evaluation relevance score is out of range.");
+        var outcomes = RequiredArray(report, "results").EnumerateArray().Select(item =>
+        {
+            var relevance = RequiredObject(item, "relevance");
+            var score = NullableInt(relevance, "score");
+            var cause = NullableString(relevance, "unavailable_cause");
+            var usage = RequiredObject(item, "grader_usage");
+            var inputTokens = NonnegativeLong(usage, "input_tokens");
+            var outputTokens = NonnegativeLong(usage, "output_tokens");
+            if (!AssistantEvaluationRelevanceContract.IsCoherent(
+                    score, cause, inputTokens, outputTokens))
+                throw new InvalidDataException(
+                    "Assistant evaluation relevance evidence is incoherent.");
+            return (
+                CaseId: BoundedString(item, 100, "case_id"),
+                Passed: RequiredBoolean(item, "passed"),
+                Relevance: score);
+        }).ToArray();
         var byCase = outcomes.GroupBy(item => item.CaseId, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
         if (outcomes.Length != repetitionCount
@@ -501,6 +511,17 @@ internal static class AssistantEvaluationEvidenceVerifier
         return value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var number)
             ? number : throw new InvalidDataException(
                 "Assistant evaluation nullable integer field is invalid.");
+    }
+
+    private static string? NullableString(JsonElement root, params string[] path)
+    {
+        var value = Path(root, path);
+        if (value.ValueKind == JsonValueKind.Null) return null;
+        if (value.ValueKind != JsonValueKind.String
+            || value.GetString() is not { Length: > 0 and <= 100 } text)
+            throw new InvalidDataException(
+                "Assistant evaluation nullable string field is invalid.");
+        return text;
     }
 
     private static decimal RequiredDecimal(JsonElement root, params string[] path)

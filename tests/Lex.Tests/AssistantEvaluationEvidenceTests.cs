@@ -121,6 +121,61 @@ public sealed class AssistantEvaluationEvidenceTests : IDisposable
             fixture.AdmissionAuthority));
     }
 
+    [Theory]
+    [InlineData("missing_cause")]
+    [InlineData("free_text_cause")]
+    [InlineData("unknown_cause")]
+    [InlineData("score_plus_cause")]
+    [InlineData("null_plus_null")]
+    [InlineData("billed_cause_without_usage")]
+    [InlineData("unbilled_cause_with_usage")]
+    public void Signed_package_rejects_incoherent_relevance_and_grader_usage(string mutation)
+    {
+        var fixture = Package();
+        var files = fixture.Files.ToDictionary(item => item.Key, item => item.Value.ToArray(),
+            StringComparer.Ordinal);
+        MutateJson(files, AssistantEvaluationEvidenceVerifier.ReportFile, root =>
+        {
+            var result = root["results"]![0]!.AsObject();
+            var relevance = result["relevance"]!.AsObject();
+            relevance["score"] = null;
+            relevance["unavailable_cause"] = "grader_finish_reason_length";
+            switch (mutation)
+            {
+                case "missing_cause":
+                    relevance.Remove("unavailable_cause");
+                    break;
+                case "free_text_cause":
+                    relevance["unavailable_cause"] = "the grader leaked a raw failure message";
+                    break;
+                case "unknown_cause":
+                    relevance["unavailable_cause"] = "grader_new_unreviewed_token";
+                    break;
+                case "score_plus_cause":
+                    relevance["score"] = 5;
+                    break;
+                case "null_plus_null":
+                    relevance["unavailable_cause"] = null;
+                    break;
+                case "billed_cause_without_usage":
+                    result["grader_usage"]!["input_tokens"] = 0;
+                    result["grader_usage"]!["output_tokens"] = 0;
+                    break;
+                case "unbilled_cause_with_usage":
+                    relevance["unavailable_cause"] = "grader_not_configured";
+                    break;
+            }
+        });
+        ResignManifest(files, fixture.ArtifactKey);
+        var release = ReleaseFor(files,
+            Sha(files[AssistantEvaluationEvidenceVerifier.ReportFile]),
+            fixture.Runtime.CodeCommit);
+
+        Assert.Throws<InvalidDataException>(() => AssistantEvaluationEvidenceVerifier.Verify(
+            release, files, [fixture.ArtifactRoot], fixture.Now,
+            fixture.AdmissionAuthority));
+    }
+
     [Fact]
     public void Runtime_match_rejects_each_different_identity_domain()
     {
@@ -392,9 +447,9 @@ public sealed class AssistantEvaluationEvidenceTests : IDisposable
                 "total":{"p50_milliseconds":360,"p95_milliseconds":420,"p99_milliseconds":420}
               },
               "results":[
-                {"case_id":"one","repetition":1,"passed":true,"relevance":{"score":5},"failures":[],"candidate_usage":{"input_tokens":300,"output_tokens":30},"grader_usage":{"input_tokens":200,"output_tokens":20},"timings":{"submit_to_first_operation_result_milliseconds":180,"total_milliseconds":360}},
-                {"case_id":"one","repetition":2,"passed":true,"relevance":{"score":4},"failures":[],"candidate_usage":{"input_tokens":300,"output_tokens":30},"grader_usage":{"input_tokens":200,"output_tokens":20},"timings":{"submit_to_first_operation_result_milliseconds":210,"total_milliseconds":420}},
-                {"case_id":"two","repetition":1,"passed":true,"relevance":{"score":5},"failures":[],"candidate_usage":{"input_tokens":400,"output_tokens":40},"grader_usage":{"input_tokens":200,"output_tokens":20},"timings":{"submit_to_first_operation_result_milliseconds":170,"total_milliseconds":350}}
+                {"case_id":"one","repetition":1,"passed":true,"relevance":{"score":5,"unavailable_cause":null},"failures":[],"candidate_usage":{"input_tokens":300,"output_tokens":30},"grader_usage":{"input_tokens":200,"output_tokens":20},"timings":{"submit_to_first_operation_result_milliseconds":180,"total_milliseconds":360}},
+                {"case_id":"one","repetition":2,"passed":true,"relevance":{"score":4,"unavailable_cause":null},"failures":[],"candidate_usage":{"input_tokens":300,"output_tokens":30},"grader_usage":{"input_tokens":200,"output_tokens":20},"timings":{"submit_to_first_operation_result_milliseconds":210,"total_milliseconds":420}},
+                {"case_id":"two","repetition":1,"passed":true,"relevance":{"score":5,"unavailable_cause":null},"failures":[],"candidate_usage":{"input_tokens":400,"output_tokens":40},"grader_usage":{"input_tokens":200,"output_tokens":20},"timings":{"submit_to_first_operation_result_milliseconds":170,"total_milliseconds":350}}
               ],
               "gate_failures":[],
               "activation_gate_passed":true
