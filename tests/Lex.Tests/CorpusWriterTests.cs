@@ -2074,6 +2074,29 @@ public sealed partial class CorpusWriterTests : IDisposable
     }
 
     [Fact]
+    public async Task Changed_source_configuration_requires_fresh_migration_before_absence()
+    {
+        var originalScope = new string('a', 64);
+        var narrowedScope = new string('b', 64);
+        await new CorpusWriter(_dir,
+                DateTimeOffset.Parse("2026-08-01T00:00:00Z"), CodeCommit)
+            .WriteAsync(new ScopedInventoryAdapter(
+                new ManyWorksAdapter(1), originalScope), default);
+        var before = Snapshot();
+
+        var error = await Assert.ThrowsAsync<InvalidDataException>(() =>
+            new CorpusWriter(_dir,
+                    DateTimeOffset.Parse("2026-08-02T00:00:00Z"), CodeCommit,
+                    runIdentity: "nightly-narrowed-scope-1")
+                .WriteAsync(new ScopedInventoryAdapter(
+                    new EmptyAdapter(), narrowedScope), default));
+
+        Assert.Contains("fresh-corpus migration", error.Message,
+            StringComparison.Ordinal);
+        Assert.Equal(before, Snapshot());
+    }
+
+    [Fact]
     public async Task Failed_body_acquisition_rolls_back_every_candidate_file()
     {
         await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-01T00:00:00Z"), CodeCommit)
@@ -3002,6 +3025,33 @@ public sealed partial class CorpusWriterTests : IDisposable
 
         public Task<SourceBodyFetch> FetchBody(VersionRecord version, ExpressionRecord expression, CancellationToken ct) =>
             Task.FromResult(new SourceBodyFetch(SourceBodyStatus.PublisherMetadataOnly));
+    }
+
+    private sealed class ScopedInventoryAdapter(
+        ISourceAdapter inner,
+        string scopeSha256) : ISourceAdapter, ISourceBuildInventory
+    {
+        public PublisherDescriptor Describe() => inner.Describe();
+
+        public IAsyncEnumerable<WorkRef> EnumerateWorks(CancellationToken ct) =>
+            inner.EnumerateWorks(ct);
+
+        public Task<IReadOnlyList<VersionRecord>> FetchVersions(
+            WorkRef work, CancellationToken ct) => inner.FetchVersions(work, ct);
+
+        public Task<SourceBodyFetch> FetchBody(
+            VersionRecord version, ExpressionRecord expression, CancellationToken ct) =>
+            inner.FetchBody(version, expression, ct);
+
+        public Task<SourceManifestationFetch> FetchAltManifestation(
+            VersionRecord version, ExpressionRecord expression, CancellationToken ct) =>
+            inner.FetchAltManifestation(version, expression, ct);
+
+        public SourceBuildInventory GetBuildInventory() => new(
+            ExpectedWorks: inner is EmptyAdapter ? 0 : 1,
+            Issues: [],
+            SourceConfigurationKind: "engineering_scope",
+            SourceConfigurationSha256: scopeSha256);
     }
 
     private sealed class CrossLanguageTitleAdapter : ISourceAdapter

@@ -128,7 +128,11 @@ public sealed class CorpusWriter(
         RequireUniquePlannedWorks(enumeration);
         RequireUniquePlannedVersions(enumeration);
         if (existingManifest is not null)
+        {
             existingManifest = RequireVerifiedBaseline(pub.Id, plan);
+            RequireUnchangedSourceConfiguration(
+                existingManifest, sourceConfigurationKind, sourceConfigurationSha256);
+        }
         // Engineering scope is an acquisition decision, not publisher legal metadata. Reject the
         // complete metadata plan before any body request or candidate write, and also refuse to
         // carry an old leaked key forward from an existing corpus.
@@ -802,6 +806,23 @@ public sealed class CorpusWriter(
                 throw new InvalidDataException(
                     $"manifest source_configuration_kind '{kind}' is unsupported");
         }
+    }
+
+    private static void RequireUnchangedSourceConfiguration(
+        ManifestDoc existing,
+        string currentKind,
+        string? currentSha256)
+    {
+        var sameDigest = existing.SourceConfigurationSha256 is null
+            ? currentSha256 is null
+            : currentSha256 is not null
+              && CorpusHashes.Equal(existing.SourceConfigurationSha256, currentSha256);
+        if (string.Equals(existing.SourceConfigurationKind, currentKind,
+                StringComparison.Ordinal) && sameDigest)
+            return;
+        throw new InvalidDataException(
+            "The source configuration changed; use the explicit fresh-corpus migration path "
+            + "before recording lifecycle absences under the new enumeration scope.");
     }
 
     internal static void ValidateVersionRawForSourceConfiguration(
