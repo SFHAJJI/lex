@@ -242,6 +242,138 @@ test("no_corpus_mounted is a terminal refusal, not a malformed response", () => 
   assert.equal(projectGovernedEmptiness("in_force_on", [noCorpus], 0).empty, "no_corpus");
 });
 
+
+// ---------------------------------------------------------------------------
+// The no-corpus refusal is GLOBAL and TERMINAL, so it speaks only for a whole response
+// ---------------------------------------------------------------------------
+//
+// `McpCore.CallToolCore` returns it as one top-level object, with no envelope, before any
+// per-publisher work runs. Two consequences, both load-bearing: it can never legitimately
+// arrive beside a unit that answered, and an object carrying an envelope beside the terminal
+// status is not the shape the producer emits.
+
+/** The producer's actual terminal object, diagnostics included. */
+const noCorpusUnit = (tool = "search") => ({
+  status: NO_CORPUS_STATUS,
+  detail: "This server started with zero verified indexes, so it holds no law.",
+  hosted_endpoint: "https://law.soufien.lu/mcp",
+  index_dir_searched: "indexes",
+  tool_called: tool,
+});
+
+test("only the producer's single bare terminal object renders the no-corpus sentence", () => {
+  // The repo requires the terminal case to keep working: a repo-built container mounts zero
+  // indexes and must answer no_corpus_mounted rather than an empty list. It requires exactly
+  // that ONE case. McpCore returns the object globally, BEFORE publisher iteration, so it can
+  // only ever return one; a response carrying two is not a conservative case to preserve, it is
+  // a shape the producer cannot emit.
+  const one = projectSearch([noCorpusUnit()]);
+  assert.equal(one.absence, "no_corpus", "the one shape the repo requires stopped working");
+  assert.equal(searchEmptyPresentation("no_corpus").sentence, NO_CORPUS_SENTENCE);
+  assert.equal(partitionGovernedResponse("search", [noCorpusUnit()]).noCorpus, true);
+  // A bare object rather than a one-element array is the same single unit.
+  assert.equal(projectSearch(noCorpusUnit()).absence, "no_corpus");
+  for (const tool of ["changes_in_period", "in_force_on"]) {
+    assert.equal(projectGovernedEmptiness(tool, [noCorpusUnit(tool)], 0).empty,
+      "no_corpus", `${tool} lost the terminal state`);
+  }
+});
+
+test("a repeated no-corpus pair is a shape the producer cannot emit, so it claims nothing", () => {
+  // The correction to the first reading of this objection. The terminal object is returned
+  // before publisher iteration, so two of them is not a stronger no-corpus statement; it is a
+  // response nothing stands behind, and it must not authorize a sentence about the corpus.
+  const pair = partitionGovernedResponse("search", [noCorpusUnit(), noCorpusUnit()]);
+  assert.equal(pair.noCorpus, false, "a shape the producer cannot emit authorized the sentence");
+  assert.equal(pair.invalidCount, 2, "the incoherent units were ignored rather than counted");
+  assert.equal(searchAbsenceState(pair, 0), "incomplete_response");
+  assert.notEqual(projectSearch([noCorpusUnit(), noCorpusUnit(), noCorpusUnit()]).absence,
+    "no_corpus");
+  assert.equal(projectSearch([noCorpusUnit(), noCorpusUnit()]).absence, "incomplete_response");
+  for (const tool of ["changes_in_period", "in_force_on"]) {
+    assert.equal(
+      projectGovernedEmptiness(tool, [noCorpusUnit(tool), noCorpusUnit(tool)], 0).empty,
+      "incomplete_response", `${tool} accepted a repeated terminal object`);
+  }
+});
+
+test("a no-corpus unit beside anything that answered never claims the corpus is empty", () => {
+  // Counterexample 1 of the objection: the sentence was rendered beside a sibling asserting a
+  // mounted publisher and index boundary, so it was FALSE on screen. Each sibling class is
+  // exercised separately, because the old sibling check omitted mode_unavailable entirely.
+  const siblings: [string, unknown][] = [
+    ["ran", searchOk("lu-legilux", 0)],
+    ["refused", refused("lu-legilux", ["domain"])],
+    ["mode_unavailable",
+      { envelope: { status: "retrieval_mode_unavailable", publisher: "lu-legilux" } }],
+    ["invalid", { envelope: { status: "made_up" }, hits: [] }],
+  ];
+  for (const [label, sibling] of siblings) {
+    for (const order of [[noCorpusUnit(), sibling], [sibling, noCorpusUnit()]]) {
+      const partition = partitionGovernedResponse("search", order);
+      assert.equal(partition.noCorpus, false,
+        `no_corpus survived beside a ${label} sibling`);
+      assert.ok(partition.invalidCount > 0,
+        `the incoherent no_corpus unit was ignored beside a ${label} sibling`);
+      const projected = projectSearch(order);
+      assert.notEqual(projected.absence, "no_corpus",
+        `the false terminal sentence rendered beside a ${label} sibling`);
+      assert.equal(projected.absence, "incomplete_response",
+        `an incoherent response claimed something beside a ${label} sibling`);
+    }
+  }
+});
+
+test("a no-corpus unit beside rendered rows is disclosed, never dropped", () => {
+  // Counterexample 2: whole results rendered and the contradictory global state vanished,
+  // because the no-corpus class did not increase invalidCount. The rows still render, but the
+  // answer must present itself as partial.
+  const projected = projectSearch([searchOk("lu-legilux", 2), noCorpusUnit()]);
+  assert.equal(projected.works.length, 2, "the usable publisher's rows still render");
+  assert.equal(projected.absence, "partial_results",
+    "an answer was shown beside a response saying the server holds no law");
+  const governed = projectGovernedEmptiness(
+    "in_force_on", [inForceOk("lu-legilux", 2), noCorpusUnit("in_force_on")], 2);
+  assert.equal(governed.empty, null);
+  assert.equal(governed.partial, true, "the contradictory global state was silently dropped");
+});
+
+test("a no-corpus object carrying an envelope is forged, not terminal", () => {
+  // The producer returns the terminal object before any per-publisher work, so it carries no
+  // envelope. Accepting the status before inspecting the envelope let one object assert a
+  // mounted publisher AND authorize the sentence saying nothing is mounted.
+  const forged = {
+    ...noCorpusUnit(),
+    envelope: { status: "ok", publisher: "lu-legilux" },
+    retrieval_mode: "keyword",
+    hits: [{ lex_id: "lu-legilux:w0" }],
+  };
+  assert.equal(classifyEnvelope("search", forged).kind, "invalid");
+  const projected = projectSearch([forged]);
+  assert.notEqual(projected.absence, "no_corpus");
+  assert.equal(projected.absence, "incomplete_response");
+  assert.deepEqual(projected.works, [], "a forged terminal object rendered rows");
+  // A null envelope is not an absent one either.
+  assert.equal(classifyEnvelope("search", { ...noCorpusUnit(), envelope: null }).kind,
+    "invalid");
+  // And the producer's own extra diagnostic fields must stay acceptable.
+  assert.equal(classifyEnvelope("search", noCorpusUnit()).kind, "no_corpus",
+    "the documented diagnostic fields were treated as a foreign shape");
+});
+
+test("a mixed no-corpus response never selects the all-refused coverage copy", () => {
+  // all_refused says "No selected publisher ran this query", which is a coverage claim about
+  // publishers. A response that also claims no index is mounted cannot support it.
+  const mixed = partitionGovernedResponse("search",
+    [noCorpusUnit(), refused("lu-legilux", ["domain"])]);
+  assert.equal(mixed.allRefused, false);
+  assert.equal(searchAbsenceState(mixed, 0), "incomplete_response");
+  // A lone genuine refusal still reaches all_refused, so this is not a blanket suppression.
+  const lone = partitionGovernedResponse("search", [refused("lu-legilux", ["domain"])]);
+  assert.equal(lone.allRefused, true);
+  assert.equal(searchAbsenceState(lone, 0), "all_refused");
+});
+
 test("a contradictory envelope becomes incomplete, never results or absence", () => {
   const contradictory = {
     envelope: { status: "ok", publisher: "lu-legilux" },
@@ -426,6 +558,229 @@ test("out-of-order and repeated transitions leave nothing stale", () => {
 // ---------------------------------------------------------------------------
 // Client presentation states are not wire statuses (round 4, O5)
 // ---------------------------------------------------------------------------
+
+
+
+// ---------------------------------------------------------------------------
+// Same-publisher terminal-kind conflict, at the shared projector, for every governed tool
+// ---------------------------------------------------------------------------
+//
+// One publisher cannot both have run an operation and refused it. A response carrying both
+// contains two claims and nothing that says which is true, so keeping either side is the
+// product choosing one and asserting it. This lived in the search normalizer only, which left
+// changes_in_period and in_force_on emitting ran=1, limitation=1, invalidCount=0, partial=false.
+
+/** A coherent refusal for one publisher, on any governed tool. */
+const refusalFor = (publisher: string) => refused(publisher, ["domain"]);
+
+/** The coherent success fixture for each governed tool, keyed by tool. */
+const ranFor: Record<string, (publisher: string, rows: number) => unknown> = {
+  search: (publisher, rows) => searchOk(publisher, rows),
+  changes_in_period: (publisher, rows) => changesOk(publisher, rows),
+  in_force_on: (publisher, rows) => inForceOk(publisher, rows),
+};
+
+test("ran beside refused for one publisher withholds both, on every governed tool", () => {
+  for (const tool of Object.keys(ranFor)) {
+    const ranEntry = ranFor[tool]!("lu-legilux", 2);
+    const refusal = refusalFor("lu-legilux");
+    // Order reversal: arrival order may not decide which side the reader is shown.
+    for (const order of [[ranEntry, refusal], [refusal, ranEntry]]) {
+      const partition = partitionGovernedResponse(tool, order);
+      assert.deepEqual(partition.conflictedPublishers, ["lu-legilux"],
+        `${tool}: the conflict was not detected`);
+      assert.deepEqual(partition.ran, [], `${tool}: the ran side was asserted as fact`);
+      assert.equal(partition.limitations.length, 0,
+        `${tool}: the refusal side was asserted as fact`);
+      assert.equal(partition.allRefused, false,
+        `${tool}: a response that said it ran selected the no-publisher-ran copy`);
+      assert.equal(partition.invalidCount, 2,
+        `${tool}: the incoherence was dropped rather than retained`);
+    }
+  }
+});
+
+test("an all-conflicted governed response is incomplete, never an absence claim", () => {
+  for (const tool of ["changes_in_period", "in_force_on"]) {
+    const decision = projectGovernedEmptiness(tool,
+      [ranFor[tool]!("lu-legilux", 2), refusalFor("lu-legilux")], 0);
+    assert.equal(decision.empty, "incomplete_response", `${tool} claimed something`);
+    assert.equal(decision.partial, true, `${tool} hid the incoherence`);
+  }
+  const projected = projectSearch([searchOk("lu-legilux", 2), refusalFor("lu-legilux")]);
+  assert.deepEqual(projected.works, [], "a contradicted publisher's rows rendered");
+  assert.deepEqual(projected.limitations, []);
+  assert.equal(projected.absence, "incomplete_response");
+});
+
+test("another publisher renders beside a conflict, but only as partial", () => {
+  // The uncontradicted publisher keeps its rows. The answer may not present itself as whole.
+  const projected = projectSearch([
+    searchOk("eu-eurlex", 2),
+    searchOk("lu-legilux", 3),
+    refusalFor("lu-legilux"),
+  ]);
+  assert.equal(projected.works.length, 2, "the uncontradicted publisher lost its rows");
+  assert.equal(projected.absence, "partial_results",
+    "a response containing a self-contradicting publisher presented itself as whole");
+  const governed = projectGovernedEmptiness("in_force_on", [
+    inForceOk("eu-eurlex", 2), inForceOk("lu-legilux", 3), refusalFor("lu-legilux"),
+  ], 2);
+  assert.equal(governed.empty, null);
+  assert.equal(governed.partial, true);
+});
+
+test("a search conflict between ran and an unavailable retrieval mode withholds both", () => {
+  // The third pairing, and the one that only search can produce.
+  const mode = { envelope: { status: "retrieval_mode_unavailable", publisher: "lu-legilux" } };
+  for (const order of [[searchOk("lu-legilux", 2), mode], [mode, searchOk("lu-legilux", 2)]]) {
+    const partition = partitionGovernedResponse("search", order);
+    assert.deepEqual(partition.conflictedPublishers, ["lu-legilux"]);
+    assert.deepEqual(partition.ran, []);
+    assert.equal(partition.modeUnavailableCount, 0,
+      "a mode claim survived from a publisher that also said it ran");
+    assert.deepEqual(partition.modeUnavailablePublishers, []);
+    assert.equal(searchAbsenceState(partition, 0), "incomplete_response");
+  }
+  // The mode notice must not name a publisher whose claim was withheld.
+  const projected = projectSearch([searchOk("lu-legilux", 2), mode]);
+  assert.equal(projected.modeUnavailable, undefined);
+});
+
+test("a refusal beside an unavailable mode for one publisher withholds both", () => {
+  const mode = { envelope: { status: "retrieval_mode_unavailable", publisher: "lu-legilux" } };
+  const partition = partitionGovernedResponse("search", [refusalFor("lu-legilux"), mode]);
+  assert.deepEqual(partition.conflictedPublishers, ["lu-legilux"]);
+  assert.equal(partition.limitations.length, 0);
+  assert.equal(partition.modeUnavailableCount, 0);
+  assert.equal(partition.allRefused, false);
+  assert.equal(searchAbsenceState(partition, 0), "incomplete_response");
+});
+
+test("a conflict across distinct publishers is not a conflict, on every governed tool", () => {
+  // The guard against over-correction. lu-legilux ran and eu-eurlex refused: nothing
+  // contradicts itself, so both disclosures stand.
+  for (const tool of Object.keys(ranFor)) {
+    const partition = partitionGovernedResponse(tool,
+      [ranFor[tool]!("lu-legilux", 2), refusalFor("eu-eurlex")]);
+    assert.deepEqual(partition.conflictedPublishers, [], `${tool}: invented a conflict`);
+    assert.equal(partition.ran.length, 1, `${tool}: dropped an uncontradicted publisher`);
+    assert.equal(partition.limitations.length, 1, `${tool}: dropped a real limitation`);
+    assert.equal(partition.invalidCount, 0, `${tool}: reported a coherent response as partial`);
+  }
+});
+
+test("a lone genuine refusal still reaches all_refused, on every governed tool", () => {
+  // The other guard: this is the case the copy about coverage exists for, and it must survive.
+  for (const tool of Object.keys(ranFor)) {
+    const partition = partitionGovernedResponse(tool, [refusalFor("lu-legilux")]);
+    assert.deepEqual(partition.conflictedPublishers, []);
+    assert.equal(partition.limitations.length, 1, `${tool}: silenced a lone refusal`);
+    assert.equal(partition.allRefused, true, `${tool}: lost the coverage state`);
+  }
+  assert.equal(projectSearch([refusalFor("lu-legilux")]).absence, "all_refused");
+  assert.equal(
+    projectGovernedEmptiness("in_force_on", [refusalFor("lu-legilux")], 0).empty, "all_refused");
+});
+
+test("two identical refusals from one publisher are one disclosure, not a conflict", () => {
+  // Same kind twice is agreement, not contradiction. Only DIFFERENT terminal kinds conflict.
+  const partition = partitionGovernedResponse("search",
+    [refusalFor("lu-legilux"), refusalFor("lu-legilux")]);
+  assert.deepEqual(partition.conflictedPublishers, []);
+  assert.equal(partition.limitations.length, 1, "two identical refusals stopped collapsing");
+  assert.equal(partition.allRefused, true);
+});
+
+test("an unattributable claim cannot conflict with a named one", () => {
+  // A claim with no valid publisher identity cannot be grouped, so it neither creates nor joins
+  // a conflict. It is already handled as an unattributed entry upstream.
+  const nameless = { envelope: { status: "filter_not_supported_by_index", publisher: " lu-legilux " },
+    unsupported_filters: ["domain"] };
+  const partition = partitionGovernedResponse("search", [searchOk("lu-legilux", 2), nameless]);
+  assert.deepEqual(partition.conflictedPublishers, [],
+    "a padded spelling was grouped with the real publisher");
+  assert.equal(partition.ran.length, 1, "an uncontradicted publisher lost its rows");
+  assert.equal(partition.limitations.length, 1);
+  assert.equal(partition.limitations[0]!.publisher, undefined);
+});
+
+// ---------------------------------------------------------------------------
+// Publisher identity: one grammar with the strip and the population footer
+// ---------------------------------------------------------------------------
+
+test("a limitation publisher is validated by the shared non-normalizing grammar", () => {
+  // This module used to validate publisher through the same case-insensitive general
+  // identifier it uses for jurisdiction. Producer registry identities are ordinal lower-case,
+  // so a case alias is a publisher the producer cannot mint. See publisherIdentity.ts.
+  const of = (publisher: unknown) => validateLimitation({
+    status: LIMITATION_STATUS, tool: "search", publisher,
+    unsupported_filters: ["domain"],
+  });
+  assert.equal(of("lu-legilux")?.publisher, "lu-legilux");
+  for (const bad of [" lu-legilux ", "lu-legilux ", " lu-legilux", "LU-LEGILUX", "LU-Legilux",
+                     "lu-legiluX", "?", "lu legilux", "x".repeat(65), 7, null, {}]) {
+    const limitation = of(bad);
+    assert.notEqual(limitation, null, "a bad publisher must not void the limitation itself");
+    assert.equal(limitation!.publisher, undefined,
+      `accepted publisher ${JSON.stringify(bad)}`);
+  }
+  assert.notEqual(of(" lu-legilux ")?.publisher, "lu-legilux",
+    "a padded publisher was trimmed into the real identity");
+  assert.notEqual(of("LU-Legilux")?.publisher, "lu-legilux",
+    "a case alias was folded into the real identity");
+});
+
+test("a padded and an unpadded publisher are two limitations, never merged into one", () => {
+  // Dedup keys on the validated publisher. Trimming would collapse these two into one row and
+  // attribute a refusal to a publisher that never made it; refusing the padded one keeps them
+  // distinct AND keeps the unattributable refusal visible with no publisher name on it.
+  const items = limitationsFromEffect([
+    { status: LIMITATION_STATUS, tool: "search", publisher: "lu-legilux",
+      unsupported_filters: ["domain"] },
+    { status: LIMITATION_STATUS, tool: "search", publisher: " lu-legilux ",
+      unsupported_filters: ["domain"] },
+  ]);
+  assert.equal(items.length, 2, "the padded spelling was merged into the real publisher");
+  assert.deepEqual(items.map((i) => i.publisher), ["lu-legilux", undefined]);
+});
+
+test("jurisdiction keeps its own vocabulary and is not routed through publisher", () => {
+  // Different vocabularies, different grammars, and the producer says so: McpCore.SelectReaders
+  // compares publisher ordinally and jurisdiction OrdinalIgnoreCase in one expression, and
+  // LegalOperationCatalog documents the jurisdiction argument as "e.g. LU or EU". Upper case is
+  // a jurisdiction the producer really emits, so refusing it here would drop a disclosed field.
+  const of = (jurisdiction: unknown) => validateLimitation({
+    status: LIMITATION_STATUS, tool: "search", publisher: "lu-legilux", jurisdiction,
+    unsupported_filters: ["domain"],
+  });
+  assert.equal(of("LU")?.jurisdiction, "LU", "an uppercase jurisdiction code was refused");
+  assert.equal(of("EU")?.jurisdiction, "EU");
+  assert.equal(of("lu")?.jurisdiction, "lu");
+  // Still bounded and still closed, just on its own axis.
+  for (const bad of [" LU ", "L U", "", "x".repeat(65), 7, null]) {
+    assert.equal(of(bad)?.jurisdiction, undefined,
+      `accepted jurisdiction ${JSON.stringify(bad)}`);
+  }
+});
+
+test("a mode-unavailable publisher uses the same grammar as everything else", () => {
+  const alias = classifyEnvelope("search", {
+    envelope: { status: "retrieval_mode_unavailable", publisher: "LU-Legilux" },
+  });
+  assert.equal(alias.kind, "mode_unavailable");
+  assert.equal(alias.kind === "mode_unavailable" && alias.publisher, undefined,
+    "a case alias was named as an unavailable publisher");
+  const padded = classifyEnvelope("search", {
+    envelope: { status: "retrieval_mode_unavailable", publisher: " lu-legilux " },
+  });
+  assert.equal(padded.kind === "mode_unavailable" && padded.publisher, undefined);
+  const real = classifyEnvelope("search", {
+    envelope: { status: "retrieval_mode_unavailable", publisher: "lu-legilux" },
+  });
+  assert.equal(real.kind === "mode_unavailable" && real.publisher, "lu-legilux",
+    "the fixture never reached the validator with an acceptable identity");
+});
 
 test("a client-only presentation state never wears the wire status badge", () => {
   assert.equal(gapBadgeStatus("mixed_no_match"), null);

@@ -19,6 +19,8 @@
  * primary view. Nothing here copies or logs query text; every sentence is fixed.
  */
 
+import { publisherIdentity } from "./publisherIdentity.ts";
+
 export interface PublisherLimitation {
   status: "filter_not_supported_by_index";
   tool: string;
@@ -125,6 +127,17 @@ export const INCOMPLETE_RESPONSE_SENTENCE =
   "This response was incomplete, so Lex cannot show results or state what is absent. "
   + "Try the request again.";
 
+/**
+ * JURISDICTION ONLY, and it stays separate from the publisher validator on purpose.
+ *
+ * Publisher and jurisdiction are different vocabularies with different grammars, and the producer
+ * says so itself. `McpCore.SelectReaders` compares publisher with `reader.Collection == publisher`
+ * (ordinal) and jurisdiction with `StringComparison.OrdinalIgnoreCase` in the same expression.
+ * `LegalOperationCatalog` documents the jurisdiction argument as "optional jurisdiction code from
+ * index metadata, e.g. LU or EU", so UPPER CASE is a jurisdiction value the producer really does
+ * emit, and this validator must keep accepting it. Routing jurisdiction through the publisher
+ * validator would refuse "LU" outright and drop a field the reader is entitled to see.
+ */
 const boundedIdentifier = (value: unknown): string | undefined =>
   typeof value === "string" && value.length > 0 && value.length <= 64
     && /^[a-z0-9_-]+$/i.test(value)
@@ -161,7 +174,9 @@ export function validateLimitation(value: unknown): PublisherLimitation | null {
   return {
     status: LIMITATION_STATUS,
     tool,
-    publisher: boundedIdentifier(record.publisher),
+    // The publisher is the join key with the strip and the population footer, so it uses the one
+    // shared non-normalizing validator. The jurisdiction beside it does not, and must not.
+    publisher: publisherIdentity(record.publisher),
     jurisdiction: boundedIdentifier(record.jurisdiction),
     unsupported_filters: filters,
   };
@@ -225,7 +240,7 @@ export function scopedLimitations(
 
 /** One classified envelope of a governed call (round 4, O1). */
 export type EnvelopeClass =
-  | { kind: "ran"; entry: unknown }
+  | { kind: "ran"; entry: unknown; publisher?: string }
   | { kind: "refused"; limitation: PublisherLimitation }
   | { kind: "mode_unavailable"; publisher?: string }
   | { kind: "no_corpus" }
@@ -336,7 +351,19 @@ export function classifyEnvelope(tool: string, value: unknown): EnvelopeClass {
   if (!entry) return { kind: "invalid" };
   // The no-corpus refusal is documented as a top-level status with no envelope, for every
   // tool. It is terminal, not malformed: telling the reader to retry would be a lie.
-  if (entry.status === NO_CORPUS_STATUS) return { kind: "no_corpus" };
+  //
+  // NO ENVELOPE IS PART OF THAT SHAPE, not a detail beside it. `McpCore.CallToolCore` returns
+  // the object before any per-publisher work runs:
+  //     if (!_corpusMounted) return new JsonObject { ["status"] = McpStatus.NoCorpusMounted,
+  //         ["detail"] = ..., ["hosted_endpoint"] = ..., ["tool_called"] = name, ... };
+  // Every field beside the status is a documented diagnostic, and there is never an envelope
+  // among them. An object carrying BOTH the terminal status and an envelope asserts a mounted
+  // publisher and index boundary in the same breath as claiming nothing is mounted. That is a
+  // forgery or a corruption, so it is invalid, not terminal, and it may not authorize the
+  // no-corpus sentence. Extra diagnostic fields stay allowed; an envelope does not.
+  if (entry.status === NO_CORPUS_STATUS) {
+    return entry.envelope === undefined ? { kind: "no_corpus" } : { kind: "invalid" };
+  }
   const envelope = record(entry.envelope);
   if (!envelope) return { kind: "invalid" };
   const status = envelope.status;
@@ -353,10 +380,15 @@ export function classifyEnvelope(tool: string, value: unknown): EnvelopeClass {
     return limitation ? { kind: "refused", limitation } : { kind: "invalid" };
   }
   if (tool === "search" && status === "retrieval_mode_unavailable") {
-    return { kind: "mode_unavailable", publisher: boundedIdentifier(envelope.publisher) };
+    return { kind: "mode_unavailable", publisher: publisherIdentity(envelope.publisher) };
   }
   if (!SUCCESS_STATUSES[tool]!.has(status)) return { kind: "invalid" };
-  return ranShapeValid(tool, entry, status) ? { kind: "ran", entry: value } : { kind: "invalid" };
+  // The validated publisher travels with the class: the projector groups claims by it, and a
+  // grouping key that disagreed with the one the refusal and the mode-unavailable classes
+  // already carry would split one publisher in two. One validator, three classes.
+  return ranShapeValid(tool, entry, status)
+    ? { kind: "ran", entry: value, publisher: publisherIdentity(envelope.publisher) }
+    : { kind: "invalid" };
 }
 
 /**
@@ -372,12 +404,26 @@ export interface GovernedPartition {
   modeUnavailablePublishers: string[];
   /** How many envelopes lacked the retrieval mode, id-bearing or not. */
   modeUnavailableCount: number;
-  /** Every selected publisher returned the terminal no-corpus refusal. */
+  /**
+   * The response was EXACTLY the producer's terminal object and nothing else: one bare unit,
+   * `no_corpus_mounted`, no envelope. Not "at least one unit was", and not "every unit was":
+   * `McpCore.CallToolCore` returns the object globally, before publisher iteration, so it can
+   * only ever return ONE. A response carrying two is a shape the producer cannot emit, and a
+   * no-corpus unit beside a sibling that answered is an incoherent response rather than a
+   * corpus statement.
+   */
   noCorpus: boolean;
   /** Ambiguity units across ran in_force_on envelopes; they are content, not emptiness. */
   ambiguityUnits: number;
   /** Envelopes that authorize neither rows nor absence claims. */
   invalidCount: number;
+  /**
+   * Publishers whose own response contradicted itself about what they DID with this operation:
+   * it ran and it refused, it ran and its retrieval mode was unavailable, it refused and its
+   * mode was unavailable. Sorted. Every claim they made is withheld; the incoherence is the
+   * only thing left, and the surface must disclose it.
+   */
+  conflictedPublishers: string[];
   /** At least one envelope refused. */
   anyRefused: boolean;
   /** Nothing ran and at least one envelope refused or lacked the retrieval mode. */
@@ -390,18 +436,79 @@ export function partitionGovernedResponse(
 ): GovernedPartition {
   const list = Array.isArray(envelopes) ? envelopes : [];
   const classes = list.map((entry) => classifyEnvelope(tool, entry));
-  const ran = classes.flatMap((item) => item.kind === "ran" ? [item.entry] : []);
+
+  // SAME-PUBLISHER TERMINAL-KIND CONFLICT, for every governed tool rather than for search
+  // alone. One publisher cannot both have run this operation and refused it. A response
+  // carrying both contains two claims and nothing that says which is true, so keeping either
+  // side is the product choosing one and asserting it. Keeping the refusal made the screen say
+  // "No selected publisher ran this query", and LIMITATION_EXPLANATION say the publisher did
+  // not run this query, about a response that also said it ran.
+  //
+  // The three claim-bearing classes each speak for one publisher; `no_corpus` and `invalid`
+  // speak for no publisher and are not grouped. An unattributable claim (no valid publisher
+  // identity) cannot be grouped either, and stays out of this: it is already handled as an
+  // unattributed entry upstream.
+  const claimPublisher = (item: EnvelopeClass): string | undefined =>
+    item.kind === "ran" || item.kind === "mode_unavailable" ? item.publisher
+      : item.kind === "refused" ? item.limitation.publisher
+        : undefined;
+  const kindsByPublisher = new Map<string, Set<string>>();
+  for (const item of classes) {
+    const publisher = claimPublisher(item);
+    if (publisher === undefined) continue;
+    const kinds = kindsByPublisher.get(publisher) ?? new Set<string>();
+    kinds.add(item.kind);
+    kindsByPublisher.set(publisher, kinds);
+  }
+  // Decided across the WHOLE response before anything is projected, so arrival order cannot
+  // decide the outcome, and a conflict between DISTINCT publishers is not a conflict at all.
+  const conflicted = new Set([...kindsByPublisher]
+    .filter(([, kinds]) => kinds.size > 1)
+    .map(([publisher]) => publisher));
+  const conflictedPublishers = [...conflicted].sort();
+  const inConflict = (item: EnvelopeClass): boolean => {
+    const publisher = claimPublisher(item);
+    return publisher !== undefined && conflicted.has(publisher);
+  };
+  // Retained as typed incoherence rather than dropped, so an all-conflicted response becomes
+  // incomplete and another publisher's rows may render only as partial.
+  const withheldByConflict = classes.filter(inConflict).length;
+
+  const ran = classes.flatMap((item) =>
+    item.kind === "ran" && !inConflict(item) ? [item.entry] : []);
   const limitations = dedupeLimitations(
-    classes.flatMap((item) => item.kind === "refused" ? [item.limitation] : []))
+    classes.flatMap((item) =>
+      item.kind === "refused" && !inConflict(item) ? [item.limitation] : []))
     .slice(0, LIMITATION_CAP);
   const modeUnavailablePublishers = [...new Set(classes
     .flatMap((item) => item.kind === "mode_unavailable" && item.publisher
+      && !inConflict(item)
       ? [item.publisher] : []))];
   const modeUnavailableCount =
-    classes.filter((item) => item.kind === "mode_unavailable").length;
-  const invalidCount = classes.filter((item) => item.kind === "invalid").length;
-  const refusedCount = classes.filter((item) => item.kind === "refused").length;
+    classes.filter((item) => item.kind === "mode_unavailable" && !inConflict(item)).length;
+  const refusedCount =
+    classes.filter((item) => item.kind === "refused" && !inConflict(item)).length;
   const noCorpusCount = classes.filter((item) => item.kind === "no_corpus").length;
+  // The terminal refusal is GLOBAL and SINGULAR. `McpCore.CallToolCore` returns it before any
+  // per-publisher work runs, so it can never legitimately arrive beside a ran, refused,
+  // mode-unavailable or invalid sibling, AND it can only ever be returned once. Both facts fall
+  // out of one comparison: the response is the terminal answer only when it is exactly one unit
+  // and that unit is the terminal object.
+  //
+  // Not "every unit is no-corpus". A repeated pair is not a conservative case to preserve; it
+  // is a shape the producer cannot emit, and accepting it would widen the sentence's authority
+  // to cover a response nothing stands behind. Not "any unit is no-corpus" either: that is the
+  // original defect, and it printed "this server has no verified legal index mounted" beside a
+  // retrieval_mode_unavailable envelope asserting a mounted publisher and index boundary.
+  const soleTerminalUnit = classes.length === 1 && noCorpusCount === 1;
+  // A no-corpus unit that is not the sole terminal answer is an incoherence, and incoherence is
+  // what `invalid` means here. Counting it as invalid is what routes it into the partial and
+  // incomplete authority the projector already has, instead of dropping it: a ran envelope
+  // beside a no-corpus object used to render whole results and silently discard a global state
+  // saying the server holds no law.
+  const invalidCount = classes.filter((item) => item.kind === "invalid").length
+    + (soleTerminalUnit ? 0 : noCorpusCount)
+    + withheldByConflict;
   const ambiguityUnits = ran
     .map(record)
     .reduce((sum, entry) => sum + (Array.isArray(entry?.ambiguous_works)
@@ -411,16 +518,18 @@ export function partitionGovernedResponse(
     limitations,
     modeUnavailablePublishers,
     modeUnavailableCount,
-    noCorpus: noCorpusCount > 0 && ran.length === 0 && refusedCount === 0
-      && invalidCount === 0,
+    noCorpus: soleTerminalUnit,
     ambiguityUnits,
     invalidCount,
+    conflictedPublishers,
     anyRefused: refusedCount > 0,
     // A capability REFUSAL is what the filter-limitation copy explains. A publisher that
     // merely lacked the hybrid retrieval mode refused no filter, so it must not select copy
     // blaming a filter that was never refused.
-    allRefused: ran.length === 0 && refusedCount > 0 && invalidCount === 0
-      && noCorpusCount === 0,
+    // No separate no-corpus term: a whole-response no-corpus carries refusedCount 0, and a
+    // mixed one is already inside invalidCount above. Restating it here would be a condition
+    // no mutation could kill, which is its own kind of lie about what is tested.
+    allRefused: ran.length === 0 && refusedCount > 0 && invalidCount === 0,
   };
 }
 

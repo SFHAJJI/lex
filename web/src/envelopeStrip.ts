@@ -29,6 +29,8 @@
  * `index built tomorrow`, which is a freshness claim rule 8 forbids just as much as an undated one.
  */
 
+import { publisherIdentity } from "./publisherIdentity.ts";
+
 export interface EnvelopeStripRow {
   publisher: string;
   timelineSemantics?: string;
@@ -40,7 +42,14 @@ export interface EnvelopeStripRow {
   contentDigest?: string;
 }
 
-/** Commit hashes and digests are bounded; anything longer is not a value we will render. */
+/**
+ * Commit hashes and digests are bounded; anything longer is not a value we will render.
+ *
+ * This helper TRIMS, which is harmless for a hash or a digest and was a defect for `publisher`.
+ * The publisher is a join key across three disclosures, so " lu-legilux " trimmed here became one
+ * identity that the population footer and the limitation list both refused. Publisher now goes
+ * through `publisherIdentity`, which never repairs; everything else still goes through `str`.
+ */
 const MAX_IDENTITY = 128;
 
 function str(value: unknown): string | undefined {
@@ -163,7 +172,9 @@ export function envelopeStripRows(raw: unknown): EnvelopeStripRow[] {
     const envelope = (entry as { envelope?: unknown } | null)?.envelope;
     if (envelope === null || typeof envelope !== "object" || Array.isArray(envelope)) continue;
     const e = envelope as Record<string, unknown>;
-    const publisher = str(e.publisher);
+    // Not `str`: the publisher is the row key, and a trimmed or case-folded key is a different
+    // logical identity from the one the producer minted. See publisherIdentity.ts.
+    const publisher = publisherIdentity(e.publisher);
     if (publisher === undefined) continue;
     const freshness = (e.freshness ?? {}) as Record<string, unknown>;
     const artifact = (e.artifact ?? {}) as Record<string, unknown>;

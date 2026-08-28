@@ -333,8 +333,10 @@ export default function Search(p: SearchProps) {
   const laws = `${resultLawCount} law${resultLawCount === 1 ? "" : "s"}`;
   const passages =
     `${articles.length} matching passage${articles.length === 1 ? "" : "s"}`;
-  // Authoritative only when the whole selected scope answered and nothing was withheld.
-  const countedResults = error !== undefined || withheld !== undefined
+  // The same authority the denominator answers to. Testing only the withholding this file
+  // detects left a valid publisher beside an invalid sibling rendering a bare count under a
+  // partial notice, which is the claim the comment above already said was not authorized.
+  const countedResults = error !== undefined || authorityIncomplete
     ? `Showing ${laws}, ${passages}`
     : `${laws}, ${passages}`;
 

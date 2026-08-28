@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { fuzzyModeFor, populationCoverageLabel, populationScopeLabel, retainedForQuery,
+  summedPopulation,
   unionKnownExclusions } from "./api.ts";
 
 // Trust rule 6 is about a denominator the reader can check. These bind the exact presentation of
@@ -130,4 +131,49 @@ test("padding is not a different question", () => {
 
 test("nothing bound means nothing to retain", () => {
   assert.equal(retainedForQuery(undefined, "conge parental"), undefined);
+});
+
+// A population figure is a legal scope claim: it tells the reader how much of the corpus an answer
+// speaks for. These values cross the runtime boundary from a transport object, not from the
+// producer, so every one of them is hostile until checked. The previous form summed with a zero
+// default, which turned a string, a fraction, a negative or a missing value into a silently
+// smaller denominator rather than into no denominator at all.
+
+const pop = (works: unknown) => ({ population: { works_in_scope: works } });
+
+test("a population sums across the publishers that stated one", () => {
+  assert.equal(summedPopulation([pop(1200), pop(1137)], "works_in_scope"), 2337);
+});
+
+test("an entry with no population contributes nothing rather than a zero", () => {
+  assert.equal(summedPopulation([pop(1200), {}], "works_in_scope"), 1200);
+  assert.equal(summedPopulation([{}, {}], "works_in_scope"), undefined);
+});
+
+test("a count the producer could not have minted refuses the whole total", () => {
+  // Refuses rather than drops the bad entry: a total missing one publisher is not a smaller
+  // truth, it is a different and unstated scope.
+  for (const bad of ["1200", 12.5, -1, Number.NaN, Number.MAX_SAFE_INTEGER + 1, null, {}])
+    assert.equal(summedPopulation([pop(1200), pop(bad)], "works_in_scope"), undefined, String(bad));
+});
+
+test("two individually valid counts that overflow refuse a total", () => {
+  const max = Number.MAX_SAFE_INTEGER;
+  assert.equal(summedPopulation([pop(max), pop(max)], "works_in_scope"), undefined);
+  assert.equal(summedPopulation([pop(max), pop(1)], "works_in_scope"), undefined);
+  assert.equal(summedPopulation([pop(max), pop(0)], "works_in_scope"), max);
+});
+
+test("refusal does not depend on arrival order", () => {
+  assert.equal(summedPopulation([pop(-1), pop(1200)], "works_in_scope"),
+    summedPopulation([pop(1200), pop(-1)], "works_in_scope"));
+});
+
+test("an oversized or overlong exclusions set is refused, not truncated", () => {
+  const many = { population: { known_exclusions: Array.from({ length: 21 }, (_, i) => `e${i}`) } };
+  assert.deepEqual(unionKnownExclusions([many]), []);
+  const long = { population: { known_exclusions: ["x".repeat(301)] } };
+  assert.deepEqual(unionKnownExclusions([long]), []);
+  const ok = { population: { known_exclusions: ["withdrawn acts", "withdrawn acts"] } };
+  assert.deepEqual(unionKnownExclusions([ok]), ["withdrawn acts"]);
 });

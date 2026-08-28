@@ -310,6 +310,57 @@ test("one publisher's conflict does not disturb another publisher's row", () => 
   assert.deepEqual(rows[1], UNESTABLISHED);
 });
 
+
+// Publisher identity attacks. The publisher is the row KEY, so a validator that trims or case-
+// folds it does not merely admit a bad value: it decides which rows share one disclosure. The
+// strip used to validate it through `str`, which trims, while the population footer and the
+// limitation list refused the padded form outright. See publisherIdentity.ts.
+
+test("a padded publisher is refused, never trimmed into the real identity", () => {
+  // Under a trimming validator the padded entry becomes a SECOND entry for lu-legilux, and
+  // because its corpus commit differs it conflicts and blanks a row that no envelope disputed.
+  const rows = envelopeStripRows([
+    envelope("lu-legilux"),
+    envelope(" lu-legilux ", { freshness: { built_at: "2026-08-08T00:00:00Z",
+                                            corpus_commit: "0000ffff",
+                                            stamp_signature_valid: false } }),
+  ]);
+  assert.deepEqual(rows.map((r) => r.publisher), ["lu-legilux"],
+    "the padded spelling became a row of its own, or displaced the real one");
+  assert.equal(rows[0].builtAt, "2026-08-15T09:01:06Z",
+    "a padded entry was trimmed into this publisher and conflicted its identity away");
+  assert.equal(rows[0].corpusCommit, "e9c4df09");
+  assert.equal(rows[0].signatureValid, true);
+});
+
+test("a case alias is refused, never folded into the lower-case identity", () => {
+  // Producer registry identities are ordinal lower-case, so LU-Legilux is a spelling the
+  // producer cannot mint. Folding it conflicts the real row away; admitting it as its own key
+  // splits one publisher into two rows of the strip.
+  const rows = envelopeStripRows([
+    envelope("lu-legilux"),
+    envelope("LU-Legilux", { freshness: { built_at: "2026-08-08T00:00:00Z",
+                                          corpus_commit: "0000ffff",
+                                          stamp_signature_valid: false } }),
+  ]);
+  assert.deepEqual(rows.map((r) => r.publisher), ["lu-legilux"]);
+  assert.equal(rows[0].builtAt, "2026-08-15T09:01:06Z");
+  assert.equal(rows[0].corpusCommit, "e9c4df09");
+});
+
+test("the strip refuses every publisher spelling the producer cannot mint", () => {
+  // The strip previously bounded this field at 128, the length it uses for commit hashes. The
+  // producer's own publisher bound is 64 (UiEffects.Identifier, MaximumShortLength), and "?" is
+  // IndexReader.Collection's missing-stamp sentinel, not a publisher.
+  for (const bad of [" lu-legilux ", "lu-legilux ", "LU-LEGILUX", "lu-legiluX", "?",
+                     "lu legilux", "x".repeat(65), 7, null, {}]) {
+    assert.deepEqual(envelopeStripRows([envelope(bad as string)]), [],
+      `rendered a row for publisher ${JSON.stringify(bad)}`);
+  }
+  assert.equal(envelopeStripRows([envelope("x".repeat(64))]).length, 1,
+    "the producer's own bound must remain renderable");
+});
+
 test("an identical duplicate still collapses into one confident row", () => {
   // The repair may not turn every repeat into an unavailable strip. Two entries saying the same
   // thing are one disclosure, and the reader keeps the identity both of them carried.

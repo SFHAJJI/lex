@@ -21,6 +21,8 @@
  * projection can disagree with another about which publishers were admitted.
  */
 
+import { MAX_PUBLISHER_IDENTITY, publisherIdentity } from "./publisherIdentity.ts";
+
 export type PopulationBasis =
   | "selected_metadata_scope"
   | "mounted_scope_before_unsupported_filters";
@@ -56,7 +58,8 @@ const COHERENCE: Record<string, Omit<SearchPopulation, "works_in_scope" | "known
 export const POPULATION_BOUNDS = {
   maxExclusions: 20,
   maxExclusionLength: 300,
-  maxPublisherLength: 64,
+  /** The shared identity bound, referenced rather than restated so the two cannot drift. */
+  maxPublisherLength: MAX_PUBLISHER_IDENTITY,
 };
 
 /** A bounded list, or a single bounded string, and nothing else. */
@@ -75,22 +78,12 @@ function exclusionsOf(raw: unknown): string[] | null {
 }
 
 /**
- * The publisher identity a population may be attributed to.
- *
- * The bound is the shipped classifier's own identifier bound, mirrored rather than widened or
- * trimmed, so both sides name the same publisher. A value the classifier would not accept is not
- * an identity: " lu-legilux " is not lu-legilux, and admitting it here would let one response
- * carry two spellings of one publisher, each passing the duplicate check the other should have
- * failed.
+ * The publisher identity a population may be attributed to comes from `publisherIdentity`, the
+ * one non-normalizing validator the strip and the limitation list also use. This module used to
+ * carry its own copy, whose regex had the `i` flag: "LU-Legilux" was an identity here and not to
+ * the producer's ordinal registry lookup, so one raw publisher could pass the duplicate check
+ * that the other spelling should have failed. See publisherIdentity.ts for the producer evidence.
  */
-export function boundedPublisher(raw: unknown): string | undefined {
-  return typeof raw === "string"
-    && raw.length > 0
-    && raw.length <= POPULATION_BOUNDS.maxPublisherLength
-    && /^[a-z0-9_-]+$/i.test(raw)
-    ? raw
-    : undefined;
-}
 
 export function validateSearchPopulation(status: unknown, raw: unknown): PopulationVerdict {
   if (typeof status !== "string" || !(status in COHERENCE)) {
@@ -177,7 +170,14 @@ function sameExclusions(a: readonly string[], b: readonly string[]): boolean {
   return b.every((item) => present.has(item));
 }
 
-/** Logical identity of one publisher's disclosure: every field a reader could check. */
+/**
+ * Logical identity of one publisher's disclosure: every field a reader could check.
+ *
+ * The `kind` term is kept because this is a DEFINITION of sameness rather than a guard, but a
+ * kind difference no longer reaches its verdict: two claim-bearing entries for one publisher
+ * that disagree about what it DID are a status conflict, decided from the classification alone
+ * before any population is validated. See the conflict comment in normalizeSearchResponse.
+ */
 function sameDisclosure(a: PublisherPopulation, b: PublisherPopulation): boolean {
   return a.kind === b.kind
     && a.population.works_in_scope === b.population.works_in_scope
@@ -224,9 +224,11 @@ export type NormalizedSearchResponse =
       /** At most one validated population per publisher, holding none of the withheld ones. */
       populations: PublisherPopulation[];
       /**
-       * Named publishers whose population authority is void, sorted. Their rows are gone from the
-       * entry list and they contribute no population. Empty when only unattributable entries were
-       * withheld.
+       * Named publishers whose population authority is void, sorted. They contribute no
+       * population. Two causes, and they withhold different things: a VOID DENOMINATOR takes
+       * that publisher's rows out of the entry list, while a STATUS CONFLICT leaves every entry
+       * in place and lets partitionGovernedResponse withhold every claim it made. Empty when
+       * only unattributable entries were withheld.
        */
       withheldPublishers: string[];
       /**
@@ -256,6 +258,9 @@ export function normalizeSearchResponse(
 ): NormalizedSearchResponse {
   const list = Array.isArray(raw) ? raw : [raw];
   const scanned: { entry: unknown; carriesRows: boolean; publisher?: string }[] = [];
+  /** Distinct disclosable classifications seen per publisher; more than one is a conflict. */
+  const kindsByPublisher = new Map<string, Set<string>>();
+  const statusConflicted = new Set<string>();
   const byPublisher = new Map<string, PublisherPopulation>();
   const voided = new Set<string>();
   let unattributed = 0;
@@ -273,7 +278,7 @@ export function normalizeSearchResponse(
     }
     const record = entry as Record<string, unknown>;
     const envelope = (record.envelope ?? {}) as Record<string, unknown>;
-    const publisher = boundedPublisher(envelope.publisher);
+    const publisher = publisherIdentity(envelope.publisher);
     // Only a ran envelope carries hits. A refusal carries a limitation the reader must still be
     // told about, so withholding is scoped to row-bearing entries and never silences a refusal.
     const carriesRows = kind === "ran";
@@ -285,6 +290,29 @@ export function normalizeSearchResponse(
       if (carriesRows || record.population !== undefined) unattributed++;
       continue;
     }
+    // WHERE THE LINE FALLS between the two kinds of withholding, because the next reader will
+    // otherwise collapse them.
+    //
+    // A STATUS CONFLICT is two claim-bearing entries for ONE publisher that disagree about what
+    // that publisher DID: it ran and it refused, it ran and its retrieval mode was unavailable,
+    // it refused and its mode was unavailable. The response contains both claims and nothing in
+    // it says which is true, so keeping either side is the product picking one and asserting
+    // it. Every claim that publisher made is withheld, the refusal included.
+    //
+    // A VOID DENOMINATOR is narrower. One entry, coherent about what its publisher did, whose
+    // population alone will not validate. Nothing contradicts the claim itself, so a fact that
+    // stands independently of the denominator stands: a lone refusal keeps its limitation and
+    // still reaches all_refused. Only its ROWS go, because a row list the reader cannot check
+    // against a denominator is the claim this lane exists to stop.
+    //
+    // Decided from the CLASSIFICATION alone, before any population is validated, so it holds
+    // whether or not either side's denominator was readable, and it cannot depend on which
+    // entry the transport delivered first.
+    const kinds = kindsByPublisher.get(publisher) ?? new Set<string>();
+    kinds.add(kind);
+    kindsByPublisher.set(publisher, kinds);
+    if (kinds.size > 1) statusConflicted.add(publisher);
+
     const verdict = validateSearchPopulation(envelope.status, record.population);
     if (!verdict.valid) {
       voided.add(publisher);
@@ -307,11 +335,23 @@ export function normalizeSearchResponse(
     if (!sameDisclosure(existing, candidate)) voided.add(publisher);
   }
 
+  // A status conflict voids the denominator too: a publisher whose own response cannot say
+  // what it did cannot stand behind a number about what it searched.
+  for (const publisher of statusConflicted) voided.add(publisher);
   for (const publisher of voided) byPublisher.delete(publisher);
   const populations = [...byPublisher.values()];
   const kept = scanned
-    .filter((item) => !(item.carriesRows
-      && (item.publisher === undefined || voided.has(item.publisher))))
+    .filter((item) => {
+      // A status-conflicted publisher keeps EVERY entry here, deliberately. The claims are
+      // withheld by partitionGovernedResponse, which is the ONE authority for that across all
+      // three governed tools. Removing either side here would hide the conflict from it and
+      // hand the reader the surviving side after all: the refusal would still produce its
+      // limitation, and the screen would still say this publisher did not run the query about
+      // a response that also said it ran.
+      if (item.publisher !== undefined && statusConflicted.has(item.publisher)) return true;
+      return !(item.carriesRows
+        && (item.publisher === undefined || voided.has(item.publisher)));
+    })
     .map((item) => item.entry);
   const withheldPublishers = [...voided].sort();
   if (withheldPublishers.length === 0 && unattributed === 0) {

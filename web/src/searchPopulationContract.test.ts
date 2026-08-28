@@ -2,12 +2,15 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
 import {
-  boundedPublisher, contributesToQueryPopulation, normalizeSearchResponse, POPULATION_BOUNDS,
+  contributesToQueryPopulation, normalizeSearchResponse, POPULATION_BOUNDS,
   populationExclusions, queriedDenominator, queriedPopulationTotal, searchPopulations,
   unqueriedPopulations, validateSearchPopulation,
 } from "./searchPopulation.ts";
 import type { NormalizedSearchResponse, PublisherPopulation } from "./searchPopulation.ts";
-import { classifyEnvelope, partitionGovernedResponse } from "./limitations.ts";
+import {
+  classifyEnvelope, partitionGovernedResponse, searchAbsenceState,
+} from "./limitations.ts";
+import { publisherIdentity } from "./publisherIdentity.ts";
 
 /**
  * Binds the shipped population validator to the jointly accepted contract file, and binds that
@@ -365,14 +368,17 @@ test("a successful entry with no publisher is withheld from rows and from the de
     "an unattributed scope reached the denominator");
 });
 
-test("a publisher identity outside the shipped bound is not an identity", () => {
-  // Mirrors the classifier's own bound rather than trimming: accepting " lu-legilux " would let
-  // one response carry two spellings of one publisher, each passing the duplicate check the other
-  // should have failed.
-  assert.equal(boundedPublisher("lu-legilux"), "lu-legilux");
-  for (const bad of [" lu-legilux ", "lu legilux", "lu:legilux", "", "x".repeat(65), 7, null,
+test("a publisher identity outside the shipped grammar is not an identity", () => {
+  // ONE validator across the strip, this footer and the limitation list; see
+  // publisherIdentity.ts for the producer evidence. It never trims and never case-folds,
+  // because a repaired value is a DIFFERENT logical identity from the one the producer minted,
+  // and admitting it would let one response carry two spellings of one publisher, each passing
+  // the duplicate check the other should have failed.
+  assert.equal(publisherIdentity("lu-legilux"), "lu-legilux");
+  for (const bad of [" lu-legilux ", " lu-legilux", "lu-legilux ", "LU-LEGILUX", "LU-Legilux",
+                     "lu-legiluX", "?", "lu legilux", "lu:legilux", "", "x".repeat(65), 7, null,
                      undefined]) {
-    assert.equal(boundedPublisher(bad), undefined, `accepted publisher ${JSON.stringify(bad)}`);
+    assert.equal(publisherIdentity(bad), undefined, `accepted publisher ${JSON.stringify(bad)}`);
   }
   const padded = { ...ranEntry("lu-legilux", 999), envelope: { status: "ok",
                                                                publisher: " lu-legilux " } };
@@ -381,6 +387,16 @@ test("a publisher identity outside the shipped bound is not an identity", () => 
   assert.equal(normalized.complete === false && normalized.unattributedEntries, 1);
   assert.deepEqual(normalized.populations.map((r) => r.publisher), ["lu-legilux"]);
   assert.equal(queriedPopulationTotal(normalized.populations), 100);
+
+  // The case alias attacks the same seam from the other side. Folding it would attribute a
+  // second denominator to lu-legilux; keeping the `i` flag would attribute a denominator to a
+  // publisher identity the producer's ordinal registry cannot mint.
+  const aliased = { ...ranEntry("lu-legilux", 999), envelope: { status: "ok",
+                                                                publisher: "LU-Legilux" } };
+  const cased = normalizeSearchResponse([ranEntry("lu-legilux", 100), aliased], classifyEnvelope);
+  assert.equal(cased.complete === false && cased.unattributedEntries, 1);
+  assert.deepEqual(cased.populations.map((r) => r.publisher), ["lu-legilux"]);
+  assert.equal(queriedPopulationTotal(cased.populations), 100);
 });
 
 test("a publisher whose population is invalid has its rows withheld too", () => {
@@ -400,23 +416,100 @@ test("a publisher whose population is invalid has its rows withheld too", () => 
   assert.deepEqual(normalized.populations.map((r) => r.publisher), ["eu-eurlex"]);
 });
 
-test("a refusal keeps its limitation even when that publisher is withheld", () => {
-  // Withholding is scoped to row-bearing entries. Silencing a refusal would hide a disclosed
-  // limitation, which trades one fail-open for another.
-  const refusal = {
-    envelope: { status: "filter_not_supported_by_index", publisher: "lu-legilux" },
-    unsupported_filters: ["domain"],
-    population: { ...contract.statuses.filter_not_supported_by_index, works_in_scope: 77,
-                  known_exclusions: [] },
-  };
+/** A coherent filter refusal with a valid population of its own. */
+const refusalEntry = (publisher: string, works = 77) => ({
+  envelope: { status: "filter_not_supported_by_index", publisher },
+  unsupported_filters: ["domain"],
+  population: { ...contract.statuses.filter_not_supported_by_index, works_in_scope: works,
+                known_exclusions: [] },
+});
+
+/** A coherent retrieval-mode refusal, the third claim-bearing class. */
+const modeEntry = (publisher: string, works = 55) => ({
+  envelope: { status: "retrieval_mode_unavailable", publisher },
+  population: { ...contract.statuses.retrieval_mode_unavailable, works_in_scope: works,
+                known_exclusions: [] },
+});
+
+test("a same-publisher status conflict withholds every claim, the refusal included", () => {
+  // REPLACES a test that pinned the opposite. It asserted that the refusal survives a ran/
+  // refused conflict, on the rationale that dropping it would hide a limitation. Its own
+  // fixture contradicted its expected copy: the projector then emitted all_refused, the screen
+  // said "No selected publisher ran this query" and LIMITATION_EXPLANATION said this publisher
+  // did not run this query, about a response that ALSO said it ran. The product does not know
+  // which side is true and must not assert one. The withholding notice already discloses the
+  // incoherence, so dropping the refusal hides nothing. The rationale it was protecting is kept
+  // as its own case in the next test, where it genuinely applies.
+  const refusal = refusalEntry("lu-legilux");
   const normalized = normalizeSearchResponse([ranEntry("lu-legilux", 100), refusal],
     classifyEnvelope);
-  // ran and refused for one publisher is a disagreement about what that publisher did.
   assert.deepEqual(withheldOf(normalized), ["lu-legilux"]);
-  assert.ok(entriesOf(normalized).includes(refusal), "a refusal was silenced by withholding");
-  assert.equal(partitionGovernedResponse("search", entriesOf(normalized)).limitations.length, 1);
-  assert.deepEqual(lexIdsOf(entriesOf(normalized)), []);
+  assert.deepEqual(normalized.populations, [], "a contradicted publisher stood behind a number");
+  const partition = partitionGovernedResponse("search", entriesOf(normalized));
+  assert.deepEqual(partition.conflictedPublishers, ["lu-legilux"]);
+  assert.equal(partition.limitations.length, 0,
+    "the refusal side of a self-contradicting response was asserted as fact");
+  assert.deepEqual(lexIdsOf(entriesOf(normalized)), [],
+    "the ran side of a self-contradicting response was asserted as fact");
+  assert.equal(partition.allRefused, false,
+    "all_refused says no publisher ran, about a response that said one did");
+  assert.equal(searchAbsenceState(partition, 0), "incomplete_response");
+});
+
+test("order cannot decide which side of a conflict survives", () => {
+  // Callers hand this raw transport order. Both orders must reach the same verdict, for every
+  // pairing of the three claim-bearing classes.
+  const pairs: [string, unknown, unknown][] = [
+    ["ran vs refused", ranEntry("lu-legilux", 100), refusalEntry("lu-legilux")],
+    ["ran vs mode_unavailable", ranEntry("lu-legilux", 100), modeEntry("lu-legilux")],
+    ["refused vs mode_unavailable", refusalEntry("lu-legilux"), modeEntry("lu-legilux")],
+  ];
+  for (const [label, a, b] of pairs) {
+    for (const order of [[a, b], [b, a]]) {
+      const normalized = normalizeSearchResponse(order, classifyEnvelope);
+      assert.deepEqual(withheldOf(normalized), ["lu-legilux"], `${label}: not withheld`);
+      assert.deepEqual(normalized.populations, [], `${label}: a denominator survived`);
+      const partition = partitionGovernedResponse("search", entriesOf(normalized));
+      assert.deepEqual(partition.conflictedPublishers, ["lu-legilux"], `${label}: not detected`);
+      assert.equal(partition.limitations.length, 0, `${label}: a limitation survived`);
+      assert.deepEqual(lexIdsOf(entriesOf(normalized)), [], `${label}: rows survived`);
+      assert.equal(partition.modeUnavailableCount, 0, `${label}: a mode claim survived`);
+      assert.equal(searchAbsenceState(partition, 0), "incomplete_response", `${label}: claimed`);
+    }
+  }
+});
+
+test("a lone refusal whose population alone is invalid keeps its limitation", () => {
+  // The guard against over-correction, and the rationale the replaced test was protecting. This
+  // is NOT a conflict: one entry, coherent about what its publisher did, whose denominator
+  // alone will not validate. The limitation fact stands independently of the denominator, so it
+  // survives, and a genuinely lone refusal still reaches all_refused.
+  const broken = { ...refusalEntry("lu-legilux"),
+    population: { ...contract.statuses.filter_not_supported_by_index, works_in_scope: -1,
+                  known_exclusions: [] } };
+  const normalized = normalizeSearchResponse([broken], classifyEnvelope);
+  assert.deepEqual(withheldOf(normalized), ["lu-legilux"], "the void denominator was not disclosed");
   assert.deepEqual(normalized.populations, []);
+  assert.ok(entriesOf(normalized).includes(broken), "a refusal was silenced by withholding");
+  const partition = partitionGovernedResponse("search", entriesOf(normalized));
+  assert.deepEqual(partition.conflictedPublishers, []);
+  assert.equal(partition.limitations.length, 1,
+    "an independently supportable limitation was dropped with its denominator");
+  assert.equal(partition.allRefused, true);
+  assert.equal(searchAbsenceState(partition, 0), "all_refused");
+});
+
+test("a conflict across distinct publishers is not a conflict at all", () => {
+  // One publisher ran and a DIFFERENT one refused. Nothing contradicts itself, so both
+  // disclosures stand and the response is complete.
+  const normalized = normalizeSearchResponse([ranEntry("lu-legilux", 100),
+    refusalEntry("eu-eurlex")], classifyEnvelope);
+  assert.equal(normalized.complete, true, "two coherent publishers were treated as a conflict");
+  assert.deepEqual(normalized.populations.map((r) => r.publisher), ["lu-legilux", "eu-eurlex"]);
+  const partition = partitionGovernedResponse("search", entriesOf(normalized));
+  assert.deepEqual(partition.conflictedPublishers, []);
+  assert.equal(partition.limitations.length, 1);
+  assert.deepEqual(lexIdsOf(entriesOf(normalized)), ["lu-legilux:w0"]);
 });
 
 test("an envelope the classifier rejects stays in the projected set", () => {

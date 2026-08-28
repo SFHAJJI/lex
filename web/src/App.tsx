@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { compoundOperationViews, first, tool, unionKnownExclusions, type AskReply,
+import { compoundOperationViews, first, summedPopulation, tool, unionKnownExclusions,
+  type AskReply,
   type OperationReply, type ProvisionItem, type UiEffect } from "./api";
 import { envelopeStripRows, type EnvelopeStripRow } from "./envelopeStrip";
 import { publisherOf, useWorkspace, workSlug, type Space, type State } from "./state";
@@ -328,7 +329,11 @@ export default function App() {
           ? { ranking: { from_date: s.from!, to_date: s.until!, order: by,
                          works_changed: ran.reduce((n, e) => n + (e?.works_changed ?? 0), 0),
                          new_versions: ran.reduce((n, e) => n + (e?.new_versions ?? 0), 0),
-                         population_works: ran.reduce((n, e) => n + (e?.population?.works_in_scope ?? 0), 0),
+                         // Refuses rather than coerces. A string, a fraction, a negative or
+                         // an overflowing sum yields no figure at all, because a denominator
+                         // the reader is invited to check against must be one the producer
+                         // could have minted.
+                         population_works: summedPopulation(ran, "works_in_scope"),
                          population_basis: "sum of the selected publisher scopes",
                          known_exclusions: unionKnownExclusions(ran),
                          rows: visibleRows },
@@ -433,9 +438,10 @@ export default function App() {
         // describe two different populations.
         const bases = [...new Set(ran.map((e) => e?.population?.basis)
           .filter((b: unknown): b is string => typeof b === "string" && b.trim().length > 0))];
-        const covered = ran.some((e) => typeof e?.population?.works_covered === "number")
-          ? ran.reduce((n, e) => n + (e?.population?.works_covered ?? 0), 0)
-          : undefined;
+        // Refuses rather than coerces. The previous form added a zero for every entry whose
+        // count was missing or malformed, so a string, a fraction or a negative silently
+        // shrank a denominator the reader is invited to check an answer against.
+        const covered = summedPopulation(ran, "works_covered");
         // works_covered comes from Coverage(1).Groups, which counts a publisher's versioned works
         // and is never narrowed by the metadata filters this request sent. Presenting it beside a
         // filtered list without saying so would imply the filters reduced the denominator.

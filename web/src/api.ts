@@ -269,9 +269,54 @@ export function populationScopeLabel(value: number | undefined): string | undefi
  * contributed a truthy empty array that rendered as a stray separator under "Known exclusions:".
  * Flattening first makes the Set do the work it was there to do.
  */
+/**
+ * Bounds on a population disclosure, applied at the point the value crosses into the product.
+ *
+ * These are not defensive decoration. A population figure is a legal scope claim: it tells the
+ * reader how much of the corpus an answer speaks for. Anything that reaches the screen as a
+ * denominator has to be a value the producer could actually have minted, and a transport object
+ * is not the producer.
+ */
+export const POPULATION_LIMITS = { maxExclusions: 20, maxExclusionLength: 300 };
+
+/** A count the producer could have minted: a non-negative safe integer, nothing else. */
+function populationCount(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0
+    ? value : undefined;
+}
+
+/**
+ * The summed population across publishers, or undefined if it cannot be stated honestly.
+ *
+ * Refuses rather than coerces. The previous form added `?? 0` per entry, so a string, a fraction,
+ * a negative or a missing value silently became zero and shrank a denominator the reader was
+ * invited to check an answer against. Overflow refuses too: two individually valid counts can sum
+ * past the safe integer range, and a number that has lost precision is not a denominator.
+ */
+export function summedPopulation(
+  entries: any[], field: "works_in_scope" | "works_covered"): number | undefined {
+  let total = 0;
+  let seen = false;
+  for (const entry of entries) {
+    const raw = (entry as any)?.population?.[field];
+    if (raw === undefined) continue;
+    const value = populationCount(raw);
+    if (value === undefined) return undefined;
+    if (value > Number.MAX_SAFE_INTEGER - total) return undefined;
+    total += value;
+    seen = true;
+  }
+  return seen ? total : undefined;
+}
+
+/** Bounded, de-duplicated, never interpreted. Overlong or oversized sets are refused, not cut. */
 export function unionKnownExclusions(entries: any[]): string[] {
-  return [...new Set(entries.flatMap((e) => e?.population?.known_exclusions ?? [])
-    .filter((x: unknown): x is string => typeof x === "string" && x.trim().length > 0))];
+  const all = entries.flatMap((e) => e?.population?.known_exclusions ?? []);
+  if (!all.every((x: unknown): x is string =>
+    typeof x === "string" && x.trim().length > 0
+    && x.length <= POPULATION_LIMITS.maxExclusionLength)) return [];
+  const unique = [...new Set(all as string[])];
+  return unique.length <= POPULATION_LIMITS.maxExclusions ? unique : [];
 }
 
 /**
