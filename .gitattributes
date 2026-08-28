@@ -6,3 +6,4 @@ deploy/trusted-evaluation-review-roots.json text eol=lf
 src/Lex.Sources.EurLex/eu-scope.json text eol=lf
 tests/Lex.Tests/canon/** text eol=lf
 tests/Lex.Tests/canon/**/*.pdf binary
+**/packages.lock.json text eol=lf

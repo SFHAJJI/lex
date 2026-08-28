@@ -8,6 +8,7 @@ namespace Lex.Tests;
 public sealed class Canon1FreezeTests
 {
     private const string SdkVersion = "10.0.400";
+    private const string RuntimeVersion = "10.0.11";
     private const string SdkImage = "mcr.microsoft.com/dotnet/sdk:10.0.400@sha256:e1ffd2a92ae84c1291bc1b6887501f8af98e6331e7af6d4c8d37168c5e87a64c";
     private const string AspNetImage = "mcr.microsoft.com/dotnet/aspnet:10.0.11@sha256:a4556ed033fa96f984bb7a8d348851cb2d36b1281dd2420070045f664fbb5f94";
     private static readonly string CanonDirectory = Path.Combine(
@@ -23,11 +24,11 @@ public sealed class Canon1FreezeTests
 
         Assert.Equal([
             "schema", "canon", "application_baseline", "lex_derive_tree",
-            "profile_ids", "target_framework", "sdk", "dependencies", "invariants"
+            "profile_ids", "target_framework", "sdk", "runtime", "dependencies", "invariants"
         ], contract.Select(property => property.Key));
         Assert.Equal("lex-canon-freeze/1", contract["schema"]!.GetValue<string>());
         Assert.Equal("canon/1", contract["canon"]!.GetValue<string>());
-        Assert.Equal("addc13b07ea5ce83c2ab1c4c7b5f5d8b4bc43c9f",
+        Assert.Equal("20f06c1911834a4528d57a454ea170e35a9b2444",
             contract["application_baseline"]!.GetValue<string>());
         Assert.Equal("69f0bef039a569f897e7ea81cefa6850d65606db",
             contract["lex_derive_tree"]!.GetValue<string>());
@@ -35,6 +36,7 @@ public sealed class Canon1FreezeTests
             contract["profile_ids"]!.AsArray().Select(value => value!.GetValue<string>()));
         Assert.Equal("net10.0", contract["target_framework"]!.GetValue<string>());
         Assert.Equal(SdkVersion, contract["sdk"]!.GetValue<string>());
+        Assert.Equal(RuntimeVersion, contract["runtime"]!.GetValue<string>());
 
         var dependencies = contract["dependencies"]!.AsArray()
             .Select(value => (value!["name"]!.GetValue<string>(), value["version"]!.GetValue<string>()))
@@ -47,11 +49,40 @@ public sealed class Canon1FreezeTests
             Golden.RepositoryRoot(), "src", "Lex.Derive", "Lex.Derive.csproj"));
         Assert.Equal(contract["target_framework"]!.GetValue<string>(),
             Assert.Single(deriveProject.Descendants("TargetFramework")).Value);
-        Assert.Equal(dependencies, deriveProject.Descendants("PackageReference")
+        Assert.Equal([
+            ("HtmlAgilityPack", "[1.12.4]"),
+            ("PdfPig", "[0.1.11]")
+        ], deriveProject.Descendants("PackageReference")
             .Select(reference => (
                 reference.Attribute("Include")!.Value,
                 reference.Attribute("Version")!.Value))
             .ToArray());
+
+        var buildProperties = System.Xml.Linq.XDocument.Load(Path.Combine(
+            Golden.RepositoryRoot(), "Directory.Build.props"));
+        Assert.Equal(RuntimeVersion,
+            Assert.Single(buildProperties.Descendants("RuntimeFrameworkVersion")).Value);
+        Assert.Equal("Disable", Assert.Single(buildProperties.Descendants("RollForward")).Value);
+        Assert.Equal("true",
+            Assert.Single(buildProperties.Descendants("RestorePackagesWithLockFile")).Value);
+        Assert.Equal("true", Assert.Single(buildProperties.Descendants("RestoreLockedMode")).Value);
+
+        var projectFiles = Directory.EnumerateFiles(
+                Golden.RepositoryRoot(), "*.csproj", SearchOption.AllDirectories)
+            .Where(path => !path.Split(Path.DirectorySeparatorChar).Contains("obj"))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        Assert.NotEmpty(projectFiles);
+        Assert.All(projectFiles, project =>
+            Assert.True(File.Exists(Path.Combine(Path.GetDirectoryName(project)!, "packages.lock.json")),
+                $"Missing packages.lock.json for {Path.GetRelativePath(Golden.RepositoryRoot(), project)}"));
+
+        var deriveLock = JsonNode.Parse(File.ReadAllBytes(Path.Combine(
+            Golden.RepositoryRoot(), "src", "Lex.Derive", "packages.lock.json")))!.AsObject();
+        var lockedDependencies = deriveLock["dependencies"]!["net10.0"]!.AsObject();
+        AssertLockedPackage(
+            lockedDependencies, "HtmlAgilityPack", "[1.12.4, 1.12.4]", "1.12.4");
+        AssertLockedPackage(lockedDependencies, "PdfPig", "[0.1.11, 0.1.11]", "0.1.11");
 
         var invariants = contract["invariants"]!.AsObject();
         Assert.Equal([
@@ -66,8 +97,9 @@ public sealed class Canon1FreezeTests
     }
 
     [Fact]
-    public void Toolchain_and_cross_os_ci_are_exactly_pinned()
+    public void Canon_dotnet_toolchain_and_cross_os_ci_are_exactly_pinned()
     {
+        Assert.Equal(RuntimeVersion, Environment.Version.ToString());
         var repository = Golden.RepositoryRoot();
         var global = JsonNode.Parse(File.ReadAllBytes(Path.Combine(repository, "global.json")))!
             .AsObject();
@@ -88,11 +120,25 @@ public sealed class Canon1FreezeTests
         Assert.Contains($"(dotnet --version).Trim() -ne \"{SdkVersion}\"", ci,
             StringComparison.Ordinal);
         Assert.Contains("--filter FullyQualifiedName~Canon1FreezeTests", ci, StringComparison.Ordinal);
+        Assert.Contains("dotnet restore Lex.slnx --locked-mode --nologo", ci,
+            StringComparison.Ordinal);
+        Assert.Contains("dotnet build -c Release --no-restore --nologo", ci,
+            StringComparison.Ordinal);
+        Assert.Contains("dotnet restore tests/Lex.Tests/Lex.Tests.csproj --locked-mode --nologo", ci,
+            StringComparison.Ordinal);
+        Assert.Contains("dotnet restore src/Lex.Web/Lex.Web.csproj --locked-mode --nologo", ci,
+            StringComparison.Ordinal);
 
         var dockerfile = File.ReadAllText(Path.Combine(repository, "Dockerfile"))
             .Replace("\r\n", "\n", StringComparison.Ordinal);
         Assert.Contains($"FROM {SdkImage} AS build", dockerfile, StringComparison.Ordinal);
         Assert.Contains($"FROM {AspNetImage}\n", dockerfile, StringComparison.Ordinal);
+        Assert.Contains("RUN dotnet restore Lex.slnx --locked-mode --nologo", dockerfile,
+            StringComparison.Ordinal);
+        Assert.Contains("dotnet publish src/Lex.Web -c Release -o /app --no-restore --nologo",
+            dockerfile, StringComparison.Ordinal);
+        Assert.Contains("dotnet run --project src/Lex.Ingest -c Release --no-restore -- artifact verify",
+            dockerfile, StringComparison.Ordinal);
         Assert.DoesNotContain("mcr.microsoft.com/dotnet/sdk:10.0 AS build", dockerfile,
             StringComparison.Ordinal);
         Assert.DoesNotContain("mcr.microsoft.com/dotnet/aspnet:10.0\n", dockerfile,
@@ -112,6 +158,7 @@ public sealed class Canon1FreezeTests
         var attributes = File.ReadAllLines(Path.Combine(repository, ".gitattributes"));
         Assert.Contains("tests/Lex.Tests/canon/** text eol=lf", attributes);
         Assert.Contains("tests/Lex.Tests/canon/**/*.pdf binary", attributes);
+        Assert.Contains("**/packages.lock.json text eol=lf", attributes);
     }
 
     [Fact]
@@ -366,6 +413,16 @@ public sealed class Canon1FreezeTests
         Assert.DoesNotContain((byte)'\r', bytes);
         Assert.Equal((byte)'\n', bytes[^1]);
         _ = new UTF8Encoding(false, true).GetString(bytes);
+    }
+
+    private static void AssertLockedPackage(
+        JsonObject dependencies, string name, string requested, string resolved)
+    {
+        var package = dependencies[name]!.AsObject();
+        Assert.Equal("Direct", package["type"]!.GetValue<string>());
+        Assert.Equal(requested, package["requested"]!.GetValue<string>());
+        Assert.Equal(resolved, package["resolved"]!.GetValue<string>());
+        Assert.False(string.IsNullOrWhiteSpace(package["contentHash"]!.GetValue<string>()));
     }
 
     private sealed class TempDirectory : IDisposable

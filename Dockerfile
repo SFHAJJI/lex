@@ -11,7 +11,8 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0.400@sha256:e1ffd2a92ae84c1291bc1b6887501f
 WORKDIR /src
 COPY . .
 COPY --from=web /src/Lex.Web/wwwroot/app ./src/Lex.Web/wwwroot/app
-RUN dotnet publish src/Lex.Web -c Release -o /app
+RUN dotnet restore Lex.slnx --locked-mode --nologo
+RUN dotnet publish src/Lex.Web -c Release -o /app --no-restore --nologo
 
 # The indexes come from the nightly's own published output, not from a developer's disk.
 # See deploy/fetch-indexes.sh for why. Kept as a separate stage so the ~950 MB never enters
@@ -38,7 +39,7 @@ RUN set -eu; found=0; \
     for manifest in /indexes/*.manifest.json; do \
       [ -f "$manifest" ] || continue; found=1; \
       signature="${manifest%.json}.sig"; \
-      dotnet run --project src/Lex.Ingest -c Release -- artifact verify \
+      dotnet run --project src/Lex.Ingest -c Release --no-restore -- artifact verify \
         --root /indexes --manifest "$manifest" --signature "$signature" \
         --trust-roots /trust/trusted-artifact-roots.json; \
     done; \

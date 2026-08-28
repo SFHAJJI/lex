@@ -184,13 +184,14 @@ internal static class Canon1FixtureRunner
         writer.WriteStartObject();
         writer.WriteString("schema", "lex-canon-freeze/1");
         writer.WriteString("canon", "canon/1");
-        writer.WriteString("application_baseline", "addc13b07ea5ce83c2ab1c4c7b5f5d8b4bc43c9f");
+        writer.WriteString("application_baseline", "20f06c1911834a4528d57a454ea170e35a9b2444");
         writer.WriteString("lex_derive_tree", "69f0bef039a569f897e7ea81cefa6850d65606db");
         writer.WriteStartArray("profile_ids");
         foreach (var profileId in ProfileIds) writer.WriteStringValue(profileId);
         writer.WriteEndArray();
         writer.WriteString("target_framework", "net10.0");
         writer.WriteString("sdk", "10.0.400");
+        writer.WriteString("runtime", "10.0.11");
         writer.WriteStartArray("dependencies");
         Dependency(writer, "HtmlAgilityPack", "1.12.4");
         Dependency(writer, "PdfPig", "0.1.11");
