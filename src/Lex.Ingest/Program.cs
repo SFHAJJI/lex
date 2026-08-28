@@ -507,19 +507,26 @@ switch (args0[0])
         var corpus = Get("--corpus") ?? throw new ArgumentException("--corpus required");
         var ingesterCodeCommit = Lex.Temporal.CodeIdentity.RequireFullCommit(
             Get("--code-commit"), "--code-commit");
+        var ingestRunIdentity = IngestRunIdentity.Require(
+            Get("--run-id"), "--run-id");
         var adapter = sourceAdapters.Resolve(publisher, Get);
         if (Array.IndexOf(args0, "--fresh") >= 0)
         {
+            var historicalWithdrawalAudit = Get("--historical-withdrawal-audit") is { } auditPath
+                ? HistoricalWithdrawalAuditDocument.Load(auditPath)
+                : null;
             Console.Error.WriteLine(
                 $"[lex] fresh ingest {publisher} -> disposable candidate {corpus}");
             await FreshCorpusMigration.RunAsync(corpus, publisher, adapter, now,
-                ingesterCodeCommit, CancellationToken.None);
+                ingesterCodeCommit, ingestRunIdentity, historicalWithdrawalAudit,
+                CancellationToken.None);
             return 0;
         }
         else
         {
             Console.Error.WriteLine($"[lex] ingest {publisher} -> {corpus}");
-            var writer = new CorpusWriter(corpus, now, ingesterCodeCommit);
+            var writer = new CorpusWriter(
+                corpus, now, ingesterCodeCommit, runIdentity: ingestRunIdentity);
             await writer.WriteAsync(adapter, CancellationToken.None, requireComplete: true);
             return writer.Accepted ? 0 : 4;
         }
@@ -922,8 +929,8 @@ static void Usage() => Console.Error.WriteLine("""
     lex — point-in-time regulatory text pipeline
       lex embedding-smoke --model-dir PATH [--text TEXT] [--batch-size N]
       lex scope-preview [--publisher ID] [--scope FILE] [--previous-scope FILE] [--wave 1..4]
-      lex ingest --publisher ID --corpus PATH --code-commit FULL_SHA [--scope FILE] [--wave 1..4] [--now ISO]
-                 [--fresh]
+      lex ingest --publisher ID --corpus PATH --code-commit FULL_SHA --run-id SOURCE_RUN_ID [--scope FILE] [--wave 1..4] [--now ISO]
+                 [--fresh [--historical-withdrawal-audit FILE]]
       lex index  --corpus PATH [--articles PATH --articles-commit FULL_SHA] --out FILE.db [--keyfile KEY.pem] [--now ISO]
                  [--embedding-model PATH] [--vectors FILE] [--embedding-batch-size N]
                  [--time-budget-minutes N] --corpus-commit FULL_SHA --code-commit FULL_SHA

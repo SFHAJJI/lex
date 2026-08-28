@@ -165,6 +165,47 @@ public class IndexTests : IDisposable
     }
 
     [Fact]
+    public void Reader_keeps_old_five_column_event_indexes_backward_compatible()
+    {
+        var stamp = new Dictionary<string, string>
+        {
+            ["collection"] = "t-pub", ["tier"] = "A",
+            ["history_begins"] = "publisher",
+            ["built_at"] = "2026-08-01T00:00:00Z", ["corpus_commit"] = "test",
+        };
+        IndexBuilder.Build(_db, stamp, [], [],
+            [new EventRow("t-pub:w1:v1", "version", "resighted",
+                "2026-08-01T00:00:00Z", null,
+                RunIdentity: "nightly-legacy-shape")],
+            [], StampSigner.CreateKeyPem());
+        using (var currentReader = LexIndexReader.Open(_db))
+            Assert.Equal("nightly-legacy-shape",
+                Assert.Single(currentReader.Events("t-pub:w1:v1")).RunIdentity);
+        using (var connection = new Microsoft.Data.Sqlite.SqliteConnection(
+                   $"Data Source={_db}"))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = """
+                ALTER TABLE events RENAME TO events_new;
+                CREATE TABLE events(
+                  key TEXT, scope TEXT, event TEXT, observed_from TEXT, detail TEXT);
+                INSERT INTO events(key,scope,event,observed_from,detail)
+                  SELECT key,scope,event,observed_from,detail FROM events_new;
+                DROP TABLE events_new;
+                CREATE INDEX ix_events_key ON events(key);
+                """;
+            command.ExecuteNonQuery();
+        }
+
+        using var reader = LexIndexReader.Open(_db);
+        var legacy = Assert.Single(reader.Events("t-pub:w1:v1"));
+        Assert.Null(legacy.FirstMissedAt);
+        Assert.Null(legacy.RunsMissed);
+        Assert.Null(legacy.RunIdentity);
+    }
+
+    [Fact]
     public void Search_facets_are_derived_from_mounted_index_values()
     {
         var stamp = new Dictionary<string, string>

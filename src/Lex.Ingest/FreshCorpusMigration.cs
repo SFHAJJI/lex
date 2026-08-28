@@ -20,7 +20,36 @@ public static class FreshCorpusMigration
         string ingesterCodeCommit,
         CancellationToken cancellationToken) =>
         RunAsync(corpusRoot, publisher, adapter, now, ingesterCodeCommit,
-            beforeMove: null, cancellationToken);
+            runIdentity: null, historicalWithdrawalAudit: null,
+            beforeMove: null, beforeStageFileWrite: null,
+            cancellationToken);
+
+    public static Task<CorpusIntegrityReport> RunAsync(
+        string corpusRoot,
+        string publisher,
+        ISourceAdapter adapter,
+        DateTimeOffset now,
+        string ingesterCodeCommit,
+        string runIdentity,
+        CancellationToken cancellationToken) =>
+        RunAsync(corpusRoot, publisher, adapter, now, ingesterCodeCommit,
+            IngestRunIdentity.Require(runIdentity, "fresh migration run identity"),
+            historicalWithdrawalAudit: null,
+            beforeMove: null, beforeStageFileWrite: null, cancellationToken);
+
+    public static Task<CorpusIntegrityReport> RunAsync(
+        string corpusRoot,
+        string publisher,
+        ISourceAdapter adapter,
+        DateTimeOffset now,
+        string ingesterCodeCommit,
+        string runIdentity,
+        HistoricalWithdrawalAuditDocument? historicalWithdrawalAudit,
+        CancellationToken cancellationToken) =>
+        RunAsync(corpusRoot, publisher, adapter, now, ingesterCodeCommit,
+            IngestRunIdentity.Require(runIdentity, "fresh migration run identity"),
+            historicalWithdrawalAudit,
+            beforeMove: null, beforeStageFileWrite: null, cancellationToken);
 
     internal static Task<CorpusIntegrityReport> RunAsync(
         string corpusRoot,
@@ -31,9 +60,10 @@ public static class FreshCorpusMigration
         Action<string, string>? beforeMove,
         CancellationToken cancellationToken) =>
         RunAsync(corpusRoot, publisher, adapter, now, ingesterCodeCommit,
+            runIdentity: null, historicalWithdrawalAudit: null,
             beforeMove, beforeStageFileWrite: null, cancellationToken);
 
-    internal static async Task<CorpusIntegrityReport> RunAsync(
+    internal static Task<CorpusIntegrityReport> RunAsync(
         string corpusRoot,
         string publisher,
         ISourceAdapter adapter,
@@ -41,6 +71,38 @@ public static class FreshCorpusMigration
         string ingesterCodeCommit,
         Action<string, string>? beforeMove,
         Action<string>? beforeStageFileWrite,
+        CancellationToken cancellationToken) =>
+        RunAsync(corpusRoot, publisher, adapter, now, ingesterCodeCommit,
+            runIdentity: null, historicalWithdrawalAudit: null,
+            beforeMove, beforeStageFileWrite, cancellationToken);
+
+    internal static async Task<CorpusIntegrityReport> RunAsync(
+        string corpusRoot,
+        string publisher,
+        ISourceAdapter adapter,
+        DateTimeOffset now,
+        string ingesterCodeCommit,
+        string? runIdentity,
+        HistoricalWithdrawalAuditDocument? historicalWithdrawalAudit,
+        Action<string, string>? beforeMove,
+        Action<string>? beforeStageFileWrite,
+        CancellationToken cancellationToken)
+        => await RunAsync(corpusRoot, publisher, adapter, now,
+            ingesterCodeCommit, runIdentity, historicalWithdrawalAudit,
+            beforeMove, beforeStageFileWrite, afterPublish: null,
+            cancellationToken);
+
+    internal static async Task<CorpusIntegrityReport> RunAsync(
+        string corpusRoot,
+        string publisher,
+        ISourceAdapter adapter,
+        DateTimeOffset now,
+        string ingesterCodeCommit,
+        string? runIdentity,
+        HistoricalWithdrawalAuditDocument? historicalWithdrawalAudit,
+        Action<string, string>? beforeMove,
+        Action<string>? beforeStageFileWrite,
+        Action<int, string>? afterPublish,
         CancellationToken cancellationToken)
     {
         var root = Path.GetFullPath(corpusRoot);
@@ -50,6 +112,8 @@ public static class FreshCorpusMigration
             throw new InvalidDataException(
                 "Fresh corpus migration refuses a filesystem root.");
 
+        using var protectedWriteSession = CorpusWriteSession.Acquire(root);
+        var protectedBaseline = protectedWriteSession.Baseline;
         var baselineIntegrity = CorpusIntegrity.Verify(root);
         if (!baselineIntegrity.IsValid)
             throw new InvalidDataException(
@@ -72,29 +136,39 @@ public static class FreshCorpusMigration
         var name = Path.GetFileName(root.TrimEnd(
             Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
         var stage = Path.Combine(parent, $".{name}.lex-fresh-stage-{token}");
-        var backup = Path.Combine(parent, $".{name}.lex-fresh-backup-{token}");
         Directory.CreateDirectory(stage);
         try
         {
-            var writer = new CorpusWriter(stage, now, ingesterCodeCommit);
+            var writer = new CorpusWriter(
+                stage, now, ingesterCodeCommit, runIdentity: runIdentity);
             BaselineReconciliation? reconciliation = null;
             IReadOnlyList<string>? matchedProtectedPaths = null;
+            IReadOnlyDictionary<HistoricalWithdrawalAuditKey,
+                IReadOnlyList<HistoricalWithdrawalAuditRunEvidence>>? withdrawalAuditRuns = null;
             await writer.WriteAsync(adapter, cancellationToken, requireComplete: true,
                 plan =>
                 {
                     reconciliation = RequirePreservedBaseline(baseline, plan, adapter);
+                    withdrawalAuditRuns = RequireHistoricalWithdrawalAudit(
+                        reconciliation.Withdrawn, historicalWithdrawalAudit,
+                        publisher, now);
+                    protectedBaseline.RequireUnchanged();
                     matchedProtectedPaths = ImportMatchedBaselineStates(
                         root, stage, reconciliation.Matched, now,
                         beforeStageFileWrite, cancellationToken);
-                });
+                }, beforeCandidateCommit: null,
+                allowTrustedPlanPreparation: true);
             if (!writer.Committed)
                 throw new InvalidDataException("Fresh corpus candidate was not committed.");
             if (reconciliation is null)
                 throw new InvalidDataException(
                     "Fresh corpus baseline reconciliation did not run.");
 
+            protectedBaseline.RequireUnchanged();
             ImportWithdrawnBaselineStates(
                 root, stage, reconciliation.Withdrawn, now,
+                withdrawalAuditRuns ?? throw new InvalidDataException(
+                    "Historical withdrawal audit reconciliation did not run."),
                 beforeStageFileWrite, cancellationToken);
 
             var candidateManifest = ReadManifest(stage);
@@ -110,6 +184,12 @@ public static class FreshCorpusMigration
             candidateManifest.MigrationBaselineWorks = baselineIntegrity.ActualWorks;
             File.WriteAllText(Path.Combine(stage, "manifest.json"),
                 JsonSerializer.Serialize(candidateManifest, CorpusJson.Options) + "\n");
+            candidateManifest.CompletedRunsSha256 = MergeCompletedRunLedger(
+                root, stage, publisher,
+                withdrawalAuditRuns ?? throw new InvalidDataException(
+                    "Historical withdrawal audit reconciliation did not run."));
+            File.WriteAllText(Path.Combine(stage, "manifest.json"),
+                JsonSerializer.Serialize(candidateManifest, CorpusJson.Options) + "\n");
 
             var integrity = CorpusIntegrity.Verify(stage);
             if (!integrity.IsValid)
@@ -119,18 +199,74 @@ public static class FreshCorpusMigration
             if (matchedProtectedPaths is null)
                 throw new InvalidDataException(
                     "Fresh corpus matched baseline import did not run.");
+            protectedBaseline.RequireUnchanged();
             RevalidateMatchedBaselinePaths(
                 root, matchedProtectedPaths, cancellationToken);
-            ReplaceCandidateTree(root, stage, backup, beforeMove);
-            return integrity;
+            beforeMove?.Invoke(
+                Path.Combine(root, "works"), Path.Combine(stage, "works"));
+            protectedBaseline.RequireOriginalEntriesUnchanged();
+            CorpusTransaction.CommitSnapshot(
+                protectedWriteSession.EnsureRoot(), stage, protectedBaseline,
+                afterPublish);
+            var published = CorpusIntegrity.Verify(root);
+            if (!published.IsValid)
+                throw new InvalidDataException(
+                    "Fresh corpus publication failed final-root integrity:\n"
+                    + string.Join("\n", published.Errors));
+            return published;
         }
         finally
         {
             try { if (Directory.Exists(stage)) Directory.Delete(stage, recursive: true); } catch { }
-            // ReplaceCandidateTree removes a backup only after a proven successful swap. If a
-            // move or rollback throws, the adjacent backup is the only recoverable baseline and
-            // must survive; the disposable checkout can then be discarded or repaired manually.
         }
+    }
+
+    private static string? MergeCompletedRunLedger(
+        string protectedRoot,
+        string stage,
+        string publisher,
+        IReadOnlyDictionary<HistoricalWithdrawalAuditKey,
+            IReadOnlyList<HistoricalWithdrawalAuditRunEvidence>> withdrawalAuditRuns)
+    {
+        var protectedLedger = CompletedRunLedger.Load(protectedRoot);
+        var candidateLedger = CompletedRunLedger.Load(stage);
+        if (protectedLedger.Runs.Count == 0
+            && candidateLedger.Runs.Count == 0
+            && withdrawalAuditRuns.Count == 0)
+            return null;
+
+        var combined = new CompletedRunLedgerDoc();
+        foreach (var run in protectedLedger.Runs)
+            CompletedRunLedger.Bind(combined, run.RunIdentity,
+                run.CompletedAt, run.EnumerationScopeSha256);
+
+        if (withdrawalAuditRuns.Count > 0)
+        {
+            var auditScope = HistoricalWithdrawalAuditValidation.ScopeDigest(
+                publisher, withdrawalAuditRuns);
+            foreach (var run in withdrawalAuditRuns.Values
+                         .SelectMany(value => value)
+                         .GroupBy(value => value.RunIdentity, StringComparer.Ordinal)
+                         .Select(group =>
+                         {
+                             var completed = group.Select(value => value.CompletedAt)
+                                 .Distinct(StringComparer.Ordinal).ToArray();
+                             if (completed.Length != 1)
+                                 throw new InvalidDataException(
+                                     $"Historical audit run identity '{group.Key}' has conflicting completion times.");
+                             return new HistoricalWithdrawalAuditRunEvidence(
+                                 group.Key, completed[0]);
+                         })
+                         .OrderBy(value => value.CompletedAt, StringComparer.Ordinal)
+                         .ThenBy(value => value.RunIdentity, StringComparer.Ordinal))
+                CompletedRunLedger.Bind(combined, run.RunIdentity,
+                    run.CompletedAt, auditScope);
+        }
+
+        foreach (var run in candidateLedger.Runs)
+            CompletedRunLedger.Bind(combined, run.RunIdentity,
+                run.CompletedAt, run.EnumerationScopeSha256);
+        return CompletedRunLedger.Write(combined, stage);
     }
 
     private static ManifestDoc ReadManifest(string root)
@@ -555,6 +691,8 @@ public static class FreshCorpusMigration
         string stage,
         IReadOnlyList<WithdrawnBaselineState> withdrawnStates,
         DateTimeOffset now,
+        IReadOnlyDictionary<HistoricalWithdrawalAuditKey,
+            IReadOnlyList<HistoricalWithdrawalAuditRunEvidence>> withdrawalAuditRuns,
         Action<string>? beforeStageFileWrite,
         CancellationToken cancellationToken)
     {
@@ -594,6 +732,11 @@ public static class FreshCorpusMigration
             var revised = RewriteDestinationIdentity(
                 meta, withdrawn.DestinationWorkSlug,
                 withdrawn.PublisherVersionIdentifier, destination);
+            var auditKey = new HistoricalWithdrawalAuditKey(
+                state.Version.WorkIdentifier,
+                withdrawn.PublisherVersionIdentifier);
+            if (withdrawalAuditRuns.TryGetValue(auditKey, out var completedRuns))
+                AppendHistoricalWithdrawalAudit(meta, completedRuns);
             AppendMigrationRevision(meta, revised, now);
             if (!IsWithdrawn(meta))
                 throw new InvalidDataException(
@@ -607,6 +750,95 @@ public static class FreshCorpusMigration
 
         WritePreparedBaselineImports(
             protectedRoot, stage, prepared, beforeStageFileWrite, cancellationToken);
+    }
+
+    private static IReadOnlyDictionary<HistoricalWithdrawalAuditKey,
+        IReadOnlyList<HistoricalWithdrawalAuditRunEvidence>> RequireHistoricalWithdrawalAudit(
+        IReadOnlyList<WithdrawnBaselineState> withdrawnStates,
+        HistoricalWithdrawalAuditDocument? document,
+        string publisher,
+        DateTimeOffset now)
+    {
+        var required = new List<(string WorkIdentifier,
+            string PublisherVersionIdentifier)>();
+        var legacyObservedAt = new Dictionary<HistoricalWithdrawalAuditKey,
+            DateTimeOffset>();
+        foreach (var withdrawn in withdrawnStates)
+        {
+            var lifecycle = withdrawn.Baseline.Version.Events.LastOrDefault(entry =>
+                entry.Event is "absent_unconfirmed" or "withdrawn_from_source" or "resighted");
+            if (lifecycle?.Event != "withdrawn_from_source")
+                throw new InvalidDataException(
+                    "A withdrawn baseline state has no terminal withdrawal event: "
+                    + withdrawn.Baseline.Description);
+
+            var structuredFields = new object?[]
+            {
+                lifecycle.FirstMissedAt,
+                lifecycle.RunsMissed,
+                lifecycle.RunIdentity,
+            };
+            if (structuredFields.All(value => value is null))
+            {
+                required.Add((withdrawn.Baseline.Version.WorkIdentifier,
+                    withdrawn.PublisherVersionIdentifier));
+                var key = new HistoricalWithdrawalAuditKey(
+                    withdrawn.Baseline.Version.WorkIdentifier,
+                    withdrawn.PublisherVersionIdentifier);
+                if (!legacyObservedAt.TryAdd(key,
+                        HistoricalWithdrawalAuditValidation.ParseCanonicalUtc(
+                            lifecycle.ObservedFrom,
+                            "legacy withdrawal observed_from")))
+                    throw new InvalidDataException(
+                        "A legacy withdrawal audit state is duplicated: "
+                        + withdrawn.Baseline.Description);
+            }
+            else if (structuredFields.Any(value => value is null))
+                throw new InvalidDataException(
+                    "A legacy withdrawal has a partial absence lifecycle and cannot be audited: "
+                    + withdrawn.Baseline.Description);
+        }
+
+        var validated = HistoricalWithdrawalAuditValidation.Require(
+            document, publisher, now, required);
+        foreach (var (key, observedAt) in legacyObservedAt)
+            if (HistoricalWithdrawalAuditValidation.ParseCanonicalUtc(
+                    validated[key][0].CompletedAt,
+                    "historical withdrawal audit completed_at") <= observedAt)
+                throw new InvalidDataException(
+                    "Historical withdrawal audit runs must be later than the legacy withdrawal.");
+        return validated;
+    }
+
+    private static void AppendHistoricalWithdrawalAudit(
+        VersionMeta meta,
+        IReadOnlyList<HistoricalWithdrawalAuditRunEvidence> completedRuns)
+    {
+        if (completedRuns.Count != 3)
+            throw new InvalidDataException(
+                "Historical withdrawal audit must contain exactly three completed runs.");
+        var firstMissedAt = completedRuns[0].CompletedAt;
+        for (var index = 0; index < completedRuns.Count; index++)
+        {
+            var run = completedRuns[index];
+            var runsMissed = index + 1;
+            meta.Events.Add(new EventEntry
+            {
+                Event = runsMissed == 3
+                    ? "withdrawn_from_source"
+                    : "absent_unconfirmed",
+                ObservedFrom = run.CompletedAt,
+                Scope = "version",
+                Detail = runsMissed == 3
+                    ? HistoricalWithdrawalAuditValidation.EventDetailPrefix
+                      + "publisher record absent from three successive completed enumerations"
+                    : HistoricalWithdrawalAuditValidation.EventDetailPrefix
+                      + "publisher record absence was not yet confirmed",
+                FirstMissedAt = firstMissedAt,
+                RunsMissed = runsMissed,
+                RunIdentity = run.RunIdentity,
+            });
+        }
     }
 
     private static void WritePreparedBaselineImports(
@@ -945,82 +1177,4 @@ public static class FreshCorpusMigration
         return safe.Length <= 120 ? safe : safe[..117] + "...";
     }
 
-    private static void ReplaceCandidateTree(
-        string candidateRoot, string stage, string backup,
-        Action<string, string>? beforeMove)
-    {
-        var targetWorks = Path.Combine(candidateRoot, "works");
-        var targetManifest = Path.Combine(candidateRoot, "manifest.json");
-        var targetNotice = Path.Combine(candidateRoot, "NOTICE");
-        var stagedWorks = Path.Combine(stage, "works");
-        var stagedManifest = Path.Combine(stage, "manifest.json");
-        var stagedNotice = Path.Combine(stage, "NOTICE");
-        if (!Directory.Exists(stagedWorks) || !File.Exists(stagedManifest)
-            || !File.Exists(stagedNotice))
-            throw new InvalidDataException("Fresh corpus candidate is incomplete.");
-
-        Directory.CreateDirectory(backup);
-        var oldWorks = Path.Combine(backup, "works");
-        var oldManifest = Path.Combine(backup, "manifest.json");
-        var oldNotice = Path.Combine(backup, "NOTICE");
-        var movedOldWorks = false;
-        var movedOldManifest = false;
-        var movedOldNotice = false;
-        var movedNewWorks = false;
-        var movedNewManifest = false;
-        var movedNewNotice = false;
-        try
-        {
-            if (Directory.Exists(targetWorks))
-            {
-                MoveDirectory(targetWorks, oldWorks, beforeMove);
-                movedOldWorks = true;
-            }
-            if (File.Exists(targetManifest))
-            {
-                MoveFile(targetManifest, oldManifest, beforeMove);
-                movedOldManifest = true;
-            }
-            if (File.Exists(targetNotice))
-            {
-                MoveFile(targetNotice, oldNotice, beforeMove);
-                movedOldNotice = true;
-            }
-            MoveDirectory(stagedWorks, targetWorks, beforeMove);
-            movedNewWorks = true;
-            MoveFile(stagedManifest, targetManifest, beforeMove);
-            movedNewManifest = true;
-            MoveFile(stagedNotice, targetNotice, beforeMove);
-            movedNewNotice = true;
-        }
-        catch
-        {
-            if (movedNewNotice && File.Exists(targetNotice)) File.Delete(targetNotice);
-            if (movedNewManifest && File.Exists(targetManifest)) File.Delete(targetManifest);
-            if (movedNewWorks && Directory.Exists(targetWorks))
-                Directory.Delete(targetWorks, recursive: true);
-            if (movedOldManifest && File.Exists(oldManifest))
-                MoveFile(oldManifest, targetManifest, beforeMove);
-            if (movedOldNotice && File.Exists(oldNotice))
-                MoveFile(oldNotice, targetNotice, beforeMove);
-            if (movedOldWorks && Directory.Exists(oldWorks))
-                MoveDirectory(oldWorks, targetWorks, beforeMove);
-            throw;
-        }
-        try { Directory.Delete(backup, recursive: true); } catch { }
-    }
-
-    private static void MoveFile(
-        string source, string destination, Action<string, string>? beforeMove)
-    {
-        beforeMove?.Invoke(source, destination);
-        File.Move(source, destination);
-    }
-
-    private static void MoveDirectory(
-        string source, string destination, Action<string, string>? beforeMove)
-    {
-        beforeMove?.Invoke(source, destination);
-        Directory.Move(source, destination);
-    }
 }

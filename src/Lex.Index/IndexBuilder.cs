@@ -345,7 +345,9 @@ public static class IndexBuilder
               etype TEXT NOT NULL, from_anchor TEXT, to_anchor TEXT,
               anchor TEXT, text_sha TEXT, at_version TEXT);
             CREATE INDEX ix_aevents ON anchor_events(group_key, language);
-            CREATE TABLE events(key TEXT, scope TEXT, event TEXT, observed_from TEXT, detail TEXT);
+            CREATE TABLE events(
+              key TEXT, scope TEXT, event TEXT, observed_from TEXT, detail TEXT,
+              first_missed_at TEXT, runs_missed INTEGER, run_identity TEXT);
             CREATE INDEX ix_events_key ON events(key);
             CREATE TABLE obs_history(key TEXT, language TEXT, expr_valid_from TEXT,
               sha256 TEXT, source_uri TEXT, observed_from TEXT, observed_to TEXT);
@@ -587,13 +589,22 @@ public static class IndexBuilder
             }
 
             var insEv = conn.CreateCommand();
-            insEv.CommandText = "INSERT INTO events VALUES ($key,$scope,$event,$of,$detail)";
-            foreach (var p in new[] { "$key", "$scope", "$event", "$of", "$detail" })
+            insEv.CommandText = """
+                INSERT INTO events(
+                  key,scope,event,observed_from,detail,
+                  first_missed_at,runs_missed,run_identity)
+                VALUES ($key,$scope,$event,$of,$detail,$first,$missed,$run)
+                """;
+            foreach (var p in new[] { "$key", "$scope", "$event", "$of", "$detail", "$first", "$run" })
                 insEv.Parameters.Add(new SqliteParameter(p, SqliteType.Text));
+            insEv.Parameters.Add(new SqliteParameter("$missed", SqliteType.Integer));
             foreach (var e in eventRows)
             {
                 Set(insEv, "$key", e.Key); Set(insEv, "$scope", e.Scope); Set(insEv, "$event", e.Event);
                 Set(insEv, "$of", e.ObservedFrom); Set(insEv, "$detail", e.Detail);
+                Set(insEv, "$first", e.FirstMissedAt);
+                insEv.Parameters["$missed"].Value = (object?)e.RunsMissed ?? DBNull.Value;
+                Set(insEv, "$run", e.RunIdentity);
                 insEv.ExecuteNonQuery();
                 DatabaseItemCompleted();
             }

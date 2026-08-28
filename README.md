@@ -202,9 +202,13 @@ LEX_CODE_COMMIT=$(git rev-parse HEAD)
 LEX_ARTICLES_COMMIT=$(git -C ../lex-articles rev-parse HEAD)
 LEX_LU_CORPUS_COMMIT=$(git -C ../lex-corpus-lu-legilux rev-parse HEAD)
 LEX_EU_CORPUS_COMMIT=$(git -C ../lex-corpus-eu-eurlex rev-parse HEAD)
+# One exact completed-enumeration identity. Reuse it only when retrying that same run.
+LEX_INGEST_RUN_ID=manual-example-001
 
 # ingest (paced, sequential; official open-data channels only)
-dotnet run --project src/Lex.Ingest -- ingest --publisher lu-legilux --corpus ../lex-corpus-lu-legilux
+dotnet run --project src/Lex.Ingest -- ingest --publisher lu-legilux \
+    --corpus ../lex-corpus-lu-legilux --code-commit "$LEX_CODE_COMMIT" \
+    --run-id "$LEX_INGEST_RUN_ID"
 
 # derive the per-article layer, build the signed index
 dotnet run --project src/Lex.Ingest -- derive --publisher lu-legilux --corpus ../lex-corpus-lu-legilux --out ../lex-articles

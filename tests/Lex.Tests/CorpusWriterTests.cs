@@ -55,6 +55,393 @@ public sealed partial class CorpusWriterTests : IDisposable
     }
 
     [Fact]
+    public async Task Same_date_publisher_identity_replacement_preserves_the_verified_prior_state()
+    {
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-14T00:00:00Z"), CodeCommit)
+            .WriteAsync(new SameDateAdapter(
+                reverse: false, includeSecond: false), default);
+        var before = Assert.Single(await SameDateInventory(_dir));
+        var priorDirectory = Path.Combine(
+            _dir, "works", "w1", "versions", before.Key);
+        var priorMeta = JsonSerializer.Deserialize<VersionMeta>(
+            await File.ReadAllTextAsync(Path.Combine(priorDirectory, "meta.json")),
+            CorpusJson.Options)!;
+        var priorObservation = Assert.Single(
+            Assert.Single(priorMeta.Expressions).Observations);
+        var priorBytes = await File.ReadAllBytesAsync(
+            Path.Combine(priorDirectory, priorObservation.File!));
+        var priorEvents = priorMeta.Events.Select(entry =>
+            JsonSerializer.Serialize(entry, CorpusJson.Options)).ToArray();
+
+        var replacement = new CorpusWriter(
+            _dir, DateTimeOffset.Parse("2026-08-15T00:00:00Z"), CodeCommit,
+            runIdentity: "nightly-replacement-1");
+        var replacementAdapter = new SameDateAdapter(
+            reverse: false, includeFirst: false);
+        await replacement.WriteAsync(replacementAdapter, default);
+
+        var after = await SameDateInventory(_dir);
+        Assert.True(replacement.Accepted);
+        Assert.True(replacement.Committed);
+        Assert.Equal(2, after.Count);
+        Assert.Equal("official:v-a", after[before.Key]);
+        Assert.Contains("official:v-b", after.Values);
+        Assert.Equal(1, replacementAdapter.BodyFetchCount);
+        var retained = JsonSerializer.Deserialize<VersionMeta>(
+            await File.ReadAllTextAsync(Path.Combine(priorDirectory, "meta.json")),
+            CorpusJson.Options)!;
+        Assert.Equal(priorEvents, retained.Events.Take(priorEvents.Length)
+            .Select(entry => JsonSerializer.Serialize(entry, CorpusJson.Options)));
+        var pending = retained.Events[^1];
+        Assert.Equal("absent_unconfirmed", pending.Event);
+        Assert.Equal("2026-08-15T00:00:00Z", pending.FirstMissedAt);
+        Assert.Equal(1, pending.RunsMissed);
+        var replacementManifest = JsonSerializer.Deserialize<ManifestDoc>(
+            await File.ReadAllTextAsync(Path.Combine(_dir, "manifest.json")),
+            CorpusJson.Options)!;
+        Assert.Equal(1, replacementManifest.Works);
+        Assert.Equal(2, replacementManifest.Versions);
+        var retainedObservation = Assert.Single(
+            Assert.Single(retained.Expressions).Observations);
+        Assert.Equal(priorObservation.Sha256, retainedObservation.Sha256);
+        Assert.Equal(priorBytes, await File.ReadAllBytesAsync(
+            Path.Combine(priorDirectory, retainedObservation.File!)));
+        var integrity = CorpusIntegrity.Verify(_dir);
+        Assert.True(integrity.IsValid, string.Join(Environment.NewLine, integrity.Errors));
+    }
+
+    [Fact]
+    public async Task V3_same_date_shared_uri_changed_bytes_append_a_file_replaced_event()
+    {
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-14T00:00:00Z"), CodeCommit)
+            .WriteAsync(new SameDateAdapter(
+                reverse: false, includeSecond: false, shareSource: true), default);
+        var priorDirectory = Assert.Single(Directory.EnumerateDirectories(
+            Path.Combine(_dir, "works", "w1", "versions")));
+        var prior = JsonSerializer.Deserialize<VersionMeta>(
+            await File.ReadAllTextAsync(Path.Combine(priorDirectory, "meta.json")),
+            CorpusJson.Options)!;
+        var priorObservation = Assert.Single(
+            Assert.Single(prior.Expressions).Observations);
+        var priorBytes = await File.ReadAllBytesAsync(
+            Path.Combine(priorDirectory, priorObservation.File!));
+
+        await new CorpusWriter(
+                _dir, DateTimeOffset.Parse("2026-08-15T00:00:00Z"), CodeCommit,
+                runIdentity: "nightly-replacement-2")
+            .WriteAsync(new SameDateAdapter(
+                reverse: false, includeFirst: false, shareSource: true), default);
+
+        var versions = Directory.EnumerateDirectories(
+                Path.Combine(_dir, "works", "w1", "versions"))
+            .Select(directory => (Directory: directory, Meta:
+                JsonSerializer.Deserialize<VersionMeta>(File.ReadAllText(
+                    Path.Combine(directory, "meta.json")), CorpusJson.Options)!))
+            .ToDictionary(item => item.Meta.PublisherVersionIdentifier!,
+                item => item, StringComparer.Ordinal);
+        var replacement = versions["official:v-b"];
+        var replacementObservation = Assert.Single(
+            Assert.Single(replacement.Meta.Expressions).Observations);
+        Assert.Equal(priorObservation.SourceUri, replacementObservation.SourceUri);
+        Assert.NotEqual(priorObservation.Sha256, replacementObservation.Sha256);
+        var eventEntry = Assert.Single(replacement.Meta.Events,
+            entry => entry.Event == "file_replaced");
+        Assert.Equal("fr", eventEntry.Scope);
+        Assert.Contains(prior.LexId, eventEntry.Detail, StringComparison.Ordinal);
+        Assert.Contains(priorObservation.Sha256!, eventEntry.Detail, StringComparison.Ordinal);
+        Assert.Equal(priorBytes, await File.ReadAllBytesAsync(
+            Path.Combine(priorDirectory, priorObservation.File!)));
+    }
+
+    [Fact]
+    public async Task Same_date_replacement_rejects_an_unverified_prior_v4_identity()
+    {
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-14T00:00:00Z"), CodeCommit)
+            .WriteAsync(new SameDateAdapter(
+                reverse: false, includeSecond: false), default);
+        var before = Assert.Single(await SameDateInventory(_dir));
+        var metaPath = Path.Combine(_dir, "works", "w1", "versions", before.Key, "meta.json");
+        var meta = JsonSerializer.Deserialize<VersionMeta>(
+            await File.ReadAllTextAsync(metaPath), CorpusJson.Options)!;
+        meta.PublisherVersionIdentifier = "official:tampered";
+        await File.WriteAllTextAsync(metaPath, JsonSerializer.Serialize(meta, CorpusJson.Options));
+
+        var error = await Assert.ThrowsAsync<InvalidDataException>(() =>
+            new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-15T00:00:00Z"), CodeCommit)
+                .WriteAsync(new SameDateAdapter(
+                    reverse: false, includeFirst: false), default));
+
+        Assert.Contains("identity", error.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData("record-sha")]
+    [InlineData("observation-bytes")]
+    [InlineData("work-meta")]
+    [InlineData("manifest-publisher")]
+    [InlineData("manifest-missing")]
+    public async Task V3_replacement_rejects_a_tampered_baseline_before_body_fetch(
+        string target)
+    {
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-14T00:00:00Z"), CodeCommit)
+            .WriteAsync(new SameDateAdapter(
+                reverse: false, includeSecond: false), default);
+        var priorDirectory = Assert.Single(Directory.EnumerateDirectories(
+            Path.Combine(_dir, "works", "w1", "versions")));
+        var metaPath = Path.Combine(priorDirectory, "meta.json");
+        var meta = JsonSerializer.Deserialize<VersionMeta>(
+            await File.ReadAllTextAsync(metaPath), CorpusJson.Options)!;
+        switch (target)
+        {
+            case "record-sha":
+                meta.DocumentType = "TAMPERED";
+                await File.WriteAllTextAsync(metaPath,
+                    JsonSerializer.Serialize(meta, CorpusJson.Options) + "\n");
+                break;
+            case "observation-bytes":
+                await File.AppendAllTextAsync(Path.Combine(priorDirectory,
+                    Assert.Single(Assert.Single(meta.Expressions).Observations).File!), "tampered");
+                break;
+            case "work-meta":
+                var workPath = Path.Combine(_dir, "works", "w1", "meta.json");
+                var work = JsonSerializer.Deserialize<WorkMeta>(
+                    await File.ReadAllTextAsync(workPath), CorpusJson.Options)!;
+                work.WorkIdentifier = "official:other";
+                await File.WriteAllTextAsync(workPath,
+                    JsonSerializer.Serialize(work, CorpusJson.Options) + "\n");
+                break;
+            case "manifest-publisher":
+                var manifestPath = Path.Combine(_dir, "manifest.json");
+                var manifest = JsonSerializer.Deserialize<ManifestDoc>(
+                    await File.ReadAllTextAsync(manifestPath), CorpusJson.Options)!;
+                manifest.Publisher["id"] = "other";
+                await File.WriteAllTextAsync(manifestPath,
+                    JsonSerializer.Serialize(manifest, CorpusJson.Options) + "\n");
+                break;
+            case "manifest-missing":
+                File.Delete(Path.Combine(_dir, "manifest.json"));
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(target));
+        }
+        var before = Inventory(_dir);
+        var replacement = new SameDateAdapter(reverse: false, includeFirst: false);
+
+        await Assert.ThrowsAsync<InvalidDataException>(() =>
+            new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-15T00:00:00Z"), CodeCommit)
+                .WriteAsync(replacement, default));
+
+        Assert.Equal(0, replacement.BodyFetchCount);
+        Assert.Equal(before, Inventory(_dir));
+    }
+
+    [Theory]
+    [InlineData("metadata-change")]
+    [InlineData("body-change")]
+    [InlineData("path-addition")]
+    [InlineData("path-removal")]
+    public async Task V3_append_rejects_every_post_fetch_baseline_change(string mutation)
+    {
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-14T00:00:00Z"), CodeCommit)
+            .WriteAsync(new SameDateAdapter(
+                reverse: false, includeSecond: false), default);
+        var priorDirectory = Assert.Single(Directory.EnumerateDirectories(
+            Path.Combine(_dir, "works", "w1", "versions")));
+        var metaPath = Path.Combine(priorDirectory, "meta.json");
+        var meta = JsonSerializer.Deserialize<VersionMeta>(
+            await File.ReadAllTextAsync(metaPath), CorpusJson.Options)!;
+        var bodyPath = Path.Combine(priorDirectory,
+            Assert.Single(Assert.Single(meta.Expressions).Observations).File!);
+        var unexpected = Path.Combine(priorDirectory, "unexpected.txt");
+        var manifestBefore = await File.ReadAllBytesAsync(Path.Combine(_dir, "manifest.json"));
+        void MutateBaseline()
+        {
+            switch (mutation)
+            {
+                case "metadata-change": File.AppendAllText(metaPath, " "); break;
+                case "body-change": File.AppendAllText(bodyPath, "tampered"); break;
+                case "path-addition": File.WriteAllText(unexpected, "tampered"); break;
+                case "path-removal": File.Delete(bodyPath); break;
+                default: throw new ArgumentOutOfRangeException(nameof(mutation));
+            }
+        }
+        var replacement = new SameDateAdapter(
+            reverse: false, includeFirst: false,
+            beforeFirstBodyFetch: MutateBaseline);
+
+        var error = await Assert.ThrowsAsync<InvalidDataException>(() =>
+            new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-15T00:00:00Z"), CodeCommit,
+                    runIdentity: "nightly-toctou-1")
+                .WriteAsync(replacement, default));
+
+        Assert.Contains("changed during ingest", error.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(1, replacement.BodyFetchCount);
+        Assert.Equal(manifestBefore, await File.ReadAllBytesAsync(Path.Combine(_dir, "manifest.json")));
+        Assert.DoesNotContain("official:v-b", (await SameDateInventory(_dir)).Values);
+    }
+
+    [Fact]
+    public async Task Candidate_commit_compares_the_baseline_after_the_commit_boundary_hook()
+    {
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-14T00:00:00Z"), CodeCommit)
+            .WriteAsync(new SameDateAdapter(
+                reverse: false, includeSecond: false), default);
+        var priorDirectory = Assert.Single(Directory.EnumerateDirectories(
+            Path.Combine(_dir, "works", "w1", "versions")));
+        var metaPath = Path.Combine(priorDirectory, "meta.json");
+        var replacement = new SameDateAdapter(reverse: false, includeFirst: false);
+        var writer = new CorpusWriter(
+            _dir, DateTimeOffset.Parse("2026-08-15T00:00:00Z"), CodeCommit,
+            runIdentity: "nightly-cas-1");
+
+        var error = await Assert.ThrowsAsync<InvalidDataException>(() =>
+            WriteWithCommitHook(writer, replacement,
+                () => File.AppendAllText(metaPath, " ")));
+
+        Assert.Contains("changed during ingest", error.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("official:v-b", (await SameDateInventory(_dir)).Values);
+    }
+
+    [Fact]
+    public async Task A_second_cooperative_writer_cannot_enter_the_same_corpus()
+    {
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-14T00:00:00Z"), CodeCommit)
+            .WriteAsync(new SameDateAdapter(
+                reverse: false, includeSecond: false), default);
+        using var entered = new ManualResetEventSlim(false);
+        using var release = new ManualResetEventSlim(false);
+        var firstAdapter = new SameDateAdapter(
+            reverse: false, includeFirst: false,
+            beforeFirstBodyFetch: () =>
+            {
+                entered.Set();
+                Assert.True(release.Wait(TimeSpan.FromSeconds(10)));
+            });
+        var first = Task.Run(() => new CorpusWriter(
+                _dir, DateTimeOffset.Parse("2026-08-15T00:00:00Z"), CodeCommit,
+                runIdentity: "nightly-lock-1")
+            .WriteAsync(firstAdapter, default));
+        Assert.True(entered.Wait(TimeSpan.FromSeconds(10)));
+
+        try
+        {
+            var error = await Assert.ThrowsAsync<InvalidDataException>(() =>
+                new CorpusWriter(_dir,
+                        DateTimeOffset.Parse("2026-08-15T00:05:00Z"), CodeCommit,
+                        runIdentity: "nightly-lock-2")
+                    .WriteAsync(new EmptyAdapter(), default));
+            Assert.Contains("writer lock", error.Message, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            release.Set();
+            await first;
+        }
+    }
+
+    [Fact]
+    public async Task V3_replacement_rejects_a_coherently_rebound_coordinate_with_a_stale_record_sha()
+    {
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-14T00:00:00Z"), CodeCommit)
+            .WriteAsync(new SameDateAdapter(
+                reverse: false, includeSecond: false), default);
+        var versions = Path.Combine(_dir, "works", "w1", "versions");
+        var priorDirectory = Assert.Single(Directory.EnumerateDirectories(versions));
+        var replacementKey = StableVersionKey("2025-07-28", "official:v-b");
+        var reboundDirectory = Path.Combine(versions, replacementKey);
+        Directory.Move(priorDirectory, reboundDirectory);
+        var metaPath = Path.Combine(reboundDirectory, "meta.json");
+        var meta = JsonSerializer.Deserialize<VersionMeta>(
+            await File.ReadAllTextAsync(metaPath), CorpusJson.Options)!;
+        meta.PublisherVersionIdentifier = "official:v-b";
+        meta.LexId = $"test:w1:{replacementKey}";
+        await File.WriteAllTextAsync(metaPath,
+            JsonSerializer.Serialize(meta, CorpusJson.Options) + "\n");
+        var before = Inventory(_dir);
+        var replacement = new SameDateAdapter(reverse: false, includeFirst: false);
+
+        await Assert.ThrowsAsync<InvalidDataException>(() =>
+            new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-15T00:00:00Z"), CodeCommit)
+                .WriteAsync(replacement, default));
+
+        Assert.Equal(0, replacement.BodyFetchCount);
+        Assert.Equal(before, Inventory(_dir));
+    }
+
+    [Theory]
+    [InlineData("publisher")]
+    [InlineData("work")]
+    [InlineData("lex-id")]
+    [InlineData("valid-from")]
+    public async Task V3_existing_expected_coordinate_must_keep_every_identity_binding(
+        string target)
+    {
+        var adapter = new SameDateAdapter(reverse: false, includeSecond: false);
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-14T00:00:00Z"), CodeCommit)
+            .WriteAsync(adapter, default);
+        var directory = Assert.Single(Directory.EnumerateDirectories(
+            Path.Combine(_dir, "works", "w1", "versions")));
+        var metaPath = Path.Combine(directory, "meta.json");
+        var meta = JsonSerializer.Deserialize<VersionMeta>(
+            await File.ReadAllTextAsync(metaPath), CorpusJson.Options)!;
+        switch (target)
+        {
+            case "publisher": meta.Publisher = "other"; break;
+            case "work": meta.WorkIdentifier = "official:other"; break;
+            case "lex-id": meta.LexId += ":other"; break;
+            case "valid-from": meta.ValidFrom = "2025-07-29"; break;
+            default: throw new ArgumentOutOfRangeException(nameof(target));
+        }
+        RefreshRecordHash(meta);
+        await File.WriteAllTextAsync(metaPath,
+            JsonSerializer.Serialize(meta, CorpusJson.Options) + "\n");
+        var before = Inventory(_dir);
+        var refresh = new SameDateAdapter(reverse: false, includeSecond: false);
+
+        await Assert.ThrowsAsync<InvalidDataException>(() =>
+            new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-15T00:00:00Z"), CodeCommit)
+                .WriteAsync(refresh, default));
+
+        Assert.Equal(0, refresh.BodyFetchCount);
+        Assert.Equal(before, Inventory(_dir));
+    }
+
+    [Fact]
+    public async Task V3_plan_rejects_a_version_bound_to_another_enumerated_work_before_body_fetch()
+    {
+        var before = Inventory(_dir);
+        var mismatched = new SameDateAdapter(
+            reverse: false, includeSecond: false,
+            versionWorkIdentifier: "official:other");
+
+        await Assert.ThrowsAsync<InvalidDataException>(() =>
+            new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-15T00:00:00Z"), CodeCommit)
+                .WriteAsync(mismatched, default));
+
+        Assert.Equal(0, mismatched.BodyFetchCount);
+        Assert.Equal(before, Inventory(_dir));
+    }
+
+    [Fact]
+    public async Task V3_append_rejects_rebinding_an_existing_slug_to_another_work_before_reuse()
+    {
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-14T00:00:00Z"), CodeCommit)
+            .WriteAsync(new SameDateAdapter(
+                reverse: false, includeSecond: false), default);
+        var before = Inventory(_dir);
+        var rebound = new SameDateAdapter(
+            reverse: false, includeSecond: false,
+            workIdentifier: "official:rebound-work");
+
+        await Assert.ThrowsAsync<InvalidDataException>(() =>
+            new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-15T00:00:00Z"), CodeCommit)
+                .WriteAsync(rebound, default));
+
+        Assert.Equal(0, rebound.BodyFetchCount);
+        Assert.Equal(before, Inventory(_dir));
+    }
+
+    [Fact]
     public async Task No_change_poll_keeps_the_prior_materializer_identity_and_writes_no_bytes()
     {
         const string laterCodeCommit = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
@@ -497,6 +884,63 @@ public sealed partial class CorpusWriterTests : IDisposable
         Assert.Equal(1, manifest.MigrationBaselineWorks);
     }
 
+    [Fact]
+    public async Task Fresh_migration_retains_and_verifies_the_completed_run_ledger()
+    {
+        var corpusRoot = Path.Combine(_dir, "candidate-with-ledger");
+        await WriteLegacyBaselineAsync(corpusRoot);
+
+        await FreshCorpusMigration.RunAsync(
+            corpusRoot, "test", new ManyWorksAdapter(1),
+            DateTimeOffset.Parse("2026-08-14T00:00:00Z"), CodeCommit,
+            "fresh-ledger-run-1", default);
+
+        Assert.True(File.Exists(Path.Combine(corpusRoot, "completed-runs.json")));
+        var report = CorpusIntegrity.Verify(corpusRoot);
+        Assert.True(report.IsValid, string.Join(Environment.NewLine, report.Errors));
+    }
+
+    [Fact]
+    public async Task Interrupted_fresh_publication_recovers_before_replay()
+    {
+        var corpusRoot = Path.Combine(_dir, "candidate-recovery");
+        await WriteLegacyBaselineAsync(corpusRoot);
+        var runAt = DateTimeOffset.Parse("2026-08-14T00:00:00Z");
+        var migrate = typeof(FreshCorpusMigration).GetMethods(
+                System.Reflection.BindingFlags.NonPublic
+                | System.Reflection.BindingFlags.Static)
+            .Single(method => method.Name == "RunAsync"
+                && method.GetParameters().Length == 11);
+        var task = Assert.IsAssignableFrom<Task<CorpusIntegrityReport>>(migrate.Invoke(null,
+        [
+            corpusRoot, "test", new ManyWorksAdapter(1), runAt, CodeCommit,
+            "fresh-recovery-run-1", null, null, null,
+            (Action<int, string>)((_, path) =>
+            {
+                if (path.Contains("/versions/", StringComparison.Ordinal)
+                    && path.EndsWith("/meta.json", StringComparison.Ordinal))
+                    throw new InvalidOperationException("simulated process interruption");
+            }),
+            CancellationToken.None,
+        ]));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => task);
+        Assert.True(Directory.Exists(Path.Combine(
+            corpusRoot, ".lex-corpus-transaction")));
+        Assert.False(File.Exists(Path.Combine(corpusRoot, "completed-runs.json")));
+
+        var replay = new CorpusWriter(
+            corpusRoot, runAt, CodeCommit, runIdentity: "fresh-recovery-run-1");
+        await replay.WriteAsync(new ManyWorksAdapter(1), default);
+
+        Assert.True(replay.Accepted);
+        Assert.False(replay.Committed);
+        Assert.False(Directory.Exists(Path.Combine(
+            corpusRoot, ".lex-corpus-transaction")));
+        var report = CorpusIntegrity.Verify(corpusRoot);
+        Assert.True(report.IsValid, string.Join(Environment.NewLine, report.Errors));
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -638,7 +1082,8 @@ public sealed partial class CorpusWriterTests : IDisposable
 
         var report = await FreshCorpusMigration.RunAsync(
             corpusRoot, "lu-legilux", current,
-            DateTimeOffset.Parse("2026-08-14T00:00:00Z"), CodeCommit, default);
+            DateTimeOffset.Parse("2026-08-14T00:00:00Z"), CodeCommit,
+            "fresh-migration-401", LegacyWithdrawalAudit(), default);
 
         Assert.True(report.IsValid, string.Join(Environment.NewLine, report.Errors));
         Assert.Equal(2, report.ActualVersions);
@@ -685,6 +1130,75 @@ public sealed partial class CorpusWriterTests : IDisposable
             entry => entry.Event == "metadata_revised"
                 && entry.Detail == "fields=lex_id,publisher_version_identifier");
         Assert.Equal("2026-08-14T00:00:00Z", migration.ObservedFrom);
+        var corrected = withdrawn.Meta.Events
+            .Where(entry => entry.RunIdentity is not null).ToArray();
+        Assert.Equal(3, corrected.Length);
+        Assert.Equal([1, 2, 3], corrected.Select(entry => entry.RunsMissed));
+        Assert.Equal(["audit-run-1", "audit-run-2", "audit-run-3"],
+            corrected.Select(entry => entry.RunIdentity));
+    }
+
+    [Fact]
+    public async Task Fresh_migration_refuses_a_legacy_withdrawal_without_an_audit_contract()
+    {
+        var corpusRoot = Path.Combine(_dir, "candidate-without-audit");
+        await WriteLegacyWithdrawalBaselineAsync(corpusRoot);
+        var before = Inventory(corpusRoot);
+        var current = new LegiluxReplacementAdapter(includeWithdrawn: false);
+
+        var error = await Assert.ThrowsAsync<InvalidDataException>(() =>
+            FreshCorpusMigration.RunAsync(
+                corpusRoot, "lu-legilux", current,
+                DateTimeOffset.Parse("2026-08-14T00:00:00Z"), CodeCommit,
+                "fresh-migration-402", historicalWithdrawalAudit: null, default));
+
+        Assert.Contains("historical withdrawal audit", error.Message,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(before, Inventory(corpusRoot));
+    }
+
+    [Theory]
+    [InlineData("duplicate-run")]
+    [InlineData("timestamp-run")]
+    [InlineData("out-of-order")]
+    [InlineData("before-legacy")]
+    [InlineData("wrong-state")]
+    public async Task Fresh_migration_rejects_invalid_historical_withdrawal_audit(
+        string mutation)
+    {
+        var corpusRoot = Path.Combine(_dir, "candidate-invalid-audit-" + mutation);
+        await WriteLegacyWithdrawalBaselineAsync(corpusRoot);
+        var audit = LegacyWithdrawalAudit();
+        switch (mutation)
+        {
+            case "duplicate-run":
+                audit.Entries[0].CompletedRuns[1].RunIdentity = "audit-run-1";
+                break;
+            case "timestamp-run":
+                audit.Entries[0].CompletedRuns[1].RunIdentity = "2026-08-13T10:00:00Z";
+                break;
+            case "out-of-order":
+                audit.Entries[0].CompletedRuns[1].CompletedAt = "2026-08-13T08:30:00Z";
+                break;
+            case "before-legacy":
+                audit.Entries[0].CompletedRuns[0].CompletedAt = "2026-08-13T07:00:00Z";
+                break;
+            case "wrong-state":
+                audit.Entries[0].PublisherVersionIdentifier = "official:other";
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(mutation));
+        }
+        var before = Inventory(corpusRoot);
+
+        await Assert.ThrowsAsync<InvalidDataException>(() =>
+            FreshCorpusMigration.RunAsync(
+                corpusRoot, "lu-legilux",
+                new LegiluxReplacementAdapter(includeWithdrawn: false),
+                DateTimeOffset.Parse("2026-08-14T00:00:00Z"), CodeCommit,
+                "fresh-migration-403", audit, default));
+
+        Assert.Equal(before, Inventory(corpusRoot));
     }
 
     [Fact]
@@ -869,24 +1383,13 @@ public sealed partial class CorpusWriterTests : IDisposable
     }
 
     [Fact]
-    public async Task Fresh_migration_preserves_the_verified_backup_when_rollback_move_fails()
+    public async Task Fresh_migration_prepublication_failure_preserves_the_verified_baseline()
     {
         var corpusRoot = Path.Combine(_dir, "candidate");
         await WriteLegacyBaselineAsync(corpusRoot);
-        var initialSwapFailed = false;
-        void Inject(string source, string destination)
-        {
-            if (source.Contains(".lex-fresh-stage-", StringComparison.Ordinal)
-                && Path.GetFileName(source) == "manifest.json")
-            {
-                initialSwapFailed = true;
-                throw new IOException("injected staged manifest move failure");
-            }
-            if (initialSwapFailed
-                && source.Contains(".lex-fresh-backup-", StringComparison.Ordinal)
-                && Path.GetFileName(source) == "manifest.json")
-                throw new IOException("injected baseline restore failure");
-        }
+        var before = Inventory(corpusRoot);
+        void Inject(string source, string destination) =>
+            throw new IOException("injected prepublication failure");
 
         var injected = typeof(FreshCorpusMigration).GetMethods(
                 System.Reflection.BindingFlags.NonPublic
@@ -899,14 +1402,12 @@ public sealed partial class CorpusWriterTests : IDisposable
                 corpusRoot, "test", new ManyWorksAdapter(1),
                 DateTimeOffset.Parse("2026-08-14T00:00:00Z"), CodeCommit,
                 (Action<string, string>)Inject, CancellationToken.None,
-            ]));
+        ]));
         await Assert.ThrowsAsync<IOException>(() => task);
 
-        var backup = Assert.Single(Directory.EnumerateDirectories(_dir,
-            ".candidate.lex-fresh-backup-*"));
-        Assert.True(Directory.Exists(Path.Combine(backup, "works")));
-        Assert.True(File.Exists(Path.Combine(backup, "manifest.json")));
-        Assert.True(File.Exists(Path.Combine(backup, "NOTICE")));
+        Assert.Equal(before, Inventory(corpusRoot));
+        Assert.False(Directory.Exists(Path.Combine(
+            corpusRoot, ".lex-corpus-transaction")));
     }
 
     [Fact]
@@ -1069,25 +1570,474 @@ public sealed partial class CorpusWriterTests : IDisposable
     }
 
     [Fact]
-    public async Task Missing_publisher_record_is_tombstoned_and_can_be_resighted()
+    public async Task V3_completed_absence_requires_three_successive_misses_before_withdrawal()
     {
         await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-01T00:00:00Z"), CodeCommit)
             .WriteAsync(new OneVersionAdapter("in_force", "financial-services"), default);
 
-        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-03T00:00:00Z"), CodeCommit)
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-03T00:00:00Z"), CodeCommit,
+                runIdentity: "nightly-101")
             .WriteAsync(new EmptyAdapter(), default);
+        var first = await ReadVersionMeta();
+        var firstMiss = first.Events[^1];
+        Assert.Equal("absent_unconfirmed", firstMiss.Event);
+        Assert.Equal("2026-08-03T00:00:00Z", firstMiss.FirstMissedAt);
+        Assert.Equal(1, firstMiss.RunsMissed);
+        Assert.Equal("nightly-101", firstMiss.RunIdentity);
+        var firstIntegrity = CorpusIntegrity.Verify(_dir);
+        Assert.True(firstIntegrity.IsValid);
+        Assert.Equal(1, firstIntegrity.ManifestWorks);
+        Assert.Equal(1, firstIntegrity.ManifestVersions);
+        Assert.Equal(1, firstIntegrity.CurrentVersions);
 
-        var path = Path.Combine(OneVersionDirectory, "meta.json");
-        var withdrawn = JsonSerializer.Deserialize<VersionMeta>(
-            await File.ReadAllTextAsync(path), CorpusJson.Options)!;
-        Assert.Equal("withdrawn_from_source", withdrawn.Events[^1].Event);
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-04T00:00:00Z"), CodeCommit,
+                runIdentity: "nightly-102")
+            .WriteAsync(new EmptyAdapter(), default);
+        var secondMiss = (await ReadVersionMeta()).Events[^1];
+        Assert.Equal("absent_unconfirmed", secondMiss.Event);
+        Assert.Equal(firstMiss.FirstMissedAt, secondMiss.FirstMissedAt);
+        Assert.Equal(2, secondMiss.RunsMissed);
+        Assert.Equal("nightly-102", secondMiss.RunIdentity);
+        var secondIntegrity = CorpusIntegrity.Verify(_dir);
+        Assert.True(secondIntegrity.IsValid);
+        Assert.Equal(1, secondIntegrity.ManifestWorks);
+        Assert.Equal(1, secondIntegrity.ManifestVersions);
+        Assert.Equal(1, secondIntegrity.CurrentVersions);
 
-        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-06T00:00:00Z"), CodeCommit)
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-05T00:00:00Z"), CodeCommit,
+                runIdentity: "nightly-103")
+            .WriteAsync(new EmptyAdapter(), default);
+        var withdrawal = (await ReadVersionMeta()).Events[^1];
+        Assert.Equal("withdrawn_from_source", withdrawal.Event);
+        Assert.Equal(firstMiss.FirstMissedAt, withdrawal.FirstMissedAt);
+        Assert.Equal(3, withdrawal.RunsMissed);
+        Assert.Equal("nightly-103", withdrawal.RunIdentity);
+        var thirdIntegrity = CorpusIntegrity.Verify(_dir);
+        Assert.True(thirdIntegrity.IsValid);
+        Assert.Equal(0, thirdIntegrity.ManifestWorks);
+        Assert.Equal(0, thirdIntegrity.ManifestVersions);
+        Assert.Equal(0, thirdIntegrity.CurrentVersions);
+    }
+
+    [Fact]
+    public async Task Retrying_the_same_completed_run_identity_never_advances_absence()
+    {
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-01T00:00:00Z"), CodeCommit)
             .WriteAsync(new OneVersionAdapter("in_force", "financial-services"), default);
 
-        var resighted = JsonSerializer.Deserialize<VersionMeta>(
-            await File.ReadAllTextAsync(path), CorpusJson.Options)!;
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-02T00:00:00Z"), CodeCommit,
+                runIdentity: "nightly-201")
+            .WriteAsync(new EmptyAdapter(), default);
+        var afterFirst = await ReadVersionMeta();
+        var firstEventCount = afterFirst.Events.Count;
+
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-02T00:00:00Z"), CodeCommit,
+                runIdentity: "nightly-201")
+            .WriteAsync(new EmptyAdapter(), default);
+        var afterRetry = await ReadVersionMeta();
+
+        Assert.Equal(firstEventCount, afterRetry.Events.Count);
+        var miss = afterRetry.Events[^1];
+        Assert.Equal(1, miss.RunsMissed);
+        Assert.Equal("nightly-201", miss.RunIdentity);
+        Assert.Equal("2026-08-02T00:00:00Z", miss.ObservedFrom);
+    }
+
+    [Fact]
+    public async Task Completed_run_ledger_is_cross_record_and_exact_replay_is_idempotent()
+    {
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-01T00:00:00Z"), CodeCommit)
+            .WriteAsync(new SameDateAdapter(reverse: false), default);
+
+        var first = new CorpusWriter(_dir,
+            DateTimeOffset.Parse("2026-08-02T00:00:00Z"), CodeCommit,
+            runIdentity: "nightly-cross-record-1");
+        await first.WriteAsync(new EmptyAdapter(), default);
+        var afterFirst = Inventory(_dir);
+
+        var replay = new CorpusWriter(_dir,
+            DateTimeOffset.Parse("2026-08-02T00:00:00Z"), CodeCommit,
+            runIdentity: "nightly-cross-record-1");
+        await replay.WriteAsync(new EmptyAdapter(), default);
+
+        Assert.True(replay.Accepted);
+        Assert.False(replay.Committed);
+        Assert.Equal(afterFirst, Inventory(_dir));
+        var ledger = JsonNode.Parse(await File.ReadAllTextAsync(
+            Path.Combine(_dir, "completed-runs.json")))!.AsObject();
+        var run = Assert.Single(ledger["runs"]!.AsArray())!.AsObject();
+        Assert.Equal("nightly-cross-record-1", run["run_identity"]!.GetValue<string>());
+        Assert.Equal("2026-08-02T00:00:00Z", run["completed_at"]!.GetValue<string>());
+        Assert.Matches("^[0-9a-f]{64}$", run["enumeration_scope_sha256"]!.GetValue<string>());
+        Assert.Matches("^[0-9a-f]{64}$", run["entry_sha256"]!.GetValue<string>());
+        Assert.All(Directory.EnumerateFiles(Path.Combine(_dir, "works"), "meta.json",
+                SearchOption.AllDirectories)
+            .Where(path => path.Contains($"{Path.DirectorySeparatorChar}versions{Path.DirectorySeparatorChar}")),
+            path => Assert.Single(JsonSerializer.Deserialize<VersionMeta>(
+                    File.ReadAllText(path), CorpusJson.Options)!.Events,
+                entry => entry.RunIdentity == "nightly-cross-record-1"));
+    }
+
+    [Fact]
+    public async Task Interrupted_completion_rolls_forward_before_exact_replay()
+    {
+        await new CorpusWriter(_dir,
+                DateTimeOffset.Parse("2026-08-01T00:00:00Z"), CodeCommit)
+            .WriteAsync(new OneVersionAdapter(
+                "in_force", "financial-services"), default);
+
+        var interrupted = new CorpusWriter(_dir,
+            DateTimeOffset.Parse("2026-08-02T00:00:00Z"), CodeCommit,
+            runIdentity: "nightly-recovery-1");
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            WriteWithPublishHook(interrupted, new EmptyAdapter(), (_, path) =>
+            {
+                if (path.Contains("/versions/", StringComparison.Ordinal)
+                    && path.EndsWith("/meta.json", StringComparison.Ordinal))
+                    throw new InvalidOperationException("simulated process interruption");
+            }));
+
+        Assert.True(Directory.Exists(Path.Combine(
+            _dir, ".lex-corpus-transaction")));
+        Assert.False(File.Exists(Path.Combine(_dir, "completed-runs.json")));
+        Assert.Equal("nightly-recovery-1", (await ReadVersionMeta()).Events[^1].RunIdentity);
+
+        var replay = new CorpusWriter(_dir,
+            DateTimeOffset.Parse("2026-08-02T00:00:00Z"), CodeCommit,
+            runIdentity: "nightly-recovery-1");
+        await replay.WriteAsync(new EmptyAdapter(), default);
+
+        Assert.True(replay.Accepted);
+        Assert.False(replay.Committed);
+        Assert.False(Directory.Exists(Path.Combine(
+            _dir, ".lex-corpus-transaction")));
+        Assert.True(File.Exists(Path.Combine(_dir, "completed-runs.json")));
+        var report = CorpusIntegrity.Verify(_dir);
+        Assert.True(report.IsValid, string.Join(Environment.NewLine, report.Errors));
+    }
+
+    [Fact]
+    public async Task Interrupted_after_ledger_publication_recovers_before_exact_replay()
+    {
+        await new CorpusWriter(_dir,
+                DateTimeOffset.Parse("2026-08-01T00:00:00Z"), CodeCommit)
+            .WriteAsync(new OneVersionAdapter(
+                "in_force", "financial-services"), default);
+
+        var completedAt = DateTimeOffset.Parse("2026-08-02T00:00:00Z");
+        var interrupted = new CorpusWriter(
+            _dir, completedAt, CodeCommit, runIdentity: "nightly-visible-recovery-1");
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            WriteWithPublishHook(interrupted, new EmptyAdapter(), (_, path) =>
+            {
+                if (path == "completed-runs.json")
+                    throw new InvalidOperationException("simulated process interruption");
+            }));
+
+        Assert.True(Directory.Exists(Path.Combine(
+            _dir, ".lex-corpus-transaction")));
+        Assert.True(File.Exists(Path.Combine(_dir, "completed-runs.json")));
+
+        var replay = new CorpusWriter(
+            _dir, completedAt, CodeCommit, runIdentity: "nightly-visible-recovery-1");
+        await replay.WriteAsync(new EmptyAdapter(), default);
+
+        Assert.True(replay.Accepted);
+        Assert.False(replay.Committed);
+        Assert.False(Directory.Exists(Path.Combine(
+            _dir, ".lex-corpus-transaction")));
+        var report = CorpusIntegrity.Verify(_dir);
+        Assert.True(report.IsValid, string.Join(Environment.NewLine, report.Errors));
+    }
+
+    [Fact]
+    public async Task Reusing_completed_run_identity_with_different_time_or_scope_fails_before_advancement()
+    {
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-01T00:00:00Z"), CodeCommit)
+            .WriteAsync(new OneVersionAdapter("in_force", "financial-services"), default);
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-02T00:00:00Z"), CodeCommit,
+                runIdentity: "nightly-bound-once-1")
+            .WriteAsync(new EmptyAdapter(), default);
+        var before = Inventory(_dir);
+
+        await Assert.ThrowsAsync<InvalidDataException>(() =>
+            new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-02T01:00:00Z"), CodeCommit,
+                    runIdentity: "nightly-bound-once-1")
+                .WriteAsync(new EmptyAdapter(), default));
+        await Assert.ThrowsAsync<InvalidDataException>(() =>
+            new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-02T00:00:00Z"), CodeCommit,
+                    runIdentity: "nightly-bound-once-1")
+                .WriteAsync(new OneVersionAdapter("in_force", "financial-services"), default));
+
+        Assert.Equal(before, Inventory(_dir));
+        Assert.Equal(1, (await ReadVersionMeta()).Events[^1].RunsMissed);
+    }
+
+    [Fact]
+    public async Task Completed_run_scope_binds_the_complete_version_and_expression_record()
+    {
+        var completedAt = DateTimeOffset.Parse("2026-08-02T00:00:00Z");
+        await new CorpusWriter(_dir, completedAt, CodeCommit,
+                runIdentity: "nightly-full-record-1")
+            .WriteAsync(new OneVersionAdapter(
+                "in_force", "financial-services", ["en"]), default);
+        var before = Inventory(_dir);
+
+        await Assert.ThrowsAsync<InvalidDataException>(() =>
+            new CorpusWriter(_dir, completedAt, CodeCommit,
+                    runIdentity: "nightly-full-record-1")
+                .WriteAsync(new OneVersionAdapter(
+                    "in_force", "financial-services", ["en", "fr"]), default));
+        await Assert.ThrowsAsync<InvalidDataException>(() =>
+            new CorpusWriter(_dir, completedAt, CodeCommit,
+                    runIdentity: "nightly-full-record-1")
+                .WriteAsync(new OneVersionAdapter(
+                    "in_force", "financial-services", ["en"],
+                    validFrom: new DateOnly(2024, 1, 2)), default));
+        await Assert.ThrowsAsync<InvalidDataException>(() =>
+            new CorpusWriter(_dir, completedAt, CodeCommit,
+                    runIdentity: "nightly-full-record-1")
+                .WriteAsync(new OneVersionAdapter(
+                    "in_force", "financial-services", ["en"],
+                    expressionSourceUri: "https://example.test/v1/en?revision=2"),
+                    default));
+        await Assert.ThrowsAsync<InvalidDataException>(() =>
+            new CorpusWriter(_dir, completedAt, CodeCommit,
+                    runIdentity: "nightly-full-record-1")
+                .WriteAsync(new OneVersionAdapter(
+                    "in_force", "changed-source-record", ["en"]), default));
+
+        Assert.Equal(before, Inventory(_dir));
+    }
+
+    [Fact]
+    public async Task Integrity_binds_each_lifecycle_time_to_its_completed_run()
+    {
+        await new CorpusWriter(_dir,
+                DateTimeOffset.Parse("2026-08-01T00:00:00Z"), CodeCommit)
+            .WriteAsync(new OneVersionAdapter(
+                "in_force", "financial-services"), default);
+        await new CorpusWriter(_dir,
+                DateTimeOffset.Parse("2026-08-02T00:00:00Z"), CodeCommit,
+                runIdentity: "nightly-time-binding-1")
+            .WriteAsync(new EmptyAdapter(), default);
+
+        var meta = await ReadVersionMeta();
+        meta.Events[^1].ObservedFrom = "2026-08-02T00:00:01Z";
+        meta.Events[^1].FirstMissedAt = "2026-08-02T00:00:01Z";
+        RefreshRecordHash(meta);
+        await File.WriteAllTextAsync(
+            Path.Combine(OneVersionDirectory, "meta.json"),
+            JsonSerializer.Serialize(meta, CorpusJson.Options) + "\n");
+
+        var report = CorpusIntegrity.Verify(_dir);
+        Assert.False(report.IsValid);
+        Assert.Contains(report.Errors, error => error.Contains(
+            "completed-run ledger time", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Integrity_binds_resighting_time_to_its_completed_run()
+    {
+        await new CorpusWriter(_dir,
+                DateTimeOffset.Parse("2026-08-01T00:00:00Z"), CodeCommit)
+            .WriteAsync(new OneVersionAdapter(
+                "in_force", "financial-services"), default);
+        await new CorpusWriter(_dir,
+                DateTimeOffset.Parse("2026-08-02T00:00:00Z"), CodeCommit,
+                runIdentity: "nightly-resighting-time-1")
+            .WriteAsync(new EmptyAdapter(), default);
+        await new CorpusWriter(_dir,
+                DateTimeOffset.Parse("2026-08-03T00:00:00Z"), CodeCommit,
+                runIdentity: "nightly-resighting-time-2")
+            .WriteAsync(new OneVersionAdapter(
+                "in_force", "financial-services"), default);
+
+        var meta = await ReadVersionMeta();
+        Assert.Equal("resighted", meta.Events[^1].Event);
+        meta.Events[^1].ObservedFrom = "2026-08-03T00:00:01Z";
+        RefreshRecordHash(meta);
+        await File.WriteAllTextAsync(
+            Path.Combine(OneVersionDirectory, "meta.json"),
+            JsonSerializer.Serialize(meta, CorpusJson.Options) + "\n");
+
+        var report = CorpusIntegrity.Verify(_dir);
+        Assert.False(report.IsValid);
+        Assert.Contains(report.Errors, error => error.Contains(
+            "completed-run ledger time", StringComparison.Ordinal));
+
+        meta.Events[^1].ObservedFrom = "2026-08-03T00:00:00Z";
+        meta.Events[^1].RunIdentity = null;
+        RefreshRecordHash(meta);
+        await File.WriteAllTextAsync(
+            Path.Combine(OneVersionDirectory, "meta.json"),
+            JsonSerializer.Serialize(meta, CorpusJson.Options) + "\n");
+
+        var unbound = CorpusIntegrity.Verify(_dir);
+        Assert.False(unbound.IsValid);
+        Assert.Contains(unbound.Errors, error => error.Contains(
+            "absence lifecycle is invalid", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Manifest_identity_prevents_a_silent_completed_run_history_reset()
+    {
+        await new CorpusWriter(_dir,
+                DateTimeOffset.Parse("2026-08-01T00:00:00Z"), CodeCommit,
+                runIdentity: "nightly-history-root-1")
+            .WriteAsync(new OneVersionAdapter(
+                "in_force", "financial-services"), default);
+        var manifest = JsonSerializer.Deserialize<ManifestDoc>(
+            await File.ReadAllTextAsync(Path.Combine(_dir, "manifest.json")),
+            CorpusJson.Options)!;
+        Assert.Matches("^[0-9a-f]{64}$", manifest.CompletedRunsSha256);
+
+        File.Delete(Path.Combine(_dir, "completed-runs.json"));
+
+        var report = CorpusIntegrity.Verify(_dir);
+        Assert.False(report.IsValid);
+        Assert.Contains(report.Errors, error => error.Contains(
+            "missing or empty completed-run ledger", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Distinct_completed_run_identities_must_be_observed_in_time_order()
+    {
+        await new CorpusWriter(_dir,
+                DateTimeOffset.Parse("2026-08-01T00:00:00Z"), CodeCommit)
+            .WriteAsync(new OneVersionAdapter("in_force", "financial-services"), default);
+        await new CorpusWriter(_dir,
+                DateTimeOffset.Parse("2026-08-03T00:00:00Z"), CodeCommit,
+                runIdentity: "nightly-ordered-1")
+            .WriteAsync(new EmptyAdapter(), default);
+        var before = Inventory(_dir);
+
+        await Assert.ThrowsAsync<InvalidDataException>(() =>
+            new CorpusWriter(_dir,
+                    DateTimeOffset.Parse("2026-08-02T00:00:00Z"), CodeCommit,
+                    runIdentity: "nightly-ordered-2")
+                .WriteAsync(new EmptyAdapter(), default));
+
+        Assert.Equal(before, Inventory(_dir));
+    }
+
+    [Fact]
+    public async Task A_completed_run_identity_cannot_be_reused_after_resighting()
+    {
+        await new CorpusWriter(_dir,
+                DateTimeOffset.Parse("2026-08-01T00:00:00Z"), CodeCommit)
+            .WriteAsync(new OneVersionAdapter("in_force", "financial-services"), default);
+        await new CorpusWriter(_dir,
+                DateTimeOffset.Parse("2026-08-02T00:00:00Z"), CodeCommit,
+                runIdentity: "nightly-reused-1")
+            .WriteAsync(new EmptyAdapter(), default);
+        await new CorpusWriter(_dir,
+                DateTimeOffset.Parse("2026-08-03T00:00:00Z"), CodeCommit,
+                runIdentity: "nightly-resight-2")
+            .WriteAsync(new OneVersionAdapter("in_force", "financial-services"), default);
+        var before = Inventory(_dir);
+
+        await Assert.ThrowsAsync<InvalidDataException>(() =>
+            new CorpusWriter(_dir,
+                    DateTimeOffset.Parse("2026-08-04T00:00:00Z"), CodeCommit,
+                    runIdentity: "nightly-reused-1")
+                .WriteAsync(new EmptyAdapter(), default));
+
+        Assert.Equal(before, Inventory(_dir));
+    }
+
+    [Fact]
+    public async Task First_miss_lifecycle_reaches_index_reader_and_Mcp_provenance()
+    {
+        var corpus = Path.Combine(_dir, "first-miss-corpus");
+        var db = Path.Combine(_dir, "first-miss.db");
+        await new CorpusWriter(corpus,
+                DateTimeOffset.Parse("2026-08-01T00:00:00Z"), CodeCommit)
+            .WriteAsync(new OneVersionAdapter("in_force", "financial-services"), default);
+        await new CorpusWriter(corpus,
+                DateTimeOffset.Parse("2026-08-02T00:00:00Z"), CodeCommit,
+                runIdentity: "nightly-first-miss-501")
+            .WriteAsync(new EmptyAdapter(), default);
+        var corpusCommit = CommitGitDirectory(corpus);
+
+        IndexFromCorpus.Build(corpus, null, db, null,
+            DateTimeOffset.Parse("2026-08-02T00:05:00Z"),
+            codeCommit: new string('c', 40), corpusCommit: corpusCommit);
+
+        using var reader = LexIndexReader.Open(db);
+        var key = Assert.Single(reader.Timeline("w1")).Key;
+        var indexed = Assert.Single(reader.Events(key),
+            entry => entry.Event == "absent_unconfirmed");
+        Assert.Equal("2026-08-02T00:00:00Z", indexed.FirstMissedAt);
+        Assert.Equal(1, indexed.RunsMissed);
+        Assert.Equal("nightly-first-miss-501", indexed.RunIdentity);
+
+        var response = Assert.IsType<JsonObject>(new McpCore(
+            new Dictionary<string, LexIndexReader> { [reader.Collection] = reader })
+            .CallTool("provenance", new JsonObject { ["lex_id"] = key }));
+        var events = Assert.IsType<JsonArray>(response["events"]);
+        var served = Assert.Single(events.OfType<JsonObject>(), value =>
+            value["event"]!.GetValue<string>() == "absent_unconfirmed");
+        Assert.Equal("2026-08-02T00:00:00Z",
+            served["first_missed_at"]!.GetValue<string>());
+        Assert.Equal(1, served["runs_missed"]!.GetValue<int>());
+        Assert.Equal("nightly-first-miss-501",
+            served["run_identity"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task A_missing_record_requires_a_bounded_non_timestamp_run_identity()
+    {
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-01T00:00:00Z"), CodeCommit)
+            .WriteAsync(new OneVersionAdapter("in_force", "financial-services"), default);
+
+        await Assert.ThrowsAsync<InvalidDataException>(() =>
+            new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-02T00:00:00Z"), CodeCommit)
+                .WriteAsync(new EmptyAdapter(), default));
+        Assert.Throws<InvalidDataException>(() => new CorpusWriter(
+            _dir, DateTimeOffset.Parse("2026-08-02T00:00:00Z"), CodeCommit,
+            runIdentity: "2026-08-02T00:00:00Z"));
+        Assert.Throws<InvalidDataException>(() => new CorpusWriter(
+            _dir, DateTimeOffset.Parse("2026-08-02T00:00:00Z"), CodeCommit,
+            runIdentity: new string('a', 129)));
+    }
+
+    [Fact]
+    public async Task V3_resighting_preserves_pending_absence_history_and_resets_the_sequence()
+    {
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-01T00:00:00Z"), CodeCommit)
+            .WriteAsync(new OneVersionAdapter("in_force", "financial-services"), default);
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-02T00:00:00Z"), CodeCommit,
+                runIdentity: "nightly-301")
+            .WriteAsync(new EmptyAdapter(), default);
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-03T00:00:00Z"), CodeCommit,
+                runIdentity: "nightly-302")
+            .WriteAsync(new EmptyAdapter(), default);
+
+        await Assert.ThrowsAsync<InvalidDataException>(() =>
+            new CorpusWriter(_dir,
+                    DateTimeOffset.Parse("2026-08-04T00:00:00Z"), CodeCommit)
+                .WriteAsync(new OneVersionAdapter(
+                    "in_force", "financial-services"), default));
+        await new CorpusWriter(_dir,
+                DateTimeOffset.Parse("2026-08-04T00:00:00Z"), CodeCommit,
+                runIdentity: "nightly-resighted-1")
+            .WriteAsync(new OneVersionAdapter("in_force", "financial-services"), default);
+        var resighted = await ReadVersionMeta();
+        Assert.Equal(["absent_unconfirmed", "absent_unconfirmed"],
+            resighted.Events.Where(entry => entry.Event == "absent_unconfirmed")
+                .Select(entry => entry.Event));
         Assert.Equal("resighted", resighted.Events[^1].Event);
+        Assert.Equal("nightly-resighted-1", resighted.Events[^1].RunIdentity);
+
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-05T00:00:00Z"), CodeCommit,
+                runIdentity: "nightly-303")
+            .WriteAsync(new EmptyAdapter(), default);
+        var restarted = (await ReadVersionMeta()).Events[^1];
+        Assert.Equal("absent_unconfirmed", restarted.Event);
+        Assert.Equal("2026-08-05T00:00:00Z", restarted.FirstMissedAt);
+        Assert.Equal(1, restarted.RunsMissed);
+        Assert.Equal("nightly-303", restarted.RunIdentity);
     }
 
     [Fact]
@@ -1119,7 +2069,8 @@ public sealed partial class CorpusWriterTests : IDisposable
         Assert.Equal("incomplete_enumeration", failure.Issue.Code);
         Assert.Equal(before, Snapshot());
         var meta = await ReadVersionMeta();
-        Assert.DoesNotContain(meta.Events, item => item.Event == "withdrawn_from_source");
+        Assert.DoesNotContain(meta.Events, item =>
+            item.Event is "absent_unconfirmed" or "withdrawn_from_source");
     }
 
     [Fact]
@@ -1525,6 +2476,39 @@ public sealed partial class CorpusWriterTests : IDisposable
             Assert.IsType<byte[]>(tombstoneBytes));
     }
 
+    private static HistoricalWithdrawalAuditDocument LegacyWithdrawalAudit() => new()
+    {
+        Schema = HistoricalWithdrawalAuditDocument.CurrentSchema,
+        Publisher = "lu-legilux",
+        Entries =
+        [
+            new HistoricalWithdrawalAuditEntry
+            {
+                WorkIdentifier = LegiluxReplacementAdapter.WorkIdentifier,
+                PublisherVersionIdentifier =
+                    LegiluxReplacementAdapter.WithdrawnVersionIdentifier,
+                CompletedRuns =
+                [
+                    new HistoricalWithdrawalAuditRun
+                    {
+                        RunIdentity = "audit-run-1",
+                        CompletedAt = "2026-08-13T09:00:00Z",
+                    },
+                    new HistoricalWithdrawalAuditRun
+                    {
+                        RunIdentity = "audit-run-2",
+                        CompletedAt = "2026-08-13T10:00:00Z",
+                    },
+                    new HistoricalWithdrawalAuditRun
+                    {
+                        RunIdentity = "audit-run-3",
+                        CompletedAt = "2026-08-13T11:00:00Z",
+                    },
+                ],
+            },
+        ],
+    };
+
     private static Dictionary<string, (string Directory, VersionMeta Meta)>
         ReadVersionsByPublisherIdentity(string root) =>
         Directory.EnumerateDirectories(
@@ -1615,7 +2599,9 @@ public sealed partial class CorpusWriterTests : IDisposable
         string titleHint = "Work one",
         Exception? bodyException = null,
         IReadOnlyDictionary<string, SourceBodyFetch>? bodyFetchByLanguage = null,
-        SourceManifestationFetch? altFetch = null) : ISourceAdapter
+        SourceManifestationFetch? altFetch = null,
+        DateOnly? validFrom = null,
+        string? expressionSourceUri = null) : ISourceAdapter
     {
         private readonly WorkRef _work = new(new Identifier("official:w1"), "w1", "REG", titleHint);
 
@@ -1642,14 +2628,16 @@ public sealed partial class CorpusWriterTests : IDisposable
         public Task<IReadOnlyList<VersionRecord>> FetchVersions(WorkRef work, CancellationToken ct)
         {
             if (!hasVersions) return Task.FromResult<IReadOnlyList<VersionRecord>>([]);
+            var date = validFrom ?? new DateOnly(2024, 1, 1);
             IReadOnlyList<VersionRecord> versions =
             [
                 new(
-                    new Identifier("official:v1"), _work.Id, "REG", new DateOnly(2024, 1, 1), null,
-                    "publisher", "true", new DateOnly(2024, 1, 1),
+                    new Identifier("official:v1"), _work.Id, "REG", date, null,
+                    "publisher", "true", date,
                     (languages ?? ["en"]).Select(language => new ExpressionRecord(
-                        language, new DateOnly(2024, 1, 1), null, "publisher",
-                        "Work one", titleShort, $"https://example.test/v1/{language}")).ToArray(),
+                        language, date, null, "publisher",
+                        "Work one", titleShort, expressionSourceUri
+                            ?? $"https://example.test/v1/{language}")).ToArray(),
                     [], new Dictionary<string, string>
                     {
                         ["binding_status"] = bindingStatus,
@@ -1679,10 +2667,18 @@ public sealed partial class CorpusWriterTests : IDisposable
     }
 
     private sealed class SameDateAdapter(
-        bool reverse, bool includeSecond = true, bool shareSource = false) :
+        bool reverse,
+        bool includeSecond = true,
+        bool shareSource = false,
+        bool includeFirst = true,
+        string? versionWorkIdentifier = null,
+        Action? beforeFirstBodyFetch = null,
+        string? workIdentifier = null,
+        bool omitSource = false) :
         ISourceAdapter, ILegacyVersionIdentityResolver
     {
-        private readonly WorkRef _work = new(new Identifier("official:w1"), "w1", "LOI", "Work one");
+        private readonly WorkRef _work = new(
+            new Identifier(workIdentifier ?? "official:w1"), "w1", "LOI", "Work one");
         public int BodyFetchCount { get; private set; }
 
         public PublisherDescriptor Describe() => new(
@@ -1700,23 +2696,30 @@ public sealed partial class CorpusWriterTests : IDisposable
         public Task<IReadOnlyList<VersionRecord>> FetchVersions(WorkRef work, CancellationToken ct)
         {
             VersionRecord Version(string id) => new(
-                new Identifier(id), _work.Id, "LOI", new DateOnly(2025, 7, 28), null,
+                new Identifier(id),
+                new Identifier(versionWorkIdentifier ?? _work.Id.Value),
+                "LOI", new DateOnly(2025, 7, 28), null,
                 "publisher", null, null,
                 [new ExpressionRecord("fr", new DateOnly(2025, 7, 28), null, "publisher",
-                    $"Version {id}", null, shareSource
-                        ? "https://example.test/shared"
-                        : $"https://example.test/{id}")],
+                    $"Version {id}", null, omitSource
+                        ? null
+                        : shareSource
+                            ? "https://example.test/shared"
+                            : $"https://example.test/{id}")],
                 [], new Dictionary<string, string>());
-            IReadOnlyList<VersionRecord> versions = includeSecond
-                ? [Version("official:v-a"), Version("official:v-b")]
-                : [Version("official:v-a")];
+            var versions = new List<VersionRecord>();
+            if (includeFirst) versions.Add(Version("official:v-a"));
+            if (includeSecond) versions.Add(Version("official:v-b"));
+            if (versions.Count == 0)
+                throw new InvalidOperationException("The synthetic adapter needs one version.");
             return Task.FromResult<IReadOnlyList<VersionRecord>>(
-                reverse ? versions.Reverse().ToArray() : versions);
+                reverse ? versions.AsEnumerable().Reverse().ToArray() : versions);
         }
 
         public Task<SourceBodyFetch> FetchBody(
             VersionRecord version, ExpressionRecord expression, CancellationToken ct)
         {
+            if (BodyFetchCount == 0) beforeFirstBodyFetch?.Invoke();
             BodyFetchCount++;
             return Task.FromResult(SourceBodyFetch.Retrieved(
                 $"<html>{version.Id.Value}</html>"));
@@ -1900,6 +2903,39 @@ public sealed partial class CorpusWriterTests : IDisposable
             null, beforeStageFileWrite, CancellationToken.None,
         ]));
         return await task;
+    }
+
+    private static async Task WriteWithCommitHook(
+        CorpusWriter writer, ISourceAdapter adapter, Action beforeCandidateCommit)
+    {
+        var write = typeof(CorpusWriter).GetMethods(
+                System.Reflection.BindingFlags.NonPublic
+                | System.Reflection.BindingFlags.Instance)
+            .Single(method => method.Name == "WriteAsync"
+                && method.GetParameters().Length == 5);
+        var task = Assert.IsAssignableFrom<Task>(write.Invoke(writer,
+        [
+            adapter, CancellationToken.None, false, null, beforeCandidateCommit,
+        ]));
+        await task;
+    }
+
+    private static async Task WriteWithPublishHook(
+        CorpusWriter writer,
+        ISourceAdapter adapter,
+        Action<int, string> afterCandidatePublish)
+    {
+        var write = typeof(CorpusWriter).GetMethods(
+                System.Reflection.BindingFlags.NonPublic
+                | System.Reflection.BindingFlags.Instance)
+            .Single(method => method.Name == "WriteAsync"
+                && method.GetParameters().Length == 7);
+        var task = Assert.IsAssignableFrom<Task>(write.Invoke(writer,
+        [
+            adapter, CancellationToken.None, false, null, null, false,
+            afterCandidatePublish,
+        ]));
+        await task;
     }
 
     private sealed class AltThenPrimaryAdapter(

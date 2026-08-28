@@ -20,12 +20,15 @@ internal sealed record CorpusPlannedWork(
 /// metadata-only expression writes no body and records the reason instead.
 /// </summary>
 public sealed class CorpusWriter(
-    string corpusRoot, DateTimeOffset now, string codeCommit, TextWriter? progress = null)
+    string corpusRoot, DateTimeOffset now, string codeCommit, TextWriter? progress = null,
+    string? runIdentity = null)
 {
     private readonly string _now = now.UtcDateTime.ToString("yyyy-MM-ddTHH:mm:ssZ");
     private readonly string _ingesterCodeCommit = CodeIdentity.RequireFullCommit(
         codeCommit, "ingester code commit");
     private readonly TextWriter _progress = progress ?? Console.Error;
+    private readonly string? _runIdentity = runIdentity is null
+        ? null : IngestRunIdentity.Require(runIdentity, "ingest run identity");
     public int Created { get; private set; }
     public int Updated { get; private set; }
     public int Unchanged { get; private set; }
@@ -35,15 +38,45 @@ public sealed class CorpusWriter(
 
     public Task WriteAsync(
         ISourceAdapter adapter, CancellationToken ct, bool requireComplete = false) =>
-        WriteAsync(adapter, ct, requireComplete, validatePlan: null);
+        WriteAsync(adapter, ct, requireComplete, validatePlan: null,
+            beforeCandidateCommit: null);
 
     internal async Task WriteAsync(
         ISourceAdapter adapter,
         CancellationToken ct,
         bool requireComplete,
-        Action<IReadOnlyList<CorpusPlannedWork>>? validatePlan)
+        Action<IReadOnlyList<CorpusPlannedWork>>? validatePlan,
+        Action? beforeCandidateCommit = null) =>
+        await WriteAsync(adapter, ct, requireComplete, validatePlan,
+            beforeCandidateCommit, allowTrustedPlanPreparation: false);
+
+    internal async Task WriteAsync(
+        ISourceAdapter adapter,
+        CancellationToken ct,
+        bool requireComplete,
+        Action<IReadOnlyList<CorpusPlannedWork>>? validatePlan,
+        Action? beforeCandidateCommit,
+        bool allowTrustedPlanPreparation)
+        => await WriteAsync(adapter, ct, requireComplete, validatePlan,
+            beforeCandidateCommit, allowTrustedPlanPreparation,
+            afterCandidatePublish: null);
+
+    internal async Task WriteAsync(
+        ISourceAdapter adapter,
+        CancellationToken ct,
+        bool requireComplete,
+        Action<IReadOnlyList<CorpusPlannedWork>>? validatePlan,
+        Action? beforeCandidateCommit,
+        bool allowTrustedPlanPreparation,
+        Action<int, string>? afterCandidatePublish)
     {
+        using var writeSession = CorpusWriteSession.Acquire(corpusRoot);
+        var baseline = writeSession.Baseline;
+        if (allowTrustedPlanPreparation && !baseline.IsEmpty)
+            throw new InvalidDataException(
+                "Trusted plan preparation is allowed only for an empty disposable corpus.");
         var existingManifest = RefuseLegacyAppend(corpusRoot);
+        var completedRunsSha256 = existingManifest?.CompletedRunsSha256;
         var desc = adapter.Describe();
         var pub = desc.Publisher;
         using var candidate = new CorpusCandidate(corpusRoot);
@@ -59,12 +92,14 @@ public sealed class CorpusWriter(
         // report a real denominator. A percentage without a denominator is not actionable; an
         // elapsed time without observed throughput is not an ETA.
         var plan = new List<CorpusPlannedWork>();
+        var enumeration = new List<CorpusPlannedWork>();
         var localBuildIssues = new List<SourceBuildIssue>();
         var enumeratedWorks = 0;
         await foreach (var work in adapter.EnumerateWorks(ct))
         {
             enumeratedWorks++;
             var versionsOfWork = await adapter.FetchVersions(work, ct);
+            enumeration.Add(new CorpusPlannedWork(work, versionsOfWork));
             if (versionsOfWork.Count > 0)
                 plan.Add(new CorpusPlannedWork(work, versionsOfWork));
             else
@@ -83,6 +118,17 @@ public sealed class CorpusWriter(
             throw new SourceEnumerationIncompleteException(new SourceBuildIssue(
                 "incomplete_enumeration", pub.Id,
                 $"Publisher enumeration returned {enumeratedWorks} of {expectedWorks} expected works; the prior corpus remains unchanged."));
+        foreach (var item in plan)
+            foreach (var version in item.Versions)
+                if (!string.Equals(version.WorkId.Value, item.Work.Id.Value,
+                        StringComparison.Ordinal))
+                    throw new InvalidDataException(
+                        $"Publisher version {version.Id.Value} belongs to work "
+                        + $"{version.WorkId.Value}, not enumerated work {item.Work.Id.Value}.");
+        RequireUniquePlannedWorks(enumeration);
+        RequireUniquePlannedVersions(enumeration);
+        if (existingManifest is not null)
+            existingManifest = RequireVerifiedBaseline(pub.Id, plan);
         // Engineering scope is an acquisition decision, not publisher legal metadata. Reject the
         // complete metadata plan before any body request or candidate write, and also refuse to
         // carry an old leaked key forward from an existing corpus.
@@ -95,6 +141,26 @@ public sealed class CorpusWriter(
         // same single source enumeration consumed below; the validator must not re-query the
         // publisher.
         validatePlan?.Invoke(plan);
+        if (_runIdentity is not null)
+        {
+            var ledger = CompletedRunLedger.Load(corpusRoot);
+            var enumerationScopeSha256 = CompletedRunLedger.EnumerationScopeDigest(
+                desc, sourceConfigurationKind, sourceConfigurationSha256,
+                expectedWorks, retryMaximumAttempts, sourceInventory?.Issues ?? [],
+                enumeration);
+            var disposition = CompletedRunLedger.Bind(
+                ledger, _runIdentity, _now, enumerationScopeSha256);
+            if (disposition == CompletedRunDisposition.ExactReplay)
+            {
+                Accepted = true;
+                _progress.WriteLine("  [corpus] exact completed-run replay; no changes applied");
+                return;
+            }
+            completedRunsSha256 = CompletedRunLedger.Stage(
+                ledger, corpusRoot, candidate);
+        }
+        if (allowTrustedPlanPreparation)
+            baseline = CorpusBaseline.Capture(corpusRoot);
         var totalExpressions = plan.Sum(item => item.Versions.Sum(version => (long)version.Expressions.Count));
         long processedExpressions = 0;
         var lastReportedPercent = -1;
@@ -107,6 +173,7 @@ public sealed class CorpusWriter(
             works++;
 
             var workDir = Path.Combine(corpusRoot, "works", work.Slug);
+            var versionKeys = VersionKeys(workDir, pub.Id, work, versionsOfWork);
             var workMeta = new WorkMeta
             {
                 LexWorkId = $"{pub.Id}:{work.Slug}",
@@ -120,7 +187,6 @@ public sealed class CorpusWriter(
             };
             candidate.WriteIfChanged(Path.Combine(workDir, "meta.json"), JsonSerializer.Serialize(workMeta, CorpusJson.Options));
 
-            var versionKeys = VersionKeys(workDir, versionsOfWork);
             foreach (var v in versionsOfWork.OrderBy(v => v.ValidFrom).ThenBy(v => v.Id.Value, StringComparer.Ordinal))
             {
                 versions++;
@@ -139,6 +205,9 @@ public sealed class CorpusWriter(
                 var lexId = $"{pub.Id}:{work.Slug}:{vkey}";
                 VersionMeta meta;
                 var existing = File.Exists(metaPath);
+                if (existing)
+                    metaPath = VerifiedCorpusPath.RequireExisting(
+                        corpusRoot, metaPath, "existing version metadata");
                 var changed = false;
                 if (existing)
                 {
@@ -160,15 +229,21 @@ public sealed class CorpusWriter(
                         changed = true;
                     }
                     var lifecycle = meta.Events.LastOrDefault(e =>
-                        e.Event is "withdrawn_from_source" or "resighted");
-                    if (lifecycle?.Event == "withdrawn_from_source")
+                        e.Event is "absent_unconfirmed" or "withdrawn_from_source" or "resighted");
+                    if (lifecycle?.Event is "absent_unconfirmed" or "withdrawn_from_source")
                     {
+                        if (_runIdentity is null)
+                            throw new InvalidDataException(
+                                $"A completed source run identity is required to resight {meta.LexId}.");
+                        RequireUnusedRunIdentity(meta, _runIdentity);
+                        RequireLaterCompletedRun(lifecycle, _runIdentity, meta.LexId);
                         meta.Events.Add(new EventEntry
                         {
                             Event = "resighted",
                             ObservedFrom = _now,
                             Scope = "version",
                             Detail = "publisher record returned to the current enumeration",
+                            RunIdentity = _runIdentity,
                         });
                         changed = true;
                     }
@@ -348,6 +423,20 @@ public sealed class CorpusWriter(
                             continue;
                         }
                         var bytes = Encoding.UTF8.GetBytes(fetched.Text);
+                        var bodySha256 = Convert.ToHexStringLower(SHA256.HashData(bytes));
+                        var replaced = PriorSameDatePrimaryObservation(
+                            workDir, vkey, vfrom, exprMeta.Language, exprRec.SourceUri);
+                        if (replaced is not null
+                            && !CorpusHashes.Equal(replaced.Value.Sha256, bodySha256))
+                            meta.Events.Add(new EventEntry
+                            {
+                                Event = "file_replaced",
+                                ObservedFrom = _now,
+                                Scope = exprMeta.Language,
+                                Detail = $"prior_lex_id={replaced.Value.LexId}; "
+                                    + $"prior_sha256={replaced.Value.Sha256}; "
+                                    + $"current_sha256={bodySha256}",
+                            });
                         var ext = fetched.Text.TrimStart().StartsWith("<?xml", StringComparison.Ordinal) ? "xml" : "html";
                         var file = $"{exprMeta.Language}.{ext}";          // §3.3 rule 3, initial expression
                         var bodyPath = Path.Combine(versionDir, file);
@@ -355,7 +444,7 @@ public sealed class CorpusWriter(
                         exprMeta.Observations.Add(new ObservationEntry
                         {
                             File = file,
-                            Sha256 = Convert.ToHexStringLower(SHA256.HashData(bytes)),
+                            Sha256 = bodySha256,
                             SourceUri = exprRec.SourceUri ?? "",
                             RetrievedAt = _now,
                             ObservedFrom = _now,
@@ -454,7 +543,27 @@ public sealed class CorpusWriter(
             }
         }
 
-        TombstoneMissingVersions(seenVersionMetadata, candidate);
+        baseline.RequireUnchanged();
+        var pendingVersions = TombstoneMissingVersions(seenVersionMetadata, candidate);
+        var currentWorkIdentifiers = plan.Select(item => item.Work.Id.Value)
+            .ToHashSet(StringComparer.Ordinal);
+        foreach (var pending in pendingVersions)
+        {
+            versions++;
+            currentWorkIdentifiers.Add(pending.WorkIdentifier);
+            if (pending.DocumentType is not null)
+                kinds[pending.DocumentType] = kinds.GetValueOrDefault(pending.DocumentType) + 1;
+            earliest = Min(earliest, pending.ValidFrom);
+            latest = Max(latest, pending.ValidFrom);
+            foreach (var expression in pending.Expressions)
+            {
+                langs.Add(expression.Language);
+                expressions++;
+                if (expression.Text.Available && expression.Observations.Count > 0)
+                    expressionsWithText++;
+            }
+        }
+        works = currentWorkIdentifiers.Count;
 
         sourceInventory = (adapter as ISourceBuildInventory)?.GetBuildInventory();
         retryMaximumAttempts = Math.Max(
@@ -528,6 +637,7 @@ public sealed class CorpusWriter(
                 ?? _ingesterCodeCommit,
             SourceConfigurationKind = sourceConfigurationKind,
             SourceConfigurationSha256 = sourceConfigurationSha256,
+            CompletedRunsSha256 = completedRunsSha256,
             MigrationBaselineWorks = existingManifest?.MigrationBaselineWorks,
         };
         candidate.WriteIfChanged(Path.Combine(corpusRoot, "manifest.json"), JsonSerializer.Serialize(manifest, CorpusJson.Options));
@@ -557,7 +667,8 @@ public sealed class CorpusWriter(
                 "  [corpus] no materialized changes; prior ingester identity retained");
             return;
         }
-        candidate.Commit();
+        candidate.Commit(
+            baseline, writeSession, beforeCandidateCommit, afterCandidatePublish);
         Committed = true;
         _progress.WriteLine($"  [corpus] works={works} versions={versions} expressions={expressions} " +
             $"with_text={expressionsWithText} without_text={manifest.ExpressionsWithoutText} " +
@@ -567,7 +678,15 @@ public sealed class CorpusWriter(
     private static ManifestDoc? RefuseLegacyAppend(string root)
     {
         var path = Path.Combine(root, "manifest.json");
-        if (!File.Exists(path)) return null;
+        if (!File.Exists(path))
+        {
+            if (Directory.Exists(Path.Combine(root, "works")))
+                throw new InvalidDataException(
+                    "Existing corpus works cannot be appended without manifest.json; "
+                    + "use a full re-ingest through the explicit fresh-corpus migration path.");
+            return null;
+        }
+        path = VerifiedCorpusPath.RequireExisting(root, path, "manifest");
         var manifest = JsonSerializer.Deserialize<ManifestDoc>(
             File.ReadAllText(path), CorpusJson.Options)
             ?? throw new InvalidDataException("Existing corpus manifest is empty.");
@@ -580,6 +699,88 @@ public sealed class CorpusWriter(
         ValidateSourceConfiguration(
             manifest.SourceConfigurationKind, manifest.SourceConfigurationSha256);
         return manifest;
+    }
+
+    private ManifestDoc RequireVerifiedBaseline(
+        string publisher,
+        IReadOnlyList<CorpusPlannedWork> plan)
+    {
+        var baseline = CorpusIntegrity.Verify(corpusRoot);
+        if (!baseline.IsValid)
+            throw new InvalidDataException(
+                "Existing corpus baseline is not integrity-compatible:\n"
+                + string.Join("\n", baseline.Errors));
+        var manifest = RefuseLegacyAppend(corpusRoot)
+            ?? throw new InvalidDataException(
+                "Existing corpus manifest disappeared during verification.");
+        var existingPublisher = manifest.Publisher.GetValueOrDefault("id");
+        if (!string.Equals(existingPublisher, publisher, StringComparison.Ordinal))
+            throw new InvalidDataException(
+                $"Existing corpus publisher '{existingPublisher}' does not match adapter publisher '{publisher}'.");
+
+        var worksRoot = VerifiedCorpusPath.RequireExisting(
+            corpusRoot, Path.Combine(corpusRoot, "works"), "works directory");
+        var existingBySlug = new Dictionary<string, WorkMeta>(StringComparer.Ordinal);
+        var existingByIdentifier = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var unverifiedWorkDirectory in Directory.EnumerateDirectories(worksRoot))
+        {
+            var workDirectory = VerifiedCorpusPath.RequireExisting(
+                corpusRoot, unverifiedWorkDirectory, "work directory");
+            var metaPath = VerifiedCorpusPath.RequireExisting(
+                corpusRoot, Path.Combine(workDirectory, "meta.json"), "work metadata");
+            var meta = JsonSerializer.Deserialize<WorkMeta>(
+                File.ReadAllText(metaPath), CorpusJson.Options)
+                ?? throw new InvalidDataException(
+                    $"Existing corpus work metadata is empty: {metaPath}");
+            existingBySlug.Add(meta.Slug, meta);
+            existingByIdentifier.Add(meta.WorkIdentifier, meta.Slug);
+        }
+
+        foreach (var item in plan)
+        {
+            if (existingBySlug.TryGetValue(item.Work.Slug, out var existing)
+                && !string.Equals(existing.WorkIdentifier,
+                    item.Work.Id.Value, StringComparison.Ordinal))
+                throw new InvalidDataException(
+                    $"Existing work slug '{item.Work.Slug}' is bound to publisher work "
+                    + $"'{existing.WorkIdentifier}', not '{item.Work.Id.Value}'.");
+            if (existingByIdentifier.TryGetValue(item.Work.Id.Value, out var existingSlug)
+                && !string.Equals(existingSlug, item.Work.Slug, StringComparison.Ordinal))
+                throw new InvalidDataException(
+                    $"Existing publisher work '{item.Work.Id.Value}' is bound to slug "
+                    + $"'{existingSlug}', not '{item.Work.Slug}'.");
+        }
+        return manifest;
+    }
+
+    private static void RequireUniquePlannedWorks(
+        IReadOnlyList<CorpusPlannedWork> plan)
+    {
+        var plannedSlugs = new HashSet<string>(StringComparer.Ordinal);
+        var plannedIdentifiers = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var item in plan)
+        {
+            if (!plannedSlugs.Add(item.Work.Slug))
+                throw new InvalidDataException(
+                    $"Publisher returned duplicate work slug '{item.Work.Slug}'.");
+            if (!plannedIdentifiers.Add(item.Work.Id.Value))
+                throw new InvalidDataException(
+                    $"Publisher returned duplicate work identifier '{item.Work.Id.Value}'.");
+        }
+    }
+
+    private static void RequireUniquePlannedVersions(
+        IReadOnlyList<CorpusPlannedWork> plan)
+    {
+        foreach (var item in plan)
+        {
+            var identifiers = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var version in item.Versions)
+                if (!identifiers.Add(version.Id.Value))
+                    throw new InvalidDataException(
+                        $"Publisher returned duplicate version identifier "
+                        + $"'{version.Id.Value}' for work '{item.Work.Id.Value}'.");
+        }
     }
 
     internal static void ValidateSourceConfiguration(string? kind, string? digest)
@@ -650,8 +851,11 @@ public sealed class CorpusWriter(
         }
     }
 
-    private static Dictionary<string, string> VersionKeys(
-        string workDir, IReadOnlyList<VersionRecord> versions)
+    private Dictionary<string, string> VersionKeys(
+        string workDir,
+        string publisher,
+        WorkRef work,
+        IReadOnlyList<VersionRecord> versions)
     {
         var duplicateId = versions.GroupBy(version => version.Id.Value, StringComparer.Ordinal)
             .FirstOrDefault(group => group.Count() > 1);
@@ -676,17 +880,65 @@ public sealed class CorpusWriter(
 
             var versionsDir = Path.Combine(workDir, "versions");
             if (!Directory.Exists(versionsDir)) continue;
-            var incompatible = Directory.EnumerateDirectories(versionsDir)
+            versionsDir = VerifiedCorpusPath.RequireExisting(
+                corpusRoot, versionsDir, "versions directory");
+            var retained = Directory.EnumerateDirectories(versionsDir)
                 .Select(Path.GetFileName)
                 .Where(key => key is not null
                     && (key == date || key.StartsWith(date + "--", StringComparison.Ordinal)))
-                .FirstOrDefault(key => !expectedKeys.Contains(key!));
-            if (incompatible is not null)
-                throw new InvalidDataException(
-                    $"Legacy or incompatible version key {incompatible} exists for "
-                    + $"{Path.GetFileName(workDir)}; a full re-ingest is required.");
+                .Select(key => key!)
+                .Where(key => !expectedKeys.Contains(key))
+                .Order(StringComparer.Ordinal)
+                .ToArray();
+            // A publisher may replace one record with another on the same validity date. Keep
+            // the verified prior coordinate so the lifecycle pass can record its absence, while
+            // refusing legacy ordinals or a directory whose persisted v4 identity does not bind.
+            foreach (var retainedKey in retained)
+                RequireVerifiedRetainedIdentity(
+                    workDir, retainedKey, publisher, work);
         }
         return result;
+    }
+
+    private void RequireVerifiedRetainedIdentity(
+        string workDir,
+        string versionKey,
+        string publisher,
+        WorkRef work)
+    {
+        VersionMeta meta;
+        try
+        {
+            var versionDirectory = VerifiedCorpusPath.RequireExisting(
+                corpusRoot, Path.Combine(workDir, "versions", versionKey),
+                "retained same-date version directory");
+            var metaPath = VerifiedCorpusPath.RequireExisting(
+                corpusRoot, Path.Combine(versionDirectory, "meta.json"),
+                "retained same-date version metadata");
+            meta = JsonSerializer.Deserialize<VersionMeta>(
+                File.ReadAllText(metaPath), CorpusJson.Options)
+                ?? throw new InvalidDataException("retained metadata is empty");
+            if (!string.Equals(meta.Publisher, publisher, StringComparison.Ordinal)
+                || !string.Equals(meta.WorkIdentifier, work.Id.Value, StringComparison.Ordinal))
+                throw new InvalidDataException("retained publisher or work identity differs");
+            VersionIdentity.RequireCanonical(
+                versionKey,
+                meta.ValidFrom,
+                meta.PublisherVersionIdentifier,
+                meta.LexId,
+                $"{publisher}:{work.Slug}");
+        }
+        catch (Exception error) when (error is IOException
+                                      or UnauthorizedAccessException
+                                      or JsonException
+                                      or InvalidDataException)
+        {
+            throw new InvalidDataException(
+                $"Retained same-date version identity {versionKey} is not a verified v4 "
+                + $"identity for {work.Slug}; use a full re-ingest through the explicit "
+                + "fresh-corpus migration path.",
+                error);
+        }
     }
 
     private static ExpressionMeta CreateExpressionMeta(ExpressionRecord expression, bool textIncluded) => new()
@@ -705,6 +957,52 @@ public sealed class CorpusWriter(
             Url = expression.SourceUri,
         },
     };
+
+    private (string LexId, string Sha256)? PriorSameDatePrimaryObservation(
+        string workDir,
+        string currentVersionKey,
+        string validFrom,
+        string language,
+        string? sourceUri)
+    {
+        if (string.IsNullOrWhiteSpace(sourceUri)) return null;
+        var versionsDir = Path.Combine(workDir, "versions");
+        if (!Directory.Exists(versionsDir)) return null;
+        var prior = new List<(string LexId, string Sha256)>();
+        foreach (var unverifiedDirectory in Directory.EnumerateDirectories(versionsDir)
+                     .Where(directory => !string.Equals(
+                         Path.GetFileName(directory), currentVersionKey, StringComparison.Ordinal)
+                         && Path.GetFileName(directory).StartsWith(
+                             validFrom + "--", StringComparison.Ordinal)))
+        {
+            var directory = VerifiedCorpusPath.RequireExisting(
+                corpusRoot, unverifiedDirectory, "prior same-date version directory");
+            var metaPath = VerifiedCorpusPath.RequireExisting(
+                corpusRoot, Path.Combine(directory, "meta.json"),
+                "prior same-date version metadata");
+            var meta = JsonSerializer.Deserialize<VersionMeta>(
+                File.ReadAllText(metaPath), CorpusJson.Options)
+                ?? throw new InvalidDataException(
+                    $"Prior same-date version metadata is empty: {metaPath}");
+            var observation = meta.Expressions
+                .Where(expression => string.Equals(
+                    expression.Language, language, StringComparison.Ordinal))
+                .SelectMany(expression => expression.Observations)
+                .Where(value => value.Format is null
+                    && string.Equals(value.SourceUri, sourceUri, StringComparison.Ordinal)
+                    && !string.IsNullOrWhiteSpace(value.Sha256))
+                .OrderBy(value => value.ObservedFrom, StringComparer.Ordinal)
+                .LastOrDefault();
+            if (observation is not null) prior.Add((meta.LexId, observation.Sha256!));
+        }
+        return prior.Count switch
+        {
+            0 => null,
+            1 => prior[0],
+            _ => throw new InvalidDataException(
+                $"Multiple prior same-date versions claim the same {language} source URI."),
+        };
+    }
 
     private static List<PublisherMetadataRecord> CanonicalPublisherMetadata(
         IReadOnlyList<PublisherMetadataRecord>? values) =>
@@ -728,11 +1026,12 @@ public sealed class CorpusWriter(
                 "A source manifestation outcome must contain a value exactly when its status is Retrieved.");
     }
 
-    private void TombstoneMissingVersions(
+    private IReadOnlyList<VersionMeta> TombstoneMissingVersions(
         IReadOnlySet<string> seenVersionMetadata, CorpusCandidate candidate)
     {
+        var pendingVersions = new List<VersionMeta>();
         var worksRoot = Path.Combine(corpusRoot, "works");
-        if (!Directory.Exists(worksRoot)) return;
+        if (!Directory.Exists(worksRoot)) return pendingVersions;
 
         foreach (var metaPath in Directory.EnumerateFiles(
                      worksRoot, "meta.json", SearchOption.AllDirectories))
@@ -742,23 +1041,82 @@ public sealed class CorpusWriter(
                 continue;
             if (seenVersionMetadata.Contains(Path.GetFullPath(metaPath))) continue;
 
+            var verifiedMetaPath = VerifiedCorpusPath.RequireExisting(
+                corpusRoot, metaPath, "missing-version metadata");
             var meta = JsonSerializer.Deserialize<VersionMeta>(
-                File.ReadAllText(metaPath), CorpusJson.Options)!;
+                File.ReadAllText(verifiedMetaPath), CorpusJson.Options)!;
             var lifecycle = meta.Events.LastOrDefault(e =>
-                e.Event is "withdrawn_from_source" or "resighted");
+                e.Event is "absent_unconfirmed" or "withdrawn_from_source" or "resighted");
             if (lifecycle?.Event == "withdrawn_from_source") continue;
 
+            if (_runIdentity is null)
+                throw new InvalidDataException(
+                    $"A completed source run identity is required to record absence for {meta.LexId}.");
+            if (lifecycle?.Event == "absent_unconfirmed"
+                && string.Equals(lifecycle.RunIdentity, _runIdentity,
+                    StringComparison.Ordinal))
+            {
+                pendingVersions.Add(meta);
+                continue;
+            }
+            RequireUnusedRunIdentity(meta, _runIdentity);
+            if (lifecycle is not null)
+                RequireLaterCompletedRun(lifecycle, _runIdentity, meta.LexId);
+
+            var firstMissedAt = _now;
+            var runsMissed = 1;
+            if (lifecycle?.Event == "absent_unconfirmed")
+            {
+                if (string.IsNullOrWhiteSpace(lifecycle.FirstMissedAt)
+                    || lifecycle.RunsMissed is not (1 or 2))
+                    throw new InvalidDataException(
+                        $"Pending absence state is invalid for {meta.LexId}.");
+                firstMissedAt = lifecycle.FirstMissedAt;
+                runsMissed = lifecycle.RunsMissed.Value + 1;
+            }
             meta.Events.Add(new EventEntry
             {
-                Event = "withdrawn_from_source",
+                Event = runsMissed == 3 ? "withdrawn_from_source" : "absent_unconfirmed",
                 ObservedFrom = _now,
                 Scope = "version",
-                Detail = "publisher record absent from the current enumeration",
+                Detail = runsMissed == 3
+                    ? "publisher record absent from three successive completed enumerations"
+                    : "publisher record absence is not yet confirmed",
+                FirstMissedAt = firstMissedAt,
+                RunsMissed = runsMissed,
+                RunIdentity = _runIdentity,
             });
             meta.RecordSha256 = CorpusHashes.RecordSha256(meta);
             candidate.WriteIfChanged(metaPath, JsonSerializer.Serialize(meta, CorpusJson.Options));
             Updated++;
+            if (runsMissed < 3) pendingVersions.Add(meta);
         }
+        return pendingVersions;
+    }
+
+    private static void RequireUnusedRunIdentity(VersionMeta meta, string runIdentity)
+    {
+        if (meta.Events.Any(entry => string.Equals(
+                entry.RunIdentity, runIdentity, StringComparison.Ordinal)))
+            throw new InvalidDataException(
+                $"Completed source run identity '{runIdentity}' was already observed for {meta.LexId}.");
+    }
+
+    private void RequireLaterCompletedRun(
+        EventEntry prior,
+        string runIdentity,
+        string lexId)
+    {
+        if (string.Equals(prior.RunIdentity, runIdentity, StringComparison.Ordinal))
+            throw new InvalidDataException(
+                $"Completed source run identity '{runIdentity}' conflicts for {lexId}.");
+        var priorCompletedAt = HistoricalWithdrawalAuditValidation.ParseCanonicalUtc(
+            prior.ObservedFrom, "prior completed source run observed_from");
+        var currentCompletedAt = HistoricalWithdrawalAuditValidation.ParseCanonicalUtc(
+            _now, "completed source run observed_from");
+        if (currentCompletedAt <= priorCompletedAt)
+            throw new InvalidDataException(
+                $"Completed source runs must be observed in order for {lexId}.");
     }
 
     private static StringComparer PathComparer => OperatingSystem.IsWindows()

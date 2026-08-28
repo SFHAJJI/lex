@@ -43,6 +43,9 @@ public sealed class EventEntry
     public required string ObservedFrom { get; set; }
     public string? Scope { get; set; }
     public string? Detail { get; set; }
+    public string? FirstMissedAt { get; set; }
+    public int? RunsMissed { get; set; }
+    public string? RunIdentity { get; set; }
 }
 
 public sealed class ObservationEntry
@@ -119,6 +122,7 @@ public sealed class ManifestDoc
     public string? IngesterCodeCommit { get; set; }
     public string? SourceConfigurationKind { get; set; }
     public string? SourceConfigurationSha256 { get; set; }
+    public string? CompletedRunsSha256 { get; set; }
     public int? MigrationBaselineWorks { get; set; }
 }
 
