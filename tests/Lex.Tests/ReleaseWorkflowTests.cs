@@ -6,6 +6,231 @@ namespace Lex.Tests;
 public sealed class ReleaseWorkflowTests
 {
     [Fact]
+    public void Telemetry_drift_is_the_immediate_post_login_pre_mutation_gate()
+    {
+        var workflow = File.ReadAllText(Path.Combine(RepoRoot(), ".github", "workflows", "deploy.yml"))
+            .Replace("\r\n", "\n", StringComparison.Ordinal);
+        var login = workflow.IndexOf("      - uses: azure/login@", StringComparison.Ordinal);
+        var drift = workflow.IndexOf(
+            "\n      - name: Verify source-controlled telemetry policy\n", login,
+            StringComparison.Ordinal);
+        var retention = workflow.IndexOf(
+            "\n      - name: Verify published telemetry retention\n", login,
+            StringComparison.Ordinal);
+        var build = workflow.IndexOf(
+            "\n      - name: Build immutable image in ACR\n", login,
+            StringComparison.Ordinal);
+        var candidateQuery = workflow.IndexOf("az monitor app-insights query", login,
+            StringComparison.Ordinal);
+        Assert.True(login >= 0 && drift > login && retention > drift && build > retention
+                    && candidateQuery > drift);
+        var between = workflow[(workflow.IndexOf('\n', workflow.IndexOf("subscription-id:", login)) + 1)..drift];
+        Assert.DoesNotContain("\n      - name:", between, StringComparison.Ordinal);
+
+        var block = workflow[drift..retention];
+        Assert.Contains("deploy/telemetry-policy.json", block);
+        Assert.Contains("scripts/deploy/telemetry_policy.py", block);
+        Assert.Contains("mktemp -d", block);
+        Assert.Contains("azure-error.txt", block);
+        Assert.Contains("2025-07-01", block);
+        Assert.Contains("2021-05-01-preview", block);
+        Assert.Contains("2020-02-02", block);
+        Assert.Contains("diagnosticSettingsCategories", block);
+        Assert.Equal(3, Regex.Matches(block,
+            Regex.Escape("length(not_null(value, `[]`))")).Count);
+        Assert.Equal(3, Regex.Matches(block,
+            "diagnostic_settings_type:type\\(value\\)").Count);
+        Assert.DoesNotContain("length(value)", block, StringComparison.Ordinal);
+        Assert.DoesNotContain(".resource_id", block, StringComparison.Ordinal);
+        Assert.DoesNotContain(".customer_id", block, StringComparison.Ordinal);
+        Assert.Contains("managed_environment_telemetry", block);
+        Assert.Contains("managed_open_telemetry", block);
+        Assert.Contains("otlp_destinations_type:type(", block);
+        Assert.Contains("dapr_application_insights_enabled", block);
+        Assert.Contains("dapr_enabled", block);
+        Assert.Contains("dapr_api_logging_enabled", block);
+        Assert.DoesNotContain("az containerapp", block, StringComparison.Ordinal);
+        Assert.DoesNotContain("az acr", block, StringComparison.Ordinal);
+        Assert.DoesNotContain("cat \"$telemetry_dir/azure-error.txt\"", block,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain("tee \"$telemetry_dir/azure-error.txt\"", block,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Telemetry_drift_roles_have_only_the_exact_read_actions_and_scopes()
+    {
+        var terraform = File.ReadAllText(Path.Combine(RepoRoot(), "infra", "main.tf"));
+        var config = TerraformResource(terraform, "azurerm_role_definition",
+            "deploy_telemetry_configuration_reader");
+        Assert.Equal(new[]
+        {
+            "Microsoft.App/managedEnvironments/read",
+            "Microsoft.App/containerApps/read",
+            "Microsoft.Insights/components/read",
+            "Microsoft.Insights/diagnosticSettings/read",
+            "Microsoft.Insights/diagnosticSettingsCategories/read",
+        }, QuotedActions(config));
+        Assert.Contains("scope       = data.azurerm_resource_group.platform.id", config);
+        Assert.Contains("assignable_scopes = [data.azurerm_resource_group.platform.id]", config);
+        Assert.Contains("scope              = local.container_app_environment_id", terraform);
+        Assert.Contains("scope              = local.container_app_id", terraform);
+        Assert.Contains("scope              = data.azurerm_application_insights.web.id", terraform);
+
+        var workspaces = TerraformResource(terraform, "azurerm_role_definition",
+            "deploy_telemetry_workspace_reader");
+        Assert.Equal(new[] { "Microsoft.OperationalInsights/workspaces/read" },
+            QuotedActions(workspaces));
+        Assert.Contains("scope       = \"/subscriptions/${var.subscription_id}\"", workspaces);
+        Assert.Contains("assignable_scopes = [\"/subscriptions/${var.subscription_id}\"]",
+            workspaces);
+        Assert.Contains("scope              = local.telemetry_container_apps_workspace_id",
+            terraform);
+        Assert.Contains("scope              = local.telemetry_application_insights_workspace_id",
+            terraform);
+        Assert.DoesNotContain("workspace.resource_id", terraform, StringComparison.Ordinal);
+        Assert.Contains("workspace.resource_group_name", terraform, StringComparison.Ordinal);
+        Assert.Contains("data.azurerm_application_insights.web.workspace_id", terraform,
+            StringComparison.Ordinal);
+
+        var combined = config + workspaces;
+        foreach (var forbidden in new[]
+                 {
+                     "*", "/write", "/action", "query", "sharedKeys", "listKeys", "dataActions",
+                 })
+            Assert.DoesNotContain(forbidden, combined, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Transitional_privacy_gate_pins_safe_request_and_dependency_fields()
+    {
+        var workflow = File.ReadAllText(Path.Combine(RepoRoot(), ".github", "workflows", "deploy.yml"));
+        var start = workflow.IndexOf("trace_id=$(openssl rand -hex 16)", StringComparison.Ordinal);
+        var end = workflow.IndexOf("# Zero-traffic revisions", start, StringComparison.Ordinal);
+        Assert.True(start >= 0 && end > start);
+        var gate = workflow[start..end];
+        Assert.Contains("https://$fqdn/search?q=$query_canary", gate);
+        Assert.DoesNotContain("https://$fqdn/?q=$query_canary", gate);
+        Assert.Contains("union", gate);
+        Assert.DoesNotContain("isfuzzy", CandidateTelemetryQuery(gate),
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("(requests", gate);
+        Assert.Contains("(dependencies", gate);
+        Assert.Contains("(traces", gate);
+        Assert.Contains("timestamp > ago(15m) and operation_Id == '$trace_id'", gate);
+        Assert.Contains("telemetryName=tostring(name)", gate);
+        Assert.Contains("requestUrl=tostring(url)", gate);
+        Assert.Contains("dependencyData=tostring(data)", gate);
+        Assert.Contains("dependencyTarget=tostring(target)", gate);
+        Assert.Contains("record=tostring(pack_all())", gate);
+        Assert.DoesNotContain("dependencyData=''", gate, StringComparison.Ordinal);
+        Assert.DoesNotContain("dependencyTarget=''", gate, StringComparison.Ordinal);
+        Assert.DoesNotContain("AppRequests", gate, StringComparison.Ordinal);
+        Assert.DoesNotContain("AppDependencies", gate, StringComparison.Ordinal);
+        Assert.DoesNotContain("AppTraces", gate, StringComparison.Ordinal);
+        Assert.Contains("telemetryName != 'lex.request'", gate);
+        Assert.Contains("telemetryName == 'lex.tool'", gate);
+        Assert.Contains("requestNameViolations", gate);
+        Assert.Contains("requestUrlViolations", gate);
+        Assert.Contains("toolRows", gate);
+        Assert.Contains("dependencyFieldViolations", gate);
+        Assert.Contains(
+            "isnotempty(dependencyData) or isnotempty(dependencyTarget)", gate);
+        Assert.DoesNotContain("summarize rows=count()", gate, StringComparison.Ordinal);
+        Assert.Contains(".tables[0].rows[0][0] // 0", gate);
+        Assert.Contains(".tables[0].rows[0][3] // 0", gate);
+        Assert.Contains(".tables[0].rows[0][1] // -1", gate);
+        Assert.Contains(".tables[0].rows[0][2] // -1", gate);
+        Assert.Contains(".tables[0].rows[0][4] // -1", gate);
+        Assert.Contains("candidate request telemetry was not exported", gate);
+        Assert.Contains("candidate tool telemetry was not exported", gate);
+        Assert.Contains("candidate telemetry fields violated the safe shape", gate);
+        Assert.Contains("candidate telemetry response shape was invalid", gate);
+        Assert.Contains("[.tables[0].columns[].name] ==", gate);
+        Assert.Contains("(.tables[0].rows | length) == 1", gate);
+        Assert.Contains("all(.tables[0].rows[0][];", gate);
+    }
+
+    [Fact]
+    public void Transitional_trace_shape_query_is_one_argument_with_exactly_five_aggregates()
+    {
+        var workflow = File.ReadAllText(Path.Combine(RepoRoot(), ".github", "workflows", "deploy.yml"));
+        var start = workflow.IndexOf("trace_id=$(openssl rand -hex 16)", StringComparison.Ordinal);
+        var end = workflow.IndexOf("# Zero-traffic revisions", start, StringComparison.Ordinal);
+        Assert.True(start >= 0 && end > start);
+        var gate = workflow[start..end];
+        Assert.Contains("telemetry_query=$(tr '\\n' ' ' <<KQL", gate);
+        Assert.Contains("--analytics-query \"$telemetry_query\"", gate);
+        Assert.DoesNotContain("--analytics-query \"union", gate, StringComparison.Ordinal);
+
+        var query = CandidateTelemetryQuery(gate);
+        Assert.DoesNotContain('\r', query);
+        Assert.DoesNotContain('\n', query);
+        var operationFilter = query.IndexOf(
+            "| where timestamp > ago(15m) and operation_Id == '$trace_id'",
+            StringComparison.Ordinal);
+        var summarize = query.IndexOf("| summarize", StringComparison.Ordinal);
+        Assert.True(operationFilter >= 0 && summarize > operationFilter);
+        var aggregates = Regex.Matches(query[summarize..],
+                @"\b(?<name>[A-Za-z][A-Za-z0-9]*)\s*=\s*countif\(")
+            .Select(match => match.Groups["name"].Value)
+            .ToArray();
+        Assert.Equal([
+            "requestRows", "requestNameViolations", "requestUrlViolations", "toolRows",
+            "dependencyFieldViolations",
+        ], aggregates);
+    }
+
+    [Fact]
+    public void Release_privacy_gate_injects_and_count_scans_all_four_canaries_in_every_store()
+    {
+        var workflow = File.ReadAllText(
+            Path.Combine(RepoRoot(), ".github", "workflows", "deploy.yml"));
+        var start = workflow.IndexOf("trace_id=$(openssl rand -hex 16)",
+            StringComparison.Ordinal);
+        var end = workflow.IndexOf("# Zero-traffic revisions", start,
+            StringComparison.Ordinal);
+        Assert.True(start >= 0 && end > start);
+        var gate = workflow[start..end];
+
+        Assert.Contains("query_canary=", gate);
+        Assert.Contains("ip_canary=", gate);
+        Assert.Contains("ip_canary=\"2001:db8:${trace_id:0:4}:${trace_id:4:4}::1\"", gate);
+        Assert.Contains("user_agent_canary=", gate);
+        Assert.Contains("body_canary=", gate);
+        Assert.Contains("-H \"User-Agent: $user_agent_canary\"", gate);
+        Assert.Contains("-H \"X-Forwarded-For: $ip_canary\"", gate);
+        Assert.Contains("--request GET", gate);
+        Assert.Contains("--data-binary \"$body_canary\"", gate);
+        Assert.Contains("https://$fqdn/search?q=$query_canary", gate);
+        Assert.Contains("2> \"$privacy_error\"", gate);
+
+        var applicationQuery = NamedTelemetryQuery(gate, "application_privacy_query");
+        var platformQuery = NamedTelemetryQuery(gate, "platform_privacy_query");
+        string[] expectedMatches =
+            ["queryMatches", "ipMatches", "userAgentMatches", "bodyMatches"];
+        foreach (var name in expectedMatches)
+        {
+            Assert.Contains(name, applicationQuery);
+            Assert.Contains(name, platformQuery);
+        }
+        Assert.Equal(expectedMatches, CountIfAggregates(applicationQuery));
+        Assert.Equal(expectedMatches, CountIfAggregates(platformQuery));
+        Assert.Contains("ContainerAppHTTPLogs", platformQuery);
+        Assert.Contains("ContainerAppSystemLogs_CL", platformQuery);
+        Assert.Contains("ContainerAppConsoleLogs_CL", platformQuery);
+        Assert.DoesNotContain("isfuzzy", platformQuery, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("az monitor log-analytics query", gate);
+        Assert.Contains("--workspace \"$container_apps_workspace_customer\"", gate);
+        Assert.DoesNotContain("echo \"$query_canary", gate, StringComparison.Ordinal);
+        Assert.DoesNotContain("echo \"$ip_canary", gate, StringComparison.Ordinal);
+        Assert.DoesNotContain("echo \"$user_agent_canary", gate, StringComparison.Ordinal);
+        Assert.DoesNotContain("echo \"$body_canary", gate, StringComparison.Ordinal);
+        Assert.DoesNotContain("cat \"$privacy_error", gate, StringComparison.Ordinal);
+        Assert.DoesNotContain("tee \"$privacy_error", gate, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Deployment_requires_exact_ci_success_and_an_immutable_image_digest()
     {
         var workflow = File.ReadAllText(Path.Combine(RepoRoot(), ".github", "workflows", "deploy.yml"));
@@ -25,8 +250,9 @@ public sealed class ReleaseWorkflowTests
         Assert.Contains("expected exactly one traffic-bearing revision before candidate creation", workflow);
         Assert.Contains("--connect-timeout 5 --max-time 60", workflow);
         Assert.Contains("scripts/deploy/candidate_gates.py readyz \"$MANIFEST_SET\"", workflow);
-        Assert.Contains("requestRows=countif(itemType == 'request')", workflow);
-        Assert.Contains("[ \"$request_rows\" -gt 0 ] && break", workflow);
+        Assert.Contains("requestRows=countif(isRequest)", workflow);
+        Assert.Contains("[ \"$request_rows\" -gt 0 ] && [ \"$tool_rows\" -gt 0 ] && break",
+            workflow);
     }
 
     [Fact]
@@ -133,9 +359,10 @@ public sealed class ReleaseWorkflowTests
         Assert.Contains("${retention[1]}", workflow);
         Assert.DoesNotContain("$'90\\t90'", workflow);
         Assert.Contains("retention is not the published 90 days", workflow);
-        Assert.Contains("LEXTRACE${GITHUB_RUN_ID}${GITHUB_RUN_ATTEMPT}", workflow);
+        Assert.Contains("LEXQ${GITHUB_RUN_ID}X${GITHUB_RUN_ATTEMPT}", workflow);
         Assert.Contains("candidate request telemetry was not exported", workflow);
-        Assert.Contains("raw query or client address reached telemetry", workflow);
+        Assert.Contains("synthetic privacy canary reached application telemetry", workflow);
+        Assert.Contains("synthetic privacy canary reached Container Apps telemetry", workflow);
         Assert.Contains("evals/run-mcp-load.mjs", workflow);
         Assert.Contains("candidate exceeded the 75 percent memory budget", workflow);
         Assert.Contains("candidate load used more than one replica", workflow);
@@ -161,12 +388,20 @@ public sealed class ReleaseWorkflowTests
         Assert.Contains("top=200", workflow);
         Assert.Contains("metric_confirmation", workflow);
         Assert.Contains("metric response shape", workflow);
-        Assert.Contains("union isfuzzy=true requests, dependencies, traces", candidateBlock);
+        Assert.Contains("union", candidateBlock);
+        Assert.DoesNotContain("isfuzzy", CandidateTelemetryQuery(candidateBlock),
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("(requests", candidateBlock);
+        Assert.Contains("(dependencies", candidateBlock);
+        Assert.Contains("(traces", candidateBlock);
         Assert.Contains("timestamp > ago(15m) and operation_Id == '$trace_id'", candidateBlock);
-        Assert.Contains("column_ifexists('client_IP', '')", candidateBlock);
-        Assert.DoesNotContain("AppRequests", candidateBlock);
-        Assert.DoesNotContain("AppDependencies", candidateBlock);
-        Assert.DoesNotContain("AppTraces", candidateBlock);
+        Assert.Contains("requestUrl=tostring(url)", candidateBlock);
+        Assert.Contains("dependencyData=tostring(data)", candidateBlock);
+        Assert.Contains("dependencyTarget=tostring(target)", candidateBlock);
+        Assert.Contains("record=tostring(pack_all())", candidateBlock);
+        Assert.DoesNotContain("AppRequests", candidateBlock, StringComparison.Ordinal);
+        Assert.DoesNotContain("AppDependencies", candidateBlock, StringComparison.Ordinal);
+        Assert.DoesNotContain("AppTraces", candidateBlock, StringComparison.Ordinal);
         Assert.Contains("revision_get() {", workflow);
         Assert.Contains("for attempt in $(seq 1 24)", workflow);
         Assert.Contains("--silent --show-error --connect-timeout 5 --max-time 10 \"$url\"", workflow);
@@ -425,7 +660,7 @@ public sealed class ReleaseWorkflowTests
     }
 
     [Fact]
-    public void Deployment_can_verify_retention_without_broad_telemetry_access()
+    public void Deployment_can_query_only_the_exact_telemetry_surfaces()
     {
         var terraform = File.ReadAllText(Path.Combine(RepoRoot(), "infra", "main.tf"));
         var start = terraform.IndexOf(
@@ -446,7 +681,11 @@ public sealed class ReleaseWorkflowTests
         var actionEntries = Regex.Matches(actions, "\"([^\"]+)\"")
             .Select(match => match.Groups[1].Value)
             .ToArray();
-        Assert.Equal(new[] { "Microsoft.Insights/components/read" }, actionEntries);
+        Assert.Equal(new[]
+        {
+            "Microsoft.Insights/components/read",
+            "Microsoft.Insights/components/query/read",
+        }, actionEntries);
         Assert.Contains("scope       = data.azurerm_resource_group.platform.id", role);
         Assert.Contains("assignable_scopes = [data.azurerm_resource_group.platform.id]", role);
         Assert.Contains("scope              = data.azurerm_application_insights.web.id", terraform[end..]);
@@ -472,7 +711,30 @@ public sealed class ReleaseWorkflowTests
         Assert.Contains("scope       = \"/subscriptions/${var.subscription_id}\"", role);
         Assert.Contains("assignable_scopes = [\"/subscriptions/${var.subscription_id}\"]", role);
         Assert.DoesNotContain("log_analytics_resource_group_id", terraform);
-        Assert.Contains("scope              = data.azurerm_application_insights.web.workspace_id", terraform[end..]);
+        Assert.Contains("scope              = local.telemetry_application_insights_workspace_id",
+            terraform[end..]);
+        Assert.Contains("check \"telemetry_application_insights_workspace_pin\"", terraform);
+        Assert.Contains(
+            "lower(data.azurerm_application_insights.web.workspace_id) == lower(local.telemetry_application_insights_workspace_id)",
+            terraform);
+
+        var queryRole = TerraformResource(terraform, "azurerm_role_definition",
+            "deploy_container_apps_privacy_query_reader");
+        var queryActions = QuotedActions(queryRole);
+        Assert.Equal(new[]
+        {
+            "Microsoft.OperationalInsights/workspaces/query/read",
+            "Microsoft.OperationalInsights/workspaces/query/ContainerAppHTTPLogs/read",
+            "Microsoft.OperationalInsights/workspaces/query/ContainerAppSystemLogs/read",
+            "Microsoft.OperationalInsights/workspaces/query/ContainerAppConsoleLogs/read",
+        }, queryActions);
+        Assert.Contains("assignable_scopes = [\"/subscriptions/${var.subscription_id}\"]",
+            queryRole);
+        Assert.Contains("scope              = local.telemetry_container_apps_workspace_id",
+            terraform);
+        Assert.Equal(3, queryActions.Count(action => action.StartsWith(
+            "Microsoft.OperationalInsights/workspaces/query/ContainerApp",
+            StringComparison.Ordinal)));
     }
 
     [Fact]
@@ -805,7 +1067,9 @@ public sealed class ReleaseWorkflowTests
             Path.Combine(RepoRoot(), ".github", "workflows", "revision-traffic.yml"));
         var retry = File.ReadAllText(Path.Combine(RepoRoot(), "scripts", "deploy", "az-retry.sh"));
 
-        Assert.Contains("az_retry az monitor app-insights query", deploy);
+        Assert.Contains("az monitor app-insights query", deploy);
+        Assert.DoesNotContain("az_retry az monitor app-insights query", deploy);
+        Assert.Contains("2> \"$telemetry_error\"", deploy);
         Assert.Contains(". scripts/deploy/az-retry.sh", traffic);
         Assert.Contains(". scripts/deploy/az-reauth.sh", traffic);
         Assert.Contains("az_retry az containerapp revision activate", traffic);
@@ -1402,6 +1666,43 @@ public sealed class ReleaseWorkflowTests
                         ?? throw new InvalidOperationException("Repository root not found.");
         return directory;
     }
+
+    private static string TerraformResource(string terraform, string type, string name)
+    {
+        var start = terraform.IndexOf($"resource \"{type}\" \"{name}\"",
+            StringComparison.Ordinal);
+        Assert.True(start >= 0, $"Terraform resource {type}.{name} is missing.");
+        var end = terraform.IndexOf("\nresource \"", start + 1, StringComparison.Ordinal);
+        return terraform[start..(end < 0 ? terraform.Length : end)];
+    }
+
+    private static string[] QuotedActions(string role)
+    {
+        var start = role.IndexOf("actions = [", StringComparison.Ordinal);
+        Assert.True(start >= 0, "Role actions are missing.");
+        var end = role.IndexOf(']', start);
+        Assert.True(end > start, "Role actions are incomplete.");
+        return Regex.Matches(role[start..end], "\"([^\"]+)\"")
+            .Select(match => match.Groups[1].Value)
+            .ToArray();
+    }
+
+    private static string CandidateTelemetryQuery(string gate) =>
+        NamedTelemetryQuery(gate, "telemetry_query");
+
+    private static string NamedTelemetryQuery(string gate, string variable)
+    {
+        var normalized = gate.Replace("\r\n", "\n", StringComparison.Ordinal);
+        var heredoc = Regex.Match(normalized,
+            $@"(?ms){Regex.Escape(variable)}=.*?<<KQL\n(?<query>.*?)\n\s+KQL\n");
+        Assert.True(heredoc.Success, "Candidate telemetry KQL heredoc is incomplete.");
+        return heredoc.Groups["query"].Value.Replace('\n', ' ');
+    }
+
+    private static string[] CountIfAggregates(string query) => Regex.Matches(query,
+            @"\b(?<name>[A-Za-z][A-Za-z0-9]*)\s*=\s*countif\(")
+        .Select(match => match.Groups["name"].Value)
+        .ToArray();
 
     private static (int ExitCode, string Output) RunEvaluationPublicationValidation(
         params string[] extraArguments)
