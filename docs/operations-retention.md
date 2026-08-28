@@ -2,6 +2,11 @@
 
 Status: accepted for implementation, cleanup execution remains operator-controlled.
 
+Related evidence contracts: [corpus revalidation](corpus-revalidation.md) and
+[snapshot retention and replay](snapshot-retention.md). This ADR governs deployable revisions,
+rollback identities and cleanup authority; those documents govern legal-data observations and
+the snapshots retained for evidence replay.
+
 ## Context
 
 Lex needs one deployable production release, one deployable rollback release, and a transient
