@@ -63,6 +63,11 @@ public static class CorpusIntegrity
             }
         if (manifest.MigrationBaselineWorks is < 0)
             errors.Add("manifest migration_baseline_works cannot be negative");
+        string? manifestPublisher = null;
+        if (manifest.Publisher is null
+            || !manifest.Publisher.TryGetValue("id", out manifestPublisher)
+            || string.IsNullOrWhiteSpace(manifestPublisher))
+            errors.Add("manifest publisher.id is required");
 
         if (manifest.AcquisitionRetryMaximumAttempts is < 1 or > 10)
             errors.Add("manifest acquisition_retry_maximum_attempts must be between 1 and 10");
@@ -93,6 +98,7 @@ public static class CorpusIntegrity
                 [.. errors, "works directory is missing"]);
 
         var workIds = new HashSet<string>(StringComparer.Ordinal);
+        var publisherWorkIds = new HashSet<string>(StringComparer.Ordinal);
         var versionIds = new HashSet<string>(StringComparer.Ordinal);
         var actualWorks = 0;
         var actualVersions = 0;
@@ -122,13 +128,26 @@ public static class CorpusIntegrity
                 continue;
 
             actualWorks++;
+            WorkMeta? work = null;
             try
             {
-                var work = JsonSerializer.Deserialize<WorkMeta>(
+                work = JsonSerializer.Deserialize<WorkMeta>(
                     File.ReadAllText(workMetaPath), CorpusJson.Options)
                     ?? throw new InvalidDataException("record is empty");
                 if (!workIds.Add(work.LexWorkId))
                     errors.Add($"duplicate lex_work_id '{work.LexWorkId}'");
+                if (!publisherWorkIds.Add(work.WorkIdentifier))
+                    errors.Add($"duplicate work_identifier '{work.WorkIdentifier}'");
+                var directorySlug = Path.GetFileName(workDir);
+                if (!string.Equals(work.Publisher, manifestPublisher, StringComparison.Ordinal))
+                    errors.Add($"{relativeWork}/meta.json publisher does not match manifest publisher");
+                if (!string.Equals(work.Slug, directorySlug, StringComparison.Ordinal))
+                    errors.Add($"{relativeWork}/meta.json slug does not match its directory");
+                if (!string.Equals(work.LexWorkId,
+                        $"{work.Publisher}:{directorySlug}", StringComparison.Ordinal))
+                    errors.Add($"{relativeWork}/meta.json lex_work_id is not canonical");
+                if (string.IsNullOrWhiteSpace(work.WorkIdentifier))
+                    errors.Add($"{relativeWork}/meta.json work_identifier is required");
             }
             catch (Exception ex)
             {
@@ -177,6 +196,12 @@ public static class CorpusIntegrity
 
                 if (!versionIds.Add(version.LexId))
                     errors.Add($"duplicate lex_id '{version.LexId}'");
+                if (!string.Equals(version.Publisher, manifestPublisher, StringComparison.Ordinal))
+                    errors.Add($"{relativeVersion}/meta.json publisher does not match manifest publisher");
+                if (work is not null
+                    && !string.Equals(version.WorkIdentifier,
+                        work.WorkIdentifier, StringComparison.Ordinal))
+                    errors.Add($"{relativeVersion}/meta.json work_identifier does not match its work");
                 try
                 {
                     if (currentSchema)
@@ -213,8 +238,10 @@ public static class CorpusIntegrity
                     {
                         errors.Add($"{relativeVersion}/meta.json source boundary is invalid: {ex.Message}");
                     }
+                if (currentSchema)
+                    VerifyAbsenceLifecycle(version, relativeVersion, errors);
                 var lifecycle = version.Events.LastOrDefault(e =>
-                    e.Event is "withdrawn_from_source" or "resighted");
+                    e.Event is "absent_unconfirmed" or "withdrawn_from_source" or "resighted");
                 if (lifecycle?.Event != "withdrawn_from_source")
                 {
                     currentVersions++;
@@ -260,6 +287,61 @@ public static class CorpusIntegrity
         var actual = CorpusHashes.RecordSha256(version);
         if (!CorpusHashes.Equal(actual, claimed))
             errors.Add($"{relativeVersion}/meta.json record_sha256 mismatch");
+    }
+
+    private static void VerifyAbsenceLifecycle(
+        VersionMeta version,
+        string relativeVersion,
+        ICollection<string> errors)
+    {
+        string? state = null;
+        string? firstMissedAt = null;
+        var runsMissed = 0;
+        foreach (var entry in version.Events)
+        {
+            switch (entry.Event)
+            {
+                case "absent_unconfirmed":
+                    var expectedRuns = state == "absent_unconfirmed" ? runsMissed + 1 : 1;
+                    var expectedFirstMissedAt = expectedRuns == 1
+                        ? entry.ObservedFrom : firstMissedAt;
+                    if (state == "withdrawn_from_source"
+                        || expectedRuns is < 1 or > 2
+                        || string.IsNullOrWhiteSpace(entry.FirstMissedAt)
+                        || entry.RunsMissed != expectedRuns
+                        || !string.Equals(entry.FirstMissedAt,
+                            expectedFirstMissedAt, StringComparison.Ordinal))
+                        errors.Add($"{relativeVersion}/meta.json absence lifecycle is invalid");
+                    state = "absent_unconfirmed";
+                    firstMissedAt = entry.FirstMissedAt;
+                    runsMissed = entry.RunsMissed ?? 0;
+                    break;
+                case "withdrawn_from_source":
+                    // Pre-threshold v4 corpora used a terminal withdrawal without sequence
+                    // fields. Keep that historical representation readable, while requiring all
+                    // newly structured withdrawals to close an exact 1, 2, 3 sequence.
+                    var legacy = entry.FirstMissedAt is null && entry.RunsMissed is null;
+                    if (!legacy
+                        && (state != "absent_unconfirmed"
+                            || runsMissed != 2
+                            || entry.RunsMissed != 3
+                            || string.IsNullOrWhiteSpace(entry.FirstMissedAt)
+                            || !string.Equals(entry.FirstMissedAt,
+                                firstMissedAt, StringComparison.Ordinal)))
+                        errors.Add($"{relativeVersion}/meta.json absence lifecycle is invalid");
+                    state = "withdrawn_from_source";
+                    firstMissedAt = null;
+                    runsMissed = 0;
+                    break;
+                case "resighted":
+                    if (state is not ("absent_unconfirmed" or "withdrawn_from_source"))
+                        errors.Add($"{relativeVersion}/meta.json absence lifecycle is invalid");
+                    state = "resighted";
+                    firstMissedAt = null;
+                    runsMissed = 0;
+                    break;
+            }
+        }
     }
 
     private static void VerifyObservation(

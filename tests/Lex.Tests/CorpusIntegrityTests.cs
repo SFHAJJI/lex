@@ -67,7 +67,7 @@ public sealed class CorpusIntegrityTests : IDisposable
     }
 
     [Fact]
-    public async Task Ingestion_refreshes_a_stale_record_hash_without_inventing_an_event()
+    public async Task V3_ingestion_rejects_a_stale_record_hash_without_rewriting_it()
     {
         var adapter = new TextAdapter();
         await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-06T00:00:00Z"), CodeCommit)
@@ -76,18 +76,17 @@ public sealed class CorpusIntegrityTests : IDisposable
         var metaPath = Path.Combine(VersionDirectory, "meta.json");
         var meta = JsonSerializer.Deserialize<VersionMeta>(
             await File.ReadAllTextAsync(metaPath), CorpusJson.Options)!;
-        var eventCount = meta.Events.Count;
         meta.RecordSha256 = new string('0', 64);
         await File.WriteAllTextAsync(metaPath, JsonSerializer.Serialize(meta, CorpusJson.Options) + "\n");
+        var before = await File.ReadAllBytesAsync(metaPath);
 
-        var writer = new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-07T00:00:00Z"), CodeCommit);
-        await writer.WriteAsync(adapter, default);
+        var error = await Assert.ThrowsAsync<InvalidDataException>(() =>
+            new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-07T00:00:00Z"), CodeCommit)
+                .WriteAsync(adapter, default));
 
-        var repaired = JsonSerializer.Deserialize<VersionMeta>(
-            await File.ReadAllTextAsync(metaPath), CorpusJson.Options)!;
-        Assert.Equal(1, writer.Updated);
-        Assert.Equal(eventCount, repaired.Events.Count);
-        Assert.True(CorpusIntegrity.Verify(_dir).IsValid);
+        Assert.Contains("record_sha256 mismatch", error.Message, StringComparison.Ordinal);
+        Assert.Equal(before, await File.ReadAllBytesAsync(metaPath));
+        Assert.False(CorpusIntegrity.Verify(_dir).IsValid);
     }
 
     [Fact]
@@ -256,6 +255,40 @@ public sealed class CorpusIntegrityTests : IDisposable
             _dir, null, Path.Combine(_dir, "index.db"), null,
             DateTimeOffset.Parse("2026-08-06T00:00:00Z"),
             codeCommit: BuilderCommit));
+    }
+
+    [Theory]
+    [InlineData(null, 1)]
+    [InlineData("2026-08-07T00:00:00Z", null)]
+    [InlineData("2026-08-07T00:00:00Z", 3)]
+    public async Task Pending_absence_requires_a_complete_bounded_sequence_state(
+        string? firstMissedAt,
+        int? runsMissed)
+    {
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-06T00:00:00Z"), CodeCommit)
+            .WriteAsync(new TextAdapter(), default);
+        var metaPath = Path.Combine(VersionDirectory, "meta.json");
+        var meta = JsonSerializer.Deserialize<VersionMeta>(
+            await File.ReadAllTextAsync(metaPath), CorpusJson.Options)!;
+        meta.Events.Add(new EventEntry
+        {
+            Event = "absent_unconfirmed",
+            ObservedFrom = "2026-08-07T00:00:00Z",
+            Scope = "version",
+            FirstMissedAt = firstMissedAt,
+            RunsMissed = runsMissed,
+        });
+        meta.RecordSha256 = null;
+        meta.RecordSha256 = Convert.ToHexStringLower(
+            System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(
+                JsonSerializer.Serialize(meta, CorpusJson.Options))));
+        await File.WriteAllTextAsync(metaPath,
+            JsonSerializer.Serialize(meta, CorpusJson.Options) + "\n");
+
+        var report = CorpusIntegrity.Verify(_dir);
+
+        Assert.Contains(report.Errors, error => error.Contains(
+            "absence lifecycle", StringComparison.Ordinal));
     }
 
     public void Dispose()

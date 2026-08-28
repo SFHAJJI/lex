@@ -43,6 +43,8 @@ public sealed class EventEntry
     public required string ObservedFrom { get; set; }
     public string? Scope { get; set; }
     public string? Detail { get; set; }
+    public string? FirstMissedAt { get; set; }
+    public int? RunsMissed { get; set; }
 }
 
 public sealed class ObservationEntry

@@ -99,6 +99,15 @@ internal sealed class CorpusCandidate : IDisposable
         if (!full.StartsWith(prefix, OperatingSystem.IsWindows()
                 ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
             throw new InvalidDataException($"Corpus candidate path escapes its root: {target}");
+        if (Directory.Exists(_root))
+        {
+            var existing = full;
+            while (!File.Exists(existing) && !Directory.Exists(existing))
+                existing = Path.GetDirectoryName(existing)
+                    ?? throw new InvalidDataException(
+                        $"Corpus candidate target has no existing ancestor: {target}");
+            VerifiedCorpusPath.RequireExisting(_root, existing, "candidate target ancestor");
+        }
         return full;
     }
 

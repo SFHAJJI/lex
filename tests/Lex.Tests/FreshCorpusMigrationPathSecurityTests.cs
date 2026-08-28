@@ -6,6 +6,145 @@ namespace Lex.Tests;
 public sealed partial class CorpusWriterTests
 {
     [Theory]
+    [InlineData("versions-root")]
+    [InlineData("version-directory")]
+    [InlineData("version-meta")]
+    [InlineData("observation")]
+    public async Task V3_append_refuses_external_links_before_body_fetch(string targetKind)
+    {
+        if (!CanCreateSymbolicLinks()) return;
+
+        var corpusRoot = Path.Combine(_dir, "linked-v4-" + targetKind);
+        await new CorpusWriter(corpusRoot,
+                DateTimeOffset.Parse("2026-08-14T00:00:00Z"), CodeCommit)
+            .WriteAsync(new SameDateAdapter(
+                reverse: false, includeSecond: false), default);
+        var versionsRoot = Path.Combine(corpusRoot, "works", "w1", "versions");
+        var versionDirectory = Assert.Single(Directory.EnumerateDirectories(versionsRoot));
+        var metaPath = Path.Combine(versionDirectory, "meta.json");
+        var meta = System.Text.Json.JsonSerializer.Deserialize<VersionMeta>(
+            await File.ReadAllTextAsync(metaPath), CorpusJson.Options)!;
+        var target = targetKind switch
+        {
+            "versions-root" => versionsRoot,
+            "version-directory" => versionDirectory,
+            "version-meta" => metaPath,
+            "observation" => Path.Combine(versionDirectory,
+                Assert.Single(Assert.Single(meta.Expressions).Observations).File!),
+            _ => throw new ArgumentOutOfRangeException(nameof(targetKind)),
+        };
+        ReplaceWithExternalLink(target, Path.Combine(_dir, "external-v4-" + targetKind));
+        var before = LinkAwareInventory(corpusRoot);
+        var replacement = new SameDateAdapter(reverse: false, includeFirst: false);
+
+        var error = await Assert.ThrowsAsync<InvalidDataException>(() =>
+            new CorpusWriter(corpusRoot,
+                    DateTimeOffset.Parse("2026-08-15T00:00:00Z"), CodeCommit)
+                .WriteAsync(replacement, default));
+
+        Assert.Contains("reparse point or symbolic link", error.Message,
+            StringComparison.Ordinal);
+        Assert.Equal(0, replacement.BodyFetchCount);
+        Assert.Equal(before, LinkAwareInventory(corpusRoot));
+    }
+
+    [Fact]
+    public async Task V3_append_rechecks_a_new_version_destination_after_body_fetch()
+    {
+        if (!CanCreateSymbolicLinks()) return;
+
+        var corpusRoot = Path.Combine(_dir, "linked-v4-destination-after-fetch");
+        await new CorpusWriter(corpusRoot,
+                DateTimeOffset.Parse("2026-08-14T00:00:00Z"), CodeCommit)
+            .WriteAsync(new SameDateAdapter(
+                reverse: false, includeSecond: false), default);
+        var replacementKey = "2025-07-28--" + Convert.ToHexStringLower(
+            System.Security.Cryptography.SHA256.HashData(
+                System.Text.Encoding.UTF8.GetBytes("official:v-b")));
+        var destination = Path.Combine(
+            corpusRoot, "works", "w1", "versions", replacementKey);
+        var external = Path.Combine(_dir, "external-v4-destination-after-fetch");
+        Directory.CreateDirectory(external);
+        var replacement = new SameDateAdapter(
+            reverse: false, includeFirst: false,
+            beforeFirstBodyFetch: () => Directory.CreateSymbolicLink(destination, external),
+            omitSource: true);
+
+        var error = await Assert.ThrowsAsync<InvalidDataException>(() =>
+            new CorpusWriter(corpusRoot,
+                    DateTimeOffset.Parse("2026-08-15T00:00:00Z"), CodeCommit)
+                .WriteAsync(replacement, default));
+
+        Assert.Contains("reparse point or symbolic link", error.Message,
+            StringComparison.Ordinal);
+        Assert.Equal(1, replacement.BodyFetchCount);
+        Assert.Empty(Directory.EnumerateFileSystemEntries(external));
+    }
+
+    [Fact]
+    public async Task V3_append_refuses_a_versions_root_junction_before_body_fetch()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+
+        var corpusRoot = Path.Combine(_dir, "junction-v4-versions-root");
+        await new CorpusWriter(corpusRoot,
+                DateTimeOffset.Parse("2026-08-14T00:00:00Z"), CodeCommit)
+            .WriteAsync(new SameDateAdapter(
+                reverse: false, includeSecond: false), default);
+        var versionsRoot = Path.Combine(corpusRoot, "works", "w1", "versions");
+        var external = Path.Combine(_dir, "external-v4-versions-junction");
+        Directory.Move(versionsRoot, external);
+        Assert.True(TryCreateJunction(versionsRoot, external),
+            "The Windows test host could not create a directory junction.");
+        var before = LinkAwareInventory(corpusRoot);
+        var replacement = new SameDateAdapter(reverse: false, includeFirst: false);
+
+        var error = await Assert.ThrowsAsync<InvalidDataException>(() =>
+            new CorpusWriter(corpusRoot,
+                    DateTimeOffset.Parse("2026-08-15T00:00:00Z"), CodeCommit)
+                .WriteAsync(replacement, default));
+
+        Assert.Contains("reparse point or symbolic link", error.Message,
+            StringComparison.Ordinal);
+        Assert.Equal(0, replacement.BodyFetchCount);
+        Assert.Equal(before, LinkAwareInventory(corpusRoot));
+    }
+
+    [Fact]
+    public async Task V3_append_rechecks_a_new_version_destination_junction_after_body_fetch()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+
+        var corpusRoot = Path.Combine(_dir, "junction-v4-destination-after-fetch");
+        await new CorpusWriter(corpusRoot,
+                DateTimeOffset.Parse("2026-08-14T00:00:00Z"), CodeCommit)
+            .WriteAsync(new SameDateAdapter(
+                reverse: false, includeSecond: false), default);
+        var replacementKey = "2025-07-28--" + Convert.ToHexStringLower(
+            System.Security.Cryptography.SHA256.HashData(
+                System.Text.Encoding.UTF8.GetBytes("official:v-b")));
+        var destination = Path.Combine(
+            corpusRoot, "works", "w1", "versions", replacementKey);
+        var external = Path.Combine(_dir, "external-v4-destination-junction-after-fetch");
+        Directory.CreateDirectory(external);
+        var replacement = new SameDateAdapter(
+            reverse: false, includeFirst: false, omitSource: true,
+            beforeFirstBodyFetch: () => Assert.True(
+                TryCreateJunction(destination, external),
+                "The Windows test host could not create a directory junction."));
+
+        var error = await Assert.ThrowsAsync<InvalidDataException>(() =>
+            new CorpusWriter(corpusRoot,
+                    DateTimeOffset.Parse("2026-08-15T00:00:00Z"), CodeCommit)
+                .WriteAsync(replacement, default));
+
+        Assert.Contains("reparse point or symbolic link", error.Message,
+            StringComparison.Ordinal);
+        Assert.Equal(1, replacement.BodyFetchCount);
+        Assert.Empty(Directory.EnumerateFileSystemEntries(external));
+    }
+
+    [Theory]
     [InlineData("work-directory")]
     [InlineData("work-meta")]
     [InlineData("version-directory")]
@@ -216,6 +355,31 @@ public sealed partial class CorpusWriterTests
             try { if (Directory.Exists(probe)) Directory.Delete(probe); } catch { }
             try { if (Directory.Exists(target)) Directory.Delete(target); } catch { }
         }
+    }
+
+    private static bool TryCreateJunction(string junction, string target)
+    {
+        var start = new System.Diagnostics.ProcessStartInfo("cmd.exe")
+        {
+            CreateNoWindow = true,
+            RedirectStandardError = true,
+            RedirectStandardOutput = true,
+            UseShellExecute = false,
+        };
+        start.ArgumentList.Add("/d");
+        start.ArgumentList.Add("/c");
+        start.ArgumentList.Add("mklink");
+        start.ArgumentList.Add("/J");
+        start.ArgumentList.Add(junction);
+        start.ArgumentList.Add(target);
+        using var process = System.Diagnostics.Process.Start(start);
+        if (process is null) return false;
+        _ = process.StandardOutput.ReadToEnd();
+        _ = process.StandardError.ReadToEnd();
+        process.WaitForExit();
+        return process.ExitCode == 0
+            && Directory.Exists(junction)
+            && (File.GetAttributes(junction) & FileAttributes.ReparsePoint) != 0;
     }
 
     private static SortedDictionary<string, string> LinkAwareInventory(string root)
