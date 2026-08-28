@@ -184,3 +184,139 @@ test("a malformed response yields no strip rather than a fabricated one", () => 
     assert.deepEqual(envelopeStripRows(raw), [], `fabricated a row from ${JSON.stringify(raw)}`);
   }
 });
+
+// Duplicate publisher identities. Search calls envelopeStripRows on the raw response, so arrival
+// order is transport order, and a first-wins collapse would let the same two envelopes display
+// two different corpus commits depending on which one the transport happened to put first.
+
+const conflictPair = () => [
+  envelope("lu-legilux"),
+  envelope("lu-legilux", {
+    freshness: {
+      built_at: "2026-08-08T00:00:00Z",
+      corpus_commit: "0000ffff",
+      stamp_signature_valid: false,
+    },
+  }),
+];
+
+const UNESTABLISHED = {
+  publisher: "lu-legilux",
+  timelineSemantics: undefined,
+  builtAt: undefined,
+  signatureValid: undefined,
+  corpusCommit: undefined,
+  codeCommit: undefined,
+  manifestSetId: undefined,
+  contentDigest: undefined,
+};
+
+test("conflicting envelopes for one publisher state no identity rather than the first one", () => {
+  const rows = envelopeStripRows(conflictPair());
+  assert.equal(rows.length, 1);
+  assert.deepEqual(rows[0], UNESTABLISHED, "picked one conflicting disclosure and rendered it");
+  assert.equal(indexFreshnessLabel(rows[0].builtAt), "index build date unavailable");
+});
+
+test("arrival order cannot decide the displayed identity", () => {
+  const [first, second] = conflictPair();
+  assert.deepEqual(envelopeStripRows([first, second]), envelopeStripRows([second, first]));
+  // Named explicitly as well, so a regression cannot pass by making both orders equally wrong.
+  for (const order of [[first, second], [second, first]]) {
+    const [row] = envelopeStripRows(order);
+    assert.equal(row.builtAt, undefined, "arrival order produced a confident build date");
+    assert.equal(row.corpusCommit, undefined, "arrival order produced a confident corpus commit");
+    assert.equal(row.signatureValid, undefined, "arrival order produced a signature claim");
+  }
+});
+
+test("a conflicted publisher is disclosed, never dropped from the strip", () => {
+  // Dropping it would hide that the index answered at all, which reads as "not mounted" and is a
+  // different, false statement. The reader has to be told the identity could not be established.
+  const rows = envelopeStripRows(conflictPair());
+  assert.deepEqual(rows.map((r) => r.publisher), ["lu-legilux"]);
+  assert.equal(indexFreshnessLabel(rows[0].builtAt), "index build date unavailable");
+});
+
+test("a disagreement on any single row field conflicts, not just the build date", () => {
+  // Comparing a subset is the same defect in a subtler place: two entries agreeing on built_at and
+  // disagreeing on corpus_commit would collapse into one confident row.
+  const base = {
+    timeline_semantics: "publisher_applicability",
+    freshness: { built_at: "2026-08-15T09:01:06Z", corpus_commit: "e9c4df09",
+                 stamp_signature_valid: true },
+    artifact: { code_commit: "abc123", manifest_set_id: "m-1", content_digest: "d-1" },
+  };
+  const differing: Record<string, unknown>[] = [
+    { ...base, timeline_semantics: "publisher_transaction" },
+    { ...base, freshness: { ...base.freshness, built_at: "2026-08-08T00:00:00Z" } },
+    { ...base, freshness: { ...base.freshness, stamp_signature_valid: false } },
+    { ...base, freshness: { ...base.freshness, corpus_commit: "0000ffff" } },
+    { ...base, artifact: { ...base.artifact, code_commit: "def456" } },
+    { ...base, artifact: { ...base.artifact, manifest_set_id: "m-2" } },
+    { ...base, artifact: { ...base.artifact, content_digest: "d-2" } },
+  ];
+  for (const over of differing) {
+    const rows = envelopeStripRows([envelope("lu-legilux", base), envelope("lu-legilux", over)]);
+    assert.equal(rows.length, 1);
+    assert.deepEqual(rows[0], UNESTABLISHED, `collapsed a conflict: ${JSON.stringify(over)}`);
+  }
+});
+
+test("a field absent on one entry and present on the other is a conflict, not a merge", () => {
+  const rows = envelopeStripRows([
+    envelope("lu-legilux"),
+    envelope("lu-legilux", { freshness: { built_at: "2026-08-15T09:01:06Z",
+                                          stamp_signature_valid: true } }),
+  ]);
+  assert.deepEqual(rows[0], UNESTABLISHED, "kept a corpus commit only one envelope carried");
+});
+
+test("entries whose raw values differ but normalize alike are one disclosure", () => {
+  // Equality is over what the row would state, not over the bytes that produced it. Both of these
+  // fail closed to undefined on every field, so they say the same thing and collapsing states
+  // nothing neither of them said.
+  const rows = envelopeStripRows([
+    envelope("lu-legilux", { timeline_semantics: 7, freshness: { built_at: "tomorrow",
+      corpus_commit: "", stamp_signature_valid: "yes" }, artifact: { code_commit: null } }),
+    envelope("lu-legilux", { timeline_semantics: null, freshness: { built_at: 20260815,
+      corpus_commit: "   ", stamp_signature_valid: 1 }, artifact: { code_commit: "x".repeat(129) } }),
+  ]);
+  assert.equal(rows.length, 1, "treated two identical fail-closed disclosures as a conflict");
+  assert.deepEqual(rows[0], UNESTABLISHED);
+});
+
+test("a third entry conflicting with two agreeing ones still fails the row closed", () => {
+  const rows = envelopeStripRows([
+    envelope("lu-legilux"),
+    envelope("lu-legilux"),
+    envelope("lu-legilux", { freshness: { built_at: "2026-08-08T00:00:00Z" } }),
+  ]);
+  assert.equal(rows.length, 1);
+  assert.deepEqual(rows[0], UNESTABLISHED, "an agreeing pair absorbed a later conflict");
+});
+
+test("one publisher's conflict does not disturb another publisher's row", () => {
+  const rows = envelopeStripRows([
+    ...conflictPair(),
+    envelope("eu-eurlex", { freshness: { built_at: "2026-08-08T00:00:00Z",
+                                         corpus_commit: "aa11bb22", stamp_signature_valid: true } }),
+  ]);
+  // Ordinal sort survives the conflict handling, so the strip renders identically between runs.
+  assert.deepEqual(rows.map((r) => r.publisher), ["eu-eurlex", "lu-legilux"]);
+  assert.equal(rows[0].builtAt, "2026-08-08T00:00:00Z");
+  assert.equal(rows[0].corpusCommit, "aa11bb22");
+  assert.equal(rows[0].signatureValid, true);
+  assert.deepEqual(rows[1], UNESTABLISHED);
+});
+
+test("an identical duplicate still collapses into one confident row", () => {
+  // The repair may not turn every repeat into an unavailable strip. Two entries saying the same
+  // thing are one disclosure, and the reader keeps the identity both of them carried.
+  const rows = envelopeStripRows([envelope("lu-legilux"), envelope("lu-legilux")]);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].builtAt, "2026-08-15T09:01:06Z");
+  assert.equal(rows[0].corpusCommit, "e9c4df09");
+  assert.equal(rows[0].signatureValid, true);
+  assert.equal(rows[0].contentDigest, "d-1");
+});

@@ -11,6 +11,17 @@
  * into one build date. Two mounted indexes built a week apart have two answers, and picking one
  * would assert a freshness the other does not have.
  *
+ * The same rule holds inside one publisher. Two envelopes naming the same publisher are one
+ * disclosure only if they agree on every field the row carries; then collapsing them states
+ * nothing neither of them said. If they disagree on any field, there is no established identity to
+ * show, and the row fails closed instead: the publisher is still listed, with every identity field
+ * absent, so the strip says the build date and stamp are unavailable rather than picking whichever
+ * envelope happened to arrive first. Arrival order is not evidence. Callers hand this raw
+ * transport order, so a first-wins collapse would let two responses carrying the same two
+ * envelopes in different orders display two different corpus commits as fact, and a reader
+ * checking an answer against the wrong corpus commit is the failure this disclosure exists to
+ * prevent.
+ *
  * Fails closed: a value that is not the type the producer promised becomes undefined, and an
  * absent build date is stated as absent rather than omitted, because an undated screen is exactly
  * what rule 8 forbids. For the build date, "the type the producer promised" is not "a string" but
@@ -93,18 +104,70 @@ function buildTimestamp(value: unknown): string | undefined {
     : undefined;
 }
 
+/**
+ * Every field of the row except the key that identifies it. A mapped type rather than a written
+ * list, so a field added to `EnvelopeStripRow` fails the build until it is compared here too.
+ *
+ * Comparing a subset is the first-wins defect wearing a disguise. Two envelopes agreeing on
+ * `built_at` and disagreeing on `corpus_commit` would collapse into one confident row, and the
+ * reader would check an answer against a corpus commit the response never established.
+ */
+const COMPARED: { [K in Exclude<keyof EnvelopeStripRow, "publisher">]: true } = {
+  timelineSemantics: true,
+  builtAt: true,
+  signatureValid: true,
+  corpusCommit: true,
+  codeCommit: true,
+  manifestSetId: true,
+  contentDigest: true,
+};
+
+const COMPARED_FIELDS = Object.keys(COMPARED) as (keyof typeof COMPARED)[];
+
+/**
+ * One disclosure or two. Compared field by field after the per-field validation above, so two
+ * entries whose raw values differ but both fail closed to undefined are the same disclosure:
+ * what the row would state is identical, and that is what collapsing may not change.
+ */
+function sameDisclosure(a: EnvelopeStripRow, b: EnvelopeStripRow): boolean {
+  return COMPARED_FIELDS.every((field) => a[field] === b[field]);
+}
+
+/**
+ * The publisher is mounted and its index identity could not be established. Every field is absent,
+ * so `indexFreshnessLabel` and `signatureStatusLabel` state the unavailable case and the identity
+ * list renders empty. There is no path from here to a confident build date.
+ *
+ * The whole row blanks, not only the fields that disagreed. Keeping the agreeing halves of two
+ * conflicting disclosures would mint a row no envelope carried, and pairing one envelope's build
+ * date with another's corpus commit is a stronger claim than either envelope made.
+ */
+function identityUnestablished(publisher: string): EnvelopeStripRow {
+  return {
+    publisher,
+    timelineSemantics: undefined,
+    builtAt: undefined,
+    signatureValid: undefined,
+    corpusCommit: undefined,
+    codeCommit: undefined,
+    manifestSetId: undefined,
+    contentDigest: undefined,
+  };
+}
+
 export function envelopeStripRows(raw: unknown): EnvelopeStripRow[] {
   if (!Array.isArray(raw)) return [];
   const byPublisher = new Map<string, EnvelopeStripRow>();
+  const conflicted = new Set<string>();
   for (const entry of raw) {
     const envelope = (entry as { envelope?: unknown } | null)?.envelope;
     if (envelope === null || typeof envelope !== "object" || Array.isArray(envelope)) continue;
     const e = envelope as Record<string, unknown>;
     const publisher = str(e.publisher);
-    if (publisher === undefined || byPublisher.has(publisher)) continue;
+    if (publisher === undefined) continue;
     const freshness = (e.freshness ?? {}) as Record<string, unknown>;
     const artifact = (e.artifact ?? {}) as Record<string, unknown>;
-    byPublisher.set(publisher, {
+    const row: EnvelopeStripRow = {
       publisher,
       timelineSemantics: str(e.timeline_semantics),
       builtAt: buildTimestamp(freshness.built_at),
@@ -115,15 +178,27 @@ export function envelopeStripRows(raw: unknown): EnvelopeStripRow[] {
       codeCommit: str(artifact.code_commit),
       manifestSetId: str(artifact.manifest_set_id),
       contentDigest: str(artifact.content_digest),
-    });
+    };
+    const seen = byPublisher.get(publisher);
+    if (seen === undefined) byPublisher.set(publisher, row);
+    // Every later entry is compared against the first one kept, never against a decision already
+    // taken, so the verdict does not depend on which entry arrived first. Field-by-field equality
+    // is an equivalence relation, so agreeing with the first is agreeing with all of them, and a
+    // publisher that conflicts once stays conflicted however many entries follow.
+    else if (!sameDisclosure(seen, row)) conflicted.add(publisher);
   }
   // Ordinal sort so the strip renders identically between processes and runs.
-  return [...byPublisher.values()].sort((a, b) => (a.publisher < b.publisher ? -1 : 1));
+  return [...byPublisher.values()]
+    .map((row) => (conflicted.has(row.publisher) ? identityUnestablished(row.publisher) : row))
+    .sort((a, b) => (a.publisher < b.publisher ? -1 : 1));
 }
 
 /**
  * Never render an undated current. A missing build date is said out loud, because a screen that
  * simply omits it reads as "current" and that is the claim rule 8 exists to stop.
+ *
+ * A publisher whose envelopes conflicted arrives here as undefined and gets the same sentence,
+ * which is the honest one either way: the strip cannot state this index's build date.
  */
 export function indexFreshnessLabel(builtAt: string | undefined): string {
   return builtAt === undefined ? "index build date unavailable" : `index built ${builtAt}`;
