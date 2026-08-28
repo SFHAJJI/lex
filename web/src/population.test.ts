@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { fuzzyModeFor, populationCoverageLabel, populationScopeLabel, unionKnownExclusions } from "./api.ts";
+import { fuzzyModeFor, populationCoverageLabel, populationScopeLabel, retainedForQuery,
+  unionKnownExclusions } from "./api.ts";
 
 // Trust rule 6 is about a denominator the reader can check. These bind the exact presentation of
 // a population the producer published, so a number can never appear describing a scope it did not
@@ -83,4 +84,38 @@ test("an override never survives a change of question", () => {
   assert.equal(fuzzyModeFor("travial salarie", "conge parental"), "auto");
   assert.equal(fuzzyModeFor("travial salarie", ""), "auto");
   assert.equal(fuzzyModeFor("travial salarie", "travial"), "auto");
+});
+
+// retainedForQuery has been the site of the same defect twice, once on the exact-words override
+// and once on the publisher metadata filter, so it gets its own cases rather than being covered
+// only through the components that call it. The rule it encodes is that state a reader bound to
+// one question is discarded when a different question is submitted. Hiding it is not discarding
+// it: a hidden value is dormant, and returning to the earlier question reapplies a narrowing the
+// reader authorised once, on a visit they never authorised.
+
+const filter = { query: "conge parental", metadata: { kind: "eurovoc_domain" } };
+
+test("state bound to a question survives that question", () => {
+  assert.deepEqual(retainedForQuery(filter, "conge parental"), filter);
+});
+
+test("state bound to a question is discarded by a different question", () => {
+  assert.equal(retainedForQuery(filter, "travial salarie"), undefined);
+  assert.equal(retainedForQuery(filter, ""), undefined);
+  // A prefix is a different question, not the same one partially typed.
+  assert.equal(retainedForQuery(filter, "conge"), undefined);
+});
+
+test("padding is not a different question", () => {
+  // The request carries the trimmed question and the search surface is keyed by it. Comparing
+  // raw strings here while the key trimmed left a padded resubmission neither remounted nor
+  // discarded, so the unpadded question reactivated it. One notion of identity, not three.
+  assert.deepEqual(retainedForQuery(filter, "  conge parental  "), filter);
+  assert.deepEqual(
+    retainedForQuery({ ...filter, query: "  conge parental  " }, "conge parental"),
+    { ...filter, query: "  conge parental  " });
+});
+
+test("nothing bound means nothing to retain", () => {
+  assert.equal(retainedForQuery(undefined, "conge parental"), undefined);
 });
