@@ -475,6 +475,13 @@ export interface UiEffect {
   publisher_limitations?: unknown;
   /** Verified rows rendered while a sibling publisher response was unusable (PR293 O1). */
   partial_response?: boolean;
+  /**
+   * Publishers whose own response contradicted itself, so every claim they made was withheld.
+   * Named rather than counted: a reader who knows which publisher is missing can judge the gap,
+   * and "these results are incomplete" alone does not tell them whether the missing part is the
+   * one they care about.
+   */
+  conflicted_publishers?: string[];
   provision?: { subject: Subject; valid_from: string; valid_to?: string; provisions: ProvisionItem[]; permalink?: string;
                 evidence?: EvidenceContext[]; total_provisions?: number; truncated?: boolean;
                 text_truncated?: boolean; outline_only?: boolean };

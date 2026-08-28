@@ -3,7 +3,7 @@ import test from "node:test";
 import {
   classifyEnvelope, clearedSearchResults, gapBadgeStatus, INCOMPLETE_RESPONSE_SENTENCE,
   AMBIGUOUS_ONLY_SENTENCE, LIMITATION_CAP, NO_CORPUS_SENTENCE, NO_CORPUS_STATUS,
-  PARTIAL_RESPONSE_SENTENCE, scopedLimitations,
+  conflictedPublishersSentence, PARTIAL_RESPONSE_SENTENCE, scopedLimitations,
   LIMITATION_EXPLANATION, LIMITATION_STATUS, limitationsForTool, limitationsFromEffect,
   MIXED_ZERO_SENTENCES, partitionGovernedResponse, projectGovernedEmptiness,
   projectSearchResponse, searchAbsenceState, searchEmptyPresentation, searchResultsFromError,
@@ -998,4 +998,32 @@ test("a genuinely unknown filter is still dropped", () => {
     envelope: { status: LIMITATION_STATUS, publisher: "lu-legilux" },
     unsupported_filters: ["not_a_governed_filter"],
   }).kind, "invalid");
+});
+
+// A conflicted publisher is not merely missing from the answer. Every claim it made was withheld,
+// so a reader deciding whether this answer covers what they care about needs to know which
+// publisher it was. "These results are incomplete" alone does not tell them that.
+
+test("no conflicted publisher says nothing at all", () => {
+  assert.equal(conflictedPublishersSentence([]), undefined);
+});
+
+test("a conflicted publisher is named, not counted", () => {
+  const sentence = conflictedPublishersSentence(["lu-legilux"]);
+  assert.ok(sentence !== undefined);
+  assert.ok(sentence.includes("lu-legilux"), "the publisher was not named");
+  assert.ok(!sentence.includes("1 publisher"), "named, not counted");
+});
+
+test("several conflicted publishers are all named", () => {
+  const sentence = conflictedPublishersSentence(["eu-eurlex", "lu-legilux"]) ?? "";
+  assert.ok(sentence.includes("eu-eurlex") && sentence.includes("lu-legilux"));
+});
+
+test("the cause stays neutral between the two ways a publisher contradicts itself", () => {
+  // A status conflict and a population conflict are different facts. Naming either one would be
+  // a specific false claim in the other case, which is worse than the vague true one.
+  const sentence = conflictedPublishersSentence(["lu-legilux"]) ?? "";
+  assert.ok(!sentence.includes("scope figure"), "a status conflict relabelled as a population one");
+  assert.ok(sentence.includes("contradict"), "the cause is not stated at all");
 });

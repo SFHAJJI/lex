@@ -21,7 +21,8 @@ import {
 import { extractionDisclosure } from "./extractionProfile";
 import { HISTORICAL_DENSITY, historicalDensityApplies } from "./notices";
 import { gapBadgeStatus, LIMITATION_EXPLANATION, limitationsFromEffect,
-  PARTIAL_RESPONSE_SENTENCE, scopedLimitations, type PublisherLimitation } from "./limitations";
+  conflictedPublishersSentence, PARTIAL_RESPONSE_SENTENCE, scopedLimitations,
+  type PublisherLimitation } from "./limitations";
 
 const permalink = (work: string, date: string, anchor?: string) =>
   `/${publisherOf(work)}/${workSlug(work)}/${date}${anchor ? `#${anchor}` : ""}`;
@@ -774,13 +775,21 @@ export const hasView = (ui?: UiEffect) =>
  * (PR293 review, O1). Round 6 computed this state and rendered nothing, so an incomplete
  * answer presented itself as the complete holding.
  */
-export function PartialResponseNotice({ partial }: { partial?: boolean }) {
+export function PartialResponseNotice(
+  { partial, conflicted }: { partial?: boolean; conflicted?: string[] }) {
   if (!partial) return null;
+  // Named when we can name them. A conflicted publisher is not merely missing: its own response
+  // contradicted itself, so every claim it made was withheld, and a reader deciding whether this
+  // answer covers what they care about needs to know which publisher that was.
+  const names = conflictedPublishersSentence(conflicted ?? []);
   return (
     <div className="trust-notice" role="note" data-testid="partial-response-notice"
          aria-label="Incomplete response">
       <b>These results are incomplete</b>
       <p className="sub">{PARTIAL_RESPONSE_SENTENCE}</p>
+      {names !== undefined ? (
+        <p className="sub" data-testid="conflicted-publishers">{names}</p>
+      ) : null}
     </div>
   );
 }

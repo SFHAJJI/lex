@@ -122,6 +122,21 @@ export const PARTIAL_RESPONSE_SENTENCE =
   "Some publishers returned a response Lex could not read, so these results are not everything "
   + "it holds for this request.";
 
+/**
+ * Names the publishers whose own response contradicted itself, or nothing when there are none.
+ *
+ * Named rather than counted. A conflicted publisher is not merely missing: every claim it made
+ * was withheld, and a reader deciding whether this answer covers what they care about needs to
+ * know which publisher that was. The cause stays neutral between the two ways a publisher can
+ * contradict itself, because a status conflict and a population conflict are different facts and
+ * naming the wrong one is a specific false claim rather than a vague one.
+ */
+export function conflictedPublishersSentence(conflicted: string[]): string | undefined {
+  return conflicted.length === 0 ? undefined
+    : `Nothing from ${conflicted.join(", ")} is shown here, because that publisher answered `
+      + "this query in ways that contradict each other.";
+}
+
 /** The fixed sentence for a response that cannot support results or absence claims. */
 export const INCOMPLETE_RESPONSE_SENTENCE =
   "This response was incomplete, so Lex cannot show results or state what is absent. "

@@ -338,7 +338,8 @@ export default function App() {
                          known_exclusions: unionKnownExclusions(ran),
                          rows: visibleRows },
               publisher_limitations: partition.limitations,
-              partial_response: decision.partial }
+              partial_response: decision.partial,
+              conflicted_publishers: partition.conflictedPublishers }
           : decision.empty === "all_refused"
           ? { gap: { status: "filter_not_supported_by_index",
                      explanation: LIMITATION_EXPLANATION, available: [] },
@@ -355,7 +356,8 @@ export default function App() {
                      explanation: AMBIGUOUS_ONLY_SENTENCE, available: [] },
               publisher_limitations: partition.limitations,
               // An unusable sibling is still disclosed beside the ambiguity message.
-              partial_response: decision.partial }
+              partial_response: decision.partial,
+              conflicted_publishers: partition.conflictedPublishers }
           : decision.empty === "incomplete_response"
           ? { gap: { status: "incomplete_response",
                      explanation: INCOMPLETE_RESPONSE_SENTENCE, available: [] },
@@ -455,7 +457,8 @@ export default function App() {
                           known_exclusions: unionKnownExclusions(ran),
                           rows: visibleRows },
               publisher_limitations: partition.limitations,
-              partial_response: decision.partial }
+              partial_response: decision.partial,
+              conflicted_publishers: partition.conflictedPublishers }
           : decision.empty === "all_refused"
           ? { gap: { status: "filter_not_supported_by_index",
                      explanation: LIMITATION_EXPLANATION, available: [] },
@@ -469,7 +472,8 @@ export default function App() {
                      explanation: AMBIGUOUS_ONLY_SENTENCE, available: [] },
               publisher_limitations: partition.limitations,
               // An unusable sibling is still disclosed beside the ambiguity message.
-              partial_response: decision.partial }
+              partial_response: decision.partial,
+              conflicted_publishers: partition.conflictedPublishers }
           : decision.empty === "incomplete_response"
           ? { gap: { status: "incomplete_response",
                      explanation: INCOMPLETE_RESPONSE_SENTENCE, available: [] },
@@ -836,7 +840,8 @@ export default function App() {
           </div>
         ) : <>
         <PublisherLimitations items={limitationsFromEffect(ui?.publisher_limitations)} />
-        <PartialResponseNotice partial={ui?.partial_response} />
+        <PartialResponseNotice partial={ui?.partial_response}
+                               conflicted={ui?.conflicted_publishers} />
         {ui?.gap ? <Gap {...ui.gap} held={s.work ? held : undefined} /> :
          ui?.ranking ? <Ranking rows={ui.ranking.rows} worksChanged={ui.ranking.works_changed}
                                 newVersions={ui.ranking.new_versions} from={ui.ranking.from_date}
