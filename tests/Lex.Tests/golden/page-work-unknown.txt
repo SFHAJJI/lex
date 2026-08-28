@@ -241,7 +241,7 @@ HTTP 404
 <main>
 <h1>Unknown work</h1>
 
-<p>status <span class="mono">unknown_work</span>, no work <b>nope</b> in t-pub. Try <a href="/search">search</a>.</p><div class="notice" role="note" data-testid="unknown-work-notice" aria-label="Instrument not found in held records"><b>Instrument not found in held records.</b> status <span class="mono">unknown_work</span>, requested <span class="mono">nope</span>. Lex does not hold an instrument matching this identifier. This is not evidence that the instrument or law does not exist. Check the identifier, choose a possible held record below, or search the official publisher.<span class="sub"><a href="/search">Search Lex</a> &nbsp;&nbsp;<a href="/search">Search Lex</a></span></div>
+<p>status <span class="mono">unknown_work</span>, no work <b>nope</b> in t-pub. Try <a href="/search">search</a>.</p><div class="notice" role="note" data-testid="unknown-work-notice" aria-label="Instrument not found in held records"><b>Instrument not found in held records.</b> status <span class="mono">unknown_work</span>, requested <span class="mono">nope</span>. Lex does not hold an instrument matching this identifier. This is not evidence that the instrument or law does not exist. Check the identifier. If possible held records are listed below, choose one; otherwise search the official publisher.<span class="sub"><a href="/search">Search Lex</a> &nbsp;&nbsp;<a href="/search">Search Lex</a></span></div>
 </main>
 <footer>
 <!-- Fourteen links in one undifferentiated run answered no question a reader had. Three

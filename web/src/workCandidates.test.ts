@@ -41,6 +41,6 @@ test("the frozen copy is byte-equal to Decision 41, heading and complete body", 
   assert.equal(UNKNOWN_WORK_HEADING, "Instrument not found in held records");
   assert.equal(UNKNOWN_WORK_BODY,
     "Lex does not hold an instrument matching this identifier. This is not evidence that "
-    + "the instrument or law does not exist. Check the identifier, choose a possible held "
-    + "record below, or search the official publisher.");
+    + "the instrument or law does not exist. Check the identifier. If possible held records "
+    + "are listed below, choose one; otherwise search the official publisher.");
 });

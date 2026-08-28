@@ -18,8 +18,8 @@ public static class WorkCandidates
     public const string Heading = "Instrument not found in held records";
     public const string Body =
         "Lex does not hold an instrument matching this identifier. This is not evidence that "
-        + "the instrument or law does not exist. Check the identifier, choose a possible held "
-        + "record below, or search the official publisher.";
+        + "the instrument or law does not exist. Check the identifier. If possible held "
+        + "records are listed below, choose one; otherwise search the official publisher.";
     public const string CandidatesHeading = "Possible held records";
 
     /// <summary>
