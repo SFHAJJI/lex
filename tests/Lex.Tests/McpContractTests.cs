@@ -521,6 +521,11 @@ public class McpContractTests : IDisposable
         Assert.Null(unavailable["retrieval_mode"]);
         Assert.Empty(unavailable["hits"]!.AsArray());
         Assert.Null(unavailable["query_plan"]);
+        var population = Assert.IsType<JsonObject>(unavailable["population"]);
+        Assert.Equal("selected_metadata_scope", population["basis"]!.GetValue<string>());
+        Assert.Equal(2, population["works_in_scope"]!.GetValue<int>());
+        Assert.True(population["scope_filters_applied"]!.GetValue<bool>());
+        Assert.False(population["query_ran"]!.GetValue<bool>());
     }
 
     [Fact]
@@ -575,6 +580,7 @@ public class McpContractTests : IDisposable
                 ["publisher_metadata_identifier"] = firstId,
             }));
             var part = Assert.Single(response.OfType<JsonObject>());
+            Assert.Equal(1, part["population"]!["works_in_scope"]!.GetValue<int>());
             Assert.False(part["query_plan"]!["has_strong_work_match"]!.GetValue<bool>());
             Assert.Empty(part["query_plan"]!["work_constraints"]!.AsArray());
             var hit = Assert.Single(part["hits"]!.AsArray())!.AsObject();
@@ -1019,6 +1025,82 @@ public class McpContractTests : IDisposable
         var hits = Assert.IsType<JsonArray>(result["hits"]);
         Assert.NotEmpty(hits);
         Assert.All(hits.OfType<JsonObject>(), h => Assert.Equal("2020-01-01", h["valid_from"]!.GetValue<string>()));
+    }
+
+    [Fact]
+    public void Search_population_applies_the_same_metadata_and_time_scope_before_matching()
+    {
+        var all = Call("search", new JsonObject
+        {
+            ["query"] = "no-such-word", ["time_scope"] = "all_versions",
+        });
+        var allPopulation = Assert.IsType<JsonObject>(all["population"]);
+        Assert.Equal("selected_metadata_scope", allPopulation["basis"]!.GetValue<string>());
+        Assert.Equal(2, allPopulation["works_in_scope"]!.GetValue<int>());
+        Assert.True(allPopulation["scope_filters_applied"]!.GetValue<bool>());
+        Assert.True(allPopulation["query_ran"]!.GetValue<bool>());
+
+        var atDate = Call("search", new JsonObject
+        {
+            ["query"] = "no-such-word", ["time_scope"] = "as_of", ["as_of"] = "2019-06-01",
+        });
+        Assert.Equal(1, atDate["population"]!["works_in_scope"]!.GetValue<int>());
+
+        var filtered = Call("search", new JsonObject
+        {
+            ["query"] = "no-such-word", ["time_scope"] = "all_versions",
+            ["hierarchy"] = "secondary_law", ["domain"] = "finance",
+            ["act_form"] = "REG", ["binding_status"] = "in_force",
+        });
+        Assert.Equal(1, filtered["population"]!["works_in_scope"]!.GetValue<int>());
+        Assert.False(string.IsNullOrWhiteSpace(
+            filtered["population"]!["known_exclusions"]!.GetValue<string>()));
+
+        var selectedWork = Call("search", new JsonObject
+        {
+            ["query"] = "no-such-word", ["time_scope"] = "all_versions",
+            ["works"] = "t-pub:w2",
+        });
+        Assert.Equal(1, selectedWork["population"]!["works_in_scope"]!.GetValue<int>());
+
+        var sourceClass = Call("search", new JsonObject
+        {
+            ["query"] = "no-such-word", ["time_scope"] = "all_versions",
+            ["source_class"] = "!REG",
+        });
+        Assert.Equal(0, sourceClass["population"]!["works_in_scope"]!.GetValue<int>());
+    }
+
+    [Fact]
+    public void Search_LU_exclusions_do_not_publish_an_obsolete_hand_copied_count()
+    {
+        var db = Path.Combine(Path.GetTempPath(), $"lex-mcp-lu-population-{Guid.NewGuid():N}.db");
+        try
+        {
+            var stamp = new Dictionary<string, string>
+            {
+                ["collection"] = "lu-legilux", ["tier"] = "A",
+                ["history_begins"] = "publisher", ["built_at"] = "2026-08-28T00:00:00Z",
+                ["corpus_commit"] = "test",
+            };
+            var document = new DocRow(
+                "lu-legilux:test:2024-01-01", "lu-legilux", "test", "urn:test", "LOI",
+                "fr", "2024-01-01", null, "publisher", "2026-08-28T00:00:00Z", false,
+                true, true, "record", "body", "https://example.test/test", "Test", "Test",
+                null, "2024-01-01", null);
+            IndexBuilder.Build(db, stamp, [document], [], [], [], StampSigner.CreateKeyPem());
+            using var reader = LexIndexReader.Open(db);
+            var core = new McpCore(new Dictionary<string, LexIndexReader>
+                { ["lu-legilux"] = reader });
+
+            var response = Assert.Single(Assert.IsType<JsonArray>(core.CallTool(
+                "search", new JsonObject { ["query"] = "absent" })).OfType<JsonObject>());
+            var exclusions = response["population"]!["known_exclusions"]!.GetValue<string>();
+            Assert.Contains("never-consolidated", exclusions, StringComparison.Ordinal);
+            Assert.DoesNotContain("24,579", exclusions, StringComparison.Ordinal);
+            Assert.DoesNotContain('\u2014', exclusions);
+        }
+        finally { try { File.Delete(db); } catch { } }
     }
 
     [Fact]

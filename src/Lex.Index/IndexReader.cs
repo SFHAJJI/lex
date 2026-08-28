@@ -617,8 +617,16 @@ public sealed class LexIndexReader : IDisposable
     public IReadOnlyList<string> UnsupportedFilters(
         FilterSet filters,
         CapabilityTimeScope timeScope,
-        DateOnly? asOf = null) => Lex.Index.CapabilityManifest.UnsupportedFilters(
+        DateOnly? asOf = null)
+    {
+        var unsupported = Lex.Index.CapabilityManifest.UnsupportedFilters(
             CapabilityManifest, filters, timeScope, asOf, _legacyCapabilityManifest);
+        if (filters.PublisherMetadataIdentifier is null || _workCatalogVersion >= 2)
+            return unsupported;
+
+        return unsupported.Append("publisher_metadata_identifier")
+            .Order(StringComparer.Ordinal).ToArray();
+    }
 
     internal IReadOnlyList<string> UnsupportedFiltersInPeriod(
         FilterSet filters,
@@ -2099,6 +2107,20 @@ public sealed class LexIndexReader : IDisposable
             "1=1", scoped, excludeAsOf: true);
         using var cmd = Cmd(
             $"SELECT COUNT(DISTINCT group_key) FROM docs WHERE {where}", parameters);
+        return Convert.ToInt32(cmd.ExecuteScalar() ?? 0);
+    }
+
+    /// <summary>
+    /// Distinct non-withdrawn works in the exact supported metadata and time scope presented to
+    /// search, before the query text selects matches. Unlike the period-ranking denominator,
+    /// search must retain <see cref="FilterSet.AsOf"/> because the result list applies it.
+    /// </summary>
+    public int SearchPopulationTotal(FilterSet filter)
+    {
+        var (where, parameters) = WithFilters(
+            "1=1", filter, excludeAsOf: false, alias: "d");
+        using var cmd = Cmd(
+            $"SELECT COUNT(DISTINCT d.group_key) FROM docs d WHERE {where}", parameters);
         return Convert.ToInt32(cmd.ExecuteScalar() ?? 0);
     }
 

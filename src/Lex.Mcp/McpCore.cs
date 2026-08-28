@@ -481,12 +481,31 @@ public sealed class McpCore
     private static string KnownExclusions(LexIndexReader r) =>
         r.Stamp.GetValueOrDefault("known_exclusions") ?? r.Collection switch
         {
-            "lu-legilux" => "never-consolidated LU acts (~24,579 as-published lois/RGD) are not ingested; ingestion scheduled — see coverage",
+            // Decision 27 forbids a hand-copied population count. A future index may stamp its
+            // build-derived count; the fallback remains qualitative and therefore cannot drift.
+            "lu-legilux" => "never-consolidated as-published LU laws and grand-ducal regulations are not yet ingested; see coverage",
             // Named, not gestured at. "Flagship acts" tells a reader nothing about whether the act
             // they care about is here, and the front page used to promise "EU law" over the top
             // of it.
-            "eu-eurlex" => $"{r.Coverage(1).Groups:n0} EU works from the reviewed scope are currently mounted; the wider acquis is not yet ingested, see coverage",
+            "eu-eurlex" => $"{r.PopulationTotal(null):n0} EU works from the reviewed scope are currently mounted; the wider acquis is not yet ingested, see coverage",
             _ => "see the coverage tool for this publisher's known gaps",
+        };
+
+    private static JsonObject SearchPopulation(
+        LexIndexReader reader,
+        FilterSet filter,
+        bool scopeFiltersApplied,
+        bool queryRan) => new()
+        {
+            ["basis"] = scopeFiltersApplied
+                ? "selected_metadata_scope"
+                : "mounted_scope_before_unsupported_filters",
+            ["works_in_scope"] = scopeFiltersApplied
+                ? reader.SearchPopulationTotal(filter)
+                : reader.PopulationTotal(null),
+            ["scope_filters_applied"] = scopeFiltersApplied,
+            ["query_ran"] = queryRan,
+            ["known_exclusions"] = KnownExclusions(reader),
         };
 
     private static bool ProvisionalFor(LexIndexReader r, DateOnly d)
@@ -1339,8 +1358,13 @@ public sealed class McpCore
                     var unsupported = reader.UnsupportedFilters(
                         filter, capabilityTimeScope, asOf);
                     if (unsupported.Count > 0)
-                        outp.Add(UnsupportedFilterResult(
-                            reader, unsupported, filter, timeScope, asOf, "hits"));
+                    {
+                        var refusal = UnsupportedFilterResult(
+                            reader, unsupported, filter, timeScope, asOf, "hits");
+                        refusal["population"] = SearchPopulation(
+                            reader, filter, scopeFiltersApplied: false, queryRan: false);
+                        outp.Add(refusal);
+                    }
                     else
                         supportedReaders.Add(reader);
                 }
@@ -1358,6 +1382,8 @@ public sealed class McpCore
                         ["query_expansions"] = new JsonArray(),
                         ["artifact_manifest_id"] =
                             Environment.GetEnvironmentVariable("LEX_ARTIFACT_MANIFEST_ID"),
+                        ["population"] = SearchPopulation(
+                            reader, filter, scopeFiltersApplied: true, queryRan: false),
                         ["hits"] = new JsonArray(),
                     });
                 }
@@ -1541,6 +1567,8 @@ public sealed class McpCore
                         },
                         ["query_expansions"] = new JsonArray(execution.QueryExpansions.Select(x => (JsonNode)x).ToArray()),
                         ["artifact_manifest_id"] = Environment.GetEnvironmentVariable("LEX_ARTIFACT_MANIFEST_ID"),
+                        ["population"] = SearchPopulation(
+                            r, filter, scopeFiltersApplied: true, queryRan: true),
                         ["hits"] = hitsArr,
                     });
                 }
