@@ -97,6 +97,63 @@ public sealed class Canon1FreezeTests
     }
 
     [Fact]
+    public void DirectML_configuration_has_its_own_complete_locked_graph()
+    {
+        var repository = Golden.RepositoryRoot();
+        var buildProperties = System.Xml.Linq.XDocument.Load(Path.Combine(
+            repository, "Directory.Build.props"));
+        var directMlLockPath = Assert.Single(
+            buildProperties.Descendants("NuGetLockFilePath"));
+        Assert.Equal("'$(UseDirectML)' == 'true'",
+            directMlLockPath.Attribute("Condition")?.Value);
+        Assert.Equal("$(MSBuildProjectDirectory)/packages.directml.lock.json",
+            directMlLockPath.Value);
+
+        var projectFiles = Directory.EnumerateFiles(
+                repository, "*.csproj", SearchOption.AllDirectories)
+            .Where(path => !path.Split(Path.DirectorySeparatorChar).Contains("obj"))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        Assert.All(projectFiles, project =>
+            Assert.True(File.Exists(Path.Combine(
+                    Path.GetDirectoryName(project)!, "packages.directml.lock.json")),
+                $"Missing packages.directml.lock.json for {Path.GetRelativePath(repository, project)}"));
+
+        var defaultIndexDependencies = LockedDependencies(Path.Combine(
+            repository, "src", "Lex.Index", "packages.lock.json"));
+        Assert.Contains("Microsoft.ML.OnnxRuntime",
+            defaultIndexDependencies.Select(item => item.Key));
+        Assert.DoesNotContain("Microsoft.ML.OnnxRuntime.DirectML",
+            defaultIndexDependencies.Select(item => item.Key));
+
+        var indexDependencies = LockedDependencies(Path.Combine(
+            repository, "src", "Lex.Index", "packages.directml.lock.json"));
+        AssertLockedPackage(indexDependencies, "Microsoft.ML.OnnxRuntime.DirectML",
+            "[1.24.4, )", "1.24.4");
+        Assert.DoesNotContain("Microsoft.ML.OnnxRuntime",
+            indexDependencies.Select(item => item.Key));
+
+        var ingestDependencies = LockedDependencies(Path.Combine(
+            repository, "src", "Lex.Ingest", "packages.directml.lock.json"));
+        Assert.Contains("Microsoft.ML.OnnxRuntime.DirectML",
+            ingestDependencies.Select(item => item.Key));
+        Assert.DoesNotContain("Microsoft.ML.OnnxRuntime",
+            ingestDependencies.Select(item => item.Key));
+
+        var ci = File.ReadAllText(Path.Combine(repository, ".github", "workflows", "ci.yml"))
+            .Replace("\r\n", "\n", StringComparison.Ordinal);
+        Assert.Contains(
+            "dotnet restore Lex.slnx --locked-mode --nologo -p:UseDirectML=true", ci,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "dotnet build src/Lex.Ingest/Lex.Ingest.csproj -c Release --no-restore --nologo -p:UseDirectML=true",
+            ci, StringComparison.Ordinal);
+
+        var attributes = File.ReadAllLines(Path.Combine(repository, ".gitattributes"));
+        Assert.Contains("**/packages.directml.lock.json text eol=lf", attributes);
+    }
+
+    [Fact]
     public void Canon_dotnet_toolchain_and_cross_os_ci_are_exactly_pinned()
     {
         Assert.Equal(RuntimeVersion, Environment.Version.ToString());
@@ -414,6 +471,9 @@ public sealed class Canon1FreezeTests
         Assert.Equal((byte)'\n', bytes[^1]);
         _ = new UTF8Encoding(false, true).GetString(bytes);
     }
+
+    private static JsonObject LockedDependencies(string path) =>
+        JsonNode.Parse(File.ReadAllBytes(path))!["dependencies"]!["net10.0"]!.AsObject();
 
     private static void AssertLockedPackage(
         JsonObject dependencies, string name, string requested, string resolved)

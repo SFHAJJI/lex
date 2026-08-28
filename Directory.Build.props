@@ -4,5 +4,6 @@
     <RollForward>Disable</RollForward>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
     <RestoreLockedMode>true</RestoreLockedMode>
+    <NuGetLockFilePath Condition="'$(UseDirectML)' == 'true'">$(MSBuildProjectDirectory)/packages.directml.lock.json</NuGetLockFilePath>
   </PropertyGroup>
 </Project>

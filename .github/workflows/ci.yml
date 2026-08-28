@@ -70,6 +70,11 @@ jobs:
         run: |
           dotnet restore tests/Lex.Tests/Lex.Tests.csproj --locked-mode --nologo
           dotnet test tests/Lex.Tests/Lex.Tests.csproj -c Release --no-restore --nologo --filter FullyQualifiedName~Canon1FreezeTests
+      - name: DirectML locked dependency graph
+        shell: pwsh
+        run: |
+          dotnet restore Lex.slnx --locked-mode --nologo -p:UseDirectML=true
+          dotnet build src/Lex.Ingest/Lex.Ingest.csproj -c Release --no-restore --nologo -p:UseDirectML=true
 
   web:
     runs-on: ubuntu-latest
