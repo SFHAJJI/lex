@@ -36,15 +36,15 @@ internal sealed record AssistantEvaluationRelease(
     bool Prerelease,
     IReadOnlyDictionary<string, AssistantEvaluationReleaseAsset> Assets);
 
-/// <summary>One frozen case as the signed report scored it: how many repetitions ran, how many
-/// passed the deterministic contract, and the relevance score each repetition received. Relevance
-/// is reported and gates nothing.</summary>
+/// <summary>One frozen case as the signed report measured it: how many repetitions ran, how many
+/// passed the deterministic contract, and each nullable relevance score. Relevance is reported
+/// and gates nothing.</summary>
 internal sealed record AssistantEvaluationCaseOutcome(
     string CaseId,
     string Question,
     int Repetitions,
     int Passed,
-    IReadOnlyList<int> RelevanceScores);
+    IReadOnlyList<int?> RelevanceScores);
 
 internal sealed record VerifiedAssistantEvaluationEvidence(
     string Repository,
@@ -351,7 +351,7 @@ internal static class AssistantEvaluationEvidenceVerifier
         var outcomes = RequiredArray(report, "results").EnumerateArray().Select(item => (
             CaseId: BoundedString(item, 100, "case_id"),
             Passed: RequiredBoolean(item, "passed"),
-            Relevance: RequiredInt(Path(item, "relevance"), "score")))
+            Relevance: NullableInt(Path(item, "relevance"), "score")))
             .ToArray();
         if (outcomes.Any(item => item.Relevance is < 1 or > 5))
             throw new InvalidDataException("Assistant evaluation relevance score is out of range.");
@@ -491,6 +491,16 @@ internal static class AssistantEvaluationEvidenceVerifier
         return value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var number)
             ? number : throw new InvalidDataException(
                 "Assistant evaluation integer field is missing.");
+    }
+
+    private static int? NullableInt(JsonElement root, params string[] path)
+    {
+        var value = Path(root, path);
+        if (value.ValueKind == JsonValueKind.Null)
+            return null;
+        return value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var number)
+            ? number : throw new InvalidDataException(
+                "Assistant evaluation nullable integer field is invalid.");
     }
 
     private static decimal RequiredDecimal(JsonElement root, params string[] path)

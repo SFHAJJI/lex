@@ -204,6 +204,8 @@ public static class AssistantEvaluationDiagnosticRunner
                                     ("content_filtered", "content_filter"),
                                 ("invalid_response", "stop") =>
                                     ("invalid_response", "stop"),
+                                ("invalid_response", null) =>
+                                    ("invalid_response", null),
                                 _ => ("unknown", null),
                             };
                         graderUsage = BoundedUsage(exception.Usage, item.Case);
@@ -282,11 +284,11 @@ public static class AssistantEvaluationDiagnosticRunner
 
 internal sealed class AssistantEvaluationDiagnosticResponseException(
     string failureCategory,
-    string finishReason,
+    string? finishReason,
     AssistantModelUsage usage) : Exception(
         "Diagnostic assistant grader returned an unusable response.")
 {
     internal string FailureCategory { get; } = failureCategory;
-    internal string FinishReason { get; } = finishReason;
+    internal string? FinishReason { get; } = finishReason;
     internal AssistantModelUsage Usage { get; } = usage;
 }

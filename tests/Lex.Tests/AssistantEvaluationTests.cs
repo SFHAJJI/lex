@@ -725,30 +725,24 @@ public sealed class AssistantEvaluationTests : IDisposable
     }
 
     [Fact]
-    public async Task Runner_fails_closed_for_contract_drift_or_a_missing_llm_grader()
+    public async Task Runner_fails_closed_for_contract_drift_when_grader_is_unconfigured()
     {
         var drift = Response();
         drift["operations"]![0]!["legal_outcome"] = "not_found";
-        var set = Reviewed(Catalog());
         var drifted = await AssistantEvaluationRunner.RunAsync(
-            set, new StubTarget(drift), null, Identity(), Pricing(),
+            Reviewed(LlmCatalog()), new StubTarget(drift), null, Identity(), Pricing(),
             DateTimeOffset.Parse("2026-08-11T02:00:00Z"), CancellationToken.None);
+
         Assert.False(drifted.ActivationGatePassed);
         Assert.Contains(drifted.Results.SelectMany(result => result.Failures),
             failure => failure.Contains("legal_outcome", StringComparison.Ordinal));
-
-        var llm = Catalog();
-        llm["cases"]![0]!["grading"]!["mode"] = "llm";
-        llm["cases"]![0]!["grading"]!["rubric"] = "Score only grounded legal accuracy.";
-        llm["cases"]![0]!["grading"]!["maximum_input_tokens"] = 4_096;
-        llm["budget"]!["maximum_grader_input_tokens"] = 8_192;
-        var missingGrader = await AssistantEvaluationRunner.RunAsync(
-            Reviewed(llm), new StubTarget(Response()), null,
-            Identity(), Pricing(), DateTimeOffset.Parse("2026-08-11T02:00:00Z"),
-            CancellationToken.None);
-        Assert.False(missingGrader.ActivationGatePassed);
-        Assert.Contains(missingGrader.Results.SelectMany(result => result.Failures),
+        Assert.DoesNotContain(drifted.Results.SelectMany(result => result.Failures),
             failure => failure.Contains("grader", StringComparison.OrdinalIgnoreCase));
+        Assert.All(drifted.Results, result =>
+        {
+            Assert.Null(result.Relevance.Score);
+            Assert.Equal("grader_not_configured", result.Relevance.UnavailableCause);
+        });
     }
 
     [Fact]
@@ -765,7 +759,7 @@ public sealed class AssistantEvaluationTests : IDisposable
             DateTimeOffset.Parse("2026-08-11T02:00:00Z"), CancellationToken.None);
         // Still not hidden, and still not a pass. It is recorded as the measurement that did not
         // happen, with the cause, which is the only honest reading of an unavailable judge.
-        Assert.Equal("transport_Unknown",
+        Assert.Equal("grader_transport_unavailable",
             Assert.Single(failed.Results.Where(result => result.GradingMode == "llm"))
                 .Relevance.UnavailableCause);
 
@@ -831,7 +825,7 @@ public sealed class AssistantEvaluationTests : IDisposable
     }
 
     [Fact]
-    public async Task A_failed_grader_call_is_an_absent_measurement_not_a_pass_and_not_a_failure()
+    public async Task An_unavailable_or_unconfigured_grader_is_a_typed_absent_measurement_and_never_gates()
     {
         var set = Reviewed(LlmCatalog());
 
@@ -844,7 +838,7 @@ public sealed class AssistantEvaluationTests : IDisposable
         {
             Assert.Empty(result.Failures);
             Assert.Null(result.Relevance.Score);
-            Assert.Equal("transport_Unknown", result.Relevance.UnavailableCause);
+            Assert.Equal("grader_transport_unavailable", result.Relevance.UnavailableCause);
         });
         Assert.DoesNotContain("secret upstream detail",
             JsonSerializer.Serialize(unavailable), StringComparison.Ordinal);
@@ -860,18 +854,39 @@ public sealed class AssistantEvaluationTests : IDisposable
         Assert.All(truncated.Results, result =>
         {
             Assert.Null(result.Relevance.Score);
-            Assert.Equal("grader_finish_reason_length", result.Relevance.UnavailableCause);
+            Assert.Equal("grader_unknown_failure", result.Relevance.UnavailableCause);
         });
 
-        // A run wired to no grader at all is not one call that failed; it is a run that never
-        // brought the separate judge, and that still denies promotion.
+        // A run wired to no grader reports the absent measurement just as explicitly. Availability
+        // does not decide the product gate; deterministic candidate evidence still does.
         var unwired = await AssistantEvaluationRunner.RunAsync(
             set, new StubTarget(Response()), null, Identity(), Pricing(),
             DateTimeOffset.Parse("2026-08-11T02:00:00Z"), CancellationToken.None);
 
-        Assert.False(unwired.ActivationGatePassed);
-        Assert.Contains(unwired.Results.SelectMany(result => result.Failures),
-            failure => failure.Contains("grader", StringComparison.OrdinalIgnoreCase));
+        Assert.True(unwired.ActivationGatePassed);
+        Assert.Empty(unwired.GateFailures);
+        Assert.Equal(new AssistantModelUsage(0, 0), unwired.ActualGraderUsage);
+        Assert.Equal(0, unwired.ActualGraderCostEur);
+        Assert.All(unwired.Results, result =>
+        {
+            Assert.True(result.Passed);
+            Assert.Empty(result.Failures);
+            Assert.Null(result.Relevance.Score);
+            Assert.Equal("grader_not_configured", result.Relevance.UnavailableCause);
+            Assert.Equal(new AssistantModelUsage(0, 0), result.GraderUsage);
+        });
+
+        var malformed = await AssistantEvaluationRunner.RunAsync(
+            set, new StubTarget(Response()), new ScoreGrader(7), Identity(), Pricing(),
+            DateTimeOffset.Parse("2026-08-11T02:00:00Z"), CancellationToken.None);
+
+        Assert.True(malformed.ActivationGatePassed);
+        Assert.All(malformed.Results, result =>
+        {
+            Assert.Empty(result.Failures);
+            Assert.Null(result.Relevance.Score);
+            Assert.Equal("grader_score_out_of_range", result.Relevance.UnavailableCause);
+        });
     }
 
     [Fact]
@@ -888,7 +903,7 @@ public sealed class AssistantEvaluationTests : IDisposable
             set, new StubTarget(Response(),
                 admissionRunIdentity: admission.RunIdentity,
                 admissionSha256: admission.Sha256),
-            new ThrowingGrader(), Identity(), Pricing(), runAt, CancellationToken.None);
+            null, Identity(), Pricing(), runAt, CancellationToken.None);
         var reportPath = Path.Combine(_dir, "assistant-eval-report.json");
         var verifiedAt = DateTimeOffset.Parse("2026-08-11T03:00:00Z");
 
@@ -914,7 +929,7 @@ public sealed class AssistantEvaluationTests : IDisposable
         Assert.All(accepted.Results, result =>
         {
             Assert.Null(result.Relevance.Score);
-            Assert.Equal("transport_Unknown", result.Relevance.UnavailableCause);
+            Assert.Equal("grader_not_configured", result.Relevance.UnavailableCause);
         });
 
         // A score and a reason it is missing cannot both be true.
@@ -949,9 +964,92 @@ public sealed class AssistantEvaluationTests : IDisposable
         });
         Assert.Throws<InvalidDataException>(Verify);
 
+        WriteReport(json => json["results"]![0]!["relevance"] = new JsonObject
+        {
+            ["score"] = null,
+            ["unavailable_cause"] = "HOSTILE_REGEX_VALID_SENTINEL",
+        });
+        Assert.Throws<InvalidDataException>(Verify);
+
+        WriteReport(json => json["results"]![0]!["relevance"] = new JsonObject
+        {
+            ["score"] = null,
+            ["unavailable_cause"] = 7,
+        });
+        Assert.Throws<InvalidDataException>(Verify);
+
+        // A score proves that a grader call completed, so it cannot coexist with zero usage.
+        WriteReport(json => json["results"]![0]!["relevance"] = new JsonObject
+        {
+            ["score"] = 3,
+            ["unavailable_cause"] = null,
+        });
+        Assert.Throws<InvalidDataException>(Verify);
+
+        // Conversely, not-configured is a pre-call cause and cannot claim billed usage.
+        WriteReport(json =>
+        {
+            foreach (var result in json["results"]!.AsArray())
+                result!["grader_usage"] = new JsonObject
+                {
+                    ["input_tokens"] = 1,
+                    ["output_tokens"] = 1,
+                };
+            var measured = new AssistantModelUsage(report.Results.Count, report.Results.Count);
+            var cost = report.Pricing.GraderCost(
+                measured.InputTokens, measured.OutputTokens);
+            json["actual_grader_usage"] = JsonSerializer.SerializeToNode(measured,
+                new JsonSerializerOptions
+                {
+                    PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+                });
+            json["actual_grader_cost_eur"] = cost;
+            json["actual_total_cost_eur"] = report.ActualCandidateCostEur + cost;
+        });
+        Assert.Throws<InvalidDataException>(Verify);
+
         // And the deterministic half is still refusable at the boundary.
         WriteReport(json => json["results"]![0]!["failures"] = new JsonArray("op1 legal_outcome"));
         Assert.Throws<InvalidDataException>(Verify);
+    }
+
+    [Fact]
+    public async Task Release_verifier_accepts_only_the_billed_safe_unknown_cause_for_positive_usage()
+    {
+        var set = Reviewed(LlmCatalog());
+        var runAt = DateTimeOffset.Parse("2026-08-11T02:00:00Z");
+        var admission = SignedAdmission(set, runAt);
+        var report = await AssistantEvaluationRunner.RunAsync(
+            set, new StubTarget(Response(),
+                admissionRunIdentity: admission.RunIdentity,
+                admissionSha256: admission.Sha256),
+            new TypedRefusingGrader("HOSTILE_REGEX_VALID_SENTINEL", new(10, 1)),
+            Identity(), Pricing(), runAt, CancellationToken.None);
+        var reportPath = Path.Combine(_dir, "unknown-billed-cause-report.json");
+        var options = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+        };
+        File.WriteAllBytes(reportPath, JsonSerializer.SerializeToUtf8Bytes(report, options));
+
+        var verified = VerifyReportForTest(
+            reportPath, admission.Path, admission.SignaturePath,
+            set, Identity().Target,
+            new AssistantTargetAttestation(Identity().IndexManifestIds),
+            DateTimeOffset.Parse("2026-08-11T03:00:00Z"), admission.Authority);
+
+        Assert.All(verified.Results, result => Assert.Equal(
+            "grader_unknown_billed_failure", result.Relevance.UnavailableCause));
+
+        var drifted = JsonNode.Parse(File.ReadAllBytes(reportPath))!.AsObject();
+        drifted["results"]![0]!["relevance"]!["unavailable_cause"] =
+            "grader_unknown_failure";
+        File.WriteAllText(reportPath, drifted.ToJsonString());
+        Assert.Throws<InvalidDataException>(() => VerifyReportForTest(
+            reportPath, admission.Path, admission.SignaturePath,
+            set, Identity().Target,
+            new AssistantTargetAttestation(Identity().IndexManifestIds),
+            DateTimeOffset.Parse("2026-08-11T03:00:00Z"), admission.Authority));
     }
 
     [Fact]
@@ -1445,7 +1543,7 @@ public sealed class AssistantEvaluationTests : IDisposable
         var grader = new AssistantEvaluationHttpGrader(
             http, "https://independent-grader.example", "test-key", "grader-release");
 
-        var exception = await Assert.ThrowsAsync<AssistantEvaluationStageException>(() =>
+        var exception = await Assert.ThrowsAnyAsync<AssistantEvaluationStageException>(() =>
             grader.GradeAsync(evaluationCase, response, CancellationToken.None));
 
         Assert.Contains("typed evidence exceeds", exception.Message, StringComparison.Ordinal);
@@ -1585,14 +1683,326 @@ public sealed class AssistantEvaluationTests : IDisposable
             filteredHttp, "https://independent-grader.example", "test-key", "grader-release");
 
         var truncatedFailure =
-            await Assert.ThrowsAsync<AssistantEvaluationStageException>(() =>
+            await Assert.ThrowsAnyAsync<AssistantEvaluationStageException>(() =>
                 truncated.GradeAsync(evaluationCase, Response(), CancellationToken.None));
         var filteredFailure =
-            await Assert.ThrowsAsync<AssistantEvaluationStageException>(() =>
+            await Assert.ThrowsAnyAsync<AssistantEvaluationStageException>(() =>
                 filtered.GradeAsync(evaluationCase, Response(), CancellationToken.None));
 
         Assert.Equal("grader_finish_reason_length", truncatedFailure.Cause);
         Assert.Equal("grader_finish_reason_content_filter", filteredFailure.Cause);
+    }
+
+    [Theory]
+    [InlineData("length", "grader_finish_reason_length")]
+    [InlineData("content_filter", "grader_finish_reason_content_filter")]
+    public async Task Runner_retains_billed_usage_for_a_successful_unscored_grader_response(
+        string finishReason,
+        string expectedCause)
+    {
+        var set = Reviewed(LlmCatalog());
+        using var http = new HttpClient(new GraderHandler(finishReason));
+        var grader = new AssistantEvaluationHttpGrader(
+            http, "https://independent-grader.example", "test-key", "grader-release");
+
+        var report = await AssistantEvaluationRunner.RunAsync(
+            set, new StubTarget(Response()), grader, Identity(), Pricing(),
+            DateTimeOffset.Parse("2026-08-11T02:00:00Z"), CancellationToken.None);
+
+        Assert.True(report.ActivationGatePassed);
+        Assert.All(report.Results, result =>
+        {
+            Assert.Equal(new AssistantModelUsage(1_000, 20), result.GraderUsage);
+            Assert.Null(result.Relevance.Score);
+            Assert.Equal(expectedCause, result.Relevance.UnavailableCause);
+        });
+        var expectedUsage = new AssistantModelUsage(
+            1_000L * report.Results.Count, 20L * report.Results.Count);
+        Assert.Equal(expectedUsage, report.ActualGraderUsage);
+        Assert.Equal(Pricing().GraderCost(
+            expectedUsage.InputTokens, expectedUsage.OutputTokens),
+            report.ActualGraderCostEur);
+    }
+
+    [Theory]
+    [InlineData("absent", "grader_finish_reason_absent")]
+    [InlineData("wrong_type", "grader_finish_reason_invalid_type")]
+    [InlineData("unknown", "grader_finish_reason_unknown")]
+    [InlineData("malformed_grade", "grader_grade_malformed")]
+    [InlineData("missing_content", "grader_no_content")]
+    [InlineData("missing_score", "grader_no_score")]
+    [InlineData("missing_reason", "grader_no_reason")]
+    [InlineData("score_out_of_range", "grader_score_out_of_range")]
+    [InlineData("empty_choices", "grader_response_malformed")]
+    [InlineData("choices_object", "grader_response_malformed")]
+    [InlineData("null_choice", "grader_response_malformed")]
+    [InlineData("multiple_choices", "grader_response_malformed")]
+    public async Task Official_grader_accepts_only_stop_and_retains_usage_for_closed_failures(
+        string mutation,
+        string expectedCause)
+    {
+        var set = Reviewed(LlmCatalog());
+        using var http = new HttpClient(new GraderHandler(mutateResponse: response =>
+        {
+            var choice = response["choices"]![0]!.AsObject();
+            switch (mutation)
+            {
+                case "absent":
+                    choice.Remove("finish_reason");
+                    break;
+                case "wrong_type":
+                    choice["finish_reason"] = 7;
+                    break;
+                case "unknown":
+                    choice["finish_reason"] = "tool_calls";
+                    break;
+                case "malformed_grade":
+                    choice["message"]!["content"] = "{";
+                    break;
+                case "missing_content":
+                    choice["message"]!.AsObject().Remove("content");
+                    break;
+                case "missing_score":
+                    choice["message"]!["content"] = new JsonObject
+                    {
+                        ["reason"] = "measured",
+                    }.ToJsonString();
+                    break;
+                case "missing_reason":
+                    choice["message"]!["content"] = new JsonObject
+                    {
+                        ["score"] = 5,
+                    }.ToJsonString();
+                    break;
+                case "score_out_of_range":
+                    choice["message"]!["content"] = new JsonObject
+                    {
+                        ["score"] = 7,
+                        ["reason"] = "measured",
+                    }.ToJsonString();
+                    break;
+                case "empty_choices":
+                    response["choices"] = new JsonArray();
+                    break;
+                case "choices_object":
+                    response["choices"] = new JsonObject();
+                    break;
+                case "null_choice":
+                    response["choices"] = new JsonArray((JsonNode?)null);
+                    break;
+                case "multiple_choices":
+                    response["choices"]!.AsArray().Add(choice.DeepClone());
+                    break;
+            }
+        }));
+        var grader = new AssistantEvaluationHttpGrader(
+            http, "https://independent-grader.example", "test-key", "grader-release");
+
+        var report = await AssistantEvaluationRunner.RunAsync(
+            set, new StubTarget(Response()), grader, Identity(), Pricing(),
+            DateTimeOffset.Parse("2026-08-11T02:00:00Z"), CancellationToken.None);
+
+        Assert.True(report.ActivationGatePassed);
+        Assert.All(report.Results, result =>
+        {
+            Assert.Equal(new AssistantModelUsage(1_000, 20), result.GraderUsage);
+            Assert.Null(result.Relevance.Score);
+            Assert.Equal(expectedCause, result.Relevance.UnavailableCause);
+        });
+        var expectedUsage = new AssistantModelUsage(
+            1_000L * report.Results.Count, 20L * report.Results.Count);
+        Assert.Equal(expectedUsage, report.ActualGraderUsage);
+        Assert.Equal(Pricing().GraderCost(
+            expectedUsage.InputTokens, expectedUsage.OutputTokens),
+            report.ActualGraderCostEur);
+    }
+
+    [Fact]
+    public async Task Official_grader_sanitizes_invalid_http_usage_before_reading_the_grade()
+    {
+        var set = Reviewed(LlmCatalog());
+        using var http = new HttpClient(new GraderHandler(mutateResponse: response =>
+        {
+            response["usage"]!["prompt_tokens"] = -1;
+        }));
+        var grader = new AssistantEvaluationHttpGrader(
+            http, "https://independent-grader.example", "test-key", "grader-release");
+
+        var report = await AssistantEvaluationRunner.RunAsync(
+            set, new StubTarget(Response()), grader, Identity(), Pricing(),
+            DateTimeOffset.Parse("2026-08-11T02:00:00Z"), CancellationToken.None);
+
+        Assert.True(report.ActivationGatePassed);
+        Assert.Equal(new AssistantModelUsage(0, 0), report.ActualGraderUsage);
+        Assert.Equal(0, report.ActualGraderCostEur);
+        Assert.All(report.Results, result =>
+        {
+            Assert.Equal(new AssistantModelUsage(0, 0), result.GraderUsage);
+            Assert.Null(result.Relevance.Score);
+            Assert.Equal("grader_usage_invalid", result.Relevance.UnavailableCause);
+        });
+    }
+
+    [Fact]
+    public async Task Grader_failures_use_a_closed_privacy_safe_cause_vocabulary()
+    {
+        const string hostileCause = "HOSTILE_REGEX_VALID_SENTINEL";
+        var set = Reviewed(LlmCatalog());
+        var hostile = await AssistantEvaluationRunner.RunAsync(
+            set, new StubTarget(Response()), new RefusingGrader(hostileCause),
+            Identity(), Pricing(), DateTimeOffset.Parse("2026-08-11T02:00:00Z"),
+            CancellationToken.None);
+        var internalTimeout = await AssistantEvaluationRunner.RunAsync(
+            set, new StubTarget(Response()), new CancelingGrader(),
+            Identity(), Pricing(), DateTimeOffset.Parse("2026-08-11T02:00:00Z"),
+            CancellationToken.None);
+
+        Assert.True(hostile.ActivationGatePassed);
+        Assert.All(hostile.Results, result => Assert.Equal(
+            "grader_unknown_failure", result.Relevance.UnavailableCause));
+        Assert.DoesNotContain(hostileCause, JsonSerializer.Serialize(hostile),
+            StringComparison.Ordinal);
+        Assert.True(internalTimeout.ActivationGatePassed);
+        Assert.All(internalTimeout.Results, result => Assert.Equal(
+            "grader_timeout", result.Relevance.UnavailableCause));
+
+        using var canceled = new CancellationTokenSource();
+        await Assert.ThrowsAsync<OperationCanceledException>(() =>
+            AssistantEvaluationRunner.RunAsync(
+                set, new StubTarget(Response()), new CancelingCallerGrader(canceled),
+                Identity(), Pricing(), DateTimeOffset.Parse("2026-08-11T02:00:00Z"),
+                canceled.Token));
+    }
+
+    [Fact]
+    public async Task Runner_validates_typed_grader_exception_fields_at_its_trust_boundary()
+    {
+        var set = Reviewed(LlmCatalog());
+        var invalidUsage = await AssistantEvaluationRunner.RunAsync(
+            set, new StubTarget(Response()),
+            new TypedRefusingGrader("grader_finish_reason_length", new(-1, 1)),
+            Identity(), Pricing(), DateTimeOffset.Parse("2026-08-11T02:00:00Z"),
+            CancellationToken.None);
+        var hostileCause = await AssistantEvaluationRunner.RunAsync(
+            set, new StubTarget(Response()),
+            new TypedRefusingGrader("HOSTILE_REGEX_VALID_SENTINEL", new(10, 1)),
+            Identity(), Pricing(), DateTimeOffset.Parse("2026-08-11T02:00:00Z"),
+            CancellationToken.None);
+        var nullUsage = await AssistantEvaluationRunner.RunAsync(
+            set, new StubTarget(Response()),
+            new TypedRefusingGrader("grader_finish_reason_length", null!),
+            Identity(), Pricing(), DateTimeOffset.Parse("2026-08-11T02:00:00Z"),
+            CancellationToken.None);
+        var incoherentUsage = await AssistantEvaluationRunner.RunAsync(
+            set, new StubTarget(Response()),
+            new TypedRefusingGrader("grader_timeout", new(10, 1)),
+            Identity(), Pricing(), DateTimeOffset.Parse("2026-08-11T02:00:00Z"),
+            CancellationToken.None);
+
+        Assert.All(invalidUsage.Results, result =>
+        {
+            Assert.Equal(new AssistantModelUsage(0, 0), result.GraderUsage);
+            Assert.Equal("grader_usage_invalid", result.Relevance.UnavailableCause);
+        });
+        Assert.All(hostileCause.Results, result =>
+        {
+            Assert.Equal(new AssistantModelUsage(10, 1), result.GraderUsage);
+            Assert.Equal("grader_unknown_billed_failure",
+                result.Relevance.UnavailableCause);
+        });
+        var expectedUsage = new AssistantModelUsage(
+            10L * hostileCause.Results.Count, hostileCause.Results.Count);
+        Assert.Equal(expectedUsage, hostileCause.ActualGraderUsage);
+        Assert.Equal(Pricing().GraderCost(
+            expectedUsage.InputTokens, expectedUsage.OutputTokens),
+            hostileCause.ActualGraderCostEur);
+        Assert.DoesNotContain("HOSTILE_REGEX_VALID_SENTINEL",
+            JsonSerializer.Serialize(hostileCause), StringComparison.Ordinal);
+        Assert.All(nullUsage.Results, result =>
+        {
+            Assert.Equal(new AssistantModelUsage(0, 0), result.GraderUsage);
+            Assert.Equal("grader_usage_invalid", result.Relevance.UnavailableCause);
+        });
+        Assert.All(incoherentUsage.Results, result =>
+        {
+            Assert.Equal(new AssistantModelUsage(0, 0), result.GraderUsage);
+            Assert.Equal("grader_usage_invalid", result.Relevance.UnavailableCause);
+        });
+    }
+
+    [Theory]
+    [InlineData(-1, -1)]
+    [InlineData(-1, 0)]
+    [InlineData(0, 1)]
+    public async Task Runner_never_accumulates_or_prices_invalid_custom_grader_usage(
+        long inputTokens,
+        long outputTokens)
+    {
+        var report = await AssistantEvaluationRunner.RunAsync(
+            Reviewed(LlmCatalog()), new StubTarget(Response()),
+            new UsageGrader(new AssistantModelUsage(inputTokens, outputTokens)),
+            Identity(), Pricing(), DateTimeOffset.Parse("2026-08-11T02:00:00Z"),
+            CancellationToken.None);
+
+        Assert.True(report.ActivationGatePassed);
+        Assert.Equal(new AssistantModelUsage(0, 0), report.ActualGraderUsage);
+        Assert.Equal(0, report.ActualGraderCostEur);
+        Assert.All(report.Results, result =>
+        {
+            Assert.Equal(new AssistantModelUsage(0, 0), result.GraderUsage);
+            Assert.Null(result.Relevance.Score);
+            Assert.Equal("grader_usage_invalid", result.Relevance.UnavailableCause);
+        });
+    }
+
+    [Fact]
+    public async Task Runner_sanitizes_custom_grader_usage_whose_token_total_overflows()
+    {
+        var report = await AssistantEvaluationRunner.RunAsync(
+            Reviewed(LlmCatalog()), new StubTarget(Response()),
+            new UsageGrader(new AssistantModelUsage(long.MaxValue, long.MaxValue)),
+            Identity(), Pricing(), DateTimeOffset.Parse("2026-08-11T02:00:00Z"),
+            CancellationToken.None);
+
+        Assert.Equal(new AssistantModelUsage(0, 0), report.ActualGraderUsage);
+        Assert.Equal(0, report.ActualGraderCostEur);
+        Assert.All(report.Results, result =>
+        {
+            Assert.Equal(new AssistantModelUsage(0, 0), result.GraderUsage);
+            Assert.Equal("grader_usage_invalid", result.Relevance.UnavailableCause);
+        });
+    }
+
+    [Fact]
+    public async Task Runner_prefers_usage_refusal_when_score_and_usage_are_both_invalid()
+    {
+        var report = await AssistantEvaluationRunner.RunAsync(
+            Reviewed(LlmCatalog()), new StubTarget(Response()),
+            new UsageGrader(new AssistantModelUsage(-1, 1), score: 7),
+            Identity(), Pricing(), DateTimeOffset.Parse("2026-08-11T02:00:00Z"),
+            CancellationToken.None);
+
+        Assert.Equal(new AssistantModelUsage(0, 0), report.ActualGraderUsage);
+        Assert.Equal(0, report.ActualGraderCostEur);
+        Assert.All(report.Results, result =>
+        {
+            Assert.Equal(new AssistantModelUsage(0, 0), result.GraderUsage);
+            Assert.Null(result.Relevance.Score);
+            Assert.Equal("grader_usage_invalid", result.Relevance.UnavailableCause);
+        });
+    }
+
+    [Fact]
+    public async Task Runner_fails_closed_when_valid_per_call_usage_overflows_aggregation()
+    {
+        var failure = await Assert.ThrowsAsync<InvalidDataException>(() =>
+            AssistantEvaluationRunner.RunAsync(
+                Reviewed(LlmCatalog()), new StubTarget(Response()),
+                new UsageGrader(new AssistantModelUsage(long.MaxValue / 2 + 1, 1)),
+                Identity(), Pricing(), DateTimeOffset.Parse("2026-08-11T02:00:00Z"),
+                CancellationToken.None));
+
+        Assert.Contains("grader usage", failure.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -2060,6 +2470,7 @@ public sealed class AssistantEvaluationTests : IDisposable
         Assert.Equal("none", failedGrade.TargetFailureCategory);
         Assert.Equal("invalid_response", failedGrade.GraderFailureCategory);
         Assert.Null(failedGrade.FinishReason);
+        Assert.Equal(new AssistantModelUsage(1_000, 20), failedGrade.GraderUsage);
         Assert.Equal(8_000, graderFailure.Preflight.ReservedGraderOutputTokens);
         Assert.False(graderFailure.MeasurementCompleted);
         var json = JsonSerializer.Serialize(targetFailure)
@@ -2080,6 +2491,75 @@ public sealed class AssistantEvaluationTests : IDisposable
         Assert.Null(untrustedResult.FinishReason);
         Assert.DoesNotContain("raw-interface-finish",
             JsonSerializer.Serialize(untrustedGrader), StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("missing_finish", "invalid_response", null, 1_000, 20)]
+    [InlineData("unknown_finish", "invalid_response", null, 1_000, 20)]
+    [InlineData("length", "truncated", "length", 1_000, 20)]
+    [InlineData("content_filter", "content_filtered", "content_filter", 1_000, 20)]
+    [InlineData("choices_object", "invalid_response", null, 1_000, 20)]
+    [InlineData("multiple_choices", "invalid_response", null, 1_000, 20)]
+    [InlineData("malformed_grade", "invalid_response", "stop", 1_000, 20)]
+    [InlineData("invalid_usage", "invalid_response", "stop", 0, 0)]
+    public async Task Diagnostic_preserves_valid_usage_through_every_post_response_refusal(
+        string mutation,
+        string expectedFailure,
+        string? expectedFinish,
+        long expectedInput,
+        long expectedOutput)
+    {
+        var catalog = Catalog();
+        catalog["cases"]![0]!["grading"]!["mode"] = "llm";
+        catalog["cases"]![0]!["grading"]!["rubric"] = "Judge relevance.";
+        catalog["cases"]![0]!["grading"]!["maximum_input_tokens"] = 4_096;
+        catalog["cases"]![0]!["grading"]!["maximum_output_tokens"] = 1_000;
+        catalog["budget"]!["maximum_grader_input_tokens"] = 4_096;
+        catalog["budget"]!["maximum_grader_output_tokens"] = 8_000;
+        using var http = new HttpClient(new GraderHandler(mutateResponse: response =>
+        {
+            var choice = response["choices"]![0]!.AsObject();
+            switch (mutation)
+            {
+                case "missing_finish":
+                    choice.Remove("finish_reason");
+                    break;
+                case "unknown_finish":
+                    choice["finish_reason"] = "tool_calls";
+                    break;
+                case "length":
+                case "content_filter":
+                    choice["finish_reason"] = mutation;
+                    break;
+                case "choices_object":
+                    response["choices"] = new JsonObject();
+                    break;
+                case "multiple_choices":
+                    response["choices"]!.AsArray().Add(choice.DeepClone());
+                    break;
+                case "malformed_grade":
+                    choice["message"]!["content"] = "{";
+                    break;
+                case "invalid_usage":
+                    response["usage"]!["completion_tokens"] = -1;
+                    break;
+            }
+        }));
+        var grader = new AssistantEvaluationHttpGrader(
+            http, "https://independent-grader.example", "test-key", "grader-release");
+
+        var report = await AssistantEvaluationDiagnosticRunner.RunAsync(
+            Reviewed(catalog),
+            new StubTarget(Response(), admissionRunIdentity: "0123456789abcdef"),
+            grader, Identity(), Pricing(), DateTimeOffset.Parse("2026-08-11T02:00:00Z"),
+            CancellationToken.None);
+
+        var result = Assert.Single(report.Results,
+            item => item.CaseId == "gdpr-as-of");
+        Assert.Equal(expectedFailure, result.GraderFailureCategory);
+        Assert.Equal(expectedFinish, result.FinishReason);
+        Assert.Null(result.Grade);
+        Assert.Equal(new AssistantModelUsage(expectedInput, expectedOutput), result.GraderUsage);
     }
 
     [Fact]
@@ -2284,7 +2764,7 @@ public sealed class AssistantEvaluationTests : IDisposable
     }
 
     [Fact]
-    public async Task Promotion_rejects_a_tampered_or_missing_required_llm_grade()
+    public async Task Promotion_rejects_a_tampered_or_missing_relevance_record()
     {
         var catalog = Catalog();
         catalog["cases"]![0]!["grading"]!["mode"] = "llm";
@@ -2327,12 +2807,7 @@ public sealed class AssistantEvaluationTests : IDisposable
     [Fact]
     public async Task Promotion_rejects_zero_or_negative_model_usage_even_when_totals_match()
     {
-        var catalog = Catalog();
-        catalog["cases"]![0]!["grading"]!["mode"] = "llm";
-        catalog["cases"]![0]!["grading"]!["rubric"] = "Judge groundedness.";
-        catalog["cases"]![0]!["grading"]!["maximum_input_tokens"] = 4_096;
-        catalog["budget"]!["maximum_grader_input_tokens"] = 8_192;
-        var set = Reviewed(catalog);
+        var set = Reviewed(LlmCatalog());
         var admission = SignedAdmission(
             set, DateTimeOffset.Parse("2026-08-11T02:00:00Z"));
         var report = await AssistantEvaluationRunner.RunAsync(
@@ -2367,15 +2842,17 @@ public sealed class AssistantEvaluationTests : IDisposable
                 DateTimeOffset.Parse("2026-08-11T03:00:00Z"), admission.Authority));
 
         var invalidGraderUsage = new AssistantModelUsage(-1, -1);
+        var invalidGraderTotal = new AssistantModelUsage(
+            -report.Results.Count, -report.Results.Count);
         var invalidGraderCost = report.Pricing.GraderCost(
-            invalidGraderUsage.InputTokens, invalidGraderUsage.OutputTokens);
+            invalidGraderTotal.InputTokens, invalidGraderTotal.OutputTokens);
         var negativeGrader = report with
         {
             Results = report.Results.Select(result => result with
             {
                 GraderUsage = invalidGraderUsage,
             }).ToArray(),
-            ActualGraderUsage = invalidGraderUsage,
+            ActualGraderUsage = invalidGraderTotal,
             ActualGraderCostEur = invalidGraderCost,
             ActualTotalCostEur = report.ActualCandidateCostEur + invalidGraderCost,
         };
@@ -2387,6 +2864,113 @@ public sealed class AssistantEvaluationTests : IDisposable
                 set, Identity().Target,
                 new AssistantTargetAttestation(Identity().IndexManifestIds),
                 DateTimeOffset.Parse("2026-08-11T03:00:00Z"), admission.Authority));
+
+        var negativeCost = report with
+        {
+            ActualGraderCostEur = -1,
+            ActualTotalCostEur = report.ActualCandidateCostEur - 1,
+        };
+        File.WriteAllBytes(reportPath,
+            JsonSerializer.SerializeToUtf8Bytes(negativeCost, options));
+        Assert.Throws<InvalidDataException>(() =>
+            VerifyReportForTest(
+                reportPath, admission.Path, admission.SignaturePath,
+                set, Identity().Target,
+                new AssistantTargetAttestation(Identity().IndexManifestIds),
+                DateTimeOffset.Parse("2026-08-11T03:00:00Z"), admission.Authority));
+    }
+
+    [Fact]
+    public async Task Llm_target_failures_report_that_grading_was_not_executed()
+    {
+        var report = await AssistantEvaluationRunner.RunAsync(
+            Reviewed(LlmCatalog()),
+            new ThrowingTarget(new InvalidDataException("secret upstream detail")),
+            new ScoreGrader(5), Identity(), Pricing(),
+            DateTimeOffset.Parse("2026-08-11T02:00:00Z"), CancellationToken.None);
+
+        Assert.All(report.Results, result =>
+        {
+            Assert.Null(result.Relevance.Score);
+            Assert.Equal("grader_not_executed_target_failure",
+                result.Relevance.UnavailableCause);
+            Assert.Equal(new AssistantModelUsage(0, 0), result.GraderUsage);
+        });
+    }
+
+    [Theory]
+    [InlineData(-1, 0)]
+    [InlineData(0, 1)]
+    public async Task Promotion_rejects_mixed_axis_grader_usage_even_when_totals_and_cost_match(
+        long inputTokens,
+        long outputTokens)
+    {
+        var set = Reviewed(LlmCatalog());
+        var runAt = DateTimeOffset.Parse("2026-08-11T02:00:00Z");
+        var admission = SignedAdmission(set, runAt);
+        var report = await AssistantEvaluationRunner.RunAsync(
+            set, new StubTarget(Response(),
+                admissionRunIdentity: admission.RunIdentity,
+                admissionSha256: admission.Sha256),
+            new EchoGrader("measured"), Identity(), Pricing(), runAt,
+            CancellationToken.None);
+        var perResult = new AssistantModelUsage(inputTokens, outputTokens);
+        var total = new AssistantModelUsage(
+            checked(inputTokens * report.Results.Count),
+            checked(outputTokens * report.Results.Count));
+        var cost = report.Pricing.GraderCost(total.InputTokens, total.OutputTokens);
+        var mutated = report with
+        {
+            Results = report.Results.Select(result => result with
+            {
+                GraderUsage = perResult,
+            }).ToArray(),
+            ActualGraderUsage = total,
+            ActualGraderCostEur = cost,
+            ActualTotalCostEur = report.ActualCandidateCostEur + cost,
+        };
+        var path = Path.Combine(_dir, "mixed-grader-usage.json");
+        File.WriteAllBytes(path, JsonSerializer.SerializeToUtf8Bytes(mutated,
+            new JsonSerializerOptions
+            {
+                PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+            }));
+
+        Assert.Throws<InvalidDataException>(() => VerifyReportForTest(
+            path, admission.Path, admission.SignaturePath,
+            set, Identity().Target,
+            new AssistantTargetAttestation(Identity().IndexManifestIds),
+            DateTimeOffset.Parse("2026-08-11T03:00:00Z"), admission.Authority));
+    }
+
+    [Fact]
+    public async Task Promotion_turns_usage_sum_overflow_into_a_typed_refusal()
+    {
+        var set = Reviewed(LlmCatalog());
+        var runAt = DateTimeOffset.Parse("2026-08-11T02:00:00Z");
+        var admission = SignedAdmission(set, runAt);
+        var report = await AssistantEvaluationRunner.RunAsync(
+            set, new StubTarget(Response(),
+                admissionRunIdentity: admission.RunIdentity,
+                admissionSha256: admission.Sha256),
+            new EchoGrader("measured"), Identity(), Pricing(), runAt,
+            CancellationToken.None);
+        var path = Path.Combine(_dir, "overflow-grader-usage.json");
+        var json = JsonNode.Parse(JsonSerializer.SerializeToUtf8Bytes(report,
+            new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower }))!
+            .AsObject();
+        foreach (var result in json["results"]!.AsArray())
+        {
+            result!["grader_usage"]!["input_tokens"] = long.MaxValue / 2 + 1;
+            result["grader_usage"]!["output_tokens"] = 1;
+        }
+        File.WriteAllText(path, json.ToJsonString());
+
+        Assert.Throws<InvalidDataException>(() => VerifyReportForTest(
+            path, admission.Path, admission.SignaturePath,
+            set, Identity().Target,
+            new AssistantTargetAttestation(Identity().IndexManifestIds),
+            DateTimeOffset.Parse("2026-08-11T03:00:00Z"), admission.Authority));
     }
 
     [Fact]
@@ -3358,7 +3942,8 @@ public sealed class AssistantEvaluationTests : IDisposable
     private sealed class GraderHandler(
         string finishReason = "stop",
         string gradeReason = "grounded",
-        bool omitContent = false) : HttpMessageHandler
+        bool omitContent = false,
+        Action<JsonObject>? mutateResponse = null) : HttpMessageHandler
     {
         public int RequestBytes { get; private set; }
         public JsonObject? RequestBody { get; private set; }
@@ -3392,6 +3977,7 @@ public sealed class AssistantEvaluationTests : IDisposable
                     ["completion_tokens"] = 20,
                 },
             };
+            mutateResponse?.Invoke(response);
             return new HttpResponseMessage(System.Net.HttpStatusCode.OK)
             {
                 Content = new StringContent(
@@ -3841,6 +4427,48 @@ public sealed class AssistantEvaluationTests : IDisposable
             CancellationToken cancellationToken) => Task.FromResult(
             new AssistantEvaluationGrade(
                 score, "measured", new AssistantModelUsage(100, 20)));
+    }
+
+    private sealed class UsageGrader(AssistantModelUsage usage, int score = 5) :
+        IAssistantEvaluationGrader
+    {
+        public Task<AssistantEvaluationGrade> GradeAsync(
+            AssistantEvaluationCase evaluationCase,
+            JsonObject response,
+            CancellationToken cancellationToken) => Task.FromResult(
+            new AssistantEvaluationGrade(score, "measured", usage));
+    }
+
+    private sealed class CancelingGrader : IAssistantEvaluationGrader
+    {
+        public Task<AssistantEvaluationGrade> GradeAsync(
+            AssistantEvaluationCase evaluationCase,
+            JsonObject response,
+            CancellationToken cancellationToken) =>
+            throw new TaskCanceledException("hostile internal timeout detail");
+    }
+
+    private sealed class CancelingCallerGrader(CancellationTokenSource source) :
+        IAssistantEvaluationGrader
+    {
+        public Task<AssistantEvaluationGrade> GradeAsync(
+            AssistantEvaluationCase evaluationCase,
+            JsonObject response,
+            CancellationToken cancellationToken)
+        {
+            source.Cancel();
+            throw new OperationCanceledException(cancellationToken);
+        }
+    }
+
+    private sealed class TypedRefusingGrader(string cause, AssistantModelUsage usage) :
+        IAssistantEvaluationGrader
+    {
+        public Task<AssistantEvaluationGrade> GradeAsync(
+            AssistantEvaluationCase evaluationCase,
+            JsonObject response,
+            CancellationToken cancellationToken) =>
+            throw new AssistantEvaluationGraderException(cause, usage, "grader refused");
     }
 
     private sealed class RefusingGrader(string cause) : IAssistantEvaluationGrader

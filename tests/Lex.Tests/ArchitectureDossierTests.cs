@@ -314,6 +314,8 @@ public sealed class ArchitectureDossierTests : IClassFixture<GoldenTests.Site>
             [
                 new("starter-gdpr-article", "What did GDPR Article 6 say on 1 January 2021?", 2, 2, [5, 4]),
                 new("legal-advice-boundary", "Am I compliant if I rely on legitimate interest?", 2, 2, [5, 5]),
+                new("grader-unavailable", "Was the answer relevant?", 2, 2, [null, null]),
+                new("grader-partial", "Was every answer graded?", 2, 2, [5, null]),
             ]);
         using var site = new GoldenTests.Site(new AssistantEvaluationEvidenceSnapshot(evidence));
         using var page = await site.Client.GetAsync("/built/release");
@@ -329,6 +331,9 @@ public sealed class ArchitectureDossierTests : IClassFixture<GoldenTests.Site>
         Assert.DoesNotContain("All 25 reviewed cases", html);
         Assert.Contains("EUR 0.3800 / EUR 10 maximum", html);
         Assert.Contains("first result p95 850 ms", html);
+        Assert.Contains("insufficient_denominator (0 of 2 measured)", html);
+        Assert.Contains("5/5, not measured (1 of 2 measured)", html);
+        Assert.DoesNotContain("0/5", html);
         Assert.Contains("running and evaluated code commit", html);
         Assert.Contains("signed report SHA-256", html);
         Assert.Contains("These hashes intentionally differ", html);

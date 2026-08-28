@@ -57,6 +57,71 @@ public sealed class AssistantEvaluationEvidenceTests : IDisposable
     }
 
     [Fact]
+    public void Signed_package_preserves_an_unavailable_relevance_score_as_null()
+    {
+        var fixture = Package();
+        var files = fixture.Files.ToDictionary(item => item.Key, item => item.Value.ToArray(),
+            StringComparer.Ordinal);
+        MutateJson(files, AssistantEvaluationEvidenceVerifier.ReportFile, root =>
+        {
+            root["results"]![0]!["relevance"]!["score"] = null;
+            root["results"]![0]!["relevance"]!["unavailable_cause"] =
+                "grader_finish_reason_length";
+        });
+        ResignManifest(files, fixture.ArtifactKey);
+        var release = ReleaseFor(files,
+            Sha(files[AssistantEvaluationEvidenceVerifier.ReportFile]),
+            fixture.Runtime.CodeCommit);
+
+        var evidence = AssistantEvaluationEvidenceVerifier.Verify(
+            release, files, [fixture.ArtifactRoot], fixture.Now,
+            fixture.AdmissionAuthority);
+
+        var firstCase = evidence.CaseOutcomes.Single(item => item.CaseId == "one");
+        Assert.Null(firstCase.RelevanceScores[0]);
+        Assert.Equal<int?>(4, firstCase.RelevanceScores[1]);
+    }
+
+    [Theory]
+    [InlineData("missing")]
+    [InlineData("string")]
+    [InlineData("zero")]
+    [InlineData("six")]
+    public void Signed_package_rejects_an_invalid_nullable_relevance_score(string mutation)
+    {
+        var fixture = Package();
+        var files = fixture.Files.ToDictionary(item => item.Key, item => item.Value.ToArray(),
+            StringComparer.Ordinal);
+        MutateJson(files, AssistantEvaluationEvidenceVerifier.ReportFile, root =>
+        {
+            var relevance = root["results"]![0]!["relevance"]!.AsObject();
+            switch (mutation)
+            {
+                case "missing":
+                    relevance.Remove("score");
+                    break;
+                case "string":
+                    relevance["score"] = "5";
+                    break;
+                case "zero":
+                    relevance["score"] = 0;
+                    break;
+                case "six":
+                    relevance["score"] = 6;
+                    break;
+            }
+        });
+        ResignManifest(files, fixture.ArtifactKey);
+        var release = ReleaseFor(files,
+            Sha(files[AssistantEvaluationEvidenceVerifier.ReportFile]),
+            fixture.Runtime.CodeCommit);
+
+        Assert.Throws<InvalidDataException>(() => AssistantEvaluationEvidenceVerifier.Verify(
+            release, files, [fixture.ArtifactRoot], fixture.Now,
+            fixture.AdmissionAuthority));
+    }
+
+    [Fact]
     public void Runtime_match_rejects_each_different_identity_domain()
     {
         var fixture = Package();
