@@ -33,7 +33,10 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory,
     private const int FormexArchiveCapBytes = 32 * 1024 * 1024;
     private const long FormexMemberCapBytes = 64 * 1024 * 1024;
     private const long FormexExpandedCapBytes = 128 * 1024 * 1024;
+    private const int SparqlResponseCapBytes = 128 * 1024 * 1024;
     private const int PortalIdentityMaximumResponses = 2;
+    private const int ScopeSelectorResponseLimit = 20_001;
+    internal const int CellarTruncationRowLimit = 1_000_000;
     internal const int MetadataWorkBatchSize = 16;
     internal const int MetadataRowsPerWorkMaximum = 512;
     internal const int VirtuosoSortedTopMaximum = 10_000;
@@ -769,7 +772,8 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory,
         var result = new Dictionary<string, List<Dictionary<string, string>>>(StringComparer.Ordinal);
         foreach (var chunk in MetadataWorkBatches(celexNumbers))
         {
-            var rows = await SelectAsync(ConsolidationsQuery(chunk), ct);
+            var rows = await SelectAsync(
+                ConsolidationsQuery(chunk), MetadataQueryLimit(chunk.Length), ct);
             AddBoundedMetadataRows(result, rows, chunk, "consolidation");
         }
         RetainUnscopedConsolidations(result);
@@ -859,7 +863,8 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory,
         var result = new Dictionary<string, List<Dictionary<string, string>>>(StringComparer.Ordinal);
         foreach (var chunk in MetadataWorkBatches(celexNumbers))
         {
-            var rows = await SelectAsync(WorkMetadataQuery(chunk), ct);
+            var rows = await SelectAsync(
+                WorkMetadataQuery(chunk), MetadataQueryLimit(chunk.Length), ct);
             RequireBoundedWorkMetadataRows(rows);
             AddBoundedMetadataRows(result, rows, chunk, "work");
         }
@@ -909,7 +914,8 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory,
         var result = new Dictionary<string, List<Dictionary<string, string>>>(StringComparer.Ordinal);
         foreach (var chunk in MetadataWorkBatches(celexNumbers))
         {
-            var rows = await SelectAsync(PublisherMetadataQuery(chunk), ct);
+            var rows = await SelectAsync(
+                PublisherMetadataQuery(chunk), MetadataQueryLimit(chunk.Length), ct);
             RequireBoundedPublisherMetadataRows(rows);
             AddBoundedMetadataRows(result, rows, chunk, "publisher");
         }
@@ -1081,8 +1087,8 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory,
                          cdm:resource_legal_is_about_concept_directory-code ?directory {{inForce}} .
                       FILTER(STRSTARTS(STRAFTER(STR(?directory), "/dir-eu-legal-act/"), "{{prefix}}"))
                       FILTER(REGEX(STR(?celex), "^3[0-9]{4}[RLD]"))
-                    } LIMIT 20001
-                    """, ct);
+                    } LIMIT {{ScopeSelectorResponseLimit}}
+                    """, ScopeSelectorResponseLimit, ct);
                 if (rows.Count > 20000)
                     throw new InvalidOperationException($"Directory selector '{prefix}' exceeds 20,000 works; refine the reviewed scope.");
                 foreach (var row in rows) Add(row["celex"], $"domain:{domain.Id}:directory:{prefix}");
@@ -1094,8 +1100,8 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory,
                       ?w cdm:resource_legal_id_celex ?celex ; cdm:resource_legal_type ?type ;
                          cdm:work_is_about_concept_eurovoc <http://eurovoc.europa.eu/{{concept}}> .
                       FILTER(STR(?type) IN ("R", "L", "D"))
-                    } ORDER BY ?celex LIMIT 20001
-                    """, ct);
+                    } ORDER BY ?celex LIMIT {{ScopeSelectorResponseLimit}}
+                    """, ScopeSelectorResponseLimit, ct);
                 if (rows.Count > 20000)
                     throw new InvalidOperationException($"EuroVoc selector '{concept}' exceeds 20,000 works; refine the reviewed scope.");
                 foreach (var row in rows) Add(row["celex"], $"domain:{domain.Id}:eurovoc:{concept}");
@@ -1112,7 +1118,7 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory,
             foreach (var chunk in frontier.Chunk(50))
             {
                 var rows = await SelectAsync(RelationshipClosureQuery(
-                    chunk, predicates, _scope.Languages), ct);
+                    chunk, predicates, _scope.Languages), CellarTruncationRowLimit, ct);
                 foreach (var group in rows.GroupBy(r => r["seedCelex"], StringComparer.Ordinal))
                     if (group.Select(r => r["relatedCelex"]).Distinct(StringComparer.Ordinal).Count()
                         > _scope.RelationshipClosure.MaxRelatedPerSeed)
@@ -1171,6 +1177,7 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory,
                 || (!STRSTARTS(STR(?seedCelex), "1")
                     && REGEX(STR(?relatedCelex), "^3[0-9]{4}[RL]")))
             }
+            LIMIT {{CellarTruncationRowLimit}}
             """;
     }
 
@@ -1473,8 +1480,195 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory,
     internal static string OfficialDisplayTitle(string? title, string fallback) =>
         ShortTitle(title) ?? fallback;
 
-    private async Task<List<Dictionary<string, string>>> SelectAsync(string query, CancellationToken ct)
+    internal static void RequireBoundedEnumerationQuery(string query, int responseLimit)
     {
+        if (string.IsNullOrWhiteSpace(query))
+            throw new InvalidDataException("A Cellar enumeration query is empty.");
+        if (responseLimit is < 1 or > CellarTruncationRowLimit)
+            throw new InvalidDataException(
+                $"A Cellar enumeration response limit must be between 1 and {CellarTruncationRowLimit} rows.");
+
+        var tokens = SparqlTokens(query);
+        var limits = tokens.Count(token =>
+            string.Equals(token, "LIMIT", StringComparison.OrdinalIgnoreCase));
+        var expectedLimit = responseLimit.ToString(
+            System.Globalization.CultureInfo.InvariantCulture);
+        if (limits != 1
+            || tokens.Count < 2
+            || !string.Equals(tokens[^2], "LIMIT", StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(tokens[^1], expectedLimit, StringComparison.Ordinal))
+            throw new InvalidDataException(
+                $"A Cellar enumeration query must end in one exact LIMIT {responseLimit} clause.");
+    }
+
+    private static List<string> SparqlTokens(string query)
+    {
+        for (var index = 0; index + 1 < query.Length; index++)
+            if (query[index] == '\\' && query[index + 1] is 'u' or 'U')
+                throw new InvalidDataException(
+                    "A Cellar enumeration query cannot contain SPARQL codepoint escapes.");
+
+        var tokens = new List<string>();
+        for (var index = 0; index < query.Length;)
+        {
+            var character = query[index];
+            if (char.IsWhiteSpace(character))
+            {
+                index++;
+                continue;
+            }
+
+            if (character == '#')
+            {
+                while (index < query.Length && query[index] is not '\r' and not '\n')
+                    index++;
+                continue;
+            }
+
+            if (character is '\'' or '"')
+            {
+                SkipSparqlString(query, ref index, character);
+                tokens.Add("<literal>");
+                continue;
+            }
+
+            if (character == '<' && TrySkipSparqlIri(query, ref index))
+            {
+                tokens.Add("<iri>");
+                continue;
+            }
+
+            if (IsSparqlTokenBoundary(character))
+            {
+                tokens.Add(character.ToString());
+                index++;
+                continue;
+            }
+
+            var start = index;
+            while (index < query.Length)
+            {
+                if (query[index] == '\\')
+                {
+                    if (index + 1 >= query.Length
+                        || !IsSparqlLocalEscape(query[index + 1]))
+                        throw new InvalidDataException(
+                            "A Cellar enumeration query contains an invalid prefixed-name escape.");
+                    index += 2;
+                    continue;
+                }
+                if (char.IsWhiteSpace(query[index])
+                    || query[index] == '#'
+                    || query[index] is '\'' or '"'
+                    || IsSparqlTokenBoundary(query[index]))
+                    break;
+                index++;
+            }
+            tokens.Add(query[start..index]);
+        }
+        return tokens;
+    }
+
+    private static void SkipSparqlString(string query, ref int index, char quote)
+    {
+        var isLong = index + 2 < query.Length
+            && query[index + 1] == quote
+            && query[index + 2] == quote;
+        index += isLong ? 3 : 1;
+        while (index < query.Length)
+        {
+            if (query[index] == '\\')
+            {
+                index += 2;
+                continue;
+            }
+            if (isLong
+                && index + 2 < query.Length
+                && query[index] == quote
+                && query[index + 1] == quote
+                && query[index + 2] == quote)
+            {
+                index += 3;
+                return;
+            }
+            if (!isLong && query[index] == quote)
+            {
+                index++;
+                return;
+            }
+            if (!isLong && query[index] is '\r' or '\n')
+                break;
+            index++;
+        }
+        throw new InvalidDataException("A Cellar enumeration query contains an unterminated string literal.");
+    }
+
+    private static bool TrySkipSparqlIri(string query, ref int index)
+    {
+        var cursor = index + 1;
+        if (cursor >= query.Length || char.IsWhiteSpace(query[cursor]))
+            return false;
+        while (cursor < query.Length)
+        {
+            var character = query[cursor];
+            if (character == '>')
+            {
+                index = cursor + 1;
+                return true;
+            }
+            if (character <= ' '
+                || character is '<' or '"' or '{' or '}' or '|' or '^' or '`' or '\\')
+                return false;
+            cursor++;
+        }
+        return false;
+    }
+
+    private static bool IsSparqlTokenBoundary(char character) =>
+        character is '{' or '}' or '(' or ')' or '[' or ']' or ';' or ','
+            or '=' or '!' or '+' or '*' or '/' or '|' or '^' or '&' or '<' or '>';
+
+    private static bool IsSparqlLocalEscape(char character) =>
+        character is '_' or '~' or '.' or '-' or '!' or '$' or '&' or '\''
+            or '(' or ')' or '*' or '+' or ',' or ';' or '=' or '/' or '?'
+            or '#' or '@' or '%';
+
+    internal static void RequireCompleteCellarEnumeration(int rowCount, int responseLimit)
+    {
+        if (rowCount < 0)
+            throw new ArgumentOutOfRangeException(nameof(rowCount));
+        if (responseLimit is < 1 or > CellarTruncationRowLimit)
+            throw new InvalidDataException(
+                $"A Cellar enumeration response limit must be between 1 and {CellarTruncationRowLimit} rows.");
+        if (rowCount >= responseLimit)
+            throw new InvalidDataException(
+                $"Cellar returned a full {responseLimit}-row page; enumeration completeness is unproved.");
+    }
+
+    internal static List<Dictionary<string, string>> ParseSparqlRows(
+        ReadOnlyMemory<byte> body,
+        int responseLimit)
+    {
+        using var doc = JsonDocument.Parse(body);
+        var rows = new List<Dictionary<string, string>>();
+        foreach (var binding in doc.RootElement.GetProperty("results")
+                     .GetProperty("bindings").EnumerateArray())
+        {
+            var row = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var property in binding.EnumerateObject())
+                row[property.Name] = property.Value.GetProperty("value").GetString() ?? "";
+            rows.Add(row);
+        }
+        RequireCompleteCellarEnumeration(rows.Count, responseLimit);
+        return rows;
+    }
+
+    private async Task<List<Dictionary<string, string>>> SelectAsync(
+        string query,
+        int responseLimit,
+        CancellationToken ct)
+    {
+        RequireBoundedEnumerationQuery(query, responseLimit);
         await PaceAsync(ct);
         var sent = await SourceHttp.SendAsync(_http, () =>
         {
@@ -1485,7 +1679,7 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory,
             req.Headers.Accept.ParseAdd("application/sparql-results+json");
             return req;
         }, RetryPolicy, ct, delay: _delay,
-            completion: HttpCompletionOption.ResponseContentRead);
+            completion: HttpCompletionOption.ResponseHeadersRead);
         using var resp = sent.Response;
         if (resp is null || sent.RetryExhausted || !resp.IsSuccessStatusCode)
             throw new SourceAcquisitionException(new SourceBuildIssue(
@@ -1493,19 +1687,32 @@ public sealed class EurLexAdapter : ISourceAdapter, ISourceBuildInventory,
                 "eu-eurlex",
                 sent.FailureDetail ?? $"The official SPARQL endpoint returned HTTP {(int?)resp?.StatusCode}."),
                 sent.Attempts);
+        if (resp.Content.Headers.ContentLength is > SparqlResponseCapBytes)
+            throw new SourceAcquisitionException(new SourceBuildIssue(
+                "enumeration_response_too_large",
+                "eu-eurlex",
+                $"The official SPARQL response exceeds {SparqlResponseCapBytes} bytes."),
+                sent.Attempts);
         try
         {
             await using var stream = await resp.Content.ReadAsStreamAsync(ct);
-            using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: ct);
-            var rows = new List<Dictionary<string, string>>();
-            foreach (var b in doc.RootElement.GetProperty("results").GetProperty("bindings").EnumerateArray())
+            var bounded = await ReadBounded(stream, SparqlResponseCapBytes, ct);
+            if (bounded.LimitExceeded)
+                throw new SourceAcquisitionException(new SourceBuildIssue(
+                    "enumeration_response_too_large",
+                    "eu-eurlex",
+                    $"The official SPARQL response exceeds {SparqlResponseCapBytes} bytes."),
+                    sent.Attempts);
+            try
             {
-                var row = new Dictionary<string, string>(StringComparer.Ordinal);
-                foreach (var p in b.EnumerateObject())
-                    row[p.Name] = p.Value.GetProperty("value").GetString() ?? "";
-                rows.Add(row);
+                return ParseSparqlRows(bounded.Bytes, responseLimit);
             }
-            return rows;
+            catch (InvalidDataException ex)
+            {
+                throw new SourceAcquisitionException(new SourceBuildIssue(
+                    "enumeration_truncation_suspected", "eu-eurlex", ex.Message),
+                    sent.Attempts);
+            }
         }
         catch (Exception ex) when (ex is JsonException or InvalidOperationException or KeyNotFoundException)
         {
