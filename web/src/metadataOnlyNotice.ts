@@ -76,6 +76,11 @@ export function MetadataOnlyNotice(
               h("span", { className: "sub mono" },
                 `${row.group} · ${row.publisher} · matched in metadata`),
             ))),
+          // C3 ruling: the count covers only valid deduplicated rows in this bounded
+          // response, minus the ten shown; identical wording to the server surface.
+          rows.length > 10
+            ? h("span", { className: "sub" }, `and ${rows.length - 10} more returned matches`)
+            : null,
         )
       : null,
     h(

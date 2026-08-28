@@ -140,8 +140,13 @@ public static class MatchLanes
                 + $"{H(title)}</a> <span class=\"sub mono\">{H(row.Work)} · {H(row.Publisher)}"
                 + " · matched in metadata</span></li>";
         }));
+        // C3 ruling: N counts only valid, logically deduplicated suppressed matches present
+        // in this bounded response, minus the rows shown; never a corpus-wide claim. Search
+        // envelopes carry no truncation marker today, so the exact count always exists.
+        var overflow = valid.Length <= 10 ? "" :
+            $"<span class=\"sub\">and {valid.Length - 10} more returned matches</span>";
         var disclosure = valid.Length == 0 ? "" :
-            $"<details><summary>{H(DisclosureLabel)}</summary><ul>{items}</ul></details>";
+            $"<details><summary>{H(DisclosureLabel)}</summary><ul>{items}</ul>{overflow}</details>";
         var officials = string.Join("", collections
             .Where(collection => PublisherGrammar.IsMatch(collection))
             .Distinct(StringComparer.Ordinal)

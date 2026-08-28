@@ -212,6 +212,28 @@ public sealed class MatchLaneTests : IDisposable
     }
 
     [Fact]
+    public void Disclosure_overflow_counts_only_valid_deduplicated_returned_matches()
+    {
+        var twelve = Enumerable.Range(0, 12).Select(index => new MatchLanes.DisclosureRow(
+            "lu-legilux", $"w-{index}", "2024-01-01", $"Work {index}")).ToArray();
+        var overflowing = MatchLanes.NoticeHtml(["lu-legilux"], twelve);
+        Assert.Equal(10, overflowing.Split("<li>").Length - 1);
+        Assert.Contains("and 2 more returned matches", overflowing, StringComparison.Ordinal);
+
+        // Invalid and duplicate rows never inflate the count.
+        var padded = twelve
+            .Concat([new MatchLanes.DisclosureRow("evil host", "w-x", "2024-01-01", "bad"),
+                     new MatchLanes.DisclosureRow("lu-legilux", "w-0", "2024-01-01", "dup")])
+            .ToArray();
+        Assert.Contains("and 2 more returned matches",
+            MatchLanes.NoticeHtml(["lu-legilux"], padded), StringComparison.Ordinal);
+
+        var exactlyTen = twelve.Take(10).ToArray();
+        Assert.DoesNotContain("more returned matches",
+            MatchLanes.NoticeHtml(["lu-legilux"], exactlyTen), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Response_population_skips_refused_envelopes_without_blocking_the_state()
     {
         var envelopes = new JsonArray(

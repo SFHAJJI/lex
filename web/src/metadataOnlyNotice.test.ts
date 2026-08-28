@@ -57,12 +57,15 @@ test("the disclosure is capped at ten, deduplicated, and absent when nothing val
     work: `lu-legilux:w-${index}`, title: `Work ${index}` }));
   const html = render(many);
   assert.equal(html.split("<li>").length - 1, 10, "at most ten disclosed matches");
+  // C3 ruling: the overflow counts valid deduplicated rows in this response only.
+  assert.ok(html.includes("and 4 more returned matches"));
 
   const duplicated = render([
     { work: "lu-legilux:w-1", title: "Work" },
     { work: "lu-legilux:w-1", title: "Work again" },
   ]);
   assert.equal(duplicated.split("<li>").length - 1, 1, "one row per logical work");
+  assert.ok(!duplicated.includes("more returned matches"), "duplicates never inflate the count");
 
   const bare = render([]);
   assert.ok(bare.includes(METADATA_ONLY_HEADING), "the notice never depends on the list");
