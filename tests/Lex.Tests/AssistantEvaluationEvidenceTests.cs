@@ -46,7 +46,7 @@ public sealed class AssistantEvaluationEvidenceTests : IDisposable
         Assert.True(evidence.Matches(fixture.Runtime));
         Assert.Equal(2, evidence.CaseCount);
         Assert.Equal(3, evidence.RepetitionCount);
-        Assert.Equal(0.125m, evidence.TotalCostEur);
+        Assert.Equal(0.1248m, evidence.TotalCostEur);
         Assert.Equal(210, evidence.FirstOperationP95Milliseconds);
         Assert.Equal(420, evidence.TotalP99Milliseconds);
         Assert.Equal(25, evidence.BrowserP95Milliseconds);
@@ -167,6 +167,196 @@ public sealed class AssistantEvaluationEvidenceTests : IDisposable
             }
         });
         ResignManifest(files, fixture.ArtifactKey);
+        var release = ReleaseFor(files,
+            Sha(files[AssistantEvaluationEvidenceVerifier.ReportFile]),
+            fixture.Runtime.CodeCommit);
+
+        Assert.Throws<InvalidDataException>(() => AssistantEvaluationEvidenceVerifier.Verify(
+            release, files, [fixture.ArtifactRoot], fixture.Now,
+            fixture.AdmissionAuthority));
+    }
+
+    [Fact]
+    public void Signed_package_rejects_re_signed_aggregate_grader_usage_drift()
+    {
+        var fixture = Package();
+        var files = fixture.Files.ToDictionary(item => item.Key, item => item.Value.ToArray(),
+            StringComparer.Ordinal);
+        MutateJson(files, AssistantEvaluationEvidenceVerifier.ReportFile, root =>
+        {
+            var result = root["results"]![0]!;
+            result["relevance"]!["score"] = null;
+            result["relevance"]!["unavailable_cause"] = "grader_not_configured";
+            result["grader_usage"]!["input_tokens"] = 0;
+            result["grader_usage"]!["output_tokens"] = 0;
+        });
+        ResignManifest(files, fixture.ArtifactKey);
+        var release = ReleaseFor(files,
+            Sha(files[AssistantEvaluationEvidenceVerifier.ReportFile]),
+            fixture.Runtime.CodeCommit);
+
+        Assert.Throws<InvalidDataException>(() => AssistantEvaluationEvidenceVerifier.Verify(
+            release, files, [fixture.ArtifactRoot], fixture.Now,
+            fixture.AdmissionAuthority));
+    }
+
+    [Fact]
+    public void Signed_package_rejects_re_signed_grader_cost_drift()
+    {
+        var fixture = Package();
+        var files = fixture.Files.ToDictionary(item => item.Key, item => item.Value.ToArray(),
+            StringComparer.Ordinal);
+        MutateJson(files, AssistantEvaluationEvidenceVerifier.ReportFile, root =>
+        {
+            root["actual_grader_cost_eur"] = 0.04m;
+            root["actual_total_cost_eur"] = 0.115m;
+        });
+        ResignManifest(files, fixture.ArtifactKey);
+        var release = ReleaseFor(files,
+            Sha(files[AssistantEvaluationEvidenceVerifier.ReportFile]),
+            fixture.Runtime.CodeCommit);
+
+        Assert.Throws<InvalidDataException>(() => AssistantEvaluationEvidenceVerifier.Verify(
+            release, files, [fixture.ArtifactRoot], fixture.Now,
+            fixture.AdmissionAuthority));
+    }
+
+    [Fact]
+    public void Signed_package_rejects_re_signed_aggregate_grader_usage_only_drift()
+    {
+        var fixture = Package();
+        var files = fixture.Files.ToDictionary(item => item.Key, item => item.Value.ToArray(),
+            StringComparer.Ordinal);
+        MutateJson(files, AssistantEvaluationEvidenceVerifier.ReportFile, root =>
+            root["actual_grader_usage"]!["input_tokens"] = 601);
+        ResignManifest(files, fixture.ArtifactKey);
+        var release = ReleaseFor(files,
+            Sha(files[AssistantEvaluationEvidenceVerifier.ReportFile]),
+            fixture.Runtime.CodeCommit);
+
+        Assert.Throws<InvalidDataException>(() => AssistantEvaluationEvidenceVerifier.Verify(
+            release, files, [fixture.ArtifactRoot], fixture.Now,
+            fixture.AdmissionAuthority));
+    }
+
+    [Fact]
+    public void Signed_package_rejects_re_signed_candidate_usage_and_cost_drift()
+    {
+        var fixture = Package();
+        var files = fixture.Files.ToDictionary(item => item.Key, item => item.Value.ToArray(),
+            StringComparer.Ordinal);
+        MutateJson(files, AssistantEvaluationEvidenceVerifier.ReportFile, root =>
+        {
+            root["results"]![0]!["candidate_usage"]!["input_tokens"] = 301;
+            root["actual_candidate_usage"]!["input_tokens"] = 1_001;
+        });
+        ResignManifest(files, fixture.ArtifactKey);
+        var release = ReleaseFor(files,
+            Sha(files[AssistantEvaluationEvidenceVerifier.ReportFile]),
+            fixture.Runtime.CodeCommit);
+
+        Assert.Throws<InvalidDataException>(() => AssistantEvaluationEvidenceVerifier.Verify(
+            release, files, [fixture.ArtifactRoot], fixture.Now,
+            fixture.AdmissionAuthority));
+    }
+
+    [Fact]
+    public void Signed_package_rejects_re_signed_zero_candidate_run()
+    {
+        var fixture = Package();
+        var files = fixture.Files.ToDictionary(item => item.Key, item => item.Value.ToArray(),
+            StringComparer.Ordinal);
+        MutateJson(files, AssistantEvaluationEvidenceVerifier.ReportFile, root =>
+        {
+            root["actual_candidate_usage"]!["input_tokens"] = 0;
+            root["actual_candidate_usage"]!["output_tokens"] = 0;
+            root["actual_candidate_cost_eur"] = 0;
+            root["actual_total_cost_eur"] = root["actual_grader_cost_eur"]!.DeepClone();
+            foreach (var result in root["results"]!.AsArray())
+            {
+                result!["candidate_usage"]!["input_tokens"] = 0;
+                result["candidate_usage"]!["output_tokens"] = 0;
+            }
+        });
+        ResignManifest(files, fixture.ArtifactKey);
+        var release = ReleaseFor(files,
+            Sha(files[AssistantEvaluationEvidenceVerifier.ReportFile]),
+            fixture.Runtime.CodeCommit);
+
+        Assert.Throws<InvalidDataException>(() => AssistantEvaluationEvidenceVerifier.Verify(
+            release, files, [fixture.ArtifactRoot], fixture.Now,
+            fixture.AdmissionAuthority));
+    }
+
+    [Fact]
+    public void Signed_package_rejects_re_signed_report_pricing_drift()
+    {
+        var fixture = Package();
+        var files = fixture.Files.ToDictionary(item => item.Key, item => item.Value.ToArray(),
+            StringComparer.Ordinal);
+        MutateJson(files, AssistantEvaluationEvidenceVerifier.ReportFile, root =>
+        {
+            root["pricing"]!["grader"]!["input"]!["euros_per_million"] = 70;
+            root["pricing"]!["grader_input_euros_per_million"] = 70;
+            root["actual_grader_cost_eur"] = 0.0438m;
+            root["actual_total_cost_eur"] = 0.1188m;
+        });
+        ResignManifest(files, fixture.ArtifactKey);
+        var release = ReleaseFor(files,
+            Sha(files[AssistantEvaluationEvidenceVerifier.ReportFile]),
+            fixture.Runtime.CodeCommit);
+
+        Assert.Throws<InvalidDataException>(() => AssistantEvaluationEvidenceVerifier.Verify(
+            release, files, [fixture.ArtifactRoot], fixture.Now,
+            fixture.AdmissionAuthority));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Signed_package_rejects_unknown_report_properties(bool nestedInResult)
+    {
+        var fixture = Package();
+        var files = fixture.Files.ToDictionary(item => item.Key, item => item.Value.ToArray(),
+            StringComparer.Ordinal);
+        var canary = Convert.ToHexString(RandomNumberGenerator.GetBytes(64));
+        MutateJson(files, AssistantEvaluationEvidenceVerifier.ReportFile, root =>
+        {
+            var target = nestedInResult ? root["results"]![0]!.AsObject() : root;
+            target["raw_answer"] = canary;
+        });
+        ResignManifest(files, fixture.ArtifactKey);
+        var release = ReleaseFor(files,
+            Sha(files[AssistantEvaluationEvidenceVerifier.ReportFile]),
+            fixture.Runtime.CodeCommit);
+
+        var exception = Assert.Throws<InvalidDataException>(() =>
+            AssistantEvaluationEvidenceVerifier.Verify(
+            release, files, [fixture.ArtifactRoot], fixture.Now,
+            fixture.AdmissionAuthority));
+        Assert.False(exception.ToString().Contains(canary, StringComparison.Ordinal),
+            "verification diagnostic contained private report content");
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Signed_package_rejects_duplicate_known_report_properties(bool nestedInResult)
+    {
+        var fixture = Package();
+        var files = fixture.Files.ToDictionary(item => item.Key, item => item.Value.ToArray(),
+            StringComparer.Ordinal);
+        var report = Encoding.UTF8.GetString(
+            files[AssistantEvaluationEvidenceVerifier.ReportFile]);
+        var marker = nestedInResult ? "\"case_id\":" : "\"schema\":";
+        var duplicate = nestedInResult
+            ? "\"case_id\":\"duplicate\","
+            : "\"schema\":\"duplicate\",";
+        var index = report.IndexOf(marker, StringComparison.Ordinal);
+        Assert.True(index >= 0);
+        files[AssistantEvaluationEvidenceVerifier.ReportFile] = Encoding.UTF8.GetBytes(
+            report.Insert(index, duplicate));
+        ResignManifestPayloadOnly(files, fixture.ArtifactKey);
         var release = ReleaseFor(files,
             Sha(files[AssistantEvaluationEvidenceVerifier.ReportFile]),
             fixture.Runtime.CodeCommit);
@@ -354,6 +544,16 @@ public sealed class AssistantEvaluationEvidenceTests : IDisposable
               "schema":"lex-assistant-eval/3",
               "frozen_at":"2026-08-15T10:00:00Z",
               "budget":{"maximum_cost_eur":10},
+              "pricing":{
+                "candidate":{
+                  "input":{"euros_per_million":70},
+                  "output":{"euros_per_million":50}
+                },
+                "grader":{
+                  "input":{"euros_per_million":80},
+                  "output":{"euros_per_million":30}
+                }
+              },
               "cases":[
                 {"id":"one","question":"What did Article 6 say on 1 January 2021?","repetitions":2},
                 {"id":"two","question":"Which laws changed in 2024?","repetitions":1}
@@ -433,11 +633,25 @@ public sealed class AssistantEvaluationEvidenceTests : IDisposable
                   "sku":"GlobalStandard"
                 }
               },
+              "pricing":{
+                "candidate":{
+                  "input":{"euros_per_million":70},
+                  "output":{"euros_per_million":50}
+                },
+                "grader":{
+                  "input":{"euros_per_million":80},
+                  "output":{"euros_per_million":30}
+                },
+                "candidate_input_euros_per_million":70,
+                "candidate_output_euros_per_million":50,
+                "grader_input_euros_per_million":80,
+                "grader_output_euros_per_million":30
+              },
               "actual_candidate_usage":{"input_tokens":1000,"output_tokens":100},
               "actual_grader_usage":{"input_tokens":600,"output_tokens":60},
               "actual_candidate_cost_eur":0.075,
-              "actual_grader_cost_eur":0.05,
-              "actual_total_cost_eur":0.125,
+              "actual_grader_cost_eur":0.0498,
+              "actual_total_cost_eur":0.1248,
               "latency":{
                 "planner":{"p50_milliseconds":100,"p95_milliseconds":130,"p99_milliseconds":130},
                 "mcp":{"p50_milliseconds":40,"p95_milliseconds":50,"p99_milliseconds":50},
@@ -557,6 +771,26 @@ public sealed class AssistantEvaluationEvidenceTests : IDisposable
             target["revision_name"]!.GetValue<string>(),
             report["cases_sha256"]!.GetValue<string>(),
             target["evidence_sha256"]!.GetValue<string>());
+    }
+
+    private static void ResignManifestPayloadOnly(
+        Dictionary<string, byte[]> files,
+        string key)
+    {
+        var reportBytes = files[AssistantEvaluationEvidenceVerifier.ReportFile];
+        var manifest = ArtifactManifests.Parse(
+            files[AssistantEvaluationEvidenceVerifier.ManifestFile]);
+        manifest = manifest with
+        {
+            Files = manifest.Files.Select(item =>
+                item.Path == AssistantEvaluationEvidenceVerifier.ReportFile
+                    ? item with { Size = reportBytes.LongLength, Sha256 = Sha(reportBytes) }
+                    : item).ToArray(),
+        };
+        var manifestBytes = ArtifactManifests.Serialize(manifest);
+        files[AssistantEvaluationEvidenceVerifier.ManifestFile] = manifestBytes;
+        files[AssistantEvaluationEvidenceVerifier.ManifestSignatureFile] = Encoding.UTF8.GetBytes(
+            ArtifactManifests.SignBase64(manifestBytes, key));
     }
 
     private static AssistantEvaluationRelease ReleaseFor(

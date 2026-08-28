@@ -205,6 +205,9 @@ public static class AssistantEvaluationRunner
         "^[0-9a-f]{64}$", RegexOptions.CultureInvariant);
     private static readonly Regex RunIdentity = new(
         "^[0-9a-f]{16}$", RegexOptions.CultureInvariant);
+    private static readonly Regex TargetStageCause = new(
+        "^candidate_(?:usage_(?:absent|invalid)|thread_token_(?:absent|invalid)|setup_http_[1-5][0-9]{2})$",
+        RegexOptions.CultureInvariant);
 
     private sealed record PendingResult(
         AssistantEvaluationCase Case,
@@ -322,16 +325,17 @@ public static class AssistantEvaluationRunner
                 catch (Exception exception)
                 {
                     elapsed.Stop();
+                    var cause = StageCause(exception);
                     Console.Error.WriteLine(
-                        $"[diagnostic] case={evaluationCase.Id} repetition={repetition}: {exception}");
+                        $"[diagnostic] case={evaluationCase.Id} repetition={repetition} cause={cause}");
                     failures.Add(
-                        $"assistant evaluation target unavailable: {StageCause(exception)}");
+                        $"assistant evaluation target unavailable: {cause}");
                 }
                 if (failures.Count == 0 || attempt == 2 || retryPool == 0) break;
                 retryPool--;
                 Console.Error.WriteLine(
-                    $"[retry] case={evaluationCase.Id} repetition={repetition}: "
-                    + string.Join("; ", failures));
+                    $"[retry] case={evaluationCase.Id} repetition={repetition} "
+                    + $"failure_count={failures.Count}");
                 }
 
                 pending.Add(new PendingResult(
@@ -376,7 +380,7 @@ public static class AssistantEvaluationRunner
                         // every other grader malfunction lands: no measurement, and why.
                         relevance = !usageValid
                             ? new(null, "grader_usage_invalid")
-                            : grade.Usage.InputTokens == 0
+                            : grade.Usage.TotalTokens == 0
                                 ? new(null, "grader_usage_absent")
                                 : grade.Score is < 1 or > 5
                                     ? new(null, "grader_score_out_of_range")
@@ -393,7 +397,7 @@ public static class AssistantEvaluationRunner
                         else if (!AssistantEvaluationGraderCause.IsKnown(exception.Cause))
                         {
                             graderUsage = exception.Usage;
-                            relevance = exception.Usage.InputTokens > 0
+                            relevance = exception.Usage.TotalTokens > 0
                                 ? new(null, "grader_unknown_billed_failure")
                                 : new(null, "grader_unknown_failure");
                         }
@@ -467,7 +471,9 @@ public static class AssistantEvaluationRunner
         // One repetition may honestly report zero, a whole run may not: a report claiming the
         // candidate spent nothing across every case measured nothing. The release verifier refuses
         // the same report, but the run that produced it should say so itself.
-        if (totalCandidateUsage.InputTokens <= 0 || totalCandidateUsage.OutputTokens <= 0)
+        if (!AssistantEvaluationRelevanceContract.IsValidUsage(
+                totalCandidateUsage.InputTokens, totalCandidateUsage.OutputTokens)
+            || totalCandidateUsage.InputTokens == 0 && totalCandidateUsage.OutputTokens == 0)
             gateFailures.Add("measured candidate token usage was zero across the whole run");
         if (totalGraderUsage.InputTokens > caseSet.Catalog.Budget.MaximumGraderInputTokens
             || totalGraderUsage.OutputTokens > caseSet.Catalog.Budget.MaximumGraderOutputTokens)
@@ -503,16 +509,27 @@ public static class AssistantEvaluationRunner
     // identically, and every grader refusal read as an unavailable grader. Exception MESSAGES stay
     // out: this list is published, and a message can carry an endpoint or the candidate's own
     // answer. What is left is a machine token, a status code, or the exception's own type name.
-    private static string StageCause(Exception exception) => exception switch
+    private static string StageCause(Exception exception)
     {
-        AssistantEvaluationStageException staged => staged.Cause,
-        HttpRequestException { StatusCode: { } status } => $"http_{(int)status}",
-        HttpRequestException transport => $"transport_{transport.HttpRequestError}",
-        OperationCanceledException => "timeout",
-        InvalidDataException malformed when StreamCauses.TryGetValue(malformed.Message, out var cause)
-            => cause,
-        _ => exception.GetType().Name,
-    };
+        var cause = exception switch
+        {
+            AssistantEvaluationStageException staged
+                when staged.Cause is { } stageCause && TargetStageCause.IsMatch(stageCause)
+                => stageCause,
+            AssistantEvaluationStageException => "unclassified_exception",
+            HttpRequestException { StatusCode: { } status } => $"http_{(int)status}",
+            HttpRequestException transport => $"transport_{transport.HttpRequestError}",
+            OperationCanceledException => "timeout",
+            InvalidDataException malformed when StreamCauses.TryGetValue(
+                malformed.Message, out var streamCause) => streamCause,
+            _ => exception.GetType().Name,
+        };
+        return cause is { Length: > 0 and <= 100 }
+               && cause.All(character => char.IsAsciiLetterOrDigit(character)
+                   || character == '_')
+            ? cause
+            : "unclassified_exception";
+    }
 
     // The runner's own stream checks throw InvalidDataException with one of these exact messages.
     // Naming the check in the report is what makes an intermittent shape failure diagnosable;
@@ -745,11 +762,7 @@ public static class AssistantEvaluationRunner
             || !TryLong(inputValue, out var input) || input < 0
             || usage["output_tokens"] is not JsonValue outputValue
             || !TryLong(outputValue, out var output) || output < 0
-            // Only an all-zero reading is a turn that called no model. A turn reporting no input
-            // beside real output did call one and is understating the axis
-            // MaximumCandidateInputTokens is enforced on, so the mixed reading stays refused
-            // exactly as it was.
-            || (input == 0) != (output == 0)
+            || !AssistantEvaluationRelevanceContract.IsValidUsage(input, output)
             || usage["total_tokens"] is not JsonValue totalValue
             || !TryLong(totalValue, out var total)
             || total != input + output)
@@ -1373,13 +1386,10 @@ public sealed class AssistantEvaluationHttpTarget : IAssistantEvaluationTarget
         var input = Long(usage["input_tokens"]);
         var output = Long(usage["output_tokens"]);
         var total = Long(usage["total_tokens"]);
-        // A deterministic clarification turn calls no model and reports 0/0/0 beside a complete
-        // evidence envelope. That is a measurement, not a missing one, so zero is admitted here and
-        // only negatives, non-numbers and a total that does not add up are refused. Long() returns
-        // -1 for an absent or non-numeric field, so absence still lands in the refusal. Zero has to
-        // be all-zero for the same reason: a turn reporting no input beside real output did call a
-        // model, and that mixed reading is what the old input <= 0 check was there to catch.
-        if (input < 0 || output < 0 || (input == 0) != (output == 0)
+        // A deterministic clarification turn can report 0/0/0, while content filtering and similar
+        // measured calls can validly report one zero axis. The shared contract admits both shapes and
+        // rejects negatives and overflow; the response must still state the exact derived total.
+        if (!AssistantEvaluationRelevanceContract.IsValidUsage(input, output)
             || total != input + output)
             throw new AssistantEvaluationStageException("candidate_usage_invalid",
                 "Assistant evaluation turn has invalid model usage.");
@@ -1797,7 +1807,7 @@ public sealed class AssistantEvaluationHttpGrader :
                 ?? throw new InvalidDataException();
             var usage = new AssistantModelUsage(
                 ReadLong(value, "prompt_tokens"), ReadLong(value, "completion_tokens"));
-            if (!AssistantEvaluationGraderCause.ValidUsage(usage) || usage.InputTokens == 0)
+            if (!AssistantEvaluationGraderCause.ValidUsage(usage) || usage.TotalTokens == 0)
                 throw new InvalidDataException();
             return usage;
         }
@@ -1946,8 +1956,8 @@ public sealed class AssistantEvaluationHttpGrader :
     {
         if (usage[key] is JsonValue value)
         {
-            if (value.TryGetValue<long>(out var number) && number > 0) return number;
-            if (value.TryGetValue<int>(out var integer) && integer > 0) return integer;
+            if (value.TryGetValue<long>(out var number) && number >= 0) return number;
+            if (value.TryGetValue<int>(out var integer) && integer >= 0) return integer;
         }
         throw new InvalidDataException("Assistant evaluation grader returned invalid usage.");
     }

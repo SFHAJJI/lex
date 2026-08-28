@@ -193,6 +193,7 @@ internal static class AssistantEvaluationEvidenceVerifier
         var reportSha = Sha(files[ReportFile]);
         using var reportDocument = Parse(files[ReportFile], ReportFile);
         var report = reportDocument.RootElement;
+        VerifyReportProperties(report);
         var target = RequiredObject(RequiredObject(report, "identity"), "target");
         var codeCommit = RequiredString(target, "code_commit");
         if (!Commit.IsMatch(codeCommit) || manifest.CodeCommit != codeCommit
@@ -211,6 +212,14 @@ internal static class AssistantEvaluationEvidenceVerifier
         var maximumCost = RequiredDecimal(catalog, "budget", "maximum_cost_eur");
         if (maximumCost is <= 0 or > 10)
             throw new InvalidDataException("Assistant evaluation maximum cost is outside display bounds.");
+        var catalogCandidateInputPrice = NonnegativeDecimal(
+            catalog, "pricing", "candidate", "input", "euros_per_million");
+        var catalogCandidateOutputPrice = NonnegativeDecimal(
+            catalog, "pricing", "candidate", "output", "euros_per_million");
+        var catalogGraderInputPrice = NonnegativeDecimal(
+            catalog, "pricing", "grader", "input", "euros_per_million");
+        var catalogGraderOutputPrice = NonnegativeDecimal(
+            catalog, "pricing", "grader", "output", "euros_per_million");
         var cases = RequiredArray(catalog, "cases").EnumerateArray().Select(item =>
         {
             var id = BoundedString(item, 100, "id");
@@ -241,16 +250,37 @@ internal static class AssistantEvaluationEvidenceVerifier
             throw new InvalidDataException(
                 "Signed assistant evaluation report does not claim a passing verdict.");
 
-        var candidateUsage = RequiredObject(report, "actual_candidate_usage");
-        var graderUsage = RequiredObject(report, "actual_grader_usage");
-        var candidateInput = NonnegativeLong(candidateUsage, "input_tokens");
-        var candidateOutput = NonnegativeLong(candidateUsage, "output_tokens");
-        var graderInput = NonnegativeLong(graderUsage, "input_tokens");
-        var graderOutput = NonnegativeLong(graderUsage, "output_tokens");
+        var (candidateInput, candidateOutput) = RequiredUsage(
+            report, "actual_candidate_usage");
+        var (graderInput, graderOutput) = RequiredUsage(
+            report, "actual_grader_usage");
         var candidateCost = NonnegativeDecimal(report, "actual_candidate_cost_eur");
         var graderCost = NonnegativeDecimal(report, "actual_grader_cost_eur");
         var totalCost = NonnegativeDecimal(report, "actual_total_cost_eur");
-        if (candidateCost + graderCost != totalCost || totalCost > maximumCost)
+        var candidateInputPrice = NonnegativeDecimal(
+            report, "pricing", "candidate", "input", "euros_per_million");
+        var candidateOutputPrice = NonnegativeDecimal(
+            report, "pricing", "candidate", "output", "euros_per_million");
+        var graderInputPrice = NonnegativeDecimal(
+            report, "pricing", "grader", "input", "euros_per_million");
+        var graderOutputPrice = NonnegativeDecimal(
+            report, "pricing", "grader", "output", "euros_per_million");
+        var reportedPricing = RequiredObject(report, "pricing");
+        if (catalogCandidateInputPrice <= 0 || catalogCandidateOutputPrice <= 0
+            || catalogGraderInputPrice <= 0 || catalogGraderOutputPrice <= 0
+            || candidateInputPrice != catalogCandidateInputPrice
+            || candidateOutputPrice != catalogCandidateOutputPrice
+            || graderInputPrice != catalogGraderInputPrice
+            || graderOutputPrice != catalogGraderOutputPrice
+            || NonnegativeDecimal(reportedPricing, "candidate_input_euros_per_million")
+                != catalogCandidateInputPrice
+            || NonnegativeDecimal(reportedPricing, "candidate_output_euros_per_million")
+                != catalogCandidateOutputPrice
+            || NonnegativeDecimal(reportedPricing, "grader_input_euros_per_million")
+                != catalogGraderInputPrice
+            || NonnegativeDecimal(reportedPricing, "grader_output_euros_per_million")
+                != catalogGraderOutputPrice
+            || candidateCost + graderCost != totalCost || totalCost > maximumCost)
             throw new InvalidDataException("Signed assistant evaluation cost claim is inconsistent.");
         var latency = RequiredObject(report, "latency");
         var firstP95 = NonnegativeDouble(
@@ -348,23 +378,59 @@ internal static class AssistantEvaluationEvidenceVerifier
         // so the page can show which questions were asked and how each one scored rather than only a
         // verdict a reader has to take on trust. A result naming a case the catalog does not contain,
         // or a case the report never ran, is a mismatch rather than a row to render.
+        long resultCandidateInput = 0;
+        long resultCandidateOutput = 0;
+        long resultGraderInput = 0;
+        long resultGraderOutput = 0;
         var outcomes = RequiredArray(report, "results").EnumerateArray().Select(item =>
         {
             var relevance = RequiredObject(item, "relevance");
             var score = NullableInt(relevance, "score");
             var cause = NullableString(relevance, "unavailable_cause");
-            var usage = RequiredObject(item, "grader_usage");
-            var inputTokens = NonnegativeLong(usage, "input_tokens");
-            var outputTokens = NonnegativeLong(usage, "output_tokens");
+            var (candidateInputTokens, candidateOutputTokens) = RequiredUsage(
+                item, "candidate_usage");
+            var (graderInputTokens, graderOutputTokens) = RequiredUsage(item, "grader_usage");
             if (!AssistantEvaluationRelevanceContract.IsCoherent(
-                    score, cause, inputTokens, outputTokens))
+                    score, cause, graderInputTokens, graderOutputTokens))
                 throw new InvalidDataException(
                     "Assistant evaluation relevance evidence is incoherent.");
+            try
+            {
+                resultCandidateInput = checked(resultCandidateInput + candidateInputTokens);
+                resultCandidateOutput = checked(resultCandidateOutput + candidateOutputTokens);
+                resultGraderInput = checked(resultGraderInput + graderInputTokens);
+                resultGraderOutput = checked(resultGraderOutput + graderOutputTokens);
+            }
+            catch (OverflowException exception)
+            {
+                throw new InvalidDataException(
+                    "Assistant evaluation result usage overflowed.", exception);
+            }
             return (
                 CaseId: BoundedString(item, 100, "case_id"),
                 Passed: RequiredBoolean(item, "passed"),
                 Relevance: score);
         }).ToArray();
+        decimal expectedCandidateCost;
+        decimal expectedGraderCost;
+        try
+        {
+            expectedCandidateCost = resultCandidateInput * catalogCandidateInputPrice / 1_000_000m
+                + resultCandidateOutput * catalogCandidateOutputPrice / 1_000_000m;
+            expectedGraderCost = resultGraderInput * catalogGraderInputPrice / 1_000_000m
+                + resultGraderOutput * catalogGraderOutputPrice / 1_000_000m;
+        }
+        catch (OverflowException exception)
+        {
+            throw new InvalidDataException(
+                "Assistant evaluation result cost overflowed.", exception);
+        }
+        if (candidateInput == 0 && candidateOutput == 0
+            || resultCandidateInput != candidateInput || resultCandidateOutput != candidateOutput
+            || resultGraderInput != graderInput || resultGraderOutput != graderOutput
+            || expectedCandidateCost != candidateCost || expectedGraderCost != graderCost)
+            throw new InvalidDataException(
+                "Assistant evaluation aggregate usage or cost evidence is invalid.");
         var byCase = outcomes.GroupBy(item => item.CaseId, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
         if (outcomes.Length != repetitionCount
@@ -390,6 +456,99 @@ internal static class AssistantEvaluationEvidenceVerifier
             graderModelVersion, indexIds, cases.Length, repetitionCount, candidateInput,
             candidateOutput, graderInput, graderOutput, totalCost, maximumCost, firstP95,
             totalP99, browserP95, caseOutcomes);
+    }
+
+    private static void VerifyReportProperties(JsonElement report)
+    {
+        OnlyProperties(report,
+            "schema", "cases_sha256", "frozen_at", "run_at",
+            "admission_run_identity", "admission_sha256", "identity", "preflight",
+            "pricing", "actual_candidate_usage", "actual_grader_usage",
+            "actual_candidate_cost_eur", "actual_grader_cost_eur", "actual_total_cost_eur",
+            "latency", "results", "gate_failures", "activation_gate_passed");
+
+        var identity = RequiredObject(report, "identity");
+        OnlyProperties(identity, "target", "index_manifest_ids", "candidate_model", "grader_model");
+        OnlyProperties(RequiredObject(identity, "target"),
+            "resource_id", "revision_name", "revision_fqdn", "image", "cpu_cores",
+            "memory_limit_bytes", "minimum_replicas", "maximum_replicas", "traffic_weight",
+            "code_commit", "artifact_manifest_set", "candidate_model_host",
+            "candidate_deployment", "evidence_sha256");
+        foreach (var role in new[] { "candidate_model", "grader_model" })
+            OnlyProperties(RequiredObject(identity, role),
+                "resource_id", "endpoint", "deployment", "sku", "model_format",
+                "model_name", "model_version", "evidence_sha256");
+
+        if (report.TryGetProperty("preflight", out var preflight))
+            OnlyProperties(preflight,
+                "reserved_candidate_input_tokens", "reserved_candidate_output_tokens",
+                "reserved_grader_input_tokens", "reserved_grader_output_tokens",
+                "estimated_candidate_cost_eur", "estimated_grader_cost_eur",
+                "estimated_total_cost_eur");
+
+        var pricing = RequiredObject(report, "pricing");
+        OnlyProperties(pricing,
+            "schema", "currency", "source_uri", "retrieved_at", "valid_until",
+            "candidate", "grader", "candidate_input_euros_per_million",
+            "candidate_output_euros_per_million", "grader_input_euros_per_million",
+            "grader_output_euros_per_million");
+        foreach (var role in new[] { "candidate", "grader" })
+        {
+            var model = RequiredObject(pricing, role);
+            OnlyProperties(model, "model_name", "model_version", "sku", "input", "output");
+            foreach (var axis in new[] { "input", "output" })
+                if (model.TryGetProperty(axis, out var meter))
+                    OnlyProperties(meter,
+                        "meter_id", "meter_name", "effective_start_date", "euros_per_million");
+        }
+
+        OnlyProperties(RequiredObject(report, "actual_candidate_usage"),
+            "input_tokens", "output_tokens", "total_tokens");
+        OnlyProperties(RequiredObject(report, "actual_grader_usage"),
+            "input_tokens", "output_tokens", "total_tokens");
+
+        var latency = RequiredObject(report, "latency");
+        OnlyProperties(latency, "planner", "mcp", "transport_queue_residual",
+            "submit_to_first_operation_result", "synthesis", "total");
+        foreach (var segment in new[]
+                 {
+                     "planner", "mcp", "transport_queue_residual",
+                     "submit_to_first_operation_result", "synthesis", "total",
+                 })
+            OnlyProperties(RequiredObject(latency, segment),
+                "p50_milliseconds", "p95_milliseconds", "p99_milliseconds");
+
+        foreach (var result in RequiredArray(report, "results").EnumerateArray())
+        {
+            OnlyProperties(result,
+                "case_id", "repetition", "prompt_sha256", "grading_mode", "passed",
+                "failures", "relevance", "candidate_usage", "grader_usage", "timings");
+            OnlyProperties(RequiredObject(result, "relevance"), "score", "unavailable_cause");
+            if (RequiredArray(result, "failures").GetArrayLength() != 0)
+                throw new InvalidDataException(
+                    "Passing assistant evaluation result contains failure details.");
+            if (result.TryGetProperty("candidate_usage", out var candidateUsage))
+                OnlyProperties(candidateUsage, "input_tokens", "output_tokens", "total_tokens");
+            OnlyProperties(RequiredObject(result, "grader_usage"),
+                "input_tokens", "output_tokens", "total_tokens");
+            if (result.TryGetProperty("timings", out var timings))
+                OnlyProperties(timings,
+                    "planner_milliseconds", "mcp_milliseconds",
+                    "transport_queue_residual_milliseconds",
+                    "submit_to_first_operation_result_milliseconds",
+                    "synthesis_milliseconds", "total_milliseconds");
+        }
+    }
+
+    private static void OnlyProperties(JsonElement value, params string[] allowed)
+    {
+        if (value.ValueKind != JsonValueKind.Object)
+            throw new InvalidDataException("Assistant evaluation report object is invalid.");
+        var remaining = allowed.ToHashSet(StringComparer.Ordinal);
+        foreach (var property in value.EnumerateObject())
+            if (!remaining.Remove(property.Name))
+                throw new InvalidDataException(
+                    "Assistant evaluation report contains an unknown or duplicate property.");
     }
 
     private static void VerifyAssets(
@@ -539,6 +698,21 @@ internal static class AssistantEvaluationEvidenceVerifier
             || number < 0)
             throw new InvalidDataException("Assistant evaluation token claim is invalid.");
         return number;
+    }
+
+    private static (long InputTokens, long OutputTokens) RequiredUsage(
+        JsonElement root,
+        params string[] path)
+    {
+        var usage = RequiredObject(root, path);
+        var input = NonnegativeLong(usage, "input_tokens");
+        var output = NonnegativeLong(usage, "output_tokens");
+        if (!AssistantEvaluationRelevanceContract.IsValidUsage(input, output))
+            throw new InvalidDataException("Assistant evaluation token usage is invalid.");
+        if (usage.TryGetProperty("total_tokens", out _)
+            && NonnegativeLong(usage, "total_tokens") != checked(input + output))
+            throw new InvalidDataException("Assistant evaluation token total is inconsistent.");
+        return (input, output);
     }
 
     private static decimal NonnegativeDecimal(JsonElement root, params string[] path)

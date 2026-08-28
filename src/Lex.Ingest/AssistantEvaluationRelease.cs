@@ -242,14 +242,8 @@ public static class AssistantEvaluationReleaseVerifier
                     || item.GradingMode != evaluationCase.Grading.Mode
                     || item.CandidateUsage is null
                     || item.GraderUsage is null
-                    // A deterministic turn that called no model reports zero, so a repetition may
-                    // read zero here, but only as an all-zero reading: no input beside real output
-                    // is a model call understating the axis the candidate input budget is enforced
-                    // on. The run-wide sum below is where a report claiming no spend at all fails.
-                    || item.CandidateUsage.InputTokens < 0
-                    || item.CandidateUsage.OutputTokens < 0
-                    || (item.CandidateUsage.InputTokens == 0)
-                        != (item.CandidateUsage.OutputTokens == 0)
+                    || !AssistantEvaluationRelevanceContract.IsValidUsage(
+                        item.CandidateUsage.InputTokens, item.CandidateUsage.OutputTokens)
                     // Relevance reports, so no score is refused here for being low. What is
                     // refused is an incoherent measurement: a judged case that is silent about
                     // both the score and why it has none, a score that arrived with a reason it
@@ -285,8 +279,9 @@ public static class AssistantEvaluationReleaseVerifier
             // Recomputed from the per-result usages just above, so a report cannot declare spend it
             // did not measure: a run whose every repetition read zero fails here, which is where
             // the per-result check used to stop it before deterministic turns could report honestly.
-            || candidateUsage.InputTokens <= 0
-            || candidateUsage.OutputTokens <= 0
+            || !AssistantEvaluationRelevanceContract.IsValidUsage(
+                candidateUsage.InputTokens, candidateUsage.OutputTokens)
+            || candidateUsage.InputTokens == 0 && candidateUsage.OutputTokens == 0
             || candidateUsage.InputTokens > caseSet.Catalog.Budget.MaximumCandidateInputTokens
             || candidateUsage.OutputTokens > caseSet.Catalog.Budget.MaximumCandidateOutputTokens
             || graderUsage.InputTokens > caseSet.Catalog.Budget.MaximumGraderInputTokens

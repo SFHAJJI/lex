@@ -18,6 +18,19 @@ public sealed class EvaluationAdmissionTests
     private static readonly DateTimeOffset Now =
         new(2026, 8, 14, 12, 0, 0, TimeSpan.Zero);
 
+    [Theory]
+    [InlineData(1_000, 0)]
+    [InlineData(0, 20)]
+    public void Relevance_contract_accepts_nonnegative_mixed_zero_usage_with_positive_total(
+        long inputTokens,
+        long outputTokens)
+    {
+        Assert.True(AssistantEvaluationRelevanceContract.IsValidUsage(
+            inputTokens, outputTokens));
+        Assert.True(AssistantEvaluationRelevanceContract.IsCoherent(
+            null, "grader_finish_reason_content_filter", inputTokens, outputTokens));
+    }
+
     [Fact]
     public void Signed_admission_is_release_bound_and_commits_only_exact_requests()
     {

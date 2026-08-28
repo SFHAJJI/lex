@@ -1270,6 +1270,44 @@ public sealed class AssistantEvaluationTests : IDisposable
                     >= invocation.Timings.SubmitToFirstOperationResultMilliseconds);
     }
 
+    [Theory]
+    [InlineData(1_000L, 0L)]
+    [InlineData(0L, 20L)]
+    public async Task Evaluation_http_target_accepts_and_aggregates_mixed_zero_usage(
+        long inputTokens,
+        long outputTokens)
+    {
+        var catalog = Catalog();
+        catalog["cases"]![0]!["history"] = new JsonArray(new JsonObject
+        {
+            ["role"] = "user",
+            ["content"] = nameof(Evaluation_http_target_accepts_and_aggregates_mixed_zero_usage),
+            ["maximum_input_tokens"] = 250,
+            ["maximum_output_tokens"] = 50,
+        });
+        catalog["budget"]!["maximum_candidate_input_tokens"] = 2_500;
+        catalog["budget"]!["maximum_candidate_output_tokens"] = 500;
+        var evaluationCase = Reviewed(catalog).Catalog.Cases[0];
+        using var http = new HttpClient(new EvaluationStreamHandler(
+            usage: new AssistantModelUsage(inputTokens, outputTokens)));
+        var target = new AssistantEvaluationHttpTarget(http, "https://candidate.test");
+
+        var invocation = await target.InvokeAsync(
+            evaluationCase, "mixed-zero-usage", CancellationToken.None);
+
+        var setup = Assert.Single(invocation.SetupInvocations!);
+        Assert.Equal(inputTokens,
+            setup.Response["model_usage"]!["input_tokens"]!.GetValue<long>());
+        Assert.Equal(outputTokens,
+            setup.Response["model_usage"]!["output_tokens"]!.GetValue<long>());
+        Assert.Equal(checked(inputTokens * 2),
+            invocation.Response["model_usage"]!["input_tokens"]!.GetValue<long>());
+        Assert.Equal(checked(outputTokens * 2),
+            invocation.Response["model_usage"]!["output_tokens"]!.GetValue<long>());
+        Assert.Equal(checked((inputTokens + outputTokens) * 2),
+            invocation.Response["model_usage"]!["total_tokens"]!.GetValue<long>());
+    }
+
     [Fact]
     public async Task Evaluation_target_runs_injection_as_real_same_thread_turns_and_starts_fresh()
     {
@@ -1725,6 +1763,45 @@ public sealed class AssistantEvaluationTests : IDisposable
     }
 
     [Theory]
+    [InlineData(1_000L, 0L)]
+    [InlineData(0L, 20L)]
+    public async Task Content_filter_preserves_mixed_zero_grader_usage(
+        long inputTokens,
+        long outputTokens)
+    {
+        var set = Reviewed(LlmCatalog());
+        using var http = new HttpClient(new GraderHandler(
+            "content_filter",
+            mutateResponse: response =>
+            {
+                response["usage"]!["prompt_tokens"] = inputTokens;
+                response["usage"]!["completion_tokens"] = outputTokens;
+            }));
+        var grader = new AssistantEvaluationHttpGrader(
+            http, "https://grader.test", "grader", "secret");
+
+        var report = await AssistantEvaluationRunner.RunAsync(
+            set, new StubTarget(Response()), grader, Identity(), Pricing(),
+            DateTimeOffset.Parse("2026-08-14T12:00:00Z"), CancellationToken.None);
+
+        Assert.True(report.ActivationGatePassed);
+        Assert.All(report.Results, result =>
+        {
+            Assert.Equal(new AssistantModelUsage(inputTokens, outputTokens), result.GraderUsage);
+            Assert.Null(result.Relevance.Score);
+            Assert.Equal("grader_finish_reason_content_filter",
+                result.Relevance.UnavailableCause);
+        });
+        var expectedUsage = new AssistantModelUsage(
+            checked(inputTokens * report.Results.Count),
+            checked(outputTokens * report.Results.Count));
+        Assert.Equal(expectedUsage, report.ActualGraderUsage);
+        Assert.Equal(Pricing().GraderCost(
+            expectedUsage.InputTokens, expectedUsage.OutputTokens),
+            report.ActualGraderCostEur);
+    }
+
+    [Theory]
     [InlineData("absent", "grader_finish_reason_absent")]
     [InlineData("wrong_type", "grader_finish_reason_invalid_type")]
     [InlineData("unknown", "grader_finish_reason_unknown")]
@@ -1933,7 +2010,6 @@ public sealed class AssistantEvaluationTests : IDisposable
     [Theory]
     [InlineData(-1, -1)]
     [InlineData(-1, 0)]
-    [InlineData(0, 1)]
     public async Task Runner_never_accumulates_or_prices_invalid_custom_grader_usage(
         long inputTokens,
         long outputTokens)
@@ -2063,6 +2139,76 @@ public sealed class AssistantEvaluationTests : IDisposable
             failure => failure.Contains("secret upstream detail", StringComparison.Ordinal));
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Runner_stderr_contains_only_a_bounded_typed_target_failure(
+        bool hostileStageCause)
+    {
+        var canary = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+        Exception targetFailure = hostileStageCause
+            ? new AssistantEvaluationStageException(canary, canary)
+            : new InvalidOperationException(canary);
+        var expectedCause = hostileStageCause
+            ? "unclassified_exception"
+            : nameof(InvalidOperationException);
+        var original = Console.Error;
+        using var error = new StringWriter();
+        try
+        {
+            Console.SetError(error);
+            await AssistantEvaluationRunner.RunAsync(
+                Reviewed(Catalog()),
+                new ThrowingTarget(targetFailure),
+                null, Identity(), Pricing(),
+                DateTimeOffset.Parse("2026-08-14T12:00:00Z"), CancellationToken.None);
+        }
+        finally
+        {
+            Console.SetError(original);
+        }
+
+        var stderr = error.ToString();
+        Assert.False(stderr.Contains(canary, StringComparison.Ordinal),
+            "stderr contained exception content");
+        Assert.True(stderr.Contains(expectedCause, StringComparison.Ordinal),
+            "stderr omitted the typed cause");
+        Assert.All(stderr.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries),
+            line => Assert.InRange(line.Length, 1, 200));
+    }
+
+    [Fact]
+    public async Task Runner_retry_stderr_does_not_emit_assistant_controlled_failure_content()
+    {
+        var marker = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+        var response = Response();
+        response["operations"]![0]!["legal_outcome"] =
+            marker + Environment.NewLine + new string('X', 2_000);
+        var original = Console.Error;
+        using var error = new StringWriter();
+        try
+        {
+            Console.SetError(error);
+            await AssistantEvaluationRunner.RunAsync(
+                Reviewed(Catalog()), new StubTarget(response),
+                null, Identity(), Pricing(),
+                DateTimeOffset.Parse("2026-08-14T12:00:00Z"), CancellationToken.None,
+                retryRepetitionBudget: 1);
+        }
+        finally
+        {
+            Console.SetError(original);
+        }
+
+        var stderr = error.ToString();
+        Assert.False(stderr.Contains(marker, StringComparison.Ordinal),
+            "stderr contained assistant-controlled failure content");
+        Assert.True(stderr.Contains("failure_count=", StringComparison.Ordinal),
+            "stderr omitted bounded retry metadata");
+        Assert.All(stderr.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries),
+            line => Assert.InRange(line.Length, 1, 200));
+    }
+
     [Fact]
     public async Task Evaluation_accepts_an_authenticated_zero_usage_repetition()
     {
@@ -2089,12 +2235,8 @@ public sealed class AssistantEvaluationTests : IDisposable
     }
 
     [Fact]
-    public async Task Evaluation_refuses_a_repetition_that_reports_no_input_beside_real_output()
+    public async Task Evaluation_preserves_a_repetition_with_zero_input_and_real_output()
     {
-        // The relaxation admits an all-zero measurement, not a partial one: a turn that reports no
-        // input while reporting output did call a model, and input is the axis the candidate token
-        // budget is enforced on. One honest repetition makes the run-wide sum positive, so the
-        // run-wide gate cannot be what catches this.
         var skewed = Response();
         skewed["model_usage"]!["input_tokens"] = 0;
         skewed["model_usage"]!["output_tokens"] = 120;
@@ -2105,10 +2247,11 @@ public sealed class AssistantEvaluationTests : IDisposable
             Identity(), Pricing(), DateTimeOffset.Parse("2026-08-11T02:00:00Z"),
             CancellationToken.None);
 
-        Assert.False(report.ActivationGatePassed);
-        Assert.Contains(report.Results.SelectMany(result => result.Failures),
-            failure => failure.Contains(
-                "missing or inconsistent model token usage", StringComparison.Ordinal));
+        Assert.True(report.ActivationGatePassed);
+        Assert.Equal(new AssistantModelUsage(0, 120), report.Results[0].CandidateUsage);
+        Assert.Equal(Pricing().CandidateCost(
+            report.ActualCandidateUsage.InputTokens,
+            report.ActualCandidateUsage.OutputTokens), report.ActualCandidateCostEur);
     }
 
     [Fact]
@@ -2899,9 +3042,9 @@ public sealed class AssistantEvaluationTests : IDisposable
     }
 
     [Theory]
-    [InlineData(-1, 0)]
-    [InlineData(0, 1)]
-    public async Task Promotion_rejects_mixed_axis_grader_usage_even_when_totals_and_cost_match(
+    [InlineData(1_000, 0)]
+    [InlineData(0, 20)]
+    public async Task Promotion_accepts_positive_mixed_axis_grader_usage_and_exact_cost(
         long inputTokens,
         long outputTokens)
     {
@@ -2936,11 +3079,13 @@ public sealed class AssistantEvaluationTests : IDisposable
                 PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
             }));
 
-        Assert.Throws<InvalidDataException>(() => VerifyReportForTest(
+        var verified = VerifyReportForTest(
             path, admission.Path, admission.SignaturePath,
             set, Identity().Target,
             new AssistantTargetAttestation(Identity().IndexManifestIds),
-            DateTimeOffset.Parse("2026-08-11T03:00:00Z"), admission.Authority));
+            DateTimeOffset.Parse("2026-08-11T03:00:00Z"), admission.Authority);
+        Assert.Equal(total, verified.ActualGraderUsage);
+        Assert.Equal(cost, verified.ActualGraderCostEur);
     }
 
     [Fact]
@@ -3990,7 +4135,8 @@ public sealed class AssistantEvaluationTests : IDisposable
         int requestIdentityCount = 1,
         bool wrongOperationResult = false,
         int synthesisDelayMilliseconds = 0,
-        double? declaredSynthesisMilliseconds = null) : HttpMessageHandler
+        double? declaredSynthesisMilliseconds = null,
+        AssistantModelUsage? usage = null) : HttpMessageHandler
     {
         protected override async Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request,
@@ -3999,6 +4145,16 @@ public sealed class AssistantEvaluationTests : IDisposable
             Assert.Equal("/api/ask/stream", request.RequestUri?.AbsolutePath);
             Assert.Contains("1", request.Headers.GetValues("X-Lex-Stream-Version"));
             var response = Response();
+            if (usage is not null)
+            {
+                response["model_usage"] = new JsonObject
+                {
+                    ["input_tokens"] = usage.InputTokens,
+                    ["output_tokens"] = usage.OutputTokens,
+                    ["total_tokens"] = usage.TotalTokens,
+                };
+                response["thread_token"] = new string('t', 43);
+            }
             response["timing"] = new JsonObject
             {
                 ["planner_ms"] = 12,

@@ -77,8 +77,7 @@ public static class AssistantEvaluationRelevanceContract
 
     public static bool IsValidUsage(long inputTokens, long outputTokens)
     {
-        if (inputTokens < 0 || outputTokens < 0
-            || (inputTokens == 0) != (outputTokens == 0)) return false;
+        if (inputTokens < 0 || outputTokens < 0) return false;
         try
         {
             _ = checked(inputTokens + outputTokens);
@@ -91,14 +90,17 @@ public static class AssistantEvaluationRelevanceContract
     }
 
     public static bool IsCoherent(
-        int? score, string? unavailableCause, long inputTokens, long outputTokens) =>
-        IsValidUsage(inputTokens, outputTokens)
-        && (score is >= 1 and <= 5
-            ? unavailableCause is null && inputTokens > 0
+        int? score, string? unavailableCause, long inputTokens, long outputTokens)
+    {
+        if (!IsValidUsage(inputTokens, outputTokens)) return false;
+        var hasUsage = inputTokens != 0 || outputTokens != 0;
+        return score is >= 1 and <= 5
+            ? unavailableCause is null && hasUsage
             : score is null && unavailableCause is not null
-                && (inputTokens > 0
+                && (hasUsage
                     ? BilledCauses.Contains(unavailableCause)
-                    : UnbilledCauses.Contains(unavailableCause)));
+                    : UnbilledCauses.Contains(unavailableCause));
+    }
 }
 
 public static partial class EvaluationAdmissionContract
