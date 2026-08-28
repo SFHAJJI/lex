@@ -22,6 +22,15 @@ internal sealed class AgentEvidenceLedger
         JsonObject? arguments = null)
     {
         var call = ++_call;
+        var ordinal = 0;
+        if (string.Equals(status, LegalOperationStatus.PartialResult, StringComparison.Ordinal))
+        {
+            var limitations = PublisherLimitationPolicy.FromResult(tool, result);
+            if (limitations.Count > 0)
+                Add(tool, call, ordinal++, AgentEvidenceKind.Coverage,
+                    null, null, null, null, null, true, null,
+                    PublisherLimitationPayload(limitations));
+        }
         if (status is not null && LegalOperationPolicy.OutcomeForStatus(status) is
             LegalOutcome.NeedsClarification or LegalOutcome.NotAvailable
                 or LegalOutcome.NotComparable or LegalOutcome.NotFound)
@@ -50,7 +59,6 @@ internal sealed class AgentEvidenceLedger
         };
         if (kind is null) return;
 
-        var ordinal = 0;
         if (kind == AgentEvidenceKind.Ranking && result is not null)
             foreach (var aggregate in RankingAggregates(result))
                 Add(tool, call, ordinal++, AgentEvidenceKind.Ranking, null, null, null, null, null,
@@ -161,6 +169,22 @@ internal sealed class AgentEvidenceLedger
         return json.Length <= 8_000 ? json : json[..8_000];
     }
 
+    private static string PublisherLimitationPayload(
+        IReadOnlyList<PublisherLimitationView> limitations) => new JsonObject
+    {
+        ["status"] = LegalOperationStatus.PartialResult,
+        ["publisher_limitations"] = new JsonArray(limitations.Select(item =>
+            (JsonNode)new JsonObject
+            {
+                ["status"] = item.Status,
+                ["tool"] = item.Tool,
+                ["publisher"] = item.Publisher,
+                ["jurisdiction"] = item.Jurisdiction,
+                ["unsupported_filters"] = new JsonArray(item.UnsupportedFilters
+                    .Select(filter => (JsonNode)filter).ToArray()),
+            }).ToArray()),
+    }.ToJsonString();
+
     /// <summary>
     /// The verified comparison, carried as the typed fields rather than the whole tool response.
     ///
@@ -227,6 +251,11 @@ internal sealed class AgentEvidenceLedger
         };
         foreach (var entry in entries)
         {
+            if ((entry["envelope"]?["status"] ?? entry["status"]) is JsonValue status
+                && status.TryGetValue<string>(out var statusValue)
+                && string.Equals(statusValue, McpStatus.FilterNotSupportedByIndex,
+                    StringComparison.Ordinal))
+                continue;
             var aggregate = new JsonObject();
             foreach (var key in new[]
                      {

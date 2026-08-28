@@ -368,6 +368,63 @@ public sealed class IndexStampVerifierTests : IDisposable
     }
 
     [Fact]
+    public void Promotion_verification_never_succeeds_without_external_capability_policy()
+    {
+        var policyPath = TempFile(".json");
+        File.WriteAllText(policyPath, """
+            {
+              "schema": "lex-capability-policy/1",
+              "collections": {
+                "eu-eurlex": { "unsupported_filters": ["domain"] }
+              }
+            }
+            """, new UTF8Encoding(false));
+        var expectation = CapabilityBuildExpectation.Production(
+            "eu-eurlex", ["domain"], Sha(policyPath));
+        var db = Build(StampSigner.CreateKeyPem(), capabilityExpectation: expectation);
+
+        var verification = IndexStampVerifier.VerifyPromotion(db,
+            new IndexStampVerificationInputs(ExpectedCollection: "eu-eurlex"));
+
+        Assert.True(verification.SignatureValid);
+        Assert.True(verification.ContentDigestMatches);
+        Assert.False(verification.CapabilityPolicyMatches);
+        Assert.False(verification.IsValid);
+        Assert.Equal(5, verification.ExitCode);
+        Assert.Contains(verification.ProvenanceErrors, error => error.Contains(
+            "no external capability policy", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Command_line_stamp_verifier_requires_external_capability_policy()
+    {
+        var policyPath = TempFile(".json");
+        File.WriteAllText(policyPath, """
+            {
+              "schema": "lex-capability-policy/1",
+              "collections": {
+                "eu-eurlex": { "unsupported_filters": ["domain"] }
+              }
+            }
+            """, new UTF8Encoding(false));
+        var expectation = CapabilityBuildExpectation.Production(
+            "eu-eurlex", ["domain"], Sha(policyPath));
+        var db = Build(StampSigner.CreateKeyPem(), capabilityExpectation: expectation);
+
+        var refused = RunLex("verify", "stamp", "--db", db,
+            "--expected-collection", "eu-eurlex");
+        Assert.Equal(5, refused.ExitCode);
+        Assert.Contains("no external capability policy", refused.StandardError,
+            StringComparison.Ordinal);
+
+        var accepted = RunLex("verify", "stamp", "--db", db,
+            "--expected-collection", "eu-eurlex", "--capability-policy", policyPath);
+        Assert.Equal(0, accepted.ExitCode);
+        Assert.DoesNotContain("provenance error", accepted.StandardError,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Release_verification_recomputes_capabilities_from_indexed_documents()
     {
         var policyPath = TempFile(".json");
@@ -516,6 +573,36 @@ public sealed class IndexStampVerifierTests : IDisposable
         Task.WhenAll(output, error).GetAwaiter().GetResult();
         Assert.True(process.ExitCode == 0, error.Result);
         return output.Result.Trim().ToLowerInvariant();
+    }
+
+    private static (int ExitCode, string StandardOutput, string StandardError) RunLex(
+        params string[] arguments)
+    {
+        var assemblyDirectory = Path.GetDirectoryName(typeof(IndexFromCorpus).Assembly.Location)!;
+        var executable = Path.Combine(assemblyDirectory,
+            OperatingSystem.IsWindows() ? "Lex.Ingest.exe" : "Lex.Ingest");
+        var start = new ProcessStartInfo(executable)
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        };
+        foreach (var argument in arguments) start.ArgumentList.Add(argument);
+        using var process = Process.Start(start)!;
+        var output = process.StandardOutput.ReadToEndAsync();
+        var error = process.StandardError.ReadToEndAsync();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        try
+        {
+            process.WaitForExitAsync(timeout.Token).GetAwaiter().GetResult();
+        }
+        catch (OperationCanceledException)
+        {
+            try { process.Kill(entireProcessTree: true); } catch { }
+            Assert.Fail("Lex.Ingest test process timed out.");
+        }
+        Task.WhenAll(output, error).GetAwaiter().GetResult();
+        Assert.InRange(output.Result.Length + error.Result.Length, 0, 16 * 1024);
+        return (process.ExitCode, output.Result, error.Result);
     }
 
     public void Dispose()

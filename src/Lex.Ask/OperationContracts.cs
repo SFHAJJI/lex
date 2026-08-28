@@ -72,11 +72,17 @@ public enum OperationExecutionState
     Completed,
 }
 
+/// <summary>Status values derived only at the multi-publisher operation boundary.</summary>
+public static class LegalOperationStatus
+{
+    public const string PartialResult = "partial_result";
+}
+
 public static class LegalOperationPolicy
 {
     public static LegalOutcome OutcomeForStatus(string status) => status switch
     {
-        McpStatus.Ok => LegalOutcome.Succeeded,
+        McpStatus.Ok or LegalOperationStatus.PartialResult => LegalOutcome.Succeeded,
         McpStatus.NoResult or McpStatus.NoChangesInPeriod => LegalOutcome.SucceededEmpty,
         McpStatus.ProfilesDiffer => LegalOutcome.NotComparable,
         McpStatus.AmbiguousVersion => LegalOutcome.NeedsClarification,
@@ -87,7 +93,7 @@ public static class LegalOperationPolicy
             or McpStatus.TextWithheld or McpStatus.NoCorpusMounted
             or McpStatus.RetrievalModeUnavailable
             or McpStatus.FilterNotSupportedByIndex => LegalOutcome.NotAvailable,
-        _ => throw new InvalidDataException($"Unknown MCP legal status '{status}'."),
+        _ => throw new InvalidDataException($"Unknown legal operation status '{status}'."),
     };
 
     public static LegalResultClass ResultClassFor(string tool) =>
@@ -161,10 +167,10 @@ public static class LegalOperationPolicy
         var statuses = ObservedStatuses(payload).ToArray();
         if (statuses.Length == 0) return declared;
 
-        var actual = DominantOutcome(statuses.Select(OutcomeForStatus));
+        var actual = OutcomeForStatus(StatusForResult(payload));
         if (actual != declared)
             throw new InvalidDataException(
-                $"Declared MCP status '{declaredStatus}' contradicts the result payload.");
+                $"Declared legal operation status '{declaredStatus}' contradicts the result payload.");
         return actual;
     }
 
@@ -174,6 +180,17 @@ public static class LegalOperationPolicy
         if (payload is JsonArray { Count: 0 }) return McpStatus.NoResult;
         var statuses = ObservedStatuses(payload).ToArray();
         if (statuses.Length == 0) return McpStatus.Ok;
+        if (statuses.Contains(McpStatus.FilterNotSupportedByIndex, StringComparer.Ordinal))
+        {
+            var supported = statuses
+                .Where(status => status != McpStatus.FilterNotSupportedByIndex)
+                .Select(OutcomeForStatus)
+                .ToArray();
+            if (supported.Length > 0
+                && DominantOutcome(supported) is LegalOutcome.Succeeded
+                    or LegalOutcome.SucceededEmpty)
+                return LegalOperationStatus.PartialResult;
+        }
         var outcome = DominantOutcome(statuses.Select(OutcomeForStatus));
         return statuses.First(status => OutcomeForStatus(status) == outcome);
     }

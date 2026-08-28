@@ -76,7 +76,21 @@ public static class IndexStampVerifier
                 expectedCodeCommit, expectedArticlesCommit));
 
     public static IndexStampVerification Verify(
-        string dbPath, IndexStampVerificationInputs inputs)
+        string dbPath, IndexStampVerificationInputs inputs) =>
+        VerifyCore(dbPath, inputs, requireCapabilityPolicy: false);
+
+    /// <summary>
+    /// The promotion-capable verifier. It always recomputes the capability manifest from indexed
+    /// documents and cannot succeed without the checked-in external production policy.
+    /// </summary>
+    public static IndexStampVerification VerifyPromotion(
+        string dbPath, IndexStampVerificationInputs inputs) =>
+        VerifyCore(dbPath, inputs, requireCapabilityPolicy: true);
+
+    private static IndexStampVerification VerifyCore(
+        string dbPath,
+        IndexStampVerificationInputs inputs,
+        bool requireCapabilityPolicy)
     {
         using var reader = LexIndexReader.Open(dbPath);
         var claimedContent = reader.Stamp.GetValueOrDefault("content_digest") ?? "";
@@ -136,6 +150,7 @@ public static class IndexStampVerifier
                      || inputs.ExpectedCodeCommit is not null
                      || inputs.ExpectedArticlesCommit is not null
                      || inputs.CapabilityPolicyPath is not null
+                     || requireCapabilityPolicy
                      || inputs.RequireDerivedProvenance;
         var provenanceErrors = VerifyProvenance(reader.Stamp, inputs.RequireDerivedProvenance,
             inputs.ExpectedCodeCommit, inputs.ExpectedCorpusCommit,
@@ -144,6 +159,11 @@ public static class IndexStampVerifier
             expectedProfiles);
         var capabilityPolicyMatches = VerifyCapabilityPolicy(
             reader, capabilityExpectation, provenanceErrors);
+        if (requireCapabilityPolicy && inputs.CapabilityPolicyPath is null)
+        {
+            provenanceErrors.Add("no external capability policy was supplied");
+            capabilityPolicyMatches = false;
+        }
         if (inputs.RequireDerivedProvenance)
         {
             RequireExternal(inputs.ExpectedCollection ?? manifest?.Publisher.GetValueOrDefault("id"),

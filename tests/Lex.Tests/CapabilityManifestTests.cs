@@ -279,6 +279,8 @@ public sealed class CapabilityManifestTests : IDisposable
             filter, new DateOnly(2020, 12, 31), new DateOnly(2021, 1, 1)));
         Assert.Equal(["hierarchy"], reader.UnsupportedFiltersInPeriod(
             filter, new DateOnly(2020, 12, 31), new DateOnly(2020, 12, 31)));
+        Assert.Equal(["hierarchy"], reader.UnsupportedFiltersInPeriod(
+            filter, new DateOnly(2019, 1, 1), new DateOnly(2019, 12, 31)));
 
         var core = new McpCore(new Dictionary<string, LexIndexReader>
         {

@@ -61,7 +61,36 @@ internal static class OperationAnswerPolicy
             rendered += locale == "fr"
                 ? " Cet état futur est provisoire, selon les données éditeur actuellement publiées."
                 : " This future state is provisional, based on publisher data currently available.";
-        return rendered + Disclose(locale, disclosure);
+        return rendered + DisclosePublisherLimitations(locale, effect.PublisherLimitations)
+                        + Disclose(locale, disclosure);
+    }
+
+    internal static string DisclosePublisherLimitations(
+        string locale,
+        IReadOnlyList<PublisherLimitationView>? source) =>
+        string.Concat(PublisherLimitationSentences(locale, source));
+
+    internal static IReadOnlyList<string> PublisherLimitationSentences(
+        string locale,
+        IReadOnlyList<PublisherLimitationView>? source)
+    {
+        var limitations = PublisherLimitationPolicy.Normalize(source);
+        if (limitations.Count == 0) return [];
+        var fr = locale == "fr";
+        return limitations.Select(item =>
+        {
+            var publisher = item.Publisher is { Length: > 0 }
+                ? item.Jurisdiction is { Length: > 0 }
+                    ? $"{item.Publisher} ({item.Jurisdiction})"
+                    : item.Publisher
+                : item.Jurisdiction is { Length: > 0 }
+                    ? item.Jurisdiction
+                    : fr ? "un éditeur sélectionné" : "a selected publisher";
+            var filters = string.Join(", ", item.UnsupportedFilters);
+            return fr
+                ? $" Limite de capacité: {publisher} n'a pas exécuté le filtre [{filters}], car son index ne le décrit pas pour le périmètre demandé. Il s'agit de la couverture de Lex, et non d'une preuve de l'absence d'une loi ou d'un record."
+                : $" Capability limitation: {publisher} did not run the [{filters}] filter because its index does not describe it for the requested scope. This is about Lex coverage, not evidence that a law or record is absent.";
+        }).ToArray();
     }
 
     /// <summary>The one clause that makes a selection error correctable in a single turn. The

@@ -1795,6 +1795,8 @@ public sealed class AskService
         AgentClarification? clarification = null,
         IReadOnlyList<WorkResolutionGuard.GuardChoice>? clarificationChoices = null)
     {
+        var merged = UiEffect.Merge(effects);
+        reply = WithPublisherLimitations(reply, locale, merged.PublisherLimitations);
         var body = new JsonObject { ["reply"] = reply, ["trace"] = trace };
         if (clarification is not null)
         {
@@ -1809,7 +1811,6 @@ public sealed class AskService
                     }).ToArray());
             body["clarification"] = serialized;
         }
-        var merged = UiEffect.Merge(effects);
         // A turn that used tools and produced nothing to render is a refusal — the most
         // characteristic thing this product does. It gets a view like any other answer,
         // rather than silently degrading to a wall of prose.
@@ -1842,6 +1843,19 @@ public sealed class AskService
                      .Select(disclosure => OperationAnswerPolicy.Disclose(locale, disclosure))
                      .Where(sentence => sentence.Length > 0)
                      .Distinct(StringComparer.Ordinal))
+            if (!text.Contains(sentence.Trim(), StringComparison.Ordinal))
+                text += sentence;
+        return text;
+    }
+
+    internal static string WithPublisherLimitations(
+        string reply,
+        string locale,
+        IReadOnlyList<PublisherLimitationView>? limitations)
+    {
+        var text = reply;
+        foreach (var sentence in OperationAnswerPolicy
+                     .PublisherLimitationSentences(locale, limitations))
             if (!text.Contains(sentence.Trim(), StringComparison.Ordinal))
                 text += sentence;
         return text;
@@ -1949,7 +1963,7 @@ public sealed class AskService
 
     private static (string? Status, JsonArray Docs) Summarize(JsonNode result)
     {
-        string? status = null;
+        var status = LegalOperationPolicy.StatusForResult(result);
         var docs = new JsonArray();
 
         // Pinpoints: the exact provision text the tool returned, quotable next to the
@@ -1997,7 +2011,6 @@ public sealed class AskService
             switch (n)
             {
                 case JsonObject o:
-                    status ??= (o["envelope"]?["status"] ?? o["status"])?.GetValue<string>();
                     // article_history has no lex_id at all: it is keyed by work + anchor, and its
                     // evidence is the list of states. Without this it produced ZERO evidence rows
                     // and its own permalinks read as ungrounded when the model cited them.

@@ -672,7 +672,7 @@ switch (args0[0])
         // verify corpus --corpus X | verify stamp --db X
         //   [--expected-collection ID] [--expected-corpus-commit SHA]
         //   [--expected-code-commit SHA] [--corpus-manifest FILE]
-        //   [--articles-generation FILE]
+        //   [--articles-generation FILE] --capability-policy FILE
         // | verify derive --publisher P --corpus X --articles Y
         switch (args0.Length > 1 ? args0[1] : "")
         {
@@ -706,21 +706,8 @@ switch (args0[0])
                 var expectedGenerationSha256 = Get("--expected-generation-sha256");
                 var expectedProfilesSha256 = Get("--expected-profiles-sha256");
                 var capabilityPolicy = Get("--capability-policy");
-                var hasProvenanceEvidence = corpusManifest is not null
-                    || articlesGeneration is not null
-                    || expectedCorpusManifestSha256 is not null
-                    || expectedIngesterCodeCommit is not null
-                    || expectedDeriverCodeCommit is not null
-                    || expectedDeriverTreeId is not null
-                    || expectedGenerationSha256 is not null
-                    || expectedProfilesSha256 is not null
-                    || capabilityPolicy is not null;
-                if (expectedCollection is not null || expectedCorpusCommit is not null
-                    || expectedCodeCommit is not null || expectedArticlesCommit is not null
-                    || hasProvenanceEvidence)
-                {
-                    var strict = IndexStampVerifier.Verify(db,
-                        new IndexStampVerificationInputs(
+                var strict = IndexStampVerifier.VerifyPromotion(db,
+                    new IndexStampVerificationInputs(
                             ExpectedCollection: expectedCollection,
                             ExpectedCorpusCommit: expectedCorpusCommit,
                             ExpectedCodeCommit: expectedCodeCommit,
@@ -736,7 +723,7 @@ switch (args0[0])
                             CapabilityPolicyPath: capabilityPolicy,
                             RequireDerivedProvenance: expectedArticlesCommit is not null
                                 || articlesGeneration is not null));
-                    Console.WriteLine($"collection={strict.Collection} " +
+                Console.WriteLine($"collection={strict.Collection} " +
                         $"corpus_commit={strict.CorpusCommit} " +
                         $"signature_valid={strict.SignatureValid} " +
                         $"content_digest={(strict.ContentDigestMatches ? "matches"
@@ -752,24 +739,9 @@ switch (args0[0])
                         $"capability_policy_sha256={strict.CapabilityPolicySha256 ?? "absent"} " +
                         $"derived_provenance={(strict.ProvenanceMatches
                             ? "matches" : "MISMATCH")}");
-                    foreach (var error in strict.ProvenanceErrors)
-                        Console.Error.WriteLine($"provenance error: {error}");
-                    return strict.ExitCode;
-                }
-                using var r = Lex.Index.LexIndexReader.Open(db);
-                // A valid signature over the metadata proves nothing about the text. Recompute
-                // the content digest from what the database actually holds and compare it with
-                // the signed value: that is what detects an edited article.
-                var claimed = r.Stamp.GetValueOrDefault("content_digest") ?? "";
-                var actual = r.ComputeContentDigest();
-                var contentOk = claimed.Length > 0 && claimed == actual;
-                Console.WriteLine($"collection={r.Collection} schema={r.Stamp.GetValueOrDefault("schema")} " +
-                    $"algorithm={r.Stamp.GetValueOrDefault("algorithm")} corpus_commit={r.Stamp.GetValueOrDefault("corpus_commit")} " +
-                    $"built_at={r.Stamp.GetValueOrDefault("built_at")} signature_valid={r.SignatureValid} " +
-                    $"content_digest={(claimed.Length == 0 ? "absent (index predates content binding)" : contentOk ? "matches" : "MISMATCH — contents were altered")}");
-                if (!r.SignatureValid) return 3;
-                if (claimed.Length > 0 && !contentOk) return 4;
-                return 0;
+                foreach (var error in strict.ProvenanceErrors)
+                    Console.Error.WriteLine($"provenance error: {error}");
+                return strict.ExitCode;
             }
             case "derive":
             {
@@ -815,7 +787,7 @@ switch (args0[0])
                 finally { try { Directory.Delete(tmp, true); } catch { } }
             }
             default:
-                Console.Error.WriteLine("usage: lex verify corpus --corpus X | lex verify stamp --db X [--expected-collection ID] [--expected-corpus-commit SHA] [--expected-code-commit SHA] [--expected-articles-commit SHA] [--corpus-manifest FILE --articles-generation FILE] [--capability-policy FILE] | lex verify derive --publisher P --corpus X --articles Y [--work slug]");
+                Console.Error.WriteLine("usage: lex verify corpus --corpus X | lex verify stamp --db X --capability-policy FILE [--expected-collection ID] [--expected-corpus-commit SHA] [--expected-code-commit SHA] [--expected-articles-commit SHA] [--corpus-manifest FILE --articles-generation FILE] | lex verify derive --publisher P --corpus X --articles Y [--work slug]");
                 return 1;
         }
     }

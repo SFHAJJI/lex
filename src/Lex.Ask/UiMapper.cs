@@ -81,8 +81,14 @@ public static class UiMapper
     public static UiEffect From(string tool, JsonObject args, JsonNode result, string locale = "en")
     {
         var evidence = EvidenceOf(result, args);
-        if (tool == "coverage") return WithEvidence(CoverageResult(result, locale), evidence);
-        if (result is JsonArray { Count: 0 })
+        var (effectiveResult, publisherLimitations) = SplitPublisherLimitations(tool, result);
+        UiEffect Finish(UiEffect effect) => WithEvidence(effect, evidence) with
+        {
+            PublisherLimitations = publisherLimitations.Count == 0
+                ? null : publisherLimitations,
+        };
+        if (tool == "coverage") return Finish(CoverageResult(effectiveResult, locale));
+        if (effectiveResult is JsonArray { Count: 0 })
         {
             var empty = tool switch
             {
@@ -115,9 +121,10 @@ public static class UiMapper
                 "search" => SearchWorkspace(args, result),
                 _ => new UiEffect(),
             };
-            return WithEvidence(empty, evidence);
+            return Finish(empty);
         }
-        var node = result is JsonArray arr ? Aggregate(tool, arr) : result as JsonObject;
+        var node = effectiveResult is JsonArray arr
+            ? Aggregate(tool, arr) : effectiveResult as JsonObject;
         if (node is null) return new UiEffect();
         var status = (node["envelope"]?["status"] ?? node["status"])?.GetValue<string>();
         var outcome = status is null ? (LegalOutcome?)null : LegalOperationPolicy.OutcomeForStatus(status);
@@ -135,7 +142,7 @@ public static class UiMapper
             var refused = outcome == LegalOutcome.NotComparable && tool == "diff"
                 ? UiEffect.Merge([Diff(node, args), gap])
                 : gap;
-            return WithEvidence(refused, evidence);
+            return Finish(refused);
         }
 
         var mapped = tool switch
@@ -148,10 +155,34 @@ public static class UiMapper
             "in_force_on" => InForce(node, args),
             "cited_by" => Cited(node),
             "provenance" => Verification(node),
-            "search" => SearchWorkspace(args, result),
+            "search" => SearchWorkspace(args, effectiveResult),
             _ => new UiEffect(),
         };
-        return WithEvidence(mapped, evidence);
+        return Finish(mapped);
+    }
+
+    /// <summary>
+    /// A multi-publisher capability refusal is partial when another publisher answered. Retain
+    /// the successful payload as the primary mapping and carry every refusal as a bounded typed
+    /// disclosure. All-refusal payloads remain the existing full gap.
+    /// </summary>
+    private static (JsonNode Result, IReadOnlyList<PublisherLimitationView> Limitations)
+        SplitPublisherLimitations(string tool, JsonNode result)
+    {
+        if (result is not JsonArray array) return (result, []);
+        var parts = array.OfType<JsonObject>().ToArray();
+        var refusals = parts.Where(part => string.Equals(
+                S(part["envelope"] as JsonObject, "status") ?? S(part, "status"),
+                McpStatus.FilterNotSupportedByIndex,
+                StringComparison.Ordinal))
+            .ToArray();
+        if (refusals.Length == 0 || refusals.Length == parts.Length)
+            return (result, []);
+
+        var supported = parts.Except(refusals).ToArray();
+        var limitations = PublisherLimitationPolicy.FromResult(tool, result);
+        return (new JsonArray(supported
+            .Select(part => (JsonNode)part.DeepClone()).ToArray()), limitations);
     }
 
     private static UiEffect WithEvidence(
@@ -294,6 +325,7 @@ public static class UiMapper
     private static bool HasContent(JsonObject o)
         => o["provisions"] is JsonArray { Count: > 0 } || o["states"] is JsonArray { Count: > 0 }
            || o["changes"] is JsonArray { Count: > 0 } || o["works"] is JsonArray { Count: > 0 }
+           || o["hits"] is JsonArray { Count: > 0 }
            || o["document"] is JsonObject || o["from"] is JsonObject;
 
     /// <summary>
