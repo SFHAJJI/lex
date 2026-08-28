@@ -87,7 +87,10 @@ public static class IndexFromCorpus
                                 && meta.Events.Last(e => e.Event is "withdrawn_from_source" or "resighted").Event == "withdrawn_from_source";
 
                 foreach (var e in meta.Events)
-                    events.Add(new EventRow(meta.LexId, e.Scope ?? "version", e.Event, e.ObservedFrom, e.Detail));
+                    events.Add(new EventRow(
+                        meta.LexId, e.Scope ?? "version", e.Event,
+                        e.ObservedFrom, e.Detail, e.FirstMissedAt,
+                        e.RunsMissed, e.RunIdentity));
 
                 foreach (var expr in meta.Expressions)
                 {

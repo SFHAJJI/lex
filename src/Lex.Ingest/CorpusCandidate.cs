@@ -4,22 +4,22 @@ namespace Lex.Ingest;
 
 /// <summary>
 /// Stages one corpus refresh outside the live checkout and applies it only after acquisition,
-/// reconciliation, and manifest construction all succeed. Applying is journalled too: a local
-/// disk failure restores every replaced file and removes every newly-created file, so the caller
-/// either sees the complete candidate or the exact prior corpus.
+/// reconciliation, and manifest construction all succeed. Publication copies a durable payload
+/// into an in-root journal and replaces each target atomically. A later writer rolls an
+/// interrupted publication forward before it reads the completed-run ledger.
 /// </summary>
 internal sealed class CorpusCandidate : IDisposable
 {
     private readonly string _root;
     private readonly string _stage;
-    private readonly string _backup;
 
     public CorpusCandidate(string corpusRoot)
     {
         _root = Path.GetFullPath(corpusRoot);
         var token = Guid.NewGuid().ToString("N");
-        _stage = Path.Combine(Path.GetTempPath(), $"lex-corpus-candidate-{token}");
-        _backup = Path.Combine(Path.GetTempPath(), $"lex-corpus-backup-{token}");
+        var protectedParent = Path.GetDirectoryName(_root)
+            ?? throw new InvalidDataException("The corpus root has no parent directory.");
+        _stage = Path.Combine(protectedParent, $".lex-corpus-candidate-{token}");
         Directory.CreateDirectory(_stage);
     }
 
@@ -49,44 +49,18 @@ internal sealed class CorpusCandidate : IDisposable
         File.WriteAllText(staged, canonical);
     }
 
-    public void Commit()
+    public void Commit(
+        CorpusBaseline baseline,
+        CorpusWriteSession session,
+        Action? beforeCompareAndSwap = null,
+        Action<int, string>? afterPublish = null)
     {
-        var applied = new List<(string Target, string? Backup)>();
-        try
-        {
-            foreach (var staged in Directory.EnumerateFiles(_stage, "*", SearchOption.AllDirectories)
-                         .Order(StringComparer.Ordinal).ToArray())
-            {
-                var relative = Path.GetRelativePath(_stage, staged);
-                var target = CheckedTarget(Path.Combine(_root, relative));
-                Directory.CreateDirectory(Path.GetDirectoryName(target)!);
-                string? backup = null;
-                if (File.Exists(target))
-                {
-                    backup = Path.Combine(_backup, relative);
-                    Directory.CreateDirectory(Path.GetDirectoryName(backup)!);
-                    File.Copy(target, backup, overwrite: false);
-                }
-                File.Copy(staged, target, overwrite: true);
-                File.Delete(staged);
-                applied.Add((target, backup));
-            }
-        }
-        catch
-        {
-            foreach (var (target, backup) in applied.AsEnumerable().Reverse())
-            {
-                if (backup is null)
-                {
-                    if (File.Exists(target)) File.Delete(target);
-                }
-                else
-                {
-                    File.Copy(backup, target, overwrite: true);
-                }
-            }
-            throw;
-        }
+        baseline.RequireUnchanged();
+        var root = session.EnsureRoot();
+        beforeCompareAndSwap?.Invoke();
+        baseline.RequireOriginalEntriesUnchanged();
+        CorpusTransaction.CommitFiles(
+            root, _stage, afterPublish);
     }
 
     private string Staged(string target) => Path.Combine(_stage,
@@ -114,6 +88,5 @@ internal sealed class CorpusCandidate : IDisposable
     public void Dispose()
     {
         try { if (Directory.Exists(_stage)) Directory.Delete(_stage, recursive: true); } catch { }
-        try { if (Directory.Exists(_backup)) Directory.Delete(_backup, recursive: true); } catch { }
     }
 }

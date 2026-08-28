@@ -77,6 +77,8 @@ public sealed class LexIndexReader : IDisposable
     private readonly ITextEncoder? _encoder;
     private readonly SemanticVectorReader? _vectors;
     private readonly bool _hasWorkSearch;
+    private readonly bool _hasEvents;
+    private readonly bool _hasEventLifecycleFields;
     private readonly int _workCatalogVersion;
     private readonly long _provisionVectorCount;
     private readonly IReadOnlyList<CoverageBuildIssue> _buildIssues;
@@ -91,6 +93,8 @@ public sealed class LexIndexReader : IDisposable
 
     private LexIndexReader(SqliteConnection conn, Dictionary<string, string> stamp, string schema,
                            ITextEncoder? encoder, SemanticVectorReader? vectors, bool hasWorkSearch,
+                           bool hasEvents,
+                           bool hasEventLifecycleFields,
                            int workCatalogVersion, long provisionVectorCount,
                            IReadOnlyList<CoverageBuildIssue> buildIssues, int? expectedWorks,
                            bool ownsVectors)
@@ -101,6 +105,8 @@ public sealed class LexIndexReader : IDisposable
         _encoder = encoder;
         _vectors = vectors;
         _hasWorkSearch = hasWorkSearch;
+        _hasEvents = hasEvents;
+        _hasEventLifecycleFields = hasEventLifecycleFields;
         _workCatalogVersion = workCatalogVersion;
         _provisionVectorCount = provisionVectorCount;
         _buildIssues = buildIssues;
@@ -207,6 +213,34 @@ public sealed class LexIndexReader : IDisposable
                         $"Index {dbPath} claims schema '{schema}' but {table} is missing language identity columns.");
             }
         }
+
+        var eventColumns = new HashSet<string>(StringComparer.Ordinal);
+        using (var eventColumnCommand = conn.CreateCommand())
+        {
+            eventColumnCommand.CommandText = "SELECT name FROM pragma_table_info('events')";
+            using var eventColumnReader = eventColumnCommand.ExecuteReader();
+            while (eventColumnReader.Read())
+                eventColumns.Add(eventColumnReader.GetString(0));
+        }
+        var hasEvents = eventColumns.Count != 0;
+        if (schema == IndexBuilder.SchemaVersion && !hasEvents)
+            throw new InvalidOperationException(
+                $"Index {dbPath} claims schema '{schema}' but is missing events.");
+        var baseEventColumns = new[]
+            { "key", "scope", "event", "observed_from", "detail" };
+        var missingBaseEventColumns = baseEventColumns
+            .Where(column => !eventColumns.Contains(column)).ToArray();
+        if (hasEvents && missingBaseEventColumns.Length != 0)
+            throw new InvalidOperationException(
+                $"Index {dbPath} events is missing "
+                + $"[{string.Join(", ", missingBaseEventColumns)}].");
+        var lifecycleEventColumns = new[]
+            { "first_missed_at", "runs_missed", "run_identity" };
+        var presentLifecycleEventColumns = lifecycleEventColumns.Count(eventColumns.Contains);
+        if (presentLifecycleEventColumns is not (0 or 3))
+            throw new InvalidDataException(
+                $"Index {dbPath} contains a partial event lifecycle extension.");
+        var hasEventLifecycleFields = presentLifecycleEventColumns == 3;
 
         var baseWorkCatalogTables = new[]
             { "work_records", "work_names", "work_fts", "work_discovery", "work_vectors" };
@@ -317,7 +351,8 @@ public sealed class LexIndexReader : IDisposable
                 throw new InvalidDataException($"Index {dbPath} has an invalid work vector layout claim.");
         }
 
-        ValidateBoundedPublicMetadata(conn, dbPath, schema, hasWorkSearch);
+        ValidateBoundedPublicMetadata(
+            conn, dbPath, schema, hasWorkSearch, hasEventLifecycleFields);
 
         SemanticVectorReader? vectors = null;
         long provisionVectorCount = 0;
@@ -400,7 +435,8 @@ public sealed class LexIndexReader : IDisposable
                 throw new InvalidDataException("The semantic vector file contains an unmapped record.");
         }
         return new LexIndexReader(
-            conn, stamp, schema!, encoder, vectors, hasWorkSearch, workCatalogVersion,
+            conn, stamp, schema!, encoder, vectors, hasWorkSearch, hasEvents,
+            hasEventLifecycleFields, workCatalogVersion,
             provisionVectorCount, buildIssues, expectedWorks, ownsVectors: true);
     }
 
@@ -421,6 +457,8 @@ public sealed class LexIndexReader : IDisposable
             _encoder,
             _vectors,
             _hasWorkSearch,
+            _hasEvents,
+            _hasEventLifecycleFields,
             _workCatalogVersion,
             _provisionVectorCount,
             _buildIssues,
@@ -606,7 +644,8 @@ public sealed class LexIndexReader : IDisposable
         SqliteConnection connection,
         string dbPath,
         string schema,
-        bool hasWorkSearch)
+        bool hasWorkSearch,
+        bool hasEventLifecycleFields)
     {
         void Reject(string table, string predicate, string label)
         {
@@ -638,7 +677,16 @@ public sealed class LexIndexReader : IDisposable
             "provision metadata");
         Reject("citations", "length(cited_slug)>512 OR length(href)>4096 OR length(label)>4096",
             "citation metadata");
-        Reject("events", "length(event)>128 OR length(scope)>128 OR length(detail)>4096",
+        var eventBounds = "length(event)>128 OR length(scope)>128 OR length(detail)>4096";
+        if (hasEventLifecycleFields)
+            eventBounds += " OR (first_missed_at IS NOT NULL AND length(first_missed_at)<>20) "
+                + "OR (run_identity IS NOT NULL AND (length(run_identity)=0 "
+                + "OR length(run_identity)>128)) "
+                + "OR (runs_missed IS NOT NULL AND (typeof(runs_missed)<>'integer' "
+                + "OR runs_missed NOT BETWEEN 1 AND 3)) "
+                + "OR ((first_missed_at IS NULL) <> (runs_missed IS NULL)) "
+                + "OR (first_missed_at IS NOT NULL AND run_identity IS NULL)";
+        Reject("events", eventBounds,
             "provenance metadata");
         if (hasWorkSearch)
         {
@@ -2058,12 +2106,23 @@ public sealed class LexIndexReader : IDisposable
     public List<EventRow> Events(string key, int limit)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(limit);
-        using var cmd = Cmd("SELECT key, scope, event, observed_from, detail FROM events WHERE key=$k ORDER BY observed_from LIMIT $lim", []);
+        if (!_hasEvents) return [];
+        var lifecycleColumns = _hasEventLifecycleFields
+            ? "first_missed_at, runs_missed, run_identity"
+            : "NULL, NULL, NULL";
+        using var cmd = Cmd(
+            $"SELECT key, scope, event, observed_from, detail, {lifecycleColumns} "
+            + "FROM events WHERE key=$k ORDER BY observed_from LIMIT $lim", []);
         cmd.Parameters.AddWithValue("$k", key);
         cmd.Parameters.AddWithValue("$lim", limit);
         var list = new List<EventRow>();
         using var r = cmd.ExecuteReader();
-        while (r.Read()) list.Add(new EventRow(r.GetString(0), r.GetString(1), r.GetString(2), r.GetString(3), r.IsDBNull(4) ? null : r.GetString(4)));
+        while (r.Read()) list.Add(new EventRow(
+            r.GetString(0), r.GetString(1), r.GetString(2), r.GetString(3),
+            r.IsDBNull(4) ? null : r.GetString(4),
+            r.IsDBNull(5) ? null : r.GetString(5),
+            r.IsDBNull(6) ? null : r.GetInt32(6),
+            r.IsDBNull(7) ? null : r.GetString(7)));
         return list;
     }
 

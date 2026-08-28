@@ -291,6 +291,87 @@ public sealed class CorpusIntegrityTests : IDisposable
             "absence lifecycle", StringComparison.Ordinal));
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Current_v4_withdrawal_without_structured_three_run_evidence_is_invalid(
+        bool claimsExplicitMigration)
+    {
+        await new CorpusWriter(_dir, DateTimeOffset.Parse("2026-08-06T00:00:00Z"), CodeCommit)
+            .WriteAsync(new TextAdapter(), default);
+        var metaPath = Path.Combine(VersionDirectory, "meta.json");
+        var meta = JsonSerializer.Deserialize<VersionMeta>(
+            await File.ReadAllTextAsync(metaPath), CorpusJson.Options)!;
+        meta.Events.Add(new EventEntry
+        {
+            Event = "withdrawn_from_source",
+            ObservedFrom = "2026-08-07T00:00:00Z",
+            Scope = "version",
+        });
+        meta.RecordSha256 = null;
+        meta.RecordSha256 = Convert.ToHexStringLower(
+            System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(
+                JsonSerializer.Serialize(meta, CorpusJson.Options))));
+        await File.WriteAllTextAsync(metaPath,
+            JsonSerializer.Serialize(meta, CorpusJson.Options) + "\n");
+        if (claimsExplicitMigration)
+        {
+            var manifestPath = Path.Combine(_dir, "manifest.json");
+            var manifest = JsonSerializer.Deserialize<ManifestDoc>(
+                await File.ReadAllTextAsync(manifestPath), CorpusJson.Options)!;
+            manifest.MigrationBaselineWorks = 1;
+            await File.WriteAllTextAsync(manifestPath,
+                JsonSerializer.Serialize(manifest, CorpusJson.Options) + "\n");
+        }
+
+        var report = CorpusIntegrity.Verify(_dir);
+
+        Assert.Contains(report.Errors, error => error.Contains(
+            "absence lifecycle", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Migration_marker_cannot_relabel_fresh_run_evidence_as_a_historical_audit()
+    {
+        await new CorpusWriter(_dir,
+                DateTimeOffset.Parse("2026-08-01T00:00:00Z"), CodeCommit)
+            .WriteAsync(new TextAdapter(), default);
+        for (var run = 1; run <= 3; run++)
+            await new CorpusWriter(_dir,
+                    DateTimeOffset.Parse($"2026-08-0{run + 1}T00:00:00Z"), CodeCommit,
+                    runIdentity: $"fresh-run-{run}")
+                .WriteAsync(new EmptyTextAdapter(), default);
+
+        var metaPath = Path.Combine(VersionDirectory, "meta.json");
+        var meta = JsonSerializer.Deserialize<VersionMeta>(
+            await File.ReadAllTextAsync(metaPath), CorpusJson.Options)!;
+        var firstAbsence = meta.Events.FindIndex(entry =>
+            entry.Event == "absent_unconfirmed");
+        meta.Events.Insert(firstAbsence, new EventEntry
+        {
+            Event = "withdrawn_from_source",
+            ObservedFrom = "2026-08-01T12:00:00Z",
+            Scope = "version",
+        });
+        meta.RecordSha256 = null;
+        meta.RecordSha256 = Convert.ToHexStringLower(
+            System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(
+                JsonSerializer.Serialize(meta, CorpusJson.Options))));
+        await File.WriteAllTextAsync(metaPath,
+            JsonSerializer.Serialize(meta, CorpusJson.Options) + "\n");
+        var manifestPath = Path.Combine(_dir, "manifest.json");
+        var manifest = JsonSerializer.Deserialize<ManifestDoc>(
+            await File.ReadAllTextAsync(manifestPath), CorpusJson.Options)!;
+        manifest.MigrationBaselineWorks = 1;
+        await File.WriteAllTextAsync(manifestPath,
+            JsonSerializer.Serialize(manifest, CorpusJson.Options) + "\n");
+
+        var report = CorpusIntegrity.Verify(_dir);
+
+        Assert.Contains(report.Errors, error => error.Contains(
+            "absence lifecycle", StringComparison.Ordinal));
+    }
+
     public void Dispose()
     {
         try { Directory.Delete(_dir, true); } catch { }
@@ -339,5 +420,30 @@ public sealed class CorpusIntegrityTests : IDisposable
             Task.FromResult(SourceBodyFetch.Retrieved(multiline
                 ? $"<html lang=\"{expression.Language}\">\nofficial\n</html>"
                 : $"<html lang=\"{expression.Language}\">official</html>"));
+    }
+
+    private sealed class EmptyTextAdapter : ISourceAdapter
+    {
+        public PublisherDescriptor Describe() => new(
+            new Publisher("test", "Test", "EU", "https://example.test",
+                Tier.A, "test", null),
+            [], ["en", "fr"], TextIncluded: true, TextPublic: true,
+            HistoryBegins: "publisher");
+
+        public async IAsyncEnumerable<WorkRef> EnumerateWorks(
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+            await Task.CompletedTask;
+            yield break;
+        }
+
+        public Task<IReadOnlyList<VersionRecord>> FetchVersions(
+            WorkRef work, CancellationToken ct) =>
+            Task.FromResult<IReadOnlyList<VersionRecord>>([]);
+
+        public Task<SourceBodyFetch> FetchBody(
+            VersionRecord version, ExpressionRecord expression, CancellationToken ct) =>
+            throw new InvalidOperationException();
     }
 }

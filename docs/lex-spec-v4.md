@@ -726,7 +726,8 @@ lex-corpus-lu-cssf/
   "ingester_code_commit": "<full reviewed Lex commit>",
   "migration_baseline_works": 1390,
   "source_configuration_kind": "code_only",
-  "source_configuration_sha256": null
+  "source_configuration_sha256": null,
+  "completed_runs_sha256": "<sha256-of-completed-runs.json>"
 }
 ```
 
@@ -755,6 +756,13 @@ lex-corpus-lu-cssf/
   current publisher plan remains fail-closed. Manifest summaries continue to
   describe the current publisher plan; corpus integrity reports the larger
   retained evidence population separately.
+- `completed_runs_sha256` binds the append-only `completed-runs.json` ledger
+  into the manifest. Each logical source run records one canonical UTC
+  completion time and the digest of its complete deterministic enumeration.
+  Lifecycle `observed_from` values must equal that ledger time. Publication uses
+  a durable in-root journal, publishes lifecycle files before the manifest and
+  the ledger, and publishes the ledger last. Recovery finishes that journal
+  before replay detection or any new ingest work.
 - The manifest is written only when its content changes, never as a heartbeat
   (freshness lives in `lex-ops`, §11.2).
 
@@ -1382,6 +1390,7 @@ hash and keeps §1.3 architectural (fitness rule F10).
        │   │   │   nothing, outcome=failed (§7.4 point 5, a flaky endpoint
        │   │   │   must not write history)
        │   │   ├─ runs: lex ingest --publisher lu-legilux
+       │   │   │        --run-id "$GITHUB_RUN_ID"
        │   │   │        adapter → Lex.Law → corpus writer (C3/F12 rules)
        │   │   ├─ commits ONLY if observed reality changed
        │   │   └─ uploads its status record as a RUN ARTIFACT (C11), including

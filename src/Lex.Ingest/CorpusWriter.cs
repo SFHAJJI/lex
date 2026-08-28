@@ -20,12 +20,15 @@ internal sealed record CorpusPlannedWork(
 /// metadata-only expression writes no body and records the reason instead.
 /// </summary>
 public sealed class CorpusWriter(
-    string corpusRoot, DateTimeOffset now, string codeCommit, TextWriter? progress = null)
+    string corpusRoot, DateTimeOffset now, string codeCommit, TextWriter? progress = null,
+    string? runIdentity = null)
 {
     private readonly string _now = now.UtcDateTime.ToString("yyyy-MM-ddTHH:mm:ssZ");
     private readonly string _ingesterCodeCommit = CodeIdentity.RequireFullCommit(
         codeCommit, "ingester code commit");
     private readonly TextWriter _progress = progress ?? Console.Error;
+    private readonly string? _runIdentity = runIdentity is null
+        ? null : IngestRunIdentity.Require(runIdentity, "ingest run identity");
     public int Created { get; private set; }
     public int Updated { get; private set; }
     public int Unchanged { get; private set; }
@@ -35,15 +38,45 @@ public sealed class CorpusWriter(
 
     public Task WriteAsync(
         ISourceAdapter adapter, CancellationToken ct, bool requireComplete = false) =>
-        WriteAsync(adapter, ct, requireComplete, validatePlan: null);
+        WriteAsync(adapter, ct, requireComplete, validatePlan: null,
+            beforeCandidateCommit: null);
 
     internal async Task WriteAsync(
         ISourceAdapter adapter,
         CancellationToken ct,
         bool requireComplete,
-        Action<IReadOnlyList<CorpusPlannedWork>>? validatePlan)
+        Action<IReadOnlyList<CorpusPlannedWork>>? validatePlan,
+        Action? beforeCandidateCommit = null) =>
+        await WriteAsync(adapter, ct, requireComplete, validatePlan,
+            beforeCandidateCommit, allowTrustedPlanPreparation: false);
+
+    internal async Task WriteAsync(
+        ISourceAdapter adapter,
+        CancellationToken ct,
+        bool requireComplete,
+        Action<IReadOnlyList<CorpusPlannedWork>>? validatePlan,
+        Action? beforeCandidateCommit,
+        bool allowTrustedPlanPreparation)
+        => await WriteAsync(adapter, ct, requireComplete, validatePlan,
+            beforeCandidateCommit, allowTrustedPlanPreparation,
+            afterCandidatePublish: null);
+
+    internal async Task WriteAsync(
+        ISourceAdapter adapter,
+        CancellationToken ct,
+        bool requireComplete,
+        Action<IReadOnlyList<CorpusPlannedWork>>? validatePlan,
+        Action? beforeCandidateCommit,
+        bool allowTrustedPlanPreparation,
+        Action<int, string>? afterCandidatePublish)
     {
+        using var writeSession = CorpusWriteSession.Acquire(corpusRoot);
+        var baseline = writeSession.Baseline;
+        if (allowTrustedPlanPreparation && !baseline.IsEmpty)
+            throw new InvalidDataException(
+                "Trusted plan preparation is allowed only for an empty disposable corpus.");
         var existingManifest = RefuseLegacyAppend(corpusRoot);
+        var completedRunsSha256 = existingManifest?.CompletedRunsSha256;
         var desc = adapter.Describe();
         var pub = desc.Publisher;
         using var candidate = new CorpusCandidate(corpusRoot);
@@ -59,12 +92,14 @@ public sealed class CorpusWriter(
         // report a real denominator. A percentage without a denominator is not actionable; an
         // elapsed time without observed throughput is not an ETA.
         var plan = new List<CorpusPlannedWork>();
+        var enumeration = new List<CorpusPlannedWork>();
         var localBuildIssues = new List<SourceBuildIssue>();
         var enumeratedWorks = 0;
         await foreach (var work in adapter.EnumerateWorks(ct))
         {
             enumeratedWorks++;
             var versionsOfWork = await adapter.FetchVersions(work, ct);
+            enumeration.Add(new CorpusPlannedWork(work, versionsOfWork));
             if (versionsOfWork.Count > 0)
                 plan.Add(new CorpusPlannedWork(work, versionsOfWork));
             else
@@ -90,7 +125,8 @@ public sealed class CorpusWriter(
                     throw new InvalidDataException(
                         $"Publisher version {version.Id.Value} belongs to work "
                         + $"{version.WorkId.Value}, not enumerated work {item.Work.Id.Value}.");
-        RequireUniquePlannedWorks(plan);
+        RequireUniquePlannedWorks(enumeration);
+        RequireUniquePlannedVersions(enumeration);
         if (existingManifest is not null)
             existingManifest = RequireVerifiedBaseline(pub.Id, plan);
         // Engineering scope is an acquisition decision, not publisher legal metadata. Reject the
@@ -105,6 +141,26 @@ public sealed class CorpusWriter(
         // same single source enumeration consumed below; the validator must not re-query the
         // publisher.
         validatePlan?.Invoke(plan);
+        if (_runIdentity is not null)
+        {
+            var ledger = CompletedRunLedger.Load(corpusRoot);
+            var enumerationScopeSha256 = CompletedRunLedger.EnumerationScopeDigest(
+                desc, sourceConfigurationKind, sourceConfigurationSha256,
+                expectedWorks, retryMaximumAttempts, sourceInventory?.Issues ?? [],
+                enumeration);
+            var disposition = CompletedRunLedger.Bind(
+                ledger, _runIdentity, _now, enumerationScopeSha256);
+            if (disposition == CompletedRunDisposition.ExactReplay)
+            {
+                Accepted = true;
+                _progress.WriteLine("  [corpus] exact completed-run replay; no changes applied");
+                return;
+            }
+            completedRunsSha256 = CompletedRunLedger.Stage(
+                ledger, corpusRoot, candidate);
+        }
+        if (allowTrustedPlanPreparation)
+            baseline = CorpusBaseline.Capture(corpusRoot);
         var totalExpressions = plan.Sum(item => item.Versions.Sum(version => (long)version.Expressions.Count));
         long processedExpressions = 0;
         var lastReportedPercent = -1;
@@ -176,12 +232,18 @@ public sealed class CorpusWriter(
                         e.Event is "absent_unconfirmed" or "withdrawn_from_source" or "resighted");
                     if (lifecycle?.Event is "absent_unconfirmed" or "withdrawn_from_source")
                     {
+                        if (_runIdentity is null)
+                            throw new InvalidDataException(
+                                $"A completed source run identity is required to resight {meta.LexId}.");
+                        RequireUnusedRunIdentity(meta, _runIdentity);
+                        RequireLaterCompletedRun(lifecycle, _runIdentity, meta.LexId);
                         meta.Events.Add(new EventEntry
                         {
                             Event = "resighted",
                             ObservedFrom = _now,
                             Scope = "version",
                             Detail = "publisher record returned to the current enumeration",
+                            RunIdentity = _runIdentity,
                         });
                         changed = true;
                     }
@@ -481,6 +543,7 @@ public sealed class CorpusWriter(
             }
         }
 
+        baseline.RequireUnchanged();
         var pendingVersions = TombstoneMissingVersions(seenVersionMetadata, candidate);
         var currentWorkIdentifiers = plan.Select(item => item.Work.Id.Value)
             .ToHashSet(StringComparer.Ordinal);
@@ -574,6 +637,7 @@ public sealed class CorpusWriter(
                 ?? _ingesterCodeCommit,
             SourceConfigurationKind = sourceConfigurationKind,
             SourceConfigurationSha256 = sourceConfigurationSha256,
+            CompletedRunsSha256 = completedRunsSha256,
             MigrationBaselineWorks = existingManifest?.MigrationBaselineWorks,
         };
         candidate.WriteIfChanged(Path.Combine(corpusRoot, "manifest.json"), JsonSerializer.Serialize(manifest, CorpusJson.Options));
@@ -603,7 +667,8 @@ public sealed class CorpusWriter(
                 "  [corpus] no materialized changes; prior ingester identity retained");
             return;
         }
-        candidate.Commit();
+        candidate.Commit(
+            baseline, writeSession, beforeCandidateCommit, afterCandidatePublish);
         Committed = true;
         _progress.WriteLine($"  [corpus] works={works} versions={versions} expressions={expressions} " +
             $"with_text={expressionsWithText} without_text={manifest.ExpressionsWithoutText} " +
@@ -701,6 +766,20 @@ public sealed class CorpusWriter(
             if (!plannedIdentifiers.Add(item.Work.Id.Value))
                 throw new InvalidDataException(
                     $"Publisher returned duplicate work identifier '{item.Work.Id.Value}'.");
+        }
+    }
+
+    private static void RequireUniquePlannedVersions(
+        IReadOnlyList<CorpusPlannedWork> plan)
+    {
+        foreach (var item in plan)
+        {
+            var identifiers = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var version in item.Versions)
+                if (!identifiers.Add(version.Id.Value))
+                    throw new InvalidDataException(
+                        $"Publisher returned duplicate version identifier "
+                        + $"'{version.Id.Value}' for work '{item.Work.Id.Value}'.");
         }
     }
 
@@ -970,6 +1049,20 @@ public sealed class CorpusWriter(
                 e.Event is "absent_unconfirmed" or "withdrawn_from_source" or "resighted");
             if (lifecycle?.Event == "withdrawn_from_source") continue;
 
+            if (_runIdentity is null)
+                throw new InvalidDataException(
+                    $"A completed source run identity is required to record absence for {meta.LexId}.");
+            if (lifecycle?.Event == "absent_unconfirmed"
+                && string.Equals(lifecycle.RunIdentity, _runIdentity,
+                    StringComparison.Ordinal))
+            {
+                pendingVersions.Add(meta);
+                continue;
+            }
+            RequireUnusedRunIdentity(meta, _runIdentity);
+            if (lifecycle is not null)
+                RequireLaterCompletedRun(lifecycle, _runIdentity, meta.LexId);
+
             var firstMissedAt = _now;
             var runsMissed = 1;
             if (lifecycle?.Event == "absent_unconfirmed")
@@ -991,6 +1084,7 @@ public sealed class CorpusWriter(
                     : "publisher record absence is not yet confirmed",
                 FirstMissedAt = firstMissedAt,
                 RunsMissed = runsMissed,
+                RunIdentity = _runIdentity,
             });
             meta.RecordSha256 = CorpusHashes.RecordSha256(meta);
             candidate.WriteIfChanged(metaPath, JsonSerializer.Serialize(meta, CorpusJson.Options));
@@ -998,6 +1092,31 @@ public sealed class CorpusWriter(
             if (runsMissed < 3) pendingVersions.Add(meta);
         }
         return pendingVersions;
+    }
+
+    private static void RequireUnusedRunIdentity(VersionMeta meta, string runIdentity)
+    {
+        if (meta.Events.Any(entry => string.Equals(
+                entry.RunIdentity, runIdentity, StringComparison.Ordinal)))
+            throw new InvalidDataException(
+                $"Completed source run identity '{runIdentity}' was already observed for {meta.LexId}.");
+    }
+
+    private void RequireLaterCompletedRun(
+        EventEntry prior,
+        string runIdentity,
+        string lexId)
+    {
+        if (string.Equals(prior.RunIdentity, runIdentity, StringComparison.Ordinal))
+            throw new InvalidDataException(
+                $"Completed source run identity '{runIdentity}' conflicts for {lexId}.");
+        var priorCompletedAt = HistoricalWithdrawalAuditValidation.ParseCanonicalUtc(
+            prior.ObservedFrom, "prior completed source run observed_from");
+        var currentCompletedAt = HistoricalWithdrawalAuditValidation.ParseCanonicalUtc(
+            _now, "completed source run observed_from");
+        if (currentCompletedAt <= priorCompletedAt)
+            throw new InvalidDataException(
+                $"Completed source runs must be observed in order for {lexId}.");
     }
 
     private static StringComparer PathComparer => OperatingSystem.IsWindows()

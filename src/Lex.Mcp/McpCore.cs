@@ -1600,7 +1600,11 @@ public sealed class McpCore
                             || observations.Count > MaximumProvenanceRows,
                         ["events"] = new JsonArray(events.Take(MaximumProvenanceRows).Select(e => (JsonNode)new JsonObject
                         {
-                            ["event"] = e.Event, ["scope"] = e.Scope, ["observed_from"] = e.ObservedFrom, ["detail"] = e.Detail,
+                            ["event"] = e.Event, ["scope"] = e.Scope,
+                            ["observed_from"] = e.ObservedFrom, ["detail"] = e.Detail,
+                            ["first_missed_at"] = e.FirstMissedAt,
+                            ["runs_missed"] = e.RunsMissed,
+                            ["run_identity"] = e.RunIdentity,
                         }).ToArray()),
                         ["observations"] = new JsonArray(observations.Take(MaximumProvenanceRows).Select(o => (JsonNode)new JsonObject
                         {

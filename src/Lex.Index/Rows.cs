@@ -148,7 +148,15 @@ public sealed record AnchorEventRow(
     string GroupKey, string Language, bool IsPrimaryLanguage, string EType, string? FromAnchor, string? ToAnchor,
     string? Anchor, string? TextSha, string? AtVersion);
 
-public sealed record EventRow(string Key, string Scope, string Event, string ObservedFrom, string? Detail);
+public sealed record EventRow(
+    string Key,
+    string Scope,
+    string Event,
+    string ObservedFrom,
+    string? Detail,
+    string? FirstMissedAt = null,
+    int? RunsMissed = null,
+    string? RunIdentity = null);
 
 public sealed record ObservationRow(
     string Key, string Language, string ExprValidFrom,
