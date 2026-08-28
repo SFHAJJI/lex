@@ -512,7 +512,9 @@ export function Ranking({ rows, worksChanged, newVersions, populationWorks, know
 export function InForce({ date, total, rows, page, hasMore, onOpen, onPage }: {
   date: string; total: number;
   rows: { work: string; title?: string; kind?: string; valid_from: string;
-          jurisdiction?: string; hierarchy?: string; timeline_semantics?: string }[];
+          jurisdiction?: string; hierarchy?: string; timeline_semantics?: string;
+          /** The publisher exposes several identified versions for this work on this date. */
+          ambiguous?: boolean }[];
   page: number; hasMore: boolean;
   onOpen: (work: string, date: string) => void;
   onPage: (page: number) => void;
@@ -529,11 +531,20 @@ export function InForce({ date, total, rows, page, hasMore, onOpen, onPage }: {
             <button className="rowbtn" onClick={() => onOpen(r.work, r.valid_from)}>
               <span>{r.title ?? r.work}</span>
               <span className="hitmeta">
+                {/* An ambiguity unit is NOT a determinate version. Rendering it unmarked
+                    would assert the publisher identified one, which it did not. */}
+                {r.ambiguous
+                  ? <span className="tag warn" data-testid="ambiguous-version-row">
+                      several identified versions
+                    </span>
+                  : null}
                 {r.jurisdiction ? <span>{jurisdictionLabel(r.jurisdiction)}</span> : null}
                 {r.hierarchy ? <span>{facetLabel(r.hierarchy)}</span> : null}
                 {r.kind ? <span>{facetLabel(r.kind)}</span> : null}
                 <span className="mono">
-                  {usesPublisherVersionDates(r.work, r.timeline_semantics) ? `publisher version ${r.valid_from}` : `in force since ${r.valid_from}`}
+                  {r.ambiguous
+                    ? `choose a version for ${r.valid_from}`
+                    : usesPublisherVersionDates(r.work, r.timeline_semantics) ? `publisher version ${r.valid_from}` : `in force since ${r.valid_from}`}
                 </span>
               </span>
             </button>

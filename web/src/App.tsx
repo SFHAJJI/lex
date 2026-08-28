@@ -321,7 +321,9 @@ export default function App() {
           : decision.empty === "ambiguous_only"
           ? { gap: { status: "ambiguous_only",
                      explanation: AMBIGUOUS_ONLY_SENTENCE, available: [] },
-              publisher_limitations: partition.limitations }
+              publisher_limitations: partition.limitations,
+              // An unusable sibling is still disclosed beside the ambiguity message.
+              partial_response: decision.partial }
           : decision.empty === "incomplete_response"
           ? { gap: { status: "incomplete_response",
                      explanation: INCOMPLETE_RESPONSE_SENTENCE, available: [] },
@@ -375,7 +377,21 @@ export default function App() {
           timeline_semantics: e?.envelope?.timeline_semantics,
         })));
         rows.sort((a: any, b: any) => String(a.title ?? a.work).localeCompare(String(b.title ?? b.work)));
-        const visibleRows = rows.slice(page * PAGE, (page + 1) * PAGE);
+        // Ambiguity units are held content the reader must see, not a silent contribution to
+        // the total (PR293 exact review, O1). They render beside normal rows, carry their own
+        // marker, and count as page units so pagination describes what is actually shown.
+        const ambiguityDecision = projectGovernedEmptiness("in_force_on", res, rows.length);
+        const ambiguityRows = ambiguityDecision.ambiguous.map((unit: any) => ({
+          work: unit.lex_id
+            ? String(unit.lex_id).split(":").slice(0, 2).join(":")
+            : String(unit.work ?? ""),
+          title: unit.title, kind: unit.document_type,
+          valid_from: unit.valid_from ?? s.asOf!, permalink: unit.permalink,
+          jurisdiction: unit.jurisdiction, hierarchy: unit.hierarchy,
+          ambiguous: true,
+        }));
+        const pageUnits = [...rows, ...ambiguityRows];
+        const visibleRows = pageUnits.slice(page * PAGE, (page + 1) * PAGE);
         const decision = projectGovernedEmptiness("in_force_on", res, visibleRows.length);
         setUi(decision.empty === null
           ? { in_force: { date: s.asOf!, total: ran.reduce((n, e) => n + (e?.total_works_in_force ?? 0), 0), rows: visibleRows },
@@ -392,7 +408,9 @@ export default function App() {
           : decision.empty === "ambiguous_only"
           ? { gap: { status: "ambiguous_only",
                      explanation: AMBIGUOUS_ONLY_SENTENCE, available: [] },
-              publisher_limitations: partition.limitations }
+              publisher_limitations: partition.limitations,
+              // An unusable sibling is still disclosed beside the ambiguity message.
+              partial_response: decision.partial }
           : decision.empty === "incomplete_response"
           ? { gap: { status: "incomplete_response",
                      explanation: INCOMPLETE_RESPONSE_SENTENCE, available: [] },

@@ -229,21 +229,46 @@ function rowsValid(value: unknown): value is Record<string, unknown>[] {
     && value.every((row) => typeof row === "object" && row !== null && !Array.isArray(row));
 }
 
+/** A non-empty string field, which is what every renderer actually consumes. */
+const text = (value: unknown): boolean =>
+  typeof value === "string" && value.length > 0;
+
+/**
+ * Operation-specific row schemas (PR293 exact review, O2). Round 7 accepted any non-null
+ * object, so `hits:[{}]` was `ran`: the empty row then yielded no work id, the surface found
+ * zero rows and claimed "Nothing in the corpus matches that", and an empty change row threw
+ * inside `work.includes`. A row that a renderer cannot read is malformed, not empty.
+ */
+const ROW_SCHEMAS: Record<string, (row: Record<string, unknown>) => boolean> = {
+  // The workspace derives every work identity from lex_id.
+  search: (row) => text(row.lex_id),
+  // The ranking view reads work and calls string methods on it.
+  changes_in_period: (row) => text(row.work),
+  // The in-force view opens rows by work, or by lex_id when the publisher supplies one.
+  in_force_on: (row) => text(row.work) || text(row.lex_id),
+};
+
+const rowsMatchSchema = (tool: string, rows: Record<string, unknown>[]): boolean =>
+  rows.every((row) => ROW_SCHEMAS[tool]!(row));
+
 function ranShapeValid(tool: string, entry: Record<string, unknown>, status: string): boolean {
   if (tool === "search") {
     // O3: the producer always declares its actual retrieval mode on a successful search.
     // Admitting an envelope without one lets a response of unknown provenance render.
     return rowsValid(entry.hits)
+      && rowsMatchSchema("search", entry.hits)
       && typeof entry.retrieval_mode === "string"
       && RETRIEVAL_MODES.has(entry.retrieval_mode);
   }
   if (tool === "changes_in_period") {
     if (!rowsValid(entry.changes)) return false;
+    if (!rowsMatchSchema("changes_in_period", entry.changes)) return false;
     const worksChanged = requiredCount(entry.works_changed);
     const newVersions = optionalCount(entry.new_versions);
     if (worksChanged === null || newVersions === null) return false;
     if (status === "no_changes_in_period") {
-      return worksChanged === 0 && entry.changes.length === 0;
+      return worksChanged === 0 && entry.changes.length === 0
+        && optionalCount(entry.new_versions) === 0;
     }
     // Rows may legitimately be empty beside a positive count: the producer emits this
     // publisher's FULL period total beside its slice of one globally merged page, so a
@@ -255,11 +280,21 @@ function ranShapeValid(tool: string, entry: Record<string, unknown>, status: str
   }
   if (tool === "in_force_on") {
     if (!rowsValid(entry.works)) return false;
+    if (!rowsMatchSchema("in_force_on", entry.works)) return false;
     const total = requiredCount(entry.total_works_in_force);
     if (total === null) return false;
-    if (entry.ambiguous_works !== undefined && !rowsValid(entry.ambiguous_works)) return false;
+    if (entry.ambiguous_works !== undefined
+      && (!rowsValid(entry.ambiguous_works)
+        || !rowsMatchSchema("in_force_on", entry.ambiguous_works))) return false;
     const ambiguities = Array.isArray(entry.ambiguous_works)
       ? entry.ambiguous_works.length : 0;
+    // Status and counts must agree. no_result means the publisher found nothing, so a
+    // positive total contradicts it; round 7 admitted that and rendered a false claim that
+    // no state covers the date beside a response reporting five (O2). ambiguous_version
+    // means at least one ambiguity unit exists.
+    if (status === "no_result"
+      && (total !== 0 || entry.works.length > 0 || ambiguities > 0)) return false;
+    if (status === "ambiguous_version" && ambiguities === 0) return false;
     // As above: one remainingLimit is shared across publishers, so an exhausted page returns
     // zero rows beside this publisher's full total. Ambiguity units also consume the page, so
     // rows plus ambiguities is what must not exceed the total.
@@ -505,6 +540,13 @@ export function projectSearchResponse<W, A>(
 /** One governed non-search projection: validated rows, counts and the typed empty state. */
 export interface GovernedProjection {
   partition: GovernedPartition;
+  /**
+   * The ambiguity units the caller must render beside normal rows (PR293 exact review, O1).
+   * Round 7 chose visible rows first, so a mixed page dropped these objects while keeping
+   * their contribution to the total, producing pagination like 1 to 1 of 2 with an
+   * unexplained second unit.
+   */
+  ambiguous: Record<string, unknown>[];
   /** The typed empty state; null while rows or ambiguity units exist. */
   empty: "all_refused" | "no_corpus" | "mixed_no_match" | "none_matched"
     | "incomplete_response" | "ambiguous_only" | null;
@@ -525,23 +567,27 @@ export function projectGovernedEmptiness(
   const envelopes = Array.isArray(raw) ? raw : [raw];
   const partition = partitionGovernedResponse(tool, envelopes);
   const partial = partition.invalidCount > 0;
-  if (visibleRowCount > 0) return { partition, empty: null, partial };
+  const ambiguous = partition.ran
+    .map((entry) => (entry as Record<string, unknown> | null)?.ambiguous_works)
+    .flatMap((units) => Array.isArray(units) ? units as Record<string, unknown>[] : []);
+  if (visibleRowCount > 0) return { partition, empty: null, partial, ambiguous };
   // Ambiguity units are held content, so this is not absence. But it is not a result either:
   // round 6 returned null here, which let the caller render a positive total beside an empty
   // list (PR293 review, O2). It is its own state, and the surface must ask for clarification
   // rather than report a count it cannot itemise.
   if (partition.ambiguityUnits > 0) {
-    return { partition, empty: "ambiguous_only", partial };
+    return { partition, empty: "ambiguous_only", partial, ambiguous };
   }
-  if (partition.noCorpus) return { partition, empty: "no_corpus", partial };
-  if (partial) return { partition, empty: "incomplete_response", partial };
-  if (partition.allRefused) return { partition, empty: "all_refused", partial };
+  if (partition.noCorpus) return { partition, empty: "no_corpus", partial, ambiguous };
+  if (partial) return { partition, empty: "incomplete_response", partial, ambiguous };
+  if (partition.allRefused) return { partition, empty: "all_refused", partial, ambiguous };
   if (partition.ran.length === 0) {
-    return { partition, empty: "incomplete_response", partial };
+    return { partition, empty: "incomplete_response", partial, ambiguous };
   }
   return {
     partition,
     empty: partition.anyRefused ? "mixed_no_match" : "none_matched",
     partial,
+    ambiguous,
   };
 }

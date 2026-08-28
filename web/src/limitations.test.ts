@@ -515,3 +515,78 @@ test("an ungoverned tool derives nothing even from a refusing envelope", () => {
   assert.equal(partitionGovernedResponse("provenance",
     [refused("lu-legilux", ["domain"])]).limitations.length, 0);
 });
+
+// ---------------------------------------------------------------------------
+// PR293 exact review: row schemas, status coherence, ambiguity rendering
+// ---------------------------------------------------------------------------
+
+test("a row a renderer cannot read is malformed, not empty", () => {
+  // Round 7 accepted any non-null object, so hits:[{}] was ran: the empty row yielded no
+  // work id, the surface found zero rows and claimed nothing in the corpus matched.
+  assert.equal(classifyEnvelope("search", {
+    envelope: { status: "ok" }, hits: [{}], retrieval_mode: "keyword",
+  }).kind, "invalid");
+  assert.equal(classifyEnvelope("changes_in_period", {
+    envelope: { status: "ok" }, changes: [{}], works_changed: 1,
+  }).kind, "invalid", "an empty change row threw inside work.includes");
+  assert.equal(classifyEnvelope("in_force_on", {
+    envelope: { status: "ok" }, works: [{}], total_works_in_force: 1,
+  }).kind, "invalid");
+  // A row carrying what the renderer actually consumes is fine.
+  assert.equal(classifyEnvelope("search", {
+    envelope: { status: "ok" }, hits: [{ lex_id: "lu:w1:2024-01-01" }],
+    retrieval_mode: "keyword",
+  }).kind, "ran");
+  assert.equal(classifyEnvelope("in_force_on", {
+    envelope: { status: "ok" }, works: [{ lex_id: "lu:w1:2024-01-01" }],
+    total_works_in_force: 1,
+  }).kind, "ran", "in-force rows may be identified by lex_id instead of work");
+});
+
+test("status and counts must cohere", () => {
+  // no_result means the publisher found nothing, so a positive total contradicts it.
+  // Round 7 admitted this and rendered a false claim that no state covers the date
+  // beside a response reporting five.
+  assert.equal(classifyEnvelope("in_force_on", {
+    envelope: { status: "no_result" }, works: [], total_works_in_force: 5,
+  }).kind, "invalid");
+  assert.equal(classifyEnvelope("in_force_on", {
+    envelope: { status: "no_result" }, works: [], total_works_in_force: 0,
+  }).kind, "ran");
+  // ambiguous_version asserts at least one ambiguity unit exists.
+  assert.equal(classifyEnvelope("in_force_on", {
+    envelope: { status: "ambiguous_version" }, works: [], ambiguous_works: [],
+    total_works_in_force: 0,
+  }).kind, "invalid");
+  // no_changes_in_period must be empty on every count it carries.
+  assert.equal(classifyEnvelope("changes_in_period", {
+    envelope: { status: "no_changes_in_period" }, changes: [], works_changed: 0,
+    new_versions: 3,
+  }).kind, "invalid");
+});
+
+test("ambiguity units travel to the caller for rendering", () => {
+  // Round 7 chose visible rows first and dropped these objects while keeping their
+  // contribution to the total, producing pagination with an unexplained extra unit.
+  const mixed = {
+    envelope: { status: "ambiguous_version", publisher: "lu-legilux" },
+    works: [{ work: "w1", title: "Determinate", valid_from: "2024-01-01" }],
+    ambiguous_works: [{ work: "w2", title: "Ambiguous", valid_from: "2024-01-01" }],
+    total_works_in_force: 2,
+  };
+  const decision = projectGovernedEmptiness("in_force_on", [mixed], 1);
+  assert.equal(decision.empty, null, "a normal row exists, so this is a result");
+  assert.equal(decision.ambiguous.length, 1, "the ambiguity unit reaches the caller");
+  assert.equal((decision.ambiguous[0] as { work: string }).work, "w2");
+
+  // And the invalid-sibling disclosure survives the ambiguity-only branch.
+  const ambiguousPlusInvalid = projectGovernedEmptiness("in_force_on", [
+    { envelope: { status: "ambiguous_version", publisher: "lu-legilux" }, works: [],
+      ambiguous_works: [{ work: "w2", valid_from: "2024-01-01" }],
+      total_works_in_force: 1 },
+    { envelope: { status: "made_up" }, works: [] },
+  ], 0);
+  assert.equal(ambiguousPlusInvalid.empty, "ambiguous_only");
+  assert.equal(ambiguousPlusInvalid.partial, true,
+    "an unusable sibling is still disclosed beside the ambiguity message");
+});
