@@ -19,8 +19,11 @@ public static class MatchLanes
     public const string Metadata = "metadata";
     public const string UnclassifiedRender = "unclassified_render";
 
+    // semantic_work and semantic_concept are deliberately NOT text: the producer's work
+    // vector is subjects plus names, never provision text, and the concept arm is unreachable
+    // and kind-unbound (Codex B2 review O3). Both fall through to unclassified_render.
     private static readonly HashSet<string> TextReasons =
-        ["keyword", "semantic", "semantic_work", "semantic_concept", "article_intent", "fuzzy"];
+        ["keyword", "semantic", "article_intent", "fuzzy"];
 
     private static readonly string[] IdentitySuffixes =
         ["_identifier", "_publisher_short_title", "_title", "_alias"];
@@ -78,29 +81,82 @@ public static class MatchLanes
         + "or identifier, review coverage and known gaps, or search the official publisher.";
     public const string DisclosureLabel = "Matched only in metadata";
 
+    /// <summary>A candidate disclosure row straight off served hit fields, validated here.</summary>
+    public sealed record DisclosureRow(string Publisher, string Work, string ValidFrom, string Title);
+
+    private static readonly System.Text.RegularExpressions.Regex WorkGrammar = new(
+        "^[a-z0-9][a-z0-9._-]{0,199}$",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase
+        | System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
+    private static readonly System.Text.RegularExpressions.Regex PublisherGrammar = new(
+        "^[a-z0-9][a-z0-9-]{0,63}$",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase
+        | System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
+    private static readonly System.Text.RegularExpressions.Regex DateGrammar = new(
+        "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+        System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
     /// <summary>
-    /// The server-page notice plus the subordinate disclosure list. Byte-exact boundaries and
-    /// append-only insertion, per the B1 classifier finding.
+    /// Every hit of a multi-publisher search response paired with its envelope publisher.
+    /// Refused envelopes carry no hits array and simply contribute nothing, so a refusal
+    /// beside metadata hits neither blocks nor fakes the response-level state.
+    /// </summary>
+    public static IReadOnlyList<(string Publisher, JsonObject Hit)> ResponsePopulation(
+        JsonArray envelopes) =>
+        envelopes.OfType<JsonObject>().SelectMany(result =>
+        {
+            var publisher = (result["envelope"] as JsonObject)?["publisher"] is JsonValue value
+                && value.TryGetValue<string>(out var text) ? text : "";
+            return (result["hits"] as JsonArray ?? []).OfType<JsonObject>()
+                .Select(hit => (publisher, hit));
+        }).ToArray();
+
+    /// <summary>
+    /// The server-page notice plus the subordinate disclosure list, for the ONE response-level
+    /// metadata_only state (Codex B2 review, O1: classification is never per publisher).
+    /// Rows are validated fail closed against the B1 coordinate grammar and links are rebuilt
+    /// from the parsed parts; invalid rows are omitted without suppressing the notice (O4).
+    /// One exact-host official action renders per represented collection. Byte-exact
+    /// boundaries and append-only insertion, per the B1 classifier finding.
     /// </summary>
     public static string NoticeHtml(
-        string collection,
-        IReadOnlyList<(string Href, string Title, string Detail)> matches)
+        IReadOnlyList<string> collections,
+        IReadOnlyList<DisclosureRow> rows)
     {
-        var official = WorkCandidates.OfficialSearchHref(collection);
-        var officialLink = official.StartsWith("https://", StringComparison.Ordinal)
-            ? $"<a href=\"{H(official)}\" rel=\"noopener\">Search the official publisher</a>"
-            : $"<a href=\"{H(official)}\">Search Lex</a>";
-        var items = string.Join("", matches.Select(match =>
-            $"<li><a href=\"{H(match.Href)}\">{H(match.Title)}</a> "
-            + $"<span class=\"sub mono\">{H(match.Detail)}</span></li>"));
-        var disclosure = matches.Count == 0 ? "" :
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var valid = rows.Where(row =>
+                PublisherGrammar.IsMatch(row.Publisher)
+                && WorkGrammar.IsMatch(row.Work)
+                && DateGrammar.IsMatch(row.ValidFrom)
+                && seen.Add($"{row.Publisher}:{row.Work}"))
+            .ToArray();
+        var items = string.Join("", valid.Take(10).Select(row =>
+        {
+            var title = row.Title.Length is > 0 and <= 300 ? row.Title
+                : row.Title.Length > 300 ? row.Title[..300] : row.Work;
+            return $"<li><a href=\"/{H(row.Publisher)}/{H(row.Work)}/{H(row.ValidFrom)}\">"
+                + $"{H(title)}</a> <span class=\"sub mono\">{H(row.Work)} · {H(row.Publisher)}"
+                + " · matched in metadata</span></li>";
+        }));
+        var disclosure = valid.Length == 0 ? "" :
             $"<details><summary>{H(DisclosureLabel)}</summary><ul>{items}</ul></details>";
+        var officials = string.Join("", collections
+            .Where(collection => PublisherGrammar.IsMatch(collection))
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(collection => collection, StringComparer.Ordinal)
+            .Select(WorkCandidates.OfficialSearchHref)
+            .Distinct(StringComparer.Ordinal)
+            .Select(official => official.StartsWith("https://", StringComparison.Ordinal)
+                ? $" &nbsp;&nbsp;<a href=\"{H(official)}\" rel=\"noopener\">Search the official publisher</a>"
+                : $" &nbsp;&nbsp;<a href=\"{H(official)}\">Search Lex</a>"));
         return "<div class=\"notice\" role=\"note\" data-testid=\"metadata-only-notice\""
             + $" aria-label=\"{H(Heading)}\">"
             + $"<b>{H(Heading)}.</b> {H(Body)}"
             + disclosure
             + $"<span class=\"sub\"><a href=\"/coverage\">View coverage and known gaps</a>"
-            + $" &nbsp;&nbsp;{officialLink}</span>"
+            + $"{officials}</span>"
             + "</div>";
     }
 

@@ -26,8 +26,8 @@ export const UNKNOWN_WORK_BODY =
   + "listed below, choose one; otherwise search the official publisher.";
 export const UNKNOWN_WORK_CANDIDATES_HEADING = "Possible held records";
 
-const IDENTIFIER = /^[a-z0-9][a-z0-9._-]{0,199}$/i;
-const PUBLISHER = /^[a-z0-9][a-z0-9-]{0,63}$/i;
+export const IDENTIFIER = /^[a-z0-9][a-z0-9._-]{0,199}$/i;
+export const PUBLISHER = /^[a-z0-9][a-z0-9-]{0,63}$/i;
 
 export function validateWorkCandidate(value: unknown): WorkCandidate | null {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return null;

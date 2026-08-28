@@ -8,7 +8,7 @@ import {
   type PublisherMetadata,
 } from "./publisherMetadata";
 import { ScopeFilters } from "./ScopeFilters";
-import { metadataOnlyState } from "./matchLanes";
+import { metadataOnlyResponse } from "./matchLanes";
 import { MetadataOnlyNotice } from "./metadataOnlyNotice";
 import type { State } from "./state";
 import { shorten } from "./pickers";
@@ -84,6 +84,9 @@ const INITIAL_ARTICLES = 8;
 export default function Search(p: SearchProps) {
   const [text, setText] = useState(p.state.q ?? "");
   const [works, setWorks] = useState<WorkHit[]>([]);
+  // B2 (Codex O2): decided in the fetch from the COMPLETE fused population, before the
+  // eight-work display cap and the passage filter, never derived from visible arrays.
+  const [metadataOnly, setMetadataOnly] = useState(false);
   const [articles, setArticles] = useState<ArticleHit[]>([]);
   const [busy, setBusy] = useState(false);
   const [modeUsed, setModeUsed] = useState<"keyword" | "hybrid" | "unavailable">("keyword");
@@ -123,7 +126,7 @@ export default function Search(p: SearchProps) {
   const metadataIdentifier = metadataArguments?.publisher_metadata_identifier;
 
   useEffect(() => {
-    if (!q.trim()) { setWorks([]); setArticles([]); setError(undefined); return; }
+    if (!q.trim()) { setWorks([]); setArticles([]); setMetadataOnly(false); setError(undefined); return; }
     let live = true;
     setArticleLimit(INITIAL_ARTICLES);
     setBusy(true);
@@ -132,6 +135,7 @@ export default function Search(p: SearchProps) {
     setExpansions([]);
     setWorks([]);
     setArticles([]);
+    setMetadataOnly(false);
     tool<any>("search", { query: q.trim(), limit: 40, time_scope: "as_of", as_of: asOf ?? p.today,
                           retrieval_mode: retrieval, fuzzy: "auto",
                           ...(jurisdiction ? { jurisdiction } : {}),
@@ -161,6 +165,12 @@ export default function Search(p: SearchProps) {
         // The same hits answer two different questions, so they are split rather than ranked
         // together: "which law is this" and "where is this said". A reader almost always wants
         // the first when they typed a name, and the second when they typed words.
+        // The response-level lane decision reads every fused hit with its RAW served
+        // reasons; validation and the union rule live in metadataOnlyResponse.
+        setMetadataOnly(metadataOnlyResponse(hits.map((h: any) => ({
+          work: String(h.lex_id ?? "").split(":").slice(0, 2).join(":"),
+          reasons: h.match_reasons,
+        }))));
         const byWork = new Map<string, WorkHit>();
         const arts: ArticleHit[] = [];
         for (const h of hits) {
@@ -191,7 +201,7 @@ export default function Search(p: SearchProps) {
         // result inventory and must never introduce a ninth law after the work cap was applied.
         setArticles(arts.filter((article) => visibleWorkIds.has(article.work)).slice(0, 25));
       })
-      .catch(() => { if (live) { setWorks([]); setArticles([]); setError("Search could not be reached. Try again."); } })
+      .catch(() => { if (live) { setWorks([]); setArticles([]); setMetadataOnly(false); setError("Search could not be reached. Try again."); } })
       .finally(() => { if (live) setBusy(false); });
     return () => { live = false; };
   }, [q, asOf, retrieval, jurisdiction, hierarchy, domain, sourceClass, actForm, bindingStatus,
@@ -202,11 +212,8 @@ export default function Search(p: SearchProps) {
     p.onSubmit(searchSubmission(text));
   };
 
-  // B2 (Decision 41, metadata_only): when every hit is POSITIVELY a subject-metadata
-  // association, nothing here is an answer; the typed notice speaks and the matches are
-  // disclosed beneath it, never rendered as law cards. Mixed responses are unchanged.
-  const metadataOnly = articles.length === 0
-    && metadataOnlyState(works.map((work) => work.matchReasons ?? []));
+  // B2 (Decision 41, metadata_only): the response-level state was decided in the fetch
+  // over the full population; here it only suppresses the card projection.
   const groupedResults = groupSearchResults(metadataOnly ? [] : works, articles);
   const visiblePassages = new Set(articles.slice(0, articleLimit));
   const resultLawCount = groupedResults.reduce((count, section) => count + section.works.length, 0);
