@@ -396,7 +396,17 @@ internal sealed class HandleBoundRoot : IDisposable
                         fd = openat(current.DangerousGetHandle().ToInt32(), component,
                             OReadOnly | ODirectory | ONoFollow | OCloseOnExec, 0);
                     }
-                    if (fd < 0) ThrowUnix($"open directory '{component}'");
+                    if (fd < 0)
+                    {
+                        var error = Marshal.GetLastPInvokeError();
+                        if (error == ENoEntry)
+                            throw new FileNotFoundException(
+                                $"Handle-bound corpus directory '{component}' is missing.");
+                        if (error is ELoop or ENotDirectory)
+                            throw new InvalidDataException(
+                                "A handle-bound corpus path component is not a safe directory.");
+                        ThrowUnix($"open directory '{component}'");
+                    }
                     next = new SafeFileHandle(new IntPtr(fd), ownsHandle: true);
                 }
                 if (create)
