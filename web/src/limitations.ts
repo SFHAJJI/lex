@@ -36,8 +36,32 @@ export const LIMITATION_CAP = 8;
 /** The governed operations; a limitation naming any other tool is malformed. */
 const GOVERNED_TOOLS = new Set(["search", "changes_in_period", "in_force_on"]);
 
+/**
+ * The four filters the index itself checks. This set is signed: CapabilityManifest.RequestedFilters
+ * returns exactly these, Populated throws for anything else, and
+ * VerifyCapabilityManifestMatchesDocuments compares the stored manifest against a recompute, so
+ * widening it would invalidate every signed index stamp. Do not add to this set.
+ */
+export const MANIFEST_FILTERS = new Set([
+  "act_form", "binding_status", "domain", "hierarchy",
+]);
+
+/**
+ * Filters a producer may refuse outside the signed manifest. `publisher_metadata_identifier` is
+ * answerable only by an extended work catalog; an older index evaluates it as an ordinary
+ * predicate and returns an authoritative-looking zero, so search refuses instead (Codex contract
+ * amendment, 2026-08-28).
+ *
+ * This set is deliberately NOT part of MANIFEST_FILTERS, and the two must stay separate. Merging
+ * them would either throw inside the manifest path or invalidate signed stamps. Nor can this one
+ * simply be omitted: an unrecognized filter name makes the whole refusal classify as invalid, so
+ * the client would present an honest capability refusal as a malformed response, which is exactly
+ * what never-implied rule 10 forbids.
+ */
+export const GUARDED_FILTERS = new Set(["publisher_metadata_identifier"]);
+
 /** The governed filter identifiers; anything else in the list is dropped. */
-const GOVERNED_FILTERS = new Set(["act_form", "binding_status", "domain", "hierarchy"]);
+export const GOVERNED_FILTERS = new Set([...MANIFEST_FILTERS, ...GUARDED_FILTERS]);
 
 /**
  * The closed terminal success statuses per governed operation, pinned against the producer

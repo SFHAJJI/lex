@@ -8,6 +8,7 @@ import {
   MIXED_ZERO_SENTENCES, partitionGovernedResponse, projectGovernedEmptiness,
   projectSearchResponse, searchAbsenceState, searchEmptyPresentation, searchResultsFromError,
   validateLimitation,
+  GOVERNED_FILTERS, MANIFEST_FILTERS,
 } from "./limitations.ts";
 
 const refused = (publisher: string, filters: string[]) => ({
@@ -589,4 +590,37 @@ test("ambiguity units travel to the caller for rendering", () => {
   assert.equal(ambiguousPlusInvalid.empty, "ambiguous_only");
   assert.equal(ambiguousPlusInvalid.partial, true,
     "an unusable sibling is still disclosed beside the ambiguity message");
+});
+
+// Legacy work-catalog guard (Codex contract amendment, 2026-08-28). publisher_metadata_identifier
+// is answerable only by an extended work catalog; an older index evaluates it as an ordinary
+// predicate and returns an authoritative-looking zero, so the producer refuses instead. The client
+// must recognize that filter or it turns an honest refusal into a malformed response, which is
+// never-implied rule 10. These were watched failing before the vocabulary was widened.
+
+test("a capability refusal naming publisher_metadata_identifier is honest, not malformed", () => {
+  const refusal = {
+    envelope: { status: LIMITATION_STATUS, publisher: "lu-legilux" },
+    unsupported_filters: ["publisher_metadata_identifier"],
+  };
+  assert.equal(classifyEnvelope("search", refusal).kind, "refused",
+    "an honest capability refusal must never be presented as a malfunction");
+});
+
+test("the guarded filter is not smuggled into the signed capability manifest", () => {
+  // The index checks four filters and its manifest is signed; widening that set would invalidate
+  // every stamp. The client's accepted vocabulary is deliberately wider than the manifest, and
+  // this pins the divergence so nobody collapses the two sets back together.
+  assert.deepEqual([...MANIFEST_FILTERS].sort(),
+    ["act_form", "binding_status", "domain", "hierarchy"]);
+  assert.equal(MANIFEST_FILTERS.has("publisher_metadata_identifier"), false);
+  assert.equal(GOVERNED_FILTERS.has("publisher_metadata_identifier"), true);
+  for (const f of MANIFEST_FILTERS) assert.equal(GOVERNED_FILTERS.has(f), true);
+});
+
+test("a genuinely unknown filter is still dropped", () => {
+  assert.equal(classifyEnvelope("search", {
+    envelope: { status: LIMITATION_STATUS, publisher: "lu-legilux" },
+    unsupported_filters: ["not_a_governed_filter"],
+  }).kind, "invalid");
 });
