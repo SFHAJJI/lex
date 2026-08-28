@@ -87,11 +87,23 @@ test("an override never survives a change of question", () => {
 });
 
 // retainedForQuery has been the site of the same defect twice, once on the exact-words override
-// and once on the publisher metadata filter, so it gets its own cases rather than being covered
-// only through the components that call it. The rule it encodes is that state a reader bound to
+// and once on the publisher metadata filter. The rule it encodes is that state a reader bound to
 // one question is discarded when a different question is submitted. Hiding it is not discarding
 // it: a hidden value is dormant, and returning to the earlier question reapplies a narrowing the
 // reader authorised once, on a visit they never authorised.
+//
+// What these cases do NOT prove, stated because a green test that stands behind an unreachable
+// production path is the exact defect this lane keeps finding. The search surface is now keyed by
+// the trimmed question, and the metadata filter stores the question it was chosen for, so within
+// one mount the stored question and the submitted one cannot disagree and this function's
+// mismatch branch is unreachable through that path. The remount is the primary mechanism and it
+// is covered by a browser test: removing the key lets the override survive a change of question
+// and flips a recorded request argument.
+//
+// This function is kept as a second, independent guard, because the remount is one line in a
+// render tree that a later edit could delete without touching this file, and the failure would be
+// silent. That is a different case from a bound the grammar already enforces, which would be
+// unkillable dead code. These cases pin the rule; they are not evidence about the component.
 
 const filter = { query: "conge parental", metadata: { kind: "eurovoc_domain" } };
 

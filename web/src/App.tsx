@@ -54,6 +54,19 @@ function shift(date: string, days: number) {
 export default function App() {
   const [s, go] = useWorkspace();
   const [ui, setUi] = useState<UiEffect>();
+  /**
+   * The governed-response generation, for the two effects this branch touches.
+   *
+   * A boolean captured per effect run is flipped by passive cleanup, which runs after the
+   * next paint, so a response arriving in that interval was still live. Worse, an accepted
+   * assistant view can install a new view without changing the request tuple at all, so the
+   * effect never re-runs, its cleanup never fires, and an older held response could later
+   * overwrite a view the reader had already been given.
+   *
+   * Advanced wherever the view is replaced: the shared clear, the assistant install, and the
+   * start of each governed request. Every completion compares the generation it captured.
+   */
+  const governedGeneration = useRef(0);
   const [operationViews, setOperationViews] = useState<OperationReply[]>([]);
   const [assistantPresentationId, setAssistantPresentationId] = useState<string>();
   const pendingPresentations = useRef(new Set<string>());
@@ -264,7 +277,9 @@ export default function App() {
   // and any /?from=&until= link land on real content instead of an empty panel.
   useEffect(() => {
     if (s.work || !s.from || !s.until) return;
-    let live = true;
+    governedGeneration.current += 1;
+    const mine = governedGeneration.current;
+    const live = () => mine === governedGeneration.current;
     // Before the request, not after it. The previous window's ranking and index identity
     // describe a period the reader has already left, and leaving the rows up also kept
     // ReportSkeleton unreachable, so the stale table was the entire loading state.
@@ -283,7 +298,7 @@ export default function App() {
       // then sorting and slicing once below, produces one honest cross-publisher pagination.
       limit: (page + 1) * PAGE, offset: 0 })
       .then((res) => {
-        if (!live) return;
+        if (!live()) return;
         // changes_in_period asks ACROSS the corpus, so its answer is the union of the
         // publishers, not the first one that happens to reply. Taking the first envelope with
         // rows reported 3 EU acts for the pandemic and silently dropped the hundreds of
@@ -349,8 +364,7 @@ export default function App() {
           : { gap: { status: "no_changes_in_period", explanation: "Nothing changed in that window.", available: [] },
               publisher_limitations: partition.limitations });
       })
-      .catch(() => { if (live) setUi({ gap: { status: "error", explanation: "The change report could not be loaded. Try again.", available: [] } }); });
-    return () => { live = false; };
+      .catch(() => { if (live()) setUi({ gap: { status: "error", explanation: "The change report could not be loaded. Try again.", available: [] } }); });
   }, [s.work, s.from, s.until, s.order, s.jurisdiction, s.hierarchy, s.domain,
       s.sourceClass, s.actForm, s.bindingStatus, s.language, page]);
 
@@ -360,7 +374,9 @@ export default function App() {
     // A date with no question is itself a question: what applied that day. Not a mode, just what
     // an empty search means once a date is set.
     if (s.work || s.q || !s.asOf || s.space === "time") return;
-    let live = true;
+    governedGeneration.current += 1;
+    const mine = governedGeneration.current;
+    const live = () => mine === governedGeneration.current;
     // Before the request. A reader who changes the date must never see the previous date's
     // list, or its index identity, presented as the answer for the new one.
     setUi(undefined);
@@ -376,7 +392,7 @@ export default function App() {
       ...(s.language ? { language: s.language } : {}),
     })
       .then((res) => {
-        if (!live) return;
+        if (!live()) return;
         setStrip(envelopeStripRows(res));
         const first = projectGovernedEmptiness("in_force_on", res, 1);
         const partition = first.partition;
@@ -459,8 +475,7 @@ export default function App() {
           : { gap: { status: "no_result", explanation: `No publisher state covers ${s.asOf} in this scope.`, available: [] },
               publisher_limitations: partition.limitations });
       })
-      .catch(() => { if (live) setUi({ gap: { status: "error", explanation: "The in-force list could not be loaded. Try again.", available: [] } }); });
-    return () => { live = false; };
+      .catch(() => { if (live()) setUi({ gap: { status: "error", explanation: "The in-force list could not be loaded. Try again.", available: [] } }); });
   }, [s.space, s.asOf, s.work, s.q, s.jurisdiction, s.hierarchy, s.domain,
       s.sourceClass, s.actForm, s.bindingStatus, s.language, page]);
 
@@ -481,6 +496,10 @@ export default function App() {
   }, [s.work, s.anchor]);
 
   const applyAssistantReply = useCallback((r: AskReply) => {
+      // An accepted view is a new answer on this route, so anything still outstanding from
+      // before it is no longer allowed to write. The request tuple may not have changed, so
+      // nothing else would invalidate them.
+      governedGeneration.current += 1;
       setOperationViews(compoundOperationViews(r));
       const presentation = r.operations?.find((operation) => hasView(operation.ui));
       if (presentation
@@ -546,6 +565,7 @@ export default function App() {
   }, [go]);
 
   const clearAssistantView = useCallback(() => {
+    governedGeneration.current += 1;
     setUi(undefined);
     // The strip describes the response that produced the view being cleared. Leaving it up
     // across a route or space change states an index identity for an answer that is gone.

@@ -172,6 +172,15 @@ export default function Search(p: SearchProps) {
   // cannot outlive the words it was chosen for.
   const fuzzyMode = fuzzyModeFor(exactQuery, q);
   const asOf = p.state.asOf;
+  /**
+   * The date the request actually carries. It is not `asOf`: with no explicit date the
+   * request falls back to today, and today moves. Depending on `asOf` alone meant a
+   * rerender after the calendar day changed updated the visible default while the rows,
+   * strip, population and limitations stayed on the previous day, and no new request was
+   * issued. One value, used by the request and by both dependency lists, so the thing
+   * sent and the thing watched cannot drift apart.
+   */
+  const requestAsOf = asOf ?? p.today;
   const retrieval = p.state.retrieval ?? "keyword";
   const jurisdiction = p.state.jurisdiction ?? "";
   const hierarchy = p.state.hierarchy ?? "";
@@ -215,7 +224,7 @@ export default function Search(p: SearchProps) {
     setArticleLimit(INITIAL_ARTICLES);
     setBusy(true);
     return () => { generation.current += 1; };
-  }, [q, asOf, retrieval, jurisdiction, hierarchy, domain, sourceClass, actForm,
+  }, [q, requestAsOf, retrieval, jurisdiction, hierarchy, domain, sourceClass, actForm,
       bindingStatus, language, metadataIdentifier, fuzzyMode, clearResponseState]);
 
   useEffect(() => {
@@ -224,7 +233,7 @@ export default function Search(p: SearchProps) {
     // request belongs to.
     const mine = generation.current;
     const live = () => mine === generation.current;
-    tool<any>("search", { query: q.trim(), limit: 40, time_scope: "as_of", as_of: asOf ?? p.today,
+    tool<any>("search", { query: q.trim(), limit: 40, time_scope: "as_of", as_of: requestAsOf,
                           retrieval_mode: retrieval, fuzzy: fuzzyMode,
                           ...(jurisdiction ? { jurisdiction } : {}),
                           ...(hierarchy ? { hierarchy } : {}), ...(domain ? { domain } : {}),
@@ -292,7 +301,7 @@ export default function Search(p: SearchProps) {
         if (live()) setResults(searchResultsFromError("Search could not be reached. Try again."));
       })
       .finally(() => { if (live()) setBusy(false); });
-  }, [q, asOf, retrieval, jurisdiction, hierarchy, domain, sourceClass, actForm, bindingStatus,
+  }, [q, requestAsOf, retrieval, jurisdiction, hierarchy, domain, sourceClass, actForm, bindingStatus,
       language, metadataIdentifier, fuzzyMode, clearResponseState]);
 
   const submit = (e: React.FormEvent) => {
