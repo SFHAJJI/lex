@@ -326,7 +326,15 @@ export default function App() {
   // directly. No model in the loop — playing with the workspace must be instant and repeatable.
   useEffect(() => {
     if (!s.work || s.mode !== "read") return;
-    let live = true;
+    // Same construction as the outline effect, and for the same reason. A boolean flipped by
+    // this passive cleanup is not enough on its own: the layout transition above has already
+    // bumped the generation and cleared the view before paint, while the passive phase runs
+    // after it. A request issued under the previous UTC day can resolve inside that gap with
+    // its flag still true, and write yesterday provisions under today heading. Comparing the
+    // generation the request was issued under cannot be late, because the value it compares
+    // against is the one the transition itself already changed.
+    const mine = lawGeneration.current;
+    const live = () => mine === lawGeneration.current;
     // Never show one law's text under another's heading: clear before fetching.
     setLoaded(undefined);
     const date = readDate;
@@ -350,7 +358,7 @@ export default function App() {
     };
     fetchRead()
       .then((res) => {
-        if (!live) return;
+        if (!live()) return;
         const one = first<any>(res, (x) => Array.isArray(x?.provisions) && x.provisions.length > 0);
         const doc = one?.document ?? one;
         setTitle(shorten(doc?.title));
@@ -373,8 +381,7 @@ export default function App() {
           setUi({ gap: { status: one?.envelope?.status ?? "no_result", explanation: "No text is held for this law on that date.", available: [] } });
         else setUi(undefined);
       })
-      .catch(() => live && setUi({ gap: { status: "error", explanation: "That version could not be loaded.", available: [] } }));
-    return () => { live = false; };
+      .catch(() => { if (live()) setUi({ gap: { status: "error", explanation: "That version could not be loaded.", available: [] } }); });
   }, [s.work, readDate, s.mode, s.anchor, s.language]);
 
   // Time workspace: a period loads the ranking deterministically, so the follow-up chips
