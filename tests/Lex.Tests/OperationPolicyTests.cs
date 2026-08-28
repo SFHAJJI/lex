@@ -1711,6 +1711,7 @@ public sealed class OperationPolicyTests
         { McpStatus.TextWithheld, LegalOutcome.NotAvailable },
         { McpStatus.NoCorpusMounted, LegalOutcome.NotAvailable },
         { McpStatus.RetrievalModeUnavailable, LegalOutcome.NotAvailable },
+        { McpStatus.FilterNotSupportedByIndex, LegalOutcome.NotAvailable },
     };
 
     [Theory]
@@ -1858,6 +1859,7 @@ public sealed class OperationPolicyTests
         Assert.Equal("2.0.0", McpSdkBridge.ServerVersion);
         Assert.DoesNotContain("outside_observed_window", McpSdkBridge.ServerInstructions);
         Assert.Contains(McpStatus.RetrievalModeUnavailable, McpSdkBridge.ServerInstructions);
+        Assert.Contains(McpStatus.FilterNotSupportedByIndex, McpSdkBridge.ServerInstructions);
     }
 
     [Fact]
@@ -2017,6 +2019,28 @@ public sealed class OperationPolicyTests
 
         Assert.Equal(McpStatus.RetrievalModeUnavailable, effect.Gap?.Status);
         Assert.Contains("signed retrieval benchmark", effect.Gap?.Explanation);
+    }
+
+    [Fact]
+    public void Unsupported_index_filter_is_an_explicit_user_visible_gap()
+    {
+        var effect = UiMapper.From("search", new JsonObject
+        {
+            ["query"] = "synthetic",
+            ["domain"] = "finance",
+        }, new JsonArray(new JsonObject
+        {
+            ["envelope"] = new JsonObject
+            {
+                ["publisher"] = "lu-legilux",
+                ["status"] = McpStatus.FilterNotSupportedByIndex,
+            },
+            ["unsupported_filters"] = new JsonArray("domain"),
+            ["hits"] = new JsonArray(),
+        }), "fr");
+
+        Assert.Equal(McpStatus.FilterNotSupportedByIndex, effect.Gap?.Status);
+        Assert.Contains("filtre", effect.Gap?.Explanation, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

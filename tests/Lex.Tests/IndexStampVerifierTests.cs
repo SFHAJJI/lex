@@ -318,8 +318,108 @@ public sealed class IndexStampVerifierTests : IDisposable
         Assert.Equal(5, verification.ExitCode);
     }
 
+    [Fact]
+    public void Release_verification_consumes_the_external_capability_policy()
+    {
+        var policyPath = TempFile(".json");
+        File.WriteAllText(policyPath, """
+            {
+              "schema": "lex-capability-policy/1",
+              "collections": {
+                "eu-eurlex": { "unsupported_filters": ["domain"] }
+              }
+            }
+            """, new UTF8Encoding(false));
+        var expectation = CapabilityBuildExpectation.Production(
+            "eu-eurlex", ["domain"], Sha(policyPath));
+        var db = Build(StampSigner.CreateKeyPem(), capabilityExpectation: expectation);
+
+        var valid = IndexStampVerifier.Verify(db, new IndexStampVerificationInputs(
+            ExpectedCollection: "eu-eurlex",
+            CapabilityPolicyPath: policyPath));
+        Assert.True(valid.IsValid, string.Join(Environment.NewLine, valid.ProvenanceErrors));
+        Assert.True(valid.CapabilityPolicyMatches);
+        Assert.Equal(expectation.PolicySha256, valid.CapabilityPolicySha256);
+        Assert.Equal(64, valid.CapabilityManifestSha256?.Length);
+
+        var changedPolicy = TempFile(".json");
+        File.WriteAllText(changedPolicy, """
+            {
+              "schema": "lex-capability-policy/1",
+              "collections": {
+                "eu-eurlex": { "unsupported_filters": ["domain", "hierarchy"] }
+              }
+            }
+            """, new UTF8Encoding(false));
+        var changed = IndexStampVerifier.Verify(db, new IndexStampVerificationInputs(
+            ExpectedCollection: "eu-eurlex",
+            CapabilityPolicyPath: changedPolicy));
+        Assert.False(changed.CapabilityPolicyMatches);
+        Assert.Equal(5, changed.ExitCode);
+
+        var uncheckedDb = Build(StampSigner.CreateKeyPem());
+        var uncheckedPolicy = IndexStampVerifier.Verify(
+            uncheckedDb, new IndexStampVerificationInputs(
+                ExpectedCollection: "eu-eurlex",
+                CapabilityPolicyPath: policyPath));
+        Assert.False(uncheckedPolicy.CapabilityPolicyMatches);
+        Assert.Contains(uncheckedPolicy.ProvenanceErrors,
+            error => error.Contains("capability_policy_tier", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Release_verification_recomputes_capabilities_from_indexed_documents()
+    {
+        var policyPath = TempFile(".json");
+        File.WriteAllText(policyPath, """
+            {
+              "schema": "lex-capability-policy/1",
+              "collections": {
+                "eu-eurlex": { "unsupported_filters": ["domain"] }
+              }
+            }
+            """, new UTF8Encoding(false));
+        var expectation = CapabilityBuildExpectation.Production(
+            "eu-eurlex", ["domain"], Sha(policyPath));
+        var key = StampSigner.CreateKeyPem();
+        var db = Build(key, capabilityExpectation: expectation);
+
+        using (var connection = new SqliteConnection($"Data Source={db}"))
+        {
+            connection.Open();
+            using var tamper = connection.CreateCommand();
+            tamper.CommandText = "UPDATE docs SET hierarchy=NULL";
+            tamper.ExecuteNonQuery();
+        }
+        string contentDigest;
+        using (var reader = LexIndexReader.Open(db))
+            contentDigest = reader.ComputeContentDigest();
+        using (var connection = new SqliteConnection($"Data Source={db}"))
+        {
+            connection.Open();
+            using var update = connection.CreateCommand();
+            update.CommandText =
+                "UPDATE stamp SET v=$digest WHERE k='content_digest'";
+            update.Parameters.AddWithValue("$digest", contentDigest);
+            update.ExecuteNonQuery();
+            Resign(connection, key);
+        }
+
+        var verification = IndexStampVerifier.Verify(db,
+            new IndexStampVerificationInputs(
+                ExpectedCollection: "eu-eurlex",
+                CapabilityPolicyPath: policyPath));
+
+        Assert.True(verification.SignatureValid);
+        Assert.True(verification.ContentDigestMatches);
+        Assert.False(verification.CapabilityPolicyMatches);
+        Assert.Contains(verification.ProvenanceErrors, error => error.Contains(
+            "does not match indexed documents", StringComparison.Ordinal));
+    }
+
     private string Build(string key,
-        IReadOnlyDictionary<string, string>? additionalStamp = null)
+        IReadOnlyDictionary<string, string>? additionalStamp = null,
+        CapabilityBuildExpectation? capabilityExpectation = null)
     {
         var db = TempFile(".db");
         var text = "Reporting obligations.";
@@ -327,7 +427,12 @@ public sealed class IndexStampVerifierTests : IDisposable
             "urn:work", "REG", "en", "2024-01-01", null, "publisher",
             "2026-08-09T00:00:00Z", false, true, true, "record", null,
             "https://example.invalid", "Official title", "Official title", null,
-            "2024-01-01", null);
+            "2024-01-01", null) with
+        {
+            Hierarchy = "secondary_law",
+            ActForm = "REG",
+            BindingStatus = "in_force",
+        };
         var provision = new ProvisionRow($"{doc.Key}|en|2024-01-01", 0, "art_1",
             $"{doc.Key}#art_1", "article", "1", null, null, null, doc.Title, text,
             Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(text))));
@@ -342,7 +447,8 @@ public sealed class IndexStampVerifierTests : IDisposable
         foreach (var (name, value) in additionalStamp ??
                      new Dictionary<string, string>())
             stamp[name] = value;
-        IndexBuilder.Build(db, stamp, [doc], [provision], [], [], key);
+        IndexBuilder.Build(db, stamp, [doc], [provision], [], [], key,
+            capabilityExpectation: capabilityExpectation);
         return db;
     }
 

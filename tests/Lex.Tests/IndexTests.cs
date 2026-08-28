@@ -570,7 +570,7 @@ public class IndexTests : IDisposable
         AssertStage(progress, SemanticBuildStage.Preparation, 1);
         AssertStage(progress, SemanticBuildStage.Embeddings, 1);
         AssertStage(progress, SemanticBuildStage.WorkEmbeddings, 2);
-        AssertStage(progress, SemanticBuildStage.Database, 4);
+        AssertStage(progress, SemanticBuildStage.Database, 20);
         AssertStage(progress, SemanticBuildStage.Finalization, 3);
         using var vectorReader = new SemanticVectorReader(vectors);
         Assert.Equal(3, vectorReader.Count);

@@ -692,6 +692,7 @@ public static class UiMapper
             {
                 McpStatus.NoCorpusMounted => "Lex ne dispose d'aucun index juridique vérifié, donc aucune opération juridique n'est disponible.",
                 McpStatus.RetrievalModeUnavailable => "La recherche par sens n'est pas disponible pour ce périmètre, car son benchmark de recherche signé n'en a pas autorisé l'activation. La recherche par mots exacts reste disponible.",
+                McpStatus.FilterNotSupportedByIndex => "L'index signé ne prend pas en charge ce filtre pour la langue et la période demandées. Retirez le filtre ou consultez la couverture déclarée.",
                 McpStatus.NoVersionForDate => "Lex détient cet instrument, mais aucune version de l'éditeur ne couvre cette date.",
                 McpStatus.AmbiguousVersion when tool == "diff" => "L'éditeur expose plusieurs versions identifiées à une limite de comparaison. Choisissez une version exacte pour chaque limite ambiguë.",
                 McpStatus.AmbiguousVersion => "L'éditeur expose plusieurs versions identifiées à cette date. Choisissez une version exacte de l'éditeur.",
@@ -712,6 +713,7 @@ public static class UiMapper
         {
             McpStatus.NoCorpusMounted => "Lex has no verified legal index mounted, so no legal operation is available.",
             McpStatus.RetrievalModeUnavailable => "Meaning search is unavailable for this scope because its signed retrieval benchmark has not authorized activation. Exact-word search remains available.",
+            McpStatus.FilterNotSupportedByIndex => "The signed index does not support this filter for the requested language and period. Remove the filter or inspect the declared coverage.",
             McpStatus.NoVersionForDate => "Lex holds this law, but no publisher version covers that date.",
             McpStatus.AmbiguousVersion when tool == "diff" => "The publisher exposes multiple identified versions at a comparison boundary. Choose one exact publisher version for each ambiguous comparison boundary.",
             McpStatus.AmbiguousVersion => "The publisher exposes multiple identified versions for that date. Choose one exact publisher version.",

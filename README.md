@@ -214,6 +214,7 @@ dotnet run --project src/Lex.Ingest -- ingest --publisher lu-legilux \
 dotnet run --project src/Lex.Ingest -- derive --publisher lu-legilux --corpus ../lex-corpus-lu-legilux --out ../lex-articles
 dotnet run --project src/Lex.Ingest -- index --corpus ../lex-corpus-lu-legilux --articles ../lex-articles \
     --out indexes/index-lu-legilux.db --keyfile signing-key.pem \
+    --capability-policy deploy/capability-policy.json \
     --code-commit "$LEX_CODE_COMMIT" --articles-commit "$LEX_ARTICLES_COMMIT" \
     --corpus-commit "$LEX_LU_CORPUS_COMMIT"
 
@@ -226,6 +227,7 @@ src/Lex.Ingest/bin/Release/net10.0/Lex.Ingest index \
     --embedding-directml-device 1 --embedding-batch-size 256 \
     --embedding-max-batch-tokens 32768 \
     --embedding-cache build-cache/eu-eurlex-embeddings.db \
+    --capability-policy deploy/capability-policy.json \
     --code-commit "$LEX_CODE_COMMIT" --articles-commit "$LEX_ARTICLES_COMMIT" \
     --corpus-commit "$LEX_EU_CORPUS_COMMIT"
 

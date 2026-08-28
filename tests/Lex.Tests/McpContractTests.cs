@@ -54,7 +54,8 @@ public class McpContractTests : IDisposable
                 { Hierarchy = "secondary_law", Domains = "|finance|", ActForm = "REG", BindingStatus = "in_force" },
             Row("t-pub:w1:2022-01-01", "w1", "2022-01-01", null, true) with
                 { Hierarchy = "secondary_law", Domains = "|finance|", ActForm = "REG", BindingStatus = "in_force" },
-            Row("t-pub:w2:2019-06-01", "w2", "2019-06-01", null, false),   // held, but no text
+            Row("t-pub:w2:2019-06-01", "w2", "2019-06-01", null, false) with
+                { Hierarchy = "primary_law", Domains = "|other|", ActForm = "DEC", BindingStatus = "not_in_force" },
         };
         var provisions = new[]
         {

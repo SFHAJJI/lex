@@ -21,6 +21,10 @@ public sealed record IndexStampVerification(
     IReadOnlyList<string> ProvenanceErrors,
     bool Strict)
 {
+    public bool CapabilityPolicyMatches { get; init; } = true;
+    public string? CapabilityManifestSha256 { get; init; }
+    public string? CapabilityPolicySha256 { get; init; }
+
     public bool ProvenanceMatches => ProvenanceErrors.Count == 0;
 
     public bool IsValid => SignatureValid
@@ -29,12 +33,13 @@ public sealed record IndexStampVerification(
                            && CorpusCommitMatches
                            && CodeCommitMatches
                            && ArticlesCommitMatches
+                           && CapabilityPolicyMatches
                            && ProvenanceMatches;
 
     public int ExitCode => !SignatureValid ? 3
         : !ContentDigestMatches && (Strict || ContentDigestPresent) ? 4
         : CollectionMatches && CorpusCommitMatches && CodeCommitMatches && ArticlesCommitMatches
-          && ProvenanceMatches ? 0 : 5;
+          && CapabilityPolicyMatches && ProvenanceMatches ? 0 : 5;
 }
 
 /// <summary>
@@ -55,6 +60,7 @@ public sealed record IndexStampVerificationInputs(
     string? ExpectedDeriverTreeId = null,
     string? ExpectedGenerationSha256 = null,
     string? ExpectedProfilesSha256 = null,
+    string? CapabilityPolicyPath = null,
     bool RequireDerivedProvenance = false);
 
 public static class IndexStampVerifier
@@ -79,6 +85,10 @@ public static class IndexStampVerifier
         var expectedCollection = Consistent("collection",
             inputs.ExpectedCollection,
             manifest?.Publisher.GetValueOrDefault("id"));
+        var capabilityExpectation = inputs.CapabilityPolicyPath is null
+            ? null
+            : CapabilityPolicy.Load(inputs.CapabilityPolicyPath,
+                expectedCollection ?? reader.Collection);
         DerivationGeneration.Entry? generation = null;
         string? generationFileDigest = null;
         if (inputs.ArticlesGenerationPath is not null)
@@ -125,12 +135,15 @@ public static class IndexStampVerifier
         var strict = expectedCollection is not null || expectedCorpusCommit is not null
                      || inputs.ExpectedCodeCommit is not null
                      || inputs.ExpectedArticlesCommit is not null
+                     || inputs.CapabilityPolicyPath is not null
                      || inputs.RequireDerivedProvenance;
         var provenanceErrors = VerifyProvenance(reader.Stamp, inputs.RequireDerivedProvenance,
             inputs.ExpectedCodeCommit, inputs.ExpectedCorpusCommit,
             inputs.ExpectedArticlesCommit, expectedCorpusManifest, expectedIngester,
             expectedDeriver, expectedDeriverTree, externalGeneration,
             expectedProfiles);
+        var capabilityPolicyMatches = VerifyCapabilityPolicy(
+            reader, capabilityExpectation, provenanceErrors);
         if (inputs.RequireDerivedProvenance)
         {
             RequireExternal(inputs.ExpectedCollection ?? manifest?.Publisher.GetValueOrDefault("id"),
@@ -159,7 +172,47 @@ public static class IndexStampVerifier
             inputs.ExpectedArticlesCommit is null
             || string.Equals(inputs.ExpectedArticlesCommit, articlesCommit, StringComparison.Ordinal),
             provenanceErrors,
-            strict);
+            strict)
+        {
+            CapabilityPolicyMatches = capabilityPolicyMatches,
+            CapabilityManifestSha256 = reader.Stamp.GetValueOrDefault(
+                "capability_manifest_sha256"),
+            CapabilityPolicySha256 = reader.Stamp.GetValueOrDefault(
+                "capability_policy_sha256"),
+        };
+    }
+
+    private static bool VerifyCapabilityPolicy(
+        LexIndexReader reader,
+        CapabilityBuildExpectation? expectation,
+        ICollection<string> errors)
+    {
+        var before = errors.Count;
+        try
+        {
+            reader.VerifyCapabilityManifestMatchesDocuments();
+        }
+        catch (InvalidDataException error)
+        {
+            errors.Add(error.Message);
+        }
+        if (expectation is null) return errors.Count == before;
+        if (!string.Equals(reader.Stamp.GetValueOrDefault("capability_policy_tier"),
+                "production", StringComparison.Ordinal))
+            errors.Add("stamp capability_policy_tier is not production");
+        if (!string.Equals(reader.Stamp.GetValueOrDefault("capability_policy_sha256"),
+                expectation.PolicySha256, StringComparison.Ordinal))
+            errors.Add("stamp capability_policy_sha256 does not match external evidence");
+        try
+        {
+            CapabilityManifest.ValidateExpectation(
+                reader.Collection, reader.CapabilityManifest, expectation);
+        }
+        catch (InvalidDataException error)
+        {
+            errors.Add(error.Message);
+        }
+        return errors.Count == before;
     }
 
     private static ManifestDoc? ReadManifest(string? path)

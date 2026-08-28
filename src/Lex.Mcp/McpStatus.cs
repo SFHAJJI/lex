@@ -25,6 +25,7 @@ public static class McpStatus
     public const string TextWithheld = "text_withheld";
     public const string NoCorpusMounted = "no_corpus_mounted";
     public const string RetrievalModeUnavailable = "retrieval_mode_unavailable";
+    public const string FilterNotSupportedByIndex = "filter_not_supported_by_index";
 
     public static IReadOnlyList<string> All { get; } = Array.AsReadOnly(new[]
     {
@@ -43,5 +44,6 @@ public static class McpStatus
         TextWithheld,
         NoCorpusMounted,
         RetrievalModeUnavailable,
+        FilterNotSupportedByIndex,
     });
 }

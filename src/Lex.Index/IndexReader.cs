@@ -84,7 +84,11 @@ public sealed class LexIndexReader : IDisposable
     private readonly IReadOnlyList<CoverageBuildIssue> _buildIssues;
     private readonly int? _expectedWorks;
     private readonly bool _ownsVectors;
+    private readonly bool _legacyCapabilityManifest;
     public IReadOnlyDictionary<string, string> Stamp { get; }
+    public IReadOnlyList<CapabilityManifestEntry> CapabilityManifest { get; }
+    public string CapabilityManifestDigest =>
+        Stamp.GetValueOrDefault("capability_manifest_sha256", "legacy-unavailable");
     public string Collection => Stamp.GetValueOrDefault("collection", "?");
     public bool SignatureValid { get; }
     public bool HybridReady => _encoder is not null && _vectors is not null;
@@ -97,6 +101,8 @@ public sealed class LexIndexReader : IDisposable
                            bool hasEventLifecycleFields,
                            int workCatalogVersion, long provisionVectorCount,
                            IReadOnlyList<CoverageBuildIssue> buildIssues, int? expectedWorks,
+                           IReadOnlyList<CapabilityManifestEntry> capabilityManifest,
+                           bool legacyCapabilityManifest,
                            bool ownsVectors)
     {
         _conn = conn;
@@ -111,6 +117,8 @@ public sealed class LexIndexReader : IDisposable
         _provisionVectorCount = provisionVectorCount;
         _buildIssues = buildIssues;
         _expectedWorks = expectedWorks;
+        CapabilityManifest = capabilityManifest;
+        _legacyCapabilityManifest = legacyCapabilityManifest;
         _ownsVectors = ownsVectors;
         SignatureValid = stamp.ContainsKey("signature") && StampSigner.Verify(stamp);
     }
@@ -353,6 +361,7 @@ public sealed class LexIndexReader : IDisposable
 
         ValidateBoundedPublicMetadata(
             conn, dbPath, schema, hasWorkSearch, hasEventLifecycleFields);
+        var capabilityManifest = Lex.Index.CapabilityManifest.Read(conn, stamp, dbPath);
 
         SemanticVectorReader? vectors = null;
         long provisionVectorCount = 0;
@@ -437,7 +446,8 @@ public sealed class LexIndexReader : IDisposable
         return new LexIndexReader(
             conn, stamp, schema!, encoder, vectors, hasWorkSearch, hasEvents,
             hasEventLifecycleFields, workCatalogVersion,
-            provisionVectorCount, buildIssues, expectedWorks, ownsVectors: true);
+            provisionVectorCount, buildIssues, expectedWorks,
+            capabilityManifest.Rows, capabilityManifest.Legacy, ownsVectors: true);
     }
 
     /// <summary>
@@ -463,6 +473,8 @@ public sealed class LexIndexReader : IDisposable
             _provisionVectorCount,
             _buildIssues,
             _expectedWorks,
+            CapabilityManifest,
+            _legacyCapabilityManifest,
             ownsVectors: false);
     }
 
@@ -600,6 +612,27 @@ public sealed class LexIndexReader : IDisposable
             domains,
             Distinct("SELECT DISTINCT act_form FROM docs WHERE act_form IS NOT NULL AND act_form <> '' ORDER BY act_form"),
             Distinct("SELECT DISTINCT binding_status FROM docs WHERE binding_status IS NOT NULL AND binding_status <> '' ORDER BY binding_status"));
+    }
+
+    public IReadOnlyList<string> UnsupportedFilters(
+        FilterSet filters,
+        CapabilityTimeScope timeScope,
+        DateOnly? asOf = null) => Lex.Index.CapabilityManifest.UnsupportedFilters(
+            CapabilityManifest, filters, timeScope, asOf, _legacyCapabilityManifest);
+
+    internal IReadOnlyList<string> UnsupportedFiltersInPeriod(
+        FilterSet filters,
+        DateOnly from,
+        DateOnly to) => Lex.Index.CapabilityManifest.UnsupportedFiltersInPeriod(
+            CapabilityManifest, filters, from, to, _legacyCapabilityManifest);
+
+    internal void VerifyCapabilityManifestMatchesDocuments()
+    {
+        if (_legacyCapabilityManifest) return;
+        var recomputed = Lex.Index.CapabilityManifest.Recompute(_conn);
+        if (!CapabilityManifest.SequenceEqual(recomputed))
+            throw new InvalidDataException(
+                "Stored capability manifest does not match indexed documents.");
     }
 
     public DocRow? AsOf(string work, DateOnly date, FilterSet filters)

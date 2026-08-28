@@ -260,6 +260,34 @@ public sealed class McpCore
         return envelope;
     }
 
+    private JsonObject UnsupportedFilterResult(
+        LexIndexReader reader,
+        IReadOnlyList<string> unsupportedFilters,
+        FilterSet filters,
+        string timeScope,
+        DateOnly? asOf,
+        string emptyResultField)
+    {
+        var result = new JsonObject
+        {
+            ["envelope"] = Envelope(reader, McpStatus.FilterNotSupportedByIndex),
+            ["unsupported_filters"] = new JsonArray(
+                unsupportedFilters.Select(filter => (JsonNode)filter).ToArray()),
+            ["requested_language"] = filters.Language,
+            ["time_scope"] = timeScope,
+            ["as_of"] = asOf?.ToString("yyyy-MM-dd"),
+            ["capability_manifest"] = new JsonObject
+            {
+                ["schema"] = reader.Stamp.GetValueOrDefault("capability_manifest_schema"),
+                ["sha256"] = reader.Stamp.GetValueOrDefault("capability_manifest_sha256"),
+                ["policy_tier"] = reader.Stamp.GetValueOrDefault("capability_policy_tier"),
+                ["policy_sha256"] = reader.Stamp.GetValueOrDefault("capability_policy_sha256"),
+            },
+            [emptyResultField] = new JsonArray(),
+        };
+        return result;
+    }
+
     private static bool PublisherTextGateOpen(LexIndexReader reader) =>
         string.Equals(reader.Stamp.GetValueOrDefault("text_public"), "true",
             StringComparison.Ordinal);
@@ -1064,14 +1092,22 @@ public sealed class McpCore
                 var jurisdiction = Str("jurisdiction");
                 var outp = new JsonArray();
                 var selectedReaders = SelectReaders(pub, jurisdiction);
+                var filter = new FilterSet(null, null, Str("source_class") ?? Str("document_type"),
+                    Str("language"), null, Str("hierarchy"), Str("act_form"),
+                    Str("binding_status"), Str("domain"));
                 var remainingOffset = offset;
                 var remainingLimit = limit;
                 var totalAcrossPublishers = 0;
                 foreach (var r in selectedReaders.Readers)
                 {
-                    var filter = new FilterSet(null, null, Str("source_class") ?? Str("document_type"),
-                        Str("language"), null, Str("hierarchy"), Str("act_form"),
-                        Str("binding_status"), Str("domain"));
+                    var unsupported = r.UnsupportedFilters(
+                        filter, CapabilityTimeScope.AsOf, date);
+                    if (unsupported.Count > 0)
+                    {
+                        outp.Add(UnsupportedFilterResult(
+                            r, unsupported, filter, CapabilityManifest.AsOf, date, "works"));
+                        continue;
+                    }
                     var localOffset = remainingOffset;
                     var page = r.InForceOn(
                         date, filter, Math.Max(1, remainingLimit), localOffset);
@@ -1295,7 +1331,20 @@ public sealed class McpCore
                     Str("binding_status"), Str("domain"),
                     PublisherMetadataIdentifier: publisherMetadataIdentifier);
                 var selectedReaders = SelectReaders(pub, jurisdiction);
-                foreach (var reader in selectedReaders.Readers.Where(reader =>
+                var capabilityTimeScope = timeScope == CapabilityManifest.AsOf
+                    ? CapabilityTimeScope.AsOf : CapabilityTimeScope.AllVersions;
+                var supportedReaders = new List<LexIndexReader>();
+                foreach (var reader in selectedReaders.Readers)
+                {
+                    var unsupported = reader.UnsupportedFilters(
+                        filter, capabilityTimeScope, asOf);
+                    if (unsupported.Count > 0)
+                        outp.Add(UnsupportedFilterResult(
+                            reader, unsupported, filter, timeScope, asOf, "hits"));
+                    else
+                        supportedReaders.Add(reader);
+                }
+                foreach (var reader in supportedReaders.Where(reader =>
                              requestedMode == "hybrid" && !reader.HybridReady))
                 {
                     outp.Add(new JsonObject
@@ -1312,7 +1361,7 @@ public sealed class McpCore
                         ["hits"] = new JsonArray(),
                     });
                 }
-                var executions = selectedReaders.Readers
+                var executions = supportedReaders
                     .Where(reader => requestedMode != "hybrid" || reader.HybridReady)
                     .Select(reader => (Reader: reader, Execution: requestedMode == "hybrid"
                         ? reader.SearchHybrid(q, filter, limit * 6, fuzzy == "auto")
@@ -1664,9 +1713,13 @@ public sealed class McpCore
 
             case "changes_in_period":
             {
-                var from = Str("from_date") ?? throw new ArgumentException("from_date required");
-                var to = Str("to_date") ?? throw new ArgumentException("to_date required");
-                if (string.CompareOrdinal(from, to) > 0) (from, to) = (to, from);
+                var fromDate = Date("from_date");
+                var toDate = Date("to_date");
+                if (fromDate > toDate) (fromDate, toDate) = (toDate, fromDate);
+                var from = fromDate.ToString("yyyy-MM-dd",
+                    System.Globalization.CultureInfo.InvariantCulture);
+                var to = toDate.ToString("yyyy-MM-dd",
+                    System.Globalization.CultureInfo.InvariantCulture);
                 var pub = Str("publisher");
                 var jurisdiction = Str("jurisdiction");
                 // Comma-separated, and a leading "!" inverts: "!RECUEIL,!CODE_RECUEIL" asks for
@@ -1681,13 +1734,33 @@ public sealed class McpCore
                 var offset = Int("offset", 0);
                 var outp = new JsonArray();
                 var selectedReaders = SelectReaders(pub, jurisdiction);
+                var supportedReaders = new List<LexIndexReader>();
+                foreach (var reader in selectedReaders.Readers)
+                {
+                    var unsupported = reader.UnsupportedFiltersInPeriod(
+                        filter, fromDate, toDate);
+                    if (unsupported.Count == 0)
+                    {
+                        supportedReaders.Add(reader);
+                        continue;
+                    }
+                    var refusal = UnsupportedFilterResult(
+                        reader, unsupported, filter, "period",
+                        null, "changes");
+                    refusal["window"] = new JsonObject { ["from"] = from, ["to"] = to };
+                    refusal["works_changed"] = 0;
+                    refusal["new_versions"] = 0;
+                    refusal["shown"] = 0;
+                    refusal["offset"] = offset;
+                    outp.Add(refusal);
+                }
                 var totalAcrossPublishers = 0;
                 var globalPage = MergeGlobalChanges(
-                    selectedReaders.Readers, from, to, kinds, byChurn, limit, offset, filter);
+                    supportedReaders, from, to, kinds, byChurn, limit, offset, filter);
                 var candidates = globalPage.Items;
                 var globalRanks = candidates.ToDictionary(
                     item => (item.Reader.Collection, item.Row.GroupKey), item => item.Rank);
-                foreach (var r in selectedReaders.Readers)
+                foreach (var r in supportedReaders)
                 {
                     var (works, versions) = r.ChangeTotals(from, to, kinds, filter);
                     totalAcrossPublishers += works;
