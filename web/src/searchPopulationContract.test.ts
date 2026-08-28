@@ -3,7 +3,9 @@ import test from "node:test";
 import { readFileSync } from "node:fs";
 import {
   contributesToQueryPopulation, POPULATION_BOUNDS, validateSearchPopulation,
+  populationExclusions, queriedPopulationTotal, searchPopulations, unqueriedPopulations,
 } from "./searchPopulation.ts";
+import { classifyEnvelope } from "./limitations.ts";
 
 /**
  * Binds the shipped population validator to the jointly accepted contract file, and binds that
@@ -117,4 +119,97 @@ test("only a publisher that ran the query contributes to a query population", ()
       `${status} contributed its scope to a query-ran claim`);
   }
   assert.equal(contributesToQueryPopulation({ valid: false, reason: "x" }), false);
+});
+
+// The browser contract's rendering rules, exercised against the shipped classifier rather than a
+// stand-in, so a publisher can never count as having answered here while being withheld there.
+
+const entry = (publisher: string, status: string, over: Record<string, unknown> = {}) => ({
+  envelope: { status, publisher },
+  retrieval_mode: "keyword",
+  hits: [],
+  population: { ...contract.statuses[status], works_in_scope: 100,
+                known_exclusions: [`${publisher} gap`] },
+  ...over,
+});
+
+test("two publishers that ran both contribute to the queried denominator", () => {
+  const rows = searchPopulations(
+    [entry("lu-legilux", "ok", { population: { ...contract.statuses.ok, works_in_scope: 1250,
+                                               known_exclusions: ["a"] } }),
+     entry("eu-eurlex", "ok", { population: { ...contract.statuses.ok, works_in_scope: 300,
+                                              known_exclusions: ["b"] } })],
+    classifyEnvelope);
+  assert.equal(rows.length, 2);
+  assert.equal(queriedPopulationTotal(rows), 1550);
+  assert.deepEqual(populationExclusions(rows), ["a", "b"]);
+});
+
+test("a refused publisher discloses its scope but never joins the queried denominator", () => {
+  const rows = searchPopulations([
+    entry("lu-legilux", "ok"),
+    { ...entry("eu-eurlex", "filter_not_supported_by_index"), unsupported_filters: ["domain"] },
+  ], classifyEnvelope);
+  assert.equal(queriedPopulationTotal(rows), 100, "the refused scope was added to the query claim");
+  const unqueried = unqueriedPopulations(rows);
+  assert.equal(unqueried.length, 1);
+  assert.equal(unqueried[0].publisher, "eu-eurlex");
+  assert.equal(unqueried[0].population.basis, "mounted_scope_before_unsupported_filters");
+});
+
+test("an all-refused response yields no queried denominator at all", () => {
+  const rows = searchPopulations([
+    { ...entry("lu-legilux", "filter_not_supported_by_index"), unsupported_filters: ["domain"] },
+  ], classifyEnvelope);
+  // Not zero. Zero would assert an empty corpus was searched, which is exactly rule N3.
+  assert.equal(queriedPopulationTotal(rows), undefined);
+  assert.equal(unqueriedPopulations(rows).length, 1);
+});
+
+test("a retrieval-mode refusal discloses the selected scope and states it did not run", () => {
+  const rows = searchPopulations([
+    entry("lu-legilux", "retrieval_mode_unavailable",
+      { retrieval_mode: undefined, requested_retrieval_mode: "hybrid" }),
+  ], classifyEnvelope);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].population.query_ran, false);
+  assert.equal(rows[0].population.basis, "selected_metadata_scope");
+  assert.equal(queriedPopulationTotal(rows), undefined);
+});
+
+test("an invalid sibling contributes no population fact", () => {
+  const rows = searchPopulations([
+    entry("lu-legilux", "ok"),
+    // Incoherent: claims success while saying the query never ran.
+    entry("eu-eurlex", "ok", { population: { ...contract.statuses.ok, query_ran: false,
+                                             works_in_scope: 999, known_exclusions: [] } }),
+  ], classifyEnvelope);
+  assert.equal(rows.length, 1, "an incoherent population was rendered");
+  assert.equal(queriedPopulationTotal(rows), 100);
+});
+
+test("one publisher repeated across entries is counted once", () => {
+  const rows = searchPopulations([entry("lu-legilux", "ok"), entry("lu-legilux", "ok")],
+    classifyEnvelope);
+  assert.equal(rows.length, 1);
+  assert.equal(queriedPopulationTotal(rows), 100);
+});
+
+test("an envelope the classifier calls invalid contributes nothing, even with a valid population", () => {
+  // Distinct from the incoherent-population case above: here the population is perfectly well
+  // formed and the ENVELOPE is invalid. A refusal naming no recognized filter classifies invalid,
+  // and an invalid envelope authorizes neither rows nor a denominator. Added after a mutation
+  // that removed the classification guard killed no test, which meant this was unprotected.
+  const invalidSibling = {
+    envelope: { status: "filter_not_supported_by_index", publisher: "eu-eurlex" },
+    unsupported_filters: ["not_a_governed_filter"],
+    population: { ...contract.statuses.filter_not_supported_by_index, works_in_scope: 999,
+                  known_exclusions: ["should not appear"] },
+  };
+  assert.equal(classifyEnvelope("search", invalidSibling).kind, "invalid",
+    "the fixture no longer classifies invalid; this test would prove nothing");
+  const rows = searchPopulations([entry("lu-legilux", "ok"), invalidSibling], classifyEnvelope);
+  assert.equal(rows.length, 1);
+  assert.equal(queriedPopulationTotal(rows), 100);
+  assert.deepEqual(populationExclusions(rows), ["lu-legilux gap"]);
 });

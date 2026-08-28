@@ -716,3 +716,10 @@ button.publisher-metadata-chip[aria-pressed="true"] { border-color: var(--fg); c
 .envelope-identity > div { display: contents; }
 .envelope-identity dt { opacity: .8; }
 .envelope-identity dd { margin: 0; overflow-wrap: anywhere; }
+
+/* The denominator sits with the results it describes, quiet but never optional: a zero-hit
+   screen without it makes the claim that no such law exists. */
+.population-footer { margin-top: 1rem; padding-top: .6rem; border-top: 1px solid var(--line);
+  font-size: .82rem; }
+.population-footer p { margin: 0 0 .25rem; }
+.population-footer .sub { font-size: .78rem; opacity: .85; }

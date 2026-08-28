@@ -9,10 +9,11 @@ import {
 } from "./publisherMetadata";
 import { ScopeFilters } from "./ScopeFilters";
 import { envelopeStripRows, type EnvelopeStripRow } from "./envelopeStrip";
-import { clearedSearchResults, LIMITATION_EXPLANATION, projectSearchResponse,
+import { searchPopulations, type PublisherPopulation } from "./searchPopulation";
+import { classifyEnvelope, clearedSearchResults, LIMITATION_EXPLANATION, projectSearchResponse,
   searchEmptyPresentation, searchResultsFromError,
   type SearchResultsState } from "./limitations";
-import { PartialResponseNotice, PublisherLimitations } from "./views";
+import { PartialResponseNotice, PopulationFooter, PublisherLimitations } from "./views";
 import type { State } from "./state";
 import { shorten } from "./pickers";
 import { ResultsSkeleton } from "./Skeleton";
@@ -97,6 +98,9 @@ export default function Search(p: SearchProps) {
   const { works, articles, error, modeUnavailable, expansions, limitations } = results;
   const allRefused = results.absence === "all_refused";
   const [busy, setBusy] = useState(false);
+  // The denominator behind whatever this response showed, kept from the response itself so the
+  // footer can never describe a different query than the one on screen.
+  const [populations, setPopulations] = useState<PublisherPopulation[]>([]);
 
 
   const [articleLimit, setArticleLimit] = useState(INITIAL_ARTICLES);
@@ -155,6 +159,7 @@ export default function Search(p: SearchProps) {
       .then((res) => {
         if (!live) return;
         p.onEnvelopes(envelopeStripRows(res));
+        setPopulations(searchPopulations(res, classifyEnvelope));
         // Round 4 (O3/O4): the ONE production projector partitions the response closed,
         // derives mode and expansion facts from the validated ran envelopes only, and types
         // the absence state; the callback below is presentation mapping, not decision.
@@ -396,6 +401,10 @@ export default function Search(p: SearchProps) {
               )}
             </div>
           ) : null}
+
+          {/* Rule 6: the population behind the list, the zero, or the refusal alike. Rendered
+              from validated envelopes only, so an invalid sibling contributes nothing. */}
+          {!busy && !error ? <PopulationFooter rows={populations} /> : null}
         </div>
       ) : null}
     </section>

@@ -5,6 +5,8 @@ import {
 } from "./api";
 import { facetLabel, jurisdictionLabel } from "./facets";
 import { indexFreshnessLabel, type EnvelopeStripRow } from "./envelopeStrip";
+import { populationExclusions, queriedPopulationTotal, unqueriedPopulations,
+  type PublisherPopulation } from "./searchPopulation";
 import { publisherOf, workSlug } from "./state";
 import { shorten } from "./pickers";
 import { assistantTimelineRows } from "./assistantShell";
@@ -508,6 +510,49 @@ export function Ranking({ rows, worksChanged, newVersions, populationWorks, know
         </div>
       ) : null}
     </>
+  );
+}
+
+/**
+ * The denominator behind a result list, an empty result, or a refusal.
+ *
+ * Trust rule 6 requires the population behind every list and count, and never-implied rules 3 and
+ * 7 forbid reading a zero as an absence of law or implying the search reached beyond what it
+ * disclosed. A zero-hit screen with no denominator makes exactly the claim rule 3 forbids.
+ *
+ * A publisher that did not run the query is shown separately and never added in. Its scope is a
+ * real fact about what is mounted, but adding it to a "searched N works" sentence would claim the
+ * query covered ground it never touched. When nothing ran at all there is no denominator rather
+ * than a zero, because zero asserts that an empty corpus was searched.
+ */
+export function PopulationFooter({ rows }: { rows: PublisherPopulation[] }) {
+  if (rows.length === 0) return null;
+  const searched = queriedPopulationTotal(rows);
+  const unqueried = unqueriedPopulations(rows);
+  const exclusions = populationExclusions(rows);
+  return (
+    <div className="population-footer" data-testid="population-footer">
+      {searched === undefined
+        ? <p data-testid="population-searched">
+            No publisher ran this query, so no works were searched.
+          </p>
+        : <p data-testid="population-searched">
+            Searched {searched.toLocaleString()} works in the selected scope.
+          </p>}
+      {unqueried.map((r) => (
+        <p key={r.publisher ?? "unnamed"} className="sub" data-testid="population-not-queried">
+          {r.publisher ?? "One selected publisher"}: {r.population.works_in_scope.toLocaleString()}
+          {r.population.scope_filters_applied
+            ? " works in the selected scope, not queried."
+            : " works mounted before the unsupported filters, not queried."}
+        </p>
+      ))}
+      {exclusions.length > 0
+        ? <p className="sub" data-testid="population-exclusions">
+            Known exclusions: {exclusions.join(" · ")} <a href="/coverage">See coverage</a>
+          </p>
+        : null}
+    </div>
   );
 }
 

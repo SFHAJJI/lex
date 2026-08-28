@@ -121,3 +121,69 @@ export function validateSearchPopulation(status: unknown, raw: unknown): Populat
 export function contributesToQueryPopulation(verdict: PopulationVerdict): boolean {
   return verdict.valid && verdict.population.query_ran;
 }
+
+/** A publisher's validated population, tagged with whether it actually answered the query. */
+export interface PublisherPopulation {
+  publisher?: string;
+  /** From the shipped classifier, never re-derived here. */
+  kind: "ran" | "mode_unavailable" | "refused";
+  population: SearchPopulation;
+}
+
+/** Envelope classifications that may carry a population the reader can be shown. */
+const DISCLOSABLE = new Set(["ran", "mode_unavailable", "refused"]);
+
+/**
+ * Per-publisher populations from one search response.
+ *
+ * Classification comes from `classifyEnvelope`, the same authority the rows come from, so a
+ * publisher can never be counted as having answered here while being withheld there. An invalid
+ * sibling contributes nothing: it authorizes neither rows nor an absence claim, and a denominator
+ * is an absence claim about everything outside it.
+ */
+export function searchPopulations(
+  raw: unknown,
+  classify: (tool: string, entry: unknown) => { kind: string },
+): PublisherPopulation[] {
+  const list = Array.isArray(raw) ? raw : [raw];
+  const seen = new Set<string>();
+  const out: PublisherPopulation[] = [];
+  for (const entry of list) {
+    if (entry === null || typeof entry !== "object") continue;
+    const kind = classify("search", entry).kind;
+    if (!DISCLOSABLE.has(kind)) continue;
+    const record = entry as Record<string, unknown>;
+    const envelope = (record.envelope ?? {}) as Record<string, unknown>;
+    const verdict = validateSearchPopulation(envelope.status, record.population);
+    if (!verdict.valid) continue;
+    const publisher = typeof envelope.publisher === "string" ? envelope.publisher : undefined;
+    if (publisher !== undefined) {
+      if (seen.has(publisher)) continue;
+      seen.add(publisher);
+    }
+    out.push({ publisher, kind: kind as PublisherPopulation["kind"], population: verdict.population });
+  }
+  return out;
+}
+
+/**
+ * The denominator a "searched N works" sentence may claim: only publishers that ran the query.
+ * Returns undefined when none did, because zero would assert an empty corpus was searched.
+ */
+export function queriedPopulationTotal(rows: PublisherPopulation[]): number | undefined {
+  const queried = rows.filter((r) => r.population.query_ran);
+  return queried.length === 0
+    ? undefined
+    : queried.reduce((n, r) => n + r.population.works_in_scope, 0);
+}
+
+/** Publishers that disclosed a scope but did not run the query. Shown, never added in. */
+export function unqueriedPopulations(rows: PublisherPopulation[]): PublisherPopulation[] {
+  return rows.filter((r) => !r.population.query_ran);
+}
+
+/** Bounded, de-duplicated, never interpreted. */
+export function populationExclusions(rows: PublisherPopulation[]): string[] {
+  return [...new Set(rows.flatMap((r) => r.population.known_exclusions))]
+    .slice(0, POPULATION_BOUNDS.maxExclusions);
+}
